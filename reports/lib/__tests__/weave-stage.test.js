@@ -204,7 +204,7 @@ describe('the weave checks (the check node)', () => {
   });
 
   it('skips once the meeting is approved, leaving every channel as it was', () => {
-    expect(validateArcStructure(weaveState({ selectedArcs: ['weave'] }), {})).toEqual({});
+    expect(validateArcStructure(weaveState({ meetingApproved: true }), {})).toEqual({});
   });
 });
 
@@ -217,15 +217,17 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
     }
   });
 
+  // Brief 4.5 (T1): the evidence, the money and the pronouns read the director's answers
+  // at the story meeting, as record.
   it('each truth question is worded for the weave, pinned', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('arcs', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
-      evidenceTruth: "Is every claim in the weave written as its evidence allows (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?",
-      moneyTruth: "Does the money in the weave run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; and a balance the director's notes record as said or shown in the room as that moment's figure (T1).",
+      evidenceTruth: "Is every claim in the weave written as its evidence allows, the director's answers at the story meeting included as record, as the notes are (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?",
+      moneyTruth: "Does the money in the weave run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1).",
       verdictTruth: "Is the verdict in the weave told as the room's official story, ungraded against any hidden answer (T2)? The theories the room debated are the map's to place, so the weave keeps T2 whether it names them or not.",
       stagesTruth: "In the weave, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
       novaPositionTruth: "In the weave, is Nova the uninterested third party, reporting on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and witnesses only what this session's mode block allows (T8)?",
-      playersTruth: "Does every player in the weave take the pronoun the roster gives (T9), and does the judgement in the weave land on the characters' choices, with no player's looks described (T11)?",
+      playersTruth: "Does every player in the weave take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's answer at the story meeting gives (T9), and does the judgement in the weave land on the characters' choices, with no player's looks described (T11)?",
       wordsTruth: "Is every quoted line in the weave word for word from the record or the director's notes, and in its real speaker's mouth (T12)?"
     });
   });
@@ -427,7 +429,7 @@ describe('the automatic passes run through reviseArcs with the weave\'s schema',
     expect(prompt).toContain('PREVIOUS WEAVE OUTPUT (the version this rework starts from):');
     // The rework's own text: the craft files state their own rules.
     expect(prompt.replace(loadRuleSet('arc').craft, '')).not.toMatch(/interweav|WHAT THIS REWORK RETURNS|narrativeArcs/i);
-    expect(systemPrompt).toBe(getArcRevisionSystemPrompt(false, state.sessionConfig, 'journalist'));
+    expect(systemPrompt).toBe(getArcRevisionSystemPrompt(null, state.sessionConfig, 'journalist'));
     expect(systemPrompt).toMatch(/reworking the weave you wrote after an automatic check or fact check/);
   });
 
@@ -454,7 +456,7 @@ describe('the automatic passes run through reviseArcs with the weave\'s schema',
   });
 
   it("a director's send back clears the mark: the reworked weave is checked and judged again", async () => {
-    const state = weaveState({ _arcFeedback: 'Make the money thread the main thread.', humanArcRevisionCount: 1 });
+    const state = weaveState({ _meetingRound: 'send-back', _arcFeedback: 'Make the money thread the main thread.', humanArcRevisionCount: 1 });
     state.weave = withFactCheckMark(state.weave, { at: 't', ready: true, fixes: 0 });
     const update = await reviseArcs(state, { configurable: { sdkClient: recordingSdk(reworkFixtureState('journalist').weave) } });
     expect(update.weave).not.toHaveProperty('_factCheck');
@@ -472,14 +474,15 @@ describe('the automatic passes run through reviseArcs with the weave\'s schema',
 describe('the timeout bookkeeping has a channel of its own', () => {
   const timeout = () => { throw new Error('SDK timeout after 900.0s idle (limit: 900s) - Arc revision 1'); };
 
-  it('a rework that times out keeps the previous weave and records the timeout in _arcReworkTimeout, as a free retry', async () => {
-    const state = weaveState({ arcRevisionCount: 1, humanArcRevisionCount: 1, _arcFeedback: 'Lead with the money.' });
+  // Brief 4.5 (ruling 5): the free retry lowers only the counter its pass raised.
+  it('an automatic pass that times out keeps the previous weave, records the timeout in _arcReworkTimeout, and gives back its own count', async () => {
+    const state = weaveState({ arcRevisionCount: 1, humanArcRevisionCount: 1 });
     const update = await reviseArcs(state, { configurable: { sdkClient: recordingSdk(timeout) } });
     expect(update).not.toHaveProperty('weave');
     expect(update._arcReworkTimeout).toMatchObject({ consecutive: 1, attempt: 1 });
+    expect(update._arcReworkTimeout).not.toHaveProperty('round');
     expect(update.arcRevisionCount).toBe(0);
-    expect(update.humanArcRevisionCount).toBe(0);
-    expect(update._arcFeedback).toBe('Lead with the money.');
+    expect(update).not.toHaveProperty('humanArcRevisionCount');
     expect(update).not.toHaveProperty('_arcAnalysisCache');
     expect(update.currentPhase).not.toBe(PHASES.ERROR);
   });
@@ -524,7 +527,7 @@ describe('the routing: one check rework and one fact-check fix per round, counte
     const state = weaveState();
     expect(routeArcValidation({ ...state, _arcValidation: { weaveKey: weaveKey(state.weave), passed: true, failures: [] } })).toBe('evaluate');
     expect(routeArcValidation(judged(failed(state), { at: 't', ready: false, fixes: 1 }))).toBe('evaluate');
-    expect(routeArcValidation(failed({ ...state, selectedArcs: ['weave'] }))).toBe('evaluate');
+    expect(routeArcValidation(failed({ ...state, meetingApproved: true }))).toBe('evaluate');
   });
 
   it('a check result stamped for another weave sends nothing back', () => {
@@ -541,14 +544,14 @@ describe('the routing: one check rework and one fact-check fix per round, counte
     expect(routeArcEvaluation(judged(state, { at: 't', ready: false, fixes: 0 }))).toBe('revise');
     expect(routeArcEvaluation(judged(state, { at: 't', ready: false, fixes: 1 }))).toBe('checkpoint');
     expect(routeArcEvaluation(judged(state, { at: 't', ready: true, fixes: 0 }))).toBe('checkpoint');
-    expect(routeArcEvaluation({ ...state, selectedArcs: ['weave'], evaluationHistory: [{ phase: 'arcs', ready: true }] })).toBe('checkpoint');
+    expect(routeArcEvaluation({ ...state, meetingApproved: true, evaluationHistory: [{ phase: 'arcs', ready: true }] })).toBe('checkpoint');
     expect(routeArcEvaluation({ ...state, currentPhase: PHASES.ERROR })).toBe('error');
   });
 
   it('an automatic pass counts toward the round; a send back opens a new round; neither writes a history stub', async () => {
     const automatic = await incrementArcRevision({ ...weaveState(), arcRevisionCount: 0 });
     expect(automatic).toMatchObject({ arcRevisionCount: 1, humanArcRevisionCount: 0 });
-    const round = await incrementArcRevision({ ...weaveState(), arcRevisionCount: 1, humanArcRevisionCount: 0, _arcFeedback: 'x' });
+    const round = await incrementArcRevision({ ...weaveState(), arcRevisionCount: 1, humanArcRevisionCount: 0, _meetingRound: 'send-back', _arcFeedback: 'x' });
     expect(round).toMatchObject({ arcRevisionCount: 0, humanArcRevisionCount: 1 });
     [automatic, round].forEach((update) => {
       expect(update).not.toHaveProperty('evaluationHistory');

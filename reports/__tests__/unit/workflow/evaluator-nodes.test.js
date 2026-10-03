@@ -485,12 +485,15 @@ describe('evaluator-nodes', () => {
       expect(result.weave._factCheck).toEqual(expect.objectContaining({ ready: true, fixes: 0 }));
     });
 
+    // Brief 4.5 (ruling 8): a truth-only verdict holds the weave on a breach it lists, never
+    // on its own ready flag, so each not-ready verdict here lists its breach.
     it('returns revision needed when score < 0.7', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         criteriaScores: {},
         issues: ['Issue 1'],
+        structuralIssues: ['T3: "Issue 1" states what a buried memory held.'],
         revisionGuidance: 'Fix issue 1',
         confidence: 'medium'
       });
@@ -529,6 +532,7 @@ describe('evaluator-nodes', () => {
         ready: false,
         overallScore: 0.5,
         issues: ['Still has issues'],
+        structuralIssues: ['T3: "Still has issues" states what a buried memory held.'],
         confidence: 'medium'
       });
 
@@ -765,6 +769,7 @@ describe('evaluator-nodes', () => {
         ready: false,
         overallScore: 0.5,
         issues: ['Issue'],
+        structuralIssues: ['T3: "Issue" states what a buried memory held.'],
         confidence: 'low'
       });
       const config = { configurable: { sdkClient: mockClient } };
@@ -942,7 +947,8 @@ describe('evaluator-nodes', () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
-        issues: ['Issue']
+        issues: ['Issue'],
+        structuralIssues: ['T3: "Issue" states what a buried memory held.']
       });
       const config = { configurable: { sdkClient: mockClient } };
 
@@ -1994,9 +2000,13 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     const { renderPhotoEntry } = require('../../../lib/prompt-renderers/director-words-renderer');
     const outlineSchema = require('../../../lib/schemas/outline.schema.json');
 
-    /** The fixture, with a bundle that prints a hero image and a captioned photo beside its cards. */
+    /**
+     * The fixture, with a bundle that prints a hero image and a captioned photo beside its
+     * cards, and (brief 4.5) a weave question the director answered at the story meeting.
+     */
     const fullState = () => {
       const state = stateFor('journalist');
+      state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
       state.heroImage = 'hero.jpg';
       state.contentBundle.heroImage = { filename: 'hero.jpg', caption: 'The room before the vote.' };
       state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
@@ -2597,7 +2607,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     });
 
     it('moneyTruth reads the timeline and the notes at every judge, and FINANCIAL_SUMMARY where its writer had it', () => {
-      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes']);
+      // Brief 4.5 (T1): the weave's fact check reads the director's answers too.
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes', 'answers']);
       expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
       for (const phase of ['outline', 'article']) {
         const { reads } = getPhaseCriteria(phase, 'journalist').moneyTruth;
@@ -2621,8 +2632,9 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
         expect(description).toContain(IN_THE_ROOM);
         expect(description).not.toContain('as the ledger or FINANCIAL_SUMMARY gives it');
       }
+      // Brief 4.5 (T1): at the weave, a ledger line the director's answer explains, too.
       const arcs = getPhaseCriteria('arcs', 'journalist').moneyTruth.description;
-      expect(arcs).toContain(`${LEDGER} and ${IN_THE_ROOM}`);
+      expect(arcs).toContain(`${LEDGER} a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1).`);
     });
   });
 

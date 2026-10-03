@@ -35,13 +35,10 @@ const checkpointInterrupt = jest.fn((type, data, skipCondition) => {
   if (type === 'outline' || type === 'article') {
     return { approved: true };
   }
-  // Arc selection checkpoint needs non-empty selectedArcs for conditional routing
+  // The story meeting (brief 4.5) resumes as the director's approval. A graph test that
+  // runs past it seeds selectedArcs for the packages node until 4.6.
   if (type === 'arc-selection') {
-    const arcs = data?.narrativeArcs || [];
-    const ids = arcs.length > 0
-      ? arcs.map(a => a.id || a.title || 'mock-arc')
-      : ['mock-arc-1'];
-    return { selectedArcs: ids };
+    return { approved: true };
   }
   return data;
 });

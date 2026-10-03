@@ -66,14 +66,32 @@ function buildRollbackState(rollbackPoint = 'input-review') {
 }
 
 /**
- * The phases a rollback point regenerates, and therefore invalidates. Module scope
- * because pruneGateNotes and the server's rollback handler need the same table
- * (spec 2026-09-19 §5.4).
+ * The phases whose evaluations a rollback point invalidates with a stub, where the point
+ * keeps the history (buildEvaluationInvalidationStubs). The note pruning reads a table of
+ * its own, STOPS_INVALIDATED_BY (brief 4.5): the meeting's point prunes the notes and
+ * writes no stub, since it clears the history.
  */
 const PHASES_INVALIDATED_BY = {
   // The photo branch (photo late-join) preserves evaluationHistory the way the
   // outline point does — the arc verdict is upstream and still valid — and
   // regenerates the outline AND the article, so both are invalidated (R2/M1).
+  photos: ['outline', 'article'],
+  'character-ids': ['outline', 'article'],
+  outline: ['outline', 'article'],
+  article: ['article']
+};
+
+/**
+ * The stops whose content a rollback point regenerates, for the note pruning (spec
+ * 2026-09-19 §5.4; brief 4.5): pruneGateNotes drops each of their rejection notes, and the
+ * server's rollback handler prunes at exactly these points. A table of its own, apart from
+ * the evaluation stubs (PHASES_INVALIDATED_BY): going back to the story meeting (R9) keeps
+ * the meeting's notes and prunes the map's and the article's, and writes no stub, because
+ * that point clears the whole history. The points above the meeting clear the notes
+ * outright (ROLLBACK_CLEARS).
+ */
+const STOPS_INVALIDATED_BY = {
+  'arc-selection': ['outline', 'article'],
   photos: ['outline', 'article'],
   'character-ids': ['outline', 'article'],
   outline: ['outline', 'article'],
@@ -87,7 +105,9 @@ const PHASES_INVALIDATED_BY = {
  * point does not already empty the whole history:
  *   - `arc-selection` and everything upstream of it list `evaluationHistory` in
  *     ROLLBACK_CLEARS, so the history is emptied and no phase can skip. No stub,
- *     and none is emitted, so the `[]` clear stands.
+ *     and none is emitted, so the `[]` clear stands. The meeting's point (brief 4.5)
+ *     keeps the weave and its fact-check mark, which the fact check skips by, so the
+ *     cleared history costs no call there, and the map and the article are judged again.
  *   - `outline` preserves the history (it may hold useful arc evaluations) and
  *     regenerates the outline AND the article, so both are invalidated. Appending
  *     two entries in one update is why appendSingleReducer spreads an array.
@@ -114,9 +134,9 @@ function buildEvaluationInvalidationStubs(rollbackPoint) {
 /**
  * The director's gate notes that survive a rollback to `rollbackTo` (spec 2026-09-19 §5.4).
  *
- * A rollback into the outline/article region regenerates content the later notes
- * described, so those notes are dropped; the arc-selection notes always survive.
- * Points OUTSIDE PHASES_INVALIDATED_BY are not pruned here — they clear the whole
+ * A rollback to the story meeting or into the map and article region regenerates content
+ * the later notes described, so those notes are dropped; the meeting's notes always
+ * survive. Points OUTSIDE STOPS_INVALIDATED_BY are not pruned here — they clear the whole
  * channel through ROLLBACK_CLEARS — so this returns every note unchanged for them,
  * and the rollback handler must check membership before writing (a write of "all
  * notes" would undo the list's clear).
@@ -127,7 +147,7 @@ function buildEvaluationInvalidationStubs(rollbackPoint) {
  */
 function pruneGateNotes(notes, rollbackTo) {
   const list = (Array.isArray(notes) ? notes : []).filter((n) => n && typeof n === 'object');
-  const invalidated = new Set(PHASES_INVALIDATED_BY[rollbackTo] || []);
+  const invalidated = new Set(STOPS_INVALIDATED_BY[rollbackTo] || []);
   if (invalidated.size === 0) return list.slice();
   // Phase 1 (final review I1): a rejection note at an invalidated stop was about work
   // the rollback throws away, so it goes; an approval note is forward guidance for
@@ -235,6 +255,23 @@ function confineToBase(baseDir, requestedPath) {
   return resolved;
 }
 
+/**
+ * The director's notes a rollback writes (spec 2026-09-19 §5.4; brief 4.5): at a point
+ * that regenerates later stops (STOPS_INVALIDATED_BY), the notes pruneGateNotes keeps; at
+ * any other point, nothing. The points above the meeting clear the channel through
+ * ROLLBACK_CLEARS, and a write of "all notes" there would undo that clear. The server's
+ * rollback handler applies it.
+ *
+ * @param {string} rollbackTo
+ * @param {Array|null|undefined} notes - state.directorGateNotes before the rollback
+ * @returns {{directorGateNotes: Object[]}|{}}
+ */
+function rollbackNotesUpdate(rollbackTo, notes) {
+  return Object.prototype.hasOwnProperty.call(STOPS_INVALIDATED_BY, rollbackTo)
+    ? { directorGateNotes: pruneGateNotes(notes, rollbackTo) }
+    : {};
+}
+
 module.exports = {
   buildRollbackState,
   buildFreshStartState,
@@ -242,5 +279,7 @@ module.exports = {
   sendErrorResponse,
   confineToBase,
   pruneGateNotes,
-  PHASES_INVALIDATED_BY
+  rollbackNotesUpdate,
+  PHASES_INVALIDATED_BY,
+  STOPS_INVALIDATED_BY
 };

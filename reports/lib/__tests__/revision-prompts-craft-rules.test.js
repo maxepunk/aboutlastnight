@@ -84,8 +84,8 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
   });
 
   it('the evaluator-driven arc rework system prompt carries no 80% rule', () => {
-    expect(ARC_REVISION_RULES.evaluator).not.toContain('80%');
-    expect(getArcRevisionSystemPrompt(false)).not.toContain('80%');
+    expect(ARC_REVISION_RULES.automatic).not.toContain('80%');
+    expect(getArcRevisionSystemPrompt(null)).not.toContain('80%');
   });
 
   it('the article rework rules carry the rule in no wording, either theme', () => {
@@ -111,7 +111,7 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
 
     expect(numbered(outlineRevisionRules('detective'))).toEqual([1, 2, 3, 4, 5]);
     expect(numbered(OUTLINE_REVISION_RULES)).toEqual([]);
-    expect(numbered(ARC_REVISION_RULES.evaluator)).toEqual([]);
+    expect(numbered(ARC_REVISION_RULES.automatic)).toEqual([]);
   });
 });
 
@@ -426,20 +426,28 @@ describe('the rework rules (phase 3, 3.3)', () => {
 
   it('no journalist rework carries fixed "preserve" or "do not regenerate" text, in its rules or its task', async () => {
     const texts = {
-      'arc rules (send back)': arcRevisionRules(true, 'journalist'),
-      'arc rules (automated)': arcRevisionRules(false, 'journalist'),
+      'arc rules (send back)': arcRevisionRules('send-back'),
+      'arc rules (reweave)': arcRevisionRules('reweave'),
+      'arc rules (automated)': arcRevisionRules(null),
       'outline rules': outlineRevisionRules('journalist'),
       'article rules': articleRevisionRules('journalist')
     };
+    // Brief 4.5: the weave's rework, at each of its kinds, by the story meeting's round mark.
+    [[null, null], ['reweave', null], ['reweave', 'Join the ledger thread to the vote.'], ['send-back', 'Rethink it from scratch.']]
+      .forEach(([round, note]) => {
+        const arcs = buildRevisionContext({
+          phase: 'arcs', outputName: 'weave', revisionCount: 1, previousOutput: {}, humanFeedback: note, meetingRound: round,
+          validationResults: round ? null : { phase: 'arcs', passed: false, structuralIssues: ['one defect'] }
+        });
+        texts[`arc task (${round || 'automated'}${note ? ', with a note' : ''})`] = after(
+          buildArcRevisionPrompt({ ...ARC_STATE, _meetingRound: round, _arcFeedback: note }, arcs.contextSection, arcs.previousOutputSection),
+          '# Weave Rework'
+        );
+      });
     for (const humanFeedback of [null, 'Rethink it from scratch.']) {
       const kind = humanFeedback ? 'send back' : 'automated';
-      const arcs = contextFor('arcs', humanFeedback);
       const outline = contextFor('outline', humanFeedback);
       const article = contextFor('article', humanFeedback);
-      texts[`arc task (${kind})`] = after(
-        buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: humanFeedback }, arcs.contextSection, arcs.previousOutputSection),
-        '# Weave Rework'
-      );
       texts[`outline task (${kind})`] = after(
         await buildOutlineRevisionPrompt({ selectedArcs: [] }, outline.contextSection, outline.previousOutputSection, promptBuilder),
         '# Outline Revision Request'
@@ -456,10 +464,13 @@ describe('the rework rules (phase 3, 3.3)', () => {
 
   it("a rework's first line names the task its revision context gives it", () => {
     const firstLine = (text) => text.split('\n')[0];
-    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/reworking the weave/);
-    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/director sent it back/);
-    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/reworking the weave/);
-    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/automatic check or fact check/);
+    expect(firstLine(arcRevisionRules('send-back'))).toMatch(/reworking the weave/);
+    expect(firstLine(arcRevisionRules('send-back'))).toMatch(/director sent it back/);
+    // Brief 4.5: a reweave's first line names the changes the revision context lists.
+    expect(firstLine(arcRevisionRules('reweave'))).toMatch(/reworking the weave/);
+    expect(firstLine(arcRevisionRules('reweave'))).toMatch(/asked for a reweave, and the revision context lists the changes/);
+    expect(firstLine(arcRevisionRules(null))).toMatch(/reworking the weave/);
+    expect(firstLine(arcRevisionRules(null))).toMatch(/automatic check or fact check/);
     expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/reworking the outline/);
     expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/revision context/);
     // The article rework's first line is its own (3.10, fix round 1). It was the
@@ -489,8 +500,9 @@ describe('the rework rules (phase 3, 3.3)', () => {
   // the revision context as the task's source and states no scope of its own.
   it('no journalist rework rule names the findings as the automatic task: each points at the revision context', () => {
     const rules = {
-      'arc rules (send back)': arcRevisionRules(true, 'journalist'),
-      'arc rules (automatic)': arcRevisionRules(false, 'journalist'),
+      'arc rules (send back)': arcRevisionRules('send-back'),
+      'arc rules (reweave)': arcRevisionRules('reweave'),
+      'arc rules (automatic)': arcRevisionRules(null),
       'outline rules': outlineRevisionRules('journalist'),
       'article rules': articleRevisionRules('journalist')
     };
@@ -512,16 +524,16 @@ describe('the rework rules (phase 3, 3.3)', () => {
   // asks for a rethink gets a rethink". The rethink rule is the revision context's,
   // the one place every reworker shares; the arc rules add only the mechanic line.
   it("an arc send back states the rethink rule once, in the revision context, and a corrected mechanic reaches every thread", () => {
-    const rules = arcRevisionRules(true, 'journalist');
+    const rules = arcRevisionRules('send-back');
     expect(rules).not.toMatch(/rethink/i);
     expect(rules).toMatch(/corrects every thread it touches/);
     const feedback = 'Merge the two money threads.';
     const context = buildRevisionContext({
-      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 1, previousOutput: {}, humanFeedback: feedback,
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 1, previousOutput: {}, humanFeedback: feedback, meetingRound: 'send-back',
       validationResults: { phase: 'arcs', passed: true, criteriaScores: { evidenceTruth: { score: 0.9, type: 'structural' } } }
     });
-    const system = getArcRevisionSystemPrompt(true, ARC_STATE.sessionConfig, 'journalist');
-    const user = buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: feedback }, context.contextSection, context.previousOutputSection);
+    const system = getArcRevisionSystemPrompt('send-back', ARC_STATE.sessionConfig, 'journalist');
+    const user = buildArcRevisionPrompt({ ...ARC_STATE, _meetingRound: 'send-back', _arcFeedback: feedback }, context.contextSection, context.previousOutputSection);
     const whole = `${system}\n${user}`;
     expect(whole.match(/rethink/gi)).toHaveLength(2);
     expect(whole.match(/a note that asks for a rethink gets a rethink/g)).toHaveLength(1);

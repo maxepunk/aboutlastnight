@@ -20,6 +20,7 @@ const path = require('path');
 const { PHASES } = require('../state');
 const { CHECKPOINT_TYPES, checkpointInterrupt } = require('../checkpoint-helpers');
 const { traceNode } = require('../../observability');
+const { isWeave, isMeetingApproved, MEETING_ROUNDS } = require('../../weave');
 
 // Same convention as fetch-nodes.js / photo-nodes.js / input-nodes.js.
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', '..', 'data');
@@ -254,44 +255,20 @@ function capturePhotoDescriptions(state, config, descriptions) {
  * @returns {Object} Partial state update with currentPhase
  */
 async function checkpointCharacterIds(state, config) {
-  // C5: this gate moved BEHIND arc selection. A thread paused here on the previous
-  // graph fires this node on its first Resume (a plain edge is a channel named
-  // after the TARGET node, so the pending write survives the rewiring), and its
-  // outgoing writes then follow the NEW graph: straight into
-  // buildArcEvidencePackages with zero arcs and a paid generateOutline +
-  // evaluateOutline, pausing at `outline` on an outline for no arcs. Stop here
-  // instead, with the recovery in the message.
-  //
-  // v2 I1: the discriminator is whether arcs were ever ANALYSED, not whether any
-  // were SELECTED. routeAfterArcCheckpoint forces `forward` with an empty
-  // selection once the human revision cap is reached, and that legitimate path now
-  // runs through this gate; keying on selectedArcs would kill it with a false
-  // message and the wrong recovery.
-  //
-  // `narrativeArcs` alone is not enough either: validateArcStructure FILTERS arcs
-  // with no evidence and no characters, and routeArcValidation/routeArcEvaluation
-  // deliberately escalate a 0-arc result to the human gate rather than revise
-  // futilely — so a genuinely analysed run can arrive here with narrativeArcs: []
-  // and no _previousArcs stash. Two more signals cover that:
-  //   - `_arcAnalysisCache`, written by analyzeArcsPlayerFocusGuided itself;
-  //   - an `arcs` entry in evaluationHistory, which every new-graph path to this
-  //     gate has (checkpointArcSelection is only reachable via evaluateArcs).
-  // Both are cleared by every rollback list that clears narrativeArcs and by a
-  // fresh start, so they say "the arc phase ran on THIS graph" without saying
-  // anything about how many arcs survived. An old-graph thread paused at
-  // character-ids (phase 1.66, upstream of all of it) has none of the four.
-  const arcPhaseRan = Boolean(
-    state.narrativeArcs?.length
-    || state._previousArcs?.length
-    || state._arcAnalysisCache
-    || (state.evaluationHistory || []).some(entry => entry?.phase === 'arcs')
-  );
-  if (!arcPhaseRan) {
+  // C5, then brief 4.5 (R2): this gate runs behind the story meeting, and every later
+  // stage works from the weave the meeting settled. A thread that reaches it with no weave
+  // was started on an older graph: before the story meeting (arcs, no weave), or before the
+  // photo late-join (this gate ran before arc analysis). A paused write survives the
+  // rewiring (a plain edge is a channel named after the TARGET node), so its first Resume
+  // fires this node, and its outgoing writes then follow the new graph into stages that
+  // need a weave, and pay for them. Stop here instead, with the recovery in the message:
+  // the rollback to the story meeting keeps the parse, the curation and the photos, and
+  // writes the weave fresh.
+  if (!isWeave(state.weave)) {
     throw new Error(
-      '[checkpointCharacterIds] Reached before any arc analysis has run. This thread was started ' +
-      'on the previous graph, where character-ids ran before arc analysis. Roll back to ' +
-      'await-full-context and re-run from there (a rollback replays from START, so nothing ' +
-      'already collected is lost).'
+      '[checkpointCharacterIds] Reached with no weave: this thread was started before the story ' +
+      'meeting existed. Roll back to the story meeting (arc-selection): the rollback keeps the ' +
+      'parse, the curation and the photos, and writes the weave fresh for the meeting.'
     );
   }
 
@@ -550,50 +527,89 @@ async function checkpointEvidenceAndPhotos(state, config) {
 // evaluationHistory was lost when checkpointInterrupt() threw before return.
 
 /**
- * Arc Selection Checkpoint
+ * Write the weave the director approved at the story meeting to the session folder
+ * (brief 4.5; R8): `data/<id>/analysis/weave.approved.json`, beside the map's and the
+ * article's approved versions, for the readout that asks whether the story changed after
+ * the meeting (spec section 13). The update the payload sends is applied before this node
+ * re-executes, so state.weave here is the weave as the director left it. The session id is
+ * the state's; a failed write is logged and never costs the director the approval.
  *
- * Pauses for user to select which narrative arcs to include in the article.
- * Requires: state.narrativeArcs (from evaluateArcs with ready=true)
+ * @param {Object} state
+ * @param {Object} config - may carry configurable.dataDir
+ */
+function writeApprovedWeave(state, config) {
+  const sessionId = state.sessionId || config?.configurable?.sessionId;
+  if (!sessionId) {
+    console.warn('[checkpointArcSelection] No sessionId; not writing the approved weave');
+    return;
+  }
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const analysisDir = path.join(dataDir, String(sessionId), 'analysis');
+  const target = path.join(analysisDir, 'weave.approved.json');
+  try {
+    fs.mkdirSync(analysisDir, { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(state.weave ?? null, null, 2), 'utf-8');
+    console.log(`[checkpointArcSelection] Approved weave written to ${target}`);
+  } catch (error) {
+    console.error(`[checkpointArcSelection] Could not write ${target}: ${error.message}`);
+  }
+}
+
+/**
+ * The story meeting's stop (phase 4, brief 4.5; spec 4.3 and 4.4): the arc stop, where the
+ * director settles the weave.
  *
- * @param {Object} state - Current state with narrativeArcs
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with selectedArcs
+ * It shows the weave and pauses until the director acts. The payload (server.js
+ * buildResumePayload, lib/meeting.js meetingResume) has already written the weave as the
+ * director left it and the standing edits through the update, which LangGraph applies
+ * before this node re-executes; the resume value says which action it was:
+ * - an approve (`{approved: true}`): this node sets the meeting's approval, which every
+ *   arc-stage skip reads (lib/weave.js isMeetingApproved), ends the round's report and
+ *   marks, and writes the approved weave. The standing edits and their baseline stay: they
+ *   stand past approve (K3);
+ * - a reweave or a send-back (`{round}`): the director's round, marked, which the route
+ *   takes to the rework.
+ * Anything else is a resume the meeting does not know, and fails loud. Skips once the
+ * meeting is approved, so a replay passes through.
+ *
+ * @param {Object} state - Current state with the weave
+ * @param {Object} config - Graph config, with configurable.dataDir for the approved weave
+ * @returns {Object} Partial state update
  */
 async function checkpointArcSelection(state, config) {
-  // Skip if already have selection (resume case)
-  const skipCondition = state.selectedArcs?.length > 0
-    ? state.selectedArcs
-    : null;
+  const skipCondition = isMeetingApproved(state) ? true : null;
 
   const resumeValue = checkpointInterrupt(
     CHECKPOINT_TYPES.ARC_SELECTION,
-    {
-      narrativeArcs: state.narrativeArcs,
-      evaluationHistory: state.evaluationHistory
-    },
+    { weave: state.weave },
     skipCondition
   );
 
-  // Approve: resumed with arc selection
-  if (resumeValue?.selectedArcs && !skipCondition) {
-    console.log(`[checkpointArcSelection] Approved with ${resumeValue.selectedArcs.length} arcs selected`);
+  if (skipCondition) {
+    return { currentPhase: PHASES.ARC_SELECTION };
+  }
+
+  if (resumeValue?.approved === true) {
+    console.log('[checkpointArcSelection] The story meeting is approved');
+    writeApprovedWeave(state, config);
     return {
-      selectedArcs: resumeValue.selectedArcs,
+      meetingApproved: true,
+      _meetingRound: null,
+      _weaveHandEditReport: null,
+      _weaveMarks: null,
       currentPhase: PHASES.ARC_SELECTION
     };
   }
 
-  // Reject with feedback — routing function sends to revision loop
-  if (resumeValue?.approved === false && resumeValue?.feedback) {
-    console.log(`[checkpointArcSelection] Rejected by human with feedback`);
+  if (MEETING_ROUNDS.includes(resumeValue?.round)) {
+    console.log(`[checkpointArcSelection] The director asked for a ${resumeValue.round}`);
     return {
+      _meetingRound: resumeValue.round,
       currentPhase: PHASES.ARC_SELECTION
     };
   }
 
-  return {
-    currentPhase: PHASES.ARC_SELECTION
-  };
+  throw new Error(`[checkpointArcSelection] The story meeting resumed with neither an approval nor a round: it takes approve, reweave or send-back (got ${JSON.stringify(resumeValue)}).`);
 }
 
 /**
@@ -777,7 +793,7 @@ module.exports = {
 
   // Evaluation checkpoint nodes (SRP: separate from expensive evaluation)
   checkpointArcSelection: traceNode(checkpointArcSelection, 'checkpointArcSelection', {
-    stateFields: ['narrativeArcs', 'selectedArcs', 'evaluationHistory']
+    stateFields: ['weave', 'meetingApproved', '_meetingRound']
   }),
   checkpointOutline: traceNode(checkpointOutline, 'checkpointOutline', {
     stateFields: ['outline', 'outlineApproved', 'evaluationHistory']

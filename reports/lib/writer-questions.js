@@ -17,6 +17,14 @@
  * with C15's three cases as the story meeting asks them (a player, a pronoun, a figure
  * that looks wrong) and what each answer changes in print. The outline's and the
  * article's `writerQuestions` stay until their writers drop the field (4.6, 4.7).
+ *
+ * Brief 4.5 (C15, ruling 4): the director answers each question in its own box at the
+ * story meeting, and the answer (`answer`, WEAVE_ANSWER_KEY) travels with its question
+ * to every later writer as the director's words. Code keeps each answered question
+ * whole, apart from any model's output: every rework keeps each question the director has
+ * not answered, and no answer is ever read from a rework's returned questions
+ * (carriedWeaveQuestions). The writer's schema has no `answer`; the director-side schema
+ * (lib/meeting.js) adds it.
  */
 
 /** The field's name on the outline and the article. */
@@ -258,48 +266,68 @@ const WEAVE_QUESTIONS_PROPERTY = Object.freeze({
 /** The five strings a weave question carries. */
 const WEAVE_QUESTION_FIELDS = ['id', 'kind', 'about', 'question', 'changes'];
 
+/** The director's answer on a weave question, given at the story meeting (brief 4.5). */
+const WEAVE_ANSWER_KEY = 'answer';
+
 /**
  * The weave's questions in a list, as `{id, kind, about, question, changes}` with each
- * string trimmed at the ends. An entry that lacks one of the five, or whose kind is not
+ * string trimmed at the ends, and the director's `answer` when there is one, trimmed at
+ * the ends only (brief 4.5). An entry that lacks one of the five, or whose kind is not
  * one of WEAVE_QUESTION_KINDS, is not a question the meeting can ask, and is left out.
  *
  * @param {*} value - a weave's questions
- * @returns {Array<{id: string, kind: string, about: string, question: string, changes: string}>}
+ * @returns {Array<{id: string, kind: string, about: string, question: string, changes: string, answer?: string}>}
  */
 function weaveQuestionsOf(value) {
   if (!Array.isArray(value)) return [];
   return value
     .filter((q) => q && typeof q === 'object')
-    .map((q) => Object.fromEntries(WEAVE_QUESTION_FIELDS.map((field) => [field, typeof q[field] === 'string' ? q[field].trim() : ''])))
+    .map((q) => {
+      const question = Object.fromEntries(WEAVE_QUESTION_FIELDS.map((field) => [field, typeof q[field] === 'string' ? q[field].trim() : '']));
+      const answer = typeof q[WEAVE_ANSWER_KEY] === 'string' ? q[WEAVE_ANSWER_KEY].trim() : '';
+      return answer ? { ...question, [WEAVE_ANSWER_KEY]: answer } : question;
+    })
     .filter((q) => WEAVE_QUESTION_FIELDS.every((field) => q[field]) && WEAVE_QUESTION_KINDS.includes(q.kind));
 }
 
+/** Whether the director has answered this weave question. */
+function isAnswered(question) {
+  return Boolean(question && typeof question[WEAVE_ANSWER_KEY] === 'string' && question[WEAVE_ANSWER_KEY].trim());
+}
+
+/** Questions with no answer on any: what a model's output may carry (brief 4.5). */
+function withoutAnswers(questions) {
+  return (Array.isArray(questions) ? questions : []).map((question) => {
+    if (!question || typeof question !== 'object' || !(WEAVE_ANSWER_KEY in question)) return question;
+    const { [WEAVE_ANSWER_KEY]: _answer, ...asked } = question;
+    return asked;
+  });
+}
+
 /**
- * A weave rework's questions (C15, R5): a rework keeps every question it did not answer.
- * - An automatic pass (a failed check or the fact check sent it) keeps every previous
- *   question: one it returned under the same id is its version, in the previous place;
- *   one it left out comes back, in its place; its questions under new ids follow.
- * - A rework after the director's note returns the questions the note left open beside
- *   its own: its list replaces the old one, an empty list included.
- * - A rework that returns no list keeps the previous one, on either kind of pass.
+ * A weave rework's questions (C15, ruling 4 of brief 4.5): every rework, an automatic
+ * pass or the director's round alike, keeps each question the director has not answered.
+ * - An answered question stays whole, as the director answered it, in its place: code
+ *   keeps it apart from the model's output, so a rework that drops it or rewords it
+ *   changes nothing.
+ * - An unanswered question the rework returned under its id is the rework's version, in
+ *   the previous place; one it left out comes back, in its place.
+ * - The rework's questions under new ids follow.
+ * - A rework that returns no list keeps the previous one.
+ * No answer is ever read from the rework's returned questions.
  *
  * @param {*} returned - the rework's questions (undefined when it returned none)
- * @param {*} previous - the previous weave's questions
- * @param {{afterDirectorNote: boolean}} options - required, as carriedWriterQuestions
+ * @param {*} previous - the questions of the weave the rework started from
  * @returns {Array}
  */
-function carriedWeaveQuestions(returned, previous, { afterDirectorNote } = {}) {
-  if (typeof afterDirectorNote !== 'boolean') {
-    throw new TypeError('carriedWeaveQuestions: options.afterDirectorNote must be true or false (does this rework act on the director\'s note?)');
-  }
+function carriedWeaveQuestions(returned, previous) {
   const previousQuestions = weaveQuestionsOf(previous);
   if (!Array.isArray(returned)) return previousQuestions;
-  const returnedQuestions = weaveQuestionsOf(returned);
-  if (afterDirectorNote) return returnedQuestions;
+  const returnedQuestions = withoutAnswers(weaveQuestionsOf(returned));
   const returnedById = new Map(returnedQuestions.map((q) => [q.id, q]));
   const previousIds = new Set(previousQuestions.map((q) => q.id));
   return [
-    ...previousQuestions.map((q) => returnedById.get(q.id) || q),
+    ...previousQuestions.map((q) => (isAnswered(q) ? q : (returnedById.get(q.id) || q))),
     ...returnedQuestions.filter((q) => !previousIds.has(q.id))
   ];
 }
@@ -313,10 +341,13 @@ module.exports = {
   withCarriedWriterQuestions,
   withoutWriterQuestions,
   schemaWithoutWriterQuestions,
-  // Phase 4 (brief 4.4): the weave's questions
+  // Phase 4 (brief 4.4): the weave's questions; brief 4.5: their answers
   WEAVE_QUESTIONS_KEY,
   WEAVE_QUESTION_KINDS,
   WEAVE_QUESTIONS_PROPERTY,
+  WEAVE_ANSWER_KEY,
   weaveQuestionsOf,
+  isAnswered,
+  withoutAnswers,
   carriedWeaveQuestions
 };

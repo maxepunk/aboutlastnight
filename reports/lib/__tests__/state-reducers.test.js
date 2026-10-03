@@ -54,9 +54,12 @@ describe('humanArcRevisionCount', () => {
     expect(REVISION_CAPS.HUMAN_ARCS).toBeUndefined();
   });
 
-  test('ROLLBACK_COUNTER_RESETS includes humanArcRevisionCount', () => {
+  // Brief 4.5 (R9): a rollback to the story meeting reopens it as the director left it, its
+  // round counters with it; a rollback above the meeting starts its rounds over.
+  test('ROLLBACK_COUNTER_RESETS includes humanArcRevisionCount above the meeting, and the meeting keeps its own', () => {
     expect(ROLLBACK_COUNTER_RESETS['evidence-and-photos'].humanArcRevisionCount).toBe(0);
-    expect(ROLLBACK_COUNTER_RESETS['arc-selection'].humanArcRevisionCount).toBe(0);
+    expect(ROLLBACK_COUNTER_RESETS['arc-selection']).not.toHaveProperty('humanArcRevisionCount');
+    expect(ROLLBACK_COUNTER_RESETS['arc-selection']).not.toHaveProperty('arcRevisionCount');
   });
 
   test('ROLLBACK_COUNTER_RESETS does NOT include humanArcRevisionCount for outline/article', () => {

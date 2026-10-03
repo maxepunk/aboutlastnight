@@ -29,7 +29,7 @@ const {
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
-const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, pruneGateNotes, PHASES_INVALIDATED_BY } = require('./lib/api-helpers');
+const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, rollbackNotesUpdate } = require('./lib/api-helpers');
 const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditReportOf } = require('./lib/hand-edit-diff');
 // FA (requirement 9): the roster's names as the coverage check reads them, which each
 // send-back records a cut's or a rewrite's names against.
@@ -41,6 +41,9 @@ const { missingPrintedPhotos } = require('./lib/publish-photos');
 const { leftOutPhotosOf, listAfterStopChoices } = require('./lib/photo-leave-out');
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
+// Brief 4.5: the story meeting's payloads and what its stop sends.
+const { meetingResume, meetingCheckpointData } = require('./lib/meeting');
+const { isWeave } = require('./lib/weave');
 // The outline editors' own list of the fields phase 3 retired (BU3), so the server
 // diffs a hand edit against the outline the director edited (fix 3.2b).
 const { dropRetiredOutlineFields } = require('./console/outline-edit-logic');
@@ -400,22 +403,16 @@ async function getCheckpointData(checkpointType, state) {
         case CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS:
             return { evidenceBundle: state.evidenceBundle };
         case CHECKPOINT_TYPES.ARC_SELECTION:
-            return {
-                narrativeArcs: state.narrativeArcs,
-                lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'arcs'),
-                evaluationHistory: state.evaluationHistory,
-                revisionCount: state.arcRevisionCount || 0,
-                humanRevisionCount: state.humanArcRevisionCount || 0,
-                maxRevisions: REVISION_CAPS.ARCS,
-                previousFeedback: state._arcFeedback || null,
-                _revisionTimedOut: state._arcAnalysisCache?._revisionTimedOut || false,
-                _generationTimedOut: state._arcAnalysisCache?._generationTimedOut || false,
-                directorGateNotes: state.directorGateNotes || [],
-                // Brief 1.2: what each arc's keyEvidence id actually refers to.
+            // Brief 4.5: the story meeting (lib/meeting.js meetingCheckpointData): the weave,
+            // the verdict as the parse holds it, the questions with any answers, a code check
+            // still failing on the weave in hand, the concerns beside their lines, the marks
+            // after a round, the edits a send-back changed, the standing notes, the round
+            // counters and a round that did not run. Brief 1.2: evidenceIndex names each
+            // receipt's document.
+            return meetingCheckpointData(state, {
                 evidenceIndex: buildEvidenceIndex(state.evidenceBundle),
-                // Brief 3.7: the arc writer's questions for the director (C15)
-                writerQuestions: writerQuestionsOf(state._arcAnalysisCache?.writerQuestions)
-            };
+                maxRevisions: REVISION_CAPS.ARCS
+            });
         case CHECKPOINT_TYPES.OUTLINE:
             return {
                 outline: state.outline,
@@ -716,25 +713,29 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         }
     }
 
-    // Arc selection: approve with selection, or reject-with-feedback
-    if (Array.isArray(approvals.selectedArcs) && approvals.selectedArcs.length > 0) {
-        validApprovalDetected = true;
-        stateUpdates.selectedArcs = approvals.selectedArcs;
-        resume.selectedArcs = approvals.selectedArcs;
-        // Q2: optional director emphasis, carried into the outline AND article
-        // prompts. Only on an APPROVAL -- a rejection regenerates the arcs, and
-        // arcFeedback is the channel for that.
-        if (typeof approvals.outlineGuidance === 'string' && approvals.outlineGuidance.trim()) {
-            stateUpdates._outlineGuidance = approvals.outlineGuidance.trim();
+    // The story meeting (phase 4, brief 4.5): `{meeting: 'approve' | 'reweave' | 'send-back',
+    // weave, note}`. lib/meeting.js meetingResume holds the weave to the director-side
+    // schema, refusing a malformed one with its reason, and writes the director's version
+    // and their standing edits; a reweave and a send-back are the director's round, marked.
+    // The note joins the standing notes: an approval note on an approve (the arc
+    // selection's _outlineGuidance is written no more), a rejection note on a round. Taken
+    // only at the meeting's own stop (I3): `{approved: true}` posted at another stop would
+    // approve that stop. The arc selection's old shape is refused by name.
+    if (approvals.meeting !== undefined) {
+        if (checkpointType !== null && checkpointType !== CHECKPOINT_TYPES.ARC_SELECTION) {
+            return { resume: {}, stateUpdates: {}, error: `The story meeting's actions are taken at the story meeting (arc-selection), not at ${checkpointType}.` };
         }
-    } else if (approvals.selectedArcs === false && typeof approvals.arcFeedback === 'string' && approvals.arcFeedback.trim()) {
+        const meeting = meetingResume(approvals, currentState, sendBackRecordOptions(currentState));
+        if (meeting.error) return { resume: {}, stateUpdates: {}, error: meeting.error };
         validApprovalDetected = true;
-        resume.approved = false;
-        resume.feedback = approvals.arcFeedback.trim();
-        stateUpdates._arcFeedback = approvals.arcFeedback.trim();
-        appendGateNote(stateUpdates, currentState, 'arc-selection', approvals.arcFeedback.trim(), 'rejection');
-    } else if (approvals.selectedArcs && !Array.isArray(approvals.selectedArcs)) {
-        error = 'selectedArcs must be an array or false (for rejection)';
+        Object.assign(resume, meeting.resume);
+        Object.assign(stateUpdates, meeting.stateUpdates);
+        if (meeting.note) appendGateNote(stateUpdates, currentState, 'arc-selection', meeting.note.text, meeting.note.kind);
+    } else if (['selectedArcs', 'arcFeedback', 'outlineGuidance'].some((key) => approvals[key] !== undefined)) {
+        return {
+            resume: {}, stateUpdates: {},
+            error: 'The arc selection is gone: the story meeting takes {meeting: "approve" | "reweave" | "send-back", weave, note}.'
+        };
     }
 
     // Outline: approve, approve-with-edits, or reject-with-feedback
@@ -1403,9 +1404,10 @@ const RESOURCE_ENDPOINTS = [
     { path: 'evidence', minPhase: 1.8,
       fields: state => ({ evidenceBundle: state.evidenceBundle || null }),
       check: state => !!state.evidenceBundle },
+    // Brief 4.5: the story meeting's weave, as the director last left it.
     { path: 'arcs', minPhase: 2.3,
-      fields: state => ({ narrativeArcs: state.narrativeArcs || null, selectedArcs: state.selectedArcs || null }),
-      check: state => !!state.narrativeArcs },
+      fields: state => ({ weave: state.weave || null }),
+      check: state => isWeave(state.weave) },
     { path: 'outline', minPhase: 3.2,
       fields: state => ({ outline: state.outline || null }),
       check: state => !!state.outline },
@@ -1743,14 +1745,12 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             initialState._previousPhotosPath = session.state.photosPath || null;
         }
 
-        // Spec 2026-09-19 §5.4: a rollback into the outline/article region drops the
-        // director's gate notes about content this point regenerates and keeps the
-        // earlier ones. Membership is checked first: points at or above arc-selection
-        // clear the whole channel through ROLLBACK_CLEARS, and writing "all notes"
-        // here would undo that clear.
-        if (Object.prototype.hasOwnProperty.call(PHASES_INVALIDATED_BY, rollbackTo)) {
-            initialState.directorGateNotes = pruneGateNotes(session.state.directorGateNotes, rollbackTo);
-        }
+        // Spec 2026-09-19 §5.4: a rollback to the story meeting or into the map and article
+        // region drops the director's gate notes about content this point regenerates and
+        // keeps the earlier ones (brief 4.5: its own table, STOPS_INVALIDATED_BY, apart from
+        // the evaluation stubs). The points above the meeting clear the whole channel through
+        // ROLLBACK_CLEARS, and the update writes nothing there.
+        Object.assign(initialState, rollbackNotesUpdate(rollbackTo, session.state.directorGateNotes));
 
         if (stateOverrides) {
             Object.assign(initialState, stateOverrides);
@@ -2109,4 +2109,4 @@ process.on('SIGINT', async () => {
 
 // Export helpers for testing. `app` is exported so integration tests can boot the
 // real route table over http (listen() stays behind the require.main guard above).
-module.exports = { app, isAllowedSessionId, buildResumePayload, getCheckpointData, buildCompleteCheckpointData, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState, resolveCheckpointDbPath, resolvePort, CHECKPOINT_DB_PATH, PORT };
+module.exports = { app, isAllowedSessionId, buildResumePayload, getCheckpointData, buildCompleteCheckpointData, RESOURCE_ENDPOINTS, buildCompletionResponse, drainAndClose, _inFlight: inFlightTasks, probeNotionReachable, getSessionOutcome, shapeSessionState, resolveCheckpointDbPath, resolvePort, CHECKPOINT_DB_PATH, PORT };

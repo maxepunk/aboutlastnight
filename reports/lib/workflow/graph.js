@@ -26,10 +26,14 @@
  * → preprocessEvidence → extractCharacterData → checkpointPreCuration [interrupt: pre-curation]
  * → curateEvidenceBundle → checkpointEvidenceAndPhotos [interrupt: evidence-photos] → processRescuedItems
  *
- * PHASE 2: The weave (phase 4, brief 4.4)
+ * PHASE 2: The weave (phase 4, brief 4.4) and the story meeting (brief 4.5)
  * → analyzeArcs (the arc writer: one weave) → validateArcs (the weave checks)
- * → evaluateArcs (the fact check) → checkpointArcSelection [interrupt: arc-selection]
+ * → evaluateArcs (the fact check) → checkpointArcSelection [interrupt: arc-selection,
+ *   the story meeting]
  * → [rework loop: one check rework and one fact-check fix per round]
+ * The meeting's approve goes forward to the photos; a reweave or a send-back is the
+ * director's round: incrementArcRevision → reviseArcs → validateArcs → evaluateArcs,
+ * then the meeting again.
  *
  * PHASE 2.36: Photo branch (photo late-join)
  * checkpointArcSelection --forward--> checkpointPhotos [interrupt: photos]
@@ -65,7 +69,7 @@ const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
 const { ReportStateAnnotation, PHASES, REVISION_CAPS } = require('./state');
 const nodes = require('./nodes');
 const { isTransientError } = require('../llm/retry');
-const { weaveKey, factCheckMarkOf, isWeave, isWeaveJudged, isMeetingApproved } = require('../weave');
+const { weaveKey, factCheckMarkOf, isWeave, isWeaveJudged, isMeetingApproved, meetingRoundOf } = require('../weave');
 
 // P3.1 — Transient-only auto-retry for LLM-calling nodes.
 // initialInterval is MILLISECONDS in @langchain/langgraph 1.0.7 (verified against
@@ -181,19 +185,21 @@ function routeAfterArticleCheckpoint(state) {
 }
 
 /**
- * Route function after arc selection human checkpoint
- * Approve (selectedArcs populated) → forward to evidence packaging
- * Reject (no selectedArcs) → revision loop for arc regeneration
+ * Route after the story meeting's stop (brief 4.5): three outcomes. An approved meeting
+ * goes forward to the photos; a reweave and a send-back, the director's rounds, go to the
+ * rework. A stop with neither (a resume the meeting does not know) fails loud.
+ *
+ * Brief 1.4: the director's rounds are not limited, so there is no cap to force forward
+ * at. The forced forward sent an EMPTY selection down the whole paid pipeline on the
+ * fourth send back.
+ *
  * @param {Object} state - Current graph state
  * @returns {string} 'forward' or 'revise'
  */
 function routeAfterArcCheckpoint(state) {
-  if (state.selectedArcs?.length > 0) return 'forward';
-  // Brief 1.4: the director's rounds are not limited, so there is no cap to force
-  // forward at. The forced forward sent an EMPTY selection down the whole paid
-  // pipeline — an outline, an article and an evaluation about nothing — on the
-  // fourth send back.
-  return 'revise';
+  if (isMeetingApproved(state)) return 'forward';
+  if (meetingRoundOf(state)) return 'revise';
+  throw new Error('[routeAfterArcCheckpoint] The story meeting holds neither an approval nor a round: it takes approve, reweave or send-back.');
 }
 
 // NOTE: routeOutlineValidation and routeArticleValidation removed in Commit 8.23
@@ -277,21 +283,25 @@ function routeArcValidation(state) {
 /**
  * Count one more pass on the weave (phase 4, brief 4.4).
  *
- * A send back opens a round of the director's (brief 1.4): the automatic count starts
- * over. An automatic pass, a check rework or the fact check's fix, counts toward the
- * round. The weave stays where it is: the rework reads it as the version it starts from.
- * No history stub is needed, since the fact check skips by its mark on the weave, which
- * the rework of a director's round writes without (lib/weave.js).
+ * A reweave or a send-back opens a round of the director's (briefs 1.4 and 4.5): it
+ * spends no automated budget, and the automatic count starts over. Its round mark
+ * (`_meetingRound`), never the note's presence, says the pass is the director's, so a
+ * reweave with no note is a round too. An automatic pass, a check rework or the fact
+ * check's fix, counts toward the round. The weave stays where it is: the rework reads it
+ * as the version it starts from. No history stub is needed, since the fact check skips by
+ * its mark on the weave, which the rework of a director's round writes without
+ * (lib/weave.js).
  */
 async function incrementArcRevision(state) {
-  const isHumanDriven = !!state._arcFeedback;
+  const round = meetingRoundOf(state);
+  const isHumanDriven = round !== null;
   const newEvalCount = isHumanDriven
     ? 0
     : (state.arcRevisionCount || 0) + 1;
   const newHumanCount = isHumanDriven
     ? (state.humanArcRevisionCount || 0) + 1
     : (state.humanArcRevisionCount || 0);
-  const kind = isHumanDriven ? "the director's round" : (isWeaveJudged(state.weave) ? "the fact check's fix" : 'a check rework');
+  const kind = isHumanDriven ? `the director's ${round}` : (isWeaveJudged(state.weave) ? "the fact check's fix" : 'a check rework');
 
   console.log(`[incrementArcRevision] count=${newEvalCount}, humanCount=${newHumanCount}, ${kind}`);
 

@@ -373,7 +373,7 @@ SECTION 6: CRAFT GUIDANCE (the rule set's craft files for the arc writer: story,
 }
 ```
 
-**Checkpoint**: `arc-selection` (2.35) - Select 3-5 arcs for article
+**Checkpoint**: `arc-selection` (2.35) - The story meeting (phase 4, brief 4.5): the director settles the weave, then approves, reweaves or sends back (CLAUDE.md, **The story meeting**)
 
 ### Phase 2.36: Photo Branch
 
@@ -770,7 +770,7 @@ const { interrupt } = require('@langchain/langgraph');
 // In checkpoint node
 interrupt({
   type: 'arc-selection',
-  data: { narrativeArcs, evaluationHistory }
+  weave            // the story meeting (phase 4, brief 4.5)
 });
 ```
 

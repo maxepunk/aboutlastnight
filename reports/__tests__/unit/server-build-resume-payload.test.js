@@ -283,37 +283,6 @@ describe('buildResumePayload — input review (CODE-REVIEW B2/B8)', () => {
   });
 });
 
-describe('buildResumePayload — arc-selection director guidance (Q2)', () => {
-  it('carries trimmed outlineGuidance alongside the arc selection', () => {
-    const result = buildResumePayload({
-      selectedArcs: ['a'],
-      outlineGuidance: '  Lead with the money, not the vote. '
-    });
-    expect(result.error).toBeNull();
-    expect(result.resume.selectedArcs).toEqual(['a']);
-    expect(result.stateUpdates.selectedArcs).toEqual(['a']);
-    expect(result.stateUpdates._outlineGuidance).toBe('Lead with the money, not the vote.');
-  });
-
-  it('omits the key entirely for blank guidance', () => {
-    ['', '   ', undefined, null, 42].forEach((guidance) => {
-      const result = buildResumePayload({ selectedArcs: ['a'], outlineGuidance: guidance });
-      expect('_outlineGuidance' in result.stateUpdates).toBe(false);
-    });
-  });
-
-  it('does not attach guidance to an arc REJECTION', () => {
-    const result = buildResumePayload({
-      selectedArcs: false,
-      arcFeedback: 'these arcs miss the vote',
-      outlineGuidance: 'Lead with the money'
-    });
-    expect(result.error).toBeNull();
-    expect(result.resume.approved).toBe(false);
-    expect('_outlineGuidance' in result.stateUpdates).toBe(false);
-  });
-});
-
 describe('fullContext approval clears the parse it replaces (operator gate 2026-09-19)', () => {
   // loadDirectorNotes rehydrates sessionConfig/directorNotes from data/<id>/inputs/*.json on
   // any replay where directorNotes is null (a forced Start Fresh of a reused id, a rollback
@@ -423,8 +392,10 @@ describe('buildResumePayload — photosPath is a photos-gate-only approval (C1/I
     expect(evidence.stateUpdates.photosPath).toBe(dir);
     expect(evidence.resume.photosPath).toBeUndefined();
 
+    // Brief 4.5: the story meeting's approve.
+    const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
     const arcs = buildResumePayload(
-      { selectedArcs: ['a'], photosPath: dir }, {}, 'journalist', 'arc-selection'
+      { meeting: 'approve', weave: JSON.parse(JSON.stringify(WEAVE)), photosPath: dir }, { weave: WEAVE }, 'journalist', 'arc-selection'
     );
     expect(arcs.error).toBeNull();
     expect(arcs.stateUpdates.photosPath).toBe(dir);
@@ -521,10 +492,13 @@ describe('buildResumePayload — whiteboardPhotoPath rides along, never approves
   });
 
   it('is ignored at every other gate', () => {
+    // Brief 4.5: the story meeting's approve.
+    const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
     const result = buildResumePayload({
-      selectedArcs: ['a'],
+      meeting: 'approve',
+      weave: JSON.parse(JSON.stringify(WEAVE)),
       whiteboardPhotoPath: 'D:/x.jpg'
-    }, current, 'journalist', 'arc-selection');
+    }, { ...current, weave: WEAVE }, 'journalist', 'arc-selection');
     expect(result.error).toBeNull();
     expect('rawSessionInput' in result.stateUpdates).toBe(false);
   });
@@ -783,8 +757,10 @@ describe('the director\'s edits stand across send-backs (F1)', () => {
 describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
   const existing = [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the vote arc.', at: '2026-09-19T10:00:00.000Z' }];
 
+  // Brief 4.5: the story meeting's send-back.
   test('an arc rejection appends one arc-selection entry with round = existing arc notes + 1', () => {
-    const { stateUpdates } = buildResumePayload({ selectedArcs: false, arcFeedback: 'Merge arcs 2 and 3.' }, { directorGateNotes: existing });
+    const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+    const { stateUpdates } = buildResumePayload({ meeting: 'send-back', note: 'Merge arcs 2 and 3.' }, { weave: WEAVE, directorGateNotes: existing });
     expect(stateUpdates.directorGateNotes).toHaveLength(2);
     expect(stateUpdates.directorGateNotes[0]).toEqual(existing[0]);
     expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'arc-selection', kind: 'rejection', round: 2, text: 'Merge arcs 2 and 3.' });
@@ -802,9 +778,12 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
     expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'article', kind: 'rejection', round: 1, text: 'Name the shell account.' })]);
   });
 
-  test('an approval with no note appends nothing, and arc GUIDANCE is not recorded as a note', () => {
-    const a = buildResumePayload({ selectedArcs: ['arc-1'], outlineGuidance: 'Lead with the money.' }, { directorGateNotes: existing });
-    expect(a.stateUpdates._outlineGuidance).toBe('Lead with the money.');
+  // Brief 4.5: the story meeting's approve with no note; the meeting writes no guidance.
+  test('an approval with no note appends nothing, and the meeting writes no guidance', () => {
+    const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+    const a = buildResumePayload({ meeting: 'approve', weave: JSON.parse(JSON.stringify(WEAVE)) }, { weave: WEAVE, directorGateNotes: existing });
+    expect(a.error).toBeNull();
+    expect('_outlineGuidance' in a.stateUpdates).toBe(false);
     expect(a.stateUpdates.directorGateNotes).toBeUndefined();
     const o = buildResumePayload({ outline: true }, { directorGateNotes: existing });
     expect(o.stateUpdates.directorGateNotes).toBeUndefined();
@@ -1273,5 +1252,87 @@ describe('buildResumePayload: the structured form clears the raw text (brief 4.2
     expect(error).toBeNull();
     expect(stateUpdates.characterIdsRaw).toBe('Photo aln (7 of 9).jpg:\n  User Input: Kai at the bar.');
     expect(stateUpdates).not.toHaveProperty('characterIdMappings');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5: the story meeting's payloads (brief 4.5; spec 4.3 and 4.4)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The arc stop is the story meeting: `{meeting: 'approve' | 'reweave' | 'send-back', weave,
+// note}` replaces the arc selection. lib/meeting.js meetingResume holds the weave to the
+// director-side schema (lib/__tests__/meeting.test.js covers it); these pin the server's
+// part: the notes, the stop it is taken at, and the old shape refused.
+describe('4.5: the story meeting through buildResumePayload', () => {
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { withFactCheckMark } = require('../../lib/weave');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const shown = () => ({
+    weave: withFactCheckMark(clone(WEAVE), { at: 't', ready: true, fixes: 0 }),
+    _weaveBaseline: clone(WEAVE),
+    directorGateNotes: [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the heir thread.', at: 't0' }]
+  });
+  const left = () => {
+    const weave = clone(WEAVE);
+    weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
+    weave.questions = weave.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar.' }));
+    return weave;
+  };
+
+  it("approve resumes as an approval, writes the director's version and their edits, and joins the note as an approval note", () => {
+    const { resume, stateUpdates, error } = buildResumePayload({ meeting: 'approve', weave: left(), note: '  Lead with the vote.  ' }, shown(), 'journalist', 'arc-selection');
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: true });
+    expect(stateUpdates.weave.questions[0].answer).toBe('Sarah ran the bar.');
+    expect(stateUpdates.weave._factCheck).toEqual({ at: 't', ready: true, fixes: 0 });
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'threads[#t3].role']]);
+    expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Lead with the vote.' });
+    ['_outlineGuidance', 'selectedArcs', '_meetingRound', '_arcFeedback'].forEach((key) => expect(`${key}: ${key in stateUpdates}`).toBe(`${key}: false`));
+  });
+
+  it('a reweave with no note is the director\'s round, marked, and appends no note', () => {
+    const { resume, stateUpdates, error } = buildResumePayload({ meeting: 'reweave', weave: left() }, shown(), 'journalist', 'arc-selection');
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: false, round: 'reweave' });
+    expect(stateUpdates).toMatchObject({ _meetingRound: 'reweave', _arcFeedback: null });
+    expect(stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  it('a send-back carries its note to the rework and joins it as a rejection note, round counted per kind', () => {
+    const { resume, stateUpdates, error } = buildResumePayload({ meeting: 'send-back', note: 'Rethink the money thread.' }, shown(), 'journalist', 'arc-selection');
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: false, round: 'send-back', feedback: 'Rethink the money thread.' });
+    expect(stateUpdates).toMatchObject({ _meetingRound: 'send-back', _arcFeedback: 'Rethink the money thread.' });
+    expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'arc-selection', kind: 'rejection', round: 2, text: 'Rethink the money thread.' });
+  });
+
+  it('refuses a malformed weave with the schema\'s reason, and writes nothing', () => {
+    const bad = left();
+    bad.threads[0].role = 'hero';
+    const result = buildResumePayload({ meeting: 'approve', weave: bad }, shown(), 'journalist', 'arc-selection');
+    expect(result.error).toMatch(/director-side schema: \/threads\/0\/role must be equal to one of the allowed values/);
+    expect(result.stateUpdates).toEqual({});
+    expect(result.resume).toEqual({});
+  });
+
+  it('refuses a send-back with no note, and an action the meeting does not take', () => {
+    expect(buildResumePayload({ meeting: 'send-back', note: '  ' }, shown()).error).toMatch(/A send-back carries a note/);
+    expect(buildResumePayload({ meeting: 'select', weave: left() }, shown()).error).toMatch(/approve, reweave or send-back/);
+  });
+
+  it("takes the meeting's actions only at the meeting: at another stop an approval would approve that stop (I3)", () => {
+    ['outline', 'article', 'photos'].forEach((type) => {
+      const result = buildResumePayload({ meeting: 'approve', weave: left() }, shown(), 'journalist', type);
+      expect(result.error).toMatch(/taken at the story meeting \(arc-selection\)/);
+      expect(result.resume).toEqual({});
+    });
+  });
+
+  it('refuses the arc selection\'s old shape by name, so a stale console never approves by a selection', () => {
+    [{ selectedArcs: ['a'] }, { selectedArcs: false, arcFeedback: 'x' }, { outlineGuidance: 'Lead with the money.' }].forEach((approvals) => {
+      const result = buildResumePayload(approvals, shown(), 'journalist', 'arc-selection');
+      expect(result.error).toMatch(/The arc selection is gone: the story meeting takes \{meeting/);
+      expect(result.stateUpdates).toEqual({});
+    });
   });
 });

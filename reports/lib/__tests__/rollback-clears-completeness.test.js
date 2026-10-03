@@ -16,7 +16,7 @@ const {
   ROLLBACK_CLEARS,
   ROLLBACK_CLEARS_EXEMPT
 } = require('../workflow/state');
-const { PHASES_INVALIDATED_BY } = require('../api-helpers');
+const { STOPS_INVALIDATED_BY } = require('../api-helpers');
 
 describe('ROLLBACK_CLEARS completeness (ROOT-1)', () => {
   // Union of every field cleared by ANY rollback point
@@ -120,7 +120,8 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     'input-review': ['inputReviewApproved'],
     'pre-curation': ['preCurationApproved'],
     'evidence-and-photos': ['_evidenceApproved'],
-    'arc-selection': ['selectedArcs'],
+    // Brief 4.5: the story meeting's own approval.
+    'arc-selection': ['meetingApproved'],
     'photos': ['photosPath'],
     'character-ids': ['characterIdMappings'],
     'outline': ['outlineApproved'],
@@ -235,14 +236,16 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
       expect(list.includes('_articleHandEditReport')).toBe(list.includes('_articleFeedback'));
     });
 
-    test('directorGateNotes clears at arc-selection and every point upstream of it', () => {
+    test('directorGateNotes clears at every point upstream of arc-selection', () => {
       ['input-review', 'paper-evidence-selection', 'await-roster', 'await-full-context',
-       'pre-curation', 'evidence-and-photos', 'arc-selection']
+       'pre-curation', 'evidence-and-photos']
         .forEach((p) => expect(ROLLBACK_CLEARS[p]).toContain('directorGateNotes'));
     });
 
-    test('directorGateNotes is NOT list-cleared by the four downstream points (they prune instead)', () => {
-      ['photos', 'character-ids', 'outline', 'article']
+    // Brief 4.5 (R9): going back to the story meeting keeps the meeting's notes, and
+    // prunes the map's and the article's as the later points do.
+    test('directorGateNotes is NOT list-cleared by arc-selection and the four points after it (they prune instead)', () => {
+      ['arc-selection', 'photos', 'character-ids', 'outline', 'article']
         .forEach((p) => expect(ROLLBACK_CLEARS[p]).not.toContain('directorGateNotes'));
     });
 
@@ -250,9 +253,11 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     // PARTITION itself: a twelfth rollback point that is in neither mechanism would
     // silently keep every standing note, and one in both would be a contradiction
     // (M1; the per-point-completeness lesson in the memory file is this shape).
+    // Brief 4.5: the pruning reads its own table of invalidated stops, apart from the
+    // evaluation stubs (lib/api-helpers.js STOPS_INVALIDATED_BY).
     test.each(points)('%s uses exactly one directorGateNotes mechanism: clear or prune', (point) => {
       const listClears = ROLLBACK_CLEARS[point].includes('directorGateNotes');
-      const prunes = Object.prototype.hasOwnProperty.call(PHASES_INVALIDATED_BY, point);
+      const prunes = Object.prototype.hasOwnProperty.call(STOPS_INVALIDATED_BY, point);
       expect(listClears).toBe(!prunes);
     });
   });
@@ -325,5 +330,41 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
       expect(ROLLBACK_CLEARS_EXEMPT.has('_outlineTrace')).toBe(false);
       expect(ROLLBACK_CLEARS_EXEMPT.has('_articleTrace')).toBe(false);
     });
+  });
+});
+
+// Brief 4.5 (R9; K2 and K3 of the plan review): going back to the story meeting reopens it
+// as the director left it. The weave, its baseline and the standing edits survive the
+// meeting's point and every point after it, and go only with the stages that write the
+// weave again; the approval, the round mark, the marks and the report go wherever the
+// meeting reopens.
+describe("the story meeting's channels (brief 4.5)", () => {
+  const points = Object.keys(ROLLBACK_CLEARS);
+  const UPSTREAM = ['input-review', 'paper-evidence-selection', 'await-roster', 'await-full-context', 'pre-curation', 'evidence-and-photos'];
+  const KEPT_FROM_THE_MEETING = ['arc-selection', 'photos', 'character-ids', 'outline', 'article'];
+  const THE_DIRECTORS_WEAVE = ['weave', '_weaveBaseline', '_weaveHandEdits'];
+  const THE_ROUND = ['meetingApproved', '_meetingRound', '_weaveMarks', '_weaveHandEditReport'];
+
+  test('every point is one of the two lists', () => {
+    expect([...UPSTREAM, ...KEPT_FROM_THE_MEETING].sort()).toEqual(points.slice().sort());
+  });
+
+  test.each(UPSTREAM)('%s writes the weave again, so it clears the weave, its baseline, the edits and the round', (point) => {
+    [...THE_DIRECTORS_WEAVE, ...THE_ROUND].forEach((field) => expect([point, field, ROLLBACK_CLEARS[point].includes(field)]).toEqual([point, field, true]));
+  });
+
+  test.each(KEPT_FROM_THE_MEETING)('%s keeps the weave as the director left it, its baseline and the standing edits', (point) => {
+    THE_DIRECTORS_WEAVE.forEach((field) => expect([point, field, ROLLBACK_CLEARS[point].includes(field)]).toEqual([point, field, false]));
+  });
+
+  test("the meeting's own point reopens it: the approval, the round mark, the marks and the report go; the points after it keep the approval", () => {
+    THE_ROUND.forEach((field) => expect(ROLLBACK_CLEARS['arc-selection']).toContain(field));
+    ['photos', 'character-ids', 'outline', 'article'].forEach((point) => {
+      THE_ROUND.forEach((field) => expect([point, field, ROLLBACK_CLEARS[point].includes(field)]).toEqual([point, field, false]));
+    });
+  });
+
+  test('none of the six is exempt', () => {
+    [...THE_DIRECTORS_WEAVE.filter((f) => f !== 'weave'), ...THE_ROUND].forEach((field) => expect(ROLLBACK_CLEARS_EXEMPT.has(field)).toBe(false));
   });
 });

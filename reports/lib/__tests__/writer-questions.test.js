@@ -342,10 +342,15 @@ describe('writerQuestionsOf keeps the kind', () => {
 });
 
 // Phase 4 (brief 4.4): the arc rework reads and returns the weave, its questions in it.
+// Brief 4.5: a director's round is marked explicitly (`_meetingRound`), and every rework
+// keeps each question the director has not answered (C15, ruling 4).
 describe('an arc rework carries forward the questions it did not answer (R5)', () => {
   function reworkState(previousQuestions, feedback = null) {
     const state = reworkFixtureState('journalist');
-    return { ...state, _arcFeedback: feedback, weave: { ...clone(state.weave), questions: previousQuestions } };
+    return {
+      ...state, _arcFeedback: feedback, ...(feedback && { _meetingRound: 'send-back' }),
+      weave: { ...clone(state.weave), questions: previousQuestions }
+    };
   }
   /** The weave the rework returns: the one it started from, with these questions, or none. */
   function returned(state, questions) {
@@ -371,10 +376,27 @@ describe('an arc rework carries forward the questions it did not answer (R5)', (
     expect(result.weave.questions).toEqual([W_SARAH, W_FIGURE]);
   });
 
-  it('drops a question the rework answered after the director\'s note, and keeps the unanswered one', async () => {
+  it("keeps a question a send-back's rework left out: the note answers no question, only its box does", async () => {
     const state = reworkState([W_SARAH, W_FIGURE], 'Sarah sold the first memory at 07:50 AM.');
     const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, [W_FIGURE])) } });
-    expect(result.weave.questions).toEqual([W_FIGURE]);
+    expect(result.weave.questions).toEqual([W_SARAH, W_FIGURE]);
+  });
+
+  it("keeps an answered question whole, with its answer, through a send-back whose rework returns no questions at all", async () => {
+    const answered = { ...W_SARAH, answer: 'Sarah ran the bar all morning.' };
+    const state = reworkState([answered, W_FIGURE], 'Rethink the money thread.');
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, [])) } });
+    expect(result.weave.questions).toEqual([answered, W_FIGURE]);
+    const none = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, undefined)) } });
+    expect(none.weave.questions).toEqual([answered, W_FIGURE]);
+  });
+
+  it("keeps an answered question whole through a reweave that rewords it, and reads no answer the rework wrote", async () => {
+    const answered = { ...W_SARAH, answer: 'Sarah ran the bar all morning.' };
+    const state = { ...reworkState([answered, W_FIGURE]), _meetingRound: 'reweave' };
+    const rework = [{ ...W_SARAH, question: 'Where was Sarah at nine?', answer: 'At the bar.' }, { ...W_FIGURE, answer: 'Not a duplicate.' }];
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, rework)) } });
+    expect(result.weave.questions).toEqual([answered, W_FIGURE]);
   });
 
   it('adds the rework\'s own new questions', async () => {

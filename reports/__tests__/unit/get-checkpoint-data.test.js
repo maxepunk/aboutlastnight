@@ -39,9 +39,12 @@ describe('getCheckpointData — lastEvaluation (H6)', () => {
     { phase: 'arcs', overallScore: 0.95 }
   ];
 
-  it('gives arc-selection the LAST arcs evaluation, not the last entry overall', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { evaluationHistory: HISTORY });
-    expect(data.lastEvaluation.overallScore).toBe(0.95);
+  // Brief 4.5: the story meeting sends no evaluation (its payload is the meeting's), so the
+  // H6 cases read the outline and article stops.
+  it('gives the article stop the LAST article evaluation, not the last entry overall', async () => {
+    const history = [...HISTORY, { phase: 'article', overallScore: 0.6 }, { phase: 'outline', overallScore: 0.8 }, { phase: 'article', overallScore: 0.65 }];
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: history, contentBundle: null });
+    expect(data.lastEvaluation.overallScore).toBe(0.65);
   });
 
   it('gives the outline gate the outline evaluation', async () => {
@@ -55,12 +58,12 @@ describe('getCheckpointData — lastEvaluation (H6)', () => {
   });
 
   it('is null when there is no history at all', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {});
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {});
     expect(data.lastEvaluation).toBeNull();
   });
 
   it('keeps the raw evaluationHistory for backward compatibility', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { evaluationHistory: HISTORY });
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: HISTORY });
     expect(data.evaluationHistory).toEqual(HISTORY);
   });
 });
@@ -447,11 +450,15 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
   const Q1 = { about: 'Sarah', question: 'The record holds nothing about Sarah: where was Sarah?' };
   const Q2 = { about: 'The 10:02 AM sale', question: 'Is this a duplicate?' };
 
-  it('the arc stop sends the arc cache\'s questions', async () => {
+  // Brief 4.5: the story meeting sends the weave's questions, with any answers, as
+  // `questions` (the 4.5 describe below); the arc cache is read no more.
+  it('the arc stop sends the weave\'s questions as the meeting\'s, and reads no arc cache', async () => {
+    const W = { id: 'q1', kind: 'player', about: 'Sarah', question: 'What did Sarah do?', changes: 'Where Sarah prints.', answer: 'Ran the bar.' };
     const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
-      narrativeArcs: [], _arcAnalysisCache: { writerQuestions: [Q1, Q2] }
+      weave: { threads: [], questions: [W] }, _arcAnalysisCache: { writerQuestions: [Q1, Q2] }
     });
-    expect(data.writerQuestions).toEqual([Q1, Q2]);
+    expect(data.questions).toEqual([W]);
+    expect(data).not.toHaveProperty('writerQuestions');
   });
 
   it('the outline stop sends the outline\'s questions', async () => {
@@ -469,15 +476,15 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
   });
 
   it('is an empty list at each stop when the output has none, or there is no output yet', async () => {
-    const arcs = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { _arcAnalysisCache: null });
+    const arcs = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { weave: null });
     const outline = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], outline: null });
     const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: VALID_BUNDLE() });
-    expect([arcs.writerQuestions, outline.writerQuestions, article.writerQuestions]).toEqual([[], [], []]);
+    expect([arcs.questions, outline.writerQuestions, article.writerQuestions]).toEqual([[], [], []]);
   });
 
   it('sends only entries with both an about and a question', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, {
-      _arcAnalysisCache: { writerQuestions: [Q1, { about: 'Alex' }, { about: '  ', question: 'x' }, 'loose', null] }
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
+      evaluationHistory: [], outline: { writerQuestions: [Q1, { about: 'Alex' }, { about: '  ', question: 'x' }, 'loose', null] }
     });
     expect(data.writerQuestions).toEqual([Q1]);
   });
@@ -489,32 +496,36 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
   });
 
   // Fix 3.7b (finding 5): a rollback to a stop clears that stop's questions with its
-  // output, through the field each stop reads them from (ROLLBACK_CLEARS clears
-  // _arcAnalysisCache, outline and contentBundle), and keeps the questions of the
-  // stops before it, whose output it keeps.
+  // output, through the field each stop reads them from (ROLLBACK_CLEARS clears the
+  // outline and contentBundle), and keeps the questions of the stops before it, whose
+  // output it keeps. Brief 4.5 (R9): a rollback to the story meeting keeps the weave, so
+  // the meeting reopens with its questions and their answers; the evidence stop above it
+  // writes the weave again.
   describe('a rollback clears a stop\'s questions with its output', () => {
     const { buildRollbackState } = require('../../lib/api-helpers');
     const Q3 = { kind: 'ledger', about: 'The 10:14 AM sale of $50,000', question: 'Is this a second entry for one sale?' };
+    const W1 = { id: 'q1', kind: 'player', about: 'Sarah', question: 'What did Sarah do?', changes: 'Where Sarah prints.', answer: 'Ran the bar.' };
     const withQuestions = () => ({
       evaluationHistory: [],
-      _arcAnalysisCache: { writerQuestions: [Q1] },
+      weave: { threads: [], questions: [W1] },
       outline: { lede: { hook: 'h' }, writerQuestions: [Q2] },
       contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q3] }
     });
     const questionsAtEachStop = async (state) => ({
-      'arc-selection': (await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).writerQuestions,
+      'arc-selection': (await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).questions,
       outline: (await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state)).writerQuestions,
       article: (await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, state)).writerQuestions
     });
 
     it('every stop shows its questions before the rollback', async () => {
-      expect(await questionsAtEachStop(withQuestions())).toEqual({ 'arc-selection': [Q1], outline: [Q2], article: [Q3] });
+      expect(await questionsAtEachStop(withQuestions())).toEqual({ 'arc-selection': [W1], outline: [Q2], article: [Q3] });
     });
 
     it.each([
-      ['arc-selection', { 'arc-selection': [], outline: [], article: [] }],
-      ['outline', { 'arc-selection': [Q1], outline: [], article: [] }],
-      ['article', { 'arc-selection': [Q1], outline: [Q2], article: [] }]
+      ['evidence-and-photos', { 'arc-selection': [], outline: [], article: [] }],
+      ['arc-selection', { 'arc-selection': [W1], outline: [], article: [] }],
+      ['outline', { 'arc-selection': [W1], outline: [], article: [] }],
+      ['article', { 'arc-selection': [W1], outline: [Q2], article: [] }]
     ])('a rollback to %s', async (point, expected) => {
       const state = { ...withQuestions(), ...buildRollbackState(point) };
       expect(await questionsAtEachStop(state)).toEqual(expected);
@@ -550,5 +561,99 @@ describe('4.3b: writerTrackerPrints at the article stop', () => {
       expect([shellAccounts, flag]).toEqual([shellAccounts, writerTrackerPrints(bundle.financialTracker, shellAccounts)]);
       expect([shellAccounts, flag]).toEqual([shellAccounts, preview.writerTrackerPrints(bundle, shellAccounts)]);
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5: what the story meeting's stop sends (brief 4.5; lib/meeting.js)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.5: the story meeting\'s payload at arc-selection', () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { withFactCheckMark, weaveKey } = require('../../lib/weave');
+  const { standingAtMeeting } = require('../../lib/hand-edit-diff');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const ACCUSATION = { verdictKind: 'overdose', accused: [], charge: 'Accidental overdose', votes: [{ option: 'Overdose', count: 6, adopted: true }, { option: 'Murder', count: 2 }] };
+
+  function atMeeting() {
+    const left = clone(WEAVE);
+    left.threads.push({ id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it', receipt: 'zzz999' });
+    left.questions[0].answer = 'Sarah ran the bar.';
+    const weave = withFactCheckMark(left, { at: 't', ready: true, fixes: 0 });
+    return {
+      weave,
+      _weaveHandEdits: standingAtMeeting(null, WEAVE, left),
+      _arcValidation: {
+        weaveKey: weaveKey(weave), passed: false,
+        failures: [{ type: 'over-length', message: 'The weave runs long.' }],
+        concerns: ['Director\'s edit E1: Thread "t6" gives the receipt "zzz999", which names no document in the record.']
+      },
+      sessionConfig: { accusation: ACCUSATION },
+      evidenceBundle: { exposed: { tokens: [{ id: 'ale003', rawData: { name: 'The sale', owners: ['Alex'] }, fullContent: 'A line.' }] } },
+      directorGateNotes: [{ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Lead with the vote.', at: 't' }],
+      arcRevisionCount: 1,
+      humanArcRevisionCount: 2,
+      evaluationHistory: [{ phase: 'arcs', ready: true, overallScore: 1 }]
+    };
+  }
+
+  it("sends the meeting's keys and none of the arc selection's", async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, atMeeting());
+    expect(Object.keys(data).sort()).toEqual([
+      'accusation', 'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport',
+      'humanRevisionCount', 'marks', 'maxRevisions', 'questions', 'revisionCount', 'roundDidNotRun', 'weave'
+    ]);
+    ['narrativeArcs', 'lastEvaluation', 'writerQuestions', 'previousFeedback'].forEach((key) => expect(`${key}: ${key in data}`).toBe(`${key}: false`));
+  });
+
+  it('carries the weave, the receipts\' documents, the verdict as the parse holds it, the questions with the answer, and the counters', async () => {
+    const state = atMeeting();
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state);
+    expect(data.weave).toEqual(state.weave);
+    expect(data.evidenceIndex).toEqual({ ale003: { name: 'The sale', owner: 'Alex', type: 'memory', firstLine: 'A line.' } });
+    expect(data.accusation).toEqual(ACCUSATION);
+    expect(data.questions[0]).toMatchObject({ id: 'q1', answer: 'Sarah ran the bar.' });
+    expect(data).toMatchObject({ revisionCount: 1, humanRevisionCount: 2, maxRevisions: REVISION_CAPS.ARCS, roundDidNotRun: null, marks: null });
+    expect(data.directorGateNotes).toEqual(state.directorGateNotes);
+  });
+
+  it('a check still failing on the weave in hand, and the concern beside the line of the edit it is about', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, atMeeting());
+    expect(data.checkFailures).toEqual([{ type: 'over-length', message: 'The weave runs long.' }]);
+    expect(data.concerns).toEqual([expect.objectContaining({ editIds: ['E1'], places: [{ id: 'E1', path: 'threads[#t6]', where: 'thread "t6", added' }] })]);
+  });
+
+  it('a check run on another weave is not shown (ruling 7)', async () => {
+    const state = atMeeting();
+    state._arcValidation.weaveKey = 'another-weave';
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state);
+    expect(data.checkFailures).toEqual([]);
+    expect(data.concerns).toEqual([]);
+  });
+
+  it('a round that did not run, with its note', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { ...atMeeting(), _arcReworkTimeout: { consecutive: 1, attempt: 0, round: 'reweave', note: null, at: 't9' } });
+    expect(data.roundDidNotRun).toEqual({ round: 'reweave', at: 't9', note: null });
+  });
+
+  it('survives the merge with the interrupt payload', async () => {
+    const state = atMeeting();
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARC_SELECTION, weave: state.weave }, state);
+    expect(merged.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
+    expect(merged.questions[0].answer).toBe('Sarah ran the bar.');
+    expect(merged.checkFailures).toHaveLength(1);
+  });
+});
+
+describe('4.5: /api/session/:id/arcs serves the weave', () => {
+  const { RESOURCE_ENDPOINTS } = require('../../server.js');
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const arcs = RESOURCE_ENDPOINTS.find((endpoint) => endpoint.path === 'arcs');
+
+  it('the weave as the director last left it, available once the thread holds one', () => {
+    expect(arcs.fields({ weave: WEAVE, narrativeArcs: [{ id: 'old' }], selectedArcs: ['old'] })).toEqual({ weave: WEAVE });
+    expect(arcs.check({ weave: WEAVE })).toBe(true);
+    expect(arcs.check({ narrativeArcs: [{ id: 'old' }] })).toBe(false);
+    expect(arcs.fields({})).toEqual({ weave: null });
   });
 });

@@ -257,7 +257,9 @@ describe('journalist arc stop', () => {
     return { writer: call(writerSdk), rework: call(reworkSdk) };
   }
 
+  // Brief 4.5 (ruling 1): a send-back is the director's round by its mark.
   const SEND_BACK = {
+    _meetingRound: 'send-back',
     _arcFeedback: NOTE,
     humanArcRevisionCount: 1,
     arcRevisionCount: 0,
@@ -297,12 +299,16 @@ describe('journalist arc stop', () => {
 
   it("the reworker's system prompt is its writer's, then the rework rules for its kind", async () => {
     const sendBack = await writerAndRework(SEND_BACK);
-    expect(sendBack.rework.system).toBe(`${sendBack.writer.system}\n\n${arcRevisionRules(true, theme)}`);
+    expect(sendBack.rework.system).toBe(`${sendBack.writer.system}\n\n${arcRevisionRules('send-back')}`);
+    // Brief 4.5: a reweave, marked, with no note.
+    const reweave = await writerAndRework({ _meetingRound: 'reweave', _arcFeedback: null, humanArcRevisionCount: 1, arcRevisionCount: 0 });
+    expect(reweave.rework.system).toBe(`${reweave.writer.system}\n\n${arcRevisionRules('reweave')}`);
+    expect(reweave.rework.user).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
     const automated = await writerAndRework({
       arcRevisionCount: 1, humanArcRevisionCount: 0,
       validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" has no receipt.'] }
     });
-    expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${arcRevisionRules(false, theme)}`);
+    expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${arcRevisionRules(null)}`);
     expect(automated.rework.user).toContain('REVISION CONTEXT: WEAVE (automated pass 1)');
     expect(automated.rework.user).not.toContain('REVISION 1: Address these issues');
   });

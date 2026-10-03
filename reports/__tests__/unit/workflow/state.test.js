@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 82 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 88 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -251,6 +251,15 @@ describe('ReportStateAnnotation', () => {
         // timeout bookkeeping
         'weave',
         '_arcReworkTimeout',
+        // The story meeting (phase 4, brief 4.5): its approval, the director's round mark,
+        // the writer's last weave, the director's standing edits, the round's report on
+        // them, and the version the round's marks are read from
+        'meetingApproved',
+        '_meetingRound',
+        '_weaveBaseline',
+        '_weaveHandEdits',
+        '_weaveHandEditReport',
+        '_weaveMarks',
         // Analysis results
         'narrativeArcs',
         'selectedArcs',
@@ -472,7 +481,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(82);
+      expect(Object.keys(getDefaultState()).length).toBe(88);
     });
 
     it('declares the leave-out list (phase 4, brief 4.2)', () => {
@@ -782,9 +791,12 @@ describe('ReportStateAnnotation', () => {
       expect(Object.keys(ROLLBACK_COUNTER_RESETS)).toEqual(Object.keys(ROLLBACK_CLEARS));
     });
 
-    it('arc-selection resets all revision counters', () => {
+    // Brief 4.5 (R9): going back to the story meeting reopens it as the director left it,
+    // its round counters with it; the map and the article are written again.
+    it("arc-selection resets the map's and the article's counters and keeps the meeting's", () => {
       const resets = ROLLBACK_COUNTER_RESETS['arc-selection'];
-      expect(resets.arcRevisionCount).toBe(0);
+      expect(resets.arcRevisionCount).toBeUndefined();
+      expect(resets.humanArcRevisionCount).toBeUndefined();
       expect(resets.outlineRevisionCount).toBe(0);
       expect(resets.articleRevisionCount).toBe(0);
     });

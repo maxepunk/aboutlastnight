@@ -268,8 +268,10 @@ describe('the mode block reaches the arc and outline writers', () => {
       'weave writer': arcTesting.weaveSystemPrompt(sessionConfig),
       // Both rework branches: a mode-blind rework puts the presence claims back
       // into a remote session's weave one paid call after generation avoided them.
-      'arc rework (director-driven)': arcTesting.getArcRevisionSystemPrompt(true, sessionConfig),
-      'arc rework (evaluation-driven)': arcTesting.getArcRevisionSystemPrompt(false, sessionConfig)
+      'arc rework (director-driven)': arcTesting.getArcRevisionSystemPrompt('send-back', sessionConfig),
+      // Brief 4.5: the reweave is the director's round too.
+      'arc rework (reweave)': arcTesting.getArcRevisionSystemPrompt('reweave', sessionConfig),
+      'arc rework (evaluation-driven)': arcTesting.getArcRevisionSystemPrompt(null, sessionConfig)
     };
   }
 
@@ -283,6 +285,7 @@ describe('the mode block reaches the arc and outline writers', () => {
         'outline revision',
         'weave writer',
         'arc rework (director-driven)',
+        'arc rework (reweave)',
         'arc rework (evaluation-driven)'
       ])(
         'the %s system prompt states the mode, word for word, once',

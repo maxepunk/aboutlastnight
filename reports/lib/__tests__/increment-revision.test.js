@@ -27,10 +27,22 @@ describe('incrementArcRevision', () => {
   test('a send back opens a round and resets the automated budget at the arc stop', async () => {
     // Integrator ruling after wave 2: the arc stop's automated counter is per round like
     // the outline's and article's, so the banner's "this round" is true here too.
-    const state = { weave: WEAVE, arcRevisionCount: 2, humanArcRevisionCount: 0, _arcFeedback: 'fix burial stuff' };
+    // Brief 4.5: the round is the director's by its explicit mark.
+    const state = { weave: WEAVE, arcRevisionCount: 2, humanArcRevisionCount: 0, _meetingRound: 'send-back', _arcFeedback: 'fix burial stuff' };
     const result = await incrementArcRevision(state);
     expect(result.arcRevisionCount).toBe(0);
     expect(result.humanArcRevisionCount).toBe(1);
+  });
+
+  // Brief 4.5 (ruling 1): the mark, never the note's presence, makes a round the director's.
+  test('a reweave with no note is a round of the director\'s: it spends no automated budget and opens a new one', async () => {
+    const result = await incrementArcRevision({ weave: WEAVE, arcRevisionCount: 1, humanArcRevisionCount: 0, _meetingRound: 'reweave', _arcFeedback: null });
+    expect(result).toEqual({ arcRevisionCount: 0, humanArcRevisionCount: 1 });
+  });
+
+  test('a note left in the slot without the mark is an automatic pass', async () => {
+    const result = await incrementArcRevision({ weave: WEAVE, arcRevisionCount: 0, humanArcRevisionCount: 2, _arcFeedback: 'a stale note' });
+    expect(result).toEqual({ arcRevisionCount: 1, humanArcRevisionCount: 2 });
   });
 
   test('leaves the weave where it is: the rework reads it as the version it starts from', async () => {
@@ -237,13 +249,15 @@ describe('the trace entry (phase 2, brief 2.7)', () => {
   });
 });
 
+// Brief 4.5: the story meeting's route has three outcomes. Approve goes to the photos; a
+// reweave and a send-back go to the rework.
 describe('routeAfterArcCheckpoint', () => {
-  test('returns forward when selectedArcs populated', () => {
-    expect(routeAfterArcCheckpoint({ selectedArcs: ['a1', 'a2'] })).toBe('forward');
+  test('an approved meeting goes forward, to the photos', () => {
+    expect(routeAfterArcCheckpoint({ meetingApproved: true })).toBe('forward');
   });
 
-  test('returns revise when no selectedArcs', () => {
-    expect(routeAfterArcCheckpoint({ selectedArcs: null, humanArcRevisionCount: 0 })).toBe('revise');
+  test.each(['reweave', 'send-back'])('a %s goes to the rework', (round) => {
+    expect(routeAfterArcCheckpoint({ meetingApproved: false, _meetingRound: round })).toBe('revise');
   });
 
   // Brief 1.4: the arc stop never forces forward. A fourth send back used to push an
@@ -251,8 +265,13 @@ describe('routeAfterArcCheckpoint', () => {
   // the theory that the director had run out of rounds. The director's rounds are
   // not limited, so there is nothing left to run out of.
   test('never forces forward, however many rounds the director has taken', () => {
-    expect(routeAfterArcCheckpoint({ selectedArcs: null, humanArcRevisionCount: 4 })).toBe('revise');
-    expect(routeAfterArcCheckpoint({ selectedArcs: [], humanArcRevisionCount: 9 })).toBe('revise');
+    expect(routeAfterArcCheckpoint({ _meetingRound: 'send-back', humanArcRevisionCount: 4 })).toBe('revise');
+    expect(routeAfterArcCheckpoint({ _meetingRound: 'reweave', humanArcRevisionCount: 9 })).toBe('revise');
+  });
+
+  test('the old arc selection approves nothing, and a stop left with neither an approval nor a round fails loud', () => {
+    expect(() => routeAfterArcCheckpoint({ selectedArcs: ['a1', 'a2'] })).toThrow(/approve, reweave or send-back/);
+    expect(() => routeAfterArcCheckpoint({ _arcFeedback: 'a note' })).toThrow(/approve, reweave or send-back/);
   });
 });
 

@@ -101,3 +101,34 @@ describe('evaluateArcs skip logic', () => {
     expect(result.evaluationHistory).toBeUndefined();
   });
 });
+
+// 4.5: the story meeting's own approval (brief 4.5; ruling 1). The fact check's skip reads
+// the meeting's approval, `meetingApproved`, through lib/weave.js isMeetingApproved, in
+// place of the old arc selection.
+describe("4.5: the fact check skips on the meeting's approval", () => {
+  const WEAVE = {
+    story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
+    threads: [{ id: 't1', claim: 'The room named Vic.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+    connections: [], convergence: 'C', questions: []
+  };
+  const session = {
+    evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } },
+    playerFocus: {},
+    sessionConfig: { roster: [] }
+  };
+
+  test('an approved meeting is not judged, though its weave carries no mark', async () => {
+    const sdk = jest.fn();
+    const result = await evaluateArcs({ ...session, weave: WEAVE, meetingApproved: true }, { configurable: { sdkClient: sdk } });
+    expect(sdk).not.toHaveBeenCalled();
+    expect(result.evaluationHistory).toMatchObject({ phase: 'arcs', ready: true, skippedReason: 'user-already-approved' });
+  });
+
+  test('a selection is no approval: the weave is judged', async () => {
+    const sdk = createMockSdkClient();
+    const result = await evaluateArcs({ ...session, weave: WEAVE, selectedArcs: ['weave'] }, { configurable: { sdkClient: sdk } });
+    expect(result.evaluationHistory).toBeDefined();
+    expect(result.evaluationHistory.skippedReason).toBeUndefined();
+    expect(result.weave._factCheck).toBeDefined();
+  });
+});

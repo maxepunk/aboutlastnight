@@ -869,7 +869,7 @@ describe('each automatic rework states its scope once, in the revision context (
     });
     let whole;
     if (phase === 'arcs') {
-      whole = `${getArcRevisionSystemPrompt(false, state.sessionConfig, 'journalist')}\n${buildArcRevisionPrompt(state, contextSection, previousOutputSection)}`;
+      whole = `${getArcRevisionSystemPrompt(null, state.sessionConfig, 'journalist')}\n${buildArcRevisionPrompt(state, contextSection, previousOutputSection)}`;
     } else if (phase === 'outline') {
       whole = `${await buildOutlineRevisionSystemPrompt(builder)}\n${await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, builder)}`;
     } else {
@@ -1026,5 +1026,95 @@ describe('a rework never reads a finding located in the director\'s text (FA)', 
     });
     expect(evaluationOf(contextSection)).toContain(`T1: "${CLAIM}" states a motive as fact.`);
     expect(evaluationOf(contextSection)).toContain('Step 1');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5: the story meeting's rounds (TH7, R23; rulings 1 and 9)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A reweave or a send-back is the director's round, marked explicitly: the mark, never the
+// note's presence, selects the rework's scope. A reweave fits the director's changes in and
+// keeps every line they did not touch; a send-back rethinks the weave as the note asks. A
+// director's round reads no finding from before the round. A code check's rework reads the
+// check's lines alone (ruling 9).
+describe("4.5: the story meeting's rounds in the revision context", () => {
+  const { standingAtMeeting, carriedEdits } = require('../hand-edit-diff');
+  const { WEAVE } = require('./fixtures/rework-state');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const left = () => {
+    const weave = clone(WEAVE);
+    weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
+    weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
+    return weave;
+  };
+  const edits = () => carriedEdits(standingAtMeeting(null, WEAVE, left()), left());
+  const STALE = { phase: 'arcs', passed: false, structuralIssues: ['T3: "a stale finding" from before the round.'], criteriaScores: { evidenceTruth: { score: 0.3, notes: 'stale', fix: 'stale fix' } } };
+  const context = (overrides) => buildRevisionContext({
+    phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: STALE,
+    previousOutput: left(), handEdits: edits(), theme: 'journalist', ...overrides
+  }).contextSection;
+
+  it("a reweave with no note gets the reweave's scope: fit the director's changes in, keep every other line", () => {
+    const text = context({ meetingRound: 'reweave', humanFeedback: null, validationResults: null });
+    expect(text).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
+    expect(text).toContain("The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: each change in <HAND_EDITS>.");
+    expect(text).toMatch(/keeps every other line word for word/);
+    expect(text).not.toContain('This rework fixes the must-fix items');
+    expect(text).not.toContain('HUMAN FEEDBACK');
+    expect(text).not.toContain('EVALUATION SUMMARY');
+    expect(text).not.toContain('(no evaluator feedback');
+  });
+
+  it("a reweave's note is part of what it fits in", () => {
+    const text = context({ meetingRound: 'reweave', humanFeedback: 'Join the ledger thread to the vote.', validationResults: null });
+    expect(text).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nJoin the ledger thread to the vote.');
+    expect(text).toContain("each change in <HAND_EDITS>, and each change the note above asks for.");
+  });
+
+  it("the director's changes are final through a reweave: its <HAND_EDITS> lists them by place, with the meeting's own rule", () => {
+    const text = context({ meetingRound: 'reweave', humanFeedback: null, validationResults: null });
+    const block = text.slice(text.indexOf('<HAND_EDITS>'), text.indexOf('</HAND_EDITS>'));
+    expect(block).toContain("The director's changes to the weave at the story meeting.");
+    expect(block).toContain('each role they gave stays, each thread they added stays in the weave, and each connection they struck and each removed sentence stay out of it.');
+    expect(block).toContain('E1 (thread "t3", role): "mirrors-it"');
+    expect(block).toMatch(/E2 \(connection "c2", struck\): kind "moment"/);
+    expect(block).not.toContain('changedDirectorEdits');
+    expect(block).not.toMatch(/block they moved|marked moved/);
+  });
+
+  it('the previous weave prints as the rework reads it: the struck connection out, the strike listed in <HAND_EDITS>', () => {
+    const { previousOutputSection } = buildRevisionContext({
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
+      previousOutput: left(), handEdits: edits(), theme: 'journalist', meetingRound: 'reweave', humanFeedback: null
+    });
+    expect(previousOutputSection).toContain('"c1"');
+    expect(previousOutputSection).not.toContain('"c2"');
+  });
+
+  it('a send-back rethinks the weave as the note asks, and may change an edit only where the note needs it, saying why', () => {
+    const text = context({ meetingRound: 'send-back', humanFeedback: 'Rethink the money thread.', validationResults: null });
+    expect(text).toContain("REVISION CONTEXT: WEAVE (round 2: the director's send back)");
+    expect(text).toContain("The director's note above is the task, and it sets how much of the previous weave this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was.");
+    expect(text).not.toMatch(/unless an issue to address needs it changed/);
+    expect(text).toMatch(/unless the structural change their note asks for means it no longer fits/);
+    expect(text).toContain('changedDirectorEdits');
+  });
+
+  it('the mark decides, never the note: an automatic pass with a note in the slot keeps the automatic scope', () => {
+    const text = context({ meetingRound: null, humanFeedback: 'A note left over.', validationResults: { phase: 'arcs', passed: false, structuralIssues: ['T3: "x y z" breaks a rule.'] } });
+    expect(text).toContain('automated pass 0');
+    expect(text).toContain('This rework fixes the must-fix items');
+    expect(text).not.toContain('HUMAN FEEDBACK');
+    expect(text).toContain('This automatic pass fixes the writer\'s text.');
+  });
+
+  it("a code check's rework reads the check's lines alone: no confidence and no criteria scores (ruling 9)", () => {
+    const text = context({
+      meetingRound: null, humanFeedback: null, handEdits: null, previousOutput: clone(WEAVE),
+      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, ready: false, structuralPassed: false, structuralIssues: ['Thread "t2" gives the receipt "zzz".'] }
+    });
+    expect(text).toContain('WEAVE CHECK FAILURES:\n  - Thread "t2" gives the receipt "zzz".');
+    ['EVALUATION SUMMARY', 'Confidence', 'Ready:', 'CRITERIA SCORES', 'no criteria scores'].forEach((gone) => expect(`${gone}: ${text.includes(gone)}`).toBe(`${gone}: false`));
   });
 });

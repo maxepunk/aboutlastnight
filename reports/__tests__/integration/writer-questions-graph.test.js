@@ -161,7 +161,8 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
     expect(sdk.calls).toEqual(['evaluation']);
     expect(snapshot.values.weave.questions).toEqual([W_ZIA, W_FIGURE]);
 
-    const next = await sendBack(graph, thread, snapshot.values, { selectedArcs: false, arcFeedback: 'Lead with the ledger.' });
+    // Brief 4.5: the story meeting's send-back, a note and no edit.
+    const next = await sendBack(graph, thread, snapshot.values, { meeting: 'send-back', note: 'Lead with the ledger.' });
     expect(next.next).toEqual(['checkpointArcSelection']);
     expect(sdk.calls).toEqual(['evaluation', 'Arc revision 0', 'evaluation']);
     expect(next.values.weave.questions).toEqual([W_ZIA, W_FIGURE]);

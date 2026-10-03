@@ -6,8 +6,16 @@
  * (analyzeArcsPlayerFocusGuided); code checks it (validateArcStructure, lib/weave.js
  * checkWeave); the fact check scores the truth criteria and marks the weave it judged
  * (evaluator-nodes.js); and the arc rework (reviseArcs) fixes what a check or the fact
- * check found, or acts on the director's note. The director settles the weave at the
- * story meeting, and every later writer works from it.
+ * check found. The director settles the weave at the story meeting, and every later
+ * writer works from it.
+ *
+ * The story meeting (brief 4.5): the director's round, a reweave or a send-back, marked
+ * explicitly (`_meetingRound`), is the rework's too. A reweave fits the director's changes
+ * in and keeps every line they did not touch; a send-back rethinks the weave as the note
+ * asks. Code holds every pass but a send-back to the director's edits, keeps every answer
+ * with its question, and keeps the writer's last weave as the meeting's baseline. The
+ * checks read only the writer's text (R11): the director's share of the weave is never a
+ * check's failure, and a check that finds a fault in it files a concern for the meeting.
  *
  * History: the arcs came from parallel specialists (8.12), then one player-focus-guided
  * call (8.15), then a split into the arc call and an interweaving call (8.28). On
@@ -47,24 +55,32 @@ const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes, r
 const { loadRuleSet } = require('../../rule-set');
 const { WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions } = require('../../writer-questions');
 const {
-  WEAVE_ROLES, CONNECTION_KINDS, LEDGER_RECEIPT, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY,
-  isWeave, weaveForPrompt, weaveKey, weaveWordCount, factCheckMarkOf, isMeetingApproved, checkWeave
+  WEAVE_ROLES, CONNECTION_KINDS, LEDGER_RECEIPT, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS,
+  isWeave, weaveForPrompt, weaveKey, weaveWordCount, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
+  weaveFindings, withStruckConnections
 } = require('../../weave');
+const {
+  carriedEdits, settleEdits, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS
+} = require('../../hand-edit-diff');
+// Brief 4.5: a send-back that carries the director's edits asks for the list of those it
+// changed, as the outline's and the article's send-backs do (F1): one schema rule, one strip.
+const { reworkSchemaWithChangedEdits, takeChangedEdits } = require('./ai-nodes');
 
 /**
  * The director's standing notes for the arc writer and the arc rework (phase 2, brief
  * 2.2).
  *
  * The same section the outline and article prompts carry, built by the same two
- * functions (prompt-builder.js), with the gate `arc-selection`: the note this rework is
- * acting on is already its HUMAN FEEDBACK and is filtered out; every earlier note
- * stands.
+ * functions (prompt-builder.js), with the gate `arc-selection`: on the director's round
+ * (brief 4.5, by its mark) the round's note is already its HUMAN FEEDBACK and is filtered
+ * out; every other note stands.
  *
  * @param {Object} state
  * @returns {string} '\n\n<DIRECTOR_GUIDANCE>...' or '' when there are no notes
  */
 function buildArcStandingNotes(state) {
-  const notes = filterGateNotes(state.directorGateNotes || [], state._arcFeedback || null, 'arc-selection');
+  const actingOn = meetingRoundOf(state) ? (state._arcFeedback || null) : null;
+  const notes = filterGateNotes(state.directorGateNotes || [], actingOn, 'arc-selection');
   const section = buildDirectorGuidanceSection(null, notes);
   return section ? `\n\n${section}` : '';
 }
@@ -421,7 +437,9 @@ async function generateWeave(state, config) {
  * @param {Object} state - Current state: the evidence bundle, the room's conclusions,
  *   the director's notes, the roster
  * @param {Object} config - Graph config with the SDK client
- * @returns {Promise<Object>} `{weave, _arcReworkTimeout: null, currentPhase}`
+ * @returns {Promise<Object>} `{weave, _weaveBaseline, _arcReworkTimeout: null, currentPhase}`:
+ *   the weave twice, since the writer's weave is the baseline the story meeting's diffs
+ *   start from (brief 4.5)
  */
 async function analyzeArcsPlayerFocusGuided(state, config) {
   if (isWeave(state.weave)) {
@@ -440,6 +458,7 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
     const weave = await generateWeave(state, config);
     return {
       weave,
+      _weaveBaseline: weave,
       _arcReworkTimeout: null,
       currentPhase: PHASES.ARC_SYNTHESIS
     };
@@ -456,30 +475,44 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
 // THE ARC REWORK
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** A note may correct how the game works; the correction reaches every thread it touches. */
+const NOTE_CORRECTS_A_MECHANIC = 'The director knows the game, so a note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every thread it touches, not only the one it names.';
+
 /**
  * The rules the arc rework's system prompt adds after its writer's, one set per kind of
- * rework (phase 3, brief 3.3; TH7). The first line says why the rework runs and where its
- * task is: on a send back, the director's note in the revision context; on an automatic
- * pass, after a weave check or the fact check, the revision context lists what it found
- * and what the rework fixes. How much of the previous weave a rework keeps is the
- * revision context's to say (buildRevisionContext), once.
+ * rework (phase 3, brief 3.3; TH7; brief 4.5). The first line says why the rework runs
+ * and where its task is: on a send-back, the director's note in the revision context; on
+ * a reweave, the director's changes the revision context lists; on an automatic pass,
+ * after a weave check or the fact check, what the revision context says it found. How
+ * much of the previous weave a rework keeps is the revision context's to say
+ * (buildRevisionContext), once.
  */
 const ARC_REVISION_RULES = {
-  human: `You are reworking the weave you wrote: the director sent it back, and the director's note in the revision context is the task.
+  'send-back': `You are reworking the weave you wrote: the director sent it back, and the director's note in the revision context is the task.
 
-The director knows the game, so a note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every thread it touches, not only the one it names.`,
+${NOTE_CORRECTS_A_MECHANIC}`,
 
-  evaluator: 'You are reworking the weave you wrote after an automatic check or fact check; the revision context lists what it found and what this rework fixes.'
+  reweave: `You are reworking the weave you wrote: the director changed it at the story meeting and asked for a reweave, and the revision context lists the changes this rework fits in.
+
+${NOTE_CORRECTS_A_MECHANIC}`,
+
+  automatic: 'You are reworking the weave you wrote after an automatic check or fact check; the revision context lists what it found and what this rework fixes.'
 };
 
 /**
- * The arc rework rules for one kind of rework.
+ * The arc rework rules for one kind of rework, by the story meeting's round mark (brief
+ * 4.5; lib/weave.js meetingRoundOf).
  *
- * @param {boolean} hasHumanFeedback - a send back (true) or an automatic pass
+ * @param {'reweave'|'send-back'|null} round - the director's round, or null for an automatic pass
  * @returns {string}
+ * @throws {TypeError} on anything else, such as the old boolean
  */
-function arcRevisionRules(hasHumanFeedback) {
-  return hasHumanFeedback ? ARC_REVISION_RULES.human : ARC_REVISION_RULES.evaluator;
+function arcRevisionRules(round) {
+  if (round === null) return ARC_REVISION_RULES.automatic;
+  if (!MEETING_ROUNDS.includes(round)) {
+    throw new TypeError(`arcRevisionRules takes the story meeting's round mark: 'reweave', 'send-back' or null (got ${JSON.stringify(round)}).`);
+  }
+  return ARC_REVISION_RULES[round];
 }
 
 /**
@@ -487,13 +520,13 @@ function arcRevisionRules(hasHumanFeedback) {
  * of rework (phase 2, 2.3). The writer's brings the mode block, the world and the truth
  * rules.
  *
- * @param {boolean} hasHumanFeedback - Whether the director sent the weave back
+ * @param {'reweave'|'send-back'|null} [round=null] - the director's round, by its mark
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
  * @param {string} [theme] - state.theme; weaveSystemPrompt's default when absent
  * @returns {string}
  */
-function getArcRevisionSystemPrompt(hasHumanFeedback = false, sessionConfig = undefined, theme = undefined) {
-  return `${weaveSystemPrompt(sessionConfig, theme)}\n\n${arcRevisionRules(hasHumanFeedback)}`;
+function getArcRevisionSystemPrompt(round = null, sessionConfig = undefined, theme = undefined) {
+  return `${weaveSystemPrompt(sessionConfig, theme)}\n\n${arcRevisionRules(round)}`;
 }
 
 /**
@@ -533,8 +566,11 @@ ${ARC_REWORK_TASK}${buildArcStandingNotes(state)}`;
 
 /**
  * The weave a rework returned, as the state stores it:
- * - every question the rework did not answer is kept (carriedWeaveQuestions): an
- *   automatic pass keeps each previous question it left out;
+ * - the questions (carriedWeaveQuestions, brief 4.5): every answered question whole, with
+ *   the director's answer, and every question the rework did not answer, whatever kind of
+ *   rework; an answer the rework wrote is no answer;
+ * - the connections the director struck, which the rework never saw (they are out of its
+ *   view), back where they sat, still struck (withStruckConnections);
  * - the fact check's mark: the fix (an automatic pass on a weave the fact check judged)
  *   keeps it, counting the fix; a check rework starts from a weave not yet judged, so
  *   there is none to keep; a director's round writes the weave without it, so the
@@ -546,25 +582,89 @@ ${ARC_REWORK_TASK}${buildArcStandingNotes(state)}`;
  * @returns {Object}
  */
 function weaveFromRework(result, previous, { directorRound }) {
-  const weave = {
+  const weave = withStruckConnections({
     ...weaveFromOutput(result, 'arc rework'),
-    questions: carriedWeaveQuestions(result && result.questions, previous.questions, { afterDirectorNote: directorRound })
-  };
+    questions: carriedWeaveQuestions(result && result.questions, previous.questions)
+  }, weaveForPrompt(previous));
   const mark = directorRound ? null : factCheckMarkOf(previous);
   return mark ? { ...weave, [FACT_CHECK_MARK_KEY]: { ...mark, fixes: (mark.fixes || 0) + 1 } } : weave;
 }
 
 /**
- * The arc rework: one pass on the weave, after a failed check, after the fact check
- * found a breach, or on the director's note (`_arcFeedback`). Built from the writer's
- * own sections, with the weave's schema.
+ * The arc rework's call for a state, as reviseArcs sends it (brief 4.5): the one place it
+ * is built, so scripts/render-prompts.js renders exactly what the node sends, for an
+ * automatic pass, a reweave and a send-back alike. The round mark decides the rework's
+ * system prompt, its scope (buildRevisionContext) and, on a send-back that carries the
+ * director's edits, the schema that asks which edits it changed. A director's round reads
+ * no finding from before the round. The version the rework starts from is read with the
+ * connections the director struck, which <HAND_EDITS> lists and the rework's own view of
+ * the weave leaves out.
  *
- * A rework that times out keeps the weave it started from as a free retry (its counters
- * go back down) and records the timeout in `_arcReworkTimeout`, up to the third timeout
- * in a row, which ends the run in an error. Any other failure keeps the weave and ends
- * the run in an error, which the routing takes to the end.
+ * @param {Object} state - the weave, the findings, the round mark and its note, the
+ *   director's standing edits
+ * @returns {{meetingRound: string|null, before: Object, edits: Object[], asksForChangedEdits: boolean,
+ *            prompt: string, systemPrompt: string, jsonSchema: Object, label: string}}
+ */
+function arcReworkCall(state) {
+  const revisionCount = state.arcRevisionCount || 0;
+  const meetingRound = meetingRoundOf(state);
+  const directorRound = meetingRound !== null;
+  const note = directorRound ? (state._arcFeedback || null) : null;
+  const before = weaveForPrompt(state.weave);
+  const edits = carriedEdits(state._weaveHandEdits, before);
+  const asksForChangedEdits = meetingRound === 'send-back' && edits.length > 0;
+  const { contextSection, previousOutputSection } = buildRevisionContext({
+    phase: 'arcs',
+    outputName: 'weave',
+    revisionCount,
+    // Brief 2.3: a round's banner names the round it opens, as the stop shows it.
+    round: (state.humanArcRevisionCount || 0) + 1,
+    validationResults: directorRound ? null : state.validationResults,
+    previousOutput: before,
+    handEdits: state._weaveHandEdits,
+    humanFeedback: note,
+    meetingRound,
+    theme: state.theme
+  });
+  return {
+    meetingRound,
+    before,
+    edits,
+    asksForChangedEdits,
+    prompt: buildArcRevisionPrompt(state, contextSection, previousOutputSection),
+    systemPrompt: getArcRevisionSystemPrompt(meetingRound, state.sessionConfig, state.theme),
+    jsonSchema: asksForChangedEdits ? reworkSchemaWithChangedEdits(WEAVE_SCHEMA) : WEAVE_SCHEMA,
+    label: `Arc revision ${revisionCount}`
+  };
+}
+
+/**
+ * The arc rework: one pass on the weave, built from the writer's own sections, with the
+ * weave's schema (arcReworkCall). An automatic pass runs after a failed check or after
+ * the fact check found a breach, and fixes what it found in the writer's text. The
+ * director's round (brief 4.5), marked `_meetingRound`, runs on a reweave or a send-back
+ * at the story meeting: a reweave fits the director's changes in and keeps every other
+ * line; a send-back rethinks the weave as the note asks (TH7) and may change one of the
+ * director's edits, saying why (the changed-edits list its schema adds). Neither reads a
+ * finding from before the round.
  *
- * @param {Object} state - Current state: the weave, the findings, the director's note
+ * Every pass but a send-back is held to the director's standing edits: code puts back
+ * each line it changed and strikes again, by id, each connection it brought back
+ * (lib/hand-edit-diff.js settleEdits), and the round's report (`_weaveHandEditReport`)
+ * records each change and each restore. The weave a pass leaves is the writer's last
+ * weave (`_weaveBaseline`), the meeting's next diffs start from it; a director's round
+ * also keeps the version the director left (`_weaveMarks`), from which the meeting reads
+ * what the round changed.
+ *
+ * A rework that times out keeps the weave it started from and gives back only the count
+ * its pass raised (ruling 5). An automatic pass is then retried free by the routing. The
+ * director's round does not run (ruling 6): the meeting reopens with the director's
+ * version, and `_arcReworkTimeout` names the round and its note, which the stop says did
+ * not run. The third timeout in a row ends the run in an error, as any other failure
+ * does, which the routing takes to the end.
+ *
+ * @param {Object} state - Current state: the weave, the findings, the round mark and its
+ *   note, the director's standing edits
  * @param {Object} config - Graph config with the SDK client
  * @returns {Promise<Object>} partial state
  */
@@ -575,6 +675,7 @@ async function reviseArcs(state, config) {
     console.error('[reviseArcs] No weave to rework.');
     return {
       _arcFeedback: null,
+      _meetingRound: null,
       errors: [{
         phase: PHASES.ARC_SYNTHESIS,
         type: 'revision-no-previous-output',
@@ -585,37 +686,44 @@ async function reviseArcs(state, config) {
     };
   }
 
-  const directorRound = Boolean(state._arcFeedback);
+  const meetingRound = meetingRoundOf(state);
+  const directorRound = meetingRound !== null;
+  const note = directorRound ? (state._arcFeedback || null) : null;
   const sdkClient = getSdkClient(config, 'reviseArcs');
   const startTime = Date.now();
-  console.log(`[reviseArcs] Starting ${directorRound ? 'the director\'s round' : `automatic pass ${revisionCount}`}`);
+  console.log(`[reviseArcs] Starting ${directorRound ? `the director's ${meetingRound}` : `automatic pass ${revisionCount}`}`);
 
   try {
     // Built inside the try, so a throw lands in state as this node's error contract.
-    const { contextSection, previousOutputSection } = buildRevisionContext({
-      phase: 'arcs',
-      outputName: 'weave',
-      revisionCount,
-      // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
-      round: (state.humanArcRevisionCount || 0) + 1,
-      validationResults: state.validationResults,
-      previousOutput: weaveForPrompt(previous),
-      humanFeedback: state._arcFeedback || null,
-      theme: state.theme
-    });
+    const call = arcReworkCall(state);
     const result = await sdkClient({
-      prompt: buildArcRevisionPrompt(state, contextSection, previousOutputSection),
-      systemPrompt: getArcRevisionSystemPrompt(directorRound, state.sessionConfig, state.theme),
+      prompt: call.prompt,
+      systemPrompt: call.systemPrompt,
       model: 'opus',
-      jsonSchema: WEAVE_SCHEMA,
+      jsonSchema: call.jsonSchema,
       disableTools: true,
-      label: `Arc revision ${revisionCount}`
+      label: call.label
     });
 
-    const weave = weaveFromRework(result, previous, { directorRound });
+    const { output, reasons } = takeChangedEdits(result);
+    let pass = revisionCount;
+    if (meetingRound === 'send-back') pass = SEND_BACK_PASS;
+    else if (meetingRound === 'reweave') pass = REWEAVE_PASS;
+    const settled = settleEdits(state._weaveHandEditReport, {
+      edits: call.edits,
+      before: call.before,
+      after: weaveFromRework(output, previous, { directorRound }),
+      pass,
+      reasons: call.asksForChangedEdits ? reasons : []
+    });
+    const weave = settled.output;
     console.log(`[reviseArcs] Complete: ${weave.threads.length} threads, ${weaveWordCount(weave)} words, in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     return {
       weave,
+      _weaveBaseline: weaveForPrompt(weave),
+      _weaveHandEditReport: settled.report,
+      ...(directorRound && { _weaveMarks: { round: meetingRound, from: call.before, at: new Date().toISOString() } }),
+      _meetingRound: null,
       _arcFeedback: null,
       _arcReworkTimeout: null,
       currentPhase: PHASES.ARC_SYNTHESIS
@@ -626,18 +734,28 @@ async function reviseArcs(state, config) {
     const isTimeout = !isRefusalError(error) && error.message?.includes('timeout') && error.message?.includes('limit');
     const consecutive = ((state._arcReworkTimeout && state._arcReworkTimeout.consecutive) || 0) + 1;
     if (isTimeout && consecutive < 3) {
+      const at = new Date().toISOString();
+      if (directorRound) {
+        console.warn(`[reviseArcs] Timeout ${consecutive}/2: the director's ${meetingRound} did not run; the meeting reopens with the director's version`);
+        return {
+          _meetingRound: null,
+          _arcFeedback: null,
+          _arcReworkTimeout: { consecutive, attempt: revisionCount, round: meetingRound, note, at },
+          humanArcRevisionCount: Math.max(0, (state.humanArcRevisionCount || 1) - 1),
+          currentPhase: PHASES.ARC_SYNTHESIS
+        };
+      }
       console.warn(`[reviseArcs] Timeout ${consecutive}/2: keeping the weave as a free retry`);
       return {
-        _arcFeedback: state._arcFeedback,  // kept for the retry: the director's intent is not lost
-        _arcReworkTimeout: { consecutive, attempt: revisionCount, at: new Date().toISOString() },
+        _arcReworkTimeout: { consecutive, attempt: revisionCount, at },
         arcRevisionCount: Math.max(0, (state.arcRevisionCount || 1) - 1),
-        humanArcRevisionCount: Math.max(0, (state.humanArcRevisionCount || 1) - 1),
         currentPhase: PHASES.ARC_SYNTHESIS
       };
     }
 
     console.error('[reviseArcs] Error:', error.message);
     return {
+      _meetingRound: null,
       _arcFeedback: null,
       _arcReworkTimeout: null,
       errors: [{
@@ -718,7 +836,7 @@ function hasInterweavingPlan(plan) {
 
 /**
  * The weave checks' node (phase 4, brief 4.4; spec 4.5): code checks the weave the
- * writer wrote (lib/weave.js checkWeave), free, before the fact check.
+ * writer wrote (lib/weave.js weaveFindings), free, before the fact check.
  *
  * Writes validationResults on every outcome, stamped for the weave it checked (`phase`
  * and `weaveKey`), with each failure as one line that names the defect and its fix; a
@@ -726,6 +844,12 @@ function hasInterweavingPlan(plan) {
  * `_arcValidation`, which the routing reads and the meeting shows: a check still failing
  * when the stop opens is kept there. Player coverage left this stage: the map places
  * every player.
+ *
+ * The checks read only the writer's text (R11, brief 4.5): the director's share of the
+ * weave, read from the standing edits it carries, is never a failure. A fault in the
+ * director's own change, such as a receipt they typed that names no document, is a
+ * concern under the edit's id, kept in `_arcValidation.concerns` for the meeting to show
+ * beside the line; no rework reads it.
  *
  * Once the meeting is approved it checks nothing and writes nothing, so a replay past
  * the meeting leaves a later stage's findings in validationResults as they were.
@@ -739,20 +863,23 @@ function validateArcStructure(state) {
     return {};
   }
   const weave = state.weave;
-  const failures = checkWeave(weave, {
+  const directorsShare = weaveDirectorsShare(carriedEdits(state._weaveHandEdits, weaveForPrompt(weave)));
+  const { failures, concerns } = weaveFindings(weave, {
     recordIds: buildValidEvidenceIds(state.evidenceBundle),
-    directorWords: directorWordsOf(state)
+    directorWords: directorWordsOf(state),
+    directorsShare
   });
   const key = weaveKey(weave);
   const passed = failures.length === 0;
-  const words = weaveWordCount(weave);
-  console.log(`[validateArcs] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${words} words, weave ${key})`);
+  const words = weaveWordCount(weave, directorsShare);
+  console.log(`[validateArcs] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${words} words, weave ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
 
   return {
     _arcValidation: {
       weaveKey: key,
       passed,
       failures,
+      concerns: concerns.map(c => directorEditConcern(c.editIds, c.finding)),
       words,
       checkedAt: new Date().toISOString()
     },
@@ -776,7 +903,7 @@ module.exports = {
 
   // The arc rework: a check rework, the fact check's fix, or the director's round
   reviseArcs: traceNode(reviseArcs, 'reviseArcs', {
-    stateFields: ['weave', 'validationResults']
+    stateFields: ['weave', 'validationResults', '_meetingRound']
   }),
 
   // The weave checks
@@ -802,9 +929,11 @@ module.exports = {
     extractPlayerFocusContext,
     extractEvidenceSummary,
     buildArcRevisionPrompt,
+    arcReworkCall,
     getArcRevisionSystemPrompt,
     arcRevisionRules,
     ARC_REVISION_RULES,
+    NOTE_CORRECTS_A_MECHANIC,
     ARC_REWORK_TASK,
     WEAVE_TASK,
     buildCharacterCategoriesBlock,

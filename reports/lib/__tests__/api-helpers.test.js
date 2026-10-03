@@ -428,8 +428,8 @@ describe('pruneGateNotes (spec 2026-09-19 §5.4)', () => {
   });
 
   test('a point outside the table returns every note unchanged (the caller clears via ROLLBACK_CLEARS)', () => {
-    expect(pruneGateNotes(notes, 'arc-selection')).toEqual(notes);
     expect(pruneGateNotes(notes, 'input-review')).toEqual(notes);
+    expect(pruneGateNotes(notes, 'evidence-and-photos')).toEqual(notes);
   });
 
   test('returns a new array and tolerates null/garbage', () => {
@@ -456,5 +456,69 @@ describe('pruneGateNotes keeps approval notes (phase 1, final review I1)', () =>
     expect(pruneGateNotes(notes, 'outline').map((n) => n.text)).toEqual([
       'develop the story through every section', 'keep the closing as it is'
     ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// 4.5: going back to the story meeting (R9)
+// ═══════════════════════════════════════════════════════
+//
+// A rollback to the meeting keeps the weave as the director last left it, with its
+// fact-check mark, its answers, the standing edits and their baseline, and the meeting's
+// notes. It clears the approval, the map, the article and the history, and prunes the
+// map's and the article's rejection notes as the later points do. The note pruning has a
+// table of its own, apart from the evaluation stubs: the meeting's point prunes the notes
+// and writes no stub, so the cleared history reruns every later evaluation.
+describe("4.5: going back to the story meeting (R9)", () => {
+  const { STOPS_INVALIDATED_BY } = require('../api-helpers');
+  const notes = [
+    { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'meeting send-back', at: 't1' },
+    { gate: 'arc-selection', kind: 'approval', round: 1, text: 'meeting approval', at: 't2' },
+    { gate: 'outline', kind: 'rejection', round: 1, text: 'map send-back', at: 't3' },
+    { gate: 'outline', kind: 'approval', round: 1, text: 'map approval', at: 't4' },
+    { gate: 'article', kind: 'rejection', round: 1, text: 'desk send-back', at: 't5' }
+  ];
+
+  test('the note pruning has a table of its own: the stops each rollback invalidates', () => {
+    expect(STOPS_INVALIDATED_BY).toEqual({
+      'arc-selection': ['outline', 'article'],
+      photos: ['outline', 'article'],
+      'character-ids': ['outline', 'article'],
+      outline: ['outline', 'article'],
+      article: ['article']
+    });
+    // The evaluation stubs keep their own table, which the meeting's point is not in.
+    expect(PHASES_INVALIDATED_BY).not.toHaveProperty('arc-selection');
+  });
+
+  test("the meeting's point keeps the meeting's notes and the approval notes, and prunes the map's and the article's rejection notes", () => {
+    expect(pruneGateNotes(notes, 'arc-selection').map((n) => n.text)).toEqual(['meeting send-back', 'meeting approval', 'map approval']);
+  });
+
+  test('the rollback handler writes the pruned notes at the points that prune them, and nothing at the points that clear them', () => {
+    const { rollbackNotesUpdate } = require('../api-helpers');
+    expect(rollbackNotesUpdate('arc-selection', notes)).toEqual({ directorGateNotes: pruneGateNotes(notes, 'arc-selection') });
+    expect(rollbackNotesUpdate('article', notes).directorGateNotes.map((n) => n.text)).toEqual(['meeting send-back', 'meeting approval', 'map send-back', 'map approval']);
+    ['evidence-and-photos', 'pre-curation', 'input-review'].forEach((point) => expect([point, rollbackNotesUpdate(point, notes)]).toEqual([point, {}]));
+  });
+
+  test('writes no evaluation stub: the history is cleared, so the map and the article are judged again', () => {
+    const state = buildRollbackState('arc-selection');
+    expect(state.evaluationHistory).toEqual([]);
+    expect(state).not.toHaveProperty('directorGateNotes');
+  });
+
+  test("clears the approval and the round's marks, keeps the weave, its baseline and the standing edits, and keeps the meeting's counters", () => {
+    const state = buildRollbackState('arc-selection');
+    ['meetingApproved', '_meetingRound', '_weaveMarks', '_weaveHandEditReport', 'outline', 'contentBundle'].forEach((field) => {
+      expect([field, state[field]]).toEqual([field, null]);
+    });
+    ['weave', '_weaveBaseline', '_weaveHandEdits', 'photosPath', 'characterIdMappings', 'leftOutPhotos', 'photoDescriptions'].forEach((field) => {
+      expect([field, Object.prototype.hasOwnProperty.call(state, field)]).toEqual([field, false]);
+    });
+    expect(state).not.toHaveProperty('arcRevisionCount');
+    expect(state).not.toHaveProperty('humanArcRevisionCount');
+    expect(state.outlineRevisionCount).toBe(0);
+    expect(state.articleRevisionCount).toBe(0);
   });
 });

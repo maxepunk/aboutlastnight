@@ -174,29 +174,46 @@ describe("the weave's questions (C15)", () => {
       expect(weaveQuestionsOf(undefined)).toEqual([]);
       expect(weaveQuestionsOf({ id: 'q1' })).toEqual([]);
     });
+
+    // Brief 4.5 (ruling 4): the director's answer travels with its question.
+    it("keeps the director's answer, trimmed at the ends only; a blank answer is no answer", () => {
+      const q = { id: 'q1', kind: 'player', about: 'Kai', question: 'What did Kai do?', changes: 'Where Kai appears.' };
+      expect(weaveQuestionsOf([{ ...q, answer: '  Kai sold the  first memory.  ' }])).toEqual([{ ...q, answer: 'Kai sold the  first memory.' }]);
+      expect(weaveQuestionsOf([{ ...q, answer: '   ' }])).toEqual([q]);
+      expect(weaveQuestionsOf([{ ...q, answer: 42 }])).toEqual([q]);
+    });
   });
 
+  // Brief 4.5 (C15, ruling 4): every rework keeps each question the director has not
+  // answered, and code keeps each answered question whole, apart from the model's output.
   describe('carriedWeaveQuestions', () => {
     const Q1 = { id: 'q1', kind: 'player', about: 'Kai', question: 'What did Kai do?', changes: 'Where Kai appears.' };
     const Q2 = { id: 'q2', kind: 'pronoun', about: 'Sloane', question: 'Which pronoun for Sloane?', changes: "Sloane's pronoun." };
     const Q3 = { id: 'q3', kind: 'figure', about: 'The 9:40 sale', question: 'A duplicate?', changes: 'The sale count.' };
+    const ANSWERED = { ...Q1, answer: 'Kai ran the coat check all night.' };
 
-    it('an automatic pass keeps each question it left out, in its place, and takes its own version of one it returned', () => {
+    it('a rework keeps each question it left out, in its place, and takes its own version of one it returned', () => {
       const reworded = { ...Q2, question: 'Which pronoun does Sloane use?' };
-      expect(carriedWeaveQuestions([reworded, Q3], [Q1, Q2], { afterDirectorNote: false })).toEqual([Q1, reworded, Q3]);
+      expect(carriedWeaveQuestions([reworded, Q3], [Q1, Q2])).toEqual([Q1, reworded, Q3]);
     });
 
-    it("after the director's note, the rework's list replaces the old one", () => {
-      expect(carriedWeaveQuestions([Q3], [Q1, Q2], { afterDirectorNote: true })).toEqual([Q3]);
+    it("an unanswered question a director's round left out comes back: only an answer settles a question", () => {
+      expect(carriedWeaveQuestions([Q3], [Q1, Q2])).toEqual([Q1, Q2, Q3]);
     });
 
     it('a rework that returns no list keeps the previous one', () => {
-      expect(carriedWeaveQuestions(undefined, [Q1], { afterDirectorNote: true })).toEqual([Q1]);
-      expect(carriedWeaveQuestions(undefined, [Q1], { afterDirectorNote: false })).toEqual([Q1]);
+      expect(carriedWeaveQuestions(undefined, [Q1, ANSWERED])).toEqual([Q1, ANSWERED]);
+      expect(carriedWeaveQuestions(undefined, [ANSWERED])).toEqual([ANSWERED]);
     });
 
-    it('throws when the caller does not say whether the rework acts on the director\'s note', () => {
-      expect(() => carriedWeaveQuestions([Q1], [Q1])).toThrow(/afterDirectorNote/);
+    it('an answered question stays whole, as the director answered it, whatever the rework returns', () => {
+      const reworded = { ...Q1, question: 'Where was Kai?', changes: 'Nothing.' };
+      expect(carriedWeaveQuestions([reworded, Q3], [ANSWERED, Q2])).toEqual([ANSWERED, Q2, Q3]);
+      expect(carriedWeaveQuestions([], [Q2, ANSWERED])).toEqual([Q2, ANSWERED]);
+    });
+
+    it("no answer is read from a rework's questions", () => {
+      expect(carriedWeaveQuestions([{ ...Q2, answer: 'he/him' }, { ...Q3, answer: 'Yes.' }], [Q2])).toEqual([Q2, Q3]);
     });
   });
 });
@@ -246,9 +263,12 @@ describe('the weave helpers', () => {
     expect(WEAVE).not.toHaveProperty('_factCheck');
   });
 
+  // Brief 4.5 (ruling 1): the meeting's own approval, which the director's approve sets.
+  // The old arc selection approves nothing.
   it('the meeting is approved once the director has approved the stop', () => {
-    expect(isMeetingApproved({ selectedArcs: ['weave'] })).toBe(true);
-    expect(isMeetingApproved({ selectedArcs: [] })).toBe(false);
+    expect(isMeetingApproved({ meetingApproved: true })).toBe(true);
+    expect(isMeetingApproved({ meetingApproved: false })).toBe(false);
+    expect(isMeetingApproved({ meetingApproved: null, selectedArcs: ['weave'] })).toBe(false);
     expect(isMeetingApproved({})).toBe(false);
   });
 
@@ -395,5 +415,170 @@ describe('the weave checks (checkWeave)', () => {
       const quoted = { ...atBound, fromYourNotes: longNotes };
       expect(checkWeave(quoted, { recordIds: RECORD_IDS, directorWords: [longNotes] })).toEqual([]);
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5: the meeting's plumbing (spec 4.3, 4.4; rulings 2 and 3)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The director strikes a connection by marking it `struck: true`, so the meeting can show
+// it struck; every reader of the story reads the live connections alone. The checks read
+// only the writer's text (R11): the director's share of the weave, read from their
+// standing edits, is never a check's failure, and a receipt the director typed that names
+// no document is a concern.
+describe('4.5: struck connections, the round mark and the views of the weave', () => {
+  const {
+    MEETING_ROUNDS, STRUCK_KEY, isStruck, liveConnections, meetingRoundOf, weaveForRework, weaveForJudge, withStruckConnections
+  } = require('../weave');
+  const struck = () => ({ ...clone(WEAVE), connections: clone(WEAVE).connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c)) });
+
+  it('a connection the director struck carries struck: true, and the live connections leave it out', () => {
+    expect(STRUCK_KEY).toBe('struck');
+    const weave = struck();
+    expect(isStruck(weave.connections[1])).toBe(true);
+    expect(isStruck(weave.connections[0])).toBe(false);
+    expect(liveConnections(weave).map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
+    expect(liveConnections(null)).toEqual([]);
+  });
+
+  it("a struck connection's words are not the weave's", () => {
+    const weave = struck();
+    const detailWords = WEAVE.connections[1].detail.split(/\s+/).filter(Boolean).length;
+    expect(weaveWordCount(weave)).toBe(weaveWordCount(WEAVE) - detailWords);
+  });
+
+  it('the round mark is the reweave or the send-back, and nothing else', () => {
+    expect([...MEETING_ROUNDS]).toEqual(['reweave', 'send-back']);
+    expect(meetingRoundOf({ _meetingRound: 'reweave' })).toBe('reweave');
+    expect(meetingRoundOf({ _meetingRound: 'send-back' })).toBe('send-back');
+    expect(meetingRoundOf({ _meetingRound: 'approve' })).toBeNull();
+    expect(meetingRoundOf({ _arcFeedback: 'Rethink it.' })).toBeNull();
+    expect(meetingRoundOf({})).toBeNull();
+  });
+
+  it('a rework reads the weave without its code-owned keys or its struck connections, answers kept', () => {
+    const weave = withFactCheckMark({ ...struck(), questions: [{ ...WEAVE.questions[0], answer: 'Print it as the room said it.' }] }, { at: 't', ready: true, fixes: 0 });
+    const view = weaveForRework(weave);
+    expect(view).not.toHaveProperty('_factCheck');
+    expect(view.connections.map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
+    expect(view.questions[0].answer).toBe('Print it as the room said it.');
+    expect(weave.connections).toHaveLength(4);
+  });
+
+  it("the fact check reads the weave with no struck connection and no answer: the answers are the director's words, read apart", () => {
+    const weave = { ...struck(), questions: [{ ...WEAVE.questions[0], answer: 'Print it as the room said it.' }] };
+    const view = weaveForJudge(weave);
+    expect(view.connections.map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
+    expect(view.questions[0]).not.toHaveProperty('answer');
+    expect(view.questions[0].question).toBe(WEAVE.questions[0].question);
+  });
+
+  describe('withStruckConnections: the struck connections a rework never saw come back where they sat', () => {
+    it('puts each one the output lacks back in its place', () => {
+      const previous = struck();
+      const output = { ...clone(WEAVE), connections: clone(WEAVE).connections.filter((c) => c.id !== 'c2') };
+      const back = withStruckConnections(output, previous);
+      expect(back.connections.map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
+      expect(back.connections[1]).toEqual(previous.connections[1]);
+      expect(output.connections).toHaveLength(3);
+    });
+
+    it('leaves a connection the output returned under a struck id as the output has it', () => {
+      const previous = struck();
+      const output = clone(WEAVE);
+      expect(withStruckConnections(output, previous)).toEqual(output);
+    });
+
+    it('returns the output as it is when nothing was struck', () => {
+      const output = clone(WEAVE);
+      expect(withStruckConnections(output, clone(WEAVE))).toBe(output);
+    });
+  });
+});
+
+describe('4.5: every id is unique, and the stronger main thread names a thread (ruling 3)', () => {
+  it('fires on two threads that share an id, naming the id and the fix', () => {
+    const doubled = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[1] }] };
+    const failures = check(doubled);
+    expect(typesOf(failures)).toEqual(['duplicate-id']);
+    expect(failures[0].message).toMatch(/threads share the id "t2"/);
+  });
+
+  it('fires on two connections, and on two questions, that share an id', () => {
+    const connections = { ...clone(WEAVE), connections: [...clone(WEAVE).connections, { ...clone(WEAVE).connections[0], detail: 'Another.' }] };
+    expect(check(connections).map((f) => f.message)).toEqual([expect.stringMatching(/connections share the id "c1"/)]);
+    const questions = { ...clone(WEAVE), questions: [...clone(WEAVE).questions, { ...clone(WEAVE).questions[0], question: 'Again?' }] };
+    expect(check(questions).map((f) => f.message)).toEqual([expect.stringMatching(/questions share the id "q1"/)]);
+  });
+
+  it('fires on a stronger main thread that names no thread of the weave', () => {
+    const failures = check({ ...clone(WEAVE), strongerMainThread: { thread: 't9', reason: 'A stronger story.' } });
+    expect(typesOf(failures)).toEqual(['stronger-main-thread-unknown']);
+    expect(failures[0].message).toMatch(/"t9"/);
+  });
+
+  it('is silent on the weave as written', () => {
+    expect(check(WEAVE)).toEqual([]);
+  });
+});
+
+describe("4.5: the checks read only the writer's text (R11, ruling 2)", () => {
+  const { weaveFindings } = require('../weave');
+  /** The director's share of the weave, as lib/hand-edit-diff.js weaveDirectorsShare reads it from the edits. */
+  const share = (parts = {}) => ({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, ...parts });
+  const concerns = (weave, directorsShare) => weaveFindings(weave, { recordIds: RECORD_IDS, directorsShare }).concerns;
+
+  it('a thread the director added, with no receipt and no reason, is no failure', () => {
+    const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { id: 't7', claim: 'The guest list was rewritten that morning.', role: 'left-out' }] };
+    expect(typesOf(check(added))).toEqual(['thread-without-receipt', 'left-out-without-reason']);
+    expect(check(added, { directorsShare: share({ addedThreads: { t7: 'E1' } }) })).toEqual([]);
+  });
+
+  it('a thread the director re-roled may have no reason, and no receipt', () => {
+    const reroled = withThread('t2', ({ receipt: _r, ...t }) => ({ ...t, role: 'left-out' }));
+    expect(typesOf(check(reroled))).toEqual(['thread-without-receipt', 'left-out-without-reason']);
+    expect(check(reroled, { directorsShare: share({ reroledThreads: { t2: 'E2' } }) })).toEqual([]);
+  });
+
+  it('a receipt the director typed that names no document is a concern, never a failure', () => {
+    const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { id: 't7', claim: 'The guest list was rewritten.', role: 'grounds-it', receipt: 'zzz999' }] };
+    const directorsShare = share({ addedThreads: { t7: 'E1' } });
+    expect(check(added, { directorsShare })).toEqual([]);
+    const found = concerns(added, directorsShare);
+    expect(found).toEqual([{ type: 'receipt-not-in-record', editIds: ['E1'], finding: expect.stringMatching(/"t7".*"zzz999"/) }]);
+    // The same receipt typed over a writer's thread.
+    const typed = withThread('t3', (t) => ({ ...t, receipt: 'zzz999' }));
+    expect(check(typed, { directorsShare: share({ threadFields: { 't3.receipt': 'E4' } }) })).toEqual([]);
+    expect(concerns(typed, share({ threadFields: { 't3.receipt': 'E4' } })).map((c) => c.editIds)).toEqual([['E4']]);
+    // A receipt the writer wrote stays the writer's failure.
+    expect(typesOf(check(typed))).toEqual(['receipt-not-in-record']);
+    expect(concerns(typed, share())).toEqual([]);
+  });
+
+  it("a verdict thread the director left out is a concern on that edit, not the writer's failure", () => {
+    const leftOut = withThread('t1', (t) => ({ ...t, role: 'left-out', reason: 'The director cut it.' }));
+    const directorsShare = share({ reroledThreads: { t1: 'E2' } });
+    expect(check(leftOut, { directorsShare })).toEqual([]);
+    expect(concerns(leftOut, directorsShare)).toEqual([{ type: 'no-verdict-thread', editIds: ['E2'], finding: expect.stringMatching(/"t1".*verdict/) }]);
+  });
+
+  it("the director's typed words and the threads they added add no length", () => {
+    const longText = Array.from({ length: WEAVE_WORD_BOUND }, (_, i) => `word${i}`).join(' ');
+    const typed = { ...clone(WEAVE), story: longText, threads: [...clone(WEAVE).threads, { id: 't7', claim: longText, role: 'grounds-it' }] };
+    expect(typesOf(check(typed))).toContain('over-length');
+    expect(check(typed, { directorsShare: share({ fields: { story: 'E1' }, addedThreads: { t7: 'E2' } }) })).toEqual([]);
+    expect(weaveWordCount(typed, share({ fields: { story: 'E1' }, addedThreads: { t7: 'E2' } }))).toBe(weaveWordCount(WEAVE) - weaveWordCount({ story: WEAVE.story, threads: [] }));
+  });
+
+  it('"from your notes" the director typed is not checked against the notes', () => {
+    const typed = { ...clone(WEAVE), fromYourNotes: 'the director put this in their own words' };
+    expect(typesOf(check(typed))).toEqual(['from-your-notes-not-verbatim']);
+    expect(check(typed, { directorsShare: share({ fields: { fromYourNotes: 'E1' } }) })).toEqual([]);
+  });
+
+  it('a struck connection is no failure, whatever it joins', () => {
+    const weave = { ...clone(WEAVE), connections: [...clone(WEAVE).connections, { id: 'c9', kind: 'person', joins: ['t1', 't99'], detail: 'x', struck: true }] };
+    expect(check(weave)).toEqual([]);
   });
 });

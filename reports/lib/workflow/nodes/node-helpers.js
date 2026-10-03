@@ -11,10 +11,10 @@ const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency, pairRepliesWithBatch } = require('../../evidence-preprocessor');
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
 const {
-  carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE
+  carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE
 } = require('../../hand-edit-diff');
 const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
-const { WEAVE_CHECKS_SOURCE } = require('../../weave');
+const { WEAVE_CHECKS_SOURCE, MEETING_ROUNDS, weaveForRework } = require('../../weave');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NON-ROSTER PC VALIDATION (Commit 8.xx)
@@ -823,6 +823,16 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  * @param {string} [options.outputName] - what the context calls the output the rework
  *   starts from, where it differs from the phase's name: 'weave' for the arc stage's
  *   rework (phase 4, brief 4.4). The phase still names the stamp the findings must carry.
+ * @param {'reweave'|'send-back'|null} [options.meetingRound] - the story meeting's round
+ *   mark (brief 4.5; lib/weave.js meetingRoundOf). The weave's rework always passes it, and
+ *   then the mark, never the note's presence, decides: a reweave fits the director's
+ *   changes in and keeps every other line; a send-back takes the note as its task; null is
+ *   an automatic pass, which reads no note. Its <HAND_EDITS> reads the meeting's changes,
+ *   and a director's round prints no evaluation, since its rework reads no finding from
+ *   before the round. Its PREVIOUS OUTPUT prints the weave as the rework reads it (lib/weave.js
+ *   weaveForRework: no struck connection), while <HAND_EDITS> lists each strike, read
+ *   against the whole weave. A caller that leaves it out (the outline and the article)
+ *   decides by the note's presence, as before.
  * @returns {Object} { contextSection, previousOutputSection }
  *
  * @example
@@ -835,9 +845,17 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  * });
  */
 function buildRevisionContext(options) {
-  const { phase, revisionCount, previousOutput, humanFeedback, handEdits, round, theme = 'journalist' } = options;
+  const { phase, revisionCount, previousOutput, handEdits, round, theme = 'journalist' } = options;
   const outputName = typeof options.outputName === 'string' && options.outputName ? options.outputName : phase;
   const parkedDetective = theme === 'detective';
+
+  // Brief 4.5 (ruling 1): at the story meeting the round mark decides the scope, the banner
+  // and the rules for the director's edits; the note is only what the director wrote. Every
+  // other caller decides by the note's presence, as before.
+  const meetingMode = Object.prototype.hasOwnProperty.call(options, 'meetingRound');
+  const meetingRound = meetingMode && MEETING_ROUNDS.includes(options.meetingRound) ? options.meetingRound : null;
+  const directorsRound = meetingMode ? meetingRound !== null : Boolean(options.humanFeedback);
+  const humanFeedback = meetingMode && !meetingRound ? null : options.humanFeedback;
 
   // F1: the director's edits the version this rework starts from carries, by id. FA
   // (requirement 7): the rework reads the verdict without the findings located in them.
@@ -1025,15 +1043,24 @@ ${advisories.map(formatIssue).join('\n')}`
   let feedbackBlock = '';
   if (codeCheck) {
     feedbackBlock = feedback ? `\n${feedback}` : '';
-  } else if (parkedDetective || humanFeedback) {
+  } else if (parkedDetective || directorsRound) {
     feedbackBlock = `
 
 EVALUATOR FEEDBACK:
 ${feedback || '(no specific feedback provided)'}`;
   }
 
-  const evaluationBlock = hasEvaluation
-    ? `EVALUATION SUMMARY:
+  // Brief 4.5 (ruling 9): a code check has no confidence and no scores, so its rework
+  // reads the check's lines alone, under the check's label. A director's round at the
+  // story meeting reads no finding from before the round, so it prints no evaluation.
+  let evaluationBlock;
+  if (meetingMode && directorsRound && !hasEvaluation) {
+    evaluationBlock = '';
+  } else if (codeCheck && hasEvaluation) {
+    evaluationBlock = `${issuesHeading}:
+${issuesList}${feedbackBlock}${shouldConsiderBlock}`;
+  } else if (hasEvaluation) {
+    evaluationBlock = `EVALUATION SUMMARY:
   Confidence: ${confidenceText}
   Ready: ${passed ? 'YES' : 'NO (must address issues)'}${sendBackLine}
 
@@ -1041,8 +1068,10 @@ ${scoresGuideBlock}CRITERIA SCORES:
 ${criteriaList}
 
 ${issuesHeading}:
-${issuesList}${codeCheck ? feedbackBlock : ''}${shouldConsiderBlock}${codeCheck ? '' : feedbackBlock}`
-    : '(no evaluator feedback for this phase)';
+${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
+  } else {
+    evaluationBlock = '(no evaluator feedback for this phase)';
+  }
 
   // Spec 2026-09-19 §4.3: the director's edits, after HUMAN FEEDBACK and before the
   // instructions. Present on EVERY pass of the round, not only the first.
@@ -1058,12 +1087,32 @@ ${issuesList}${codeCheck ? feedbackBlock : ''}${shouldConsiderBlock}${codeCheck 
   // each one it changed, with why (CHANGED_EDITS_KEY, which the rework call's schema
   // carries; ai-nodes.js). EDIT_LINES_GUIDE says how to read the lines, in the words
   // the judges' section uses.
-  const handEditsRule = humanFeedback
-    ? `An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
-    : 'This automatic pass fixes the writer\'s text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out.';
+  //
+  // Brief 4.5: the story meeting's changes have their own wording, by the round mark: an
+  // automatic pass and a reweave keep every change of the director's (code holds both to
+  // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
+  // note needs it, saying why.
+  const WEAVE_EDITS_FINAL = 'the text they wrote stays exactly as written, each role they gave stays, each thread they added stays in the weave, and each connection they struck and each removed sentence stay out of it.';
+  let handEditsRule;
+  if (meetingMode) {
+    if (meetingRound === 'send-back') {
+      handEditsRule = `Each change of the director's is final unless the structural change their note asks for means it no longer fits: ${WEAVE_EDITS_FINAL} List each change this rework alters, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`;
+    } else if (meetingRound === 'reweave') {
+      handEditsRule = `Each change of the director's is final: ${WEAVE_EDITS_FINAL}`;
+    } else {
+      handEditsRule = `This automatic pass fixes the writer's text. Each change of the director's is final: ${WEAVE_EDITS_FINAL}`;
+    }
+  } else {
+    handEditsRule = humanFeedback
+      ? `An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
+      : 'This automatic pass fixes the writer\'s text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out.';
+  }
+  const handEditsIntro = meetingMode
+    ? `The director's changes to the weave at the story meeting. ${WEAVE_EDIT_LINES_GUIDE}`
+    : `The director's edits, by id: text the director wrote into the previous version, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE}`;
   const handEditsBlock = standingEdits.length > 0
     ? `<HAND_EDITS>
-The director's edits, by id: text the director wrote into the previous version, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE}
+${handEditsIntro}
 ${handEditsRule}
 
 ${formatEditLines(standingEdits)}
@@ -1075,9 +1124,11 @@ ${formatEditLines(standingEdits)}
   // Brief 2.3: which pass this is. A send back is the director's round, not an
   // automated pass: the send back resets the automated counter, so its banner used
   // to read "automated pass 0" above the director's own note. The discriminator is
-  // the one the increment nodes use, the feedback slot.
-  const passLabel = humanFeedback
-    ? (Number.isInteger(round) && round > 0 ? `round ${round}: the director's send back` : "the director's send back")
+  // the one the increment nodes use: the feedback slot, or at the story meeting the
+  // round mark (brief 4.5).
+  const roundWords = meetingRound === 'reweave' ? "the director's reweave" : "the director's send back";
+  const passLabel = directorsRound
+    ? (Number.isInteger(round) && round > 0 ? `round ${round}: ${roundWords}` : roundWords)
     : `automated pass ${revisionCount}`;
 
   // Brief 1.3: the instruction "if a criterion is scoring well (>=80%), do NOT
@@ -1116,6 +1167,21 @@ ${formatEditLines(standingEdits)}
     `Everything else in the previous ${outputName} stays word for word.`,
     'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.'
   ].filter(Boolean).join(' ');
+  // Brief 4.5 (TH7, R23): the director's two rounds at the story meeting, each stated
+  // once. A reweave fits the director's changes in and keeps every line no change needs;
+  // a send-back takes the note as its task, with nothing found before the round to fix.
+  const reweaveAsks = [
+    standingEdits.length > 0 && 'each change in <HAND_EDITS>',
+    humanFeedback && 'each change the note above asks for'
+  ].filter(Boolean).join(', and ');
+  const reweaveScope = reweaveAsks
+    ? `The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: ${reweaveAsks}. It rewrites the lines a change needs, such as the story, the question, the headline, a connection or the convergence once a thread takes a new role, and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed.`
+    : 'The director asked for a reweave at the story meeting with no change to fit in. This rework returns the weave with every line word for word.';
+  const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.`;
+  let scope;
+  if (meetingRound === 'reweave') scope = reweaveScope;
+  else if (directorsRound) scope = noteScope;
+  else scope = automaticScope;
   const instructionsSection = parkedDetective
     ? `═══════════════════════════════════════════════════════════════════════════════
 CRITICAL REVISION INSTRUCTIONS:
@@ -1129,23 +1195,25 @@ CRITICAL REVISION INSTRUCTIONS:
 WHAT THIS REWORK DOES:
 ═══════════════════════════════════════════════════════════════════════════════
 
-${humanFeedback
-    ? `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was, unless an issue to address needs it changed.`
-    : automaticScope}`;
+${scope}`;
+
+  // The note's own block. At the story meeting a director's round reads no finding, so the
+  // line about the evaluator's issues stays out there (brief 4.5).
+  const noteBlock = humanFeedback
+    ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
+${humanFeedback}
+${meetingMode ? '' : `
+NOTE: The human reviewer has explicitly requested these changes.
+Address human feedback FIRST, then address any remaining evaluator issues.
+`}`
+    : '';
 
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
 REVISION CONTEXT: ${outputName.toUpperCase()} (${passLabel})
 ═══════════════════════════════════════════════════════════════════════════════
 
-${evaluationBlock}
-
-${humanFeedback ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
-${humanFeedback}
-
-NOTE: The human reviewer has explicitly requested these changes.
-Address human feedback FIRST, then address any remaining evaluator issues.
-` : ''}${handEditsBlock}${instructionsSection}
+${evaluationBlock ? `${evaluationBlock}\n\n` : ''}${noteBlock}${noteBlock && meetingMode ? '\n' : ''}${handEditsBlock}${instructionsSection}
 `.trim();
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1153,15 +1221,18 @@ Address human feedback FIRST, then address any remaining evaluator issues.
   // ─────────────────────────────────────────────────────────────────────────────
 
   let previousOutputText;
+  // Brief 4.5: at the story meeting the rework reads the weave without the connections the
+  // director struck; <HAND_EDITS> above lists each one as struck.
+  const shownOutput = meetingMode ? weaveForRework(previousOutput) : previousOutput;
 
-  if (previousOutput === null || previousOutput === undefined) {
+  if (shownOutput === null || shownOutput === undefined) {
     previousOutputText = '(No previous output available - this appears to be the first generation attempt)';
-  } else if (Array.isArray(previousOutput)) {
-    previousOutputText = JSON.stringify(previousOutput, null, 2);
-  } else if (typeof previousOutput === 'object') {
-    previousOutputText = JSON.stringify(previousOutput, null, 2);
+  } else if (Array.isArray(shownOutput)) {
+    previousOutputText = JSON.stringify(shownOutput, null, 2);
+  } else if (typeof shownOutput === 'object') {
+    previousOutputText = JSON.stringify(shownOutput, null, 2);
   } else {
-    previousOutputText = String(previousOutput);
+    previousOutputText = String(shownOutput);
   }
 
   // Phase 3 (3.3): the journalist's header says what the version is, not how little

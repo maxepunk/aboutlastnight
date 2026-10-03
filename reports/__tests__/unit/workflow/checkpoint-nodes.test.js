@@ -72,81 +72,91 @@ describe('checkpoint-nodes', () => {
     });
   });
 
-  describe('checkpointCharacterIds old-graph guard (C5)', () => {
-    it('throws when reached without arcs having ever been analysed', async () => {
-      // A thread paused at character-ids on the PREVIOUS graph triggers this node
-      // on its first Resume (a plain edge is a channel named after the TARGET, so
-      // the pending write still fires it), and the node's outgoing writes then
-      // follow the NEW graph: parseCharacterIds, finalizePhotoAnalyses,
-      // buildArcEvidencePackages with zero arcs, then a PAID generateOutline and
-      // evaluateOutline. Fail before the interrupt instead.
+  // Brief 4.5 (R2): the guard reads the weave. A thread that reaches the character-IDs stop
+  // with no weave was started before the story meeting existed (or before the photo
+  // late-join, when this stop ran before arc analysis): the parse, the curation and the
+  // photos are kept by a rollback to the story meeting, which writes the weave fresh.
+  describe('checkpointCharacterIds: the guard reads the weave (brief 4.5)', () => {
+    const WEAVE = { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', claim: 'c', role: 'main-thread', receipt: 'ledger', verdict: true }], connections: [], convergence: 'v', questions: [] };
+
+    it('throws when reached with no weave, telling the director to roll back to the story meeting', async () => {
       await expect(checkpointCharacterIds({ photoAnalyses: { analyses: [] }, roster: ['Vic'] }, {}))
-        .rejects.toThrow(/previous graph/i);
+        .rejects.toThrow(/story meeting/);
       await expect(checkpointCharacterIds({ photoAnalyses: null, roster: null }, {}))
-        .rejects.toThrow(/await-full-context/);
+        .rejects.toThrow(/arc-selection/);
     });
 
-    it('does not throw on the normal path', async () => {
-      const out = await checkpointCharacterIds({
-        photoAnalyses: { analyses: [] }, roster: ['Vic'],
-        narrativeArcs: [{ id: 'arc-1' }], selectedArcs: ['arc-1'], characterIdMappings: null
-      }, {});
+    it('does not throw on the normal path: the weave the meeting settled', async () => {
+      const out = await checkpointCharacterIds({ photoAnalyses: { analyses: [] }, roster: ['Vic'], weave: WEAVE, characterIdMappings: null }, {});
       expect(out.currentPhase).toBeDefined();
     });
 
-    it('does not discriminate on selectedArcs, which may be empty (v2 I1)', async () => {
-      // Discriminating on selectedArcs would kill a run with a message that is false
-      // ("previous graph") and a recovery that is wrong ("roll back to
-      // await-full-context"). narrativeArcs is the real discriminator: an old-graph
-      // thread never ran analyzeArcs. (An empty selection used to reach this gate
-      // through the arc stop's forced forward, which brief 1.4 removed.)
-      const out = await checkpointCharacterIds({
-        photoAnalyses: { analyses: [] }, roster: ['Vic'],
-        selectedArcs: [],
-        narrativeArcs: [{ id: 'arc-1' }],
-        characterIdMappings: null
-      }, {});
-      expect(out.currentPhase).toBeDefined();
-    });
-
-    it('accepts _arcAnalysisCache alone, for an analysed run whose arcs were all filtered', async () => {
-      // validateArcStructure drops arcs with no evidence AND no characters, and
-      // routeArcValidation/routeArcEvaluation escalate the resulting 0-arc state to
-      // the human gate instead of revising futilely. That run HAS analysed its arcs,
-      // so it must not be told it was started on the previous graph.
-      const out = await checkpointCharacterIds({
-        photoAnalyses: { analyses: [] }, roster: ['Vic'],
-        narrativeArcs: [], selectedArcs: [],
-        _arcAnalysisCache: { synthesizedAt: '2026-09-19T00:00:00.000Z', architecture: 'split-call' },
-        characterIdMappings: null
-      }, {});
-      expect(out.currentPhase).toBeDefined();
-    });
-
-    it('accepts an arcs evaluation entry alone (arcs seeded, then all filtered)', async () => {
-      // checkpointArcSelection is only reachable through evaluateArcs, so every
-      // new-graph path to this gate carries an `arcs` entry — including a resumed
-      // run whose seeded arcs were filtered away and whose evaluation was skipped
-      // on that pre-seeded entry, so nothing wrote _arcAnalysisCache.
-      const out = await checkpointCharacterIds({
-        photoAnalyses: { analyses: [] }, roster: ['Vic'],
-        narrativeArcs: [],
-        evaluationHistory: [{ phase: 'arcs', ready: true }],
-        characterIdMappings: null
-      }, {});
-      expect(out.currentPhase).toBeDefined();
-    });
-
-    it('accepts _previousArcs alone as evidence that arcs were analysed', async () => {
-      // reviseArcs stashes the prior arcs there and nulls narrativeArcs on the way
-      // into a revision; a timeout can leave the state in exactly that shape.
-      const out = await checkpointCharacterIds({
-        photoAnalyses: null, roster: ['Vic'],
-        narrativeArcs: [], _previousArcs: [{ id: 'arc-1' }], characterIdMappings: null
-      }, {});
-      expect(out.currentPhase).toBeDefined();
+    it.each([
+      ['its arcs', { narrativeArcs: [{ id: 'arc-1' }], selectedArcs: ['arc-1'] }],
+      ['its arc analysis cache', { narrativeArcs: [], _arcAnalysisCache: { synthesizedAt: '2026-09-19T00:00:00.000Z', architecture: 'split-call' } }],
+      ['an arcs evaluation entry', { narrativeArcs: [], evaluationHistory: [{ phase: 'arcs', ready: true }] }],
+      ['the arcs a rework stashed', { narrativeArcs: [], _previousArcs: [{ id: 'arc-1' }] }]
+    ])('a thread from before the story meeting, with %s and no weave, is told to roll back to the meeting', async (_name, shape) => {
+      await expect(checkpointCharacterIds({ photoAnalyses: { analyses: [] }, roster: ['Vic'], characterIdMappings: null, ...shape }, {}))
+        .rejects.toThrow(/Roll back to the story meeting \(arc-selection\)/);
     });
   });
+
+  // Brief 4.5: the story meeting's stop. The payload resumes it as an approval or as one of
+  // the director's rounds; the approval is the stop's to set, and it writes the approved
+  // weave beside the session's other approved versions.
+  describe('checkpointArcSelection: the story meeting (brief 4.5)', () => {
+    const { _testing: { checkpointArcSelection } } = require('../../../lib/workflow/nodes/checkpoint-nodes');
+    const WEAVE = { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', claim: 'c', role: 'main-thread', receipt: 'ledger', verdict: true }], connections: [], convergence: 'v', questions: [] };
+    let dataDir;
+    beforeEach(() => { dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-meeting-')); });
+    afterEach(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+    const approvedWeave = (sessionId) => path.join(dataDir, sessionId, 'analysis', 'weave.approved.json');
+
+    it('shows the weave, and skips once the meeting is approved', async () => {
+      checkpointInterrupt.mockReturnValueOnce({ approved: true });
+      await checkpointArcSelection({ sessionId: '100326', weave: WEAVE }, { configurable: { dataDir } });
+      expect(checkpointInterrupt.mock.calls[0][0]).toBe('arc-selection');
+      expect(checkpointInterrupt.mock.calls[0][1]).toEqual({ weave: WEAVE });
+      expect(checkpointInterrupt.mock.calls[0][2]).toBeNull();
+
+      jest.clearAllMocks();
+      const replay = await checkpointArcSelection({ sessionId: '100326', weave: WEAVE, meetingApproved: true }, { configurable: { dataDir } });
+      expect(checkpointInterrupt.mock.calls[0][2]).toBe(true);
+      expect(replay).not.toHaveProperty('meetingApproved');
+    });
+
+    it("an approve sets the meeting's approval, ends the round's report and marks, and writes weave.approved.json", async () => {
+      checkpointInterrupt.mockReturnValueOnce({ approved: true });
+      const out = await checkpointArcSelection({ sessionId: '100326', weave: { ...WEAVE, _factCheck: { at: 't', ready: true, fixes: 0 } } }, { configurable: { dataDir } });
+      expect(out).toMatchObject({ meetingApproved: true, _meetingRound: null, _weaveHandEditReport: null, _weaveMarks: null });
+      expect(out).not.toHaveProperty('_weaveHandEdits');
+      expect(out).not.toHaveProperty('_weaveBaseline');
+      expect(JSON.parse(fs.readFileSync(approvedWeave('100326'), 'utf-8'))).toEqual({ ...WEAVE, _factCheck: { at: 't', ready: true, fixes: 0 } });
+    });
+
+    it('writes nothing on a replay of an approved meeting, or without a session id', async () => {
+      await checkpointArcSelection({ sessionId: '100326', weave: WEAVE, meetingApproved: true }, { configurable: { dataDir } });
+      checkpointInterrupt.mockReturnValueOnce({ approved: true });
+      await checkpointArcSelection({ weave: WEAVE }, { configurable: { dataDir } });
+      expect(fs.readdirSync(dataDir)).toEqual([]);
+    });
+
+    it.each(['reweave', 'send-back'])('a %s marks the round and approves nothing', async (round) => {
+      checkpointInterrupt.mockReturnValueOnce({ approved: false, round });
+      const out = await checkpointArcSelection({ sessionId: '100326', weave: WEAVE }, { configurable: { dataDir } });
+      expect(out).toMatchObject({ _meetingRound: round });
+      expect(out).not.toHaveProperty('meetingApproved');
+      expect(fs.readdirSync(dataDir)).toEqual([]);
+    });
+
+    it('refuses a resume that is neither an approval nor a round', async () => {
+      checkpointInterrupt.mockReturnValueOnce({ selectedArcs: ['arc-1'] });
+      await expect(checkpointArcSelection({ sessionId: '100326', weave: WEAVE }, { configurable: { dataDir } }))
+        .rejects.toThrow(/approve, reweave or send-back/);
+    });
+  });
+
   describe('checkpointArticle writes the approved bundle (brief 1.6)', () => {
     // The director's approved version existed nowhere on disk: the writer's last
     // version is in the checkpoint database and the published HTML is rendered,
@@ -241,7 +251,7 @@ describe('checkpointCharacterIds: the per-photo descriptions', () => {
     sessionId: '092026',
     photoAnalyses: { analyses: [{ filename: 'aln092026 (7 of 9).jpg' }] },
     roster: ['Alex', 'Sam'],
-    narrativeArcs: [{ id: 'arc-1' }],
+    weave: { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', claim: 'c', role: 'main-thread', receipt: 'ledger', verdict: true }], connections: [], convergence: 'v', questions: [] },
     characterIdMappings: null
   };
 
@@ -279,7 +289,7 @@ describe('checkpointCharacterIds: the leave-out choices', () => {
   const analysedState = {
     sessionId: null,
     photoAnalyses: { analyses: [{ filename: 'a.jpg' }, { filename: 'b.jpg' }] },
-    narrativeArcs: [{ id: 'arc-1' }],
+    weave: { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', claim: 'c', role: 'main-thread', receipt: 'ledger', verdict: true }], connections: [], convergence: 'v', questions: [] },
     characterIdMappings: null
   };
 

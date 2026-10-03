@@ -1,9 +1,12 @@
 /**
  * reviseArcs timeout recovery test
  *
- * A rework that times out keeps the weave it started from instead of losing it, as a
- * free retry. Phase 4 (brief 4.4): the weave stays in its channel (the rework writes
- * none), and the timeout bookkeeping has a channel of its own, `_arcReworkTimeout`.
+ * A rework that times out keeps the weave it started from instead of losing it. Phase 4
+ * (brief 4.4): the weave stays in its channel (the rework writes none), and the timeout
+ * bookkeeping has a channel of its own, `_arcReworkTimeout`. Brief 4.5 (rulings 5 and 6):
+ * the retry gives back only the count its pass raised; an automatic pass is retried free,
+ * and the director's round does not run, so the meeting reopens with the director's
+ * version and the record names the round and its note.
  */
 
 // Mock LLM module
@@ -53,24 +56,39 @@ describe('reviseArcs timeout recovery', () => {
   });
   afterAll(() => jest.restoreAllMocks());
 
-  test('keeps the previous weave on timeout instead of losing it', async () => {
+  test('keeps the previous weave on timeout instead of losing it: an automatic pass gives back its own count', async () => {
     const mockSdk = jest.fn().mockRejectedValueOnce(
       new Error('SDK timeout after 300.0s (limit: 300s) - Arc revision 1')
     );
-    const state = makeState();
+    const state = makeState({ _arcFeedback: null });
 
     const result = await reviseArcs(state, { configurable: { sdkClient: mockSdk } });
 
     // The weave stays as it was: the rework writes none
     expect(result).not.toHaveProperty('weave');
-    // Timeout should be free retry — counters decremented
+    // A free retry: the automatic count goes back down, the director's rounds stay
     expect(result.arcRevisionCount).toBeLessThan(state.arcRevisionCount);
-    expect(result.humanArcRevisionCount).toBeLessThan(state.humanArcRevisionCount);
+    expect(result).not.toHaveProperty('humanArcRevisionCount');
     // The timeout is recorded in its own channel, with the consecutive count
     expect(result._arcReworkTimeout).toMatchObject({ consecutive: 1, attempt: 1 });
-    // Should preserve human feedback for retry
-    expect(result._arcFeedback).toBe('fix burial mechanics');
+    expect(result._arcReworkTimeout).not.toHaveProperty('round');
     // Should NOT be in error state
+    expect(result.currentPhase).not.toBe('error');
+  });
+
+  test("the director's round that times out does not run: the round's count goes back, and the record names the round and its note", async () => {
+    const mockSdk = jest.fn().mockRejectedValueOnce(
+      new Error('SDK timeout after 300.0s (limit: 300s) - Arc revision 0')
+    );
+    const state = makeState({ _meetingRound: 'send-back', arcRevisionCount: 0 });
+
+    const result = await reviseArcs(state, { configurable: { sdkClient: mockSdk } });
+
+    expect(result).not.toHaveProperty('weave');
+    expect(result.humanArcRevisionCount).toBe(0);
+    expect(result).not.toHaveProperty('arcRevisionCount');
+    expect(result._arcReworkTimeout).toMatchObject({ consecutive: 1, round: 'send-back', note: 'fix burial mechanics' });
+    expect(result).toMatchObject({ _meetingRound: null, _arcFeedback: null });
     expect(result.currentPhase).not.toBe('error');
   });
 

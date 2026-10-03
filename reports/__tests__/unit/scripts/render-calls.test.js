@@ -40,7 +40,7 @@ const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criter
 
 /** Each judge's node, and the state that keeps it from skipping its model call. */
 const JUDGES = {
-  arcs: [evaluateArcs, { selectedArcs: [] }],
+  arcs: [evaluateArcs, { meetingApproved: false }],
   outline: [evaluateOutline, { outlineApproved: false }],
   // At the cap the article judge runs whatever the fact check found.
   article: [evaluateArticle, { articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE }]
@@ -110,6 +110,31 @@ describe.each(['journalist', 'detective'])('%s: a judge with the director\'s edi
     await evaluateArticle(clone(state), cfg(sdk, theme));
     const rendered = await renderJudge(calls, state, 'article');
     expect(rendered.userPrompt).toContain('E1 (section "the-story", paragraph): "Then the paternity test came back, and the room went quiet."');
+    expectSent(sdk.mock.calls[0][0], rendered);
+  });
+});
+
+// 4.5: after a director's round at the story meeting, the weave's fact check reads the
+// director's changes and their answers (evaluator-nodes.js judgedEdits,
+// renderDirectorAnswers), and render-calls.js passes them as the node does.
+describe("4.5: the weave's fact check with the director's changes and answers sends what the script renders", () => {
+  const { standingAtMeeting } = require('../../../lib/hand-edit-diff');
+  const { WEAVE } = require('../../../lib/__tests__/fixtures/rework-state');
+
+  test('the arcs judge', async () => {
+    const left = clone(WEAVE);
+    left.threads = left.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
+    left.connections = left.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
+    left.questions = left.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar all morning.' }));
+    const state = {
+      ...reworkFixtureState('journalist'), weave: left, evaluationHistory: [], meetingApproved: false,
+      _weaveHandEdits: standingAtMeeting(null, WEAVE, left)
+    };
+    const sdk = recordingSdk(() => VERDICT);
+    await evaluateArcs(clone(state), cfg(sdk, 'journalist'));
+    const rendered = await renderJudge(calls, state, 'arcs');
+    expect(rendered.userPrompt).toContain('E1 (thread "t3", role): "mirrors-it"');
+    expect(rendered.userPrompt).toContain('<DIRECTOR_ANSWERS>');
     expectSent(sdk.mock.calls[0][0], rendered);
   });
 });

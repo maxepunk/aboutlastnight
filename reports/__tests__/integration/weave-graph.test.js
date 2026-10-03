@@ -175,7 +175,8 @@ describe('the weave through the real graph (phase 4, brief 4.4)', () => {
     const { graph, thread, snapshot } = await runToStop({ sdk, weave: clone(reworkFixtureState('journalist').weave) });
     expect(sdk.calls).toEqual(['fact check']);
 
-    const { resume, stateUpdates, error } = buildResumePayload({ selectedArcs: false, arcFeedback: 'Make the sale the main thread.' }, snapshot.values);
+    // Brief 4.5: the story meeting's send-back, a note and no edit.
+    const { resume, stateUpdates, error } = buildResumePayload({ meeting: 'send-back', note: 'Make the sale the main thread.' }, snapshot.values);
     expect(error).toBeNull();
     await graph.invoke(new Command({ resume, update: stateUpdates }), { ...thread, recursionLimit: RECURSION_LIMIT, durability: 'sync' });
     const next = await graph.getState(thread);

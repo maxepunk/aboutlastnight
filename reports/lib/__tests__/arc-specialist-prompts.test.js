@@ -91,8 +91,11 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
 
     expect(arcModule._testing.weaveSystemPrompt(remote, 'journalist')).toContain(loadModeBlock('remote'));
     expect(arcModule._testing.weaveSystemPrompt({}, 'journalist')).toContain(loadModeBlock('on-site'));
-    expect(arcModule._testing.getArcRevisionSystemPrompt(true, remote, 'journalist')).toContain(loadModeBlock('remote'));
-    expect(arcModule._testing.getArcRevisionSystemPrompt(false, remote, 'journalist')).toContain(loadModeBlock('remote'));
+    // Brief 4.5: the rework's system prompt takes the story meeting's round mark.
+    ['send-back', 'reweave', null].forEach((round) => {
+      expect(arcModule._testing.getArcRevisionSystemPrompt(round, remote, 'journalist')).toContain(loadModeBlock('remote'));
+    });
+    expect(() => arcModule._testing.getArcRevisionSystemPrompt(true, remote, 'journalist')).toThrow(/round mark/);
     // No theme: the arc file's own default, the journalist.
     expect(arcModule._testing.weaveSystemPrompt(remote)).toContain(loadModeBlock('remote'));
     expect(arcModule._testing.weaveSystemPrompt(remote)).not.toContain(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
@@ -242,11 +245,19 @@ describe("arc prompts: the director's words as record", () => {
 
   describe('standing notes', () => {
     it('the reworker shows every earlier arc note and leaves out the one it is acting on', () => {
-      const prompt = buildArcRevisionPrompt({ ...base, directorGateNotes: NOTES, _arcFeedback: 'Put the vote first.' }, 'CTX', 'PREV');
+      const prompt = buildArcRevisionPrompt({ ...base, directorGateNotes: NOTES, _meetingRound: 'send-back', _arcFeedback: 'Put the vote first.' }, 'CTX', 'PREV');
       expect(prompt).toContain('<DIRECTOR_GUIDANCE>');
       expect(prompt).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
       expect(prompt).not.toContain('- [arc-selection, rejection 2] Put the vote first.');
       expect(prompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+    });
+
+    // Brief 4.5 (ruling 1): the round mark, never a note left in the slot, says which note
+    // a rework acts on. An automatic pass acts on none, so every note stands.
+    it('an automatic pass acts on no note: with no round mark, every note stands', () => {
+      const prompt = buildArcRevisionPrompt({ ...base, directorGateNotes: NOTES, _meetingRound: null, _arcFeedback: 'Put the vote first.' }, 'CTX', 'PREV');
+      expect(prompt).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
+      expect(prompt).toContain('- [arc-selection, rejection 2] Put the vote first.');
     });
 
     it('the writer renders them through the same function', () => {

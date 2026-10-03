@@ -65,8 +65,10 @@ const {
 // questions out.
 const { withoutWriterQuestions } = require('../../writer-questions');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
-// the meeting's approval it skips on.
-const { isWeave, weaveForPrompt, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
+// the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
+// (no struck connection, no answer), and the director's answers, which it reads as record.
+const { isWeave, weaveForPrompt, weaveForJudge, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
+const { renderDirectorAnswers } = require('../../prompt-renderers/settled-weave');
 // The page's own rule for whether the writer's money tracker prints (printedWriterTracker).
 const { writerTrackerPrints } = require('../../template-assembler');
 // F1 (spec 2026-10-02 section 7): the director's edits are final. The outline and article
@@ -74,7 +76,7 @@ const { writerTrackerPrints } = require('../../template-assembler');
 // about one of them to advisoryWarnings under the one prefix.
 const {
   carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, concernFinding, DIRECTOR_EDIT_PREFIX,
-  EDIT_LINES_GUIDE, PRINTED_FIELDS
+  EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE, PRINTED_FIELDS
 } = require('../../hand-edit-diff');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -116,7 +118,7 @@ const TRUTH_SUBJECTS = { arcs: 'the weave', outline: 'the outline', article: 'th
 
 /**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
- * it under. The first eleven are the judge's inputs; the last two are the judged output's
+ * it under. The first twelve are the judge's inputs; the last two are the judged output's
  * own text, which only the article holds (an outline places cards by id and photos by
  * filename, and arcs place neither).
  */
@@ -125,6 +127,7 @@ const TRUTH_MATERIAL = Object.freeze({
   timeline: '<morning-timeline>',           // the ledger and the evidence log, on the morning clock
   financialSummary: '<FINANCIAL_SUMMARY>',  // the account totals the outline and article writers copy (3.9)
   notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
+  answers: '<DIRECTOR_ANSWERS>',            // the director's answers at the story meeting (renderDirectorAnswers; brief 4.5)
   epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
   verdict: '<DIRECTOR_ACCUSATION>',         // the room's verdict, in the director's words
   roster: 'CANONICAL CHARACTER ROSTER:',    // each player with the roster's pronoun
@@ -136,13 +139,18 @@ const TRUTH_MATERIAL = Object.freeze({
   printedCaptions: '"caption": '            // the article's captions, as CONTENT BUNDLE prints them
 });
 
+// Brief 4.5 (T1): after a director's round at the story meeting the weave's fact check
+// reads the director's answers to the weave's questions as the director's words, record as
+// the notes are. The three questions an answer can settle read them: the evidence (an
+// answer says what a player did), the money (an answer says what a ledger line was) and
+// the pronouns (an answer gives a pronoun the roster lacks).
 const TRUTH_GROUPS = [
   {
     key: 'evidenceTruth',
     rules: ['T1', 'T3', 'T4', 'T6'],
-    reads: () => ['record', 'timeline', 'notes'],
+    reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers'] : ['record', 'timeline', 'notes']),
     // Phase 3 (3.9): T4 as round 7 words it (R21).
-    describe: (s) => `Is every claim in ${s} written as its evidence allows (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
+    describe: (s, phase) => `Is every claim in ${s} written as its evidence allows${phase === 'arcs' ? ", the director's answers at the story meeting included as record, as the notes are" : ''} (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
   },
   {
     key: 'moneyTruth',
@@ -157,8 +165,8 @@ const TRUTH_GROUPS = [
     // balances said or shown in the room before then (092026's read-out of the balances,
     // 092626's "$4 million in the RW account"), so a judge reads such a line as that
     // moment's figure (T1) and never "corrects" it to a closing total.
-    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes'] : ['timeline', 'financialSummary', 'notes']),
-    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} and a balance the director's notes record as said or shown in the room as that moment's figure (T1).`
+    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers'] : ['timeline', 'financialSummary', 'notes']),
+    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1)." : "and a balance the director's notes record as said or shown in the room as that moment's figure (T1)."}`
   },
   {
     key: 'verdictTruth',
@@ -187,8 +195,8 @@ const TRUTH_GROUPS = [
   {
     key: 'playersTruth',
     rules: ['T9', 'T11'],
-    reads: () => ['roster'],
-    describe: (s) => `Does every player in ${s} take the pronoun the roster gives (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
+    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers'] : ['roster']),
+    describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives${phase === 'arcs' ? ", or, where the roster gives none, the pronoun the director's answer at the story meeting gives" : ''} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
   },
   {
     key: 'wordsTruth',
@@ -555,7 +563,9 @@ function truthIssueLines(failed, written) {
 }
 
 /**
- * The output each judge scores: the one the director's edits are found in.
+ * The output each judge scores: the one the director's edits are found in. The weave
+ * without its code-owned keys (brief 4.5): the parts the guard reads of it leave out the
+ * connections the director struck and the answers (lib/hand-edit-diff.js weaveParts).
  *
  * @param {'arcs'|'outline'|'article'} phase
  * @param {Object} state
@@ -564,14 +574,16 @@ function truthIssueLines(failed, written) {
 function judgedOutput(phase, state) {
   if (phase === 'outline') return state.outline || null;
   if (phase === 'article') return state.contentBundle || null;
+  if (phase === 'arcs') return isWeave(state.weave) ? weaveForPrompt(state.weave) : null;
   return null;
 }
 
 /**
  * The director's edits the judged output carries (F1; spec 2026-10-02 section 7), in id
  * order: the one list the judge's prompt prints, the verdict guard reads and the fact
- * check locates (createEvaluator, buildFactCheckArgs, scripts/lib/render-calls.js). The
- * arc stop has no edits.
+ * check locates (createEvaluator, buildFactCheckArgs, scripts/lib/render-calls.js). At the
+ * story meeting (brief 4.5), the director's changes the weave carries, each strike among
+ * them.
  *
  * @param {'arcs'|'outline'|'article'} phase
  * @param {Object} state
@@ -580,6 +592,7 @@ function judgedOutput(phase, state) {
 function judgedEdits(phase, state) {
   if (phase === 'outline') return carriedEdits(state._outlineHandEdits, state.outline);
   if (phase === 'article') return carriedEdits(state._articleHandEdits, state.contentBundle);
+  if (phase === 'arcs') return carriedEdits(state._weaveHandEdits, judgedOutput('arcs', state));
   return [];
 }
 
@@ -780,13 +793,20 @@ function isTruthOnly(criteria) {
  * definition's type, so a breach's fix never reaches the rework as a suggestion; a
  * criterion it was not given goes; and its advisories are only its concerns about the
  * director's edits (DIRECTOR_EDIT_PREFIX, as the guard leaves them), which the stop shows
- * and no rework reads (forTheRework). Readiness stays the guard's: it reads the criteria's
- * definitions, and no advisory holds an output.
+ * and no rework reads (forTheRework).
+ *
+ * Readiness follows from the contract alone (brief 4.5, ruling 8): the verdict is ready
+ * when no structural issue remains and no truth criterion holds, whatever the judge's own
+ * structuralPassed says, on the path with no edits and on the edits path alike. "When it
+ * finds a breach, one automatic fix runs" (spec 4.5): a breach the judge listed holds the
+ * output though the judge called it passed, and a criterion outside the contract, which
+ * the verdict leaves out, holds nothing, so no fix runs with nothing to fix.
  *
  * @param {Object} guard - guardDirectorEdits' result
  * @param {Object} criteria - the judge's criteria, every one a truth criterion (isTruthOnly)
  * @returns {Object} the guard's result with its `advisories` and `criteriaScores` held to the
- *   contract, and `outsideContract`: the criteria and advisories it left out, for the log
+ *   contract, its `ready` read from the contract, and `outsideContract`: the criteria and
+ *   advisories it left out, for the log
  */
 function truthOnlyVerdict(guard, criteria) {
   const given = (key) => Object.prototype.hasOwnProperty.call(criteria, key);
@@ -796,8 +816,11 @@ function truthOnlyVerdict(guard, criteria) {
       .filter(([key]) => given(key))
       .map(([key, value]) => [key, value && typeof value === 'object' ? { ...value, type: criteria[key].type } : value]))
     : guard.criteriaScores;
+  const holding = (Array.isArray(guard.holding) ? guard.holding : []).filter(given);
   return {
     ...guard,
+    holding,
+    ready: guard.kept.length === 0 && holding.length === 0,
     advisories: guard.advisories.filter((advisory) => !forTheRework(advisory)),
     criteriaScores,
     outsideContract: [
@@ -1595,14 +1618,25 @@ ${advisory.text}`;
  * director's authority, not craft, so the parked detective reads it too (the
  * integrator's ruling), with a criterion of its own in the example. '' with no edits.
  *
+ * The weave's fact check (brief 4.5; R11) reads the director's changes at the story
+ * meeting the same way, right after the weave, in the meeting's own words
+ * (WEAVE_EDIT_LINES_GUIDE): it judges the writer's text, and a breach in a change of the
+ * director's is a concern for the meeting, under the change's id.
+ *
  * @param {Object[]|undefined} edits - judgedEdits
- * @param {'outline'|'article'} phase
+ * @param {'arcs'|'outline'|'article'} phase
  * @param {string} theme
  * @returns {string}
  */
 function renderJudgeDirectorEdits(edits, phase, theme) {
   const list = Array.isArray(edits) ? edits : [];
   if (list.length === 0) return '';
+  if (phase === 'arcs') {
+    return `THE DIRECTOR'S EDITS (record: the director's own changes at the story meeting, each final as the director left it):
+The lines below are the director's changes to the weave above. ${WEAVE_EDIT_LINES_GUIDE} A change is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where a change of the director's breaks a truth rule, write the concern in advisoryWarnings, opening with the change's id and then the rule it concerns, as in: ${DIRECTOR_EDIT_PREFIX}E1: T1: <the concern>.
+
+${formatEditLines(list)}`;
+  }
   const output = phase === 'outline' ? 'the outline above' : 'the content bundle above';
   const example = `${DIRECTOR_EDIT_PREFIX}E1: ${theme === 'detective' ? 'evidenceIntegration' : 'T1'}: <the concern>`;
   return `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
@@ -1770,13 +1804,14 @@ Check the outline's momentum against the craft reference:
  *   for the bundle under review, as createEvaluator computed it this pass. The
  *   state's `_articleFactCheck` is not read: before this evaluation writes it, it
  *   belongs to the previous bundle.
- * @param {Object[]} [options.directorEdits] - outline and article: the director's edits
- *   the judged output carries (judgedEdits; F1), printed right after that output
+ * @param {Object[]} [options.directorEdits] - the director's edits the judged output carries
+ *   (judgedEdits; F1), printed right after that output: the outline's, the article's, and
+ *   at the story meeting the weave's (brief 4.5)
  * @returns {string} User prompt
  */
 function buildEvaluationUserPrompt(phase, state, options = {}) {
   const journalist = (state.theme || 'journalist') !== 'detective';
-  const directorEditsSection = phase === 'arcs' ? '' : renderJudgeDirectorEdits(options.directorEdits, phase, state.theme || 'journalist');
+  const directorEditsSection = renderJudgeDirectorEdits(options.directorEdits, phase, state.theme || 'journalist');
   const afterJudged = directorEditsSection ? `${directorEditsSection}\n\n` : '';
   switch (phase) {
     case 'arcs': {
@@ -1785,17 +1820,22 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // director's account of it, the roster with pronouns, the director's notes under
       // the arc writer's own label, and the record with its morning timeline. The weave's
       // receipts and its verdict thread are the code checks', and no craft file is read.
+      //
+      // Brief 4.5: after a director's round it reads the weave as it judges it (no struck
+      // connection, no answer), the director's changes right after it, and their answers
+      // after the notes, as the director's words (T1).
+      const answers = renderDirectorAnswers(state.weave && state.weave.questions);
       return `Check this weave against the record and the director's words:
 
 WEAVE:
-${JSON.stringify(weaveForPrompt(state.weave) || null, null, 2)}
+${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
 
-THE ACCUSATION (the parsed verdict, then the director's account word for word):
+${afterJudged}THE ACCUSATION (the parsed verdict, then the director's account word for word):
 ${renderArcAccusation(state.playerFocus?.accusation, directorAccusationText(state), "Players' Reasoning")}
 
 ${renderJudgeRosterSection(state)}
 
-${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}
+${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}${answers ? `\n\n${answers}` : ''}
 
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
@@ -2304,12 +2344,18 @@ function createEvaluator(phase, options = {}) {
       // its verdict and no fix run yet. The route reads the mark: a breach gets its one
       // fix (graph.js routeArcEvaluation), and the fix keeps the mark, so the stop opens
       // without a second judge call. No escalation at a cap: the fix runs once.
+      //
+      // Brief 4.5 (R11): a finding located in the director's changes is a concern on the
+      // mark, which the meeting shows beside the change's line; no rework reads it.
       if (phase === 'arcs') {
-        console.log(`[evaluateArcs] ${isReady ? 'No breach' : 'A breach: one automatic fix'} (score: ${evaluation.overallScore})`);
+        const concerns = historyEntry.advisoryWarnings.filter((warning) => !forTheRework(warning));
+        console.log(`[evaluateArcs] ${isReady ? 'No breach' : 'A breach: one automatic fix'} (score: ${evaluation.overallScore})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
         return {
           evaluationHistory: historyEntry,
           validationResults: buildValidationResults(isReady),
-          weave: withFactCheckMark(state.weave, { at: historyEntry.timestamp, ready: isReady, fixes: 0 }),
+          weave: withFactCheckMark(state.weave, {
+            at: historyEntry.timestamp, ready: isReady, fixes: 0, ...(concerns.length > 0 && { concerns })
+          }),
           currentPhase: phaseConstant
         };
       }

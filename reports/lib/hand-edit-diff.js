@@ -67,6 +67,15 @@
  * Equality is trimmed canonical JSON: keys sorted, every string trimmed. Matching an
  * object value is a subset match: every key the director's value carries is present
  * with an equal value, so a field the rework added is no change.
+ *
+ * THE WEAVE (brief 4.5): the director's changes at the story meeting are edits through
+ * the same machinery, with three differences. They are made at every approve, reweave
+ * and send-back, against the writer's last weave (standingAtMeeting), and stand past
+ * approve. Each is one place (weaveEditsBetween): a field rewritten, a thread's field (its
+ * role among them), a thread added whole, or a connection struck whole (`struck: true` on
+ * the edit), which code strikes again by id when a pass brings it back. And a reweave is
+ * held to them as an automatic pass is (REWEAVE_PASS). The answers are the director's
+ * words, kept by their own rule (lib/writer-questions.js carriedWeaveQuestions): no edit.
  */
 'use strict';
 
@@ -77,6 +86,8 @@ const { isVerbatimIn, normalizeForGrounding, quotedPassages } = require('./groun
 const {
   pairSectionBlocks, stayingInSection, blockText, blockKey, sectionKey
 } = require('../console/article-desk-logic');
+const { isWeave, isStruck, STRUCK_KEY } = require('./weave');
+const { WEAVE_ANSWER_KEY } = require('./writer-questions');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
 // which do not name metadata, voice_self_check or _revisionHistory.
@@ -107,8 +118,21 @@ const DIRECTOR_EDIT_PREFIX = "Director's edit ";
  */
 const EDIT_LINES_GUIDE = "An edit covers only the place its line names: a place that ends on a field, such as a card's headline or a photo's caption, is that field alone, and the rest of the block is the writer's. A line marked moved names a block the director moved to that place without changing it: the place is the director's, and the block's text is still the writer's. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
 
+/**
+ * How to read the weave's edit lines (brief 4.5; formatEditLines), for the weave's
+ * reworks' <HAND_EDITS> block and the meeting's fact check alike.
+ */
+const WEAVE_EDIT_LINES_GUIDE = "Each line is one change by its id and place, with the director's text or value: a field they rewrote, a field of a thread they changed (its role among them), a whole thread they added (marked added), or a connection they struck (marked struck), which is out of the story. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+
 /** The pass a report entry names when the rework of the director's send-back changed an edit. */
 const SEND_BACK_PASS = 'send-back';
+
+/**
+ * The pass a report entry names when the director's reweave changed an edit (brief 4.5).
+ * A reweave is the director's round, so its entries are not automatic; it is held to the
+ * edits as an automatic pass is, so code puts back what it changed (settleEdits).
+ */
+const REWEAVE_PASS = 'reweave';
 
 /**
  * The field a send-back's rework returns its changed edits in, `[{id, reason}]`. It
@@ -174,8 +198,18 @@ const ELEMENT_KEYS = {
   shellAccounts: 'name',
   entries: 'description',
   assessments: 'name',
-  evidenceGroups: 'theme'
+  evidenceGroups: 'theme',
+  // The weave's collections (brief 4.5): each element names itself by its id.
+  threads: 'id',
+  connections: 'id',
+  questions: 'id'
 };
+
+/** The weave's text fields, each one place (brief 4.5). */
+const WEAVE_FIELDS = ['story', 'question', 'headline', 'fromYourNotes', 'convergence'];
+
+/** The weave's collections, by the word for one of their elements (brief 4.5). */
+const WEAVE_ELEMENTS = { threads: 'thread', connections: 'connection', questions: 'question' };
 
 /** The field a block's text is in, which a label leaves unsaid ("paragraph", not "paragraph, text"). */
 const MAIN_FIELD = { paragraph: 'text', quote: 'text', list: 'items' };
@@ -454,16 +488,35 @@ function sectionParts(section) {
 }
 
 /**
+ * The weave's text, part by part (brief 4.5): the fields the meeting prints and later
+ * writers read, the struck connections and the director's answers left out (a struck
+ * connection is out of the story, and an answer is the director's words, record).
+ */
+function weaveParts(weave) {
+  const objects = (list) => (Array.isArray(list) ? list.filter(isObj) : []);
+  const stronger = isObj(weave.strongerMainThread) ? weave.strongerMainThread : {};
+  return [
+    ...WEAVE_FIELDS.map((field) => weave[field]),
+    ...objects(weave.threads).flatMap((thread) => [thread.claim, thread.reason]),
+    ...objects(weave.connections).filter((connection) => !isStruck(connection)).map((connection) => connection.detail),
+    stronger.reason,
+    ...objects(weave.questions).flatMap((question) => [question.about, question.question, question.changes])
+  ].filter((text) => typeof text === 'string' && text.trim()).map((text) => ({ text, cardContent: false }));
+}
+
+/**
  * The text a version prints, part by part: for a content bundle, the fields the page
- * prints (PRINTED_FIELDS); for an outline, every string the writer reads, leaving out
- * the writer's questions. Each part says whether it is an evidence card's content, which
- * prints its document word for word (the citation rule, known item 5).
+ * prints (PRINTED_FIELDS); for a weave, the fields the meeting prints (weaveParts); for
+ * an outline, every string the writer reads, leaving out the writer's questions. Each
+ * part says whether it is an evidence card's content, which prints its document word for
+ * word (the citation rule, known item 5).
  *
- * @param {*} obj - the outline or bundle
+ * @param {*} obj - the outline, the bundle or the weave
  * @returns {Array<{text: string, cardContent: boolean}>}
  */
 function printedParts(obj) {
   if (!isObj(obj)) return [];
+  if (isWeave(obj)) return weaveParts(obj);
   if (!Array.isArray(obj.sections)) return stringLeaves(obj).map((text) => ({ text, cardContent: false }));
   const tracker = isObj(obj.financialTracker) ? obj.financialTracker : null;
   return [
@@ -663,7 +716,8 @@ function pathOf(steps) {
   steps.forEach((step, i) => {
     if ('key' in step) { out += (i === 0 ? '' : '.') + step.key; return; }
     const collection = collectionAt(steps, i);
-    const byId = collection === 'sections' || (collection === 'evidenceCards' && i === 1);
+    const byId = collection === 'sections' || (collection === 'evidenceCards' && i === 1)
+      || (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, collection) && i === 1);
     if (byId) {
       const field = ELEMENT_KEYS[collection];
       out += `[#${step.match && step.match[field] != null ? step.match[field] : `index-${step.index}`}]`;
@@ -771,6 +825,13 @@ function isMove(edit) { return Boolean(edit.from) && !isCut(edit); }
  * the block `between.follows` finds and before the block `between.precedes` finds.
  */
 function isMoveWithin(edit) { return isMove(edit) && isObj(edit.between); }
+
+/**
+ * A strike (brief 4.5): a connection the director struck at the story meeting, one edit of
+ * the whole connection, whose `after` carries `struck: true`. Its words are the writer's
+ * connection, which the director took out of the story.
+ */
+function isStrike(edit) { return Boolean(edit && edit.struck === true) && !isCut(edit); }
 
 function editNumber(id) {
   const m = /^E(\d+)$/.exec(String(id));
@@ -942,13 +1003,14 @@ function completeEdit(edit, sentBackText, names) {
   const out = { id: edit.id, scope: edit.scope, path: pathOf(edit.at), at: edit.at, before: edit.before, after: edit.after };
   if (edit.from) out.from = edit.from;
   if (isObj(edit.between)) out.between = edit.between;
+  if (edit.struck === true) out.struck = true;
   const parts = sentBackText ? sentBackText.map((part) => ({ text: part.text })) : null;
   if (isCut(out)) {
     if (sentBackText) out.pieces = cutSentences(out).filter((sentence) => !partHolding(sentBackText, sentence));
     if (names && parts) out.names = droppedNames(valueTexts(out, out.before), parts, names);
     return out;
   }
-  if (out.before !== null && !out.from) {
+  if (out.before !== null && !out.from && !isStrike(out)) {
     const own = sentBackText || versionText({ value: valueTexts(out, out.after) });
     const removed = valueTexts(out, out.before).flatMap(writtenSentences).filter((sentence) => !removedHeld(own, sentence));
     if (removed.length > 0) {
@@ -1077,6 +1139,171 @@ function carriedEdits(handEdits, obj) {
   return edits.filter((e) => editCarried(obj, e));
 }
 
+// ─── the weave (brief 4.5) ────────────────────────────────────────────────────
+
+/** A collection's elements that name themselves by an id, each id once: `{list, map}`. */
+function elementsById(list) {
+  const out = { list: [], map: new Map() };
+  (Array.isArray(list) ? list : []).forEach((element, index) => {
+    const id = isObj(element) && typeof element.id === 'string' ? element.id.trim() : '';
+    if (!id || out.map.has(id)) return;
+    out.map.set(id, element);
+    out.list.push({ id, element, index });
+  });
+  return out;
+}
+
+/** An element without one key. */
+function without(element, key) {
+  const { [key]: _gone, ...rest } = element;
+  return rest;
+}
+
+/**
+ * The changes between two versions of a weave, one per place, in the order the meeting
+ * prints them (brief 4.5): each text field (WEAVE_FIELDS) and the stronger main thread
+ * whole; then the threads and the connections, each element found by its id, field by
+ * field (a thread's role is one field); an element one version lacks is added whole or
+ * cut whole. A connection struck in `after` is one change of the whole connection, marked
+ * `struck`; one `after` unstruck is no change, since it is the writer's connection again.
+ * With `questions`, the questions too, never their answers, which are the director's
+ * words and no edit.
+ *
+ * @param {Object} before
+ * @param {Object} after
+ * @param {Object} [options]
+ * @param {boolean} [options.questions] - read the questions as well (the marks do)
+ * @returns {Array<{scope: string, at: Object[], before: *, after: *, struck?: true}>}
+ */
+function weaveEditsBetween(before, after, { questions = false } = {}) {
+  if (!isObj(before) || !isObj(after)) return [];
+  const out = [];
+  const change = (scope, at, b, a, extra = {}) => out.push({
+    scope, at, before: b === undefined ? null : b, after: a === undefined ? null : a, ...extra
+  });
+  [...WEAVE_FIELDS, 'strongerMainThread'].forEach((field) => {
+    if (!same(before[field], after[field])) change(field, [{ key: field }], before[field], after[field]);
+  });
+  const collections = questions ? ['threads', 'connections', 'questions'] : ['threads', 'connections'];
+  collections.forEach((collection) => {
+    const b = elementsById(before[collection]);
+    const a = elementsById(after[collection]);
+    a.list.forEach(({ id, element, index }) => {
+      const at = [{ key: collection }, { index, match: { id } }];
+      const prior = b.map.get(id);
+      if (!prior) {
+        change(collection, at, null, element);
+        return;
+      }
+      if (collection === 'connections' && isStruck(element) && !isStruck(prior)) {
+        change(collection, at, prior, element, { struck: true });
+        return;
+      }
+      const ignored = collection === 'questions' ? WEAVE_ANSWER_KEY : (collection === 'connections' ? STRUCK_KEY : null);
+      const p = ignored ? without(prior, ignored) : prior;
+      const e = ignored ? without(element, ignored) : element;
+      unionKeys(p, e).forEach((key) => {
+        if (!same(p[key], e[key])) change(collection, [...at, { key }], p[key], e[key]);
+      });
+    });
+    b.list.forEach(({ id, element }) => {
+      if (!a.map.has(id)) change(collection, [{ key: collection }, { index: null, match: { id } }], element, null);
+    });
+  });
+  return out;
+}
+
+/** The place an edit or a change is at, as one string. */
+function placeOf(edit) { return pathOf(stepsOf(edit)); }
+
+/**
+ * The director's edits at the story meeting after an approve, a reweave or a send-back
+ * (brief 4.5; K3 of the plan review): the meeting's edits stand past approve, so each of
+ * the three actions makes them, against the writer's last weave (`baseline`).
+ * - Each earlier edit the director's version still carries stands, with its id; one it no
+ *   longer carries (the director undid it, or a send-back's rework changed it) goes.
+ * - Each difference between the baseline and the director's version that no standing
+ *   edit is at joins them, numbered on from every id given at the stop.
+ * The baseline is the weave as the writer's last pass left it, the director's lines a
+ * reweave kept among it, so an edit made before a reweave stands as the earlier edit and
+ * is never given a second id.
+ *
+ * @param {*} previous - the meeting's standing edits so far
+ * @param {Object|null} baseline - the writer's last weave (state._weaveBaseline)
+ * @param {Object} left - the weave as the director left it
+ * @param {Object} [options]
+ * @param {string[]} [options.names] - the roster's names, as standingAfterSendBack takes them
+ * @returns {{kind: 'weave', issued: number, edits: Object[]}|null}
+ */
+function standingAtMeeting(previous, baseline, left, { names } = {}) {
+  const prior = standingEditsOf(previous);
+  const issued = prior ? prior.issued : 0;
+  const kept = prior ? prior.edits.filter((e) => editCarried(left, e)).map((e) => stillRemoved(e, [left])) : [];
+  const keptPlaces = new Set(kept.map(placeOf));
+  const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
+  const leftText = versionText(left);
+  const added = weaveEditsBetween(isObj(baseline) ? baseline : left, left)
+    .filter((raw) => !keptPlaces.has(pathOf(raw.at)))
+    .map((raw, i) => completeEdit({ id: `E${issued + 1 + i}`, ...raw }, leftText, roster));
+  if (kept.length === 0 && added.length === 0 && issued === 0) return null;
+  return { kind: 'weave', issued: issued + added.length, edits: [...kept, ...added] };
+}
+
+/**
+ * The director's share of the weave, read from their standing edits (brief 4.5), for the
+ * code checks, which read only the writer's text (lib/weave.js weaveFindings): each map
+ * from what the director changed to the id of the edit:
+ * - `addedThreads`: a thread they added, by its id;
+ * - `reroledThreads`: a thread whose role they changed;
+ * - `fields`: a text field of the weave they rewrote (`story`, `fromYourNotes`, ...);
+ * - `threadFields`: a field of a thread they rewrote, as `t3.receipt`.
+ *
+ * @param {Object[]|null} edits - the standing edits the weave carries
+ * @returns {{addedThreads: Object, reroledThreads: Object, fields: Object, threadFields: Object}}
+ */
+function weaveDirectorsShare(edits) {
+  const share = { addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {} };
+  (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).forEach((e) => {
+    const steps = stepsOf(e);
+    const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
+    if (steps.length === 1 && (WEAVE_FIELDS.includes(head) || head === 'strongerMainThread')) {
+      share.fields[head] = e.id;
+      return;
+    }
+    if (head !== 'threads' || !isElementStep(steps[1]) || !steps[1].match || steps[1].match.id == null) return;
+    const id = String(steps[1].match.id);
+    if (steps.length === 2) {
+      if (!isCut(e) && (e.before === null || e.before === undefined)) share.addedThreads[id] = e.id;
+      return;
+    }
+    const field = steps[2].key;
+    if (field === 'role') share.reroledThreads[id] = e.id;
+    else share.threadFields[`${id}.${field}`] = e.id;
+  });
+  return share;
+}
+
+/**
+ * What a rework changed in the weave, from the director's version (brief 4.5): the marks
+ * the meeting shows after a reweave or a send-back. One per place, as weaveEditsBetween
+ * finds them with the questions, each `{path, where, before, after}` with the director's
+ * text and the rework's (empty for a place one of them lacks). The director's lines code
+ * kept, their struck connections and their answers are the same on both sides, so they
+ * carry no mark.
+ *
+ * @param {Object} from - the weave as the director left it, which the round's rework started from
+ * @param {Object} weave - the weave the round's passes left
+ * @returns {Array<{path: string, where: string, before: string, after: string}>}
+ */
+function weaveMarks(from, weave) {
+  return weaveEditsBetween(from, weave, { questions: true }).map((change) => ({
+    path: pathOf(change.at),
+    where: editWhere(change),
+    before: editValueText(change.before),
+    after: editValueText(change.after)
+  }));
+}
+
 /** A paragraph-like value: its one text field is the whole of what the director wrote. */
 function isTextBlock(value) {
   return isObj(value) && typeof value.text === 'string' && Object.keys(value).every((k) => k === 'type' || k === 'text');
@@ -1163,12 +1390,18 @@ function editWhere(edit) {
     parts.push('hero image', ...stepWords(steps.slice(1)));
   } else if (head === 'financialTracker') {
     parts.push('financial tracker', ...stepWords(steps.slice(1)).map((w) => w.replace(/^entries /, 'entry ')));
+  } else if (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, head) && isElementStep(steps[1])) {
+    // The weave (brief 4.5): `thread "t3", role`; a whole thread the director added is
+    // marked added.
+    parts.push(`${WEAVE_ELEMENTS[head]} ${elementLabel(steps[1])}`, ...stepWords(steps.slice(2)));
+    if (steps.length === 2 && (edit.before === null || edit.before === undefined) && !isCut(edit)) parts.push('added');
   } else if (head) {
     parts.push(head, ...stepWords(steps.slice(1)));
   } else {
     parts.push(edit.path);
   }
   if (isCut(edit)) parts.push('cut');
+  if (isStrike(edit)) parts.push('struck');
   if (edit.from) parts.push(isObj(edit.between) ? 'moved within the section' : `moved from section "${edit.from}"`);
   return parts.filter(Boolean).join(', ');
 }
@@ -1190,19 +1423,34 @@ function moveLine(edit) {
 }
 
 /**
+ * A strike's line (brief 4.5): its id and place, then the connection the director struck,
+ * by its fields, its id and the strike itself said by the place.
+ */
+function strikeLine(edit) {
+  const connection = isObj(edit.after) ? edit.after : {};
+  const fields = Object.keys(connection).filter((k) => k !== 'id' && k !== STRUCK_KEY);
+  return `${edit.id} (${editWhere(edit)}): ${valueLine(pick(connection, fields))}`;
+}
+
+/**
  * One line per edit, by id and place, with the director's text whole: a cut's line
  * holds the text the director removed, and a rewrite's removed sentences follow it, one
  * `removed:` line each. Text is quoted; an element prints its fields, never JSON. A
- * move's line names the block and its place (moveLine).
+ * move's line names the block and its place (moveLine); a strike's, the connection the
+ * director struck (strikeLine).
  *
  * @param {Object[]} edits
  * @returns {string}
  */
 function formatEditLines(edits) {
-  return (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).map((e) => (isMove(e) ? moveLine(e) : [
-    `${e.id} (${editWhere(e)}): ${valueLine(isCut(e) ? e.before : e.after)}`,
-    ...(Array.isArray(e.removed) ? e.removed : []).map((sentence) => `  removed: "${String(sentence).trim()}"`)
-  ].join('\n'))).join('\n');
+  return (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).map((e) => {
+    if (isMove(e)) return moveLine(e);
+    if (isStrike(e)) return strikeLine(e);
+    return [
+      `${e.id} (${editWhere(e)}): ${valueLine(isCut(e) ? e.before : e.after)}`,
+      ...(Array.isArray(e.removed) ? e.removed : []).map((sentence) => `  removed: "${String(sentence).trim()}"`)
+    ].join('\n');
+  }).join('\n');
 }
 
 /**
@@ -1668,10 +1916,12 @@ function restoreEdit(edit, before, out) {
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
  * - a cut whose text came back, or a rewrite's removed sentence that came back, flagged
  *   (`cut`, `removed`), with the text where it came back: code never takes it out;
- * - each with the pass (SEND_BACK_PASS or the automatic pass's number), whether an
- *   automatic pass made it, and the rework's reason (null: none given).
+ * - each with the pass (SEND_BACK_PASS, REWEAVE_PASS or the automatic pass's number),
+ *   whether an automatic pass made it, and the rework's reason (null: none given);
+ * - a connection the director struck that a pass brought back (brief 4.5) is marked
+ *   `struck`, and `restored` says code struck it again.
  * `checked` lists every id the round's passes checked. The server resets the report at
- * each send-back, so it holds one round.
+ * each send-back (and, at the story meeting, at each reweave), so it holds one round.
  *
  * @param {Object|null} previous - the round's report so far
  * @param {Object} pass
@@ -1691,11 +1941,12 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   const why = new Map((Array.isArray(reasons) ? reasons : [])
     .filter((r) => isObj(r) && typeof r.id === 'string' && typeof r.reason === 'string' && r.reason.trim())
     .map((r) => [r.id.trim(), r.reason.trim()]));
-  const automatic = pass !== SEND_BACK_PASS;
+  const automatic = pass !== SEND_BACK_PASS && pass !== REWEAVE_PASS;
   const putBack = new Set(Array.isArray(restored) ? restored : []);
   const entry = (e, fields) => ({
     id: e.id, scope: e.scope, where: editWhere(e), cut: false, removed: false, moved: false,
-    director: '', became: null, pass, automatic, reason: why.get(e.id) || null, restored: false, ...fields
+    director: '', became: null, pass, automatic, reason: why.get(e.id) || null, restored: false,
+    ...(isStrike(e) && { struck: true }), ...fields
   });
   const changed = [];
   carried.forEach((e) => {
@@ -1733,8 +1984,10 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * edits that find it there; one the pass removed stays out, since only its place was the
  * director's and its removal can be the fix of a fault in the writer's text (fix round 1,
  * findings 1 and 2). A send-back's rework is left as it is: the director's note may
- * change an edit, and the rework says why. The report records what each pass did and
- * each restore.
+ * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
+ * the edits as an automatic pass is: code puts back each line it changed, and strikes
+ * again, by id, each connection the director struck that it brought back. The report
+ * records what each pass did and each restore.
  *
  * @param {Object|null} previous - the round's report so far
  * @param {Object} pass - as reportAfterPass takes it: {edits, before, after, pass, reasons}
@@ -1784,9 +2037,11 @@ module.exports = {
   standingEditsOf, standingAfterSendBack, carriedEdits, formatEditLines, editValueText,
   locateQuotedText, directorEditConcern, concernEditIds, concernFinding, editLocator,
   reportAfterPass, settleEdits, handEditReportOf, sectionKey, namesPerson,
+  // Brief 4.5: the meeting's edits
+  REWEAVE_PASS, WEAVE_EDIT_LINES_GUIDE, weaveEditsBetween, standingAtMeeting, weaveDirectorsShare, weaveMarks, editWhere,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
-    stayingInSection
+    stayingInSection, pathOf
   }
 };

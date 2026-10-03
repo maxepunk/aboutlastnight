@@ -56,6 +56,11 @@ describe('workflow integration', () => {
   // the generated folder rather than leave an untracked file behind on every run.
   afterAll(() => {
     fs.rmSync(path.join(FIXTURES_DATA_DIR, 'test-session', 'output'), { recursive: true, force: true });
+    // Brief 4.5: the story meeting's approve writes the approved weave beside the
+    // analysis; the file goes, and its folder with it when nothing else is there.
+    const analysis = path.join(FIXTURES_DATA_DIR, 'test-session', 'analysis');
+    fs.rmSync(path.join(analysis, 'weave.approved.json'), { force: true });
+    if (fs.existsSync(analysis) && fs.readdirSync(analysis).length === 0) fs.rmdirSync(analysis);
   });
 
   describe('routing functions', () => {
@@ -248,7 +253,10 @@ describe('workflow integration', () => {
           accusation: { accused: ['Blake'] }
         },
         preprocessedEvidence: mockPreprocessedEvidence,  // Populated so curation runs (N3: empty now throws)
-        preCurationApproved: true  // Phase 4f: skip pre-curation checkpoint
+        preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
+        // Brief 4.5: the story meeting writes no selection, and the packages node reads one
+        // until 4.6, so a run past the meeting seeds it.
+        selectedArcs: ['mock-arc-1']
       };
 
       // With mocked checkpointInterrupt, graph should complete
@@ -271,7 +279,8 @@ describe('workflow integration', () => {
           roster: [{ name: 'Alice' }],
           accusation: { accused: ['Blake'] }
         },
-        preCurationApproved: true  // Phase 4f: skip pre-curation checkpoint
+        preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
+        selectedArcs: ['mock-arc-1']  // brief 4.5: read by the packages node until 4.6
       };
 
       try {

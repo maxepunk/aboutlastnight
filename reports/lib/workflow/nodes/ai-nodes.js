@@ -2214,6 +2214,10 @@ module.exports = {
   isPhotoExcluded,
   heroPhotoEntry,
   whiteboardFilenameOf,
+  // Brief 4.5: the send-back's changed-edits list, which the weave's send-back asks for
+  // too (arc-specialist-nodes.js reviseArcs): one schema rule and one strip.
+  reworkSchemaWithChangedEdits,
+  takeChangedEdits,
 
   // Internal functions for testing
   _testing: {
