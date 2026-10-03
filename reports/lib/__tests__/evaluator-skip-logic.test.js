@@ -1,8 +1,8 @@
 /**
  * Evaluator skip logic test
  *
- * Verifies that the evaluation skip logic checks the MOST RECENT
- * phase entry (not the first ready=true ever recorded).
+ * Verifies the story meeting's fact check skip: it reads the mark on the weave it
+ * judged, never the evaluation history (phase 4, brief 4.4).
  */
 
 const { createMockSdkClient } = require('../../__tests__/mocks/llm-client.mock');
@@ -40,7 +40,7 @@ describe('evaluateArcs skip logic', () => {
     sessionConfig: { roster: [] }
   };
 
-  test('skips when most recent arcs evaluation is ready=true', async () => {
+  test('skips a weave the fact check marked ready', async () => {
     const state = {
       weave: judged(true),
       evaluationHistory: [
@@ -55,7 +55,7 @@ describe('evaluateArcs skip logic', () => {
     expect(result.currentPhase).toBeDefined();
   });
 
-  test('does NOT skip when most recent arcs evaluation is ready=false (invalidated)', async () => {
+  test('judges a weave with no mark, whatever the history says', async () => {
     const mockSdk = createMockSdkClient();
     const state = {
       ...session,
@@ -74,7 +74,7 @@ describe('evaluateArcs skip logic', () => {
     expect(result.weave._factCheck).toEqual(expect.objectContaining({ fixes: 0 }));
   });
 
-  test('does not skip when evaluationHistory is empty', async () => {
+  test('judges a weave with no mark when the history is empty', async () => {
     const mockSdk = createMockSdkClient();
     const state = { ...session, weave: WEAVE, evaluationHistory: [] };
     const config = { configurable: { sdkClient: mockSdk } };
@@ -84,7 +84,7 @@ describe('evaluateArcs skip logic', () => {
     expect(result.evaluationHistory.phase).toBe('arcs');
   });
 
-  test('skips when only evaluation is ready=true (no invalidation)', async () => {
+  test('skips a weave the fact check marked not ready: its one fix runs, with no second judge call', async () => {
     // A weave the fact check judged and found a breach in is not judged again: its one
     // fix runs, and the stop opens with no second judge call (R6).
     const state = {

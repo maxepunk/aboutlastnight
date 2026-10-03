@@ -2,17 +2,16 @@
  * Arc Specialist Nodes Fail-Loud Tests (N7)
  *
  * Covers analyzeArcsPlayerFocusGuided's total-failure behavior:
- * - When the Core arc generation SDK call fails, the node must THROW rather than
- *   return narrativeArcs: [] + currentPhase: ARC_SYNTHESIS. Returning [] arcs makes an
- *   outage indistinguishable from "genuinely no arcs" at the empty arc-selection screen,
- *   and force-forward can carry [] into the article.
+ * - When the weave writer's SDK call fails (generateWeave, phase 4), the node must
+ *   THROW rather than write an empty weave. An empty result would make an outage
+ *   indistinguishable from "genuinely no story" at the story meeting.
  * - Throwing leaves the clean pre-node checkpoint snapshot for operator /resume, and lets
  *   the graph-level retryPolicy retry transient failures (it is the SOLE retrier now that
  *   the in-node MAX_GENERATION_ATTEMPTS loop was removed — TRC-2 de-layering).
  *
  * Mock pattern matches the working generate-arcs-retry.test.js: mock ../llm (so the node's
  * isSdkTimeoutError import resolves) and ../observability (full no-op shape). The SDK is
- * injected via config.configurable.sdkClient so a rejected call drives generateCoreArcs's
+ * injected via config.configurable.sdkClient so a rejected call drives generateWeave's
  * own catch → the surviving outer catch → the new throw.
  */
 
@@ -32,7 +31,7 @@ jest.mock('../../../lib/observability', () => ({
 const { analyzeArcsPlayerFocusGuided: analyzeArcs } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
 
 describe('analyzeArcs fail-loud (N7)', () => {
-  test('throws on SDK failure instead of returning [] arcs', async () => {
+  test('throws on SDK failure instead of writing an empty weave', async () => {
     const mockSdk = jest.fn().mockRejectedValue(new Error('overloaded_error'));
     const state = {
       narrativeArcs: null,

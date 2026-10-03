@@ -973,9 +973,9 @@ ${advisories.map(formatIssue).join('\n')}`
   // one included, as a defect.
   //
   // The journalist's line says only who computed the scores (post-merge fix, 3.3
-  // review findings 1 and 2). A model evaluation's are the judge's own, uncalibrated;
-  // the arc check computes its two in code (validateArcStructure), and the fact check
-  // that runs before the article judge writes none, so neither gets the model's line.
+  // review findings 1 and 2). A model evaluation's are the judge's own, uncalibrated.
+  // The weave checks (validateArcStructure, phase 4) and the fact check that runs before
+  // the article judge score nothing, so a record with no scores gets no line.
   // What to do with each kind of finding is WHAT THIS REWORK DOES's to say, once.
   let scoresGuide;
   if (parkedDetective) {

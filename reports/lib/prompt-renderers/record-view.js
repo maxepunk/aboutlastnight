@@ -2,7 +2,7 @@
  * The record view (phase 2, brief 2.1; wave-1 ruling R1)
  *
  * One renderer for the session's record. Every call that decides or writes the
- * story reads it: the arc writer, the interweaving call, the outline writer and the
+ * story reads it: the arc writer (the weave, since phase 4), the outline writer and the
  * article writer (the reworkers take it in 2.3, the judges in 2.4).
  *
  * Each exposed document sits in its own tag, labelled the same way everywhere:

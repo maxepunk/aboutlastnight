@@ -298,7 +298,22 @@ const REMOVED_PHRASES = [
   'The alternative theories the room debated are always reported',
   'goes to the director as a question',
   'reaches the writer with no roster pronoun',
-  'raised as a question to the director'
+  'raised as a question to the director',
+
+  // Phase 4, 4.4: the arc stage's old wording, which went with the interweaving call,
+  // the long write-up for each thread and the every-player rule (spec section 10). The
+  // weave names its connections itself, and the meeting's fact check reads no roster
+  // coverage.
+  'the interweaving call',
+  'Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks)',
+  'INTERWEAVING PRINCIPLES',
+  '## WHAT THIS REWORK RETURNS',
+  'ARC CHECK GUIDANCE',
+  'or a writerQuestions entry of kind "player"',
+  '### All Valid Evidence IDs for keyEvidence',
+  'THE THREE LENSES IN analysisNotes',
+  'ROSTER COVERAGE: Every name in SESSION ROSTER',
+  'Character Categories for characterPlacements'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

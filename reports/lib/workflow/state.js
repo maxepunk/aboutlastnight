@@ -921,10 +921,12 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * Arc validation results from validateArcStructure (Commit 8.xx)
-   * Set by: validateArcStructure in arc-specialist-nodes.js
-   * Consumed by: routeArcValidation in graph.js for routing decision
-   * Contains: { inputCount, outputCount, structuralPassed, missingRoster, nonRosterPCs, ... }
+   * The weave checks' last result (phase 4, brief 4.4): { weaveKey, passed, failures,
+   * words, checkedAt }, written by validateArcStructure on every outcome. `weaveKey`
+   * names the weave it checked (lib/weave.js), so a reader compares it with the current
+   * weave before acting on a failure: routeArcValidation does, and the story meeting
+   * shows a check still failing. It survives every rollback (ROLLBACK_CLEARS_EXEMPT); a
+   * result stamped for another weave says nothing about the one in hand.
    */
   _arcValidation: Annotation({
     reducer: replaceReducer,
@@ -1203,7 +1205,10 @@ const ROLLBACK_CLEARS_EXEMPT = new Set([
   'characterIdsRaw',
   // Transient per-revision scratch — nodes null these themselves after use
   '_rescuedItems', '_excludedItemsCache', '_rescueWarnings',
-  '_previousArcs', '_previousOutline', '_previousContentBundle', '_arcValidation', '_previousFullContext', '_previousPhotosPath',
+  '_previousArcs', '_previousOutline', '_previousContentBundle', '_previousFullContext', '_previousPhotosPath',
+  // The weave checks' last result, kept for the story meeting; its weaveKey says which
+  // weave it checked, so it needs no clear (phase 4, brief 4.4)
+  '_arcValidation',
   // Control flow + counters — handled by buildRollbackState / ROLLBACK_COUNTER_RESETS
   'currentPhase', 'voiceRevisionCount',
   'arcRevisionCount', 'humanArcRevisionCount',

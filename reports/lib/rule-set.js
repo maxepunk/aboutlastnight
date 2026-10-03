@@ -20,8 +20,10 @@
  * builder that calls it stays synchronous. The cache lives for the process: a
  * changed rule file reaches the prompts on the next server start.
  *
- * Journalist only. A detective caller keeps its own text (spec D13), and branches on
- * the theme before calling here.
+ * Journalist only. Since phase 4 the detective is parked at start (R1), so the arc
+ * stage's calls read this folder for every session; the outline and article callers
+ * still branch on the theme before calling here. A theme's own rules folder, read
+ * through the theme, is the phase 4 integrator's ruling R14.
  */
 
 const fs = require('fs');
