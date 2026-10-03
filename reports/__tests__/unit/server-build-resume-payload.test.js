@@ -1150,3 +1150,84 @@ describe('the article approve checks the printed photos (FA)', () => {
     expect(buildResumePayload({ article: true }, { contentBundle: printing(null, 'p9.jpg') }, 'journalist', 'article', { dataDir }).error).toBeNull();
   });
 });
+
+// Phase 4, task 4.3 (spec 2026-10-02 section 6.3): the article stop is the director's desk,
+// and Approve publishes exactly what is on it. The desk builds its bundle with the pure
+// operations in console/article-desk-logic.js and sends it on every approve and send-back,
+// edited or not, through articleReviewPayload. Its own checks catch an empty block and a
+// headline outside the schema's limits first; the server's schema gate stays the last word
+// on shape. The director's moves and deletes become standing edits at a send-back.
+describe('the desk\'s payload through buildResumePayload (task 4.3)', () => {
+  const Desk = require('../../console/article-desk-logic');
+  const { articleReviewPayload } = require('../../console/checkpoint-view-logic');
+  const paragraph = (text) => ({ type: 'paragraph', text });
+  const PHOTO = { type: 'photo', filename: 'p1.jpg', caption: 'The six in the huddle.' };
+  const CARD = { type: 'evidence-card', tokenId: 'doc001', headline: 'Wire transfer records', content: 'Transfers to the Cayman account, March to June.' };
+  let dataDir;
+
+  /** The writer's draft as the stop stores it: a photo in the intro, a card in the evidence section. */
+  const stored = () => {
+    const b = JSON.parse(JSON.stringify(require('../fixtures/content-bundles/valid-journalist.json')));
+    b.metadata.sessionId = '0926262';
+    b.sections[0].content.push(JSON.parse(JSON.stringify(PHOTO)));
+    b.sections[1].content.push(JSON.parse(JSON.stringify(CARD)));
+    return b;
+  };
+  /** The photo moved to the conclusion, the card deleted, a paragraph inserted in the money section. */
+  const deskWithInsert = () => {
+    let desk = Desk.moveToSection(stored(), { section: 0, block: 2 }, 3);
+    desk = Desk.deleteBlock(desk, 1, 3);
+    return Desk.insertBlock(desk, 2, 1, 'paragraph');
+  };
+  const atStop = (bundle) => ({ sessionId: '0926262', contentBundle: bundle });
+  const review = (payload, bundle = stored()) => buildResumePayload(payload, atStop(bundle), 'journalist', 'article', { dataDir });
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-desk-payload-'));
+    fs.mkdirSync(path.join(dataDir, '0926262', 'photos'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, '0926262', 'photos', 'p1.jpg'), 'jpeg');
+  });
+  afterEach(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+
+  test('the desk names the paragraph it inserted and left empty, and the schema gate refuses it too', () => {
+    const desk = deskWithInsert();
+    expect(Desk.deskProblems(desk).map((p) => p.message)).toEqual([
+      'Section "Following the Money", block 2: the paragraph is empty. Write it or delete it.'
+    ]);
+    const result = review(articleReviewPayload(desk, '', 'approve'));
+    expect(result.error).toContain('failed schema validation (content-bundle)');
+    expect(result.stateUpdates.contentBundle).toBeUndefined();
+  });
+
+  test('approve sends exactly the bundle on the desk, and the server stores that bundle', () => {
+    const desk = Desk.setBlock(deskWithInsert(), 2, 1, paragraph('The ledger shows three transfers in one week.'));
+    expect(Desk.deskProblems(desk)).toEqual([]);
+    const payload = articleReviewPayload(desk, 'Ship it.', 'approve');
+    expect(payload).toEqual({ article: true, articleNote: 'Ship it.', articleEdits: desk });
+    const result = review(payload);
+    expect(result.error).toBeNull();
+    expect(result.resume.approved).toBe(true);
+    expect(result.stateUpdates.contentBundle).toBe(desk);
+  });
+
+  test('an untouched desk sends the draft it opened on', () => {
+    const draft = stored();
+    const result = review(articleReviewPayload(draft, '', 'approve'), draft);
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates.contentBundle).toEqual(stored());
+  });
+
+  test('a send-back carries the director\'s moves and deletes as standing edits', () => {
+    let desk = Desk.moveBlock(stored(), { section: 0, block: 2 }, { section: 0, block: 0 });   // the photo to the top of the intro
+    desk = Desk.deleteBlock(desk, 1, 3);                                                         // the card
+    const result = review(articleReviewPayload(desk, 'Tighten the money section.', 'send-back'));
+    expect(result.error).toBeNull();
+    const edits = result.stateUpdates._articleHandEdits.edits;
+    expect(edits.map((e) => [e.id, e.path, e.from || null, e.after === null ? 'cut' : 'place'])).toEqual([
+      ['E1', 'sections[#intro].content[0]', 'intro', 'place'],
+      ['E2', 'sections[#evidence-section].content[-]', null, 'cut']
+    ]);
+    expect(edits[1].before).toEqual(CARD);
+    expect(result.stateUpdates.contentBundle).toBe(desk);
+  });
+});

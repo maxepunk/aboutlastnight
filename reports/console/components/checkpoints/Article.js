@@ -1,10 +1,19 @@
 /**
- * Article Checkpoint Component
- * Rich article preview with inline per-block editing, photo thumbnails,
- * styled evidence cards, verbatim/crystallization pull quotes, and
- * formatted financial tracker. Supports approve (with/without edits),
- * JSON editor (advanced), reject with feedback, and HTML preview.
- * Exports to window.Console.checkpoints.Article
+ * Article Checkpoint Component: the director's desk (spec 2026-10-02 section 6.3; phase 4,
+ * task 4.3).
+ *
+ * The article as it will print, with every editor visible. Each piece of the article is a
+ * row whose controls sit in a rail, a column of its own beside it (deskRow), so no control
+ * covers the prose: the pencil on every piece and, on each block, move, delete and insert.
+ * The director edits any text in place (the headline, the deck, the captions and the
+ * section headings included), moves, deletes or inserts any block, and sees the page as
+ * they have it (the preview route renders the bundle on the desk). Approve sends exactly the
+ * bundle on the desk. An empty block and a headline outside the schema's limits are caught
+ * before every approve and every send-back, edited or not.
+ *
+ * The block operations, the checks and the change report are console/article-desk-logic.js,
+ * pure and node-tested; this component is a thin consumer. The JSON editor stays as the
+ * advanced path. Exports to window.Console.checkpoints.Article
  */
 
 window.Console = window.Console || {};
@@ -14,21 +23,14 @@ const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar, TracePanel, 
 const { RevisionDiff } = window.Console;
 const ArticleEditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
+// The desk's block operations, checks and change report (task 4.3).
+const DeskLogic = window.Console.articleDeskLogic;
 
-/**
- * Photos in the HTML preview, and scripts in it (R5 F9).
- *
- * The assembled article references photos relatively (`sessionphotos/<id>/x.jpg`).
- * The server injects `<base href="/">` into `htmlPreview` so they resolve; this
- * strips <script> tags instead of granting `allow-scripts`, which removes the
- * three "Blocked script execution in 'about:srcdoc'" console errors without
- * giving the previewed document script access to its own (same-origin) frame.
- */
-function stripScripts(html) {
-  return String(html == null ? '' : html)
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<script\b[^>]*\/>/gi, '');
-}
+/** How long the desk waits after a change before it asks for the page again, so a run of moves asks once. */
+const ARTICLE_PREVIEW_DELAY_MS = 400;
+
+/** The preview before the page has come back. */
+const NO_PREVIEW = { html: null, error: '', pending: false, writerTrackerPrints: false };
 
 /**
  * The programmatic fact-check, in front of the person approving the article
@@ -87,6 +89,22 @@ function baseName(filepath) {
   const value = String(filepath == null ? '' : filepath);
   const cut = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
   return cut >= 0 ? value.slice(cut + 1) : value;
+}
+
+/** The Save and Cancel buttons every editor ends with. */
+function editorActions(onSave, onCancel, saveLabel) {
+  return React.createElement('div', { className: 'flex gap-sm mt-sm' },
+    React.createElement('button', {
+      className: 'btn btn-primary btn-sm',
+      onClick: onSave,
+      'aria-label': saveLabel
+    }, 'Save'),
+    React.createElement('button', {
+      className: 'btn btn-ghost btn-sm',
+      onClick: onCancel,
+      'aria-label': 'Cancel edit'
+    }, 'Cancel')
+  );
 }
 
 // ── Editor components (module-level to isolate hooks from Article) ──
@@ -261,18 +279,25 @@ function BlockEditor({ block, sectionIdx, blockIdx, onSave, onCancel }) {
   },
     React.createElement('div', { className: 'article-block__edit-form' },
       formFields,
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('button', {
-          className: 'btn btn-primary btn-sm',
-          onClick: function () { onSave(sectionIdx, blockIdx, localBlock); },
-          'aria-label': 'Save block edit'
-        }, 'Save'),
-        React.createElement('button', {
-          className: 'btn btn-ghost btn-sm',
-          onClick: onCancel,
-          'aria-label': 'Cancel edit'
-        }, 'Cancel')
-      )
+      editorActions(function () { onSave(sectionIdx, blockIdx, localBlock); }, onCancel, 'Save block edit')
+    )
+  );
+}
+
+/** A section's heading, edited in place: the page prints it above the section, and a blank one prints none. */
+function SectionHeadingEditor({ heading, onSave, onCancel }) {
+  const [local, setLocal] = React.useState(heading || '');
+
+  return React.createElement('div', { className: 'article-block article-block--editing fade-in' },
+    React.createElement('div', { className: 'article-block__edit-form' },
+      React.createElement('label', { className: 'form-group__label' }, 'Section heading (leave it blank to print none)'),
+      React.createElement('input', {
+        className: 'input',
+        value: local,
+        onChange: function (e) { setLocal(e.target.value); },
+        'aria-label': 'Section heading'
+      }),
+      editorActions(function () { onSave(local); }, onCancel, 'Save section heading')
     )
   );
 }
@@ -305,67 +330,7 @@ function HeadlineEditor({ headline, onSave, onCancel }) {
         onChange: function (e) { setLocal(Object.assign({}, local, { deck: e.target.value })); },
         'aria-label': 'Deck subheadline'
       }),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('button', {
-          className: 'btn btn-primary btn-sm',
-          onClick: function () { onSave(local); },
-          'aria-label': 'Save headline edit'
-        }, 'Save'),
-        React.createElement('button', {
-          className: 'btn btn-ghost btn-sm',
-          onClick: onCancel,
-          'aria-label': 'Cancel edit'
-        }, 'Cancel')
-      )
-    )
-  );
-}
-
-function PullQuoteEditor({ pq, idx, original, onSave, onCancel }) {
-  const [local, setLocal] = React.useState(function () {
-    return { text: pq.text || '', attribution: pq.attribution || '', placement: pq.placement || 'right', type: pq.type || 'verbatim' };
-  });
-
-  return React.createElement('div', { key: 'pq-edit-' + idx, className: 'pull-quote article-block--editing fade-in' },
-    React.createElement('div', { className: 'article-block__edit-form' },
-      React.createElement('label', { className: 'form-group__label' }, 'Quote Text'),
-      React.createElement('textarea', {
-        className: 'input',
-        value: local.text,
-        onChange: function (e) { setLocal(Object.assign({}, local, { text: e.target.value })); },
-        rows: 3,
-        'aria-label': 'Pull quote text'
-      }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Attribution (empty for crystallization)'),
-      React.createElement('input', {
-        className: 'input',
-        value: local.attribution,
-        onChange: function (e) { setLocal(Object.assign({}, local, { attribution: e.target.value })); },
-        'aria-label': 'Attribution'
-      }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Placement'),
-      React.createElement('select', {
-        className: 'input',
-        value: local.placement,
-        onChange: function (e) { setLocal(Object.assign({}, local, { placement: e.target.value })); },
-        'aria-label': 'Placement'
-      },
-        React.createElement('option', { value: 'left' }, 'Left'),
-        React.createElement('option', { value: 'right' }, 'Right'),
-        React.createElement('option', { value: 'center' }, 'Center')
-      ),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('button', {
-          className: 'btn btn-primary btn-sm',
-          onClick: function () { onSave('pullQuotes', idx, Object.assign({}, original, local)); },
-          'aria-label': 'Save pull quote'
-        }, 'Save'),
-        React.createElement('button', {
-          className: 'btn btn-ghost btn-sm',
-          onClick: onCancel,
-          'aria-label': 'Cancel edit'
-        }, 'Cancel')
-      )
+      editorActions(function () { onSave(DeskLogic.changedFields(headline, local)); }, onCancel, 'Save headline edit')
     )
   );
 }
@@ -432,18 +397,7 @@ function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
           )
         )
       ),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('button', {
-          className: 'btn btn-primary btn-sm',
-          onClick: function () { onSave('evidenceCards', idx, Object.assign({}, original, local)); },
-          'aria-label': 'Save evidence card'
-        }, 'Save'),
-        React.createElement('button', {
-          className: 'btn btn-ghost btn-sm',
-          onClick: onCancel,
-          'aria-label': 'Cancel edit'
-        }, 'Cancel')
-      )
+      editorActions(function () { onSave(idx, Object.assign({}, original, local)); }, onCancel, 'Save evidence card')
     )
   );
 }
@@ -453,43 +407,35 @@ function FinancialEntryEditor({ entry, idx, onSave, onCancel }) {
     return { description: entry.description || '', amount: entry.amount || '', date: entry.date || '', category: entry.category || '' };
   });
 
-  return React.createElement('tr', { key: 'ft-edit-' + idx, className: 'article-block--editing' },
-    React.createElement('td', { colSpan: 3 },
-      React.createElement('div', { className: 'article-block__edit-form' },
-        React.createElement('div', { className: 'flex gap-sm' },
-          React.createElement('input', {
-            className: 'input',
-            placeholder: 'Description',
-            value: local.description,
-            onChange: function (e) { setLocal(Object.assign({}, local, { description: e.target.value })); },
-            style: { flex: 2 }
-          }),
-          React.createElement('input', {
-            className: 'input',
-            placeholder: 'Amount',
-            value: local.amount,
-            onChange: function (e) { setLocal(Object.assign({}, local, { amount: e.target.value })); },
-            style: { flex: 1 }
-          }),
-          React.createElement('input', {
-            className: 'input',
-            placeholder: 'Category',
-            value: local.category,
-            onChange: function (e) { setLocal(Object.assign({}, local, { category: e.target.value })); },
-            style: { flex: 1 }
-          })
-        ),
-        React.createElement('div', { className: 'flex gap-sm mt-sm' },
-          React.createElement('button', {
-            className: 'btn btn-primary btn-sm',
-            onClick: function () { onSave(idx, local); }
-          }, 'Save'),
-          React.createElement('button', {
-            className: 'btn btn-ghost btn-sm',
-            onClick: onCancel
-          }, 'Cancel')
-        )
-      )
+  return React.createElement('div', { className: 'article-block article-block--editing fade-in' },
+    React.createElement('div', { className: 'article-block__edit-form' },
+      React.createElement('div', { className: 'flex gap-sm' },
+        React.createElement('input', {
+          className: 'input',
+          placeholder: 'Description',
+          value: local.description,
+          onChange: function (e) { setLocal(Object.assign({}, local, { description: e.target.value })); },
+          style: { flex: 2 },
+          'aria-label': 'Tracker row description'
+        }),
+        React.createElement('input', {
+          className: 'input',
+          placeholder: 'Amount',
+          value: local.amount,
+          onChange: function (e) { setLocal(Object.assign({}, local, { amount: e.target.value })); },
+          style: { flex: 1 },
+          'aria-label': 'Tracker row amount'
+        }),
+        React.createElement('input', {
+          className: 'input',
+          placeholder: 'Category',
+          value: local.category,
+          onChange: function (e) { setLocal(Object.assign({}, local, { category: e.target.value })); },
+          style: { flex: 1 },
+          'aria-label': 'Tracker row category'
+        })
+      ),
+      editorActions(function () { onSave(idx, local); }, onCancel, 'Save tracker row')
     )
   );
 }
@@ -515,35 +461,24 @@ function HeroImageEditor({ hero, onSave, onCancel }) {
         onChange: function (e) { setLocal(Object.assign({}, local, { characters: e.target.value })); },
         'aria-label': 'Hero image characters'
       }),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('button', {
-          className: 'btn btn-primary btn-sm',
-          onClick: function () {
-            onSave(Object.assign({}, hero, {
-              caption: local.caption,
-              characters: local.characters.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
-            }));
-          },
-          'aria-label': 'Save hero image edit'
-        }, 'Save'),
-        React.createElement('button', {
-          className: 'btn btn-ghost btn-sm',
-          onClick: onCancel,
-          'aria-label': 'Cancel edit'
-        }, 'Cancel')
-      )
+      editorActions(function () {
+        onSave({
+          caption: local.caption,
+          characters: local.characters.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+        });
+      }, onCancel, 'Save hero image edit')
     )
   );
 }
 
+/**
+ * The byline as the page prints it: the author, their title, and the guest reporter's
+ * credit beside them. Only the fields the director changed are saved (DeskLogic.setByline
+ * keeps every other one, the credit included).
+ */
 function BylineEditor({ byline, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
-    return {
-      author: byline.author || '',
-      title: byline.title || '',
-      location: byline.location || '',
-      date: byline.date || ''
-    };
+    return { author: byline.author || '', title: byline.title || '', guestReporter: byline.guestReporter || '' };
   });
 
   return React.createElement('div', { className: 'article-block article-block--editing fade-in mb-md' },
@@ -568,92 +503,14 @@ function BylineEditor({ byline, onSave, onCancel }) {
           })
         )
       ),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('div', { style: { flex: 1 } },
-          React.createElement('label', { className: 'form-group__label' }, 'Location'),
-          React.createElement('input', {
-            className: 'input',
-            value: local.location,
-            onChange: function (e) { setLocal(Object.assign({}, local, { location: e.target.value })); },
-            'aria-label': 'Byline location'
-          })
-        ),
-        React.createElement('div', { style: { flex: 1 } },
-          React.createElement('label', { className: 'form-group__label' }, 'Date'),
-          React.createElement('input', {
-            className: 'input',
-            value: local.date,
-            onChange: function (e) { setLocal(Object.assign({}, local, { date: e.target.value })); },
-            'aria-label': 'Byline date'
-          })
-        )
-      ),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('button', {
-          className: 'btn btn-primary btn-sm',
-          onClick: function () { onSave(local); },
-          'aria-label': 'Save byline edit'
-        }, 'Save'),
-        React.createElement('button', {
-          className: 'btn btn-ghost btn-sm',
-          onClick: onCancel,
-          'aria-label': 'Cancel edit'
-        }, 'Cancel')
-      )
-    )
-  );
-}
-
-function GalleryPhotoEditor({ photo, idx, onSave, onCancel }) {
-  const [local, setLocal] = React.useState(function () {
-    return {
-      caption: photo.caption || '',
-      characters: (photo.characters || []).join(', '),
-      afterSection: photo.afterSection || ''
-    };
-  });
-
-  return React.createElement('div', { className: 'article-photos-gallery__item article-block--editing fade-in' },
-    React.createElement('div', { className: 'article-block__edit-form' },
-      React.createElement('label', { className: 'form-group__label' }, 'Caption'),
+      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Guest reporter (Name | Role)'),
       React.createElement('input', {
         className: 'input',
-        value: local.caption,
-        onChange: function (e) { setLocal(Object.assign({}, local, { caption: e.target.value })); },
-        'aria-label': 'Photo caption'
+        value: local.guestReporter,
+        onChange: function (e) { setLocal(Object.assign({}, local, { guestReporter: e.target.value })); },
+        'aria-label': 'Guest reporter credit'
       }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Characters (comma-separated)'),
-      React.createElement('input', {
-        className: 'input',
-        value: local.characters,
-        onChange: function (e) { setLocal(Object.assign({}, local, { characters: e.target.value })); },
-        'aria-label': 'Photo characters'
-      }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'After Section'),
-      React.createElement('input', {
-        className: 'input',
-        value: local.afterSection,
-        onChange: function (e) { setLocal(Object.assign({}, local, { afterSection: e.target.value })); },
-        'aria-label': 'Place after section'
-      }),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('button', {
-          className: 'btn btn-primary btn-sm',
-          onClick: function () {
-            onSave('photos', idx, Object.assign({}, photo, {
-              caption: local.caption,
-              characters: local.characters.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-              afterSection: local.afterSection
-            }));
-          },
-          'aria-label': 'Save photo edit'
-        }, 'Save'),
-        React.createElement('button', {
-          className: 'btn btn-ghost btn-sm',
-          onClick: onCancel,
-          'aria-label': 'Cancel edit'
-        }, 'Cancel')
-      )
+      editorActions(function () { onSave(DeskLogic.changedFields(byline, local)); }, onCancel, 'Save byline edit')
     )
   );
 }
@@ -666,13 +523,6 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // Theme detection: prop > metadata > fallback
   const isDetective = theme === 'detective' ||
     (!theme && contentBundle.metadata && contentBundle.metadata.theme === 'detective');
-  // H13: the preview used to be gated on `assembledHtml`, which is null until
-  // assembleHtml runs TWO NODES LATER — so the button did not exist on the first
-  // pass, i.e. at the only gate where it matters. Task 3 renders `htmlPreview`
-  // from the pending bundle with the same TemplateAssembler the pipeline
-  // publishes with.
-  const previewHtml = (data && data.htmlPreview) || (data && data.assembledHtml) ||
-    (data && data.articleHtml) || '';
   // H6: `data.evaluationHistory` is an append-only ARRAY mixing all three phases;
   // the old renderEvalBar read `.overallScore` (and `advisoryNotes`, not a field)
   // off it and rendered null in every session.
@@ -696,23 +546,20 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const maxRevisions = (data && data.maxRevisions) || 0;
   const sessionId = propSessionId || (data && data.sessionId) || '';
 
-  const headline = contentBundle.headline || {};
-  const byline = contentBundle.byline || {};
-  const sections = contentBundle.sections || [];
-  const pullQuotes = contentBundle.pullQuotes || [];
-  const evidenceCards = contentBundle.evidenceCards || [];
-  const financialTracker = contentBundle.financialTracker || null;
-  const heroImage = contentBundle.heroImage || null;
-  const photos = contentBundle.photos || [];
-
   // -- State --
   const [editedBundle, setEditedBundle] = React.useState(null);
   const [editingBlock, setEditingBlock] = React.useState(null);
   const [hasEdits, setHasEdits] = React.useState(false);
+  // The block whose delete was clicked once ('section:block'): the second click deletes it.
+  const [armedDelete, setArmedDelete] = React.useState(null);
+  // Counts the changes on the desk, so the preview asks for the page again after each.
+  const [deskVersion, setDeskVersion] = React.useState(0);
+  // The page as it will print, from the preview route, and whether it prints the writer's money tracker.
+  const [preview, setPreview] = React.useState(NO_PREVIEW);
   const [mode, setMode] = React.useState('view'); // 'view' | 'json'
   const [jsonText, setJsonText] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
-  // B6: inline error for an edited bundle that fails the client shape gate.
+  // B6: inline error for a bundle that fails the desk's checks or the client shape gate.
   const [editError, setEditError] = React.useState('');
   // The stop's ONE note box (phase 1, brief 1.1). On screen in the view mode and
   // sent with whatever the director presses: with Approve it becomes a standing note
@@ -734,6 +581,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     setEditedBundle(null);
     setEditingBlock(null);
     setHasEdits(false);
+    setArmedDelete(null);
+    setDeskVersion(0);
+    setPreview(NO_PREVIEW);
     setMode('view');
     setJsonText('');
     setJsonError('');
@@ -749,6 +599,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     if (pendingEdits && !editedBundle) {
       setEditedBundle(pendingEdits);
       setHasEdits(true);
+      setDeskVersion(function (v) { return v + 1; });
     }
   }, [pendingEdits]);
 
@@ -760,49 +611,83 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     }
   }, [pendingNote]);
 
-  // Word count
-  const wordCount = React.useMemo(function () {
-    var count = 0;
-    sections.forEach(function (section) {
-      (section.content || []).forEach(function (block) {
-        if (block.type === 'paragraph' && block.text) {
-          count += block.text.split(/\s+/).filter(Boolean).length;
-        }
-      });
-    });
-    return count;
-  }, [sections]);
+  // The page as it will print: asked of the preview route when the stop opens and after
+  // each change on the desk, a moment later so a run of moves asks once. The answer also
+  // says whether the page prints the writer's money tracker, which decides its editor.
+  React.useEffect(function () {
+    var bundle = editedBundle || contentBundle;
+    if (!sessionId || !Array.isArray(bundle.sections)) return undefined;
+    var cancelled = false;
+    setPreview(function (p) { return Object.assign({}, p, { pending: true }); });
+    var request = DeskLogic.previewRequest(sessionId, bundle);
+    var timer = setTimeout(function () {
+      fetch(request.url, request.init)
+        .then(function (res) {
+          return res.json().then(function (body) { return { ok: res.ok, body: body || {} }; });
+        })
+        .then(function (result) {
+          if (cancelled) return;
+          if (result.ok) {
+            setPreview({ html: result.body.html || '', error: '', pending: false, writerTrackerPrints: result.body.writerTrackerPrints === true });
+          } else {
+            setPreview(function (p) {
+              return Object.assign({}, p, { html: null, pending: false, error: result.body.error || 'The page could not be rendered.' });
+            });
+          }
+        })
+        .catch(function () {
+          if (!cancelled) {
+            setPreview(function (p) { return Object.assign({}, p, { pending: false, error: 'The preview could not be reached.' }); });
+          }
+        });
+    }, ARTICLE_PREVIEW_DELAY_MS);
+    return function () { cancelled = true; clearTimeout(timer); };
+  }, [deskVersion, dataKey]);
 
-  // Get the current bundle (edited or original)
+  // The bundle on the desk: the director's, once they have changed anything.
   function getCurrentBundle() {
     return editedBundle || contentBundle;
   }
 
-  // Deep clone contentBundle for editing
-  function ensureEditedBundle() {
-    if (editedBundle) return editedBundle;
-    var clone = JSON.parse(safeStringify(contentBundle));
-    setEditedBundle(clone);
-    return clone;
+  /**
+   * Put a new bundle on the desk. Blocks are addressed by index, so a move, a delete or
+   * an insert closes the open editor; an insert opens it on the block it added.
+   */
+  function applyDesk(next, openEditor) {
+    setEditedBundle(next);
+    setHasEdits(true);
+    setEditingBlock(openEditor || null);
+    setArmedDelete(null);
+    setEditError('');
+    setDeskVersion(function (v) { return v + 1; });
   }
 
   // -- Edit helpers --
 
   function startBlockEdit(sectionIdx, blockIdx) {
+    setArmedDelete(null);
     setEditingBlock({ type: 'block', sectionIdx: sectionIdx, blockIdx: blockIdx });
   }
 
+  function startHeadingEdit(sectionIdx) {
+    setArmedDelete(null);
+    setEditingBlock({ type: 'heading', sectionIdx: sectionIdx });
+  }
+
   function startSidebarEdit(category, idx) {
+    setArmedDelete(null);
     setEditingBlock({ type: 'sidebar', category: category, idx: idx });
   }
 
   function startHeadlineEdit() {
+    setArmedDelete(null);
     setEditingBlock({ type: 'headline' });
   }
 
   function isEditing(type, a, b) {
     if (!editingBlock) return false;
     if (type === 'block') return editingBlock.type === 'block' && editingBlock.sectionIdx === a && editingBlock.blockIdx === b;
+    if (type === 'heading') return editingBlock.type === 'heading' && editingBlock.sectionIdx === a;
     if (type === 'sidebar') return editingBlock.type === 'sidebar' && editingBlock.category === a && editingBlock.idx === b;
     if (type === 'headline') return editingBlock.type === 'headline';
     return false;
@@ -813,110 +698,102 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function saveBlockEdit(sectionIdx, blockIdx, updatedBlock) {
-    var bundle = ensureEditedBundle();
-    var clone = JSON.parse(safeStringify(bundle));
-    if (clone.sections && clone.sections[sectionIdx] && clone.sections[sectionIdx].content) {
-      clone.sections[sectionIdx].content[blockIdx] = updatedBlock;
-    }
-    setEditedBundle(clone);
-    setHasEdits(true);
-    setEditingBlock(null);
+    applyDesk(DeskLogic.setBlock(getCurrentBundle(), sectionIdx, blockIdx, updatedBlock));
   }
 
-  function saveSidebarEdit(category, idx, updatedItem) {
-    var bundle = ensureEditedBundle();
-    var clone = JSON.parse(safeStringify(bundle));
-    if (clone[category] && clone[category][idx] !== undefined) {
-      clone[category][idx] = updatedItem;
-    }
-    setEditedBundle(clone);
-    setHasEdits(true);
-    setEditingBlock(null);
+  function saveHeadingEdit(sectionIdx, heading) {
+    applyDesk(DeskLogic.setSectionHeading(getCurrentBundle(), sectionIdx, heading));
+  }
+
+  function saveSidebarCardEdit(idx, updatedCard) {
+    applyDesk(DeskLogic.setSidebarCard(getCurrentBundle(), idx, updatedCard));
   }
 
   function saveFinancialEntryEdit(idx, updatedEntry) {
-    var bundle = ensureEditedBundle();
-    var clone = JSON.parse(safeStringify(bundle));
-    if (clone.financialTracker && clone.financialTracker.entries && clone.financialTracker.entries[idx] !== undefined) {
-      clone.financialTracker.entries[idx] = updatedEntry;
+    applyDesk(DeskLogic.setTrackerEntry(getCurrentBundle(), idx, updatedEntry));
+  }
+
+  function saveHeadlineEdit(changedFields) {
+    applyDesk(DeskLogic.setHeadline(getCurrentBundle(), changedFields));
+  }
+
+  function saveHeroImageEdit(fields) {
+    applyDesk(DeskLogic.setHero(getCurrentBundle(), fields));
+  }
+
+  function saveBylineEdit(changedFields) {
+    applyDesk(DeskLogic.setByline(getCurrentBundle(), changedFields));
+  }
+
+  // -- The desk's hands: move, delete, insert --
+
+  function moveStep(sectionIdx, blockIdx, direction) {
+    var bundle = getCurrentBundle();
+    var to = DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, direction);
+    if (to) applyDesk(DeskLogic.moveBlock(bundle, { section: sectionIdx, block: blockIdx }, to));
+  }
+
+  function moveToSection(sectionIdx, blockIdx, targetSection) {
+    applyDesk(DeskLogic.moveToSection(getCurrentBundle(), { section: sectionIdx, block: blockIdx }, targetSection));
+  }
+
+  /** A delete takes two clicks, as a send back does: the first arms it on that block. */
+  function deleteClick(sectionIdx, blockIdx) {
+    var key = sectionIdx + ':' + blockIdx;
+    if (armedDelete !== key) {
+      setArmedDelete(key);
+      return;
     }
-    setEditedBundle(clone);
-    setHasEdits(true);
-    setEditingBlock(null);
+    applyDesk(DeskLogic.deleteBlock(getCurrentBundle(), sectionIdx, blockIdx));
   }
 
-  function saveHeadlineEdit(updatedHeadline) {
-    var bundle = ensureEditedBundle();
-    var clone = JSON.parse(safeStringify(bundle));
-    clone.headline = updatedHeadline;
-    setEditedBundle(clone);
-    setHasEdits(true);
-    setEditingBlock(null);
-  }
-
-  function saveHeroImageEdit(updatedHero) {
-    var bundle = ensureEditedBundle();
-    var clone = JSON.parse(safeStringify(bundle));
-    clone.heroImage = updatedHero;
-    setEditedBundle(clone);
-    setHasEdits(true);
-    setEditingBlock(null);
-  }
-
-  function saveBylineEdit(updatedByline) {
-    var bundle = ensureEditedBundle();
-    var clone = JSON.parse(safeStringify(bundle));
-    clone.byline = updatedByline;
-    setEditedBundle(clone);
-    setHasEdits(true);
-    setEditingBlock(null);
+  function insertAt(sectionIdx, blockIdx, type) {
+    applyDesk(DeskLogic.insertBlock(getCurrentBundle(), sectionIdx, blockIdx, type),
+      { type: 'block', sectionIdx: sectionIdx, blockIdx: blockIdx });
   }
 
   // -- Actions --
 
   /**
-   * B6 (client half): check an edited bundle's shape before the POST.
+   * The desk's checks and the client shape gate, on every approve and every send-back,
+   * edited or not (B6; task 4.3).
    *
-   * Task 3 added the server-side content-bundle schema gate, which returns a 400
-   * the console renders as a banner. This runs the same class of check inline, in
-   * the existing validation-error slot, and BLOCKS Approve — because before
-   * either gate existed a hand-edit reached validateContentBundle, which routes a
-   * bad bundle straight to END: ten checkpoints and five-plus Opus calls spent,
-   * Retry failing identically, and rollback discarding the approved draft.
+   * The desk's checks catch what would otherwise differ between the desk and the page: an
+   * empty block (validateContentBundle drops a blank paragraph without a word after the
+   * approve) and a headline outside the schema's limits (refused by the server's schema
+   * gate, or by validateContentBundle, which ends the run). The shape check mirrors the
+   * server's schema gate, which stays the last word on shape, because before either gate
+   * existed a hand edit reached validateContentBundle, which routes a bad bundle straight
+   * to END: ten checkpoints and five-plus Opus calls spent, Retry failing identically, and
+   * rollback discarding the approved draft.
    *
-   * `verb` names what the click would have done, so the reject path does not read
+   * `verb` names what the click would have done, so the send-back does not read
    * "Cannot approve" (review round 2, M13).
    *
-   * @returns {boolean} whether the edits may be sent
+   * @returns {boolean} whether the bundle may be sent
    */
   function gateEdits(bundle, setError, verb) {
-    var result = ArticleEditLogic.validateBundleShape(bundle);
-    if (result.valid) {
+    var problems = DeskLogic.deskProblems(bundle).map(function (p) { return p.message; })
+      .concat(ArticleEditLogic.validateBundleShape(bundle).errors.map(function (e) { return e.path + ' ' + e.message; }));
+    if (problems.length === 0) {
       setError('');
       return true;
     }
-    setError('Cannot ' + (verb || 'approve') + ', edited article is invalid: ' +
-      result.errors.map(function (e) { return e.path + ' ' + e.message; }).join('; '));
+    setError('Cannot ' + (verb || 'approve') + ' yet. Fix these first:' + '\n- ' + problems.join('\n- '));
     return false;
   }
 
   function handleApprove() {
     setSendBackArmed(false);
     const note = feedbackText.trim();
-    if (hasEdits && editedBundle) {
-      if (!gateEdits(editedBundle, setEditError)) return;
-      // Persist edits and the note in reducer state so they survive unmount during processing
-      if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle, note: note });
-      }
-      onApprove(ViewLogic.articleReviewPayload(editedBundle, note, 'approve'));
-    } else {
-      setEditError('');
-      if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', note: note });
-      }
-      onApprove(ViewLogic.articleReviewPayload(null, note, 'approve'));
+    const deskBundle = getCurrentBundle();
+    if (!gateEdits(deskBundle, setEditError)) return;
+    // Persist the edits and the note in reducer state so they survive an unmount during processing
+    if (dispatch) {
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: hasEdits ? deskBundle : undefined, note: note });
     }
+    // Approve sends exactly the bundle on the desk, edited or not.
+    onApprove(ViewLogic.articleReviewPayload(deskBundle, note, 'approve'));
   }
 
   function handleJsonApprove() {
@@ -967,26 +844,18 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   function handleReject() {
     const note = feedbackText.trim();
     if (!note) return;
-    // Spec 2026-09-19 §4.6: hand edits travel with the note, validated through the
-    // SAME gate approve uses (review fix 1, finding 1 — two copies of the gate drift,
-    // and the one that drifts loose ships an invalid bundle). An invalid edit is
-    // shown and not sent.
-    if (hasEdits && editedBundle) {
-      // A send blocked by an invalid edit disarms the button: the next attempt costs two clicks again.
-      setSendBackArmed(false);
-      if (!gateEdits(editedBundle, setEditError, 'send')) return;
-      if (dispatch) {
-        dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: editedBundle, note: note });
-        dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: editedBundle });
-      }
-      onReject(ViewLogic.articleReviewPayload(editedBundle, note, 'send-back'));
-      return;
-    }
+    const deskBundle = getCurrentBundle();
+    // Spec 2026-09-19 §4.6: the desk travels with the note, checked by the SAME gate
+    // approve uses (review fix 1, finding 1 — two copies of the gate drift, and the
+    // one that drifts loose ships an invalid bundle). A send blocked by a check
+    // disarms the button: the next attempt costs two clicks again.
+    setSendBackArmed(false);
+    if (!gateEdits(deskBundle, setEditError, 'send')) return;
     if (dispatch) {
-      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', note: note });
-      dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: contentBundle });
+      dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'article', edits: hasEdits ? deskBundle : undefined, note: note });
+      dispatch({ type: 'CACHE_REVISION', contentType: 'article', data: deskBundle });
     }
-    onReject(ViewLogic.articleReviewPayload(null, note, 'send-back'));
+    onReject(ViewLogic.articleReviewPayload(deskBundle, note, 'send-back'));
   }
 
   // -- Photo URL --
@@ -1015,116 +884,130 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     return '/sessionphotos/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(filename);
   }
 
+  // -- The desk's rows --
 
-  // -- Block renderers --
+  /**
+   * One editable piece of the article: its content, and its rail, a column of its own
+   * beside it holding the pencil and any other control, so every editor is visible and
+   * none covers the prose (spec 2026-10-02 section 6.3).
+   */
+  function deskRow(key, className, body, onEdit, controls) {
+    return React.createElement('div', { key: key, className: 'desk-row ' + className },
+      React.createElement('div', { className: 'desk-row__body' }, body),
+      React.createElement('div', { className: 'desk-rail' }, editBtn(onEdit), controls || null)
+    );
+  }
 
-  function renderBlock(block, sectionIdx, blockIdx) {
-    if (!block || !block.type) return null;
-    var currentBundle = getCurrentBundle();
-    var currentBlock = (currentBundle.sections && currentBundle.sections[sectionIdx] &&
-      currentBundle.sections[sectionIdx].content && currentBundle.sections[sectionIdx].content[blockIdx]) || block;
-    var editing = isEditing('block', sectionIdx, blockIdx);
+  /** One control in a block's rail. */
+  function deskButton(label, title, onClick, options) {
+    var opts = options || {};
+    return React.createElement('button', {
+      type: 'button',
+      className: 'desk-rail__btn' + (opts.armed ? ' desk-rail__btn--armed' : ''),
+      onClick: function (e) { e.stopPropagation(); onClick(); },
+      disabled: !!opts.disabled,
+      'aria-label': title,
+      title: title
+    }, label);
+  }
 
-    if (editing) {
-      return React.createElement(BlockEditor, {
-        key: 'edit-' + sectionIdx + '-' + blockIdx,
-        block: currentBlock,
-        sectionIdx: sectionIdx,
-        blockIdx: blockIdx,
-        onSave: saveBlockEdit,
-        onCancel: cancelEdit
-      });
-    }
+  /** A block's controls beside the pencil: one step up or down, to another section, delete, and insert after it. */
+  function blockControls(sectionIdx, blockIdx) {
+    var bundle = getCurrentBundle();
+    var armed = armedDelete === sectionIdx + ':' + blockIdx;
+    return React.createElement(React.Fragment, null,
+      deskButton('\u2191', 'Move this block up', function () { moveStep(sectionIdx, blockIdx, 'up'); },
+        { disabled: !DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, 'up') }),
+      deskButton('\u2193', 'Move this block down', function () { moveStep(sectionIdx, blockIdx, 'down'); },
+        { disabled: !DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, 'down') }),
+      React.createElement('select', {
+        className: 'desk-rail__move',
+        value: '',
+        onChange: function (e) { if (e.target.value !== '') moveToSection(sectionIdx, blockIdx, Number(e.target.value)); },
+        'aria-label': 'Move this block to the end of a section',
+        title: 'Move this block to the end of a section'
+      },
+        React.createElement('option', { value: '' }, 'Move to'),
+        (bundle.sections || []).map(function (section, s) {
+          return React.createElement('option', { key: 'to-' + s, value: String(s) }, DeskLogic.sectionLabel(section, s));
+        })
+      ),
+      deskButton(armed ? 'Delete?' : '\u2715', armed ? 'Click again to delete this block' : 'Delete this block',
+        function () { deleteClick(sectionIdx, blockIdx); }, { armed: armed }),
+      deskButton('+\u00B6', 'Insert a paragraph after this block', function () { insertAt(sectionIdx, blockIdx + 1, 'paragraph'); }),
+      deskButton('+\u275D', 'Insert a quote after this block', function () { insertAt(sectionIdx, blockIdx + 1, 'quote'); })
+    );
+  }
 
-    switch (currentBlock.type) {
+  /** What a block shows on the desk: what it prints, or, for an empty block, what to do about it. */
+  function blockBody(block) {
+    var emptyNote = DeskLogic.emptyBlockNote(block);
+    var note = emptyNote && React.createElement('p', { className: 'desk-empty-note text-sm' }, emptyNote);
+    switch (block.type) {
       case 'paragraph':
-        return React.createElement('div', {
-          key: 'block-' + sectionIdx + '-' + blockIdx,
-          className: 'article-block article-block--paragraph article-block--editable'
-        },
-          editBtn(function () { startBlockEdit(sectionIdx, blockIdx); }),
-          React.createElement('p', { className: 'text-sm' }, currentBlock.text || '')
+        return React.createElement('div', { className: 'article-block article-block--paragraph' },
+          note || React.createElement('p', { className: 'text-sm' }, block.text)
         );
 
       case 'quote':
-        return React.createElement('blockquote', {
-          key: 'block-' + sectionIdx + '-' + blockIdx,
-          className: 'article-block article-block--quote article-block--editable'
-        },
-          editBtn(function () { startBlockEdit(sectionIdx, blockIdx); }),
-          React.createElement('p', { className: 'article-block__quote-text' },
-            '\u201C' + (currentBlock.text || '') + '\u201D'
-          ),
-          currentBlock.attribution && React.createElement('cite', { className: 'article-block__quote-cite' },
-            '\u2014 ' + currentBlock.attribution
-          )
+        return React.createElement('blockquote', { className: 'article-block article-block--quote' },
+          note || React.createElement('p', { className: 'article-block__quote-text' }, '\u201C' + block.text + '\u201D'),
+          block.attribution && React.createElement('cite', { className: 'article-block__quote-cite' }, '\u2014 ' + block.attribution)
         );
 
       case 'evidence-reference':
-        return React.createElement('div', {
-          key: 'block-' + sectionIdx + '-' + blockIdx,
-          className: 'article-block article-block--evidence article-block--editable'
-        },
-          editBtn(function () { startBlockEdit(sectionIdx, blockIdx); }),
+        return React.createElement('div', { className: 'article-block article-block--evidence' },
           React.createElement('div', { className: 'article-block__evidence-header' },
             React.createElement(Badge, { label: 'Evidence', color: 'var(--accent-amber)' }),
-            currentBlock.tokenId && React.createElement('span', { className: 'text-xs text-muted' }, currentBlock.tokenId)
+            block.tokenId && React.createElement('span', { className: 'text-xs text-muted' }, block.tokenId)
           ),
-          currentBlock.text && React.createElement('p', { className: 'text-sm' }, currentBlock.text),
-          currentBlock.caption && React.createElement('p', { className: 'text-xs text-secondary' }, currentBlock.caption)
+          note,
+          block.text && React.createElement('p', { className: 'text-sm' }, block.text),
+          block.caption && React.createElement('p', { className: 'text-xs text-secondary' }, block.caption)
         );
 
       case 'evidence-card':
         return React.createElement('aside', {
-          key: 'block-' + sectionIdx + '-' + blockIdx,
-          className: 'article-evidence-card article-evidence-card--' + (currentBlock.significance || 'supporting') + ' article-block--editable'
+          className: 'article-evidence-card article-evidence-card--' + (block.significance || 'supporting')
         },
-          editBtn(function () { startBlockEdit(sectionIdx, blockIdx); }),
-          React.createElement('div', { className: 'article-evidence-card__label' }, currentBlock.headline || 'Evidence'),
-          React.createElement('div', { className: 'article-evidence-card__content' }, currentBlock.content || ''),
-          (currentBlock.owner || currentBlock.significance) && React.createElement('div', { className: 'article-evidence-card__meta' },
-            currentBlock.owner && React.createElement('span', { className: 'article-evidence-card__owner' }, currentBlock.owner),
-            currentBlock.significance && React.createElement(Badge, {
-              label: currentBlock.significance,
-              color: currentBlock.significance === 'critical' ? 'var(--accent-red)' :
-                     currentBlock.significance === 'supporting' ? 'var(--accent-amber)' : 'var(--accent-cyan)'
+          React.createElement('div', { className: 'article-evidence-card__label' }, block.headline || 'Evidence'),
+          note || React.createElement('div', { className: 'article-evidence-card__content' }, block.content || ''),
+          (block.owner || block.significance) && React.createElement('div', { className: 'article-evidence-card__meta' },
+            block.owner && React.createElement('span', { className: 'article-evidence-card__owner' }, block.owner),
+            block.significance && React.createElement(Badge, {
+              label: block.significance,
+              color: block.significance === 'critical' ? 'var(--accent-red)' :
+                     block.significance === 'supporting' ? 'var(--accent-amber)' : 'var(--accent-cyan)'
             })
           )
         );
 
       case 'photo':
-        return React.createElement('figure', {
-          key: 'block-' + sectionIdx + '-' + blockIdx,
-          className: 'article-block article-block--photo-rich article-block--editable'
-        },
-          editBtn(function () { startBlockEdit(sectionIdx, blockIdx); }),
-          photoUrl(currentBlock.filename)
+        return React.createElement('figure', { className: 'article-block article-block--photo-rich' },
+          note,
+          photoUrl(block.filename)
             ? React.createElement('img', {
-                src: photoUrl(currentBlock.filename),
-                alt: currentBlock.caption || currentBlock.filename,
+                src: photoUrl(block.filename),
+                alt: block.caption || block.filename,
                 className: 'article-photo__thumbnail',
                 loading: 'lazy',
-                onClick: function () { setExpandedPhoto(expandedPhoto === currentBlock.filename ? null : currentBlock.filename); }
+                onClick: function () { setExpandedPhoto(expandedPhoto === block.filename ? null : block.filename); }
               })
-            : React.createElement('div', { className: 'article-block__photo-placeholder' },
-                '[Photo' + (currentBlock.filename ? ': ' + currentBlock.filename : '') + ']'
+            : !note && React.createElement('div', { className: 'article-block__photo-placeholder' },
+                '[Photo' + (block.filename ? ': ' + block.filename : '') + ']'
               ),
-          currentBlock.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, currentBlock.caption),
-          currentBlock.characters && currentBlock.characters.length > 0 && React.createElement('div', { className: 'tag-list mt-sm' },
-            currentBlock.characters.map(function (c, j) {
+          block.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, block.caption),
+          block.characters && block.characters.length > 0 && React.createElement('div', { className: 'tag-list mt-sm' },
+            block.characters.map(function (c, j) {
               return React.createElement(Badge, { key: 'char-' + j, label: c, color: 'var(--accent-cyan)' });
             })
           )
         );
 
       case 'list':
-        return React.createElement('div', {
-          key: 'block-' + sectionIdx + '-' + blockIdx,
-          className: 'article-block article-block--list article-block--editable'
-        },
-          editBtn(function () { startBlockEdit(sectionIdx, blockIdx); }),
-          React.createElement('ul', { className: 'checkpoint-section__list text-sm' },
-            (currentBlock.items || []).map(function (item, j) {
+        return React.createElement('div', { className: 'article-block article-block--list' },
+          note || React.createElement('ul', { className: 'checkpoint-section__list text-sm' },
+            (block.items || []).map(function (item, j) {
               return React.createElement('li', { key: 'item-' + j },
                 typeof item === 'string' ? item : (item.text || safeStringify(item))
               );
@@ -1133,161 +1016,137 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         );
 
       default:
-        return React.createElement('div', {
-          key: 'block-' + sectionIdx + '-' + blockIdx,
-          className: 'article-block text-xs text-muted'
-        }, '[' + currentBlock.type + ' block]');
+        return React.createElement('div', { className: 'article-block text-xs text-muted' }, '[' + block.type + ' block]');
     }
   }
 
-  // -- Pull quote renderer --
+  // -- Block renderer --
 
-  function renderPullQuote(pq, idx) {
-    var currentPq = (getCurrentBundle().pullQuotes || [])[idx] || pq;
-    var isVerbatim = currentPq.type === 'verbatim';
-    var editing = isEditing('sidebar', 'pullQuotes', idx);
+  function renderBlock(block, sectionIdx, blockIdx) {
+    if (!block || !block.type) return null;
 
-    if (editing) {
-      return React.createElement(PullQuoteEditor, {
-        key: 'pq-edit-' + idx,
-        pq: currentPq,
-        idx: idx,
-        original: pq,
-        onSave: saveSidebarEdit,
+    if (isEditing('block', sectionIdx, blockIdx)) {
+      return React.createElement(BlockEditor, {
+        key: 'edit-' + sectionIdx + '-' + blockIdx,
+        block: block,
+        sectionIdx: sectionIdx,
+        blockIdx: blockIdx,
+        onSave: saveBlockEdit,
         onCancel: cancelEdit
       });
     }
 
-    return React.createElement('div', {
-      key: 'pq-' + idx,
-      className: 'pull-quote ' + (isVerbatim ? 'pull-quote--verbatim' : 'pull-quote--crystallization') + ' article-block--editable'
-    },
-      editBtn(function () { startSidebarEdit('pullQuotes', idx); }),
-      !isVerbatim && React.createElement('span', { className: 'pull-quote__type-label' }, isDetective ? "Detective's Note" : "Nova's Insight"),
-      React.createElement('p', { className: 'pull-quote__text' },
-        '\u201C' + (currentPq.text || '') + '\u201D'
+    return deskRow('block-' + sectionIdx + '-' + blockIdx,
+      'desk-row--block' + (DeskLogic.isEmptyBlock(block) ? ' desk-row--empty' : ''),
+      blockBody(block),
+      function () { startBlockEdit(sectionIdx, blockIdx); },
+      blockControls(sectionIdx, blockIdx));
+  }
+
+  // -- Section heading: its editor, and insertion at the top of the section --
+
+  function renderSectionHeading(section, sectionIdx) {
+    if (isEditing('heading', sectionIdx)) {
+      return React.createElement(SectionHeadingEditor, {
+        key: 'heading-edit-' + sectionIdx,
+        heading: section.heading || '',
+        onSave: function (heading) { saveHeadingEdit(sectionIdx, heading); },
+        onCancel: cancelEdit
+      });
+    }
+    var body = React.createElement('div', { className: 'flex gap-sm items-center' },
+      React.createElement('h4', { className: 'outline-section__title' + (section.heading ? '' : ' text-muted') },
+        section.heading || 'No heading (this section prints without one)'
       ),
-      isVerbatim && currentPq.attribution && React.createElement('p', { className: 'pull-quote__attribution' },
-        '\u2014 ' + currentPq.attribution
-      ),
-      React.createElement('div', { className: 'tag-list mt-sm' },
-        React.createElement(Badge, { label: isVerbatim ? 'verbatim' : 'crystallization', color: isVerbatim ? 'var(--accent-amber)' : 'var(--accent-cyan)' }),
-        currentPq.placement && React.createElement(Badge, { label: currentPq.placement, color: 'var(--text-muted)' })
-      )
+      section.type && React.createElement(Badge, { label: section.type, color: 'var(--accent-cyan)' })
     );
+    return deskRow('heading-' + sectionIdx, 'desk-row--heading', body,
+      function () { startHeadingEdit(sectionIdx); },
+      React.createElement(React.Fragment, null,
+        deskButton('+\u00B6', 'Insert a paragraph at the top of this section', function () { insertAt(sectionIdx, 0, 'paragraph'); }),
+        deskButton('+\u275D', 'Insert a quote at the top of this section', function () { insertAt(sectionIdx, 0, 'quote'); })
+      ));
   }
 
   // -- Evidence card renderer (sidebar) --
 
   function renderSidebarEvidenceCard(card, idx) {
-    var currentCard = (getCurrentBundle().evidenceCards || [])[idx] || card;
-    var editing = isEditing('sidebar', 'evidenceCards', idx);
-
-    if (editing) {
+    if (isEditing('sidebar', 'evidenceCards', idx)) {
       return React.createElement(SidebarEvidenceCardEditor, {
         key: 'ec-edit-' + idx,
-        card: currentCard,
+        card: card,
         idx: idx,
         original: card,
-        onSave: saveSidebarEdit,
+        onSave: saveSidebarCardEdit,
         onCancel: cancelEdit
       });
     }
 
-    return React.createElement('div', {
-      key: 'ec-' + idx,
-      className: 'article-evidence-card article-evidence-card--' + (currentCard.significance || 'supporting') + ' article-block--editable mb-md'
+    var body = React.createElement('div', {
+      className: 'article-evidence-card article-evidence-card--' + (card.significance || 'supporting') + ' mb-md'
     },
-      editBtn(function () { startSidebarEdit('evidenceCards', idx); }),
-      React.createElement('div', { className: 'article-evidence-card__label' }, currentCard.headline || currentCard.tokenId || 'Card ' + (idx + 1)),
+      React.createElement('div', { className: 'article-evidence-card__label' }, card.headline || card.tokenId || 'Card ' + (idx + 1)),
       // The summary, which the sidebar prints; never the content, which it does not.
-      currentCard.summary && React.createElement('div', { className: 'article-evidence-card__content' }, currentCard.summary),
+      card.summary && React.createElement('div', { className: 'article-evidence-card__content' }, card.summary),
       React.createElement('div', { className: 'article-evidence-card__meta' },
-        currentCard.owner && React.createElement('span', { className: 'article-evidence-card__owner' }, currentCard.owner),
+        card.owner && React.createElement('span', { className: 'article-evidence-card__owner' }, card.owner),
         React.createElement('div', { className: 'tag-list' },
-          currentCard.significance && React.createElement(Badge, {
-            label: currentCard.significance,
-            color: currentCard.significance === 'critical' ? 'var(--accent-red)' :
-                   currentCard.significance === 'supporting' ? 'var(--accent-amber)' : 'var(--accent-cyan)'
+          card.significance && React.createElement(Badge, {
+            label: card.significance,
+            color: card.significance === 'critical' ? 'var(--accent-red)' :
+                   card.significance === 'supporting' ? 'var(--accent-amber)' : 'var(--accent-cyan)'
           }),
-          currentCard.layer && React.createElement(Badge, {
-            label: currentCard.layer,
-            color: currentCard.layer === 'exposed' ? 'var(--layer-exposed)' :
-                   currentCard.layer === 'buried' ? 'var(--layer-buried)' : 'var(--accent-amber)'
+          card.layer && React.createElement(Badge, {
+            label: card.layer,
+            color: card.layer === 'exposed' ? 'var(--layer-exposed)' :
+                   card.layer === 'buried' ? 'var(--layer-buried)' : 'var(--accent-amber)'
           }),
-          currentCard.placement && React.createElement(Badge, { label: currentCard.placement, color: 'var(--text-muted)' })
+          card.placement && React.createElement(Badge, { label: card.placement, color: 'var(--text-muted)' })
         )
       ),
-      currentCard.tokenId && React.createElement('span', { className: 'text-xs text-muted d-block mt-sm' }, currentCard.tokenId)
+      card.tokenId && React.createElement('span', { className: 'text-xs text-muted d-block mt-sm' }, card.tokenId)
     );
+    return deskRow('ec-' + idx, 'desk-row--card', body, function () { startSidebarEdit('evidenceCards', idx); });
   }
 
-  // -- Financial tracker renderer --
+  // -- Financial tracker: the writer's, only when the page prints it --
 
   function renderFinancialTracker(tracker) {
-    if (!tracker) return null;
-    var entries = tracker.entries || [];
-    var currentTracker = getCurrentBundle().financialTracker || tracker;
-    var currentEntries = currentTracker.entries || [];
-
+    var entries = tracker && Array.isArray(tracker.entries) ? tracker.entries : [];
+    if (entries.length === 0) return null;
     return React.createElement('div', { className: 'outline-section' },
       React.createElement('h4', { className: 'outline-section__title' }, 'FINANCIAL TRACKER'),
-      entries.length > 0 && React.createElement('table', { className: 'financial-table' },
-        React.createElement('thead', null,
-          React.createElement('tr', null,
-            React.createElement('th', null, 'Description'),
-            React.createElement('th', null, 'Amount'),
-            React.createElement('th', null, 'Category')
-          )
-        ),
-        React.createElement('tbody', null,
-          currentEntries.map(function (entry, i) {
-            var editing = isEditing('sidebar', 'financialEntry', i);
-            if (editing) {
-              return React.createElement(FinancialEntryEditor, {
-                key: 'ft-edit-' + i,
-                entry: entry,
-                idx: i,
-                onSave: saveFinancialEntryEdit,
-                onCancel: cancelEdit
-              });
-            }
-            return React.createElement('tr', {
-              key: 'ft-' + i,
-              className: 'financial-table__row article-block--editable'
-            },
-              React.createElement('td', null,
-                entry.date && React.createElement('span', { className: 'text-xs text-muted' }, entry.date + ' '),
-                entry.description || ''
-              ),
-              React.createElement('td', { className: 'financial-table__amount' }, entry.amount || ''),
-              React.createElement('td', { className: 'text-xs text-muted' },
-                entry.category || '',
-                editBtn(function () { startSidebarEdit('financialEntry', i); })
-              )
-            );
-          })
-        ),
-        currentTracker.totalExposed && React.createElement('tfoot', null,
-          React.createElement('tr', { className: 'financial-table__total' },
-            React.createElement('td', null, 'Total Buried'),
-            React.createElement('td', { className: 'financial-table__amount' }, currentTracker.totalExposed),
-            React.createElement('td', null)
-          )
-        )
-      ),
-      entries.length === 0 && React.createElement('p', { className: 'text-xs text-muted' }, 'No financial entries.')
+      entries.map(function (entry, i) {
+        if (isEditing('sidebar', 'financialEntry', i)) {
+          return React.createElement(FinancialEntryEditor, {
+            key: 'ft-edit-' + i,
+            entry: entry,
+            idx: i,
+            onSave: saveFinancialEntryEdit,
+            onCancel: cancelEdit
+          });
+        }
+        var body = React.createElement('div', { className: 'desk-tracker-row' },
+          React.createElement('span', null,
+            entry.date && React.createElement('span', { className: 'text-xs text-muted' }, entry.date + ' '),
+            entry.description || ''
+          ),
+          React.createElement('span', { className: 'financial-table__amount' }, entry.amount || ''),
+          React.createElement('span', { className: 'text-xs text-muted' }, entry.category || '')
+        );
+        return deskRow('ft-' + i, 'desk-row--tracker', body, function () { startSidebarEdit('financialEntry', i); });
+      }),
+      tracker.totalExposed && React.createElement('p', { className: 'text-sm mt-sm' }, 'Total Buried: ' + tracker.totalExposed)
     );
   }
 
   // -- Hero image --
 
   function renderHeroImage() {
-    var currentHero = getCurrentBundle().heroImage || heroImage;
+    var currentHero = getCurrentBundle().heroImage || null;
     if (!currentHero || !currentHero.filename) return null;
-    var editing = isEditing('sidebar', 'heroImage', 0);
 
-    if (editing) {
+    if (isEditing('sidebar', 'heroImage', 0)) {
       return React.createElement(HeroImageEditor, {
         key: 'hero-edit',
         hero: currentHero,
@@ -1297,8 +1156,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     }
 
     var heroSrc = photoUrl(currentHero.filename);
-    return React.createElement('figure', { className: 'article-hero mb-md article-block--editable' },
-      editBtn(function () { startSidebarEdit('heroImage', 0); }),
+    var body = React.createElement('figure', { className: 'article-hero mb-md' },
       heroSrc
         ? React.createElement('img', {
             src: heroSrc,
@@ -1315,50 +1173,45 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         })
       )
     );
+    return deskRow('hero', 'desk-row--hero', body, function () { startSidebarEdit('heroImage', 0); });
   }
 
-  // -- Photos gallery --
+  // -- Headline and byline --
 
-  function renderPhotosGallery() {
-    var currentPhotos = getCurrentBundle().photos || photos;
-    if (!currentPhotos || currentPhotos.length === 0) return null;
-    return React.createElement('div', { className: 'outline-section' },
-      React.createElement('h4', { className: 'outline-section__title' }, 'ARTICLE PHOTOS (' + currentPhotos.length + ')'),
-      React.createElement('div', { className: 'article-photos-gallery' },
-        currentPhotos.map(function (photo, i) {
-          var editing = isEditing('sidebar', 'photos', i);
-          if (editing) {
-            return React.createElement(GalleryPhotoEditor, {
-              key: 'gallery-edit-' + i,
-              photo: photo,
-              idx: i,
-              onSave: saveSidebarEdit,
-              onCancel: cancelEdit
-            });
-          }
-          return React.createElement('figure', { key: 'gallery-' + i, className: 'article-photos-gallery__item article-block--editable' },
-            editBtn(function () { startSidebarEdit('photos', i); }),
-            photoUrl(photo.filename)
-              ? React.createElement('img', {
-                  src: photoUrl(photo.filename),
-                  alt: photo.caption || photo.filename,
-                  className: 'article-photos-gallery__img',
-                  loading: 'lazy'
-                })
-              : React.createElement('div', { className: 'article-block__photo-placeholder' }, photo.filename || 'Photo'),
-            photo.caption && React.createElement('figcaption', { className: 'text-xs text-secondary mt-xs' }, photo.caption),
-            photo.characters && photo.characters.length > 0 && React.createElement('div', { className: 'tag-list mt-xs' },
-              photo.characters.map(function (c, j) {
-                return React.createElement(Badge, { key: 'gc-' + j, label: c, color: 'var(--accent-cyan)' });
-              })
-            ),
-            photo.afterSection && React.createElement('span', { className: 'text-xs text-muted d-block' }, 'After: ' + photo.afterSection)
-          );
-        })
-      )
+  function renderHeadline() {
+    var currentHeadline = getCurrentBundle().headline || {};
+    if (isEditing('headline')) {
+      return React.createElement(HeadlineEditor, {
+        key: 'headline-edit',
+        headline: currentHeadline,
+        onSave: saveHeadlineEdit,
+        onCancel: cancelEdit
+      });
+    }
+    var body = React.createElement('div', { className: 'outline-section' },
+      currentHeadline.kicker && React.createElement('p', { className: 'text-xs text-muted mb-sm article-headline__kicker' }, currentHeadline.kicker),
+      React.createElement('h3', { className: 'article-headline__main' + (currentHeadline.main ? '' : ' text-muted') }, currentHeadline.main || 'No headline'),
+      currentHeadline.deck && React.createElement('p', { className: 'text-sm text-secondary mt-sm article-headline__deck' }, currentHeadline.deck)
     );
+    return deskRow('headline', 'desk-row--headline', body, startHeadlineEdit);
   }
 
+  function renderByline() {
+    var currentByline = getCurrentBundle().byline || {};
+    if (isEditing('sidebar', 'byline', 0)) {
+      return React.createElement(BylineEditor, {
+        key: 'byline-edit',
+        byline: currentByline,
+        onSave: saveBylineEdit,
+        onCancel: cancelEdit
+      });
+    }
+    // As the page prints it: the author and their title, then the guest reporter's credit.
+    var line = [currentByline.author, currentByline.title].filter(Boolean).join(' | ') +
+      (currentByline.guestReporter ? ' || ' + currentByline.guestReporter : '');
+    var body = React.createElement('div', { className: 'text-xs text-muted mb-md' }, line || 'No byline');
+    return deskRow('byline', 'desk-row--byline', body, function () { startSidebarEdit('byline', 0); });
+  }
 
   // -- Expanded photo overlay --
 
@@ -1378,13 +1231,15 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   // -- Main render --
 
+  var deskBundleNow = getCurrentBundle();
+
   // tokenId -> headline for the fact-check card group, so a flagged card is
   // identifiable by what it SAYS and not only by its id.
   var cardHeadlines = {};
-  (getCurrentBundle().evidenceCards || []).forEach(function (card) {
+  (deskBundleNow.evidenceCards || []).forEach(function (card) {
     if (card && card.tokenId && card.headline) cardHeadlines[card.tokenId] = card.headline;
   });
-  (getCurrentBundle().sections || []).forEach(function (section) {
+  (deskBundleNow.sections || []).forEach(function (section) {
     (section && section.content || []).forEach(function (block) {
       if (block && block.type === 'evidence-card' && block.tokenId && block.headline) {
         cardHeadlines[block.tokenId] = block.headline;
@@ -1395,11 +1250,17 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   var approve = ViewLogic.approveLabel(factCheck, hasEdits);
   const sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'article');
 
-  var currentHeadline = getCurrentBundle().headline || headline;
-  var currentByline = getCurrentBundle().byline || byline;
-  var currentSections = (getCurrentBundle().sections || sections);
-  var currentPullQuotes = (getCurrentBundle().pullQuotes || pullQuotes);
-  var currentEvidenceCards = (getCurrentBundle().evidenceCards || evidenceCards);
+  var currentSections = deskBundleNow.sections || [];
+  var currentEvidenceCards = deskBundleNow.evidenceCards || [];
+  var writerTracker = deskBundleNow.financialTracker || null;
+  var hasWriterTrackerRows = !!(writerTracker && Array.isArray(writerTracker.entries) && writerTracker.entries.length > 0);
+  // The word count reads the bundle as edited.
+  var wordCount = DeskLogic.wordCount(deskBundleNow);
+  // What would stop an approve or a send-back now, shown before the click.
+  var deskIssues = DeskLogic.deskProblems(deskBundleNow);
+  // The page as it will print: the preview route's answer once it comes; until then, the
+  // stop's own render of the draft while the desk still holds it.
+  var previewHtml = typeof preview.html === 'string' ? preview.html : (hasEdits ? '' : ((data && data.htmlPreview) || ''));
 
   return React.createElement('div', { className: 'flex flex-col gap-md' },
 
@@ -1440,7 +1301,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     renderHeroImage(),
 
     // Thesis echo (spec 2026-09-19 §6.2): read-only, from the approved outline, so the
-    // headline is judged against the thesis it must serve. No pencil, no opt-in class.
+    // headline is judged against the thesis it must serve. No pencil.
     outlineThesis && React.createElement('div', { className: 'article-thesis-echo' },
       React.createElement('h4', { className: 'outline-section__title' }, 'THESIS (from the approved outline)'),
       thesisField('Hook', outlineThesis.hook, 'text-sm mb-sm'),
@@ -1448,48 +1309,17 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       thesisField('Primary arc', outlineThesis.primaryArc, 'text-sm')
     ),
 
-    // Headline (editable)
-    isEditing('headline')
-      ? React.createElement(HeadlineEditor, {
-          key: 'headline-edit',
-          headline: currentHeadline,
-          onSave: saveHeadlineEdit,
-          onCancel: cancelEdit
-        })
-      : (currentHeadline.main || currentHeadline.kicker || currentHeadline.deck) && React.createElement('div', {
-          className: 'outline-section article-block--editable'
-        },
-          editBtn(startHeadlineEdit),
-          currentHeadline.kicker && React.createElement('p', { className: 'text-xs text-muted mb-sm article-headline__kicker' }, currentHeadline.kicker),
-          currentHeadline.main && React.createElement('h3', { className: 'article-headline__main' }, currentHeadline.main),
-          currentHeadline.deck && React.createElement('p', { className: 'text-sm text-secondary mt-sm article-headline__deck' }, currentHeadline.deck)
-        ),
+    // Headline and byline
+    renderHeadline(),
+    renderByline(),
 
-    // Byline (editable)
-    isEditing('sidebar', 'byline', 0)
-      ? React.createElement(BylineEditor, {
-          key: 'byline-edit',
-          byline: currentByline,
-          onSave: saveBylineEdit,
-          onCancel: cancelEdit
-        })
-      : (currentByline.author || currentByline.title) && React.createElement('div', {
-          className: 'text-xs text-muted mb-md article-block--editable'
-        },
-          editBtn(function () { startSidebarEdit('byline', 0); }),
-          [currentByline.author, currentByline.title, currentByline.location, currentByline.date].filter(Boolean).join(' \u2022 ')
-        ),
-
-    // Content sections with inline editing
+    // The sections: each heading, then its blocks, every one with its rail
     currentSections.map(function (section, i) {
       return React.createElement('div', {
         key: (section.id || 'section') + '-' + i,
-        className: 'outline-section'
+        className: 'outline-section desk-section'
       },
-        React.createElement('h4', { className: 'outline-section__title' },
-          section.heading || section.id || 'Section ' + (i + 1)
-        ),
-        section.type && React.createElement(Badge, { label: section.type, color: 'var(--accent-cyan)' }),
+        renderSectionHeading(section, i),
         React.createElement('div', { className: 'outline-section__content mt-sm' },
           (section.content || []).map(function (block, j) {
             return renderBlock(block, i, j);
@@ -1497,14 +1327,6 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         )
       );
     }),
-
-    // Pull quotes (journalist theme only — detective reports don't use pull quotes)
-    !isDetective && currentPullQuotes.length > 0 && React.createElement('div', { className: 'outline-section' },
-      React.createElement('h4', { className: 'outline-section__title' }, 'PULL QUOTES (' + currentPullQuotes.length + ')'),
-      currentPullQuotes.map(function (pq, i) {
-        return renderPullQuote(pq, i);
-      })
-    ),
 
     // Evidence cards (journalist theme only)
     !isDetective && currentEvidenceCards.length > 0 && React.createElement('div', { className: 'outline-section' },
@@ -1514,35 +1336,53 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       })
     ),
 
-    // Financial tracker (journalist theme only)
-    !isDetective && renderFinancialTracker(getCurrentBundle().financialTracker || financialTracker),
+    // The money tracker (journalist theme only): the writer's prints only when the ledger
+    // has no account to print in its place, so its editor shows only then.
+    !isDetective && (preview.writerTrackerPrints
+      ? renderFinancialTracker(writerTracker)
+      : hasWriterTrackerRows && React.createElement('p', { className: 'text-xs text-muted' },
+          'The page prints the money tracker from the ledger, which the preview shows.')),
 
-    // Photos gallery
-    renderPhotosGallery(),
-
-    // HTML Preview toggle
-    previewHtml && React.createElement('div', { className: 'mt-md' },
+    // The page as it will print, from the bundle on the desk
+    React.createElement('div', { className: 'mt-md' },
       React.createElement('button', {
         className: 'btn btn-secondary btn-sm',
         onClick: function () { setShowHtmlPreview(!showHtmlPreview); },
-        'aria-label': showHtmlPreview ? 'Hide HTML preview' : 'Show HTML preview'
-      }, showHtmlPreview ? 'Hide HTML Preview' : 'Show HTML Preview'),
+        'aria-label': showHtmlPreview ? 'Hide the page as it will print' : 'Show the page as it will print'
+      }, showHtmlPreview ? 'Hide the page' : 'Show the page as it will print'),
 
-      showHtmlPreview && React.createElement('div', { className: 'html-preview mt-md fade-in' },
-        React.createElement('iframe', {
-          className: 'html-preview__frame',
-          // The string is used as-is apart from the <script> strip: the server
-          // already injected `<base href="/">` so the relative sessionphotos/
-          // URLs resolve instead of hitting the /console/* SPA catch-all.
-          srcDoc: stripScripts(previewHtml),
-          sandbox: 'allow-same-origin',
-          title: 'Article HTML Preview'
+      showHtmlPreview && React.createElement('div', { className: 'desk-preview mt-md fade-in' },
+        (preview.pending || preview.error) && React.createElement('p', {
+          className: 'desk-preview__status text-xs' + (preview.error ? ' desk-preview__status--error' : ' text-muted'),
+          role: 'status'
+        }, preview.error ? 'The page cannot be shown yet: ' + preview.error : 'Updating the page\u2026'),
+        previewHtml && React.createElement('div', { className: 'html-preview' },
+          React.createElement('iframe', {
+            className: 'html-preview__frame',
+            // The scripts are taken out (DeskLogic.stripScripts); the server already put
+            // in `<base href="/">`, so the relative sessionphotos/ links resolve instead
+            // of hitting the /console/* catch-all.
+            srcDoc: DeskLogic.stripScripts(previewHtml),
+            sandbox: 'allow-same-origin',
+            title: 'The page as it will print'
+          })
+        )
+      )
+    ),
+
+    // What would stop an approve or a send-back, before the click
+    deskIssues.length > 0 && React.createElement('div', { className: 'desk-problems', role: 'status' },
+      React.createElement('p', { className: 'desk-problems__title' },
+        'To fix before you approve or send back (' + deskIssues.length + ')'),
+      React.createElement('ul', { className: 'desk-problems__list' },
+        deskIssues.map(function (problem, i) {
+          return React.createElement('li', { key: problem.path + '-' + i }, problem.message);
         })
       )
     ),
 
-    // Inline validation error (B6: shown when Approve is blocked)
-    editError && React.createElement('p', { className: 'validation-error', role: 'alert' }, editError),
+    // Inline validation error (B6: shown when Approve or Send back is blocked)
+    editError && React.createElement('p', { className: 'validation-error desk-error', role: 'alert' }, editError),
 
     // The stop's ONE note box (phase 1, brief 1.1), always on screen and above the
     // actions, because it is sent with whichever action the director takes. It used
@@ -1600,7 +1440,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         rows: 20,
         'aria-label': 'Edit article JSON'
       }),
-      jsonError && React.createElement('p', { className: 'validation-error' }, jsonError),
+      jsonError && React.createElement('p', { className: 'validation-error desk-error' }, jsonError),
       React.createElement('button', {
         className: 'btn btn-primary',
         onClick: handleJsonApprove,

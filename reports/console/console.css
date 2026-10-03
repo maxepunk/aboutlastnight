@@ -2247,11 +2247,10 @@ textarea.input {
 
    TWO REVEAL MODES, and the distinction is load-bearing (review fix 1):
 
-   - DEFAULT (`--editable`): hidden until hover or `:focus-within`. This is what
-     the ARTICLE gate needs. Its 13 hosts are full-width per-block containers
-     (paragraph, quote, list, evidence card, photo, pull quote, financial row,
-     one-line byline), and an always-on 24px button at their top-right lands ON
-     the block's own first line — measured live at 19 of 54 rendered blocks.
+   - DEFAULT (`--editable`): hidden until hover or `:focus-within`. A full-width
+     per-block host gets this: an always-on 24px button at its top-right lands ON
+     the block's own first line, measured live at 19 of 54 rendered blocks of the
+     article stop when its pencils sat in that corner.
    - OPT-IN (`--editable-always`): rendered at low opacity, full opacity on
      hover/focus. Only for hosts whose top-right corner is known to be empty:
      Outline.js's section wrappers (a short ALL-CAPS `<h4>` at the top-LEFT) and
@@ -2259,9 +2258,11 @@ textarea.input {
      touch-usable and focusable without hover, because the editor layer behind
      them is the whole point of the gate.
 
-   Do NOT put `--editable-always` on an Article host; pinned by
-   __tests__/unit/console-editable-pencils.test.js. Position is absolute, so
-   neither mode costs layout. */
+   The article stop is the director's desk (task 4.3): its pencils sit in the desk's
+   rail, a column of its own beside each piece of the article (`.desk-row`, at the end
+   of this file), never in a corner over the prose, so Article.js uses neither mode.
+   Pinned by __tests__/unit/console-editable-pencils.test.js. Position is absolute
+   here, so neither mode costs layout. */
 .article-block--editable {
   position: relative;
 }
@@ -2937,4 +2938,137 @@ textarea.input {
 .photo-card--left-out .photo-card__ai-section,
 .photo-card--left-out .photo-card__user-section {
   opacity: 0.45;
+}
+
+/* ── The desk (phase 4, task 4.3) ──
+   The article stop is the director's desk (spec 2026-10-02 section 6.3): every editor is
+   visible, and each piece of the article is a row whose controls sit in a rail, a column
+   of its own beside it, so no control covers the prose. The rail's pencil sits in the
+   rail's flow, never positioned over the block. Pinned by
+   __tests__/unit/console-editable-pencils.test.js. */
+.desk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-sm);
+  align-items: start;
+}
+
+.desk-row__body {
+  min-width: 0;
+}
+
+.desk-rail {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-content: flex-start;
+  gap: 2px;
+  max-width: 116px;
+  padding-top: var(--space-xs);
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
+}
+
+.desk-row:hover > .desk-rail,
+.desk-row:focus-within > .desk-rail {
+  opacity: 1;
+}
+
+.desk-rail .article-block__edit-btn {
+  position: static;
+  display: inline-flex;
+}
+
+.desk-rail__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 2px;
+  background: rgba(212, 168, 83, 0.1);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent-amber);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.desk-rail__btn:hover,
+.desk-rail__btn:focus-visible {
+  background: rgba(212, 168, 83, 0.3);
+}
+
+.desk-rail__btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* A delete armed by its first click reads as one. */
+.desk-rail__btn--armed {
+  padding: 0 4px;
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.desk-rail__move {
+  width: 76px;
+  height: 24px;
+  padding: 0 2px;
+  background: var(--bg-input);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent-amber);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+/* An empty block, caught before an approve or a send-back. */
+.desk-row--empty > .desk-row__body {
+  outline: 1px dashed var(--accent-red);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.desk-empty-note {
+  color: var(--accent-red);
+  font-style: italic;
+}
+
+.desk-tracker-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+  padding: var(--space-xs) 0;
+}
+
+.desk-problems {
+  padding: var(--space-sm) var(--space-md);
+  border-left: 2px solid var(--accent-red);
+  background: rgba(231, 76, 60, 0.06);
+  font-size: 0.85rem;
+}
+
+.desk-problems__title {
+  color: var(--accent-red);
+  margin-bottom: var(--space-xs);
+}
+
+.desk-problems__list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+/* The gate's message lists each problem on its own line. */
+.desk-error {
+  white-space: pre-line;
+}
+
+.desk-preview__status {
+  margin-bottom: var(--space-sm);
+}
+
+.desk-preview__status--error {
+  color: var(--accent-red);
 }

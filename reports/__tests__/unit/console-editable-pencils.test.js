@@ -54,22 +54,35 @@ describe('inline edit pencil: default reveal is hover/focus', () => {
     expect(css).toContain('.outline-section--editing .article-block__edit-btn');
   });
 
-  it('has an opt-in always-visible rule, and it is scoped to the opt-in class', () => {
+  it('has an opt-in always-visible rule, and it is scoped to the opt-in class or the desk rail', () => {
     // A DESCENDANT selector: the button sits at three different depths across the
     // opt-in host shapes (direct child, inside .outline-section__header, inside a
     // plain .flex row), so a child selector silently misses two of them.
     expect(css).toContain(`.${ALWAYS} .article-block__edit-btn`);
     expect(css).not.toContain(`.${ALWAYS} > .article-block__edit-btn`);
     // The always-on declaration must never be reachable from the plain host: that
-    // is the article-overlap regression.
+    // is the article-overlap regression. Task 4.3 adds the one other place it may be:
+    // the desk's rail, a column of its own beside the article's block, where the
+    // pencil sits in the rail's flow and covers no prose.
     const alwaysRules = css
       .split('}')
       .filter((block) => /display:\s*inline-flex/.test(block) && /article-block__edit-btn/.test(block))
       .filter((block) => !block.includes(':hover') && !block.includes(':focus-within') && !block.includes('--editing'));
-    expect(alwaysRules.length).toBeGreaterThan(0);
+    expect(alwaysRules.length).toBeGreaterThan(1);
     alwaysRules.forEach((block) => {
-      expect(block).toContain(ALWAYS);
+      expect(block.includes(ALWAYS) || block.includes('.desk-rail .article-block__edit-btn')).toBe(true);
     });
+  });
+
+  it('puts the desk\'s pencil in the rail\'s flow, and the rail in a column of its own (task 4.3)', () => {
+    const railPencil = css.slice(css.indexOf('.desk-rail .article-block__edit-btn {'));
+    const railBody = railPencil.slice(0, railPencil.indexOf('}'));
+    expect(railBody).toMatch(/position:\s*static/);
+    expect(railBody).toMatch(/display:\s*inline-flex/);
+    const row = css.slice(css.indexOf('.desk-row {'));
+    const rowBody = row.slice(0, row.indexOf('}'));
+    expect(rowBody).toMatch(/display:\s*grid/);
+    expect(rowBody).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\) auto/);
   });
 
   it('reserves the button gutter on the opt-in hosts', () => {
@@ -126,17 +139,28 @@ describe('Outline.js opts in at every pencil host', () => {
   });
 });
 
-describe('Article.js never opts in', () => {
+// Phase 4, task 4.3 (spec 2026-10-02 section 6.3): the article stop is the director's desk,
+// with every editor visible. The pins that stood here held the article's 13 pencils hidden
+// until hover, because a corner button covered the prose at 19 of 54 blocks. On the desk
+// each piece of the article is a row whose controls (the pencil, and for a block move,
+// delete and insert) sit in a rail, a column of its own beside it, so they are always
+// visible and never on the prose: no host is hover-only and none carries the corner overlay.
+describe('Article.js puts every pencil in the desk\'s rail', () => {
   const src = read('components/checkpoints/Article.js');
 
-  it('carries no always-visible host', () => {
-    // 19 of 54 rendered blocks had the button on top of their own text.
+  it('carries no hover-only host and no corner overlay', () => {
+    expect(count(src, BASE)).toBe(0);
     expect(count(src, ALWAYS)).toBe(0);
   });
 
-  it('still marks every pencil host as editable (hover/focus reveal)', () => {
-    const hosts = count(src, BASE);
-    expect(hosts).toBe(13);
-    expect(count(src, 'editBtn(')).toBe(hosts);
+  it('renders its one pencil inside deskRow, the rail every editable piece goes through', () => {
+    expect(count(src, 'editBtn(')).toBe(1);
+    const row = src.slice(src.indexOf('function deskRow('));
+    expect(row.slice(0, row.indexOf('\n  }\n'))).toContain("React.createElement('div', { className: 'desk-rail' }, editBtn(onEdit)");
+  });
+
+  it('gives each piece of the article its row: blocks, section headings, the headline, the byline, the hero, sidebar cards, tracker rows', () => {
+    // One definition and seven call sites.
+    expect(count(src, 'deskRow(')).toBe(8);
   });
 });
