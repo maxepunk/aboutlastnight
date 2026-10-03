@@ -370,6 +370,12 @@ describe('the items phase 4 rewrites (task 4.1)', () => {
   ])('%s, in %s.md, carries the approved title', (id, name, heading) => {
     expect(itemText(name, id).split('\n')[0]).toBe(heading);
   });
+
+  // The director's change of 2026-10-03, on thin notes: the article is capped at about
+  // 1,500 words, and the C4 clause pinned above aims it at the map's expected length.
+  it('C4 caps the article at about 1,500 words', () => {
+    expect(itemText('craft-telling', 'C4')).toContain('The article runs to about 1,500 words at most.');
+  });
 });
 
 describe('the removed-phrase fixture', () => {

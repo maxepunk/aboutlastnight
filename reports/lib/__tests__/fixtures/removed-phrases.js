@@ -271,7 +271,34 @@ const REMOVED_PHRASES = [
   'Key callback opportunities across arcs for recontextualization',
   /compulsive readability/i,
   'bridges for transitions',
-  'What this arc brings to the convergence point'
+  'What this arc brings to the convergence point',
+
+  // Phase 4, 4.1: the old items' wording that named the old stages' jobs. The story
+  // meeting settles the story, the map lays it across the sections and chooses the
+  // director's lines, and questions are asked only at the meeting. The phrases still in
+  // code text (the interweaving call, the outline writer's and the outline judge's jobs)
+  // join when the slices that remove them merge.
+  'The outline names the thesis',
+  'Before the article is planned',
+  'The threads are ordered by how they bear',
+  'The threads are intercut through the article',
+  'Each thread is examined through three lenses',
+  'The thesis decides which sections exist',
+  'the thesis decides what earns space',
+  'used where they make sense',
+  'The outline and the article carry what the throughline uses',
+  'A line that cannot be placed so it makes sense stays out',
+  'a connection prints when it moves the throughline',
+  'raised with the director',
+  'Each player reaches the story through',
+  'The writer raises questions to the director',
+  'the writer raises it in a short list of questions',
+  'The director answers with a note',
+  "as the director's notes record it",
+  'The alternative theories the room debated are always reported',
+  'goes to the director as a question',
+  'reaches the writer with no roster pronoun',
+  'raised as a question to the director'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
