@@ -39,10 +39,12 @@
  *
  * WHAT A VERSION CARRIES (editCarried). A field edit is carried while the element it
  * belongs to, found by its `match`, holds the director's value; a section's block is
- * looked for in every section, since a rework may move it. A move is carried while its
- * block sits in the section the director put it in. A cut is carried while none of its
- * pieces is back. Text is read from the fields the page prints (printedParts; known item
- * 6), and a piece under six words is back only as a whole sentence (known item 4).
+ * looked for in every section, since a rework may move it. A move is carried while a
+ * block of its identity (its type with its filename, tokenId or text) sits in the section
+ * the director put it in, whatever its other fields (fix round 1, finding 1). A cut is
+ * carried while none of its pieces is back. Text is read from the fields the page prints
+ * (printedParts; known item 6), and a piece under six words is back only as a whole
+ * sentence (known item 4).
  *
  * Equality is trimmed canonical JSON: keys sorted, every string trimmed. Matching an
  * object value is a subset match: every key the director's value carries is present
@@ -812,9 +814,18 @@ function placesOf(root, steps, { anywhere = true } = {}) {
   return out;
 }
 
-/** The place in `obj` that carries the edit's value, or undefined. */
+/** The place in `obj` that carries a field edit's value, or undefined. */
 function placeCarrying(obj, edit) {
-  return placesOf(obj, stepsOf(edit), { anywhere: !edit.from }).find((place) => matchesAfter(place.value, edit.after));
+  return placesOf(obj, stepsOf(edit)).find((place) => matchesAfter(place.value, edit.after));
+}
+
+/**
+ * The places in `obj` that carry a move: each block of its identity in the director's
+ * section. A move's steps end on the block, matched by its identity (blockIdentity), so
+ * its other fields, which are the writer's, never decide (fix round 1, finding 1).
+ */
+function movedBlockPlaces(obj, edit) {
+  return placesOf(obj, stepsOf(edit), { anywhere: false });
 }
 
 /** Does `obj` still carry this edit (see the module header)? */
@@ -822,6 +833,7 @@ function editCarried(obj, edit) {
   if (!isObj(obj) || !isEdit(edit)) return false;
   if (isCut(edit)) return cutReturnedIn(obj, edit) === null;
   if (stepsOf(edit).length === 0) return false;
+  if (isMove(edit)) return movedBlockPlaces(obj, edit).length > 0;
   return placeCarrying(obj, edit) !== undefined;
 }
 
@@ -1324,25 +1336,78 @@ function partnerIndex(collection, beforeArr, afterArr, bi) {
   return pair && sameKind(afterArr[pair.ai], element) ? pair.ai : -1;
 }
 
-/** The id of the section of `obj` whose content holds `block`, or null. */
-function sectionHolding(obj, block) {
+/** What finds a moved block in any version: its type with its filename, tokenId or text. */
+function moveIdentity(edit) {
+  const steps = stepsOf(edit);
+  const last = steps[steps.length - 1];
+  return (isElementStep(last) && last.match) || blockIdentity(edit.after);
+}
+
+/** The index of the section of `obj` the director moved a block to, or -1. */
+function moveSectionIndex(obj, edit) {
+  const sec = stepsOf(edit)[1];
   const sections = isObj(obj) && Array.isArray(obj.sections) ? obj.sections : [];
-  const index = sections.findIndex((s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, block)));
-  return index === -1 ? null : sectionKey(sections[index], index);
+  if (!isElementStep(sec)) return -1;
+  return sections.findIndex((s, i) => (sec.match ? matchesAfter(s, sec.match) : i === sec.index));
+}
+
+/** The index of the first section of `obj` whose content holds a block of `identity`, or -1. */
+function sectionHoldingIdentity(obj, identity) {
+  const sections = isObj(obj) && Array.isArray(obj.sections) ? obj.sections : [];
+  return sections.findIndex((s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, identity)));
+}
+
+/**
+ * Does the director's section of `after` still hold the block a move placed, which the
+ * pass rewrote in place: the block at `link` in the version the pass started from has a
+ * partner among the section's blocks of its type, paired by opening words, then by order.
+ * Only blocks of its type pair, so a block of another type that left the section never
+ * takes its partner.
+ */
+function rewrittenInPlace(link, afterContent) {
+  const block = link.holder[link.index];
+  const ofType = (arr) => arr.filter((b) => sameKind(b, block));
+  const beforeBlocks = ofType(link.holder);
+  const bi = beforeBlocks.indexOf(block);
+  return pairElements('content', beforeBlocks, ofType(afterContent)).pairs.some((pair) => pair.bi === bi);
+}
+
+/**
+ * What a pass did with a block the director moved (fix round 1, finding 1). Only the
+ * block's place is the director's (finding 2), so the pass's changes to its fields
+ * never count. The block is found by its identity (its type with its filename, tokenId
+ * or text), and, when the pass rewrote that in place, among the director's section's
+ * blocks of its type (rewrittenInPlace):
+ * - `kept`: the block is in the director's section;
+ * - `moved`, with `section`: a block of its identity is in another section;
+ * - `gone`: the pass removed it.
+ *
+ * @returns {{outcome: 'kept'|'moved'|'gone', section?: string}}
+ */
+function moveOutcome(edit, before, after) {
+  if (editCarried(after, edit)) return { outcome: 'kept' };
+  const sections = isObj(after) && Array.isArray(after.sections) ? after.sections : [];
+  const elsewhere = sectionHoldingIdentity(after, moveIdentity(edit));
+  if (elsewhere !== -1) return { outcome: 'moved', section: sectionKey(sections[elsewhere], elsewhere) };
+  const target = moveSectionIndex(after, edit);
+  const place = movedBlockPlaces(before, edit)[0];
+  if (target !== -1 && place && Array.isArray(sections[target].content)
+    && rewrittenInPlace(place.chain[place.chain.length - 1], sections[target].content)) return { outcome: 'kept' };
+  return { outcome: 'gone' };
 }
 
 /**
  * What an edit's text became in a pass's output, or null when it is gone: the field's
  * new value, found by following the edit's element from where it sat in the version the
  * pass started from; for a cut, the text where it came back; for a move, the section
- * the block is in.
+ * the pass took the block to (moveOutcome).
  */
 function becameOf(edit, before, after) {
   if (!isObj(after)) return null;
   if (isCut(edit)) return cutReturnedIn(after, edit);
-  if (edit.from) {
-    const where = sectionHolding(after, edit.after);
-    return where === null ? null : `section "${where}"`;
+  if (isMove(edit)) {
+    const { outcome, section } = moveOutcome(edit, before, after);
+    return outcome === 'moved' ? `section "${section}"` : null;
   }
   const place = placeCarrying(before, edit);
   if (!place) return null;
@@ -1361,23 +1426,31 @@ function becameOf(edit, before, after) {
   return cur === undefined || cur === null ? null : editValueText(cur);
 }
 
-/** Put a moved block back in the section the director put it in. */
+/**
+ * Put a block the director moved, which a pass took to another section, back in the
+ * director's section, at the place the director gave it, as the pass left it: its fields
+ * are the writer's (fix round 1, findings 1 and 2). The block is the one of its identity
+ * outside the director's section. When the director's section already holds one (a field
+ * edit's restore put the section back whole, block included), the pass's copy is taken
+ * out, so the page prints the block once. With no such section, or no block outside it,
+ * nothing is written.
+ */
 function restoreMove(edit, out) {
   const steps = stepsOf(edit);
   const sections = isObj(out) && Array.isArray(out.sections) ? out.sections : null;
-  if (!sections || !isElementStep(steps[1]) || !isElementStep(steps[3])) return false;
-  const sec = steps[1];
-  const targetIndex = sections.findIndex((s, i) => (sec.match ? matchesAfter(s, sec.match) : i === sec.index));
-  if (targetIndex === -1) return false;
-  for (const s of sections) {
-    if (!isObj(s) || !Array.isArray(s.content)) continue;
-    const at = s.content.findIndex((b) => matchesAfter(b, edit.after));
-    if (at !== -1) { s.content.splice(at, 1); break; }
-  }
+  const targetIndex = moveSectionIndex(out, edit);
+  if (!sections || targetIndex === -1 || !isElementStep(steps[3])) return false;
+  const identity = moveIdentity(edit);
+  const holds = (s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, identity));
+  const fromIndex = sections.findIndex((s, i) => i !== targetIndex && holds(s));
+  if (fromIndex === -1) return false;
+  const from = sections[fromIndex].content;
+  const [block] = from.splice(from.findIndex((b) => matchesAfter(b, identity)), 1);
   const target = sections[targetIndex];
+  if (holds(target)) return true;
   if (!Array.isArray(target.content)) target.content = [];
   const index = Number.isInteger(steps[3].index) ? steps[3].index : target.content.length;
-  target.content.splice(Math.min(index, target.content.length), 0, clone(edit.after));
+  target.content.splice(Math.min(index, target.content.length), 0, block);
   return true;
 }
 
@@ -1385,13 +1458,14 @@ function restoreMove(edit, out) {
  * Put one of the director's edits back into `out`, the pass's output (changed in place):
  * follow the edit's element from where it sat in `before`, the version the pass started
  * from, into `out`, and write the director's value at its field. An element the pass
- * removed goes back where it sat, as it was in `before`. A cut is never put back.
+ * removed goes back where it sat, as it was in `before`. A moved block goes back into the
+ * director's section as the pass left it (restoreMove). A cut is never put back.
  *
  * @returns {boolean} whether anything was written
  */
 function restoreEdit(edit, before, out) {
   if (isCut(edit) || !isObj(out)) return false;
-  if (edit.from) return restoreMove(edit, out);
+  if (isMove(edit)) return restoreMove(edit, out);
   const place = placeCarrying(before, edit);
   if (!place) return false;
   let cur = out;
@@ -1435,6 +1509,9 @@ function restoreEdit(edit, before, out) {
  * from:
  * - a field or element the pass changed: the director's text, what it became (null:
  *   gone), and whether code put it back (`restored`);
+ * - a block the director moved that the pass took to another section (`moved`, `became`
+ *   that section) or removed (`became` null), and whether the block is back in the
+ *   director's section (`restored`); a change to its fields is the writer's and no entry;
  * - a cut whose text came back, or a rewrite's removed sentence that came back, flagged
  *   (`cut`, `removed`), with the text where it came back: code never takes it out;
  * - each with the pass (SEND_BACK_PASS or the automatic pass's number), whether an
@@ -1473,9 +1550,15 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       if (back !== null) changed.push(entry(e, { cut: true, director: editValueText(e.before), became: back }));
       return;
     }
+    if (isMove(e)) {
+      if (moveOutcome(e, before, after).outcome !== 'kept') {
+        changed.push(entry(e, { moved: true, director: editValueText(e.after), became: becameOf(e, before, after), restored: putBack.has(e.id) }));
+      }
+      return;
+    }
     if (!editCarried(after, e)) {
       changed.push(entry(e, {
-        moved: Boolean(e.from), director: editValueText(e.after), became: becameOf(e, before, after), restored: putBack.has(e.id)
+        director: editValueText(e.after), became: becameOf(e, before, after), restored: putBack.has(e.id)
       }));
     }
     const back = removedReturnedIn(stored, e);
@@ -1489,10 +1572,14 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
 
 /**
  * One pass, settled (FA, requirement 8): after an automatic pass, code puts back each
- * standing edit the pass changed, field by field, so the stored output carries every
- * one; a cut or removed sentence that came back stays, flagged in the report. A
- * send-back's rework is left as it is: the director's note may change an edit, and the
- * rework says why. The report records what each pass did and each restore.
+ * standing edit the pass changed, field by field, so the stored output carries it; a cut
+ * or removed sentence that came back stays, flagged in the report. A block the director
+ * moved goes back into the director's section as the pass left it, before the field
+ * edits that find it there; one the pass removed stays out, since only its place was the
+ * director's and its removal can be the fix of a fault in the writer's text (fix round 1,
+ * findings 1 and 2). A send-back's rework is left as it is: the director's note may
+ * change an edit, and the rework says why. The report records what each pass did and
+ * each restore.
  *
  * @param {Object|null} previous - the round's report so far
  * @param {Object} pass - as reportAfterPass takes it: {edits, before, after, pass, reasons}
@@ -1504,10 +1591,18 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
   let output = after;
   const restored = [];
   if (pass !== SEND_BACK_PASS && isObj(after)) {
-    const changed = carried.filter((e) => !isCut(e) && !editCarried(after, e));
-    if (changed.length > 0) {
+    const outcome = (e) => moveOutcome(e, before, after).outcome;
+    const changed = carried.filter((e) => !isCut(e) && (isMove(e) ? outcome(e) !== 'kept' : !editCarried(after, e)));
+    const moves = changed.filter((e) => isMove(e) && outcome(e) === 'moved');
+    const fields = changed.filter((e) => !isMove(e));
+    if (moves.length + fields.length > 0) {
       output = clone(after);
-      changed.forEach((e) => restoreEdit(e, before, output));
+      // The moves first, so a field edit on a moved block finds the block where the
+      // director put it. A move whose section the pass removed waits for the field edits,
+      // one of which may put that section back whole, block included.
+      const waiting = moves.filter((e) => !restoreEdit(e, before, output));
+      fields.forEach((e) => restoreEdit(e, before, output));
+      waiting.forEach((e) => restoreEdit(e, before, output));
       changed.forEach((e) => { if (editCarried(output, e)) restored.push(e.id); });
     }
   }

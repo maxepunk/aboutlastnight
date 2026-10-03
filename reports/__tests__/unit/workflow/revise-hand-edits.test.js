@@ -119,6 +119,28 @@ describe('reviseContentBundle', () => {
     }]);
   });
 
+  // FA fix round 1, finding 1: an automatic pass that changes a photo the director moved
+  // stores it once: kept where the director put it with the pass's caption, or moved back
+  // there as the pass left it.
+  it('an automatic pass that changes a moved photo\'s caption stores the photo once, in the director\'s section', async () => {
+    const PHOTO = { type: 'photo', filename: 'p3.jpg', caption: 'Vic, Remi and Alex' };
+    const withPhotoIn = (index, caption = PHOTO.caption) => {
+      const b = clone(BUNDLE);
+      b.sections.push({ id: 's2', type: 'narrative', heading: 'Closing', content: [{ type: 'paragraph', text: 'Q' }] });
+      b.sections[index].content.push({ ...PHOTO, caption });
+      return b;
+    };
+    const standing = standingAfterSendBack(null, withPhotoIn(0), withPhotoIn(1), 'bundle');
+    const photos = (bundle) => bundle.sections.map((s) => s.content.filter((x) => x.type === 'photo').map((x) => x.caption));
+    for (const returned of [withPhotoIn(1, 'At the bar'), withPhotoIn(0, 'At the bar')]) {
+      const result = await reviseContentBundle(
+        { _previousContentBundle: withPhotoIn(1), _articleHandEdits: standing, articleRevisionCount: 1 },
+        cfg(sdkReturning(returned))
+      );
+      expect(photos(result.contentBundle)).toEqual([[], ['At the bar']]);
+    }
+  });
+
   it('passes the standing notes, excluding the current article feedback', async () => {
     const sdk = sdkReturning(EDITED_BUNDLE);
     const notes = [...NOTES, { gate: 'article', kind: 'rejection', round: 1, text: 'Name the shell.', at: 't3' }];

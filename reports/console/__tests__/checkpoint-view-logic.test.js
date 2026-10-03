@@ -626,6 +626,23 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
     ]);
   });
 
+  // FA fix round 1, finding 1: a move is the block's place only, so code moves a block a
+  // pass took elsewhere back and leaves out one a pass removed; each line says which.
+  test('a moved block a pass removed, or took where it cannot go back, each read as what happened', () => {
+    const move = {
+      id: 'E4', scope: 'section:closing', where: 'section "closing", photo p3.jpg, moved from section "the-story"', cut: false, removed: false, moved: true,
+      director: 'filename: p3.jpg; caption: Vic, Remi and Alex', pass: 1, automatic: true, reason: null
+    };
+    const v = steeringView({
+      checked: ['E4'],
+      changed: [{ ...move, became: null, restored: false }, { ...move, became: 'section "the-story"', restored: false }]
+    }, []);
+    expect(v.changedEdits.map((c) => [c.restored, c.line])).toEqual([
+      [false, 'E4, section "closing", photo p3.jpg, moved from section "the-story": automatic pass 1 removed the block you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.'],
+      [false, 'E4, section "closing", photo p3.jpg, moved from section "the-story": automatic pass 1 moved the block you placed here to section "the-story". It could not be put back.']
+    ]);
+  });
+
   // FA, known item 7: the screen reads who made a change from the entry's own flag.
   test('a change is automatic when its entry says so', () => {
     const [line] = steeringView({ checked: ['E1'], changed: [{ ...AUTOMATIC_CHANGE, automatic: false }] }, []).changedEdits;

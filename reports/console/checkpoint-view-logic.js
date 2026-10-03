@@ -678,6 +678,13 @@
   var STILL_IN_ARTICLE = 'It is still in the article: cut it again if it should go.';
 
   /**
+   * What the line says of a block the director moved that an automatic pass removed: a
+   * move is the block's place only, and its text the writer's, so code leaves it out
+   * (lib/hand-edit-diff.js settleEdits; FA fix round 1).
+   */
+  var MOVED_BLOCK_LEFT_OUT = 'Only its place was your edit, so it was not put back: add it again if it should stay.';
+
+  /**
    * One line for an edit a pass changed (F1, FA): its id and place (the field, since FA;
    * an entry from before FA names its scope), what happened to the director's text, which
    * pass did it, and what followed. Who made a change is the entry's own `automatic` flag
@@ -686,8 +693,9 @@
    *   the line says so; an entry from before FA says the pass should have kept it.
    * - A cut, or a sentence a rewrite removed, that came back: it is still in the article,
    *   because code never takes text out.
-   * - A block the director moved that a pass moved again: where it went, and whether code
-   *   put it back.
+   * - A block the director moved that a pass took to another section: where it went, and
+   *   whether code put it back; one a pass removed: that code left it out, since only its
+   *   place was the director's edit.
    * - A change a send-back's rework made: the rework's reason, or that it gave none.
    */
   function changedEditLine(entry) {
@@ -704,7 +712,8 @@
     if (entry.moved === true) {
       var moved = became !== null ? 'moved the block you placed here to ' + became : 'removed the block you placed here';
       if (!automatic) return label + ': ' + by + ' ' + moved + '. ' + why;
-      return label + ': ' + by + ' ' + moved + '. ' + (entry.restored === true ? 'It was put back.' : 'It could not be put back.');
+      if (entry.restored === true) return label + ': ' + by + ' ' + moved + '. It was put back.';
+      return label + ': ' + by + ' ' + moved + '. ' + (became !== null ? 'It could not be put back.' : MOVED_BLOCK_LEFT_OUT);
     }
     if (automatic && entry.restored === true) {
       return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' removed your "' + director + '"') + '. Your text was put back.';

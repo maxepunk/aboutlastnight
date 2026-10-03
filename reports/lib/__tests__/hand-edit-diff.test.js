@@ -488,6 +488,115 @@ describe('a block moved across sections (FA)', () => {
     expect(output.sections[2].content[1]).toEqual(PHOTO);
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "the-story"', restored: true, automatic: true })]);
   });
+
+  // FA fix round 1, finding 1: a move is found by its block's identity (its type with its
+  // filename, tokenId or text), and its fields are the writer's, so a pass may change
+  // them. F1's whole-block match read a changed caption as the block gone, and the
+  // restore printed the photo twice while the report said it was put back.
+  const recaptioned = (sectionIndex) => {
+    const a = withPhotoIn(sectionIndex);
+    a.sections[sectionIndex].content[a.sections[sectionIndex].content.length - 1].caption = 'Vic, Remi and Alex at the bar';
+    return a;
+  };
+  const photosIn = (output) => output.sections.map((s) => s.content.filter((b) => b.type === 'photo').map((b) => b.caption));
+  const settled = (after, pass = 1) => {
+    const { edits } = D.standingAfterSendBack(null, withPhotoIn(1), withPhotoIn(2), 'bundle');
+    return D.settleEdits(null, { edits: D.carriedEdits(edits, withPhotoIn(2)), before: withPhotoIn(2), after, pass });
+  };
+
+  test('stands while a block of its identity sits in the director\'s section, whatever its other fields', () => {
+    const standing = D.standingAfterSendBack(null, withPhotoIn(1), withPhotoIn(2), 'bundle');
+    expect(D.carriedEdits(standing, recaptioned(2)).map((e) => e.id)).toEqual(['E1']);
+    expect(D.standingAfterSendBack(standing, recaptioned(2), recaptioned(2), 'bundle').edits.map((e) => e.id)).toEqual(['E1']);
+  });
+
+  test('a pass that changes only the moved photo\'s caption keeps it in place, once, with the pass\'s caption', () => {
+    const after = recaptioned(2);
+    const { output, report } = settled(after);
+    expect(output).toBe(after);
+    expect(photosIn(output)).toEqual([[], [], ['Vic, Remi and Alex at the bar']]);
+    expect(report).toEqual({ checked: ['E1'], changed: [] });
+  });
+
+  test('a pass that changes its caption and moves it back has it moved back once, as the pass left it', () => {
+    const { output, report } = settled(recaptioned(1));
+    expect(photosIn(output)).toEqual([[], [], ['Vic, Remi and Alex at the bar']]);
+    expect(output.sections[2].content[1]).toEqual({ ...PHOTO, caption: 'Vic, Remi and Alex at the bar' });
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "the-story"', restored: true, automatic: true })]);
+  });
+
+  test('a pass that removes the moved block leaves it out, and the report says so: only its place was the director\'s', () => {
+    const after = directorsVersion();
+    const { output, report } = settled(after);
+    expect(output).toBe(after);
+    expect(photosIn(output)).toEqual([[], [], []]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: null, restored: false, automatic: true })]);
+  });
+
+  test('a pass that removed the director\'s section, which a field edit puts back whole, leaves the moved block once', () => {
+    const shown = articleAtStop();
+    shown.sections[1].content.push(clone(PHOTO));
+    const sentBack = withPhotoIn(2);   // the closing rewritten, the theory cut, the photo moved to the closing
+    const standing = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+    expect(standing.edits.map((e) => [e.path, e.from])).toEqual([
+      ['sections[#the-story].content[-]', undefined],
+      ['sections[#closing].content[0].text', undefined],
+      ['sections[#closing].content[1]', 'the-story']
+    ]);
+    const after = clone(sentBack);
+    after.sections.splice(2, 1);
+    after.sections[1].content.push({ ...PHOTO, caption: 'Vic, Remi and Alex at the bar' });
+    const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1 });
+    expect(output.sections.map((s) => s.id)).toEqual(['lede', 'the-story', 'closing']);
+    expect(output.sections[2].content).toEqual([paragraph(CLOSING_EDIT), PHOTO]);
+    expect(photosIn(output)).toEqual([[], [], ['Vic, Remi and Alex']]);
+    expect(report.changed).toEqual([
+      expect.objectContaining({ id: 'E2', restored: true }),
+      expect.objectContaining({ id: 'E3', moved: true, became: 'section "the-story"', restored: true })
+    ]);
+  });
+
+  test('a paragraph the director moved and a pass rewrote in place is still in the director\'s place', () => {
+    const LINE = 'Sarah told the room she had seen Jess at the bar with the cash.';
+    const withLineIn = (sectionIndex, text = LINE) => {
+      const a = directorsVersion();
+      a.sections[sectionIndex].content.push(paragraph(text));
+      return a;
+    };
+    const { edits } = D.standingAfterSendBack(null, withLineIn(1), withLineIn(2), 'bundle');
+    const after = withLineIn(2, 'Sarah said she had seen Jess at the bar.');
+    const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(edits, withLineIn(2)), before: withLineIn(2), after, pass: 1 });
+    expect(output).toBe(after);
+    expect(report).toEqual({ checked: ['E1'], changed: [] });
+  });
+
+  test('a paragraph rewritten in place stays in the director\'s place when the same pass takes a photo out of that section', () => {
+    const LINE = 'Sarah told the room she had seen Jess at the bar with the cash.';
+    const shown = directorsVersion();
+    shown.sections[1].content.push(clone(PHOTO), paragraph(LINE));
+    const sentBack = directorsVersion();
+    sentBack.sections[2].content.push(clone(PHOTO), paragraph(LINE));   // both moved to the closing
+    const standing = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+    expect(standing.edits.map((e) => [e.id, e.from])).toEqual([['E1', 'the-story'], ['E2', 'the-story']]);
+    const after = clone(sentBack);
+    after.sections[2].content = [paragraph(CLOSING_EDIT), paragraph('Sarah said she had seen Jess at the bar.')];
+    after.sections[1].content.push(clone(PHOTO));   // the photo went back to THE STORY
+    const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1 });
+    expect(output.sections[2].content).toEqual([paragraph(CLOSING_EDIT), PHOTO, paragraph('Sarah said she had seen Jess at the bar.')]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "the-story"', restored: true })]);
+  });
+
+  test('the rework of a send-back that moves it back is reported with its reason, and left as it is', () => {
+    const after = recaptioned(1);
+    const { edits } = D.standingAfterSendBack(null, withPhotoIn(1), withPhotoIn(2), 'bundle');
+    const { output, report } = D.settleEdits(null, {
+      edits, before: withPhotoIn(2), after, pass: D.SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note put every photo in THE STORY.' }]
+    });
+    expect(output).toBe(after);
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', moved: true, became: 'section "the-story"', automatic: false, restored: false, reason: 'The note put every photo in THE STORY.'
+    })]);
+  });
 });
 
 // FA fix round 1, finding 2: a move is the block's place only. The director moved the
