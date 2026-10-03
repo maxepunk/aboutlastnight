@@ -1,20 +1,24 @@
 const { _testing } = require('../workflow/graph');
 const { incrementArcRevision, incrementOutlineRevision, incrementArticleRevision, routeAfterArcCheckpoint, routeArcValidation, routeArcEvaluation } = _testing;
+const { weaveKey } = require('../weave');
+
+/** A weave the checks and the fact check read (phase 4, brief 4.4). */
+const WEAVE = {
+  story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
+  threads: [{ id: 't1', claim: 'The room named Vic.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+  connections: [], convergence: 'C', questions: []
+};
 
 describe('incrementArcRevision', () => {
-  test('adds evaluation invalidation entry with source', async () => {
-    const state = { narrativeArcs: [{ id: 'a1' }], arcRevisionCount: 0 };
-    const result = await incrementArcRevision(state);
-    expect(result.evaluationHistory).toEqual(expect.objectContaining({
-      phase: 'arcs',
-      ready: false,
-      reason: 'revision-invalidated',
-      source: 'evaluator'
-    }));
+  // Phase 4 (brief 4.4): the fact check skips by its mark on the weave, so the increment
+  // writes no history stub.
+  test('writes no evaluation stub: the fact check skips by its mark on the weave', async () => {
+    const result = await incrementArcRevision({ weave: WEAVE, arcRevisionCount: 0 });
+    expect(result).not.toHaveProperty('evaluationHistory');
   });
 
   test('increments evaluator count when no human feedback', async () => {
-    const state = { narrativeArcs: [{ id: 'a1' }], arcRevisionCount: 0, _arcFeedback: null };
+    const state = { weave: WEAVE, arcRevisionCount: 0, _arcFeedback: null };
     const result = await incrementArcRevision(state);
     expect(result.arcRevisionCount).toBe(1);
     expect(result.humanArcRevisionCount).toBe(0);
@@ -23,31 +27,15 @@ describe('incrementArcRevision', () => {
   test('a send back opens a round and resets the automated budget at the arc stop', async () => {
     // Integrator ruling after wave 2: the arc stop's automated counter is per round like
     // the outline's and article's, so the banner's "this round" is true here too.
-    const state = { narrativeArcs: [{ id: 'a1' }], arcRevisionCount: 2, humanArcRevisionCount: 0, _arcFeedback: 'fix burial stuff' };
+    const state = { weave: WEAVE, arcRevisionCount: 2, humanArcRevisionCount: 0, _arcFeedback: 'fix burial stuff' };
     const result = await incrementArcRevision(state);
     expect(result.arcRevisionCount).toBe(0);
     expect(result.humanArcRevisionCount).toBe(1);
   });
 
-  test('falls back to _previousArcs when narrativeArcs is empty', async () => {
-    const prevArcs = [{ id: 'a1' }];
-    const state = { narrativeArcs: [], _previousArcs: prevArcs, arcRevisionCount: 0 };
-    const result = await incrementArcRevision(state);
-    expect(result._previousArcs).toEqual(prevArcs);
-  });
-
-  test('sets _previousArcs to undefined when both sources empty (double timeout)', async () => {
-    const state = { narrativeArcs: [], _previousArcs: undefined, arcRevisionCount: 0 };
-    const result = await incrementArcRevision(state);
-    expect(result._previousArcs).toBeUndefined();
-  });
-
-  test('preserves narrativeArcs when present', async () => {
-    const arcs = [{ id: 'a1' }, { id: 'a2' }];
-    const state = { narrativeArcs: arcs, arcRevisionCount: 0 };
-    const result = await incrementArcRevision(state);
-    expect(result._previousArcs).toEqual(arcs);
-    expect(result.narrativeArcs).toBeNull();
+  test('leaves the weave where it is: the rework reads it as the version it starts from', async () => {
+    const result = await incrementArcRevision({ weave: WEAVE, arcRevisionCount: 0 });
+    expect(Object.keys(result).sort()).toEqual(['arcRevisionCount', 'humanArcRevisionCount']);
   });
 });
 
@@ -268,96 +256,55 @@ describe('routeAfterArcCheckpoint', () => {
   });
 });
 
+// Phase 4 (brief 4.4; R6): the routing reads the weave checks' result, stamped for the
+// weave they checked, and the fact check's mark on the weave.
 describe('routeArcValidation', () => {
-  test('evaluates when structural checks pass', () => {
-    expect(routeArcValidation({
-      _arcValidation: { structuralPassed: true }
-    })).toBe('evaluate');
+  const failed = { weaveKey: weaveKey(WEAVE), passed: false, failures: [{ type: 'receipt-not-in-record', message: 'x' }] };
+
+  test('evaluates when the checks pass', () => {
+    expect(routeArcValidation({ weave: WEAVE, _arcValidation: { weaveKey: weaveKey(WEAVE), passed: true, failures: [] } })).toBe('evaluate');
   });
 
-  test('revises when structural issues and arcs exist to revise', () => {
-    expect(routeArcValidation({
-      _arcValidation: { structuralPassed: false, missingRoster: ['Sarah'] },
-      narrativeArcs: [{ id: 'a1' }],
-      _previousArcs: null,
-      arcRevisionCount: 0
-    })).toBe('revise');
+  test('revises when a check failed on a weave the fact check has not judged', () => {
+    expect(routeArcValidation({ weave: WEAVE, _arcValidation: failed, arcRevisionCount: 0 })).toBe('revise');
   });
 
-  test('evaluates (not revise) when 0 arcs AND no previous arcs — futile revision prevention', () => {
-    // This is the key fix: initial generation failure should not burn revision slots
-    expect(routeArcValidation({
-      _arcValidation: { structuralPassed: false, missingRoster: ['Sarah', 'Alex'] },
-      narrativeArcs: [],
-      _previousArcs: null,
-      arcRevisionCount: 0
-    })).toBe('evaluate');
+  test('evaluates (not revise) when there is no weave to rework', () => {
+    expect(routeArcValidation({ weave: null, _arcValidation: failed, arcRevisionCount: 0 })).toBe('evaluate');
   });
 
-  test('evaluates when 0 arcs, empty previous arcs', () => {
-    expect(routeArcValidation({
-      _arcValidation: { structuralPassed: false },
-      narrativeArcs: [],
-      _previousArcs: [],
-      arcRevisionCount: 0
-    })).toBe('evaluate');
-  });
-
-  test('revises when 0 current arcs but previous arcs exist (timeout recovery)', () => {
-    expect(routeArcValidation({
-      _arcValidation: { structuralPassed: false, missingRoster: ['Sarah'] },
-      narrativeArcs: [],
-      _previousArcs: [{ id: 'a1' }],
-      arcRevisionCount: 0
-    })).toBe('revise');
-  });
-
-  test('evaluates when at revision cap regardless', () => {
-    expect(routeArcValidation({
-      _arcValidation: { structuralPassed: false },
-      narrativeArcs: [{ id: 'a1' }],
-      arcRevisionCount: 2
-    })).toBe('evaluate');
+  test('evaluates when the round\'s check rework is spent', () => {
+    expect(routeArcValidation({ weave: WEAVE, _arcValidation: failed, arcRevisionCount: 1 })).toBe('evaluate');
   });
 
   test('evaluates when no validation data', () => {
-    expect(routeArcValidation({ _arcValidation: null })).toBe('evaluate');
+    expect(routeArcValidation({ weave: WEAVE, _arcValidation: null })).toBe('evaluate');
+  });
+
+  test('evaluates on a weave the fact check judged: its fix is the round\'s last pass', () => {
+    const judged = { ...WEAVE, _factCheck: { at: 't', ready: false, fixes: 1 } };
+    expect(routeArcValidation({ weave: judged, _arcValidation: { ...failed, weaveKey: weaveKey(judged) }, arcRevisionCount: 0 })).toBe('evaluate');
+  });
+
+  test('ends the run when a rework failed', () => {
+    expect(routeArcValidation({ weave: WEAVE, _arcValidation: failed, currentPhase: 'error' })).toBe('error');
   });
 });
 
-describe('routeArcEvaluation - futile revision guard', () => {
-  test('routes to checkpoint (not revise) when 0 arcs and no previous arcs', () => {
-    expect(routeArcEvaluation({
-      narrativeArcs: [],
-      _previousArcs: null,
-      evaluationHistory: [{ phase: 'arcs', ready: false }],
-      arcRevisionCount: 0
-    })).toBe('checkpoint');
+describe('routeArcEvaluation', () => {
+  test('routes to the stop when there is no weave', () => {
+    expect(routeArcEvaluation({ weave: null, evaluationHistory: [{ phase: 'arcs', ready: false }] })).toBe('checkpoint');
   });
 
-  test('routes to revise when 0 current arcs but previous arcs exist', () => {
-    expect(routeArcEvaluation({
-      narrativeArcs: [],
-      _previousArcs: [{ id: 'a1' }],
-      evaluationHistory: [{ phase: 'arcs', ready: false }],
-      arcRevisionCount: 0
-    })).toBe('revise');
+  test('routes to the fix when the fact check found a breach and no fix has run', () => {
+    expect(routeArcEvaluation({ weave: { ...WEAVE, _factCheck: { at: 't', ready: false, fixes: 0 } } })).toBe('revise');
   });
 
-  test('routes to checkpoint when 0 arcs and _previousArcs is empty array', () => {
-    expect(routeArcEvaluation({
-      narrativeArcs: [],
-      _previousArcs: [],
-      evaluationHistory: [{ phase: 'arcs', ready: false }],
-      arcRevisionCount: 0
-    })).toBe('checkpoint');
+  test('routes to the stop after the fix, with no second judge call', () => {
+    expect(routeArcEvaluation({ weave: { ...WEAVE, _factCheck: { at: 't', ready: false, fixes: 1 } } })).toBe('checkpoint');
   });
 
-  test('still routes to checkpoint when evaluation ready', () => {
-    expect(routeArcEvaluation({
-      narrativeArcs: [{ id: 'a1' }],
-      evaluationHistory: [{ phase: 'arcs', ready: true }],
-      arcRevisionCount: 0
-    })).toBe('checkpoint');
+  test('still routes to checkpoint when the fact check found no breach', () => {
+    expect(routeArcEvaluation({ weave: { ...WEAVE, _factCheck: { at: 't', ready: true, fixes: 0 } } })).toBe('checkpoint');
   });
 });

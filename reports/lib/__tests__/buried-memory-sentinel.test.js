@@ -14,6 +14,10 @@
  * director-notes link stored the old way (with tokenId and tokenOwner). It then
  * builds every prompt through its own node, with a recording stand-in for the model,
  * and asserts none of them carries the id, the owner or the text.
+ *
+ * Phase 4 (brief 4.4): the arc stage writes the weave, so no prompt of its writer, its
+ * rework or its fact check may carry the memory, and none reaches the weave. The arc
+ * stage is the journalist's alone (R1).
  */
 
 const fs = require('fs');
@@ -126,32 +130,44 @@ describe('the fixture plants the buried memory where it can enter', () => {
   });
 });
 
-describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge prompt carries the buried memory', (theme) => {
-  it('the arc writer and the interweaving call', async () => {
-    const sdk = recordingSdk((options) => (options.label && options.label.startsWith('Interweaving')
-      ? { arcInterweaving: [], interweavingPlan: { suggestedOrder: ['arc-sale'], convergencePoint: 'The vote', keyCallbacks: [] } }
-      : { narrativeArcs: sentinelState(theme).narrativeArcs, synthesisNotes: 's' }));
-    await analyzeArcsPlayerFocusGuided({ ...sentinelState(theme), narrativeArcs: null }, cfg(sdk, theme));
+describe('the arc stage: no prompt carries the buried memory, so none reaches the weave', () => {
+  it('the arc writer', async () => {
+    const sdk = recordingSdk(() => sentinelState().weave);
+    await analyzeArcsPlayerFocusGuided({ ...sentinelState(), weave: null }, cfg(sdk));
     const prompts = promptsOf(sdk);
-    expect(prompts).toHaveLength(2);
+    expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
-    // Phase 3 (3.5): the interweaving call reads the morning timeline, with the sale
-    // and the real exposure on it, and the buried memory's evidence-log entry left out.
-    expect(prompts[1]).toContain('<morning-timeline>');
-    expect(prompts[1]).toContain('| sale | account: Gorlan | amount: $125,000');
-    expect(prompts[1]).toContain('| exposure | document: ale003 | anonymous');
-    prompts.forEach((p) => expect(leaksIn(p)).toEqual([]));
+    // Phase 3 (3.5): the arc writer reads the morning timeline, with the sale and the
+    // real exposure on it, and the buried memory's evidence-log entry left out.
+    expect(prompts[0]).toContain('<morning-timeline>');
+    expect(prompts[0]).toContain('| sale | account: Gorlan | amount: $125,000');
+    expect(prompts[0]).toContain('| exposure | document: ale003 | anonymous');
+    expect(leaksIn(prompts[0])).toEqual([]);
   });
 
   it('the arc reworker', async () => {
-    const state = sentinelState(theme);
-    const sdk = recordingSdk(() => ({ narrativeArcs: state.narrativeArcs, synthesisNotes: 's', interweavingPlan: { suggestedOrder: ['arc-sale'] } }));
-    await reviseArcs({ ...state, narrativeArcs: null, _previousArcs: state.narrativeArcs, _arcFeedback: 'Tighten it.', humanArcRevisionCount: 1 }, cfg(sdk, theme));
+    const state = sentinelState();
+    const sdk = recordingSdk(() => state.weave);
+    await reviseArcs({ ...state, _arcFeedback: 'Tighten it.', humanArcRevisionCount: 1 }, cfg(sdk));
     const [prompt] = promptsOf(sdk);
     expect(prompt).toContain('<TRANSACTION_LINKS>');
+    expect(prompt).toContain('PREVIOUS WEAVE OUTPUT');
     expect(leaksIn(prompt)).toEqual([]);
   });
 
+  it('the fact check', async () => {
+    const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 1, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
+    const sdk = recordingSdk(verdict);
+    await evaluateArcs({ ...sentinelState(), selectedArcs: [], evaluationHistory: [] }, cfg(sdk));
+    const prompts = promptsOf(sdk);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
+    expect(prompts[0]).toContain('<morning-timeline>');
+    expect(leaksIn(prompts[0])).toEqual([]);
+  });
+});
+
+describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge prompt carries the buried memory', (theme) => {
   it('the outline writer and its reworker', async () => {
     const state = sentinelState(theme);
     const writer = recordingSdk(() => OUTLINE);
@@ -181,27 +197,23 @@ describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge pro
     }
   });
 
-  it('the three judges', async () => {
+  it('the outline and article judges', async () => {
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
     const state = { ...sentinelState(theme), heroImage: 'hero.jpg', evaluationHistory: [] };
-    const arcs = recordingSdk(verdict);
-    await evaluateArcs({ ...state, selectedArcs: [] }, cfg(arcs, theme));
     const outline = recordingSdk(verdict);
     await evaluateOutline({ ...state, outlineApproved: false }, cfg(outline, theme));
     // At the cap the article judge runs whatever the fact check found.
     const article = recordingSdk(verdict);
     await evaluateArticle({ ...state, contentBundle: PREVIOUS_BUNDLE, articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE }, cfg(article, theme));
-    for (const sdk of [arcs, outline, article]) {
+    for (const sdk of [outline, article]) {
       const prompts = promptsOf(sdk);
       expect(prompts).toHaveLength(1);
       expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
       expect(leaksIn(prompts[0])).toEqual([]);
     }
-    // The outline and article judges read the whole record view, timeline included;
-    // since 3.4 so does the journalist arc judge, and the detective's keeps its own list.
+    // The outline and article judges read the whole record view, timeline included.
     expect(promptsOf(outline)[0]).toContain('<morning-timeline>');
     expect(promptsOf(article)[0]).toContain('<morning-timeline>');
-    expect(promptsOf(arcs)[0].includes('<morning-timeline>')).toBe(theme === 'journalist');
   });
 });
 

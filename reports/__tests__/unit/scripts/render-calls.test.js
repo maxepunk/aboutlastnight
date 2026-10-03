@@ -1,24 +1,23 @@
 /**
- * render-prompts.js renders the interweaving call and the three judges through
- * scripts/lib/render-calls.js (brief 3.0, fix round 1). The nodes build those
- * prompts with argument lists they keep inline (analyzeArcsPlayerFocusGuided calling
- * enrichWithInterweaving; createEvaluator's criteria and fact check), so the module
- * repeats them. This test keeps the copy and the node together: it runs each node
- * with a recording stand-in for the model and requires the node to send exactly the
- * module's render, system prompt and user prompt, for both themes, on the fixture
- * state the writer pins use. A node that starts passing its builder something the
- * module does not (3.5 gives the interweaving call the session config) fails here
+ * render-prompts.js renders the three judges through scripts/lib/render-calls.js
+ * (brief 3.0, fix round 1). The nodes build those prompts with argument lists they keep
+ * inline (createEvaluator's criteria and fact check), so the module repeats them. This
+ * test keeps the copy and the node together: it runs each node with a recording
+ * stand-in for the model and requires the node to send exactly the module's render,
+ * system prompt and user prompt, for both themes, on the fixture state the writer pins
+ * use. A node that starts passing its builder something the module does not fails here
  * until render-calls.js passes it too.
+ *
+ * Phase 4 (brief 4.4): the interweaving call went, and the arcs judge is the story
+ * meeting's fact check on the fixture's weave.
  */
 const path = require('path');
 const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
-const { analyzeArcsPlayerFocusGuided } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
 const { evaluateArcs, evaluateOutline, evaluateArticle } = require('../../../lib/workflow/nodes/evaluator-nodes');
 const { REVISION_CAPS } = require('../../../lib/workflow/state');
 const {
   JUDGE_PHASES,
   loadCallModules,
-  renderInterweaving,
   renderJudge
 } = require('../../../scripts/lib/render-calls');
 
@@ -57,20 +56,6 @@ beforeAll(() => {
 afterAll(() => jest.restoreAllMocks());
 
 describe.each(['journalist', 'detective'])('%s: each node sends exactly what the script renders', (theme) => {
-  test('the interweaving call', async () => {
-    const state = reworkFixtureState(theme);
-    // Call 1 answers with the stored arcs, which the render stands in for call 1's.
-    const sdk = recordingSdk((options) => (options.label && options.label.startsWith('Interweaving')
-      ? { arcInterweaving: [], interweavingPlan: { suggestedOrder: [], convergencePoint: '', keyCallbacks: [] } }
-      : { narrativeArcs: state.narrativeArcs, synthesisNotes: 's' }));
-    await analyzeArcsPlayerFocusGuided({ ...clone(state), narrativeArcs: null }, cfg(sdk, theme));
-    expect(sdk).toHaveBeenCalledTimes(2);
-    const sent = sdk.mock.calls[1][0];
-    expect(sent.label).toMatch(/^Interweaving/);
-
-    expectSent(sent, await renderInterweaving(calls, state));
-  });
-
   test.each(JUDGE_PHASES)('the %s judge', async (phase) => {
     const [node, sendsItsCall] = JUDGES[phase];
     const state = { ...reworkFixtureState(theme), contentBundle: clone(PREVIOUS_BUNDLE), evaluationHistory: [], ...sendsItsCall };

@@ -34,6 +34,33 @@ const OUTLINE = {
   closing: { arcResolutions: [], systemicAngle: 'Markets for memory', accusationHandling: 'Say what the room said' }
 };
 
+/**
+ * The arc writer's weave (phase 4, brief 4.4), for this fixture's record: each receipt
+ * names one of its documents or the ledger, "from your notes" is the notes' own words,
+ * and every check passes. Invented text.
+ */
+const WEAVE = {
+  story: 'The room called it an accidental overdose, and the record points at a sale Marcus made the night he died.',
+  question: 'Who gained from the sale the room left out of its statement?',
+  headline: 'The Room Voted Overdose. The Ledger Kept Talking.',
+  fromYourNotes: 'Riley watched the ledger all morning',
+  threads: [
+    { id: 't1', claim: 'The room settled on an accidental overdose after a deadlock between Alex and Morgan.', role: 'main-thread', receipt: 'ledger', verdict: true },
+    { id: 't2', claim: 'Marcus bragged about the BizAI sale the night he died.', role: 'grounds-it', receipt: 'ale003' },
+    { id: 't3', claim: 'Morgan paid Riley at the bar, out of sight.', role: 'complicates-it', receipt: 'mor001' },
+    { id: 't4', claim: "A paternity result names Sarah as Marcus's heir.", role: 'carries-it-forward', receipt: 'p-dna' },
+    { id: 't5', claim: 'An unsigned letter threatened Marcus over the patents.', role: 'left-out', receipt: 'p-rescued', reason: 'No one in the room took it up.' }
+  ],
+  connections: [
+    { id: 'c1', kind: 'person', joins: ['t1', 't3'], detail: 'Morgan: one side of the deadlock, and the payer at the bar.' },
+    { id: 'c2', kind: 'moment', joins: ['t2', 't4'], detail: 'The night of the sale is the night the result came back.' }
+  ],
+  convergence: 'The verdict closes the night; the sale and the heir keep it open.',
+  questions: [
+    { id: 'q1', kind: 'player', about: 'Sarah', question: 'The record holds nothing Sarah did this morning: what did Sarah do?', changes: 'Where Sarah appears in the article.' }
+  ]
+};
+
 /** A previous article whose cards quote documents from the record. */
 const PREVIOUS_BUNDLE = {
   headline: { main: 'The Sale', kicker: 'NovaNews', deck: 'A vote for overdose' },
@@ -149,6 +176,9 @@ function reworkFixtureState(theme = 'journalist') {
     },
     inputReviewCorrections: ['The quote at the bar was Morgan to Alex, not Alex to Morgan.'],
     evidenceBundle,
+    // Phase 4 (brief 4.4): the weave beside the old arcs, which stay until their last
+    // readers go (4.6, delete-last).
+    weave: JSON.parse(JSON.stringify(WEAVE)),
     narrativeArcs,
     selectedArcs: ['arc-sale', 'arc-envelope'],
     _arcAnalysisCache: {
@@ -190,4 +220,4 @@ function reworkFixtureState(theme = 'journalist') {
   };
 }
 
-module.exports = { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE };
+module.exports = { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE, WEAVE };

@@ -93,17 +93,20 @@ async function renderAll(req) {
     out[`article-${theme}`] = `${articleSdk.calls[0].systemPrompt}\n=====\n${articleSdk.calls[0].prompt}`;
 
     // The arc writer, with arcRevisionCount > 0 and standing notes, so its tail is
-    // pinned too. Since phase 3 (3.3) only the detective arc writer renders a
-    // revision hook (buildArcRevisionContext); the journalist's tail is the notes alone.
-    const arcSdk = recordingSdk({ narrativeArcs: [], synthesisNotes: '' });
-    await arcNodes.generateCoreArcs(
-      {
-        ...base, ...tail, arcRevisionCount: 1,
-        validationResults: { phase: 'arcs', issues: ['PIN ARC ISSUE'], feedback: 'PIN ARC FEEDBACK', criteriaScores: { rosterCoverage: { score: 0.5, notes: 'Riley missing' } } }
-      },
-      { configurable: { sdkClient: arcSdk } }
-    );
-    out[`arcs-${theme}`] = `${arcSdk.calls[0].systemPrompt}\n=====\n${arcSdk.calls[0].prompt}`;
+    // pinned too. Since phase 3 (3.3) the journalist's tail is the notes alone. Phase 4
+    // (brief 4.4): the arc writer writes the weave, and the arc stage is the
+    // journalist's alone (R1), so the detective renders no arc writer.
+    if (theme === 'journalist') {
+      const arcSdk = recordingSdk(base.weave);
+      await arcNodes.generateWeave(
+        {
+          ...base, ...tail, weave: null, arcRevisionCount: 1,
+          validationResults: { phase: 'arcs', issues: ['PIN ARC ISSUE'], feedback: 'PIN ARC FEEDBACK', criteriaScores: { rosterCoverage: { score: 0.5, notes: 'Riley missing' } } }
+        },
+        { configurable: { sdkClient: arcSdk } }
+      );
+      out[`arcs-${theme}`] = `${arcSdk.calls[0].systemPrompt}\n=====\n${arcSdk.calls[0].prompt}`;
+    }
   }
   return out;
 }

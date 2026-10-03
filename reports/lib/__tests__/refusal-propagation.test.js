@@ -3,9 +3,9 @@
  *
  * The wrapper throws SdkRefusalError (lib/llm/client.js, cases in
  * lib/llm/__tests__/client-contract.test.js). Four nodes re-wrap SDK errors into plain
- * Errors, and four paths swallow them into state. After each, the failure the director
- * sees must still say "declined" with the category, and the retry classifier must still
- * call it permanent.
+ * Errors, and three paths swallow them into state (the interweaving call, a fourth,
+ * went in phase 4, brief 4.4). After each, the failure the director sees must still say
+ * "declined" with the category, and the retry classifier must still call it permanent.
  *
  * Kept out of client-contract.test.js on purpose: these load the workflow nodes, and
  * photo-nodes needs the native `sharp` binary.
@@ -35,7 +35,7 @@ function expectNamedPermanent(err, category = 'bio') {
 }
 
 const arcState = () => ({
-  narrativeArcs: null,
+  weave: null,
   evidenceBundle: {
     exposed: { tokens: [{ id: 't1', summary: 'test', fullDescription: 'test desc' }], paperEvidence: [] },
     buried: { transactions: [], relationships: [] }
@@ -143,7 +143,11 @@ describe('the paths that swallow errors into state keep "declined" and the categ
     const { evaluateArcs } = require('../workflow/nodes/evaluator-nodes');
     const sdk = jest.fn().mockRejectedValue(declined('reasoning_extraction'));
     const state = {
-      narrativeArcs: [{ id: 'a', title: 'Arc', keyEvidence: [], characterPlacements: {}, analysisNotes: {} }],
+      weave: {
+        story: 'The room named Alex.', question: 'Why Alex?', headline: 'H',
+        threads: [{ id: 't1', claim: 'The room named Alex.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+        connections: [], convergence: 'C', questions: []
+      },
       evaluationHistory: [],
       evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } },
       arcRevisionCount: 0,
@@ -166,11 +170,15 @@ describe('the paths that swallow errors into state keep "declined" and the categ
     const err = new SdkRefusalError({ category: 'cyber', explanation: 'timeout limit', model: 'claude-opus-5-5', label: 'Arc revision 1' });
     const sdk = jest.fn().mockRejectedValueOnce(err);
     const state = {
-      _previousArcs: [{ id: 'arc-1', title: 'Test Arc', arcSource: 'accusation' }],
+      weave: {
+        story: 'The room named Test.', question: 'Why?', headline: 'H',
+        threads: [{ id: 't1', claim: 'The room named Test.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+        connections: [], convergence: 'C', questions: []
+      },
       arcRevisionCount: 1,
       humanArcRevisionCount: 1,
       _arcFeedback: 'fix it',
-      _arcAnalysisCache: null,
+      _arcReworkTimeout: null,
       validationResults: {},
       playerFocus: { accusation: { accused: ['Test'], charge: 'test' } },
       sessionConfig: { roster: ['Alex'] },
@@ -180,35 +188,12 @@ describe('the paths that swallow errors into state keep "declined" and the categ
 
     const result = await reviseArcs(state, { configurable: { sdkClient: sdk } });
 
-    expect(result._arcAnalysisCache._revisionTimedOut).toBeUndefined();
-    expect(result._arcAnalysisCache._error).toMatch(/declined the request/);
+    // Phase 4 (brief 4.4): the timeout bookkeeping has its own channel, and the rework
+    // leaves the weave where it was.
+    expect(result._arcReworkTimeout).toBeNull();
+    expect(result).not.toHaveProperty('weave');
+    expect(result.errors[0].message).toMatch(/declined the request/);
     expect(result.errors[0].message).toMatch(/category: cyber/);
-  });
-
-  test('interweaving falls back to defaults and the arc cache says why', async () => {
-    const { analyzeArcsPlayerFocusGuided } = require('../workflow/nodes/arc-specialist-nodes');
-    const sdk = jest.fn()
-      .mockResolvedValueOnce({ narrativeArcs: [{ id: 'arc-1', title: 'Arc', arcSource: 'accusation', characterPlacements: { Alex: 'x' }, keyEvidence: [] }], synthesisNotes: '' })
-      .mockRejectedValueOnce(declined('bio'));
-
-    const result = await analyzeArcsPlayerFocusGuided(arcState(), { configurable: { sdkClient: sdk } });
-
-    expect(sdk).toHaveBeenCalledTimes(2);
-    expect(result._arcAnalysisCache.interweavingFailed).toBe(true);
-    expect(result._arcAnalysisCache.interweavingError).toMatch(/declined the request/);
-    expect(result._arcAnalysisCache.interweavingError).toMatch(/category: bio/);
-  });
-
-  test('interweaving that succeeds records no error', async () => {
-    const { analyzeArcsPlayerFocusGuided } = require('../workflow/nodes/arc-specialist-nodes');
-    const sdk = jest.fn()
-      .mockResolvedValueOnce({ narrativeArcs: [{ id: 'arc-1', title: 'Arc', arcSource: 'accusation', characterPlacements: { Alex: 'x' }, keyEvidence: [] }], synthesisNotes: '' })
-      .mockResolvedValueOnce({ arcInterweaving: [], interweavingPlan: { suggestedOrder: ['arc-1'] } });
-
-    const result = await analyzeArcsPlayerFocusGuided(arcState(), { configurable: { sdkClient: sdk } });
-
-    expect(result._arcAnalysisCache.interweavingFailed).toBe(false);
-    expect(result._arcAnalysisCache.interweavingError).toBeNull();
   });
 
   test('the director-notes enricher puts the refusal in its fallback reason (the input-review banner)', async () => {

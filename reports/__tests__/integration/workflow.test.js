@@ -3,7 +3,7 @@
  *
  * Tests the complete report generation graph flow including:
  * - Approval checkpoints pause execution
- * - Arc specialists run and synthesize
+ * - The arc writer writes the weave (phase 4, brief 4.4)
  * - Evaluator loops with revision caps
  * - Full pipeline completion with mock approvals
  * - Error handling and state transitions
@@ -42,6 +42,8 @@ const FIXTURES_DATA_DIR = path.join(__dirname, '..', 'fixtures', 'sessions');
 // Load fixtures
 const mockEvidenceBundle = require('../fixtures/mock-responses/evidence-bundle.json');
 const mockArcAnalysis = require('../fixtures/mock-responses/arc-analysis.json');
+// Phase 4 (brief 4.4): the full-pipeline states plant the weave, so the arc stage skips.
+const mockWeave = require('../fixtures/mock-responses/weave.json');
 const mockOutline = require('../fixtures/mock-responses/outline.json');
 const mockContentBundle = require('../fixtures/content-bundles/valid-journalist.json');
 const mockValidationPassed = require('../fixtures/mock-responses/validation-results.json');
@@ -60,33 +62,26 @@ describe('workflow integration', () => {
     // NOTE: routeEvidenceApproval tests removed in interrupt() migration
     // Checkpoints now use native LangGraph interrupt() in nodes themselves
 
+    // Phase 4 (brief 4.4; R6): the fact check marks the weave it judged, and its one fix
+    // per round is counted on the mark.
     describe('routeArcEvaluation', () => {
+      const judged = (mark) => ({ ...mockWeave, _factCheck: { at: 't', ...mark } });
+
       it('returns "checkpoint" when evaluation ready', () => {
-        expect(routeArcEvaluation({
-          evaluationHistory: [{ phase: 'arcs', ready: true }],
-          arcRevisionCount: 0
-        })).toBe('checkpoint');
+        expect(routeArcEvaluation({ weave: judged({ ready: true, fixes: 0 }) })).toBe('checkpoint');
       });
 
       it('returns "checkpoint" when at revision cap', () => {
-        expect(routeArcEvaluation({
-          evaluationHistory: [{ phase: 'arcs', ready: false }],
-          arcRevisionCount: REVISION_CAPS.ARCS
-        })).toBe('checkpoint');
+        expect(routeArcEvaluation({ weave: judged({ ready: false, fixes: 1 }) })).toBe('checkpoint');
       });
 
-      it('returns "revise" when not ready, under cap, and arcs exist', () => {
-        expect(routeArcEvaluation({
-          narrativeArcs: [{ id: 'a1' }],
-          evaluationHistory: [{ phase: 'arcs', ready: false }],
-          arcRevisionCount: 0
-        })).toBe('revise');
+      it('returns "revise" when not ready, under cap, and a weave exists', () => {
+        expect(routeArcEvaluation({ weave: judged({ ready: false, fixes: 0 }) })).toBe('revise');
       });
 
-      it('returns "checkpoint" when 0 arcs and no previous arcs (futile revision guard)', () => {
+      it('returns "checkpoint" when there is no weave (futile revision guard)', () => {
         expect(routeArcEvaluation({
-          narrativeArcs: [],
-          _previousArcs: null,
+          weave: null,
           evaluationHistory: [{ phase: 'arcs', ready: false }],
           arcRevisionCount: 0
         })).toBe('checkpoint');
@@ -281,8 +276,8 @@ describe('workflow integration', () => {
 
       try {
         const result = await graph.invoke(stateAfterApproval, config);
-        // Should have narrative arcs generated before arc selection interrupt
-        expect(result.narrativeArcs).toBeDefined();
+        // Should have the weave written before the arc selection interrupt
+        expect(result.weave.threads.length).toBeGreaterThan(0);
       } catch (error) {
         // GraphInterrupt at arc-selection checkpoint is expected
         expect(error.name).toBe('GraphInterrupt');
@@ -338,7 +333,7 @@ describe('workflow integration', () => {
       const config = createAutoApproveConfig('test-session');
 
       // Set up state with all approvals already given (sessionId from config)
-      // Commit 8.6: Include specialist analyses and evaluation history
+      // Commit 8.6: Include evaluation history; phase 4 (brief 4.4): and the weave
       // NOTE: interrupt() migration - no awaitingApproval/approvalType needed
       const preApprovedState = {
         sessionConfig: {
@@ -349,11 +344,7 @@ describe('workflow integration', () => {
         preprocessedEvidence: mockPreprocessedEvidence,  // Skip preprocessing
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
-        specialistAnalyses: {
-          financial: { findings: {} },
-          behavioral: { findings: {} },
-          victimization: { findings: {} }
-        },
+        weave: mockWeave,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['The Money Trail'],
         outline: mockOutline,
@@ -398,11 +389,7 @@ describe('workflow integration', () => {
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         // Arc phase data
-        specialistAnalyses: {
-          financial: { findings: {} },
-          behavioral: { findings: {} },
-          victimization: { findings: {} }
-        },
+        weave: mockWeave,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['The Money Trail'],
         // Generation phase data
@@ -456,14 +443,14 @@ describe('workflow integration', () => {
       };
     }
 
-    it('respects arc revision cap (max 2)', async () => {
-      // Test that arc revision count is respected
+    // Phase 4 (brief 4.4; R6): one fact-check fix per round, counted on the weave's mark.
+    it('respects the fact check\'s fix budget (one fix per round)', async () => {
       const state = {
-        evaluationHistory: [{ ready: false }],
+        weave: { ...mockWeave, _factCheck: { at: 't', ready: false, fixes: 1 } },
         arcRevisionCount: REVISION_CAPS.ARCS
       };
 
-      // At cap, should route to checkpoint
+      // After the fix, should route to checkpoint
       expect(routeArcEvaluation(state)).toBe('checkpoint');
     });
 
@@ -539,11 +526,7 @@ describe('workflow integration', () => {
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         // Arc phase data
-        specialistAnalyses: {
-          financial: { findings: {} },
-          behavioral: { findings: {} },
-          victimization: { findings: {} }
-        },
+        weave: mockWeave,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['The Money Trail'],
         // Generation phase data
@@ -610,11 +593,7 @@ describe('workflow integration', () => {
         preprocessedEvidence: mockPreprocessedEvidence,
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
-        specialistAnalyses: {
-          financial: { findings: {} },
-          behavioral: { findings: {} },
-          victimization: { findings: {} }
-        },
+        weave: mockWeave,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['The Money Trail'],
         outline: mockOutline,
@@ -679,11 +658,7 @@ describe('workflow integration', () => {
         preprocessedEvidence: mockPreprocessedEvidence,
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
-        specialistAnalyses: {
-          financial: { findings: {} },
-          behavioral: { findings: {} },
-          victimization: { findings: {} }
-        },
+        weave: mockWeave,
         narrativeArcs: mockArcAnalysis.narrativeArcs,
         selectedArcs: ['The Money Trail'],
         outline: mockOutline,

@@ -41,9 +41,24 @@ const FAILING_EVALUATION = {
 const Q_ZIA = { kind: 'player', about: 'Zia', question: 'The record holds nothing Zia did this morning: what did Zia do?' };
 const Q_LEDGER = { kind: 'ledger', about: 'The 10:02 AM sale of $250,000 into Ember', question: 'Is this sale a duplicate entry?' };
 
+// Phase 4 (brief 4.4): the arc writer's questions are the weave's own, each with an id
+// and what its answer changes.
+const W_ZIA = { id: 'q1', kind: 'player', about: 'Zia', question: Q_ZIA.question, changes: 'Whether Zia prints in the story.' };
+const W_FIGURE = { id: 'q2', kind: 'figure', about: Q_LEDGER.about, question: Q_LEDGER.question, changes: "The money section's total." };
+const WEAVE = {
+  story: 'The room accused Vic, and the ledger tells another story.',
+  question: 'Why Vic?',
+  headline: 'The Room Named Vic',
+  threads: [{ id: 't1', claim: 'The room accused Vic of the murder.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+  connections: [],
+  convergence: 'The vote and the ledger meet at the end.',
+  questions: [W_ZIA, W_FIGURE]
+};
+
 /**
  * A scripted SDK: each rework by its label returns the next of its scripted outputs
- * (then repeats the last); the evaluations by their system prompt, in order.
+ * (then repeats the last); the evaluations by their system prompt, in order (the story
+ * meeting's fact check is one, phase 4).
  */
 function scriptedSdk({ reworks, evaluations }) {
   const calls = [];
@@ -57,7 +72,7 @@ function scriptedSdk({ reworks, evaluations }) {
       reworkIndex += 1;
       return clone(answer);
     }
-    if (/Evaluator/.test(options.systemPrompt || '')) {
+    if (/Evaluator|WEAVE fact check/.test(options.systemPrompt || '')) {
       const answer = evaluations[Math.min(evaluationIndex, evaluations.length - 1)];
       evaluationIndex += 1;
       return clone(answer);
@@ -122,14 +137,13 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
     return graph.getState(thread);
   }
 
-  it('the arc stop: a questioned player passes the check, and the questions survive a send back', async () => {
-    const arcs = [{
-      id: 'arc-verdict', title: 'The verdict', summary: 'The room accused Vic.', arcSource: 'accusation',
-      keyEvidence: [], characterPlacements: { Vic: 'accused' }, evidenceStrength: 'moderate',
-      playerEmphasis: 'high', storyRelevance: 'critical'
-    }];
-    // The rework returns its arcs and no questions field: the previous list is kept.
-    const sdk = scriptedSdk({ reworks: [{ narrativeArcs: arcs, synthesisNotes: 's' }], evaluations: [PASSING_EVALUATION] });
+  // Phase 4 (brief 4.4): the weave carries the questions, and a player question no longer
+  // covers a player at the arc stage, whose check counts no roster. The stop's payload is
+  // the story meeting's (4.5).
+  it('the arc stop: the weave\'s questions survive a send back whose rework returns no field', async () => {
+    const { questions, ...withoutQuestions } = WEAVE;
+    // The rework returns its weave and no questions field: the previous list is kept.
+    const sdk = scriptedSdk({ reworks: [withoutQuestions], evaluations: [PASSING_EVALUATION] });
 
     const { graph, thread, snapshot } = await runToStop({
       sdk,
@@ -138,25 +152,19 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
         sessionConfig: { roster: ['Vic', 'Zia'], accusation: { verdictKind: 'culprit', accused: ['Vic'], charge: 'Murder' } },
         evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } },
         canonicalCharacters: { Vic: 'Vic Kingsley', Zia: 'Zia Bashir' },
-        narrativeArcs: arcs,
-        _arcAnalysisCache: { synthesisNotes: 's', interweavingPlan: {}, writerQuestions: [Q_ZIA, Q_LEDGER] }
+        weave: clone(WEAVE)
       }
     });
 
-    // Zia is placed nowhere, and the question about Zia covers Zia: no rework, one evaluation.
+    // The checks pass with no rework, and the fact check runs once.
     expect(snapshot.next).toEqual(['checkpointArcSelection']);
     expect(sdk.calls).toEqual(['evaluation']);
-    expect(snapshot.values._arcValidation.rosterCoveredByQuestion).toEqual(['Zia']);
-    let data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, snapshot.values);
-    expect(data.writerQuestions).toEqual([Q_ZIA, Q_LEDGER]);
-    // Task 3.11: the view names its stop, for the hint it shows there.
-    expect(writerQuestionsView(data.writerQuestions, 'arc-selection').items.map((i) => i.about)).toEqual(['Zia', Q_LEDGER.about]);
+    expect(snapshot.values.weave.questions).toEqual([W_ZIA, W_FIGURE]);
 
     const next = await sendBack(graph, thread, snapshot.values, { selectedArcs: false, arcFeedback: 'Lead with the ledger.' });
     expect(next.next).toEqual(['checkpointArcSelection']);
     expect(sdk.calls).toEqual(['evaluation', 'Arc revision 0', 'evaluation']);
-    data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, next.values);
-    expect(data.writerQuestions).toEqual([Q_ZIA, Q_LEDGER]);
+    expect(next.values.weave.questions).toEqual([W_ZIA, W_FIGURE]);
   });
 
   it('the outline stop: the questions survive an automatic pass and a send back, and clear when answered', async () => {

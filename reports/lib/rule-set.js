@@ -10,8 +10,8 @@
  * - eight `craft-*.md` files, the craft items C1 to C19 grouped by the writer's job
  *   (spec section 5; task 3.8): story (C1, C3, C16), form (C2, C5, C6, C17, C18,
  *   C19, C14), material (C8, C7, C10, C11), voice (C12), judgement (C13), telling
- *   (C4), cards (C9) and questions (C15). Each call reads the files spec section 8
- *   gives it (RULE_SET_CALLS);
+ *   (C4), cards (C9) and questions (C15). Each call reads the files the phase 4 spec's
+ *   section 11 gives it (RULE_SET_CALLS; docs/superpowers/specs/2026-10-02-story-meeting-and-map.md);
  * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block,
  *   which loadModeBlock hands back in its tag as loadRuleSet does each file.
  *
@@ -35,16 +35,19 @@ const DEFAULT_RULES_ROOT = path.resolve(
 const CORE_FILES = ['world', 'truth-rules'];
 
 /**
- * Each call's craft files (spec section 8), every list in one order: story, form,
- * material, voice, judgement, telling, cards, questions. The arc writer finds the
- * threads, examines them through the lenses and finds where they can meet; the
- * interweaving call plans how they intercut and converge, and has no output for
- * questions, so it reads no C15; the outline writer plans the telling and reads all
- * but the voice; the article writer reads all eight. A reworker passes its writer's
- * call; a judge reads its writer's list.
+ * Each call's craft files, every list in one order: story, form, material, voice,
+ * judgement, telling, cards, questions. The arc writer writes the weave and reads the
+ * story, form, material, judgement and questions files; the outline writer plans the
+ * telling and reads all but the voice; the article writer reads all eight. A reworker
+ * passes its writer's call.
+ *
+ * Phase 4 (brief 4.4): the arc stage follows the phase 4 spec's section 11 (who reads
+ * what; it was the rule-set spec's section 8). The interweaving call is gone, and the
+ * story meeting's fact check reads the world, the truth rules and the mode block alone:
+ * it writes no notes on the writing, so it reads no craft file. The outline and article
+ * judges keep their writers' lists until their own slices move them.
  */
 const ARC_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'];
-const INTERWEAVING_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement'];
 const OUTLINE_CRAFT = [
   'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
   'craft-telling', 'craft-cards', 'craft-questions'
@@ -56,10 +59,9 @@ const ARTICLE_CRAFT = [
 
 const RULE_SET_CALLS = Object.freeze({
   arc: ARC_CRAFT,
-  interweaving: INTERWEAVING_CRAFT,
   outline: OUTLINE_CRAFT,
   article: ARTICLE_CRAFT,
-  'judge-arc': ARC_CRAFT,
+  'judge-arc': [],
   'judge-outline': OUTLINE_CRAFT,
   'judge-article': ARTICLE_CRAFT
 });
@@ -123,7 +125,7 @@ function tagged(name, text) {
 /**
  * The rule set for one call.
  *
- * @param {'arc'|'interweaving'|'outline'|'article'|'judge-arc'|'judge-outline'|'judge-article'} call
+ * @param {'arc'|'outline'|'article'|'judge-arc'|'judge-outline'|'judge-article'} call
  * @param {Object} [options]
  * @param {string} [options.root] - the folder to read; the default root otherwise
  * @returns {{core: string, craft: string}} `core`: <world> then <truth-rules>; `craft`:

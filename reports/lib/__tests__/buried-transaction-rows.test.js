@@ -8,6 +8,10 @@
  * them all-null, and the arc judge listed them with the account "Unknown", while the
  * outline and article saw 30. The arc writer, its reworker and the arc judge now use
  * the view's own filter.
+ *
+ * Phase 4 (brief 4.4): the arc writer, its rework and the fact check read the sales on
+ * the record view's morning timeline; the detective's own lists went with the arc
+ * stage's detective branch (R1).
  */
 
 const { isBuriedTransactionRow, renderMorningTimeline } = require('../prompt-renderers/record-view');
@@ -58,31 +62,17 @@ describe('isBuriedTransactionRow: the record view\'s own rule', () => {
 describe('the arc writer, its reworker and the arc judge share the rule', () => {
   const ROWS = [UNSOLD[0], SOLD[0], UNSOLD[1], SOLD[1], UNSOLD[2]];
 
-  it('extractEvidenceSummary lists only the sold rows', () => {
-    const { buriedTransactions } = arcTesting.extractEvidenceSummary(bundleWith(ROWS));
-    expect(buriedTransactions.map((t) => t.shellAccount)).toEqual(['Melanie', 'Gorlan']);
-  });
-
   it('the journalist arc writer (and so its reworker) reads the 2 sales on the record view\'s timeline (phase 3, 3.3)', () => {
     const state = { ...reworkFixtureState('journalist'), evidenceBundle: bundleWith(ROWS) };
-    const sections = arcTesting.buildCoreArcSections(state);
+    const sections = arcTesting.buildWeaveSections(state);
     expect(sections).not.toContain('### Buried Transactions');
     const timeline = sections.slice(sections.indexOf('<morning-timeline>\n'), sections.indexOf('</morning-timeline>'));
     expect(timeline.split('\n').filter((l) => l.includes('| sale |'))).toHaveLength(2);
   });
 
-  it('the detective arc writer (and so its reworker, built from its sections) counts and lists 2 rows', () => {
-    const state = { ...reworkFixtureState('detective'), evidenceBundle: bundleWith(ROWS) };
-    const sections = arcTesting.buildCoreArcSections(state);
-    expect(sections).toContain('### Buried Transactions (2 items - Layer 2, INVESTIGATION ACTIONS)');
-    const list = sections.slice(sections.indexOf('### Buried Transactions'), sections.indexOf('### All Valid Evidence IDs'));
-    // No unsold memory's all-null row (a sold row may still lack one field).
-    expect(list).not.toContain('"shellAccount": null');
-    expect(list.match(/"shellAccount"/g)).toHaveLength(2);
-  });
-
   // Phase 3 (3.4): the journalist arc judge reads the sales on the record view's morning
-  // timeline, under the same rule, in place of a list of its own; the detective keeps it.
+  // timeline, under the same rule, in place of a list of its own. Phase 4 (brief 4.4): the
+  // judge is the story meeting's fact check.
   it('the journalist arc judge reads 2 sales on the timeline and no "Unknown" account', () => {
     const state = { ...reworkFixtureState('journalist'), evidenceBundle: bundleWith(ROWS), narrativeArcs: [] };
     const prompt = evalTesting.buildEvaluationUserPrompt('arcs', state, {});
@@ -92,15 +82,5 @@ describe('the arc writer, its reworker and the arc judge share the rule', () => 
     expect(timeline).not.toContain('Unknown');
     expect(timeline).toContain('account: Melanie');
     expect(timeline).toContain('account: Gorlan');
-  });
-
-  it('the detective arc judge lists 2 rows and no "Unknown" account', () => {
-    const state = { ...reworkFixtureState('detective'), evidenceBundle: bundleWith(ROWS), narrativeArcs: [] };
-    const prompt = evalTesting.buildEvaluationUserPrompt('arcs', state, {});
-    expect(prompt).toContain('BURIED TRANSACTIONS (2 - for amount/account verification):');
-    const list = prompt.slice(prompt.indexOf('BURIED TRANSACTIONS ('), prompt.indexOf('EVALUATION CHECKLIST'));
-    expect(list).not.toContain('Unknown');
-    expect(list).toContain('"accountName": "Melanie"');
-    expect(list).toContain('"accountName": "Gorlan"');
   });
 });

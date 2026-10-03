@@ -19,10 +19,9 @@ const {
   createEvaluator,
   createMockEvaluator,
   _testing: {
-    QUALITY_CRITERIA,
+    getArcCriteria,
     getOutlineCriteria,
     getArticleCriteria,
-    getNpcDescriptions,
     getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,
@@ -35,6 +34,19 @@ const {
 } = require('../../../lib/workflow/nodes/evaluator-nodes');
 const { PHASES, REVISION_CAPS } = require('../../../lib/workflow/state');
 const { CHECKPOINT_TYPES } = require('../../../lib/workflow/checkpoint-helpers');
+
+/**
+ * Phase 4 (brief 4.4): the arc stage's fact check judges the weave, scores the truth
+ * criteria alone, marks the weave it judged and never escalates; its one fix per round is
+ * counted on the mark. Its weighted criteria, its NPC and roster lists, its craft files
+ * and the arc stage's detective judge went.
+ */
+const WEAVE = {
+  story: 'The room named Vic.', question: 'Why Vic?', headline: 'The Room Named Vic',
+  threads: [{ id: 't1', claim: 'The room named Vic.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+  connections: [], convergence: 'The vote.', questions: []
+};
+const weaveState = (extra = {}) => ({ weave: JSON.parse(JSON.stringify(WEAVE)), ...extra });
 
 // Phase 2 final fix wave, item 13: this file's output carries no warnings. Its
 // fact-check fixtures used to name roster players with no canonicalCharacters, so
@@ -71,7 +83,7 @@ describe('evaluator-nodes', () => {
     });
 
     it('exports _testing with helper functions', () => {
-      expect(QUALITY_CRITERIA).toBeDefined();
+      expect(typeof getArcCriteria).toBe('function');
       expect(typeof getSdkClient).toBe('function');
       expect(typeof buildEvaluationSystemPrompt).toBe('function');
       expect(typeof buildEvaluationUserPrompt).toBe('function');
@@ -80,15 +92,17 @@ describe('evaluator-nodes', () => {
   });
 
   describe('QUALITY_CRITERIA', () => {
+    // Phase 4 (brief 4.4): the arc stage's fact check scores the truth criteria alone.
     it('defines criteria for arcs phase', () => {
-      expect(QUALITY_CRITERIA.arcs).toBeDefined();
-      // Commit 8.15: Structural criteria
-      expect(QUALITY_CRITERIA.arcs.rosterCoverage).toBeDefined();
-      expect(QUALITY_CRITERIA.arcs.evidenceIdValidity).toBeDefined();
-      expect(QUALITY_CRITERIA.arcs.accusationArcPresent).toBeDefined();
-      // Commit 8.15: Advisory criteria
-      expect(QUALITY_CRITERIA.arcs.coherence).toBeDefined();
-      expect(QUALITY_CRITERIA.arcs.evidenceConfidenceBalance).toBeDefined();
+      const arcCriteria = getArcCriteria();
+      expect(Object.keys(arcCriteria).length).toBeGreaterThan(0);
+      Object.values(arcCriteria).forEach((criterion) => {
+        expect(criterion.truth).toBe(true);
+        expect(criterion.type).toBe('structural');
+        expect(criterion.weight).toBeUndefined();
+      });
+      ['rosterCoverage', 'evidenceIdValidity', 'accusationArcPresent', 'coherence', 'evidenceConfidenceBalance']
+        .forEach((retired) => expect(arcCriteria[retired]).toBeUndefined());
     });
 
     it('defines criteria for outline phase via getOutlineCriteria', () => {
@@ -133,7 +147,7 @@ describe('evaluator-nodes', () => {
     it('all criteria have description and weight', () => {
       // Merge static criteria with dynamic outline/article criteria for full validation.
       // Phase 3 (3.4): a truth criterion carries rules and no weight; it decides readiness.
-      const allCriteria = { ...QUALITY_CRITERIA, outline: getOutlineCriteria(), article: getArticleCriteria() };
+      const allCriteria = { arcs: getArcCriteria(), outline: getOutlineCriteria(), article: getArticleCriteria() };
       Object.entries(allCriteria).forEach(([phase, criteria]) => {
         if (!criteria) return; // Skip null entries
         Object.entries(criteria).filter(([, criterion]) => !criterion.truth).forEach(([name, criterion]) => {
@@ -146,7 +160,8 @@ describe('evaluator-nodes', () => {
     });
 
     it('weights sum to approximately 1.0 for each phase', () => {
-      const allCriteria = { ...QUALITY_CRITERIA, outline: getOutlineCriteria(), article: getArticleCriteria() };
+      // Phase 4 (brief 4.4): the arc stage's criteria are truth criteria alone, with no weight.
+      const allCriteria = { outline: getOutlineCriteria(), article: getArticleCriteria() };
       Object.entries(allCriteria).forEach(([phase, criteria]) => {
         if (!criteria) return; // Skip null entries
         // Phase 3 (3.4): the truth criteria carry no weight.
@@ -175,17 +190,21 @@ describe('evaluator-nodes', () => {
 
   describe('buildEvaluationSystemPrompt', () => {
     it('includes phase name', () => {
-      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs);
-      expect(prompt).toContain('ARCS');
+      // Phase 4 (brief 4.4): the arc stage's judge is the weave's fact check.
+      const prompt = buildEvaluationSystemPrompt('arcs', getArcCriteria());
+      expect(prompt).toContain('WEAVE fact check');
     });
 
     it('includes all criteria with weights', () => {
-      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs);
+      const prompt = buildEvaluationSystemPrompt('outline', getOutlineCriteria());
 
-      expect(prompt).toContain('coherence');
-      // Commit 8.15: Changed from evidenceGrounding to evidenceIdValidity
-      expect(prompt).toContain('evidenceIdValidity');
-      expect(prompt).toContain('rosterCoverage');
+      expect(prompt).toContain('arcCoverage');
+      expect(prompt).toContain('sectionBalance');
+      // Phase 4 (brief 4.4): the fact check lists its truth criteria, and nothing weighted.
+      const factCheck = buildEvaluationSystemPrompt('arcs', getArcCriteria());
+      Object.keys(getArcCriteria()).forEach((key) => expect(factCheck).toContain(`- ${key} (`));
+      expect(factCheck).not.toContain('rosterCoverage');
+      expect(factCheck).not.toContain('evidenceIdValidity');
     });
 
     it('includes evaluation rules', () => {
@@ -207,38 +226,13 @@ describe('evaluator-nodes', () => {
     });
 
     it('mentions About Last Night game', () => {
-      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs);
+      const prompt = buildEvaluationSystemPrompt('outline', getOutlineCriteria());
       expect(prompt).toContain('About Last Night');
     });
 
     it('emphasizes human always makes final decision', () => {
       const prompt = buildEvaluationSystemPrompt('article', getArticleCriteria());
       expect(prompt).toContain('Human always makes final decision');
-    });
-
-    it('includes journalist NPCs (with Nova) for journalist theme', () => {
-      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'journalist');
-      expect(prompt).toContain('Marcus');
-      expect(prompt).toContain('Nova');
-      expect(prompt).toContain('Blake');
-    });
-
-    it('excludes Nova from detective theme NPC list', () => {
-      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'detective');
-      expect(prompt).toContain('Marcus');
-      expect(prompt).toContain('Blake');
-      expect(prompt).not.toContain('Nova');
-    });
-
-    it('uses theme-aware non-roster PC example for journalist', () => {
-      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'journalist');
-      expect(prompt).toContain("Nova didn't see this");
-    });
-
-    it('uses theme-aware non-roster PC example for detective', () => {
-      const prompt = buildEvaluationSystemPrompt('arcs', QUALITY_CRITERIA.arcs, 'detective');
-      expect(prompt).toContain('the investigation did not observe this');
-      expect(prompt).not.toContain("Nova didn't see this");
     });
 
     it('uses theme-aware critical checks for detective article evaluation', () => {
@@ -249,55 +243,16 @@ describe('evaluator-nodes', () => {
     });
   });
 
-  describe('getNpcDescriptions', () => {
-    it('returns Marcus, Nova, Blake for journalist', () => {
-      const desc = getNpcDescriptions('journalist');
-      expect(desc).toContain('Marcus');
-      expect(desc).toContain('Nova');
-      expect(desc).toContain('Blake');
-    });
-
-    it('returns Marcus, Blake but not Nova for detective', () => {
-      const desc = getNpcDescriptions('detective');
-      expect(desc).toContain('Marcus');
-      expect(desc).toContain('Blake');
-      expect(desc).not.toContain('Nova');
-    });
-
-    it('does not duplicate Blake/Valet entry', () => {
-      const desc = getNpcDescriptions('journalist');
-      // One entry line for Blake, with the Valet as its alias. The canon role names
-      // Blake too ("Marcus called Blake his Valet", T15), so count entries, not words.
-      const blakeEntries = desc.split('\n').filter((line) => /^- Blake\b/.test(line));
-      expect(blakeEntries).toHaveLength(1);
-      expect(desc.split('\n').filter((line) => /^- (?:the )?Valet\b/.test(line))).toHaveLength(0);
-    });
-
-    it('returns empty string for unknown theme', () => {
-      const desc = getNpcDescriptions('nonexistent');
-      expect(desc).toBe('');
-    });
-  });
-
   describe('buildEvaluationUserPrompt', () => {
     describe('arcs phase', () => {
+      // Phase 4 (brief 4.4): the fact check reads the weave.
       it('includes narrative arcs', () => {
-        const state = {
-          narrativeArcs: [{ title: 'Arc 1', summary: 'Test summary' }]
-        };
+        const state = weaveState();
         const prompt = buildEvaluationUserPrompt('arcs', state);
 
-        expect(prompt).toContain('Arc 1');
-        expect(prompt).toContain('Test summary');
-      });
-
-      it('includes player focus', () => {
-        const state = {
-          playerFocus: { primaryInvestigation: 'Who stole the money?' }
-        };
-        const prompt = buildEvaluationUserPrompt('arcs', state);
-
-        expect(prompt).toContain('Who stole the money?');
+        expect(prompt).toContain('WEAVE:\n');
+        expect(prompt).toContain(WEAVE.story);
+        expect(prompt).toContain(WEAVE.threads[0].claim);
       });
 
       it('includes evidence bundle summary', () => {
@@ -318,13 +273,13 @@ describe('evaluator-nodes', () => {
         // Brief 2.4: the record view replaced EXPOSED EVIDENCE DETAILS (name
         // summaries and 100-character excerpts). Phase 3 (3.4): the journalist arc
         // judge reads the sales on the record view's morning timeline, not a list of
-        // its own; the detective keeps the list.
+        // its own. Phase 4 (brief 4.4): the code checks hold the receipts to the
+        // record's ids, so the fact check prints no id list.
         expect(prompt).toContain('<RECORD>');
         expect(prompt).not.toContain('EXPOSED EVIDENCE DETAILS');
         expect(prompt).toContain('<morning-timeline>');
         expect(prompt).not.toContain('BURIED TRANSACTIONS');
-        expect(prompt).toContain('ALL VALID EVIDENCE IDS');
-        expect(buildEvaluationUserPrompt('arcs', { ...state, theme: 'detective' })).toContain('BURIED TRANSACTIONS');
+        expect(prompt).not.toContain('ALL VALID EVIDENCE IDS');
       });
     });
 
@@ -435,7 +390,8 @@ describe('evaluator-nodes', () => {
   describe('getRevisionCap', () => {
     it('returns REVISION_CAPS.ARCS for arcs', () => {
       expect(getRevisionCap('arcs')).toBe(REVISION_CAPS.ARCS);
-      expect(getRevisionCap('arcs')).toBe(2);
+      // Phase 4 (brief 4.4; R6): one check rework per round.
+      expect(getRevisionCap('arcs')).toBe(1);
     });
 
     it('returns REVISION_CAPS.OUTLINE for outline', () => {
@@ -492,7 +448,7 @@ describe('evaluator-nodes', () => {
       const evaluator = createEvaluator('arcs', { model: 'sonnet' });
       const config = { configurable: { sdkClient: mockClient } };
 
-      evaluator({ narrativeArcs: [] }, config);
+      evaluator(weaveState(), config);
 
       expect(mockClient).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'sonnet' })
@@ -501,9 +457,8 @@ describe('evaluator-nodes', () => {
   });
 
   describe('evaluateArcs', () => {
-    const createMockState = () => ({
+    const createMockState = () => weaveState({
       sessionId: 'test',
-      narrativeArcs: [{ title: 'Test Arc' }],
       playerFocus: { primaryInvestigation: 'Test focus' },
       evidenceBundle: { exposed: [], buried: [] }
     });
@@ -526,6 +481,8 @@ describe('evaluator-nodes', () => {
       expect(result.currentPhase).toBe(PHASES.ARC_EVALUATION);
       // Verify evaluationHistory records the ready state
       expect(result.evaluationHistory.ready).toBe(true);
+      // Phase 4 (brief 4.4): the fact check marks the weave it judged.
+      expect(result.weave._factCheck).toEqual(expect.objectContaining({ ready: true, fixes: 0 }));
     });
 
     it('returns revision needed when score < 0.7', async () => {
@@ -565,7 +522,9 @@ describe('evaluator-nodes', () => {
       expect(result.evaluationHistory.overallScore).toBe(0.9);
     });
 
-    it('escalates to human when at revision cap', async () => {
+    // Phase 4 (brief 4.4; R6): the fact check never escalates. A breach is marked on the
+    // weave for its one fix, whatever the check reworks' count, and the stop opens after it.
+    it('marks a breach on the weave for its one fix, with no escalation at the cap', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
@@ -583,8 +542,8 @@ describe('evaluator-nodes', () => {
 
       // Evaluator no longer sets awaitingApproval - checkpoint handles it
       expect(result.awaitingApproval).toBeUndefined();
-      expect(result.evaluationHistory.escalatedToHuman).toBe(true);
-      expect(result.evaluationHistory.escalationReason).toContain('revision cap');
+      expect(result.evaluationHistory.escalatedToHuman).toBeUndefined();
+      expect(result.weave._factCheck).toEqual(expect.objectContaining({ ready: false, fixes: 0 }));
     });
 
     it('handles Claude client error', async () => {
@@ -799,7 +758,9 @@ describe('evaluator-nodes', () => {
   });
 
   describe('revision cap behavior', () => {
-    it('arcs has cap of 2', async () => {
+    // Phase 4 (brief 4.4; R6): one fact-check fix per round, counted on the weave's mark
+    // (graph.js routeArcEvaluation), never on the check reworks' count.
+    it('arcs: the fact check marks its one fix on the weave, at any count', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
@@ -808,17 +769,14 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      // At revision 1, should allow another revision (increment happens in graph.js)
-      const result1 = await evaluateArcs({ narrativeArcs: [], arcRevisionCount: 1 }, config);
-      expect(result1.arcRevisionCount).toBeUndefined(); // Increment moved to graph.js
-      expect(result1.awaitingApproval).toBeUndefined();
-      expect(result1.validationResults.passed).toBe(false);
-
-      // At revision 2 (the cap), should escalate
-      const result2 = await evaluateArcs({ narrativeArcs: [], arcRevisionCount: 2 }, config);
-      // Evaluator no longer sets awaitingApproval - checkpoint handles it
-      expect(result2.awaitingApproval).toBeUndefined();
-      expect(result2.evaluationHistory.escalatedToHuman).toBe(true);
+      for (const arcRevisionCount of [0, REVISION_CAPS.ARCS]) {
+        const result = await evaluateArcs(weaveState({ arcRevisionCount }), config);
+        expect(result.arcRevisionCount).toBeUndefined(); // Increment moved to graph.js
+        expect(result.awaitingApproval).toBeUndefined();
+        expect(result.validationResults.passed).toBe(false);
+        expect(result.evaluationHistory.escalatedToHuman).toBeUndefined();
+        expect(result.weave._factCheck).toEqual(expect.objectContaining({ ready: false, fixes: 0 }));
+      }
     });
 
     it('outline allows 2 automated passes per round, then hands over', async () => {
@@ -870,7 +828,7 @@ describe('evaluator-nodes', () => {
       const config = { configurable: { sdkClient: mockClient } };
 
       const before = new Date().toISOString();
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
       const after = new Date().toISOString();
 
       expect(result.evaluationHistory.timestamp).toBeDefined();
@@ -886,7 +844,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.evaluationHistory.confidence).toBe('high');
     });
@@ -899,7 +857,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.evaluationHistory.confidence).toBe('medium');
     });
@@ -912,7 +870,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.evaluationHistory.issues).toEqual(['Issue 1', 'Issue 2']);
     });
@@ -925,7 +883,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.evaluationHistory.issues).toEqual([]);
     });
@@ -937,7 +895,7 @@ describe('evaluator-nodes', () => {
         ready: false, structuralPassed: false, overallScore: 0.5,
         structuralIssues: ['Missing roster members: Quinn']
       });
-      const result = await evaluateArcs({ narrativeArcs: [{ id: 'a' }] }, { configurable: { sdkClient: mockClient } });
+      const result = await evaluateArcs(weaveState(), { configurable: { sdkClient: mockClient } });
       expect(result.validationResults.phase).toBe('arcs');
     });
 
@@ -948,7 +906,7 @@ describe('evaluator-nodes', () => {
         advisoryWarnings: ['coherence is thin'],
         confidence: 'high'
       });
-      const result = await evaluateArcs({ narrativeArcs: [{ id: 'a' }] }, { configurable: { sdkClient: mockClient } });
+      const result = await evaluateArcs(weaveState(), { configurable: { sdkClient: mockClient } });
       // These were computed, logged, stored in evaluationHistory — and then dropped
       // on the floor instead of being handed to the revision node.
       expect(result.validationResults.structuralIssues).toEqual(['Missing roster members: Quinn']);
@@ -956,14 +914,15 @@ describe('evaluator-nodes', () => {
       expect(result.validationResults.confidence).toBe('high');
     });
 
+    // Phase 4 (brief 4.4): the arc stage no longer escalates; the outline judge does.
     it('escalates at the cap with the structural+advisory findings, not `issues`', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false, structuralPassed: false, overallScore: 0.4,
         structuralIssues: ['Missing roster members: Quinn'],
         advisoryWarnings: ['thin coherence']
       });
-      const result = await evaluateArcs(
-        { narrativeArcs: [{ id: 'a' }], _previousArcs: [{ id: 'a' }], arcRevisionCount: REVISION_CAPS.ARCS },
+      const result = await evaluateOutline(
+        { outline: {}, outlineRevisionCount: REVISION_CAPS.OUTLINE },
         { configurable: { sdkClient: mockClient } }
       );
       expect(result.evaluationHistory.escalatedToHuman).toBe(true);
@@ -984,7 +943,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.validationResults.passed).toBe(false);
     });
@@ -998,7 +957,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.validationResults.feedback).toBe('Fix the coherence issues by...');
     });
@@ -1014,7 +973,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.validationResults.criteriaScores.coherence.score).toBe(0.3);
     });
@@ -1033,7 +992,7 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.validationResults).toEqual(expect.objectContaining({
         phase: 'arcs',
@@ -1054,14 +1013,15 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs(
-        { narrativeArcs: [{ id: 'a' }], _previousArcs: [{ id: 'a' }], arcRevisionCount: REVISION_CAPS.ARCS },
+      // Phase 4 (brief 4.4): the arc stage no longer escalates; the outline judge does.
+      const result = await evaluateOutline(
+        { outline: {}, outlineRevisionCount: REVISION_CAPS.OUTLINE },
         config
       );
 
       expect(result.evaluationHistory.escalatedToHuman).toBe(true);
       expect(result.validationResults).toEqual(expect.objectContaining({
-        phase: 'arcs',
+        phase: 'outline',
         passed: false,
         structuralIssues: ['Missing roster members: Quinn'],
         advisoryWarnings: ['thin coherence']
@@ -1075,7 +1035,7 @@ describe('evaluator-nodes', () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('Network error'));
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].type).toBe('arcs-evaluation-failed');
@@ -1087,7 +1047,7 @@ describe('evaluator-nodes', () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('Parse error'));
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [] }, config);
+      const result = await evaluateArcs(weaveState(), config);
 
       expect(result.evaluationHistory._error).toBe('Parse error');
       expect(result.evaluationHistory.ready).toBe(false);
@@ -1106,7 +1066,7 @@ describe('evaluator-nodes', () => {
       const mockClient = jest.fn().mockRejectedValue(new Error('API error'));
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs({ narrativeArcs: [], arcRevisionCount: 1 }, config);
+      const result = await evaluateArcs(weaveState({ arcRevisionCount: 1 }), config);
 
       expect(result.evaluationHistory.revisionNumber).toBe(1);
       // Should not increment on error
@@ -1343,7 +1303,6 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
   const { renderSessionFactsVerdict, renderArcAccusation, photoKey } = require('../../../lib/prompt-renderers/director-words-renderer');
   const { renderDirectorEnrichmentBlock } = require('../../../lib/prompt-renderers/director-notes-renderer');
   const { createPromptBuilder } = require('../../../lib/prompt-builder');
-  const { _testing: { extractEvidenceSummary } } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
   const { _testing: { buildSessionFacts, buildAvailablePhotos, outlineWriterInputs, selectHeroImage } } = require('../../../lib/workflow/nodes/ai-nodes');
 
   /** The filenames the outline judge's PHOTOS section lists, in order. */
@@ -1465,11 +1424,6 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
     };
   }
 
-  function validIdsIn(prompt) {
-    const start = prompt.indexOf('[', prompt.indexOf('ALL VALID EVIDENCE IDS'));
-    return JSON.parse(prompt.slice(start, prompt.indexOf('<RECORD>')).trim());
-  }
-
   /** The roster section the article writer's system prompt carries, for this state. */
   function writerRosterSection(state) {
     return createPromptBuilder({
@@ -1554,21 +1508,6 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       expect(prompt).not.toContain('EXPOSED EVIDENCE DETAILS');
     });
 
-    it('checks keyEvidence against the arc writer\'s own valid-id list, so every id names a document it can see', () => {
-      const state = realisticState();
-      const prompt = buildEvaluationUserPrompt('arcs', state);
-      const ids = validIdsIn(prompt);
-
-      expect(ids).toEqual(extractEvidenceSummary(state.evidenceBundle).allEvidenceIds);
-      // The rescued document is named by its Notion id in the view; the old rule
-      // (id || tokenId || pageId || name) listed it by name, so an arc citing the
-      // id it was shown would have been judged invalid.
-      expect(ids).toContain('rescued-notion-id');
-      expect(prompt).toContain('<document id="rescued-notion-id"');
-      const documentIds = [...prompt.matchAll(/<document id="([^"]+)"/g)].map(m => m[1]);
-      expect([...documentIds].sort()).toEqual([...ids].sort());
-    });
-
     it('reads the accusation as the arc writer renders it, with the director\'s account after the parse', () => {
       const state = realisticState();
       const prompt = buildEvaluationUserPrompt('arcs', state);
@@ -1580,20 +1519,6 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       expect(prompt.indexOf('<DIRECTOR_ACCUSATION>')).toBeGreaterThan(prompt.indexOf('**Accused:**'));
     });
 
-    it('keeps the investigation focus in PLAYER FOCUS, without the accusation and observations it now renders', () => {
-      const prompt = buildEvaluationUserPrompt('arcs', realisticState());
-      const start = prompt.indexOf('{', prompt.indexOf('PLAYER FOCUS ('));
-      const playerFocus = JSON.parse(prompt.slice(start, prompt.indexOf('ALL VALID EVIDENCE IDS')).trim());
-
-      expect(playerFocus).toEqual({ primaryInvestigation: 'Who supplied the compound?', primarySuspects: ['Alex'] });
-    });
-
-    it('puts the roster section after the coverage roster, which still names only the session\'s players', () => {
-      const state = realisticState();
-      const prompt = buildEvaluationUserPrompt('arcs', state);
-      expect(prompt).toContain('SESSION ROSTER (2 players who were PRESENT this session):\n[\n  "Alex",\n  "Sam"\n]');
-      expect(prompt.indexOf(writerRosterSection(state))).toBeGreaterThan(prompt.indexOf('ONLY check coverage for the 2 names'));
-    });
   });
 
   describe('outline judge', () => {
@@ -1876,10 +1801,8 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       // Phase 3 (3.4) adds the truth criteria (structural, journalist only); the
       // criteria that were here keep their status.
       const withoutTruth = (criteria) => Object.fromEntries(Object.entries(criteria).filter(([, c]) => !c.truth));
-      expect(split(QUALITY_CRITERIA.arcs)).toEqual({
-        structural: ['rosterCoverage', 'evidenceIdValidity', 'accusationArcPresent'],
-        advisory: ['coherence', 'evidenceConfidenceBalance']
-      });
+      // Phase 4 (brief 4.4): the arc stage's fact check scores the truth criteria alone.
+      expect(split(withoutTruth(getArcCriteria()))).toEqual({ structural: [], advisory: [] });
       expect(split(withoutTruth(getOutlineCriteria('journalist')))).toEqual({
         structural: ['arcCoverage', 'requiredSections', 'arcSectionFlow', 'visualDistributionPlan'],
         advisory: ['sectionBalance', 'flowLogic', 'photoPlacement', 'wordBudget', 'loopArchitecture', 'arcInterweaving', 'visualMomentum', 'convergence']
@@ -1915,10 +1838,9 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
 describe('the judges read the rule set (phase 3, 3.4)', () => {
   const crypto = require('crypto');
   const { loadRuleSet, loadModeBlock } = require('../../../lib/rule-set');
-  const { getThemeNPCEntries } = require('../../../lib/theme-config');
   const { renderRecordView } = require('../../../lib/prompt-renderers/record-view');
   const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
-  const { _testing: { getPhaseCriteria, getArcCriteria } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+  const { _testing: { getPhaseCriteria, TRUTH_ONLY_EVALUATION_RULES } } = require('../../../lib/workflow/nodes/evaluator-nodes');
 
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const count = (text, part) => text.split(part).length - 1;
@@ -1969,7 +1891,8 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       }
     });
 
-    it.each(JUDGE_CALLS)('the journalist %s judge reads its writer\'s craft files in the user prompt, after the record', (phase, call) => {
+    // Phase 4 (brief 4.4): the arc stage's fact check reads no craft file (below).
+    it.each(JUDGE_CALLS.filter(([phase]) => phase !== 'arcs'))('the journalist %s judge reads its writer\'s craft files in the user prompt, after the record', (phase, call) => {
       const prompt = userFor(phase, stateFor());
       const { craft } = loadRuleSet(call);
       expect(count(prompt, craft)).toBe(1);
@@ -1982,7 +1905,9 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     it('each judge reads exactly its writer\'s craft list', () => {
       const craftTags = (phase) => [...userFor(phase, stateFor()).matchAll(/^<(craft-[a-z]+)>$/gm)].map((m) => m[1]);
       // Task 3.8: the craft files grouped by the writer's job (spec section 8).
-      expect(craftTags('arcs')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions']);
+      // Phase 4 (brief 4.4; spec section 11): the story meeting's fact check reads none.
+      expect(craftTags('arcs')).toEqual([]);
+      expect(`${systemFor('arcs', stateFor())}\n${userFor('arcs', stateFor())}`).not.toMatch(/<craft-[a-z]+>/);
       expect(craftTags('outline')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement',
         'craft-telling', 'craft-cards', 'craft-questions']);
       expect(craftTags('article')).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-voice',
@@ -1990,11 +1915,13 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     });
 
     it('says a craft finding is should-consider, naming its item', () => {
-      for (const [phase] of JUDGE_CALLS) {
+      // Phase 4 (brief 4.4): the arc stage's fact check writes no notes on the writing.
+      for (const [phase] of JUDGE_CALLS.filter(([p]) => p !== 'arcs')) {
         const prompt = systemFor(phase, stateFor());
         expect(prompt).toContain('CRAFT FINDINGS');
         expect(prompt).toMatch(/craft finding[^\n]*advisoryWarnings/i);
       }
+      expect(systemFor('arcs', stateFor())).not.toContain('CRAFT FINDINGS');
     });
 
     it('createEvaluator sends the judge the session\'s mode block', async () => {
@@ -2027,16 +1954,24 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     });
 
     it('carries no weight: the weighted criteria still make up the whole score', () => {
-      for (const phase of ['arcs', 'outline', 'article']) {
+      for (const phase of ['outline', 'article']) {
         const criteria = getPhaseCriteria(phase, 'journalist');
         const weighted = Object.values(criteria).filter((c) => !c.truth);
         expect(weighted.reduce((sum, c) => sum + c.weight, 0)).toBeCloseTo(1.0, 5);
         Object.values(criteria).filter((c) => c.truth).forEach((c) => expect(c.weight).toBeUndefined());
       }
+      // Phase 4 (brief 4.4): the arc stage's fact check scores the truth criteria alone,
+      // and its overallScore comes from them (TRUTH_ONLY_EVALUATION_RULES).
+      Object.values(getPhaseCriteria('arcs', 'journalist')).forEach((c) => {
+        expect(c.truth).toBe(true);
+        expect(c.weight).toBeUndefined();
+      });
     });
 
+    // Phase 4 (brief 4.4; R1): the arc stage's detective judge went; the outline's and
+    // the article's stay parked.
     it('the detective judges carry no truth criterion', () => {
-      for (const phase of ['arcs', 'outline', 'article']) {
+      for (const phase of ['outline', 'article']) {
         const criteria = getPhaseCriteria(phase, 'detective');
         expect(Object.values(criteria).some((c) => c.truth)).toBe(false);
       }
@@ -2231,10 +2166,8 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
 
   describe('the existing criteria keep their status', () => {
     const EXISTING = {
-      arcs: {
-        structural: ['rosterCoverage', 'evidenceIdValidity', 'accusationArcPresent'],
-        advisory: ['coherence', 'evidenceConfidenceBalance']
-      },
+      // Phase 4 (brief 4.4): the arc stage's fact check scores the truth criteria alone.
+      arcs: { structural: [], advisory: [] },
       outline: {
         structural: ['arcCoverage', 'requiredSections', 'arcSectionFlow', 'visualDistributionPlan'],
         advisory: ['sectionBalance', 'flowLogic', 'photoPlacement', 'wordBudget', 'loopArchitecture', 'arcInterweaving', 'visualMomentum', 'convergence']
@@ -2370,21 +2303,6 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // Final review (judges-factcheck[1]): round 7 made C3 "How the official story was
     // made", so neither the criterion nor the arc checklist cites it for the facts the
     // arcs must agree on. The tension the arcs may carry is C16's.
-    it('coherence: faults only incompatible facts, never arcs that pull against the verdict (C16), and cites no C3', () => {
-      const { description } = getArcCriteria('journalist').coherence;
-      expect(description).not.toMatch(/\bC3\b/);
-      expect(description).toMatch(/\bC16\b/);
-      expect(description).toContain('cannot both be true');
-      expect(description).toContain('pull against');
-      expect(description).not.toContain('without contradictions');
-    });
-
-    it("the arc judge's checklist asks for coherence without citing C3", () => {
-      const prompt = userFor('arcs', stateFor());
-      expect(prompt).toContain("5. COHERENCE: Do the arcs agree on the record's facts? Arcs that pull against each other or against the room's verdict are the tension the article uses.");
-      expect(prompt).not.toMatch(/\(C3\)/);
-    });
-
     it('the outline judge\'s momentum questions name no murder and no pull quotes', () => {
       const prompt = userFor('outline', stateFor());
       const momentum = prompt.slice(prompt.indexOf('MOMENTUM EVALUATION'));
@@ -2407,8 +2325,12 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       for (const [phase] of JUDGE_CALLS) {
         const prompt = systemFor(phase, stateFor());
         expect(prompt).not.toContain('pass (1.0), partial (0.5), fail (0.0)');
-        expect(prompt).toContain('weighted average');
+        // Phase 4 (brief 4.4): the fact check's score comes from its truth criteria.
+        if (phase === 'arcs') expect(prompt).toContain(TRUTH_ONLY_EVALUATION_RULES);
+        else expect(prompt).toContain('weighted average');
       }
+      expect(TRUTH_ONLY_EVALUATION_RULES).toContain('overallScore is the lowest truth-criterion score.');
+      expect(TRUTH_ONLY_EVALUATION_RULES).not.toMatch(/weighted|advisory/i);
     });
   });
 
@@ -2423,6 +2345,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
 
     // Fix 3.4b item 6: one source for the notes label. The arc judge's directorNotes line
     // prints ARC_NOTES_LABEL, which arc-specialist-nodes.js exports for the arc writer.
+    // Phase 4 (brief 4.4): the fact check prints it as the heading of the notes it reads.
     it('the arc judge\'s director-notes line prints the label arc-specialist-nodes.js exports', () => {
       const ARC_NODES = '../../../lib/workflow/nodes/arc-specialist-nodes';
       try {
@@ -2430,10 +2353,8 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
           const actual = jest.requireActual(ARC_NODES);
           jest.doMock(ARC_NODES, () => ({ ...actual, ARC_NOTES_LABEL: 'SENTINEL NOTES LABEL' }));
           const isolated = require('../../../lib/workflow/nodes/evaluator-nodes')._testing;
-          const state = stateFor();
-          const prompt = isolated.buildEvaluationSystemPrompt('arcs', isolated.getPhaseCriteria('arcs', 'journalist'),
-            'journalist', { sessionConfig: state.sessionConfig });
-          expect(prompt).toContain('- directorNotes: SENTINEL NOTES LABEL\n');
+          const prompt = isolated.buildEvaluationUserPrompt('arcs', stateFor(), { factCheck: null });
+          expect(prompt).toContain('SENTINEL NOTES LABEL\n<DIRECTOR_NOTES>');
         });
       } finally {
         jest.dontMock(ARC_NODES);
@@ -2446,19 +2367,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       const { ARC_NOTES_LABEL } = require('../../../lib/workflow/nodes/arc-specialist-nodes');
       expect(typeof ARC_NOTES_LABEL).toBe('string');
       expect(ARC_NOTES_LABEL.trim()).not.toBe('');
-      expect(systemFor('arcs', stateFor())).toContain(`- directorNotes: ${ARC_NOTES_LABEL}`);
-    });
-
-    it('the journalist NPC list reads each canon line from the theme config (M26)', () => {
-      const lines = getNpcDescriptions('journalist').split('\n');
-      const entries = getThemeNPCEntries('journalist').filter((e) => !e.aliasOf);
-      expect(lines).toHaveLength(entries.length);
-      entries.forEach((entry, i) => {
-        expect(lines[i]).toContain(entry.fullName || entry.name);
-        expect(lines[i]).toContain(entry.role);
-      });
-      expect(getNpcDescriptions('journalist')).not.toContain('should appear in most arcs');
-      expect(getNpcDescriptions('journalist')).toContain('Valet');
+      expect(userFor('arcs', stateFor())).toContain(`${ARC_NOTES_LABEL}\n<DIRECTOR_NOTES>`);
     });
 
     it('the article judge\'s mode line points at the mode block and sends no exposure through a tipster', () => {
@@ -2552,12 +2461,6 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(prompt).not.toContain('"accountName"');
     });
 
-    it('the detective arc judge keeps its own list', () => {
-      const state = stateFor('detective');
-      const prompt = userFor('arcs', state);
-      expect(prompt).toContain(renderRecordView(state.evidenceBundle, { buried: false }));
-      expect(prompt).toContain('BURIED TRANSACTIONS (1 - for amount/account verification):');
-    });
   });
 
   describe('the detective judges are unchanged', () => {
@@ -2573,14 +2476,14 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // only below the bar, and "revisionGuidance" holds one step per structural issue.
     // Restoring those two lines gives back the 3.11 hashes (a41aadbd..., fcdacdb8...,
     // a45757c8...).
+    // Phase 4 (brief 4.4; R1): the detective arcs judge went with the arc stage's
+    // detective branch, and its pin with it.
     const PINNED = {
-      arcs: '0faa4ba3cbdf058f6ac32675c7d657cbf844a6f86388968ecc3cab6757ae8d57',
       outline: '5282b08c81ad69cb8ab69f95eaa7aee15ca81deea7e2c14af1740dd406a7db8c',
       article: '6e6ee008220dffdcd408efa5d463b91ef7b523e4ccca9f1b256e2f52a0943692'
     };
     const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
     const JUDGES = {
-      arcs: [evaluateArcs, { selectedArcs: [] }],
       outline: [evaluateOutline, { outlineApproved: false }],
       article: [evaluateArticle, { articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE }]
     };
@@ -2599,14 +2502,8 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(hash).toBe(PINNED[phase]);
     });
 
+    // Phase 4 (brief 4.4; R1): the detective arc criteria went with its arc judge.
     it('the detective criteria are today\'s', () => {
-      expect(getArcCriteria('detective')).toEqual({
-        rosterCoverage: { description: 'Does every roster member have a placement in at least one arc?', weight: 0.30, type: 'structural' },
-        evidenceIdValidity: { description: 'Are all keyEvidence IDs valid (exist in evidence bundle)?', weight: 0.25, type: 'structural' },
-        accusationArcPresent: { description: 'Is there an arc with arcSource="accusation" addressing the player accusation?', weight: 0.20, type: 'structural' },
-        coherence: { description: 'Do arcs tell a consistent story without contradictions?', weight: 0.15, type: 'advisory' },
-        evidenceConfidenceBalance: { description: 'Are there arcs with strong/moderate evidence (not all speculative)?', weight: 0.10, type: 'advisory' }
-      });
       expect(getOutlineCriteria('detective')).toEqual({
         arcCoverage: { description: 'Does outline address all selected narrative threads?', weight: 0.25, type: 'structural' },
         requiredSections: { description: 'Are all required sections present (executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment)?', weight: 0.25, type: 'structural' },
@@ -2763,9 +2660,10 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       expect(source).not.toContain('the room\'s events by attribution)');
     });
 
+    // Phase 4 (brief 4.4): the second, the arc judge's coherence, went with its weighted
+    // criteria.
     it('two criteria that restated a craft item name it instead', () => {
-      const coherence = getPhaseCriteria('arcs', 'journalist').coherence.description;
-      expect(coherence).toMatch(/\bC16\b/);
+      expect(getPhaseCriteria('arcs', 'journalist').coherence).toBeUndefined();
       const visual = getArticleCriteria('journalist').visualDistribution.description;
       expect(visual).toMatch(/\bC9\b/);
       expect(visual).not.toContain('a budget and never a quota');
@@ -2781,7 +2679,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
   });
 
   describe('craft findings are the editor\'s notes for the director (R22)', () => {
-    it.each(['arcs', 'outline', 'article'])('the %s judge files a craft finding as an editor\'s note for the director, never a blocker', (phase) => {
+    // Phase 4 (brief 4.4): the arc stage's fact check files no craft finding.
+    it.each(['outline', 'article'])('the %s judge files a craft finding as an editor\'s note for the director, never a blocker', (phase) => {
       const prompt = systemFor(phase, stateFor());
       const section = prompt.slice(prompt.indexOf('CRAFT FINDINGS'), prompt.indexOf('EVALUATION RULES'));
       expect(section).toContain("an editor's note for the director, never a blocker");
@@ -2836,14 +2735,15 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     const { STRUCTURAL_PASS_SCORE } = require('../../../lib/workflow/nodes/node-helpers');
     const fixesLine = (prompt) => prompt.split('\n').find((line) => line.startsWith('- CONCRETE fixes'));
 
-    it.each(['arcs', 'outline', 'article'])('the journalist %s judge asks for concrete fixes for the criteria below the bar and the structural issues', (phase) => {
+    // Phase 4 (brief 4.4): the arc stage's fact check names each breach and leaves its fix to the rework.
+    it.each(['outline', 'article'])('the journalist %s judge asks for concrete fixes for the criteria below the bar and the structural issues', (phase) => {
       const prompt = systemFor(phase, stateFor());
       const block = prompt.slice(prompt.indexOf('CRITICAL: Your feedback MUST be actionable'), prompt.indexOf('OUTPUT FORMAT (JSON):'));
       expect(fixesLine(block)).toContain(`- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "`);
     });
 
     it('the detective judges keep their blocks', () => {
-      for (const phase of ['arcs', 'outline', 'article']) {
+      for (const phase of ['outline', 'article']) {
         expect([phase, fixesLine(systemFor(phase, stateFor('detective'))).startsWith('- CONCRETE fixes (not "')]).toEqual([phase, true]);
       }
     });
@@ -2851,9 +2751,10 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     it('judge prompt text writes the bar through STRUCTURAL_PASS_SCORE, never as a number; the prompts read the same', () => {
       const source = require('fs').readFileSync(require.resolve('../../../lib/workflow/nodes/evaluator-nodes'), 'utf8');
       expect(source).not.toMatch(/MUST score >= 0\.8|score it below 0\.8/);
-      expect(systemFor('arcs', stateFor())).toContain('STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements); a truth criterion with any breach fails.');
+      expect(systemFor('outline', stateFor())).toContain('STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements); a truth criterion with any breach fails.');
       expect(systemFor('arcs', stateFor())).toContain('One breach fails it: score it below 0.8.');
-      expect(systemFor('arcs', stateFor('detective'))).toContain('2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)\n');
+      expect(systemFor('arcs', stateFor())).toContain('when every truth criterion scores 0.8 or more.');
+      expect(systemFor('outline', stateFor('detective'))).toContain('2. STRUCTURAL criteria MUST score >= 0.8 to pass (these are hard requirements)\n');
     });
   });
 
@@ -2866,8 +2767,9 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       ...state, ...update,
       evaluationHistory: [...(state.evaluationHistory || []), ...[].concat(update.evaluationHistory || [])]
     });
+    // Phase 4 (brief 4.4): the arc stage never escalates; its fact check skips by its mark
+    // on the weave (lib/__tests__/weave-stage.test.js, __tests__/integration/weave-graph.test.js).
     const STOPS = {
-      arcs: { node: evaluateArcs, route: 'routeArcEvaluation', increment: 'incrementArcRevision', counter: 'arcRevisionCount', cap: REVISION_CAPS.ARCS, feedback: '_arcFeedback', output: 'narrativeArcs', open: { selectedArcs: [] } },
       outline: { node: evaluateOutline, route: 'routeOutlineEvaluation', increment: 'incrementOutlineRevision', counter: 'outlineRevisionCount', cap: REVISION_CAPS.OUTLINE, feedback: '_outlineFeedback', output: 'outline', open: { outlineApproved: false } },
       article: { node: evaluateArticle, route: 'routeArticleEvaluation', increment: 'incrementArticleRevision', counter: 'articleRevisionCount', cap: REVISION_CAPS.ARTICLE, feedback: '_articleFeedback', output: 'contentBundle', open: { articleApproved: false } }
     };

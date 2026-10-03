@@ -21,10 +21,9 @@ const {
 } = require('../workflow/nodes/ai-nodes');
 const {
   reviseArcs,
-  _testing: { generateCoreArcs, arcRevisionRules, arcReworkSchema }
+  _testing: { generateWeave, arcRevisionRules }
 } = require('../workflow/nodes/arc-specialist-nodes');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
-const { PLAYER_FOCUS_GUIDED_SCHEMA, DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA } = require('../sdk-client/subagents');
 const { PromptBuilder } = require('../prompt-builder');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -242,16 +241,19 @@ describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
   });
 });
 
-describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
+// Phase 4 (brief 4.4): the arc writer writes the weave, and its rework returns the weave
+// in the writer's own schema, so the rework adds no fields to the writer's OUTPUT FORMAT.
+// The arc stage's detective branch went (R1).
+describe('journalist arc stop', () => {
+  const theme = 'journalist';
   const NOTE = 'Riley is not the buyer; Morgan is.';
-  const REVISED = { narrativeArcs: [{ id: 'arc-sale', title: 'The Sale' }], synthesisNotes: 's', interweavingPlan: { suggestedOrder: ['arc-sale'] } };
 
   async function writerAndRework(reworkOverrides) {
     const state = reworkFixtureState(theme);
-    const writerSdk = recordingSdk({ narrativeArcs: [], synthesisNotes: '' });
-    await generateCoreArcs({ ...state, arcRevisionCount: 0 }, cfg(writerSdk, theme));
-    const reworkSdk = recordingSdk(REVISED);
-    await reviseArcs({ ...state, narrativeArcs: null, _previousArcs: state.narrativeArcs, ...reworkOverrides }, cfg(reworkSdk, theme));
+    const writerSdk = recordingSdk(state.weave);
+    await generateWeave({ ...state, weave: null, arcRevisionCount: 0 }, cfg(writerSdk, theme));
+    const reworkSdk = recordingSdk(state.weave);
+    await reviseArcs({ ...state, ...reworkOverrides }, cfg(reworkSdk, theme));
     return { writer: call(writerSdk), rework: call(reworkSdk) };
   }
 
@@ -268,39 +270,29 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
 
   it('the reworker carries every section of its writer, then the revision block, then <DIRECTOR_GUIDANCE> last', async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
-    expectWriterSectionsFirst(writer.user, rework.user, '# Arc Revision Request\n');
+    expectWriterSectionsFirst(writer.user, rework.user, '# Weave Rework\n');
     expectOneRecordAndGuidanceLast(rework.user);
 
     // What the reworker used to lack (rework-inputs.md Step 2): the whiteboard, the
-    // investigation focus, the character context, the rules, the record, the
-    // boundaries, temporal awareness, the tensions and the three lenses. Phase 3 (3.3):
-    // the journalist's sections are the rule set's (its truth rules state the old
-    // boundaries and timelines), and its craft files come last. Task 3.8: the lenses
-    // (C16) are in craft-story, the file that opens the arc writer's craft.
-    const headings = theme === 'detective'
-      ? ['## SECTION 4: EVIDENCE BOUNDARIES', '## SECTION 4.5: TEMPORAL AWARENESS', '## SECTION 4.6: NARRATIVE TENSIONS',
-        '## SECTION 5: THREE-LENS ANALYSIS REQUIREMENT']
-      : ['## SECTION 3: THE RECORD', '## SECTION 4: STAGES IN AN ARC SUMMARY', '## SECTION 5: THE THREE LENSES IN analysisNotes',
-        '## SECTION 6: CRAFT GUIDANCE', '<craft-story>'];
+    // investigation focus, the character context, the rules and the record. Phase 3
+    // (3.3): the rule set's craft files come last. Phase 4 (brief 4.4): the weave's
+    // sections.
     [
-      // Phase 3 (3.5): the whiteboard section's heading names it a model's reading.
       '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',
-      '## SECTION 2: ARC GENERATION RULES', ...headings
+      '## SECTION 2: THE RECORD', '## SECTION 3: THE WEAVE', '## SECTION 4: CRAFT GUIDANCE', '<craft-story>'
     ].forEach((heading) => expect(rework.user).toContain(heading));
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user).toContain(text));
 
-    // The valid ids follow the writer's rule, so a rescued document is named by its
+    // The receipts follow the writer's id rule, so a rescued document is named by its
     // Notion id in both (wave-2 ruling W2).
-    expect(rework.user).toContain('### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)\n["ale003","mor001","p-dna","p-rescued"]');
-    expect(rework.user).not.toContain('### Valid Evidence (the ONLY ids keyEvidence may cite)');
+    expect(rework.user).toContain('### Receipts\nA thread\'s receipt is one of these document ids, or "ledger" for the ledger:\n["ale003","mor001","p-dna","p-rescued"]');
     expect(rework.user).not.toContain('## SESSION CONTEXT');
 
     const at = (s) => rework.user.indexOf(s);
     expect(at('HUMAN FEEDBACK (HIGHEST PRIORITY):')).toBeGreaterThan(writer.user.length);
-    expect(at('PREVIOUS ARCS OUTPUT')).toBeGreaterThan(at('HUMAN FEEDBACK'));
-    expect(at('### PREVIOUS INTERWEAVING PLAN')).toBeGreaterThan(at('END PREVIOUS OUTPUT'));
-    expect(at('## YOUR TASK')).toBeGreaterThan(at('### PREVIOUS INTERWEAVING PLAN'));
-    expect(rework.user).toContain("REVISION CONTEXT: ARCS (round 2: the director's send back)");
+    expect(at('PREVIOUS WEAVE OUTPUT')).toBeGreaterThan(at('HUMAN FEEDBACK'));
+    expect(at('## YOUR TASK')).toBeGreaterThan(at('END PREVIOUS OUTPUT'));
+    expect(rework.user).toContain("REVISION CONTEXT: WEAVE (round 2: the director's send back)");
   });
 
   it("the reworker's system prompt is its writer's, then the rework rules for its kind", async () => {
@@ -308,12 +300,10 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     expect(sendBack.rework.system).toBe(`${sendBack.writer.system}\n\n${arcRevisionRules(true, theme)}`);
     const automated = await writerAndRework({
       arcRevisionCount: 1, humanArcRevisionCount: 0,
-      validationResults: { phase: 'arcs', passed: false, structuralIssues: ['Riley has no placement'] }
+      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" has no receipt.'] }
     });
     expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${arcRevisionRules(false, theme)}`);
-    expect(automated.rework.user).toContain('REVISION CONTEXT: ARCS (automated pass 1)');
-    // The writer's own revision hook stays the writer's: the reworker's context is
-    // buildRevisionContext's, once.
+    expect(automated.rework.user).toContain('REVISION CONTEXT: WEAVE (automated pass 1)');
     expect(automated.rework.user).not.toContain('REVISION 1: Address these issues');
   });
 
@@ -322,52 +312,6 @@ describe.each(['journalist', 'detective'])('%s arc stop', (theme) => {
     const guidance = rework.user.slice(rework.user.indexOf('<DIRECTOR_GUIDANCE>'));
     expect(guidance).toContain('- [arc-selection, rejection 1] Drop the succession thread.');
     expect(guidance).not.toContain(NOTE);
-  });
-
-  it("names the two fields the writer's OUTPUT FORMAT lacks, in the schema's words; the writer's prompt does not", async () => {
-    // Integrator ruling: the reworker carries the writer's OUTPUT FORMAT unchanged,
-    // which lists no interweaving fields, while its schema asks for both. A model
-    // that followed the format block would drop the plan brief 2.2 must keep.
-    const { writer, rework } = await writerAndRework(SEND_BACK);
-    const addendum = rework.user.slice(rework.user.indexOf('## WHAT THIS REWORK RETURNS'), rework.user.indexOf('## YOUR TASK'));
-    expect(addendum).toContain('Each arc\'s "interweaving" object:');
-    expect(addendum).toContain('The top-level "interweavingPlan" object:');
-    expect(rework.user.indexOf('## WHAT THIS REWORK RETURNS')).toBeGreaterThan(rework.user.indexOf('### PREVIOUS INTERWEAVING PLAN'));
-    expect(addendum).toContain('A PREVIOUS INTERWEAVING PLAN is shown above: keep it, or update it for the revised arcs. Do not drop it.');
-
-    // One wording: every field and every description comes from the schema (the
-    // theme's: the detective keeps today's wording, phase 3, 3.3).
-    const schema = arcReworkSchema(theme);
-    expect(schema).toBe(theme === 'detective' ? DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA : PLAYER_FOCUS_GUIDED_SCHEMA);
-    const arcFields = schema.properties.narrativeArcs.items.properties.interweaving.properties;
-    const planFields = schema.properties.interweavingPlan.properties;
-    Object.entries({ ...arcFields, ...planFields }).forEach(([name, spec]) => {
-      expect(addendum).toContain(`- "${name}"`);
-      expect(addendum).toContain(spec.description);
-    });
-    expect(addendum).toContain('"bridgeType": "shared_character" | "causal_chain" | "temporal" | "contradiction"');
-
-    // The writer's prompt (and so its OUTPUT FORMAT) is unchanged: it names neither.
-    expect(writer.user).not.toContain('interweavingPlan');
-    expect(writer.user).not.toContain('"interweaving"');
-    expect(writer.user).not.toContain('WHAT THIS REWORK RETURNS');
-  });
-
-  it('with no previous plan, the addendum asks for one instead of asking to keep it', async () => {
-    const { rework } = await writerAndRework({ ...SEND_BACK, _arcAnalysisCache: null });
-    expect(rework.user).toContain('The top-level "interweavingPlan" object:');
-    expect(rework.user).toContain('No previous plan is shown: write one for the revised arcs.');
-    expect(rework.user).not.toContain('Do not drop it.');
-  });
-
-  it('leaves the previous interweaving plan out when there is none, and does not ask to keep it', async () => {
-    for (const cache of [null, { interweavingPlan: {} }, { interweavingPlan: { suggestedOrder: [], convergencePoint: '', keyCallbacks: [] } }]) {
-      const { rework } = await writerAndRework({ ...SEND_BACK, _arcAnalysisCache: cache });
-      expect(rework.user).not.toContain('PREVIOUS INTERWEAVING PLAN');
-      // Phase 3 (3.3): the journalist's task has three steps; the detective keeps six.
-      const step = theme === 'detective' ? 6 : 3;
-      expect(rework.user).toContain(`\n${step}. Return the interweavingPlan (suggestedOrder, convergencePoint, keyCallbacks) for the revised arcs, and each arc's interweaving.\n`);
-    }
   });
 });
 

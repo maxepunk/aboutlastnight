@@ -531,28 +531,26 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
     expect(contextSection.indexOf('uncalibrated')).toBeLessThan(contextSection.indexOf('CRITERIA SCORES:'));
   });
 
-  // Post-merge fix (3.3 review, finding 1): the arc check computes rosterCoverage and
-  // accusationArcPresent in code (validateArcStructure, source 'programmatic-validation').
-  // The context called them "the evaluating model's own and uncalibrated" too, right
-  // above "rosterCoverage: 0.75". Only a model evaluation's scores are the model's.
-  it("labels the arc check's code-computed scores as the check's, never as the evaluating model's", () => {
-    const ARC_CHECK = {
+  // Post-merge fix (3.3 review, finding 1): only a model evaluation's scores are the
+  // model's. Phase 4 (brief 4.4): the weave checks replace the arc check and score
+  // nothing, so their context carries no scores' line at all, and their lines print
+  // under the checks' own label.
+  it("prints the weave checks' lines under their label, with no word of the evaluating model's", () => {
+    const WEAVE_CHECKS = {
       phase: 'arcs',
+      source: 'weave-checks',
+      passed: false,
       ready: false,
       structuralPassed: false,
-      issues: [{ type: 'missing-roster-coverage', message: 'Missing roster members: Alex', severity: 'structural' }],
-      revisionGuidance: 'Place Alex in an arc.',
-      criteriaScores: { rosterCoverage: 0.75, accusationArcPresent: 1.0 },
-      source: 'programmatic-validation'
+      structuralIssues: ['Thread "t2" has no receipt. Give it its strongest receipt: the id of a document in <RECORD>, or "ledger".']
     };
-    for (const humanFeedback of [null, 'Merge the two money arcs.']) {
+    for (const humanFeedback of [null, 'Merge the two money threads.']) {
       const { contextSection } = buildRevisionContext({
-        phase: 'arcs', revisionCount: 1, validationResults: ARC_CHECK, previousOutput: [], humanFeedback
+        phase: 'arcs', outputName: 'weave', revisionCount: 1, validationResults: WEAVE_CHECKS, previousOutput: {}, humanFeedback
       });
-      expect(contextSection).not.toMatch(/uncalibrated|evaluating model/i);
-      const guide = contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY:'), contextSection.indexOf('CRITERIA SCORES:'));
-      expect(guide).toMatch(/The scores below are the arc check's, computed in code from the arcs\./);
-      expect(contextSection).toContain('  - rosterCoverage: 0.75\n  - accusationArcPresent: 1.00');
+      expect(contextSection).not.toMatch(/uncalibrated|evaluating model|scores below/i);
+      expect(contextSection).toContain(`WEAVE CHECK FAILURES:\n  - ${WEAVE_CHECKS.structuralIssues[0]}`);
+      expect(contextSection).not.toContain('ISSUES TO ADDRESS');
     }
   });
 
@@ -886,18 +884,17 @@ describe('each automatic rework states its scope once, in the revision context (
 
 /**
  * The 4b fix batch (the integrator's ruling; 3.10 review minor 2): a code check's own
- * guidance still reaches an automatic rework, under a label that says it is the
- * check's. The arc check (validateArcStructure, source "programmatic-validation") writes
- * its guidance in code, must-fix steps only, and fix 3.7b's coverage line reaches a
- * rework only through it: "Give each one a placement ... or ... a writerQuestions entry
- * of kind "player"". Only a judge's revisionGuidance is left out of an automatic pass:
- * its must-fix steps repeat ISSUES TO ADDRESS and its optional steps read as
- * instructions.
+ * findings still reach an automatic rework, under a label that says they are the
+ * check's. Only a judge's revisionGuidance is left out of an automatic pass: its
+ * must-fix steps repeat ISSUES TO ADDRESS and its optional steps read as instructions.
+ *
+ * Phase 4 (brief 4.4): the weave checks (validateArcStructure, source "weave-checks")
+ * replace the arc check, whose coverage line left the arc stage with roster coverage.
+ * Each check's line names the defect and its fix.
  */
-describe("a code check's guidance reaches an automatic rework (the 4b fix batch)", () => {
+describe("a code check's findings reach an automatic rework (the 4b fix batch)", () => {
   const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
   const { reworkFixtureState } = require('./fixtures/rework-state');
-  const COVERAGE_LINE = /Give each one a placement in an arc's characterPlacements through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry of kind "player" about them for the director \(C15\)\./;
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
   beforeAll(() => {
@@ -906,35 +903,34 @@ describe("a code check's guidance reaches an automatic rework (the 4b fix batch)
   });
   afterAll(() => jest.restoreAllMocks());
 
-  /** The fixture's arcs with Riley's placements taken out, so the arc check finds Riley missing. */
-  function stateMissingRiley() {
+  /** The fixture's weave with one receipt the record does not hold, so a check fails. */
+  function stateWithBadReceipt() {
     const state = clone(reworkFixtureState('journalist'));
-    state.narrativeArcs = state.narrativeArcs.map((arc) => {
-      const { Riley, ...placements } = arc.characterPlacements || {};
-      return { ...arc, characterPlacements: placements };
-    });
+    state.selectedArcs = []; // the meeting is still open: the checks skip an approved one
+    state.weave.threads = state.weave.threads.map((t) => (t.id === 't2' ? { ...t, receipt: 'zzz999' } : t));
     return state;
   }
 
-  it("an automatic pass after the arc check carries its coverage line, under the check's label", async () => {
-    const state = stateMissingRiley();
+  it("an automatic pass after the weave checks carries each check's line, under the checks' label", async () => {
+    const state = stateWithBadReceipt();
     const { validationResults } = arcNodes.validateArcStructure(state, {});
-    expect(validationResults.source).toBe('programmatic-validation');
+    expect(validationResults.source).toBe('weave-checks');
+    expect(validationResults.structuralIssues).toHaveLength(1);
+    const line = validationResults.structuralIssues[0];
+    expect(line).toContain('"zzz999"');
     const { contextSection } = buildRevisionContext({
-      phase: 'arcs', revisionCount: 1, validationResults, previousOutput: state.narrativeArcs, humanFeedback: null, theme: 'journalist'
+      phase: 'arcs', outputName: 'weave', revisionCount: 1, validationResults, previousOutput: state.weave, humanFeedback: null, theme: 'journalist'
     });
-    expect(contextSection).toMatch(COVERAGE_LINE);
-    expect(contextSection).toContain(`ARC CHECK GUIDANCE:\n${validationResults.revisionGuidance}`);
+    expect(contextSection).toContain(`WEAVE CHECK FAILURES:\n  - ${line}`);
     expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
 
     // The rework the graph runs next sends it to the model.
     let sent;
     await arcNodes.reviseArcs(
-      { ...state, narrativeArcs: null, _previousArcs: clone(state.narrativeArcs), arcRevisionCount: 1, validationResults },
-      { configurable: { sdkClient: async (options) => { sent = options; return { narrativeArcs: clone(state.narrativeArcs), synthesisNotes: 's' }; }, theme: 'journalist' } }
+      { ...state, arcRevisionCount: 1, validationResults },
+      { configurable: { sdkClient: async (options) => { sent = options; return clone(state.weave); }, theme: 'journalist' } }
     );
-    expect(sent.prompt).toMatch(COVERAGE_LINE);
-    expect(sent.prompt).toContain('ARC CHECK GUIDANCE:\n');
+    expect(sent.prompt).toContain(`WEAVE CHECK FAILURES:\n  - ${line}`);
   });
 
   it("an automatic pass after a judge's verdict carries no EVALUATOR FEEDBACK", () => {
@@ -950,7 +946,7 @@ describe("a code check's guidance reaches an automatic rework (the 4b fix batch)
     });
     expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
     expect(contextSection).not.toContain('JUDGE-GUIDANCE');
-    expect(contextSection).not.toContain('ARC CHECK GUIDANCE');
+    expect(contextSection).not.toContain('WEAVE CHECK FAILURES');
   });
 });
 

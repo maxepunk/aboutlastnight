@@ -60,30 +60,30 @@ const CRAFT_ITEMS = {
 
 /**
  * Spec section 8, item by item: the arc writer reads neither the voice (C12), the
- * telling (C4) nor the cards (C9); the interweaving call has no output for questions
- * (C15) either; the outline writer reads all but the voice.
+ * telling (C4) nor the cards (C9); the outline writer reads all but the voice.
+ *
+ * Phase 4 (brief 4.4): the arc stage follows the phase 4 spec's section 11. The
+ * interweaving call is gone, and the story meeting's fact check reads no craft file.
  */
 const SPEC_SECTION_8 = {
   arc: ALL_CRAFT.filter((id) => !['C4', 'C9', 'C12'].includes(id)),
-  interweaving: ALL_CRAFT.filter((id) => !['C4', 'C9', 'C12', 'C15'].includes(id)),
   outline: ALL_CRAFT.filter((id) => id !== 'C12'),
   article: ALL_CRAFT
 };
-SPEC_SECTION_8['judge-arc'] = SPEC_SECTION_8.arc;
+SPEC_SECTION_8['judge-arc'] = [];
 SPEC_SECTION_8['judge-outline'] = SPEC_SECTION_8.outline;
 SPEC_SECTION_8['judge-article'] = SPEC_SECTION_8.article;
 
 /** The brief's map (spec section 8; the read's section C): each call's craft files, in order. */
 const BRIEF_MAP = {
   arc: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'],
-  interweaving: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement'],
   outline: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'],
   article: [
     'craft-story', 'craft-form', 'craft-material', 'craft-voice',
     'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
   ]
 };
-BRIEF_MAP['judge-arc'] = BRIEF_MAP.arc;
+BRIEF_MAP['judge-arc'] = [];
 BRIEF_MAP['judge-outline'] = BRIEF_MAP.outline;
 BRIEF_MAP['judge-article'] = BRIEF_MAP.article;
 
@@ -112,7 +112,7 @@ describe('the loader', () => {
     expect(path.resolve(DEFAULT_RULES_ROOT)).toBe(path.resolve(RULES_ROOT));
   });
 
-  it('serves exactly the seven calls of the plan', () => {
+  it('serves exactly the six calls of the plan', () => {
     expect(Object.keys(RULE_SET_CALLS).sort()).toEqual(Object.keys(BRIEF_MAP).sort());
   });
 
@@ -158,7 +158,7 @@ describe('the loader', () => {
   });
 
   it('throws on a call it does not know, naming the calls it does', () => {
-    expect(() => loadRuleSet('revision', { root: STUB_ROOT })).toThrow(/revision.*arc.*interweaving/s);
+    expect(() => loadRuleSet('revision', { root: STUB_ROOT })).toThrow(/revision.*arc.*outline/s);
   });
 
   it('throws naming every missing or empty file a call needs', () => {
@@ -560,6 +560,8 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
 
     const state = reworkFixtureState('journalist');
     state.narrativeArcs[0] = { ...state.narrativeArcs[0], summary: `${MODEL} summary`, caveats: [`${MODEL} caveat`] };
+    // Phase 4 (brief 4.4): the weave the arc reworker and the fact check print back
+    state.weave = { ...state.weave, story: `${MODEL} story` };
     state._arcAnalysisCache = {
       ...state._arcAnalysisCache,
       synthesisNotes: `${MODEL} synthesis`,
@@ -580,7 +582,7 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     );
     const join = ({ systemPrompt, userPrompt }) => `${systemPrompt}\n${userPrompt}`;
     const { contextSection, previousOutputSection } = buildRevisionContext({
-      phase: 'arcs', revisionCount: 0, validationResults: null, previousOutput: state.narrativeArcs, humanFeedback: NOTE, round: 1
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, validationResults: null, previousOutput: state.weave, humanFeedback: NOTE, round: 1
     });
     const renders = {
       'outline writer': join(await builder.buildOutlinePrompt(
@@ -591,8 +593,7 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
         state.outline, state.arcEvidencePackages, 'hero.jpg', state.shellAccounts, null, state.directorNotes, null,
         { evidenceBundle: state.evidenceBundle }
       )),
-      'arc writer': arcs.buildCoreArcPrompt(state),
-      interweaving: arcs.buildInterweavingPrompt(state.narrativeArcs, state.sessionConfig.roster, state.evidenceBundle),
+      'arc writer': arcs.buildWeavePrompt(state),
       'arc reworker': arcs.buildArcRevisionPrompt(state, contextSection, previousOutputSection),
       'arc judge': judges.buildEvaluationUserPrompt('arcs', state, {}),
       'outline judge': judges.buildEvaluationUserPrompt('outline', state, {}),
@@ -821,7 +822,7 @@ describe('instructionText: the excerpts, the photo analyses and the tension sent
   });
 
   it("strips the director's sentences under the arc writer's Blake and Valet heading, and keeps the label and what follows", () => {
-    const render = arcs.buildCoreArcPrompt(state());
+    const render = arcs.buildWeavePrompt(state());
     expect(render).toContain(`- ${SENTENCE}`);
     const text = instructionText(render);
     expect(findRemovedPhrases(text)).toEqual([]);

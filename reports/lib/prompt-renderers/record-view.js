@@ -191,9 +191,9 @@ function buriedTransactionFields({ account, amount, time } = {}, clock = null) {
  * A buried item with none of the three is not a transaction: it is a memory no one
  * scanned (fetch-nodes tagTokensWithDisposition marks every token in neither list
  * buried, with no transaction data). Every list of buried transactions a prompt
- * carries applies this one rule (the timeline below, the arc writer's and its
- * reworker's list through extractEvidenceSummary, and the arc judge's), so each
- * prompt counts the same sales (phase 2 final fix wave).
+ * carries applies this one rule (the timeline below), so each prompt counts the same
+ * sales (phase 2 final fix wave). The arc writer's and the arc judge's own lists went
+ * with the arc stage's detective branch (phase 4, brief 4.4).
  *
  * @param {*} row - a bundle's buried.transactions entry
  * @returns {boolean}

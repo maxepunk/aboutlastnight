@@ -5,20 +5,19 @@
  * reviseArcs set `interweavingFromPreviousRound` on the arc cache, and the outline
  * writer's <arc-analysis> printed the cache with only `timing` and `architecture`
  * stripped, so the flag reached the writer. And three places decided whether a plan
- * said anything, each its own way: reviseArcs by "an object with a key" (so an empty
- * returned plan replaced a real previous one), the arc reworker by the plan's own
- * fields, and the outline judge by "any non-empty value". They now share the one
- * exported hasInterweavingPlan.
+ * said anything, each its own way. They shared the one exported hasInterweavingPlan.
+ *
+ * Phase 4 (brief 4.4): the interweaving call and the arc rework's plan went with the
+ * weave, so the arc stage writes no plan. The rule stays for the outline judge, which
+ * reads a stored plan by it until its own slice removes it.
  */
 
-const { hasInterweavingPlan, reviseArcs, _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
+const { hasInterweavingPlan } = require('../workflow/nodes/arc-specialist-nodes');
 const { generateOutline } = require('../workflow/nodes/ai-nodes');
 const { _testing: { buildEvaluationUserPrompt } } = require('../workflow/nodes/evaluator-nodes');
 const { reworkFixtureState, OUTLINE } = require('./fixtures/rework-state');
 
-const REAL_PLAN = { suggestedOrder: ['arc-sale', 'arc-envelope'], convergencePoint: 'The vote', keyCallbacks: [] };
-
-/** Plans the three consumers used to disagree on, and what the one rule says. */
+/** Plans the consumers used to disagree on, and what the one rule says. */
 const CASES = [
   ['no plan', null, false],
   ['an empty object', {}, false],
@@ -43,37 +42,10 @@ describe('hasInterweavingPlan is exported by name', () => {
   });
 });
 
-describe('the arc reworker, reviseArcs and the outline judge apply it', () => {
-  it.each(CASES)('the arc reworker shows the previous plan: %s', (_name, plan, expected) => {
-    const prompt = arcTesting.buildArcRevisionPrompt({ ...reworkFixtureState('journalist'), _arcAnalysisCache: { interweavingPlan: plan } }, 'CTX', 'PREV');
-    expect(prompt.includes('### PREVIOUS INTERWEAVING PLAN')).toBe(expected);
-  });
-
+describe('the outline judge applies it', () => {
   it.each(CASES)('the outline judge shows the plan: %s', (_name, plan, expected) => {
     const prompt = buildEvaluationUserPrompt('outline', { ...reworkFixtureState('journalist'), _arcAnalysisCache: { interweavingPlan: plan } }, {});
     expect(prompt.includes('INTERWEAVING PLAN (from arc analysis)')).toBe(expected);
-  });
-
-  it.each(CASES)('reviseArcs stores the plan the rework returned only when it has one: %s', async (_name, plan, expected) => {
-    const state = reworkFixtureState('journalist');
-    const sdk = jest.fn(async () => ({ narrativeArcs: state.narrativeArcs, synthesisNotes: 's', interweavingPlan: plan }));
-    const result = await reviseArcs(
-      { ...state, narrativeArcs: null, _previousArcs: state.narrativeArcs, _arcAnalysisCache: { interweavingPlan: REAL_PLAN } },
-      { configurable: { sdkClient: sdk } }
-    );
-    expect(result._arcAnalysisCache.interweavingPlan).toEqual(expected ? plan : REAL_PLAN);
-    expect(result._arcAnalysisCache.interweavingFromPreviousRound === true).toBe(!expected);
-  });
-
-  it('reviseArcs does not claim to keep a previous plan that says nothing', async () => {
-    const state = reworkFixtureState('journalist');
-    const sdk = jest.fn(async () => ({ narrativeArcs: state.narrativeArcs, synthesisNotes: 's' }));
-    const result = await reviseArcs(
-      { ...state, narrativeArcs: null, _previousArcs: state.narrativeArcs, _arcAnalysisCache: { interweavingPlan: {} } },
-      { configurable: { sdkClient: sdk } }
-    );
-    expect(result._arcAnalysisCache.interweavingPlan).toEqual(arcTesting.createDefaultInterweavingPlan());
-    expect(result._arcAnalysisCache).not.toHaveProperty('interweavingFromPreviousRound');
   });
 });
 

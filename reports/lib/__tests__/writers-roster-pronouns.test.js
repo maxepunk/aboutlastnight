@@ -14,6 +14,10 @@
  * rosterCoverage. The section is built without the character data: the arc writer
  * prints its own character context, and the other two read none. The detective's
  * prompts keep their text (D13).
+ *
+ * Phase 4 (brief 4.4): the arc writer writes the weave, the interweaving call went, and
+ * the arc stage's detective branch went (R1). Roster coverage left the arc stage; the
+ * arc writer still prints the session roster.
  */
 
 const { reworkFixtureState } = require('./fixtures/rework-state');
@@ -51,15 +55,14 @@ beforeAll(() => {
 });
 afterAll(() => jest.restoreAllMocks());
 
-/** The arc writer's and the interweaving call's prompts, as analyzeArcsPlayerFocusGuided sends them. */
-async function arcCalls(theme) {
-  const state = reworkFixtureState(theme);
-  const sdk = recordingSdk((options) => (options.label && options.label.startsWith('Interweaving')
-    ? { arcInterweaving: [], interweavingPlan: { suggestedOrder: [], convergencePoint: '', keyCallbacks: [] } }
-    : { narrativeArcs: state.narrativeArcs, synthesisNotes: 's' }));
-  await arcNodes.analyzeArcsPlayerFocusGuided({ ...clone(state), narrativeArcs: null }, { configurable: { sdkClient: sdk, theme } });
-  const [writer, interweaving] = sdk.mock.calls.map(([options]) => `${options.systemPrompt}\n=====\n${options.prompt}`);
-  return { state, writer, interweaving };
+/** The arc writer's prompt, as analyzeArcsPlayerFocusGuided sends it (the weave, one call). */
+async function arcCalls() {
+  const state = reworkFixtureState('journalist');
+  const sdk = recordingSdk(() => state.weave);
+  await arcNodes.analyzeArcsPlayerFocusGuided({ ...clone(state), weave: null }, { configurable: { sdkClient: sdk, theme: 'journalist' } });
+  expect(sdk).toHaveBeenCalledTimes(1);
+  const [writer] = sdk.mock.calls.map(([options]) => `${options.systemPrompt}\n=====\n${options.prompt}`);
+  return { state, writer };
 }
 
 /** The outline writer's prompt, as generateOutline sends it, through a real PromptBuilder. */
@@ -92,27 +95,27 @@ describe('the section is the one the article writer and the judges print', () =>
 
 describe('the arc writer', () => {
   it('reads the roster with pronouns once, each player\'s pronoun once', async () => {
-    const { state, writer } = await arcCalls('journalist');
+    const { state, writer } = await arcCalls();
     expect(count(writer, rosterSectionFor(state))).toBe(1);
     PRONOUN_LINES.forEach((line) => expect(`${line}: ${count(writer, line)}`).toBe(`${line}: 1`));
   });
 
-  it('keeps its session roster for coverage, and its own character context once', async () => {
-    const { writer } = await arcCalls('journalist');
+  it('keeps its session roster, and its own character context once', async () => {
+    const { writer } = await arcCalls();
     expect(writer).toContain('### Session Roster (the players at the investigation)\n["Alex","Morgan","Sarah","Riley"]');
     expect(count(writer, 'CHARACTER CONTEXT')).toBe(0);
     expect(count(writer, '### Character Context (')).toBe(1);
     // The roster comes after the character categories, under its own heading.
     const at = (s) => writer.indexOf(s);
-    expect(at('### Names and Pronouns\nCANONICAL CHARACTER ROSTER:')).toBeGreaterThan(at('### Character Categories for characterPlacements'));
+    expect(at('### Names and Pronouns\nCANONICAL CHARACTER ROSTER:')).toBeGreaterThan(at('### Character Categories'));
     expect(at('### Character Context (')).toBeGreaterThan(at('### Names and Pronouns'));
   });
 
   it('the arc reworker carries it once, through the writer\'s sections', async () => {
     const state = reworkFixtureState('journalist');
-    const sdk = recordingSdk(() => ({ narrativeArcs: state.narrativeArcs, synthesisNotes: 's' }));
+    const sdk = recordingSdk(() => state.weave);
     await arcNodes.reviseArcs(
-      { ...clone(state), narrativeArcs: null, _previousArcs: clone(state.narrativeArcs), _arcFeedback: 'Rethink it.' },
+      { ...clone(state), _arcFeedback: 'Rethink it.' },
       { configurable: { sdkClient: sdk, theme: 'journalist' } }
     );
     const [{ systemPrompt, prompt }] = sdk.mock.calls[0];
@@ -120,29 +123,18 @@ describe('the arc writer', () => {
   });
 });
 
-describe('the interweaving call', () => {
-  it('reads the roster with pronouns once, beside the roster it bridges by', async () => {
-    const { state, interweaving } = await arcCalls('journalist');
-    expect(count(interweaving, rosterSectionFor(state))).toBe(1);
-    PRONOUN_LINES.forEach((line) => expect(`${line}: ${count(interweaving, line)}`).toBe(`${line}: 1`));
-    // The 4b fix batch (3.10 review minor 5): under the heading the arc writer and the
-    // outline writer give it too, a subsection of the roster it bridges by.
-    expect(interweaving).toContain(`## ROSTER (for identifying shared characters)\n\n["Alex","Morgan","Sarah","Riley"]\n\n### Names and Pronouns\n${rosterSectionFor(state)}\n`);
-    expect(interweaving).not.toContain('CHARACTER CONTEXT');
-  });
-});
-
 // The 4b fix batch (3.10 review minor 5): the section was built at two sites with two
 // constructions, and the outline printed it bare while the arc writer and the
 // interweaving call gave it a heading. One function builds it, heading included.
 describe('one builder for the roster without the character context', () => {
-  it('the arc writer, the interweaving call and the outline writer print its section once, under the same heading', async () => {
+  // Phase 4 (brief 4.4): the interweaving call went.
+  it('the arc writer and the outline writer print its section once, under the same heading', async () => {
     const { rosterWithPronounsSection } = require('../prompt-builder');
-    const { state, writer, interweaving } = await arcCalls('journalist');
+    const { state, writer } = await arcCalls();
     const { system, user } = await outlineCall('journalist');
     const section = rosterWithPronounsSection(state.sessionConfig, state.canonicalCharacters);
     expect(section).toBe(`### Names and Pronouns\n${rosterSectionFor(state)}`);
-    for (const [name, text] of [['arc writer', writer], ['interweaving', interweaving], ['outline writer', `${system}\n${user}`]]) {
+    for (const [name, text] of [['arc writer', writer], ['outline writer', `${system}\n${user}`]]) {
       expect(`${name}: ${count(text, section)}`).toBe(`${name}: 1`);
       expect(`${name}: ${count(text, 'Names and Pronouns')}`).toBe(`${name}: 1`);
     }
@@ -173,11 +165,11 @@ describe('the outline writer', () => {
   });
 });
 
+// Phase 4 (brief 4.4): the detective's arc writer and interweaving call went (R1).
 describe("the detective's prompts keep their text (D13)", () => {
-  it('neither its arc writer, its interweaving call nor its outline writer prints the section', async () => {
-    const { writer, interweaving } = await arcCalls('detective');
+  it('its outline writer does not print the section', async () => {
     const { system, user } = await outlineCall('detective');
-    for (const [name, text] of [['arc writer', writer], ['interweaving', interweaving], ['outline writer', `${system}\n${user}`]]) {
+    for (const [name, text] of [['outline writer', `${system}\n${user}`]]) {
       expect(`${name}: ${text.includes('CANONICAL CHARACTER ROSTER')}`).toBe(`${name}: false`);
       expect(`${name}: ${text.includes('NAMES AND PRONOUNS') || text.includes('Names and Pronouns')}`).toBe(`${name}: false`);
     }

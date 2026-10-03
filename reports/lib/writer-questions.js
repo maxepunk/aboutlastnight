@@ -2,24 +2,24 @@
  * The writers' questions for the director (phase 3, brief 3.7; spec C15, R5).
  *
  * When the record holds nothing about a player, a roster pronoun is missing, or a
- * ledger line looks wrong, a writer asks the director instead of guessing. Each
- * writer's output carries the questions in one optional field, `writerQuestions`: a
- * list of `{kind, about, question}`, where `kind` is which of C15's three cases the
- * question raises (`player`, `pronoun`, `ledger`) and `about` names its subject (the
- * player's name, or the ledger entry's time and amount). The arcs keep theirs in
- * `_arcAnalysisCache.writerQuestions`; the outline and the article at their top
- * level. The interweaving call has no field (spec section 8).
+ * ledger line looks wrong, a writer asks the director instead of guessing. The outline
+ * and the article carry the questions in one optional top-level field,
+ * `writerQuestions`: a list of `{kind, about, question}`, where `kind` is which of
+ * C15's three cases the question raises (`player`, `pronoun`, `ledger`) and `about`
+ * names its subject (the player's name, or the ledger entry's time and amount).
  *
  * The field never prints. The director reads it at the stop (getCheckpointData, the
  * console's writer-questions panel) and answers with the stop's note, the one
  * exception to HY1. So it is kept out of the template and out of every later prompt.
  *
- * Journalist only: the detective's schemas and calls stay as they were (spec D13).
+ * Phase 4 (brief 4.4): the weave carries its own questions in its own property,
+ * `questions` (WEAVE_QUESTIONS_PROPERTY below): `{id, kind, about, question, changes}`,
+ * with C15's three cases as the story meeting asks them (a player, a pronoun, a figure
+ * that looks wrong) and what each answer changes in print. The outline's and the
+ * article's `writerQuestions` stay until their writers drop the field (4.6, 4.7).
  */
 
-const { getCanonicalName } = require('./theme-config');
-
-/** The field's name on every writer's output. */
+/** The field's name on the outline and the article. */
 const WRITER_QUESTIONS_KEY = 'writerQuestions';
 
 /**
@@ -30,11 +30,9 @@ const WRITER_QUESTIONS_KEY = 'writerQuestions';
 const WRITER_QUESTION_KINDS = Object.freeze(['player', 'pronoun', 'ledger']);
 
 /**
- * The field as the two arc schemas define it (lib/sdk-client/subagents.js). The
- * outline and content-bundle schema files carry the same shape and wording, with the
- * `additionalProperties: false` those files put on every object; a test holds the
- * four to one wording (fix 3.7b). The arc writer's OUTPUT FORMAT shows `about` in
- * this wording too.
+ * The field's one wording. The outline and content-bundle schema files carry this shape
+ * and wording, with the `additionalProperties: false` those files put on every object; a
+ * test holds them to it (fix 3.7b).
  */
 const WRITER_QUESTIONS_PROPERTY = Object.freeze({
   type: 'array',
@@ -221,35 +219,89 @@ function schemaWithoutWriterQuestions(schema) {
   return schemasWithout.get(schema);
 }
 
-/** A name as a whole word, any case: "Sarah" in "Sarah's pronoun", not in "Sarahson". */
-function namesWord(text, name) {
-  const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (!escaped) return false;
-  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(text);
+// ═══════════════════════════════════════════════════════════════════════════
+// THE WEAVE'S QUESTIONS (phase 4, brief 4.4; C15)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** The weave's field for its questions (lib/weave.js). */
+const WEAVE_QUESTIONS_KEY = 'questions';
+
+/**
+ * A weave question's kind: C15's three cases, as the story meeting asks them. `player`:
+ * the record holds nothing about a player; `pronoun`: a roster pronoun is missing;
+ * `figure`: a figure looks wrong, in the ledger or as said in the room.
+ */
+const WEAVE_QUESTION_KINDS = Object.freeze(['player', 'pronoun', 'figure']);
+
+/**
+ * The weave's `questions`, as the weave's schema carries it (lib/sdk-client/subagents.js
+ * WEAVE_SCHEMA): each question with its id, its kind, what it is about, the question and
+ * what its answer changes in print. The arc writer's OUTPUT FORMAT shows `about` in this
+ * wording.
+ */
+const WEAVE_QUESTIONS_PROPERTY = Object.freeze({
+  type: 'array',
+  description: 'Questions for the director (C15), each saying what its answer changes',
+  items: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'A short id, unique in the weave' },
+      kind: { type: 'string', enum: [...WEAVE_QUESTION_KINDS], description: 'The C15 case the question raises' },
+      about: { type: 'string', description: "The player's name; for a figure, the ledger entry's time and amount or the words said in the room" },
+      question: { type: 'string', description: 'The question for the director' },
+      changes: { type: 'string', description: 'What its answer changes in print' }
+    },
+    required: ['id', 'kind', 'about', 'question', 'changes']
+  }
+});
+
+/** The five strings a weave question carries. */
+const WEAVE_QUESTION_FIELDS = ['id', 'kind', 'about', 'question', 'changes'];
+
+/**
+ * The weave's questions in a list, as `{id, kind, about, question, changes}` with each
+ * string trimmed at the ends. An entry that lacks one of the five, or whose kind is not
+ * one of WEAVE_QUESTION_KINDS, is not a question the meeting can ask, and is left out.
+ *
+ * @param {*} value - a weave's questions
+ * @returns {Array<{id: string, kind: string, about: string, question: string, changes: string}>}
+ */
+function weaveQuestionsOf(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((q) => q && typeof q === 'object')
+    .map((q) => Object.fromEntries(WEAVE_QUESTION_FIELDS.map((field) => [field, typeof q[field] === 'string' ? q[field].trim() : ''])))
+    .filter((q) => WEAVE_QUESTION_FIELDS.every((field) => q[field]) && WEAVE_QUESTION_KINDS.includes(q.kind));
 }
 
 /**
- * The roster members a question names, in roster order (C7, C15). A question names a
- * player when its kind is `player` and what it is about (`about`) holds the roster
- * name or the character's full name as a whole word, so a question about "Sarah
- * Blackwood" covers "Sarah". A pronoun or ledger question covers no one (fix 3.7b): a
- * ledger question about an account named after a player is about the account, and an
- * account's name is never a reason to suspect its namesake (T4).
+ * A weave rework's questions (C15, R5): a rework keeps every question it did not answer.
+ * - An automatic pass (a failed check or the fact check sent it) keeps every previous
+ *   question: one it returned under the same id is its version, in the previous place;
+ *   one it left out comes back, in its place; its questions under new ids follow.
+ * - A rework after the director's note returns the questions the note left open beside
+ *   its own: its list replaces the old one, an empty list included.
+ * - A rework that returns no list keeps the previous one, on either kind of pass.
  *
- * @param {*} questions - writerQuestions
- * @param {string[]} roster - the session roster (first names)
- * @param {Object} [canonicalCharacters] - state.canonicalCharacters (first name -> full name)
- * @returns {string[]}
+ * @param {*} returned - the rework's questions (undefined when it returned none)
+ * @param {*} previous - the previous weave's questions
+ * @param {{afterDirectorNote: boolean}} options - required, as carriedWriterQuestions
+ * @returns {Array}
  */
-function questionedRosterNames(questions, roster, canonicalCharacters = {}) {
-  const abouts = writerQuestionsOf(questions).filter((q) => q.kind === 'player').map((q) => q.about);
-  if (abouts.length === 0) return [];
-  return (Array.isArray(roster) ? roster : [])
-    .filter((name) => typeof name === 'string' && name.trim())
-    .filter((name) => {
-      const names = [name, getCanonicalName(name, canonicalCharacters || {})];
-      return abouts.some((about) => names.some((n) => typeof n === 'string' && namesWord(about, n)));
-    });
+function carriedWeaveQuestions(returned, previous, { afterDirectorNote } = {}) {
+  if (typeof afterDirectorNote !== 'boolean') {
+    throw new TypeError('carriedWeaveQuestions: options.afterDirectorNote must be true or false (does this rework act on the director\'s note?)');
+  }
+  const previousQuestions = weaveQuestionsOf(previous);
+  if (!Array.isArray(returned)) return previousQuestions;
+  const returnedQuestions = weaveQuestionsOf(returned);
+  if (afterDirectorNote) return returnedQuestions;
+  const returnedById = new Map(returnedQuestions.map((q) => [q.id, q]));
+  const previousIds = new Set(previousQuestions.map((q) => q.id));
+  return [
+    ...previousQuestions.map((q) => returnedById.get(q.id) || q),
+    ...returnedQuestions.filter((q) => !previousIds.has(q.id))
+  ];
 }
 
 module.exports = {
@@ -261,5 +313,10 @@ module.exports = {
   withCarriedWriterQuestions,
   withoutWriterQuestions,
   schemaWithoutWriterQuestions,
-  questionedRosterNames
+  // Phase 4 (brief 4.4): the weave's questions
+  WEAVE_QUESTIONS_KEY,
+  WEAVE_QUESTION_KINDS,
+  WEAVE_QUESTIONS_PROPERTY,
+  weaveQuestionsOf,
+  carriedWeaveQuestions
 };

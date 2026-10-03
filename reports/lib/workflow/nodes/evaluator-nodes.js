@@ -35,7 +35,7 @@ const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
-const { getThemeNPCs, getThemeNPCEntries } = require('../../theme-config');
+const { getThemeNPCEntries } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 // Phase 3 (3.4): each journalist judge reads the rule set its writer reads, through
@@ -44,27 +44,29 @@ const { loadRuleSet } = require('../../rule-set');
 const { withReportingModeBlock } = require('../../prompt-builder');
 // Phase 2, brief 2.4: the judges read the record and the director's words through
 // the same renderers and builders the writers use, so a judge sees what it judges.
-const { renderRecordView, isBuriedTransactionRow } = require('../../prompt-renderers/record-view');
+const { renderRecordView } = require('../../prompt-renderers/record-view');
 const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
 const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
-// The writers' own builders: the arc writer's valid-id list, the writers'
-// SESSION_FACTS, the outline writer's inputs (its photo list among them) with the
-// hero it used, the article writer's inputs (its photos, 3.9), the PromptBuilder
-// (whose roster method gives the roster section, and whose money summary the outline
-// and article judges print, 3.9), and the one rule for a kept photo with the one hero
-// entry (the 4b fix batch), and the whiteboard's filename (task 4c-fix).
-// ARC_NOTES_LABEL is the arc writer's label for the director's notes, which the arc
-// judge's directorNotes line prints (one source, fix 3.4b).
-const { hasInterweavingPlan, extractEvidenceSummary, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
+// The writers' own builders: the writers' SESSION_FACTS, the outline writer's inputs
+// (its photo list among them) with the hero it used, the article writer's inputs (its
+// photos, 3.9), the PromptBuilder (whose roster method gives the roster section, and
+// whose money summary the outline and article judges print, 3.9), and the one rule for
+// a kept photo with the one hero entry (the 4b fix batch), and the whiteboard's filename
+// (task 4c-fix). ARC_NOTES_LABEL is the arc writer's label for the director's notes,
+// which the weave's fact check prints as its notes heading (one source, fix 3.4b).
+const { hasInterweavingPlan, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const {
   buildSessionFacts, outlineWriterInputs, articleWriterInputs, reworkHeroImage, getPromptBuilder, isPhotoExcluded, heroPhotoEntry,
   whiteboardFilenameOf
 } = require('./ai-nodes');
-// Phase 3 (3.7): the writers' questions for the director. The arc judge reads the arc
-// writer's, for rosterCoverage; every judge's JSON of an output leaves them out.
-const { writerQuestionsOf, withoutWriterQuestions } = require('../../writer-questions');
+// Phase 3 (3.7): every judge's JSON of an outline or an article leaves the writers'
+// questions out.
+const { withoutWriterQuestions } = require('../../writer-questions');
+// Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
+// the meeting's approval it skips on.
+const { isWeave, weaveForPrompt, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
 // The page's own rule for which money tracker prints (printedWriterTracker).
 const { TemplateAssembler } = require('../../template-assembler');
 // F1 (spec 2026-10-02 section 7): the director's edits are final. The outline and article
@@ -79,62 +81,10 @@ const {
 // QUALITY CRITERIA DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Quality criteria for each phase
- * Each criterion has a description, weight, and type (structural or advisory)
- *
- * Commit 8.15: Arc criteria updated for player-focus-guided architecture:
- * - STRUCTURAL criteria: Block if failed (rosterCoverage, evidenceIdValidity, accusationArcPresent)
- * - ADVISORY criteria: Warn but don't block (coherence, evidenceConfidenceBalance)
- *
- * The player-focus-guided architecture GUARANTEES playerFocusAlignment by design
- * (accusation arc is required, arcs are driven by player conclusions not evidence patterns)
- *
- * Phase 3 (3.4): `arcs` is the detective arc judge's set, unchanged (the detective is
- * parked, spec D13). The journalist's is getArcCriteria('journalist'): the same five
- * criteria reworded to name the rule they score, plus the truth criteria. Every phase
- * resolves its criteria through getPhaseCriteria(phase, theme).
- */
-const QUALITY_CRITERIA = {
-  arcs: {
-    // ═══════════════════════════════════════════════════════════════════════
-    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.75)
-    // ═══════════════════════════════════════════════════════════════════════
-    rosterCoverage: {
-      description: 'Does every roster member have a placement in at least one arc?',
-      weight: 0.30,
-      type: 'structural'
-    },
-    evidenceIdValidity: {
-      description: 'Are all keyEvidence IDs valid (exist in evidence bundle)?',
-      weight: 0.25,
-      type: 'structural'
-    },
-    accusationArcPresent: {
-      description: 'Is there an arc with arcSource="accusation" addressing the player accusation?',
-      weight: 0.20,
-      type: 'structural'
-    },
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.25)
-    // ═══════════════════════════════════════════════════════════════════════
-    coherence: {
-      description: 'Do arcs tell a consistent story without contradictions?',
-      weight: 0.15,
-      type: 'advisory'
-    },
-    evidenceConfidenceBalance: {
-      description: 'Are there arcs with strong/moderate evidence (not all speculative)?',
-      weight: 0.10,
-      type: 'advisory'
-    }
-  },
-  // Outline criteria use getOutlineCriteria(theme) for theme-aware descriptions
-  outline: null,  // Populated by getOutlineCriteria() at evaluation time
-  // Article criteria use getArticleCriteria(theme) for theme-aware descriptions
-  article: null  // Populated by getArticleCriteria() at evaluation time
-};
+// Each phase resolves its criteria through getPhaseCriteria(phase, theme): the weave's
+// fact check scores the truth criteria alone (phase 4, brief 4.4); the outline and
+// article judges add their weighted criteria (getOutlineCriteria, getArticleCriteria).
+// The detective's arc criteria went with its arc stage (ruling R1).
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TRUTH CRITERIA (phase 3, 3.4; spec section 4 and R2)
@@ -153,12 +103,16 @@ const QUALITY_CRITERIA = {
 // is worded per judge, and `reads` names the material each judge's criterion checks
 // against (TRUTH_MATERIAL); the tests find every one in that judge's prompts.
 //
-// `phases` limits a group to the judges whose output it scores. Arcs place no photos
-// and print nothing, so the arc judge leaves out photos and the fiction's words: there
-// a criterion could only misfire, at the cost of an automatic arc rework.
+// `phases` limits a group to the judges whose output it scores. A weave places no photos
+// and prints nothing, so the weave's fact check leaves out photos and the fiction's
+// words: there a criterion could only misfire, at the cost of an automatic fix.
+//
+// Phase 4 (brief 4.4): the arc stage's judge is the weave's fact check, and each of its
+// questions is worded for the weave (the `arcs` phase keeps its name, as the stop types
+// do, R3).
 
 /** What each judge scores, as the truth criteria name it. */
-const TRUTH_SUBJECTS = { arcs: 'the arcs', outline: 'the outline', article: 'the article' };
+const TRUTH_SUBJECTS = { arcs: 'the weave', outline: 'the outline', article: 'the article' };
 
 /**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
@@ -210,7 +164,11 @@ const TRUTH_GROUPS = [
     key: 'verdictTruth',
     rules: ['T2'],
     reads: () => ['verdict', 'notes'],
-    describe: (s) => `Is the verdict in ${s} told as the room's official story, with the alternative theories the room debated reported, and left ungraded against any hidden answer (T2)?`
+    // Phase 4 (brief 4.4; T2 as rewritten): the map places the theories the room debated,
+    // so the weave's question asks for the verdict as the official story alone.
+    describe: (s, phase) => (phase === 'arcs'
+      ? `Is the verdict in ${s} told as the room's official story, ungraded against any hidden answer (T2)? The theories the room debated are the map's to place, so the weave keeps T2 whether it names them or not.`
+      : `Is the verdict in ${s} told as the room's official story, with the alternative theories the room debated reported, and left ungraded against any hidden answer (T2)?`)
   },
   {
     key: 'stagesTruth',
@@ -285,59 +243,16 @@ function truthCriteria(phase) {
 }
 
 /**
- * The heading under which the journalist arc judge reads the arc writer's questions
- * for the director (phase 3, 3.7), which its rosterCoverage criterion names.
- */
-const ARC_JUDGE_QUESTIONS_LABEL = 'QUESTIONS FOR THE DIRECTOR (writerQuestions):';
-
-/**
- * The journalist arc judge's weighted criteria: QUALITY_CRITERIA.arcs, each reworded to
- * name the rule or craft item it scores, with the same weight and type.
+ * The weave's fact check's criteria (phase 4, brief 4.4; spec 4.5): the truth criteria,
+ * worded for the weave, and nothing else. Its weighted criteria went: player coverage
+ * left the arc stage for the map, the code checks hold the receipts and the verdict
+ * thread, and no notes on the writing reach the story meeting. One set for every theme:
+ * the detective's arc criteria went with its arc stage (ruling R1).
  *
- * Phase 3 (3.7; C7, C15): rosterCoverage counts a player covered by a placement or by
- * a question of kind "player" to the director about them, as the arc check does (fix
- * 3.7b). It stays structural.
+ * @returns {Object} the truth criteria
  */
-const JOURNALIST_ARC_CRITERIA = {
-  rosterCoverage: {
-    description: 'Does every roster member have a placement in at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR (C7, C15)?',
-    weight: 0.30,
-    type: 'structural'
-  },
-  evidenceIdValidity: {
-    description: 'Are all keyEvidence IDs valid, each naming a document in the record (T1)?',
-    weight: 0.25,
-    type: 'structural'
-  },
-  accusationArcPresent: {
-    description: 'Is there an arc with arcSource="accusation" that takes up the room\'s verdict (T2)?',
-    weight: 0.20,
-    type: 'structural'
-  },
-  // Phase 3 (3.9): the tension it describes is C16's, and named so (round 7's craft).
-  // Final review (judges-factcheck[1]): round 7 made C3 "How the official story was
-  // made", which says nothing of facts that cannot both be true, so that clause cites
-  // no item.
-  coherence: {
-    description: 'Do the arcs agree on the record\'s facts, with no two claims that cannot both be true? Arcs that pull against each other or against the room\'s verdict are the tension the article uses (C16).',
-    weight: 0.15,
-    type: 'advisory'
-  },
-  evidenceConfidenceBalance: {
-    description: 'Are there arcs with strong or moderate evidence, not all speculative (T1)?',
-    weight: 0.10,
-    type: 'advisory'
-  }
-};
-
-/**
- * Get theme-aware arc evaluation criteria
- * @param {string} theme - 'journalist' or 'detective'
- * @returns {Object} Arc quality criteria
- */
-function getArcCriteria(theme = 'journalist') {
-  if (theme === 'detective') return QUALITY_CRITERIA.arcs;
-  return { ...JOURNALIST_ARC_CRITERIA, ...truthCriteria('arcs') };
+function getArcCriteria() {
+  return truthCriteria('arcs');
 }
 
 /**
@@ -583,7 +498,7 @@ function getArticleCriteria(theme = 'journalist') {
  */
 function getPhaseCriteria(phase, theme = 'journalist') {
   switch (phase) {
-    case 'arcs': return getArcCriteria(theme);
+    case 'arcs': return getArcCriteria();
     case 'outline': return getOutlineCriteria(theme);
     case 'article': return getArticleCriteria(theme);
     default: throw new Error(`No quality criteria defined for phase: ${phase}`);
@@ -995,53 +910,6 @@ const EVALUATION_JSON_SCHEMA = {
 
 // getSdkClient imported from node-helpers.js
 
-/**
- * The detective arc judge's NPC lines, keyed by NPC name. Unchanged since phase 2:
- * the detective is parked (spec D13). The journalist judge reads each NPC's canon
- * line from the theme config instead (getNpcDescriptions, M26).
- */
-const DETECTIVE_NPC_DESCRIPTIONS = {
-  'Marcus': 'Marcus (the murder victim) - should appear in most arcs as the central victim',
-  'Nova': 'Nova (the journalist narrator) - may appear as the article\'s narrator/voice',
-  'Blake': 'Blake / Valet (NPC character) - may appear in relevant arcs',
-  'Valet': null  // Alias for Blake, skip in descriptions
-};
-
-/**
- * Build NPC description list for evaluation prompts
- *
- * Journalist (phase 3, 3.4, M26): one line per NPC, its full name, its aliases and
- * its canon line, as lib/theme-config.js states them once for every prompt (the
- * roster section reads the same line). The detective keeps today's lines.
- *
- * @param {string} theme - Theme name ('journalist' or 'detective')
- * @returns {string} Formatted NPC descriptions for prompt injection
- */
-function getNpcDescriptions(theme) {
-  if (theme === 'journalist') {
-    const entries = getThemeNPCEntries(theme).filter(entry => entry && typeof entry === 'object');
-    return entries
-      .filter(entry => !entry.aliasOf)
-      .map(entry => {
-        const aliases = entries.filter(alias => alias.aliasOf === entry.name).map(alias => `the ${alias.name}`);
-        const also = aliases.length > 0 ? ` (also called ${aliases.join(', ')})` : '';
-        return `- ${entry.fullName || entry.name}${also}${entry.role ? `: ${entry.role}` : ''}`;
-      })
-      .join('\n');
-  }
-  const npcs = getThemeNPCs(theme);
-  const seen = new Set();
-  return npcs
-    .filter(name => {
-      const desc = DETECTIVE_NPC_DESCRIPTIONS[name];
-      if (!desc || seen.has(name)) return false;
-      seen.add(name);
-      return true;
-    })
-    .map(name => `- ${DETECTIVE_NPC_DESCRIPTIONS[name]}`)
-    .join('\n');
-}
-
 const SECTION_RULE = '═══════════════════════════════════════════════════════════════════════════';
 
 /** A boxed section heading, as every judge prompt draws them. */
@@ -1090,7 +958,9 @@ function weightedCriteriaList(criteria, wanted) {
  * Build system prompt for evaluation
  *
  * Phase 3 (3.4): the journalist judges read the rule set (journalistEvaluationSystemPrompt);
- * the detective's judges are unchanged (detectiveEvaluationSystemPrompt, spec D13).
+ * the detective's outline and article judges are unchanged (detectiveEvaluationSystemPrompt,
+ * spec D13). Phase 4 (brief 4.4): the weave's fact check is one prompt for every theme,
+ * since the detective's arc judge went with its arc stage (ruling R1).
  *
  * @param {string} phase - Phase name (arcs, outline, article)
  * @param {Object} criteria - Quality criteria for phase
@@ -1100,13 +970,14 @@ function weightedCriteriaList(criteria, wanted) {
  * @returns {string} System prompt
  */
 function buildEvaluationSystemPrompt(phase, criteria, theme = 'journalist', { sessionConfig = null } = {}) {
-  if (theme === 'detective') return detectiveEvaluationSystemPrompt(phase, criteria);
+  if (theme === 'detective' && phase !== 'arcs') return detectiveEvaluationSystemPrompt(phase, criteria);
   return journalistEvaluationSystemPrompt(phase, criteria, sessionConfig);
 }
 
 /**
- * The detective judges' system prompts, as they were before phase 3 (parked, spec D13;
- * __tests__/unit/workflow/evaluator-nodes.test.js pins them by hash).
+ * The detective's outline and article judges' system prompts, as they were before phase
+ * 3 (parked, spec D13; __tests__/unit/workflow/evaluator-nodes.test.js pins them by
+ * hash). Its arc judge went with its arc stage (phase 4, brief 4.4; ruling R1).
  *
  * @param {string} phase
  * @param {Object} criteria
@@ -1128,63 +999,6 @@ EVALUATION RULES:
 3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
 4. Content is READY if ALL structural criteria pass
 5. Content is NOT READY only if a STRUCTURAL criterion fails`;
-
-  // For arcs phase, use structural/advisory distinction
-  // Commit 8.17: Added immutability guidance and NPC allowlist
-  if (phase === 'arcs') {
-    return `You are the ARCS Evaluator for an investigative article about "About Last Night" - a crime thriller game.
-
-Your task is to evaluate if the arcs are ready for human review.
-
-${boxedHeading('IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)')}
-The following inputs were approved in earlier phases and CANNOT be modified:
-- evidenceBundle: The curated evidence is final (exposed/buried structure is locked)
-- playerFocus: The accusation and whiteboard conclusions are immutable
-- directorNotes: The director's observations are ground truth - never question them
-- roster: The session roster is fixed (these are the players who attended)
-
-Your feedback should focus on how ARCS USE these inputs, not changing the inputs themselves.
-Do NOT suggest adding new evidence, changing the roster, or modifying player conclusions.
-
-${boxedHeading('KNOWN NPCs (Valid in characterPlacements despite NOT being on roster)')}
-The following NPCs are valid in arc characterPlacements:
-${getNpcDescriptions('detective')}
-
-These are NOT roster members and should NOT be flagged as missing from roster coverage.
-Do NOT remove them from characterPlacements or flag them as "non-roster characters".
-Roster coverage ONLY applies to the actual player roster, not NPCs.
-
-${boxedHeading('NON-ROSTER PCs (Valid for MENTIONS - evidence-based only)')}
-Non-roster PCs are valid game characters who were NOT present at this session's investigation.
-Examples: If Nat, Ezra, or others are NOT in the roster, they are non-roster PCs.
-
-Non-roster PCs CAN appear in arc characterPlacements when:
-- They are mentioned in exposed evidence (someone's memory about them)
-- They are referenced in paper evidence documents
-
-They should NOT be flagged as "missing from roster coverage" or as invalid.
-However, their roles must be EVIDENCE-BASED, not OBSERVED:
-- CORRECT: "Nat: Mentioned in Alex's memory as co-investor"
-- WRONG: "Nat: Was seen coordinating with Vic" (the investigation did not observe this)
-
-When a non-roster PC appears, add appropriate caveats to indicate evidence-based inference.
-
-${criteriaSections}
-
-CRITICAL DISTINCTION:
-- accusationArcPresent: Check if any arc has arcSource="accusation"
-- evidenceIdValidity: Check if keyEvidence IDs exist in the evidence bundle
-- rosterCoverage: Check if every roster member appears in characterPlacements of at least one arc
-
-CRITICAL: Your feedback MUST be actionable. Include:
-- SPECIFIC names (characters missing from roster coverage)
-- SPECIFIC evidence IDs (which IDs are invalid)
-- CONCRETE fixes (not "improve grounding" but "Arc 2 should reference evidence ID xyz123")
-
-${outputFormat('specific explanation with names/evidence')}
-
-Remember: STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
-  }
 
   // Commit 8.21: Use structural/advisory distinction for outline and article phases too
   if (phase === 'outline') {
@@ -1271,12 +1085,26 @@ const JUDGE_RULE_CALLS = { arcs: 'judge-arc', outline: 'judge-outline', article:
 /** The writer whose output each judge judges, as the prompts name it. */
 const JUDGED_WRITERS = { arcs: 'arc writer', outline: 'outline writer', article: 'article writer' };
 
-/** How a truth finding quotes the text at fault, per judge. */
+/**
+ * How a truth finding quotes the text at fault, per judge. A breach in the weave names
+ * the thread it is in (phase 4, brief 4.4), so the fix and the meeting find its line.
+ */
 const TRUTH_FINDING_QUOTE = {
-  arcs: 'quotes the claim and names its arc',
+  arcs: 'quotes the text at fault, names the thread it is in by its id (or the field, for the story, the question, the headline, the convergence or a connection)',
   outline: 'quotes the planned line and names its section',
   article: 'quotes the sentence and names its section'
 };
+
+/**
+ * The scoring rules a truth-only judge reads (phase 4, brief 4.4): its truth criteria
+ * are the whole evaluation, with no weighted average and no advisory criteria, and
+ * overallScore comes from the truth criteria. The weave's fact check reads them now; the
+ * article judge moves onto them in its own slice.
+ */
+const TRUTH_ONLY_EVALUATION_RULES = `EVALUATION RULES:
+1. The truth criteria above are the whole evaluation: each finding is a breach of a truth rule.
+2. Score each truth criterion from 0.0 to 1.0. The output is READY, with structuralPassed true, when every truth criterion scores ${STRUCTURAL_PASS_SCORE} or more.
+3. overallScore is the lowest truth-criterion score.`;
 
 /** The journalist judges' scoring rules (M30: they say how the score is made). */
 const JOURNALIST_EVALUATION_RULES = `EVALUATION RULES:
@@ -1340,9 +1168,11 @@ function journalistEvaluationSystemPrompt(phase, criteria, sessionConfig) {
   if (!call) throw new Error(`Unknown evaluation phase: ${phase}`);
   const { core } = loadRuleSet(call);
   const writer = JUDGED_WRITERS[phase];
-  const judged = phase === 'arcs' ? 'the arcs' : phase === 'outline' ? 'the outline' : 'the article';
+  const judged = TRUTH_SUBJECTS[phase];
   const frame = `The rules above are the ones the ${writer} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.`;
-  const judging = `${truthCriteriaSection(phase, criteria)}${boxedHeading('STRUCTURAL CRITERIA (MUST PASS - these block if failed)')}
+  // The outline and article judges: the truth criteria, then the weighted criteria, the
+  // craft findings and the weighted scoring rules.
+  const judging = () => `${truthCriteriaSection(phase, criteria)}${boxedHeading('STRUCTURAL CRITERIA (MUST PASS - these block if failed)')}
 ${weightedCriteriaList(criteria, 'structural')}
 
 ${boxedHeading('ADVISORY CRITERIA (Warn but don\'t block - these are quality guidance)')}
@@ -1354,60 +1184,19 @@ ${JOURNALIST_EVALUATION_RULES}`;
 
   let prompt;
   if (phase === 'arcs') {
-    prompt = `You are the ARCS Evaluator for an investigative article about "About Last Night" - a crime thriller game.
+    // Phase 4 (brief 4.4; spec 4.5): the weave's fact check scores the truth criteria
+    // alone, by the truth-only rules, and reads no craft file (RULE_SET_CALLS['judge-arc']).
+    // Its weighted criteria, its craft findings and the arc lists (roster coverage, NPCs
+    // in placements, source labels) went with the arcs.
+    prompt = `You are the WEAVE fact check for an investigative article about one session of the game: you check the weave the arc writer wrote, before the director reads it at the story meeting.
 
 ${core}
 
-Your task is to evaluate if the arcs are ready for human review. ${frame}
+Your task is to find each breach of the truth rules in the weave. ${frame}
 
-${boxedHeading('IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)')}
-The following inputs were approved in earlier phases and CANNOT be modified:
-- evidenceBundle: The curated evidence is final (exposed/buried structure is locked)
-- playerFocus: The accusation and whiteboard conclusions are immutable
-- directorNotes: ${ARC_NOTES_LABEL}
-- roster: The session roster is fixed (these are the players who attended)
+${truthCriteriaSection(phase, criteria)}${TRUTH_ONLY_EVALUATION_RULES}
 
-Your feedback should focus on how ARCS USE these inputs, not changing the inputs themselves.
-Do NOT suggest adding new evidence, changing the roster, or modifying player conclusions.
-
-${boxedHeading('KNOWN NPCs (Valid in characterPlacements despite NOT being on roster)')}
-The following NPCs are valid in arc characterPlacements, each with its canon line:
-${getNpcDescriptions('journalist')}
-
-These are NOT roster members and should NOT be flagged as missing from roster coverage.
-Do NOT remove them from characterPlacements or flag them as "non-roster characters".
-Roster coverage ONLY applies to the actual player roster, not NPCs.
-
-${boxedHeading('NON-ROSTER PCs (Valid for MENTIONS - evidence-based only)')}
-Non-roster PCs are valid game characters who were NOT present at this session's investigation.
-Examples: If Nat, Ezra, or others are NOT in the roster, they are non-roster PCs.
-
-Non-roster PCs CAN appear in arc characterPlacements when:
-- They are mentioned in exposed evidence (someone's memory about them)
-- They are referenced in paper evidence documents
-
-They should NOT be flagged as "missing from roster coverage" or as invalid.
-However, their roles must be EVIDENCE-BASED, not OBSERVED:
-- CORRECT: "Nat: Mentioned in Alex's memory as co-investor"
-- WRONG: "Nat: Was seen coordinating with Vic" (Nova didn't see this)
-
-When a non-roster PC appears, add appropriate caveats to indicate evidence-based inference.
-
-${judging}
-
-CRITICAL DISTINCTION:
-- accusationArcPresent: Check if any arc has arcSource="accusation"
-- evidenceIdValidity: Check if keyEvidence IDs exist in the evidence bundle
-- rosterCoverage: Check that every roster member appears in characterPlacements of at least one arc, or has a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR
-
-CRITICAL: Your feedback MUST be actionable. Include:
-- SPECIFIC names (characters missing from roster coverage)
-- SPECIFIC evidence IDs (which IDs are invalid)
-- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "improve grounding" but "Arc 2 should reference evidence ID xyz123")
-
-${outputFormat('specific explanation with names/evidence')}
-
-Remember: STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
+${outputFormat('the breach: the text at fault, the thread it is in, and the record it contradicts')}`;
   } else if (phase === 'outline') {
     prompt = `You are the OUTLINE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
 
@@ -1423,7 +1212,7 @@ The following inputs were approved in earlier phases and CANNOT be modified:
 
 Your feedback should focus on how the OUTLINE USES these inputs, not changing the inputs.
 
-${judging}
+${judging()}
 
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC arc titles that are missing coverage
@@ -1453,7 +1242,7 @@ ${boxedHeading('EVALUATION GOAL: COMPELLING GIFT FOR PLAYERS')}
 The article should feel like a real investigative piece that celebrates the players' gameplay experience.
 Visual distribution serves narrative flow, NOT quota compliance.
 
-${judging}
+${judging()}
 
 CRITICAL: Your feedback MUST be actionable. Include:
 - SPECIFIC lines with voice issues
@@ -1640,12 +1429,14 @@ function renderJudgeRosterSection(state) {
  * never rewritten.
  *
  * @param {Object} state
+ * @param {string} [heading] - the notes' heading; the weave's fact check gives the arc
+ *   writer's own label (ARC_NOTES_LABEL), so the two read the notes under one text
  * @returns {string}
  */
-function renderJudgeDirectorNotes(state) {
+function renderJudgeDirectorNotes(state, heading = "THE DIRECTOR'S NOTES (the director's own account of the investigation, with any input-review corrections after it):") {
   const notes = state.directorNotes || {};
   const listOf = (value) => (Array.isArray(value) ? value : []);
-  return `THE DIRECTOR'S NOTES (the director's own account of the investigation, with any input-review corrections after it):
+  return `${heading}
 ${renderDirectorEnrichmentBlock({
   rawProse: notes.rawProse || '',
   quotes: listOf(notes.quotes),
@@ -1899,130 +1690,26 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
   const afterJudged = directorEditsSection ? `${directorEditsSection}\n\n` : '';
   switch (phase) {
     case 'arcs': {
-      // Provide roster for rosterCoverage evaluation
-      const roster = state.sessionConfig?.roster || [];
-      // Brief 2.4: the valid ids are the arc writer's list, built by the writer's own
-      // function, so each names a document the record view below shows by that id.
-      const allEvidenceIds = extractEvidenceSummary(state.evidenceBundle || {}).allEvidenceIds;
+      // Phase 4 (brief 4.4): the weave's fact check reads the weave, without its mark,
+      // then what the arc writer read for the truth rules: the verdict beside the
+      // director's account of it, the roster with pronouns, the director's notes under
+      // the arc writer's own label, and the record with its morning timeline. The weave's
+      // receipts and its verdict thread are the code checks', and no craft file is read.
+      return `Check this weave against the record and the director's words:
 
-      // Extract key playerFocus elements for evaluation. The accusation and the
-      // director's observations are no longer in this JSON (brief 2.4, roadmap 2.4):
-      // they are rendered below as the arc writer renders them, beside the director's
-      // own words, so each appears once.
-      const playerFocusForEval = {
-        primaryInvestigation: state.playerFocus?.primaryInvestigation,
-        primarySuspects: state.playerFocus?.primarySuspects || []
-      };
-
-      // Phase 3 (3.4): the journalist judge reads the whole record view, its sales on
-      // the morning timeline (3.5) under the one row rule every prompt applies
-      // (isBuriedTransactionRow). The detective judge keeps its own list.
-      let recordSection;
-      if (journalist) {
-        recordSection = `${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
-
-${renderJudgeCraft('arcs')}`;
-      } else {
-        // evidenceBundle has nested structure: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } }
-        const buriedData = state.evidenceBundle?.buried || {};
-        // Flatten buried items - INCLUDE IDs and amounts for financial verification.
-        // Only rows that are transactions, by the record view's rule, as the arc writer
-        // lists them (phase 2 final fix wave): an unsold memory used to show as "Unknown".
-        const buriedTx = Array.isArray(buriedData.transactions) ? buriedData.transactions.filter(isBuriedTransactionRow) : [];
-        const buriedRel = Array.isArray(buriedData.relationships) ? buriedData.relationships : [];
-        const buriedEvidence = [...buriedTx, ...buriedRel]
-          .map((e, index) => ({
-            id: `buried-${index + 1}`,  // Synthetic ID — real token IDs stripped to prevent identity leak
-            amount: e.amount || e.transactionAmount,
-            accountName: e.shellAccount || e.accountName || 'Unknown',
-            time: e.time || e.sessionTransactionTime
-          }));
-        recordSection = `${renderRecordView(state.evidenceBundle, { buried: false })}
-
-BURIED TRANSACTIONS (${buriedEvidence.length} - for amount/account verification):
-${JSON.stringify(buriedEvidence, null, 2)}`;
-      }
-
-      const checklist = journalist
-        ? `1. ROSTER COVERAGE: Every name in SESSION ROSTER has a role in characterPlacements of at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR
-2. EVIDENCE ID VALIDITY: Every keyEvidence ID should exist in ALL VALID EVIDENCE IDS list
-3. ACCUSATION ARC PRESENT: At least one arc should have arcSource="accusation"
-4. TRUTH RULES: Every truth criterion in your instructions, each breach written under its rule ids
-
-═══════════════════════════════════════════════════════════════════════════
-ADVISORY CHECKS (Warn but don't block)
-═══════════════════════════════════════════════════════════════════════════
-5. COHERENCE: Do the arcs agree on the record's facts? Arcs that pull against each other or against the room's verdict are the tension the article uses.
-6. EVIDENCE CONFIDENCE BALANCE: Are there arcs with evidenceStrength="strong" or "moderate" (not all speculative)?`
-        : `1. ROSTER COVERAGE: Every name in SESSION ROSTER needs a role in characterPlacements of at least one arc
-2. EVIDENCE ID VALIDITY: Every keyEvidence ID should exist in ALL VALID EVIDENCE IDS list
-3. ACCUSATION ARC PRESENT: At least one arc should have arcSource="accusation"
-
-═══════════════════════════════════════════════════════════════════════════
-ADVISORY CHECKS (Warn but don't block)
-═══════════════════════════════════════════════════════════════════════════
-4. COHERENCE: Do arcs tell a consistent story without contradictions?
-5. EVIDENCE CONFIDENCE BALANCE: Are there arcs with evidenceStrength="strong" or "moderate" (not all speculative)?`;
-
-      // Phase 3 (3.7; C7, C15): the arc writer's questions for the director, which the
-      // journalist rosterCoverage criterion counts. The detective's writer raises none.
-      const questionsSection = journalist
-        ? `${ARC_JUDGE_QUESTIONS_LABEL}
-${JSON.stringify(writerQuestionsOf(state._arcAnalysisCache?.writerQuestions), null, 2)}
-
-`
-        : '';
-
-      return `Evaluate these narrative arcs:
-
-ARCS:
-${JSON.stringify(state.narrativeArcs || [], null, 2)}
-
-${questionsSection}SESSION ROSTER (${roster.length} players who were PRESENT this session):
-${JSON.stringify(roster, null, 2)}
-
-CRITICAL ROSTER vs EVIDENCE DISTINCTION:
-- The ROSTER above lists the ONLY characters who need arc coverage (they were played this session)
-- Evidence IDs may reference characters NOT on the roster (from the broader game universe)
-- Do NOT infer roster members from evidence ID prefixes (e.g., "ezr011" does NOT mean "Ezra" is on roster)
-- ONLY check coverage for the ${roster.length} names listed in SESSION ROSTER above
-
-The canonical roster below gives ${journalist ? 'names and pronouns' : 'names'} only. Check coverage against the SESSION ROSTER above, not against this list.
-
-${renderJudgeRosterSection(state)}
+WEAVE:
+${JSON.stringify(weaveForPrompt(state.weave) || null, null, 2)}
 
 THE ACCUSATION (the parsed verdict, then the director's account word for word):
 ${renderArcAccusation(state.playerFocus?.accusation, directorAccusationText(state), "Players' Reasoning")}
 
-${renderJudgeDirectorNotes(state)}
+${renderJudgeRosterSection(state)}
 
-PLAYER FOCUS (arcs should reflect what players investigated):
-${JSON.stringify(playerFocusForEval, null, 2)}
+${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}
 
-ALL VALID EVIDENCE IDS (${allEvidenceIds.length} total - use to verify keyEvidence references):
-${JSON.stringify(allEvidenceIds, null, 2)}
+${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
-${recordSection}
-
-EVALUATION CHECKLIST (Commit 8.15 - Structural vs Advisory):
-
-═══════════════════════════════════════════════════════════════════════════
-STRUCTURAL CHECKS (MUST PASS)
-═══════════════════════════════════════════════════════════════════════════
-${checklist}
-
-IMPORTANT FOR NEW FIELDS (Commit 8.15):
-- arcSource: Should be one of ["accusation", "whiteboard", "observation", "discovered"]
-- evidenceStrength: Should be one of ["strong", "moderate", "weak", "speculative"]
-- caveats: Array of complications/contradictions
-- unansweredQuestions: Array of evidence gaps
-
-Be SPECIFIC in issues:
-- Name missing characters FROM THE ROSTER
-- List invalid evidence IDs
-- Note if accusation arc is missing
-
-Are these arcs ready for human review?`;
+Is the weave free of truth-rule breaches?`;
     }
 
     case 'outline': {
@@ -2232,11 +1919,11 @@ function createEvaluator(phase, options = {}) {
     const currentRevisions = state[revisionCountField] || 0;
 
     // Skip logic 1: If user has already approved this phase (checkpoint approval flag set)
-    // For arcs: selectedArcs means user approved arc selection
+    // For arcs: the story meeting's approval (lib/weave.js isMeetingApproved)
     // For outline: outlineApproved means user approved outline at checkpoint
     // For article: articleApproved means user approved article at checkpoint
     const hasUserApproved = (
-      (phase === 'arcs' && state.selectedArcs && state.selectedArcs.length > 0) ||
+      (phase === 'arcs' && isMeetingApproved(state)) ||
       (phase === 'outline' && state.outlineApproved === true) ||
       (phase === 'article' && state.articleApproved === true)
     );
@@ -2255,54 +1942,47 @@ function createEvaluator(phase, options = {}) {
       };
     }
 
-    // Skip logic 2: Check MOST RECENT evaluation for this phase
-    // (not first ready=true — that persists across revisions and blocks re-evaluation)
-    //
-    // Phase 3 (3.9; the ledger's Gate 3 finding): an entry escalated to the director is
-    // the verdict on the output at the stop, so a replay from START skips it as it skips
-    // a ready one; the route then takes the cap to the stop. At the gate each replay at
-    // an escalated stop paid for its evaluation again. Every rework and every rollback
-    // appends a not-ready stub first (graph.js increment*Revision, api-helpers.js
-    // buildRollbackState), so a changed output is always evaluated.
-    const existingEvals = state.evaluationHistory || [];
-    const phaseEvals = existingEvals.filter(e => e.phase === phase);
-    const mostRecent = phaseEvals[phaseEvals.length - 1];
-    if (mostRecent?.ready === true || mostRecent?.escalatedToHuman === true) {
-      const why = mostRecent.ready === true ? 'is ready=true' : 'escalated to the director';
-      console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - most recent ${phase} evaluation ${why}`);
-      return {
-        currentPhase: phaseConstant
-      };
+    // Skip logic 2: the weave's fact check skips by its mark on the weave; the outline
+    // and article judges by their most recent evaluation.
+    if (phase === 'arcs') {
+      // Phase 4 (brief 4.4): the weave's fact check runs once per round. It marks the
+      // weave it judged (below), and skips a marked weave: the fix keeps the mark, a
+      // replay finds it, and only a director's round writes a weave without it. The
+      // history is not read, so a rollback that clears it never costs a second call.
+      if (isWeaveJudged(state.weave)) {
+        console.log('[evaluateArcs] Skipping - the fact check has judged this weave');
+        return { currentPhase: phaseConstant };
+      }
+      if (!isWeave(state.weave)) {
+        console.log('[evaluateArcs] Skipping - the state holds no weave to check');
+        return {
+          evaluationHistory: { phase, timestamp: new Date().toISOString(), ready: false, reason: 'no-weave' },
+          currentPhase: phaseConstant
+        };
+      }
+    } else {
+      // Skip logic 2: Check MOST RECENT evaluation for this phase
+      // (not first ready=true — that persists across revisions and blocks re-evaluation)
+      //
+      // Phase 3 (3.9; the ledger's Gate 3 finding): an entry escalated to the director is
+      // the verdict on the output at the stop, so a replay from START skips it as it skips
+      // a ready one; the route then takes the cap to the stop. At the gate each replay at
+      // an escalated stop paid for its evaluation again. Every rework and every rollback
+      // appends a not-ready stub first (graph.js increment*Revision, api-helpers.js
+      // buildRollbackState), so a changed output is always evaluated.
+      const existingEvals = state.evaluationHistory || [];
+      const phaseEvals = existingEvals.filter(e => e.phase === phase);
+      const mostRecent = phaseEvals[phaseEvals.length - 1];
+      if (mostRecent?.ready === true || mostRecent?.escalatedToHuman === true) {
+        const why = mostRecent.ready === true ? 'is ready=true' : 'escalated to the director';
+        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Skipping - most recent ${phase} evaluation ${why}`);
+        return {
+          currentPhase: phaseConstant
+        };
+      }
     }
 
     console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Starting evaluation (revision ${currentRevisions}/${revisionCap})`);
-
-    // Debug: Log evaluation context
-    if (phase === 'arcs') {
-      const pf = state.playerFocus || {};
-      const roster = state.sessionConfig?.roster || [];
-      const arcs = state.narrativeArcs || [];
-      // Flatten evidence bundle for counting
-      const exposedData = state.evidenceBundle?.exposed || {};
-      const buriedData = state.evidenceBundle?.buried || {};
-      const exposedCount = (Array.isArray(exposedData.tokens) ? exposedData.tokens.length : 0) +
-                           (Array.isArray(exposedData.paperEvidence) ? exposedData.paperEvidence.length : 0);
-      const buriedCount = (Array.isArray(buriedData.transactions) ? buriedData.transactions.length : 0) +
-                          (Array.isArray(buriedData.relationships) ? buriedData.relationships.length : 0);
-      console.log(`[evaluateArcs] Evaluation context check:`);
-      console.log(`  - playerFocus.primaryInvestigation: "${pf.primaryInvestigation || 'MISSING'}"`);
-      console.log(`  - playerFocus.primarySuspects: ${JSON.stringify(pf.primarySuspects || [])}`);
-      console.log(`  - roster: ${JSON.stringify(roster)}`);
-      console.log(`  - arcs count: ${arcs.length}`);
-      console.log(`  - evidenceBundle: exposed=${exposedCount}, buried=${buriedCount}`);
-
-      // Check if roster members are in arc characterPlacements
-      const allPlacements = arcs.flatMap(a => Object.keys(a.characterPlacements || {}));
-      const missingFromArcs = roster.filter(r => !allPlacements.some(p => p.toLowerCase().includes(r.toLowerCase())));
-      if (missingFromArcs.length > 0) {
-        console.log(`  - MISSING from arcs: ${JSON.stringify(missingFromArcs)}`);
-      }
-    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // ARTICLE: programmatic fact-check BEFORE the Opus evaluation
@@ -2461,9 +2141,8 @@ function createEvaluator(phase, options = {}) {
       // 091826 it said "Ready: NO" and listed four evidence-card defects the
       // reviser had already fixed.
       //
-      // `feedback` and `revisionGuidance` carry the same text under both names:
-      // buildRevisionContext reads revisionGuidance first, buildArcRevisionContext
-      // (arc-specialist-nodes.js) reads only feedback.
+      // `feedback` and `revisionGuidance` carry the same text under both names, and
+      // buildRevisionContext reads revisionGuidance first.
       //
       // A proven defect outranks an opinion. At the cap the fact-check runs
       // without short-circuiting, so Opus can return structuralPassed:true over
@@ -2475,6 +2154,9 @@ function createEvaluator(phase, options = {}) {
       const criteriaRules = criteriaRulesOf(criteria);
       const buildValidationResults = (passed) => ({
         phase,
+        // Phase 4 (brief 4.4): the weave's fact check stamps the weave it read, as the
+        // weave checks do, so its fix and the meeting know the findings are this weave's.
+        ...(phase === 'arcs' && { weaveKey: weaveKey(state.weave) }),
         passed: passed && factCheckIssues.length === 0,
         structuralIssues: [
           ...judgeStructuralIssues,
@@ -2517,8 +2199,21 @@ function createEvaluator(phase, options = {}) {
         console.log(`  - issues: ${JSON.stringify(evaluation.issues)}`);
       }
 
+      // Phase 4 (brief 4.4; R6): the weave's fact check marks the weave it judged, with
+      // its verdict and no fix run yet. The route reads the mark: a breach gets its one
+      // fix (graph.js routeArcEvaluation), and the fix keeps the mark, so the stop opens
+      // without a second judge call. No escalation at a cap: the fix runs once.
+      if (phase === 'arcs') {
+        console.log(`[evaluateArcs] ${isReady ? 'No breach' : 'A breach: one automatic fix'} (score: ${evaluation.overallScore})`);
+        return {
+          evaluationHistory: historyEntry,
+          validationResults: buildValidationResults(isReady),
+          weave: withFactCheckMark(state.weave, { at: historyEntry.timestamp, ready: isReady, fixes: 0 }),
+          currentPhase: phaseConstant
+        };
+      }
+
       // Determine next action based on evaluation result
-      // Commit 8.15: Use isReady (which factors in structuralPassed for arcs)
       if (isReady) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Ready for human review (score: ${evaluation.overallScore})`);
 
@@ -2715,7 +2410,7 @@ function createMockEvaluator(phase, options = {}) {
 module.exports = {
   // Main evaluator functions (wrapped with LangSmith tracing)
   evaluateArcs: traceNode(evaluateArcs, 'evaluateArcs', {
-    stateFields: ['narrativeArcs', 'evaluationHistory']
+    stateFields: ['weave', 'evaluationHistory']
   }),
   evaluateOutline: traceNode(evaluateOutline, 'evaluateOutline', {
     stateFields: ['outline', 'evaluationHistory']
@@ -2732,8 +2427,9 @@ module.exports = {
 
   // Export for testing
   _testing: {
-    QUALITY_CRITERIA,
     EVALUATION_JSON_SCHEMA,
+    // Phase 4 (brief 4.4): the scoring rules a truth-only judge reads
+    TRUTH_ONLY_EVALUATION_RULES,
     getArcCriteria,
     getOutlineCriteria,
     getArticleCriteria,
@@ -2747,7 +2443,6 @@ module.exports = {
     renderJudgeDirectorEdits,
     guardDirectorEdits,
     recordTexts,
-    getNpcDescriptions,
     getSdkClient,
     buildEvaluationSystemPrompt,
     buildEvaluationUserPrompt,
@@ -2766,7 +2461,7 @@ if (require.main === module) {
   // Test with mock SDK client - returns parsed objects directly
   const mockSdkClient = async (options) => {
     // Return different scores based on phase
-    if (options.systemPrompt.includes('ARCS')) {
+    if (options.systemPrompt.includes('WEAVE fact check')) {
       return {
         ready: true,
         overallScore: 0.85,
@@ -2803,7 +2498,7 @@ if (require.main === module) {
 
   const mockState = {
     sessionId: 'self-test',
-    narrativeArcs: [{ title: 'Test Arc', summary: 'Test summary' }],
+    weave: { story: 'Test story.', threads: [{ id: 't1', claim: 'Test claim.', role: 'main-thread', receipt: 'ledger', verdict: true }], connections: [], questions: [] },
     playerFocus: { primaryInvestigation: 'Who is the Valet?' },
     evidenceBundle: { exposed: [{ id: 'e1' }], buried: [] },
     outline: { sections: [{ title: 'Intro' }] },

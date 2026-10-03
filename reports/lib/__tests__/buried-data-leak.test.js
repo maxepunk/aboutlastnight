@@ -51,6 +51,8 @@ describe('buried transaction ID stripping', () => {
     });
   });
 
+  // Phase 4 (brief 4.4): the summary lists no buried sale at all (the detective arc
+  // writer's list, its only reader, went with R1), so no buried id reaches the receipts.
   test('extractEvidenceSummary buried transactions lack id field (second defense)', () => {
     const evidenceBundle = {
       exposed: { tokens: [], paperEvidence: [] },
@@ -65,10 +67,8 @@ describe('buried transaction ID stripping', () => {
 
     const summary = extractEvidenceSummary(evidenceBundle);
 
-    for (const tx of summary.buriedTransactions) {
-      expect(tx).not.toHaveProperty('id');
-      expect(tx).toHaveProperty('shellAccount');
-      expect(tx).toHaveProperty('timeline', 'investigation');
-    }
+    expect(summary).not.toHaveProperty('buriedTransactions');
+    expect(summary.allEvidenceIds).not.toContain('sam004');
+    expect(JSON.stringify(summary)).not.toContain('sam004');
   });
 });

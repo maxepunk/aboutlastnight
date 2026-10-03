@@ -14,41 +14,7 @@ const {
   carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE
 } = require('../../hand-edit-diff');
 const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
-
-// ═══════════════════════════════════════════════════════════════════════════
-// NPC VALIDATION
-// Commit 8.17: Theme-configurable NPC allowlist for arc validation
-// NPCs are defined in lib/theme-config.js (DRY/SOLID - single source of truth)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Check if a character name is a known NPC
- * NPCs are valid in characterPlacements but don't count toward roster coverage.
- *
- * Uses word-boundary matching to avoid false positives:
- * - "Marcus" matches "Marcus", "Marcus Blackwood" ✓
- * - "Nova" matches "Nova", "Leyla Nova" ✓
- * - "Renovated" does NOT match "Nova" ✓
- *
- * @param {string} name - Character name to check
- * @param {string[]} npcs - Array of NPC names from theme config
- * @returns {boolean} True if known NPC
- */
-function isKnownNPC(name, npcs = []) {
-  if (!name || !Array.isArray(npcs) || npcs.length === 0) return false;
-  const normalized = name.toLowerCase().trim();
-
-  return npcs.some(npc => {
-    const npcLower = npc.toLowerCase();
-    // Exact match
-    if (normalized === npcLower) return true;
-
-    // Word-boundary match (handles "Leyla Nova", "Marcus Blackwood", etc.)
-    // Matches if NPC name appears as a complete word
-    const wordBoundaryRegex = new RegExp(`\\b${npcLower}\\b`, 'i');
-    return wordBoundaryRegex.test(name);
-  });
-}
+const { WEAVE_CHECKS_SOURCE } = require('../../weave');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NON-ROSTER PC VALIDATION (Commit 8.xx)
@@ -56,54 +22,6 @@ function isKnownNPC(name, npcs = []) {
 // Non-roster PCs = valid game characters NOT in session roster and NOT NPCs
 // They can appear in arcs (evidence-based mentions) but don't count for coverage
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Check if a character is a non-roster PC
- *
- * Non-roster PCs are valid game characters (in canonicalCharacters) who:
- * - Are NOT in this session's roster (weren't present at investigation)
- * - Are NOT NPCs (Marcus, Nova, Blake, Valet)
- *
- * They CAN appear in arcs because evidence mentions them, but Nova didn't
- * observe their behavior directly. Their roles must be evidence-based.
- *
- * Uses word-boundary matching consistent with isKnownNPC().
- *
- * @param {string} name - Character name to check
- * @param {string[]} roster - Session roster (characters present at investigation)
- * @param {string[]} allCharacters - All valid PC names from theme config
- * @param {string[]} npcs - NPC names from theme config
- * @returns {boolean} True if non-roster PC (valid game character not in roster/npcs)
- */
-function isNonRosterPC(name, roster = [], allCharacters = [], npcs = []) {
-  if (!name) return false;
-
-  // If it's an NPC, it's not a non-roster PC
-  if (isKnownNPC(name, npcs)) return false;
-
-  // Normalize roster for comparison
-  const rosterLower = new Set(roster.map(n => n.toLowerCase().trim()));
-
-  // Check if name matches any roster member (case-insensitive)
-  const normalizedName = name.toLowerCase().trim();
-  if (rosterLower.has(normalizedName)) return false;
-
-  // Also check word-boundary match against roster (handles "Alex Reeves" vs "Alex")
-  for (const r of roster) {
-    const regex = new RegExp(`\\b${r.toLowerCase().trim()}\\b`, 'i');
-    if (regex.test(name)) return false;
-  }
-
-  // Check if it's a valid game character with word-boundary matching
-  return allCharacters.some(char => {
-    const charLower = char.toLowerCase();
-    // Exact match
-    if (normalizedName === charLower) return true;
-    // Word-boundary match (handles "Sofia Francisco" matching "Sofia")
-    const regex = new RegExp(`\\b${charLower}\\b`, 'i');
-    return regex.test(name);
-  });
-}
 
 /**
  * Get all non-roster PCs for a session
@@ -681,76 +599,6 @@ function buildValidEvidenceIds(evidenceBundle) {
   return ids;
 }
 
-/**
- * Validate roster name with fuzzy matching
- *
- * Used to validate characterPlacements in arcs reference actual roster members.
- * Returns the ORIGINAL name if a match is found (preserving canonical full names),
- * or null if no match.
- *
- * Matching order:
- * 1. Exact match with roster entry (case-insensitive)
- * 2. Canonical full name match (e.g., "Sarah Blackwood" matches roster "Sarah")
- * 3. Substring match with tie-breaking:
- *    - Prefer exact length match
- *    - Prefer shortest match (most specific)
- * 4. No match → returns null
- *
- * Commit 8.12: Added tie-breaking for ambiguous substring matches
- * Commit 8.xx: Preserves canonical full names (DRY fix with theme-config.js)
- *
- * @param {string} name - Character name from arc characterPlacements
- * @param {string[]} roster - Array of roster names (typically first names)
- * @param {Object} canonicalCharacters - Notion-derived map of firstName -> fullName
- * @returns {string|null} Original name (preserved) if valid, or null
- */
-function validateRosterName(name, roster, canonicalCharacters = {}) {
-  if (!name || !Array.isArray(roster) || roster.length === 0) {
-    return null;
-  }
-
-  const normalizedInput = name.toLowerCase().trim();
-
-  // 1. Exact match with roster entry (case-insensitive)
-  const exactMatch = roster.find(r => r.toLowerCase().trim() === normalizedInput);
-  if (exactMatch) return name;  // Return original name (preserves casing)
-
-  // 2. Check if input IS a canonical full name for any roster entry
-  // Example: input "Sarah Blackwood" should match roster entry "Sarah"
-  for (const rosterName of roster) {
-    const canonical = getCanonicalName(rosterName, canonicalCharacters);
-    if (canonical.toLowerCase().trim() === normalizedInput) {
-      return name;  // Return original name (preserves canonical full name)
-    }
-  }
-
-  // 3. Substring matches with tie-breaking
-  const substringMatches = roster.filter(r => {
-    const normalizedRoster = r.toLowerCase().trim();
-    return normalizedRoster.includes(normalizedInput) ||
-           normalizedInput.includes(normalizedRoster);
-  });
-
-  if (substringMatches.length === 0) {
-    return null;  // No match
-  }
-
-  if (substringMatches.length === 1) {
-    return name;  // Match found - return original name to preserve formatting
-  }
-
-  // Multiple matches - apply tie-breaking
-  // First: prefer exact length match (name length equals roster name length)
-  const exactLengthMatch = substringMatches.find(r =>
-    r.toLowerCase().trim().length === normalizedInput.length
-  );
-  if (exactLengthMatch) return name;  // Return original name
-
-  // Second: prefer shortest match (most specific - "Jon" over "Jonathan")
-  // Match found - return original name to preserve formatting
-  return name;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // ARC RESOLUTION HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -842,20 +690,21 @@ const MODEL_SCORES_LINE = "The scores below are the evaluating model's own and u
 
 /**
  * The code checks that write validationResults, keyed by the `source` each stamps on
- * it, with what the journalist revision context says of each: who computed its scores
- * (in place of MODEL_SCORES_LINE), and the label its revision guidance prints under.
+ * it, with the label the journalist revision context prints its lines under.
  *
- * The 4b fix batch (the integrator's ruling): a code check's guidance reaches an
- * automatic rework too. It is written in code with must-fix steps only, and the arc
- * check's carries fix 3.7b's coverage line ("Give each one a placement ... or ... a
- * writerQuestions entry of kind "player""), which reaches a rework only through it. Only
- * a judge's revisionGuidance is left out of an automatic pass.
+ * The 4b fix batch (the integrator's ruling): a code check's findings reach an automatic
+ * rework too, written in code with must-fix steps only. Only a judge's revisionGuidance
+ * is left out of an automatic pass.
+ *
+ * Phase 4 (brief 4.4): a code check's lines print under its own label in place of ISSUES
+ * TO ADDRESS, each line the defect and its fix, and the automatic scope names the label.
+ * The weave checks (lib/weave.js checkWeave, the arc stage's check node) are the first;
+ * they replace the arc check, whose roster coverage left the arc stage. A code check
+ * scores nothing, so every scores' line the context prints is a judge's.
  */
 const CODE_CHECKS = {
-  // validateArcStructure (arc-specialist-nodes.js): rosterCoverage and accusationArcPresent
-  'programmatic-validation': {
-    scoresLine: "The scores below are the arc check's, computed in code from the arcs.",
-    guidanceLabel: 'ARC CHECK GUIDANCE'
+  [WEAVE_CHECKS_SOURCE]: {
+    label: 'WEAVE CHECK FAILURES'
   }
 };
 
@@ -969,20 +818,26 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  *   everything else stays word for word, for the reason the context gives with it (the
  *   4b fix batch). Only a criterion that failed (scored below STRUCTURAL_PASS_SCORE)
  *   prints its notes and fix, on either kind of rework. An automatic pass carries no
- *   EVALUATOR FEEDBACK, the judge's guidance; a code check's guidance prints under the
- *   check's own label (CODE_CHECKS) on either kind. The detective keeps today's text (D13).
+ *   EVALUATOR FEEDBACK, the judge's guidance. A code check's lines print under the
+ *   check's own label (CODE_CHECKS) in place of ISSUES TO ADDRESS, on either kind (phase
+ *   4, brief 4.4). The detective keeps today's text (D13).
+ * @param {string} [options.outputName] - what the context calls the output the rework
+ *   starts from, where it differs from the phase's name: 'weave' for the arc stage's
+ *   rework (phase 4, brief 4.4). The phase still names the stamp the findings must carry.
  * @returns {Object} { contextSection, previousOutputSection }
  *
  * @example
  * const { contextSection, previousOutputSection } = buildRevisionContext({
  *   phase: 'arcs',
+ *   outputName: 'weave',
  *   revisionCount: 1,
  *   validationResults: state.validationResults,
- *   previousOutput: state._previousArcs
+ *   previousOutput: state.weave
  * });
  */
 function buildRevisionContext(options) {
   const { phase, revisionCount, previousOutput, humanFeedback, handEdits, round, theme = 'journalist' } = options;
+  const outputName = typeof options.outputName === 'string' && options.outputName ? options.outputName : phase;
   const parkedDetective = theme === 'detective';
 
   // F1: the director's edits the version this rework starts from carries, by id. FA
@@ -1138,7 +993,7 @@ ${advisories.map(formatIssue).join('\n')}`
   } else if (scored.length === 0) {
     scoresGuide = '';
   } else {
-    scoresGuide = codeCheckOf(validationResults)?.scoresLine || MODEL_SCORES_LINE;
+    scoresGuide = MODEL_SCORES_LINE;
   }
   const scoresGuideBlock = scoresGuide ? `${scoresGuide}\n\n` : '';
 
@@ -1161,16 +1016,16 @@ ${advisories.map(formatIssue).join('\n')}`
   // guidance, so it is left out whole rather than filtered by its wording. A send back
   // keeps it, and the detective keeps it on both (D13).
   //
-  // The 4b fix batch (the integrator's ruling): a code check's guidance is not a
-  // judge's. It prints on every journalist pass under the check's own label
-  // (CODE_CHECKS), so the arc check's coverage line still reaches an automatic rework.
+  // The 4b fix batch (the integrator's ruling): a code check's findings are not a
+  // judge's. They print on every journalist pass under the check's own label
+  // (CODE_CHECKS). Phase 4 (brief 4.4): the label heads the check's lines in place of
+  // ISSUES TO ADDRESS, each line the defect and its fix, and a guidance text a check
+  // writes follows its lines under the same label.
   const codeCheck = parkedDetective ? null : codeCheckOf(validationResults);
+  const issuesHeading = codeCheck ? codeCheck.label : 'ISSUES TO ADDRESS';
   let feedbackBlock = '';
   if (codeCheck) {
-    feedbackBlock = feedback ? `
-
-${codeCheck.guidanceLabel}:
-${feedback}` : '';
+    feedbackBlock = feedback ? `\n${feedback}` : '';
   } else if (parkedDetective || humanFeedback) {
     feedbackBlock = `
 
@@ -1186,8 +1041,8 @@ ${feedback || '(no specific feedback provided)'}`;
 ${scoresGuideBlock}CRITERIA SCORES:
 ${criteriaList}
 
-ISSUES TO ADDRESS:
-${issuesList}${shouldConsiderBlock}${feedbackBlock}`
+${issuesHeading}:
+${issuesList}${codeCheck ? feedbackBlock : ''}${shouldConsiderBlock}${codeCheck ? '' : feedbackBlock}`
     : '(no evaluator feedback for this phase)';
 
   // Spec 2026-09-19 §4.3: the director's edits, after HUMAN FEEDBACK and before the
@@ -1257,9 +1112,9 @@ ${formatEditLines(standingEdits)}
     hasSuggestionLines && 'a suggestion in CRITERIA SCORES'
   ].filter(Boolean).join(' or ');
   const automaticScope = [
-    `This rework fixes the must-fix items: the ISSUES TO ADDRESS${hasFixLines ? ' and the fixes in CRITERIA SCORES' : ''}.`,
+    `This rework fixes the must-fix items: the ${issuesHeading}${hasFixLines ? ' and the fixes in CRITERIA SCORES' : ''}.`,
     suggestionSources && `Take up ${suggestionSources} only where it touches a line this rework is already changing for a must-fix item.`,
-    `Everything else in the previous ${phase} stays word for word.`,
+    `Everything else in the previous ${outputName} stays word for word.`,
     'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.'
   ].filter(Boolean).join(' ');
   const instructionsSection = parkedDetective
@@ -1269,19 +1124,19 @@ CRITICAL REVISION INSTRUCTIONS:
 
 1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch
 2. Make TARGETED FIXES only for the specific issues identified above
-3. Output the complete revised ${phase} with all original content plus fixes
+3. Output the complete revised ${outputName} with all original content plus fixes
 4. Maintain consistency with the original structure and organization`
     : `═══════════════════════════════════════════════════════════════════════════════
 WHAT THIS REWORK DOES:
 ═══════════════════════════════════════════════════════════════════════════════
 
 ${humanFeedback
-    ? `The director's note above is the task, and it sets how much of the previous ${phase} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was, unless an issue to address needs it changed.`
+    ? `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was, unless an issue to address needs it changed.`
     : automaticScope}`;
 
   const contextSection = `
 ═══════════════════════════════════════════════════════════════════════════════
-REVISION CONTEXT: ${phase.toUpperCase()} (${passLabel})
+REVISION CONTEXT: ${outputName.toUpperCase()} (${passLabel})
 ═══════════════════════════════════════════════════════════════════════════════
 
 ${evaluationBlock}
@@ -1315,7 +1170,7 @@ Address human feedback FIRST, then address any remaining evaluator issues.
   const previousLabel = parkedDetective ? '(to improve, not regenerate)' : '(the version this rework starts from)';
   const previousOutputSection = `
 ═══════════════════════════════════════════════════════════════════════════════
-PREVIOUS ${phase.toUpperCase()} OUTPUT ${previousLabel}:
+PREVIOUS ${outputName.toUpperCase()} OUTPUT ${previousLabel}:
 ═══════════════════════════════════════════════════════════════════════════════
 
 ${previousOutputText}
@@ -1483,17 +1338,12 @@ module.exports = {
 
   // Arc validation helpers (Commit 8.12+)
   buildValidEvidenceIds,
-  validateRosterName,
 
   // Arc resolution helpers (Commit 8.25)
   resolveArc,
   resolveArcs,
 
-  // NPC validation (Commit 8.17) - NPCs defined in lib/theme-config.js
-  isKnownNPC,
-
-  // Non-roster PC validation (Commit 8.xx) - Three-category character model
-  isNonRosterPC,
+  // Non-roster PCs (Commit 8.xx) - Three-category character model
   getNonRosterPCs,
   resolveRoster,
 

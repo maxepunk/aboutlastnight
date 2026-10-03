@@ -9,7 +9,7 @@
  * - Fetch Nodes: Data fetching from files/APIs (initializeSession, loadDirectorNotes, etc.)
  * - Photo Nodes: Photo analysis with Haiku vision (analyzePhotos) - Commit 8.6
  * - Preprocess Nodes: Batch evidence preprocessing (preprocessEvidence) - Commit 8.5
- * - Arc Specialist Nodes: Player-focus-guided arc analysis (analyzeArcsPlayerFocusGuided) - Commit 8.15
+ * - Arc Specialist Nodes: the weave: the arc writer, its checks and its rework (phase 4, brief 4.4)
  * - Evaluator Nodes: Per-phase quality evaluation (arcs, outline, article) - Commit 8.6
  * - AI Nodes: Claude-powered processing (curateEvidenceBundle, generateOutline, etc.)
  * - Template Nodes: HTML assembly (assembleHtml)
@@ -79,11 +79,10 @@ module.exports = {
   checkpointOutline: checkpointNodes.checkpointOutline,
   checkpointArticle: checkpointNodes.checkpointArticle,
 
-  // Arc specialist nodes (from arc-specialist-nodes.js) - Commit 8.15
-  // Commit 8.15: Player-focus-guided single-call architecture (replaces parallel specialists)
-  analyzeArcsPlayerFocusGuided: arcSpecialistNodes.analyzeArcsPlayerFocusGuided,
-  validateArcStructure: arcSpecialistNodes.validateArcStructure,  // Commit 8.12: Strict evidence/roster validation
-  reviseArcs: arcSpecialistNodes.reviseArcs,  // Revision node with previous output context (DRY)
+  // Arc specialist nodes (from arc-specialist-nodes.js): the weave (phase 4, brief 4.4)
+  analyzeArcsPlayerFocusGuided: arcSpecialistNodes.analyzeArcsPlayerFocusGuided,  // the arc writer: one weave
+  validateArcStructure: arcSpecialistNodes.validateArcStructure,  // the weave checks
+  reviseArcs: arcSpecialistNodes.reviseArcs,  // the arc rework
 
   // Evaluator nodes (from evaluator-nodes.js) - Commit 8.6
   evaluateArcs: evaluatorNodes.evaluateArcs,
@@ -131,9 +130,6 @@ module.exports = {
     createMockNotionClient: fetchNodes.createMockNotionClient,
     createMockPhotoAnalyzer: photoNodes.createMockPhotoAnalyzer,
     createMockPreprocessor: preprocessNodes.createMockPreprocessor,
-    // Commit 8.8: New orchestrator mock replaces individual specialist mocks
-    createMockOrchestrator: arcSpecialistNodes.createMockOrchestrator,
-    // Commit 8.xx: Removed deprecated createMockSpecialist, createMockSynthesizer
     createMockEvaluator: evaluatorNodes.createMockEvaluator,
     createMockPromptBuilder: aiNodes.createMockPromptBuilder,
     createMockTemplateAssembler: templateNodes.createMockTemplateAssembler

@@ -100,9 +100,9 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
     }
   });
 
+  // Phase 4 (brief 4.4): the arc stage's detective branch went, with its numbered list.
   it('both lists stay consecutively numbered after the removal (the detective\'s; the journalist\'s have none since phase 3)', () => {
     const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
-    const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
     const numbered = (text) => text
       .split('\n')
       .map((line) => line.match(/^(\d+)\. /))
@@ -110,7 +110,6 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
       .map((match) => Number(match[1]));
 
     expect(numbered(outlineRevisionRules('detective'))).toEqual([1, 2, 3, 4, 5]);
-    expect(numbered(arcRevisionRules(false, 'detective'))).toEqual([1, 2, 3, 4, 5]);
     expect(numbered(OUTLINE_REVISION_RULES)).toEqual([]);
     expect(numbered(ARC_REVISION_RULES.evaluator)).toEqual([]);
   });
@@ -192,22 +191,23 @@ describe('arc revision prompt gives the model the record (PROMPT-REVIEW; brief 2
     }
   };
 
-  it("carries each exposed document in full, labelled, and the writer's list of valid ids", () => {
+  it("carries each exposed document in full, labelled, and the writer's list of receipts", () => {
     const prompt = buildArcRevisionPrompt(STATE, 'ctx', 'prev');
     // The reviser was once shown ONLY `["vic001","paper-1"]` and told to fix its
     // keyEvidence; then an id, an owner and a summary of the name. It now reads the
     // documents themselves, as the writer does, and the ids follow the writer's rule.
+    // Phase 4 (brief 4.4): the ids are the receipts a thread may give.
     expect(prompt).toContain('<document id="vic001" kind="memory" name="VIC001 - The ledger" owner="Vic Kingsley" layer="exposed">');
     expect(prompt).toContain(MEMORY_TEXT);
     expect(prompt).toContain('<document id="paper-1" kind="Document" name="Cease and desist" layer="exposed">');
     expect(prompt).toContain(PAPER_TEXT);
-    expect(prompt).toContain('### All Valid Evidence IDs for keyEvidence (EXPOSED LAYER 1 ONLY)\n["vic001","paper-1"]');
+    expect(prompt).toContain('### Receipts\nA thread\'s receipt is one of these document ids, or "ledger" for the ledger:\n["vic001","paper-1"]');
     expect(prompt).not.toContain('A summary of the name only');
   });
 
   it('re-includes the three-category character block the generation prompt has', () => {
     const prompt = buildArcRevisionPrompt(STATE, 'ctx', 'prev');
-    expect(prompt).toContain('Character Categories for characterPlacements');
+    expect(prompt).toContain('### Character Categories');
     expect(prompt).toContain('ROSTER PCs');
     expect(prompt).toContain('NPCs');
     expect(prompt).toContain('NON-ROSTER PCs');
@@ -347,7 +347,7 @@ describe('a prompt build that throws becomes the node error contract, for the ju
   // deliberate throw (buildArcReworkOutputAddendum), so a throw there bypassed the
   // swallow-into-state contract and rejected the graph.
   const { evaluateArcs, evaluateOutline, evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
-  const { reviseArcs, _testing: { PLAYER_FOCUS_GUIDED_SCHEMA } } = require('../workflow/nodes/arc-specialist-nodes');
+  const { reviseArcs } = require('../workflow/nodes/arc-specialist-nodes');
   const { PHASES, REVISION_CAPS } = require('../workflow/state');
   const { PromptBuilder } = require('../prompt-builder');
   const { reworkFixtureState, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
@@ -375,25 +375,18 @@ describe('a prompt build that throws becomes the node error contract, for the ju
     expect(sdkClient).not.toHaveBeenCalled();
   });
 
+  // Phase 4 (brief 4.4): the rework keeps the weave it started from in its channel, so
+  // the error contract writes none.
   it('reviseArcs returns the error contract when its prompt throws', async () => {
-    const plan = PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan;
-    delete PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan;
-    try {
-      const state = reworkFixtureState('journalist');
-      const sdkClient = jest.fn();
-      const result = await reviseArcs(
-        { ...state, narrativeArcs: null, _previousArcs: state.narrativeArcs, _arcFeedback: 'Tighten it.', arcRevisionCount: 1 },
-        { configurable: { sdkClient } }
-      );
-      expect(result.currentPhase).toBe(PHASES.ERROR);
-      expect(result.narrativeArcs).toEqual([]);
-      expect(result._previousArcs).toBeNull();
-      expect(result.errors[0].type).toBe('arc-revision-failed');
-      expect(result.errors[0].message).toMatch(/no longer defines interweaving/);
-      expect(sdkClient).not.toHaveBeenCalled();
-    } finally {
-      PLAYER_FOCUS_GUIDED_SCHEMA.properties.interweavingPlan = plan;
-    }
+    const state = { ...reworkFixtureState('journalist'), _arcFeedback: 'Tighten it.', arcRevisionCount: 1 };
+    Object.defineProperty(state, 'evidenceBundle', { get() { throw new Error('evidence bundle exploded'); } });
+    const sdkClient = jest.fn();
+    const result = await reviseArcs(state, { configurable: { sdkClient } });
+    expect(result.currentPhase).toBe(PHASES.ERROR);
+    expect(result).not.toHaveProperty('weave');
+    expect(result.errors[0].type).toBe('arc-revision-failed');
+    expect(result.errors[0].message).toBe('evidence bundle exploded');
+    expect(sdkClient).not.toHaveBeenCalled();
   });
 });
 
@@ -445,7 +438,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
       const article = contextFor('article', humanFeedback);
       texts[`arc task (${kind})`] = after(
         buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: humanFeedback }, arcs.contextSection, arcs.previousOutputSection),
-        '# Arc Revision Request'
+        '# Weave Rework'
       );
       texts[`outline task (${kind})`] = after(
         await buildOutlineRevisionPrompt({ selectedArcs: [] }, outline.contextSection, outline.previousOutputSection, promptBuilder),
@@ -463,10 +456,10 @@ describe('the rework rules (phase 3, 3.3)', () => {
 
   it("a rework's first line names the task its revision context gives it", () => {
     const firstLine = (text) => text.split('\n')[0];
-    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/reworking the arcs/);
-    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/director sent them back/);
-    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/reworking the arcs/);
-    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/automatic check or evaluation/);
+    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/reworking the weave/);
+    expect(firstLine(arcRevisionRules(true, 'journalist'))).toMatch(/director sent it back/);
+    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/reworking the weave/);
+    expect(firstLine(arcRevisionRules(false, 'journalist'))).toMatch(/automatic check or fact check/);
     expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/reworking the outline/);
     expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/revision context/);
     // The article rework's first line is its own (3.10, fix round 1). It was the
@@ -518,14 +511,14 @@ describe('the rework rules (phase 3, 3.3)', () => {
   // said "A note can call for a rethink" and its revision context said "a note that
   // asks for a rethink gets a rethink". The rethink rule is the revision context's,
   // the one place every reworker shares; the arc rules add only the mechanic line.
-  it("an arc send back states the rethink rule once, in the revision context, and a corrected mechanic reaches every arc", () => {
+  it("an arc send back states the rethink rule once, in the revision context, and a corrected mechanic reaches every thread", () => {
     const rules = arcRevisionRules(true, 'journalist');
     expect(rules).not.toMatch(/rethink/i);
-    expect(rules).toMatch(/corrects every arc it touches/);
-    const feedback = 'Merge the two money arcs.';
+    expect(rules).toMatch(/corrects every thread it touches/);
+    const feedback = 'Merge the two money threads.';
     const context = buildRevisionContext({
-      phase: 'arcs', revisionCount: 0, round: 1, previousOutput: [], humanFeedback: feedback,
-      validationResults: { phase: 'arcs', passed: true, criteriaScores: { coherence: { score: 0.9, type: 'advisory' } } }
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 1, previousOutput: {}, humanFeedback: feedback,
+      validationResults: { phase: 'arcs', passed: true, criteriaScores: { evidenceTruth: { score: 0.9, type: 'structural' } } }
     });
     const system = getArcRevisionSystemPrompt(true, ARC_STATE.sessionConfig, 'journalist');
     const user = buildArcRevisionPrompt({ ...ARC_STATE, _arcFeedback: feedback }, context.contextSection, context.previousOutputSection);
@@ -535,9 +528,9 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(user.indexOf('rethink')).toBeGreaterThan(user.indexOf('WHAT THIS REWORK DOES'));
   });
 
+  // Phase 4 (brief 4.4; R1): the arc stage's detective rules went with its detective
+  // branch; the outline's and the article's stay until their slices.
   it('the detective keeps its rework rules and tasks (D13)', async () => {
-    expect(arcRevisionRules(true, 'detective')).toContain('Their feedback takes ABSOLUTE PRIORITY.');
-    expect(arcRevisionRules(false, 'detective')).toContain('1. You are IMPROVING existing arcs, not generating from scratch');
     expect(outlineRevisionRules('detective')).toContain('1. You are IMPROVING an existing outline, not generating from scratch');
     expect(articleRevisionRules('detective')).toContain('WHAT TO PRESERVE:');
     const outline = await buildOutlineRevisionPrompt({ selectedArcs: [] }, 'c', 'p', promptBuilder, [], 'detective');

@@ -15,11 +15,14 @@ jest.mock('../observability', () => ({
  * the journalist arc writer prints those sentences, word for word, under the label
  * that calls them the director's own, and drops the tensions an older thread stored
  * that read an account's name as its holder (T4). The detective keeps today's section.
+ *
+ * Phase 4 (brief 4.4): the arc writer writes the weave and prints the same section; the
+ * arc stage's detective branch went (R1).
  */
 describe('contradiction data in arc prompt', () => {
   const { _testing } = require('../workflow/nodes/arc-specialist-nodes');
   const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
-  const buildCoreArcPrompt = _testing.buildCoreArcPrompt;
+  const buildWeavePrompt = _testing.buildWeavePrompt;
 
   const BLAKE_SENTENCE = 'Blake pulled Skyler aside twice before the vote.';
   const baseState = (overrides = {}) => ({
@@ -51,7 +54,7 @@ describe('contradiction data in arc prompt', () => {
   };
 
   test("the journalist writer prints the director's sentences about Blake under their label, and drops the retired types", () => {
-    const prompt = buildCoreArcPrompt(baseState({ narrativeTensions: STORED }));
+    const prompt = buildWeavePrompt(baseState({ narrativeTensions: STORED }));
     const section = prompt.slice(prompt.indexOf("### Blake and the Valet in the director's notes"), prompt.indexOf('### Primary Investigation Focus'));
     expect(section).toContain(DERIVED_LABELS.narrativeTensions);
     expect(section).toContain(`- ${BLAKE_SENTENCE}`);
@@ -63,27 +66,17 @@ describe('contradiction data in arc prompt', () => {
   });
 
   test("a stored sentence the notes do not hold word for word is not printed as the director's", () => {
-    const prompt = buildCoreArcPrompt(baseState({
+    const prompt = buildWeavePrompt(baseState({
       narrativeTensions: { tensions: [{ type: 'blake-proximity', observations: ['Blake paid Alex.'] }] }
     }));
     expect(prompt).not.toContain('Blake paid Alex.');
     expect(prompt).not.toContain(DERIVED_LABELS.narrativeTensions);
   });
 
-  test("the detective writer keeps today's tensions section (D13)", () => {
-    const prompt = buildCoreArcPrompt(baseState({ theme: 'detective', narrativeTensions: STORED }));
-    const section = prompt.slice(prompt.indexOf('## SECTION 4.6'), prompt.indexOf('## SECTION 5'));
-    expect(section).toContain(DERIVED_LABELS.narrativeTensions);
-    expect(section).toContain('- [named-account] Skyler used their own name.');
-    expect(section).toContain('$155,000');
-  });
-
-  test('buildCoreArcPrompt omits tensions section when no tensions', () => {
-    for (const theme of ['journalist', 'detective']) {
-      const prompt = buildCoreArcPrompt(baseState({ theme, narrativeTensions: null }));
-      expect(prompt).not.toContain('NARRATIVE TENSIONS');
-      expect(prompt).not.toContain(DERIVED_LABELS.narrativeTensions);
-    }
+  test('buildWeavePrompt omits tensions section when no tensions', () => {
+    const prompt = buildWeavePrompt(baseState({ narrativeTensions: null }));
+    expect(prompt).not.toContain('NARRATIVE TENSIONS');
+    expect(prompt).not.toContain(DERIVED_LABELS.narrativeTensions);
   });
 
   // Fix 3.2b: one filter, directorTensionSentences, for both journalist print sites.
@@ -106,7 +99,7 @@ describe('contradiction data in arc prompt', () => {
     expect(expected).toEqual([BLAKE_SENTENCE, OTHER]);
     const listed = (text) => text.split('\n').filter(line => line.startsWith('- ')).map(line => line.slice(2));
 
-    const arcPrompt = buildCoreArcPrompt(state);
+    const arcPrompt = buildWeavePrompt(state);
     const arcSection = arcPrompt.slice(arcPrompt.indexOf("### Blake and the Valet in the director's notes"), arcPrompt.indexOf('### Primary Investigation Focus'));
     expect(listed(arcSection)).toEqual(expected);
 

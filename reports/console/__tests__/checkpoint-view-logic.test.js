@@ -1183,7 +1183,9 @@ describe('the fact check\'s new advisory groups (phase 3, 3.4)', () => {
 describe('writerQuestionsView (phase 3, brief 3.7)', () => {
   const { writerQuestionsView } = require('../checkpoint-view-logic');
   const Q1 = { kind: 'player', about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
-  const Q2 = { kind: 'ledger', about: 'The 10:02 AM sale of $250,000', question: 'Is this sale a duplicate?' };
+  // Phase 4 (brief 4.4): the kinds are the weave's, C15's three cases with a figure in
+  // place of a ledger entry.
+  const Q2 = { kind: 'figure', about: 'The 10:02 AM sale of $250,000', question: 'Is this sale a duplicate?' };
 
   it.each([
     ['undefined', undefined],
@@ -1236,16 +1238,19 @@ describe('writerQuestionsView (phase 3, brief 3.7)', () => {
 
   // Fix 3.7b (finding 1): each line shows the question's kind; a question with no kind,
   // or an unknown one, from a list made before the field had one, still renders.
-  it('labels exactly the schema\'s kinds (lib/writer-questions.js)', () => {
+  // Phase 4 (brief 4.4): the labels follow the weave's kinds, the questions the story
+  // meeting asks (lib/writer-questions.js WEAVE_QUESTION_KINDS).
+  it('labels exactly the weave\'s kinds (lib/writer-questions.js)', () => {
     const { WRITER_QUESTION_KIND_LABELS } = require('../checkpoint-view-logic');
-    const { WRITER_QUESTION_KINDS } = require('../../lib/writer-questions');
-    expect(Object.keys(WRITER_QUESTION_KIND_LABELS)).toEqual([...WRITER_QUESTION_KINDS]);
+    const { WEAVE_QUESTION_KINDS } = require('../../lib/writer-questions');
+    expect(Object.keys(WRITER_QUESTION_KIND_LABELS)).toEqual([...WEAVE_QUESTION_KINDS]);
+    expect(WRITER_QUESTION_KIND_LABELS).toEqual({ player: 'Player', pronoun: 'Pronoun', figure: 'Figure' });
   });
 
   it('shows each question\'s kind', () => {
     const view = writerQuestionsView([Q1, Q2, { kind: 'pronoun', about: 'Riley', question: 'Which pronoun?' }], 'article');
     expect(view.items.map((item) => [item.kind, item.kindLabel])).toEqual([
-      ['player', 'Player'], ['ledger', 'Ledger'], ['pronoun', 'Pronoun']
+      ['player', 'Player'], ['figure', 'Figure'], ['pronoun', 'Pronoun']
     ]);
   });
 

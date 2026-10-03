@@ -1,13 +1,13 @@
 /**
- * Core arc generation — single-attempt + fail-loud (TRC-2 / N7)
+ * The arc writer's one call: single attempt + fail-loud (TRC-2 / N7)
  *
  * The in-node MAX_GENERATION_ATTEMPTS retry loop was REMOVED (TRC-2 de-layering):
- * analyzeArcsPlayerFocusGuided now makes a SINGLE Core arc generation call, and any
- * failure (timeout or not) propagates to the node's outer catch, which THROWS rather
- * than returning narrativeArcs: []. The graph-level retryPolicy is the sole retrier.
+ * analyzeArcsPlayerFocusGuided makes a SINGLE call, and any failure (timeout or not)
+ * propagates to the node's outer catch, which THROWS rather than storing an empty
+ * output. The graph-level retryPolicy is the sole retrier.
  *
- * These tests verify the single-attempt success path (no retry) and that every failure
- * mode throws (no [] arcs masking an outage).
+ * Phase 4 (brief 4.4): the call writes the weave, in one call with no interweaving call
+ * after it.
  */
 
 // Mock LLM module
@@ -25,8 +25,14 @@ jest.mock('../observability', () => ({
 
 const { analyzeArcsPlayerFocusGuided } = require('../workflow/nodes/arc-specialist-nodes');
 
+const WEAVE = {
+  story: 'The room named Alex.', question: 'Why Alex?', headline: 'The Room Named Alex',
+  threads: [{ id: 't1', claim: 'The room named Alex for the embezzlement.', role: 'main-thread', receipt: 't1', verdict: true }],
+  connections: [], convergence: 'The money and the vote meet.', questions: []
+};
+
 const makeState = () => ({
-  narrativeArcs: [],
+  weave: null,
   evidenceBundle: {
     exposed: { tokens: [{ id: 't1', summary: 'test', fullDescription: 'test desc' }], paperEvidence: [] },
     buried: { transactions: [], relationships: [] }
@@ -37,24 +43,24 @@ const makeState = () => ({
   theme: 'journalist'
 });
 
-describe('core arc generation — single attempt + fail-loud', () => {
-  test('succeeds in a single attempt (no in-node retry)', async () => {
-    const mockSdk = jest.fn()
-      .mockResolvedValueOnce({
-        narrativeArcs: [{ id: 'arc-1', title: 'Test', arcSource: 'accusation', keyEvidence: ['t1'], characterPlacements: {}, analysisNotes: {} }],
-        synthesisNotes: 'test'
-      })
-      .mockResolvedValueOnce(null); // Call 2: interweaving (graceful degradation — null is fine)
+describe('the arc writer — single attempt + fail-loud', () => {
+  beforeAll(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterAll(() => jest.restoreAllMocks());
+
+  test('succeeds in a single attempt (no in-node retry, no second call)', async () => {
+    const mockSdk = jest.fn().mockResolvedValueOnce(JSON.parse(JSON.stringify(WEAVE)));
 
     const result = await analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } });
 
-    expect(result.narrativeArcs.length).toBe(1);
-    expect(result._arcAnalysisCache.timing.retries).toBe(0);
-    expect(mockSdk).toHaveBeenCalledTimes(2); // 1 Call 1 success + 1 Call 2 interweaving — no retry
+    expect(result.weave.threads.length).toBe(1);
+    expect(mockSdk).toHaveBeenCalledTimes(1);
   });
 
   test('throws on timeout (single attempt — retryPolicy is the sole retrier)', async () => {
-    const timeoutError = new Error('SDK timeout after 600.0s (limit: 600s) - Core arc generation (Call 1)');
+    const timeoutError = new Error('SDK timeout after 600.0s (limit: 600s) - The weave');
     const mockSdk = jest.fn().mockRejectedValue(timeoutError);
 
     await expect(
@@ -74,14 +80,13 @@ describe('core arc generation — single attempt + fail-loud', () => {
     expect(mockSdk).toHaveBeenCalledTimes(1);
   });
 
-  test('throws when SDK returns valid JSON but 0 arcs', async () => {
-    // generateCoreArcs returns 0 arcs → "Call 1 returned no arcs" → outer catch throws
-    const mockSdk = jest.fn().mockResolvedValueOnce({ narrativeArcs: [], synthesisNotes: 'empty' });
+  test('throws when the SDK returns valid JSON with no threads', async () => {
+    const mockSdk = jest.fn().mockResolvedValueOnce({ ...WEAVE, threads: [] });
 
     await expect(
       analyzeArcsPlayerFocusGuided(makeState(), { configurable: { sdkClient: mockSdk } })
-    ).rejects.toThrow(/arc analysis failed/i);
+    ).rejects.toThrow(/arc analysis failed.*no threads/i);
 
-    expect(mockSdk).toHaveBeenCalledTimes(1); // No retry — "no arcs" still single attempt
+    expect(mockSdk).toHaveBeenCalledTimes(1); // No retry — "no threads" still single attempt
   });
 });

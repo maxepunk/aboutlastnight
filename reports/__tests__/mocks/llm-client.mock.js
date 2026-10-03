@@ -46,6 +46,24 @@ function getDefaultArcAnalysis() {
 }
 
 /**
+ * Default weave fixture (phase 4, brief 4.4): one thread, the room's verdict, with the
+ * ledger as its receipt, so it passes the weave checks on any record.
+ */
+function getDefaultWeave() {
+  return {
+    story: 'The room settled on its verdict, and the ledger tells a second story.',
+    question: 'What did the money buy this morning?',
+    headline: 'Test Headline for the Weave',
+    threads: [
+      { id: 't1', claim: 'The room named its culprit after a split vote.', role: 'main-thread', receipt: 'ledger', verdict: true }
+    ],
+    connections: [],
+    convergence: 'The verdict and the ledger meet at the last sale.',
+    questions: []
+  };
+}
+
+/**
  * Default outline fixture
  */
 function getDefaultOutline() {
@@ -156,6 +174,7 @@ function getDefaultPreprocessedItem() {
 const DEFAULT_FIXTURES = {
   evidence: getDefaultEvidenceBundle(),
   arc: getDefaultArcAnalysis(),
+  weave: getDefaultWeave(),
   outline: getDefaultOutline(),
   content: getDefaultContentBundle(),
   validation: getDefaultValidationResults(),
@@ -187,9 +206,10 @@ function detectFixtureKey(options) {
   if (jsonSchema?.$id === 'content-bundle') return 'contentBundle';
 
   // Evaluator patterns (must come BEFORE general arc/outline matches)
-  // because evaluator prompts contain terms like "narrative arcs"
-  if (systemLower.includes('arcs evaluator') || systemLower.includes('arcs evaluation')) {
-    return 'arcsEvaluation';
+  // because evaluator prompts contain terms like "narrative arcs".
+  // Phase 4 (brief 4.4): the arc stage's judge is the weave's fact check.
+  if (systemLower.includes('weave fact check')) {
+    return 'weaveFactCheck';
   }
   if (systemLower.includes('outline evaluator') || systemLower.includes('outline evaluation')) {
     return 'outlineEvaluation';
@@ -201,10 +221,10 @@ function detectFixtureKey(options) {
   // Preprocessing
   if (promptLower.includes('preprocess') || promptLower.includes('batch')) return 'preprocess';
 
-  // The arc writer (and its reworker, built from its sections), by its own heading:
-  // since phase 3 (brief 3.5) its whiteboard section is labelled as a model's reading
-  // of the photo, which the photo match below would otherwise take.
-  if (promptLower.startsWith('# core arc generation')) return 'arcAnalysis';
+  // The arc writer (and its rework, built from its sections), by its own heading:
+  // its whiteboard section is labelled as a model's reading of the photo, which the
+  // photo match below would otherwise take. Phase 4 (brief 4.4): it writes the weave.
+  if (promptLower.startsWith('# the weave')) return 'weave';
 
   // Photo analysis
   if (promptLower.includes('photo') || promptLower.includes('image') ||
@@ -284,6 +304,7 @@ function createMockSdkClient(fixtures = {}, options = {}) {
     // Default fixtures
     evidenceBundle: getDefaultEvidenceBundle(),
     arcAnalysis: getDefaultArcAnalysis(),
+    weave: getDefaultWeave(),
     outline: getDefaultOutline(),
     contentBundle: getDefaultContentBundle(),
     validationResults: getDefaultValidationResults(),
@@ -291,13 +312,17 @@ function createMockSdkClient(fixtures = {}, options = {}) {
     photo: getDefaultPhotoAnalysis(),
     preprocess: getDefaultPreprocessedItem(),
 
-    // Evaluator fixtures
-    arcsEvaluation: {
+    // Evaluator fixtures. Phase 4 (brief 4.4): the weave's fact check scores the truth
+    // criteria alone, and finds no breach by default.
+    weaveFactCheck: {
       ready: true,
-      overallScore: 0.85,
+      structuralPassed: true,
+      overallScore: 1,
       issues: [],
+      structuralIssues: [],
+      advisoryWarnings: [],
       confidence: 'high',
-      criteriaScores: { coherence: 1.0, evidenceGrounding: 0.8, narrativePotential: 0.8 }
+      criteriaScores: { evidenceTruth: { score: 1, type: 'structural' }, verdictTruth: { score: 1, type: 'structural' } }
     },
     outlineEvaluation: {
       ready: true,
@@ -457,6 +482,7 @@ module.exports = {
   // Default fixture generators (for extension/customization)
   getDefaultEvidenceBundle,
   getDefaultArcAnalysis,
+  getDefaultWeave,
   getDefaultOutline,
   getDefaultContentBundle,
   getDefaultValidationResults,

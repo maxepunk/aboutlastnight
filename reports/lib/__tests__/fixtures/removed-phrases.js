@@ -376,14 +376,9 @@ const MODEL_OUTPUT_LABELS = new Set([
   // the outline writer and reworker: the arcs, then the rest of the arc analysis
   '<arc-metadata>',
   '<arc-analysis>',
-  // the interweaving call
-  '## GENERATED ARCS',
-  // the arc reworker
-  '### PREVIOUS INTERWEAVING PLAN',
-  '### PREVIOUS QUESTIONS FOR THE DIRECTOR (writerQuestions)',
-  // the judges
-  'ARCS:',
-  'QUESTIONS FOR THE DIRECTOR (writerQuestions):',
+  // the judges (phase 4, brief 4.4: the story meeting's fact check reads the weave; the
+  // interweaving call, and the arc reworker's and the arc judge's old labels, went)
+  'WEAVE:',
   'OUTLINE:',
   'SELECTED ARCS (with interweaving metadata):',
   'INTERWEAVING PLAN (from arc analysis):',
@@ -564,9 +559,9 @@ function stripPhotoAnalyses(text) {
  *   excerpts, the documents' own words (3.6b fix batch);
  * - a model's output the prompt carries as data: the previous version a rework shows,
  *   the JSON after each MODEL_OUTPUT_LABELS line (the approved outline, the arcs and the
- *   rest of the arc analysis, the plans, the content bundle, the arc writer's questions
- *   for the director as the arc reworker and the arc judge print them; fix 3.7b), the whiteboard reading's
- *   values, and the outline judge's photo analyses (3.6b fix batch).
+ *   rest of the arc analysis, the plans, the content bundle, the weave the fact check
+ *   reads; phase 4, brief 4.4), the whiteboard reading's values, and the outline judge's
+ *   photo analyses (3.6b fix batch).
  *
  * Kept: every label, the ones inside <DIRECTOR_GUIDANCE> included, so a scan reads them.
  * Each tag pair and bracket pair stays, empty, so a scan still sees where it was.

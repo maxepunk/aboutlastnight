@@ -1,0 +1,15 @@
+{
+  "story": "The room named Blake for the money trail, and the audit records show who hid it.",
+  "question": "Who covered the trail the room followed?",
+  "headline": "The Room Followed the Money to Blake",
+  "threads": [
+    { "id": "t1", "claim": "The room named Blake after tracing the offshore transfers.", "role": "main-thread", "receipt": "page-ev-001", "verdict": true },
+    { "id": "t2", "claim": "Charlie altered the audit reports that would have shown the transfers.", "role": "complicates-it", "receipt": "chr001" },
+    { "id": "t3", "claim": "An email thread shows the transfers were discussed before the party.", "role": "grounds-it", "receipt": "page-ev-003" }
+  ],
+  "connections": [
+    { "id": "c1", "kind": "person", "joins": ["t1", "t2"], "detail": "Charlie: the auditor whose reports the room read against Blake." }
+  ],
+  "convergence": "The audit and the transfers meet at the account the room traced.",
+  "questions": []
+}

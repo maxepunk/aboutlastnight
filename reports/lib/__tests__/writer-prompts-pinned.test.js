@@ -9,7 +9,7 @@
  * change a byte of what a writer is sent.
  *
  * Each hash below is of "system\n=====\nuser" as the writer NODE sends it to the
- * model (generateOutline, generateContentBundle, generateCoreArcs), for the fixture
+ * model (generateOutline, generateContentBundle, generateWeave), for the fixture
  * state in fixtures/rework-state.js with every tail input set (arc-stop guidance,
  * standing notes, the previous stage's advisories; the arc writer's revision hook).
  * The craft files are stubs (fixtures/render-writers.js), so the pin covers the
@@ -201,14 +201,24 @@ const REPO = path.join(__dirname, '..', '..');
  *   28260); restoring the phrase gives back the previous hashes. The arc and detective
  *   pins do not move: the fixture's one correction quotes no line, so the shared quote
  *   rule (lib/grounding.js groundQuote) prints its quote bank as before.
+ * - Phase 4 (brief 4.4), the weave: the arc writer (generateWeave, in place of
+ *   generateCoreArcs) writes one weave of about 400 words in one call. Its system prompt
+ *   is the weave's identity and role, with the mode block and the rule set's core where
+ *   they were, and without the every-player line and the output list; its user prompt
+ *   opens on the weave's OUTPUT FORMAT, keeps what the room concluded (the ROSTER PCs
+ *   line without the every-player clause, the character categories without the
+ *   placements), the record and its morning timeline, the receipts in place of the valid
+ *   evidence ids, then the weave's task in place of the stages line and the three lenses
+ *   (11398 -> 9831). arcs-journalist only. arcs-detective goes: the arc stage's detective
+ *   branch went with R1, so the detective renders no arc writer. The outline and article
+ *   pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['d0e96e6c2dc630ed4182df08f152e8377bd4e8b6379bb1227c016169db2f881c', 21224],
   'article-journalist': ['4fe0b2b38714a8c0dd7bc72efaa43e382abbb3fd9ce1edf7d6f95846b1c7edb1', 28260],
-  'arcs-journalist': ['f4838fdf6fd39ed79c8921132224439f48a519c53e4d86c54112012dfe3c25b7', 11398],
+  'arcs-journalist': ['7d67add4936c877459d77c4ffd4eaa09265816db5fc9b175b10db4d2f079d4c7', 9831],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
-  'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436],
-  'arcs-detective': ['57b57b954a3193cbd067cbe41bfc7ffcbbc4338430eb1af8503d2cdca16fee60', 14747]
+  'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

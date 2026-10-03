@@ -44,12 +44,14 @@ afterAll(() => jest.restoreAllMocks());
 describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 renders every prompt', (theme) => {
   const SALE_LINE = '- 07:50 AM | sale | account: Melanie | amount: $75,000';
 
-  it('the interweaving call, the outline and article writers and their judges carry the sales on the clock', async () => {
-    const arcSdk = recordingSdk((options) => (options.label && options.label.startsWith('Interweaving')
-      ? { arcInterweaving: [], interweavingPlan: { suggestedOrder: ['arc-sale'], convergencePoint: 'The vote', keyCallbacks: [] } }
-      : { narrativeArcs: oldShapeState(theme).narrativeArcs, synthesisNotes: 's' }));
-    await analyzeArcsPlayerFocusGuided({ ...oldShapeState(theme), narrativeArcs: null }, cfg(arcSdk, theme));
-    expect(promptOf(arcSdk, 1)).toContain(SALE_LINE);
+  // Phase 4 (brief 4.4): the arc writer writes the weave in one call, and the arc stage
+  // is the journalist's alone (R1); the interweaving call went.
+  it('the arc writer, the outline and article writers and their judges carry the sales on the clock', async () => {
+    if (theme === 'journalist') {
+      const arcSdk = recordingSdk(() => oldShapeState(theme).weave);
+      await analyzeArcsPlayerFocusGuided({ ...oldShapeState(theme), weave: null }, cfg(arcSdk, theme));
+      expect(promptOf(arcSdk, 0)).toContain(SALE_LINE);
+    }
 
     const outlineSdk = recordingSdk(() => OUTLINE);
     await generateOutline({ ...oldShapeState(theme), outline: null }, cfg(outlineSdk, theme));
@@ -88,10 +90,8 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     };
     const LINK_LINE = '[account: Melanie | amount: $75,000 | time: 07:50 AM]';
 
-    const arcSdk = recordingSdk((options) => (options.label && options.label.startsWith('Interweaving')
-      ? { arcInterweaving: [], interweavingPlan: { suggestedOrder: ['arc-sale'], convergencePoint: 'The vote', keyCallbacks: [] } }
-      : { narrativeArcs: withLink().narrativeArcs, synthesisNotes: 's' }));
-    await analyzeArcsPlayerFocusGuided({ ...withLink(), narrativeArcs: null }, cfg(arcSdk, theme));
+    const arcSdk = recordingSdk(() => withLink().weave);
+    if (theme === 'journalist') await analyzeArcsPlayerFocusGuided({ ...withLink(), weave: null }, cfg(arcSdk, theme));
     const outlineSdk = recordingSdk(() => OUTLINE);
     await generateOutline({ ...withLink(), outline: null }, cfg(outlineSdk, theme));
     const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
@@ -101,7 +101,7 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     await evaluateOutline({ ...withLink(), heroImage: 'hero.jpg', evaluationHistory: [], outlineApproved: false }, cfg(outlineJudge, theme));
 
     const prompts = {
-      arcWriter: promptOf(arcSdk, 0),
+      ...(theme === 'journalist' && { arcWriter: promptOf(arcSdk, 0) }),
       outlineWriter: promptOf(outlineSdk),
       articleWriter: promptOf(articleSdk),
       outlineJudge: promptOf(outlineJudge)
@@ -110,7 +110,7 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     // The detective writers print no director-notes block of their own.
     expect(withLinks.map(([name]) => name)).toEqual(theme === 'journalist'
       ? ['arcWriter', 'outlineWriter', 'articleWriter', 'outlineJudge']
-      : ['arcWriter', 'outlineJudge']);
+      : ['outlineJudge']);
     withLinks.forEach(([, prompt]) => {
       // The timeline prints this sale at 07:50 AM (the test above); the link agrees.
       expect(prompt).toContain(LINK_LINE);

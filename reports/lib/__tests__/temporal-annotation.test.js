@@ -34,6 +34,8 @@ describe('temporal pre-annotation', () => {
   });
 });
 
+// Phase 4 (brief 4.4): the summary lists no buried sale (the detective arc writer's list,
+// its only reader, went with R1); the record view's morning timeline carries the sales.
 describe('extractEvidenceSummary temporal tags', () => {
   test('exposed tokens carry temporalContext through to summary', () => {
     const bundle = {
@@ -48,7 +50,7 @@ describe('extractEvidenceSummary temporal tags', () => {
     const result = extractEvidenceSummary(bundle);
     expect(result.exposedTokens[0].timeline).toBe('PARTY');
     expect(result.exposedPaper[0].timeline).toBe('BACKGROUND');
-    expect(result.buriedTransactions[0].timeline).toBe('INVESTIGATION');
+    expect(result).not.toHaveProperty('buriedTransactions');
   });
 
   test('falls back to lowercase defaults when temporalContext missing', () => {
@@ -64,6 +66,6 @@ describe('extractEvidenceSummary temporal tags', () => {
     const result = extractEvidenceSummary(bundle);
     expect(result.exposedTokens[0].timeline).toBe('party-night');
     expect(result.exposedPaper[0].timeline).toBe('BACKGROUND');
-    expect(result.buriedTransactions[0].timeline).toBe('investigation');
+    expect(result).not.toHaveProperty('buriedTransactions');
   });
 });

@@ -26,10 +26,10 @@
  * → preprocessEvidence → extractCharacterData → checkpointPreCuration [interrupt: pre-curation]
  * → curateEvidenceBundle → checkpointEvidenceAndPhotos [interrupt: evidence-photos] → processRescuedItems
  *
- * PHASE 2: Arc Analysis (Player-Focus-Guided)
- * → analyzeArcs → validateArcs → evaluateArcs
- * → checkpointArcSelection [interrupt: arc-selection] → buildArcEvidencePackages
- * → [revision loop]
+ * PHASE 2: The weave (phase 4, brief 4.4)
+ * → analyzeArcs (the arc writer: one weave) → validateArcs (the weave checks)
+ * → evaluateArcs (the fact check) → checkpointArcSelection [interrupt: arc-selection]
+ * → [rework loop: one check rework and one fact-check fix per round]
  *
  * PHASE 2.36: Photo branch (photo late-join)
  * checkpointArcSelection --forward--> checkpointPhotos [interrupt: photos]
@@ -65,6 +65,7 @@ const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
 const { ReportStateAnnotation, PHASES, REVISION_CAPS } = require('./state');
 const nodes = require('./nodes');
 const { isTransientError } = require('../llm/retry');
+const { weaveKey, factCheckMarkOf, isWeave, isWeaveJudged, isMeetingApproved } = require('../weave');
 
 // P3.1 — Transient-only auto-retry for LLM-calling nodes.
 // initialInterval is MILLISECONDS in @langchain/langgraph 1.0.7 (verified against
@@ -90,37 +91,25 @@ const LLM_RETRY = { retryPolicy: { maxAttempts: 3, initialInterval: 2000, retryO
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Route function for arc evaluation results
- * Returns 'checkpoint' if ready for human, 'revise' if needs work, 'error' on failure
+ * Route after the weave's fact check (phase 4, brief 4.4; R6): a breach the fact check
+ * found gets its one fix, and then the story meeting's stop opens with no second judge
+ * call. The fact check's mark on the weave (lib/weave.js) says what it found and how
+ * many fixes have run; an approved meeting, a weave with no breach, and a weave already
+ * fixed go to the stop.
+ *
  * @param {Object} state - Current graph state
  * @returns {string} 'checkpoint', 'revise', or 'error'
  */
 function routeArcEvaluation(state) {
-  // Check for errors
   if (state.currentPhase === PHASES.ERROR) {
     return 'error';
   }
-
-  // Futile revision guard: 0 arcs with no previous arcs = generation failed entirely
-  // Revision is pointless — escalate to checkpoint for human rollback
-  const hasNoArcs = !state.narrativeArcs || state.narrativeArcs.length === 0;
-  const hasNoPreviousArcs = !state._previousArcs || state._previousArcs.length === 0;
-  if (hasNoArcs && hasNoPreviousArcs) {
-    console.log('[routeArcEvaluation] 0 arcs with no previous arcs — escalating to checkpoint');
-    return 'checkpoint';
+  const mark = factCheckMarkOf(state.weave);
+  if (!isMeetingApproved(state) && mark && mark.ready === false && (mark.fixes || 0) < REVISION_CAPS.ARCS) {
+    console.log('[routeArcEvaluation] The fact check found a breach: one automatic fix');
+    return 'revise';
   }
-
-  // Check most recent arcs evaluation (phase-filtered, consistent with evaluator skip logic)
-  const evalHistory = state.evaluationHistory || [];
-  const phaseEvals = evalHistory.filter(e => e.phase === 'arcs');
-  const lastEval = phaseEvals[phaseEvals.length - 1];
-  const atCap = (state.arcRevisionCount || 0) >= REVISION_CAPS.ARCS;
-
-  if (lastEval?.ready || atCap) {
-    return 'checkpoint';
-  }
-
-  return 'revise';
+  return 'checkpoint';
 }
 
 /**
@@ -246,44 +235,31 @@ function routeSchemaValidation(state) {
 }
 
 /**
- * Route function for arc validation results (Commit 8.27)
- * Routes based on programmatic structural checks BEFORE expensive evaluation.
- * Returns 'evaluate' if structural checks pass, 'revise' if they fail.
+ * Route after the weave checks (phase 4, brief 4.4; R6): a failed check sends a weave
+ * the fact check has not judged back for one rework in the round, before the fact check
+ * runs. Everything else goes on to the fact check's node, which skips a judged weave and
+ * an approved meeting: a passing weave, a check still failing after its rework (kept for
+ * the meeting to show), a judged weave, and a check result stamped for another weave. A
+ * rework that failed ends the run in an error.
  *
  * @param {Object} state - Current graph state with _arcValidation
- * @returns {string} 'evaluate' or 'revise'
+ * @returns {string} 'evaluate', 'revise' or 'error'
  */
 function routeArcValidation(state) {
-  const validation = state._arcValidation;
-
-  // Default to evaluate if no validation data
-  if (!validation) {
-    console.log('[routeArcValidation] No validation data, proceeding to evaluation');
+  if (state.currentPhase === PHASES.ERROR) {
+    return 'error';
+  }
+  const check = state._arcValidation;
+  const failedOnThisWeave = Boolean(check && check.passed === false && isWeave(state.weave) && check.weaveKey === weaveKey(state.weave));
+  if (!failedOnThisWeave || isMeetingApproved(state) || isWeaveJudged(state.weave)) {
     return 'evaluate';
   }
-
-  if (validation.structuralPassed === false) {
-    // If 0 arcs AND no previous arcs, revision is pointless — nothing to revise.
-    // Skip directly to evaluation which will escalate to human checkpoint.
-    const hasNoArcs = !state.narrativeArcs || state.narrativeArcs.length === 0;
-    const hasNoPreviousArcs = !state._previousArcs || state._previousArcs.length === 0;
-    if (hasNoArcs && hasNoPreviousArcs) {
-      console.log('[routeArcValidation] 0 arcs with no previous arcs — revision would be futile, escalating to evaluation');
-      return 'evaluate';
-    }
-
-    // Check revision cap before routing to revise
-    const atCap = (state.arcRevisionCount || 0) >= REVISION_CAPS.ARCS;
-    if (atCap) {
-      console.log('[routeArcValidation] Structural issues but at revision cap, proceeding to evaluation');
-      return 'evaluate';  // Let evaluator handle escalation
-    }
-    console.log(`[routeArcValidation] Structural issues detected (${validation.missingRoster?.length || 0} missing roster), routing to revision`);
-    return 'revise';
+  if ((state.arcRevisionCount || 0) >= REVISION_CAPS.ARCS) {
+    console.log('[routeArcValidation] A check still fails after the round\'s rework: on to the fact check, the failure kept for the meeting');
+    return 'evaluate';
   }
-
-  console.log('[routeArcValidation] Structural checks passed, proceeding to evaluation');
-  return 'evaluate';
+  console.log(`[routeArcValidation] A check failed (${(check.failures || []).map(f => f.type).join(', ')}): one rework`);
+  return 'revise';
 }
 
 // NOTE: routeArcSelectionApproval, routeOutlineApproval, routeArticleApproval
@@ -299,41 +275,29 @@ function routeArcValidation(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Increment arc revision count and preserve/clear arcs for re-analysis
- * Preserves current arcs in _previousArcs for revision context
- * Clears narrativeArcs so analyzeArcs skip logic doesn't trigger
+ * Count one more pass on the weave (phase 4, brief 4.4).
+ *
+ * A send back opens a round of the director's (brief 1.4): the automatic count starts
+ * over. An automatic pass, a check rework or the fact check's fix, counts toward the
+ * round. The weave stays where it is: the rework reads it as the version it starts from.
+ * No history stub is needed, since the fact check skips by its mark on the weave, which
+ * the rework of a director's round writes without (lib/weave.js).
  */
 async function incrementArcRevision(state) {
   const isHumanDriven = !!state._arcFeedback;
-  // Phase 1 (brief 1.4, integrator ruling): the automated budget is per round of the
-  // director's at every stop, so a send back resets the automated counter here as the
-  // outline and article increments do. "Automated passes this round" is then true here too.
   const newEvalCount = isHumanDriven
     ? 0
     : (state.arcRevisionCount || 0) + 1;
   const newHumanCount = isHumanDriven
     ? (state.humanArcRevisionCount || 0) + 1
     : (state.humanArcRevisionCount || 0);
+  const kind = isHumanDriven ? "the director's round" : (isWeaveJudged(state.weave) ? "the fact check's fix" : 'a check rework');
 
-  // Preserve arcs for revision context — fall back to _previousArcs if narrativeArcs lost (timeout)
-  const arcsToPreserve = (state.narrativeArcs?.length > 0)
-    ? state.narrativeArcs
-    : state._previousArcs;
-
-  console.log(`[incrementArcRevision] count=${newEvalCount}, humanCount=${newHumanCount}, source=${isHumanDriven ? 'human' : 'evaluator'}, preserving ${arcsToPreserve?.length || 0} arcs`);
+  console.log(`[incrementArcRevision] count=${newEvalCount}, humanCount=${newHumanCount}, ${kind}`);
 
   return {
     arcRevisionCount: newEvalCount,
-    humanArcRevisionCount: newHumanCount,
-    _previousArcs: arcsToPreserve,
-    narrativeArcs: null,
-    evaluationHistory: {
-      phase: 'arcs',
-      ready: false,
-      reason: 'revision-invalidated',
-      source: isHumanDriven ? 'human' : 'evaluator',
-      timestamp: new Date().toISOString()
-    }
+    humanArcRevisionCount: newHumanCount
   };
 }
 
@@ -569,28 +533,23 @@ function createGraphBuilder() {
   builder.addNode('surfaceContradictions', nodes.surfaceContradictions);
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
+  // ADD NODES - Phase 2: The weave (phase 4, brief 4.4)
   // ═══════════════════════════════════════════════════════
 
-  // Arc analysis with player-focus-guided single-call architecture (Commit 8.15)
-  // Player conclusions (accusation/whiteboard) drive arc generation
-  // Single SDK call replaces 4-call parallel specialist pattern
+  // The arc writer: one weave in one call, from the room's conclusions and the record
   builder.addNode('analyzeArcs', nodes.analyzeArcsPlayerFocusGuided, LLM_RETRY);
 
-  // Arc structure validation - programmatic, no LLM (Commit 8.12)
-  // Validates keyEvidence IDs exist in bundle, characterPlacements use roster names
+  // The weave checks: programmatic, no model call (lib/weave.js checkWeave)
   builder.addNode('validateArcs', nodes.validateArcStructure);
 
-  // Arc evaluation (no interrupt - SRP: checkpoint separate)
+  // The fact check: the truth criteria, once per round (no interrupt - SRP: checkpoint separate)
   builder.addNode('evaluateArcs', nodes.evaluateArcs, LLM_RETRY);
 
-  // Arc selection checkpoint - interrupt() here (Commit 8.26: SRP separation)
+  // The story meeting's stop - interrupt() here (Commit 8.26: SRP separation)
   builder.addNode('checkpointArcSelection', nodes.checkpointArcSelection);
 
-  // Arc revision handling
-  // NOTE: setArcSelectionCheckpoint removed - interrupt() now in evaluateArcs
+  // The arc rework: a check rework, the fact check's fix, or the director's round
   builder.addNode('incrementArcRevision', incrementArcRevision);
-  // Revision node - uses buildRevisionContext helper for targeted fixes
   builder.addNode('reviseArcs', nodes.reviseArcs, LLM_RETRY);
 
   // ═══════════════════════════════════════════════════════
@@ -710,24 +669,23 @@ function createGraphBuilder() {
   builder.addEdge('surfaceContradictions', 'analyzeArcs');
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 2: Arc Analysis (Player-Focus-Guided - Commit 8.15)
+  // ADD EDGES - Phase 2: The weave (phase 4, brief 4.4; R6)
   // ═══════════════════════════════════════════════════════
 
-  // Arc analysis → validation → [conditional routing]
+  // The arc writer → the weave checks → [conditional routing]
   builder.addEdge('analyzeArcs', 'validateArcs');
 
-  // Arc validation routing (Commit 8.27: short-circuit expensive evaluator for structural issues)
-  // evaluate: structural checks passed, proceed to Opus evaluation for quality judgment
-  // revise: structural issues detected (missing roster, no accusation arc), immediate revision
+  // After the checks: a failed check sends a weave the fact check has not judged back
+  // for the round's one rework; everything else goes on to the fact check's node; a
+  // rework that failed ends the run.
   builder.addConditionalEdges('validateArcs', routeArcValidation, {
     evaluate: 'evaluateArcs',
-    revise: 'incrementArcRevision'  // Skip expensive evaluation, go directly to revision
+    revise: 'incrementArcRevision',
+    error: END
   });
 
-  // Arc evaluation routing (Commit 8.26: SRP - checkpoint separate from evaluation)
-  // checkpoint: evaluation ready, proceed to checkpoint node for human approval
-  // revise: needs work, loop back for revision
-  // error: fatal error, end workflow
+  // After the fact check: a breach gets its one fix, then the checks run on the fix and
+  // the stop opens with no second judge call (the fact check skips a judged weave).
   builder.addConditionalEdges('evaluateArcs', routeArcEvaluation, {
     checkpoint: 'checkpointArcSelection',  // Route to checkpoint node, not directly to next phase
     revise: 'incrementArcRevision',
@@ -740,8 +698,7 @@ function createGraphBuilder() {
     revise: 'incrementArcRevision'
   });
 
-  // Revision loop: increment → revise → validate (NOT back to analyzeArcs)
-  // reviseArcs receives previous output + feedback for TARGETED fixes
+  // Rework loop: increment → rework → the checks (never back to the arc writer)
   builder.addEdge('incrementArcRevision', 'reviseArcs');
   builder.addEdge('reviseArcs', 'validateArcs');
 

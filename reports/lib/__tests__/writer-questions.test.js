@@ -3,10 +3,14 @@
  *
  * When the record holds nothing about a player, a roster pronoun is missing, or a
  * ledger line looks wrong, a writer asks the director instead of guessing. The
- * questions ride in one optional field, `writerQuestions`, on each writer's output:
- * the arcs (stored in `_arcAnalysisCache.writerQuestions`; the interweaving call has
- * no field), the outline and the article, at the top level. The director reads them
- * at the stop and answers with the stop's note.
+ * questions ride in one optional field, `writerQuestions`, on the outline and the
+ * article, at the top level. The director reads them at the stop and answers with the
+ * stop's note.
+ *
+ * Phase 4 (brief 4.4): the arc writer's questions are the weave's own (`weave.questions`,
+ * WEAVE_QUESTIONS_PROPERTY), each with an id and what its answer changes, and their
+ * kinds are C15's player, pronoun and figure. lib/__tests__/weave.test.js pins their
+ * shape; this file follows their carry through the arc rework (R5).
  *
  * - A rework carries forward every question it did not answer (R5): only the director
  *   answers one. On an automatic pass a question the rework returns replaces each
@@ -16,22 +20,20 @@
  *   the old one; a rework that returns no field keeps the previous list.
  * - The field never prints, and never reaches the template, the fact check's printed
  *   text or a later writer's prompt.
- * - At the arc stage a roster member a question of kind "player" names counts as
- *   covered, by first name or full name, in the arc check, its fix line, the arc judge
- *   and the arc writer's own roster lines (fix 3.7b: a pronoun or ledger question
- *   covers no one; T4, an account's name never proves who holds it). The article fact
- *   check's coverage is unchanged.
- * - The detective is parked (spec D13): its schemas, prompts and checks do not change.
+ * - Roster coverage left the arc stage (phase 4, brief 4.4), and with it the rule that a
+ *   question of kind "player" covered a player there. The article fact check's
+ *   coverage is unchanged.
+ * - The detective is parked (spec D13): its outline and article schemas, prompts and
+ *   checks do not change. Its arc stage went (R1).
  */
 
 const { SchemaValidator } = require('../schema-validator');
 const outlineSchema = require('../schemas/outline.schema.json');
 const contentBundleSchema = require('../schemas/content-bundle.schema.json');
 const detectiveBundleCopy = require('../schemas/content-bundle.detective-prompt.json');
-const subagents = require('../sdk-client/subagents');
 const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
 const aiNodes = require('../workflow/nodes/ai-nodes');
-const { _testing: { buildEvaluationUserPrompt, buildEvaluationSystemPrompt, getArcCriteria } } = require('../workflow/nodes/evaluator-nodes');
+const { _testing: { buildEvaluationUserPrompt } } = require('../workflow/nodes/evaluator-nodes');
 const { PromptBuilder } = require('../prompt-builder');
 const { PHASE_REQUIREMENTS } = require('../theme-loader');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
@@ -46,6 +48,11 @@ const Q_FULL = { kind: 'player', about: 'Sarah Blackwood', question: 'The record
 const Q_LEDGER = { kind: 'ledger', about: 'The 07:50 AM sale of $75,000 into Melanie', question: 'Is this sale a duplicate entry?' };
 const Q_PRONOUN = { kind: 'pronoun', about: 'Riley', question: 'The roster gives Riley no pronoun: which one?' };
 const QUESTION_TEXTS = [Q_SARAH, Q_FULL, Q_LEDGER, Q_PRONOUN].map((q) => q.question);
+
+// Phase 4 (brief 4.4): the weave's questions, each with an id and what its answer changes.
+const W_SARAH = { id: 'q1', kind: 'player', about: 'Sarah', question: 'The record holds nothing Sarah did this morning: where was Sarah?', changes: 'Whether Sarah prints in the story.' };
+const W_FIGURE = { id: 'q2', kind: 'figure', about: 'The 07:50 AM sale of $75,000 into Melanie', question: 'Is this sale a duplicate entry?', changes: "The money section's total." };
+const W_PRONOUN = { id: 'q3', kind: 'pronoun', about: 'Riley', question: 'The roster gives Riley no pronoun: which one?', changes: "Riley's pronoun in print." };
 
 beforeAll(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -77,15 +84,10 @@ function sdkReturning(...values) {
 // The four schemas
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Phase 4 (brief 4.4): the arc writer's and the arc reworker's schemas went with the
+// weave, whose questions have their own property (weave.test.js). The field stays on the
+// outline and the bundle until 4.6 and 4.7 drop it.
 describe('the optional writerQuestions field in the four schemas', () => {
-  it('the arc writer\'s schema (CORE_ARC_SCHEMA)', () => {
-    expectQuestionsField(subagents.CORE_ARC_SCHEMA, 'CORE_ARC_SCHEMA');
-  });
-
-  it('the arc reworker\'s schema (PLAYER_FOCUS_GUIDED_SCHEMA)', () => {
-    expectQuestionsField(subagents.PLAYER_FOCUS_GUIDED_SCHEMA, 'PLAYER_FOCUS_GUIDED_SCHEMA');
-  });
-
   it('the outline schema, at the top level, and the validator accepts it', () => {
     expectQuestionsField(outlineSchema, 'outline.schema.json');
     const validator = new SchemaValidator();
@@ -110,7 +112,7 @@ describe('the optional writerQuestions field in the four schemas', () => {
   });
 
   it('the descriptions state the shape and name C15, with no em-dash', () => {
-    for (const schema of [subagents.CORE_ARC_SCHEMA, subagents.PLAYER_FOCUS_GUIDED_SCHEMA, outlineSchema, contentBundleSchema]) {
+    for (const schema of [outlineSchema, contentBundleSchema]) {
       const field = schema.properties.writerQuestions;
       expect(field.description).toMatch(/C15/);
       expect(field.items.properties.kind.description).toMatch(/C15/);
@@ -132,20 +134,6 @@ describe('the optional writerQuestions field in the four schemas', () => {
     ]) {
       expect({ label, field: schema.properties.writerQuestions }).toEqual({ label, field: expected });
     }
-    expect(subagents.CORE_ARC_SCHEMA.properties.writerQuestions).toBe(WRITER_QUESTIONS_PROPERTY);
-    expect(subagents.PLAYER_FOCUS_GUIDED_SCHEMA.properties.writerQuestions).toBe(WRITER_QUESTIONS_PROPERTY);
-  });
-
-  it('the interweaving call has no field (spec section 8)', () => {
-    expect(subagents.INTERWEAVING_SCHEMA.properties.writerQuestions).toBeUndefined();
-  });
-
-  it('the detective\'s arc schemas do not change: neither copy carries the field', () => {
-    expect(subagents.DETECTIVE_PLAYER_FOCUS_GUIDED_SCHEMA.properties.writerQuestions).toBeUndefined();
-    expect(subagents.DETECTIVE_INTERWEAVING_SCHEMA.properties.writerQuestions).toBeUndefined();
-    expect(subagents.DETECTIVE_CORE_ARC_SCHEMA.properties.writerQuestions).toBeUndefined();
-    const { writerQuestions, ...rest } = subagents.CORE_ARC_SCHEMA.properties;
-    expect(subagents.DETECTIVE_CORE_ARC_SCHEMA.properties).toEqual(rest);
   });
 
   it('the detective\'s frozen copy of the content-bundle schema keeps the live shape', () => {
@@ -156,16 +144,6 @@ describe('the optional writerQuestions field in the four schemas', () => {
 });
 
 describe('the detective\'s calls do not ask for the field (spec D13)', () => {
-  it('the detective arc writer is sent its own schema; the journalist\'s carries the field', async () => {
-    for (const theme of ['journalist', 'detective']) {
-      const state = reworkFixtureState(theme);
-      const sdk = sdkReturning({ narrativeArcs: state.narrativeArcs, synthesisNotes: 's' });
-      await arcNodes._testing.generateCoreArcs({ ...state, narrativeArcs: null }, { configurable: { sdkClient: sdk, theme } });
-      const schema = sdk.mock.calls[0][0].jsonSchema;
-      expect(`${theme}: ${Boolean(schema.properties.writerQuestions)}`).toBe(`${theme}: ${theme === 'journalist'}`);
-    }
-  });
-
   it.each([
     ['generateContentBundle', (state, cfg) => aiNodes.generateContentBundle({ ...state, contentBundle: null }, cfg)],
     ['reviseContentBundle', (state, cfg) => aiNodes.reviseContentBundle({ ...state, _previousContentBundle: clone(PREVIOUS_BUNDLE), articleRevisionCount: 1 }, cfg)]
@@ -191,33 +169,15 @@ describe('the detective\'s calls do not ask for the field (spec D13)', () => {
 // The arcs: the merge, the cache, the rework
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('the arc questions survive the merge and reach the cache', () => {
-  const { mergeArcsWithInterweaving } = arcNodes._testing;
-  const core = { narrativeArcs: [{ id: 'arc-a', title: 'A' }], synthesisNotes: 's', writerQuestions: [Q_SARAH] };
-
-  it('the merge keeps the writer\'s questions beside the interweaving', () => {
-    const merged = mergeArcsWithInterweaving(core, { arcInterweaving: [], interweavingPlan: { suggestedOrder: ['arc-a'] } });
-    expect(merged.writerQuestions).toEqual([Q_SARAH]);
-  });
-
-  it('the merge keeps them when the interweaving call failed', () => {
-    const merged = mergeArcsWithInterweaving(core, { _failed: true, _error: 'x' });
-    expect(merged.writerQuestions).toEqual([Q_SARAH]);
-  });
-
-  it('the merge gives an empty list when the writer raised none', () => {
-    const merged = mergeArcsWithInterweaving({ narrativeArcs: [], synthesisNotes: 's' }, null);
-    expect(merged.writerQuestions).toEqual([]);
-  });
-
-  it('the arc analysis stores them as _arcAnalysisCache.writerQuestions', async () => {
+describe("the arc writer's questions reach the weave", () => {
+  // Phase 4 (brief 4.4): the merge with the interweaving went; the writer's weave
+  // carries its questions, the well-formed ones only (weaveQuestionsOf).
+  it('the arc analysis stores the well-formed ones on the weave, in order', async () => {
     const state = reworkFixtureState('journalist');
-    const sdk = sdkReturning(
-      { narrativeArcs: state.narrativeArcs, synthesisNotes: 's', writerQuestions: [Q_SARAH, Q_LEDGER] },
-      { arcInterweaving: [], interweavingPlan: { suggestedOrder: ['arc-sale'] } }
-    );
-    const result = await arcNodes.analyzeArcsPlayerFocusGuided({ ...state, narrativeArcs: [] }, { configurable: { sdkClient: sdk, theme: 'journalist' } });
-    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_SARAH, Q_LEDGER]);
+    const sdk = sdkReturning({ ...clone(state.weave), questions: [W_SARAH, { kind: 'player', about: 'Kai' }, W_FIGURE] });
+    const result = await arcNodes.analyzeArcsPlayerFocusGuided({ ...state, weave: null }, { configurable: { sdkClient: sdk, theme: 'journalist' } });
+    expect(result.weave.questions).toEqual([W_SARAH, W_FIGURE]);
+    expect(result).not.toHaveProperty('_arcAnalysisCache');
   });
 });
 
@@ -338,14 +298,17 @@ describe('an automatic pass replaces each earlier question on the subject the re
     expect(carriedWriterQuestions(undefined, [Q_SARAH, Q_LEDGER], AUTOMATIC)).toEqual([Q_SARAH, Q_LEDGER]);
   });
 
+  // Phase 4 (brief 4.4): the weave's questions carry an id, and the arc rework's
+  // version of a question replaces it by that id (carriedWeaveQuestions).
   it('the three reworks replace in place on an automatic pass', async () => {
     const reworded = { ...Q_SARAH, question: 'What did Sarah do at the check-in?' };
+    const rewordedInWeave = { ...W_SARAH, question: 'What did Sarah do at the check-in?' };
     const arcState = reworkFixtureState('journalist');
     const arcResult = await arcNodes.reviseArcs(
-      { ...arcState, narrativeArcs: null, _previousArcs: arcState.narrativeArcs, _arcAnalysisCache: { ...arcState._arcAnalysisCache, writerQuestions: [Q_SARAH, Q_LEDGER] } },
-      { configurable: { sdkClient: sdkReturning({ narrativeArcs: arcState.narrativeArcs, synthesisNotes: 's', writerQuestions: [reworded] }) } }
+      { ...arcState, weave: { ...clone(arcState.weave), questions: [W_SARAH, W_FIGURE] } },
+      { configurable: { sdkClient: sdkReturning({ ...clone(arcState.weave), questions: [rewordedInWeave] }) } }
     );
-    expect(arcResult._arcAnalysisCache.writerQuestions).toEqual([reworded, Q_LEDGER]);
+    expect(arcResult.weave.questions).toEqual([rewordedInWeave, W_FIGURE]);
 
     const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: aiNodes.createMockPromptBuilder(), theme: 'journalist' } });
     const outlineResult = await aiNodes.reviseOutline(
@@ -378,69 +341,67 @@ describe('writerQuestionsOf keeps the kind', () => {
   });
 });
 
+// Phase 4 (brief 4.4): the arc rework reads and returns the weave, its questions in it.
 describe('an arc rework carries forward the questions it did not answer (R5)', () => {
   function reworkState(previousQuestions, feedback = null) {
     const state = reworkFixtureState('journalist');
-    return {
-      ...state,
-      narrativeArcs: null,
-      _previousArcs: state.narrativeArcs,
-      _arcFeedback: feedback,
-      _arcAnalysisCache: { ...state._arcAnalysisCache, writerQuestions: previousQuestions }
-    };
+    return { ...state, _arcFeedback: feedback, weave: { ...clone(state.weave), questions: previousQuestions } };
+  }
+  /** The weave the rework returns: the one it started from, with these questions, or none. */
+  function returned(state, questions) {
+    const weave = clone(state.weave);
+    if (questions === undefined) delete weave.questions;
+    else weave.questions = questions;
+    return weave;
   }
 
-  it('shows the previous questions in the rework prompt, as JSON under their own heading', () => {
-    const prompt = arcNodes._testing.buildArcRevisionPrompt(reworkState([Q_SARAH]), 'CTX', 'PREV');
-    expect(prompt).toContain(`### PREVIOUS QUESTIONS FOR THE DIRECTOR (writerQuestions)\n${JSON.stringify([Q_SARAH], null, 2)}`);
-  });
-
-  it('shows no such section when there were no questions', () => {
-    const prompt = arcNodes._testing.buildArcRevisionPrompt(reworkState([]), 'CTX', 'PREV');
+  it('shows the previous questions in the rework prompt, inside the previous weave', async () => {
+    const state = reworkState([W_SARAH]);
+    const sdk = sdkReturning(returned(state, [W_SARAH]));
+    await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
+    const { prompt } = sdk.mock.calls[0][0];
+    const previous = prompt.slice(prompt.indexOf('PREVIOUS WEAVE OUTPUT'), prompt.indexOf('END PREVIOUS OUTPUT'));
+    expect(previous).toContain(JSON.stringify(W_SARAH.question));
     expect(prompt).not.toContain('PREVIOUS QUESTIONS FOR THE DIRECTOR');
   });
 
   it('keeps the previous list when the rework returns no field', async () => {
-    const state = reworkState([Q_SARAH, Q_LEDGER]);
-    const sdk = sdkReturning({ narrativeArcs: state._previousArcs, synthesisNotes: 's' });
-    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
-    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_SARAH, Q_LEDGER]);
+    const state = reworkState([W_SARAH, W_FIGURE]);
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, undefined)) } });
+    expect(result.weave.questions).toEqual([W_SARAH, W_FIGURE]);
   });
 
   it('drops a question the rework answered after the director\'s note, and keeps the unanswered one', async () => {
-    const state = reworkState([Q_SARAH, Q_LEDGER], 'Sarah sold the first memory at 07:50 AM.');
-    const sdk = sdkReturning({ narrativeArcs: state._previousArcs, synthesisNotes: 's', writerQuestions: [Q_LEDGER] });
-    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
-    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_LEDGER]);
+    const state = reworkState([W_SARAH, W_FIGURE], 'Sarah sold the first memory at 07:50 AM.');
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, [W_FIGURE])) } });
+    expect(result.weave.questions).toEqual([W_FIGURE]);
   });
 
   it('adds the rework\'s own new questions', async () => {
-    const state = reworkState([Q_LEDGER]);
-    const sdk = sdkReturning({ narrativeArcs: state._previousArcs, synthesisNotes: 's', writerQuestions: [Q_LEDGER, Q_PRONOUN] });
-    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
-    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_LEDGER, Q_PRONOUN]);
+    const state = reworkState([W_FIGURE]);
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, [W_FIGURE, W_PRONOUN])) } });
+    expect(result.weave.questions).toEqual([W_FIGURE, W_PRONOUN]);
   });
 
   it('an automatic pass keeps a question its rework left out, beside the rework\'s own', async () => {
-    const state = reworkState([Q_SARAH, Q_LEDGER]);
-    const sdk = sdkReturning({ narrativeArcs: state._previousArcs, synthesisNotes: 's', writerQuestions: [Q_LEDGER, Q_PRONOUN] });
-    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
-    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_SARAH, Q_LEDGER, Q_PRONOUN]);
+    const state = reworkState([W_SARAH, W_FIGURE]);
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, [W_FIGURE, W_PRONOUN])) } });
+    expect(result.weave.questions).toEqual([W_SARAH, W_FIGURE, W_PRONOUN]);
   });
 
   it('an automatic pass whose rework returns an empty list keeps every previous question', async () => {
-    const state = reworkState([Q_SARAH, Q_LEDGER]);
-    const sdk = sdkReturning({ narrativeArcs: state._previousArcs, synthesisNotes: 's', writerQuestions: [] });
-    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
-    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_SARAH, Q_LEDGER]);
+    const state = reworkState([W_SARAH, W_FIGURE]);
+    const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdkReturning(returned(state, [])) } });
+    expect(result.weave.questions).toEqual([W_SARAH, W_FIGURE]);
   });
 
-  it('keeps the questions with the previous arcs on the free timeout retry', async () => {
-    const state = reworkState([Q_SARAH]);
+  it('keeps the questions with the weave on the free timeout retry', async () => {
+    const state = reworkState([W_SARAH]);
     const sdk = jest.fn().mockRejectedValueOnce(new Error('SDK timeout after 300.0s (limit: 300s)'));
     const result = await arcNodes.reviseArcs(state, { configurable: { sdkClient: sdk } });
-    expect(result._arcAnalysisCache._revisionTimedOut).toBe(true);
-    expect(result._arcAnalysisCache.writerQuestions).toEqual([Q_SARAH]);
+    expect(result._arcReworkTimeout).toMatchObject({ consecutive: 1 });
+    // The weave, its questions in it, stays in its channel: the rework writes none.
+    expect(result).not.toHaveProperty('weave');
   });
 });
 
@@ -588,158 +549,18 @@ describe('the questions never reach a later writer, a judge\'s JSON or the templ
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Roster coverage at the arc stage: placed through the record, or questioned
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe('the arc check counts a questioned player as covered (C7, C15)', () => {
-  const placesAlex = {
-    id: 'arc-verdict', title: 'The verdict', arcSource: 'accusation',
-    keyEvidence: [], characterPlacements: { Alex: 'accused' }, evidenceStrength: 'moderate'
-  };
-  function stateWith(questions, theme = 'journalist') {
-    return {
-      narrativeArcs: [placesAlex],
-      sessionConfig: { roster: ['Alex', 'Sarah'], accusation: { verdictKind: 'culprit', accused: ['Alex'], charge: 'Murder' } },
-      evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } },
-      canonicalCharacters: { Alex: 'Alex Reeves', Sarah: 'Sarah Blackwood' },
-      _arcAnalysisCache: questions === undefined ? null : { writerQuestions: questions },
-      theme
-    };
-  }
-
-  it('a player no arc places and no question names is missing', () => {
-    const result = arcNodes.validateArcStructure(stateWith([]), {});
-    expect(result._arcValidation.missingRoster).toEqual(['Sarah']);
-    expect(result._arcValidation.structuralPassed).toBe(false);
-  });
-
-  it.each([
-    ['first name', Q_SARAH],
-    ['full name', Q_FULL]
-  ])('a player question naming the player by %s covers them', (_kind, question) => {
-    const result = arcNodes.validateArcStructure(stateWith([question]), {});
-    expect(result._arcValidation.missingRoster).toEqual([]);
-    expect(result._arcValidation.rosterCoverage).toBe(1);
-    expect(result._arcValidation.rosterCoveredByQuestion).toEqual(['Sarah']);
-    expect(result._arcValidation.structuralPassed).toBe(true);
-  });
-
-  it('a question about someone else, or about a ledger line, covers no one else', () => {
-    const result = arcNodes.validateArcStructure(stateWith([Q_LEDGER, { kind: 'player', about: 'Sarahson', question: 'Who?' }]), {});
-    expect(result._arcValidation.missingRoster).toEqual(['Sarah']);
-  });
-
-  // Fix 3.7b (finding 1): only a question of kind "player" covers a player. An account
-  // can carry any name, a player's included, and its name never proves who holds it
-  // (T4), so a ledger question about the Sarah account places no one.
-  it.each([
-    ['a ledger question about an account named after the player', { kind: 'ledger', about: 'The 10:02 AM sale of $250,000 into Sarah', question: 'Is this sale a duplicate entry?' }],
-    ['a pronoun question about the player', { kind: 'pronoun', about: 'Sarah', question: 'The roster gives Sarah no pronoun: which one?' }],
-    ['a question with no kind', { about: 'Sarah', question: 'Where was Sarah?' }]
-  ])('%s covers no one', (_name, question) => {
-    const result = arcNodes.validateArcStructure(stateWith([question]), {});
-    expect(result._arcValidation.missingRoster).toEqual(['Sarah']);
-    expect(result._arcValidation.rosterCoveredByQuestion).toEqual([]);
-    expect(result._arcValidation.structuralPassed).toBe(false);
-  });
-
-  it('a thread with no cache counts placements only', () => {
-    const result = arcNodes.validateArcStructure(stateWith(undefined), {});
-    expect(result._arcValidation.missingRoster).toEqual(['Sarah']);
-  });
-
-  it('the fix line offers a placement through the record or a question to the director', () => {
-    const guidance = arcNodes.validateArcStructure(stateWith([]), {}).validationResults.revisionGuidance;
-    expect(guidance).toContain('Roster members with no placement and no writerQuestions entry of kind "player" about them:\n  - Sarah');
-    expect(guidance).toMatch(/through what the record shows they did, or, where the record holds nothing about them, a writerQuestions entry of kind "player" about them for the director \(C15\)/);
-    expect(guidance).not.toMatch(/MUST appear/);
-  });
-
-  it('the detective keeps its check and its fix line (D13)', () => {
-    const result = arcNodes.validateArcStructure(stateWith([Q_SARAH], 'detective'), {});
-    expect(result._arcValidation.missingRoster).toEqual(['Sarah']);
-    expect(result.validationResults.revisionGuidance).toContain('Missing roster members that MUST appear in characterPlacements:');
-    expect(result.validationResults.revisionGuidance).toContain("Ensure each missing member appears in at least one arc's characterPlacements.");
-  });
-});
-
-describe('the arc judge counts a questioned player as covered (C7, C15)', () => {
-  it('the journalist rosterCoverage criterion names the questions; it stays structural', () => {
-    const criterion = getArcCriteria('journalist').rosterCoverage;
-    expect(criterion.type).toBe('structural');
-    expect(criterion.description).toBe(
-      'Does every roster member have a placement in at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR (C7, C15)?'
-    );
-  });
-
-  it('the journalist judge is shown the arc writer\'s questions as JSON under their own label', () => {
-    const state = { ...reworkFixtureState('journalist'), _arcAnalysisCache: { writerQuestions: [Q_SARAH] } };
-    const prompt = buildEvaluationUserPrompt('arcs', state, {});
-    expect(prompt).toContain(`QUESTIONS FOR THE DIRECTOR (writerQuestions):\n${JSON.stringify([Q_SARAH], null, 2)}`);
-    expect(prompt).toContain('1. ROSTER COVERAGE: Every name in SESSION ROSTER has a role in characterPlacements of at least one arc, or a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR');
-  });
-
-  it('the journalist judge is told when there are none', () => {
-    const prompt = buildEvaluationUserPrompt('arcs', { ...reworkFixtureState('journalist'), _arcAnalysisCache: {} }, {});
-    expect(prompt).toContain('QUESTIONS FOR THE DIRECTOR (writerQuestions):\n[]');
-  });
-
-  it('the journalist judge\'s system prompt counts a question in its distinction line', () => {
-    const system = buildEvaluationSystemPrompt('arcs', getArcCriteria('journalist'), 'journalist', { sessionConfig: { reportingMode: 'on-site' } });
-    expect(system).toContain('- rosterCoverage: Check that every roster member appears in characterPlacements of at least one arc, or has a question of kind "player" about them in QUESTIONS FOR THE DIRECTOR');
-  });
-
-  it('the detective judge is unchanged (D13)', () => {
-    const state = { ...reworkFixtureState('detective'), _arcAnalysisCache: { writerQuestions: [Q_SARAH] } };
-    const prompt = buildEvaluationUserPrompt('arcs', state, {});
-    expect(prompt).not.toContain('QUESTIONS FOR THE DIRECTOR');
-    expect(prompt).toContain('1. ROSTER COVERAGE: Every name in SESSION ROSTER needs a role in characterPlacements of at least one arc');
-    expect(getArcCriteria('detective').rosterCoverage.description).toBe('Does every roster member have a placement in at least one arc?');
-  });
-});
-
-describe('the arc writer\'s roster lines offer the question (C7, C15)', () => {
-  it('the journalist system prompt\'s output list', () => {
-    expect(subagents.CORE_ARC_SYSTEM_PROMPT).toContain('- Each roster member has a placement the record shows, or a writerQuestions entry of kind "player" about them (C7, C15)');
-    expect(subagents.CORE_ARC_SYSTEM_PROMPT).not.toContain('Every roster member has at least one placement');
-  });
-
-  it('the journalist writer\'s roster heading, character categories and OUTPUT FORMAT', () => {
-    const prompt = arcNodes._testing.buildCoreArcPrompt(reworkFixtureState('journalist'));
-    expect(prompt).toContain('### Session Roster (the players at the investigation)');
-    expect(prompt).toContain('**ROSTER PCs** (each has a placement the record shows, or a writerQuestions entry of kind "player" about them - they were in the room;');
-    expect(prompt).not.toMatch(/MUST have placements|ALL characters who need placement/);
-  });
-
-  // Fix 3.7b (finding 2): the OUTPUT FORMAT shows the list as optional and empty, then
-  // one entry's shape in placeholders, its `about` in the schema's own wording.
-  it('the journalist OUTPUT FORMAT shows writerQuestions empty unless the director alone can settle something', () => {
-    const { WRITER_QUESTIONS_PROPERTY } = require('../writer-questions');
-    const prompt = arcNodes._testing.buildCoreArcPrompt(reworkFixtureState('journalist'));
-    const format = prompt.slice(prompt.indexOf('## OUTPUT FORMAT'), prompt.indexOf('CRITICAL: Your response MUST be'));
-    expect(format).toContain('  "writerQuestions": []\n}\n');
-    expect(format).toContain('"writerQuestions" stays [] unless the record leaves something only the director can settle (C15). Each entry:\n{ ');
-    expect(format).toContain(`{ "kind": "player" | "pronoun" | "ledger", "about": ${JSON.stringify(WRITER_QUESTIONS_PROPERTY.items.properties.about.description)}, `);
-    expect(format).not.toContain('"writerQuestions": [\n');
-  });
-
-  it('the detective writer keeps its lines (D13)', () => {
-    const prompt = arcNodes._testing.buildCoreArcPrompt(reworkFixtureState('detective'));
-    expect(prompt).toContain('### Session Roster (ALL characters who need placement)');
-    expect(prompt).toContain('**ROSTER PCs** (MUST have placements - present at the investigation):');
-    expect(prompt).not.toContain('writerQuestions');
-    expect(subagents.DETECTIVE_CORE_ARC_SYSTEM_PROMPT).toContain('- Every roster member has at least one placement');
-  });
-});
-
 // The reworker carries the writer's sections, so it is shown the same OUTPUT FORMAT.
+// Phase 4 (brief 4.4): the weave's, whose questions stay empty unless the record leaves
+// something only the director can settle, each entry's kinds and `about` in the
+// schema's own wording.
 describe('the arc reworker carries the writer\'s OUTPUT FORMAT with the field', () => {
   it('journalist', () => {
-    const state = reworkFixtureState('journalist');
-    const prompt = arcNodes._testing.buildArcRevisionPrompt({ ...state, _previousArcs: state.narrativeArcs }, 'CTX', 'PREV');
-    expect(prompt).toContain('  "writerQuestions": []\n}\n');
-    expect(prompt).toContain('"writerQuestions" stays [] unless the record leaves something only the director can settle (C15).');
+    const { WEAVE_QUESTIONS_PROPERTY } = require('../writer-questions');
+    const prompt = arcNodes._testing.buildArcRevisionPrompt(reworkFixtureState('journalist'), 'CTX', 'PREV');
+    expect(prompt).toContain('  "questions": []\n}\n');
+    expect(prompt).toContain('"questions" stays [] unless the record leaves something only the director can settle (C15). Each entry:\n{ "id": "q1", "kind": "player" | "pronoun" | "figure", ');
+    expect(prompt).toContain(`"about": ${JSON.stringify(WEAVE_QUESTIONS_PROPERTY.items.properties.about.description)}, `);
+    expect(prompt).not.toContain('writerQuestions');
   });
 });
 

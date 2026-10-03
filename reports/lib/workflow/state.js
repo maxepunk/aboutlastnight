@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (81 total - includes revision context + human feedback):
+ * State Fields (82 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections,
@@ -20,8 +20,9 @@
  *     leftOutPhotos (phase 4, brief 4.2)
  *   - Preprocessed Data: preprocessedEvidence (Commit 8.5)
  *   - Curated Data: evidenceBundle
- *   - Arc Specialists (8.6): specialistAnalyses
- *   - Analysis: narrativeArcs, selectedArcs, heroImage, _arcAnalysisCache
+ *   - The weave (phase 4, brief 4.4): weave, _arcReworkTimeout
+ *   - Analysis: narrativeArcs, selectedArcs, heroImage, _arcAnalysisCache (the old arc
+ *     channels, which nothing writes since 4.4 and which go with their last readers)
  *   - Evaluation (8.6): evaluationHistory
  *   - Generation: outline, contentBundle
  *   - Output: assembledHtml, validationResults
@@ -493,19 +494,30 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   // ═══════════════════════════════════════════════════════
-  // ARC SPECIALIST OUTPUTS (Commit 8.8: Orchestrated Subagents)
+  // THE WEAVE (phase 4, brief 4.4)
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Arc specialist outputs from orchestrated subagent analysis
-   * Structure: { financial: {...}, behavioral: {...}, victimization: {...} }
-   *
-   * Commit 8.8 change: Uses replaceReducer (the orchestrator returns the
-   * complete specialistAnalyses object in one SDK call, so no merge needed)
+   * The weave: the story the article will tell, which the arc writer writes and the
+   * director settles at the story meeting (lib/weave.js holds its shape). Written by
+   * analyzeArcsPlayerFocusGuided (the arc writer) and reviseArcs (its rework); the fact
+   * check (evaluateArcs) writes it back with its mark (`_factCheck`). Cleared, so the arc
+   * writer writes it again, by every rollback point at or above the arc stop.
    */
-  specialistAnalyses: Annotation({
+  weave: Annotation({
     reducer: replaceReducer,
-    default: () => ({})
+    default: () => null
+  }),
+
+  /**
+   * The arc rework's timeout bookkeeping: `{consecutive, attempt, at}` after a rework
+   * that timed out, which kept the weave it started from as a free retry; null after a
+   * rework that completed. reviseArcs reads `consecutive` to stop retrying at the third
+   * timeout in a row. Cleared with the weave.
+   */
+  _arcReworkTimeout: Annotation({
+    reducer: replaceReducer,
+    default: () => null
   }),
 
   // ═══════════════════════════════════════════════════════
@@ -632,7 +644,13 @@ const ReportStateAnnotation = Annotation.Root({
   // PHASE-SPECIFIC REVISION COUNTERS (Commit 8.6)
   // ═══════════════════════════════════════════════════════
 
-  /** Arc revision count — evaluator-driven (max 2 - foundational, escalate early) */
+  /**
+   * The weave's automatic passes in the CURRENT round (phase 4, brief 4.4): the rework
+   * after a failed check and the fact check's fix. Before the fact check has judged the
+   * weave it counts check reworks alone, which REVISION_CAPS.ARCS caps; the fix is
+   * capped by the fact check's mark (lib/weave.js). Reset to 0 when the director opens
+   * a round.
+   */
   arcRevisionCount: Annotation({
     reducer: replaceReducer,
     default: () => 0
@@ -915,7 +933,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (81 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list)
+ * Get default state with all fields initialized (82 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -971,8 +989,9 @@ function getDefaultState() {
     articleApproved: false,
     // Curated data
     evidenceBundle: null,
-    // Arc specialists (Commit 8.6)
-    specialistAnalyses: {},
+    // The weave (phase 4, brief 4.4)
+    weave: null,
+    _arcReworkTimeout: null,
     // Analysis results
     narrativeArcs: [],
     selectedArcs: [],
@@ -1110,7 +1129,12 @@ const PHASES = {
  * trigger on its own, per round of the director's, before it hands the output over.
  * It never counts the director's own send-backs, which are not limited anywhere.
  *
- * Arcs: 2 (foundational - escalate early)
+ * Arcs: 1 per round for each of two automatic passes, counted apart (phase 4, brief
+ * 4.4; R6): one rework after a failed weave check, and one fix after the fact check,
+ * with no second judge pass. The check rework is counted by arcRevisionCount before
+ * the fact check has judged the weave; the fix by the fact check's mark on the weave
+ * (lib/weave.js, `fixes`). It was 2, which let the arc judge run three times on
+ * 0926262.
  * Outline/Article: 2 per round. They were 3 when ONE counter served both the machine
  * and the director: on 091826 the director's two send-backs exhausted it and the
  * console declared the article final. A round starts the budget over, so the total
@@ -1120,7 +1144,7 @@ const PHASES = {
  * forward at four rejections, which paid for an outline about nothing.
  */
 const REVISION_CAPS = {
-  ARCS: 2,
+  ARCS: 1,
   OUTLINE: 2,
   ARTICLE: 2
 };
@@ -1216,7 +1240,7 @@ const ROLLBACK_CLEARS = {
     // Preprocessing and curation
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
-    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     // Spec 2026-09-19 §5.4: the director's gate notes describe outlines/articles that
     // this point regenerates from scratch, and arc notes describe arcs it re-picks.
@@ -1254,7 +1278,7 @@ const ROLLBACK_CLEARS = {
     // only the analysis.
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
@@ -1276,7 +1300,7 @@ const ROLLBACK_CLEARS = {
     // roster, and both outputs are keyed to it.
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
@@ -1307,7 +1331,7 @@ const ROLLBACK_CLEARS = {
     // gate must re-open to show (and let the director reject) the NEW parse.
     'inputReviewApproved',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
@@ -1320,7 +1344,7 @@ const ROLLBACK_CLEARS = {
     'preCurationApproved', 'characterData', 'narrativeTensions',
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
@@ -1335,7 +1359,7 @@ const ROLLBACK_CLEARS = {
   'evidence-and-photos': [
     'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData', 'narrativeTensions',
     'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
@@ -1347,10 +1371,13 @@ const ROLLBACK_CLEARS = {
   // ROLL-2: arcEvidencePackages is built post-selection (buildArcEvidencePackages
   // skips when non-empty); re-picking arcs must clear it or the article quotes the
   // wrong storyline's evidence.
+  // Phase 4 (brief 4.4): the weave goes with the arcs here, so the arc writer writes it
+  // again; the story meeting's own rollback, which keeps the weave as the director left
+  // it, is the meeting's slice to build (R9).
   'arc-selection': [
     'narrativeTensions',
     'arcEvidencePackages',
-    'specialistAnalyses', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // Q2: _outlineGuidance is captured AT this gate, so re-picking arcs must re-collect
     // it. Every point at-or-upstream of here clears it; the outline/article points do
     // NOT — rolling back there keeps the arcs, so it keeps the emphasis chosen for them.
@@ -1507,14 +1534,14 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 81
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 82
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null
   console.log('Default selectedPaperEvidence:', defaultState.selectedPaperEvidence); // Should be null
   console.log('Default preprocessedEvidence:', defaultState.preprocessedEvidence); // Should be null
   console.log('Default photoAnalyses:', defaultState.photoAnalyses); // Should be null
-  console.log('Default specialistAnalyses:', defaultState.specialistAnalyses); // Should be {}
+  console.log('Default weave:', defaultState.weave); // Should be null
   console.log('Default evaluationHistory:', defaultState.evaluationHistory); // Should be []
   console.log('Default arcRevisionCount:', defaultState.arcRevisionCount); // Should be 0
 
@@ -1540,7 +1567,7 @@ if (require.main === module) {
   // NOTE: APPROVAL_TYPES removed - checkpoint types now in checkpoint-helpers.js
 
   // Test revision caps
-  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 2, OUTLINE: 2, ARTICLE: 2 }
+  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 1, OUTLINE: 2, ARTICLE: 2 }
 
   // Test rollback points
   console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 11

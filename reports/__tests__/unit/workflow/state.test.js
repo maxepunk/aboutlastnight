@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 81 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 82 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -247,8 +247,10 @@ describe('ReportStateAnnotation', () => {
         'articleApproved',
         // Curated data
         'evidenceBundle',
-        // Arc specialists (Commit 8.6)
-        'specialistAnalyses',
+        // The weave (phase 4, brief 4.4): the arc writer's output, and the arc rework's
+        // timeout bookkeeping
+        'weave',
+        '_arcReworkTimeout',
         // Analysis results
         'narrativeArcs',
         'selectedArcs',
@@ -362,9 +364,13 @@ describe('ReportStateAnnotation', () => {
       });
     });
 
-    describe('specialist analysis defaults (Commit 8.6)', () => {
-      it('specialistAnalyses defaults to empty object', () => {
-        expect(defaultState.specialistAnalyses).toEqual({});
+    // Phase 4 (brief 4.4): the dead specialistAnalyses went; the weave took the arc
+    // writer's output.
+    describe('weave defaults (phase 4, brief 4.4)', () => {
+      it('weave and _arcReworkTimeout default to null', () => {
+        expect(defaultState.weave).toBeNull();
+        expect(defaultState._arcReworkTimeout).toBeNull();
+        expect(defaultState).not.toHaveProperty('specialistAnalyses');
       });
     });
 
@@ -466,7 +472,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(81);
+      expect(Object.keys(getDefaultState()).length).toBe(82);
     });
 
     it('declares the leave-out list (phase 4, brief 4.2)', () => {
@@ -673,8 +679,10 @@ describe('ReportStateAnnotation', () => {
   });
 
   describe('REVISION_CAPS constant (Commit 8.6)', () => {
-    it('defines ARCS cap as 2 (foundational - escalate early)', () => {
-      expect(REVISION_CAPS.ARCS).toBe(2);
+    // Phase 4 (brief 4.4; R6): each round allows one check rework and one fact-check
+    // fix, counted apart; the cap counts the check reworks.
+    it('defines ARCS cap as 1 (one check rework per round)', () => {
+      expect(REVISION_CAPS.ARCS).toBe(1);
     });
 
     it('defines OUTLINE cap as 2 automated passes per round', () => {

@@ -123,9 +123,9 @@ function getThemeNPCEntries(theme) {
 /**
  * Get NPC NAMES for a theme.
  *
- * Unchanged contract (a flat array of name strings) so every existing consumer
- * -- isKnownNPC, getNonRosterPCs, the evaluator's NPC allowlist, the arc
- * character-categories block -- keeps working after the entries gained fields.
+ * Unchanged contract (a flat array of name strings) so every consumer
+ * -- getNonRosterPCs, the arc writer's character-categories block, the
+ * director-notes enrichment -- keeps working after the entries gained fields.
  *
  * @param {string} theme - Theme name (e.g., 'journalist')
  * @returns {string[]} Array of NPC names, empty array if theme not found

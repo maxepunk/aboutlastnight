@@ -263,10 +263,11 @@ describe('the mode block reaches the arc and outline writers', () => {
     return {
       'outline generation': outline,
       'outline revision': await buildOutlineRevisionSystemPrompt(builder),
-      'core arc generation': arcTesting.coreArcSystemPrompt(sessionConfig),
-      'interweaving enrichment': arcTesting.interweavingSystemPrompt(sessionConfig),
+      // Phase 4 (brief 4.4): the arc writer writes the weave, and the interweaving
+      // call went.
+      'weave writer': arcTesting.weaveSystemPrompt(sessionConfig),
       // Both rework branches: a mode-blind rework puts the presence claims back
-      // into a remote session's arcs one paid call after generation avoided them.
+      // into a remote session's weave one paid call after generation avoided them.
       'arc rework (director-driven)': arcTesting.getArcRevisionSystemPrompt(true, sessionConfig),
       'arc rework (evaluation-driven)': arcTesting.getArcRevisionSystemPrompt(false, sessionConfig)
     };
@@ -280,8 +281,7 @@ describe('the mode block reaches the arc and outline writers', () => {
       it.each([
         'outline generation',
         'outline revision',
-        'core arc generation',
-        'interweaving enrichment',
+        'weave writer',
         'arc rework (director-driven)',
         'arc rework (evaluation-driven)'
       ])(

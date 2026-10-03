@@ -1316,11 +1316,12 @@
   // ── The writer's questions (phase 3, brief 3.7) ────────────────────────────
 
   /**
-   * Each kind a question can have and the word the panel shows for it (fix 3.7b): the
-   * schema's three, lib/writer-questions.js WRITER_QUESTION_KINDS (a test holds the
-   * keys equal to that list).
+   * Each kind a question can have and the word the panel shows for it (fix 3.7b). Phase 4
+   * (brief 4.4): the weave's three, lib/writer-questions.js WEAVE_QUESTION_KINDS, since
+   * the story meeting asks the questions (a test holds the keys equal to that list). A
+   * question of another kind renders with no kind shown.
    */
-  var WRITER_QUESTION_KIND_LABELS = { player: 'Player', pronoun: 'Pronoun', ledger: 'Ledger' };
+  var WRITER_QUESTION_KIND_LABELS = { player: 'Player', pronoun: 'Pronoun', figure: 'Figure' };
 
   /**
    * What the panel tells the director an answer does at each stop (task 3.11; final

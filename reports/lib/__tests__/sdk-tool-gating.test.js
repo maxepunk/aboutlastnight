@@ -154,16 +154,21 @@ describe('evidence-preprocessor batch call (H21)', () => {
   });
 });
 
-describe('arc interweaving call (H21)', () => {
-  const { _testing } = require('../workflow/nodes/arc-specialist-nodes');
+// Phase 4 (brief 4.4): the interweaving call went; the arc stage's calls are the weave
+// writer and its rework.
+describe("the arc stage's calls (H21)", () => {
+  const { reviseArcs, _testing } = require('../workflow/nodes/arc-specialist-nodes');
+  const { reworkFixtureState } = require('./fixtures/rework-state');
 
-  it('runs the Opus interweaving enrichment with no tools', async () => {
-    const sdk = makeCapturingSdk(() => ({ arcInterweaving: [], interweavingPlan: {} }));
-    const coreArcs = [{ id: 'arc-1', title: 'A', summary: 's' }];
+  it('runs the Opus weave writer and its rework with no tools', async () => {
+    const state = reworkFixtureState('journalist');
+    const sdk = makeCapturingSdk(() => JSON.parse(JSON.stringify(state.weave)));
 
-    await _testing.enrichWithInterweaving(coreArcs, ['Vic'], { configurable: { sdkClient: sdk } });
+    await _testing.generateWeave({ ...state, weave: null }, { configurable: { sdkClient: sdk } });
+    await reviseArcs({ ...state, _arcFeedback: 'Tighten it.' }, { configurable: { sdkClient: sdk } });
 
-    expect(sdk.calls).toHaveLength(1);
-    expectNoTools(sdk.calls[0], 'arc interweaving enrichment');
+    expect(sdk.calls).toHaveLength(2);
+    expectNoTools(sdk.calls[0], 'the weave writer');
+    expectNoTools(sdk.calls[1], 'the weave rework');
   });
 });
