@@ -272,7 +272,7 @@ The gate proves the pipeline works. Whether the article improved is shown by the
 **Intent.** The rule files name each stage's job, and phase 4 moves the jobs. This slice writes the approved rule text into the files, so every writer reads the new jobs.
 
 **Prompt.**
-- Replace C1, C2, C4, C7, C8, C15 and C16 with the approved text, word for word, from section A of `rule-text-read-3.md` (approved 2026-10-03). C4's last clause is the one the run's interfaces file gives: the director is deciding whether the article writer aims at the map's expected length, so a thin session is not padded to 1,500 words.
+- Replace C1, C2, C4, C7, C8, C15 and C16 with the approved text, word for word, from section A of `rule-text-read-3.md` (approved 2026-10-03). C4 carries the director's change of 2026-10-03: the article runs to about 1,500 words at most, and the article writer aims at the map's expected length, so a thin session makes a shorter article, never a padded one.
 - Replace the changed lines of T1, T2, T5 and T9 with section B's text.
 - Item headings keep their ids. C8's and C15's titles change as the read gives them.
 
