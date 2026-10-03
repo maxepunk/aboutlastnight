@@ -41,15 +41,29 @@ function sessionFolders() {
   return { root, sourceDir, destDir: path.join(root, 'outputs', 'sessionphotos', '0926262') };
 }
 
-/** A flat photo made with sharp, carrying EXIF, a Display P3 profile and XMP when `tagged`. */
-async function writePhoto(file, { width, height, format = 'jpeg', tagged = false }) {
+/**
+ * A flat photo made with sharp in `colour`. When `tagged`, it carries EXIF, XMP and a
+ * Display P3 profile, with its colour stored in P3's numbers, as a phone stores a photo.
+ */
+async function writePhoto(file, { width, height, format = 'jpeg', tagged = false, colour = BLUE }) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  let image = sharp({ create: { width, height, channels: 3, background: BLUE } });
+  let image = sharp({ create: { width, height, channels: 3, background: colour } });
   if (tagged) {
     image = image.withExif({ IFD0: { Make: 'TestCam', Copyright: 'A player' } }).withIccProfile('p3').withXmp(XMP);
   }
   await image.toFormat(format).toFile(file);
 }
+
+// An sRGB red whose Display P3 numbers differ from it by 16 on the red channel.
+const WIDE_GAMUT_RED = { r: 200, g: 60, b: 60 };
+
+/** The first pixel of an image as sharp reads it. */
+async function firstPixel(image) {
+  const { data } = await image.raw().toBuffer({ resolveWithObject: true });
+  return { r: data[0], g: data[1], b: data[2] };
+}
+/** The largest difference between two pixels on any channel. */
+const furthest = (a, b) => Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
 
 /**
  * A portrait photo stored sideways, as a camera turned on its side stores it: the pixels
@@ -213,21 +227,33 @@ describe('publishPhotos', () => {
     expect(isBlue(await pixelAt(out, 400, 1500))).toBe(true);
   });
 
-  test('no output carries EXIF or an ICC profile, and each is sRGB', async () => {
+  test('no output carries EXIF or an ICC profile, and each is sRGB, its colours converted from the source profile', async () => {
     const { sourceDir, destDir } = sessionFolders();
-    await writePhoto(path.join(sourceDir, 'tagged.jpg'), { width: 2400, height: 1600, tagged: true });
-    await writePhoto(path.join(sourceDir, 'tagged.png'), { width: 2400, height: 1600, format: 'png', tagged: true });
-    for (const name of ['tagged.jpg', 'tagged.png']) {
-      const input = await sharp(path.join(sourceDir, name)).metadata();
+    const names = ['tagged.jpg', 'tagged.png'];
+    await writePhoto(path.join(sourceDir, names[0]), { width: 2400, height: 1600, tagged: true, colour: WIDE_GAMUT_RED });
+    await writePhoto(path.join(sourceDir, names[1]), { width: 2400, height: 1600, format: 'png', tagged: true, colour: WIDE_GAMUT_RED });
+    const colour = {};
+    for (const name of names) {
+      const source = path.join(sourceDir, name);
+      const input = await sharp(source).metadata();
       expect([!!input.exif, !!input.icc, !!input.xmp]).toEqual([true, true, true]);
+      // The colour the source shows, in sRGB, and the P3 numbers it stores, which differ.
+      colour[name] = await firstPixel(sharp(source));
+      expect(furthest(await firstPixel(sharp(source, { ignoreIcc: true })), colour[name])).toBeGreaterThan(10);
     }
 
-    await publishPhotos({ bundle: bundlePrinting(['tagged.jpg', 'tagged.png']), theme: 'journalist', sourceDir, destDir });
+    await publishPhotos({ bundle: bundlePrinting(names), theme: 'journalist', sourceDir, destDir });
 
-    for (const name of ['tagged.jpg', 'tagged.png']) {
-      const meta = await sharp(path.join(destDir, name)).metadata();
+    for (const name of names) {
+      const published = path.join(destDir, name);
+      const meta = await sharp(published).metadata();
       expect({ name, exif: meta.exif, icc: meta.icc, xmp: meta.xmp, space: meta.space })
         .toEqual({ name, exif: undefined, icc: undefined, xmp: undefined, space: 'srgb' });
+      // A copy relabelled sRGB without converting would keep the P3 numbers, and a red 16
+      // levels off. The published pixel shows the source's colour.
+      const pixel = await firstPixel(sharp(published));
+      expect({ name, pixel, within3: furthest(pixel, colour[name]) <= 3 })
+        .toEqual({ name, pixel, within3: true });
     }
   });
 
@@ -309,6 +335,24 @@ describe('publishPhotos', () => {
     await expect(publishing).rejects.toThrow('"missing (3 of 11).jpg"');
     await expect(publishing).rejects.toThrow(sourceDir);
     expect(fs.existsSync(destDir)).toBe(false);
+  });
+
+  // The failure card offers Retry and Roll back. Retry resumes the run, which publishes
+  // the approved article once the file is back; a rollback to the article stop clears
+  // the article and writes it again, so the message names Retry.
+  test('the missing-photo error tells the director to put the file back and retry the publish', async () => {
+    const { sourceDir, destDir } = sessionFolders();
+
+    const one = publishPhotos({ bundle: bundlePrinting(['gone.jpg']), theme: 'journalist', sourceDir, destDir });
+    await expect(one).rejects.toThrow(
+      `missing from ${sourceDir}: published without it, the page would show a broken image. ` +
+      'Put it back in that folder and retry the publish: Retry resumes the run and publishes the approved ' +
+      'article, while a rollback to the article stop would write the article again.'
+    );
+
+    const two = publishPhotos({ bundle: bundlePrinting(['gone.jpg', 'also gone.jpg']), theme: 'journalist', sourceDir, destDir });
+    await expect(two).rejects.toThrow('"gone.jpg", "also gone.jpg"');
+    await expect(two).rejects.toThrow('Put them back in that folder and retry the publish');
   });
 
   test('the source folder is never changed, and nothing is written outside the published folder', async () => {

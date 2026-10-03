@@ -19,10 +19,11 @@
  *   format re-encoded in its own format, so the name still matches the content.
  *
  * A printed photo missing from the photos folder throws, naming it and the folder,
- * before anything is written: the page would show a broken image, and the fact check
- * has already checked every reference. The photos folder is only read, nothing is
- * written outside the published folder, and a file already there that the page does
- * not print is left as it is.
+ * before anything is written: published without it, the page would show a broken
+ * image. The message sends the director to put the file back and retry the publish,
+ * which resumes the run, since a rollback to the article stop would write the article
+ * again. The photos folder is only read, nothing is written outside the published
+ * folder, and a file already there that the page does not print is left as it is.
  *
  * @module publish-photos
  */
@@ -119,7 +120,8 @@ async function webSizePhoto(source) {
  * @param {string} args.theme - the page's theme
  * @param {string} args.sourceDir - data/<id>/photos
  * @param {string} args.destDir - outputs/sessionphotos/<id>
- * @returns {Promise<string[]>} the filenames published, in print order
+ * @returns {Promise<string[]>} the filenames published, in the writer's order (the
+ *   printed hero first), as printedPhotos lists them
  * @throws {Error} naming each printed photo that leads outside the folders or is
  *   missing from sourceDir, before anything is written; naming the photo when one
  *   cannot be read or encoded
@@ -138,13 +140,17 @@ async function publishPhotos({ bundle, theme, sourceDir, destDir }) {
       `${sourceDir}, and its published copy is written only inside ${destDir}.`
     );
   }
+  // The director reads this on the failure card, beside Retry and Roll back. Retry
+  // resumes the run and publishes the approved article; a rollback to the article stop
+  // clears the article and writes it again.
   const missing = photos.filter((photo) => !isFile(photo.source)).map((photo) => photo.filename);
   if (missing.length > 0) {
     const them = missing.length === 1 ? 'it' : 'them';
     throw new Error(
       `[publishPhotos] The page prints ${quoted(missing)}, missing from ${sourceDir}: published ` +
-      `without ${them}, the page would show a broken image. Put ${them} back in that folder, or roll ` +
-      `back to the article stop and take ${them} out, then approve again.`
+      `without ${them}, the page would show a broken image. Put ${them} back in that folder and retry ` +
+      'the publish: Retry resumes the run and publishes the approved article, while a rollback to the ' +
+      'article stop would write the article again.'
     );
   }
 

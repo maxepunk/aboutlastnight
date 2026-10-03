@@ -121,3 +121,26 @@ describe('assembleHtml publishes the printed photos', () => {
     expect(fs.existsSync(path.join(publishedDir, 'aln0919269 (1 of 2).jpg'))).toBe(true);
   });
 });
+
+// FB (known item 9): the node resolves the theme once, the thread's before the config's,
+// for both what the page renders and what is published. It used to render with the
+// config's theme and publish with the thread's, so a journalist page could print a hero
+// the detective's set left unpublished, or the reverse publish a hero no page printed.
+describe('assembleHtml renders and publishes in one theme', () => {
+  test.each([
+    ['detective', 'journalist', ['inline.jpg']],
+    ['journalist', 'detective', ['hero.jpg', 'inline.jpg']]
+  ])("the thread's %s theme over the config's %s: the page names exactly the photos published", async (threadTheme, configTheme, printed) => {
+    const { baseDir, publishedDir } = await baseDirWith({ 'hero.jpg': [400, 300], 'inline.jpg': [400, 300] });
+    const bundle = { ...bundlePrinting(['inline.jpg']), heroImage: { filename: 'hero.jpg', caption: 'The room at the start.' } };
+
+    const result = await assembleHtml(
+      { contentBundle: bundle, sessionId: SESSION, theme: threadTheme },
+      { configurable: { baseDir, theme: configTheme } }
+    );
+
+    const named = [...new Set([...result.assembledHtml.matchAll(/src="sessionphotos\/0919269\/([^"]+)"/g)].map((m) => m[1]))];
+    expect({ named: named.sort(), published: fs.readdirSync(publishedDir).sort() }).toEqual({ named: printed, published: printed });
+    expect(result.photosCopied).toBe(printed.length);
+  });
+});

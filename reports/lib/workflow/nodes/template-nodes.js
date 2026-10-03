@@ -29,14 +29,16 @@ const { traceNode } = require('../../observability');
  *
  * Priority:
  * 1. config.configurable.templateAssembler (injected)
- * 2. createTemplateAssembler with theme from config
- * 3. createStubAssembler (fallback for testing without templates)
+ * 2. createStubAssembler, when config.configurable.useStubAssembler asks for it (testing
+ *    without templates)
+ * 3. createTemplateAssembler for `theme`, the one theme assembleHtml resolved for both
+ *    rendering and publishing
  *
  * @param {Object} config - Graph config with optional configurable.templateAssembler
- * @param {string} theme - Theme name from state (journalist, detective)
+ * @param {string} theme - The theme assembleHtml resolved (journalist, detective)
  * @returns {Object} TemplateAssembler instance
  */
-function getTemplateAssembler(config, theme = 'journalist') {
+function getTemplateAssembler(config, theme) {
   // Use injected assembler if provided
   if (config?.configurable?.templateAssembler) {
     return config.configurable.templateAssembler;
@@ -47,9 +49,8 @@ function getTemplateAssembler(config, theme = 'journalist') {
     return createStubAssembler();
   }
 
-  // Create real assembler with theme
-  const assemblerTheme = config?.configurable?.theme || theme;
-  return createTemplateAssembler(assemblerTheme, {
+  // Create real assembler with the resolved theme
+  return createTemplateAssembler(theme, {
     cssPaths: config?.configurable?.cssPaths,
     jsPaths: config?.configurable?.jsPaths,
     validateSchema: config?.configurable?.validateSchema
@@ -126,6 +127,8 @@ async function assembleHtml(state, config) {
     );
   }
 
+  // One theme, the thread's before the config's, for both what the page renders and
+  // what is published, so the page never names a photo the publish left out.
   const theme = state.theme || config?.configurable?.theme || 'journalist';
   const assembler = getTemplateAssembler(config, theme);
 
