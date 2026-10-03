@@ -772,3 +772,80 @@ describe('parseCharacterIds: the explicit leave-out mark in each path (brief 4.2
     ]);
   });
 });
+
+/**
+ * The leave-out box, follow-ups (phase 4, brief 4.2b). finalizePhotoAnalyses finds each
+ * photo's mapping by photoKey, as isPhotoExcluded does, because the parse's keys need not
+ * match an analysis filename's case. And it spends no retry of a failed analysis, a paid
+ * vision call, on a photo isPhotoExcluded leaves out: that photo never prints.
+ */
+describe('finalizePhotoAnalyses: the leave-out box, follow-ups (brief 4.2b)', () => {
+  const mapping = (exclude, extra = {}) => ({ characterMappings: [], additionalCharacters: [], corrections: {}, ...extra, exclude });
+  const config = (sdk) => ({ configurable: { sdkClient: sdk, imagePromptBuilder: mockImagePromptBuilder } });
+  const analysis = (filename) => ({
+    filename,
+    visualContent: 'Two people at a table',
+    narrativeMoment: 'A negotiation',
+    suggestedCaption: 'A deal at the table',
+    characterDescriptions: [{ description: 'person in a grey coat', role: 'seated' }],
+    emotionalTone: 'tense',
+    storyRelevance: 'supporting'
+  });
+
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('a ticked photo whose mapping key differs from its filename only in case gets its excluded mark', async () => {
+    const sdk = jest.fn();
+    const result = await finalizePhotoAnalyses({
+      photoAnalyses: { analyses: [analysis('a.jpg'), analysis('b.jpg')] },
+      characterIdMappings: { 'A.JPG': mapping(true), 'b.jpg': mapping(false) },
+      leftOutPhotos: ['a.jpg'],
+      roster: []
+    }, config(sdk));
+
+    expect(sdk).not.toHaveBeenCalled();
+    const [a, b] = result.photoAnalyses.analyses;
+    expect(a.excluded).toBe(true);
+    expect(a.finalCaption).toBeNull();
+    expect(b.excluded).toBeUndefined();
+    expect(result.photoAnalyses.enrichmentStats.excluded).toBe(1);
+  });
+
+  it('an identified photo whose mapping key differs only in case is enriched from that mapping', async () => {
+    const sdk = jest.fn().mockResolvedValue({
+      identifiedCharacters: ['Vic'], enrichedVisualContent: 'Vic at a table', enrichedNarrativeMoment: 'A negotiation', finalCaption: 'Vic waits'
+    });
+    const result = await finalizePhotoAnalyses({
+      photoAnalyses: { analyses: [analysis('a.jpg')] },
+      characterIdMappings: { 'A.JPG': mapping(false, { characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }] }) },
+      roster: ['Vic']
+    }, config(sdk));
+
+    expect(sdk).toHaveBeenCalledTimes(1);
+    expect(sdk.mock.calls[0][0].prompt).toContain('"person in a grey coat" (seated) -> Vic');
+    expect(result.photoAnalyses.analyses[0].identifiedCharacters).toEqual(['Vic']);
+  });
+
+  it('spends no retry on a left-out photo whose analysis failed, and still retries a kept one', async () => {
+    const sdk = jest.fn().mockResolvedValue({ ...analysis('kept.jpg'), visualContent: 'Recovered' });
+    const result = await finalizePhotoAnalyses({
+      photoAnalyses: { analyses: [createFailedPhotoAnalysis('out.jpg', 'SDK error'), createFailedPhotoAnalysis('kept.jpg', 'SDK error')] },
+      sessionPhotos: ['/photos/out.jpg', '/photos/kept.jpg'],
+      characterIdMappings: { 'out.jpg': mapping(true), 'kept.jpg': mapping(false) },
+      leftOutPhotos: ['out.jpg'],
+      roster: []
+    }, config(sdk));
+
+    expect(sdk.mock.calls.map(([options]) => options.label)).toEqual(['kept.jpg']);
+    const [out, kept] = result.photoAnalyses.analyses;
+    expect(out.excluded).toBe(true);
+    expect(out._error).toBe('SDK error');
+    expect(kept._error).toBeUndefined();
+    expect(kept.visualContent).toBe('Recovered');
+    expect(result.photoAnalyses.enrichmentStats.retriedPhotos).toBe(1);
+  });
+});
