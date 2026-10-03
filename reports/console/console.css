@@ -3072,3 +3072,10 @@ textarea.input {
 .desk-preview__status--error {
   color: var(--accent-red);
 }
+
+/* ── 4.3b: the desk shows what prints ──
+   A row of the writer's money tracker shows what the page prints of it, the account and its
+   amount (templates/journalist/partials/sidebar/financial-tracker.hbs), so two columns. */
+.desk-tracker-row {
+  grid-template-columns: 2fr 1fr;
+}

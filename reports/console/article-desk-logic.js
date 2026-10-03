@@ -40,8 +40,10 @@
  *   at or before it in that section changed (untouchedThrough).
  *
  *   WHAT THE DESK SHOWS: the word count of the bundle as edited, the preview request for
- *   the page as it will print (server.js POST /api/session/:id/article/preview), and the
- *   script strip the preview frame applies to that page and to htmlPreview alike.
+ *   the page as it will print (server.js POST /api/session/:id/article/preview), the script
+ *   strip the preview frame applies to that page and to htmlPreview alike, and why a preview
+ *   failed. What prints is the page's to say: the byline line by the header partial's rule,
+ *   and the writer's money tracker as the stop's payload and each preview say (task 4.3b).
  *
  * MUST NOT reference React, and must not touch `window` at module-evaluation time except
  * the guarded window.Console write.
@@ -253,7 +255,7 @@
     return withFields(bundle, 'byline', fields);
   }
 
-  /** The bundle with the hero's caption or characters as the director edited them. */
+  /** The bundle with the hero's fields the director edited; every other field stays. */
   function setHero(bundle, fields) {
     return withFields(bundle, 'heroImage', fields);
   }
@@ -753,6 +755,82 @@
     };
   }
 
+  /**
+   * What the preview's status line says when the preview could not be reached: why, in the
+   * error's own words (a dropped connection, an expired login, a gateway page that is not
+   * JSON), so one failure reads apart from another.
+   */
+  function previewFailure(error) {
+    var message = error && typeof error.message === 'string' ? error.message.trim() : '';
+    return message ? 'The preview could not be reached (' + message + ').' : 'The preview could not be reached.';
+  }
+
+  /**
+   * Is a field set as the page's template reads it (Handlebars' {{#if}}): an empty string, an
+   * empty list, zero, false, null and a missing field are all unset.
+   */
+  function setInTemplate(value) {
+    return Array.isArray(value) ? value.length > 0 : Boolean(value);
+  }
+
+  /**
+   * The byline as the page prints it (templates/journalist/partials/header.hbs): the author;
+   * then ' | ' and the title, when there is one; then ' || ' and the guest reporter's credit,
+   * when there is one. Without an author the page prints none of them, and this is ''.
+   */
+  function bylineLine(byline) {
+    var b = isPlainObject(byline) ? byline : {};
+    if (!setInTemplate(b.author)) return '';
+    var line = String(b.author) + (setInTemplate(b.title) ? ' | ' + b.title : '');
+    return setInTemplate(b.guestReporter) ? line + ' || ' + b.guestReporter : line;
+  }
+
+  /** The byline as the desk shows it: the line the page prints, or that it prints none. */
+  function bylineLabel(byline) {
+    return bylineLine(byline) || 'No byline: the page prints one only with an author.';
+  }
+
+  /**
+   * What the desk knows about whether the page prints the writer's money tracker: 'prints' or
+   * 'does-not-print' once the stop's payload (getCheckpointData's `writerTrackerPrints`) or a
+   * preview's answer has said, else 'unknown'. An answer that says nothing leaves what the desk
+   * knew.
+   *
+   * @param {*} flag - `writerTrackerPrints`, from the payload or the preview route
+   * @param {string} [previous] - what the desk knew before this answer
+   * @returns {'unknown'|'prints'|'does-not-print'}
+   */
+  function writerTrackerState(flag, previous) {
+    if (flag === true) return 'prints';
+    if (flag === false) return 'does-not-print';
+    return previous === 'prints' || previous === 'does-not-print' ? previous : 'unknown';
+  }
+
+  /**
+   * Has the writer's money tracker a row: an entry that is an object, as the server's
+   * predicate counts them (lib/template-assembler.js writerTrackerPrints; a test holds the
+   * two equal)?
+   */
+  function hasWriterTrackerRow(bundle) {
+    var tracker = isPlainObject(bundle) && isPlainObject(bundle.financialTracker) ? bundle.financialTracker : null;
+    return Boolean(tracker && Array.isArray(tracker.entries) && tracker.entries.some(isPlainObject));
+  }
+
+  /**
+   * What the desk shows for the writer's money tracker: its editor while the page prints it;
+   * the ledger's note while it does not and has a row, since then the ledger's tracker prints
+   * in its place; and neither otherwise, nor while the desk does not know, so the desk never
+   * misstates what prints.
+   *
+   * @param {'unknown'|'prints'|'does-not-print'} state - writerTrackerState's
+   * @param {Object} bundle - the bundle on the desk
+   * @returns {'editor'|'ledger-note'|'none'}
+   */
+  function writerTrackerDisplay(state, bundle) {
+    if (state === 'prints') return 'editor';
+    if (state === 'does-not-print' && hasWriterTrackerRow(bundle)) return 'ledger-note';
+    return 'none';
+  }
 
   // ── public surface ────────────────────────────────────────────────────────
   var api = {
@@ -792,7 +870,12 @@
 
     wordCount: wordCount,
     stripScripts: stripScripts,
-    previewRequest: previewRequest
+    previewRequest: previewRequest,
+    previewFailure: previewFailure,
+    bylineLine: bylineLine,
+    bylineLabel: bylineLabel,
+    writerTrackerState: writerTrackerState,
+    writerTrackerDisplay: writerTrackerDisplay
   };
 
   if (typeof window !== 'undefined') {

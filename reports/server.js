@@ -440,6 +440,9 @@ async function getCheckpointData(checkpointType, state) {
                 contentBundle: state.contentBundle,
                 articleHtml: state.assembledHtml,
                 htmlPreview: await renderArticlePreview(state),
+                // Task 4.3b: whether the page prints the writer's money tracker, by the page's own
+                // rule, so the desk knows from the start; each preview keeps it current.
+                writerTrackerPrints: writerTrackerPrints(state.contentBundle, state.shellAccounts),
                 sessionPhotos: state.sessionPhotos,
                 factCheck: state._articleFactCheck || null,
                 lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'article'),

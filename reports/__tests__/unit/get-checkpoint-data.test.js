@@ -521,3 +521,34 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
     });
   });
 });
+
+// Task 4.3b: the article stop says from the start whether the page prints the writer's
+// money tracker, from TemplateAssembler's one predicate. The desk used to learn it only from
+// its first preview, and until then said the ledger's tracker prints, which is false for a
+// session whose ledger has no account above zero.
+describe('4.3b: writerTrackerPrints at the article stop', () => {
+  const at = (values) => getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { sessionId: '0926262', ...values });
+
+  it('is true when no ledger account is above zero and the writer\'s tracker has an entry', async () => {
+    expect((await at({ contentBundle: VALID_BUNDLE(), shellAccounts: [] })).writerTrackerPrints).toBe(true);
+    expect((await at({ contentBundle: VALID_BUNDLE(), shellAccounts: [{ name: 'Melanie', total: 0, tokenCount: 0 }] })).writerTrackerPrints).toBe(true);
+    expect((await at({ contentBundle: VALID_BUNDLE() })).writerTrackerPrints).toBe(true);
+  });
+
+  it('is false when a ledger account is above zero, or the writer\'s tracker has no entry, or there is no bundle yet', async () => {
+    expect((await at({ contentBundle: VALID_BUNDLE(), shellAccounts: [{ name: 'JessKane', total: 3235000, tokenCount: 4 }] })).writerTrackerPrints).toBe(false);
+    expect((await at({ contentBundle: { ...VALID_BUNDLE(), financialTracker: { entries: [] } }, shellAccounts: [] })).writerTrackerPrints).toBe(false);
+    expect((await at({ contentBundle: null })).writerTrackerPrints).toBe(false);
+  });
+
+  it('is the predicate\'s answer, which the desk\'s preview route gives too', async () => {
+    const { writerTrackerPrints } = require('../../lib/template-assembler');
+    const preview = require('../../lib/article-preview');
+    for (const shellAccounts of [[], [{ name: 'JessKane', total: 3235000 }]]) {
+      const bundle = VALID_BUNDLE();
+      const flag = (await at({ contentBundle: bundle, shellAccounts })).writerTrackerPrints;
+      expect([shellAccounts, flag]).toEqual([shellAccounts, writerTrackerPrints(bundle.financialTracker, shellAccounts)]);
+      expect([shellAccounts, flag]).toEqual([shellAccounts, preview.writerTrackerPrints(bundle, shellAccounts)]);
+    }
+  });
+});

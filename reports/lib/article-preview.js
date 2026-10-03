@@ -15,7 +15,7 @@
  * @module article-preview
  */
 
-const { createTemplateAssembler, TemplateAssembler } = require('./template-assembler');
+const { createTemplateAssembler, writerTrackerPrints: trackerPrints } = require('./template-assembler');
 
 /** What the preview adds to the page's head, so its relative photo links resolve. */
 const PREVIEW_BASE = '<base href="/">';
@@ -47,20 +47,17 @@ async function articlePreviewHtml(bundle, { theme, sessionId, shellAccounts } = 
 }
 
 /**
- * Does the page print the writer's money tracker? Only when the ledger gives it none to
- * print in its place (TemplateAssembler.overrideFinancialTracker passes the writer's
- * through, the page's own rule, which evaluator-nodes.js printedWriterTracker reads too)
- * and the writer's has a row. Otherwise the desk has no use for an editor of it.
+ * Does the page print this bundle's writer's money tracker? The page's own rule decides it
+ * (lib/template-assembler.js writerTrackerPrints, which the page and the article judge read
+ * too; task 4.3b). The desk's preview route and the article stop's payload answer with it,
+ * and the desk shows the tracker's editor only while it prints.
  *
  * @param {Object} bundle
  * @param {Array} shellAccounts - the session's ledger
  * @returns {boolean}
  */
 function writerTrackerPrints(bundle, shellAccounts) {
-  const tracker = bundle && bundle.financialTracker;
-  if (!tracker || typeof tracker !== 'object') return false;
-  if (TemplateAssembler.prototype.overrideFinancialTracker(tracker, shellAccounts || []) !== tracker) return false;
-  return Array.isArray(tracker.entries) && tracker.entries.length > 0;
+  return trackerPrints(bundle && bundle.financialTracker, shellAccounts);
 }
 
 module.exports = { PREVIEW_BASE, previewOptionsOf, articlePreviewHtml, writerTrackerPrints };

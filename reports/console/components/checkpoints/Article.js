@@ -30,7 +30,7 @@ const DeskLogic = window.Console.articleDeskLogic;
 const ARTICLE_PREVIEW_DELAY_MS = 400;
 
 /** The preview before the page has come back. */
-const NO_PREVIEW = { html: null, error: '', pending: false, writerTrackerPrints: false };
+const NO_PREVIEW = { html: null, error: '', pending: false };
 
 /**
  * The programmatic fact-check, in front of the person approving the article
@@ -222,6 +222,7 @@ function BlockEditor({ block, sectionIdx, blockIdx, onSave, onCancel }) {
       );
       break;
     case 'photo':
+      // The page prints a photo's file and caption; the characters in it stay as the bundle has them.
       formFields.push(
         React.createElement('label', { key: 'l1', className: 'form-group__label' }, 'Caption'),
         React.createElement('input', {
@@ -230,16 +231,6 @@ function BlockEditor({ block, sectionIdx, blockIdx, onSave, onCancel }) {
           value: localBlock.caption || '',
           onChange: function (e) { updateField('caption', e.target.value); },
           'aria-label': 'Photo caption'
-        }),
-        React.createElement('label', { key: 'l2', className: 'form-group__label mt-sm' }, 'Characters (comma-separated)'),
-        React.createElement('input', {
-          key: 'f2',
-          className: 'input',
-          value: (localBlock.characters || []).join(', '),
-          onChange: function (e) {
-            updateField('characters', e.target.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean));
-          },
-          'aria-label': 'Characters in photo'
         })
       );
       break;
@@ -342,16 +333,16 @@ function HeadlineEditor({ headline, onSave, onCancel }) {
  * Object.assign on save.
  *
  * Phase 3 (3.2; HY1): nor does its `owner` print, so the editor no longer offers or
- * seeds it, and the writer is no longer asked for it. An entry that has one keeps
- * it through the same Object.assign; the schema keeps the field optional.
+ * seeds it, and the writer is no longer asked for it. Task 4.3b: nor its `placement`
+ * (templates/journalist/partials/sidebar/evidence-card.hbs reads neither). An entry that
+ * has either keeps it through the same Object.assign; the schema keeps both optional.
  */
 function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
     return {
       headline: card.headline || '',
       summary: card.summary || '',
-      significance: card.significance || 'supporting',
-      placement: card.placement || 'sidebar'
+      significance: card.significance || 'supporting'
     };
   });
 
@@ -372,29 +363,17 @@ function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
         rows: 3,
         'aria-label': 'Sidebar entry summary'
       }),
-      React.createElement('div', { className: 'flex gap-sm mt-sm' },
-        React.createElement('div', { className: 'form-group', style: { flex: 1 } },
-          React.createElement('label', { className: 'form-group__label' }, 'Significance'),
-          React.createElement('select', {
-            className: 'input',
-            value: local.significance,
-            onChange: function (e) { setLocal(Object.assign({}, local, { significance: e.target.value })); }
-          },
-            React.createElement('option', { value: 'critical' }, 'Critical'),
-            React.createElement('option', { value: 'supporting' }, 'Supporting'),
-            React.createElement('option', { value: 'contextual' }, 'Contextual')
-          )
-        ),
-        React.createElement('div', { className: 'form-group', style: { flex: 1 } },
-          React.createElement('label', { className: 'form-group__label' }, 'Placement'),
-          React.createElement('select', {
-            className: 'input',
-            value: local.placement,
-            onChange: function (e) { setLocal(Object.assign({}, local, { placement: e.target.value })); }
-          },
-            React.createElement('option', { value: 'sidebar' }, 'Sidebar'),
-            React.createElement('option', { value: 'inline' }, 'Inline')
-          )
+      React.createElement('div', { className: 'form-group mt-sm' },
+        React.createElement('label', { className: 'form-group__label' }, 'Significance'),
+        React.createElement('select', {
+          className: 'input',
+          value: local.significance,
+          onChange: function (e) { setLocal(Object.assign({}, local, { significance: e.target.value })); },
+          'aria-label': 'Sidebar entry significance'
+        },
+          React.createElement('option', { value: 'critical' }, 'Critical'),
+          React.createElement('option', { value: 'supporting' }, 'Supporting'),
+          React.createElement('option', { value: 'contextual' }, 'Contextual')
         )
       ),
       editorActions(function () { onSave(idx, Object.assign({}, original, local)); }, onCancel, 'Save evidence card')
@@ -402,9 +381,14 @@ function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
   );
 }
 
+/**
+ * A row of the writer's money tracker as the page prints it: its description and amount
+ * (templates/journalist/partials/sidebar/financial-tracker.hbs). The row keeps every other
+ * field it has, and only the fields the director changed are saved into it.
+ */
 function FinancialEntryEditor({ entry, idx, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
-    return { description: entry.description || '', amount: entry.amount || '', date: entry.date || '', category: entry.category || '' };
+    return { description: entry.description || '', amount: entry.amount || '' };
   });
 
   return React.createElement('div', { className: 'article-block article-block--editing fade-in' },
@@ -425,24 +409,23 @@ function FinancialEntryEditor({ entry, idx, onSave, onCancel }) {
           onChange: function (e) { setLocal(Object.assign({}, local, { amount: e.target.value })); },
           style: { flex: 1 },
           'aria-label': 'Tracker row amount'
-        }),
-        React.createElement('input', {
-          className: 'input',
-          placeholder: 'Category',
-          value: local.category,
-          onChange: function (e) { setLocal(Object.assign({}, local, { category: e.target.value })); },
-          style: { flex: 1 },
-          'aria-label': 'Tracker row category'
         })
       ),
-      editorActions(function () { onSave(idx, local); }, onCancel, 'Save tracker row')
+      editorActions(function () {
+        onSave(idx, Object.assign({}, entry, DeskLogic.changedFields(entry, local)));
+      }, onCancel, 'Save tracker row')
     )
   );
 }
 
+/**
+ * The hero as the page prints it: its photo and caption (templates/journalist/layouts/
+ * article.hbs). The characters in it stay as the bundle has them (DeskLogic.setHero keeps
+ * every field the editor does not save).
+ */
 function HeroImageEditor({ hero, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
-    return { caption: hero.caption || '', characters: (hero.characters || []).join(', ') };
+    return { caption: hero.caption || '' };
   });
 
   return React.createElement('div', { className: 'article-hero article-block--editing fade-in mb-md' },
@@ -454,19 +437,7 @@ function HeroImageEditor({ hero, onSave, onCancel }) {
         onChange: function (e) { setLocal(Object.assign({}, local, { caption: e.target.value })); },
         'aria-label': 'Hero image caption'
       }),
-      React.createElement('label', { className: 'form-group__label mt-sm' }, 'Characters (comma-separated)'),
-      React.createElement('input', {
-        className: 'input',
-        value: local.characters,
-        onChange: function (e) { setLocal(Object.assign({}, local, { characters: e.target.value })); },
-        'aria-label': 'Hero image characters'
-      }),
-      editorActions(function () {
-        onSave({
-          caption: local.caption,
-          characters: local.characters.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
-        });
-      }, onCancel, 'Save hero image edit')
+      editorActions(function () { onSave(DeskLogic.changedFields(hero, local)); }, onCancel, 'Save hero image edit')
     )
   );
 }
@@ -554,8 +525,14 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [armedDelete, setArmedDelete] = React.useState(null);
   // Counts the changes on the desk, so the preview asks for the page again after each.
   const [deskVersion, setDeskVersion] = React.useState(0);
-  // The page as it will print, from the preview route, and whether it prints the writer's money tracker.
+  // The page as it will print, from the preview route.
   const [preview, setPreview] = React.useState(NO_PREVIEW);
+  // Whether the page prints the writer's money tracker (task 4.3b): 'unknown', 'prints' or
+  // 'does-not-print'. The stop's payload says it first and each preview's answer keeps it
+  // current (DeskLogic.writerTrackerState).
+  const [trackerState, setTrackerState] = React.useState(function () {
+    return DeskLogic.writerTrackerState(data && data.writerTrackerPrints);
+  });
   const [mode, setMode] = React.useState('view'); // 'view' | 'json'
   const [jsonText, setJsonText] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
@@ -584,6 +561,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     setArmedDelete(null);
     setDeskVersion(0);
     setPreview(NO_PREVIEW);
+    setTrackerState(DeskLogic.writerTrackerState(data && data.writerTrackerPrints));
     setMode('view');
     setJsonText('');
     setJsonError('');
@@ -613,7 +591,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   // The page as it will print: asked of the preview route when the stop opens and after
   // each change on the desk, a moment later so a run of moves asks once. The answer also
-  // says whether the page prints the writer's money tracker, which decides its editor.
+  // says whether the page prints the writer's money tracker, which keeps trackerState
+  // current; a failure says why in the preview's status line (task 4.3b).
   React.useEffect(function () {
     var bundle = editedBundle || contentBundle;
     if (!sessionId || !Array.isArray(bundle.sections)) return undefined;
@@ -628,16 +607,17 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         .then(function (result) {
           if (cancelled) return;
           if (result.ok) {
-            setPreview({ html: result.body.html || '', error: '', pending: false, writerTrackerPrints: result.body.writerTrackerPrints === true });
+            setPreview({ html: result.body.html || '', error: '', pending: false });
+            setTrackerState(function (state) { return DeskLogic.writerTrackerState(result.body.writerTrackerPrints, state); });
           } else {
             setPreview(function (p) {
               return Object.assign({}, p, { html: null, pending: false, error: result.body.error || 'The page could not be rendered.' });
             });
           }
         })
-        .catch(function () {
+        .catch(function (err) {
           if (!cancelled) {
-            setPreview(function (p) { return Object.assign({}, p, { pending: false, error: 'The preview could not be reached.' }); });
+            setPreview(function (p) { return Object.assign({}, p, { pending: false, error: DeskLogic.previewFailure(err) }); });
           }
         });
     }, ARTICLE_PREVIEW_DELAY_MS);
@@ -996,12 +976,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
             : !note && React.createElement('div', { className: 'article-block__photo-placeholder' },
                 '[Photo' + (block.filename ? ': ' + block.filename : '') + ']'
               ),
-          block.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, block.caption),
-          block.characters && block.characters.length > 0 && React.createElement('div', { className: 'tag-list mt-sm' },
-            block.characters.map(function (c, j) {
-              return React.createElement(Badge, { key: 'char-' + j, label: c, color: 'var(--accent-cyan)' });
-            })
-          )
+          block.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, block.caption)
         );
 
       case 'list':
@@ -1082,27 +1057,21 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       });
     }
 
+    // What the sidebar prints (templates/journalist/partials/sidebar/evidence-card.hbs): the
+    // headline, the summary and the significance badge, and the document's id, which the page
+    // carries as the card's data-token-id and the fact check names the card by. Never the
+    // content, the owner or the placement, which it does not print.
     var body = React.createElement('div', {
       className: 'article-evidence-card article-evidence-card--' + (card.significance || 'supporting') + ' mb-md'
     },
       React.createElement('div', { className: 'article-evidence-card__label' }, card.headline || card.tokenId || 'Card ' + (idx + 1)),
-      // The summary, which the sidebar prints; never the content, which it does not.
       card.summary && React.createElement('div', { className: 'article-evidence-card__content' }, card.summary),
-      React.createElement('div', { className: 'article-evidence-card__meta' },
-        card.owner && React.createElement('span', { className: 'article-evidence-card__owner' }, card.owner),
-        React.createElement('div', { className: 'tag-list' },
-          card.significance && React.createElement(Badge, {
-            label: card.significance,
-            color: card.significance === 'critical' ? 'var(--accent-red)' :
-                   card.significance === 'supporting' ? 'var(--accent-amber)' : 'var(--accent-cyan)'
-          }),
-          card.layer && React.createElement(Badge, {
-            label: card.layer,
-            color: card.layer === 'exposed' ? 'var(--layer-exposed)' :
-                   card.layer === 'buried' ? 'var(--layer-buried)' : 'var(--accent-amber)'
-          }),
-          card.placement && React.createElement(Badge, { label: card.placement, color: 'var(--text-muted)' })
-        )
+      card.significance && React.createElement('div', { className: 'article-evidence-card__meta' },
+        React.createElement(Badge, {
+          label: card.significance,
+          color: card.significance === 'critical' ? 'var(--accent-red)' :
+                 card.significance === 'supporting' ? 'var(--accent-amber)' : 'var(--accent-cyan)'
+        })
       ),
       card.tokenId && React.createElement('span', { className: 'text-xs text-muted d-block mt-sm' }, card.tokenId)
     );
@@ -1126,13 +1095,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
             onCancel: cancelEdit
           });
         }
+        // The row as the page prints it: the account and its amount.
         var body = React.createElement('div', { className: 'desk-tracker-row' },
-          React.createElement('span', null,
-            entry.date && React.createElement('span', { className: 'text-xs text-muted' }, entry.date + ' '),
-            entry.description || ''
-          ),
-          React.createElement('span', { className: 'financial-table__amount' }, entry.amount || ''),
-          React.createElement('span', { className: 'text-xs text-muted' }, entry.category || '')
+          React.createElement('span', null, entry.description || ''),
+          React.createElement('span', { className: 'financial-table__amount' }, entry.amount || '')
         );
         return deskRow('ft-' + i, 'desk-row--tracker', body, function () { startSidebarEdit('financialEntry', i); });
       }),
@@ -1166,12 +1132,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
           })
         : React.createElement('div', { className: 'article-block__photo-placeholder' },
             currentHero.filename + ' (not among the photos this session carries)'),
-      currentHero.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, currentHero.caption),
-      currentHero.characters && currentHero.characters.length > 0 && React.createElement('div', { className: 'tag-list mt-sm' },
-        currentHero.characters.map(function (c, j) {
-          return React.createElement(Badge, { key: 'hero-char-' + j, label: c, color: 'var(--accent-cyan)' });
-        })
-      )
+      currentHero.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, currentHero.caption)
     );
     return deskRow('hero', 'desk-row--hero', body, function () { startSidebarEdit('heroImage', 0); });
   }
@@ -1206,10 +1167,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         onCancel: cancelEdit
       });
     }
-    // As the page prints it: the author and their title, then the guest reporter's credit.
-    var line = [currentByline.author, currentByline.title].filter(Boolean).join(' | ') +
-      (currentByline.guestReporter ? ' || ' + currentByline.guestReporter : '');
-    var body = React.createElement('div', { className: 'text-xs text-muted mb-md' }, line || 'No byline');
+    // As the page prints it (DeskLogic.bylineLabel, the header partial's rule): the title and
+    // the guest reporter's credit print only with an author.
+    var body = React.createElement('div', { className: 'text-xs text-muted mb-md' }, DeskLogic.bylineLabel(currentByline));
     return deskRow('byline', 'desk-row--byline', body, function () { startSidebarEdit('byline', 0); });
   }
 
@@ -1253,7 +1213,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   var currentSections = deskBundleNow.sections || [];
   var currentEvidenceCards = deskBundleNow.evidenceCards || [];
   var writerTracker = deskBundleNow.financialTracker || null;
-  var hasWriterTrackerRows = !!(writerTracker && Array.isArray(writerTracker.entries) && writerTracker.entries.length > 0);
+  // The writer's money tracker on the desk (task 4.3b): its editor while the page prints it,
+  // the ledger's note while the ledger's prints in its place, neither while the desk does not know.
+  var trackerDisplay = DeskLogic.writerTrackerDisplay(trackerState, deskBundleNow);
   // The word count reads the bundle as edited.
   var wordCount = DeskLogic.wordCount(deskBundleNow);
   // What would stop an approve or a send-back now, shown before the click.
@@ -1336,12 +1298,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       })
     ),
 
-    // The money tracker (journalist theme only): the writer's prints only when the ledger
-    // has no account to print in its place, so its editor shows only then.
-    !isDetective && (preview.writerTrackerPrints
-      ? renderFinancialTracker(writerTracker)
-      : hasWriterTrackerRows && React.createElement('p', { className: 'text-xs text-muted' },
-          'The page prints the money tracker from the ledger, which the preview shows.')),
+    // The money tracker (journalist theme only), as trackerDisplay decides.
+    !isDetective && trackerDisplay === 'editor' && renderFinancialTracker(writerTracker),
+    !isDetective && trackerDisplay === 'ledger-note' && React.createElement('p', { className: 'text-xs text-muted' },
+      'The page prints the money tracker from the ledger, which the preview shows.'),
 
     // The page as it will print, from the bundle on the desk
     React.createElement('div', { className: 'mt-md' },

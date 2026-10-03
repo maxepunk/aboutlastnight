@@ -339,13 +339,11 @@ class TemplateAssembler {
       // Theme identifier
       theme: this.theme,
 
-      // Computed values. The tracker prints whenever it has entries: the ledger's when
-      // an account has a positive total. It used to print only when the writer had
-      // filled its own entries, which the ledger then replaced anyway, so a writer no
-      // longer asked for them would have lost the tracker from every article.
-      hasFinancialTracker: !!correctedTracker &&
-        Array.isArray(correctedTracker.entries) &&
-        correctedTracker.entries.length > 0,
+      // Computed values. A money tracker prints when the ledger has an account to print
+      // (its tracker replaces the writer's), else when the writer's prints, by the one rule
+      // the desk and the article judge read too (writerTrackerPrints; task 4.3b).
+      hasFinancialTracker: ledgerAccounts(shellAccounts).length > 0 ||
+        writerTrackerPrints(contentBundle.financialTracker, shellAccounts),
 
       // Override LLM-generated financial data with deterministic values
       financialTracker: correctedTracker ? {
@@ -383,13 +381,15 @@ class TemplateAssembler {
    *
    * When `shellAccounts` is empty (e.g., orchestrator skipped transaction parsing), the
    * function passes through the LLM's tracker unchanged so the field is at least present.
+   * Whether the page then prints the writer's tracker is writerTrackerPrints, after the
+   * class: the one rule (task 4.3b).
    *
    * @param {Object} financialTracker - LLM-generated financial tracker (may be ignored)
    * @param {Array} shellAccounts - Authoritative shell account data: [{name, total, tokenCount}]
    * @returns {Object} Financial tracker with clean entries derived from shellAccounts
    */
   overrideFinancialTracker(financialTracker, shellAccounts) {
-    const validAccounts = (shellAccounts || []).filter(a => a && a.total > 0 && a.name);
+    const validAccounts = ledgerAccounts(shellAccounts);
     if (validAccounts.length === 0) return financialTracker;
 
     // Sort by total descending so the bar chart reads largest-to-smallest.
@@ -479,6 +479,38 @@ class TemplateAssembler {
   }
 }
 
+/** A value that is an object and not a list: what a money tracker and each of its entries are. */
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * The ledger's accounts the page prints in place of the writer's money tracker: each with a
+ * name and a total above zero (overrideFinancialTracker's rule).
+ *
+ * @param {Array} shellAccounts - the session's ledger (state.shellAccounts)
+ * @returns {Array}
+ */
+function ledgerAccounts(shellAccounts) {
+  return (Array.isArray(shellAccounts) ? shellAccounts : []).filter(a => a && a.total > 0 && a.name);
+}
+
+/**
+ * Does the page print the writer's money tracker? The one rule (task 4.3b), which the page
+ * (buildContext's hasFinancialTracker), the desk (lib/article-preview.js, and through it the
+ * article stop's payload) and the article judge (evaluator-nodes.js printedWriterTracker)
+ * read: only when the ledger has no account to print in its place (ledgerAccounts), and the
+ * writer's tracker has an entry, an object, as the schema has every entry.
+ *
+ * @param {Object|undefined} financialTracker - the bundle's
+ * @param {Array} shellAccounts - the session's ledger (state.shellAccounts)
+ * @returns {boolean}
+ */
+function writerTrackerPrints(financialTracker, shellAccounts) {
+  if (!isPlainObject(financialTracker) || ledgerAccounts(shellAccounts).length > 0) return false;
+  return Array.isArray(financialTracker.entries) && financialTracker.entries.some(isPlainObject);
+}
+
 /**
  * Create a TemplateAssembler for the specified theme
  *
@@ -495,6 +527,7 @@ function createTemplateAssembler(theme, options = {}) {
 module.exports = {
   TemplateAssembler,
   createTemplateAssembler,
+  writerTrackerPrints,
 
   // Export for testing
   _testing: {

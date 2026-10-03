@@ -526,3 +526,85 @@ describe('the desk and the server\'s diff decide moves by one rule', () => {
   });
 });
 
+// Task 4.3b: the desk knows from the stop's payload whether the page prints the writer's money
+// tracker (getCheckpointData's writerTrackerPrints, from TemplateAssembler's one predicate), and
+// each preview keeps it current. Until one of them says, the desk shows neither the ledger's
+// note nor the tracker's editor, either of which could misstate what prints.
+describe('the writer\'s money tracker on the desk: unknown, prints, does not print (task 4.3b)', () => {
+  test('the stop\'s payload or a preview\'s answer sets the state; an answer that says nothing keeps it', () => {
+    expect(Desk.writerTrackerState(true)).toBe('prints');
+    expect(Desk.writerTrackerState(false)).toBe('does-not-print');
+    [undefined, null, 'true', 1].forEach((flag) => expect([flag, Desk.writerTrackerState(flag)]).toEqual([flag, 'unknown']));
+    expect(Desk.writerTrackerState(undefined, 'prints')).toBe('prints');
+    expect(Desk.writerTrackerState(undefined, 'does-not-print')).toBe('does-not-print');
+    expect(Desk.writerTrackerState(false, 'prints')).toBe('does-not-print');
+    expect(Desk.writerTrackerState(true, 'unknown')).toBe('prints');
+  });
+
+  test('the editor while the writer\'s tracker prints, the ledger\'s note while the ledger\'s prints in its place, neither while unknown', () => {
+    const withRows = journalistBundle();
+    expect(Desk.writerTrackerDisplay('prints', withRows)).toBe('editor');
+    expect(Desk.writerTrackerDisplay('does-not-print', withRows)).toBe('ledger-note');
+    expect(Desk.writerTrackerDisplay('unknown', withRows)).toBe('none');
+    // With no row of the writer's, nothing prints in its place to speak of.
+    const noRows = { ...journalistBundle(), financialTracker: { entries: [] } };
+    expect(['prints', 'does-not-print', 'unknown'].map((state) => Desk.writerTrackerDisplay(state, noRows))).toEqual(['editor', 'none', 'none']);
+    expect(Desk.writerTrackerDisplay('does-not-print', detectiveBundle())).toBe('none');
+  });
+
+  // The ledger's note stands only where the writer's tracker would print but for the ledger,
+  // so the desk counts the writer's rows by the server's own predicate.
+  test('the desk counts the writer\'s rows as the server\'s predicate counts its entries', () => {
+    const { writerTrackerPrints } = require('../../lib/template-assembler');
+    [[{ description: 'JessKane', amount: '$5' }], ['$5 to the account'], [null], [{ description: 'JessKane', amount: '$5' }, 'x'], [], undefined]
+      .forEach((entries) => {
+        const bundle = { ...journalistBundle(), financialTracker: { entries } };
+        const printsWithoutLedger = writerTrackerPrints(bundle.financialTracker, []);
+        expect([entries, Desk.writerTrackerDisplay('does-not-print', bundle)]).toEqual([entries, printsWithoutLedger ? 'ledger-note' : 'none']);
+      });
+  });
+});
+
+// Task 4.3b: the desk's byline line is built by the rule the page's header partial prints it
+// by (templates/journalist/partials/header.hbs): the title and the guest reporter's credit
+// print only with an author.
+describe('the byline as the page prints it (task 4.3b)', () => {
+  const Handlebars = require('handlebars');
+  const { registerHelpers } = require('../../lib/template-helpers');
+  const handlebars = Handlebars.create();
+  registerHelpers(handlebars);
+  const header = handlebars.compile(fs.readFileSync(path.join(__dirname, '..', '..', 'templates', 'journalist', 'partials', 'header.hbs'), 'utf8'));
+  /** The byline the partial prints: the text of its byline and guest-reporter spans, spaces folded. */
+  const printed = (byline) => (header({
+    headline: { main: 'The Room Voted Five to Four' },
+    byline,
+    metadata: { sessionId: '0926262', generatedAt: '2026-10-02T17:09:31.000Z' }
+  }).match(/<span class="nn-article__(?:byline|guest-reporter)">[\s\S]*?<\/span>/g) || [])
+    .map((span) => span.replace(/<[^>]+>/g, '')).join(' ').replace(/\s+/g, ' ').trim();
+
+  test.each([
+    ['the author blank', { author: '', title: 'Independent Reporter', guestReporter: 'Remi Vale | Field Reporter' }, ''],
+    ['an author with a title', { author: 'Nova', title: 'Independent Reporter', location: 'Fremont' }, 'Nova | Independent Reporter'],
+    ['a guest reporter', { author: 'Nova', guestReporter: 'Remi Vale | Field Reporter' }, 'Nova || Remi Vale | Field Reporter']
+  ])('%s', (_case, byline, line) => {
+    expect(printed(byline)).toBe(line);
+    expect(Desk.bylineLine(byline)).toBe(line);
+  });
+
+  test('the desk\'s label is the line the page prints, or says the page prints none without an author', () => {
+    expect(Desk.bylineLabel({ author: 'Nova', title: 'Independent Reporter', guestReporter: 'Remi Vale | Field Reporter' }))
+      .toBe('Nova | Independent Reporter || Remi Vale | Field Reporter');
+    [{ title: 'Independent Reporter' }, { author: '' }, {}, undefined].forEach((byline) => {
+      expect([byline, Desk.bylineLabel(byline)]).toEqual([byline, 'No byline: the page prints one only with an author.']);
+    });
+  });
+});
+
+// Task 4.3b: a preview that could not be reached says why (an expired login, a gateway page
+// that is not JSON, a dropped connection), so the director can tell one failure from another.
+test('a failed preview says why, in the error\'s own words (task 4.3b)', () => {
+  expect(Desk.previewFailure(new TypeError('Failed to fetch'))).toBe('The preview could not be reached (Failed to fetch).');
+  expect(Desk.previewFailure(new SyntaxError('Unexpected token < in JSON at position 0')))
+    .toBe('The preview could not be reached (Unexpected token < in JSON at position 0).');
+  [undefined, null, new Error(''), {}].forEach((error) => expect(Desk.previewFailure(error)).toBe('The preview could not be reached.'));
+});

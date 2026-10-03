@@ -67,8 +67,8 @@ const { withoutWriterQuestions } = require('../../writer-questions');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
 // the meeting's approval it skips on.
 const { isWeave, weaveForPrompt, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
-// The page's own rule for which money tracker prints (printedWriterTracker).
-const { TemplateAssembler } = require('../../template-assembler');
+// The page's own rule for whether the writer's money tracker prints (printedWriterTracker).
+const { writerTrackerPrints } = require('../../template-assembler');
 // F1 (spec 2026-10-02 section 7): the director's edits are final. The outline and article
 // judges read the edits the judged output carries, and the verdict guard moves a finding
 // about one of them to advisoryWarnings under the one prefix.
@@ -1687,22 +1687,20 @@ function printedBundle(bundle, shellAccounts) {
 
 /**
  * The writer's financial tracker as the page prints it: each entry's description and
- * amount, and the total. The page prints it only when TemplateAssembler's own rule
- * (overrideFinancialTracker) passes it through, which it does when no ledger account
- * has a positive total, and only when it has an entry (hasFinancialTracker). Otherwise
- * the page prints the ledger's tracker, or none, and this returns null.
+ * amount, and the total. Whether the page prints it is the page's own rule
+ * (template-assembler.js writerTrackerPrints, task 4.3b): when no ledger account has a
+ * positive total and it has an entry. Otherwise the page prints the ledger's tracker, or
+ * none, and this returns null.
  *
  * @param {Object|undefined} tracker - the bundle's financialTracker
  * @param {Array|null} shellAccounts - state.shellAccounts
  * @returns {{entries: Object[], totalExposed?: string}|null}
  */
 function printedWriterTracker(tracker, shellAccounts) {
-  if (!tracker || typeof tracker !== 'object') return null;
-  if (TemplateAssembler.prototype.overrideFinancialTracker(tracker, shellAccounts || []) !== tracker) return null;
-  const entries = (Array.isArray(tracker.entries) ? tracker.entries : [])
+  if (!writerTrackerPrints(tracker, shellAccounts)) return null;
+  const entries = tracker.entries
     .filter(entry => entry && typeof entry === 'object')
     .map(entry => pickFields(entry, PRINTED_FIELDS.trackerEntry));
-  if (entries.length === 0) return null;
   return { entries, ...pickFields(tracker, PRINTED_FIELDS.tracker) };
 }
 
