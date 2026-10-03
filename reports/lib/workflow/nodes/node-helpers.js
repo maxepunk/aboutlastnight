@@ -590,10 +590,9 @@ function buildValidEvidenceIds(evidenceBundle) {
     if (p.pageId) ids.add(p.pageId);  // Notion page ID
   }
 
-  // NOTE: Buried transactions and relationships are intentionally EXCLUDED from valid IDs
-  // They are Layer 2 evidence - can be discussed in analysisNotes but NOT cited in keyEvidence
-  // This matches the prompt guidance in buildCoreArcPrompt() and the evaluator's check
-  // See: evidenceIdValidity criterion in evaluator-nodes.js
+  // NOTE: Buried transactions and relationships are intentionally EXCLUDED from valid IDs.
+  // A buried sale is the ledger's: a weave thread names it with the receipt "ledger", as
+  // the arc writer's receipts list says (phase 4, brief 4.4; lib/weave.js checkWeave).
 
   console.log(`[buildValidEvidenceIds] Extracted ${ids.size} valid evidence IDs`);
   return ids;

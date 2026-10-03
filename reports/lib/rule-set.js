@@ -10,8 +10,9 @@
  * - eight `craft-*.md` files, the craft items C1 to C19 grouped by the writer's job
  *   (spec section 5; task 3.8): story (C1, C3, C16), form (C2, C5, C6, C17, C18,
  *   C19, C14), material (C8, C7, C10, C11), voice (C12), judgement (C13), telling
- *   (C4), cards (C9) and questions (C15). Each call reads the files the phase 4 spec's
- *   section 11 gives it (RULE_SET_CALLS; docs/superpowers/specs/2026-10-02-story-meeting-and-map.md);
+ *   (C4), cards (C9) and questions (C15). Each call reads the files RULE_SET_CALLS gives
+ *   it: spec section 8's lists, and for the arc stage the phase 4 spec's section 11
+ *   (docs/superpowers/specs/2026-10-02-story-meeting-and-map.md);
  * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block,
  *   which loadModeBlock hands back in its tag as loadRuleSet does each file.
  *

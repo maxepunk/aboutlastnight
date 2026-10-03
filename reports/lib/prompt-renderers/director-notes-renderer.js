@@ -2,7 +2,7 @@
  * Director Notes Enrichment Renderer
  *
  * Produces the XML-tagged director-notes block consumed by:
- * - lib/workflow/nodes/arc-specialist-nodes.js (buildCoreArcPrompt, buildArcRevisionPrompt)
+ * - lib/workflow/nodes/arc-specialist-nodes.js (buildWeaveSections, for the arc writer and its rework)
  * - lib/prompt-builder.js (buildOutlinePrompt, buildArticlePrompt)
  *
  * Spec: docs/superpowers/specs/2026-04-20-director-notes-enrichment-design.md
