@@ -55,6 +55,14 @@
  * (printedParts; known item 6), and a piece under six words is back only as a whole
  * sentence (known item 4).
  *
+ * A MOVE WITHIN A SECTION STAYS WHILE ITS BLOCK DOES (task 4.3b). At a send-back where the
+ * director's own move of a neighbour broke the order a move within the section recorded,
+ * the move stands while its block sits in the director's section among the blocks that
+ * kept their order in that send-back, re-anchored to its neighbours there (reanchoredMove).
+ * Code puts such a block back only into the director's order: when a pass also swapped the
+ * blocks it sat between, no place keeps that order, so the pass's version stays and the
+ * report says the block was not put back (directorsOrderCanHold).
+ *
  * Equality is trimmed canonical JSON: keys sorted, every string trimmed. Matching an
  * object value is a subset match: every key the director's value carries is present
  * with an equal value, so a field the rework added is no change.
@@ -883,6 +891,18 @@ function inDirectorsOrder(content, edit) {
   return (follows === -1 || follows < at) && (precedes === -1 || at < precedes);
 }
 
+/**
+ * Can `content` take a block the director moved within its section in the director's order
+ * (task 4.3b): are the block it follows and the block it precedes, each where the section
+ * still holds it, in that order themselves? A pass that swapped them leaves no place that
+ * keeps both.
+ */
+function directorsOrderCanHold(content, edit) {
+  const follows = indexOfIdentity(content, edit.between.follows);
+  const precedes = indexOfIdentity(content, edit.between.precedes);
+  return follows === -1 || precedes === -1 || follows < precedes;
+}
+
 /** Does `obj` still carry this edit (see the module header)? */
 function editCarried(obj, edit) {
   if (!isObj(obj) || !isEdit(edit)) return false;
@@ -949,6 +969,46 @@ function stillRemoved(edit, versions) {
 }
 
 /**
+ * A move within its section whose recorded order the version sent back broke, as it stands
+ * there (task 4.3b), or null. When the director's own move of a neighbour broke the order,
+ * the block still sits in the director's section among the blocks that kept their order in
+ * this send-back, so the move takes its place there: the blocks it now follows and precedes
+ * among them (betweenAt), and its index. When the send-back names the block moved again, or
+ * the section no longer holds it, its new move or its absence is the director's word, and
+ * this is null.
+ *
+ * @param {Object} edit - a move within its section (isMoveWithin)
+ * @param {Object} shown - the version the stop showed
+ * @param {Object} sentBack - the director's version
+ * @returns {Object|null}
+ */
+function reanchoredMove(edit, shown, sentBack) {
+  const was = moveSectionIndex(shown, edit);
+  const target = moveSectionIndex(sentBack, edit);
+  if (was === -1 || target === -1) return null;
+  const bc = Array.isArray(shown.sections[was].content) ? shown.sections[was].content : [];
+  const ac = Array.isArray(sentBack.sections[target].content) ? sentBack.sections[target].content : [];
+  const ai = indexOfIdentity(ac, moveIdentity(edit));
+  if (ai === -1) return null;
+  const staying = stayingInSection(bc, ac, matchBlocks(bc, ac).pairs);
+  if (!staying.some((pair) => pair.ai === ai)) return null;
+  const at = stepsOf(edit).map((step, i, steps) => (i === steps.length - 1 ? { ...step, index: ai } : step));
+  return { ...edit, at, path: pathOf(at), between: betweenAt(staying, ai, ac) };
+}
+
+/**
+ * An earlier edit as it stands after a send-back, or null when it no longer stands: an edit
+ * the version the stop showed and the version sent back both carry, as it is; and a move
+ * within its section the stop showed in the director's order, re-anchored to the version
+ * sent back while its block still sits in the director's section (reanchoredMove).
+ */
+function standingAcross(edit, shown, sentBack) {
+  if (!editCarried(shown, edit)) return null;
+  if (editCarried(sentBack, edit)) return edit;
+  return isMoveWithin(edit) ? reanchoredMove(edit, shown, sentBack) : null;
+}
+
+/**
  * The standing edits a state channel holds, or null: `{kind, issued, edits}`, where
  * `issued` counts every id given at the stop. A diff stored before the edits had ids
  * reads as its edits, field by field, numbered in order, its cuts read by every sentence
@@ -974,8 +1034,9 @@ function standingEditsOf(value) {
 
 /**
  * The edits that stand after a send-back: each earlier edit that both the version the
- * stop showed and the version the director sent back carry (its removed sentences that
- * came back dropped from it), then the send-back's own edits, numbered on from every id
+ * stop showed and the version the director sent back carry, a move within its section
+ * re-anchored to the version sent back (standingAcross; its removed sentences that came
+ * back dropped from it), then the send-back's own edits, numbered on from every id
  * issued at the stop. Null when no edit stands and none was ever issued; with earlier
  * ids and none standing, the count is kept, so no id is given twice at a stop.
  *
@@ -992,7 +1053,7 @@ function standingAfterSendBack(previous, shown, sentBack, kind, { names } = {}) 
   const prior = standingEditsOf(previous);
   const issued = prior ? prior.issued : 0;
   const kept = prior
-    ? prior.edits.filter((e) => editCarried(shown, e) && editCarried(sentBack, e)).map((e) => stillRemoved(e, [shown, sentBack]))
+    ? prior.edits.map((e) => standingAcross(e, shown, sentBack)).filter(Boolean).map((e) => stillRemoved(e, [shown, sentBack]))
     : [];
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const sentBackText = versionText(sentBack);
@@ -1493,13 +1554,15 @@ function becameOf(edit, before, after) {
 /**
  * Put a block the director moved within its section back in the director's order, as the
  * pass left it: right after the block it follows, else right before the block it
- * precedes (task 4.3). Writes nothing when the order already holds.
+ * precedes (task 4.3). Writes nothing when the order already holds, or when no place can
+ * hold it (directorsOrderCanHold; task 4.3b): the pass's order then stays.
  *
  * @returns {boolean} whether it moved the block
  */
 function placeInDirectorsOrder(edit, section) {
   const content = isObj(section) && Array.isArray(section.content) ? section.content : null;
-  if (!content || indexOfIdentity(content, moveIdentity(edit)) === -1 || inDirectorsOrder(content, edit)) return false;
+  if (!content || indexOfIdentity(content, moveIdentity(edit)) === -1 || inDirectorsOrder(content, edit)
+    || !directorsOrderCanHold(content, edit)) return false;
   const [block] = content.splice(indexOfIdentity(content, moveIdentity(edit)), 1);
   const follows = indexOfIdentity(content, edit.between.follows);
   // With the order broken, at least one neighbour is in the section.
@@ -1514,8 +1577,9 @@ function placeInDirectorsOrder(edit, section) {
  * outside the director's section. When the director's section already holds one (a field
  * edit's restore put the section back whole, block included), the pass's copy is taken
  * out, so the page prints the block once. A block the director moved within its section
- * then takes the director's order there (placeInDirectorsOrder). With no such section, or
- * nothing to move, nothing is written.
+ * goes back only into the director's order there (placeInDirectorsOrder): where the pass
+ * swapped the blocks it sat between, the pass's version stays, the block where the pass put
+ * it (task 4.3b). With no such section, or nothing to move, nothing is written.
  */
 function restoreMove(edit, out) {
   const steps = stepsOf(edit);
@@ -1526,6 +1590,7 @@ function restoreMove(edit, out) {
   const holds = (s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, identity));
   const fromIndex = sections.findIndex((s, i) => i !== targetIndex && holds(s));
   const target = sections[targetIndex];
+  if (isMoveWithin(edit) && !directorsOrderCanHold(Array.isArray(target.content) ? target.content : [], edit)) return false;
   let wrote = false;
   if (fromIndex !== -1) {
     const from = sections[fromIndex].content;

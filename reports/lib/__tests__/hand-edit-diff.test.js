@@ -1283,3 +1283,93 @@ test('readAtPath resolves ids, indexes and missing segments', () => {
   expect(D.readAtPath(b, 'sections[#intro].content[-]')).toBeUndefined();
   expect(D.readAtPath(null, 'x')).toBeUndefined();
 });
+
+// Task 4.3b (the review of 4.3, findings 2 and 3). A move within a section recorded its
+// place as the blocks it followed and preceded, and stood only while both kept their order
+// around it, so the director's own later move of a neighbour dropped it, and a pass that
+// then moved the block was neither undone nor reported. And when a pass also swapped those
+// two blocks, the restore put the block after the first of them: an order that was neither
+// the pass's nor the director's, under a report that said the block was not put back.
+describe('4.3b: a move within a section, across the director\'s rounds and an automatic pass', () => {
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const C = paragraph('Charlie paragraph closes the section with a long first line.');
+  const P = { type: 'photo', filename: 'whiteboard.jpg', caption: 'Mel lays out the theory at the whiteboard.' };
+  const OTHER = paragraph('Delta paragraph sits alone in the second section of the article.');
+  /** An article whose section "s" holds `blocks`, and whose section "t" holds OTHER, then `extra`. */
+  const article = (blocks, extra = []) => ({
+    metadata: { sessionId: '0926262' },
+    headline: { main: 'The Room Voted Five to Four' },
+    sections: [
+      { id: 's', type: 'narrative', content: blocks.map(clone) },
+      { id: 't', type: 'narrative', content: [clone(OTHER), ...extra.map(clone)] }
+    ]
+  });
+  /** Section "s" as letters: P for the photo, else each paragraph's first letter. */
+  const order = (output) => output.sections[0].content.map((b) => (b.type === 'photo' ? 'P' : b.text[0])).join('');
+  /** Round 1: the director moves the photo from the top to between A and B. */
+  const roundOne = () => D.standingAfterSendBack(null, article([P, A, B, C]), article([A, P, B, C]), 'bundle');
+
+  test('two send-backs: a move stays while its block sits in the director\'s section, and a pass that then moves the block has it put back and reported', () => {
+    expect(roundOne().edits.map((e) => [e.id, e.between])).toEqual([['E1', { follows: A, precedes: B }]]);
+    // The rework kept the director's order. Round 2: the director moves B to the top, and
+    // the photo still follows A. The move takes the blocks it sits between in that version.
+    const sentBack = article([B, A, P, C]);
+    const roundTwo = D.standingAfterSendBack(roundOne(), article([A, P, B, C]), sentBack, 'bundle');
+    expect(roundTwo.edits.map((e) => [e.id, e.path, e.after, e.between])).toEqual([
+      ['E1', 'sections[#s].content[2]', P, { follows: A, precedes: C }],
+      ['E2', 'sections[#s].content[0]', B, { follows: null, precedes: A }]
+    ]);
+    // An automatic pass puts the photo first.
+    const { output, report } = D.settleEdits(null, {
+      edits: D.carriedEdits(roundTwo, sentBack), before: sentBack, after: article([P, B, A, C]), pass: 1
+    });
+    expect(order(output)).toBe('BAPC');
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', moved: true, became: 'another place in section "s"', restored: true, automatic: true
+    })]);
+  });
+
+  test('the director moving the block again replaces its move, and an order that still holds keeps the move as recorded', () => {
+    // Round 2: the director moves the photo itself, after B. Its new move is its place now.
+    const again = D.standingAfterSendBack(roundOne(), article([A, P, B, C]), article([A, B, P, C]), 'bundle');
+    expect(again.edits.map((e) => [e.id, e.after, e.between])).toEqual([['E2', P, { follows: B, precedes: C }]]);
+    // Round 2: the director moves C to the other section; the photo still sits between A and B.
+    const held = D.standingAfterSendBack(roundOne(), article([A, P, B, C]), article([A, P, B], [C]), 'bundle');
+    expect(held.edits.map((e) => [e.id, e.from, e.between || null])).toEqual([
+      ['E1', 's', { follows: A, precedes: B }],
+      ['E2', 's', null]
+    ]);
+  });
+
+  test('a pass that swaps the blocks the moved block sat between leaves the pass\'s order, and the report says it was not put back', () => {
+    const director = article([A, P, B, C]);
+    const { edits } = roundOne();
+    const after = article([P, B, A, C]);
+    const { output, report } = D.settleEdits(null, { edits, before: director, after, pass: 1 });
+    expect(order(output)).toBe('PBAC');
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', moved: true, became: 'another place in section "s"', restored: false, automatic: true
+    })]);
+    // The stored version and the report agree: it does not carry the move.
+    expect(D.carriedEdits(edits, output)).toEqual([]);
+  });
+
+  test('a pass that keeps those blocks in the director\'s order has the block put back there, and the report says so', () => {
+    const director = article([A, P, B, C]);
+    const { edits } = roundOne();
+    const { output, report } = D.settleEdits(null, { edits, before: director, after: article([C, P, A, B]), pass: 1 });
+    expect(order(output)).toBe('CAPB');
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, restored: true })]);
+    expect(D.carriedEdits(edits, output).map((e) => e.id)).toEqual(['E1']);
+  });
+
+  test('a pass that takes the block to another section and swaps the blocks it sat between leaves it there, reported as not put back', () => {
+    const director = article([A, P, B, C]);
+    const { edits } = roundOne();
+    const after = article([B, A, C], [P]);
+    const { output, report } = D.settleEdits(null, { edits, before: director, after, pass: 1 });
+    expect(output).toEqual(after);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: false })]);
+  });
+});
