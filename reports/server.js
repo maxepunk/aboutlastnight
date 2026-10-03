@@ -657,6 +657,14 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         validApprovalDetected = true;
         stateUpdates.characterIdMappings = approvals.characterIds;
         resume.characterIdMappings = approvals.characterIds;
+        // Brief 4.2b: the structured form (the stop's Skip) carries no text, so it clears
+        // the raw text beside the mappings and the parse takes its no-text path: the boxes
+        // decide for every photo. characterIdsRaw survives a rollback to this stop
+        // (ROLLBACK_CLEARS_EXEMPT), and the parse would otherwise read the earlier round's
+        // text again, a paid call whose identifications and exclusions come back on photos
+        // whose box is clear. The update carries the clear, because the stop skips on its
+        // mappings.
+        stateUpdates.characterIdsRaw = null;
     }
     // Brief 2.2: the director's description of each photo, keyed by filename, sent
     // beside the IDs. Never an approval on its own. Kept word for word (trimmed at the

@@ -1231,3 +1231,47 @@ describe('the desk\'s payload through buildResumePayload (task 4.3)', () => {
     expect(result.stateUpdates.contentBundle).toBe(desk);
   });
 });
+
+/**
+ * Brief 4.2b: the structured form, the character-IDs stop's Skip, clears the raw text
+ * beside the mappings. characterIdsRaw survives a rollback to the stop
+ * (ROLLBACK_CLEARS_EXEMPT); left in place, the parse would read the earlier round's text
+ * again, a paid call whose identifications and exclusions come back on photos whose box
+ * is clear. The director's latest action at the stop is Skip, and the boxes decide.
+ */
+describe('buildResumePayload: the structured form clears the raw text (brief 4.2b)', () => {
+  const afterRollback = {
+    characterIdsRaw: 'Photo aln (8 of 9).jpg:\n  User Input: leave this one out',
+    characterIdMappings: null,
+    leftOutPhotos: null,
+    photoAnalyses: { analyses: [{ filename: 'aln (7 of 9).jpg' }, { filename: 'aln (8 of 9).jpg' }] }
+  };
+
+  it('Skip writes characterIdsRaw: null beside the mappings, in the state update', () => {
+    const { stateUpdates, resume, error } = buildResumePayload(
+      { characterIds: {}, leftOutPhotos: [] }, afterRollback, 'journalist', 'character-ids'
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates).toHaveProperty('characterIdsRaw', null);
+    expect(stateUpdates.characterIdMappings).toEqual({});
+    expect(stateUpdates.leftOutPhotos).toEqual([]);
+    expect(resume.characterIdMappings).toEqual({});
+  });
+
+  it('so does a structured form that carries identifications', () => {
+    const ids = { 'aln (7 of 9).jpg': { characterMappings: [{ descriptionIndex: 0, characterName: 'Kai' }] } };
+    const { stateUpdates, error } = buildResumePayload({ characterIds: ids }, afterRollback, 'journalist', 'character-ids');
+    expect(error).toBeNull();
+    expect(stateUpdates).toHaveProperty('characterIdsRaw', null);
+    expect(stateUpdates.characterIdMappings).toEqual(ids);
+  });
+
+  it('the text form keeps the director\'s text, and writes no mappings', () => {
+    const { stateUpdates, error } = buildResumePayload(
+      { characterIdsRaw: 'Photo aln (7 of 9).jpg:\n  User Input: Kai at the bar.' }, afterRollback, 'journalist', 'character-ids'
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates.characterIdsRaw).toBe('Photo aln (7 of 9).jpg:\n  User Input: Kai at the bar.');
+    expect(stateUpdates).not.toHaveProperty('characterIdMappings');
+  });
+});

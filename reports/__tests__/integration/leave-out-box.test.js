@@ -14,6 +14,10 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
  * photo's analysis still carries round 1's `excluded` mark (the rollback keeps the
  * analyses, and finalizePhotoAnalyses skips once any is enriched), and the box is clear:
  * the photo comes back. The mapping decides for every photo the director saw.
+ *
+ * Brief 4.2b: the stop's Skip, the structured form `{characterIds: {}, leftOutPhotos}`,
+ * through the same graph. Its boxes decide, and the parse reads no text, also after a
+ * rollback has kept an earlier round's text in characterIdsRaw (ROLLBACK_CLEARS_EXEMPT).
  */
 const fs = require('fs');
 const os = require('os');
@@ -25,7 +29,7 @@ const { createReportGraphWithCheckpointer, RECURSION_LIMIT } = require('../../li
 const { getCheckpointData, buildResumePayload } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 const { buildRollbackState } = require('../../lib/api-helpers');
-const { characterIdCards, characterIdLeaveOutTicks, characterIdsPayload } = require('../../console/checkpoint-view-logic');
+const { characterIdCards, characterIdLeaveOutTicks, characterIdsPayload, characterIdsSkipPayload } = require('../../console/checkpoint-view-logic');
 const { PARSED_CHARACTER_IDS_SCHEMA } = require('../../lib/schemas/character-ids');
 const { _testing: { ENRICHED_PHOTO_SCHEMA } } = require('../../lib/workflow/nodes/photo-nodes');
 const { createMockImagePromptBuilder } = require('../../lib/image-prompt-builder');
@@ -50,22 +54,41 @@ const ENRICHED = {
   finalCaption: 'Alex and Morgan at the bar', identifiedCharacters: ['Alex', 'Morgan']
 };
 
-/** A scripted SDK, routed by the call's schema; it keeps every outline writer's prompt. */
-function scriptedSdk() {
+/**
+ * A scripted SDK, routed by the call's schema. It answers the character-ID parse with
+ * `parsed`, keeps every outline writer's prompt, and records each call's kind in `calls`
+ * ('parse', 'enrich', 'outline', 'evaluation'), so a test counts the parse calls.
+ */
+function scriptedSdk(parsed = PARSED) {
   const outlinePrompts = [];
+  const calls = [];
   const sdk = async (options) => {
-    if (options.jsonSchema === PARSED_CHARACTER_IDS_SCHEMA) return clone(PARSED);
-    if (options.jsonSchema === ENRICHED_PHOTO_SCHEMA) return clone(ENRICHED);
+    if (options.jsonSchema === PARSED_CHARACTER_IDS_SCHEMA) {
+      calls.push('parse');
+      return clone(parsed);
+    }
+    if (options.jsonSchema === ENRICHED_PHOTO_SCHEMA) {
+      calls.push('enrich');
+      return clone(ENRICHED);
+    }
     if (options.jsonSchema === outlineSchema) {
+      calls.push('outline');
       outlinePrompts.push(options.prompt || '');
       return clone(OUTLINE);
     }
-    if (/Evaluator/.test(options.systemPrompt || '')) return clone(PASSING_EVALUATION);
+    if (/Evaluator/.test(options.systemPrompt || '')) {
+      calls.push('evaluation');
+      return clone(PASSING_EVALUATION);
+    }
     throw new Error(`scriptedSdk: unexpected call ${(options.systemPrompt || '').slice(0, 60)}`);
   };
   sdk.outlinePrompts = outlinePrompts;
+  sdk.calls = calls;
   return sdk;
 }
+
+/** How many character-ID parse calls the scripted SDK has answered. */
+const parseCalls = (sdk) => sdk.calls.filter((kind) => kind === 'parse').length;
 
 /**
  * The session as the photo branch reaches the character-IDs stop: arcs analysed and
@@ -117,29 +140,43 @@ describe('the leave-out box through the real graph (phase 4, brief 4.2)', () => 
 
   const run = (graph, thread, input) => graph.invoke(input, { ...thread, recursionLimit: RECURSION_LIMIT, durability: 'sync' });
 
-  /** Approve the character-IDs stop as the console does: its cards, its ticks, its payload. */
-  async function approveCharacterIds(graph, thread, ticked) {
+  /** A thread whose model calls go to `sdk`, with its session folder in the temp dir. */
+  const threadFor = (threadId, sdk) => ({
+    configurable: {
+      thread_id: threadId, sessionId: '010126', theme: 'journalist',
+      sdkClient: sdk, imagePromptBuilder: createMockImagePromptBuilder(), dataDir: dir
+    }
+  });
+
+  /**
+   * Answer the character-IDs stop as the console does: its cards, its ticks (`ticked` over
+   * the boxes it shows), and the payload `build(cards, ticks)` makes of them. Returns what
+   * the stop showed (its checkpoint data), the state at the stop and the snapshot after
+   * the run.
+   */
+  async function answerCharacterIds(graph, thread, ticked, build) {
     const snapshot = await graph.getState(thread);
     expect(snapshot.tasks[0].interrupts[0].value.type).toBe(CHECKPOINT_TYPES.CHARACTER_IDS);
     const shown = await getCheckpointData(CHECKPOINT_TYPES.CHARACTER_IDS, snapshot.values);
     const cards = characterIdCards(snapshot.values.photoAnalyses.analyses, shown.sessionPhotos, shown.leftOutPhotos);
     const ticks = { ...characterIdLeaveOutTicks(cards, undefined), ...ticked };
-    const payload = characterIdsPayload(cards, { 'p2.jpg': 'Alex leans over the ledger.' }, ticks);
-    const { resume, stateUpdates, error } = buildResumePayload(payload, snapshot.values, 'journalist', CHECKPOINT_TYPES.CHARACTER_IDS);
+    const { resume, stateUpdates, error } = buildResumePayload(build(cards, ticks), snapshot.values, 'journalist', CHECKPOINT_TYPES.CHARACTER_IDS);
     expect(error).toBeNull();
     await run(graph, thread, new Command({ resume, update: stateUpdates }));
-    return { shown, after: await graph.getState(thread) };
+    return { shown, atStop: snapshot.values, after: await graph.getState(thread) };
   }
+
+  /** Submit, with the director's description of p2.jpg. */
+  const approveCharacterIds = (graph, thread, ticked) => answerCharacterIds(graph, thread, ticked,
+    (cards, ticks) => characterIdsPayload(cards, { 'p2.jpg': 'Alex leans over the ledger.' }, ticks));
+
+  /** The stop's Skip (brief 4.2b): no identifications, the boxes as ticked. */
+  const skipCharacterIds = (graph, thread, ticked) => answerCharacterIds(graph, thread, ticked, characterIdsSkipPayload);
 
   it('a ticked photo is left out of the outline writer\'s list, the hero and the article writer\'s PHOTOS; unticked after a rollback, it comes back over its stale analysis mark', async () => {
     const sdk = scriptedSdk();
     const graph = createReportGraphWithCheckpointer(saver);
-    const thread = {
-      configurable: {
-        thread_id: 'leave-out-test', sessionId: '010126', theme: 'journalist',
-        sdkClient: sdk, imagePromptBuilder: createMockImagePromptBuilder(), dataDir: dir
-      }
-    };
+    const thread = threadFor('leave-out-test', sdk);
     await graph.updateState(thread, atCharacterIdsStop(), 'detectWhiteboard');
     await run(graph, thread, null);
 
@@ -184,5 +221,79 @@ describe('the leave-out box through the real graph (phase 4, brief 4.2)', () => 
     expect(state2.heroImage).toBe('p3.jpg');
     const photos2 = articleWriterInputs(state2);
     expect(photos2[photos2.length - 1].photos.map((p) => p.filename)).toEqual(['p3.jpg', 'hero.jpg', 'p2.jpg']);
+  });
+
+  /**
+   * The stop's Skip (brief 4.2b) sends the structured form, `{characterIds: {}, leftOutPhotos}`.
+   * The director's latest action at the stop is Skip, so the boxes decide for every photo
+   * and the parse reads no text: buildResumePayload clears characterIdsRaw beside the
+   * mappings, which a rollback to the stop otherwise leaves holding the earlier round's text.
+   */
+  describe('the stop\'s Skip (brief 4.2b)', () => {
+    it('Skip with one box ticked: the list and the mapping, the outline writer\'s list and hero, and the article writer\'s PHOTOS', async () => {
+      const sdk = scriptedSdk();
+      const graph = createReportGraphWithCheckpointer(saver);
+      const thread = threadFor('skip-test', sdk);
+      await graph.updateState(thread, atCharacterIdsStop(), 'detectWhiteboard');
+      await run(graph, thread, null);
+
+      // The director ticks p3.jpg's box, the photo that would otherwise be the hero, and skips.
+      const { after } = await skipCharacterIds(graph, thread, { 'p3.jpg': true });
+      expect(after.tasks[0].interrupts[0].value.type).toBe(CHECKPOINT_TYPES.OUTLINE);
+      const state = after.values;
+      expect(state.leftOutPhotos).toEqual(['p3.jpg']);
+      expect(Object.fromEntries(Object.entries(state.characterIdMappings).map(([name, m]) => [name, m.exclude])))
+        .toEqual({ 'hero.jpg': false, 'p2.jpg': false, 'p3.jpg': true });
+      expect(parseCalls(sdk)).toBe(0);
+
+      expect(sdk.outlinePrompts).toHaveLength(1);
+      expect(sdk.outlinePrompts[0]).toContain('\nHERO IMAGE: hero.jpg\n');
+      expect(availablePhotos(sdk.outlinePrompts[0])).toContain('p2.jpg');
+      expect(sdk.outlinePrompts[0]).not.toContain('p3.jpg');
+      expect(state.heroImage).toBe('hero.jpg');
+
+      const photos = articleWriterInputs(state);
+      expect(photos[photos.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg']);
+    });
+
+    it('Skip after a rollback runs no parse: an exclusion in the earlier round\'s text does not come back on a clear box', async () => {
+      // The parse reads round 1's text as naming Alex in hero.jpg and leaving p2.jpg out.
+      const sdk = scriptedSdk({ photos: [...PARSED.photos, { filename: 'p2.jpg', exclude: true }] });
+      const graph = createReportGraphWithCheckpointer(saver);
+      const thread = threadFor('skip-after-rollback-test', sdk);
+      await graph.updateState(thread, atCharacterIdsStop(), 'detectWhiteboard');
+      await run(graph, thread, null);
+
+      // Round 1: the director's text leaves p2.jpg out; every box is clear.
+      const round1 = await answerCharacterIds(graph, thread, {},
+        (cards, ticks) => characterIdsPayload(cards, { 'p2.jpg': 'Leave this one out.' }, ticks));
+      const state1 = round1.after.values;
+      expect(parseCalls(sdk)).toBe(1);
+      expect(state1.characterIdMappings['p2.jpg'].exclude).toBe(true);
+      expect(availablePhotos(sdk.outlinePrompts[0])).not.toContain('p2.jpg');
+
+      // Round 2: back to the stop. The rollback clears the mappings and keeps round 1's text.
+      await graph.updateState(thread, buildRollbackState('character-ids'), 'detectWhiteboard');
+      await run(graph, thread, null);
+      const round2 = await skipCharacterIds(graph, thread, {});
+      expect(round2.atStop.characterIdsRaw).toContain('Leave this one out.');
+      expect(round2.after.tasks[0].interrupts[0].value.type).toBe(CHECKPOINT_TYPES.OUTLINE);
+
+      // No parse call: round 1's is the only one, and the raw text is cleared.
+      const state2 = round2.after.values;
+      expect(parseCalls(sdk)).toBe(1);
+      expect(state2.characterIdsRaw).toBeNull();
+      expect(state2.leftOutPhotos).toEqual([]);
+
+      // Every box is clear, so every photo is kept, p2.jpg over its stale analysis mark, and
+      // no identification from round 1's text comes back in a mapping.
+      expect(state2.photoAnalyses.analyses.find((a) => a.filename === 'p2.jpg').excluded).toBe(true);
+      expect(Object.fromEntries(Object.entries(state2.characterIdMappings).map(([name, m]) => [name, [m.exclude, m.characterMappings]])))
+        .toEqual({ 'hero.jpg': [false, []], 'p2.jpg': [false, []], 'p3.jpg': [false, []] });
+      expect(sdk.outlinePrompts).toHaveLength(2);
+      expect(availablePhotos(sdk.outlinePrompts[1])).toContain('p2.jpg');
+      const photos2 = articleWriterInputs(state2);
+      expect(photos2[photos2.length - 1].photos.map((p) => p.filename)).toContain('p2.jpg');
+    });
   });
 });
