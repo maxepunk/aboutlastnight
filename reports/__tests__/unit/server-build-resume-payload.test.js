@@ -971,6 +971,45 @@ describe('buildResumePayload — the leave-out box (brief 4.2)', () => {
   });
 });
 
+/**
+ * The character-IDs stop's payload builders (console/checkpoint-view-logic.js), fed
+ * through buildResumePayload on a state at the stop: what the screen sends is what the
+ * server keeps (the plan's console constraint).
+ */
+describe('the character-IDs stop\'s payloads, through buildResumePayload (brief 4.2)', () => {
+  const { characterIdCards, characterIdLeaveOutTicks, characterIdsPayload, characterIdsSkipPayload } = require('../../console/checkpoint-view-logic');
+  const state = {
+    sessionPhotos: ['C:/data/092026/photos/aln (7 of 9).jpg', 'C:/data/092026/photos/aln (8 of 9).jpg'],
+    photoAnalyses: { analyses: [{ filename: 'aln (7 of 9).jpg', visualContent: 'two people at a table' }, { filename: 'aln (8 of 9).jpg' }] },
+    leftOutPhotos: null
+  };
+  const cards = characterIdCards(state.photoAnalyses.analyses, state.sessionPhotos, state.leftOutPhotos);
+
+  it('Submit: the ticked photo joins the leave-out list beside the raw text and the descriptions', () => {
+    const ticks = { ...characterIdLeaveOutTicks(cards, undefined), 'aln (8 of 9).jpg': true };
+    const payload = characterIdsPayload(cards, { 'aln (7 of 9).jpg': 'Kai at the bar.' }, ticks);
+    const { stateUpdates, resume, error } = buildResumePayload(payload, state, 'journalist', 'character-ids');
+    expect(error).toBeNull();
+    expect(stateUpdates.leftOutPhotos).toEqual(['aln (8 of 9).jpg']);
+    expect(resume.leftOutPhotos).toEqual(['aln (8 of 9).jpg']);
+    expect(stateUpdates.photoDescriptions).toEqual({ 'aln (7 of 9).jpg': 'Kai at the bar.' });
+    expect(stateUpdates.characterIdsRaw).toContain('Photo aln (7 of 9).jpg:');
+  });
+
+  it('Skip: no identifications, and the ticked photo still left out', () => {
+    const payload = characterIdsSkipPayload(cards, { 'aln (7 of 9).jpg': true });
+    const { stateUpdates, error } = buildResumePayload(payload, state, 'journalist', 'character-ids');
+    expect(error).toBeNull();
+    expect(stateUpdates.characterIdMappings).toEqual({});
+    expect(stateUpdates.leftOutPhotos).toEqual(['aln (7 of 9).jpg']);
+  });
+
+  it('every box clear: nothing of this stop is left out', () => {
+    const payload = characterIdsPayload(cards, {}, characterIdLeaveOutTicks(cards, undefined));
+    expect(buildResumePayload(payload, state, 'journalist', 'character-ids').stateUpdates.leftOutPhotos).toEqual([]);
+  });
+});
+
 // Brief 2.7: the trace shows the current round's automatic passes only. A send back
 // opens a new round, so the reject arms reset that stop's trace where they reset the
 // hand-edit fields; the send-back rework itself writes no entry (graph.js increments).

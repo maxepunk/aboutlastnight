@@ -6,6 +6,10 @@
  * 2.2) each description word for word in photoDescriptions, keyed by filename.
  * Each card pairs an analysis with its photo BY FILENAME (ViewLogic.characterIdCards),
  * never by position in the two lists.
+ * Phase 4, brief 4.2: each card has a "leave this photo out" box, and the box decides.
+ * Submit and Skip both send the ticked filenames as leftOutPhotos; the boxes start from
+ * the director's unsent ticks, else from the server's list, and every change is kept in
+ * the stop's pendingEdits slot, so a tick survives a remount.
  * Exports to window.Console.checkpoints.CharacterIds
  */
 
@@ -15,9 +19,11 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 const { Badge, truncate } = window.Console.utils;
 const ViewLogic = window.Console.checkpointViewLogic;
 
-function CharacterIds({ data, onApprove }) {
+function CharacterIds({ data, onApprove, dispatch, pendingEdits }) {
   const sessionPhotos = (data && data.sessionPhotos) || [];
   const photoAnalyses = (data && data.photoAnalyses && data.photoAnalyses.analyses) || [];
+  // Brief 4.2: the photos the server already lists as left out.
+  const leftOutPhotos = (data && data.leftOutPhotos) || [];
   // H4: the interrupt payload carries `roster` (checkpoint-nodes.js passes state.roster
   // from await-roster). sessionConfig.roster is EMPTY here — parseRawInput, which writes
   // sessionConfig, runs two checkpoints later — so reading only that key meant the roster
@@ -28,10 +34,14 @@ function CharacterIds({ data, onApprove }) {
     || [];
 
   // One card per analysis, each with its own photo (brief 2.2: by filename).
-  const cards = ViewLogic.characterIdCards(photoAnalyses, sessionPhotos);
+  const cards = ViewLogic.characterIdCards(photoAnalyses, sessionPhotos, leftOutPhotos);
 
   // Per-photo user descriptions keyed by card key (the photo's filename)
   const [descriptions, setDescriptions] = React.useState({});
+  // Brief 4.2: the leave-out box on each card, keyed by card key.
+  const [leftOut, setLeftOut] = React.useState(function () {
+    return ViewLogic.characterIdLeaveOutTicks(cards, pendingEdits);
+  });
   // Track which cards are expanded (show full AI analysis)
   const [expanded, setExpanded] = React.useState({});
 
@@ -74,13 +84,30 @@ function CharacterIds({ data, onApprove }) {
     });
   }
 
+  function toggleLeftOut(key) {
+    setLeftOut(function (prev) {
+      var next = Object.assign({}, prev);
+      next[key] = !prev[key];
+      return next;
+    });
+  }
+
+  // Brief 4.2: every change to the boxes goes to the stop's pendingEdits slot, so a
+  // remount (a processing error) restores them.
+  React.useEffect(function () {
+    if (dispatch) dispatch({ type: 'SAVE_PENDING_EDITS', checkpoint: 'character-ids', edits: { leftOut: leftOut } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftOut]);
+
   function handleSubmit() {
-    // The raw text the parser reads, plus each description as its own field.
-    onApprove(ViewLogic.characterIdsPayload(cards, descriptions));
+    // The raw text the parser reads, plus each description as its own field, and the
+    // photos whose leave-out box is ticked.
+    onApprove(ViewLogic.characterIdsPayload(cards, descriptions, leftOut));
   }
 
   function handleSkip() {
-    onApprove({ characterIds: {} });
+    // No identifications; the ticked photos are still left out.
+    onApprove(ViewLogic.characterIdsSkipPayload(cards, leftOut));
   }
 
   var hasAnyInput = Object.keys(descriptions).some(function (k) {
@@ -111,13 +138,14 @@ function CharacterIds({ data, onApprove }) {
         var charDescs = photo.characterDescriptions || [];
         var caption = photo.suggestedCaption || '';
         var isExpanded = !!expanded[cardKey];
+        var isLeftOut = !!leftOut[cardKey];
         var thumbUrl = filepath
           ? '/api/file?path=' + encodeURIComponent(filepath)
           : null;
 
         return React.createElement('div', {
           key: 'photo-' + i,
-          className: 'photo-card'
+          className: 'photo-card' + (isLeftOut ? ' photo-card--left-out' : '')
         },
           // Card body: thumbnail + content
           React.createElement('div', { className: 'photo-card__body' },
@@ -217,6 +245,20 @@ function CharacterIds({ data, onApprove }) {
                         : 'Sarah is in the red dress, Marcus is behind her...'
                   )
                 })
+              ),
+
+              // Brief 4.2: the leave-out box. A photo with no filename cannot be named
+              // in the payload, so its box is disabled.
+              React.createElement('label', { className: 'checkbox-item photo-card__leave-out' },
+                React.createElement('input', {
+                  type: 'checkbox',
+                  className: 'checkbox-item__checkbox',
+                  checked: isLeftOut,
+                  disabled: !card.filename,
+                  onChange: function () { toggleLeftOut(cardKey); },
+                  'aria-label': 'Leave ' + displayName + ' out of the article'
+                }),
+                React.createElement('span', { className: 'text-sm' }, 'Leave this photo out')
               )
             )
           )

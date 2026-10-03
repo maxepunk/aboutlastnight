@@ -2920,3 +2920,21 @@ textarea.input {
   letter-spacing: 0.05em;
   color: var(--text-secondary);
 }
+
+/* ── 4.2: the leave-out box ──
+   One "leave this photo out" box on each photo card at the character-IDs stop (phase 4,
+   brief 4.2). A photo left out stays on the screen, dimmed and edged in red, so the
+   director can see the choice and change it. */
+.photo-card__leave-out {
+  margin-top: var(--space-sm);
+}
+
+.photo-card--left-out {
+  border-color: rgba(231, 76, 60, 0.35);
+}
+
+.photo-card--left-out .photo-card__thumbnail,
+.photo-card--left-out .photo-card__ai-section,
+.photo-card--left-out .photo-card__user-section {
+  opacity: 0.45;
+}

@@ -1048,12 +1048,21 @@
    * its own filename; the thumbnail is the session photo with that basename
    * (case-insensitive, as the server's joins do).
    *
+   * Brief 4.2: `leftOut` says whether the server lists the photo as left out (the
+   * payload's `leftOutPhotos`), matched the same way; the leave-out box starts from it.
+   *
    * @param {Array} photoAnalyses - data.photoAnalyses.analyses
    * @param {Array} sessionPhotos - data.sessionPhotos (paths)
-   * @returns {Array<{key: string, filename: string, displayName: string, path: string, analysis: object}>}
+   * @param {Array} [leftOutPhotos] - data.leftOutPhotos (filenames)
+   * @returns {Array<{key: string, filename: string, displayName: string, path: string, analysis: object, leftOut: boolean}>}
    */
-  function characterIdCards(photoAnalyses, sessionPhotos) {
+  function characterIdCards(photoAnalyses, sessionPhotos, leftOutPhotos) {
     var photos = asArray(sessionPhotos).filter(function (p) { return typeof p === 'string' && p; });
+    var listed = {};
+    asArray(leftOutPhotos).forEach(function (name) {
+      var key = baseName(name).toLowerCase();
+      if (key) listed[key] = true;
+    });
     return asArray(photoAnalyses).map(function (analysis, i) {
       var a = analysis && typeof analysis === 'object' ? analysis : {};
       var filename = baseName(a.filename);
@@ -1065,8 +1074,46 @@
         }
       }
       var displayName = filename || baseName(path) || 'Photo ' + (i + 1);
-      return { key: filename || 'photo-' + i, filename: filename, displayName: displayName, path: path, analysis: a };
+      return {
+        key: filename || 'photo-' + i,
+        filename: filename,
+        displayName: displayName,
+        path: path,
+        analysis: a,
+        leftOut: Boolean(wanted && listed[wanted])
+      };
     });
+  }
+
+  /**
+   * The leave-out boxes when the character-IDs stop (re)mounts (brief 4.2), by card key:
+   * the director's unsent ticks, kept in the stop's pendingEdits slot as `leftOut`, win
+   * over the photos the server already lists (each card's `leftOut`), so a tick survives
+   * a remount.
+   *
+   * @param {Array} cards - characterIdCards(...)
+   * @param {Object|undefined} pending - the stop's pendingEdits slot
+   * @returns {Object<string, boolean>}
+   */
+  function characterIdLeaveOutTicks(cards, pending) {
+    var draft = pending && typeof pending === 'object' && pending.leftOut && typeof pending.leftOut === 'object'
+      ? pending.leftOut
+      : null;
+    var ticks = {};
+    asArray(cards).forEach(function (card) {
+      ticks[card.key] = draft && Object.prototype.hasOwnProperty.call(draft, card.key)
+        ? draft[card.key] === true
+        : card.leftOut === true;
+    });
+    return ticks;
+  }
+
+  /** The filenames whose leave-out box is ticked, in card order. A card with no filename has none. */
+  function leftOutFilenames(cards, ticks) {
+    var ticked = ticks && typeof ticks === 'object' ? ticks : {};
+    return asArray(cards)
+      .filter(function (card) { return card.filename && ticked[card.key] === true; })
+      .map(function (card) { return card.filename; });
   }
 
   /**
@@ -1080,11 +1127,16 @@
    * director left blank has no entry; `photoDescriptions` is omitted when every box
    * is blank.
    *
+   * Brief 4.2: `leftOutPhotos` is the filenames whose leave-out box is ticked, sent
+   * every time (an empty list when every box is clear): for every photo the stop
+   * showed, the box decides.
+   *
    * @param {Array} cards - characterIdCards(...)
    * @param {Object} descriptions - card key -> the director's text
-   * @returns {{characterIdsRaw: string, photoDescriptions?: Object}}
+   * @param {Object} [ticks] - card key -> ticked (characterIdLeaveOutTicks)
+   * @returns {{characterIdsRaw: string, photoDescriptions?: Object, leftOutPhotos: string[]}}
    */
-  function characterIdsPayload(cards, descriptions) {
+  function characterIdsPayload(cards, descriptions, ticks) {
     var typed = descriptions && typeof descriptions === 'object' ? descriptions : {};
     var blocks = [];
     var byFilename = {};
@@ -1107,7 +1159,20 @@
     });
     var payload = { characterIdsRaw: blocks.join('\n') };
     if (Object.keys(byFilename).length > 0) payload.photoDescriptions = byFilename;
+    payload.leftOutPhotos = leftOutFilenames(cards, ticks);
     return payload;
+  }
+
+  /**
+   * The character-IDs stop's Skip (brief 4.2): no identifications, and the photos whose
+   * leave-out box is ticked still left out.
+   *
+   * @param {Array} cards - characterIdCards(...)
+   * @param {Object} ticks - card key -> ticked
+   * @returns {{characterIds: Object, leftOutPhotos: string[]}}
+   */
+  function characterIdsSkipPayload(cards, ticks) {
+    return { characterIds: {}, leftOutPhotos: leftOutFilenames(cards, ticks) };
   }
 
   /**
@@ -1372,6 +1437,9 @@
     exposuresView: exposuresView,
     characterIdCards: characterIdCards,
     characterIdsPayload: characterIdsPayload,
+    // Phase 4, brief 4.2: the leave-out box at the character-IDs stop
+    characterIdLeaveOutTicks: characterIdLeaveOutTicks,
+    characterIdsSkipPayload: characterIdsSkipPayload,
     arcNoteInitial: arcNoteInitial,
     // Phase 3, brief 3.7: the writer's questions at the arc, outline and article stops
     writerQuestionsView: writerQuestionsView,
