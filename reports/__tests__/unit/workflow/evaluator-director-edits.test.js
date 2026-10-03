@@ -104,7 +104,7 @@ describe('the judges read the director\'s edits (F1)', () => {
     expect(prompt).toContain('E1 (lede, hook): "Marcus died the morning his company sold."');
     expect(prompt.indexOf("THE DIRECTOR'S EDITS")).toBeGreaterThan(prompt.indexOf('OUTLINE:'));
     expect(prompt.indexOf("THE DIRECTOR'S EDITS")).toBeLessThan(prompt.indexOf('SELECTED ARCS'));
-    expect(prompt).toContain('text the director wrote into the outline above, or cut from it');
+    expect(prompt).toContain('text the director wrote into the outline above, text they cut from it (marked cut), or a block they moved (marked moved)');
   });
 
   it('carries no such section when there are no standing edits', () => {

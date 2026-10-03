@@ -1196,19 +1196,20 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`
   // F1 (spec 2026-10-02 section 7): the edits stand at the stop by id, and the block
   // lists those the version this rework starts from carries, each with its place and
   // the director's text, and under a rewrite each sentence it removed (FA). Its rule
-  // depends on the kind of rework. An automatic pass fixes the writer's text, so every
-  // edit stays as written, and every cut and removed sentence stays out (and code puts
-  // back what it changes anyway; ai-nodes.js). A send-back may change an edit only
+  // depends on the kind of rework. An automatic pass fixes the writer's text, a moved
+  // block's included, so the director's text stays as written, each moved block stays
+  // in its place, and every cut and removed sentence stays out (and code puts back what
+  // it changes anyway; ai-nodes.js). A send-back may change an edit only
   // where the structural change the note asks for means it no longer fits, and returns
   // each one it changed, with why (CHANGED_EDITS_KEY, which the rework call's schema
   // carries; ai-nodes.js). EDIT_LINES_GUIDE says how to read the lines, in the words
   // the judges' section uses.
   const handEditsRule = humanFeedback
-    ? `An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
-    : 'This automatic pass fixes the writer\'s text. An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out.';
+    ? `An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
+    : 'This automatic pass fixes the writer\'s text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out.';
   const handEditsBlock = standingEdits.length > 0
     ? `<HAND_EDITS>
-The director's edits, by id: text the director wrote into the previous version, or cut from it (marked cut). ${EDIT_LINES_GUIDE}
+The director's edits, by id: text the director wrote into the previous version, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE}
 ${handEditsRule}
 
 ${formatEditLines(standingEdits)}

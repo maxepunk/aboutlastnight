@@ -18,7 +18,7 @@ const os = require('os');
 const path = require('path');
 const sharp = require('sharp');
 const { createTemplateAssembler } = require('../template-assembler');
-const { printedPhotos, publishPhotos } = require('../publish-photos');
+const { printedPhotos, publishPhotos, missingPrintedPhotos } = require('../publish-photos');
 
 const RED = { r: 255, g: 0, b: 0 };
 const BLUE = { r: 0, g: 0, b: 255 };
@@ -197,6 +197,24 @@ describe('printedPhotos is what the assembled page prints', () => {
     const html = await createTemplateAssembler(theme).assemble(bundle, { sessionId: '0926262' });
     const named = [...html.matchAll(/src="sessionphotos\/0926262\/([^"]+)"/g)].map((m) => m[1]);
     expect([...new Set(named)].sort()).toEqual([...printedPhotos(bundle, theme)].sort());
+  });
+});
+
+// One rule for "the page prints a photo the folder lacks": the article stop's approve
+// asks it before the director leaves the stop (server.js), and publish refuses the same
+// names. A filename that leads outside the folder counts as missing.
+describe('missingPrintedPhotos', () => {
+  test('names each printed photo that is not a file inside the folder, in print order', async () => {
+    const { sourceDir } = sessionFolders();
+    await writePhoto(path.join(sourceDir, 'kept.jpg'), { width: 40, height: 30 });
+    fs.mkdirSync(path.join(sourceDir, 'a-folder.jpg'));
+    const bundle = bundlePrinting(['kept.jpg', 'gone.jpg', 'a-folder.jpg', '../outside.jpg'], { hero: 'hero.jpg' });
+    expect(missingPrintedPhotos(bundle, 'journalist', sourceDir)).toEqual(['hero.jpg', 'gone.jpg', 'a-folder.jpg', '../outside.jpg']);
+  });
+
+  test('reads what the theme prints: the detective page prints no hero', () => {
+    const { sourceDir } = sessionFolders();
+    expect(missingPrintedPhotos(bundlePrinting([], { hero: 'hero.jpg' }), 'detective', sourceDir)).toEqual([]);
   });
 });
 

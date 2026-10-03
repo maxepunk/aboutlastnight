@@ -34,8 +34,9 @@ const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditRepor
 // FA (requirement 9): the roster's names as the coverage check reads them, which each
 // send-back records a cut's or a rewrite's names against.
 const { rosterNames } = require('./lib/content-bundle-fact-check');
-// FA (requirement 12): the photos the page prints, which the article approve checks.
-const { printedPhotos } = require('./lib/publish-photos');
+// FA (requirement 12): the printed photos the session's folder lacks, which the article
+// approve checks by publish's own rule.
+const { missingPrintedPhotos } = require('./lib/publish-photos');
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // The outline editors' own list of the fields phase 3 retired (BU3), so the server
@@ -569,30 +570,11 @@ function sendBackRecordOptions(currentState) {
 }
 
 /**
- * The photos the page will print that the session's photos folder lacks (FA, requirement
- * 12): each printed filename (lib/publish-photos.js printedPhotos) that is not a file
- * inside the folder, a name that leads outside it included. Publish reads the same
- * folder and refuses the same names; this asks before the director leaves the stop.
- *
- * @param {object|null} bundle - the content bundle the page is assembled from
- * @param {string} theme - the page's theme
- * @param {string} photosDir - data/<id>/photos
- * @returns {string[]} the filenames, as the page prints them
- */
-function missingPrintedPhotos(bundle, theme, photosDir) {
-    const folder = path.resolve(photosDir);
-    return printedPhotos(bundle || {}, theme === 'detective' ? 'detective' : 'journalist').filter((filename) => {
-        const target = path.resolve(folder, filename);
-        const relative = path.relative(folder, target);
-        if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return true;
-        try { return !fs.statSync(target).isFile(); } catch { return true; }
-    });
-}
-
-/**
  * The refusal for an article approve whose page would print a photo the session's photos
- * folder lacks, or null (FA, requirement 12). Without a session id nothing is checked:
- * publish copies no photo then either.
+ * folder lacks, or null (FA, requirement 12). The photos are publish's own: each printed
+ * filename that is not a file inside the folder, a name that leads outside it included
+ * (lib/publish-photos.js missingPrintedPhotos), so this asks before the director leaves
+ * the stop. Without a session id nothing is checked: publish copies no photo then either.
  *
  * @param {object|null} bundle - the bundle the approve would publish
  * @param {string} theme
@@ -603,7 +585,7 @@ function missingPrintedPhotos(bundle, theme, photosDir) {
 function printedPhotosRefusal(bundle, theme, sessionId, dataDir) {
     if (!sessionId) return null;
     const photosDir = path.join(dataDir, String(sessionId), 'photos');
-    const missing = missingPrintedPhotos(bundle, theme, photosDir);
+    const missing = missingPrintedPhotos(bundle || {}, theme === 'detective' ? 'detective' : 'journalist', photosDir);
     if (missing.length === 0) return null;
     const one = missing.length === 1;
     return `The article prints ${missing.map((f) => `"${f}"`).join(', ')}, which ${one ? 'is' : 'are'} not in the session's photos folder (${photosDir}). ` +

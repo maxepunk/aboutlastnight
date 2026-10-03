@@ -354,8 +354,8 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
     standing = standingAfterSendBack(null, { lede: { hook: 'Old' }, closing: { finalLine: 'The ledger never lies.' } }, { lede: { hook: 'New' }, closing: {} }, 'outline');
   });
   const base = { phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'New' }, closing: {} } };
-  const SEND_BACK_RULE = "An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
-  const AUTOMATIC_RULE = "This automatic pass fixes the writer's text. An edit is the final word on its text, so each edit stays exactly as written, and each cut and each removed sentence stays out.";
+  const SEND_BACK_RULE = "An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
+  const AUTOMATIC_RULE = "This automatic pass fixes the writer's text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out.";
 
   it('sits after HUMAN FEEDBACK and before the instructions (WHAT THIS REWORK DOES since phase 3)', () => {
     const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: standing });

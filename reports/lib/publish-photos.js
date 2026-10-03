@@ -84,6 +84,24 @@ function isFile(file) {
   return Boolean(stats && stats.isFile());
 }
 
+/**
+ * The photos the page prints that `folder` lacks: each printed filename (printedPhotos)
+ * that is not a file inside the folder, one that leads outside it included. The article
+ * stop's approve asks this before the director leaves the stop (server.js), and
+ * publishPhotos refuses the same names.
+ *
+ * @param {Object} bundle - the ContentBundle the page is assembled from
+ * @param {string} theme - the page's theme
+ * @param {string} folder - data/<id>/photos
+ * @returns {string[]} the filenames, in the order the page prints them
+ */
+function missingPrintedPhotos(bundle, theme, folder) {
+  return printedPhotos(bundle, theme).filter((filename) => {
+    const file = pathInside(folder, filename);
+    return !file || !isFile(file);
+  });
+}
+
 const quoted = (filenames) => filenames.map((filename) => `"${filename}"`).join(', ');
 
 /**
@@ -173,5 +191,6 @@ async function publishPhotos({ bundle, theme, sourceDir, destDir }) {
 module.exports = {
   PUBLISHED_PHOTO,
   printedPhotos,
+  missingPrintedPhotos,
   publishPhotos
 };
