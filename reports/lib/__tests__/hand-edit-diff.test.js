@@ -1372,4 +1372,60 @@ describe('4.3b: a move within a section, across the director\'s rounds and an au
     expect(output).toEqual(after);
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: false })]);
   });
+
+  // Fix round 1: the order guard returned before the step that takes out the copy outside
+  // the director's section, so the page printed the photo twice whenever that section
+  // already held it, whether a restore of its caption had put it back or the pass had left it.
+  const RECAPTIONED = { ...P, caption: 'Six people around the whiteboard, late.' };
+  /** Round 2: the director recaptions the photo where round 1 put it. */
+  const roundTwoRecaptioned = () => D.standingAfterSendBack(roundOne(), article([A, P, B, C]), article([A, RECAPTIONED, B, C]), 'bundle');
+  /** Each photo the version prints, as [section id, caption]. */
+  const photosOf = (output) => output.sections.flatMap((s) => s.content.filter((b) => b.type === 'photo').map((b) => [s.id, b.caption]));
+
+  test('a move, a later caption edit, then a pass that takes the photo to another section with the writer\'s caption and swaps its neighbours: the page prints it once, and the report matches the stored version', () => {
+    const sentBack = article([A, RECAPTIONED, B, C]);
+    const roundTwo = roundTwoRecaptioned();
+    expect(roundTwo.edits.map((e) => [e.id, e.path, Boolean(e.between)])).toEqual([
+      ['E1', 'sections[#s].content[1]', true],
+      ['E2', 'sections[#s].content[1].caption', false]
+    ]);
+    const edits = D.carriedEdits(roundTwo, sentBack);
+    const { output, report } = D.settleEdits(null, { edits, before: sentBack, after: article([B, A, C], [P]), pass: 1 });
+    // The caption's restore puts the photo back where it sat, and the copy in "t" goes.
+    expect(photosOf(output)).toEqual([['s', RECAPTIONED.caption]]);
+    expect(order(output)).toBe('BPAC');
+    // No place keeps A before B, so the move is reported not put back and the caption put
+    // back, and no sentence of the writer's caption comes back from a second copy.
+    expect(report.changed).toEqual([
+      expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: false }),
+      expect.objectContaining({ id: 'E2', moved: false, removed: false, restored: true })
+    ]);
+    // The stored version carries exactly the edits the report says were put back.
+    expect(D.carriedEdits(edits, output).map((e) => e.id)).toEqual(['E2']);
+  });
+
+  test('the same pass with the photo\'s neighbours left in order puts the photo back in the director\'s place, once, with the director\'s caption', () => {
+    const sentBack = article([A, RECAPTIONED, B, C]);
+    const edits = D.carriedEdits(roundTwoRecaptioned(), sentBack);
+    const { output, report } = D.settleEdits(null, { edits, before: sentBack, after: article([A, B, C], [P]), pass: 1 });
+    expect(photosOf(output)).toEqual([['s', RECAPTIONED.caption]]);
+    expect(order(output)).toBe('APBC');
+    expect(report.changed).toEqual([
+      expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: true }),
+      expect.objectContaining({ id: 'E2', moved: false, removed: false, restored: true })
+    ]);
+    expect(D.carriedEdits(edits, output).map((e) => e.id)).toEqual(['E1', 'E2']);
+  });
+
+  test('a pass that leaves the photo in the director\'s section out of order and copies it into another section: the page prints it once, in the pass\'s order, reported as not put back', () => {
+    const director = article([A, P, B, C]);
+    const { edits } = roundOne();
+    const { output, report } = D.settleEdits(null, { edits, before: director, after: article([B, P, A, C], [P]), pass: 1 });
+    expect(photosOf(output)).toEqual([['s', P.caption]]);
+    expect(order(output)).toBe('BPAC');
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', moved: true, became: 'another place in section "s"', restored: false
+    })]);
+    expect(D.carriedEdits(edits, output)).toEqual([]);
+  });
 });

@@ -60,8 +60,9 @@
  * the move stands while its block sits in the director's section among the blocks that
  * kept their order in that send-back, re-anchored to its neighbours there (reanchoredMove).
  * Code puts such a block back only into the director's order: when a pass also swapped the
- * blocks it sat between, no place keeps that order, so the pass's version stays and the
- * report says the block was not put back (directorsOrderCanHold).
+ * blocks it sat between, no place keeps that order, so code leaves the block where the pass,
+ * or a restore of one of its fields, put it, printed once, and the report says it was not
+ * put back (directorsOrderCanHold, restoreMove).
  *
  * Equality is trimmed canonical JSON: keys sorted, every string trimmed. Matching an
  * object value is a subset match: every key the director's value carries is present
@@ -1555,7 +1556,7 @@ function becameOf(edit, before, after) {
  * Put a block the director moved within its section back in the director's order, as the
  * pass left it: right after the block it follows, else right before the block it
  * precedes (task 4.3). Writes nothing when the order already holds, or when no place can
- * hold it (directorsOrderCanHold; task 4.3b): the pass's order then stays.
+ * hold it (directorsOrderCanHold; task 4.3b): the section then keeps its order.
  *
  * @returns {boolean} whether it moved the block
  */
@@ -1575,11 +1576,12 @@ function placeInDirectorsOrder(edit, section) {
  * director's section, at the place the director gave it, as the pass left it: its fields
  * are the writer's (fix round 1, findings 1 and 2). The block is the one of its identity
  * outside the director's section. When the director's section already holds one (a field
- * edit's restore put the section back whole, block included), the pass's copy is taken
- * out, so the page prints the block once. A block the director moved within its section
- * goes back only into the director's order there (placeInDirectorsOrder): where the pass
- * swapped the blocks it sat between, the pass's version stays, the block where the pass put
- * it (task 4.3b). With no such section, or nothing to move, nothing is written.
+ * edit's restore put the block back, or the pass left it there), the copy outside is
+ * taken out whatever the order, so the page prints the block once. A block the director
+ * moved within its section goes into that section, and back into the director's order
+ * there (placeInDirectorsOrder), only where that order can hold (directorsOrderCanHold):
+ * where the pass swapped the blocks it sat between, the block stays where it is (task
+ * 4.3b). With no such section, or nothing to move, nothing is written.
  */
 function restoreMove(edit, out) {
   const steps = stepsOf(edit);
@@ -1590,9 +1592,9 @@ function restoreMove(edit, out) {
   const holds = (s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, identity));
   const fromIndex = sections.findIndex((s, i) => i !== targetIndex && holds(s));
   const target = sections[targetIndex];
-  if (isMoveWithin(edit) && !directorsOrderCanHold(Array.isArray(target.content) ? target.content : [], edit)) return false;
+  const insertable = !isMoveWithin(edit) || directorsOrderCanHold(Array.isArray(target.content) ? target.content : [], edit);
   let wrote = false;
-  if (fromIndex !== -1) {
+  if (fromIndex !== -1 && (holds(target) || insertable)) {
     const from = sections[fromIndex].content;
     const [block] = from.splice(from.findIndex((b) => matchesAfter(b, identity)), 1);
     if (!holds(target)) {
