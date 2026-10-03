@@ -28,8 +28,9 @@ const { incrementArcRevision, routeArcEvaluation } = graphTesting;
 const { WEAVE_SCHEMA } = require('../sdk-client/subagents');
 const { WEAVE: FIXTURE_WEAVE, reworkFixtureState } = require('./fixtures/rework-state');
 const { weaveForPrompt, withFactCheckMark } = require('../weave');
-const { DIRECTOR_EDIT_PREFIX, CHANGED_EDITS_KEY } = require('../hand-edit-diff');
+const { DIRECTOR_EDIT_PREFIX, CHANGED_EDITS_KEY, carriedEdits, weaveDirectorsShare } = require('../hand-edit-diff');
 const { meetingResume } = require('../meeting');
+const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -163,6 +164,49 @@ describe('a reweave (brief 4.5)', () => {
     expect(sdk.calls[0].prompt).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nJoin the ledger thread to the vote.');
     expect(sdk.calls[0].prompt).toContain('each change the note above asks for');
     expect(sdk.calls[0].prompt).not.toContain('<DIRECTOR_GUIDANCE>');
+  });
+});
+
+// Fix round 1, finding 1: the natural flow "add a thread, reweave to see it fitted, adjust
+// it". After the first reweave the baseline holds the director's thread, so their change to
+// part of it stays part of the one edit that holds the whole thread: a second reweave is
+// held to all of it, and the checks still read it as the director's.
+describe('a thread the director added, changed after a reweave kept it (fix round 1)', () => {
+  /** What a rework sees and returns: the version the director left, without the connections they struck. */
+  const asSeen = (left) => ({ ...weaveForPrompt(clone(left)), connections: left.connections.filter((c) => !c.struck) });
+
+  /** A reweave through the meeting's payload, the increment and the rework, then judged clean by the fact check. */
+  async function reweaveRound(state, left, rework) {
+    const { stateUpdates, error } = meetingResume({ meeting: 'reweave', weave: left }, state);
+    expect(error).toBeNull();
+    const marked = { ...state, ...stateUpdates };
+    const round = { ...marked, ...(await incrementArcRevision(marked)) };
+    const after = { ...round, ...(await reviseArcs(round, cfg(recordingSdk(rework(left))))) };
+    return { ...after, weave: withFactCheckMark(after.weave, { at: 't', ready: true, fixes: 0 }) };
+  }
+
+  it.each([
+    ['its role', (t) => ({ ...t, role: 'mirrors-it' })],
+    ['its claim', (t) => ({ ...t, claim: 'Riley kept a second ledger, and hid it.' })]
+  ])('add, reweave, change %s, reweave with a paraphrase: the thread is put back whole, still marked added, and no check fails on it', async (_name, change) => {
+    const first = await reweaveRound(atMeeting(), leftByDirector(), asSeen);
+    expect(first.weave.threads.find((t) => t.id === 't6')).toEqual(leftByDirector().threads.find((t) => t.id === 't6'));
+
+    const left = weaveForPrompt(clone(first.weave));
+    left.threads = left.threads.map((t) => (t.id === 't6' ? change(t) : t));
+    const paraphrase = (seen) => {
+      const weave = asSeen(seen);
+      weave.threads = weave.threads.map((t) => (t.id === 't6' ? { ...t, claim: 'Riley may have kept another ledger.' } : t));
+      return weave;
+    };
+    const second = await reweaveRound(first, left, paraphrase);
+
+    expect(second.weave.threads.find((t) => t.id === 't6')).toEqual(left.threads.find((t) => t.id === 't6'));
+    expect(second._weaveHandEditReport.changed).toEqual([expect.objectContaining({ where: 'thread "t6", added', restored: true, pass: 'reweave' })]);
+    const share = weaveDirectorsShare(carriedEdits(second._weaveHandEdits, weaveForPrompt(second.weave)));
+    expect(Object.keys(share.addedThreads)).toEqual(['t6']);
+    expect(validateArcStructure(second, {})._arcValidation.failures).toEqual([]);
+    expect(settledWeaveOf(second)).toMatch(/- t6 \([^)]*\): .*\[the director's change E\d+: a thread they added\]/);
   });
 });
 

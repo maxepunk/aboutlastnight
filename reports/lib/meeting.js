@@ -132,10 +132,11 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
   if (problems) return refuse(`The weave as the director left it failed the director-side schema: ${problems}`);
 
   const mark = factCheckMarkOf(currentState.weave);
-  const baseline = isWeave(currentState._weaveBaseline) ? currentState._weaveBaseline : weaveForPrompt(currentState.weave);
+  const shown = weaveForPrompt(currentState.weave);
+  const baseline = isWeave(currentState._weaveBaseline) ? currentState._weaveBaseline : shown;
   const stateUpdates = {
     weave: mark ? withFactCheckMark(left, mark) : left,
-    _weaveHandEdits: standingAtMeeting(currentState._weaveHandEdits, baseline, left, { names })
+    _weaveHandEdits: standingAtMeeting(currentState._weaveHandEdits, baseline, left, { names, shown })
   };
   if (action === 'approve') {
     return { resume: { approved: true }, stateUpdates, note: note ? { text: note, kind: 'approval' } : null, error: null };

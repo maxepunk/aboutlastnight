@@ -1628,4 +1628,81 @@ describe('4.5: the meeting\'s edits', () => {
     ]);
     expect(D.weaveMarks(directors(), directors())).toEqual([]);
   });
+
+  // Fix round 1, finding 1: a thread the director added is one edit, the whole thread.
+  // After a reweave kept it, the baseline holds it, so a later change the director makes
+  // to part of it must stay part of that edit: split into a field edit against the
+  // baseline, the rest of the thread would be protected by nothing and checked as the
+  // writer's.
+  describe('fix round 1: a whole element the director put in stays one edit when they change part of it', () => {
+    /** The meeting after a reweave that kept every line of the director's: its weave is the baseline. */
+    const rewoven = () => directors();
+    const withT7 = (change) => {
+      const weave = directors();
+      weave.threads = weave.threads.map((t) => (t.id === 't7' ? change(t) : t));
+      return weave;
+    };
+
+    it.each([
+      ['its role', (t) => ({ ...t, role: 'mirrors-it' })],
+      ['its claim', (t) => ({ ...t, claim: 'The guest list was rewritten twice that morning.' })],
+      ['a receipt typed into it', (t) => ({ ...t, receipt: 'zzz999' })]
+    ])('a thread they added, changed in %s: one added edit under its id, the whole thread as they left it', (_name, change) => {
+      const first = D.standingAtMeeting(null, writers(), directors());
+      const left = withT7(change);
+      const second = D.standingAtMeeting(first, rewoven(), left, { shown: rewoven() });
+      expect(second.edits.map((e) => [e.id, e.path])).toEqual([
+        ['E1', 'story'], ['E2', 'threads[#t3].role'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2]']
+      ]);
+      expect(second.issued).toBe(4);
+      expect(byPath(second.edits)['threads[#t7]']).toMatchObject({ before: null, after: left.threads.find((t) => t.id === 't7') });
+      expect(D.weaveDirectorsShare(second.edits).addedThreads).toEqual({ t7: 'E3' });
+      expect(D.carriedEdits(second, left).map((e) => e.id)).toEqual(['E1', 'E2', 'E3', 'E4']);
+    });
+
+    it('a reweave that then paraphrases the thread gets it put back whole, still marked added', () => {
+      const first = D.standingAtMeeting(null, writers(), directors());
+      const left = withT7((t) => ({ ...t, role: 'mirrors-it' }));
+      const second = D.standingAtMeeting(first, rewoven(), left, { shown: rewoven() });
+      const rework = clone(left);
+      rework.threads = rework.threads.map((t) => (t.id === 't7' ? { ...t, claim: 'The guest list may have changed.' } : t));
+      const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(second, left), before: left, after: rework, pass: D.REWEAVE_PASS });
+      expect(output.threads.find((t) => t.id === 't7')).toEqual(left.threads.find((t) => t.id === 't7'));
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E3', where: 'thread "t7", added', restored: true, pass: 'reweave' })]);
+    });
+
+    it('a connection they struck stays one strike when they change its detail, and goes when they unstrike it', () => {
+      const first = D.standingAtMeeting(null, writers(), directors());
+      const detailed = directors();
+      detailed.connections[1].detail = 'The scoreboard, which the director struck.';
+      const second = D.standingAtMeeting(first, rewoven(), detailed, { shown: rewoven() });
+      expect(second.edits.map((e) => [e.id, e.path])).toEqual([
+        ['E1', 'story'], ['E2', 'threads[#t3].role'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2]']
+      ]);
+      expect(byPath(second.edits)['connections[#c2]']).toMatchObject({ struck: true, after: detailed.connections[1] });
+      const unstruck = directors();
+      delete unstruck.connections[1].struck;
+      expect(D.standingAtMeeting(first, rewoven(), unstruck, { shown: rewoven() }).edits.map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
+    });
+
+    it("a thread a send-back's rework changed, which the director leaves as the meeting showed it, is the writer's again", () => {
+      const first = D.standingAtMeeting(null, writers(), directors());
+      const reworked = withT7((t) => ({ ...t, claim: 'The rework rewrote the thread the director added.', receipt: 'row001' }));
+      const second = D.standingAtMeeting(first, reworked, clone(reworked), { shown: reworked });
+      expect(second.edits.map((e) => e.path)).toEqual(['story', 'threads[#t3].role', 'connections[#c2]']);
+      expect(D.weaveDirectorsShare(second.edits).addedThreads).toEqual({});
+    });
+
+    it("a thread a send-back's rework changed, which the director then changes again: their change is a field edit, and the rest stays the writer's", () => {
+      const first = D.standingAtMeeting(null, writers(), directors());
+      const reworked = withT7((t) => ({ ...t, claim: 'The rework rewrote the thread the director added.', receipt: 'row001' }));
+      const left = clone(reworked);
+      left.threads = left.threads.map((t) => (t.id === 't7' ? { ...t, role: 'mirrors-it' } : t));
+      const second = D.standingAtMeeting(first, reworked, left, { shown: reworked });
+      expect(second.edits.map((e) => [e.id, e.path])).toEqual([
+        ['E1', 'story'], ['E2', 'threads[#t3].role'], ['E4', 'connections[#c2]'], ['E5', 'threads[#t7].role']
+      ]);
+      expect(D.weaveDirectorsShare(second.edits)).toMatchObject({ addedThreads: {}, reroledThreads: { t3: 'E2', t7: 'E5' } });
+    });
+  });
 });

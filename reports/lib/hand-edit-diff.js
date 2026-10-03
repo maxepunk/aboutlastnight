@@ -73,9 +73,11 @@
  * and send-back, against the writer's last weave (standingAtMeeting), and stand past
  * approve. Each is one place (weaveEditsBetween): a field rewritten, a thread's field (its
  * role among them), a thread added whole, or a connection struck whole (`struck: true` on
- * the edit), which code strikes again by id when a pass brings it back. And a reweave is
- * held to them as an automatic pass is (REWEAVE_PASS). The answers are the director's
- * words, kept by their own rule (lib/writer-questions.js carriedWeaveQuestions): no edit.
+ * the edit), which code strikes again by id when a pass brings it back. A whole element
+ * stays one edit when the director later changes part of it (fix round 1, finding 1). And
+ * a reweave is held to them as an automatic pass is (REWEAVE_PASS). The answers are the
+ * director's words, kept by their own rule (lib/writer-questions.js carriedWeaveQuestions):
+ * no edit.
  */
 'use strict';
 
@@ -1217,13 +1219,68 @@ function weaveEditsBetween(before, after, { questions = false } = {}) {
 function placeOf(edit) { return pathOf(stepsOf(edit)); }
 
 /**
+ * Is this edit a whole element the director put in the weave (brief 4.5): a thread or a
+ * connection they added, or a connection they struck? Its `after` is the element whole,
+ * so a change they make to part of it later is part of the same edit (fix round 1,
+ * finding 1).
+ */
+function isWholeElementEdit(edit) {
+  const steps = stepsOf(edit);
+  const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
+  if (steps.length !== 2 || !Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, head) || !isElementStep(steps[1])) return false;
+  return !isCut(edit) && (isStrike(edit) || edit.before === null || edit.before === undefined);
+}
+
+/** The elements of a weave's collection under an id, each with its place. */
+function elementsUnder(weave, collection, id) {
+  return (isObj(weave) && Array.isArray(weave[collection]) ? weave[collection] : [])
+    .map((element, index) => ({ element, index }))
+    .filter(({ element }) => isObj(element) && typeof element.id === 'string' && element.id.trim() === id);
+}
+
+/**
+ * A whole element the director put in the weave (isWholeElementEdit), which they changed
+ * part of at this action, as their version holds it (fix round 1, finding 1): the same
+ * edit under its id, its `after` the element as they left it now. Null when the edit does
+ * not go on that way:
+ * - the weave the meeting showed did not carry it: a send-back's rework changed it, and
+ *   the edit goes, as any edit a send-back changed does;
+ * - the director left the element as the meeting showed it;
+ * - the meeting's weave or the director's holds no element under its id, or more than one;
+ * - a connection they struck is struck no longer: the writer's connection is back.
+ *
+ * @param {Object} edit - a standing edit
+ * @param {Object|null} shown - the weave the meeting showed
+ * @param {Object} left - the weave as the director left it
+ * @returns {Object|null}
+ */
+function wholeElementAsLeft(edit, shown, left) {
+  if (!isWholeElementEdit(edit) || !editCarried(shown, edit)) return null;
+  const [{ key: collection }, step] = stepsOf(edit);
+  const id = step.match && step.match.id != null ? String(step.match.id).trim() : '';
+  const now = elementsUnder(left, collection, id);
+  const then = elementsUnder(shown, collection, id);
+  if (!id || now.length !== 1 || then.length !== 1 || same(now[0].element, then[0].element)) return null;
+  if (isStrike(edit) && !isStruck(now[0].element)) return null;
+  const at = [{ key: collection }, { index: now[0].index, match: { id } }];
+  return { ...edit, at, path: pathOf(at), after: clone(now[0].element) };
+}
+
+/**
  * The director's edits at the story meeting after an approve, a reweave or a send-back
  * (brief 4.5; K3 of the plan review): the meeting's edits stand past approve, so each of
  * the three actions makes them, against the writer's last weave (`baseline`).
- * - Each earlier edit the director's version still carries stands, with its id; one it no
- *   longer carries (the director undid it, or a send-back's rework changed it) goes.
+ * - A whole element the director put in (a thread they added, a connection they struck)
+ *   stays one edit under its id when they change part of it, its `after` the element as
+ *   they left it now (fix round 1, finding 1). The baseline holds the element once a pass
+ *   has kept it, so the change is never split into a field edit against it: the rest of
+ *   the element stays the director's, held through every pass and read as theirs by the
+ *   checks.
+ * - Each other earlier edit the director's version still carries stands, with its id; one
+ *   it no longer carries (the director undid it, or a send-back's rework changed it) goes.
  * - Each difference between the baseline and the director's version that no standing
- *   edit is at joins them, numbered on from every id given at the stop.
+ *   edit is at, or inside of for a whole element, joins them, numbered on from every id
+ *   given at the stop.
  * The baseline is the weave as the writer's last pass left it, the director's lines a
  * reweave kept among it, so an edit made before a reweave stands as the earlier edit and
  * is never given a second id.
@@ -1233,17 +1290,27 @@ function placeOf(edit) { return pathOf(stepsOf(edit)); }
  * @param {Object} left - the weave as the director left it
  * @param {Object} [options]
  * @param {string[]} [options.names] - the roster's names, as standingAfterSendBack takes them
+ * @param {Object|null} [options.shown] - the weave the meeting showed, which tells a change
+ *   the director made to a whole element from one a send-back's rework made (default: the
+ *   baseline, which is the weave the meeting showed after every pass)
  * @returns {{kind: 'weave', issued: number, edits: Object[]}|null}
  */
-function standingAtMeeting(previous, baseline, left, { names } = {}) {
+function standingAtMeeting(previous, baseline, left, { names, shown = baseline } = {}) {
   const prior = standingEditsOf(previous);
   const issued = prior ? prior.issued : 0;
-  const kept = prior ? prior.edits.filter((e) => editCarried(left, e)).map((e) => stillRemoved(e, [left])) : [];
-  const keptPlaces = new Set(kept.map(placeOf));
+  const kept = prior
+    ? prior.edits
+      .map((e) => wholeElementAsLeft(e, shown, left) || (editCarried(left, e) ? stillRemoved(e, [left]) : null))
+      .filter(Boolean)
+    : [];
+  const covered = (at) => {
+    const place = pathOf(at);
+    return kept.some((e) => placeOf(e) === place || (isWholeElementEdit(e) && place.startsWith(`${placeOf(e)}.`)));
+  };
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const leftText = versionText(left);
   const added = weaveEditsBetween(isObj(baseline) ? baseline : left, left)
-    .filter((raw) => !keptPlaces.has(pathOf(raw.at)))
+    .filter((raw) => !covered(raw.at))
     .map((raw, i) => completeEdit({ id: `E${issued + 1 + i}`, ...raw }, leftText, roster));
   if (kept.length === 0 && added.length === 0 && issued === 0) return null;
   return { kind: 'weave', issued: issued + added.length, edits: [...kept, ...added] };
