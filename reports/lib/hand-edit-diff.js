@@ -2,8 +2,10 @@
  * lib/hand-edit-diff.js — PURE: the director's edits at a stop (spec 2026-09-19 §4.2;
  * F1 and FA, the director's edits are final, spec 2026-10-02 section 7).
  *
- * Depends only on lib/grounding.js and console/article-desk-logic.js (both pure). Never
- * throws: any non-object input yields an empty diff, no edits or no report.
+ * Depends only on lib/grounding.js, console/article-desk-logic.js, lib/weave.js and
+ * lib/writer-questions.js (all pure). Never throws: any non-object input yields an empty
+ * diff, no edits or no report. The one refusal is standingAtMeeting's, on a change under an
+ * id the weave repeats, which the meeting's gate refuses first (fix round 1, finding 3).
  *
  * THE DIFF (diffOutline, diffBundle) records what changed between two versions, by
  * scope, for the trace (server.js traceForStop) and as the first step of the edits.
@@ -88,7 +90,7 @@ const { isVerbatimIn, normalizeForGrounding, quotedPassages } = require('./groun
 const {
   pairSectionBlocks, stayingInSection, blockText, blockKey, sectionKey
 } = require('../console/article-desk-logic');
-const { isWeave, isStruck, STRUCK_KEY } = require('./weave');
+const { isWeave, isStruck, STRUCK_KEY, weaveIdOf, repeatedIds } = require('./weave');
 const { WEAVE_ANSWER_KEY } = require('./writer-questions');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
@@ -1143,14 +1145,25 @@ function carriedEdits(handEdits, obj) {
 
 // ─── the weave (brief 4.5) ────────────────────────────────────────────────────
 
-/** A collection's elements that name themselves by an id, each id once: `{list, map}`. */
+/**
+ * A collection's elements by their id, read as every join at the meeting reads one
+ * (lib/weave.js weaveIdOf; fix round 1, finding 3): `{list, map, repeated}`. Each element
+ * is under its id and its occurrence, the first element under an id occurrence 0 and a
+ * second under the same id occurrence 1, so the elements under an id the collection
+ * repeats (`repeated`, lib/weave.js repeatedIds) pair in order between two versions and
+ * none is dropped. An element with no id names nothing.
+ */
 function elementsById(list) {
-  const out = { list: [], map: new Map() };
+  const out = { list: [], map: new Map(), repeated: new Set(repeatedIds(list)) };
+  const seen = new Map();
   (Array.isArray(list) ? list : []).forEach((element, index) => {
-    const id = isObj(element) && typeof element.id === 'string' ? element.id.trim() : '';
-    if (!id || out.map.has(id)) return;
-    out.map.set(id, element);
-    out.list.push({ id, element, index });
+    const id = weaveIdOf(element);
+    if (!id) return;
+    const occurrence = seen.get(id) || 0;
+    seen.set(id, occurrence + 1);
+    const key = `${occurrence}:${id}`;
+    out.map.set(key, element);
+    out.list.push({ id, key, element, index });
   });
   return out;
 }
@@ -1171,11 +1184,16 @@ function without(element, key) {
  * With `questions`, the questions too, never their answers, which are the director's
  * words and no edit.
  *
+ * An id is read as the meeting's gate and the checks read it (lib/weave.js weaveIdOf), and
+ * the elements under an id either version repeats (repeatedIds) pair in order (fix round
+ * 1, finding 3): each change under such an id carries `repeatedId: true`, since no edit
+ * can find its element by the id, and none is dropped.
+ *
  * @param {Object} before
  * @param {Object} after
  * @param {Object} [options]
  * @param {boolean} [options.questions] - read the questions as well (the marks do)
- * @returns {Array<{scope: string, at: Object[], before: *, after: *, struck?: true}>}
+ * @returns {Array<{scope: string, at: Object[], before: *, after: *, struck?: true, repeatedId?: true}>}
  */
 function weaveEditsBetween(before, after, { questions = false } = {}) {
   if (!isObj(before) || !isObj(after)) return [];
@@ -1190,26 +1208,27 @@ function weaveEditsBetween(before, after, { questions = false } = {}) {
   collections.forEach((collection) => {
     const b = elementsById(before[collection]);
     const a = elementsById(after[collection]);
-    a.list.forEach(({ id, element, index }) => {
+    const flag = (id) => (b.repeated.has(id) || a.repeated.has(id) ? { repeatedId: true } : {});
+    a.list.forEach(({ id, key, element, index }) => {
       const at = [{ key: collection }, { index, match: { id } }];
-      const prior = b.map.get(id);
+      const prior = b.map.get(key);
       if (!prior) {
-        change(collection, at, null, element);
+        change(collection, at, null, element, flag(id));
         return;
       }
       if (collection === 'connections' && isStruck(element) && !isStruck(prior)) {
-        change(collection, at, prior, element, { struck: true });
+        change(collection, at, prior, element, { struck: true, ...flag(id) });
         return;
       }
       const ignored = collection === 'questions' ? WEAVE_ANSWER_KEY : (collection === 'connections' ? STRUCK_KEY : null);
       const p = ignored ? without(prior, ignored) : prior;
       const e = ignored ? without(element, ignored) : element;
-      unionKeys(p, e).forEach((key) => {
-        if (!same(p[key], e[key])) change(collection, [...at, { key }], p[key], e[key]);
+      unionKeys(p, e).forEach((field) => {
+        if (!same(p[field], e[field])) change(collection, [...at, { key: field }], p[field], e[field], flag(id));
       });
     });
-    b.list.forEach(({ id, element }) => {
-      if (!a.map.has(id)) change(collection, [{ key: collection }, { index: null, match: { id } }], element, null);
+    b.list.forEach(({ id, key, element }) => {
+      if (!a.map.has(key)) change(collection, [{ key: collection }, { index: null, match: { id } }], element, null, flag(id));
     });
   });
   return out;
@@ -1231,11 +1250,11 @@ function isWholeElementEdit(edit) {
   return !isCut(edit) && (isStrike(edit) || edit.before === null || edit.before === undefined);
 }
 
-/** The elements of a weave's collection under an id, each with its place. */
+/** The elements of a weave's collection under an id (lib/weave.js weaveIdOf), each with its place. */
 function elementsUnder(weave, collection, id) {
   return (isObj(weave) && Array.isArray(weave[collection]) ? weave[collection] : [])
     .map((element, index) => ({ element, index }))
-    .filter(({ element }) => isObj(element) && typeof element.id === 'string' && element.id.trim() === id);
+    .filter(({ element }) => weaveIdOf(element) === id);
 }
 
 /**
@@ -1257,7 +1276,7 @@ function elementsUnder(weave, collection, id) {
 function wholeElementAsLeft(edit, shown, left) {
   if (!isWholeElementEdit(edit) || !editCarried(shown, edit)) return null;
   const [{ key: collection }, step] = stepsOf(edit);
-  const id = step.match && step.match.id != null ? String(step.match.id).trim() : '';
+  const id = weaveIdOf(step.match);
   const now = elementsUnder(left, collection, id);
   const then = elementsUnder(shown, collection, id);
   if (!id || now.length !== 1 || then.length !== 1 || same(now[0].element, then[0].element)) return null;
@@ -1285,6 +1304,11 @@ function wholeElementAsLeft(edit, shown, left) {
  * reweave kept among it, so an edit made before a reweave stands as the earlier edit and
  * is never given a second id.
  *
+ * Every edit finds its element by its id, so a difference under an id the weave repeats
+ * (weaveEditsBetween's `repeatedId`) can be no edit (fix round 1, finding 3). The meeting's
+ * gate refuses such a change before this runs (lib/meeting.js directorWeaveProblems), so
+ * one here is refused, never dropped.
+ *
  * @param {*} previous - the meeting's standing edits so far
  * @param {Object|null} baseline - the writer's last weave (state._weaveBaseline)
  * @param {Object} left - the weave as the director left it
@@ -1294,6 +1318,7 @@ function wholeElementAsLeft(edit, shown, left) {
  *   the director made to a whole element from one a send-back's rework made (default: the
  *   baseline, which is the weave the meeting showed after every pass)
  * @returns {{kind: 'weave', issued: number, edits: Object[]}|null}
+ * @throws {Error} on a difference under an id the weave repeats
  */
 function standingAtMeeting(previous, baseline, left, { names, shown = baseline } = {}) {
   const prior = standingEditsOf(previous);
@@ -1309,9 +1334,12 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
   };
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const leftText = versionText(left);
-  const added = weaveEditsBetween(isObj(baseline) ? baseline : left, left)
-    .filter((raw) => !covered(raw.at))
-    .map((raw, i) => completeEdit({ id: `E${issued + 1 + i}`, ...raw }, leftText, roster));
+  const changes = weaveEditsBetween(isObj(baseline) ? baseline : left, left).filter((raw) => !covered(raw.at));
+  const unfindable = changes.find((raw) => raw.repeatedId);
+  if (unfindable) {
+    throw new Error(`standingAtMeeting: the director's version changes ${editWhere(unfindable)}, under an id the weave repeats, so no edit could find that element by its id. The meeting's gate (lib/meeting.js directorWeaveProblems) refuses such a change first.`);
+  }
+  const added = changes.map((raw, i) => completeEdit({ id: `E${issued + 1 + i}`, ...raw }, leftText, roster));
   if (kept.length === 0 && added.length === 0 && issued === 0) return null;
   return { kind: 'weave', issued: issued + added.length, edits: [...kept, ...added] };
 }
@@ -1356,18 +1384,20 @@ function weaveDirectorsShare(edits) {
  * finds them with the questions, each `{path, where, before, after}` with the director's
  * text and the rework's (empty for a place one of them lacks). The director's lines code
  * kept, their struck connections and their answers are the same on both sides, so they
- * carry no mark.
+ * carry no mark. A mark under an id one of the two repeats says so (`repeatedId`, fix
+ * round 1, finding 3): its place names more than one element.
  *
  * @param {Object} from - the weave as the director left it, which the round's rework started from
  * @param {Object} weave - the weave the round's passes left
- * @returns {Array<{path: string, where: string, before: string, after: string}>}
+ * @returns {Array<{path: string, where: string, before: string, after: string, repeatedId?: true}>}
  */
 function weaveMarks(from, weave) {
   return weaveEditsBetween(from, weave, { questions: true }).map((change) => ({
     path: pathOf(change.at),
     where: editWhere(change),
     before: editValueText(change.before),
-    after: editValueText(change.after)
+    after: editValueText(change.after),
+    ...(change.repeatedId && { repeatedId: true })
   }));
 }
 

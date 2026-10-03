@@ -29,7 +29,7 @@
 const Ajv = require('ajv');
 const { WEAVE_SCHEMA } = require('./sdk-client/subagents');
 const {
-  STRUCK_KEY, MEETING_ROUNDS, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark
+  STRUCK_KEY, MEETING_ROUNDS, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark, repeatedIds
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
 const {
@@ -63,7 +63,9 @@ const ID_COLLECTIONS = ['threads', 'connections', 'questions'];
  * What the director-side schema finds wrong with a weave, each problem with where it is,
  * or null for a weave it accepts. Past the schema, every thread, connection and question
  * has an id of its own (ruling 3): the edits, the strikes and the answers each find their
- * element by its id, which a schema cannot hold an array of objects to.
+ * element by its id, which a schema cannot hold an array of objects to. A repeat is read
+ * by the rule the checks and the diff read (lib/weave.js repeatedIds; fix round 1,
+ * finding 3), so "t6" and "t6 " are one id here as there.
  *
  * @param {*} weave - the weave as the director left it, without its code-owned keys
  * @returns {string|null}
@@ -75,15 +77,9 @@ function directorWeaveProblems(weave) {
   if (!validateDirectorWeave(weave)) {
     return (validateDirectorWeave.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
   }
-  const doubled = ID_COLLECTIONS.flatMap((collection) => {
-    const seen = new Set();
-    const twice = [];
-    weave[collection].forEach(({ id }) => {
-      if (seen.has(id) && !twice.includes(id)) twice.push(id);
-      seen.add(id);
-    });
-    return twice.map((id) => `two ${collection} share the id "${id}"`);
-  });
+  const doubled = ID_COLLECTIONS.flatMap((collection) => (
+    repeatedIds(weave[collection]).map((id) => `two ${collection} share the id "${id}"`)
+  ));
   if (doubled.length === 0) return null;
   const text = doubled.join('; ');
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}. Give each an id of its own.`;

@@ -582,3 +582,25 @@ describe("4.5: the checks read only the writer's text (R11, ruling 2)", () => {
     expect(check(weave)).toEqual([]);
   });
 });
+
+// Fix round 1, finding 3: every id join at the story meeting reads an id one way
+// (weaveIdOf) and a repeated id by one rule (repeatedIds), which the meeting's gate
+// (lib/meeting.js), the checks and the diff (lib/hand-edit-diff.js) all call.
+describe('4.5 fix round 1: one reading of an id, one rule for a repeated id (finding 3)', () => {
+  const { weaveIdOf, repeatedIds } = require('../weave');
+
+  it('reads an id trimmed, and nothing else as an id', () => {
+    expect(weaveIdOf({ id: ' t6 ' })).toBe('t6');
+    expect([weaveIdOf({ id: 7 }), weaveIdOf({}), weaveIdOf(null), weaveIdOf('t6')]).toEqual(['', '', '', '']);
+  });
+
+  it('names each id more than one element carries, once, in the order it first repeats', () => {
+    expect(repeatedIds([{ id: 't6' }, { id: 't1' }, { id: 't1 ' }, { id: 't6' }, { id: 't6' }, { id: '' }, { id: ' ' }, null, 'x'])).toEqual(['t1', 't6']);
+    expect(repeatedIds(undefined)).toEqual([]);
+  });
+
+  it('the checks read a repeat by it: "t2" and "t2 " are one id', () => {
+    const doubled = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[1], id: 't2 ' }] };
+    expect(check(doubled).map((f) => f.message)).toEqual([expect.stringMatching(/threads share the id "t2"/)]);
+  });
+});

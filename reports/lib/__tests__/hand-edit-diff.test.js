@@ -1705,4 +1705,50 @@ describe('4.5: the meeting\'s edits', () => {
       expect(D.weaveDirectorsShare(second.edits)).toMatchObject({ addedThreads: {}, reroledThreads: { t3: 'E2', t7: 'E5' } });
     });
   });
+
+  // Fix round 1, finding 3: the diff reads an id as the meeting's gate and the checks do
+  // (lib/weave.js weaveIdOf) and a repeated id by the same rule (repeatedIds). It pairs the
+  // elements under a repeated id in order and flags each change under one, so none is
+  // dropped; an edit there could find no element by its id, so standingAtMeeting refuses
+  // one, which the meeting's gate refuses first.
+  describe('fix round 1: an id the weave repeats', () => {
+    const doubledT7 = () => {
+      const weave = directors();
+      weave.threads.push({ id: 't7 ', claim: 'The guest list was burned that night.', role: 'grounds-it' });
+      return weave;
+    };
+
+    it('reads "t7" and "t7 " as one id: both threads are in the diff, in order, each flagged', () => {
+      const added = D.weaveEditsBetween(writers(), doubledT7()).filter((c) => c.before === null);
+      expect(added.map((c) => [D._testing.pathOf(c.at), c.after.claim, c.repeatedId])).toEqual([
+        ['threads[#t7]', ADDED.claim, true],
+        ['threads[#t7]', 'The guest list was burned that night.', true]
+      ]);
+    });
+
+    it("pairs a writer's repeated id in order: a change to the second element is flagged, and elements left as they were are no change", () => {
+      const repeated = writers();
+      repeated.threads.push({ ...repeated.threads[1], claim: 'A second thread the writer put under t2.' });
+      expect(D.weaveEditsBetween(repeated, clone(repeated))).toEqual([]);
+      const changed = clone(repeated);
+      changed.threads[3].role = 'mirrors-it';
+      expect(D.weaveEditsBetween(repeated, changed)).toEqual([
+        expect.objectContaining({ scope: 'threads', before: 'grounds-it', after: 'mirrors-it', repeatedId: true })
+      ]);
+      // An id no version repeats carries no flag.
+      expect(D.weaveEditsBetween(writers(), directors()).some((c) => 'repeatedId' in c)).toBe(false);
+    });
+
+    it("standingAtMeeting refuses to make an edit under a repeated id, which no id can find; the meeting's gate refuses that change first", () => {
+      expect(() => D.standingAtMeeting(null, writers(), doubledT7())).toThrow(/thread "t7".*repeats.*lib\/meeting\.js directorWeaveProblems/);
+    });
+
+    it('weaveMarks keeps the flag, so the meeting can say a mark sits under a repeated id', () => {
+      const rewoven = directors();
+      rewoven.threads.push({ ...rewoven.threads[1], claim: 'A thread the reweave added under t2.' });
+      expect(D.weaveMarks(directors(), rewoven)).toEqual([
+        { path: 'threads[#t2]', where: 'thread "t2", added', before: '', after: expect.stringContaining('A thread the reweave added under t2.'), repeatedId: true }
+      ]);
+    });
+  });
 });

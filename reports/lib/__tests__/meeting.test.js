@@ -92,6 +92,15 @@ describe("the director-side schema (R12)", () => {
     expect(directorWeaveProblems(doubled)).toBe('Two threads share the id "t3"; two connections share the id "c1"; two questions share the id "q1". Give each an id of its own.');
     expect(directorWeaveProblems(clone(FIXTURE_WEAVE))).toBeNull();
   });
+
+  // Fix round 1, finding 3: the gate reads an id as the checks and the diff do (lib/weave.js
+  // weaveIdOf and repeatedIds), so no weave passes the gate with a repeat the diff would
+  // have to resolve.
+  it('reads an id as the checks and the diff do: "t6" and "t6 " are one id', () => {
+    const left = leftByDirector();
+    left.threads.push({ id: 't6 ', claim: 'Riley burned the second ledger.', role: 'grounds-it' });
+    expect(directorWeaveProblems(left)).toMatch(/threads share the id "t6"/);
+  });
 });
 
 describe("the meeting's payloads (brief 4.5)", () => {

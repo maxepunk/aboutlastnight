@@ -105,6 +105,40 @@ function has(object, key) {
 }
 
 /**
+ * A thread's, connection's or question's id as every join at the story meeting reads it
+ * (ruling 3; fix round 1, finding 3): the id trimmed, or '' for an element with no id
+ * text. The meeting's gate (lib/meeting.js), the checks and the diff and the edits
+ * (lib/hand-edit-diff.js) all read an element's id through it.
+ *
+ * @param {*} element
+ * @returns {string}
+ */
+function weaveIdOf(element) {
+  return element && typeof element === 'object' ? textOf(element.id) : '';
+}
+
+/**
+ * The ids that more than one element of a list carries (weaveIdOf), each once, in the
+ * order each first repeats: the one rule for a repeated id, which the meeting's gate, the
+ * checks and the diff all call (ruling 3; fix round 1, finding 3). An element with no id
+ * repeats nothing.
+ *
+ * @param {*} elements - a weave's threads, connections or questions
+ * @returns {string[]}
+ */
+function repeatedIds(elements) {
+  const seen = new Set();
+  const repeated = [];
+  objectsOf(elements).forEach((element) => {
+    const id = weaveIdOf(element);
+    if (!id) return;
+    if (seen.has(id) && !repeated.includes(id)) repeated.push(id);
+    seen.add(id);
+  });
+  return repeated;
+}
+
+/**
  * The director's share of the weave, with each part present: `{addedThreads,
  * reroledThreads, fields, threadFields}`, each a map from what the director changed to
  * the id of their standing edit (lib/hand-edit-diff.js weaveDirectorsShare builds it):
@@ -148,11 +182,11 @@ function weaveWordCount(weave, directorsShare) {
   if (!weave || typeof weave !== 'object') return 0;
   const share = shareOf(directorsShare);
   const writers = (field) => !has(share.fields, field);
-  const threadText = (thread, field) => (has(share.threadFields, `${textOf(thread.id)}.${field}`) ? '' : thread[field]);
+  const threadText = (thread, field) => (has(share.threadFields, `${weaveIdOf(thread)}.${field}`) ? '' : thread[field]);
   const texts = [
     ...['story', 'question', 'headline', 'convergence'].filter(writers).map(field => weave[field]),
     ...objectsOf(weave.threads)
-      .filter(thread => !has(share.addedThreads, textOf(thread.id)))
+      .filter(thread => !has(share.addedThreads, weaveIdOf(thread)))
       .flatMap(thread => [threadText(thread, 'claim'), threadText(thread, 'reason')]),
     ...liveConnections(weave).map(c => c.detail),
     weave.strongerMainThread && weave.strongerMainThread.reason,
@@ -221,10 +255,10 @@ function weaveForJudge(weave) {
  */
 function withStruckConnections(output, previous) {
   if (!isWeave(output) || !isWeave(previous)) return output;
-  const present = new Set(objectsOf(output.connections).map(connection => textOf(connection.id)));
+  const present = new Set(objectsOf(output.connections).map(connection => weaveIdOf(connection)));
   const missing = objectsOf(previous.connections)
     .map((connection, index) => ({ connection, index }))
-    .filter(({ connection }) => isStruck(connection) && textOf(connection.id) && !present.has(textOf(connection.id)));
+    .filter(({ connection }) => isStruck(connection) && weaveIdOf(connection) && !present.has(weaveIdOf(connection)));
   if (missing.length === 0) return output;
   const connections = Array.isArray(output.connections) ? [...output.connections] : [];
   missing.forEach(({ connection, index }) => {
@@ -305,19 +339,6 @@ function quotedWords(text) {
   return textOf(text).replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '');
 }
 
-/** The ids that more than one element of a list carries, each once, in order. */
-function duplicateIds(elements) {
-  const seen = new Set();
-  const doubled = [];
-  elements.forEach((element) => {
-    const id = textOf(element.id);
-    if (!id) return;
-    if (seen.has(id) && !doubled.includes(id)) doubled.push(id);
-    seen.add(id);
-  });
-  return doubled;
-}
-
 /**
  * The code checks on a weave (spec 4.5), on the writer's text alone (R11, brief 4.5).
  * Each failure is one line that names the defect and its fix, in the order the meeting
@@ -325,7 +346,8 @@ function duplicateIds(elements) {
  * - each thread has a receipt (`thread-without-receipt`), and each receipt given names a
  *   document in the record, in any case, or the ledger (`receipt-not-in-record`);
  * - each left-out thread has its reason (`left-out-without-reason`);
- * - every thread, connection and question has an id of its own (`duplicate-id`);
+ * - every thread, connection and question has an id of its own (`duplicate-id`), a repeat
+ *   read by repeatedIds, the rule the meeting's gate and the diff read too;
  * - the room's verdict is one of the threads: a thread marked `verdict: true`, in a role
  *   other than left out (`no-verdict-thread`);
  * - every live connection joins two threads the weave holds (`connection-joins-unknown-thread`);
@@ -362,11 +384,11 @@ function weaveFindings(weave, { recordIds = [], directorWords = [], directorsSha
   const concern = (type, editIds, finding) => concerns.push({ type, editIds, finding });
   const known = new Set([...recordIds].filter(id => typeof id === 'string').map(id => id.trim().toLowerCase()));
   const threads = objectsOf(weave.threads);
-  const name = (thread) => (textOf(thread.id) ? `"${textOf(thread.id)}"` : 'with no id');
+  const name = (thread) => (weaveIdOf(thread) ? `"${weaveIdOf(thread)}"` : 'with no id');
   const editOf = (map, key) => (has(map, key) ? map[key] : null);
 
   threads.forEach((thread) => {
-    const id = textOf(thread.id);
+    const id = weaveIdOf(thread);
     const added = editOf(share.addedThreads, id);
     const director = added || editOf(share.reroledThreads, id);
     const typedReceipt = editOf(share.threadFields, `${id}.receipt`) || added;
@@ -381,7 +403,7 @@ function weaveFindings(weave, { recordIds = [], directorWords = [], directorsSha
       fail('left-out-without-reason', `Thread ${name(thread)} is left out with no reason. Give the one line on why the story does not need it.`);
     }
   });
-  duplicateIds(threads).forEach((id) => {
+  repeatedIds(threads).forEach((id) => {
     const added = editOf(share.addedThreads, id);
     if (added) concern('duplicate-id', [added], `Two threads share the id "${id}".`);
     else fail('duplicate-id', `Two threads share the id "${id}". Give each thread an id of its own, and make each connection and the stronger main thread name the thread they mean.`);
@@ -389,20 +411,20 @@ function weaveFindings(weave, { recordIds = [], directorWords = [], directorsSha
 
   const verdictThreads = threads.filter(thread => thread.verdict === true);
   if (verdictThreads.length === 0) {
-    const flagEdits = threads.map(thread => editOf(share.threadFields, `${textOf(thread.id)}.verdict`)).filter(Boolean);
+    const flagEdits = threads.map(thread => editOf(share.threadFields, `${weaveIdOf(thread)}.verdict`)).filter(Boolean);
     if (flagEdits.length > 0) concern('no-verdict-thread', flagEdits, "No thread carries the room's verdict.");
     else fail('no-verdict-thread', 'No thread carries the room\'s verdict. Mark the thread that tells the verdict with "verdict": true, and give it a role in the story (C16).');
   } else if (verdictThreads.every(thread => thread.role === LEFT_OUT_ROLE)) {
     const roleEdits = verdictThreads
-      .map(thread => editOf(share.reroledThreads, textOf(thread.id)) || editOf(share.addedThreads, textOf(thread.id)))
+      .map(thread => editOf(share.reroledThreads, weaveIdOf(thread)) || editOf(share.addedThreads, weaveIdOf(thread)))
       .filter(Boolean);
     if (roleEdits.length > 0) concern('no-verdict-thread', roleEdits, `Thread ${name(verdictThreads[0])} carries the room's verdict and is left out.`);
     else fail('no-verdict-thread', `Thread ${name(verdictThreads[0])} carries the room's verdict and is left out. Give it a role in the story (C16).`);
   }
 
-  const threadIds = new Set(threads.map(thread => textOf(thread.id)).filter(Boolean));
+  const threadIds = new Set(threads.map(thread => weaveIdOf(thread)).filter(Boolean));
   liveConnections(weave).forEach((connection) => {
-    const label = textOf(connection.id) ? `"${textOf(connection.id)}"` : 'with no id';
+    const label = weaveIdOf(connection) ? `"${weaveIdOf(connection)}"` : 'with no id';
     const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf) : [];
     if (joins.length !== 2 || !joins[0] || !joins[1] || joins[0] === joins[1]) {
       const listed = joins.length > 0 ? joins.map(id => `"${id}"`).join(', ') : 'nothing';
@@ -414,7 +436,7 @@ function weaveFindings(weave, { recordIds = [], directorWords = [], directorsSha
       fail('connection-joins-unknown-thread', `Connection ${label} joins "${joins[0]}" and "${joins[1]}", and the weave holds no thread ${missing.map(id => `"${id}"`).join(' or ')}. Make it join two threads of the weave, by their ids.`);
     }
   });
-  duplicateIds(objectsOf(weave.connections)).forEach((id) => {
+  repeatedIds(objectsOf(weave.connections)).forEach((id) => {
     fail('duplicate-id', `Two connections share the id "${id}". Give each connection an id of its own.`);
   });
 
@@ -432,7 +454,7 @@ function weaveFindings(weave, { recordIds = [], directorWords = [], directorsSha
     fail('stronger-main-thread-unknown', `The stronger main thread names "${named}", and the weave holds no thread "${named}". Name one of the weave's threads by its id, or leave strongerMainThread out.`);
   }
 
-  duplicateIds(objectsOf(weave.questions)).forEach((id) => {
+  repeatedIds(objectsOf(weave.questions)).forEach((id) => {
     fail('duplicate-id', `Two questions share the id "${id}". Give each question an id of its own.`);
   });
 
@@ -483,5 +505,8 @@ module.exports = {
   isMeetingApproved,
   meetingRoundOf,
   checkWeave,
-  weaveFindings
+  weaveFindings,
+  // Fix round 1, finding 3: the one reading of an id, and the one rule for a repeated id
+  weaveIdOf,
+  repeatedIds
 };
