@@ -56,9 +56,14 @@ const DIRECTOR_WEAVE_SCHEMA = (() => {
 
 const validateDirectorWeave = new Ajv({ allErrors: true, strict: true }).compile(DIRECTOR_WEAVE_SCHEMA);
 
+/** The weave's collections whose elements name themselves by an id. */
+const ID_COLLECTIONS = ['threads', 'connections', 'questions'];
+
 /**
  * What the director-side schema finds wrong with a weave, each problem with where it is,
- * or null for a weave it accepts.
+ * or null for a weave it accepts. Past the schema, every thread, connection and question
+ * has an id of its own (ruling 3): the edits, the strikes and the answers each find their
+ * element by its id, which a schema cannot hold an array of objects to.
  *
  * @param {*} weave - the weave as the director left it, without its code-owned keys
  * @returns {string|null}
@@ -67,8 +72,21 @@ function directorWeaveProblems(weave) {
   if (!weave || typeof weave !== 'object' || Array.isArray(weave)) {
     return 'The weave must be an object: the weave as the director left it.';
   }
-  if (validateDirectorWeave(weave)) return null;
-  return (validateDirectorWeave.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
+  if (!validateDirectorWeave(weave)) {
+    return (validateDirectorWeave.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
+  }
+  const doubled = ID_COLLECTIONS.flatMap((collection) => {
+    const seen = new Set();
+    const twice = [];
+    weave[collection].forEach(({ id }) => {
+      if (seen.has(id) && !twice.includes(id)) twice.push(id);
+      seen.add(id);
+    });
+    return twice.map((id) => `two ${collection} share the id "${id}"`);
+  });
+  if (doubled.length === 0) return null;
+  const text = doubled.join('; ');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}. Give each an id of its own.`;
 }
 
 /**

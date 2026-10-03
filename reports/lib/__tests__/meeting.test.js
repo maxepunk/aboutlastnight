@@ -81,6 +81,17 @@ describe("the director-side schema (R12)", () => {
     expect(directorWeaveProblems(null)).toMatch(/weave/);
     expect(directorWeaveProblems({ story: 'x' })).toMatch(/threads/);
   });
+
+  // Ruling 3: every id join at the meeting (the edits, the strikes, the answers) reads ids,
+  // so the director's weave gives each thread, connection and question an id of its own.
+  it('refuses a weave in which two threads, connections or questions share an id, naming each', () => {
+    const doubled = clone(FIXTURE_WEAVE);
+    doubled.threads.push({ id: 't3', claim: 'A thread the director added under a taken id.', role: 'grounds-it' });
+    doubled.connections.push({ ...clone(FIXTURE_WEAVE.connections[0]) });
+    doubled.questions.push({ ...clone(FIXTURE_WEAVE.questions[0]) });
+    expect(directorWeaveProblems(doubled)).toBe('Two threads share the id "t3"; two connections share the id "c1"; two questions share the id "q1". Give each an id of its own.');
+    expect(directorWeaveProblems(clone(FIXTURE_WEAVE))).toBeNull();
+  });
 });
 
 describe("the meeting's payloads (brief 4.5)", () => {
