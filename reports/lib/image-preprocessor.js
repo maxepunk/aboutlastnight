@@ -6,11 +6,18 @@
  * - Long Read tool execution times
  *
  * This module resizes and compresses images before SDK analysis:
- * - Resize to Claude's optimal resolution (1568px max dimension)
+ * - Turn the photo upright from its EXIF orientation, then resize to Claude's optimal
+ *   resolution (1568px max dimension)
  * - Convert PNG to JPEG for smaller file size
  * - Compress with quality setting for good balance
  *
  * Added in Commit 8.9 to fix photo analysis timeouts.
+ *
+ * The copy carries no metadata, so it is turned upright first: a portrait phone photo is
+ * stored on its side with an EXIF orientation that tells a viewer to turn it, and its
+ * copy would lose that tag. When the copy is a new file (a photo from a custom photos
+ * folder, or a .jpeg), the writers are given the copy, and the published page prints it
+ * (brief FB).
  *
  * @module image-preprocessor
  */
@@ -168,6 +175,7 @@ async function preprocessImage(imagePath, options = {}) {
     const startTime = Date.now();
 
     await sharp(imagePath)
+      .autoOrient()              // Upright first: the copy keeps no EXIF orientation
       .resize(maxDimension, maxDimension, {
         fit: 'inside',           // Maintain aspect ratio, fit within bounds
         withoutEnlargement: true // Don't upscale small images
