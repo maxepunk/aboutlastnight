@@ -162,6 +162,25 @@ describe('getCheckpointData — enrichment counts (H25)', () => {
   });
 });
 
+// Brief 4.2: the character-IDs stop's payload carries the photos left out so far, so
+// the leave-out boxes show them on a remount.
+describe('getCheckpointData — the leave-out choices at the character-IDs stop (brief 4.2)', () => {
+  it('sends the current list, each photo once', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.CHARACTER_IDS, {
+      sessionPhotos: ['/data/092026/photos/a.jpg'],
+      photoAnalyses: { analyses: [{ filename: 'a.jpg' }] },
+      leftOutPhotos: ['a.jpg', 'A.JPG']
+    });
+    expect(data.leftOutPhotos).toEqual(['a.jpg']);
+    expect(data.sessionPhotos).toEqual(['/data/092026/photos/a.jpg']);
+  });
+
+  it('sends an empty list when nothing is left out, a cleared list included', async () => {
+    expect((await getCheckpointData(CHECKPOINT_TYPES.CHARACTER_IDS, { leftOutPhotos: null })).leftOutPhotos).toEqual([]);
+    expect((await getCheckpointData(CHECKPOINT_TYPES.CHARACTER_IDS, {})).leftOutPhotos).toEqual([]);
+  });
+});
+
 describe('getCheckpointData — the ledger at the input review (phase 3, brief 3.5)', () => {
   const { ledgerReviewOf } = require('../../lib/session-ledger');
 

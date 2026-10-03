@@ -37,6 +37,8 @@ const { rosterNames } = require('./lib/content-bundle-fact-check');
 // FA (requirement 12): the printed photos the session's folder lacks, which the article
 // approve checks by publish's own rule.
 const { missingPrintedPhotos } = require('./lib/publish-photos');
+// Brief 4.2: the leave-out box, the list the character-IDs stop's boxes write.
+const { leftOutPhotosOf, listAfterStopChoices } = require('./lib/photo-leave-out');
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // The outline editors' own list of the fields phase 3 retired (BU3), so the server
@@ -397,7 +399,9 @@ async function getCheckpointData(checkpointType, state) {
             return {
                 sessionPhotos: state.sessionPhotos,
                 photoAnalyses: state.photoAnalyses,
-                sessionConfig: state.sessionConfig
+                sessionConfig: state.sessionConfig,
+                // Brief 4.2: the photos left out so far, so the boxes show them on a remount.
+                leftOutPhotos: leftOutPhotosOf(state)
             };
         case CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS:
             return { evidenceBundle: state.evidenceBundle };
@@ -673,6 +677,21 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
             stateUpdates.photoDescriptions = described.map;
             resume.photoDescriptions = described.map;
         }
+    }
+    // Brief 4.2: the leave-out box. The stop sends the filenames whose "leave this photo
+    // out" box is ticked, beside the descriptions; never an approval on its own. For every
+    // photo the stop showed, the box decides the list (lib/photo-leave-out.js), and the
+    // parse then writes each choice into the photo's mapping, which isPhotoExcluded reads
+    // first. The list goes through the update as well as the resume: on the structured
+    // form the stop skips on its mappings and captures nothing.
+    if (approvals.leftOutPhotos !== undefined
+        && (stateUpdates.characterIdsRaw !== undefined || stateUpdates.characterIdMappings !== undefined)) {
+        const chosen = listAfterStopChoices(currentState, approvals.leftOutPhotos);
+        if (chosen.error) {
+            return { resume, stateUpdates, error: chosen.error };
+        }
+        stateUpdates.leftOutPhotos = chosen.list;
+        resume.leftOutPhotos = chosen.list;
     }
 
     // Evidence bundle approval with rescue mechanism (Commit 8.10+)

@@ -911,6 +911,66 @@ describe('buildResumePayload — the per-photo description map (brief 2.2)', () 
   });
 });
 
+/**
+ * The leave-out box (phase 4, brief 4.2): the character-IDs stop sends the filenames
+ * whose "leave this photo out" box is ticked, beside the descriptions. The server keeps
+ * them in the leave-out list, in state (the update, which a structured approval needs:
+ * the stop skips on its mappings) and on the resume. For every photo the stop showed the
+ * box decides; the parse then writes each choice into the photo's mapping.
+ */
+describe('buildResumePayload — the leave-out box (brief 4.2)', () => {
+  const atStop = (leftOutPhotos = null) => ({
+    photoAnalyses: { analyses: [{ filename: 'aln (7 of 9).jpg' }, { filename: 'aln (8 of 9).jpg' }] },
+    leftOutPhotos
+  });
+
+  it('keeps the ticked filenames beside the raw text, in state and on the resume', () => {
+    const { resume, stateUpdates, error } = buildResumePayload({
+      characterIdsRaw: 'Photo aln (7 of 9).jpg:', photoDescriptions: { 'aln (7 of 9).jpg': 'Kai at the bar.' },
+      leftOutPhotos: ['aln (8 of 9).jpg']
+    }, atStop(), 'journalist', 'character-ids');
+    expect(error).toBeNull();
+    expect(stateUpdates.leftOutPhotos).toEqual(['aln (8 of 9).jpg']);
+    expect(resume.leftOutPhotos).toEqual(['aln (8 of 9).jpg']);
+    expect(stateUpdates.characterIdsRaw).toBe('Photo aln (7 of 9).jpg:');
+    // The mappings are the parse's to write: a mapping in the update would make the stop
+    // and the parse skip, and the director's text would never be read.
+    expect(stateUpdates).not.toHaveProperty('characterIdMappings');
+  });
+
+  it('rides along with the structured form, the stop\'s Skip', () => {
+    const { stateUpdates, error } = buildResumePayload(
+      { characterIds: {}, leftOutPhotos: ['aln (7 of 9).jpg'] }, atStop(), 'journalist', 'character-ids'
+    );
+    expect(error).toBeNull();
+    expect(stateUpdates.characterIdMappings).toEqual({});
+    expect(stateUpdates.leftOutPhotos).toEqual(['aln (7 of 9).jpg']);
+  });
+
+  it('for every photo the stop showed the box decides: a clear box takes a listed photo off the list', () => {
+    const { stateUpdates } = buildResumePayload(
+      { characterIdsRaw: 'x', leftOutPhotos: [] }, atStop(['aln (7 of 9).jpg', 'gone.jpg']), 'journalist', 'character-ids'
+    );
+    expect(stateUpdates.leftOutPhotos).toEqual(['gone.jpg']);
+  });
+
+  it('refuses a choice that is not a list of this stop\'s photos', () => {
+    expect(buildResumePayload({ characterIdsRaw: 'x', leftOutPhotos: 'aln (7 of 9).jpg' }, atStop(), 'journalist', 'character-ids').error)
+      .toBe('leftOutPhotos must be a list of photo filenames');
+    expect(buildResumePayload({ characterIdsRaw: 'x', leftOutPhotos: ['ghost.jpg'] }, atStop(), 'journalist', 'character-ids').error)
+      .toBe('leftOutPhotos names "ghost.jpg", which is not a photo at this stop');
+  });
+
+  it('is never an approval on its own, and leaves the list alone when the stop sent no choices', () => {
+    const alone = buildResumePayload({ leftOutPhotos: ['aln (7 of 9).jpg'] }, atStop(), 'journalist', 'character-ids');
+    expect(alone.error).toBe('No valid approval detected in request');
+    expect(alone.stateUpdates).not.toHaveProperty('leftOutPhotos');
+    const noChoices = buildResumePayload({ characterIdsRaw: 'x' }, atStop(['aln (7 of 9).jpg']), 'journalist', 'character-ids');
+    expect(noChoices.error).toBeNull();
+    expect(noChoices.stateUpdates).not.toHaveProperty('leftOutPhotos');
+  });
+});
+
 // Brief 2.7: the trace shows the current round's automatic passes only. A send back
 // opens a new round, so the reject arms reset that stop's trace where they reset the
 // hand-edit fields; the send-back rework itself writes no entry (graph.js increments).

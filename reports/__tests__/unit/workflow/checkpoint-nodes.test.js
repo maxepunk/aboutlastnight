@@ -268,3 +268,43 @@ describe('checkpointCharacterIds: the per-photo descriptions', () => {
     expect(fs.readdirSync(dataDir)).toEqual([]);
   });
 });
+
+/**
+ * The leave-out box (phase 4, brief 4.2): the stop's choices ride beside the
+ * descriptions. buildResumePayload writes them through the update, which is what keeps
+ * them on a structured approval (the stop skips on its mappings); on the raw path the
+ * node captures them from the resume too, as it captures the descriptions.
+ */
+describe('checkpointCharacterIds: the leave-out choices', () => {
+  const analysedState = {
+    sessionId: null,
+    photoAnalyses: { analyses: [{ filename: 'a.jpg' }, { filename: 'b.jpg' }] },
+    narrativeArcs: [{ id: 'arc-1' }],
+    characterIdMappings: null
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('captures them beside the raw text', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ characterIdsRaw: 'Photo b.jpg:', leftOutPhotos: ['b.jpg'] });
+    const out = await checkpointCharacterIds({ ...analysedState }, {});
+    expect(out.characterIdsRaw).toBe('Photo b.jpg:');
+    expect(out.leftOutPhotos).toEqual(['b.jpg']);
+  });
+
+  it('captures an empty choice too: every box clear', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ characterIdsRaw: 'Photo b.jpg:', leftOutPhotos: [] });
+    const out = await checkpointCharacterIds({ ...analysedState }, {});
+    expect(out.leftOutPhotos).toEqual([]);
+  });
+
+  it('adds no key when the resume carried no choices', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ characterIdsRaw: 'Photo b.jpg:' });
+    const out = await checkpointCharacterIds({ ...analysedState }, {});
+    expect(out).not.toHaveProperty('leftOutPhotos');
+  });
+});

@@ -314,13 +314,18 @@ async function checkpointCharacterIds(state, config) {
   // Support both formats: characterIdMappings (structured) and characterIdsRaw (text)
   // Brief 2.2: either one may carry the director's per-photo descriptions beside it;
   // they are captured the same way and written to the session folder.
+  // Brief 4.2: the leave-out choices ride beside them too. buildResumePayload also writes
+  // them through the update, which is what keeps them on the structured path, where this
+  // node skips on the mappings.
   if (!skipCondition) {
     const photoDescriptions = capturePhotoDescriptions(state, config, resumeValue?.photoDescriptions);
+    const leftOut = Array.isArray(resumeValue?.leftOutPhotos) ? { leftOutPhotos: resumeValue.leftOutPhotos } : {};
     if (resumeValue?.characterIdMappings) {
       console.log(`[checkpointCharacterIds] Captured mappings from resume`);
       return {
         characterIdMappings: resumeValue.characterIdMappings,
         ...(photoDescriptions && { photoDescriptions }),
+        ...leftOut,
         currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
       };
     }
@@ -329,6 +334,7 @@ async function checkpointCharacterIds(state, config) {
       return {
         characterIdsRaw: resumeValue.characterIdsRaw,
         ...(photoDescriptions && { photoDescriptions }),
+        ...leftOut,
         currentPhase: PHASES.CHARACTER_ID_CHECKPOINT
       };
     }
