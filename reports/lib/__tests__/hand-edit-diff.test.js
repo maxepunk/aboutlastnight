@@ -599,6 +599,130 @@ describe('a block moved across sections (FA)', () => {
   });
 });
 
+// Task 4.3 (phase 4): the director's moves at the desk are standing edits. The diff paired
+// every block of a section where it stood, so a block the director moved inside its section
+// changed nothing it could see. It is a move now, recorded as a move across sections is, and
+// its place is its order in the section: after the block it follows and before the block it
+// precedes in the director's version, among the blocks that kept their order.
+describe('a block moved within its section (task 4.3)', () => {
+  const PHOTO = { type: 'photo', filename: 'p3.jpg', caption: 'Vic, Remi and Alex' };
+  const MEL = 'Mel built the first theory around the fight and the fraud.';
+  /** THE STORY as articleAtStop has it, [MEL, CUT_THEORY, SARAH_LINE], with the photo at `index`. */
+  const withPhotoAt = (index) => {
+    const a = articleAtStop();
+    a.sections[1].content.splice(index, 0, clone(PHOTO));
+    return a;
+  };
+  const storyOf = (output) => output.sections[1].content.map((b) => (b.type === 'photo' ? 'PHOTO' : b.text));
+  const standing = () => D.standingAfterSendBack(null, withPhotoAt(0), withPhotoAt(2), 'bundle');
+
+  test('is one edit, a move, which the trace sees as a change to the section', () => {
+    expect(D.scopeKeys(D.diffBundle(withPhotoAt(0), withPhotoAt(2)))).toEqual(['section:the-story']);
+    expect(standing().edits.map(bare)).toEqual([{
+      id: 'E1', scope: 'section:the-story', path: 'sections[#the-story].content[2]', before: null, after: PHOTO, from: 'the-story',
+      between: { follows: paragraph(CUT_THEORY), precedes: paragraph(SARAH_LINE) }
+    }]);
+  });
+
+  test('its line names the block and says it moved within the section', () => {
+    expect(D.formatEditLines(standing().edits)).toBe('E1 (section "the-story", photo p3.jpg, moved within the section)');
+  });
+
+  test('stands while the block keeps the director\'s order, whatever else changes around it', () => {
+    const { edits } = standing();
+    expect(D.carriedEdits(edits, withPhotoAt(2)).map((e) => e.id)).toEqual(['E1']);
+    // Put back where the writer had it, or past the block it preceded: not the director's place.
+    expect(D.carriedEdits(edits, withPhotoAt(0))).toEqual([]);
+    expect(D.carriedEdits(edits, withPhotoAt(3))).toEqual([]);
+    // A paragraph a pass added beside it, or a neighbour a pass rewrote, leaves its order as it was.
+    const added = withPhotoAt(2);
+    added.sections[1].content.splice(2, 0, paragraph('Nobody settled it before the vote.'));
+    expect(D.carriedEdits(edits, added).map((e) => e.id)).toEqual(['E1']);
+    const rewritten = withPhotoAt(2);
+    rewritten.sections[1].content[3] = paragraph('Sarah pointed the room at Jess.');
+    expect(D.carriedEdits(edits, rewritten).map((e) => e.id)).toEqual(['E1']);
+  });
+
+  test('an automatic pass that puts it back where the writer had it has it put back in the director\'s place', () => {
+    const { output, report } = D.settleEdits(null, { edits: standing().edits, before: withPhotoAt(2), after: withPhotoAt(0), pass: 1 });
+    expect(storyOf(output)).toEqual([MEL, CUT_THEORY, 'PHOTO', SARAH_LINE]);
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', moved: true, became: 'another place in section "the-story"', restored: true, automatic: true
+    })]);
+  });
+
+  test('an automatic pass that takes it to another section has it put back in the director\'s place', () => {
+    const after = withPhotoAt(0);
+    after.sections[1].content.shift();
+    after.sections[2].content.push(clone(PHOTO));
+    const { output, report } = D.settleEdits(null, { edits: standing().edits, before: withPhotoAt(2), after, pass: 1 });
+    expect(storyOf(output)).toEqual([MEL, CUT_THEORY, 'PHOTO', SARAH_LINE]);
+    expect(output.sections[2].content).toEqual([paragraph(WRITERS_CLOSING)]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "closing"', restored: true })]);
+  });
+
+  test('the rework of a send-back that moves it is reported with its reason, and left as it is', () => {
+    const after = withPhotoAt(0);
+    const { output, report } = D.settleEdits(null, {
+      edits: standing().edits, before: withPhotoAt(2), after, pass: D.SEND_BACK_PASS,
+      reasons: [{ id: 'E1', reason: 'The note opens THE STORY on the photo.' }]
+    });
+    expect(output).toBe(after);
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', moved: true, became: 'another place in section "the-story"', automatic: false, restored: false,
+      reason: 'The note opens THE STORY on the photo.'
+    })]);
+  });
+
+  test('in a swap, the photo or card the director moved is the block named, not the paragraph it passed', () => {
+    const { edits } = D.standingAfterSendBack(null, withPhotoAt(1), withPhotoAt(0), 'bundle');
+    expect(edits.map(bare)).toEqual([{
+      id: 'E1', scope: 'section:the-story', path: 'sections[#the-story].content[0]', before: null, after: PHOTO, from: 'the-story',
+      between: { follows: null, precedes: paragraph(MEL) }
+    }]);
+  });
+
+  test('a paragraph the director moved is the writer\'s text in the director\'s place', () => {
+    const shown = articleAtStop();
+    const sentBack = articleAtStop();
+    sentBack.sections[1].content.push(sentBack.sections[1].content.shift());   // MEL to the end of THE STORY
+    const edits = D.carriedEdits(D.standingAfterSendBack(null, shown, sentBack, 'bundle'), sentBack);
+    expect(edits.map((e) => [e.id, e.from, e.between])).toEqual([['E1', 'the-story', { follows: paragraph(SARAH_LINE), precedes: null }]]);
+    expect(D.formatEditLines(edits)).toBe('E1 (section "the-story", paragraph, moved within the section): begins "Mel built the first theory around the fight…"');
+    expect(D.locateQuotedText(`T12: "${MEL}" names no source.`, edits, sentBack)).toEqual({ editIds: [], writer: true });
+  });
+
+  test('a block the director moved and changed is a cut and an addition, as across sections', () => {
+    const shown = articleAtStop();
+    const sentBack = articleAtStop();
+    const sarah = sentBack.sections[1].content.pop();
+    sentBack.sections[1].content.unshift(paragraph(sarah.text.replace('and the vote followed', 'and then the vote followed')));
+    const { edits } = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+    expect(edits.map((e) => [e.path, e.from, e.after === null ? 'cut' : 'added'])).toEqual([
+      ['sections[#the-story].content[-]', undefined, 'cut'],
+      ['sections[#the-story].content[0]', undefined, 'added']
+    ]);
+  });
+
+  test('a block moved within one section and another moved across sections are each one move', () => {
+    const shown = withPhotoAt(0);
+    shown.sections[2].content.push(card('jes002', 'You can have him.', 'You can have him. I never wanted the money.'));
+    const sentBack = clone(shown);
+    sentBack.sections[1].content.splice(2, 0, sentBack.sections[1].content.shift());   // the photo after CUT_THEORY
+    sentBack.sections[1].content.push(sentBack.sections[2].content.pop());              // the card to THE STORY
+    const { edits } = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+    expect(edits.map((e) => [e.path, e.from, Boolean(e.between)])).toEqual([
+      ['sections[#the-story].content[2]', 'the-story', true],
+      ['sections[#the-story].content[4]', 'closing', false]
+    ]);
+  });
+});
+
+/** An inline evidence card, for the moves above. */
+function card(tokenId, headline, content) {
+  return { type: 'evidence-card', tokenId, headline, content, significance: 'critical' };
+}
+
 // FA fix round 1, finding 2: a move is the block's place only. The director moved the
 // block without changing it, so its text is still the writer's: a finding that quotes
 // it quotes the writer, the fact check finds no field of it the director wrote, and its

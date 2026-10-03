@@ -32,6 +32,11 @@
  *   fields, so its text is still the writer's. It owns no text a finding is located in
  *   (locateQuotedText), the fact check finds no field of it the director wrote
  *   (editLocator), and its line names the block and its place (formatEditLines).
+ * - A block the director moved within its section, unchanged, is a move too (task 4.3,
+ *   the desk's moves): `from` is its own section, and `between` holds what finds its
+ *   place, the block it follows and the block it precedes among the blocks that kept
+ *   their order (null at an end). Of the blocks out of order, the diff names as moved the
+ *   fewest it can, a photo or a card before the text it passed (stayingPairs).
  * - Given the roster's names, a cut or a removal records `names` (FA, requirement 9):
  *   the names its text held that the director's version no longer named.
  * Ids (E1, E2, ...) are stable within a stop. The edits stand across every send-back
@@ -41,7 +46,9 @@
  * belongs to, found by its `match`, holds the director's value; a section's block is
  * looked for in every section, since a rework may move it. A move is carried while a
  * block of its identity (its type with its filename, tokenId or text) sits in the section
- * the director put it in, whatever its other fields (fix round 1, finding 1). A cut is
+ * the director put it in, whatever its other fields (fix round 1, finding 1), and a move
+ * within the section while it also sits after the block it follows and before the block
+ * it precedes, each where the section still holds it (task 4.3). A cut is
  * carried while none of its pieces is back. Text is read from the fields the page prints
  * (printedParts; known item 6), and a piece under six words is back only as a whole
  * sentence (known item 4).
@@ -256,6 +263,56 @@ function matchBlocks(beforeArr, afterArr) {
   return pairBy(beforeArr, afterArr, blockKey);
 }
 
+/** The kinds of block that carry the article's text, which a move is least likely to be about. */
+const TEXT_BLOCK_TYPES = ['paragraph', 'quote', 'list'];
+
+/**
+ * The pairs that stay in place, as indexes into `pairs` (sorted by their place in the newer
+ * version), ascending: the longest run whose order in the older version matches,
+ * preferring, among runs as long, the one that keeps changed blocks and text blocks in
+ * place, so the photo or card the director moved is the block named as moved (task 4.3).
+ * The desk's change report decides it by the same rule (console/article-desk-logic.js
+ * stayingPairs; a test holds the two equal).
+ *
+ * @param {Array<{opened: number, weight: number}>} pairs - each pair's index in the older version, and its weight
+ * @returns {number[]}
+ */
+function stayingPairs(pairs) {
+  const length = [];
+  const weight = [];
+  const previous = [];
+  pairs.forEach((pair, i) => {
+    length[i] = 1;
+    weight[i] = pair.weight;
+    previous[i] = -1;
+    for (let j = 0; j < i; j += 1) {
+      if (pairs[j].opened >= pair.opened) continue;
+      const l = length[j] + 1;
+      const w = weight[j] + pair.weight;
+      if (l > length[i] || (l === length[i] && w > weight[i])) {
+        length[i] = l;
+        weight[i] = w;
+        previous[i] = j;
+      }
+    }
+  });
+  let best = -1;
+  pairs.forEach((_pair, i) => {
+    if (best === -1 || length[i] > length[best] || (length[i] === length[best] && weight[i] > weight[best])) best = i;
+  });
+  const staying = [];
+  for (let k = best; k !== -1; k = previous[k]) staying.unshift(k);
+  return staying;
+}
+
+/**
+ * A section's blocks, diffed: each block paired where it stood, and each pair outside the
+ * run that kept its order is a block the director moved within the section (task 4.3).
+ * A moved block is recorded as a move across sections is: a removal and an addition of
+ * the same block, which rawEditsOf makes one move. Its addition carries `between`: what
+ * finds the blocks that kept their order on either side of it in the newer version, the
+ * block it follows and the block it precedes (null at an end), which are its place.
+ */
 function diffSection(id, before, after) {
   const prefix = `sections[#${id}]`;
   const changes = [];
@@ -265,7 +322,23 @@ function diffSection(id, before, after) {
   const bc = Array.isArray(before.content) ? before.content : [];
   const ac = Array.isArray(after.content) ? after.content : [];
   const { pairs, removed, added } = matchBlocks(bc, ac);
-  pairs.forEach(({ bi, ai }) => {
+  const order = [...pairs].sort((x, y) => x.ai - y.ai);
+  const staying = stayingPairs(order.map(({ bi, ai }) => ({
+    opened: bi,
+    weight: (same(bc[bi], ac[ai]) ? 0 : 2) + (isObj(ac[ai]) && TEXT_BLOCK_TYPES.includes(ac[ai].type) ? 1 : 0)
+  }))).map((i) => order[i]);
+  const between = (ai) => {
+    const follows = staying.filter((p) => p.ai < ai).pop();
+    const precedes = staying.find((p) => p.ai > ai);
+    return { follows: follows ? blockIdentity(ac[follows.ai]) : null, precedes: precedes ? blockIdentity(ac[precedes.ai]) : null };
+  };
+  pairs.forEach((pair) => {
+    const { bi, ai } = pair;
+    if (!staying.includes(pair)) {
+      changes.push({ path: `${prefix}.content[-]`, before: bc[bi], after: null });
+      changes.push({ path: `${prefix}.content[${ai}]`, before: null, after: ac[ai], between: between(ai) });
+      return;
+    }
     if (!same(bc[bi], ac[ai])) changes.push({ path: `${prefix}.content[${ai}]`, before: bc[bi], after: ac[ai] });
   });
   removed.forEach((bi) => changes.push({ path: `${prefix}.content[-]`, before: bc[bi], after: null }));
@@ -678,14 +751,18 @@ const SECTION_BLOCK_PATH = /^sections\[#([^\]]+)\]\.content\[(?:\d+|-)\]$/;
 
 /**
  * A diff's changes as the director's edits, before ids: one per field changed, a move
- * for a block that left one section and arrived unchanged in another, a cut for each
- * element or field removed.
+ * for a block that left one section and arrived unchanged in another, or that the
+ * director moved within its section (an addition the diff marked with `between`, paired
+ * with its own removal; task 4.3), a cut for each element or field removed.
  */
 function rawEditsOf(diff) {
   const changes = [];
   groups(diff).forEach((g) => (Array.isArray(g.changes) ? g.changes : []).forEach((c) => {
     if (!isObj(c) || typeof c.path !== 'string') return;
-    changes.push({ scope: g.key, path: c.path, before: c.before === undefined ? null : c.before, after: c.after === undefined ? null : c.after });
+    changes.push({
+      scope: g.key, path: c.path, before: c.before === undefined ? null : c.before, after: c.after === undefined ? null : c.after,
+      ...(isObj(c.between) ? { between: c.between } : {})
+    });
   }));
 
   const sectionOf = (change) => {
@@ -696,7 +773,8 @@ function rawEditsOf(diff) {
   const moves = new Map();
   const movedOut = new Set();
   changes.filter((c) => sectionOf(c) !== null && c.before === null && isObj(c.after)).forEach((add) => {
-    const cut = cuts.find((c) => !movedOut.has(c) && sectionOf(c) !== sectionOf(add) && same(c.before, add.after));
+    const within = isObj(add.between);
+    const cut = cuts.find((c) => !movedOut.has(c) && (sectionOf(c) === sectionOf(add)) === within && same(c.before, add.after));
     if (cut) { movedOut.add(cut); moves.set(add, sectionOf(cut)); }
   });
 
@@ -706,7 +784,7 @@ function rawEditsOf(diff) {
     const at = stepsOfChange(c);
     if (!at) return;
     if (moves.has(c)) {
-      out.push({ scope: c.scope, at, before: null, after: c.after, from: moves.get(c) });
+      out.push({ scope: c.scope, at, before: null, after: c.after, from: moves.get(c), ...(c.between ? { between: c.between } : {}) });
       return;
     }
     valueEdits(c.before, c.after, at).forEach((edit) => out.push({ scope: c.scope, ...edit }));
@@ -726,6 +804,12 @@ function isCut(edit) { return edit.after === null || edit.after === undefined; }
  * Its place is the director's and its text the writer's (fix round 1, finding 2).
  */
 function isMove(edit) { return Boolean(edit.from) && !isCut(edit); }
+
+/**
+ * A move within the block's own section (task 4.3): its place is its order there, after
+ * the block `between.follows` finds and before the block `between.precedes` finds.
+ */
+function isMoveWithin(edit) { return isMove(edit) && isObj(edit.between); }
 
 function editNumber(id) {
   const m = /^E(\d+)$/.exec(String(id));
@@ -828,12 +912,34 @@ function movedBlockPlaces(obj, edit) {
   return placesOf(obj, stepsOf(edit), { anywhere: false });
 }
 
+/** The index of the first block of `content` that `identity` finds, or -1 (and -1 for no identity). */
+function indexOfIdentity(content, identity) {
+  return isObj(identity) ? content.findIndex((b) => matchesAfter(b, identity)) : -1;
+}
+
+/**
+ * Does `content` hold a block the director moved within its section in the director's
+ * order: after the block it follows and before the block it precedes, each where the
+ * section still holds it (task 4.3)? A neighbour a pass rewrote or removed constrains
+ * nothing.
+ */
+function inDirectorsOrder(content, edit) {
+  const at = indexOfIdentity(content, moveIdentity(edit));
+  if (at === -1) return false;
+  const follows = indexOfIdentity(content, edit.between.follows);
+  const precedes = indexOfIdentity(content, edit.between.precedes);
+  return (follows === -1 || follows < at) && (precedes === -1 || at < precedes);
+}
+
 /** Does `obj` still carry this edit (see the module header)? */
 function editCarried(obj, edit) {
   if (!isObj(obj) || !isEdit(edit)) return false;
   if (isCut(edit)) return cutReturnedIn(obj, edit) === null;
   if (stepsOf(edit).length === 0) return false;
-  if (isMove(edit)) return movedBlockPlaces(obj, edit).length > 0;
+  if (isMove(edit)) {
+    if (movedBlockPlaces(obj, edit).length === 0) return false;
+    return !isMoveWithin(edit) || inDirectorsOrder(obj.sections[moveSectionIndex(obj, edit)].content, edit);
+  }
   return placeCarrying(obj, edit) !== undefined;
 }
 
@@ -862,6 +968,7 @@ function droppedNames(texts, versionParts, names) {
 function completeEdit(edit, sentBackText, names) {
   const out = { id: edit.id, scope: edit.scope, path: pathOf(edit.at), at: edit.at, before: edit.before, after: edit.after };
   if (edit.from) out.from = edit.from;
+  if (isObj(edit.between)) out.between = edit.between;
   const parts = sentBackText ? sentBackText.map((part) => ({ text: part.text })) : null;
   if (isCut(out)) {
     if (sentBackText) out.pieces = cutSentences(out).filter((sentence) => !partHolding(sentBackText, sentence));
@@ -1048,7 +1155,7 @@ function editWhere(edit) {
     parts.push(edit.path);
   }
   if (isCut(edit)) parts.push('cut');
-  if (edit.from) parts.push(`moved from section "${edit.from}"`);
+  if (edit.from) parts.push(isObj(edit.between) ? 'moved within the section' : `moved from section "${edit.from}"`);
   return parts.filter(Boolean).join(', ');
 }
 
@@ -1378,16 +1485,20 @@ function rewrittenInPlace(link, afterContent) {
  * never count. The block is found by its identity (its type with its filename, tokenId
  * or text), and, when the pass rewrote that in place, among the director's section's
  * blocks of its type (rewrittenInPlace):
- * - `kept`: the block is in the director's section;
+ * - `kept`: the block is in the director's section, and, for a move within the section,
+ *   in the director's order there;
+ * - `reordered`: a block the director moved within its section is in that section out
+ *   of the director's order (task 4.3);
  * - `moved`, with `section`: a block of its identity is in another section;
  * - `gone`: the pass removed it.
  *
- * @returns {{outcome: 'kept'|'moved'|'gone', section?: string}}
+ * @returns {{outcome: 'kept'|'reordered'|'moved'|'gone', section?: string}}
  */
 function moveOutcome(edit, before, after) {
   if (editCarried(after, edit)) return { outcome: 'kept' };
   const sections = isObj(after) && Array.isArray(after.sections) ? after.sections : [];
   const elsewhere = sectionHoldingIdentity(after, moveIdentity(edit));
+  if (elsewhere !== -1 && elsewhere === moveSectionIndex(after, edit)) return { outcome: 'reordered' };
   if (elsewhere !== -1) return { outcome: 'moved', section: sectionKey(sections[elsewhere], elsewhere) };
   const target = moveSectionIndex(after, edit);
   const place = movedBlockPlaces(before, edit)[0];
@@ -1400,13 +1511,14 @@ function moveOutcome(edit, before, after) {
  * What an edit's text became in a pass's output, or null when it is gone: the field's
  * new value, found by following the edit's element from where it sat in the version the
  * pass started from; for a cut, the text where it came back; for a move, the section
- * the pass took the block to (moveOutcome).
+ * the pass took the block to, or another place in the director's section (moveOutcome).
  */
 function becameOf(edit, before, after) {
   if (!isObj(after)) return null;
   if (isCut(edit)) return cutReturnedIn(after, edit);
   if (isMove(edit)) {
     const { outcome, section } = moveOutcome(edit, before, after);
+    if (outcome === 'reordered') return `another place in section "${edit.from}"`;
     return outcome === 'moved' ? `section "${section}"` : null;
   }
   const place = placeCarrying(before, edit);
@@ -1427,13 +1539,31 @@ function becameOf(edit, before, after) {
 }
 
 /**
+ * Put a block the director moved within its section back in the director's order, as the
+ * pass left it: right after the block it follows, else right before the block it
+ * precedes (task 4.3). Writes nothing when the order already holds.
+ *
+ * @returns {boolean} whether it moved the block
+ */
+function placeInDirectorsOrder(edit, section) {
+  const content = isObj(section) && Array.isArray(section.content) ? section.content : null;
+  if (!content || indexOfIdentity(content, moveIdentity(edit)) === -1 || inDirectorsOrder(content, edit)) return false;
+  const [block] = content.splice(indexOfIdentity(content, moveIdentity(edit)), 1);
+  const follows = indexOfIdentity(content, edit.between.follows);
+  // With the order broken, at least one neighbour is in the section.
+  content.splice(follows !== -1 ? follows + 1 : indexOfIdentity(content, edit.between.precedes), 0, block);
+  return true;
+}
+
+/**
  * Put a block the director moved, which a pass took to another section, back in the
  * director's section, at the place the director gave it, as the pass left it: its fields
  * are the writer's (fix round 1, findings 1 and 2). The block is the one of its identity
  * outside the director's section. When the director's section already holds one (a field
  * edit's restore put the section back whole, block included), the pass's copy is taken
- * out, so the page prints the block once. With no such section, or no block outside it,
- * nothing is written.
+ * out, so the page prints the block once. A block the director moved within its section
+ * then takes the director's order there (placeInDirectorsOrder). With no such section, or
+ * nothing to move, nothing is written.
  */
 function restoreMove(edit, out) {
   const steps = stepsOf(edit);
@@ -1443,15 +1573,20 @@ function restoreMove(edit, out) {
   const identity = moveIdentity(edit);
   const holds = (s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, identity));
   const fromIndex = sections.findIndex((s, i) => i !== targetIndex && holds(s));
-  if (fromIndex === -1) return false;
-  const from = sections[fromIndex].content;
-  const [block] = from.splice(from.findIndex((b) => matchesAfter(b, identity)), 1);
   const target = sections[targetIndex];
-  if (holds(target)) return true;
-  if (!Array.isArray(target.content)) target.content = [];
-  const index = Number.isInteger(steps[3].index) ? steps[3].index : target.content.length;
-  target.content.splice(Math.min(index, target.content.length), 0, block);
-  return true;
+  let wrote = false;
+  if (fromIndex !== -1) {
+    const from = sections[fromIndex].content;
+    const [block] = from.splice(from.findIndex((b) => matchesAfter(b, identity)), 1);
+    if (!holds(target)) {
+      if (!Array.isArray(target.content)) target.content = [];
+      const index = Number.isInteger(steps[3].index) ? steps[3].index : target.content.length;
+      target.content.splice(Math.min(index, target.content.length), 0, block);
+    }
+    wrote = true;
+  }
+  if (isMoveWithin(edit)) wrote = placeInDirectorsOrder(edit, target) || wrote;
+  return wrote;
 }
 
 /**
@@ -1574,7 +1709,8 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * One pass, settled (FA, requirement 8): after an automatic pass, code puts back each
  * standing edit the pass changed, field by field, so the stored output carries it; a cut
  * or removed sentence that came back stays, flagged in the report. A block the director
- * moved goes back into the director's section as the pass left it, before the field
+ * moved goes back into the director's section as the pass left it, and a block moved
+ * within its section back into the director's order there (task 4.3), before the field
  * edits that find it there; one the pass removed stays out, since only its place was the
  * director's and its removal can be the fix of a fault in the writer's text (fix round 1,
  * findings 1 and 2). A send-back's rework is left as it is: the director's note may
@@ -1593,7 +1729,7 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
   if (pass !== SEND_BACK_PASS && isObj(after)) {
     const outcome = (e) => moveOutcome(e, before, after).outcome;
     const changed = carried.filter((e) => !isCut(e) && (isMove(e) ? outcome(e) !== 'kept' : !editCarried(after, e)));
-    const moves = changed.filter((e) => isMove(e) && outcome(e) === 'moved');
+    const moves = changed.filter((e) => isMove(e) && (outcome(e) === 'moved' || outcome(e) === 'reordered'));
     const fields = changed.filter((e) => !isMove(e));
     if (moves.length + fields.length > 0) {
       output = clone(after);
@@ -1631,6 +1767,7 @@ module.exports = {
   reportAfterPass, settleEdits, handEditReportOf, sectionKey, namesPerson,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
-    OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf
+    OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
+    stayingPairs
   }
 };
