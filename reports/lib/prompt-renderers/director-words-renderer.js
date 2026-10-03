@@ -96,9 +96,11 @@ ${text}
 
 /**
  * The one sentence a verdict that places no character adds to the arc prompts'
- * accusation: a no-culprit verdict, or (phase 3, brief 3.5) a culprit verdict that
- * blames an institution or an unnamed person, in the room's words as the charge
- * (blamesNoCharacter holds only with a charge).
+ * accusation (the weave's writer, its rework and its fact check): a no-culprit verdict,
+ * or (phase 3, brief 3.5) a culprit verdict that blames an institution or an unnamed
+ * person, in the room's words as the charge (blamesNoCharacter holds only with a charge).
+ * Brief 4.5 (ruling 11): worded for the weave, whose thread that tells the verdict holds
+ * no one as the accused.
  *
  * @param {Object|null} accusation
  * @returns {string} '' for a verdict that names a character, and for a culprit parse
@@ -108,11 +110,11 @@ function noCulpritInstruction(accusation) {
   const charge = typeof accusation?.charge === 'string' ? accusation.charge.trim() : '';
   if (blamesNoCharacter(accusation)) {
     return `The group statement holds no character responsible: it blames "${charge}". ` +
-      'The accusation arc is about that verdict. Place no character as the accused.';
+      'The thread that tells the verdict holds no character as the accused.';
   }
   if (!isNoCulpritVerdict(accusation)) return '';
   return `The room named no culprit: its verdict is ${VERDICT_KIND_PHRASES[accusation.verdictKind]}${charge ? ` (${charge})` : ''}. ` +
-    'The accusation arc is about that verdict. Place no one as the accused, and never the victim.';
+    'The thread that tells the verdict holds no one as the accused, and never the victim.';
 }
 
 /**

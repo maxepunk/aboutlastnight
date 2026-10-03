@@ -220,18 +220,22 @@ ${weaveQuestionsFormatLine()}`;
 }
 
 /**
- * The arc writer's task (phase 4, brief 4.4): what the weave holds, field by field. It
- * points at C1 for the story, C16 for the threads, the connections and the convergence,
- * and C15 for the questions, and restates none of them; what it adds is how each rule
- * lands in the weave's fields. The lens work C16 sets out stays in the writer's
- * reasoning: the weave has no field for it.
+ * The arc writer's task (phase 4, briefs 4.4 and 4.5; ruling 10): which field holds what.
+ * C1 states the story, its question and the stronger main thread; C16 the threads, their
+ * roles, the connections and the convergence; C15 the questions. The task points at them
+ * and states only what no rule says: where each lands in the weave's fields, the words
+ * "from your notes" holds, the verdict flag, the receipt's source, and the shape of the
+ * stronger main thread. The lens work C16 sets out stays in the writer's reasoning: the
+ * weave has no field for it.
  */
-const WEAVE_TASK = `Write one weave of about 400 words, for the director to read in a few minutes at the story meeting.
+const WEAVE_TASK = `Write one weave of about 400 words, for the director to read in a few minutes at the story meeting. C1 (<craft-story>) sets out the story, its question and the stronger main thread; C16 (<craft-story>) sets out the threads, their roles, the connections and the convergence. The fields hold them:
 
-- **story** and **question**: the thesis and the question that carries it, as C1 (<craft-story>) sets them out. When the director's notes end with their own read of the session, the story starts from it, and **fromYourNotes** holds the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. When the notes end without a read, the story is your proposal from the record, and fromYourNotes stays out.
-- **threads**, **connections** and **convergence**: the weave C16 (<craft-story>) sets out. Every thread you find stays in the weave, each in one line with its role, and a left-out thread gives its one-line reason. Each thread's receipt is the id of its strongest document from the Receipts list, or "${LEDGER_RECEIPT}". The thread that carries the room's verdict has "verdict": true.
-- **strongerMainThread**: only when another thread would carry a stronger story as the main thread (C1): that thread's id and the reason, in one line.
-- **questions**: C15's (<craft-questions>), each saying what its answer changes in print.`;
+- **story**, **question** and **headline**: the thesis, the question that carries it, and a working headline.
+- **fromYourNotes**: when the story starts from the director's read (C1), the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. A story from the record rests on no words of the director's, and the field stays out.
+- **threads**: every thread you find, each in its role, a left-out thread with its one line on why in **reason**. A thread's **receipt** is the id of its strongest document from the Receipts list, or "${LEDGER_RECEIPT}". The thread that carries the room's verdict has "verdict": true.
+- **connections** and **convergence**: as C16 names them.
+- **strongerMainThread**: when you see a stronger main thread (C1), its id as "thread" and your one-line reason as "reason".
+- **questions**: C15's (<craft-questions>), each with what its answer changes in print as "changes".`;
 
 /**
  * The three-category character block: the roster, the theme's NPCs, and the game's

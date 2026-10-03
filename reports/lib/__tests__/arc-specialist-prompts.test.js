@@ -288,7 +288,9 @@ describe("arc prompts: the director's words as record", () => {
         expect(prompt).toContain(RAW_ACCUSATION);
         expect(prompt).toContain("**Accused:** none (the room's verdict names no culprit: an overdose)");
         expect(prompt).toContain('**Charge:** Accidental overdose');
-        expect(prompt).toMatch(/Place no one as the accused, and never the victim\./);
+        // Brief 4.5 (ruling 11): worded for the weave.
+        expect(prompt).toContain('The thread that tells the verdict holds no one as the accused, and never the victim.');
+        expect(prompt).not.toMatch(/accusation arc/);
       }
     });
 
@@ -484,7 +486,9 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       expect(count(prompt, craft)).toBe(1);
       expect(restated(prompt, craft)).toEqual([]);
       const section = prompt.slice(prompt.indexOf('## SECTION 3: THE WEAVE'), prompt.indexOf('## SECTION 4'));
-      expect(section).toContain('the weave C16 (<craft-story>) sets out');
+      // Brief 4.5 (ruling 10): the task names the fields and points at C1 and C16 for the rest.
+      expect(section).toContain('C1 (<craft-story>) sets out the story, its question and the stronger main thread');
+      expect(section).toContain('C16 (<craft-story>) sets out the threads, their roles, the connections and the convergence');
       expect(prompt.replace(craft, '')).not.toMatch(/analysisNotes|"financial"|"behavioral"|"victimization"/);
     });
 

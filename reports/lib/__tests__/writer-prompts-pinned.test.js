@@ -212,11 +212,18 @@ const REPO = path.join(__dirname, '..', '..');
  *   (11398 -> 9831). arcs-journalist only. arcs-detective goes: the arc stage's detective
  *   branch went with R1, so the detective renders no arc writer. The outline and article
  *   pins do not move.
+ * - Phase 4 (brief 4.5, the integrator's rulings 10 and 11): the weave's task names which
+ *   field holds what and points at C1 and C16 for the rest, keeping the field mappings
+ *   ("from your notes" only when the story starts from the director's read, the verdict
+ *   flag, the receipt from the Receipts list, the stronger main thread's shape); and the
+ *   sentence a verdict naming no culprit adds to the accusation is worded for the weave
+ *   ("the thread that tells the verdict holds no one as the accused, and never the
+ *   victim", where it said "the accusation arc"). arcs-journalist only (9831 -> 9892).
  */
 const PINNED = {
   'outline-journalist': ['d0e96e6c2dc630ed4182df08f152e8377bd4e8b6379bb1227c016169db2f881c', 21224],
   'article-journalist': ['4fe0b2b38714a8c0dd7bc72efaa43e382abbb3fd9ce1edf7d6f95846b1c7edb1', 28260],
-  'arcs-journalist': ['7d67add4936c877459d77c4ffd4eaa09265816db5fc9b175b10db4d2f079d4c7', 9831],
+  'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892],
   'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
   'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436]
 };
