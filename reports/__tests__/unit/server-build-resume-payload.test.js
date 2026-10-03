@@ -999,3 +999,55 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
   });
 });
 
+// FA, requirement 12 (final review of the photos, finding 1): the article stop could
+// approve a page that publish then refused, and neither recovery kept the director's desk.
+// The approve now checks every photo the page prints against data/<id>/photos and refuses
+// with the filename while the stop is still open. Publish's throw stays a backstop.
+describe('the article approve checks the printed photos (FA)', () => {
+  const bundleFixture = () => JSON.parse(JSON.stringify(require('../fixtures/content-bundles/valid-journalist.json')));
+  let dataDir;
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-approve-photos-'));
+    fs.mkdirSync(path.join(dataDir, '0926262', 'photos'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, '0926262', 'photos', 'p1.jpg'), 'jpeg');
+  });
+  afterEach(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+
+  /** The fixture with a hero (or none) and photo blocks in its first section. */
+  const printing = (hero, ...blocks) => {
+    const b = bundleFixture();
+    if (hero) b.heroImage = { filename: hero, caption: 'The huddle' };
+    blocks.forEach((filename) => b.sections[0].content.push({ type: 'photo', filename, caption: 'At the bar' }));
+    return b;
+  };
+  const approve = (approvals, state, theme = 'journalist') =>
+    buildResumePayload(approvals, { sessionId: '0926262', ...state }, theme, 'article', { dataDir });
+
+  test('refuses the approval while the stop is open, naming each printed photo the folder lacks', () => {
+    const result = approve({ article: true, articleNote: 'Ship it.' }, { contentBundle: printing('p1.jpg', 'p2.jpg', 'p3 (1 of 2).jpg') });
+    expect(result.error).toContain('"p2.jpg", "p3 (1 of 2).jpg"');
+    expect(result.error).toContain(path.join(dataDir, '0926262', 'photos'));
+    expect(result.error).not.toContain('"p1.jpg"');
+    expect(result.stateUpdates).toEqual({});
+    expect(result.resume).toEqual({});
+  });
+
+  test('checks the bundle the director approves with', () => {
+    const result = approve({ article: true, articleEdits: printing(null, 'p9.jpg') }, { contentBundle: printing('p1.jpg') });
+    expect(result.error).toContain('"p9.jpg"');
+    expect(result.stateUpdates.contentBundle).toBeUndefined();
+  });
+
+  test('approves when every printed photo is in the folder; a detective hero never prints, so it is not checked', () => {
+    expect(approve({ article: true }, { contentBundle: printing('p1.jpg', 'p1.jpg') }).error).toBeNull();
+    expect(approve({ article: true }, { contentBundle: printing('missing-hero.jpg', 'p1.jpg') }, 'detective').error).toBeNull();
+  });
+
+  test('a filename that leads outside the folder is refused like a missing one', () => {
+    expect(approve({ article: true }, { contentBundle: printing(null, '../p1.jpg') }).error).toContain('"../p1.jpg"');
+  });
+
+  test('without a session id there is no folder to check, as publish copies none', () => {
+    expect(buildResumePayload({ article: true }, { contentBundle: printing(null, 'p9.jpg') }, 'journalist', 'article', { dataDir }).error).toBeNull();
+  });
+});

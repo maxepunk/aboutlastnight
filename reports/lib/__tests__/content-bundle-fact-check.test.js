@@ -1714,6 +1714,34 @@ describe('the director\'s edits, field by field, at the fact check (FA)', () => 
     ]);
   });
 
+  it('the photo check reads the photos the page prints: a detective hero never prints, so it is not checked', () => {
+    const bundle = {
+      heroImage: { filename: 'not-ours.jpg', caption: 'The huddle' },
+      sections: [{ id: 'the-story', type: 'narrative', content: [paragraph('Vic leaned in.')] }],
+      evidenceCards: []
+    };
+    const detective = factCheckContentBundle(baseArgs({ contentBundle: bundle, sessionPhotos: ['/photos/a.jpg'], theme: 'detective' }));
+    expect(detective.photoReferences.invalid).toEqual([]);
+    expect(detective.structuralIssues.filter((i) => i.startsWith('Invalid photo reference'))).toEqual([]);
+    const journalist = factCheckContentBundle(baseArgs({ contentBundle: bundle, sessionPhotos: ['/photos/a.jpg'] }));
+    expect(journalist.photoReferences.invalid).toEqual(['not-ours.jpg']);
+  });
+
+  it('roster coverage reads the hero\'s caption only when the hero prints', () => {
+    const story = [{ id: 'the-story', type: 'narrative', content: [paragraph('Vic leaned in.')] }];
+    const unprinted = factCheckContentBundle(baseArgs({
+      contentBundle: { heroImage: { caption: 'Kai at the dictionary safe' }, sections: story, evidenceCards: [] },
+      roster: ['Kai', 'Vic']
+    }));
+    expect(unprinted.rosterCoverage.missing).toEqual(['Kai']);
+    const printed = factCheckContentBundle(baseArgs({
+      contentBundle: { heroImage: { filename: 'a.jpg', caption: 'Kai at the dictionary safe' }, sections: story, evidenceCards: [] },
+      roster: ['Kai', 'Vic'],
+      sessionPhotos: ['/photos/a.jpg']
+    }));
+    expect(printed.rosterCoverage.missing).toEqual([]);
+  });
+
   it('a roster gap is the director\'s only for a name the director\'s version no longer held when sent back', () => {
     const writers = storyWith(paragraph('Sarah kept the count.'), paragraph('Sarah left early.'), paragraph('Vic leaned in at the bar.'));
     const directors = storyWith(paragraph('Sarah left early.'), paragraph('Vic leaned in at the bar.'));

@@ -34,6 +34,8 @@ const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditRepor
 // FA (requirement 9): the roster's names as the coverage check reads them, which each
 // send-back records a cut's or a rewrite's names against.
 const { rosterNames } = require('./lib/content-bundle-fact-check');
+// FA (requirement 12): the photos the page prints, which the article approve checks.
+const { printedPhotos } = require('./lib/publish-photos');
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // The outline editors' own list of the fields phase 3 retired (BU3), so the server
@@ -566,6 +568,48 @@ function sendBackRecordOptions(currentState) {
     return names.length > 0 ? { names } : {};
 }
 
+/**
+ * The photos the page will print that the session's photos folder lacks (FA, requirement
+ * 12): each printed filename (lib/publish-photos.js printedPhotos) that is not a file
+ * inside the folder, a name that leads outside it included. Publish reads the same
+ * folder and refuses the same names; this asks before the director leaves the stop.
+ *
+ * @param {object|null} bundle - the content bundle the page is assembled from
+ * @param {string} theme - the page's theme
+ * @param {string} photosDir - data/<id>/photos
+ * @returns {string[]} the filenames, as the page prints them
+ */
+function missingPrintedPhotos(bundle, theme, photosDir) {
+    const folder = path.resolve(photosDir);
+    return printedPhotos(bundle || {}, theme === 'detective' ? 'detective' : 'journalist').filter((filename) => {
+        const target = path.resolve(folder, filename);
+        const relative = path.relative(folder, target);
+        if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return true;
+        try { return !fs.statSync(target).isFile(); } catch { return true; }
+    });
+}
+
+/**
+ * The refusal for an article approve whose page would print a photo the session's photos
+ * folder lacks, or null (FA, requirement 12). Without a session id nothing is checked:
+ * publish copies no photo then either.
+ *
+ * @param {object|null} bundle - the bundle the approve would publish
+ * @param {string} theme
+ * @param {string|undefined} sessionId
+ * @param {string} dataDir - the folder that holds each session's data/<id>/
+ * @returns {string|null}
+ */
+function printedPhotosRefusal(bundle, theme, sessionId, dataDir) {
+    if (!sessionId) return null;
+    const photosDir = path.join(dataDir, String(sessionId), 'photos');
+    const missing = missingPrintedPhotos(bundle, theme, photosDir);
+    if (missing.length === 0) return null;
+    const one = missing.length === 1;
+    return `The article prints ${missing.map((f) => `"${f}"`).join(', ')}, which ${one ? 'is' : 'are'} not in the session's photos folder (${photosDir}). ` +
+        `Put ${one ? 'it' : 'them'} in that folder, or take ${one ? 'it' : 'them'} out of the article, then approve again.`;
+}
+
 /** Schema-check a director's edited object the same way the approve path does. */
 function validateEdits(schemaName, edits, noun) {
     const { valid, errors } = outlineValidator.validate(schemaName, edits);
@@ -589,9 +633,13 @@ function validateEdits(schemaName, edits, noun) {
  *   `outline`/`article`/`arc-selection` used to count as a valid approval whose resume
  *   value was neither an approve nor a reject-with-feedback, which routes straight into
  *   a PAID revision loop. Gate those shapes on the type.
+ * @param {object} [options]
+ * @param {string} [options.dataDir] - the folder holding each session's data/<id>/ (default
+ *   the server's data/); the article approve checks the printed photos against its
+ *   <id>/photos (FA, requirement 12)
  * @returns {object} - { resume: payload for Command, stateUpdates: direct state updates, error: validation error or null }
  */
-function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist'), checkpointType = null) {
+function buildResumePayload(approvals, currentState = {}, theme = (currentState.theme || 'journalist'), checkpointType = null, { dataDir = DATA_DIR } = {}) {
     const resume = {};
     const stateUpdates = {};
     let error = null;
@@ -747,6 +795,17 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
             // identically and rollback discarding the approved draft.
             error = validateEdits('content-bundle', approvals.articleEdits, 'article');
             if (error) return { resume, stateUpdates, error };
+        }
+        // FA (requirement 12; final review of the photos, finding 1): every photo the page
+        // will print must be in data/<id>/photos. Refused here, with the filename, while
+        // the article stop is still open: past it, publish's throw (its backstop) leaves
+        // only a rollback, which regenerates the article and loses the director's desk.
+        const photoRefusal = printedPhotosRefusal(
+            approvals.articleEdits && typeof approvals.articleEdits === 'object' ? approvals.articleEdits : currentState.contentBundle,
+            theme, currentState.sessionId, dataDir
+        );
+        if (photoRefusal) return { resume: {}, stateUpdates: {}, error: photoRefusal };
+        if (approvals.articleEdits && typeof approvals.articleEdits === 'object') {
             stateUpdates.contentBundle = approvals.articleEdits;
         }
         // Phase 1 brief 1.1: as at the outline stop — the note box is sent with the
@@ -991,14 +1050,6 @@ app.use(express.static(__dirname));
 app.use('/console', express.static(path.join(__dirname, 'console')));
 app.get('/console/*', (req, res) => res.sendFile(path.join(__dirname, 'console', 'index.html')));
 
-// Serve session photos at /sessionphotos/{sessionId}/*
-// Maps to data/{sessionId}/photos/* for article photo references
-app.use('/sessionphotos/:sessionId', (req, res, next) => {
-    const { sessionId } = req.params;
-    const photosDir = path.join(__dirname, 'data', sessionId, 'photos');
-    express.static(photosDir)(req, res, next);
-});
-
 // Session middleware for authentication.
 // SECURITY (SEC-4): refuse to start without a real secret — the in-repo
 // fallback let anyone forge {authenticated:true} cookies over the tunnel.
@@ -1038,6 +1089,17 @@ function requireAuth(req, res, next) {
     }
     res.status(401).json({ error: 'Unauthorized', message: 'Please log in' });
 }
+
+// Serve session photos at /sessionphotos/{sessionId}/*, mapped to data/{sessionId}/photos/*
+// for the article preview's photo references. FA (requirement 13): login first. The folder
+// holds every photo at full size, the excluded ones and any whiteboard included, and the
+// route used to serve it to anyone over the tunnel. The console's preview loads it
+// same-origin and logged in. Mounted after the session middleware, which requireAuth reads.
+app.use('/sessionphotos/:sessionId', requireAuth, (req, res, next) => {
+    const { sessionId } = req.params;
+    const photosDir = path.join(__dirname, 'data', sessionId, 'photos');
+    express.static(photosDir)(req, res, next);
+});
 
 // ===== AUTH ENDPOINTS =====
 

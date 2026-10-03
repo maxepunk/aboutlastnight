@@ -31,6 +31,9 @@ const { DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 // edits, the one prefix a concern about an edit opens with, the one rule for a section's
 // key (known item 7) and the one roster-name test.
 const { editLocator, directorEditConcern, sectionKey, namesPerson } = require('./hand-edit-diff');
+// FA (requirement 12): the photos the page prints, the one rule the publish step and the
+// article approve read too (lib/publish-photos.js keeps the function's meaning).
+const { printedPhotos } = require('./publish-photos');
 
 /**
  * Normalise for substring comparison: every single and double quotation mark,
@@ -419,6 +422,18 @@ function narratorSegments(contentBundle) {
 /** A section's key as the director's edits address it: hand-edit-diff.js's own rule (known item 7). */
 const sectionKeyOf = sectionKey;
 
+/** The theme whose page a bundle prints on, as printedPhotos names it. */
+function pageTheme(theme) {
+  return theme === 'detective' ? 'detective' : 'journalist';
+}
+
+/** The hero's filename when the page prints the hero, else null (printedPhotos' rule). */
+function printedHero(bundle, theme) {
+  const hero = bundle && bundle.heroImage;
+  if (!hero || typeof hero !== 'object') return null;
+  return printedPhotos({ heroImage: hero }, pageTheme(theme))[0] || null;
+}
+
 /** A short span of text for a message, with any em-dash spelled out (no message carries one). */
 function excerptOf(text) {
   return String(text == null ? '' : text).replace(/\s+/g, ' ').trim().replace(/—/g, '[em-dash]');
@@ -664,8 +679,9 @@ function printedBlockText(block, journalist) {
  *   both themes  section headings; paragraph text; quote text and attribution;
  *                evidence-reference captions; list items; photo-block captions;
  *                evidence-card headline and content
- *   journalist   also the headline, kicker and deck; the hero caption; the
- *                evidence-card owner; each sidebar entry's headline and summary
+ *   journalist   also the headline, kicker and deck; the hero caption, when the
+ *                page prints the hero (printedPhotos); the evidence-card owner;
+ *                each sidebar entry's headline and summary
  *
  * Never counted, because it never prints: a sidebar entry's `content` and
  * `owner`, the top-level `photos`, pull quotes, the characters on a photo or the
@@ -690,7 +706,8 @@ function visibleText(contentBundle, theme) {
   if (journalist) {
     const headline = bundle.headline || {};
     parts.push(headline.main, headline.kicker, headline.deck);
-    if (bundle.heroImage && typeof bundle.heroImage === 'object') parts.push(bundle.heroImage.caption);
+    // FA (requirement 12): the hero's caption counts only when the page prints the hero.
+    if (printedHero(bundle, theme)) parts.push(bundle.heroImage.caption);
   }
 
   for (const section of asArray(bundle.sections)) {
@@ -1042,21 +1059,28 @@ function factCheckContentBundle({
   const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
   const kept = Array.from(available).filter(filename => !excluded.has(filename) && !isWhiteboard(filename));
   const useKept = kept.length > 0 ? `Use one of [${kept.join(', ')}] or remove the reference.` : 'Remove the reference.';
-  // F1 and FA (requirement 2): each reference with the director's edit that set its
-  // filename, if any (the hero's, or a photo block's).
-  const referenced = [];
-  if (bundle.heroImage && typeof bundle.heroImage === 'object' && bundle.heroImage.filename) {
-    referenced.push({ filename: String(bundle.heroImage.filename), editId: edits.field('heroImage.filename') });
-  }
-  asArray(bundle.sections).forEach((section, index) => {
-    if (!section || typeof section !== 'object') return;
-    for (const block of asArray(section.content)) {
-      if (block && typeof block === 'object' && block.type === 'photo' && block.filename) {
-        referenced.push({ filename: String(block.filename), editId: edits.blockField(sectionKeyOf(section, index), block, 'filename') });
+  // FA (requirement 12): the references are the photos the page prints
+  // (lib/publish-photos.js printedPhotos), so a detective hero, which never prints, is not
+  // checked, and the top-level `photos` list never prints either (phase 3, 3.4; HY1). F1
+  // and FA (requirement 2): a reference is the director's only when the director set its
+  // filename, the hero's or a photo block's.
+  const hero = printedHero(bundle, theme);
+  const photoEditOf = (filename) => {
+    if (filename === hero) {
+      const heroEdit = edits.field('heroImage.filename');
+      if (heroEdit) return heroEdit;
+    }
+    for (const [index, section] of asArray(bundle.sections).entries()) {
+      if (!section || typeof section !== 'object') continue;
+      for (const block of asArray(section.content)) {
+        if (!block || typeof block !== 'object' || block.type !== 'photo' || block.filename !== filename) continue;
+        const editId = edits.blockField(sectionKeyOf(section, index), block, 'filename');
+        if (editId) return editId;
       }
     }
-  });
-  // The top-level `photos` list never prints, so it is not read (phase 3, 3.4; HY1).
+    return null;
+  };
+  const referenced = printedPhotos(bundle, pageTheme(theme)).map(filename => ({ filename, editId: photoEditOf(filename) }));
 
   const invalidPhotos = [];
   const invalidInEdits = [];   // [filename, editId]: a reference the director placed
