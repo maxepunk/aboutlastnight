@@ -45,9 +45,10 @@ function loadCallModules(req) {
  * on the stored bundle with the evaluator's arguments (none when there is no bundle).
  *
  * Phase 4 (brief 4.4): the arcs judge is the story meeting's fact check on
- * `state.weave`, with its truth criteria (getPhaseCriteria), no code fact check and no
- * director's edits, as createEvaluator calls it. A tree from before getPhaseCriteria
- * reads its arc criteria from QUALITY_CRITERIA.
+ * `state.weave`, with its truth criteria (getPhaseCriteria) and no code fact check, as
+ * createEvaluator calls it. Brief 4.5: after a director's round it reads the director's
+ * standing edits (judgedEdits) and their answers, as the outline and article judges read
+ * theirs. A tree from before getPhaseCriteria reads its arc criteria from QUALITY_CRITERIA.
  *
  * Phase 3 (3.4): a tree that exports getPhaseCriteria and buildFactCheckArgs builds
  * both through the evaluator's own functions, and its system prompt takes the session

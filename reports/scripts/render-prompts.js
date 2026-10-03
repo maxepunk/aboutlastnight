@@ -32,13 +32,18 @@
  * argument list; __tests__/unit/scripts/render-calls.test.js fails when a node sends
  * anything else, so a change to what a node passes its builders goes there too.
  *
- * Phase 4 (brief 4.4): nine files. The arc writer writes the weave (arc-generation.txt),
- * arc-revision.txt is the arc rework's automatic pass on it after the weave checks, and
+ * Phase 4 (brief 4.4): the arc writer writes the weave (arc-generation.txt), and
  * judge-arc.txt is the story meeting's fact check on it. The interweaving call and its
- * render went. When the thread holds no weave, the fixed weave of
- * scripts/lib/fixed-weave.js is planted, as the fixed notes are: invented text with an
- * edit, an answer, a struck connection and a new main thread, and one receipt the record
- * does not hold, so the automatic pass has a check failure to fix.
+ * render went. Brief 4.5: eleven files. The arc rework renders as reviseArcs sends it
+ * (arcReworkCall), three ways: arc-revision.txt is its automatic pass after the weave
+ * checks, arc-reweave.txt the director's reweave with no note, and arc-send-back.txt the
+ * director's send-back with the fixed note. When the thread holds no weave, the fixed
+ * story meeting of scripts/lib/fixed-weave.js is planted, as the fixed notes are:
+ * invented text, the writer's weave as the baseline and the director's version with an
+ * edit, an answer, a struck connection and a new main thread, its changes the standing
+ * edits; one receipt the record does not hold gives the automatic pass a check failure to
+ * fix. A thread whose weave carries no edits gets the fixed edit on its story, as the
+ * outline and the article get theirs, so every arc rework render shows <HAND_EDITS>.
  * Every builder is awaited. The run fails (exit 1, naming the file) when a render's
  * system or user prompt is empty, when it contains "[object Promise]", or when no line
  * opens with one of the file's markers in REQUIRED_MARKERS below; a file in that table
@@ -60,7 +65,7 @@ const path = require('path');
 const fs = require('fs');
 const { compareSections, renderProblems } = require('./lib/prompt-sections');
 const { JUDGE_PHASES, requireExports, loadCallModules, renderJudge } = require('./lib/render-calls');
-const { fixedWeave } = require('./lib/fixed-weave');
+const { fixedWeave, fixedBaseline } = require('./lib/fixed-weave');
 
 /**
  * The markers each render must carry: for each, a line that opens with it. Each is
@@ -76,7 +81,9 @@ const REQUIRED_MARKERS = {
   'article-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
   'article-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
   'arc-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
-  'arc-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'arc-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
+  'arc-reweave.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
+  'arc-send-back.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'judge-arc.txt': ['<RECORD>'],
   'judge-outline.txt': ['<RECORD>'],
   'judge-article.txt': ['<RECORD>']
@@ -99,8 +106,11 @@ const args = parseArgs(process.argv.slice(2));
 const PRODUCTION_DB = path.resolve(path.join(__dirname, '..', 'data', 'checkpoints.sqlite'));
 
 const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-generation.txt', 'article-revision.txt'];
-/** Rendered as well, but not compared (phase 2, 2.3): the arc writer and its reworker. */
-const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt'];
+/**
+ * Rendered as well, but not compared (phase 2, 2.3): the arc writer and its reworker,
+ * since brief 4.5 the reworker's automatic pass, reweave and send-back.
+ */
+const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt', 'arc-reweave.txt', 'arc-send-back.txt'];
 /** Rendered as well, but not compared (phase 3, 3.0): the judges, by phase. */
 const JUDGE_FILES = { arcs: 'judge-arc.txt', outline: 'judge-outline.txt', article: 'judge-article.txt' };
 const FIXED_FEEDBACK = 'RENDER-DIFF FIXED FEEDBACK: tighten the second section.';
@@ -181,8 +191,7 @@ async function render() {
     buildSessionFacts, buildAvailablePhotos, articleWriterInputs } } = req('lib/workflow/nodes/ai-nodes.js');
   const arcModule = req('lib/workflow/nodes/arc-specialist-nodes.js');
   const { _testing: arcNodes } = arcModule;
-  requireExports('arc-specialist-nodes.js _testing', arcNodes, ['weaveSystemPrompt', 'buildWeavePrompt',
-    'getArcRevisionSystemPrompt', 'buildArcRevisionPrompt']);
+  requireExports('arc-specialist-nodes.js _testing', arcNodes, ['weaveSystemPrompt', 'buildWeavePrompt', 'arcReworkCall']);
   requireExports('arc-specialist-nodes.js', arcModule, ['validateArcStructure']);
   const weaveModule = req('lib/weave.js');
   requireExports('weave.js', weaveModule, ['isWeave', 'weaveForPrompt']);
@@ -199,11 +208,24 @@ async function render() {
   // --theme renders every call for that theme, whatever the thread ran as: every
   // builder below reads the theme from state.theme or from this one value.
   if (args.theme) state.theme = args.theme;
-  // Phase 4 (brief 4.4): a thread from before the weave holds none, so the fixed one is
-  // planted, as the fixed notes are, for the arc rework and the fact check to read.
+  // Phase 4 (briefs 4.4 and 4.5): a thread from before the weave holds none, so the fixed
+  // story meeting is planted, as the fixed notes are, for the arc reworks and the fact
+  // check to read: the writer's weave as the baseline, the director's version, and their
+  // changes as the standing edits. A thread whose weave carries no edits of the director's
+  // gets the fixed edit on its story.
+  requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits']);
   if (!weaveModule.isWeave(state.weave)) {
     state.weave = fixedWeave();
-    console.log('the thread holds no weave: planted the fixed weave (scripts/lib/fixed-weave.js)');
+    state._weaveBaseline = fixedBaseline();
+    state._weaveHandEdits = null;
+    console.log('the thread holds no weave: planted the fixed story meeting (scripts/lib/fixed-weave.js)');
+  }
+  if (diffMod.carriedEdits(state._weaveHandEdits, weaveModule.weaveForPrompt(state.weave)).length === 0) {
+    const baseline = weaveModule.isWeave(state._weaveBaseline) ? state._weaveBaseline : weaveModule.weaveForPrompt(state.weave);
+    if (JSON.stringify(baseline) === JSON.stringify(weaveModule.weaveForPrompt(state.weave))) {
+      state.weave = { ...state.weave, story: `${state.weave.story || ''} [RENDER-DIFF EDIT]` };
+    }
+    state._weaveHandEdits = diffMod.standingAtMeeting(null, baseline, weaveModule.weaveForPrompt(state.weave));
   }
   const theme = state.theme || 'journalist';
   const promptBuilder = createPromptBuilder({
@@ -307,19 +329,26 @@ async function render() {
     : await getArticleRevisionSystemPrompt(theme, state.sessionConfig || {});
   write(FILES[3], arSystem, arPrompt);
 
-  // 5. the arc writer (the weave) and 6. the arc rework's automatic pass on the weave
-  // after the weave checks (phase 4, brief 4.4), as reviseArcs builds it. Rendered for
-  // the plain prompt diff only; --compare reads FILES. The fixed notes stand in for the
-  // director's, and the weave the thread holds (or the fixed one planted above) is the
-  // version the rework starts from; the checks run on it as the check node runs them,
-  // with the meeting still open.
+  // 5. the arc writer (the weave), then 6-8. the arc rework as reviseArcs sends it
+  // (arcReworkCall; briefs 4.4 and 4.5): its automatic pass after the weave checks, the
+  // director's reweave with no note, and the director's send-back with the fixed note,
+  // each round's banner reading round FIXED_ROUND. Rendered for the plain prompt diff
+  // only; --compare reads FILES. The fixed notes stand in for the director's, and the
+  // weave the thread holds (or the fixed one planted above) is the version each rework
+  // starts from, with the director's standing edits; the checks run on it as the check
+  // node runs them, with the meeting still open.
   const arcState = { ...state, directorGateNotes: FIXED_NOTES };
   write(ARC_FILES[0], await arcNodes.weaveSystemPrompt(state.sessionConfig || {}, theme), await arcNodes.buildWeavePrompt(arcState));
-  const { validationResults: weaveChecks } = await arcModule.validateArcStructure({ ...state, selectedArcs: [] }, {});
-  const crc = await buildRevisionContext({ phase: 'arcs', outputName: 'weave', revisionCount: 1, round: FIXED_ROUND,
-    validationResults: weaveChecks, previousOutput: weaveModule.weaveForPrompt(state.weave), humanFeedback: null, theme });
-  write(ARC_FILES[1], await arcNodes.getArcRevisionSystemPrompt(false, state.sessionConfig || {}, theme),
-    await arcNodes.buildArcRevisionPrompt({ ...arcState, _arcFeedback: null, arcRevisionCount: 1 }, crc.contextSection, crc.previousOutputSection));
+  const { validationResults: weaveChecks } = await arcModule.validateArcStructure({ ...state, meetingApproved: false }, {});
+  const reworks = [
+    [ARC_FILES[1], { _meetingRound: null, _arcFeedback: null, arcRevisionCount: 1, validationResults: weaveChecks }],
+    [ARC_FILES[2], { _meetingRound: 'reweave', _arcFeedback: null, arcRevisionCount: 0 }],
+    [ARC_FILES[3], { _meetingRound: 'send-back', _arcFeedback: FIXED_FEEDBACK, arcRevisionCount: 0 }]
+  ];
+  for (const [file, round] of reworks) {
+    const call = await arcNodes.arcReworkCall({ ...arcState, humanArcRevisionCount: FIXED_ROUND - 1, ...round });
+    write(file, call.systemPrompt, call.prompt);
+  }
 
   // 7-9. the three judges, from the thread's state; the arcs judge is the story
   // meeting's fact check on the weave, and the article judge's fact check is run on the
