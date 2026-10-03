@@ -50,7 +50,8 @@ const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessio
 const { isSessionLocked } = require('./lib/session-locks');
 const { runGraphInBackground } = require('./lib/api-background-runner');
 const { SchemaValidator } = require('./lib/schema-validator');
-const { createTemplateAssembler } = require('./lib/template-assembler');
+// Task 4.3: the article as it will print, one renderer for htmlPreview and the desk's preview route.
+const { previewOptionsOf, articlePreviewHtml, writerTrackerPrints } = require('./lib/article-preview');
 const outlineValidator = new SchemaValidator();
 
 // Shared checkpointer instance - DURABLE (DUR-1): sessions survive restart/crash/deploy.
@@ -204,10 +205,8 @@ function lastEvaluationFor(history, phase) {
  * Uses the same TemplateAssembler the pipeline publishes with, so the operator
  * approves the thing they can read rather than a JSON blob. Nothing is written
  * to disk and no photos are copied — that is assembleHtml's job, after approval.
- *
- * `<base href="/">` is injected because the published page uses relative
- * `sessionphotos/...` URLs, which would otherwise resolve against /console/ in
- * the preview iframe and 404.
+ * The render, its `<base href="/">` included, is lib/article-preview.js's, which the
+ * desk's preview route shares (task 4.3).
  *
  * Returns null on ANY failure: a bundle too malformed to render is exactly when
  * the operator most needs the gate to open (with the JSON and the reject box).
@@ -218,12 +217,7 @@ function lastEvaluationFor(history, phase) {
 async function renderArticlePreview(state) {
     if (!state.contentBundle) return null;
     try {
-        const assembler = createTemplateAssembler(state.theme || 'journalist');
-        const html = await assembler.assemble(state.contentBundle, {
-            sessionId: state.sessionId,
-            shellAccounts: state.shellAccounts || []
-        });
-        return html.replace('<head>', '<head>\n  <base href="/">');
+        return await articlePreviewHtml(state.contentBundle, previewOptionsOf(state));
     } catch (err) {
         console.warn(`[renderArticlePreview] preview unavailable: ${err.message}`);
         return null;
@@ -1420,6 +1414,44 @@ for (const endpoint of RESOURCE_ENDPOINTS) {
         }
     });
 }
+
+/**
+ * POST /api/session/:id/article/preview
+ * The desk's preview (phase 4, task 4.3; spec 2026-10-02 section 6.3): the bundle the
+ * console sends, as it will print. `htmlPreview` shows the writer's draft; at the desk the
+ * director sees the page as they have it. Rendered by lib/article-preview.js, as htmlPreview
+ * is, with the session's theme, photo paths and ledger: the photos spaced, the ledger's
+ * money tracker in place of the writer's, `<base href="/">` for the photo links. Read-only:
+ * nothing is stored and no graph runs.
+ *
+ * Body `{contentBundle}`. Answers `{html, writerTrackerPrints}`, which tells the desk whether
+ * the writer's money tracker prints at all; 400 without a bundle; 404 for a session with no
+ * thread; 422 with the reason for a bundle the page cannot print, which the desk shows in
+ * place of the page.
+ */
+app.post('/api/session/:id/article/preview', requireAuth, async (req, res) => {
+    const { id: sessionId } = req.params;
+    const bundle = req.body && req.body.contentBundle;
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+        return res.status(400).json({ error: 'The preview needs the article as an object: {contentBundle}' });
+    }
+    try {
+        const session = await getSessionState(sessionId);
+        if (!session) {
+            return res.status(404).json({ sessionId, exists: false });
+        }
+        const options = previewOptionsOf(session.state);
+        let html;
+        try {
+            html = await articlePreviewHtml(bundle, options);
+        } catch (err) {
+            return res.status(422).json({ error: err.message });
+        }
+        res.json({ html, writerTrackerPrints: writerTrackerPrints(bundle, options.shellAccounts) });
+    } catch (error) {
+        sendErrorResponse(res, sessionId, error, `POST /api/session/${sessionId}/article/preview`);
+    }
+});
 
 // ===== SESSION ACTION ENDPOINTS (8.9.7) =====
 
