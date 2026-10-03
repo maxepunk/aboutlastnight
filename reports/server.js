@@ -946,10 +946,19 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
 /**
  * Valid theme values for validation
  */
-// Both themes fully supported by LangGraph pipeline.
 // 'journalist' = NovaNews investigative article (first-person, ~3000 words)
 // 'detective' = Detective Anondono case file (third-person, ~750 words)
 const VALID_THEMES = ['journalist', 'detective'];
+
+/**
+ * Themes that start no session (phase 4, brief 4.4; ruling R1). The detective theme stays
+ * as the worked example of a second theme, with its skill folder, templates and theme
+ * config, but it has no story meeting, map or article stage yet: a session on it would
+ * break at the arc stop. `/start` refuses it up front with a message instead.
+ */
+const PARKED_THEMES = {
+    detective: 'The detective theme is parked until it has its own files for the story meeting, the map and the article. Start this session with the journalist theme.'
+};
 
 /**
  * Session-ID contract (B1 companion).
@@ -1473,8 +1482,12 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
     // Validate theme
     if (!VALID_THEMES.includes(theme)) {
         return res.status(400).json({
-            error: `Invalid theme: ${theme}. Use 'journalist' or 'detective'.`
+            error: `Invalid theme: ${theme}. Use 'journalist'.`
         });
+    }
+    // R1: a parked theme starts no session, before any graph is built or state read.
+    if (Object.prototype.hasOwnProperty.call(PARKED_THEMES, theme)) {
+        return res.status(400).json({ error: PARKED_THEMES[theme] });
     }
 
     // Validate minimal required input for incremental flow.
