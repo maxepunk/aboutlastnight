@@ -251,7 +251,8 @@ class TemplateAssembler {
 
     // Never two photos in a row (spec 2026-10-02 section 9): what prints is spaced, and
     // the stored bundle keeps the writer's order. A printed hero is a photo just above
-    // the first block.
+    // the first block. A section the spacing empties is gone from both the page and its
+    // section nav.
     const sections = spacePhotos(contentBundle.sections, { photoAboveFirstBlock: hero !== null });
 
     // Load inline CSS if enabled
@@ -361,8 +362,8 @@ class TemplateAssembler {
       // Byline data for header partial (author, title, guestReporter)
       byline: contentBundle.byline || {},
 
-      // Section navigation items (for sidebar)
-      sectionNav: this.buildSectionNav(contentBundle.sections)
+      // Section navigation items (for sidebar), from the sections that print
+      sectionNav: this.buildSectionNav(sections)
     };
   }
 
@@ -443,7 +444,8 @@ class TemplateAssembler {
    * Build section navigation from sections array
    *
    * @private
-   * @param {Array} sections - ContentBundle sections
+   * @param {Array} sections - The sections that print, as spacePhotos returns them, so
+   *   a section the spacing emptied has no link
    * @returns {Array} Navigation items with id, label, href
    */
   buildSectionNav(sections) {

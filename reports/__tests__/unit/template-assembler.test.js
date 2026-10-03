@@ -389,6 +389,26 @@ describe('photo spacing in what prints', () => {
     expect(html).not.toContain('The room before the doors opened.');
   });
 
+  // FB: a section that held only photos the spacing moved would print as a heading over
+  // nothing, with a link to it in the section nav.
+  it('prints no heading and no nav link for a section the spacing empties', async () => {
+    const assembler = new TemplateAssembler('journalist');
+    const bundle = {
+      ...JSON.parse(JSON.stringify(validBundle)),
+      heroImage: { filename: 'hero.jpg', caption: 'The hero.' },
+      sections: sectionsFrom('[the-story] P PH1 [whats-missing] PH2 [closing] P P')
+    };
+
+    const context = await assembler.buildContext(bundle, '010126');
+    expect(notationOf(context.sections)).toBe('[the-story] P PH1 [closing] P PH2 P');
+    expect(context.sectionNav.map((item) => item.href)).toEqual(['#the-story', '#closing']);
+
+    const html = await assembler.assemble(bundle, { sessionId: '010126' });
+    expect(html).not.toContain('id="whats-missing"');
+    expect(html).not.toContain('href="#whats-missing"');
+    expect(html).toContain('href="#closing"');
+  });
+
   it('prints the spaced order on the page', async () => {
     const assembler = new TemplateAssembler('journalist');
     const html = await assembler.assemble(journalistDraft(), { sessionId: '010126' });
