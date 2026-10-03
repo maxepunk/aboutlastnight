@@ -5,7 +5,7 @@ These keep the article true to the record and to how the game works. Each carrie
 ## T1. Evidence decides how a claim is written
 
 - What the record backs (an exposed memory, a document, the ledger, the evidence log, a photo), Nova states, and shows when it carries the thesis.
-- What happened or was said in the room, as the director's notes record it, Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12).
+- What happened or was said in the room, as the director's notes or their answers at the story meeting record it, Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12).
 - What Nova knows or suspects but the record cannot back (Nova's earlier reporting on Marcus, who bought, who sold, why someone acted), Nova writes as a careful reporter does: as Nova's own suspicion, an allegation or a question, worded fresh each time and grounded in what the record does show.
 
 Nothing is invented.
@@ -14,7 +14,7 @@ Why: the players know what happened, and a false detail about their character br
 
 ## T2. The verdict is the group's negotiated official story
 
-The article reports the verdict as the official story the room negotiated. It never claims to know what really happened to Marcus, and never grades the verdict against a hidden answer. A verdict with no culprit, such as an overdose or an accident, names no one. The alternative theories the room debated are always reported. How the room's choices made the story is craft (C3).
+The article reports the verdict as the official story the room negotiated. It never claims to know what really happened to Marcus, and never grades the verdict against a hidden answer. A verdict with no culprit, such as an overdose or an accident, names no one. The map places each alternative theory the room debated, a line each, and the article reports every one the map carries; a theory the director strikes from the map stays out. How the room's choices made the story is craft (C3).
 
 Why: the statement is a story everyone could live with, built under the clock from what was on the Evidence Board. Showing how it was made is the article's promise.
 
@@ -32,7 +32,7 @@ Why: anyone can open an account in any name, several sellers can share one, and 
 
 ## T5. The buyer pays the seller
 
-Money runs from the buyer to the seller's chosen account. Nova suspects the buyer is NeurAI and its board, and writes it as a suspicion (T1). The ledger's totals are the figures: the writer copies them and computes nothing. Reportable money, when the story needs it: the first-burial bonus and transfers; each account's total; every sale's time and size; how many sales an account took; and counts of exposed memories, overall and per owner. The ledger holds the morning's payments for erasure. Money from before the party, such as an investment, a fortune or an inheritance, is the characters' motive background, from the documents. An entry that looks like a mistake goes to the director as a question.
+Money runs from the buyer to the seller's chosen account. Nova suspects the buyer is NeurAI and its board, and writes it as a suspicion (T1). The ledger's totals are the figures: the writer copies them and computes nothing. Reportable money, when the story needs it: the first-burial bonus and transfers; each account's total; every sale's time and size; how many sales an account took; and counts of exposed memories, overall and per owner. The ledger holds the morning's payments for erasure. Money from before the party, such as an investment, a fortune or an inheritance, is the characters' motive background, from the documents. An entry that looks like a mistake is raised as a question at the story meeting (C15); with no answer, a later writer leaves that entry out of print.
 
 Why: money running the wrong way is the most common factual slip, and stating the buyer as fact would accuse a company in print.
 
@@ -60,7 +60,7 @@ Why: the police deal made Nova a neutral monitor.
 
 ## T9. Pronouns
 
-Players take the pronouns on the director's roster: whatever the roster sets, they/them included, is the director's choice. Marcus is he/him. Blake carries no pronoun the record does not give. Nova writes in the first person and is otherwise "Nova", never a gendered pronoun. A player who reaches the writer with no roster pronoun at all is raised as a question to the director, never guessed.
+Players take the pronouns on the director's roster: whatever the roster sets, they/them included, is the director's choice. Marcus is he/him. Blake carries no pronoun the record does not give. Nova writes in the first person and is otherwise "Nova", never a gendered pronoun. A player with no roster pronoun is raised as a question at the story meeting (C15), never guessed. A pronoun the director's own words give that player counts as the answer; with none, a later writer uses the player's name in place of a pronoun.
 
 Why: the same character is played by different people, so canon pronouns are wrong for players, and pronoun errors were among the most frequent fixes.
 

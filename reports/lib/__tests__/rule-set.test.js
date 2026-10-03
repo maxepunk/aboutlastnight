@@ -325,6 +325,53 @@ describe('the rule files', () => {
   });
 });
 
+/**
+ * Phase 4, task 4.1: the rule text the director approved on 2026-10-03
+ * (rule-text-read-3.md in the phase 4 workspace, sections A and B). Phase 4 moves the
+ * stages' jobs: the story meeting settles the story, the map lays it across the
+ * sections, and the article writer writes all the prose. Each changed item carries one
+ * of the read's sentences inside its own item, and C8 and C15 carry the read's titles.
+ * The lint above holds the rest: each item once, every pointer, no em-dash, no gendered
+ * Nova and nothing on the removed list.
+ */
+describe('the items phase 4 rewrites (task 4.1)', () => {
+  const read = (name) => {
+    const file = path.join(RULES_ROOT, `${name}.md`);
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  };
+  /** One item's text: its heading line, through the line before the next heading. */
+  const itemText = (name, id) => {
+    const lines = read(name).split('\n');
+    const start = lines.findIndex((line) => new RegExp(`^#{1,6} ${id}\\b`).test(line));
+    if (start < 0) return '';
+    const end = lines.findIndex((line, i) => i > start && /^#{1,6} /.test(line));
+    return lines.slice(start, end < 0 ? lines.length : end).join('\n');
+  };
+
+  it.each([
+    ['C1', 'craft-story', 'The director settles the thesis at the meeting, and every later writer works from the settled story.'],
+    ['C16', 'craft-story', "The arc writer weighs each thread by how it bears on the room's verdict, and that weight decides its role."],
+    ['C2', 'craft-form', 'The map decides, from the settled story, which sections exist, their order and their headings.'],
+    ['C4', 'craft-telling', "The article writer gives each beat the sentences its job needs, a supporting player's beat a line or two and a decisive scene more, and aims at the map's expected length: a session that gives less makes a shorter article, never a padded one."],
+    ['C8', 'craft-material', 'The map chooses, from the notes and the record, the lines the settled story needs, places each where it makes sense in its context, a line from the room in its moment, and lists what it considered and did not use as left out, one line each.'],
+    ['C7', 'craft-material', 'The map places every player in a beat, through something the record shows they did or said, in the section where it matters, never as a roll call.'],
+    ['C15', 'craft-questions', "The director answers each in its own box at the story meeting, and the answer travels with its question to every later writer as the director's words."],
+    ['T1', 'truth-rules', "What happened or was said in the room, as the director's notes or their answers at the story meeting record it, Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
+    ['T2', 'truth-rules', 'The map places each alternative theory the room debated, a line each, and the article reports every one the map carries; a theory the director strikes from the map stays out.'],
+    ['T5', 'truth-rules', 'An entry that looks like a mistake is raised as a question at the story meeting (C15); with no answer, a later writer leaves that entry out of print.'],
+    ['T9', 'truth-rules', "A pronoun the director's own words give that player counts as the answer; with none, a later writer uses the player's name in place of a pronoun."]
+  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
+    expect(itemText(name, id)).toContain(sentence);
+  });
+
+  it.each([
+    ['C8', 'craft-material', "## C8. The director's lines: weighed by the arc writer, chosen by the map"],
+    ['C15', 'craft-questions', '## C15. Questions to the director, at the story meeting']
+  ])('%s, in %s.md, carries the approved title', (id, name, heading) => {
+    expect(itemText(name, id).split('\n')[0]).toBe(heading);
+  });
+});
+
 describe('the removed-phrase fixture', () => {
   it('is a list of strings and patterns', () => {
     expect(REMOVED_PHRASES.length).toBeGreaterThan(0);

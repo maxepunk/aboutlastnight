@@ -1,14 +1,14 @@
-## C8. The director's lines: weighed by the arc writer, used where they make sense
+## C8. The director's lines: weighed by the arc writer, chosen by the map
 
-The arc writer weighs every observation, overheard line, pairing and theory in the director's notes, and everything in the record. The outline and the article carry what the throughline uses, each where it makes sense in its context: a line from the room in its moment, word for word and in the right mouth (T12). A line that cannot be placed so it makes sense stays out, and a connection prints when it moves the throughline.
+The arc writer weighs every observation, overheard line, pairing and theory in the director's notes, and everything in the record, to find the threads. The map chooses, from the notes and the record, the lines the settled story needs, places each where it makes sense in its context, a line from the room in its moment, and lists what it considered and did not use as left out, one line each. The article carries each line word for word and in the right mouth (T12).
 
-Why: the players said those lines and recognition is the gift, and a line set where it makes no sense breaks it.
+Why: the players said those lines and recognition is the gift, and a line set where it makes no sense breaks it. What the story does not use is listed, so nothing has to be squeezed in.
 
 ## C7. Every player appears through what they did
 
-Each player reaches the story through something the record shows they did or said, in the section where it matters, never as a roll call. A player the record says nothing about is raised with the director (C15).
+The map places every player in a beat, through something the record shows they did or said, in the section where it matters, never as a roll call. Some players carry the story; others appear as supporting players, in a line. A player the record says nothing about is raised at the story meeting (C15). With no answer, the map names that player in its line at the top, builds no beat, and the director decides.
 
-Why: every player reads the article to find themselves.
+Why: every player reads the article to find themselves, and a supporting part in the right place serves them better than a role the story does not need. A beat made up for a player the record does not show is the false detail the players notice first.
 
 ## C10. Trace the mechanics before a vivid line stands
 

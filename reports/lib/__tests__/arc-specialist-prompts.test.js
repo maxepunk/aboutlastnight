@@ -660,7 +660,9 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       // of it again.
       expect(label).not.toMatch(/what happened and was said|never changed|as written|unproven claim|open question|suspicion|allegation|careful reporter|worded fresh/);
       const system = coreArcSystemPrompt(state.sessionConfig, 'journalist');
-      expect(count(`${system}\n${prompt}`, "as the director's notes record it")).toBe(1);
+      // Phase 4 (4.1): T1's second point names the director's answers at the story
+      // meeting beside the notes; T1 alone states it, once.
+      expect(count(`${system}\n${prompt}`, "as the director's notes or their answers at the story meeting record it")).toBe(1);
     });
 
     // Post-merge fix: the arc judge prints the arc writer's own label, so the label has

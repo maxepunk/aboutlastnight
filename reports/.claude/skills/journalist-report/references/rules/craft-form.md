@@ -7,9 +7,11 @@ The article is one story, and each section is a movement of it: it carries the t
 - WHAT'S MISSING: what is still open;
 - the untitled closing: where it lands.
 
-The thesis decides which sections exist, their order and their headings. What is still open often belongs in the closing, and a section whose job is done elsewhere is dropped. The story is told through every section, never front-loaded into the first, and not every thread appears in every section.
+The map decides, from the settled story, which sections exist, their order and their headings. Each section it keeps has one job: what it does to the question. A section whose job is done elsewhere is dropped, with one line on why; what is still open often belongs in the closing. The story is told through every section, never front-loaded into the first, and not every thread appears in every section.
 
-Why: an article in which every section is essential to the narrative is one the players read to the end. A first section that tells everything, followed by sections filled with leftover material, is one they skim.
+A section's beats are its scenes, receipts, lines and figures, each named by its material: the document, the speaker and the line, the ledger entry. A beat names what the article will use, and the article writer writes it. Each photo sits beside the beat it belongs with. A photo whose moment is outside the story sits in the section where its people appear, captioned from the director's description, and nothing is written to explain it.
+
+Why: an article in which every section is essential to the narrative is one the players read to the end. A first section that tells everything, followed by sections filled with leftover material, is one they skim. A map that drafts the prose hands the article writer finished sentences from a plan that never read the voice guidance, and the article then reads like its plan.
 
 ## C5. The opening: hook, turn, moment, stakes
 
