@@ -1768,3 +1768,55 @@ describe('the director\'s edits, field by field, at the fact check (FA)', () => 
     expect(sectionKeyOf).toBe(sectionKey);
   });
 });
+
+// FA fix round 1, finding 2: a move is the block's place only. A block the director moved
+// without changing it is still the writer's, field by field, so a hit in it keeps its
+// status: the whiteboard, a card that is not verbatim, a card with an unknown source or a
+// reporter-mode phrase reaches the automatic pass as the writer's must-fix.
+describe('a block the director only moved is the writer\'s at the fact check (FA, fix round 1)', () => {
+  const { standingAfterSendBack, carriedEdits, DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
+  const paragraph = (text) => ({ type: 'paragraph', text });
+  const NOT_VERBATIM = 'An invented sentence that appears in no document of this session.';
+  const WHITEBOARD = { type: 'photo', filename: 'whiteboard.jpg', caption: "The room's working notes" };
+  /** Two sections, with `blocks` at the end of the one at `where`. */
+  const twoSections = (where, blocks) => {
+    const bundle = {
+      sections: [
+        { id: 'the-story', type: 'narrative', content: [paragraph('Vic leaned in at the bar.')] },
+        { id: 'closing', type: 'narrative', content: [paragraph('Whether the verdict costs Alex anything is still open.')] }
+      ],
+      evidenceCards: []
+    };
+    bundle.sections[where].content.push(...blocks.map((block) => JSON.parse(JSON.stringify(block))));
+    return bundle;
+  };
+  /** The fact check on the director's version, where `blocks` moved from THE STORY to the closing. */
+  const movedRun = (blocks, extra = {}) => {
+    const directors = twoSections(1, blocks);
+    const directorEdits = carriedEdits(standingAfterSendBack(null, twoSections(0, blocks), directors, 'bundle'), directors);
+    return { directorEdits, result: factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits, ...extra })) };
+  };
+
+  it('the whiteboard, a card that is not verbatim and a card with an unknown source stay structural', () => {
+    const { directorEdits, result } = movedRun(
+      [WHITEBOARD, inlineCard({ content: NOT_VERBATIM }), inlineCard({ tokenId: 'nope999', content: 'x' })],
+      { sessionPhotos: ['/photos/a.jpg', '/photos/whiteboard.jpg'], whiteboardPhoto: 'whiteboard.jpg' }
+    );
+    expect(directorEdits.map((e) => [e.id, e.from])).toEqual([['E1', 'the-story'], ['E2', 'the-story'], ['E3', 'the-story']]);
+    expect(result.structuralIssues).toEqual([
+      expect.stringMatching(/^Evidence card "vic001" \(in section "closing"\) is not verbatim/),
+      expect.stringMatching(/^Evidence card "nope999" \(in section "closing"\) has an unknown source/),
+      expect.stringMatching(/^Invalid photo reference "whiteboard.jpg": this is the whiteboard/)
+    ]);
+    expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
+    expect(result.cardFidelity.filter((item) => item.directorEdit)).toEqual([]);
+    expect(result.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
+  });
+
+  it('a reporter-mode phrase in a paragraph the director moved stays structural', () => {
+    const { result } = movedRun([paragraph('Then I voted with the room.')]);
+    expect(result.reporterMode.violations).toEqual(['i voted']);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\./)]);
+    expect(result.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
+  });
+});

@@ -416,6 +416,36 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
     expect(contextSection).toContain('A removed: line under an edit is a sentence the director took out of that text when rewriting it.');
   });
 
+  // FA fix round 1, finding 2: a move is the block's place only, so the block stays the
+  // writer's: the block lists it by its place, and a finding that quotes the moved
+  // block's text reaches the rework as the writer's must-fix.
+  it('lists a moved block by its place, and a finding about its text reaches the rework', () => {
+    const LINE = 'Riley watched the ledger all morning and said nothing to anyone.';
+    const article = (where) => {
+      const a = {
+        headline: { main: 'The Sale' },
+        sections: [
+          { id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: 'Mel built the first theory around the fight.' }] },
+          { id: 'closing', type: 'narrative', content: [{ type: 'paragraph', text: 'Whether the verdict costs Alex anything is still open.' }] }
+        ]
+      };
+      a.sections[where].content.push({ type: 'paragraph', text: LINE });
+      return a;
+    };
+    const issue = `T12: "${LINE}" is not in the record. Cut the line.`;
+    for (const humanFeedback of [null, 'Move the photos apart.']) {
+      const { contextSection } = buildRevisionContext({
+        phase: 'article', revisionCount: 1, previousOutput: article(1), humanFeedback,
+        handEdits: standingAfterSendBack(null, article(0), article(1), 'bundle'),
+        validationResults: { phase: 'article', passed: false, criteriaScores: {}, structuralIssues: [issue], advisoryWarnings: [], revisionGuidance: '' }
+      });
+      const block = contextSection.slice(contextSection.indexOf('<HAND_EDITS>'), contextSection.indexOf('</HAND_EDITS>'));
+      expect(block).toContain('E1 (section "closing", paragraph, moved from section "the-story"): begins "Riley watched the ledger all morning and said…"');
+      expect(block).toContain('A line marked moved names a block the director moved to that place without changing it: the place is the director\'s, and the block\'s text is still the writer\'s.');
+      expect(contextSection.slice(0, contextSection.indexOf('<HAND_EDITS>'))).toContain(issue);
+    }
+  });
+
   it('is absent when handEdits is null, empty or missing, or when no edit is carried', () => {
     expect(buildRevisionContext({ ...base, handEdits: null }).contextSection).not.toContain('HAND_EDITS');
     expect(buildRevisionContext({ ...base, handEdits: diffOutline({}, {}) }).contextSection).not.toContain('HAND_EDITS');

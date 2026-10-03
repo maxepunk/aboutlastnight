@@ -472,7 +472,7 @@ describe('a block moved across sections (FA)', () => {
   test('is one edit, not a cut and an addition', () => {
     const { edits } = D.standingAfterSendBack(null, withPhotoIn(1), withPhotoIn(2), 'bundle');
     expect(edits.map(bare)).toEqual([{ id: 'E1', scope: 'section:closing', path: 'sections[#closing].content[1]', before: null, after: PHOTO, from: 'the-story' }]);
-    expect(D.formatEditLines(edits)).toBe('E1 (section "closing", photo p3.jpg, moved from section "the-story"): filename "p3.jpg"; caption "Vic, Remi and Alex"');
+    expect(D.formatEditLines(edits)).toBe('E1 (section "closing", photo p3.jpg, moved from section "the-story")');
   });
 
   test('stands while the block sits in the section the director put it in', () => {
@@ -487,6 +487,51 @@ describe('a block moved across sections (FA)', () => {
     expect(output.sections[1].content.map((b) => b.type)).toEqual(['paragraph', 'paragraph']);
     expect(output.sections[2].content[1]).toEqual(PHOTO);
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "the-story"', restored: true, automatic: true })]);
+  });
+});
+
+// FA fix round 1, finding 2: a move is the block's place only. The director moved the
+// block without changing it, so its text is still the writer's: a finding that quotes
+// it quotes the writer, the fact check finds no field of it the director wrote, and its
+// line names the block and its place, never its text as the director's.
+describe('a moved block is the writer\'s, in the director\'s place (FA, fix round 1)', () => {
+  const LINE = 'Sarah told the room she had seen Jess at the bar with the cash.';
+  const PHOTO = { type: 'photo', filename: 'p3.jpg', caption: 'Vic, Remi and Alex' };
+  const withIn = (block, sectionIndex) => {
+    const a = directorsVersion();
+    a.sections[sectionIndex].content.push(clone(block));
+    return a;
+  };
+  /** The director moved `block` from THE STORY to the closing, unchanged. */
+  const moved = (block) => {
+    const output = withIn(block, 2);
+    return { output, edits: D.carriedEdits(D.standingAfterSendBack(null, withIn(block, 1), output, 'bundle'), output) };
+  };
+
+  test('a finding that quotes the moved block\'s text quotes the writer', () => {
+    const { output, edits } = moved(paragraph(LINE));
+    expect(edits.map((e) => [e.id, e.from])).toEqual([['E1', 'the-story']]);
+    expect(D.locateQuotedText(`T12: "${LINE}" puts a line in Sarah's mouth that no note gives her.`, edits, output))
+      .toEqual({ editIds: [], writer: true });
+  });
+
+  test('the fact check finds no field of a moved block that the director wrote', () => {
+    const { output, edits } = moved(PHOTO);
+    const locator = D.editLocator(output, edits);
+    const block = output.sections[2].content[1];
+    expect(locator.blockField('closing', block, 'filename')).toBeNull();
+    expect(locator.blockField('closing', block, 'caption')).toBeNull();
+    expect(locator.blockEdited('closing', block)).toBeNull();
+  });
+
+  test('its line names the block and where the director moved it, and a block its text names by the words it begins with', () => {
+    expect(D.formatEditLines(moved(PHOTO).edits)).toBe('E1 (section "closing", photo p3.jpg, moved from section "the-story")');
+    expect(D.formatEditLines(moved(paragraph(LINE)).edits))
+      .toBe('E1 (section "closing", paragraph, moved from section "the-story"): begins "Sarah told the room she had seen Jess…"');
+  });
+
+  test('the guide to the lines says a moved block\'s text is still the writer\'s', () => {
+    expect(D.EDIT_LINES_GUIDE).toContain('A line marked moved names a block the director moved to that place without changing it: the place is the director\'s, and the block\'s text is still the writer\'s.');
   });
 });
 

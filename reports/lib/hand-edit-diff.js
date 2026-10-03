@@ -27,7 +27,11 @@
  * - A rewritten text field also records `removed` (FA, requirement 3): each sentence of
  *   its old text the director's version no longer held, as written.
  * - A block that left one section and arrived unchanged in another is one edit, a move
- *   (FA, requirement 4): `after` is the block and `from` the section it left.
+ *   (FA, requirement 4): `after` is the block and `from` the section it left. A move is
+ *   the block's place only (fix round 1, finding 2): the director changed none of its
+ *   fields, so its text is still the writer's. It owns no text a finding is located in
+ *   (locateQuotedText), the fact check finds no field of it the director wrote
+ *   (editLocator), and its line names the block and its place (formatEditLines).
  * - Given the roster's names, a cut or a removal records `names` (FA, requirement 9):
  *   the names its text held that the director's version no longer named.
  * Ids (E1, E2, ...) are stable within a stop. The edits stand across every send-back
@@ -72,9 +76,10 @@ const DIRECTOR_EDIT_PREFIX = "Director's edit ";
 /**
  * How to read the edit lines (formatEditLines), for the judges' section and the
  * reworks' <HAND_EDITS> block alike: an edit is the field its place names (FA,
- * requirement 2), and a removed: line is a sentence a rewrite took out (requirement 3).
+ * requirement 2), a moved block's text is still the writer's (requirement 4; fix round 1,
+ * finding 2), and a removed: line is a sentence a rewrite took out (requirement 3).
  */
-const EDIT_LINES_GUIDE = "An edit covers only the place its line names: a place that ends on a field, such as a card's headline or a photo's caption, is that field alone, and the rest of the block is the writer's. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+const EDIT_LINES_GUIDE = "An edit covers only the place its line names: a place that ends on a field, such as a card's headline or a photo's caption, is that field alone, and the rest of the block is the writer's. A line marked moved names a block the director moved to that place without changing it: the place is the director's, and the block's text is still the writer's. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
 
 /** The pass a report entry names when the rework of the director's send-back changed an edit. */
 const SEND_BACK_PASS = 'send-back';
@@ -714,6 +719,12 @@ function isEdit(e) { return isObj(e) && typeof e.id === 'string' && typeof e.pat
 /** A cut: the director removed the text, so the edit has no `after`. */
 function isCut(edit) { return edit.after === null || edit.after === undefined; }
 
+/**
+ * A move: a block the director moved, unchanged, from section `from` (FA, requirement 4).
+ * Its place is the director's and its text the writer's (fix round 1, finding 2).
+ */
+function isMove(edit) { return Boolean(edit.from) && !isCut(edit); }
+
 function editNumber(id) {
   const m = /^E(\d+)$/.exec(String(id));
   return m ? Number(m[1]) : 0;
@@ -1029,28 +1040,45 @@ function editWhere(edit) {
   return parts.filter(Boolean).join(', ');
 }
 
+/** How many of its opening words name a moved block that no filename or tokenId names. */
+const MOVED_OPENING_WORDS = 8;
+
+/**
+ * A move's line: its id and place, and, for a block its text names, the words it begins
+ * with. Its text is the writer's (fix round 1, finding 2), so the line never prints it
+ * as the director's.
+ */
+function moveLine(edit) {
+  const block = edit.after;
+  const named = isObj(block) && (block.filename || block.tokenId);
+  const words = named ? [] : blockText(block).trim().split(/\s+/).filter(Boolean);
+  const opening = words.length > MOVED_OPENING_WORDS ? `${words.slice(0, MOVED_OPENING_WORDS).join(' ')}…` : words.join(' ');
+  return `${edit.id} (${editWhere(edit)})${opening ? `: begins "${opening}"` : ''}`;
+}
+
 /**
  * One line per edit, by id and place, with the director's text whole: a cut's line
  * holds the text the director removed, and a rewrite's removed sentences follow it, one
- * `removed:` line each. Text is quoted; an element prints its fields, never JSON.
+ * `removed:` line each. Text is quoted; an element prints its fields, never JSON. A
+ * move's line names the block and its place (moveLine).
  *
  * @param {Object[]} edits
  * @returns {string}
  */
 function formatEditLines(edits) {
-  return (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).map((e) => [
+  return (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).map((e) => (isMove(e) ? moveLine(e) : [
     `${e.id} (${editWhere(e)}): ${valueLine(isCut(e) ? e.before : e.after)}`,
     ...(Array.isArray(e.removed) ? e.removed : []).map((sentence) => `  removed: "${String(sentence).trim()}"`)
-  ].join('\n')).join('\n');
+  ].join('\n'))).join('\n');
 }
 
 /**
  * The text `output` prints outside the edits it carries (each edit's own text taken out
- * once), part by part.
+ * once), part by part. A moved block's text stays the writer's.
  */
 function writerParts(output, edits) {
   const owned = new Map();
-  edits.filter((e) => !isCut(e)).forEach((e) => valueTexts(e, e.after).forEach((leaf) => {
+  edits.filter((e) => !isCut(e) && !isMove(e)).forEach((e) => valueTexts(e, e.after).forEach((leaf) => {
     const key = fold(leaf);
     owned.set(key, (owned.get(key) || 0) + 1);
   }));
@@ -1063,8 +1091,12 @@ function writerParts(output, edits) {
   });
 }
 
-/** The text an edit locates a quote against: its own text, the text it cut, and the sentences it removed. */
+/**
+ * The text an edit locates a quote against: its own text, the text it cut, and the
+ * sentences it removed. A move has none: its block's text is the writer's.
+ */
 function locatingTexts(edit) {
+  if (isMove(edit)) return [];
   return [
     ...valueTexts(edit, isCut(edit) ? edit.before : edit.after),
     ...(Array.isArray(edit.removed) ? edit.removed.filter((s) => typeof s === 'string') : [])
@@ -1195,14 +1227,15 @@ function valueAtSteps(value, steps) {
  * Which of the director's edits each printed piece of a bundle is, for the fact check,
  * field by field (FA, requirement 2): the edit that wrote a block's field, any edit on a
  * block or a sidebar card, a field such as `headline.main` or `heroImage.filename`, and
- * the cut or removal that took out a player's last mention.
+ * the cut or removal that took out a player's last mention. A move wrote no field: the
+ * block it placed is the writer's (fix round 1, finding 2).
  *
  * @param {Object} bundle
  * @param {Object[]} edits - the edits the bundle carries
  */
 function editLocator(bundle, edits) {
   const list = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
-  const written = list.filter((e) => !isCut(e));
+  const written = list.filter((e) => !isCut(e) && !isMove(e));
   /** The edits on section blocks: a whole section, a whole block, or a block's field. */
   const blockEdits = (sectionKeyOfBlock, block, onField) => {
     for (const e of written) {

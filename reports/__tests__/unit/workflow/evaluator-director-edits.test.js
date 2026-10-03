@@ -484,3 +484,42 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     if (theme === 'journalist') expect(result.validationResults.criteriaRules.verdictTruth).toEqual(['T2']);
   });
 });
+
+// FA fix round 1, finding 2: a move is the block's place only. The director moved the
+// writer's paragraph to the closing without changing it, so a finding that quotes the
+// paragraph is about the writer's text: it stays must-fix, and the output is not ready.
+describe('a paragraph the director only moved is the writer\'s at the judge (FA, fix round 1)', () => {
+  const WRITER_ISSUE = `T12: "${WRITER_LINE}" is not in the record. Cut the line.`;
+  /** The writer's article with WRITER_LINE moved, unchanged, from THE STORY to the closing. */
+  const movedArticle = () => {
+    const a = writersArticle();
+    const [line] = a.sections[0].content.splice(2, 1);
+    a.sections[1].content.push(line);
+    return a;
+  };
+  const movedState = (theme = 'journalist') => articleState(theme, {
+    contentBundle: movedArticle(),
+    _articleHandEdits: standingAfterSendBack(null, writersArticle(), movedArticle(), 'bundle')
+  });
+
+  it.each(['journalist', 'detective'])('%s judge: the move is listed by its place and the words the block begins with', (theme) => {
+    const state = movedState(theme);
+    const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: buildFactCheckArgs(state).directorEdits });
+    const section = prompt.slice(prompt.indexOf("THE DIRECTOR'S EDITS"), prompt.indexOf('\nOUTLINE:'));
+    expect(section).toContain('E1 (section "closing", paragraph, moved from section "the-story"): begins "Riley watched the ledger all morning and said…"');
+    expect(section).toContain('A line marked moved names a block the director moved to that place without changing it: the place is the director\'s, and the block\'s text is still the writer\'s.');
+    expect(section).not.toContain(WRITER_LINE);
+  });
+
+  it('a finding that quotes the moved paragraph stays structural, and the output is not ready', async () => {
+    const result = await evaluateArticle(movedState(), cfg(judging({
+      ready: false, structuralPassed: false, overallScore: 0.7, criteriaScores: {},
+      structuralIssues: [WRITER_ISSUE], advisoryWarnings: [], revisionGuidance: 'Step 1: cut the Riley line.', confidence: 'high'
+    })));
+    expect(result.evaluationHistory.structuralIssues).toEqual([WRITER_ISSUE]);
+    expect(result.evaluationHistory.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toEqual([WRITER_ISSUE]);
+    expect(result.validationResults.revisionGuidance).toBe('Step 1: cut the Riley line.');
+  });
+});
