@@ -26,17 +26,12 @@ const { SchemaValidator } = require('./schema-validator');
 const { createThemeLoader } = require('./theme-loader');
 const { withoutWriterQuestions } = require('./writer-questions');
 const { spacePhotos } = require('./photo-spacing');
+const { printedHero } = require('./theme-config');
 
 /**
  * Default base directory for templates
  */
 const DEFAULT_TEMPLATE_DIR = path.join(__dirname, '..', 'templates');
-
-/**
- * Themes whose layout prints the bundle's heroImage just above the first section
- * (templates/journalist/layouts/article.hbs). The detective layout prints no hero.
- */
-const THEMES_PRINTING_HERO = new Set(['journalist']);
 
 /**
  * Default CSS paths per theme (relative paths for HTML output)
@@ -231,7 +226,8 @@ class TemplateAssembler {
    * Adds computed properties and theme-specific data.
    * When inlineCss/inlineJs is enabled, loads and embeds asset content.
    * When sessionId is provided, transforms photo paths to use session-specific URLs.
-   * Spaces the sections' photos so no two print in a row (lib/photo-spacing.js).
+   * Prints the hero only when printedHero says the page prints it (lib/theme-config.js),
+   * and spaces the sections' photos so no two print in a row (lib/photo-spacing.js).
    *
    * @private
    * @param {Object} contentBundle - ContentBundle JSON
@@ -249,12 +245,14 @@ class TemplateAssembler {
     // Use relative path (no leading /) for standalone HTML compatibility (GitHub Pages, file://)
     const photosBasePath = sessionId ? `sessionphotos/${sessionId}/` : 'photos/';
 
+    // The hero this page prints, by the one rule printedPhotos reads for the publish: the
+    // theme's layout prints one, and the hero names a file.
+    const hero = printedHero(contentBundle, this.theme);
+
     // Never two photos in a row (spec 2026-10-02 section 9): what prints is spaced, and
-    // the stored bundle keeps the writer's order. On a page that prints the hero, the
-    // hero is a photo just above the first block.
-    const sections = spacePhotos(contentBundle.sections, {
-      photoAboveFirstBlock: THEMES_PRINTING_HERO.has(this.theme) && Boolean(contentBundle.heroImage)
-    });
+    // the stored bundle keeps the writer's order. A printed hero is a photo just above
+    // the first block.
+    const sections = spacePhotos(contentBundle.sections, { photoAboveFirstBlock: hero !== null });
 
     // Load inline CSS if enabled
     let inlineCss = null;
@@ -290,11 +288,8 @@ class TemplateAssembler {
       // Photos base path for session-specific photo serving
       photosBasePath,
 
-      // Transform heroImage to use session-specific path
-      heroImage: contentBundle.heroImage ? {
-        ...contentBundle.heroImage,
-        src: `${photosBasePath}${contentBundle.heroImage.filename}`
-      } : null,
+      // The printed hero with its session-specific path, or null when the page prints none
+      heroImage: hero ? { ...hero, src: `${photosBasePath}${hero.filename}` } : null,
 
       // Transform photos array to use session-specific paths
       photos: Array.isArray(contentBundle.photos)

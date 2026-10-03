@@ -139,16 +139,29 @@ describe('printedPhotos', () => {
       .toEqual(['aln0926262 (2 of 11).jpg']);
   });
 
+  test('a hero that names no file is not printed', () => {
+    expect(printedPhotos({ ...bundle, heroImage: { caption: 'The hero, its file not named.' } }, 'journalist'))
+      .toEqual(['aln0926262 (2 of 11).jpg', 'hero.jpg']);
+  });
+
   test('a theme with no known layout throws, naming it', () => {
     expect(() => printedPhotos(bundle, 'noir')).toThrow(/"noir"/);
   });
 });
 
+// The page and the publish read one rule for the hero (printedHero, lib/theme-config.js),
+// so the photos the HTML names are always the photos published: never a hero printed
+// and left unpublished, and never src=".../undefined" for a hero that names no file.
 describe('printedPhotos is what the assembled page prints', () => {
-  const pageBundle = (theme) => ({
+  const HEROES = {
+    'a hero that names a file': { filename: 'aln0926262 (1 of 11).jpg', caption: 'The six in the huddle.' },
+    'a hero that names no file': { caption: 'The six in the huddle.' },
+    'no hero': null
+  };
+  const pageBundle = (theme, hero) => ({
     metadata: { sessionId: '0926262', theme, generatedAt: '2026-10-02T00:00:00Z' },
     headline: { main: 'A headline long enough for the schema' },
-    heroImage: { filename: 'aln0926262 (1 of 11).jpg', caption: 'The six in the huddle.' },
+    ...(hero ? { heroImage: hero } : {}),
     photos: [{ filename: 'aln0926262 (9 of 11).jpg', caption: 'Listed at the top level, never printed.' }],
     sections: [
       { id: 'lede', type: 'narrative', content: [
@@ -164,8 +177,9 @@ describe('printedPhotos is what the assembled page prints', () => {
     ]
   });
 
-  test.each(['journalist', 'detective'])('%s: the photos the HTML names are the printed photos', async (theme) => {
-    const bundle = pageBundle(theme);
+  const cases = ['journalist', 'detective'].flatMap((theme) => Object.keys(HEROES).map((hero) => [theme, hero]));
+  test.each(cases)('%s, %s: the photos the HTML names are the printed photos', async (theme, hero) => {
+    const bundle = pageBundle(theme, HEROES[hero]);
     const html = await createTemplateAssembler(theme).assemble(bundle, { sessionId: '0926262' });
     const named = [...html.matchAll(/src="sessionphotos\/0926262\/([^"]+)"/g)].map((m) => m[1]);
     expect([...new Set(named)].sort()).toEqual([...printedPhotos(bundle, theme)].sort());
@@ -260,6 +274,15 @@ describe('publishPhotos', () => {
 
     expect(published).toEqual(['aln (1 of 2).jpg']);
     expect(fs.readdirSync(destDir)).toEqual(['aln (1 of 2).jpg']);
+  });
+
+  test('a hero that names no file publishes nothing for it', async () => {
+    const { sourceDir, destDir } = sessionFolders();
+    await writePhoto(path.join(sourceDir, 'inline.jpg'), { width: 400, height: 300 });
+    const bundle = { ...bundlePrinting(['inline.jpg']), heroImage: { caption: 'The room at the start.' } };
+
+    expect(await publishPhotos({ bundle, theme: 'journalist', sourceDir, destDir })).toEqual(['inline.jpg']);
+    expect(fs.readdirSync(destDir)).toEqual(['inline.jpg']);
   });
 
   test('the hero is published for the journalist theme only', async () => {

@@ -30,47 +30,37 @@
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { printedHero } = require('./theme-config');
 
 /** The web size: 1600 px on the long edge, JPEG quality 85 (spec section 9). */
 const PUBLISHED_PHOTO = Object.freeze({ longEdge: 1600, jpegQuality: 85 });
-
-/**
- * Whether each theme's layout prints the hero (templates/<theme>/layouts/article.hbs).
- * The detective's case file has no hero, and neither layout prints the bundle's
- * top-level `photos` list.
- */
-const LAYOUT_PRINTS_HERO = Object.freeze({ journalist: true, detective: false });
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
 /**
- * The photos the page prints, read from the bundle: the hero where the theme's layout
- * prints it, then every photo block in the sections, in the writer's order, each
- * filename once. A block or hero with no filename has nothing to publish, and the fact
- * check reads references the same way.
+ * The photos the page prints, read from the bundle: the hero when the page prints it,
+ * then every photo block in the sections, in the writer's order, each filename once.
+ * Whether the hero prints is printedHero's rule (lib/theme-config.js), which the
+ * assembler reads too: the theme's layout prints a hero, and the hero names a file.
+ * A block with no filename has nothing to publish, and neither layout prints the
+ * bundle's top-level `photos` list.
  *
  * @param {Object} bundle - ContentBundle
  * @param {string} theme - 'journalist' | 'detective'
  * @returns {string[]} filenames, as the HTML names them
- * @throws {Error} for a theme with no known layout
+ * @throws {Error} for a theme with no known layout (from printedHero)
  */
 function printedPhotos(bundle, theme) {
-  if (!Object.prototype.hasOwnProperty.call(LAYOUT_PRINTS_HERO, theme)) {
-    throw new Error(
-      `[printedPhotos] No layout is known for the theme "${theme}": add it to LAYOUT_PRINTS_HERO, ` +
-      'saying whether its page prints the hero.'
-    );
-  }
+  const hero = printedHero(bundle, theme);
   const filenames = [];
   const print = (filename) => {
     if (typeof filename === 'string' && filename !== '' && !filenames.includes(filename)) {
       filenames.push(filename);
     }
   };
-  const hero = bundle && bundle.heroImage;
-  if (LAYOUT_PRINTS_HERO[theme] && hero && typeof hero === 'object') print(hero.filename);
+  if (hero) print(hero.filename);
   for (const section of asArray(bundle && bundle.sections)) {
     for (const block of asArray(section && section.content)) {
       if (block && block.type === 'photo') print(block.filename);

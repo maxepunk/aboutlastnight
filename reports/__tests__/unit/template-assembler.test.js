@@ -368,6 +368,27 @@ describe('photo spacing in what prints', () => {
     expect(notationOf(withoutHero.sections)).toBe('[lede] PH1 P P');
   });
 
+  // FB: one rule says whether a page prints a hero (printedHero, lib/theme-config.js):
+  // the theme's layout prints one, and the hero names a file. A hero with no filename
+  // used to print as src=".../undefined" and still pushed the lede's first photo down.
+  it('prints no hero that names no file, and counts none above the lede', async () => {
+    const assembler = new TemplateAssembler('journalist');
+    const bundle = {
+      ...JSON.parse(JSON.stringify(validBundle)),
+      heroImage: { caption: 'The room before the doors opened.' },
+      sections: sectionsFrom('[lede] PH1 P P')
+    };
+
+    const context = await assembler.buildContext(bundle, '010126');
+    expect(context.heroImage).toBeNull();
+    expect(notationOf(context.sections)).toBe('[lede] PH1 P P');
+
+    const html = await assembler.assemble(bundle, { sessionId: '010126' });
+    expect(html).not.toContain('<figure class="article-photo article-photo--hero">');
+    expect(html).not.toContain('sessionphotos/010126/undefined');
+    expect(html).not.toContain('The room before the doors opened.');
+  });
+
   it('prints the spaced order on the page', async () => {
     const assembler = new TemplateAssembler('journalist');
     const html = await assembler.assemble(journalistDraft(), { sessionId: '010126' });

@@ -3,6 +3,8 @@
  * Commit 8.19: Tests for config-driven validation rules
  */
 
+const fs = require('fs');
+const path = require('path');
 const {
   THEME_CONFIGS,
   getThemeNPCs,
@@ -11,7 +13,8 @@ const {
   getOutlineRules,
   getArticleRules,
   getCanonicalName,
-  getThemeCharacters
+  getThemeCharacters,
+  printedHero
 } = require('../theme-config');
 // getArticleRules is intentionally still destructured above to PROVE it is
 // undefined after deletion (see "F9: dead bannedPatterns config removed").
@@ -187,6 +190,40 @@ describe('theme-config', () => {
     it('detective does not have storyDate (no in-world date constraint)', () => {
       const config = getThemeConfig('detective');
       expect(config.display.storyDate).toBeUndefined();
+    });
+  });
+
+  // FB: one rule says whether a page prints a hero, read by the assembler (the page and
+  // its photo spacing) and by printedPhotos (the publish and the fact check). It used to
+  // be stated twice, and the two disagreed on a hero with no filename.
+  describe('printedHero', () => {
+    const hero = { filename: 'aln0926262 (10 of 11).jpg', caption: 'The six in the huddle.' };
+
+    it("is the bundle's hero on a page whose layout prints one", () => {
+      expect(printedHero({ heroImage: hero }, 'journalist')).toBe(hero);
+    });
+
+    it("is null on a page whose layout prints none: the detective's case file", () => {
+      expect(printedHero({ heroImage: hero }, 'detective')).toBeNull();
+    });
+
+    it('is null for a hero that names no file, which would print as a broken image', () => {
+      for (const heroImage of [{ caption: 'The six in the huddle.' }, { filename: '' }, { filename: 7 }, 'hero.jpg', null, undefined]) {
+        expect(printedHero({ heroImage }, 'journalist')).toBeNull();
+      }
+      expect(printedHero(undefined, 'journalist')).toBeNull();
+    });
+
+    it('throws for a theme that does not say whether its page prints a hero, naming it', () => {
+      expect(() => printedHero({ heroImage: hero }, 'noir')).toThrow(/"noir"/);
+    });
+
+    it("says what each theme's layout does", () => {
+      for (const theme of Object.keys(THEME_CONFIGS)) {
+        const layout = fs.readFileSync(path.join(__dirname, '..', '..', 'templates', theme, 'layouts', 'article.hbs'), 'utf8');
+        expect({ theme, printsHero: THEME_CONFIGS[theme].display.printsHero })
+          .toEqual({ theme, printsHero: layout.includes('heroImage') });
+      }
     });
   });
 

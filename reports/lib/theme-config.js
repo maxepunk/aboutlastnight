@@ -9,10 +9,12 @@
  * - npcs: Characters valid in characterPlacements but not on player roster
  * - outlineRules: Structural requirements for article outlines (detective only;
  *   the journalist's went in phase 3)
+ * - display: constants for the printed page, including printsHero, whether the theme's
+ *   layout prints the bundle's hero (read through printedHero)
  *
  * To add a new theme:
  * 1. Add entry to THEME_CONFIGS with theme name as key
- * 2. Define npcs, outlineRules
+ * 2. Define npcs, outlineRules, and display.printsHero
  * 3. No changes needed to validation code (Open/Closed principle)
  */
 
@@ -61,6 +63,7 @@ const THEME_CONFIGS = {
       articleIdPrefix: 'NNA',           // NovaNews Article
       crystallizationLabel: "Nova's Insight",
       storyDate: '2027-02-22',           // In-world article date (always Feb 22, 2027)
+      printsHero: true,                  // The layout prints heroImage above the first section
       postGenValidation: {
         minInlineEvidenceCards: 3
       }
@@ -100,6 +103,7 @@ const THEME_CONFIGS = {
     display: {
       articleIdPrefix: 'DCR',           // Detective Case Report
       crystallizationLabel: "Detective's Note",
+      printsHero: false,                 // The case file prints no hero
       postGenValidation: {
         minInlineEvidenceCards: 0
       }
@@ -169,6 +173,38 @@ function isValidTheme(theme) {
 }
 
 /**
+ * The hero the theme's page prints, or null. This is the one rule for the hero: the
+ * assembler reads it for the page and its photo spacing, and printedPhotos
+ * (lib/publish-photos.js) for its list of the photos a page prints.
+ *
+ * A page prints a hero when the theme's layout prints one (display.printsHero: the
+ * journalist's does, the detective's case file does not) and the bundle's heroImage
+ * names a file. A hero with no filename would print as a broken image, so it does not
+ * print, and nothing is published for it.
+ *
+ * @param {Object} bundle - ContentBundle
+ * @param {string} theme - Theme name
+ * @returns {Object|null} the bundle's heroImage when the page prints it
+ * @throws {Error} for a theme whose display config does not say whether its page prints
+ *   a hero, naming the theme
+ */
+function printedHero(bundle, theme) {
+  const printsHero = Object.prototype.hasOwnProperty.call(THEME_CONFIGS, theme)
+    ? THEME_CONFIGS[theme].display?.printsHero
+    : undefined;
+  if (typeof printsHero !== 'boolean') {
+    throw new Error(
+      `[printedHero] No layout is known for the theme "${theme}": give its display config ` +
+      'printsHero, saying whether its page prints the hero.'
+    );
+  }
+  const hero = bundle && bundle.heroImage;
+  const namesFile = Boolean(hero) && typeof hero === 'object' &&
+    typeof hero.filename === 'string' && hero.filename !== '';
+  return printsHero && namesFile ? hero : null;
+}
+
+/**
  * Get outline rules for a theme (Commit 8.19)
  * @param {string} theme - Theme name
  * @returns {Object} Outline rules, or an empty object for a theme with none (the
@@ -216,5 +252,6 @@ module.exports = {
   isValidTheme,
   getOutlineRules,
   getCanonicalName,
-  getThemeCharacters
+  getThemeCharacters,
+  printedHero
 };
