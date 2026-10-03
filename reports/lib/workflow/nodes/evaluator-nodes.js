@@ -759,6 +759,55 @@ function forTheRework(warning) {
 }
 
 /**
+ * Whether a judge is truth-only (phase 4, brief 4.4): every criterion it scores is a truth
+ * criterion, so the truth criteria are the whole evaluation. Its schema
+ * (TRUTH_ONLY_EVALUATION_JSON_SCHEMA) and its verdict (truthOnlyVerdict) follow from its
+ * criteria, and a test holds its prompt's OUTPUT FORMAT (truthOnlyOutputFormat) to the same
+ * rule, so the article judge takes on all three when its criteria shrink to the truth groups.
+ *
+ * @param {Object} criteria
+ * @returns {boolean}
+ */
+function isTruthOnly(criteria) {
+  const list = Object.values(criteria || {});
+  return list.length > 0 && list.every((criterion) => Boolean(criterion && criterion.truth));
+}
+
+/**
+ * A truth-only judge's verdict, held to its contract after the verdict guard (phase 4,
+ * brief 4.4, fix round 1): spec 4.5 lets no notes on the writing reach the meeting, and an
+ * automatic pass reads only must-fix work. Each criterion the judge was given keeps its
+ * definition's type, so a breach's fix never reaches the rework as a suggestion; a
+ * criterion it was not given goes; and its advisories are only its concerns about the
+ * director's edits (DIRECTOR_EDIT_PREFIX, as the guard leaves them), which the stop shows
+ * and no rework reads (forTheRework). Readiness stays the guard's: it reads the criteria's
+ * definitions, and no advisory holds an output.
+ *
+ * @param {Object} guard - guardDirectorEdits' result
+ * @param {Object} criteria - the judge's criteria, every one a truth criterion (isTruthOnly)
+ * @returns {Object} the guard's result with its `advisories` and `criteriaScores` held to the
+ *   contract, and `outsideContract`: the criteria and advisories it left out, for the log
+ */
+function truthOnlyVerdict(guard, criteria) {
+  const given = (key) => Object.prototype.hasOwnProperty.call(criteria, key);
+  const scores = guard.criteriaScores && typeof guard.criteriaScores === 'object' ? guard.criteriaScores : null;
+  const criteriaScores = scores
+    ? Object.fromEntries(Object.entries(scores)
+      .filter(([key]) => given(key))
+      .map(([key, value]) => [key, value && typeof value === 'object' ? { ...value, type: criteria[key].type } : value]))
+    : guard.criteriaScores;
+  return {
+    ...guard,
+    advisories: guard.advisories.filter((advisory) => !forTheRework(advisory)),
+    criteriaScores,
+    outsideContract: [
+      ...(scores ? Object.keys(scores).filter((key) => !given(key)) : []),
+      ...guard.advisories.filter(forTheRework)
+    ]
+  };
+}
+
+/**
  * The director's words: the notes, the input-review corrections and the accusation. The
  * fact check's pronoun check reads them (buildFactCheckArgs), and the verdict guard reads
  * them as record (recordTexts).
@@ -904,6 +953,29 @@ const EVALUATION_JSON_SCHEMA = {
   required: ['ready', 'overallScore', 'structuralPassed']
 };
 
+/**
+ * What a truth-only judge writes in advisoryWarnings (phase 4, brief 4.4, fix round 1):
+ * only its concerns about the director's edits, which the guard and the stop read under
+ * DIRECTOR_EDIT_PREFIX (renderJudgeDirectorEdits says how to write one). Its truth
+ * criteria are the whole evaluation, so it has no suggestion to give: spec 4.5 lets no
+ * notes on the writing reach the meeting. One wording, for the schema and the OUTPUT FORMAT.
+ */
+const TRUTH_ONLY_ADVISORY_WARNINGS = "only a concern about one of the director's edits; empty when there is none";
+
+/**
+ * The structured-output schema a truth-only judge is sent (phase 4, brief 4.4, fix round
+ * 1): the judges' schema with no criterion `type`, since each truth criterion's type is
+ * its definition's (truthOnlyVerdict sets it), and advisoryWarnings kept for the concerns
+ * about the director's edits. Every other field is EVALUATION_JSON_SCHEMA's. The weave's
+ * fact check is the first; the article judge moves onto it with its truth-only criteria.
+ */
+const TRUTH_ONLY_EVALUATION_JSON_SCHEMA = (() => {
+  const schema = structuredClone(EVALUATION_JSON_SCHEMA);
+  delete schema.properties.criteriaScores.additionalProperties.properties.type;
+  schema.properties.advisoryWarnings.description = TRUTH_ONLY_ADVISORY_WARNINGS;
+  return schema;
+})();
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -923,8 +995,14 @@ function boxedHeading(title) {
  * Phase 3 (3.9): the must-fix work only, as the schema asks it. Shared by both themes,
  * so the parked detective's judges change with it (the integrator's ruling; a named
  * detective hunk).
+ *
+ * @param {string} notes - what a criterion's notes hold, for this judge
+ * @param {Object} [options]
+ * @param {boolean} [options.truthOnly] - a truth-only judge's contract (truthOnlyOutputFormat)
  */
-function outputFormat(notes) {
+function outputFormat(notes, { truthOnly = false } = {}) {
+  const typeLine = truthOnly ? '' : '\n      "type": "structural" | "advisory",';
+  const advisories = truthOnly ? TRUTH_ONLY_ADVISORY_WARNINGS : 'issues that are suggestions, not blockers';
   return `OUTPUT FORMAT (JSON):
 {
   "ready": boolean,
@@ -932,17 +1010,30 @@ function outputFormat(notes) {
   "structuralPassed": boolean,
   "criteriaScores": {
     "criterionName": {
-      "score": number,
-      "type": "structural" | "advisory",
+      "score": number,${typeLine}
       "notes": "${notes}",
       "fix": "only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}"
     }
   },
   "structuralIssues": [ "issues that MUST be fixed" ],
-  "advisoryWarnings": [ "issues that are suggestions, not blockers" ],
+  "advisoryWarnings": [ "${advisories}" ],
   "revisionGuidance": "one step per structural issue, each the fix for that issue (Step 1: ..., Step 2: ...); empty when there is none",
   "confidence": "high" | "medium" | "low"
 }`;
+}
+
+/**
+ * A truth-only judge's OUTPUT FORMAT (phase 4, brief 4.4, fix round 1), as
+ * TRUTH_ONLY_EVALUATION_JSON_SCHEMA states it: the judges' shape with no criterion type,
+ * and advisoryWarnings kept for a concern about one of the director's edits. The weave's
+ * fact check prints it after TRUTH_ONLY_EVALUATION_RULES; the article judge prints it
+ * when it moves onto those rules.
+ *
+ * @param {string} notes - what a criterion's notes hold, for this judge
+ * @returns {string}
+ */
+function truthOnlyOutputFormat(notes) {
+  return outputFormat(notes, { truthOnly: true });
 }
 
 /** The weighted criteria of one type, one line each with its percentage. */
@@ -1099,7 +1190,8 @@ const TRUTH_FINDING_QUOTE = {
  * The scoring rules a truth-only judge reads (phase 4, brief 4.4): its truth criteria
  * are the whole evaluation, with no weighted average and no advisory criteria, and
  * overallScore comes from the truth criteria. The weave's fact check reads them now; the
- * article judge moves onto them in its own slice.
+ * article judge moves onto them in its own slice. Its output contract follows them
+ * (truthOnlyOutputFormat), and code holds its verdict to that contract (truthOnlyVerdict).
  */
 const TRUTH_ONLY_EVALUATION_RULES = `EVALUATION RULES:
 1. The truth criteria above are the whole evaluation: each finding is a breach of a truth rule.
@@ -1196,7 +1288,7 @@ Your task is to find each breach of the truth rules in the weave. ${frame}
 
 ${truthCriteriaSection(phase, criteria)}${TRUTH_ONLY_EVALUATION_RULES}
 
-${outputFormat('the breach: the text at fault, the thread it is in, and the record it contradicts')}`;
+${truthOnlyOutputFormat('the breach: the text at fault, the thread it is in, and the record it contradicts')}`;
   } else if (phase === 'outline') {
     prompt = `You are the OUTLINE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
 
@@ -1912,6 +2004,9 @@ function createEvaluator(phase, options = {}) {
     // carry the truth criteria; the detective's are unchanged).
     const theme = state.theme || 'journalist';
     const criteria = getPhaseCriteria(phase, theme);
+    // Phase 4 (brief 4.4, fix round 1): a judge whose criteria are all truth criteria gets
+    // the truth-only schema and verdict (the weave's fact check; the article judge in 4.7).
+    const truthOnly = isTruthOnly(criteria);
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
     const revisionCap = getRevisionCap(phase);
@@ -2063,7 +2158,7 @@ function createEvaluator(phase, options = {}) {
       // Brief 2.4: the article judge reads the fact check's result for THIS bundle
       // (computed above), never the state's _articleFactCheck from the previous one.
       const prompt = buildEvaluationUserPrompt(phase, state, { factCheck, directorEdits });
-      const jsonSchema = EVALUATION_JSON_SCHEMA;
+      const jsonSchema = truthOnly ? TRUTH_ONLY_EVALUATION_JSON_SCHEMA : EVALUATION_JSON_SCHEMA;
 
       // SDK returns parsed object directly when jsonSchema is provided
       // Commit 8.23: disableTools prevents evaluator from using Grep/Read during evaluation
@@ -2093,13 +2188,19 @@ function createEvaluator(phase, options = {}) {
       // ready. Fix round 1: the rework reads no criterion notes, fix or guidance located
       // in the director's text, and a record passage the writer's card prints is a
       // citation, not the writer's text (recordTexts). With no edits, this is the rule above.
-      const guard = guardDirectorEdits({
+      const guarded = guardDirectorEdits({
         evaluation,
         criteria,
         edits: directorEdits,
         output: judgedOutput(phase, state),
         record: directorEdits.length > 0 ? recordTexts(state) : []
       });
+      // Phase 4 (brief 4.4, fix round 1): a truth-only judge's verdict is held to its
+      // contract, so a note on the writing reaches neither the stop nor an automatic pass.
+      const guard = truthOnly ? truthOnlyVerdict(guarded, criteria) : guarded;
+      if (truthOnly && guard.outsideContract.length > 0) {
+        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Outside the truth-only contract, left out: ${JSON.stringify(guard.outsideContract)}`);
+      }
       const judgeStructuralIssues = guard.kept;
       const isReady = guard.ready;
       if (guard.failedTruth.length > 0) {
@@ -2185,7 +2286,9 @@ function createEvaluator(phase, options = {}) {
       console.log(`  - structuralPassed: ${evaluation.structuralPassed}`);
       if (evaluation.criteriaScores) {
         Object.entries(evaluation.criteriaScores).forEach(([key, val]) => {
-          const typeLabel = val.type === 'structural' ? '[STRUCTURAL]' : '[advisory]';
+          // The criterion's own type where the judge was given it: a truth-only judge writes none.
+          const type = (criteria[key] && criteria[key].type) || (val && val.type);
+          const typeLabel = type === 'structural' ? '[STRUCTURAL]' : '[advisory]';
           console.log(`  - ${typeLabel} ${key}: ${val.score} (${val.notes || 'no notes'})`);
         });
       }
@@ -2428,8 +2531,15 @@ module.exports = {
   // Export for testing
   _testing: {
     EVALUATION_JSON_SCHEMA,
-    // Phase 4 (brief 4.4): the scoring rules a truth-only judge reads
+    // Phase 4 (brief 4.4): the scoring rules a truth-only judge reads, and its contract
+    // (fix round 1): the OUTPUT FORMAT, the schema and the verdict held to them
     TRUTH_ONLY_EVALUATION_RULES,
+    TRUTH_ONLY_ADVISORY_WARNINGS,
+    TRUTH_ONLY_EVALUATION_JSON_SCHEMA,
+    outputFormat,
+    truthOnlyOutputFormat,
+    isTruthOnly,
+    truthOnlyVerdict,
     getArcCriteria,
     getOutlineCriteria,
     getArticleCriteria,

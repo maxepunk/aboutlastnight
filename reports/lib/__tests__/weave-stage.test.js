@@ -10,8 +10,9 @@
 const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
 const { analyzeArcsPlayerFocusGuided, reviseArcs, validateArcStructure } = arcNodes;
 const { weaveSystemPrompt, buildWeavePrompt, buildWeaveSections, buildArcRevisionPrompt, getArcRevisionSystemPrompt } = arcNodes._testing;
-const { evaluateArcs, _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
+const { evaluateArcs, evaluateOutline, _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
 const { buildEvaluationSystemPrompt, buildEvaluationUserPrompt, getPhaseCriteria, TRUTH_ONLY_EVALUATION_RULES } = evalTesting;
+const { DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
 const { _testing: graphTesting } = require('../workflow/graph');
 const { routeArcValidation, routeArcEvaluation, incrementArcRevision } = graphTesting;
 const { buildRevisionContext, STRUCTURAL_PASS_SCORE } = require('../workflow/nodes/node-helpers');
@@ -291,6 +292,116 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
     const update = await evaluateArcs(weaveState(), { configurable: { sdkClient: recordingSdk(CLEAN) } });
     expect(update.weave._factCheck).toMatchObject({ ready: true, fixes: 0 });
     expect(update.evaluationHistory.ready).toBe(true);
+  });
+});
+
+// Fix round 1: the fact check's truth criteria are the whole evaluation, and no notes on
+// the writing reach the meeting (spec 4.5). So its output contract offers no criterion
+// type and no suggestions: advisoryWarnings holds only a concern about one of the
+// director's edits, the channel the fact check after a director's round needs (4.5). Code
+// holds the verdict to that contract, so a judge that writes outside it changes neither
+// what the meeting shows nor what the fix reads.
+describe('the fact check writes to the truth-only contract (fix round 1)', () => {
+  const {
+    outputFormat, truthOnlyOutputFormat, TRUTH_ONLY_ADVISORY_WARNINGS, EVALUATION_JSON_SCHEMA,
+    TRUTH_ONLY_EVALUATION_JSON_SCHEMA, isTruthOnly
+  } = evalTesting;
+  const NOTES = 'the breach: the text at fault, the thread it is in, and the record it contradicts';
+  const SHARED_TYPE_LINE = '      "type": "structural" | "advisory",';
+  const systemFor = (phase, theme = 'journalist') => buildEvaluationSystemPrompt(
+    phase, getPhaseCriteria(phase, theme), theme, { sessionConfig: weaveState().sessionConfig }
+  );
+  const formatOf = (system) => system.slice(system.indexOf('OUTPUT FORMAT (JSON):'));
+
+  it("its OUTPUT FORMAT offers no criterion type, and keeps advisoryWarnings for a concern about one of the director's edits", () => {
+    const format = formatOf(systemFor('arcs'));
+    expect(format).toBe(truthOnlyOutputFormat(NOTES));
+    expect(TRUTH_ONLY_ADVISORY_WARNINGS).toBe("only a concern about one of the director's edits; empty when there is none");
+    expect(format).toContain(`  "advisoryWarnings": [ "${TRUTH_ONLY_ADVISORY_WARNINGS}" ],`);
+    expect(format).not.toContain('"type"');
+    expect(format).not.toMatch(/suggestion|blocker/i);
+    // Every other line is the judges' shared contract.
+    const own = format.split('\n');
+    expect(outputFormat(NOTES).split('\n').filter((line) => !own.includes(line)))
+      .toEqual([SHARED_TYPE_LINE, '  "advisoryWarnings": [ "issues that are suggestions, not blockers" ],']);
+  });
+
+  it('a judge is truth-only exactly when its criteria are all truth criteria, and its prompt carries the truth-only contract exactly then', () => {
+    const truthOnlyJudges = [];
+    for (const theme of ['journalist', 'detective']) {
+      for (const phase of ['arcs', 'outline', 'article']) {
+        const truthOnly = isTruthOnly(getPhaseCriteria(phase, theme));
+        if (truthOnly) truthOnlyJudges.push(`${theme} ${phase}`);
+        const format = formatOf(systemFor(phase, theme));
+        expect([theme, phase, format.includes(TRUTH_ONLY_ADVISORY_WARNINGS), format.includes(SHARED_TYPE_LINE)])
+          .toEqual([theme, phase, truthOnly, !truthOnly]);
+      }
+    }
+    // Today the weave's fact check is the one truth-only judge, for every theme.
+    expect(truthOnlyJudges).toEqual(['journalist arcs', 'detective arcs']);
+    expect(isTruthOnly({})).toBe(false);
+  });
+
+  it('the fact check is sent the truth-only schema, which differs from the shared one in those two fields alone; the outline judge keeps the shared one', async () => {
+    const sdk = recordingSdk(CLEAN);
+    await evaluateArcs(weaveState(), { configurable: { sdkClient: sdk } });
+    const schema = sdk.calls[0].jsonSchema;
+    expect(schema).toBe(TRUTH_ONLY_EVALUATION_JSON_SCHEMA);
+    expect(Object.keys(schema.properties.criteriaScores.additionalProperties.properties)).toEqual(['score', 'notes', 'fix']);
+    expect(schema.properties.advisoryWarnings).toEqual({ type: 'array', items: { type: 'string' }, description: TRUTH_ONLY_ADVISORY_WARNINGS });
+    const { criteriaScores: ownScores, advisoryWarnings: ownAdvisories, ...ownRest } = schema.properties;
+    const { criteriaScores: sharedScores, advisoryWarnings: sharedAdvisories, ...sharedRest } = EVALUATION_JSON_SCHEMA.properties;
+    expect(ownRest).toEqual(sharedRest);
+    const { type: sharedType, ...sharedCriterion } = sharedScores.additionalProperties.properties;
+    expect(sharedType).toEqual({ type: 'string', description: 'structural or advisory' });
+    expect(ownScores.additionalProperties.properties).toEqual(sharedCriterion);
+    expect(schema.required).toEqual(EVALUATION_JSON_SCHEMA.required);
+
+    const outline = recordingSdk({ ...CLEAN, overallScore: 0.9 });
+    await evaluateOutline(weaveState({ outlineApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: outline } });
+    expect(outline.calls[0].jsonSchema).toBe(EVALUATION_JSON_SCHEMA);
+  });
+
+  it("a note on the writing reaches neither the meeting nor the fix, and a breach's fix stays a fix", async () => {
+    const verdict = {
+      ...clone(BREACH),
+      criteriaScores: {
+        ...clone(BREACH.criteriaScores),
+        // A truth criterion the judge typed as advisory, and a criterion it was not given.
+        wordsTruth: { score: 0.5, type: 'advisory', notes: 'Thread t1 quotes words the notes do not hold.', fix: 'Quote the notes word for word.' },
+        pacing: { score: 0.3, type: 'advisory', notes: 'The story starts slowly.', fix: 'Tighten the story.' }
+      },
+      advisoryWarnings: ['C10: the working headline could be sharper.']
+    };
+    const state = weaveState();
+    const update = await evaluateArcs(state, { configurable: { sdkClient: recordingSdk(verdict) } });
+    expect(update.evaluationHistory.advisoryWarnings).toEqual([]);
+    expect(update.validationResults.advisoryWarnings).toEqual([]);
+    expect(update.validationResults.criteriaScores).toEqual({
+      evidenceTruth: BREACH.criteriaScores.evidenceTruth,
+      wordsTruth: { ...verdict.criteriaScores.wordsTruth, type: 'structural' }
+    });
+
+    // The fix reads the breaches and the fixes alone.
+    const sdk = recordingSdk(reworkFixtureState('journalist').weave);
+    await reviseArcs({ ...state, weave: update.weave, validationResults: update.validationResults, arcRevisionCount: 1 }, { configurable: { sdkClient: sdk } });
+    const { prompt } = sdk.calls[0];
+    expect(prompt).toContain('  - wordsTruth: 0.50 [structural]\n      notes: Thread t1 quotes words the notes do not hold.\n      fix: Quote the notes word for word.');
+    expect(prompt).toContain('This rework fixes the must-fix items: the ISSUES TO ADDRESS and the fixes in CRITERIA SCORES. Everything else in the previous weave stays word for word.');
+    expect(prompt).not.toContain('SHOULD CONSIDER');
+    expect(prompt).not.toMatch(/^ {6}suggestion:/m);
+    ['pacing', 'Tighten the story.', 'the working headline could be sharper'].forEach((note) => expect(prompt).not.toContain(note));
+  });
+
+  it("a concern about one of the director's edits is kept for the meeting and never reaches the fix", async () => {
+    // The channel the fact check after a director's round writes to (4.5), under the
+    // prefix the guard and the stop read.
+    const concern = `${DIRECTOR_EDIT_PREFIX}E1: T1: the story's first sentence says more than the ledger shows.`;
+    const update = await evaluateArcs(weaveState(), {
+      configurable: { sdkClient: recordingSdk({ ...CLEAN, advisoryWarnings: [concern, 'C4: the convergence could land later.'] }) }
+    });
+    expect(update.evaluationHistory.advisoryWarnings).toEqual([concern]);
+    expect(update.validationResults.advisoryWarnings).toEqual([]);
   });
 });
 

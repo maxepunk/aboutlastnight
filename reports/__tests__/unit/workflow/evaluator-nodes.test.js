@@ -899,6 +899,9 @@ describe('evaluator-nodes', () => {
       expect(result.validationResults.phase).toBe('arcs');
     });
 
+    // Phase 4 (brief 4.4, fix round 1): the weave's fact check keeps no note on the
+    // writing (lib/__tests__/weave-stage.test.js, "the truth-only contract"); the outline
+    // and article judges forward their advisories.
     it('forwards structuralIssues and advisoryWarnings to the reviser', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false, structuralPassed: false, overallScore: 0.5,
@@ -906,7 +909,7 @@ describe('evaluator-nodes', () => {
         advisoryWarnings: ['coherence is thin'],
         confidence: 'high'
       });
-      const result = await evaluateArcs(weaveState(), { configurable: { sdkClient: mockClient } });
+      const result = await evaluateOutline({ outline: {} }, { configurable: { sdkClient: mockClient } });
       // These were computed, logged, stored in evaluationHistory — and then dropped
       // on the floor instead of being handed to the revision node.
       expect(result.validationResults.structuralIssues).toEqual(['Missing roster members: Quinn']);
@@ -962,12 +965,14 @@ describe('evaluator-nodes', () => {
       expect(result.validationResults.feedback).toBe('Fix the coherence issues by...');
     });
 
+    // Phase 4 (brief 4.4, fix round 1): the weave's fact check keeps the criteria it was
+    // given, its truth criteria.
     it('includes criteria scores when available', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.5,
         criteriaScores: {
-          coherence: { score: 0.3, notes: 'Poor' }
+          evidenceTruth: { score: 0.3, notes: 'Poor' }
         },
         issues: []
       });
@@ -975,12 +980,14 @@ describe('evaluator-nodes', () => {
 
       const result = await evaluateArcs(weaveState(), config);
 
-      expect(result.validationResults.criteriaScores.coherence.score).toBe(0.3);
+      expect(result.validationResults.criteriaScores.evidenceTruth.score).toBe(0.3);
     });
 
     // Brief 1.3: a passing evaluation used to write nothing, so the previous
     // failure stayed in the shared channel and the next rework prompt described an
-    // evaluation state an hour out of date.
+    // evaluation state an hour out of date. Phase 4 (brief 4.4, fix round 1): on the
+    // outline judge, which keeps advisories; the weave's fact check keeps none
+    // (lib/__tests__/weave-stage.test.js, "the truth-only contract").
     it('records the pass instead of leaving the previous failure in the channel', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: true,
@@ -992,10 +999,10 @@ describe('evaluator-nodes', () => {
       });
       const config = { configurable: { sdkClient: mockClient } };
 
-      const result = await evaluateArcs(weaveState(), config);
+      const result = await evaluateOutline({ outline: {} }, config);
 
       expect(result.validationResults).toEqual(expect.objectContaining({
-        phase: 'arcs',
+        phase: 'outline',
         passed: true,
         structuralIssues: [],
         advisoryWarnings: ['the second arc leans on one document'],
