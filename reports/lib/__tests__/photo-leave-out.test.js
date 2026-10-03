@@ -16,7 +16,7 @@
  * the director saw.
  */
 
-const { leavePhotosOut, leftOutPhotosOf, listAfterStopChoices, withExplicitExclusions } = require('../photo-leave-out');
+const { leavePhotosOut, leftOutPhotosOf, listAfterStopChoices, withExplicitExclusions, photoMappingOf } = require('../photo-leave-out');
 const aiNodes = require('../workflow/nodes/ai-nodes');
 
 const { isPhotoExcluded, buildAvailablePhotos, articleWriterInputs } = aiNodes;
@@ -178,5 +178,53 @@ describe('withExplicitExclusions: the parse\'s explicit mark', () => {
     const characterIdMappings = withExplicitExclusions({}, stale);
     expect(characterIdMappings['b.jpg']).toEqual(mapping(false));
     expect(isPhotoExcluded({ ...stale, characterIdMappings }, 'b.jpg')).toBe(false);
+  });
+});
+
+/**
+ * One lookup for a photo's mapping (brief 4.2b, fix round 1). The parse's keys need not
+ * match a filename's case, so more than one key can name a photo. photoMappingOf finds
+ * the photo's mapping: the first entry whose key names the photo and that holds a
+ * mapping. isPhotoExcluded reads the photo's `exclude` from it, finalizePhotoAnalyses its
+ * identifications and corrections, and the parse's explicit mark the exclusion the
+ * director's text asked for, so all three read the same entry.
+ */
+describe('photoMappingOf: the one lookup of a photo\'s mapping (brief 4.2b, fix round 1)', () => {
+  const vic = mapping(false, { characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }] });
+
+  it('finds the first entry whose key names the photo, in any case or folder, and that holds a mapping', () => {
+    const mappings = { 'A.JPG': 'Vic', 'photos/a.jpg': vic, 'a.jpg': mapping(true), 'b.jpg': mapping(true) };
+    expect(photoMappingOf(mappings, 'a.jpg')).toBe(vic);
+    expect(photoMappingOf(mappings, 'Photos/A.jpg')).toBe(vic);
+  });
+
+  it('passes over a key naming the photo that holds text, null or a list', () => {
+    expect(photoMappingOf({ 'A.JPG': null, 'a.jpg': ['Vic'], 'Photos/A.jpg': 'Vic', 'photos/a.JPG': vic }, 'a.jpg')).toBe(vic);
+  });
+
+  it('finds none when no entry names the photo with a mapping, or there are no mappings, or no filename', () => {
+    expect(photoMappingOf({ 'a.jpg': 'Vic', 'b.jpg': vic }, 'a.jpg')).toBeNull();
+    expect(photoMappingOf({}, 'a.jpg')).toBeNull();
+    expect(photoMappingOf(null, 'a.jpg')).toBeNull();
+    expect(photoMappingOf(undefined, 'a.jpg')).toBeNull();
+    expect(photoMappingOf({ '': vic }, '')).toBeNull();
+  });
+
+  it('isPhotoExcluded and the explicit mark read the entry it finds, and an analysis\'s mark decides neither', () => {
+    // A key in capitals holds no mapping, and the director's mapping sits under the
+    // lower-case key. b.jpg's analysis carries a stale mark from an earlier round.
+    const mappings = { 'A.JPG': 'Vic', 'a.jpg': mapping(true), 'B.JPG': null, 'b.jpg': mapping(false) };
+    const state = {
+      photoAnalyses: { analyses: [{ filename: 'a.jpg' }, { filename: 'b.jpg', excluded: true }] },
+      characterIdMappings: mappings,
+      leftOutPhotos: null
+    };
+
+    expect(isPhotoExcluded(state, 'a.jpg')).toBe(true);
+    expect(isPhotoExcluded(state, 'b.jpg')).toBe(false);
+    // The mark writes the exclusion it read from the same entry onto every key naming the photo.
+    const marked = { ...state, characterIdMappings: withExplicitExclusions(mappings, state) };
+    expect(isPhotoExcluded(marked, 'a.jpg')).toBe(true);
+    expect(isPhotoExcluded(marked, 'b.jpg')).toBe(false);
   });
 });

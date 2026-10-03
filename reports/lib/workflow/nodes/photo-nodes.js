@@ -39,12 +39,11 @@ const { preprocessImages, formatFileSize } = require('../../image-preprocessor')
 const { createImagePromptBuilder } = require('../../image-prompt-builder');
 // Commit 8.11 fix: Import from shared module to break circular dependency
 const { CHARACTER_IDS_PHOTO_TEMPLATE, PARSED_CHARACTER_IDS_SCHEMA } = require('../../schemas/character-ids');
-// Brief 4.2: the leave-out box's explicit mark in every photo's mapping
-const { shownPhotos, withExplicitExclusions } = require('../../photo-leave-out');
-// Brief 4.2b: finalizePhotoAnalyses decides a left-out photo by the one rule, and finds a
-// photo's mapping by the one join key
+// Brief 4.2: the leave-out box's explicit mark in every photo's mapping. Brief 4.2b: a
+// photo's mapping, the one lookup isPhotoExcluded and the explicit mark read too
+const { shownPhotos, withExplicitExclusions, photoMappingOf } = require('../../photo-leave-out');
+// Brief 4.2b: finalizePhotoAnalyses decides a left-out photo by the one rule
 const { isPhotoExcluded } = require('./ai-nodes');
-const { photoKey } = require('../../prompt-renderers/director-words-renderer');
 
 /**
  * Default data directory for session outputs
@@ -746,23 +745,6 @@ async function parseCharacterIds(state, config) {
 }
 
 /**
- * The director's mapping for one photo, found as isPhotoExcluded finds it (brief 4.2b):
- * the first key that names the photo by photoKey (basename, case-insensitive), because
- * the parse's keys need not match an analysis filename's case. {} when no mapping names
- * the photo.
- *
- * @param {Object} mappings - characterIdMappings
- * @param {string} filename - the analysis's filename
- * @returns {Object}
- */
-function mappingFor(mappings, filename) {
-  const key = photoKey(filename);
-  const name = Object.keys(mappings).find((candidate) => photoKey(candidate) === key);
-  const mapping = name === undefined ? null : mappings[name];
-  return mapping && typeof mapping === 'object' ? mapping : {};
-}
-
-/**
  * Finalize photo analyses by enriching with character identifications (LLM-powered)
  *
  * Uses Claude to intelligently merge user-provided character mappings and corrections
@@ -783,10 +765,11 @@ function mappingFor(mappings, filename) {
  * Skip logic: If photoAnalyses already has enriched data (identifiedCharacters),
  * skip processing (resume from checkpoint case).
  *
- * The leave-out box (phase 4, brief 4.2b): each photo's mapping is found by photoKey
- * (mappingFor), and isPhotoExcluded, the one rule for a left-out photo, decides which
- * photos get the `excluded` mark and which failed analyses are retried. A retry is a paid
- * vision call, so it goes only to a photo that prints.
+ * The leave-out box (phase 4, brief 4.2b): each photo's mapping is the one photoMappingOf
+ * finds (lib/photo-leave-out.js), the entry isPhotoExcluded reads, and isPhotoExcluded,
+ * the one rule for a left-out photo, decides which photos get the `excluded` mark and
+ * which failed analyses are retried. A retry is a paid vision call, so it goes only to a
+ * photo that prints.
  *
  * @param {Object} state - Current state with photoAnalyses, characterIdMappings
  * @param {Object} config - Graph config with optional configurable.sdkClient
@@ -886,7 +869,7 @@ async function finalizePhotoAnalyses(state, config) {
   const semaphore = createSemaphore(PHOTO_CONFIG.MAX_CONCURRENT);
 
   const enrichmentPromises = analyses.map((analysis) => {
-    const userInput = mappingFor(characterIdMappings, analysis.filename);
+    const userInput = photoMappingOf(characterIdMappings, analysis.filename) || {};
 
     // Handle excluded photos (no SDK call needed). Brief 4.2b: the one rule decides.
     if (isPhotoExcluded(state, analysis.filename)) {

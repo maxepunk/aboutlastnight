@@ -830,6 +830,36 @@ describe('finalizePhotoAnalyses: the leave-out box, follow-ups (brief 4.2b)', ()
     expect(result.photoAnalyses.analyses[0].identifiedCharacters).toEqual(['Vic']);
   });
 
+  it('reads a photo\'s identifications and its exclusion from one entry, the one photoMappingOf finds (fix round 1)', async () => {
+    // Two keys name each photo: the first holds no mapping, and the director's mapping
+    // sits under the second. a.jpg is kept and identified; b.jpg is left out, and its
+    // mapping also names someone, whom no call may read.
+    const sdk = jest.fn().mockResolvedValue({
+      identifiedCharacters: ['Vic'], enrichedVisualContent: 'Vic at a table', enrichedNarrativeMoment: 'A negotiation', finalCaption: 'Vic waits'
+    });
+    const result = await finalizePhotoAnalyses({
+      photoAnalyses: { analyses: [analysis('a.jpg'), analysis('b.jpg')] },
+      characterIdMappings: {
+        'A.JPG': 'Vic',
+        'a.jpg': mapping(false, { characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }] }),
+        'B.JPG': ['Sam'],
+        'b.jpg': mapping(true, { characterMappings: [{ descriptionIndex: 0, characterName: 'Sam' }] })
+      },
+      roster: ['Vic']
+    }, config(sdk));
+
+    expect(sdk).toHaveBeenCalledTimes(1);
+    const { prompt } = sdk.mock.calls[0][0];
+    expect(prompt).toContain('Filename: a.jpg');
+    expect(prompt).toContain('"person in a grey coat" (seated) -> Vic');
+    expect(prompt).not.toContain('-> Sam');
+    const [a, b] = result.photoAnalyses.analyses;
+    expect(a.identifiedCharacters).toEqual(['Vic']);
+    expect(b.excluded).toBe(true);
+    expect(b.identifiedCharacters).toEqual([]);
+    expect(b.finalCaption).toBeNull();
+  });
+
   it('spends no retry on a left-out photo whose analysis failed, and still retries a kept one', async () => {
     const sdk = jest.fn().mockResolvedValue({ ...analysis('kept.jpg'), visualContent: 'Recovered' });
     const result = await finalizePhotoAnalyses({

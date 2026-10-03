@@ -52,6 +52,8 @@ const {
 const { traceNode } = require('../../observability');
 const { directorAccusationText } = require('../../accusation-verdict');
 const { photoKey } = require('../../prompt-renderers/director-words-renderer');
+// Brief 4.2b: a photo's mapping, the one lookup isPhotoExcluded shares with the photo nodes
+const { photoMappingOf } = require('../../photo-leave-out');
 // Phase 3 (3.7): the writers' questions for the director (C15), kept through a rework
 // (R5) and out of every later prompt.
 const { withCarriedWriterQuestions, schemaWithoutWriterQuestions } = require('../../writer-questions');
@@ -958,7 +960,8 @@ function buildSessionFacts(state) {
  * sets from the mapping, is the fallback for a photo no mapping names: after a rollback
  * to character-ids the analyses are kept and finalizePhotoAnalyses skips, so the mark can
  * be stale. Both are matched by photoKey (basename, case-insensitive), as the parse's
- * keys need not match a filename's case.
+ * keys need not match a filename's case. The photo's mapping is the one photoMappingOf
+ * finds, the lookup finalizePhotoAnalyses and the explicit mark read too (brief 4.2b).
  *
  * @param {Object} state
  * @param {string} filename - a photo's filename or path
@@ -967,11 +970,8 @@ function buildSessionFacts(state) {
 function isPhotoExcluded(state, filename) {
   const key = photoKey(filename);
   if (!key) return false;
-  const mappings = state.characterIdMappings && typeof state.characterIdMappings === 'object' ? state.characterIdMappings : {};
-  const mapped = Object.keys(mappings).find(name => photoKey(name) === key);
-  if (mapped !== undefined && mappings[mapped] && typeof mappings[mapped] === 'object') {
-    return Boolean(mappings[mapped].exclude);
-  }
+  const mapping = photoMappingOf(state.characterIdMappings, filename);
+  if (mapping) return Boolean(mapping.exclude);
   const analysis = (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoKey(a.filename) === key);
   return analysis?.excluded === true;
 }

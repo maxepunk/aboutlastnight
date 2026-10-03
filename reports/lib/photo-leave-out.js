@@ -19,7 +19,9 @@
  * analysis's `excluded` mark, which a rollback to character-ids leaves stale (the
  * analyses are kept and finalizePhotoAnalyses skips once any is enriched), never does.
  *
- * Photos are matched by photoKey (basename, case-insensitive), the one join key.
+ * Photos are matched by photoKey (basename, case-insensitive), the one join key, and a
+ * photo's mapping is the one photoMappingOf finds, which isPhotoExcluded,
+ * finalizePhotoAnalyses and the explicit mark all read.
  *
  * @module photo-leave-out
  */
@@ -86,6 +88,23 @@ function newMapping(exclude) {
 function keysNaming(mappings, filename) {
   const key = photoKey(filename);
   return Object.keys(mappings).filter((name) => photoKey(name) === key);
+}
+
+/**
+ * A photo's mapping: the first entry of `mappings` whose key names the photo and whose
+ * value is a mapping object; a key naming the photo that holds text, null or a list is
+ * passed over. The one lookup (brief 4.2b, fix round 1), because the parse's keys need
+ * not match a filename's case: isPhotoExcluded reads the photo's `exclude` from it,
+ * finalizePhotoAnalyses its identifications and corrections, and withExplicitExclusions
+ * the parse's own value, so all three read the same entry.
+ *
+ * @param {Object|null} mappings - characterIdMappings, or the mappings the parse is building
+ * @param {string} filename - a photo's filename or path
+ * @returns {Object|null} the mapping, or null when no entry names the photo with one
+ */
+function photoMappingOf(mappings, filename) {
+  if (!isPlainObject(mappings) || !photoKey(filename)) return null;
+  return keysNaming(mappings, filename).map((key) => mappings[key]).find(isPlainObject) || null;
 }
 
 /**
@@ -164,9 +183,9 @@ function listAfterStopChoices(state, ticked) {
 /**
  * The parse's explicit mark: `mappings` with an `exclude` in the mapping of every photo
  * the stop showed. True when the photo is on the list (its box was ticked, or
- * leavePhotosOut added it), otherwise the parse's own value (the first mapping naming
- * the photo, as isPhotoExcluded reads it), otherwise false. A photo with no mapping gets
- * one; a key naming no photo the stop showed is kept as it is. Never mutates.
+ * leavePhotosOut added it), otherwise the parse's own value (in the photo's mapping,
+ * photoMappingOf), otherwise false. A photo with no mapping gets one; a key naming no
+ * photo the stop showed is kept as it is. Never mutates.
  *
  * @param {Object|null} mappings - the mappings the parse built, or the stop's own
  * @param {Object} state - reads the list and the analyses
@@ -176,7 +195,7 @@ function withExplicitExclusions(mappings, state) {
   const listed = new Set(leftOutPhotosOf(state).map(photoKey));
   let next = isPlainObject(mappings) ? { ...mappings } : {};
   shownPhotos(state).forEach((name) => {
-    const own = keysNaming(next, name).map((key) => next[key]).find(isPlainObject);
+    const own = photoMappingOf(next, name);
     const exclude = listed.has(photoKey(name)) || Boolean(own && own.exclude);
     next = withExclude(next, name, exclude);
   });
@@ -188,5 +207,6 @@ module.exports = {
   leavePhotosOut,
   listAfterStopChoices,
   withExplicitExclusions,
+  photoMappingOf,
   shownPhotos
 };
