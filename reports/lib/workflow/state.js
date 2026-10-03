@@ -800,13 +800,18 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * The director's hand edits sent WITH a rejection (spec 2026-09-19 §4).
+   * The director's standing edits at the outline and article stops (F1 and FA; spec
+   * 2026-10-02 section 7): `{kind, issued, edits}`, or null (lib/hand-edit-diff.js).
    *
-   * Written by buildResumePayload on every outline reject: the diff between the
-   * model's outline and the director's edited one (lib/hand-edit-diff.js), or null.
-   * Read by reviseOutline on EVERY pass of the round (an evaluator-driven second pass
-   * must still see it — C3), so the reviser does NOT clear it; checkpointOutline
-   * clears it on approve and the server overwrites it on the next reject.
+   * Each edit is one field the director changed, `{id, scope, path, at, before, after}`,
+   * with `removed` for a rewrite's dropped sentences, `pieces` for a cut, `from` for a
+   * moved block and `names` for the roster names a cut or rewrite took out. Written by
+   * buildResumePayload at every send-back (standingAfterSendBack): the earlier edits the
+   * version the stop showed and the version sent back both carry, then the send-back's
+   * own, numbered on from `issued`. Read on EVERY pass of the round by the reworks
+   * (<HAND_EDITS>, and the restore after an automatic pass), the judges and the fact
+   * check, each through carriedEdits; no node clears it. checkpointOutline and
+   * checkpointArticle clear it on approve, as do a rollback and a fresh start.
    */
   _outlineHandEdits: Annotation({
     reducer: replaceReducer,
@@ -818,9 +823,11 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * What the rework did to those edits: { checked: scopeKeys, changed: scopeKeys }.
-   * Rewritten by every reviser pass; surfaced at the gate as `handEditReport`;
-   * cleared on approve and reset to null on every reject.
+   * What the round's passes did to those edits (F1 and FA): `{checked: ids, changed:
+   * [{id, scope, where, cut, removed, moved, director, became, pass, automatic, reason,
+   * restored}]}` (lib/hand-edit-diff.js reportAfterPass, through settleEdits). Each
+   * rework pass adds its entries, an automatic pass's restores included; surfaced at the
+   * stop as `handEditReport`; cleared on approve and reset to null at every send-back.
    */
   _outlineHandEditReport: Annotation({
     reducer: replaceReducer,
