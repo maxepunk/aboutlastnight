@@ -360,6 +360,9 @@ describe('deskChanges: what the director inserted, deleted, moved or edited, sec
     expect(report[3]).toEqual({ section: 'closing', inserted: [], deleted: [], moved: [move], edited: [], unchanged: 1 });
   });
 
+  // A block the director moved and changed is a cut and an addition in the standing edits
+  // (lib/hand-edit-diff.js), so the desk names it deleted where it was and inserted where it
+  // went: one naming rule (task 4.3b).
   test('after an edit in place, and an edit to a block the director then moved', () => {
     const opened = journalistBundle();
     const edited = Desk.setBlock(opened, 2, 0, paragraph('Thirteen sales landed in one account in the final two minutes.'));
@@ -370,9 +373,8 @@ describe('deskChanges: what the director inserted, deleted, moved or edited, sec
     const recaptioned = Desk.setBlock(opened, 1, 1, photo('theory.jpg', 'Mel at the whiteboard.'));
     const movedToo = Desk.moveToSection(recaptioned, { section: 1, block: 1 }, 2);
     const report = Desk.deskChanges(opened, movedToo);
-    const where = { from: { section: 'the-story', block: 1 }, to: { section: 'follow-the-money', block: 2 } };
-    expect(report[1]).toMatchObject({ moved: [where], edited: [where], unchanged: 1 });
-    expect(report[2]).toMatchObject({ moved: [where], edited: [where], unchanged: 2 });
+    expect(report[1]).toEqual({ section: 'the-story', inserted: [], deleted: [1], moved: [], edited: [], unchanged: 1 });
+    expect(report[2]).toEqual({ section: 'follow-the-money', inserted: [2], deleted: [], moved: [], edited: [], unchanged: 2 });
   });
 
   test('untouchedThrough: the ordinal anchor holds for a block only while no block at or before it changed', () => {
@@ -417,27 +419,30 @@ describe('what the desk shows', () => {
 });
 
 // The desk's report and the director's standing edits (lib/hand-edit-diff.js) name the same
-// block as moved: the console cannot load the server's module, so it keeps its own copy of
-// the rule, and these hold the two equal.
+// blocks as moved: the server's diff requires this module and calls its rule (task 4.3b),
+// as server.js requires console/outline-edit-logic.js.
 describe('the desk and the server\'s diff decide moves by one rule', () => {
   const D = require('../../lib/hand-edit-diff');
 
-  /** Every ordering of 0..n-1. */
-  function permutations(n) {
-    if (n === 0) return [[]];
-    return permutations(n - 1).flatMap((p) => Array.from({ length: n }, (_x, i) => [...p.slice(0, i), n - 1, ...p.slice(i)]));
-  }
+  test('the server\'s diff pairs a section\'s blocks and picks the ones that stay with the desk\'s own functions', () => {
+    expect(D._testing.matchBlocks).toBe(Desk.pairSectionBlocks);
+    expect(D._testing.stayingInSection).toBe(Desk.stayingInSection);
+    expect(D.sectionKey).toBe(Desk.sectionKey);
+  });
 
-  test('stayingPairs: the same run stays for every ordering of up to six blocks, whatever their weights', () => {
-    const weightings = [[0, 0, 0, 0, 0, 0], [1, 0, 1, 0, 1, 0], [0, 1, 3, 0, 2, 1], [3, 3, 0, 1, 0, 2]];
-    for (let n = 1; n <= 6; n += 1) {
-      permutations(n).forEach((order) => {
-        weightings.forEach((w) => {
-          const pairs = order.map((opened, i) => ({ opened, weight: w[i] }));
-          expect(Desk.stayingPairs(pairs)).toEqual(D._testing.stayingPairs(pairs));
-        });
-      });
-    }
+  // The rule weighs a pair as changed by the equality the standing edits use, so a block
+  // the rule names moved is the block the edits record as a move.
+  test('a changed block is changed by the same equality the standing edits use: keys sorted, every string trimmed', () => {
+    const cases = [
+      [paragraph(STORY_1), paragraph(STORY_1)],
+      [paragraph(STORY_1), paragraph(STORY_1 + '  ')],
+      [{ type: 'quote', text: 'More.', attribution: 'Alex' }, { attribution: 'Alex', text: ' More.', type: 'quote' }],
+      [photo('theory.jpg', 'Mel lays out the theory.'), photo('theory.jpg', 'Mel at the whiteboard.')],
+      [{ type: 'list', items: ['One', 'Two'] }, { type: 'list', items: ['One ', 'Two'] }],
+      [{ type: 'photo', filename: 'a.jpg' }, { type: 'photo', filename: 'a.jpg', caption: undefined }],
+      [paragraph(STORY_1), { type: 'quote', text: STORY_1 }]
+    ];
+    cases.forEach(([a, b]) => expect([a, b, Desk.sameBlock(a, b)]).toEqual([a, b, D._testing.same(a, b)]));
   });
 
   test('the desk\'s report and the standing edits agree on the blocks moved, deleted and inserted', () => {
@@ -473,4 +478,51 @@ describe('the desk and the server\'s diff decide moves by one rule', () => {
       expect(movedByDesk).toEqual(movedByEdits);
     });
   });
+
+  /** A block as a test names it: its type, then its file, its document or its first words. */
+  const label = (block) => block.type + ':' + (block.filename || block.tokenId || String(block.text).slice(0, 20).trim());
+  /** The blocks of the section `key` names in `bundle`. */
+  const contentAt = (bundle, key) => bundle.sections.find((s, i) => Desk.sectionKey(s, i) === key).content;
+
+  /** Each block the desk's report names, by section: moved, edited, inserted or deleted. */
+  function namedByDesk(opened, desk) {
+    const named = [];
+    Desk.deskChanges(opened, desk).forEach((r) => {
+      r.moved.filter((m) => m.to.section === r.section).forEach((m) => named.push([r.section, 'moved', label(contentAt(desk, r.section)[m.to.block])]));
+      r.edited.forEach((m) => named.push([r.section, 'edited', label(contentAt(desk, r.section)[m.to.block])]));
+      r.inserted.forEach((j) => named.push([r.section, 'inserted', label(contentAt(desk, r.section)[j])]));
+      r.deleted.forEach((j) => named.push([r.section, 'deleted', label(contentAt(opened, r.section)[j])]));
+    });
+    return named.sort();
+  }
+
+  /** Each block the standing edits name, by section: a move, a block a field edit is on, an addition, a cut. */
+  function namedByEdits(opened, desk) {
+    const named = [];
+    D.standingAfterSendBack(null, opened, desk, 'bundle').edits.forEach((e) => {
+      const section = e.scope.replace('section:', '');
+      const blockPath = e.path.replace(/(\.content\[\d+\]).+$/, '$1');
+      if (e.from) named.push([section, 'moved', label(e.after)]);
+      else if (e.after === null) named.push([section, 'deleted', label(e.before)]);
+      else if (e.before === null && blockPath === e.path) named.push([section, 'inserted', label(e.after)]);
+      else named.push([section, 'edited', label(D.readAtPath(desk, blockPath))]);
+    });
+    return named.filter((n, i) => named.findIndex((m) => m.join() === n.join()) === i).sort();
+  }
+
+  test('a photo moved and recaptioned: the desk\'s report and the standing edits name it the same way', () => {
+    const opened = journalistBundle();
+    const recaptioned = photo('theory.jpg', 'Six people around the whiteboard, late.');
+    // Up past the paragraph before it: the recaptioned photo keeps its place among the blocks
+    // that kept their order, and the paragraph it passed is the block named moved.
+    const up = Desk.setBlock(Desk.moveBlock(opened, { section: 1, block: 1 }, { section: 1, block: 0 }), 1, 0, recaptioned);
+    // To the end of its section, and to another section: a cut and an addition.
+    const down = Desk.setBlock(Desk.moveBlock(opened, { section: 1, block: 1 }, { section: 1, block: 3 }), 1, 3, recaptioned);
+    const across = Desk.setBlock(Desk.moveToSection(opened, { section: 1, block: 1 }, 2), 2, 2, recaptioned);
+    expect(namedByDesk(opened, up)).toEqual([['the-story', 'edited', 'photo:theory.jpg'], ['the-story', 'moved', 'paragraph:Mel built the first']]);
+    expect(namedByDesk(opened, down)).toEqual([['the-story', 'deleted', 'photo:theory.jpg'], ['the-story', 'inserted', 'photo:theory.jpg']]);
+    expect(namedByDesk(opened, across)).toEqual([['follow-the-money', 'inserted', 'photo:theory.jpg'], ['the-story', 'deleted', 'photo:theory.jpg']]);
+    [up, down, across].forEach((desk) => expect(namedByDesk(opened, desk)).toEqual(namedByEdits(opened, desk)));
+  });
 });
+

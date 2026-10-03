@@ -2,8 +2,8 @@
  * lib/hand-edit-diff.js — PURE: the director's edits at a stop (spec 2026-09-19 §4.2;
  * F1 and FA, the director's edits are final, spec 2026-10-02 section 7).
  *
- * Depends only on lib/grounding.js (pure). Never throws: any non-object input yields an
- * empty diff, no edits or no report.
+ * Depends only on lib/grounding.js and console/article-desk-logic.js (both pure). Never
+ * throws: any non-object input yields an empty diff, no edits or no report.
  *
  * THE DIFF (diffOutline, diffBundle) records what changed between two versions, by
  * scope, for the trace (server.js traceForStop) and as the first step of the edits.
@@ -35,8 +35,10 @@
  * - A block the director moved within its section, unchanged, is a move too (task 4.3,
  *   the desk's moves): `from` is its own section, and `between` holds what finds its
  *   place, the block it follows and the block it precedes among the blocks that kept
- *   their order (null at an end). Of the blocks out of order, the diff names as moved the
- *   fewest it can, a photo or a card before the text it passed (stayingPairs).
+ *   their order (null at an end). Which blocks the director moved is the desk's naming
+ *   rule, which this module calls (console/article-desk-logic.js pairSectionBlocks and
+ *   stayingInSection; task 4.3b): the fewest it can, a photo or a card before the text it
+ *   passed, and a changed block kept in its place, so its change is an edit there.
  * - Given the roster's names, a cut or a removal records `names` (FA, requirement 9):
  *   the names its text held that the director's version no longer named.
  * Ids (E1, E2, ...) are stable within a stop. The edits stand across every send-back
@@ -60,6 +62,12 @@
 'use strict';
 
 const { isVerbatimIn, normalizeForGrounding, quotedPassages } = require('./grounding');
+// The desk's naming rule (task 4.3b): how a section's blocks pair across two versions and
+// which of them the director moved, one rule for the desk's change report and these edits.
+// A dual-export console module, required here as server.js requires outline-edit-logic.js.
+const {
+  pairSectionBlocks, stayingInSection, blockText, blockKey, sectionKey
+} = require('../console/article-desk-logic');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
 // which do not name metadata, voice_self_check or _revisionHistory.
@@ -222,20 +230,6 @@ function diffOutline(before, after) {
 
 // ─── bundle ───────────────────────────────────────────────────────────────────
 
-function blockText(b) {
-  if (!isObj(b)) return '';
-  if (typeof b.text === 'string') return b.text;
-  if (Array.isArray(b.items)) return b.items.map(String).join(' ');
-  if (typeof b.caption === 'string') return b.caption;
-  if (typeof b.headline === 'string') return b.headline;
-  return '';
-}
-
-function blockKey(b) {
-  const type = isObj(b) && typeof b.type === 'string' ? b.type : '';
-  return type + '|' + blockText(b).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 40);
-}
-
 /** Pair elements by `keyOf` (a null key never pairs), then by index for what is left. */
 function pairBy(beforeArr, afterArr, keyOf) {
   const b = Array.isArray(beforeArr) ? beforeArr : [];
@@ -258,60 +252,35 @@ function pairBy(beforeArr, afterArr, keyOf) {
   return { pairs, removed, added };
 }
 
-/** Pair blocks by type + first 40 normalised characters, then by index for what is left. */
-function matchBlocks(beforeArr, afterArr) {
-  return pairBy(beforeArr, afterArr, blockKey);
-}
-
-/** The kinds of block that carry the article's text, which a move is least likely to be about. */
-const TEXT_BLOCK_TYPES = ['paragraph', 'quote', 'list'];
-
 /**
- * The pairs that stay in place, as indexes into `pairs` (sorted by their place in the newer
- * version), ascending: the longest run whose order in the older version matches,
- * preferring, among runs as long, the one that keeps changed blocks and text blocks in
- * place, so the photo or card the director moved is the block named as moved (task 4.3).
- * The desk's change report decides it by the same rule (console/article-desk-logic.js
- * stayingPairs; a test holds the two equal).
- *
- * @param {Array<{opened: number, weight: number}>} pairs - each pair's index in the older version, and its weight
- * @returns {number[]}
+ * A section's blocks in two versions, paired by the desk's naming rule
+ * (console/article-desk-logic.js pairSectionBlocks; task 4.3b): `{pairs: [{bi, ai}],
+ * removed, added}`. Every block collection pairs by it, so the diff, the restores and the
+ * desk's change report pair blocks alike.
  */
-function stayingPairs(pairs) {
-  const length = [];
-  const weight = [];
-  const previous = [];
-  pairs.forEach((pair, i) => {
-    length[i] = 1;
-    weight[i] = pair.weight;
-    previous[i] = -1;
-    for (let j = 0; j < i; j += 1) {
-      if (pairs[j].opened >= pair.opened) continue;
-      const l = length[j] + 1;
-      const w = weight[j] + pair.weight;
-      if (l > length[i] || (l === length[i] && w > weight[i])) {
-        length[i] = l;
-        weight[i] = w;
-        previous[i] = j;
-      }
-    }
-  });
-  let best = -1;
-  pairs.forEach((_pair, i) => {
-    if (best === -1 || length[i] > length[best] || (length[i] === length[best] && weight[i] > weight[best])) best = i;
-  });
-  const staying = [];
-  for (let k = best; k !== -1; k = previous[k]) staying.unshift(k);
-  return staying;
+const matchBlocks = pairSectionBlocks;
+
+/**
+ * The block a moved block follows and the block it precedes among the blocks that kept
+ * their order (null at an end): what finds its place (task 4.3).
+ *
+ * @param {Array<{ai: number}>} staying - the pairs that kept their order, by their place in `content`
+ * @param {number} ai - the moved block's index in `content`
+ * @param {Array} content - the section in the director's version
+ * @returns {{follows: Object|null, precedes: Object|null}}
+ */
+function betweenAt(staying, ai, content) {
+  const follows = staying.filter((p) => p.ai < ai).pop();
+  const precedes = staying.find((p) => p.ai > ai);
+  return { follows: follows ? blockIdentity(content[follows.ai]) : null, precedes: precedes ? blockIdentity(content[precedes.ai]) : null };
 }
 
 /**
- * A section's blocks, diffed: each block paired where it stood, and each pair outside the
- * run that kept its order is a block the director moved within the section (task 4.3).
- * A moved block is recorded as a move across sections is: a removal and an addition of
- * the same block, which rawEditsOf makes one move. Its addition carries `between`: what
- * finds the blocks that kept their order on either side of it in the newer version, the
- * block it follows and the block it precedes (null at an end), which are its place.
+ * A section's blocks, diffed: each block paired, and each pair outside the run that kept
+ * its order is a block the director moved within the section (task 4.3), both by the desk's
+ * naming rule (stayingInSection; task 4.3b). A moved block is recorded as a move across
+ * sections is: a removal and an addition of the same block, which rawEditsOf makes one move.
+ * Its addition carries `between` (betweenAt), its place in the newer version.
  */
 function diffSection(id, before, after) {
   const prefix = `sections[#${id}]`;
@@ -322,21 +291,12 @@ function diffSection(id, before, after) {
   const bc = Array.isArray(before.content) ? before.content : [];
   const ac = Array.isArray(after.content) ? after.content : [];
   const { pairs, removed, added } = matchBlocks(bc, ac);
-  const order = [...pairs].sort((x, y) => x.ai - y.ai);
-  const staying = stayingPairs(order.map(({ bi, ai }) => ({
-    opened: bi,
-    weight: (same(bc[bi], ac[ai]) ? 0 : 2) + (isObj(ac[ai]) && TEXT_BLOCK_TYPES.includes(ac[ai].type) ? 1 : 0)
-  }))).map((i) => order[i]);
-  const between = (ai) => {
-    const follows = staying.filter((p) => p.ai < ai).pop();
-    const precedes = staying.find((p) => p.ai > ai);
-    return { follows: follows ? blockIdentity(ac[follows.ai]) : null, precedes: precedes ? blockIdentity(ac[precedes.ai]) : null };
-  };
+  const staying = stayingInSection(bc, ac, pairs);
   pairs.forEach((pair) => {
     const { bi, ai } = pair;
     if (!staying.includes(pair)) {
       changes.push({ path: `${prefix}.content[-]`, before: bc[bi], after: null });
-      changes.push({ path: `${prefix}.content[${ai}]`, before: null, after: ac[ai], between: between(ai) });
+      changes.push({ path: `${prefix}.content[${ai}]`, before: null, after: ac[ai], between: betweenAt(staying, ai, ac) });
       return;
     }
     if (!same(bc[bi], ac[ai])) changes.push({ path: `${prefix}.content[${ai}]`, before: bc[bi], after: ac[ai] });
@@ -350,17 +310,9 @@ function idOf(item, idField, i) {
   return (isObj(item) && item[idField] != null) ? String(item[idField]) : `index-${i}`;
 }
 
-/**
- * A section's key as the director's edits address it: its id, else its index. The one
- * rule, which the fact check reads too (known item 7).
- *
- * @param {*} section
- * @param {number} index
- * @returns {string}
- */
-function sectionKey(section, index) {
-  return idOf(section, 'id', index);
-}
+// A section's key as the director's edits address it, its id, else its index, is the desk's
+// `sectionKey` (required above): the one rule, which the diff, the fact check (known item 7)
+// and the desk's change report read.
 
 function diffById(name, idField, before, after) {
   const b = Array.isArray(before) ? before : [];
@@ -401,8 +353,8 @@ function diffBundle(before, after) {
 
   const bSecs = Array.isArray(before.sections) ? before.sections : [];
   const aSecs = Array.isArray(after.sections) ? after.sections : [];
-  const bById = new Map(bSecs.map((s, i) => [idOf(s, 'id', i), s]));
-  const aById = new Map(aSecs.map((s, i) => [idOf(s, 'id', i), s]));
+  const bById = new Map(bSecs.map((s, i) => [sectionKey(s, i), s]));
+  const aById = new Map(aSecs.map((s, i) => [sectionKey(s, i), s]));
   for (const id of new Set([...bById.keys(), ...aById.keys()])) {
     const bs = bById.get(id);
     const as = aById.get(id);
@@ -1768,6 +1720,6 @@ module.exports = {
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
-    stayingPairs
+    stayingInSection
   }
 };

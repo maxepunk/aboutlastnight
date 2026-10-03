@@ -28,14 +28,16 @@
  *     schema counts them, so the desk never disagrees with the server's schema gate, which
  *     stays the last word on shape.
  *
+ *   THE NAMING RULE decides which blocks of a section the director moved: the blocks are
+ *   paired (pairSectionBlocks), and of the pairs, the longest run that kept its order stays
+ *   (stayingInSection). It is one rule for the desk's change report and the director's
+ *   standing edits: lib/hand-edit-diff.js requires this module and its diff calls these same
+ *   functions (task 4.3b), as server.js requires console/outline-edit-logic.js.
+ *
  *   THE CHANGE REPORT (deskChanges) says, section by section, which blocks the director
- *   inserted, deleted, moved or edited since the stop opened. The desk's marks (task 4.10)
- *   anchor on it: a finding's section and ordinal hold only while no block at or before it
- *   in that section changed (untouchedThrough). A block the director moved within its
- *   section is the one named as moved, not the ones it passed: of the blocks that kept
- *   their order, the longest run stays, preferring edited blocks and text blocks, as the
- *   server's diff decides it (lib/hand-edit-diff.js stayingPairs), so the desk and the
- *   director's standing edits name the same block.
+ *   inserted, deleted, moved or edited since the stop opened, named by that rule. The desk's
+ *   marks (task 4.10) anchor on it: a finding's section and ordinal hold only while no block
+ *   at or before it in that section changed (untouchedThrough).
  *
  *   WHAT THE DESK SHOWS: the word count of the bundle as edited, the preview request for
  *   the page as it will print (server.js POST /api/session/:id/article/preview), and the
@@ -57,17 +59,6 @@
 
   function cloneBundle(bundle) {
     return JSON.parse(JSON.stringify(bundle));
-  }
-
-  /** JSON with every object's keys sorted, so two blocks compare by what they hold. */
-  function canonical(value) {
-    if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
-    if (isPlainObject(value)) {
-      return '{' + Object.keys(value).sort().map(function (key) {
-        return JSON.stringify(key) + ':' + canonical(value[key]);
-      }).join(',') + '}';
-    }
-    return value === undefined ? 'undefined' : JSON.stringify(value);
   }
 
   function sectionsOf(bundle) {
@@ -394,12 +385,54 @@
     return emptyBlocks(bundle).concat(headlineProblems(bundle));
   }
 
-  // ── the change report ─────────────────────────────────────────────────────
+  // ── the naming rule: which blocks the director moved ──────────────────────
 
   /** The kinds of block that carry the article's text, which a move is least likely to be about. */
   var TEXT_BLOCK_TYPES = ['paragraph', 'quote', 'list'];
 
-  /** What names a photo, a card or a reference in any version, a field edit apart. */
+  /** A value with its keys sorted and every string trimmed. */
+  function sortedTrimmed(value) {
+    if (Array.isArray(value)) return value.map(sortedTrimmed);
+    if (isPlainObject(value)) {
+      return Object.keys(value).sort().reduce(function (out, key) {
+        out[key] = sortedTrimmed(value[key]);
+        return out;
+      }, {});
+    }
+    return typeof value === 'string' ? value.trim() : value;
+  }
+
+  /** A block as canonical JSON: keys sorted, every string trimmed. */
+  function trimmedCanonical(block) {
+    return block === undefined ? 'undefined' : JSON.stringify(sortedTrimmed(block));
+  }
+
+  /**
+   * Do two blocks hold the same? Compared as the director's edits compare values (keys
+   * sorted, every string trimmed; lib/hand-edit-diff.js `same`, which a test holds equal), so
+   * a block the rule names moved is one the edits record as a move.
+   */
+  function sameBlock(a, b) {
+    return trimmedCanonical(a) === trimmedCanonical(b);
+  }
+
+  /** A block's text, for its opening words: its text, its items, its caption or its headline. */
+  function blockText(block) {
+    if (!isPlainObject(block)) return '';
+    if (typeof block.text === 'string') return block.text;
+    if (Array.isArray(block.items)) return block.items.map(String).join(' ');
+    if (typeof block.caption === 'string') return block.caption;
+    if (typeof block.headline === 'string') return block.headline;
+    return '';
+  }
+
+  /** A block's type and its text's first 40 characters, lower case, with runs of space folded. */
+  function blockKey(block) {
+    var type = isPlainObject(block) && typeof block.type === 'string' ? block.type : '';
+    return type + '|' + blockText(block).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 40);
+  }
+
+  /** What names a photo, a card or a reference whatever its other fields; null for a block its text names. */
   function blockIdentity(block) {
     if (!isPlainObject(block)) return null;
     if (block.type === 'photo' && typeof block.filename === 'string') return 'photo|' + block.filename;
@@ -410,14 +443,77 @@
   }
 
   /**
-   * The pairs that stay in place, as indexes into `pairs` (sorted by their place in the
-   * version the director made), ascending: the longest run whose order in the opened
-   * version matches, preferring, among runs as long, the one that keeps edited blocks and
-   * text blocks, so the photo or card the director moved is the one named. The server's
-   * diff decides it by the same rule (lib/hand-edit-diff.js stayingPairs; a test holds the
-   * two equal).
+   * A section's blocks in two versions, paired: a block with its unchanged self; then a
+   * photo, a card or a reference with itself, whatever its other fields; then a block with one
+   * of its type whose text opens with the same 40 characters (blockKey), so a block inserted
+   * before it does not throw it off; then, for what is left, the block in the same place.
+   * Each block pairs once, with the first one the test finds.
    *
-   * @param {Array<{opened: number, weight: number}>} pairs - each pair's index in the opened version, and its weight
+   * @param {Array} openedBlocks - the section in the older version
+   * @param {Array} currentBlocks - the section in the newer version
+   * @returns {{pairs: Array<{bi: number, ai: number}>, removed: number[], added: number[]}} each
+   *   pair's index in the older version (`bi`) and in the newer (`ai`): the pairs found by what
+   *   the blocks hold, by their place in the newer version, then the pairs by place; the
+   *   indexes of the blocks left in each version
+   */
+  function pairSectionBlocks(openedBlocks, currentBlocks) {
+    var opened = Array.isArray(openedBlocks) ? openedBlocks : [];
+    var current = Array.isArray(currentBlocks) ? currentBlocks : [];
+    var usedOpened = [];
+    var usedCurrent = [];
+    var byContent = [];
+    var byPlace = [];
+    function pairOn(keyOf) {
+      var openedKeys = opened.map(keyOf);
+      current.forEach(function (block, ai) {
+        if (usedCurrent[ai]) return;
+        var key = keyOf(block);
+        if (key === null) return;
+        for (var bi = 0; bi < opened.length; bi += 1) {
+          if (!usedOpened[bi] && openedKeys[bi] === key) {
+            usedOpened[bi] = true;
+            usedCurrent[ai] = true;
+            byContent.push({ bi: bi, ai: ai });
+            return;
+          }
+        }
+      });
+    }
+    pairOn(trimmedCanonical);
+    pairOn(blockIdentity);
+    pairOn(blockKey);
+    current.forEach(function (_block, ai) {
+      if (!usedCurrent[ai] && ai < opened.length && !usedOpened[ai]) {
+        usedOpened[ai] = true;
+        usedCurrent[ai] = true;
+        byPlace.push({ bi: ai, ai: ai });
+      }
+    });
+    byContent.sort(function (x, y) { return x.ai - y.ai; });
+    return {
+      pairs: byContent.concat(byPlace),
+      removed: opened.map(function (_block, i) { return i; }).filter(function (i) { return !usedOpened[i]; }),
+      added: current.map(function (_block, i) { return i; }).filter(function (i) { return !usedCurrent[i]; })
+    };
+  }
+
+  /**
+   * A pair's weight in choosing the blocks that stay: a changed block weighs most, so it
+   * keeps its place and its change is an edit there (a block the director moved and changed
+   * is a cut and an addition, which keeps no place); then a text block, so the photo or card
+   * the director moved is named before the text it passed.
+   */
+  function stayWeight(openedBlock, currentBlock) {
+    return (sameBlock(openedBlock, currentBlock) ? 0 : 2) +
+      (isPlainObject(currentBlock) && TEXT_BLOCK_TYPES.indexOf(currentBlock.type) !== -1 ? 1 : 0);
+  }
+
+  /**
+   * The pairs that stay in place, as indexes into `pairs` (sorted by their place in the newer
+   * version), ascending: the longest run whose order in the older version matches, the
+   * heaviest among runs as long.
+   *
+   * @param {Array<{opened: number, weight: number}>} pairs - each pair's index in the older version, and its weight
    * @returns {number[]}
    */
   function stayingPairs(pairs) {
@@ -449,63 +545,40 @@
     return staying;
   }
 
-  function blocksOf(bundle) {
-    var out = [];
-    sectionsOf(bundle).forEach(function (section, s) {
-      var key = sectionKey(section, s);
-      contentOf(section).forEach(function (block, b) {
-        out.push({
-          key: key, section: s, block: b, canon: canonical(block),
-          identity: blockIdentity(block), type: isPlainObject(block) ? block.type : null
-        });
-      });
-    });
-    return out;
+  /**
+   * The pairs of a section that kept their order, by their place in the newer version: the
+   * longest run whose order in the older version holds, the heaviest among runs as long
+   * (stayWeight). Every other pair is a block the director moved within the section: one
+   * unchanged is a move, and one changed is a cut and an addition, as the standing edits
+   * record them.
+   *
+   * @param {Array} openedBlocks - the section in the older version
+   * @param {Array} currentBlocks - the section in the newer version
+   * @param {Array<{bi: number, ai: number}>} pairs - pairSectionBlocks' pairs
+   * @returns {Array<{bi: number, ai: number}>} the pairs (the same objects) that stay
+   */
+  function stayingInSection(openedBlocks, currentBlocks, pairs) {
+    var opened = Array.isArray(openedBlocks) ? openedBlocks : [];
+    var current = Array.isArray(currentBlocks) ? currentBlocks : [];
+    var order = (Array.isArray(pairs) ? pairs : []).slice().sort(function (x, y) { return x.ai - y.ai; });
+    return stayingPairs(order.map(function (pair) {
+      return { opened: pair.bi, weight: stayWeight(opened[pair.bi], current[pair.ai]) };
+    })).map(function (i) { return order[i]; });
   }
 
-  /**
-   * Pair each block on the desk with the block it was when the stop opened: the same block
-   * in the same place; the same block anywhere, its own section first; the same photo, card
-   * or reference with a field changed; the same kind of block in the same place with its
-   * text changed. What pairs with nothing was inserted or deleted.
-   */
-  function pairBlocks(opened, current) {
-    var used = [];
-    var pairs = [];
-    var unpaired = current.slice();
-    function take(test) {
-      unpaired = unpaired.filter(function (c) {
-        var found = -1;
-        var fallback = -1;
-        for (var i = 0; i < opened.length; i += 1) {
-          if (used[i] || !test(opened[i], c)) continue;
-          if (opened[i].key === c.key) { found = i; break; }
-          if (fallback === -1) fallback = i;
-        }
-        if (found === -1) found = fallback;
-        if (found === -1) return true;
-        used[found] = true;
-        pairs.push({ opened: opened[found], current: c });
-        return false;
-      });
-    }
-    take(function (o, c) { return o.key === c.key && o.block === c.block && o.canon === c.canon; });
-    take(function (o, c) { return o.canon === c.canon; });
-    take(function (o, c) { return c.identity !== null && o.identity === c.identity; });
-    take(function (o, c) { return o.key === c.key && o.block === c.block && o.type === c.type; });
-    return {
-      pairs: pairs,
-      inserted: unpaired,
-      deleted: opened.filter(function (_o, i) { return !used[i]; })
-    };
-  }
+  // ── the change report ─────────────────────────────────────────────────────
 
   /**
    * What the director inserted, deleted, moved or edited at the desk since the stop opened,
    * section by section, each section named by its key (its id, as the fact check's findings
-   * name it). A block that moved across sections is listed in both. `unchanged` counts the
-   * section's first blocks that are the same, in the same place, in both versions: a
-   * finding about a block at an index below it still points at that block.
+   * name it), by the naming rule, so the report and the standing edits name the same blocks:
+   * - edited: a changed block in its place among the blocks that kept their order;
+   * - moved: an unchanged block out of that order, or one that left one section and arrived
+   *   unchanged in another, which is listed under both;
+   * - deleted and inserted: a block that left or arrived with nothing to pair it, and a block
+   *   the director moved and changed, deleted where it was and inserted where it went.
+   * `unchanged` counts the section's first blocks that are the same, in the same place, in
+   * both versions: a finding about a block at an index below it still points at that block.
    *
    * @param {Object} opened - the bundle the stop opened on (the stop's contentBundle)
    * @param {Object} current - the bundle on the desk
@@ -516,7 +589,6 @@
    */
   function deskChanges(opened, current) {
     if (!isPlainObject(opened) || !isPlainObject(current) || !Array.isArray(opened.sections) || !Array.isArray(current.sections)) return [];
-    var paired = pairBlocks(blocksOf(opened), blocksOf(current));
 
     var entries = [];
     var byKey = {};
@@ -530,51 +602,92 @@
     current.sections.forEach(function (section, s) { entry(sectionKey(section, s)); });
     opened.sections.forEach(function (section, s) { entry(sectionKey(section, s)); });
 
-    // Which pairs moved: those that changed section, and within a section those outside the
-    // run of blocks that kept their order.
-    var bySection = {};
-    paired.pairs.forEach(function (pair) {
-      pair.moved = pair.opened.key !== pair.current.key;
-      if (!pair.moved) (bySection[pair.current.key] = bySection[pair.current.key] || []).push(pair);
+    var openedByKey = {};
+    opened.sections.forEach(function (section, s) { openedByKey[sectionKey(section, s)] = { index: s, content: contentOf(section) }; });
+    var currentKeys = {};
+    current.sections.forEach(function (section, s) { currentKeys[sectionKey(section, s)] = true; });
+
+    // Each change, with where its block stood when the stop opened, for the listing order.
+    var moved = [];
+    var edited = [];
+    // The blocks that left (`gone`) or arrived (`came`) with nothing in their own section to
+    // pair them. A block moved within its section and changed arrives `within`: as in the
+    // standing edits, its arrival pairs with nothing in another section.
+    var gone = [];
+    var came = [];
+    function change(fromKey, fromBlock, toKey, toBlock, openedSection) {
+      return { from: { section: fromKey, block: fromBlock }, to: { section: toKey, block: toBlock }, at: [openedSection, fromBlock] };
+    }
+
+    current.sections.forEach(function (section, s) {
+      var key = sectionKey(section, s);
+      var after = contentOf(section);
+      var was = openedByKey[key];
+      if (!was) {
+        after.forEach(function (block, j) { came.push({ key: key, block: j, value: block }); });
+        return;
+      }
+      var before = was.content;
+      var paired = pairSectionBlocks(before, after);
+      var staying = stayingInSection(before, after, paired.pairs);
+      paired.pairs.forEach(function (pair) {
+        var unchangedBlock = sameBlock(before[pair.bi], after[pair.ai]);
+        if (staying.indexOf(pair) !== -1) {
+          if (!unchangedBlock) edited.push(change(key, pair.bi, key, pair.ai, was.index));
+        } else if (unchangedBlock) {
+          moved.push(change(key, pair.bi, key, pair.ai, was.index));
+        } else {
+          gone.push({ key: key, section: was.index, block: pair.bi, value: before[pair.bi] });
+          came.push({ key: key, block: pair.ai, value: after[pair.ai], within: true });
+        }
+      });
+      paired.removed.forEach(function (bi) { gone.push({ key: key, section: was.index, block: bi, value: before[bi] }); });
+      paired.added.forEach(function (ai) { came.push({ key: key, block: ai, value: after[ai] }); });
     });
-    Object.keys(bySection).forEach(function (key) {
-      var inSection = bySection[key].slice().sort(function (a, b) { return a.current.block - b.current.block; });
-      var staying = stayingPairs(inSection.map(function (pair) {
-        return {
-          opened: pair.opened.block,
-          weight: (pair.opened.canon !== pair.current.canon ? 2 : 0) + (TEXT_BLOCK_TYPES.indexOf(pair.current.type) !== -1 ? 1 : 0)
-        };
-      }));
-      inSection.forEach(function (pair, i) { pair.moved = staying.indexOf(i) === -1; });
+    opened.sections.forEach(function (section, s) {
+      var key = sectionKey(section, s);
+      if (currentKeys[key]) return;
+      contentOf(section).forEach(function (block, j) { gone.push({ key: key, section: s, block: j, value: block }); });
     });
+
+    // A block that left one section and arrived unchanged in another moved there.
+    var taken = [];
+    came.forEach(function (c) {
+      if (!c.within) {
+        for (var i = 0; i < gone.length; i += 1) {
+          if (!taken[i] && gone[i].key !== c.key && sameBlock(gone[i].value, c.value)) {
+            taken[i] = true;
+            moved.push(change(gone[i].key, gone[i].block, c.key, c.block, gone[i].section));
+            return;
+          }
+        }
+      }
+      entry(c.key).inserted.push(c.block);
+    });
+    gone.forEach(function (g, i) { if (!taken[i]) entry(g.key).deleted.push(g.block); });
 
     // Listed in the order the blocks stood when the stop opened; a block that changed
     // section is listed under both.
-    function list(name, pair) {
-      var where = {
-        from: { section: pair.opened.key, block: pair.opened.block },
-        to: { section: pair.current.key, block: pair.current.block }
-      };
-      entry(pair.opened.key)[name].push(where);
-      if (pair.current.key !== pair.opened.key) entry(pair.current.key)[name].push(where);
-    }
-    paired.pairs.slice()
-      .sort(function (a, b) { return (a.opened.section - b.opened.section) || (a.opened.block - b.opened.block); })
-      .forEach(function (pair) {
-        if (pair.moved) list('moved', pair);
-        if (pair.opened.canon !== pair.current.canon) list('edited', pair);
+    function list(name, changes) {
+      changes.sort(function (x, y) { return (x.at[0] - y.at[0]) || (x.at[1] - y.at[1]); }).forEach(function (c) {
+        var where = { from: c.from, to: c.to };
+        entry(c.from.section)[name].push(where);
+        if (c.to.section !== c.from.section) entry(c.to.section)[name].push(where);
       });
-    paired.inserted.forEach(function (c) { entry(c.key).inserted.push(c.block); });
-    paired.deleted.forEach(function (o) { entry(o.key).deleted.push(o.block); });
+    }
+    list('moved', moved);
+    list('edited', edited);
+    entries.forEach(function (e) {
+      e.inserted.sort(function (x, y) { return x - y; });
+      e.deleted.sort(function (x, y) { return x - y; });
+    });
 
-    var openedByKey = {};
-    opened.sections.forEach(function (section, s) { openedByKey[sectionKey(section, s)] = contentOf(section); });
     current.sections.forEach(function (section, s) {
-      var before = openedByKey[sectionKey(section, s)];
+      var was = openedByKey[sectionKey(section, s)];
+      if (!was) return;
       var after = contentOf(section);
-      if (!before) return;
       var n = 0;
-      while (n < before.length && n < after.length && canonical(before[n]) === canonical(after[n])) n += 1;
+      while (n < was.content.length && n < after.length && sameBlock(was.content[n], after[n])) n += 1;
       byKey[sectionKey(section, s)].unchanged = n;
     });
     return entries;
@@ -640,6 +753,7 @@
     };
   }
 
+
   // ── public surface ────────────────────────────────────────────────────────
   var api = {
     INSERTABLE_TYPES: INSERTABLE_TYPES,
@@ -665,10 +779,15 @@
     emptyBlocks: emptyBlocks,
     deskProblems: deskProblems,
 
+    pairSectionBlocks: pairSectionBlocks,
+    stayingInSection: stayingInSection,
+    stayingPairs: stayingPairs,
+    sameBlock: sameBlock,
+    blockText: blockText,
+    blockKey: blockKey,
+    sectionKey: sectionKey,
     deskChanges: deskChanges,
     untouchedThrough: untouchedThrough,
-    stayingPairs: stayingPairs,
-    sectionKey: sectionKey,
     sectionLabel: sectionLabel,
 
     wordCount: wordCount,
