@@ -416,7 +416,7 @@ The photo branch joins at the outline writer. Phase 2.4, the arc evidence packag
 
 **The rules**: the article writer reads the whole rule set (`loadRuleSet('article')`): the world and the truth rules in its system prompt after the mode block, and all eight craft files last in its user prompt. Nova's voice is C12 in `craft-voice.md`; where Nova stood is the session's mode block (`mode-on-site.md` or `mode-remote.md`) and T8; the length and the house style are C4 in `craft-telling.md`; the fiction's own words are T14, buried memories T3, and characters, not players, T11, all in `truth-rules.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
 
-**Photos** (since 3.9; T13): the writer is given every photo the director kept (`articleWriterInputs`, `options.photos`): the hero, then every other photo but the whiteboard, each printed once under PHOTOS; the article places the photos the outline did not, and the article judge's `photosTruth` checks every one.
+**Photos** (since 3.9; T13): the writer is given every photo the director kept (`articleWriterInputs`, `options.photos`): the hero, then every other photo but the whiteboard, each printed once under PHOTOS; the article places the photos the outline did not, and the article judge's `photosTruth` checks every one. The hero is the map's top photo, read once through `topPhotoOf(articleMapOf(state))`: PHOTOS, the instruction's hero line, the stamp and the judge's PHOTOS all name it (phase 4, brief 4.7c).
 
 **Checkpoint**: `article` (4.2) - Final content approval
 
@@ -568,7 +568,7 @@ ${content.trim()}
 
 ### The judges' output contract
 
-A judge writes a criterion's `fix` only when it scores that criterion below `STRUCTURAL_PASS_SCORE`, and its `revisionGuidance` holds only the steps that fix the structural issues, one per issue (phase 3, 3.9; `EVALUATION_JSON_SCHEMA` and `outputFormat` in `evaluator-nodes.js`, shared by both themes). `evaluatePhase` skips a phase whose most recent evaluation is ready or escalated to the director, so a replay from START reaches an escalated stop without paying for a new evaluation.
+A judge writes a criterion's `fix` only when it scores that criterion below `STRUCTURAL_PASS_SCORE`, and its `revisionGuidance` holds only the steps that fix the structural issues, one per issue (phase 3, 3.9; since phase 4, brief 4.7c, the one contract every judge gets, `TRUTH_ONLY_EVALUATION_JSON_SCHEMA` and `truthOnlyOutputFormat` in `evaluator-nodes.js`: the truth criteria and the structural issues, with no weighted score; an `issues` array a verdict carries outside it reaches none of the history entry, `validationResults` or the escalation reason). `evaluatePhase` skips a phase whose most recent evaluation is ready or escalated to the director, so a replay from START reaches an escalated stop without paying for a new evaluation.
 
 ### Revision Loop Flow
 
@@ -594,7 +594,7 @@ Generate → Evaluate → [structuralPassed?]
 **Rework Pattern** (DRY):
 - `incrementXxxRevision` preserves `_previousOutput`
 - `reviseXxx` receives previous output + feedback
-- How much it keeps follows the revision context (`buildRevisionContext`, under WHAT THIS REWORK DOES; phase 3, TH7): on a send back the director's note decides ("rethink" gets a rethink); on an automatic pass the rework fixes the must-fix items and leaves everything else word for word (R23; "The rework rules" in `reports/CLAUDE.md` gives the details). The detective keeps its older "targeted fixes" rules
+- How much it keeps follows the revision context (`buildRevisionContext`, under WHAT THIS REWORK DOES; phase 3, TH7): on a send back the director's note decides ("rethink" gets a rethink); on an automatic pass the rework fixes the must-fix items and leaves everything else word for word (R23; "The rework rules" in `reports/CLAUDE.md` gives the details). One revision context serves every theme: the detective's older "targeted fixes" branch went (R1; phase 4, brief 4.7c)
 
 ---
 
