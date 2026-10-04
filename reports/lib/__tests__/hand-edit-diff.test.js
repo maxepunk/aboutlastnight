@@ -2721,7 +2721,7 @@ describe("4.5d: a connection the director brought back is theirs by its place, a
     expect(standingIds(D.standingAtMeeting(broughtBack(), reworded(), reworded()))).toEqual([['E2', 'connections[#c2]', true]]);
   });
 
-  it('a pass that drops it has it put back where it sat, as the meeting showed it, beside the connection the pass put in its place', () => {
+  it('a pass that drops it has it put back where it sat, as the version the pass started from holds it, beside the connection the pass put in its place', () => {
     [1, D.REWEAVE_PASS].forEach((pass) => {
       const { output, report } = settle(withConnections([C1, C4]), pass);
       expect([pass, output.connections]).toEqual([pass, [C1, C2, C4]]);
@@ -2729,8 +2729,10 @@ describe("4.5d: a connection the director brought back is theirs by its place, a
         id: 'E2', where: 'connection "c2", brought back', became: null, restored: true
       })]]);
     });
-    // Dropped after an earlier pass of the round reworded it: back as the meeting showed it.
-    expect(settle(withConnections([C1, C3]), 2, { before: reworded() }).output.connections).toEqual([C1, C2, C3]);
+    // Dropped after an earlier pass of the round reworded it: back as that pass left it. Task
+    // 4.5f (the integrator's ruling 3 on 4.5e's findings) changed what this line pinned, the
+    // words the meeting showed, which undid the earlier pass's fix of a false link.
+    expect(settle(withConnections([C1, C3]), 2, { before: reworded() }).output.connections).toEqual([C1, { ...C2, detail: REWORDED }, C3]);
   });
 
   it("a finding that quotes it is the writer's, as the pass reworded it too", () => {
@@ -3118,5 +3120,39 @@ describe('4.5f: an edit whose photo still prints carries no `unprintable`', () =
     expect(output.sections[0].content).toEqual([A, photo(CAPTION), B]);
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
     expect(report.changed[0]).not.toHaveProperty('unprintable');
+  });
+});
+
+// Ruling 3 (within-round.js): a connection the director brought back goes back as the version
+// the pass started from holds it, so a reweave's rewording of it stands within a round as
+// across looks.
+describe('4.5f: a connection the director brought back goes back as the version the pass started from holds it', () => {
+  const { WEAVE } = require('./fixtures/rework-state');
+  const C1 = WEAVE.connections[0];
+  const REWOVEN = 'The result came back weeks after the sale, by the ledger.';
+  const writers = () => clone(WEAVE);
+  const struck = () => {
+    const weave = writers();
+    weave.connections[1].struck = true;
+    return weave;
+  };
+
+  it("a reweave rewords it and the round's one fix drops it, with no look between: it goes back with the reweave's words", () => {
+    // Look 1 strikes c2; look 2 brings it back, changes the headline, and asks for a reweave.
+    const look1 = D.standingAtMeeting(null, writers(), struck());
+    const left = { ...writers(), headline: 'A Director Headline For The Round.' };
+    const look2 = D.standingAtMeeting(look1, struck(), left, { shown: struck() });
+    expect(look2.edits.map((e) => [e.id, e.path, e.unstruck === true])).toEqual([['E2', 'headline', false], ['E3', 'connections[#c2]', true]]);
+    // The reweave rewords c2, the fix of a false link in the writer's words, and code keeps the words.
+    const rewoven = clone(left);
+    rewoven.connections[1].detail = REWOVEN;
+    const reweave = D.settleEdits(null, { edits: D.carriedEdits(look2, left), before: left, after: rewoven, pass: D.REWEAVE_PASS });
+    expect(reweave.output.connections[1].detail).toBe(REWOVEN);
+    expect(reweave.report.changed).toEqual([]);
+    // The fact check's one fix drops c2: code puts it back as the reweave left it.
+    const dropped = { ...clone(reweave.output), connections: [clone(C1)] };
+    const fix = D.settleEdits(reweave.report, { edits: D.carriedEdits(look2, reweave.output), before: reweave.output, after: dropped, pass: 1 });
+    expect(fix.output.connections).toEqual([C1, { ...WEAVE.connections[1], detail: REWOVEN }]);
+    expect(fix.report.changed).toEqual([expect.objectContaining({ id: 'E3', became: null, restored: true })]);
   });
 });

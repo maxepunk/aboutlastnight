@@ -894,7 +894,8 @@ function isStrike(edit) { return Boolean(edit && edit.struck === true) && !isCut
  * 4.5d; the integrator's ruling 2): it stands while a live connection under its id is in the
  * weave, whatever its words (placeCarrying), and its words are still the writer's, so it owns
  * no text a finding is located in (locatingTexts, writerParts) and its line names its place
- * alone (formatEditLines). A pass that drops it has it put back as `after` holds it.
+ * alone (formatEditLines). A pass that drops it has it put back as the version the pass
+ * started from holds it (restoreEdit; task 4.5f).
  */
 function isUnstrike(edit) { return Boolean(edit && edit.unstruck === true) && !isCut(edit); }
 
@@ -1471,8 +1472,10 @@ function withShownEdits(baseline, edits, shown) {
  * A connection the director brought back, as the meeting showed it at this look (task 4.5e):
  * the same edit, its `after` the live connection under its id in the weave the meeting showed.
  * Its words are the writer's (task 4.5d), so a round's pass may have reworded them, the fix of
- * a false link among them; a pass that drops the connection later has it put back with the
- * words the meeting last showed, never the words it had when the director brought it back.
+ * a false link among them; the edit's `after`, which the report reads, keeps the words the
+ * meeting last showed, never the words it had when the director brought it back. A pass that
+ * drops the connection has it put back as the version that pass started from holds it
+ * (restoreEdit; task 4.5f), within a round as across looks.
  * Any other edit, and an un-strike whose id names no single live connection in the weave the
  * meeting showed, is as it was.
  *
@@ -1503,8 +1506,8 @@ function unstrikeAsShown(edit, shown) {
  * - Each other earlier edit the director's version still carries stands, with its id; one
  *   it no longer carries (the director undid it, or a send-back's rework changed it) goes.
  *   A connection they brought back takes its words from the connection the meeting showed
- *   (unstrikeAsShown; task 4.5e), so a pass that drops it later puts back what the meeting
- *   last showed.
+ *   (unstrikeAsShown; task 4.5e), and a pass that drops it later has it put back as the
+ *   version that pass started from holds it (task 4.5f).
  * - Each difference between the baseline and the director's version that no standing
  *   edit is at, or inside of for a whole element, joins them, numbered on from every id
  *   given at the stop.
@@ -2899,8 +2902,10 @@ function blocksOf(collection, element) {
  * (takeOutPassCopies; task 4.3c). What goes back holds no photo block the article cannot
  * print (printableElement; task 4.5e): such a block stays out, with the edit on it, and a
  * section or a section's blocks go back without it, whether put back where they sat or
- * merged onto the element the pass kept in their place (task 4.5f). A moved block goes back
- * into the director's section as the pass left it (restoreMove). A cut is never put back.
+ * merged onto the element the pass kept in their place (task 4.5f). A connection the
+ * director brought back goes back as `before` holds it, since its words are the writer's
+ * (task 4.5f). A moved block goes back into the director's section as the pass left it
+ * (restoreMove). A cut is never put back.
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
@@ -2952,7 +2957,10 @@ function restoreEdit(edit, before, out, photos) {
       return true;
     };
     if (last) {
-      const element = clone(edit.after);
+      // An un-strike owns its place alone (task 4.5d): its connection goes back with the
+      // words of the version the pass started from, so a rewording by an earlier pass of the
+      // round, the fix of a false link among them, stands (task 4.5f).
+      const element = clone(isUnstrike(edit) ? place.value : edit.after);
       if (partner !== -1 && sameKind(cur[partner], element)) {
         const printable = printableElement(link.collection, isObj(cur[partner]) && isObj(element) ? { ...cur[partner], ...element } : element, photos);
         if (printable === null) return false;
