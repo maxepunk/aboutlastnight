@@ -799,6 +799,11 @@ function heroPhotoEntry(state, heroImage) {
  * The outline writer, its reworker and the outline judge build their lists here, and so
  * do the article writer's and judge's PHOTOS (articleWriterInputs).
  *
+ * Brief 4.6b: the hero is found by the one join key (photoKey). Since phase 4 the hero is
+ * the map's top photo, a name the writer or the director typed, so a top photo whose name
+ * differs from the session photo's in case is still left out here, and a list that puts the
+ * hero first names it once.
+ *
  * @param {Object} state
  * @param {string} heroImage - excluded (it has its own slot)
  * @param {string|null} whiteboardFilename - excluded (director-layer evidence)
@@ -817,7 +822,7 @@ function buildAvailablePhotos(state, heroImage, whiteboardFilename) {
       .map(a => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a])
   );
   return (state.sessionPhotos || [])
-    .filter(photo => getPhotoFilename(photo) !== heroImage)  // Exclude hero
+    .filter(photo => !heroImage || photoKey(getPhotoFilename(photo)) !== photoKey(heroImage))  // Exclude hero, by its key
     .filter(photo => !whiteboardFilename || getPhotoFilename(photo) !== whiteboardFilename)  // Exclude whiteboard
     .filter(photo => !isPhotoExcluded(state, getPhotoFilename(photo)))  // T13: the director's exclusions
     .map((photoPath, i) => {

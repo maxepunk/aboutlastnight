@@ -322,3 +322,27 @@ describe('with no kept photo there is no hero', () => {
     for (const prompt of [outlinePrompt, articlePrompt]) expect(prompt).not.toContain('evidence-board.png');
   });
 });
+
+// 4.6b: the hero is found by its key. The hero is the map's top photo, whose name the writer
+// or the director typed, so it need not match the session photo's name in case;
+// buildAvailablePhotos leaves it out by the one join key (director-words-renderer.js
+// photoKey), as every other photo join does, so a list that puts the hero first names it
+// once.
+describe('4.6b: buildAvailablePhotos leaves the hero out by its key', () => {
+  const { heroPhotoEntry } = aiNodes;
+  const { photoKey } = require('../prompt-renderers/director-words-renderer');
+
+  it('a top photo whose name differs in case from the session photo is listed once: as the hero, never again among the other photos', () => {
+    const state = photoState();
+    expect(filenames(buildAvailablePhotos(state, 'HERO.JPG', 'whiteboard.jpg'))).toEqual(['p2.jpg', 'p4.jpg']);
+    const listed = [heroPhotoEntry(state, 'HERO.JPG'), ...buildAvailablePhotos(state, 'HERO.JPG', 'whiteboard.jpg')];
+    expect(filenames(listed)).toEqual(['HERO.JPG', 'p2.jpg', 'p4.jpg']);
+    expect(new Set(filenames(listed).map(photoKey)).size).toBe(listed.length);
+  });
+
+  it('a hero named as the session photo is, and no hero at all, list as before', () => {
+    const state = photoState();
+    expect(filenames(buildAvailablePhotos(state, 'hero.jpg', 'whiteboard.jpg'))).toEqual(['p2.jpg', 'p4.jpg']);
+    expect(filenames(buildAvailablePhotos(state, null, 'whiteboard.jpg'))).toEqual(['hero.jpg', 'p2.jpg', 'p4.jpg']);
+  });
+});
