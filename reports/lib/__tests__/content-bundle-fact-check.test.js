@@ -1920,8 +1920,52 @@ describe('4.7a: each finding with its place', () => {
     const result = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits }));
     expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\./)]);
     expect(result.findings.filter((f) => f.kind === 'reporterMode')).toEqual([
-      { kind: 'reporterMode', status: 'structural', place: { section: 'the-story', paragraph: 2 }, excerpt: 'i voted', message: result.structuralIssues[0] }
+      { kind: 'reporterMode', status: 'structural', place: { section: 'the-story', paragraph: 2 }, excerpt: 'I voted', message: result.structuralIssues[0] }
     ]);
+  });
+
+  // 4.10 anchors a mark on its excerpt once the block has changed, so an excerpt is the
+  // page's own text at the finding's place, whatever folded copy the check read: the
+  // narrator's prose with its quoted spans taken out, or the lowercased text the phrase
+  // lists match.
+  it('every excerpt is the text the page prints at the finding\'s place', () => {
+    const LEAK = 'The job is yours, Vic, and nobody else gets a say.';
+    const bundle = {
+      headline: { main: 'The Offer' },
+      sections: [{
+        id: 'the-story', type: 'narrative', content: [
+          { type: 'paragraph', text: 'Mel said “never”—and left the room. I wasn’t there.' },
+          { type: 'paragraph', text: 'Then I voted with the room, and the “final” tier opened.' },
+          { type: 'paragraph', text: 'Nova read the “ledger” twice before she left. I was not in the room.' },
+          inlineCard({ content: LEAK })
+        ]
+      }],
+      evidenceCards: []
+    };
+    const result = factCheckContentBundle(baseArgs({ reportingMode: 'remote', contentBundle: bundle }));
+    const blocks = bundle.sections[0].content;
+    const paragraphs = blocks.filter((b) => b.type === 'paragraph');
+    /** The text the page prints at a place. */
+    const printedAt = (place) => {
+      if (place.field) return bundle.headline[place.field.split('.')[1]];
+      if (place.paragraph) return paragraphs[place.paragraph - 1].text;
+      if (place.tokenId) return blocks.filter((b) => b.tokenId === place.tokenId).map((b) => `${b.headline} ${b.content}`).join(' ');
+      return blocks.map((b) => b.text || b.content || '').join(' ');
+    };
+    const excerpts = result.findings.filter((f) => f.excerpt !== null && f.place);
+    expect(excerpts.map((f) => f.kind).sort()).toEqual(
+      ['cardFidelity', 'emDash', 'leakedExample', 'novaPronoun', 'productionWords', 'repeatedAbsence', 'repeatedAbsence', 'reporterMode']
+    );
+    for (const finding of excerpts) {
+      expect([finding.kind, printedAt(finding.place).includes(finding.excerpt)]).toEqual([finding.kind, true]);
+    }
+    const excerptOf = (kind) => excerpts.filter((f) => f.kind === kind).map((f) => f.excerpt);
+    expect(excerptOf('reporterMode')).toEqual(['I voted']);
+    expect(excerptOf('leakedExample')).toEqual(['The job is yours']);
+    expect(excerptOf('novaPronoun')).toEqual(['Nova read the “ledger” twice before she']);
+    expect(excerptOf('repeatedAbsence')).toEqual(['I wasn’t there', 'I was not in the room']);
+    expect(excerptOf('emDash')[0]).toContain('said “never”—and left');
+    expect(excerptOf('productionWords')[0]).toContain('the “final” tier opened');
   });
 
   // 4.10 marks the length on a section's heading: a finding at each section whose

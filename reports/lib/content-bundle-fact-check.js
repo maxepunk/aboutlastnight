@@ -465,6 +465,43 @@ function findingExcerpt(text) {
   return out || null;
 }
 
+/** Every quotation mark the checks fold to one (normalize, stripQuotedSpans). */
+const QUOTE_MARKS = '\'‘’‚‛"“”„‟';
+
+/**
+ * What a run of spaces in a folded copy can stand for in the printed text: spaces and the
+ * quoted spans stripQuotedSpans takes out.
+ */
+const PRINTED_GAP = '(?:\\s|"[^"\\n]*"|“[^”\\n]*”|‘[^\\n]*?’(?![A-Za-z]))+';
+
+/**
+ * The printed text a hit stands for (brief 4.7a), so the desk finds a finding's excerpt in
+ * its block (4.10): `wanted`, read from a folded copy of `printed` (normalize's lowercased
+ * text, or the narrator's prose with its quoted spans taken out), looked for in `printed`
+ * itself, where a space may stand for quoted spans, a quotation mark for any quotation
+ * mark, a hyphen for a dash and three full stops for an ellipsis, in any case. `wanted`
+ * when `printed` does not hold it.
+ *
+ * @param {string} printed - the text as the page prints it
+ * @param {string} wanted - the hit as the check read it
+ * @returns {string}
+ */
+function printedExcerpt(printed, wanted) {
+  const target = typeof wanted === 'string' ? wanted.replace(/\s+/g, ' ').trim() : '';
+  if (typeof printed !== 'string' || !printed || !target) return wanted;
+  let source = '';
+  for (let i = 0; i < target.length; i += 1) {
+    const ch = target[i];
+    if (ch === ' ') source += PRINTED_GAP;
+    else if (target.startsWith('...', i)) { source += '(?:\\.\\.\\.|…)'; i += 2; }
+    else if (QUOTE_MARKS.includes(ch)) source += `[${QUOTE_MARKS}]`;
+    else if ('-–—'.includes(ch)) source += '[-–—]';
+    else source += escapeRegExp(ch);
+  }
+  const match = new RegExp(source, 'i').exec(printed);
+  return match ? match[0] : wanted;
+}
+
 /** The text `reach` characters either side of a hit at `index`, `length` long. */
 function windowAround(text, index, length, reach = 30) {
   return text.slice(Math.max(0, index - reach), index + length + reach);
@@ -490,14 +527,15 @@ function times(n) {
  * that person's possessive (NPC_POSSESSIVE_PRONOUNS); one that is not is passed over for
  * the next pronoun in the window.
  *
- * @param {Array<{where: string, text: string, place: Object}>} segments - quotes already stripped
+ * @param {Array<{where: string, text: string, place: Object, original: string}>} segments -
+ *   quotes already stripped from `text`; `original` is the piece as it prints
  * @param {string[]} names - the person's names, matched case-sensitively
  * @param {string[]} pronouns - the pronouns that would be wrong
  * @param {string[]} others - every other known person
  * @param {{possessives?: string[]}} [options] - the pronouns read only as a possessive
- * @returns {{name: string, pronoun: string, excerpt: string, where: string, place: Object, matched: string}|null}
- *   `excerpt` for the message; `place` and `matched`, the text from the name to the
- *   pronoun, for the finding (brief 4.7a)
+ * @returns {{name: string, pronoun: string, excerpt: string, where: string, place: Object, matched: string, original: string}|null}
+ *   `excerpt` for the message; `place`, `matched` (the text from the name to the pronoun)
+ *   and `original` (the piece as it prints), for the finding (brief 4.7a)
  */
 function findPronounNear(segments, names, pronouns, others, { possessives = [] } = {}) {
   const pronounRe = new RegExp(`\\b(${pronouns.map(escapeRegExp).join('|')})\\b`, 'gi');
@@ -519,7 +557,7 @@ function findPronounNear(segments, names, pronouns, others, { possessives = [] }
             if (/[A-Z][a-z]/.test(before) || /(?:\band\b|\bor\b|\bnor\b|,)\s+[A-Z]/.test(before)) break;
             if (possessive.has(hit[1].toLowerCase()) && GOVERNED_BY_PREPOSITION.test(sentence.slice(0, match.index))) continue;
             const matched = `${name}${before}${hit[1]}`;
-            return { name, pronoun: hit[1], excerpt: excerptOf(matched), where: segment.where, place: segment.place, matched };
+            return { name, pronoun: hit[1], excerpt: excerptOf(matched), where: segment.where, place: segment.place, matched, original: segment.original };
           }
         }
       }
@@ -1047,7 +1085,7 @@ function factCheckContentBundle({
         `string from the prompt files, not session evidence. Quote ${DOCUMENT_POINTER} word for word, ` +
         `or drop the card.`;
       advisoryWarnings.push(message);
-      found('leakedExample', 'advisory', cardPlaceOf(tokenId, location), leaked, message);
+      found('leakedExample', 'advisory', cardPlaceOf(tokenId, location), printedExcerpt(content, leaked), message);
     }
 
     const source = sources.get(tokenId);
@@ -1097,7 +1135,7 @@ function factCheckContentBundle({
           `Prompt example leaked into a quote block: "${leaked}" is an illustrative string from ` +
           `the prompt files, not something anyone said. Quote the source verbatim or cut the quote.`;
         advisoryWarnings.push(message);
-        found('leakedExample', 'advisory', { section: sectionIdOf(section) }, leaked, message);
+        found('leakedExample', 'advisory', { section: sectionIdOf(section) }, printedExcerpt(block.text, leaked), message);
       }
     }
   }
@@ -1249,7 +1287,8 @@ function factCheckContentBundle({
   const segmentEdits = narratorSegments(bundle).map(segment => ({
     text: normalize(segment.text),
     editId: segment.field ? edits.field(segment.field) : edits.blockField(segment.sectionKey, segment.block, 'text'),
-    place: segment.place
+    place: segment.place,
+    original: segment.text
   }));
   const directorsPhrase = (phrase) => {
     const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
@@ -1259,8 +1298,8 @@ function factCheckContentBundle({
    * A reporter-mode hit: a concern when the phrase is the director's, else structural.
    * Brief 4.7a: a finding at each narrator piece that holds the phrase and is the hit's
    * (the director's pieces for a concern, the writer's for a structural hit, so no
-   * structural mark sits beside the director's line), or one with no place when the phrase
-   * runs across two pieces.
+   * structural mark sits beside the director's line), with the phrase as the piece prints
+   * it, or one with no place when the phrase runs across two pieces.
    */
   const reporterHit = (phrase, message) => {
     const editId = directorsPhrase(phrase);
@@ -1271,10 +1310,11 @@ function factCheckContentBundle({
       violations.push(phrase);
       structuralIssues.push(message);
     }
-    const places = segmentEdits
+    const marks = segmentEdits
       .filter(segment => segment.text.includes(phrase) && (editId || !segment.editId))
-      .map(segment => segment.place);
-    (places.length > 0 ? places : [null]).forEach(place => found('reporterMode', editId ? 'advisory' : 'structural', place, phrase, filed, editId));
+      .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase) }));
+    (marks.length > 0 ? marks : [{ place: null, excerpt: phrase }])
+      .forEach(({ place, excerpt }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt, filed, editId));
   };
 
   for (const phrase of NEVER_VOTES) {
@@ -1330,7 +1370,7 @@ function factCheckContentBundle({
       // Brief 4.7a: a statement sits inside one narrator piece (the joined text keeps each
       // piece on its own line), so each is found in its piece.
       for (const segment of narratorSegments(bundle)) {
-        for (const statement of findAbsenceStatements(segment.text)) found('repeatedAbsence', 'advisory', segment.place, statement, message);
+        for (const statement of findAbsenceStatements(segment.text)) found('repeatedAbsence', 'advisory', segment.place, printedExcerpt(segment.text, statement), message);
       }
     }
   }
@@ -1350,7 +1390,7 @@ function factCheckContentBundle({
       found('npcPronouns', 'advisory', null, hit.excerpt, message);
     }
   } else {
-    const segments = narratorSegments(bundle).map(segment => ({ ...segment, text: stripQuotedSpans(segment.text) }));
+    const segments = narratorSegments(bundle).map(segment => ({ ...segment, original: segment.text, text: stripQuotedSpans(segment.text) }));
     const npcNames = npcEntries.map(entry => entry.name);
     const allPeople = [...new Set([...npcNames, NARRATOR, ...names])];
     const othersThan = (own) => allPeople.filter(person => !own.some(name => name.toLowerCase() === person.toLowerCase()));
@@ -1372,7 +1412,7 @@ function factCheckContentBundle({
             `(in ${hit.where}). The roster block's non-player-character line is the authority. ` +
             `Correct every pronoun used of ${entry.name}.`;
           advisoryWarnings.push(message);
-          found('npcPronouns', 'advisory', hit.place, hit.matched, message);
+          found('npcPronouns', 'advisory', hit.place, printedExcerpt(hit.original, hit.matched), message);
         }
         continue;
       }
@@ -1389,7 +1429,7 @@ function factCheckContentBundle({
           `the article writes "${hit.excerpt}" (in ${hit.where}). Use the pronoun the record gives, or write ` +
           `${entry.name} by name (T9).`;
       advisoryWarnings.push(message);
-      found('npcPronouns', 'advisory', hit.place, hit.matched, message);
+      found('npcPronouns', 'advisory', hit.place, printedExcerpt(hit.original, hit.matched), message);
     }
 
     // 'novaPronoun' ADVISORY: Nova writes in the first person and is otherwise "Nova" (T9).
@@ -1400,7 +1440,7 @@ function factCheckContentBundle({
         `Gendered pronoun for Nova: "${novaHit.excerpt}" (in ${novaHit.where}). Nova writes in the first ` +
         `person and is otherwise "Nova", never a gendered pronoun (T9).`;
       advisoryWarnings.push(message);
-      found('novaPronoun', 'advisory', novaHit.place, novaHit.matched, message);
+      found('novaPronoun', 'advisory', novaHit.place, printedExcerpt(novaHit.original, novaHit.matched), message);
     }
 
     // 'emDash' ADVISORY: C4's house rule. Brief 4.7a: a finding at each piece that holds
@@ -1416,7 +1456,7 @@ function factCheckContentBundle({
         `colon or a full stop where an em-dash might go (C4).`;
       advisoryWarnings.push(message);
       for (const { segment } of dashes) {
-        found('emDash', 'advisory', segment.place, windowAround(segment.text, segment.text.indexOf('—'), 1), message);
+        found('emDash', 'advisory', segment.place, printedExcerpt(segment.original, windowAround(segment.text, segment.text.indexOf('—'), 1)), message);
       }
     }
 
@@ -1428,7 +1468,7 @@ function factCheckContentBundle({
         let match;
         while ((match = re.exec(segment.text)) !== null) {
           const around = windowAround(segment.text, match.index, match[0].length);
-          production.push({ text: `"${word}" in ${segment.where} ("...${excerptOf(around)}...")`, place: segment.place, excerpt: around });
+          production.push({ text: `"${word}" in ${segment.where} ("...${excerptOf(around)}...")`, place: segment.place, excerpt: printedExcerpt(segment.original, around) });
         }
       }
     }
@@ -1477,7 +1517,7 @@ function factCheckContentBundle({
             if (seen.has(match.index)) continue;
             if (/\b(?:only|just)\s+$/i.test(segment.text.slice(0, match.index))) continue;
             seen.add(match.index);
-            if (countOf(match[1]) !== names.length) counts.push({ text: `"${excerptOf(match[0])}" in ${segment.where}`, place: segment.place, excerpt: match[0] });
+            if (countOf(match[1]) !== names.length) counts.push({ text: `"${excerptOf(match[0])}" in ${segment.where}`, place: segment.place, excerpt: printedExcerpt(segment.original, match[0]) });
           }
         }
       }
