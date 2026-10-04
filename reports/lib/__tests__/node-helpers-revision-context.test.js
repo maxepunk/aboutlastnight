@@ -1031,7 +1031,8 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     const text = context({ meetingRound: 'reweave', humanFeedback: null, validationResults: null });
     const block = text.slice(text.indexOf('<HAND_EDITS>'), text.indexOf('</HAND_EDITS>'));
     expect(block).toContain("The director's changes to the weave at the story meeting.");
-    expect(block).toContain('each role they gave stays, each thread they added stays in the weave, and each connection they struck and each removed sentence stay out of it.');
+    // Task 4.5d: the rule names a connection the director brought back among what stays in the weave.
+    expect(block).toContain('each role they gave stays, each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.');
     expect(block).toContain('E1 (thread "t3", role): "mirrors-it"');
     expect(block).toMatch(/E2 \(connection "c2", struck\): kind "moment"/);
     expect(block).not.toContain('changedDirectorEdits');
@@ -1061,7 +1062,8 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     expect(text).toContain('automated pass 0');
     expect(text).toContain('This rework fixes the must-fix items');
     expect(text).not.toContain('HUMAN FEEDBACK');
-    expect(text).toContain('This automatic pass fixes the writer\'s text.');
+    // Task 4.5d: the automatic rule names the words of a connection the director brought back as the writer's.
+    expect(text).toContain('This automatic pass fixes the writer\'s text, in a connection the director brought back too.');
   });
 
   it("a code check's rework reads the check's lines alone: no confidence and no criteria scores (ruling 9)", () => {
@@ -1286,5 +1288,53 @@ describe('4.7c: one revision context for every theme (R1)', () => {
     const { contextSection } = buildRevisionContext({ phase: 'outline', revisionCount: 1, validationResults: VERDICT, previousOutput: { lede: {} } });
     expect(contextSection).toContain('SHOULD CONSIDER:\nThese came from the evaluation that ran before this pass.\n\n  - The closing could name the account.');
     expect(require('../prompt-builder')).not.toHaveProperty('SHOULD_CONSIDER_PREAMBLE');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5d: the meeting's edits-are-final line names a connection the director brought back
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The integrator's ruling 2 on run 4's follow-ups (progress.md, 2026-10-03): a connection the
+// director struck and later brought back is theirs by its place in the weave, and its words
+// are the writer's, as a block moved at the desk is. The meeting's rule named the threads they
+// added and the connections they struck, and not this one, so a rework read nothing that kept
+// it in the weave, and nothing that let an automatic pass fix a false link in its words.
+describe("4.5d: the meeting's edits-are-final line names a connection the director brought back", () => {
+  const { standingAtMeeting, carriedEdits } = require('../hand-edit-diff');
+  const { WEAVE } = require('./fixtures/rework-state');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const FINAL = "Each change of the director's is final: the text they wrote stays exactly as written, each role they gave stays, each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.";
+  /** The director struck c2 at one look and brought it back at the next: E2. */
+  const edits = () => {
+    const struck = clone(WEAVE);
+    struck.connections[1].struck = true;
+    return carriedEdits(standingAtMeeting(standingAtMeeting(null, clone(WEAVE), struck), struck, clone(WEAVE)), clone(WEAVE));
+  };
+  const handEdits = (overrides) => {
+    const text = buildRevisionContext({
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
+      previousOutput: clone(WEAVE), handEdits: edits(), theme: 'journalist', humanFeedback: null, meetingRound: null, ...overrides
+    }).contextSection;
+    return text.slice(text.indexOf('<HAND_EDITS>'), text.indexOf('</HAND_EDITS>'));
+  };
+
+  it.each([
+    ['an automatic pass', { meetingRound: null, revisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" gives the receipt "zzz".'] } }],
+    ['a reweave', { meetingRound: 'reweave' }],
+    ['a send-back', { meetingRound: 'send-back', humanFeedback: 'Rethink the money thread.' }]
+  ])('%s: the rule keeps it in the weave, and its line names it by its place', (_name, overrides) => {
+    const block = handEdits(overrides);
+    expect(block).toContain('each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.');
+    expect(block).toContain("A line marked brought back names a connection they struck at an earlier look and brought back: its place in the story is the director's, and its wording, as the weave holds it, is still the writer's.");
+    expect(block).toContain('E2 (connection "c2", brought back)');
+    expect(block).not.toContain(WEAVE.connections[1].detail);
+  });
+
+  it("an automatic pass fixes the writer's text in a connection the director brought back too; a reweave and a send-back keep their own frames", () => {
+    expect(handEdits({ meetingRound: null, revisionCount: 1 })).toContain(`This automatic pass fixes the writer's text, in a connection the director brought back too. ${FINAL}`);
+    expect(handEdits({ meetingRound: 'reweave' })).toContain(FINAL);
+    expect(handEdits({ meetingRound: 'send-back', humanFeedback: 'Rethink it.' }))
+      .toContain(`Each change of the director's is final unless the structural change their note asks for means it no longer fits: ${FINAL.replace("Each change of the director's is final: ", '')} List each change this rework alters, removes or brings back in changedDirectorEdits, with its id and one sentence on why.`);
   });
 });

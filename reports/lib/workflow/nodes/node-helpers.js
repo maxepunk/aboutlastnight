@@ -1037,8 +1037,11 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // Brief 4.5: the story meeting's changes have their own wording, by the round mark: an
   // automatic pass and a reweave keep every change of the director's (code holds both to
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
-  // note needs it, saying why.
-  const WEAVE_EDITS_FINAL = 'the text they wrote stays exactly as written, each role they gave stays, each thread they added stays in the weave, and each connection they struck and each removed sentence stay out of it.';
+  // note needs it, saying why. Task 4.5d (the integrator's ruling 2): a connection the
+  // director brought back stays in the weave as a block they moved stays in its place, and
+  // its words are the writer's, which an automatic pass fixes as the desk's pass fixes a
+  // moved block's text (WEAVE_EDIT_LINES_GUIDE says how its line reads).
+  const WEAVE_EDITS_FINAL = 'the text they wrote stays exactly as written, each role they gave stays, each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.';
   // Brief 4.6: the map's edits have their own wording, by the note's presence as the
   // outline's had: an automatic pass keeps every edit of the director's (code holds it to
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
@@ -1056,7 +1059,7 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
     } else if (meetingRound === 'reweave') {
       handEditsRule = `Each change of the director's is final: ${WEAVE_EDITS_FINAL}`;
     } else {
-      handEditsRule = `This automatic pass fixes the writer's text. Each change of the director's is final: ${WEAVE_EDITS_FINAL}`;
+      handEditsRule = `This automatic pass fixes the writer's text, in a connection the director brought back too. Each change of the director's is final: ${WEAVE_EDITS_FINAL}`;
     }
   } else {
     handEditsRule = humanFeedback

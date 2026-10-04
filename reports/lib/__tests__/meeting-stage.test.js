@@ -510,3 +510,75 @@ describe("4.5b: the removed-phrase scan reads the arc rework's three renders", (
     expect(text).not.toMatch(/[–—]/);
   });
 });
+
+// The integrator's ruling 2 on run 4's follow-ups (progress.md, 2026-10-03): a connection the
+// director struck and brought back is theirs by its place in the weave, and its words are the
+// writer's, as a block moved at the desk is. Through the meeting's nodes: a reweave may reword
+// it and keeps it, a send-back's rework may take it out only as it may change any edit, saying
+// why, and a fact-check finding that quotes it is the writer's must-fix, which the one
+// automatic fix takes up. Invented text.
+describe('4.5d: a connection the director brought back, through the meeting\'s nodes', () => {
+  const { standingAtMeeting } = require('../hand-edit-diff');
+  const C2 = FIXTURE_WEAVE.connections[1];
+  const REWORDED = 'The result came back on the night Marcus made the sale.';
+  const MARK = { at: 't0', ready: true, fixes: 0 };
+
+  /**
+   * The meeting after a round that kept the director's strike of c2 (E1), where the director
+   * brings c2 back and starts a round: the payload's update, then the increment.
+   */
+  async function broughtBack(round, note = null) {
+    const struck = clone(FIXTURE_WEAVE);
+    struck.connections[1].struck = true;
+    const kept = atMeeting({
+      weave: withFactCheckMark(struck, MARK), _weaveBaseline: weaveForPrompt(clone(struck)),
+      _weaveHandEdits: standingAtMeeting(null, clone(FIXTURE_WEAVE), struck)
+    });
+    const { stateUpdates, error } = meetingResume({ meeting: round, weave: clone(FIXTURE_WEAVE), ...(note && { note }) }, kept);
+    expect(error).toBeNull();
+    expect(carriedEdits(stateUpdates._weaveHandEdits, clone(FIXTURE_WEAVE)).map((e) => [e.id, e.unstruck === true])).toEqual([['E2', true]]);
+    const state = { ...kept, ...stateUpdates, _meetingRound: round };
+    return { ...state, ...(await incrementArcRevision(state)) };
+  }
+  /** The weave a rework returns: the writer's, its connections as `connections` gives them. */
+  const reworkWith = (connections) => ({ ...weaveForPrompt(clone(FIXTURE_WEAVE)), connections: connections.map(clone) });
+
+  it("a reweave reads it by its place, and its rewording stands: the connection and the reweave's words are kept, and no edit of the director's changed", async () => {
+    const state = await broughtBack('reweave');
+    const sdk = recordingSdk(reworkWith([FIXTURE_WEAVE.connections[0], { ...C2, detail: REWORDED }]));
+    const update = await reviseArcs(state, cfg(sdk));
+    const block = sdk.calls[0].prompt.slice(sdk.calls[0].prompt.indexOf('<HAND_EDITS>'), sdk.calls[0].prompt.indexOf('</HAND_EDITS>'));
+    expect(block).toContain('E2 (connection "c2", brought back)');
+    expect(block).not.toContain(C2.detail);
+    expect(update.weave.connections).toEqual([FIXTURE_WEAVE.connections[0], { ...C2, detail: REWORDED }]);
+    expect(update._weaveHandEditReport.changed).toEqual([]);
+  });
+
+  it("a send-back's rework takes it out, saying why: it stays out, and the report keeps the reason", async () => {
+    const state = await broughtBack('send-back', 'Tell the money thread alone.');
+    const reason = 'The note asks for the money thread alone, and c2 ties the heir to it.';
+    const sdk = recordingSdk({ ...reworkWith([FIXTURE_WEAVE.connections[0]]), [CHANGED_EDITS_KEY]: [{ id: 'E2', reason }] });
+    const update = await reviseArcs(state, cfg(sdk));
+    expect(sdk.calls[0].jsonSchema.required).toContain(CHANGED_EDITS_KEY);
+    expect(sdk.calls[0].prompt).toContain('each thread they added and each connection they brought back stay in the weave');
+    expect(update.weave.connections.map((c) => c.id)).toEqual(['c1']);
+    expect(update._weaveHandEditReport.changed).toEqual([expect.objectContaining({
+      id: 'E2', where: 'connection "c2", brought back', reason, restored: false, pass: 'send-back'
+    })]);
+  });
+
+  it("a fact-check finding that quotes it is the writer's must-fix, and the one automatic fix runs on it", async () => {
+    const state = await broughtBack('reweave');
+    const round = { ...state, ...(await reviseArcs(state, cfg(recordingSdk(reworkWith(FIXTURE_WEAVE.connections))))) };
+    const issue = `T1: "${C2.detail}" states a cause the record does not show.`;
+    const update = await evaluateArcs(round, cfg(recordingSdk({
+      ready: false, structuralPassed: false, overallScore: 0.4,
+      criteriaScores: { evidenceTruth: { score: 0.4, notes: `The connection "${C2.detail}" outruns the record.`, fix: 'Name only what the record shows.' } },
+      structuralIssues: [issue], advisoryWarnings: [], confidence: 'high'
+    })));
+    expect(update.validationResults.structuralIssues).toEqual([issue]);
+    expect(update.weave._factCheck).toMatchObject({ ready: false, fixes: 0 });
+    expect(update.weave._factCheck.concerns || []).toEqual([]);
+    expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('revise');
+  });
+});

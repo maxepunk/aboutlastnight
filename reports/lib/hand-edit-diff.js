@@ -81,9 +81,12 @@
  * approve. Each is one place (weaveEditsBetween): a field rewritten, a thread's field (its
  * role among them), a thread added whole, or a connection struck whole (`struck: true` on
  * the edit), which code strikes again by id when a pass brings it back. A connection they
- * struck and then bring back is one edit of the whole connection too (`unstruck: true`;
- * brief 4.5c), carried while it is live. A whole element stays one edit when the director
- * later changes part of it (fix round 1, finding 1). Each look reads the director's version
+ * struck and then bring back is one edit too (`unstruck: true`; brief 4.5c), of its place
+ * alone, as a block moved at the desk is (task 4.5d): carried while a live connection under
+ * its id is in the weave, whatever its words, which stay the writer's, so a pass may reword
+ * it and a finding that quotes it is the writer's; a pass that drops it has it put back as
+ * the meeting showed it. A whole element stays one edit when the director later changes part
+ * of it (fix round 1, finding 1). Each look reads the director's version
  * against what the meeting showed at the places their standing edits are (withShownEdits),
  * so a change there is theirs with or without a pass since. And a reweave is held to them as
  * an automatic pass is (REWEAVE_PASS). The answers are the director's words, kept by their
@@ -152,9 +155,11 @@ const EDIT_LINES_GUIDE = "An edit covers only the place its line names: a place 
 
 /**
  * How to read the weave's edit lines (brief 4.5; formatEditLines), for the weave's
- * reworks' <HAND_EDITS> block and the meeting's fact check alike.
+ * reworks' <HAND_EDITS> block and the meeting's fact check alike. A connection the director
+ * brought back reads as a moved block does at the desk (EDIT_LINES_GUIDE; task 4.5d): its
+ * place is theirs, and its wording is the writer's, which the line leaves to the weave.
  */
-const WEAVE_EDIT_LINES_GUIDE = "Each line is one change by its id and place, with the director's text or value: a field they rewrote, a field of a thread they changed (its role among them), a whole thread they added (marked added), a connection they struck (marked struck), which is out of the story, or a connection they struck at an earlier look and brought back (marked brought back), which is back in the story. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+const WEAVE_EDIT_LINES_GUIDE = "Each line is one change by its id and place, with the director's text or value: a field they rewrote, a field of a thread they changed (its role among them), a whole thread they added (marked added), or a connection they struck (marked struck), which is out of the story. A line marked brought back names a connection they struck at an earlier look and brought back: its place in the story is the director's, and its wording, as the weave holds it, is still the writer's. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
 
 /** The pass a report entry names when the rework of the director's send-back changed an edit. */
 const SEND_BACK_PASS = 'send-back';
@@ -891,9 +896,12 @@ function isStrike(edit) { return Boolean(edit && edit.struck === true) && !isCut
 
 /**
  * An un-strike (brief 4.5c): a connection the director struck at an earlier look and brought
- * back, one edit of the whole connection, its `after` the connection as they left it, live.
- * It stands while that connection is in the story (editCarried), and its words are the
- * director's from then on, as a strike's are.
+ * back, its `after` the connection as they left it, live, which is as the meeting showed it.
+ * Only its place in the story is the director's, as a moved block's is at the desk (task
+ * 4.5d; the integrator's ruling 2): it stands while a live connection under its id is in the
+ * weave, whatever its words (placeCarrying), and its words are still the writer's, so it owns
+ * no text a finding is located in (locatingTexts, writerParts) and its line names its place
+ * alone (formatEditLines). A pass that drops it has it put back as `after` holds it.
  */
 function isUnstrike(edit) { return Boolean(edit && edit.unstruck === true) && !isCut(edit); }
 
@@ -986,9 +994,16 @@ function placesOf(root, steps, { anywhere = true } = {}) {
   return out;
 }
 
-/** The place in `obj` that carries a field edit's value, or undefined. */
+/**
+ * The place in `obj` that carries a field edit's value, or undefined. A connection the
+ * director brought back is carried by a live connection under its id, whatever its words,
+ * which are the writer's (task 4.5d): a struck one holds every field of the live one, so
+ * only its being live tells them apart (brief 4.5c).
+ */
 function placeCarrying(obj, edit) {
-  return placesOf(obj, stepsOf(edit)).find((place) => matchesAfter(place.value, edit.after));
+  const places = placesOf(obj, stepsOf(edit));
+  if (isUnstrike(edit)) return places.find((place) => !isStruck(place.value));
+  return places.find((place) => matchesAfter(place.value, edit.after));
 }
 
 /**
@@ -1042,9 +1057,7 @@ function editCarried(obj, edit) {
     if (movedBlockPlaces(obj, edit).length === 0) return false;
     return !isMoveWithin(edit) || inDirectorsOrder(obj.sections[moveSectionIndex(obj, edit)].content, edit);
   }
-  // Brief 4.5c: a struck connection holds every field of the live one, so an un-strike is
-  // carried only where its connection is live.
-  if (isUnstrike(edit)) return placesOf(obj, stepsOf(edit)).some((place) => !isStruck(place.value) && matchesAfter(place.value, edit.after));
+  // An un-strike is carried by its connection's place alone (placeCarrying; task 4.5d).
   return placeCarrying(obj, edit) !== undefined;
 }
 
@@ -1698,9 +1711,9 @@ function moveLine(edit) {
 }
 
 /**
- * A strike's line (brief 4.5), or an un-strike's (brief 4.5c): its id and place, then the
- * connection the director struck or brought back, by its fields, its id and the strike
- * itself said by the place.
+ * A strike's line (brief 4.5): its id and place, then the connection the director struck, by
+ * its fields, its id and the strike itself said by the place. A rework reads the weave
+ * without it (lib/weave.js weaveForRework), so the line is where it reads what stays out.
  */
 function strikeLine(edit) {
   const connection = isObj(edit.after) ? edit.after : {};
@@ -1712,8 +1725,10 @@ function strikeLine(edit) {
  * One line per edit, by id and place, with the director's text whole: a cut's line
  * holds the text the director removed, and a rewrite's removed sentences follow it, one
  * `removed:` line each. Text is quoted; an element prints its fields, never JSON. A
- * move's line names the block and its place (moveLine); a strike's or an un-strike's, the
- * connection the director struck or brought back (strikeLine).
+ * move's line names the block and its place (moveLine); a strike's, the connection the
+ * director struck (strikeLine); an un-strike's, its place alone, since the words of the
+ * connection they brought back are the writer's, in the weave the line sits beside (task
+ * 4.5d).
  *
  * @param {Object[]} edits
  * @returns {string}
@@ -1724,7 +1739,8 @@ function formatEditLines(edits) {
     // place; its own text is the writer's.
     if (e.scope === MAP_SCOPE && isMove(e)) return e.from === MAP_NONE ? `${e.id} (${editWhere(e)}): ${valueLine(e.after)}` : `${e.id} (${editWhere(e)})`;
     if (isMove(e)) return moveLine(e);
-    if (isStrike(e) || isUnstrike(e)) return strikeLine(e);
+    if (isStrike(e)) return strikeLine(e);
+    if (isUnstrike(e)) return `${e.id} (${editWhere(e)})`;
     return [
       `${e.id} (${editWhere(e)}): ${valueLine(isCut(e) ? e.before : e.after)}`,
       ...(Array.isArray(e.removed) ? e.removed : []).map((sentence) => `  removed: "${String(sentence).trim()}"`)
@@ -1734,11 +1750,12 @@ function formatEditLines(edits) {
 
 /**
  * The text `output` prints outside the edits it carries (each edit's own text taken out
- * once), part by part. A moved block's text stays the writer's.
+ * once), part by part. A moved block's text stays the writer's, and so do the words of a
+ * connection the director brought back (task 4.5d).
  */
 function writerParts(output, edits) {
   const owned = new Map();
-  edits.filter((e) => !isCut(e) && !isMove(e)).forEach((e) => valueTexts(e, e.after).forEach((leaf) => {
+  edits.filter((e) => !isCut(e) && !isMove(e) && !isUnstrike(e)).forEach((e) => valueTexts(e, e.after).forEach((leaf) => {
     const key = fold(leaf);
     owned.set(key, (owned.get(key) || 0) + 1);
   }));
@@ -1753,10 +1770,12 @@ function writerParts(output, edits) {
 
 /**
  * The text an edit locates a quote against: its own text, the text it cut, and the
- * sentences it removed. A move has none: its block's text is the writer's.
+ * sentences it removed. A move has none: its block's text is the writer's. Nor has an
+ * un-strike: the words of the connection the director brought back are the writer's, so a
+ * finding that quotes them is the writer's must-fix (task 4.5d).
  */
 function locatingTexts(edit) {
-  if (isMove(edit)) return [];
+  if (isMove(edit) || isUnstrike(edit)) return [];
   return [
     ...valueTexts(edit, isCut(edit) ? edit.before : edit.after),
     ...(Array.isArray(edit.removed) ? edit.removed.filter((s) => typeof s === 'string') : [])
