@@ -23,6 +23,10 @@
  * echoes above the headline, and the round's record folds below the article: the marks the
  * director's edits may have resolved, the fact check's list, the trace and the round. Where
  * each mark sits is console/checkpoint-view-logic.js deskView's, node-tested.
+ *
+ * Input that lands (task 4.14d): an open editor holds Approve, Send back and the JSON editor's
+ * Save & Approve, and a line beside them says to save or cancel it first (unsavedInputLine), so
+ * an approve never publishes the writer's text over an edit the director left open.
  */
 
 window.Console = window.Console || {};
@@ -34,6 +38,7 @@ const ArticleEditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
 // The desk's block operations, checks and change report (task 4.3).
 const DeskLogic = window.Console.articleDeskLogic;
+const { unsavedInputLine } = window.Console.unsavedInputLogic;
 
 /** How long the desk waits after a change before it asks for the page again, so a run of moves asks once. */
 const ARTICLE_PREVIEW_DELAY_MS = 400;
@@ -577,6 +582,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     return ViewLogic.deskMarksAt(desk.marks, anchor);
   }
 
+  // Task 4.14d: an open editor's form reaches the desk only when the director saves it, so while
+  // one is open every action waits, and the line beside the buttons says why.
+  const held = unsavedInputLine('article', { editor: editingBlock, bundle: editedBundle || contentBundle });
+
   // Reset when data changes
   // Both counters: the automated one resets to 0 at every round of the director's,
   // so on its own it repeats across rounds and could leak stale edits.
@@ -809,6 +818,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   function handleApprove() {
     setSendBackArmed(false);
+    if (held) return;
     const note = feedbackText.trim();
     const deskBundle = getCurrentBundle();
     if (!gateEdits(deskBundle, setEditError)) return;
@@ -821,6 +831,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function handleJsonApprove() {
+    if (held) return;
     var parsed;
     try {
       parsed = JSON.parse(jsonText);
@@ -866,6 +877,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function handleReject() {
+    if (held) return;
     const note = feedbackText.trim();
     if (!note) return;
     const deskBundle = getCurrentBundle();
@@ -1432,6 +1444,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
         className: 'action-modes__btn' + (mode === 'view' ? ' action-modes__btn--active' : '') + ' btn btn-primary',
+        disabled: !!held,
         onClick: handleApprove,
         // When the fact-check found something STRUCTURAL, shipping it has to READ
         // like a choice. Four of the last five articles were approved first-pass
@@ -1447,10 +1460,13 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       React.createElement('button', {
         className: 'action-modes__btn btn btn-danger',
         onClick: handleSendBackClick,
-        disabled: sendBack.disabled,
+        disabled: !!held || sendBack.disabled,
         'aria-label': sendBack.ariaLabel
       }, sendBack.label)
     ),
+
+    // Task 4.14d: what holds the buttons, beside them.
+    held && React.createElement('p', { className: 'validation-error', role: 'status' }, held),
 
     // JSON editor mode
     mode === 'json' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
@@ -1465,9 +1481,11 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       jsonError && React.createElement('p', { className: 'validation-error desk-error' }, jsonError),
       React.createElement('button', {
         className: 'btn btn-primary',
+        disabled: !!held,
         onClick: handleJsonApprove,
         'aria-label': 'Save JSON and approve'
-      }, 'Save & Approve')
+      }, 'Save & Approve'),
+      held && React.createElement('p', { className: 'validation-error', role: 'status' }, held)
     ),
 
     // Folded below the article (task 4.10; spec 6.3): the marks the director's edits may have

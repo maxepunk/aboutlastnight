@@ -20,6 +20,8 @@
  * version and clear when a new one arrives (pendingEditsAfterCheckpoint, in state.js).
  * A note restored into the box after a round that did not run goes with Approve only once
  * the director says so (meetingApproveAsk, task 4.5c).
+ * A thread typed in the add line and not added holds every button, and a line beside them says
+ * to add or clear it first (unsavedInputLine, task 4.14d).
  * Exports to window.Console.checkpoints.ArcSelection
  */
 
@@ -28,6 +30,7 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, CollapsibleSection, CHECKPOINT_LABELS } = window.Console.utils;
 const ViewLogic = window.Console.checkpointViewLogic;
+const { unsavedInputLine } = window.Console.unsavedInputLogic;
 
 function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pendingEdits, pendingNote }) {
   const version = ViewLogic.meetingVersion(data);
@@ -66,6 +69,9 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   // The buttons and the payloads read the stop's payload: the weave it showed, and a round
   // that did not run, whose changes a reweave still has to fit in.
   const buttons = ViewLogic.meetingButtons(data, draft, note, sendBackArmed);
+  // Task 4.14d: a thread typed in the add line is in no payload until "Add a thread" puts it in
+  // the weave, so while the line holds one every button waits, and this line says why.
+  const held = unsavedInputLine('arc-selection', { addLine: newClaim });
   const standing = ViewLogic.meetingStandingNotes(data && data.directorGateNotes, CHECKPOINT_LABELS);
 
   /** Every change: on screen, and in the meeting's pending slot under the version it was made on. */
@@ -97,8 +103,10 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
    * cleared it (task 4.5c). The weave is held to the gate's decisions first, so a refusal
    * is shown here rather than posted; the weave and note are saved before the post, so a
    * refusal from the server, which remounts this screen, gives them back.
+   * Nothing is sent while the add line holds a thread (task 4.14d).
    */
   function send(action, typed) {
+    if (held) return;
     const sentNote = typeof typed === 'string' ? typed : note;
     const problem = ViewLogic.meetingWeaveProblems(draft, shown);
     if (problem) {
@@ -400,12 +408,14 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
         React.createElement('button', {
           type: 'button',
           className: 'btn btn-primary btn-sm',
+          disabled: !!held,
           onClick: function () { setAskingApprove(false); send('approve'); },
           'aria-label': approveAsk.keep.ariaLabel
         }, approveAsk.keep.label),
         React.createElement('button', {
           type: 'button',
           className: 'btn btn-secondary btn-sm',
+          disabled: !!held,
           onClick: function () { setAskingApprove(false); send('approve', ''); },
           'aria-label': approveAsk.clear.ariaLabel
         }, approveAsk.clear.label)
@@ -415,23 +425,27 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
         className: 'action-modes__btn action-modes__btn--active btn btn-primary',
+        disabled: !!held,
         onClick: handleApproveClick,
         'aria-label': buttons.approve.ariaLabel
       }, buttons.approve.label),
       React.createElement('button', {
         className: 'action-modes__btn btn btn-secondary',
-        disabled: buttons.reweave.disabled,
+        disabled: !!held || buttons.reweave.disabled,
         title: buttons.reweave.hint || undefined,
         onClick: function () { setSendBackArmed(false); setAskingApprove(false); send('reweave'); },
         'aria-label': buttons.reweave.ariaLabel
       }, buttons.reweave.label),
       React.createElement('button', {
         className: 'action-modes__btn btn btn-danger',
-        disabled: buttons.sendBack.disabled,
+        disabled: !!held || buttons.sendBack.disabled,
         onClick: handleSendBackClick,
         'aria-label': buttons.sendBack.ariaLabel
       }, buttons.sendBack.label)
-    )
+    ),
+
+    // Task 4.14d: what holds the buttons, beside them.
+    held && React.createElement('p', { className: 'validation-error', role: 'status' }, held)
   );
 }
 

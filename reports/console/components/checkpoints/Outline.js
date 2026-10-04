@@ -22,6 +22,8 @@
  * note go to the map's pendingEdits slot on every change, under the map's version
  * (mapPendingSlot), so they survive a remount of that version and clear when a new one
  * arrives (pendingEditsAfterCheckpoint, in state.js).
+ * An open editor, or an add line that holds text, holds both buttons, and a line beside them says
+ * to save or discard it first (unsavedInputLine, task 4.14d).
  * Exports to window.Console.checkpoints.Outline
  */
 
@@ -31,6 +33,7 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 const { Badge, CollapsibleSection, TracePanel, editBtn, CHECKPOINT_LABELS } = window.Console.utils;
 const EditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
+const { unsavedInputLine } = window.Console.unsavedInputLogic;
 
 // Every line the director edits on the map is a pencil host in the always-visible mode (the
 // integrator's ruling 6): the line sits at the host's left and its controls under it, so the
@@ -163,6 +166,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
 
   const view = ViewLogic.mapView(data, draft);
   const buttons = ViewLogic.mapButtons(note, sendBackArmed);
+  // Task 4.14d: an editor's form and the add line reach the map only when the director saves or
+  // adds them, so while either holds input both buttons wait, and this line says why.
+  const held = unsavedInputLine('outline', { editor: editing, adding: adding, sections: view.sections });
   const standing = ViewLogic.standingNotesView(data && data.directorGateNotes, CHECKPOINT_LABELS);
   // Brief 2.7: what the automatic rework of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace, theme);
@@ -210,8 +216,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
    * One of the two actions. The map is held to the gate's decisions first, so a refusal is
    * shown here rather than posted; the map and note are saved before the post, so a refusal
    * from the server, which remounts this screen, gives them back.
+   * Nothing is sent while an editor or the add line holds input (task 4.14d).
    */
   function send(action) {
+    if (held) return;
     const problem = ViewLogic.mapProblems(draft, data);
     if (problem) {
       setError(problem);
@@ -552,16 +560,20 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
         className: 'action-modes__btn action-modes__btn--active btn btn-primary',
+        disabled: !!held,
         onClick: function () { setSendBackArmed(false); send('approve'); },
         'aria-label': buttons.approve.ariaLabel
       }, buttons.approve.label),
       React.createElement('button', {
         className: 'action-modes__btn btn btn-danger',
-        disabled: buttons.sendBack.disabled,
+        disabled: !!held || buttons.sendBack.disabled,
         onClick: handleSendBackClick,
         'aria-label': buttons.sendBack.ariaLabel
       }, buttons.sendBack.label)
     ),
+
+    // Task 4.14d: what holds the buttons, beside them.
+    held && React.createElement('p', { className: 'validation-error', role: 'status' }, held),
 
     // The trace of an automatic rework, folded below the map.
     trace.any && React.createElement(CollapsibleSection, { title: trace.title },
