@@ -1411,3 +1411,112 @@ describe('4.5g: a whole element that came back without a photo the article canno
     expect(view.kept).toBe('');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10d: the meeting's last lines (the integrator's ruling 1 on 4.6e's and 4.10c's minors).
+// - A send-back that took out a thread on which the director had edited two fields showed two
+//   lines, each repeating the whole removal (scratch p4/4.10c-review/probe-meeting.js, case 1).
+//   One line now says the thread went and names each field the director gave it.
+// - One wording for a pass: the taken-out line reads its pass from passWords and writes no
+//   ending of its own. Only a send-back's rework takes such an element out for good: a reweave
+//   and an automatic pass are held to the director's edits, code puts the element back from the
+//   version the pass started from (lib/hand-edit-diff.js settleEdits), and the meeting shows no
+//   line for their entries.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10d: one line per removed element at the meeting, its pass in passWords\' words', () => {
+  const { settleEdits, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
+
+  /** Every line the page shows about the round's changes: beside its lines, listed with their places, and the changed edits. */
+  function roundLines(view) {
+    return [view.story, view.question, view.headline, view.fromYourNotes, view.convergence, view.strongerMainThread]
+      .concat(view.threads, view.connections, view.questions)
+      .filter(Boolean)
+      .flatMap((line) => line.marks)
+      .concat(view.removed, view.otherMarks, view.changedEdits);
+  }
+
+  /** The meeting after a director's round, from the version the director left. */
+  function afterRound(round, left, weave, edits, report) {
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(weave, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
+      _weaveMarks: { round, from: left }, humanArcRevisionCount: 1
+    }));
+    return { data, view: meetingView(data, meetingDraftOf(data, undefined)) };
+  }
+
+  /** The director's version: t3's claim and its role, both edited (probe case 1). */
+  function twoFieldsEdited() {
+    const left = clone(WEAVE);
+    left.threads[2].role = 'mirrors-it';
+    left.threads[2].claim = 'Morgan paid Riley twice.';
+    return left;
+  }
+
+  /** A rework of `left` that took t3 out, with the connection that joins it. */
+  function withoutT3(left) {
+    const weave = clone(left);
+    weave.threads = weave.threads.filter((t) => t.id !== 't3');
+    weave.connections = weave.connections.filter((c) => !(c.joins || []).includes('t3'));
+    return weave;
+  }
+
+  const T3_REMOVED = 'Thread "t3": taken out this round. Before: "id: t3; claim: Morgan paid Riley twice.; role: mirrors-it; receipt: mor001".';
+  const C1_REMOVED = 'Connection "c1": taken out this round. Before: "id: c1; kind: person; joins: t1 / t3; detail: Morgan: one side of the deadlock, and the payer at the bar."';
+  const GAVE_BOTH = ' The claim you gave it, "Morgan paid Riley twice.", and the role you gave it, "Mirrors it", went with it (the rework of your send-back).';
+
+  test('a send-back that took out a thread whose claim and role the director edited: one line for the removal, naming both fields', () => {
+    const left = twoFieldsEdited();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = withoutT3(left);
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS });
+    expect(report.changed.map((c) => [c.where, c.became])).toEqual([['thread "t3", claim', null], ['thread "t3", role', null]]);
+    const { data, view } = afterRound('send-back', left, reworked, edits, report);
+    expect(data.marks.marks.map((m) => m.path)).toEqual(['threads[#t3]', 'connections[#c1]']);
+    const line = `${T3_REMOVED}${GAVE_BOTH} No reason given.`;
+    expect(view.removed).toEqual([line, C1_REMOVED]);
+    expect(view.changedEdits).toEqual([]);
+    expect(roundLines(view)).toEqual([line, C1_REMOVED]);
+  });
+
+  test("the rework's reasons for the two edits: each reason once, in the report's order", () => {
+    const left = twoFieldsEdited();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = withoutT3(left);
+    const removedLineWith = (reasons) => {
+      const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons });
+      return afterRound('send-back', left, reworked, edits, report).view.removed[0];
+    };
+    const FOLDED = 'The note folded the payment into the main thread.';
+    const NO_THREAD = 'The role no longer had a thread to sit on.';
+    expect(removedLineWith([{ id: 'E1', reason: FOLDED }, { id: 'E2', reason: FOLDED }])).toBe(`${T3_REMOVED}${GAVE_BOTH} Why: ${FOLDED}`);
+    expect(removedLineWith([{ id: 'E2', reason: NO_THREAD }, { id: 'E1', reason: FOLDED }])).toBe(`${T3_REMOVED}${GAVE_BOTH} Why: ${FOLDED} ${NO_THREAD}`);
+    expect(removedLineWith([{ id: 'E2', reason: NO_THREAD }])).toBe(`${T3_REMOVED}${GAVE_BOTH} Why: ${NO_THREAD}`);
+  });
+
+  test("the taken-out line writes no ending of its own: changedEditLine's is the module's one ending for a held pass", () => {
+    const source = require('fs').readFileSync(require.resolve('../checkpoint-view-logic'), 'utf8');
+    expect(source.split(', which should have kept your edit)').length - 1).toBe(1);
+    const takenOut = source.slice(source.indexOf('function takenOutWithEditLine('), source.indexOf('function elsewhereLine('));
+    expect(takenOut).toContain('passWords(');
+    expect(takenOut).not.toContain('held');
+  });
+
+  test('a reweave, or an automatic pass, that took the thread out: code puts it back, so no line names the removal of the edits', () => {
+    [REWEAVE_PASS, 1].forEach((pass) => {
+      const left = twoFieldsEdited();
+      const edits = standingAtMeeting(null, WEAVE, left);
+      const { output, report } = settleEdits(null, { edits: edits.edits, before: left, after: withoutT3(left), pass });
+      expect([pass, output.threads.find((t) => t.id === 't3')]).toEqual([pass, left.threads[2]]);
+      expect([pass, report.changed.map((c) => [c.where, c.restored])]).toEqual([pass, [['thread "t3", claim', true], ['thread "t3", role', true]]]);
+      expect([pass, ViewLogic.changedEditsToShow(report)]).toEqual([pass, []]);
+    });
+    // The reweave's round as the meeting shows it: the connection the reweave took out is no
+    // edit of the director's, and the director's edits stand.
+    const left = twoFieldsEdited();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const { output, report } = settleEdits(null, { edits: edits.edits, before: left, after: withoutT3(left), pass: REWEAVE_PASS });
+    const { view } = afterRound('reweave', left, output, edits, report);
+    expect(roundLines(view)).toEqual([C1_REMOVED]);
+    expect(view.kept).toBe('Both of your edits stand.');
+  });
+});

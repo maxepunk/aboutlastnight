@@ -510,17 +510,28 @@
   /**
    * Which pass made a report entry's change, in a line's words, and the reason a send-back's
    * rework gave: `held` for a pass held to the director's edits (an automatic pass or a reweave),
-   * whose changes code puts back. changedEditLine reads it, and so does the meeting's line for a
-   * field edit on an element a round took out (takenOutWithEditLine).
+   * whose changes code puts back. changedEditLine reads it for one entry, and the meeting's line
+   * for an element a round took out reads it for the edits of the element's fields
+   * (takenOutWithEditLine; brief 4.10d): given the entries of one pass, `why` gives each reason
+   * the rework gave for them once, in their order.
+   *
+   * @param {Object|Object[]} entries - a report entry, or the entries of one pass
+   * @returns {{held: boolean, by: string, why: string}}
    */
-  function passWords(entry) {
+  function passWords(entries) {
+    var list = Array.isArray(entries) ? entries : [entries];
+    var entry = list[0];
     var automatic = entry.automatic === true;
     var reweave = entry.pass === REWEAVE_PASS;
-    var reason = asString(entry.reason).trim();
+    var reasons = [];
+    list.forEach(function (each) {
+      var reason = asString(each.reason).trim();
+      if (reason && reasons.indexOf(reason) === -1) reasons.push(reason);
+    });
     return {
       held: automatic || reweave,
       by: automatic ? 'automatic pass ' + entry.pass : (reweave ? 'your reweave' : 'the rework of your send-back'),
-      why: reason ? 'Why: ' + reason : 'No reason given.'
+      why: reasons.length > 0 ? 'Why: ' + reasons.join(' ') : 'No reason given.'
     };
   }
 
@@ -1998,19 +2009,25 @@
   }
 
   /**
-   * The one line for an edit of a field of an element the round took out whole (brief 4.10c): the
-   * element taken out, with what it held, as removedLine says it, then the field the director gave
-   * it, which went with it, and the pass that took it out, with the rework's reason, in
-   * changedEditLine's words.
+   * The one line for the edits of the fields of an element the round took out whole (briefs
+   * 4.10c and 4.10d): the element taken out, with what it held, as removedLine says it, then each
+   * field the director gave it, which went with it, and the pass that took it out with the
+   * rework's reasons, in passWords' words. Only a send-back's rework takes out such an element
+   * for good: a reweave and an automatic pass are held to the director's edits, and code puts the
+   * element back from the version the pass started from (lib/hand-edit-diff.js settleEdits), so
+   * their entries are restored and changedEditsToShow shows none.
    *
    * @param {Object} mark - the round's mark that took the element out
-   * @param {Object} entry - the report's entry for the director's edit of one of its fields
-   * @param {string} field - that field (`role`)
+   * @param {Array<{entry: Object, field: string}>} edits - the report's entries for the
+   *   director's edits of the element's fields, in the report's order, each with its field (`role`)
    */
-  function takenOutWithEditLine(mark, entry, field) {
-    var pass = passWords(entry);
-    return removedLine(mark) + '. The ' + field + ' you gave it, "' + roleWord(asString(entry.director)) + '", went with it ('
-      + pass.by + (pass.held ? ', which should have kept your edit). No reason given.' : '). ' + pass.why);
+  function takenOutWithEditLine(mark, edits) {
+    var gave = edits.map(function (edit) {
+      return 'the ' + edit.field + ' you gave it, "' + roleWord(asString(edit.entry.director)) + '"';
+    });
+    var listed = gave.length < 2 ? gave.join('') : gave.slice(0, -1).join(', ') + ', and ' + gave[gave.length - 1];
+    var pass = passWords(edits.map(function (edit) { return edit.entry; }));
+    return removedLine(mark) + '. ' + capitalized(listed) + ', went with it (' + pass.by + '). ' + pass.why;
   }
 
   /** The line for any other mark whose line the page does not show: what changed, and what the place holds now. */
@@ -2195,9 +2212,9 @@
    * stands in the mark's place, and the entry is not listed again.
    * - Several marks about one entry, such as two fields of a thread the director added: the
    *   entry's line stands in the first mark's place, and the other marks show nothing.
-   * - A mark that took an element out whole, about an entry for one of its fields, such as the
-   *   role the director gave a thread a send-back took out: one line says both
-   *   (takenOutWithEditLine).
+   * - A mark that took an element out whole, about the entries for its fields, such as the
+   *   claim and the role the director gave a thread a send-back took out: one line says the
+   *   element went and names each field (takenOutWithEditLine; brief 4.10d).
    *
    * @param {Object} data - the stop's payload
    * @param {Set<string>} onPage - the lines the page shows
@@ -2215,18 +2232,24 @@
     var lines = asArray(entries).map(function (entry) { return { entry: entry, line: changedEditLine(entry, MEETING_EDIT_LINE), shown: false }; });
     /**
      * What the page shows in a mark's place for the entries the mark is about: each entry's line
-     * the first time a mark is about it, worded with the element when the mark took the element out
-     * whole and the entry is one of its fields; null when no entry is about the mark, which then
-     * shows its own line.
+     * the first time a mark is about it, in the report's order; when the mark took the element out
+     * whole, one line for the entries that are its fields, where the first of them stands. Null
+     * when no entry is about the mark, which then shows its own line.
      */
     var editLinesOf = function (mark, elementTakenOut) {
       var about = lines.filter(function (l) { return markOfEntry(mark, l.entry); });
       if (about.length === 0) return null;
-      return about.filter(function (l) { return !l.shown; }).map(function (l) {
-        l.shown = true;
-        var field = entryLineOf(l.entry).field;
-        return elementTakenOut && field ? takenOutWithEditLine(mark, l.entry, field) : l.line;
+      var fresh = about.filter(function (l) { return !l.shown; });
+      fresh.forEach(function (l) { l.shown = true; });
+      var fields = elementTakenOut ? fresh.filter(function (l) { return entryLineOf(l.entry).field; }) : [];
+      var shown = [];
+      fresh.forEach(function (l) {
+        if (fields.indexOf(l) === -1) shown.push(l.line);
+        else if (l === fields[0]) {
+          shown.push(takenOutWithEditLine(mark, fields.map(function (f) { return { entry: f.entry, field: entryLineOf(f.entry).field }; })));
+        }
       });
+      return shown;
     };
     var round = isPlainObject(data.marks) ? data.marks : {};
     asArray(round.marks).filter(isPlainObject).forEach(function (mark) {
