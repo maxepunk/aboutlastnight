@@ -38,7 +38,7 @@ const { rosterNames } = require('./lib/content-bundle-fact-check');
 // approve checks by publish's own rule.
 const { missingPrintedPhotos } = require('./lib/publish-photos');
 // Brief 4.2: the leave-out box, the list the character-IDs stop's boxes write.
-const { leftOutPhotosOf, listAfterStopChoices } = require('./lib/photo-leave-out');
+const { leftOutPhotosOf, listAfterStopChoices, isPlainObject } = require('./lib/photo-leave-out');
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // Brief 4.5: the story meeting's payloads and what its stop sends.
@@ -606,9 +606,8 @@ function normalizePhotoDescriptions(value) {
  * @returns {string|null}
  */
 function characterIdsRefusal(value) {
-    const isMapping = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-    if (!isMapping(value)) return 'characterIds must be an object of photo filename -> mapping';
-    const key = Object.keys(value).find((k) => !isMapping(value[k]));
+    if (!isPlainObject(value)) return 'characterIds must be an object of photo filename -> mapping';
+    const key = Object.keys(value).find((k) => !isPlainObject(value[k]));
     return key === undefined ? null : `characterIds["${key}"] must be a mapping object`;
 }
 

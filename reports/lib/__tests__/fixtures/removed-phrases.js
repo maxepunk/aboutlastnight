@@ -345,7 +345,11 @@ const REMOVED_PHRASES = [
   'PREVIOUS OUTLINE OUTPUT',
   "You are planning the structure of Detective Anondono's case report.",
   'You are REVISING that outline, not writing it from scratch.',
-  '<arc-evidence>'
+  '<arc-evidence>',
+
+  // Phase 4, 4.6b: the map's task names the approval note marked arc-selection, the one
+  // the map's check counts, not any standing note.
+  'the standing note marked arc-selection'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

@@ -7,7 +7,8 @@
  *   what no writer writes, the director's `answer` on a question and `struck: true` on a
  *   connection they struck, and, as the writer's does, lets a thread the director added or
  *   re-roled have no receipt and no reason. The payload gate validates against it. The
- *   console's validator, 4.8's work and not yet built, is to apply the same rules. It is
+ *   console's validator (console/checkpoint-view-logic.js meetingWeaveProblems, 4.8) applies the
+ *   same rules, held to the gate's decisions by a corpus test. It is
  *   never sent to the SDK, and code strips both keys from what a writer or a rework returns
  *   (arc-specialist-nodes.js weaveFromOutput), so no model writes an answer or a strike.
  * - THE PAYLOADS (meetingResume, which server.js buildResumePayload calls, and only while

@@ -203,6 +203,8 @@ function withExplicitExclusions(mappings, state) {
 }
 
 module.exports = {
+  // The one test for a mapping object, which the character-IDs gate reads too (4.3c review).
+  isPlainObject,
   leftOutPhotosOf,
   leavePhotosOut,
   listAfterStopChoices,

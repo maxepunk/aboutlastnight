@@ -1563,9 +1563,13 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
         expect(take(payload, atMeeting()).error).toBeNull();
       });
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-meeting-photos-'));
-      const withPhotos = take({ ...payloads[0], photosPath: dir }, atMeeting());
-      expect(withPhotos.error).toBeNull();
-      expect(withPhotos.stateUpdates.photosPath).toBe(dir);
+      try {
+        const withPhotos = take({ ...payloads[0], photosPath: dir }, atMeeting());
+        expect(withPhotos.error).toBeNull();
+        expect(withPhotos.stateUpdates.photosPath).toBe(dir);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 
