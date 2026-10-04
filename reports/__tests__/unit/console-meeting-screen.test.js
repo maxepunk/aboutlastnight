@@ -75,6 +75,22 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
   });
 });
 
+// Fix round 1, finding 3: the standing notes are one builder's at every stop, each under its
+// stop's console label, so the meeting and RevisionDiff (the map and the desk) both hand the
+// view logic CHECKPOINT_LABELS.
+describe('4.8 fix round 1: the meeting and RevisionDiff list the standing notes under the console\'s stop labels', () => {
+  it('the meeting hands meetingStandingNotes the labels', () => {
+    expect(read('components/checkpoints/ArcSelection.js')).toContain('ViewLogic.meetingStandingNotes(data && data.directorGateNotes, CHECKPOINT_LABELS)');
+  });
+
+  it('RevisionDiff hands steeringView the labels, and prints each note under its label', () => {
+    const src = read('components/RevisionDiff.js');
+    expect(src).toMatch(/^const \{ Badge, CHECKPOINT_LABELS \} = window\.Console\.utils;$/m);
+    expect(src).toContain('ViewLogic.steeringView(handEditReport, gateNotes, CHECKPOINT_LABELS)');
+    expect(src).toContain("n.label + ': '");
+  });
+});
+
 describe('4.8: every console string that names the arc stop or its cost says "story meeting" and R9\'s cost', () => {
   const FILES = [
     'components/checkpoints/Photos.js',

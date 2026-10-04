@@ -791,6 +791,72 @@ describe('4.8: with a failing check and with a concern', () => {
   });
 });
 
+// Fix round 1, finding 3. One builder phrases an entry of the hand-edit report, and one lists
+// the standing notes, for every stop. The meeting reads steeringView's own: it names a place
+// as its page heads it, with no edit id (the meeting shows none), and a role as its picker
+// names it.
+describe('4.8 fix round 1: the meeting phrases its report and its notes through the builders every stop reads', () => {
+  const sendBack = (fields) => ({ cut: false, removed: false, moved: false, pass: SEND_BACK_PASS, automatic: false, reason: null, restored: false, ...fields });
+  const CONNECTION = 'id: c2; kind: moment; joins: t2 / t4; detail: The night of the sale is the night the result came back.';
+  const ENTRIES = [
+    sendBack({ id: 'E1', scope: 'story', where: 'story', director: 'The room named an overdose.', became: 'The ledger names a sale.', reason: 'The note asked to lead with the sale.' }),
+    sendBack({ id: 'E2', scope: 'threads', where: 'thread "t3", role', director: 'mirrors-it', became: 'grounds-it' }),
+    sendBack({ id: 'E3', scope: 'threads', where: 'thread "t6", added', director: 'id: t6; claim: Riley kept a second ledger.; role: grounds-it', became: null }),
+    sendBack({ id: 'E4', scope: 'question', where: 'question', removed: true, director: 'Who paid Riley?', became: 'Who gained from the sale? Who paid Riley?' }),
+    sendBack({ id: 'E5', scope: 'connections', where: 'connection "c2", struck', struck: true, director: CONNECTION, became: CONNECTION }),
+    sendBack({ id: 'E6', scope: 'connections', where: 'connection "c1", struck', struck: true, director: CONNECTION, became: null, reason: 'The note dropped the deadlock.' })
+  ];
+  const REPORT = { checked: ENTRIES.map((e) => e.id), changed: ENTRIES };
+  const meetingLines = () => {
+    const data = { ...payloadOf(stateAt()), handEditReport: REPORT };
+    return meetingView(data, meetingDraftOf(data, undefined)).changedEdits;
+  };
+
+  test('each edit a send-back changed, in the wording every stop uses, its place as the meeting heads it', () => {
+    expect(meetingLines()).toEqual([
+      'The story: your "The room named an overdose." became "The ledger names a sale." (the rework of your send-back). Why: The note asked to lead with the sale.',
+      'Thread "t3", role: your "Mirrors it" became "Grounds it" (the rework of your send-back). No reason given.',
+      'Thread "t6", added: your "id: t6; claim: Riley kept a second ledger.; role: grounds-it" is gone (the rework of your send-back). No reason given.',
+      'The question it carries: a sentence you removed came back as "Who gained from the sale? Who paid Riley?" (the rework of your send-back). No reason given.',
+      'Connection "c2", struck: the rework of your send-back brought it back. No reason given.',
+      'Connection "c1", struck: the rework of your send-back took it out. Why: The note dropped the deadlock.'
+    ]);
+  });
+
+  test('each of the meeting\'s lines is steeringView\'s for the same entry, but for the place and a role\'s words', () => {
+    const steering = ViewLogic.steeringView(REPORT, []).changedEdits.map((e) => e.line);
+    const meeting = meetingLines();
+    const PLACES = { E1: ['E1, story', 'The story'], E2: ['E2, thread "t3", role', 'Thread "t3", role'], E3: ['E3, thread "t6", added', 'Thread "t6", added'], E4: ['E4, question', 'The question it carries'], E5: ['E5, connection "c2", struck', 'Connection "c2", struck'], E6: ['E6, connection "c1", struck', 'Connection "c1", struck'] };
+    ENTRIES.forEach((entry, i) => {
+      const [steeringPlace, meetingPlace] = PLACES[entry.id];
+      expect(steering[i].startsWith(`${steeringPlace}: `)).toBe(true);
+      const rest = steering[i].slice(steeringPlace.length).replace('"mirrors-it"', '"Mirrors it"').replace('"grounds-it"', '"Grounds it"');
+      expect(meeting[i]).toBe(meetingPlace + rest);
+    });
+  });
+
+  test('a connection an automatic pass brought back says whether code struck it again (the map\'s strikes read the same line)', () => {
+    const automatic = { ...ENTRIES[4], pass: 1, automatic: true };
+    const lines = ViewLogic.steeringView({ checked: ['E5'], changed: [{ ...automatic, restored: true }, { ...automatic, restored: false }, { ...automatic, became: null }] }, []).changedEdits.map((e) => e.line);
+    expect(lines).toEqual([
+      'E5, connection "c2", struck: automatic pass 1 brought it back. It was struck again.',
+      'E5, connection "c2", struck: automatic pass 1 brought it back. It could not be struck again.',
+      'E5, connection "c2", struck: automatic pass 1 took it out.'
+    ]);
+  });
+
+  test('the standing notes are one builder\'s, under the console\'s stop labels, at the meeting and wherever steeringView lists them', () => {
+    const LABELS = { 'arc-selection': 'Story meeting', outline: 'Map', article: 'Article' };
+    const notes = [
+      { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the heir thread.' },
+      { gate: 'article', kind: 'approval', round: 1, text: 'Keep the closing short.' },
+      { gate: 'outline', text: '  ' }
+    ];
+    expect(ViewLogic.steeringView(null, notes, LABELS).notes).toEqual(meetingStandingNotes(notes, LABELS).items);
+    expect(meetingStandingNotes(notes, LABELS).items.map((n) => n.label)).toEqual(['Story meeting, rework note 1', 'Article, approval note 1']);
+  });
+});
+
 describe('4.8: the standing notes folded under the note box, and the rollback\'s cost', () => {
   const LABELS = { 'arc-selection': 'Story meeting', outline: 'Map', article: 'Article' };
 

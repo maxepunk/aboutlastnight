@@ -528,17 +528,22 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
     expect(line.line.startsWith('E1, constructor: ')).toBe(true);
   });
 
+  // Task 4.8 fix round 1, finding 3: the standing notes are one builder's at every stop
+  // (standingNoteItems, which the story meeting's meetingStandingNotes reads too), each under
+  // its stop's console label; a stop the labels do not name reads as its type.
   test('notes become labelled lines in order; malformed entries are skipped', () => {
-    const v = steeringView(null, [
+    const notes = [
       { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the vote arc.' },
       null, { gate: 'outline', text: '' },
       { gate: 'outline', round: 2, text: 'Lead with the ledger.' }
-    ]);
+    ];
+    const v = steeringView(null, notes, { 'arc-selection': 'Story meeting', outline: 'Map' });
     expect(v.any).toBe(true);
     expect(v.notes).toEqual([
-      { label: '[arc-selection, rejection 1]', text: 'Drop the vote arc.' },
-      { label: '[outline, rejection 2]', text: 'Lead with the ledger.' }
+      { key: 'note-0', label: 'Story meeting, rework note 1', text: 'Drop the vote arc.' },
+      { key: 'note-1', label: 'Map, rework note 2', text: 'Lead with the ledger.' }
     ]);
+    expect(steeringView(null, notes).notes.map((n) => n.label)).toEqual(['arc-selection, rework note 1', 'outline, rework note 2']);
   });
 });
 

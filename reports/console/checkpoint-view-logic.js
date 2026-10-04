@@ -575,10 +575,14 @@
   var MOVED_BLOCK_LEFT_OUT = 'Only its place was your edit, so it was not put back: add it again if it should stay.';
 
   /**
-   * One line for an edit a pass changed (F1, FA): its id and place (the field, since FA;
-   * an entry from before FA names its scope), what happened to the director's text, which
-   * pass did it, and what followed. Who made a change is the entry's own `automatic` flag
-   * (known item 7).
+   * One line for an edit a pass changed (F1, FA): its place (by default its id and field,
+   * since FA; an entry from before FA names its scope), what happened to the director's
+   * text, which pass did it, and what followed. Who made a change is the entry's own
+   * `automatic` flag (known item 7). Every stop phrases its report here: the map and the
+   * desk through steeringView, the story meeting through meetingView, which names its
+   * places as its page heads them and a role as its picker names it (task 4.8, fix round 1).
+   * - A connection the director struck (brief 4.5) that a pass brought back or took out;
+   *   after an automatic pass, whether code struck it again.
    * - A field or element an automatic pass changed: code put it back (`restored`), and
    *   the line says so; an entry from before FA says the pass should have kept it.
    * - A cut, or a sentence a rewrite removed, that came back: it is still in the article,
@@ -587,16 +591,32 @@
    *   whether code put it back; one a pass removed: that code left it out, since only its
    *   place was the director's edit.
    * - A change a send-back's rework made: the rework's reason, or that it gave none.
+   *
+   * @param {Object} entry - one of the report's `changed` entries (lib/hand-edit-diff.js reportAfterPass)
+   * @param {Object} [options]
+   * @param {function(Object): string} [options.place] - the entry's place; by default its id and `where`
+   * @param {function(string): string} [options.valueText] - how a value reads; by default as written
+   * @returns {string}
    */
-  function changedEditLine(entry) {
-    var label = entry.id + ', ' + (asString(entry.where) ? entry.where : scopeLabel(entry.scope));
-    var became = typeof entry.became === 'string' ? entry.became : null;
-    var director = asString(entry.director);
+  function changedEditLine(entry, options) {
+    var o = options || {};
+    var label = typeof o.place === 'function'
+      ? o.place(entry)
+      : entry.id + ', ' + (asString(entry.where) ? entry.where : scopeLabel(entry.scope));
+    var valueText = typeof o.valueText === 'function' ? o.valueText : function (text) { return text; };
+    var became = typeof entry.became === 'string' ? valueText(entry.became) : null;
+    var director = valueText(asString(entry.director));
     var automatic = entry.automatic === true;
     var by = automatic ? 'automatic pass ' + entry.pass : 'the rework of your send-back';
     var reason = asString(entry.reason).trim();
     var why = reason ? 'Why: ' + reason : 'No reason given.';
     var cameBackAs = became !== null ? ' as "' + became + '"' : '';
+    if (entry.struck === true) {
+      var struck = label + ': ' + by + (became !== null ? ' brought it back.' : ' took it out.');
+      if (!automatic) return struck + ' ' + why;
+      if (became === null) return struck;
+      return struck + (entry.restored === true ? ' It was struck again.' : ' It could not be struck again.');
+    }
     if (entry.cut === true) return label + ': the text you cut came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
     if (entry.removed === true) return label + ': a sentence you removed came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
     if (entry.moved === true) {
@@ -613,22 +633,45 @@
     return label + ': ' + what + ' (' + by + '). ' + why;
   }
 
+  /** How the standing notes name a note's kind (directorGateNotes' `kind`). */
+  var NOTE_KIND_WORDS = { approval: 'approval note', rejection: 'rework note' };
+
+  /**
+   * The standing notes as every stop lists them (steeringView at the map and the desk,
+   * meetingStandingNotes at the story meeting; task 4.8, fix round 1): each note with text,
+   * in order, under its stop's label, its kind and its round. A note with no kind is a
+   * rejection, as the channel has always read it.
+   *
+   * @param {Array} gateNotes - data.directorGateNotes
+   * @param {Object} [labels] - stop type -> label (the console's CHECKPOINT_LABELS); a stop
+   *   it does not name reads as its type
+   * @returns {Array<{key: string, label: string, text: string}>}
+   */
+  function standingNoteItems(gateNotes, labels) {
+    var names = isPlainObject(labels) ? labels : {};
+    return asArray(gateNotes)
+      .filter(function (n) { return isPlainObject(n) && typeof n.text === 'string' && n.text.trim(); })
+      .map(function (n, i) {
+        var kind = asString(n.kind) || 'rejection';
+        var stop = hasOwn(names, n.gate) ? names[n.gate] : asString(n.gate);
+        var kindWord = hasOwn(NOTE_KIND_WORDS, kind) ? NOTE_KIND_WORDS[kind] : kind + ' note';
+        return { key: 'note-' + i, label: stop + ', ' + kindWord + ' ' + (n.round || 1), text: n.text.trim() };
+      });
+  }
+
   /**
    * The hand-edit report and the standing notes as RevisionDiff renders them.
    *
    * F1: `changedEdits` holds one line per edit a pass changed this round
    * (changedEditLine), `automatic` marking a change an automatic pass made and
    * `restored` one code put back (FA), each read from the entry's own flags;
-   * `keptCount` is the edits checked when none changed.
+   * `keptCount` is the edits checked when none changed. `notes` are standingNoteItems',
+   * under `labels`, the console's stop labels.
    */
-  function steeringView(handEditReport, gateNotes) {
+  function steeringView(handEditReport, gateNotes, labels) {
     var report = editReportOf(handEditReport);
     var changed = report ? report.changed : [];
-    var notes = (Array.isArray(gateNotes) ? gateNotes : [])
-      .filter(function (n) { return n && typeof n.text === 'string' && n.text.trim(); })
-      .map(function (n) {
-        return { label: '[' + n.gate + ', ' + (n.kind || 'rejection') + ' ' + (n.round || 1) + ']', text: n.text.trim() };
-      });
+    var notes = standingNoteItems(gateNotes, labels);
     return {
       any: !!report || notes.length > 0,
       changedEdits: changed.map(function (entry, index) {
@@ -1902,15 +1945,32 @@
   }
 
   /**
-   * A mark's place, as the page names it: one of the weave's lines by its heading
-   * (MEETING_LINE_LABELS), an element by its `where` ("Thread "t4"") without the diff's
-   * ", cut" or ", added".
+   * A place in the weave as the meeting names it: one of the weave's lines by its heading
+   * (MEETING_LINE_LABELS), anything else by the diff's `where` ("Thread "t3", role").
+   *
+   * @param {string|null} field - the weave line the place is, if it is one
+   * @param {string} where - the diff's words for the place
    */
-  function markPlace(mark) {
-    var key = lineKeyOf(mark.path);
-    if (key !== null && hasOwn(MEETING_LINE_LABELS, key)) return MEETING_LINE_LABELS[key];
-    return capitalized(asString(mark.where).replace(/, (cut|added)$/, ''));
+  function meetingPlace(field, where) {
+    return field !== null && hasOwn(MEETING_LINE_LABELS, field) ? MEETING_LINE_LABELS[field] : capitalized(asString(where));
   }
+
+  /** A mark's place: its line, or its element ("Thread "t4"") without the diff's ", cut" or ", added", which the mark's line says. */
+  function markPlace(mark) {
+    return meetingPlace(lineKeyOf(mark.path), asString(mark.where).replace(/, (cut|added)$/, ''));
+  }
+
+  /** The place of an edit a send-back changed: its line (the edit's scope names it), or its `where`. */
+  function meetingEditPlace(entry) {
+    return meetingPlace(asString(entry.scope), asString(entry.where) || asString(entry.scope));
+  }
+
+  /**
+   * How the meeting phrases an edit a send-back changed (changedEditLine, every stop's
+   * builder): its place as the page heads it, with no edit id, since the meeting shows none,
+   * and a role as the role picker names it.
+   */
+  var MEETING_EDIT_LINE = { place: meetingEditPlace, valueText: roleWord };
 
   function lowerFirst(text) {
     return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
@@ -1944,26 +2004,6 @@
     return 'After your ' + round + ', ' + (asArray(marks.marks).length > 0
       ? 'each line the writer changed from the weave you left is marked.'
       : 'the writer changed no line of the weave you left.');
-  }
-
-  /**
-   * One edit of the director's that the rework of their send-back changed, with its reason
-   * (the hand-edit report's entries of SEND_BACK_PASS; lib/hand-edit-diff.js reportAfterPass).
-   */
-  function meetingEditLine(entry) {
-    var where = capitalized(asString(entry.where) || asString(entry.scope));
-    var reason = asString(entry.reason).trim();
-    var why = reason ? ' Why: ' + reason : ' No reason given.';
-    var became = typeof entry.became === 'string' ? roleWord(entry.became) : null;
-    var by = 'the rework of your send-back';
-    if (entry.struck === true) return where + ': ' + by + (became !== null ? ' brought it back.' : ' took it out.') + why;
-    if (entry.cut === true || entry.removed === true) {
-      return where + ': ' + (entry.cut === true ? 'the text you cut' : 'a sentence you took out') + ' came back'
-        + (became !== null ? ' in "' + became + '"' : '') + ' (' + by + ').' + why;
-    }
-    var director = roleWord(entry.director);
-    if (became === null) return where + ': ' + by + ' took out your "' + director + '".' + why;
-    return where + ': your "' + director + '" became "' + became + '" (' + by + ').' + why;
   }
 
   /**
@@ -2204,7 +2244,9 @@
         .filter(Boolean)
         .map(function (message) { return 'Check still failing: ' + message; }),
       changedEdits: report
-        ? report.changed.filter(function (entry) { return entry.pass === SEND_BACK_PASS; }).map(meetingEditLine)
+        ? report.changed
+          .filter(function (entry) { return entry.pass === SEND_BACK_PASS; })
+          .map(function (entry) { return changedEditLine(entry, MEETING_EDIT_LINE); })
         : [],
       didNotRun: didNotRunLine(d.roundDidNotRun),
       marked: markedLine(d.marks),
@@ -2214,30 +2256,16 @@
     };
   }
 
-  /** How the note box's standing notes name a note's kind. */
-  var NOTE_KIND_WORDS = { approval: 'approval note', rejection: 'rework note' };
-
   /**
-   * The standing notes, folded under the meeting's note box: each under its stop's label
-   * (the console's CHECKPOINT_LABELS, passed in), its kind and its round.
+   * The standing notes, folded under the meeting's note box: standingNoteItems', the list
+   * every stop reads, under the console's stop labels (CHECKPOINT_LABELS, passed in).
    *
    * @param {Array} gateNotes - data.directorGateNotes
    * @param {Object} labels - stop type -> label
    * @returns {{any: boolean, title: string, items: Array<{key: string, label: string, text: string}>}}
    */
   function meetingStandingNotes(gateNotes, labels) {
-    var names = isPlainObject(labels) ? labels : {};
-    var items = asArray(gateNotes)
-      .filter(function (n) { return isPlainObject(n) && typeof n.text === 'string' && n.text.trim(); })
-      .map(function (n, i) {
-        var kind = asString(n.kind) || 'rejection';
-        return {
-          key: 'note-' + i,
-          label: (hasOwn(names, n.gate) ? names[n.gate] : asString(n.gate)) + ', '
-            + (hasOwn(NOTE_KIND_WORDS, kind) ? NOTE_KIND_WORDS[kind] : kind + ' note') + ' ' + (n.round || 1),
-          text: n.text.trim()
-        };
-      });
+    var items = standingNoteItems(gateNotes, labels);
     return { any: items.length > 0, title: 'Standing notes (' + items.length + ')', items: items };
   }
 

@@ -8,7 +8,7 @@
 
 window.Console = window.Console || {};
 
-const { Badge } = window.Console.utils;
+const { Badge, CHECKPOINT_LABELS } = window.Console.utils;
 
 const ViewLogic = window.Console.checkpointViewLogic;
 
@@ -79,8 +79,9 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
 
   // Spec 2026-09-19 §4.4/§5.5: the hand-edit report and the standing notes render
   // here too, and they must render on a gate with no revision state (the first
-  // outline gate after an arc rejection has notes and nothing else).
-  const steering = ViewLogic.steeringView(handEditReport, gateNotes);
+  // outline gate after an arc rejection has notes and nothing else). Each note is
+  // named under its stop's label, as the story meeting names it (task 4.8).
+  const steering = ViewLogic.steeringView(handEditReport, gateNotes, CHECKPOINT_LABELS);
 
   // Brief 1.4: every stop shows rounds the same way. The counters mean different
   // things — humanRevisionCount is the director's rounds, revisionCount the
@@ -153,9 +154,9 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
     steering.notes.length > 0 && React.createElement('div', { className: 'revision-diff__feedback revision-diff__notes' },
       React.createElement('span', { className: 'revision-diff__feedback-label' }, 'Standing notes the writer will see'),
       React.createElement('ul', { className: 'revision-diff__notes-list' },
-        steering.notes.map(function (n, i) {
-          return React.createElement('li', { key: i, className: 'revision-diff__feedback-text' },
-            React.createElement('span', { className: 'text-muted' }, n.label + ' '), n.text);
+        steering.notes.map(function (n) {
+          return React.createElement('li', { key: n.key, className: 'revision-diff__feedback-text' },
+            React.createElement('span', { className: 'text-muted' }, n.label + ': '), n.text);
         })
       )
     ),
