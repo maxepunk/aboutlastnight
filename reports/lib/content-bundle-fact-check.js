@@ -946,11 +946,12 @@ function describeLocations(locations) {
  *   its `place`: `{section, paragraph}` (the section's id and the paragraph's ordinal),
  *   `{field}` (headline.main, headline.kicker or headline.deck), `{tokenId, section}` or
  *   `{tokenId, sidebar: true}` for a card, `{filename, section}` or `{filename, hero: true}`
- *   for a photo, `{section}` for a quote block, or null where the hit has no one place (a
- *   player never named, the length, a phrase across two pieces); an excerpt of the printed
- *   text there; and its message, a string of `structuralIssues` or `advisoryWarnings`. A
- *   message that names several places has a finding at each, and a concern about one of the
- *   director's edits carries the edit's id (`editId`).
+ *   for a photo, `{section}` for a quote block or a section the length counted, or null
+ *   where the hit has no one place (a player never named, a phrase across two pieces); an
+ *   excerpt of the printed text there, or null for the length; and its message, a string
+ *   of `structuralIssues` or `advisoryWarnings`. A message that names several places has a
+ *   finding at each, and a concern about one of the director's edits carries the edit's id
+ *   (`editId`).
  */
 function factCheckContentBundle({
   contentBundle,
@@ -1440,8 +1441,9 @@ function factCheckContentBundle({
     }
 
     // 'length' ADVISORY: the narrator's prose above the flag (C4, R4), quoted lines
-    // included, by where the words are. It is the whole article's, so its finding has no
-    // one place.
+    // included, by where the words are. Brief 4.7a: a finding at each section whose
+    // paragraphs the count covers, for a mark on the section's heading (4.10); the
+    // headline's and the deck's words are in the message alone.
     const unstripped = narratorSegments(bundle);
     const totalWords = unstripped.reduce((sum, segment) => sum + wordCount(segment.text), 0);
     if (totalWords > LENGTH_FLAG_WORDS) {
@@ -1456,7 +1458,11 @@ function factCheckContentBundle({
         `the ${fmt(LENGTH_FLAG_WORDS)}-word flag for an article of about 1,500 words (C4): ` +
         `${[...bySection].map(([key, n]) => `${key} ${fmt(n)}`).join(', ')}. Cut what the thesis does not need.`;
       advisoryWarnings.push(message);
-      found('length', 'advisory', null, null, message);
+      const sections = new Map();
+      for (const segment of unstripped) {
+        if (segment.section !== null) sections.set(segment.place.section, { section: segment.place.section });
+      }
+      (sections.size > 0 ? [...sections.values()] : [null]).forEach(place => found('length', 'advisory', place, null, message));
     }
 
     // 'headCount' ADVISORY: the room held the roster's players (T10).

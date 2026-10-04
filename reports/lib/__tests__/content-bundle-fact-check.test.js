@@ -1923,6 +1923,28 @@ describe('4.7a: each finding with its place', () => {
       { kind: 'reporterMode', status: 'structural', place: { section: 'the-story', paragraph: 2 }, excerpt: 'i voted', message: result.structuralIssues[0] }
     ]);
   });
+
+  // 4.10 marks the length on a section's heading: a finding at each section whose
+  // paragraphs the count covers. The headline's and the deck's words are in the message.
+  it('the length: a finding at each section the count covers, by the section\'s id', () => {
+    const words = (n) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        headline: { main: 'Short', deck: 'A deck of six words here.' },
+        sections: [
+          { id: 'the-story', type: 'narrative', content: [{ type: 'paragraph', text: words(1000) }, { type: 'paragraph', text: words(10) }] },
+          { id: 'closing', type: 'narrative', content: [{ type: 'quote', text: 'Not counted.' }, { type: 'paragraph', text: words(900) }] }
+        ],
+        evidenceCards: []
+      }
+    }));
+    const message = result.advisoryWarnings.find((w) => w.startsWith('Over length:'));
+    expect(message).toContain('the-story 1,010, closing 900');
+    expect(result.findings.filter((f) => f.kind === 'length')).toEqual([
+      { kind: 'length', status: 'advisory', place: { section: 'the-story' }, excerpt: null, message },
+      { kind: 'length', status: 'advisory', place: { section: 'closing' }, excerpt: null, message }
+    ]);
+  });
 });
 
 describe('4.7a: the roster check covers the players the map places', () => {
