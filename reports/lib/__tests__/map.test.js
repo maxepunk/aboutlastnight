@@ -1092,3 +1092,22 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     expect(map).toEqual(['E1']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14b: the map's last defects (the final review, ruling 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("4.14b: the gate stores a struck beat's photo by itself", () => {
+  const { mapResume } = require('../map');
+  const { MAP, reworkFixtureState } = require('./fixtures/rework-state');
+  const EditLogic = require('../../console/outline-edit-logic');
+
+  it.each(['approve', 'send-back'])('%s: the photo beside a struck beat is stored by itself, and the strike alone stands', (action) => {
+    const struck = EditLogic.strikeBeat(clone(MAP), 'b2');
+    expect(struck.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b2' }]);
+    const { error, stateUpdates } = mapResume({ outline: action, map: struck, note: 'Keep my strike.' }, reworkFixtureState('journalist'), { theme: 'journalist' });
+    expect(error).toBeNull();
+    expect(stateUpdates.outline.sections[1].photos).toEqual([{ filename: 'p2.jpg' }]);
+    expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.path, e.from])).toEqual([['leftOut[#b2]', 'theStory']]);
+  });
+});

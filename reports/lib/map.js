@@ -50,7 +50,10 @@ const outlineSchema = require('./schemas/outline.schema.json');
 const { mapSlotsOf } = require('./theme-config');
 const { roundNoteOf, roundDidNotRunAt } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
-const { mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue, shownMapOf } = require('../console/outline-edit-logic');
+const {
+  mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue, shownMapOf,
+  freeStruckBeatPhotos
+} = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
   mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
@@ -618,6 +621,9 @@ const RETIRED_OUTLINE_KEYS = Object.freeze(['outlineEdits', 'outlineFeedback', '
  * checkpointOutline). The old outline payload is refused by name, and so is a payload for a
  * theme with no map (the parked detective, R1).
  *
+ * The gate stores the director's version as every later reader takes it (task 4.14b): each
+ * photo a strike freed by itself in its section (freeStruckBeatPhotos).
+ *
  * @param {Object} approvals - the request body
  * @param {Object} currentState - the thread's state at the stop
  * @param {Object} options
@@ -641,10 +647,11 @@ function mapResume(approvals, currentState = {}, { theme, names } = {}) {
   if (body.outline === 'send-back' && !note) return refuse('A send-back carries a note: what the writer should change.');
   if (body.outline === 'approve' && (body.map === undefined || body.map === null)) return refuse('An approve carries the map as the director left it.');
   const shown = currentState.outline || null;
-  const left = body.map === undefined || body.map === null ? shown : body.map;
-  const problems = directorMapProblems(left, { theme, shown });
+  const sent = body.map === undefined || body.map === null ? shown : body.map;
+  const problems = directorMapProblems(sent, { theme, shown });
   if (problems) return refuse(problems);
 
+  const left = freeStruckBeatPhotos(sent);
   const baseline = isMap(currentState._mapBaseline) ? currentState._mapBaseline : shown;
   const stateUpdates = {
     outline: left,

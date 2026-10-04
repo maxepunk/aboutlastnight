@@ -108,7 +108,8 @@
  * copy the pass put beside a beat or photo the director placed, and puts back a beat they
  * added, a beat they struck and a photo they placed that the pass removed; a beat they only
  * moved between sections, which a pass removed, stays out, as a moved block does at the
- * desk (settleEdits).
+ * desk (settleEdits). A strike frees the photos beside its beat as part of the strike, so the
+ * edits record the strike alone, never a cut of the photo's place (task 4.14b).
  */
 'use strict';
 
@@ -126,6 +127,9 @@ const { WEAVE_ANSWER_KEY, pairWeaveQuestions } = require('./writer-questions');
 // The one join key for a photo, its basename in lower case: the map's edits find a photo by
 // it, as the map checks, the kept photos and the leave-out box do (brief 4.6, fix round 1).
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
+// Which beats a map holds only in left out, the strike's rule for the photos beside them
+// (task 4.14b), from the map's console module, as the desk's naming rule comes from the desk's.
+const { isStruckBeat } = require('../console/outline-edit-logic');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
 // which do not name metadata, voice_self_check or _revisionHistory.
@@ -2463,6 +2467,23 @@ function mapCoverKey(edit) {
   return address.fieldSteps.length > 0 ? `${who}.${address.fieldSteps.map((step) => step.key).join('.')}` : `${who}:place`;
 }
 
+/**
+ * Is this change on the map a strike's freeing of a photo (task 4.14b): a photo's beat taken
+ * off, where the beat it named is struck in `left`? A strike frees the photos beside its beat
+ * (console/outline-edit-logic.js photoBeatOf), so the freeing is part of the strike, which is
+ * the director's edit, and no cut of the photo's place.
+ *
+ * @param {Object} change - a change mapEditsBetween found
+ * @param {Object} left - the map as the director left it
+ * @returns {boolean}
+ */
+function freedByStrike(change, left) {
+  const address = mapAddressOf(change);
+  if (!address || address.kind !== 'photo' || !isCut(change)) return false;
+  const field = address.fieldSteps.length === 1 && 'key' in address.fieldSteps[0] ? address.fieldSteps[0].key : null;
+  return field === 'beat' && typeof change.before === 'string' && change.before.trim() !== '' && isStruckBeat(left, change.before.trim());
+}
+
 /** A field edit on a beat or photo, its steps re-anchored to where it sits now in `map`. */
 function reanchoredMapEdit(edit, map) {
   const address = mapAddressOf(edit);
@@ -2481,7 +2502,8 @@ function reanchoredMapEdit(edit, map) {
  *   edit is re-anchored to where its beat or photo sits now. One it no longer carries (the
  *   director undid it, or a send-back's rework changed it) goes.
  * - Each change between the baseline and the director's version that no standing edit
- *   covers (mapCoverKey) joins them, numbered on from every id given at the stop.
+ *   covers (mapCoverKey) joins them, numbered on from every id given at the stop. A photo a
+ *   strike freed is part of the strike, and no change of its own (freedByStrike; task 4.14b).
  *
  * @param {*} previous - the map's standing edits so far (state._outlineHandEdits)
  * @param {Object|null} baseline - the writer's last map
@@ -2499,7 +2521,8 @@ function standingOnMap(previous, baseline, left, { names } = {}) {
   const covered = new Set(kept.map(mapCoverKey));
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const leftText = versionText(left);
-  const changes = mapEditsBetween(isObj(baseline) ? baseline : left, left).filter((raw) => !covered.has(mapCoverKey(raw)));
+  const changes = mapEditsBetween(isObj(baseline) ? baseline : left, left)
+    .filter((raw) => !covered.has(mapCoverKey(raw)) && !freedByStrike(raw, left));
   const added = changes.map((raw, i) => completeEdit({ id: `E${issued + 1 + i}`, ...raw }, leftText, roster));
   if (kept.length === 0 && added.length === 0 && issued === 0) return null;
   return { kind: 'map', issued: issued + added.length, edits: [...kept, ...added] };

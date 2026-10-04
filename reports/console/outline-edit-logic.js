@@ -17,6 +17,9 @@
  *   - the map's editors (D, task 4.9; spec 5.3): each line's init, build and merge, and the
  *     map's moves. Each returns a new map and leaves the one it was given as it was, and what
  *     the director types is kept as typed;
+ *   - the map as the gate stores it (D, task 4.14b): a struck beat's photos freed
+ *     (freeStruckBeatPhotos, read so everywhere through photoBeatOf), which lib/map.js
+ *     mapResume applies;
  *   - the article's client gate, validateBundleShape (I2), and the reset key both stops use.
  *
  * MUST NOT reference React or window at module-evaluation time except the
@@ -274,26 +277,91 @@
 
   // The map's moves.
 
-  /** The photos of `section` that sit beside the beat `id`. */
+  /** The beat a photo names, trimmed, or '' for a photo that names none. */
+  function namedBeatOf(photo) {
+    return isPlainObject(photo) && typeof photo.beat === 'string' ? photo.beat.trim() : '';
+  }
+
+  /** The photos of `section` that name the beat `id`. */
   function besideBeat(section, id) {
     return (Array.isArray(section.photos) ? section.photos : []).filter(function (photo) {
-      return isPlainObject(photo) && typeof photo.beat === 'string' && photo.beat.trim() === id;
+      var named = namedBeatOf(photo);
+      return named !== '' && named === id;
     });
   }
 
   /**
    * The photos of `section` beside the beat `id`, left in the section by themselves, with
-   * their people: what the strike and the take-out each do when the beat leaves the section
-   * (task 4.6d). A move takes them along instead (moveBeat).
+   * their people: what the take-out does when the beat leaves the section (task 4.6d), and what
+   * the gate does with a struck beat's photos (freeStruckBeatPhotos; task 4.14b). A move takes
+   * them along instead (moveBeat).
    */
   function freePhotosBeside(section, id) {
     besideBeat(section, id).forEach(function (photo) { delete photo.beat; });
   }
 
   /**
+   * Is the beat `id` struck: held by the map only in left out (task 4.14b)? The beat is found
+   * as every move finds it (placeOfBeat): the first beat with the id, in the sections, then in
+   * left out.
+   *
+   * @param {*} map
+   * @param {string} id
+   * @returns {boolean}
+   */
+  function isStruckBeat(map, id) {
+    var place = isMapValue(map) ? placeOfBeat(map, id) : null;
+    return Boolean(place) && !place.section;
+  }
+
+  /**
+   * The beat a photo sits beside, as every reader of the map reads it (task 4.14b): the beat it
+   * names, or '' for a photo by itself. A photo beside a struck beat sits by itself, with its
+   * people: the strike freed it, and the photo keeps the beat's name only so that bringing the
+   * beat back reattaches it (strikeBeat, moveBeat).
+   *
+   * @param {*} map
+   * @param {*} photo
+   * @returns {string}
+   */
+  function photoBeatOf(map, photo) {
+    var id = namedBeatOf(photo);
+    return id && !isStruckBeat(map, id) ? id : '';
+  }
+
+  /**
+   * The map as the gate stores it (lib/map.js mapResume; task 4.14b): each photo beside a struck
+   * beat freed, by itself in its section with its people, through the one helper that frees a
+   * beat's photos (freePhotosBeside). So the map every later reader takes, the article writer's
+   * among them, holds the photo where the director saw it, and the strike records no edit of
+   * the photo's place. The same map when no photo sits beside a struck beat.
+   *
+   * @param {*} map
+   * @returns {*}
+   */
+  function freeStruckBeatPhotos(map) {
+    if (!isMapValue(map)) return map;
+    var struck = [];
+    map.sections.filter(isPlainObject).forEach(function (section) {
+      (Array.isArray(section.photos) ? section.photos : []).forEach(function (photo) {
+        var id = namedBeatOf(photo);
+        if (id && isStruckBeat(map, id) && struck.indexOf(id) === -1) struck.push(id);
+      });
+    });
+    if (struck.length === 0) return map;
+    var next = deepClone(map);
+    next.sections.filter(isPlainObject).forEach(function (section) {
+      struck.forEach(function (id) { freePhotosBeside(section, id); });
+    });
+    return next;
+  }
+
+  /**
    * A beat moved to the end of the section `toSlot`, from a section or from left out. A photo
-   * beside it goes with it, beside it still, so the photo stays with its moment. The order of
-   * the beats within a section is the article writer's, so the end is as good as any place.
+   * beside it goes with it, beside it still, so the photo stays with its moment: from the beat's
+   * section, or, for a beat brought back from left out, from the section its strike left the
+   * photo in, still naming the beat (strikeBeat; task 4.14b). The order of the beats within a
+   * section is the article writer's, so the end is as good as any place.
    */
   function moveBeat(map, id, toSlot) {
     var next = editedMap(map, 'moveBeat');
@@ -303,21 +371,25 @@
     var beat = place.list.splice(place.index, 1)[0];
     if (!Array.isArray(target.beats)) target.beats = [];
     target.beats.push(beat);
-    if (place.section) {
-      var going = besideBeat(place.section, beatIdOf(beat));
-      if (going.length > 0) {
-        place.section.photos = place.section.photos.filter(function (photo) { return going.indexOf(photo) === -1; });
-        if (!Array.isArray(target.photos)) target.photos = [];
-        target.photos.push.apply(target.photos, going);
-      }
-    }
+    var from = place.section ? [place.section] : next.sections.filter(isPlainObject);
+    from.forEach(function (section) {
+      if (section === target) return;
+      var going = besideBeat(section, beatIdOf(beat));
+      if (going.length === 0) return;
+      section.photos = section.photos.filter(function (photo) { return going.indexOf(photo) === -1; });
+      if (!Array.isArray(target.photos)) target.photos = [];
+      target.photos.push.apply(target.photos, going);
+    });
     return next;
   }
 
   /**
    * A beat struck: out of its section into the end of left out, whole, so one brought back is
-   * the beat it was. A photo beside it stays placed, by itself in its section with its people,
-   * since no photo is struck on the map and a struck moment is out of the story.
+   * the beat it was. A photo beside it stays placed in its section, and the strike frees it: no
+   * photo is struck on the map, and a struck moment is out of the story, so the photo sits by
+   * itself with its people, as every reader reads it (photoBeatOf) and the gate stores it
+   * (freeStruckBeatPhotos). On the director's map it keeps the beat's name, so bringing the beat
+   * back reattaches it (task 4.14b).
    */
   function strikeBeat(map, id) {
     var next = editedMap(map, 'strikeBeat');
@@ -326,11 +398,13 @@
     var beat = place.list.splice(place.index, 1)[0];
     if (!Array.isArray(next.leftOut)) next.leftOut = [];
     next.leftOut.push(beat);
-    freePhotosBeside(place.section, beatIdOf(beat));
     return next;
   }
 
-  /** A beat brought back from left out, whole, into the end of the section `toSlot`. */
+  /**
+   * A beat brought back from left out, whole, into the end of the section `toSlot`, with the
+   * photos its strike freed beside it again (moveBeat; task 4.14b).
+   */
   function bringBackBeat(map, id, toSlot) {
     if (beatAt(editedMap(map, 'bringBackBeat'), id, 'bringBackBeat').section) {
       throw new Error('bringBackBeat: ' + String(id) + ' is not in left out');
@@ -359,8 +433,9 @@
   /**
    * A beat taken out of the map whole: the screen offers it for a beat the director added at
    * this look. A photo beside it stays in its section, by itself with its people, as one
-   * beside a struck beat does (task 4.6c), through the same helper (freePhotosBeside; task
-   * 4.6d).
+   * beside a struck beat is read (task 4.6c), freed by the helper the gate frees a struck beat's
+   * photos with (freePhotosBeside; tasks 4.6d and 4.14b). A beat taken out does not come back,
+   * so its photo keeps no name.
    */
   function removeBeat(map, id) {
     var next = editedMap(map, 'removeBeat');
@@ -997,6 +1072,10 @@
     removeBeat: removeBeat,
     movePhoto: movePhoto,
     setPhotoBeside: setPhotoBeside,
+    // Task 4.14b: a struck beat's photos, read as by itself and stored so
+    isStruckBeat: isStruckBeat,
+    photoBeatOf: photoBeatOf,
+    freeStruckBeatPhotos: freeStruckBeatPhotos,
 
     validateOutlineShape: validateOutlineShape,
     validateMapShape: validateMapShape,

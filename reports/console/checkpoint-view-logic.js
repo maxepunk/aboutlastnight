@@ -2913,7 +2913,8 @@
    *   and card as the page prints them (`materialText`, `cardText`: the document named, through
    *   the payload's evidenceIndex; mapDocumentText). Each beat row is keyed by its beat's id,
    *   so an editor open on it survives a strike or a move above it; a beat whose id another beat
-   *   of its list holds, or with none, by its place (task 4.14b);
+   *   of its list holds, or with none, by its place (task 4.14b). A photo sits beside the beat
+   *   it names unless that beat is struck (photoBeatOf; task 4.14b);
    * - `dropped`, each with its reason; `tally`, the lines of Everyone and the counts, rebuilt
    *   from the map as edited (mapTallyOf); `leftOut`, folded, each item with the sections it can
    *   come back to; `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
@@ -2977,7 +2978,7 @@
       var p = isPlainObject(photo) ? photo : {};
       var filename = asString(p.filename);
       var key = editLogic.photoKey(filename);
-      var beside = asString(p.beat).trim();
+      var beside = editLogic.photoBeatOf(map, p);
       var options = [{ value: '', label: BY_ITSELF_LABEL }].concat(asArray(section.beats)
         .filter(function (b) { return editLogic.beatIdOf(b) !== ''; })
         .map(function (b) { return { value: editLogic.beatIdOf(b), label: 'Beside ' + editLogic.beatIdOf(b) + ': ' + shortText(mapDocumentText(b.material, d.evidenceIndex)) }; }));

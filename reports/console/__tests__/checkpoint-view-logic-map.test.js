@@ -169,7 +169,11 @@ describe("4.9: the map's moves, each leaving the map it was given as it was", ()
     const next = EditLogic.strikeBeat(map, 'b2');
     expect(beatPlaces(next)).toMatchObject({ theStory: ['b3', 'b4'], leftOut: ['b9', 'b2'] });
     expect(beatOf(next, 'b2')).toEqual(beatOf(map, 'b2'));
-    expect(next.sections[1].photos).toEqual([{ filename: 'p2.jpg' }]);
+    // 4.14b: the photo keeps the struck beat's name, so bringing the beat back reattaches it;
+    // every reader reads it as by itself (photoBeatOf), and the gate stores it so.
+    expect(next.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b2' }]);
+    expect(EditLogic.photoBeatOf(next, next.sections[1].photos[0])).toBe('');
+    expect(EditLogic.freeStruckBeatPhotos(next).sections[1].photos).toEqual([{ filename: 'p2.jpg' }]);
     expect(map).toEqual(clone(MAP));
   });
 
@@ -1091,7 +1095,9 @@ describe('4.6d: the gate and the console read the map the stop showed by one rul
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // The strike and the take-out each leave the photos beside the beat in its section by
-// themselves, through one helper both call (freePhotosBeside).
+// themselves, through one helper both call (freePhotosBeside). 4.14b: a struck beat's photos
+// keep its name on the director's map, so bringing it back reattaches them; the gate frees them
+// when it stores the map (freeStruckBeatPhotos), through the same helper.
 describe('4.6d: one helper frees the photos beside a beat, for the strike and the take-out', () => {
   const fs = require('fs');
   const path = require('path');
@@ -1103,7 +1109,7 @@ describe('4.6d: one helper frees the photos beside a beat, for the strike and th
   }
 
   test.each([
-    ['struck into left out', (map) => EditLogic.strikeBeat(map, 'b10')],
+    ['struck into left out, as the gate stores the map', (map) => EditLogic.freeStruckBeatPhotos(EditLogic.strikeBeat(map, 'b10'))],
     ['taken out', (map) => EditLogic.removeBeat(map, 'b10')]
   ])('a beat %s leaves each photo beside it in its section, by itself, and a photo beside another beat where it was', (_name, move) => {
     const map = besideB10();
@@ -1111,7 +1117,7 @@ describe('4.6d: one helper frees the photos beside a beat, for the strike and th
     expect(map.sections[1].photos[0]).toEqual({ filename: 'p2.jpg', beat: 'b10' });
   });
 
-  test('the statement that frees them is written once, in the helper both moves call', () => {
+  test("the statement that frees them is written once, in the helper the take-out and the gate's freeing of a strike's photos call", () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'outline-edit-logic.js'), 'utf8');
     /** A function's body in the module, from its declaration to its closing brace. */
     const body = (name) => {
@@ -1120,7 +1126,7 @@ describe('4.6d: one helper frees the photos beside a beat, for the strike and th
     };
     expect(src.split('{ delete photo.beat; })').length - 1).toBe(1);
     expect(body('freePhotosBeside')).toContain('{ delete photo.beat; })');
-    ['strikeBeat', 'removeBeat'].forEach((name) => expect(`${name}: ${body(name).includes('freePhotosBeside(')}`).toBe(`${name}: true`));
+    ['freeStruckBeatPhotos', 'removeBeat'].forEach((name) => expect(`${name}: ${body(name).includes('freePhotosBeside(')}`).toBe(`${name}: true`));
   });
 });
 
@@ -1299,5 +1305,54 @@ describe("4.14b: the map's beat rows are keyed by the beat's id, so an open edit
     const keys = ViewLogic.mapView(data, map).sections[1].beats.map((b) => b.key);
     expect(keys).toEqual(['theStory-beat-b2', 'theStory-beat@1', 'theStory-beat-b4', 'theStory-beat@3', 'theStory-beat@4']);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('4.14b: striking a beat and bringing it back keeps its photo', () => {
+  const { mapResume } = require('../../lib/map');
+
+  test('a strike frees the photo beside the beat: the page shows it by itself, and the gate stores it so', () => {
+    const data = payloadOf(stateAt());
+    const struck = EditLogic.strikeBeat(opened(data), 'b2');
+    const photo = ViewLogic.mapView(data, struck).sections[1].photos[0];
+    expect(photo).toMatchObject({ filename: 'p2.jpg', beat: '' });
+    expect(photo.besideOptions.map((o) => o.value)).toEqual(['', 'b3', 'b4']);
+    const { error, stateUpdates } = mapResume({ outline: 'approve', map: struck }, stateAt(), { theme: 'journalist' });
+    expect(error).toBeNull();
+    expect(stateUpdates.outline.sections[1].photos).toEqual([{ filename: 'p2.jpg' }]);
+    expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.path, e.from])).toEqual([['leftOut[#b2]', 'theStory']]);
+  });
+
+  test('brought back into its section, the beat has its photo beside it again, and the map records no edit', () => {
+    const back = EditLogic.bringBackBeat(EditLogic.strikeBeat(opened(), 'b2'), 'b2', 'theStory');
+    expect(back.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b2' }]);
+    expect(ViewLogic.mapView(payloadOf(stateAt()), back).sections[1].photos[0].beat).toBe('b2');
+    expect(standingOnMap(null, clone(MAP), back)).toBeNull();
+    expect(mapResume({ outline: 'approve', map: back }, stateAt(), { theme: 'journalist' }).stateUpdates._outlineHandEdits).toBeNull();
+  });
+
+  test("brought back into another section, its photo goes with it, beside it, as a moved beat's photo does", () => {
+    const back = EditLogic.bringBackBeat(EditLogic.strikeBeat(opened(), 'b2'), 'b2', 'closing');
+    expect([back.sections[1].photos, back.sections[3].photos]).toEqual([[], [{ filename: 'p2.jpg', beat: 'b2' }]]);
+    expect(back).toEqual(EditLogic.moveBeat(opened(), 'b2', 'closing'));
+  });
+
+  test('a photo the director placed after the strike stays where they put it', () => {
+    const besideB3 = EditLogic.setPhotoBeside(EditLogic.strikeBeat(opened(), 'b2'), 'theStory', 0, 'b3');
+    expect(EditLogic.bringBackBeat(besideB3, 'b2', 'theStory').sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b3' }]);
+    const moved = EditLogic.bringBackBeat(EditLogic.movePhoto(EditLogic.strikeBeat(opened(), 'b2'), 'theStory', 0, 'lede'), 'b2', 'theStory');
+    expect([moved.sections[0].photos, moved.sections[1].photos]).toEqual([[{ filename: 'p2.jpg' }], []]);
+  });
+
+  test("the send-back's rework that sets the freed photo beside another beat leaves the director nothing to read", () => {
+    const struck = EditLogic.strikeBeat(opened(), 'b2');
+    const { stateUpdates } = mapResume({ outline: 'send-back', map: struck, note: 'Keep the strike; tighten the lede.' }, stateAt(), { theme: 'journalist' });
+    const edits = stateUpdates._outlineHandEdits.edits;
+    const rework = clone(stateUpdates.outline);
+    rework.sections[1].photos[0].beat = 'b3';
+    const report = reportAfterPass(null, { edits, before: stateUpdates.outline, after: rework, pass: SEND_BACK_PASS });
+    expect(report.changed).toEqual([]);
+    const d = payloadOf(stateAt({ outline: rework, _outlineHandEdits: stateUpdates._outlineHandEdits, _outlineHandEditReport: report }));
+    expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([]);
   });
 });

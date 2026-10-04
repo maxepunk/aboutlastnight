@@ -3382,3 +3382,32 @@ describe('4.5g, fix round 1: an element code put back without a photo the articl
     expect(D.standingAfterPass(null, [narrowed])).toBeNull();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14b: a strike records no cut of a photo's place the director never made (the final
+// review, ruling 2). A strike frees the photos beside the beat; the freeing is part of the
+// strike, not an edit of the director's on the photo.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.14b: the map's standing edits record no cut of the place of a photo a strike freed", () => {
+  const { MAP } = require('./fixtures/rework-state');
+  const EditLogic = require('../../console/outline-edit-logic');
+  const edits = (left) => (D.standingOnMap(null, clone(MAP), left) || { edits: [] }).edits.map((e) => [e.path, e.before, e.after]);
+
+  it('the map with the freed photo, as the gate stores it: the strike alone stands', () => {
+    const stored = EditLogic.freeStruckBeatPhotos(EditLogic.strikeBeat(clone(MAP), 'b2'));
+    expect(stored.sections[1].photos).toEqual([{ filename: 'p2.jpg' }]);
+    expect(edits(stored)).toEqual([['leftOut[#b2]', null, MAP.sections[1].beats[0]]]);
+    // A pass that sets the freed photo beside another beat changes none of the director's edits.
+    const pass = clone(stored);
+    pass.sections[1].photos[0].beat = 'b3';
+    const standing = D.standingOnMap(null, clone(MAP), stored);
+    expect(D.reportAfterPass(null, { edits: standing.edits, before: stored, after: pass, pass: D.SEND_BACK_PASS }).changed).toEqual([]);
+  });
+
+  it("a photo the director set beside another beat after the strike is their edit, and so is a photo they took off a beat the story keeps", () => {
+    const beside = EditLogic.setPhotoBeside(EditLogic.strikeBeat(clone(MAP), 'b2'), 'theStory', 0, 'b3');
+    expect(edits(beside)).toEqual([['leftOut[#b2]', null, MAP.sections[1].beats[0]], ['sections[#theStory].photos[#p2.jpg].beat', 'b2', 'b3']]);
+    const byItself = EditLogic.setPhotoBeside(clone(MAP), 'theStory', 0, '');
+    expect(edits(byItself)).toEqual([['sections[#theStory].photos[#p2.jpg].beat', 'b2', null]]);
+  });
+});
