@@ -592,8 +592,9 @@ function App() {
         // [Roll back] = open the existing rollback modal. Normally at the current
         // checkpoint; v2 I3: a fetchSessionPhotos failure names the `photos` step
         // as its recovery, and that is NOT the last gate seen when the path came
-        // from /start (the gate skipped). Rolling back to arc-selection there
-        // re-pays the Opus arc analysis and throws again on the same path.
+        // from /start (the gate skipped). Going back to the story meeting there
+        // calls no model (R9), but keeps the path, so the fetch throws again on it
+        // once the meeting is approved.
         onRollback: () => setRollbackTarget(failureRollbackTarget({
           message: state.llmActivity && state.llmActivity.error,
           checkpointType: state.checkpointType
@@ -604,8 +605,10 @@ function App() {
     // Complete. When the completion was LOADED for a session that had already
     // finished (Task 2 review finding 3), the stepper goes above it with every
     // step completed and clickable: a complete thread has no checkpoint, so this
-    // is the only route to the existing RollbackPanel flow, and re-running the
-    // article or outline of a finished session with a note is a real need.
+    // is the only route to the existing RollbackPanel flow, and going back into a
+    // finished session is a real need. Going back to the story meeting or the map
+    // reopens it as the director left it, with no model call (R9); going back to
+    // the article writes it again from the map.
     // Clicking a step only OPENS the modal; nothing is POSTed until Confirm, and
     // Cancel returns here untouched. Task 4.11: a session from before the story
     // meeting gets the server's message and rollback above the completion, and its
