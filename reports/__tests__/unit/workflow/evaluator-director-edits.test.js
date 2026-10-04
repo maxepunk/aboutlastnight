@@ -531,3 +531,68 @@ describe("4.5e: a finding filed under a moved block's id is read by its quotes",
     expect(result.evaluationHistory.ready).toBe(true);
   });
 });
+
+// Task 4.5f (the integrator's ruling 2 on 4.5e's findings, progress.md 2026-10-04; scratch
+// 4.5e-review/guard-noquote.js): a finding the judge files under the prefix and the id of a
+// block the director moved, quoting nothing, is how the judge disagrees with the director's
+// choice of the block's place, which no rework may change. It stays a concern beside the move,
+// as the judge filed it. Only a quote of the writer's words makes such a finding the writer's
+// must-fix. A finding filed under the move and a text-owning edit together stays a concern as
+// the judge filed it, whatever it quotes, as one under the text edit alone does.
+describe("4.5f: a finding filed under a moved block's id is the writer's must-fix only when it quotes the writer's words", () => {
+  const PLACE_FINDING = 'T1: the closing now carries the ledger line after the verdict, which the record orders the other way.';
+  const WRITER_FINDING = `T12: "${WRITER_LINE}" is not in the record. Cut the line.`;
+  const REWRITTEN = 'Alex and Morgan argued at the bar, and Sarah kept the count for the whole room.';
+  /** The writer's article with the story's first paragraph rewritten (E1) and WRITER_LINE moved, unchanged, to the closing (E2). */
+  const editedArticle = () => {
+    const a = writersArticle();
+    const [line] = a.sections[0].content.splice(2, 1);
+    a.sections[1].content.push(line);
+    a.sections[0].content[0] = paragraph(REWRITTEN);
+    return a;
+  };
+  const editedState = () => articleState('journalist', {
+    contentBundle: editedArticle(),
+    _articleHandEdits: standingAfterSendBack(null, writersArticle(), editedArticle(), 'bundle')
+  });
+  const judged = (filed) => judging({
+    ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [],
+    revisionGuidance: '', confidence: 'high', ...filed
+  });
+  const LISTS = [
+    ['a structural issue', (finding) => ({ structuralIssues: [finding] })],
+    ['an advisory', (finding) => ({ advisoryWarnings: [finding] })]
+  ];
+
+  it('the edits: the rewrite owns text, the move owns none', () => {
+    expect(editedState()._articleHandEdits.edits.map((e) => [e.id, e.path, Boolean(e.from)])).toEqual([
+      ['E1', 'sections[#the-story].content[0].text', false],
+      ['E2', 'sections[#closing].content[1]', true]
+    ]);
+  });
+
+  it.each(LISTS)('filed as %s under the move alone, quoting nothing: a concern beside the move, as the judge filed it, and the article is ready', async (_name, filed) => {
+    const finding = `${DIRECTOR_EDIT_PREFIX}E2: ${PLACE_FINDING}`;
+    const result = await evaluateArticle(editedState(), cfg(judged(filed(finding))));
+    expect(result.evaluationHistory.structuralIssues).toEqual([]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([finding]);
+    expect(result.evaluationHistory.ready).toBe(true);
+    expect(result.validationResults.structuralIssues).toEqual([]);
+  });
+
+  it.each(LISTS)("filed as %s under the move alone, quoting the writer's words: the writer's must-fix", async (_name, filed) => {
+    const result = await evaluateArticle(editedState(), cfg(judged(filed(`${DIRECTOR_EDIT_PREFIX}E2: ${WRITER_FINDING}`))));
+    expect(result.evaluationHistory.structuralIssues).toEqual([WRITER_FINDING]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([]);
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toEqual([WRITER_FINDING]);
+  });
+
+  it.each(LISTS)("filed as %s under the move and the rewrite together, quoting the writer's words: a concern as the judge filed it", async (_name, filed) => {
+    const finding = `${DIRECTOR_EDIT_PREFIX}E1, E2: ${WRITER_FINDING}`;
+    const result = await evaluateArticle(editedState(), cfg(judged(filed(finding))));
+    expect(result.evaluationHistory.structuralIssues).toEqual([]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([finding]);
+    expect(result.evaluationHistory.ready).toBe(true);
+  });
+});

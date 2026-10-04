@@ -629,3 +629,77 @@ describe("4.5e: a finding filed under a brought-back connection's id is read by 
     expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('revise');
   });
 });
+
+// Task 4.5f (the integrator's ruling 2 on 4.5e's findings, progress.md 2026-10-04; scratch
+// 4.5e-review/guard-noquote.js): a finding the fact check files under the prefix and the id of
+// a connection the director brought back, quoting nothing, is how it disagrees with the
+// director's choice to bring the connection back, which no fix may change. It stays a concern
+// beside the connection, as the fact check filed it, and the one automatic fix does not run on
+// it. Only a quote of the connection's words, which are the writer's, makes such a finding the
+// fix's work. A finding filed under the connection and a text-owning edit together stays a
+// concern as filed, whatever it quotes. Invented text.
+describe("4.5f: a finding filed under a brought-back connection's id is the fix's work only when it quotes the writer's words", () => {
+  const { standingAtMeeting } = require('../hand-edit-diff');
+  const C2 = FIXTURE_WEAVE.connections[1];
+  const HEADLINE = 'The Room Voted Overdose. The Sale Kept Its Night.';
+  const PLACE_FINDING = 'T1: bringing this connection back joins two threads the record keeps apart.';
+  const WORDS_FINDING = `T1: "${C2.detail}" states a cause the record does not show.`;
+  const LISTS = [
+    ['a structural issue', (finding) => ({ structuralIssues: [finding] })],
+    ['an advisory', (finding) => ({ advisoryWarnings: [finding] })]
+  ];
+
+  /**
+   * After a round that kept the director's strike of c2, the director brings c2 back and, with
+   * `headline`, rewrites the headline at the same look, then reweaves; the reweave keeps both.
+   * The weave the fact check judges.
+   */
+  async function rewoven({ headline = null } = {}) {
+    const struck = clone(FIXTURE_WEAVE);
+    struck.connections[1].struck = true;
+    const kept = atMeeting({
+      weave: withFactCheckMark(struck, { at: 't0', ready: true, fixes: 0 }), _weaveBaseline: weaveForPrompt(clone(struck)),
+      _weaveHandEdits: standingAtMeeting(null, clone(FIXTURE_WEAVE), struck)
+    });
+    const left = { ...clone(FIXTURE_WEAVE), ...(headline && { headline }) };
+    const { stateUpdates, error } = meetingResume({ meeting: 'reweave', weave: left }, kept);
+    expect(error).toBeNull();
+    const round = { ...kept, ...stateUpdates, _meetingRound: 'reweave' };
+    const state = { ...round, ...(await incrementArcRevision(round)) };
+    return { ...state, ...(await reviseArcs(state, cfg(recordingSdk(weaveForPrompt(clone(left)))))) };
+  }
+  const judge = (round, filed) => evaluateArcs(round, cfg(recordingSdk({
+    ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high',
+    ...filed
+  })));
+  const editsOf = (round) => carriedEdits(round._weaveHandEdits, weaveForPrompt(round.weave)).map((e) => [e.id, e.path, e.unstruck === true]);
+
+  it.each(LISTS)('filed as %s under the connection alone, quoting nothing: a concern beside it, as filed, and no fix runs', async (_name, filed) => {
+    const round = await rewoven();
+    expect(editsOf(round)).toEqual([['E2', 'connections[#c2]', true]]);
+    const finding = `${DIRECTOR_EDIT_PREFIX}E2: ${PLACE_FINDING}`;
+    const update = await judge(round, filed(finding));
+    expect(update.validationResults.structuralIssues).toEqual([]);
+    expect(update.weave._factCheck).toMatchObject({ ready: true, fixes: 0, concerns: [finding] });
+    expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('checkpoint');
+  });
+
+  it.each(LISTS)("filed as %s under the connection alone, quoting its words: the fix's work", async (_name, filed) => {
+    const round = await rewoven();
+    const update = await judge(round, filed(`${DIRECTOR_EDIT_PREFIX}E2: ${WORDS_FINDING}`));
+    expect(update.validationResults.structuralIssues).toEqual([WORDS_FINDING]);
+    expect(update.weave._factCheck).toMatchObject({ ready: false, fixes: 0 });
+    expect(update.weave._factCheck.concerns || []).toEqual([]);
+    expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('revise');
+  });
+
+  it.each(LISTS)('filed as %s under the connection and the headline together, quoting its words: a concern as filed, and no fix runs', async (_name, filed) => {
+    const round = await rewoven({ headline: HEADLINE });
+    expect(editsOf(round)).toEqual([['E2', 'headline', false], ['E3', 'connections[#c2]', true]]);
+    const finding = `${DIRECTOR_EDIT_PREFIX}E2, E3: ${WORDS_FINDING}`;
+    const update = await judge(round, filed(finding));
+    expect(update.validationResults.structuralIssues).toEqual([]);
+    expect(update.weave._factCheck).toMatchObject({ ready: true, fixes: 0, concerns: [finding] });
+    expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('checkpoint');
+  });
+});
