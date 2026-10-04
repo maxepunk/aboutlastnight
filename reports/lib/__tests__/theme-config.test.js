@@ -313,3 +313,121 @@ describe("4.6: the map's slots are the theme's", () => {
     expect(mapSlotsOf('journalist')).toHaveLength(6);
   });
 });
+
+/**
+ * 4.13b: a theme's identity lines, as a theme author meets them (phase 4; the integrator's
+ * ruling 2 on 4.13's minors). A future theme is new files rather than new code, so a theme
+ * author who gets an identity line wrong is told so, naming the theme and the call, before
+ * any prompt is built. The brief's three tests:
+ * - one list of calls: the identity calls are the rule set's calls (lib/rule-set.js
+ *   RULE_SET_CALLS), each writer's rework beside its call;
+ * - a rework's line is a clause that code completes with the rework's task, so a line that
+ *   ends a sentence is refused;
+ * - every refusal of identityLineOf, in one table.
+ */
+describe("4.13b: a theme's identity lines", () => {
+  const { identityLineOf, IDENTITY_CALLS } = require('../theme-config');
+  const { RULE_SET_CALLS } = require('../rule-set');
+
+  /** A theme planted with one identity line for one row, gone after each test. */
+  const PLANTED = 'planted-lines';
+  const plant = (call, line) => {
+    THEME_CONFIGS[PLANTED] = { npcs: [], identities: { [call]: line } };
+  };
+  afterEach(() => {
+    delete THEME_CONFIGS[PLANTED];
+  });
+
+  /** The error identityLineOf throws for the theme and the call, or null. */
+  const refusalOf = (theme, call) => {
+    try {
+      identityLineOf(theme, call);
+      return null;
+    } catch (error) {
+      return error;
+    }
+  };
+
+  describe('one list of calls', () => {
+    it("today: the rule set's five calls and the three writers' reworks, and the journalist gives a line for each", () => {
+      expect(Object.keys(RULE_SET_CALLS)).toEqual(['arc', 'outline', 'article', 'judge-arc', 'judge-article']);
+      expect(IDENTITY_CALLS).toEqual([
+        'arc', 'arc-rework', 'outline', 'outline-rework', 'article', 'article-rework', 'judge-arc', 'judge-article'
+      ]);
+      for (const call of IDENTITY_CALLS) {
+        expect([call, typeof identityLineOf('journalist', call)]).toEqual([call, 'string']);
+      }
+    });
+
+    // The list is derived, not restated: a call the rule set gains is an identity call
+    // with no edit here, and a writer's call brings its rework's. A judge's has none.
+    it('a call the rule set gains is an identity call, with its rework beside it when a writer makes it', () => {
+      let derived;
+      try {
+        jest.isolateModules(() => {
+          jest.doMock('../rule-set', () => ({
+            RULE_SET_CALLS: { arc: [], captions: ['craft-form'], 'judge-arc': [], 'judge-captions': [] }
+          }));
+          ({ IDENTITY_CALLS: derived } = require('../theme-config'));
+        });
+      } finally {
+        jest.dontMock('../rule-set');
+      }
+      expect(derived).toEqual(['arc', 'arc-rework', 'captions', 'captions-rework', 'judge-arc', 'judge-captions']);
+    });
+  });
+
+  describe("a rework's line is a clause", () => {
+    // The journalist's arc rework line reads "You are reworking the weave you wrote", and
+    // code completes it: ": the director sent it back, ...". A line that ends a sentence
+    // would print "...wrote.: the director sent it back".
+    it.each([
+      ['a full stop', 'You are reworking the weave you wrote.'],
+      ['a question mark', 'Are you reworking the weave you wrote?'],
+      ['an exclamation mark', 'You are reworking the weave you wrote!'],
+      ['an ellipsis', 'You are reworking the weave you wrote\u2026'],
+      ['a full stop inside a closing quotation mark', 'You are reworking "the weave you wrote."'],
+      ['a full stop and a trailing space', 'You are reworking the weave you wrote. ']
+    ])('a rework line that ends a sentence with %s is refused, naming the theme and the call', (_mark, line) => {
+      for (const call of ['arc-rework', 'outline-rework', 'article-rework']) {
+        plant(call, line);
+        const error = refusalOf(PLANTED, call);
+        expect([call, error && error.message]).toEqual([call, expect.stringMatching(/ends a sentence/)]);
+        expect(error.message).toContain(`"${PLANTED}"`);
+        expect(error.message).toContain(`"${call}"`);
+      }
+    });
+
+    it("takes a rework line that runs on into its task, and a writer's or a judge's line that ends a sentence", () => {
+      plant('arc-rework', 'You are reworking the weave you wrote');
+      expect(identityLineOf(PLANTED, 'arc-rework')).toBe('You are reworking the weave you wrote');
+      plant('outline-rework', 'You are reworking the "map"');
+      expect(identityLineOf(PLANTED, 'outline-rework')).toBe('You are reworking the "map"');
+      for (const call of ['arc', 'outline', 'article', 'judge-arc', 'judge-article']) {
+        plant(call, 'You are the planted writer.');
+        expect(identityLineOf(PLANTED, call)).toBe('You are the planted writer.');
+      }
+    });
+  });
+
+  describe("identityLineOf's refusals, each naming the theme and the call", () => {
+    it.each([
+      ['an unknown call', 'journalist', 'map', undefined, /Unknown call/],
+      ['no theme', undefined, 'arc', undefined, /theme is required/],
+      ['an empty theme name', '', 'outline', undefined, /theme is required/],
+      ['an unknown theme', 'noir', 'article', undefined, /Unknown theme/],
+      ['no line for the call: the parked detective (R1)', 'detective', 'judge-arc', undefined, /has no identity line/],
+      ['an empty line', PLANTED, 'judge-article', '   ', /an empty identity line/],
+      ['a line of more than one line', PLANTED, 'arc', 'You are the planted writer.\nYou write the weave.', /more than one line/],
+      ['a rework line that ends a sentence', PLANTED, 'outline-rework', 'You are reworking the map you wrote.', /ends a sentence/]
+    ])('%s', (_case, theme, call, line, reason) => {
+      if (line !== undefined) plant(call, line);
+      const error = refusalOf(theme, call);
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toMatch(reason);
+      // The theme as it was given (a string quoted, a missing one as undefined), and the call.
+      expect(error.message).toContain(`${JSON.stringify(theme)}`);
+      expect(error.message).toContain(`"${call}"`);
+    });
+  });
+});

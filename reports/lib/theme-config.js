@@ -15,8 +15,10 @@
  *   The map writer lays the settled weave across them; a theme without them has no map
  * - rules: the theme's rules folder (phase 4, R14), relative to the reports folder, which
  *   lib/rule-set.js reads for every writer, rework and judge of the theme
- * - identities: the line that opens each writer's, rework's and judge's prompt of the new
- *   stages (phase 4, brief 4.13), by call (read through identityLineOf)
+ * - identities: by call, the theme's identity lines for the new stages (phase 4, briefs 4.13
+ *   and 4.13b; read through identityLineOf). A writer's or a judge's line opens its call's
+ *   system prompt. A rework's line opens its rework rules, which follow its writer's system
+ *   prompt, and code completes it with the rework's task
  *
  * To add a new theme:
  * 1. Add entry to THEME_CONFIGS with theme name as key
@@ -25,15 +27,36 @@
  * 3. No changes needed to validation code (Open/Closed principle)
  */
 
+// Brief 4.13b: the identity calls are derived from the rule set's calls. lib/rule-set.js
+// reads THEME_CONFIGS where it uses them, not at its top, so the two modules load in
+// either order.
+const { RULE_SET_CALLS } = require('./rule-set');
+
+/** What a rework's call adds to its writer's call: `arc-rework` reworks what `arc` wrote. */
+const REWORK_SUFFIX = '-rework';
+
 /**
- * The calls whose prompts open with the theme's identity line (phase 4, brief 4.13): the
- * rule set's calls (lib/rule-set.js RULE_SET_CALLS), with each writer's rework beside it.
- * `arc` is the weave writer, `outline` the map writer; `judge-arc` is the story meeting's
- * fact check.
+ * The calls a theme gives an identity line for (phase 4, briefs 4.13 and 4.13b): the rule
+ * set's calls (lib/rule-set.js RULE_SET_CALLS), each writer's rework beside its call. They
+ * are derived from that list, so a call the rule set gains is one here too. A judge's call
+ * opens `judge-` and has no rework. `arc` is the weave writer, `outline` the map writer;
+ * `judge-arc` is the story meeting's fact check.
+ *
+ * A writer's or a judge's line opens its call's system prompt. A rework's line opens its
+ * rework rules, not its call's prompt: the rework's system prompt is its writer's, then the
+ * rework rules, whose first line is the rework's identity line completed by code with the
+ * rework's task.
  */
-const IDENTITY_CALLS = Object.freeze([
-  'arc', 'arc-rework', 'outline', 'outline-rework', 'article', 'article-rework', 'judge-arc', 'judge-article'
-]);
+const IDENTITY_CALLS = Object.freeze(Object.keys(RULE_SET_CALLS).flatMap(
+  (call) => (call.startsWith('judge-') ? [call] : [call, `${call}${REWORK_SUFFIX}`])
+));
+
+/**
+ * A line that ends a sentence: its last mark, after any closing quotation mark or bracket
+ * and any trailing space, is a full stop, a question mark, an exclamation mark or an
+ * ellipsis. A rework's line may not (identityLineOf).
+ */
+const ENDS_A_SENTENCE = /[.!?\u2026]['"\u2019\u201d)\]]*\s*$/;
 
 const THEME_CONFIGS = {
   journalist: {
@@ -70,11 +93,13 @@ const THEME_CONFIGS = {
     rules: '.claude/skills/journalist-report/references/rules',
 
     // The identity lines (phase 4, brief 4.13): who is writing, reworking or judging, the
-    // first line of each call's prompt. The narrator, the publication and the form of the
-    // output are the theme's to name, so the lines live here and none sits in code. A
-    // writer's and a judge's line is a sentence of its own. A rework's line is the opening
-    // of its rework rules, which code completes with the rework's task (": the director sent
-    // it back, ..." or " after an automatic check ..."), so it ends where that task begins.
+    // first line of each writer's and judge's system prompt and of each rework's rework
+    // rules. The narrator, the publication and the form of the output are the theme's to
+    // name, so the lines live here and none sits in code. A writer's and a judge's line is a
+    // sentence of its own. A rework's line is the opening of its rework rules, which code
+    // completes with the rework's task (": the director sent it back, ..." or " after an
+    // automatic check ..."), so it ends where that task begins (identityLineOf refuses one
+    // that ends a sentence; brief 4.13b).
     identities: {
       arc: 'You are the arc writer for an investigative article about one session of the game: you write the weave, the story the article will tell, for the director to settle at the story meeting.',
       'arc-rework': 'You are reworking the weave you wrote',
@@ -256,35 +281,57 @@ function mapSlotsOf(theme) {
 }
 
 /**
- * The theme's identity line for one call (phase 4, brief 4.13): the first line of the
- * writer's, judge's or rework rules' prompt. Every call reads its line here, through the
- * theme it holds, so a theme brings its narrator, its publication and its form of output in
- * its own config. One line of text: the composers put the mode block right after it
- * (prompt-builder.js withReportingModeBlock).
+ * The theme's identity line for one call (phase 4, briefs 4.13 and 4.13b). Every call reads
+ * its line here, through the theme it holds, so a theme brings its narrator, its publication
+ * and its form of output in its own config. One line of text. A writer's or a judge's line
+ * opens its system prompt, with the session's mode block after it. A rework's line opens its
+ * rework rules: a clause that code completes with the rework's task, so it runs on into that
+ * task and never ends a sentence.
+ *
+ * Each refusal names the theme as it was given and the call, so a theme author who gets a
+ * line wrong is told which, before any prompt is built.
  *
  * @param {string} theme - Theme name
  * @param {string} call - one of IDENTITY_CALLS
  * @returns {string}
- * @throws {Error} on a call no prompt opens with, without a theme, for a theme the config
- *   does not know, and for a theme whose config gives no line for the call (the parked
- *   detective, R1), naming the theme and the call
+ * @throws {Error} without a theme; for a theme the config does not know; on a call not in
+ *   IDENTITY_CALLS; for a theme whose config gives no line for the call (the parked
+ *   detective, R1); for an empty line or a line of more than one line; and for a rework's
+ *   line that ends a sentence
  */
 function identityLineOf(theme, call) {
-  if (!IDENTITY_CALLS.includes(call)) {
-    throw new Error(`[identityLineOf] No prompt of the call "${call}" opens with an identity line. Calls: ${IDENTITY_CALLS.join(', ')}.`);
-  }
   if (typeof theme !== 'string' || !theme) {
-    throw new Error(`[identityLineOf] The theme is required: the identity line of the call "${call}" is its theme's (lib/theme-config.js).`);
+    throw new Error(
+      `[identityLineOf] The theme is required (got ${JSON.stringify(theme)}): the identity line of the call ` +
+      `"${call}" is its theme's (lib/theme-config.js).`
+    );
   }
   if (!Object.prototype.hasOwnProperty.call(THEME_CONFIGS, theme)) {
-    throw new Error(`[identityLineOf] Unknown theme "${theme}": no config in lib/theme-config.js gives its identity lines.`);
+    throw new Error(`[identityLineOf] Unknown theme "${theme}": no config in lib/theme-config.js gives its identity line for the call "${call}".`);
+  }
+  if (!IDENTITY_CALLS.includes(call)) {
+    throw new Error(
+      `[identityLineOf] Unknown call "${call}" for the theme "${theme}": a theme gives an identity line for each of ` +
+      `${IDENTITY_CALLS.join(', ')}.`
+    );
   }
   const identities = THEME_CONFIGS[theme].identities || {};
   const line = Object.prototype.hasOwnProperty.call(identities, call) ? identities[call] : undefined;
-  if (typeof line !== 'string' || !line.trim() || line.includes('\n')) {
+  const fix = `give its config (lib/theme-config.js) identities["${call}"], one line of text.`;
+  if (typeof line !== 'string') {
+    throw new Error(`[identityLineOf] The theme "${theme}" has no identity line for the call "${call}": ${fix}`);
+  }
+  if (!line.trim()) {
+    throw new Error(`[identityLineOf] The theme "${theme}" gives the call "${call}" an empty identity line: ${fix}`);
+  }
+  if (line.includes('\n')) {
+    throw new Error(`[identityLineOf] The theme "${theme}" gives the call "${call}" an identity line of more than one line: ${fix}`);
+  }
+  if (call.endsWith(REWORK_SUFFIX) && ENDS_A_SENTENCE.test(line)) {
     throw new Error(
-      `[identityLineOf] The theme "${theme}" has no identity line for the call "${call}": give its config ` +
-      `(lib/theme-config.js) identities["${call}"], one line of text.`
+      `[identityLineOf] The theme "${theme}" gives the call "${call}" an identity line that ends a sentence: ` +
+      `${JSON.stringify(line)}. A rework's line is a clause that opens its rework rules, and code completes it with ` +
+      'the rework\'s task (": the director sent it back, ..."), so drop the mark that ends the sentence.'
     );
   }
   return line;

@@ -31,7 +31,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { THEME_CONFIGS } = require('./theme-config');
 
 /** The folder a theme's `rules` path is relative to: the reports folder. */
 const REPORTS_ROOT = path.resolve(__dirname, '..');
@@ -52,6 +51,10 @@ const CORE_FILES = ['world', 'truth-rules'];
  * they read no craft file (the story meeting's fact check, brief 4.4; the article judge,
  * brief 4.7a). The map writer asks nothing, so it reads no craft-questions, and the
  * outline judge went with the map (brief 4.6).
+ *
+ * The calls are one list (brief 4.13b): lib/theme-config.js derives its identity calls from
+ * RULE_SET_CALLS, each call and each writer's rework (a judge's call opens `judge-`), so a
+ * call added here needs its identity line in each theme's config.
  */
 const ARC_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'];
 const OUTLINE_CRAFT = [
@@ -104,6 +107,9 @@ function setDefaultRulesRoot(root) {
  *   whose config names no rules folder (the parked detective, R1), naming the theme
  */
 function rulesFolderOf(theme) {
+  // The theme configs, required here rather than at the top: lib/theme-config.js requires
+  // this module, deriving its identity calls from RULE_SET_CALLS (brief 4.13b).
+  const { THEME_CONFIGS } = require('./theme-config');
   if (typeof theme !== 'string' || !theme) {
     throw new Error(
       '[rule-set] The theme is required: each call reads the rules folder its theme names ' +
