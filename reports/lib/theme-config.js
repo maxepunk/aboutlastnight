@@ -329,8 +329,8 @@ function identityLineOf(theme, call) {
   }
   if (call.endsWith(REWORK_SUFFIX) && ENDS_A_SENTENCE.test(line)) {
     throw new Error(
-      `[identityLineOf] The theme "${theme}" gives the call "${call}" an identity line that ends a sentence: ` +
-      `${JSON.stringify(line)}. A rework's line is a clause that opens its rework rules, and code completes it with ` +
+      `[identityLineOf] The theme "${theme}" gives the call "${call}" an identity line that ends a sentence ` +
+      `(${JSON.stringify(line)}): a rework's line is a clause that opens its rework rules, and code completes it with ` +
       'the rework\'s task (": the director sent it back, ..."), so drop the mark that ends the sentence.'
     );
   }
