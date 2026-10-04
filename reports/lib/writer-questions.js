@@ -307,18 +307,27 @@ function withoutAnswers(questions) {
 /**
  * A weave rework's questions (C15, ruling 4 of brief 4.5): every rework, an automatic
  * pass or the director's round alike, keeps each question the director has not answered.
- * A previous question pairs with the rework's question in its place under its id: the
- * questions under an id the weave repeats pair by occurrence, in order, as the diff pairs
- * elements (brief 4.5b). An occurrence of a repeated id the rework returned under no such
- * place is one it gave an id of its own: it pairs, in order, with the rework's questions
- * under the ids the previous questions do not hold. So a rework that gives each question
- * an id of its own clears the repeat, and no question appears twice.
+ * Each previous question pairs with at most one of the rework's, and only with the same
+ * question (brief 4.5b, fix round 1). The pairing runs in four steps, each over every
+ * previous question before the next, so no question takes another's partner:
+ * 1. the same words (the kind, `about` and question, case and spacing folded), in its place;
+ * 2. the same words in another place: a question the rework renumbered or moved;
+ * 3. the same subject (subjectKey: the kind and `about`, the outline carry's rule), in its
+ *    place: a question the rework reworded;
+ * 4. the same subject in another place: a question the rework reworded and renumbered.
+ * A question's place is its occurrence under its id (lib/weave.js occurrenceKeys), as the
+ * diff pairs elements, so the questions under an id the weave repeats pair in order. A
+ * rework that returns each question once, under an id of its own, therefore clears the
+ * repeat and asks no question twice, whatever ids it gives; only two questions on one
+ * subject that it rewords can pair the wrong way round.
  * - An answered question stays whole, as the director answered it, in its place: code
  *   keeps it apart from the model's output, so a rework that drops it or rewords it
- *   changes nothing. Paired with a question under an id of its own, it takes that id.
- * - An unanswered question the rework returned in its place is the rework's version, in
- *   the previous place; one it left out comes back, in its place.
- * - The rework's questions no previous question pairs with follow.
+ *   changes nothing. Paired with a question under another id, it takes that id.
+ * - An unanswered question paired with one of the rework's is the rework's version, in the
+ *   previous place; one the rework left out comes back, in its place.
+ * - The rework's questions no previous question pairs with follow, in its order, so none is
+ *   dropped. A question on another subject under a previous question's id is a new
+ *   question, and the repeat that makes is the writer's, which the checks report.
  * - A rework that returns no list keeps the previous one.
  * No answer is ever read from the rework's returned questions.
  *
@@ -329,25 +338,36 @@ function withoutAnswers(questions) {
 function carriedWeaveQuestions(returned, previous) {
   const previousQuestions = weaveQuestionsOf(previous);
   if (!Array.isArray(returned)) return previousQuestions;
-  // The one reading of an id, the one rule for a repeat and an element's place under its id
-  // (lib/weave.js), required here rather than at the top: lib/weave.js requires this module.
-  const { weaveIdOf, repeatedIds, occurrenceKeys } = require('./weave');
+  // A question's place under its id (lib/weave.js), required here rather than at the top:
+  // lib/weave.js requires this module.
+  const { occurrenceKeys } = require('./weave');
   const returnedQuestions = withoutAnswers(weaveQuestionsOf(returned));
-  const returnedKeys = occurrenceKeys(returnedQuestions);
-  const returnedByKey = new Map(returnedQuestions.map((q, i) => [returnedKeys[i], q]));
-  const previousIds = new Set(previousQuestions.map((q) => weaveIdOf(q)));
-  const repeated = new Set(repeatedIds(previousQuestions));
-  const underNewIds = returnedQuestions.filter((q) => !previousIds.has(weaveIdOf(q)));
-  const paired = new Set();
-  const previousKeys = occurrenceKeys(previousQuestions);
-  const carried = previousQuestions.map((q, i) => {
-    let partner = returnedByKey.get(previousKeys[i]);
-    if (!partner && repeated.has(weaveIdOf(q))) partner = underNewIds.find((candidate) => !paired.has(candidate));
-    if (!partner) return q;
-    paired.add(partner);
-    return isAnswered(q) ? { ...q, id: partner.id } : partner;
+  const previousPlaces = occurrenceKeys(previousQuestions);
+  const returnedPlaces = occurrenceKeys(returnedQuestions);
+  const sameSubject = (i, j) => subjectKey(previousQuestions[i]) === subjectKey(returnedQuestions[j]);
+  const sameWords = (i, j) => sameSubject(i, j) && questionKey(previousQuestions[i]) === questionKey(returnedQuestions[j]);
+  const samePlace = (i, j) => previousPlaces[i] === returnedPlaces[j];
+  const steps = [
+    (i, j) => sameWords(i, j) && samePlace(i, j),
+    sameWords,
+    (i, j) => sameSubject(i, j) && samePlace(i, j),
+    sameSubject
+  ];
+  const partners = previousQuestions.map(() => null);
+  const taken = new Set();
+  steps.forEach((same) => previousQuestions.forEach((_question, i) => {
+    if (partners[i] !== null) return;
+    const j = returnedQuestions.findIndex((_candidate, k) => !taken.has(k) && same(i, k));
+    if (j === -1) return;
+    partners[i] = j;
+    taken.add(j);
+  }));
+  const carried = previousQuestions.map((question, i) => {
+    if (partners[i] === null) return question;
+    const partner = returnedQuestions[partners[i]];
+    return isAnswered(question) ? { ...question, id: partner.id } : partner;
   });
-  return [...carried, ...returnedQuestions.filter((q) => !paired.has(q))];
+  return [...carried, ...returnedQuestions.filter((_question, j) => !taken.has(j))];
 }
 
 module.exports = {
