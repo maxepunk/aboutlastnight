@@ -2071,3 +2071,49 @@ describe('4.7a: one word count', () => {
     jest.dontMock('../word-count');
   });
 });
+
+// Brief 4.7c (4.7a's minor 5): a reporter-mode phrase in several of the director's pieces
+// under different edits is a concern on each of them. Each finding sits at its own piece
+// and carries that piece's edit, so the desk marks each of the director's lines with its
+// own edit, and its message is that edit's concern.
+describe("4.7c: a reporter-mode finding names its own edit", () => {
+  const { standingAfterSendBack, carriedEdits, DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
+  const para = (text) => ({ type: 'paragraph', text });
+
+  it("a phrase in two of the director's paragraphs under two edits: each finding carries its own paragraph's editId", () => {
+    const writers = storyWith(para('The room voted at noon.'), para('The count came at one.'));
+    const directors = storyWith(para('The room voted at noon, and I voted with them.'), para('The count came at one, and I voted again.'));
+    const directorEdits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    expect(directorEdits.map((edit) => edit.id)).toEqual(['E1', 'E2']);
+
+    const result = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits }));
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.reporterMode.violations).toEqual([]);
+    const findings = result.findings.filter((finding) => finding.kind === 'reporterMode');
+    expect(findings.map(({ status, place, excerpt, editId }) => ({ status, place, excerpt, editId }))).toEqual([
+      { status: 'advisory', place: { section: 'the-story', paragraph: 1 }, excerpt: 'I voted', editId: 'E1' },
+      { status: 'advisory', place: { section: 'the-story', paragraph: 2 }, excerpt: 'I voted', editId: 'E2' }
+    ]);
+    // Each finding's message is its own edit's concern, filed among the advisories.
+    for (const finding of findings) {
+      expect(finding.message.startsWith(`${DIRECTOR_EDIT_PREFIX}${finding.editId}: Reporter-mode violation: "i voted".`)).toBe(true);
+      expect(result.advisoryWarnings).toContain(finding.message);
+    }
+  });
+
+  it('two pieces under one edit, a section the director added whole: one concern, a finding at each piece', () => {
+    const writers = storyWith(para('The room voted at noon.'));
+    const aside = { id: 'aside', type: 'narrative', content: [para('I voted early.'), para('Then I voted again.')] };
+    const directors = { ...writers, sections: [...writers.sections, aside] };
+    const directorEdits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    expect(directorEdits.map((edit) => [edit.id, edit.path])).toEqual([['E1', 'sections[#aside]']]);
+
+    const result = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits }));
+    const findings = result.findings.filter((finding) => finding.kind === 'reporterMode');
+    expect(findings.map(({ place, editId }) => [place, editId])).toEqual([
+      [{ section: 'aside', paragraph: 1 }, 'E1'],
+      [{ section: 'aside', paragraph: 2 }, 'E1']
+    ]);
+    expect(result.advisoryWarnings.filter((warning) => warning.includes('Reporter-mode violation'))).toEqual([findings[0].message]);
+  });
+});

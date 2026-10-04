@@ -1281,40 +1281,42 @@ function factCheckContentBundle({
   const mode = reportingMode === 'remote' ? 'remote' : 'on-site';
   const normProse = normalize(narratorText(bundle));
   const violations = [];
-  // F1: the director's edit a phrase sits in, when every narrator piece that holds it
-  // is one (a paragraph's text the director wrote, or a headline field the director
-  // set). A phrase in the writer's prose, or across two pieces, is the writer's.
+  // F1: the director's edit each narrator piece is (a paragraph's text the director
+  // wrote, or a headline field the director set), or none. A phrase is the director's
+  // when every piece that holds it is one of theirs; in the writer's prose, or across two
+  // pieces, it is the writer's.
   const segmentEdits = narratorSegments(bundle).map(segment => ({
     text: normalize(segment.text),
     editId: segment.field ? edits.field(segment.field) : edits.blockField(segment.sectionKey, segment.block, 'text'),
     place: segment.place,
     original: segment.text
   }));
-  const directorsPhrase = (phrase) => {
-    const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
-    return holding.length > 0 && holding.every(segment => segment.editId) ? holding[0].editId : null;
-  };
   /**
    * A reporter-mode hit: a concern when the phrase is the director's, else structural.
    * Brief 4.7a: a finding at each narrator piece that holds the phrase and is the hit's
    * (the director's pieces for a concern, the writer's for a structural hit, so no
    * structural mark sits beside the director's line), with the phrase as the piece prints
    * it, or one with no place when the phrase runs across two pieces.
+   *
+   * Brief 4.7c: each of the director's pieces is filed under its own edit. A phrase in
+   * pieces under different edits is one concern per edit, and each finding carries its own
+   * piece's edit and that edit's concern.
    */
   const reporterHit = (phrase, message) => {
-    const editId = directorsPhrase(phrase);
-    let filed = message;
-    if (editId) {
-      filed = directorHit(editId, message);
+    const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
+    const directors = holding.length > 0 && holding.every(segment => segment.editId);
+    const concerns = new Map();   // edit id -> its concern, filed once
+    if (directors) {
+      holding.forEach(({ editId }) => { if (!concerns.has(editId)) concerns.set(editId, directorHit(editId, message)); });
     } else {
       violations.push(phrase);
       structuralIssues.push(message);
     }
-    const marks = segmentEdits
-      .filter(segment => segment.text.includes(phrase) && (editId || !segment.editId))
-      .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase) }));
-    (marks.length > 0 ? marks : [{ place: null, excerpt: phrase }])
-      .forEach(({ place, excerpt }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt, filed, editId));
+    const marks = holding
+      .filter(segment => directors || !segment.editId)
+      .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase), editId: directors ? segment.editId : null }));
+    (marks.length > 0 ? marks : [{ place: null, excerpt: phrase, editId: null }])
+      .forEach(({ place, excerpt, editId }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt, editId ? concerns.get(editId) : message, editId));
   };
 
   for (const phrase of NEVER_VOTES) {
