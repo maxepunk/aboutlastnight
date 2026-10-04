@@ -655,3 +655,26 @@ describe('4.3c: blocks pair by place only with blocks of their own type', () => 
     ]);
   });
 });
+
+// Task 4.3c: the sidebar card's editor saved its three fields whether or not the director
+// changed them, a significance the card never had included.
+describe('4.3c: the sidebar card\'s editor saves only what changed', () => {
+  test('the sidebar card\'s editor saves only the fields the director changed', () => {
+    // A card the writer gave no significance: the page prints its badge empty.
+    const sidebarCard = { tokenId: 'jes002', headline: 'You can have him', summary: 'Jess, in her own memory.', placement: 'sidebar' };
+    const form = Desk.sidebarCardForm(sidebarCard);
+    expect(form).toEqual({ headline: 'You can have him', summary: 'Jess, in her own memory.', significance: '' });
+    // Saved untouched, it changes nothing: no significance the card never had.
+    expect(Desk.changedFields(sidebarCard, form)).toEqual({});
+    const edited = { ...form, headline: 'Hers, in her own words' };
+    expect(Object.assign({}, sidebarCard, Desk.changedFields(sidebarCard, edited))).toEqual({ ...sidebarCard, headline: 'Hers, in her own words' });
+    expect(Desk.sidebarCardForm({ tokenId: 'x', headline: 'H', significance: 'critical' }).significance).toBe('critical');
+
+    // The editor seeds its form there and saves through changedFields, as the other editors do.
+    const src = fs.readFileSync(path.join(__dirname, '..', 'components', 'checkpoints', 'Article.js'), 'utf8');
+    const editor = src.slice(src.indexOf('function SidebarEvidenceCardEditor('), src.indexOf('function FinancialEntryEditor('));
+    expect(editor).toContain('DeskLogic.sidebarCardForm(card)');
+    expect(editor).toContain('onSave(idx, Object.assign({}, original, DeskLogic.changedFields(original, local)))');
+    expect(editor).not.toContain('Object.assign({}, original, local)');
+  });
+});

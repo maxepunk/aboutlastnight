@@ -336,14 +336,14 @@ function HeadlineEditor({ headline, onSave, onCancel }) {
  * seeds it, and the writer is no longer asked for it. Task 4.3b: nor its `placement`
  * (templates/journalist/partials/sidebar/evidence-card.hbs reads neither). An entry that
  * has either keeps it through the same Object.assign; the schema keeps both optional.
+ *
+ * Task 4.3c: only the fields the director changed are saved (DeskLogic.changedFields), as
+ * in the other editors. A card with no significance seeds its select blank, offered as
+ * "None", so saving another field writes no significance the card never had.
  */
 function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
   const [local, setLocal] = React.useState(function () {
-    return {
-      headline: card.headline || '',
-      summary: card.summary || '',
-      significance: card.significance || 'supporting'
-    };
+    return DeskLogic.sidebarCardForm(card);
   });
 
   return React.createElement('div', { key: 'ec-edit-' + idx, className: 'article-evidence-card article-block--editing fade-in mb-md' },
@@ -371,12 +371,13 @@ function SidebarEvidenceCardEditor({ card, idx, original, onSave, onCancel }) {
           onChange: function (e) { setLocal(Object.assign({}, local, { significance: e.target.value })); },
           'aria-label': 'Sidebar entry significance'
         },
+          !card.significance && React.createElement('option', { value: '' }, 'None'),
           React.createElement('option', { value: 'critical' }, 'Critical'),
           React.createElement('option', { value: 'supporting' }, 'Supporting'),
           React.createElement('option', { value: 'contextual' }, 'Contextual')
         )
       ),
-      editorActions(function () { onSave(idx, Object.assign({}, original, local)); }, onCancel, 'Save evidence card')
+      editorActions(function () { onSave(idx, Object.assign({}, original, DeskLogic.changedFields(original, local))); }, onCancel, 'Save evidence card')
     )
   );
 }

@@ -260,6 +260,17 @@
     return withFields(bundle, 'heroImage', fields);
   }
 
+  /**
+   * The sidebar card editor's form, seeded from the card: the headline, summary and
+   * significance the page prints, each as the card has it, blank where it has none, so a
+   * field the director leaves alone is no change to save (changedFields; task 4.3c). A card
+   * with no significance prints its badge empty, and its form shows that.
+   */
+  function sidebarCardForm(card) {
+    var c = isPlainObject(card) ? card : {};
+    return { headline: asString(c.headline), summary: asString(c.summary), significance: asString(c.significance) };
+  }
+
   /** The bundle with one sidebar evidence entry replaced. */
   function setSidebarCard(bundle, index, card) {
     var cards = isPlainObject(bundle) && Array.isArray(bundle.evidenceCards) ? bundle.evidenceCards : [];
@@ -853,6 +864,7 @@
     setHeadline: setHeadline,
     setByline: setByline,
     setHero: setHero,
+    sidebarCardForm: sidebarCardForm,
     setSidebarCard: setSidebarCard,
     setTrackerEntry: setTrackerEntry,
 
