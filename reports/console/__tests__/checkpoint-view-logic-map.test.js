@@ -700,14 +700,18 @@ describe('4.9: after a send-back and an automatic pass', () => {
     expect(ViewLogic.mapView(d, opened(d)).round).toEqual({ label: 'Round 2', note: 'You sent the map back with: "Lead with the bonus."' });
   });
 
-  test('an automatic pass that brought back a struck beat and moved a placed one: what code did, at each place the map names', () => {
+  // 4.10 (the integrator's ruling 8 on 4.9's minors): code put both back, so they ask nothing
+  // of the director, and the map lists neither. The line each would read is changedEditLine's.
+  test('an automatic pass that brought back a struck beat and moved a placed one: code put both back, so the map lists neither', () => {
     const edits = standingOnMap(null, clone(MAP), STRUCK).edits;
     const pass = clone(STRUCK);
     pass.sections[1].beats.push(pass.leftOut.pop());
     pass.sections[1].beats.push(pass.sections[3].beats.pop());
     const { report } = settleEdits(null, { edits, before: STRUCK, after: pass, pass: 1 });
+    expect(report.changed.map((c) => [c.automatic, c.restored])).toEqual([[true, true], [true, true]]);
     const d = payloadOf(stateAt({ outline: STRUCK, _outlineHandEditReport: report }));
-    expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([
+    expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([]);
+    expect(report.changed.map((c) => ViewLogic.changedEditLine(c, ViewLogic.mapEditLineOptions(SLOTS.map((s) => ({ key: s.key, label: s.label })))))).toEqual([
       'Closing, beat "b3", moved from The Story: automatic pass 1 moved the beat you placed here to The Story. It was put back.',
       'Left out, beat "b4", struck from The Story: automatic pass 1 brought it back. It was struck again.'
     ]);
@@ -994,5 +998,39 @@ describe('4.6c: the gate, the checks and the console find one set of repeats, un
     expect({ gate: gateTakes(left, shown), console: consoleTakes(left, shown) }).toEqual({ gate: true, console: true });
     expect(EditLogic.mapRepeats(left)).toEqual({ beatIds: [], photoKeys: [] });
     expect(checksFind(left)).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10: one rule for which changed lines a stop shows (the integrator's ruling 8 on 4.9's
+// minors). The map lists what a send-back's rework changed of the director's edits, with its
+// reason, and what any other pass changed that code did not put back; an entry code put back
+// asks nothing of the director. The map reads the rule the meeting and the desk read.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10: the map lists the changes no pass put back, and a send-back\'s with their reasons', () => {
+  const entry = (fields) => ({ cut: false, removed: false, moved: false, reason: null, restored: false, ...fields });
+  /** The map's changed lines for a report holding these entries. */
+  function linesFor(changed) {
+    const d = { ...payloadOf(stateAt()), handEditReport: { checked: changed.map((c) => c.id), changed } };
+    return ViewLogic.mapView(d, opened(d)).changedEdits;
+  }
+
+  test('an automatic change code put back is not listed', () => {
+    expect(linesFor([entry({ id: 'E1', scope: 'map', where: 'section "closing", beat "b6", material', director: 'Riley keeps the books.', became: 'Riley kept nothing.', pass: 1, automatic: true, restored: true })])).toEqual([]);
+  });
+
+  test('a cut that came back is listed, still on the map', () => {
+    expect(linesFor([entry({ id: 'E1', scope: 'map', where: 'section "closing", beat "b6", material', cut: true, director: 'and the second ledger', became: 'Riley: "I kept the books, and the second ledger"', pass: 1, automatic: true })]))
+      .toEqual(['Closing, beat "b6", material: the text you cut came back as "Riley: "I kept the books, and the second ledger"" (automatic pass 1). It is still on the map: cut it again if it should go.']);
+  });
+
+  test("a send-back's change is listed with its reason", () => {
+    expect(linesFor([entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", material', director: 'Riley keeps the books.', became: 'Riley kept nothing.', pass: SEND_BACK_PASS, automatic: false, reason: 'The note asks for the plain line.' })]))
+      .toEqual(['Closing, beat "b6", material: your "Riley keeps the books." became "Riley kept nothing." (the rework of your send-back). Why: The note asks for the plain line.']);
+  });
+
+  test('a beat a pass removed is listed: only its place was the director\'s, so code did not put it back', () => {
+    expect(linesFor([entry({ id: 'E3', scope: 'map', where: 'section "closing", beat "b3", moved from section "theStory"', moved: true, director: 'b3', became: null, pass: 1, automatic: true })]))
+      .toEqual(['Closing, beat "b3", moved from The Story: automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.']);
   });
 });

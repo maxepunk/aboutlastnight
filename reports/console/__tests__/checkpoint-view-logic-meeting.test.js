@@ -1098,3 +1098,50 @@ describe('4.5c fix round 1: the reopened meeting lists the round\'s note in the 
     expect(meetingStandingNotes(ran.directorGateNotes, LABELS).items.map((n) => n.label)).toEqual(['Map, approval note 1', 'Story meeting, rework note 1']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10: one rule for which changed lines a stop shows (the integrator's ruling 8 on 4.9's
+// minors). A stop shows what a send-back's rework changed of the director's edits, with its
+// reason, and what any other pass changed that code did not put back; an entry code put back
+// asks nothing of the director. The meeting reads the rule the map and the desk read
+// (changedEditsToShow), and phrases a reweave's entry as the reweave's.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10: the meeting shows the changes no pass put back, and a send-back\'s with their reasons', () => {
+  const { REWEAVE_PASS } = require('../../lib/hand-edit-diff');
+  const entry = (fields) => ({ cut: false, removed: false, moved: false, reason: null, restored: false, ...fields });
+  const CONNECTION = 'id: c2; kind: moment; joins: t2 / t4; detail: The night of the sale is the night the result came back.';
+  /** The meeting's changed lines for a report holding these entries. */
+  function linesFor(changed) {
+    const data = { ...payloadOf(stateAt()), handEditReport: { checked: changed.map((c) => c.id), changed } };
+    return meetingView(data, meetingDraftOf(data, undefined)).changedEdits;
+  }
+
+  test('an automatic change code put back is not shown', () => {
+    expect(linesFor([entry({ id: 'E1', scope: 'story', where: 'story', director: 'The room called it an overdose.', became: 'The room was wrong.', pass: 1, automatic: true, restored: true })])).toEqual([]);
+  });
+
+  test('a cut that came back is shown, still in the weave', () => {
+    expect(linesFor([entry({ id: 'E1', scope: 'story', where: 'story', cut: true, director: 'The ledger says a sale.', became: 'The room called it an overdose; the ledger says a sale.', pass: 1, automatic: true })]))
+      .toEqual(['The story: the text you cut came back as "The room called it an overdose; the ledger says a sale." (automatic pass 1). It is still in the weave: cut it again if it should go.']);
+  });
+
+  test("a send-back's change is shown with its reason", () => {
+    expect(linesFor([entry({ id: 'E2', scope: 'threads', where: 'thread "t3", role', director: 'mirrors-it', became: 'grounds-it', pass: SEND_BACK_PASS, automatic: false, reason: 'The note made the ledger the main thread.' })]))
+      .toEqual(['Thread "t3", role: your "Mirrors it" became "Grounds it" (the rework of your send-back). Why: The note made the ledger the main thread.']);
+  });
+
+  test("a reweave's change code could not put back is shown as the reweave's", () => {
+    expect(linesFor([entry({ id: 'E5', scope: 'connections', where: 'connection "c2", struck', struck: true, director: CONNECTION, became: CONNECTION, pass: REWEAVE_PASS, automatic: false })]))
+      .toEqual(['Connection "c2", struck: your reweave brought it back. It could not be struck again.']);
+  });
+
+  test('the meeting lists exactly the entries the rule keeps, in the report\'s order', () => {
+    const changed = [
+      entry({ id: 'E1', scope: 'story', where: 'story', director: 'a', became: 'b', pass: 1, automatic: true, restored: true }),
+      entry({ id: 'E2', scope: 'story', where: 'story', removed: true, director: 'c', became: 'd c', pass: 1, automatic: true }),
+      entry({ id: 'E3', scope: 'story', where: 'story', director: 'e', became: 'f', pass: SEND_BACK_PASS, automatic: false })
+    ];
+    expect(ViewLogic.changedEditsToShow({ checked: ['E1', 'E2', 'E3'], changed }).map((e) => e.id)).toEqual(['E2', 'E3']);
+    expect(linesFor(changed)).toHaveLength(2);
+  });
+});

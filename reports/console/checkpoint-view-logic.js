@@ -117,15 +117,22 @@
 
   /**
    * The pass a hand-edit report entry names when the rework of the director's send-back
-   * made the change; any other pass is an automatic pass's number. A copy of
-   * lib/hand-edit-diff.js SEND_BACK_PASS; a test holds the two equal.
+   * made the change; any other pass is a reweave's (REWEAVE_PASS) or an automatic pass's
+   * number. A copy of lib/hand-edit-diff.js SEND_BACK_PASS; a test holds the two equal.
    */
   var SEND_BACK_PASS = 'send-back';
 
-  /** The heading the concerns about the director's edits sit under, at the evaluation bar and in the fact check. */
+  /**
+   * The pass a hand-edit report entry names when a reweave at the story meeting made the change
+   * (brief 4.5). A reweave is held to the director's edits as an automatic pass is. A copy of
+   * lib/hand-edit-diff.js REWEAVE_PASS; a test holds the two equal.
+   */
+  var REWEAVE_PASS = 'reweave';
+
+  /** The heading the concerns about the director's edits sit under, in the fact check's list and an evaluation's parts. */
   var DIRECTOR_EDIT_CONCERNS_LABEL = 'Concerns about your edits';
 
-  /** What a concern is, under that heading at the evaluation bar. */
+  /** What a concern is, under that heading in an evaluation's parts (evaluationView). */
   var DIRECTOR_EDIT_CONCERNS_HINT =
     'The judge disagrees with these lines you wrote or cut. Nothing was sent back for them: they are yours to decide.';
 
@@ -569,8 +576,13 @@
     return report;
   }
 
-  /** What the line says of text the director took out that came back: it stays for the director to cut. */
-  var STILL_IN_ARTICLE = 'It is still in the article: cut it again if it should go.';
+  /**
+   * What the line says of text the director took out that came back: it stays for the
+   * director to cut, in the output the stop shows (`options.stillIn`, by default the article).
+   */
+  function stillInLine(stillIn) {
+    return 'It is still ' + (asString(stillIn) || 'in the article') + ': cut it again if it should go.';
+  }
 
   /**
    * What the line says of a block the director moved that an automatic pass removed: a
@@ -580,21 +592,31 @@
   var MOVED_BLOCK_LEFT_OUT = 'Only its place was your edit, so it was not put back: add it again if it should stay.';
 
   /**
+   * What the line says of a block moved within its section that code put back in that section
+   * where no place keeps the director's order (task 4.3c: the entry's `inOrder` is false).
+   */
+  var PUT_BACK_OUT_OF_ORDER = 'It was put back in its section, but not in the order you left it: move it again if the order matters.';
+
+  /**
    * One line for an edit a pass changed (F1, FA): its place (by default its id and field,
    * since FA; an entry from before FA names its scope), what happened to the director's
    * text, which pass did it, and what followed. Who made a change is the entry's own
-   * `automatic` flag (known item 7). Every stop phrases its report here: the map and the
-   * desk through steeringView, the story meeting through meetingView, which names its
-   * places as its page heads them and a role as its picker names it (task 4.8, fix round 1).
+   * `automatic` flag (known item 7), and a reweave's entry names its pass (brief 4.5): a
+   * reweave is held to the director's edits as an automatic pass is, so its line reads as an
+   * automatic pass's does, under its own name. Every stop phrases its report here: the desk
+   * through steeringView and deskMarks, the map through mapView, the story meeting through
+   * meetingView, which names its places as its page heads them and a role as its picker
+   * names it (task 4.8, fix round 1).
    * - A connection the director struck (brief 4.5) that a pass brought back or took out;
-   *   after an automatic pass, whether code struck it again.
+   *   after an automatic pass or a reweave, whether code struck it again.
    * - A field or element an automatic pass changed: code put it back (`restored`), and
    *   the line says so; an entry from before FA says the pass should have kept it.
-   * - A cut, or a sentence a rewrite removed, that came back: it is still in the article,
+   * - A cut, or a sentence a rewrite removed, that came back: it is still in the output,
    *   because code never takes text out.
    * - A block the director moved that a pass took to another section: where it went, and
-   *   whether code put it back; one a pass removed: that code left it out, since only its
-   *   place was the director's edit. The map (task 4.9) names the element a beat or a photo.
+   *   whether code put it back, in the director's order or not (task 4.3c, `inOrder`); one a
+   *   pass removed: that code left it out, since only its place was the director's edit. The
+   *   map (task 4.9) names the element a beat or a photo.
    * - A change a send-back's rework made: the rework's reason, or that it gave none.
    *
    * @param {Object} entry - one of the report's `changed` entries (lib/hand-edit-diff.js reportAfterPass)
@@ -602,6 +624,7 @@
    * @param {function(Object): string} [options.place] - the entry's place; by default its id and `where`
    * @param {function(string): string} [options.valueText] - how a value reads; by default as written
    * @param {function(Object): string} [options.thing] - what a moved element is called; by default a block
+   * @param {string} [options.stillIn] - where text that came back still is: by default 'in the article'
    * @returns {string}
    */
   function changedEditLine(entry, options) {
@@ -614,30 +637,51 @@
     var became = typeof entry.became === 'string' ? valueText(entry.became) : null;
     var director = valueText(asString(entry.director));
     var automatic = entry.automatic === true;
-    var by = automatic ? 'automatic pass ' + entry.pass : 'the rework of your send-back';
+    var reweave = entry.pass === REWEAVE_PASS;
+    // A pass held to the director's edits: code puts back what it changed.
+    var held = automatic || reweave;
+    var by = automatic ? 'automatic pass ' + entry.pass : (reweave ? 'your reweave' : 'the rework of your send-back');
     var reason = asString(entry.reason).trim();
     var why = reason ? 'Why: ' + reason : 'No reason given.';
     var cameBackAs = became !== null ? ' as "' + became + '"' : '';
     if (entry.struck === true) {
       var struck = label + ': ' + by + (became !== null ? ' brought it back.' : ' took it out.');
-      if (!automatic) return struck + ' ' + why;
+      if (!held) return struck + ' ' + why;
       if (became === null) return struck;
       return struck + (entry.restored === true ? ' It was struck again.' : ' It could not be struck again.');
     }
-    if (entry.cut === true) return label + ': the text you cut came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
-    if (entry.removed === true) return label + ': a sentence you removed came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
+    if (entry.cut === true) return label + ': the text you cut came back' + cameBackAs + ' (' + by + '). ' + (held ? stillInLine(o.stillIn) : why);
+    if (entry.removed === true) return label + ': a sentence you removed came back' + cameBackAs + ' (' + by + '). ' + (held ? stillInLine(o.stillIn) : why);
     if (entry.moved === true) {
       var moved = became !== null ? 'moved the ' + thing + ' you placed here to ' + became : 'removed the ' + thing + ' you placed here';
-      if (!automatic) return label + ': ' + by + ' ' + moved + '. ' + why;
-      if (entry.restored === true) return label + ': ' + by + ' ' + moved + '. It was put back.';
+      if (!held) return label + ': ' + by + ' ' + moved + '. ' + why;
+      if (entry.restored === true) return label + ': ' + by + ' ' + moved + '. ' + (entry.inOrder === false ? PUT_BACK_OUT_OF_ORDER : 'It was put back.');
       return label + ': ' + by + ' ' + moved + '. ' + (became !== null ? 'It could not be put back.' : MOVED_BLOCK_LEFT_OUT);
     }
-    if (automatic && entry.restored === true) {
+    if (held && entry.restored === true) {
       return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' removed your "' + director + '"') + '. Your text was put back.';
     }
     var what = became !== null ? 'your "' + director + '" became "' + became + '"' : 'your "' + director + '" is gone';
-    if (automatic) return label + ': ' + what + ' (' + by + ', which should have kept your edit). No reason given.';
+    if (held) return label + ': ' + what + ' (' + by + ', which should have kept your edit). No reason given.';
     return label + ': ' + what + ' (' + by + '). ' + why;
+  }
+
+  /**
+   * The entries of a hand-edit report a stop shows (the integrator's ruling 8 on 4.9's
+   * minors): each change a send-back's rework made, which comes with its reason, and each
+   * change any other pass made that code did not put back: a cut or a removed sentence that
+   * came back, a moved element a pass removed, a struck connection that could not be struck
+   * again. An entry code put back asks nothing of the director, so no stop shows it beside the
+   * edit; at the desk it stays in the folded record of the round (RevisionDiff, steeringView).
+   * One rule for the story meeting (meetingView), the map (mapView) and the desk (deskMarks).
+   *
+   * @param {*} report - a stop's handEditReport
+   * @returns {Object[]} the entries, in the report's order
+   */
+  function changedEditsToShow(report) {
+    var read = editReportOf(report);
+    if (!read) return [];
+    return read.changed.filter(function (entry) { return entry.pass === SEND_BACK_PASS || entry.restored !== true; });
   }
 
   /** How the standing notes name a note's kind (directorGateNotes' `kind`). */
@@ -2018,11 +2062,11 @@
   }
 
   /**
-   * How the meeting phrases an edit a send-back changed (changedEditLine, every stop's
-   * builder): its place as the page heads it, with no edit id, since the meeting shows none,
-   * and a role as the role picker names it.
+   * How the meeting phrases an edit a round changed (changedEditLine, every stop's builder):
+   * its place as the page heads it, with no edit id, since the meeting shows none, a role as
+   * the role picker names it, and text that came back as still in the weave.
    */
-  var MEETING_EDIT_LINE = { place: meetingEditPlace, valueText: roleWord };
+  var MEETING_EDIT_LINE = { place: meetingEditPlace, valueText: roleWord, stillIn: 'in the weave' };
 
   function lowerFirst(text) {
     return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
@@ -2226,9 +2270,10 @@
    *   unless the round took it out: then the director's notes held a read the rework
    *   dropped, and the mark of it is listed instead;
    * - the round's lines: `didNotRun` (by what the note box holds; task 4.5c),
-   *   `checkFailures` (one line each), `changedEdits` (the send-back's, with their reasons),
-   *   `marked` and the marks no line shows (`removed`, `otherMarks`), and the concerns no
-   *   line shows (`otherConcerns`).
+   *   `checkFailures` (one line each), `changedEdits` (the edits a round changed that a stop
+   *   shows, changedEditsToShow: a send-back's with their reasons, and what no pass put back;
+   *   task 4.10), `marked` and the marks no line shows (`removed`, `otherMarks`), and the
+   *   concerns no line shows (`otherConcerns`).
    * The questions are the stop's (`data.questions`), each paired with its place in the
    * director's weave, whose answer the box shows and sets.
    *
@@ -2333,7 +2378,6 @@
       strongerMainThread: strongerView !== null,
       questions: questions.length > 0
     };
-    var report = editReportOf(d.handEditReport);
     return {
       hasWeave: true,
       order: MEETING_SECTIONS.filter(function (section) { return !hasOwn(present, section) || present[section]; }),
@@ -2355,11 +2399,7 @@
         .map(function (failure) { return asString(failure.message).trim(); })
         .filter(Boolean)
         .map(function (message) { return 'Check still failing: ' + message; }),
-      changedEdits: report
-        ? report.changed
-          .filter(function (entry) { return entry.pass === SEND_BACK_PASS; })
-          .map(function (entry) { return changedEditLine(entry, MEETING_EDIT_LINE); })
-        : [],
+      changedEdits: changedEditsToShow(d.handEditReport).map(function (entry) { return changedEditLine(entry, MEETING_EDIT_LINE); }),
       didNotRun: didNotRunLine(d.roundDidNotRun, note),
       marked: markedLine(d.marks),
       removed: beside.removed,
@@ -2643,7 +2683,7 @@
    * How the map phrases an edit a rework changed (changedEditLine, every stop's builder): its
    * place as the report names it, with each slot under its label and no edit id, since the map
    * shows none; a moved element is a beat or a photo, and a section it went to reads by its
-   * label.
+   * label; text that came back is still on the map (task 4.10).
    *
    * @param {Array} slots - slotsOf(data)
    */
@@ -2654,7 +2694,8 @@
         var m = /^section "([^"]*)"$/.exec(asString(text));
         return m ? slotLabelOf(m[1], slots) : text;
       },
-      thing: function (entry) { return /(^|, )photo "/.test(asString(entry.where)) ? 'photo' : 'beat'; }
+      thing: function (entry) { return /(^|, )photo "/.test(asString(entry.where)) ? 'photo' : 'beat'; },
+      stillIn: 'on the map'
     };
   }
 
@@ -2684,9 +2725,10 @@
    * map as the director has it.
    * - `settledStory` at the top, read-only, with `storyHint`, the way back to the meeting;
    * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (one line
-   *   each), `changedEdits` (each edit a rework changed, by changedEditLine with the map's
-   *   places, a send-back's with its reason), `kept`, and `otherConcerns`, the concerns none of
-   *   whose places the page shows;
+   *   each), `changedEdits` (each edit a rework changed that a stop shows, changedEditsToShow,
+   *   by changedEditLine with the map's places: a send-back's with its reason, and what no pass
+   *   put back; task 4.10), `kept`, and `otherConcerns`, the concerns none of whose places the
+   *   page shows;
    * - `gapNote`, `headline`, `deck` and `topPhoto`;
    * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
    *   and photos, each beat and photo with the places it can move to, and each beat's material
@@ -2816,7 +2858,7 @@
         .map(function (failure) { return asString(failure.message).trim(); })
         .filter(Boolean)
         .map(function (message) { return 'Check still failing: ' + message; }),
-      changedEdits: report ? report.changed.map(function (entry) { return changedEditLine(entry, lineOptions); }) : [],
+      changedEdits: changedEditsToShow(d.handEditReport).map(function (entry) { return changedEditLine(entry, lineOptions); }),
       kept: report && report.changed.length === 0
         ? (report.checked.length === 1 ? 'The reworks kept your edit.' : 'The reworks kept all ' + report.checked.length + ' of your edits.')
         : '',
@@ -2982,6 +3024,9 @@
     mapEditLineOptions: mapEditLineOptions,
     mapView: mapView,
     mapPhotoUrl: mapPhotoUrl,
+    // Phase 4, task 4.10: one rule for the changed lines a stop shows
+    REWEAVE_PASS: REWEAVE_PASS,
+    changedEditsToShow: changedEditsToShow,
     // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
     revisionDiffKeys: revisionDiffKeys,
     REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS
