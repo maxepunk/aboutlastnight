@@ -6,7 +6,8 @@
  * merged, and on 092026 until the descriptions are re-entered. The outline and
  * article writers, their reworkers and the outline judge were then told the director
  * gave nothing for every photo. With no map, the line is left out; "none given" is
- * printed only when a map exists and lacks that photo.
+ * printed only when a map exists and lacks that photo. Phase 4 (brief 4.6): the outline
+ * judge went; the article judge's PHOTOS shows the rule.
  */
 
 const { renderPhotoEntry } = require('../prompt-renderers/director-words-renderer');
@@ -65,16 +66,9 @@ describe('a thread with no description map (every thread from before the channel
     expect(record(writer)).not.toContain("The director's description");
   });
 
-  it('the outline judge says nothing of a description', () => {
-    const state = { ...reworkFixtureState('journalist'), photoDescriptions: null, heroImage: 'hero.jpg' };
-    const prompt = buildEvaluationUserPrompt('outline', state, {});
-    expect(prompt).toContain('p2.jpg: Alex');
-    expect(prompt).not.toContain("The director's description");
-  });
-
   it('with a map, a photo the director did not describe still reads "none given"', async () => {
     const state = { ...reworkFixtureState('journalist'), photoDescriptions: { 'hero.jpg': 'The room.' }, heroImage: 'hero.jpg' };
-    const prompt = buildEvaluationUserPrompt('outline', state, {});
+    const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null });
     expect(prompt).toContain(`p2.jpg: Alex\n   ${NONE_GIVEN}`);
   });
 });

@@ -86,7 +86,6 @@ module.exports = {
 
   // Evaluator nodes (from evaluator-nodes.js) - Commit 8.6
   evaluateArcs: evaluatorNodes.evaluateArcs,
-  evaluateOutline: evaluatorNodes.evaluateOutline,
   evaluateArticle: evaluatorNodes.evaluateArticle,
 
   // NOTE: validateOutlineStructure and validateArticleContent removed in Commit 8.23

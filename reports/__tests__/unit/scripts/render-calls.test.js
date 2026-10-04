@@ -13,7 +13,7 @@
  */
 const path = require('path');
 const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
-const { evaluateArcs, evaluateOutline, evaluateArticle } = require('../../../lib/workflow/nodes/evaluator-nodes');
+const { evaluateArcs, evaluateArticle } = require('../../../lib/workflow/nodes/evaluator-nodes');
 const { REVISION_CAPS } = require('../../../lib/workflow/state');
 const {
   JUDGE_PHASES,
@@ -38,10 +38,12 @@ function expectSent(sent, rendered) {
 
 const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
 
-/** Each judge's node, and the state that keeps it from skipping its model call. */
+/**
+ * Each judge's node, and the state that keeps it from skipping its model call. Phase 4
+ * (brief 4.6): the outline judge left the graph.
+ */
 const JUDGES = {
   arcs: [evaluateArcs, { meetingApproved: false }],
-  outline: [evaluateOutline, { outlineApproved: false }],
   // At the cap the article judge runs whatever the fact check found.
   article: [evaluateArticle, { articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE }]
 };
@@ -78,25 +80,11 @@ describe('loadCallModules', () => {
   });
 });
 
-// F1: the outline and article judges now receive the director's standing edits
-// (evaluator-nodes.js judgedEdits), and render-calls.js passes them as the node does.
+// F1: the article judge receives the director's standing edits (evaluator-nodes.js
+// judgedEdits), and render-calls.js passes them as the node does. Phase 4 (brief 4.6): the
+// outline judge, which read them too, left the graph.
 describe.each(['journalist', 'detective'])('%s: a judge with the director\'s edits sends what the script renders (F1)', (theme) => {
   const { standingAfterSendBack } = require('../../../lib/hand-edit-diff');
-  const { OUTLINE } = require('../../../lib/__tests__/fixtures/rework-state');
-
-  test('the outline judge', async () => {
-    const edited = clone(OUTLINE);
-    edited.lede.hook = 'Marcus died the morning his company sold.';
-    const state = {
-      ...reworkFixtureState(theme), outline: edited, evaluationHistory: [], outlineApproved: false,
-      _outlineHandEdits: standingAfterSendBack(null, OUTLINE, edited, 'outline')
-    };
-    const sdk = recordingSdk(() => VERDICT);
-    await evaluateOutline(clone(state), cfg(sdk, theme));
-    const rendered = await renderJudge(calls, state, 'outline');
-    expect(rendered.userPrompt).toContain('E1 (lede, hook): "Marcus died the morning his company sold."');
-    expectSent(sdk.mock.calls[0][0], rendered);
-  });
 
   test('the article judge', async () => {
     const edited = clone(PREVIOUS_BUNDLE);

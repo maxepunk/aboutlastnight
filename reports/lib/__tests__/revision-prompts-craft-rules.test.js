@@ -342,11 +342,11 @@ describe('a missing craft file becomes the node error contract, not a graph reje
 
 describe('a prompt build that throws becomes the node error contract, for the judges and the arc reworker (final fix wave)', () => {
   // The evaluator and reviseArcs built their prompts BEFORE their try. Since 2.4 the
-  // judge's build creates a PromptBuilder and ThemeLoader and calls
-  // outlineWriterInputs / reworkHeroImage, and the arc rework prompt carries a
+  // judge's build creates a PromptBuilder and ThemeLoader and calls the writers' input
+  // builders, and the arc rework prompt carries a
   // deliberate throw (buildArcReworkOutputAddendum), so a throw there bypassed the
   // swallow-into-state contract and rejected the graph.
-  const { evaluateArcs, evaluateOutline, evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
+  const { evaluateArcs, evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
   const { reviseArcs } = require('../workflow/nodes/arc-specialist-nodes');
   const { PHASES, REVISION_CAPS } = require('../workflow/state');
   const { PromptBuilder } = require('../prompt-builder');
@@ -360,8 +360,8 @@ describe('a prompt build that throws becomes the node error contract, for the ju
   afterAll(() => jest.restoreAllMocks());
 
   it.each([
+    // Phase 4 (brief 4.6): the outline judge left the graph.
     ['arcs', evaluateArcs, (s) => ({ ...s, selectedArcs: [] })],
-    ['outline', evaluateOutline, (s) => ({ ...s, outlineApproved: false })],
     ['article', evaluateArticle, (s) => ({ ...s, contentBundle: PREVIOUS_BUNDLE, articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE })]
   ])('the %s judge returns the error contract', async (phase, evaluate, shape) => {
     jest.spyOn(PromptBuilder.prototype, '_rosterSection').mockImplementation(() => { throw new Error('roster section exploded'); });

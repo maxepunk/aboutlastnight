@@ -840,22 +840,6 @@ function extractEvidenceSummary(evidenceBundle) {
   };
 }
 
-/**
- * Whether an interweaving plan says anything: an order, a convergence point or a
- * callback. The one rule the outline judge reads a stored plan by (phase 2 final fix
- * wave). The arc stage writes no plan since phase 4 (brief 4.4); the rule goes with the
- * outline judge.
- *
- * @param {Object|null|undefined} plan
- * @returns {boolean}
- */
-function hasInterweavingPlan(plan) {
-  if (!plan || typeof plan !== 'object') return false;
-  return (Array.isArray(plan.suggestedOrder) && plan.suggestedOrder.length > 0) ||
-    (typeof plan.convergencePoint === 'string' && plan.convergencePoint.trim() !== '') ||
-    (Array.isArray(plan.keyCallbacks) && plan.keyCallbacks.length > 0);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // THE WEAVE CHECKS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -937,10 +921,9 @@ module.exports = {
     stateFields: ['weave']
   }),
 
-  // Shared by name: the one rule for "has an interweaving plan" (the outline judge
-  // reads a stored plan by it), the record's ids, and the director's-notes label the
-  // fact check prints too.
-  hasInterweavingPlan,
+  // Shared by name: the record's ids, and the director's-notes label the fact check
+  // prints too. (hasInterweavingPlan went with the outline judge, its last reader:
+  // phase 4, brief 4.6.)
   extractEvidenceSummary,
   ARC_NOTES_LABEL,
 
@@ -964,7 +947,6 @@ module.exports = {
     WEAVE_TASK,
     buildCharacterCategoriesBlock,
     buildArcStandingNotes,
-    hasInterweavingPlan,
     directorWordsOf
   }
 };

@@ -26,7 +26,6 @@ const {
   _testing: {
     // NOTE: routeEvidenceApproval removed in interrupt() migration
     routeArcEvaluation,
-    routeOutlineEvaluation,
     routeArticleEvaluation,
     routeSchemaValidation
   }
@@ -96,29 +95,6 @@ describe('workflow integration', () => {
         expect(routeArcEvaluation({
           currentPhase: PHASES.ERROR
         })).toBe('error');
-      });
-    });
-
-    describe('routeOutlineEvaluation', () => {
-      it('returns "checkpoint" when evaluation ready', () => {
-        expect(routeOutlineEvaluation({
-          evaluationHistory: [{ phase: 'outline', ready: true }],
-          outlineRevisionCount: 0
-        })).toBe('checkpoint');
-      });
-
-      it('returns "checkpoint" when at revision cap', () => {
-        expect(routeOutlineEvaluation({
-          evaluationHistory: [{ phase: 'outline', ready: false }],
-          outlineRevisionCount: REVISION_CAPS.OUTLINE
-        })).toBe('checkpoint');
-      });
-
-      it('returns "revise" when not ready and under cap', () => {
-        expect(routeOutlineEvaluation({
-          evaluationHistory: [{ phase: 'outline', ready: false }],
-          outlineRevisionCount: 1
-        })).toBe('revise');
       });
     });
 
@@ -461,15 +437,6 @@ describe('workflow integration', () => {
 
       // After the fix, should route to checkpoint
       expect(routeArcEvaluation(state)).toBe('checkpoint');
-    });
-
-    it('respects the outline automated budget (2 passes per round)', async () => {
-      const state = {
-        evaluationHistory: [{ ready: false }],
-        outlineRevisionCount: REVISION_CAPS.OUTLINE
-      };
-
-      expect(routeOutlineEvaluation(state)).toBe('checkpoint');
     });
 
     it('respects the article automated budget (2 passes per round)', async () => {

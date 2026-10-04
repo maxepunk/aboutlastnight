@@ -47,8 +47,9 @@ const CORE_FILES = ['world', 'truth-rules'];
  * Phase 4 (brief 4.4): the arc stage follows the phase 4 spec's section 11 (who reads
  * what; it was the rule-set spec's section 8). The interweaving call is gone, and the
  * story meeting's fact check reads the world, the truth rules and the mode block alone:
- * it writes no notes on the writing, so it reads no craft file. The outline and article
- * judges keep their writers' lists until their own slices move them.
+ * it writes no notes on the writing, so it reads no craft file. The article judge keeps
+ * its writer's list until its own slice moves it; the outline judge went with the map
+ * (brief 4.6).
  */
 const ARC_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'];
 const OUTLINE_CRAFT = [
@@ -65,7 +66,6 @@ const RULE_SET_CALLS = Object.freeze({
   outline: OUTLINE_CRAFT,
   article: ARTICLE_CRAFT,
   'judge-arc': [],
-  'judge-outline': OUTLINE_CRAFT,
   'judge-article': ARTICLE_CRAFT
 });
 
@@ -128,7 +128,7 @@ function tagged(name, text) {
 /**
  * The rule set for one call.
  *
- * @param {'arc'|'outline'|'article'|'judge-arc'|'judge-outline'|'judge-article'} call
+ * @param {'arc'|'outline'|'article'|'judge-arc'|'judge-article'} call
  * @param {Object} [options]
  * @param {string} [options.root] - the folder to read; the default root otherwise
  * @returns {{core: string, craft: string}} `core`: <world> then <truth-rules>; `craft`:

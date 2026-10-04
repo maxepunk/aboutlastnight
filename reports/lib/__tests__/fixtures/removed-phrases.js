@@ -353,13 +353,6 @@ const LISTED_BLOCKS = ['QUOTE_BANK', 'TRANSACTION_LINKS', 'NARRATIVE_TENSIONS'];
 const TENSIONS_HEADING = "### Blake and the Valet in the director's notes";
 
 /**
- * The outline judge's photo analyses (renderJudgePhotos, evaluator-nodes.js), the
- * Haiku model's output: "Photo analysis: {" then the indented JSON, closing on a line of
- * the same indent.
- */
-const PHOTO_ANALYSIS = /^(\s*)Photo analysis: \{$/;
-
-/**
  * The pipeline's own lines in <DIRECTOR_GUIDANCE> (buildDirectorGuidanceSection and
  * formatGateNotes in lib/prompt-builder.js). The director's arc-stop guidance follows
  * GUIDANCE_LABEL_END and runs to STANDING_NOTES_PREAMBLE or the block's end. The
@@ -392,11 +385,10 @@ const MODEL_OUTPUT_LABELS = new Set([
   '<arc-metadata>',
   '<arc-analysis>',
   // the judges (phase 4, brief 4.4: the story meeting's fact check reads the weave; the
-  // interweaving call, and the arc reworker's and the arc judge's old labels, went)
+  // interweaving call, and the arc reworker's and the arc judge's old labels, went;
+  // brief 4.6: the outline judge's labels went with it)
   'WEAVE:',
   'OUTLINE:',
-  'SELECTED ARCS (with interweaving metadata):',
-  'INTERWEAVING PLAN (from arc analysis):',
   'CONTENT BUNDLE:'
 ]);
 
@@ -512,26 +504,6 @@ function stripTensionSentences(text) {
   return lines.join('\n');
 }
 
-/** Each photo analysis the outline judge prints taken out, its label and braces kept. */
-function stripPhotoAnalyses(text) {
-  const lines = text.split('\n');
-  const out = [];
-  for (let i = 0; i < lines.length; i += 1) {
-    out.push(lines[i]);
-    const head = lines[i].match(PHOTO_ANALYSIS);
-    if (!head) continue;
-    const closer = `${head[1]}}`;
-    let close = i + 1;
-    while (close < lines.length && lines[close] !== closer) close += 1;
-    if (close === lines.length) {
-      throw new Error('instructionText: a photo analysis whose JSON never closes; where the model\'s output ends is unknown');
-    }
-    out.push(closer);
-    i = close;
-  }
-  return out.join('\n');
-}
-
 /**
  * A render's instruction text: the render with everything but the pipeline's own
  * instructions taken out.
@@ -548,8 +520,9 @@ function stripPhotoAnalyses(text) {
  * - a model's output the prompt carries as data: the previous version a rework shows,
  *   the JSON after each MODEL_OUTPUT_LABELS line (the approved outline, the arcs and the
  *   rest of the arc analysis, the plans, the content bundle, the weave the fact check
- *   reads; phase 4, brief 4.4), the whiteboard reading's values, and the outline judge's
- *   photo analyses (3.6b fix batch).
+ *   reads; phase 4, brief 4.4), and the whiteboard reading's values. (The outline judge's
+ *   photo analyses, stripped since the 3.6b fix batch, went with the outline judge:
+ *   phase 4, brief 4.6.)
  *
  * Kept: every label, the ones inside <DIRECTOR_GUIDANCE> included, so a scan reads them.
  * Each tag pair and bracket pair stays, empty, so a scan still sees where it was.
@@ -557,7 +530,7 @@ function stripPhotoAnalyses(text) {
  * @param {string} render - a rendered prompt, system and user
  * @returns {string}
  * @throws {Error} on a shape it cannot read: a send-back note or a previous version
- *   with no end line, JSON that never closes (a photo analysis's included), a
+ *   with no end line, JSON that never closes, a
  *   <DIRECTOR_GUIDANCE> block with neither of the pipeline's labels. A guess would scan
  *   the director's words or skip the pipeline's.
  */
@@ -575,7 +548,6 @@ function instructionText(render) {
   text = stripModelOutputJson(text);
   text = stripWhiteboardReadings(text);
   text = stripTensionSentences(text);
-  text = stripPhotoAnalyses(text);
   text = text.replace(/(The director's description[^:\n]*:).*$/gm, '$1');
   return text;
 }

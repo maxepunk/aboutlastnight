@@ -285,7 +285,8 @@ describe('generators pass options.gateNotes', () => {
     await generateContentBundle({ outline: OUTLINE, directorGateNotes: NOTES }, cfg(sdk, builder));
     const options = builder.buildArticlePrompt.mock.calls[0][6];
     // Phase 3 (3.9) added photos: the hero, then every photo the director kept (none here).
-    expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, shouldConsider: [], evidenceBundle: null, directorCorrections: [], photoDescriptions: null, photos: [] });
+    // Phase 4 (brief 4.6): the outline judge's advisories (shouldConsider) went with it.
+    expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, evidenceBundle: null, directorCorrections: [], photoDescriptions: null, photos: [] });
   });
 
   it('with no notes the generators pass an empty list (prompt unchanged)', async () => {

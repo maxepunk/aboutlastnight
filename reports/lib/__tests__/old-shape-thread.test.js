@@ -11,7 +11,7 @@
 const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const { generateOutline, generateContentBundle } = require('../workflow/nodes/ai-nodes');
 const { analyzeArcsPlayerFocusGuided } = require('../workflow/nodes/arc-specialist-nodes');
-const { evaluateOutline, evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
+const { evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
 const { ledgerReviewOf } = require('../session-ledger');
 const { REVISION_CAPS } = require('../workflow/state');
 
@@ -45,8 +45,9 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
   const SALE_LINE = '- 07:50 AM | sale | account: Melanie | amount: $75,000';
 
   // Phase 4 (brief 4.4): the arc writer writes the weave in one call, and the arc stage
-  // is the journalist's alone (R1); the interweaving call went.
-  it('the arc writer, the outline and article writers and their judges carry the sales on the clock', async () => {
+  // is the journalist's alone (R1); the interweaving call went. Brief 4.6: the outline
+  // judge went.
+  it('the arc writer, the outline and article writers and the article judge carry the sales on the clock', async () => {
     if (theme === 'journalist') {
       const arcSdk = recordingSdk(() => oldShapeState(theme).weave);
       await analyzeArcsPlayerFocusGuided({ ...oldShapeState(theme), weave: null }, cfg(arcSdk, theme));
@@ -62,9 +63,6 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     expect(promptOf(articleSdk)).toContain(SALE_LINE);
 
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
-    const outlineJudge = recordingSdk(verdict);
-    await evaluateOutline({ ...oldShapeState(theme), heroImage: 'hero.jpg', evaluationHistory: [], outlineApproved: false }, cfg(outlineJudge, theme));
-    expect(promptOf(outlineJudge)).toContain(SALE_LINE);
     const articleJudge = recordingSdk(verdict);
     await evaluateArticle({
       ...oldShapeState(theme), heroImage: 'hero.jpg', evaluationHistory: [], contentBundle: PREVIOUS_BUNDLE,
@@ -97,20 +95,24 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
     await generateContentBundle({ ...withLink(), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
-    const outlineJudge = recordingSdk(verdict);
-    await evaluateOutline({ ...withLink(), heroImage: 'hero.jpg', evaluationHistory: [], outlineApproved: false }, cfg(outlineJudge, theme));
+    // Phase 4 (brief 4.6): the article judge, in place of the outline judge that went.
+    const articleJudge = recordingSdk(verdict);
+    await evaluateArticle({
+      ...withLink(), heroImage: 'hero.jpg', evaluationHistory: [], contentBundle: PREVIOUS_BUNDLE,
+      articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE
+    }, cfg(articleJudge, theme));
 
     const prompts = {
       ...(theme === 'journalist' && { arcWriter: promptOf(arcSdk, 0) }),
       outlineWriter: promptOf(outlineSdk),
       articleWriter: promptOf(articleSdk),
-      outlineJudge: promptOf(outlineJudge)
+      articleJudge: promptOf(articleJudge)
     };
     const withLinks = Object.entries(prompts).filter(([, prompt]) => prompt.includes('<TRANSACTION_LINKS>'));
     // The detective writers print no director-notes block of their own.
     expect(withLinks.map(([name]) => name)).toEqual(theme === 'journalist'
-      ? ['arcWriter', 'outlineWriter', 'articleWriter', 'outlineJudge']
-      : ['outlineJudge']);
+      ? ['arcWriter', 'outlineWriter', 'articleWriter', 'articleJudge']
+      : ['articleJudge']);
     withLinks.forEach(([, prompt]) => {
       // The timeline prints this sale at 07:50 AM (the test above); the link agrees.
       expect(prompt).toContain(LINK_LINE);

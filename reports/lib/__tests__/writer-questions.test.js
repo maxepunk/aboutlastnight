@@ -539,7 +539,8 @@ describe('the questions never reach a later writer, a judge\'s JSON or the templ
     QUESTION_TEXTS.forEach((q) => expect(prompt).not.toContain(q));
   });
 
-  it.each(['outline', 'article'])('the %s judge\'s JSON carries none of the questions', (phase) => {
+  // Phase 4 (brief 4.6): the outline judge left the graph.
+  it.each(['article'])('the %s judge\'s JSON carries none of the questions', (phase) => {
     for (const theme of ['journalist', 'detective']) {
       const prompt = buildEvaluationUserPrompt(phase, withQuestions(reworkFixtureState(theme)), {});
       expectNoQuestions(prompt);

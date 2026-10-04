@@ -1,8 +1,9 @@
 'use strict';
 /**
- * The three judges' prompts, built from a thread's state as their nodes build them,
- * with no model call (brief 3.0, fix round 1). Phase 4 (brief 4.4): the arc stage's
- * judge is the story meeting's fact check, and the interweaving call went.
+ * The judges' prompts, built from a thread's state as their nodes build them, with no
+ * model call (brief 3.0, fix round 1). Phase 4 (brief 4.4): the arc stage's judge is the
+ * story meeting's fact check, and the interweaving call went. Brief 4.6: the outline
+ * judge went with the map.
  *
  * render-prompts.js writes judge-*.txt through these functions. The nodes keep their
  * argument lists inline (createEvaluator's criteria, fact check and director's edits),
@@ -16,7 +17,7 @@
  */
 
 /** The judges' phases, in the order render-prompts.js writes their files. */
-const JUDGE_PHASES = ['arcs', 'outline', 'article'];
+const JUDGE_PHASES = ['arcs', 'article'];
 
 /** Throw, naming the module and the export, when a tree lacks a builder a render goes through. */
 function requireExports(where, mod, names) {
@@ -33,7 +34,7 @@ function loadCallModules(req) {
   const { factCheckContentBundle } = req('lib/content-bundle-fact-check.js');
   const { getThemeNPCPronouns } = req('lib/theme-config.js');
   requireExports('evaluator-nodes.js _testing', evalNodes, ['buildEvaluationSystemPrompt', 'buildEvaluationUserPrompt',
-    'getOutlineCriteria', 'getArticleCriteria']);
+    'getArticleCriteria']);
   requireExports('content-bundle-fact-check.js', { factCheckContentBundle }, ['factCheckContentBundle']);
   requireExports('theme-config.js', { getThemeNPCPronouns }, ['getThemeNPCPronouns']);
   return { evalNodes, factCheckContentBundle, getThemeNPCPronouns };
@@ -47,17 +48,17 @@ function loadCallModules(req) {
  * Phase 4 (brief 4.4): the arcs judge is the story meeting's fact check on
  * `state.weave`, with its truth criteria (getPhaseCriteria) and no code fact check, as
  * createEvaluator calls it. Brief 4.5: after a director's round it reads the director's
- * standing edits (judgedEdits) and their answers, as the outline and article judges read
- * theirs. A tree from before getPhaseCriteria reads its arc criteria from QUALITY_CRITERIA.
+ * standing edits (judgedEdits) and their answers, as the article judge reads its own. A
+ * tree from before getPhaseCriteria reads its arc criteria from QUALITY_CRITERIA.
  *
  * Phase 3 (3.4): a tree that exports getPhaseCriteria and buildFactCheckArgs builds
  * both through the evaluator's own functions, and its system prompt takes the session
  * config (the mode block). An older tree (a baseline render through --repo) gets the
  * argument lists its evaluator used, below.
  *
- * F1 (before phase 4): the outline and article judges' user prompts take the director's
- * edits the judged output carries, through the evaluator's own judgedEdits. An older tree
- * exports none, and its builder ignores the option.
+ * F1 (before phase 4): the article judge's user prompt takes the director's edits the
+ * judged output carries, through the evaluator's own judgedEdits. An older tree exports
+ * none, and its builder ignores the option.
  * @param {string} phase - one of JUDGE_PHASES
  * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
  */
@@ -65,8 +66,7 @@ async function renderJudge({ evalNodes, factCheckContentBundle, getThemeNPCProno
   const theme = state.theme || 'journalist';
   const criteria = evalNodes.getPhaseCriteria ? evalNodes.getPhaseCriteria(phase, theme)
     : phase === 'article' ? evalNodes.getArticleCriteria(theme)
-      : phase === 'outline' ? evalNodes.getOutlineCriteria(theme)
-        : evalNodes.QUALITY_CRITERIA[phase];
+      : evalNodes.QUALITY_CRITERIA[phase];
   const factCheckArgs = evalNodes.buildFactCheckArgs ? evalNodes.buildFactCheckArgs(state) : {
     contentBundle: state.contentBundle,
     arcEvidencePackages: state.arcEvidencePackages,

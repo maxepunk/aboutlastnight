@@ -72,19 +72,20 @@ describe('buildRollbackState evaluation stubs', () => {
     expect(typeof last.timestamp).toBe('string');
   });
 
-  test('rollback to outline invalidates the outline AND the article', () => {
+  // Phase 4 (brief 4.6; spec 15): no judge reads the outline, so only the article's
+  // evaluation goes stale here.
+  test('rollback to outline invalidates the article', () => {
     const stubs = buildRollbackState('outline').evaluationHistory;
 
-    // Both are regenerated after this point, so both evaluations are stale.
-    expect(stubs.map(s => s.phase)).toEqual(['outline', 'article']);
+    expect(stubs.map(s => s.phase)).toEqual(['article']);
     expect(stubs.every(s => s.ready === false)).toBe(true);
     expect(stubs.every(s => s.source === 'rollback')).toBe(true);
   });
 
-  test('rollback into the photo branch invalidates the outline AND the article (R2)', () => {
+  test('rollback into the photo branch invalidates the article (R2; brief 4.6: no outline judge)', () => {
     for (const point of ['photos', 'character-ids']) {
       const stubs = buildRollbackState(point).evaluationHistory;
-      expect(stubs.map(s => s.phase)).toEqual(['outline', 'article']);
+      expect(stubs.map(s => s.phase)).toEqual(['article']);
       expect(stubs.every(s => s.ready === false)).toBe(true);
       expect(stubs.every(s => s.source === 'rollback')).toBe(true);
       // The arc verdict is UPSTREAM of the branch and must survive.

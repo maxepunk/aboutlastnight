@@ -948,7 +948,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     // outline/article/arc-selection, its resume value is neither an approve nor a
     // reject-with-feedback, and that routes straight into a PAID revision loop
     // (checkpointOutline -> routeAfterOutlineCheckpoint -> incrementOutlineRevision
-    // -> reviseOutline + evaluateOutline).
+    // -> reviseOutline).
     const PHOTOS_PATH_GATES = [
         CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS,
         CHECKPOINT_TYPES.ARC_SELECTION,
@@ -1451,7 +1451,9 @@ const RESOURCE_ENDPOINTS = [
     { path: 'arcs', minPhase: 2.3,
       fields: state => ({ weave: state.weave || null }),
       check: state => isWeave(state.weave) },
-    { path: 'outline', minPhase: 3.2,
+    // Phase 4 (brief 4.6): the outline judge stamped 3.2; with it gone, the stop opens
+    // after the outline writer's 3.1.
+    { path: 'outline', minPhase: 3.1,
       fields: state => ({ outline: state.outline || null }),
       check: state => !!state.outline },
     { path: 'article', minPhase: 4.2,

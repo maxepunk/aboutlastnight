@@ -616,7 +616,7 @@ async function checkpointArcSelection(state, config) {
  * Outline Checkpoint
  *
  * Pauses for user to approve the article outline.
- * Requires: state.outline (from evaluateOutline with ready=true)
+ * Requires: state.outline (from generateOutline, or reviseOutline after a send-back)
  *
  * @param {Object} state - Current state with outline
  * @param {Object} config - Graph config

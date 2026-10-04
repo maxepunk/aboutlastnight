@@ -74,10 +74,11 @@ function buildRollbackState(rollbackPoint = 'input-review') {
 const PHASES_INVALIDATED_BY = {
   // The photo branch (photo late-join) preserves evaluationHistory the way the
   // outline point does — the arc verdict is upstream and still valid — and
-  // regenerates the outline AND the article, so both are invalidated (R2/M1).
-  photos: ['outline', 'article'],
-  'character-ids': ['outline', 'article'],
-  outline: ['outline', 'article'],
+  // regenerates the article, so its evaluation is invalidated (R2/M1). Phase 4 (brief
+  // 4.6; spec 15): the outline's stubs went with the outline judge.
+  photos: ['article'],
+  'character-ids': ['article'],
+  outline: ['article'],
   article: ['article']
 };
 
@@ -109,8 +110,9 @@ const STOPS_INVALIDATED_BY = {
  *     keeps the weave and its fact-check mark, which the fact check skips by, so the
  *     cleared history costs no call there, and the map and the article are judged again.
  *   - `outline` preserves the history (it may hold useful arc evaluations) and
- *     regenerates the outline AND the article, so both are invalidated. Appending
- *     two entries in one update is why appendSingleReducer spreads an array.
+ *     regenerates the article, so the article is invalidated. (It invalidated the
+ *     outline's too, until the outline judge left in phase 4, brief 4.6; appending two
+ *     entries in one update is why appendSingleReducer spreads an array.)
  *   - `article` preserves the history and regenerates only the article.
  *
  * The stub is a history entry, not a deletion: the previous verdict stays on the

@@ -141,6 +141,7 @@ describe('graph wiring — photo late-join', () => {
 
   test('registers checkpointPhotos as a node', () => {
     expect(Object.keys(builder.nodes)).toContain('checkpointPhotos');
-    expect(Object.keys(builder.nodes)).toHaveLength(44);
+    // Phase 4 (brief 4.6): the packages node and the outline judge went.
+    expect(Object.keys(builder.nodes)).toHaveLength(43);
   });
 });

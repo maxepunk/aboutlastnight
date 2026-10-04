@@ -904,12 +904,13 @@ describe('PromptBuilder', () => {
       expect(userPrompt).toContain('They are not requirements.');
     });
 
-    it('renders them in the article prompt too', async () => {
+    // Phase 4 (brief 4.6): the outline judge, whose advisories these were, left the graph.
+    it('prints none in the article prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         {}, null, [], null, null, null, { shouldConsider: ADVISORIES }
       );
-      expect(userPrompt).toContain('<SHOULD_CONSIDER>');
-      expect(userPrompt).toContain('- The lede frontloads the verdict');
+      expect(userPrompt).not.toContain('SHOULD_CONSIDER');
+      expect(userPrompt).not.toContain('- The lede frontloads the verdict');
     });
 
     it('keeps <DIRECTOR_GUIDANCE> the last section of both prompts', async () => {
@@ -921,10 +922,10 @@ describe('PromptBuilder', () => {
         {}, null, [], null, null, null,
         { shouldConsider: ADVISORIES, directorGuidance: 'Lead with the money.' }
       );
+      expect(outline.userPrompt).toContain('<SHOULD_CONSIDER>');
+      expect(outline.userPrompt.indexOf('<SHOULD_CONSIDER>'))
+        .toBeLessThan(outline.userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
       for (const { userPrompt } of [outline, article]) {
-        expect(userPrompt).toContain('<SHOULD_CONSIDER>');
-        expect(userPrompt.indexOf('<SHOULD_CONSIDER>'))
-          .toBeLessThan(userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
         expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
       }
     });

@@ -87,7 +87,8 @@ async function renderAll(req) {
 
     const articleSdk = recordingSdk({ sections: [], evidenceCards: [], metadata: {} });
     await aiNodes.generateContentBundle(
-      { ...base, ...tail, heroImage: 'hero.jpg', contentBundle: null, validationResults: { phase: 'outline', advisoryWarnings: ['PIN OUTLINE ADVISORY'] } },
+      // Phase 4 (brief 4.6): no outline evaluation's advisories reach the article writer.
+      { ...base, ...tail, heroImage: 'hero.jpg', contentBundle: null },
       { configurable: { sdkClient: articleSdk, promptBuilder: builder, theme } }
     );
     out[`article-${theme}`] = `${articleSdk.calls[0].systemPrompt}\n=====\n${articleSdk.calls[0].prompt}`;

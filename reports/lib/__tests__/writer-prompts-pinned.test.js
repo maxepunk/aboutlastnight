@@ -224,13 +224,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   writer's <arc-evidence> (21224 -> 20492) and the detective's <evidence-context>
  *   (8828 -> 8471); the journalist article writer's ARC EVIDENCE PACKAGES (28260 -> 27631)
  *   and the detective's (29436 -> 28610). arcs-journalist does not move.
+ * - Phase 4 (brief 4.6), the outline judge leaves the graph: the article writer's
+ *   <SHOULD_CONSIDER>, the outline evaluation's advisories, goes with it, and nothing else
+ *   moves. article-journalist 27631 -> 27446, article-detective 28610 -> 28425; the
+ *   outline and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['8618f4b21202eb6cd23df199649b30f5e272db817fcb261fb820b74203adf263', 20492],
-  'article-journalist': ['e85630a0f011ce58931455d6e19cd1e0fba2b357552cbad1050defda27465fa3', 27631],
+  'article-journalist': ['33d2f7f5f488a6aef4f600186b7a9c5d6608f6c6571e345a6c814234ba42b60d', 27446],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892],
   'outline-detective': ['0521b490325112f9d3f8db05979b53f936a809b21719557ad28e76323e672017', 8471],
-  'article-detective': ['8e9a7637c4658265d021a4c4ee771cbc9bbe1aec3a685668b2f3d9799a24d22c', 28610]
+  'article-detective': ['5dd7c181f9a0aa6110f2bfee6bd5129bdee0edf0d587cd18275b2424bc6ee7dc', 28425]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

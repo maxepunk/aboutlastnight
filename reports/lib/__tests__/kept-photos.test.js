@@ -134,16 +134,6 @@ describe('every list a writer or judge may place from', () => {
     }
   });
 
-  it('the outline judge lists the hero and the kept photos, in both themes', () => {
-    for (const theme of ['journalist', 'detective']) {
-      const prompt = buildEvaluationUserPrompt('outline', photoState(theme));
-      const photos = prompt.slice(prompt.indexOf('PHOTOS (all'), prompt.indexOf('SESSION ROSTER ('));
-      expect(photos).toContain('PHOTOS (all 3 photos the outline could place');
-      expect([...photos.matchAll(/^\d+\. (?:\[hero image\] )?(.+?): .*$/gm)].map((m) => m[1])).toEqual(['hero.jpg', 'p2.jpg', 'p4.jpg']);
-      EXCLUDED.forEach((text) => expect(`${theme} ${text}: ${photos.includes(text)}`).toBe(`${theme} ${text}: false`));
-    }
-  });
-
   it("the article writer's set follows the director's decision too, over a stale mark", () => {
     const state = photoState();
     const inputs = articleWriterInputs(state);

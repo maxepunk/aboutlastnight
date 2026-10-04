@@ -173,7 +173,14 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
   });
 
   it("each reworker's prompts open with its writer's", () => {
-    const writerUser = (name) => renders[name].prompt.slice(0, renders[name].prompt.indexOf('<SHOULD_CONSIDER>'));
+    // The writer's user sections end where its tail opens: <SHOULD_CONSIDER> when it has
+    // one, else <DIRECTOR_GUIDANCE> (phase 4, brief 4.6: the article writer reads no
+    // <SHOULD_CONSIDER> since the outline judge left).
+    const writerUser = (name) => {
+      const { prompt } = renders[name];
+      const tails = ['<SHOULD_CONSIDER>', '<DIRECTOR_GUIDANCE>'].map((tag) => prompt.indexOf(tag)).filter((i) => i >= 0);
+      return prompt.slice(0, Math.min(...tails));
+    };
     expect(renders['outline reworker'].systemPrompt.startsWith(`${renders['outline writer'].systemPrompt}\n\n`)).toBe(true);
     expect(renders['article reworker'].systemPrompt.startsWith(`${renders['article writer'].systemPrompt}\n\n`)).toBe(true);
     expect(renders['outline reworker'].prompt.startsWith(writerUser('outline writer'))).toBe(true);

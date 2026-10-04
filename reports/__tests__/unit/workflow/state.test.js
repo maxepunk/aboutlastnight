@@ -574,7 +574,7 @@ describe('ReportStateAnnotation', () => {
     it('defines generation phases (3-4.x)', () => {
       expect(PHASES.GENERATE_OUTLINE).toBe('3');
       expect(PHASES.OUTLINE_GENERATION).toBe('3.1');
-      expect(PHASES.OUTLINE_EVALUATION).toBe('3.2');
+      expect(PHASES).not.toHaveProperty('OUTLINE_EVALUATION');  // brief 4.6: the outline judge went
       expect(PHASES.GENERATE_CONTENT).toBe('4');
       expect(PHASES.ARTICLE_GENERATION).toBe('4.1');
       expect(PHASES.ARTICLE_EVALUATION).toBe('4.2');
@@ -592,9 +592,10 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    // Phase 4 (brief 4.6; R5): the arc packages' phase went with the packages.
-    it('defines exactly 41 phases (photo late-join: added PHOTOS; brief 4.6: the arc packages went)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(41);
+    // Phase 4 (brief 4.6; R5): the arc packages' phase went with the packages, and the
+    // outline evaluation's with the outline judge.
+    it('defines exactly 40 phases (photo late-join: added PHOTOS; brief 4.6: the arc packages and the outline judge went)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(40);
     });
 
     it('defines the photos gate phase after arc selection', () => {
@@ -694,8 +695,9 @@ describe('ReportStateAnnotation', () => {
       expect(REVISION_CAPS.ARCS).toBe(1);
     });
 
-    it('defines OUTLINE cap as 2 automated passes per round', () => {
-      expect(REVISION_CAPS.OUTLINE).toBe(2);
+    // Phase 4 (brief 4.6; R6): one rework after a failed map check.
+    it('defines OUTLINE cap as 1 automated pass per round', () => {
+      expect(REVISION_CAPS.OUTLINE).toBe(1);
     });
 
     it('defines ARTICLE cap as 2 automated passes per round', () => {

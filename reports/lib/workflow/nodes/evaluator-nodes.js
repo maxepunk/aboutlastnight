@@ -1,10 +1,12 @@
 /**
  * Evaluator Nodes - Per-phase quality evaluation for report generation workflow
  *
- * Handles the evaluation sub-phases (2.3, 3.2, 4.2) of the pipeline:
- * - evaluateArcs: Check arc coherence, evidence grounding, narrative potential
- * - evaluateOutline: Check arc coverage, section balance, flow logic
+ * Handles the evaluation sub-phases (2.3, 4.2) of the pipeline:
+ * - evaluateArcs: the story meeting's fact check on the weave (phase 4, brief 4.4)
  * - evaluateArticle: Check voice consistency, anti-patterns, evidence integration
+ *
+ * Phase 4 (brief 4.6; spec 5.4): no model judge reads the map. The outline judge left
+ * the graph; the map's code checks (map-nodes.js) take its place.
  *
  * Added in Commit 8.6 to implement per-phase evaluator pattern.
  * Each evaluator determines if content is READY for human review.
@@ -33,11 +35,10 @@ const { PHASES, REVISION_CAPS } = require('../state');
 // checkpointInterrupt removed in Commit 8.26 (SRP - moved to checkpoint-nodes.js)
 const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
-const { safeParseJson, getSdkClient, formatIssuesForMessage, resolveArcs, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
+const { safeParseJson, getSdkClient, formatIssuesForMessage, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCEntries } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
-const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 // Phase 3 (3.4): each journalist judge reads the rule set its writer reads, through
 // the writers' own loader and mode-block placement (lib/rule-set.js, prompt-builder.js).
 const { loadRuleSet } = require('../../rule-set');
@@ -47,22 +48,20 @@ const { withReportingModeBlock } = require('../../prompt-builder');
 const { renderRecordView } = require('../../prompt-renderers/record-view');
 const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
-const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry, photoKey } = require('../../prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
-// The writers' own builders: the writers' SESSION_FACTS, the outline writer's inputs
-// (its photo list among them) with the hero it used, the article writer's inputs (its
+// The writers' own builders: the writers' SESSION_FACTS, the article writer's inputs (its
 // photos, 3.9), the PromptBuilder (whose roster method gives the roster section, and
-// whose money summary the outline and article judges print, 3.9), and the one rule for
-// a kept photo with the one hero entry (the 4b fix batch), and the whiteboard's filename
-// (task 4c-fix). ARC_NOTES_LABEL is the arc writer's label for the director's notes,
-// which the weave's fact check prints as its notes heading (one source, fix 3.4b).
-const { hasInterweavingPlan, ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
+// whose money summary the article judge prints, 3.9), the one rule for a kept photo (the
+// 4b fix batch), and the whiteboard's filename (task 4c-fix). ARC_NOTES_LABEL is the arc
+// writer's label for the director's notes, which the weave's fact check prints as its
+// notes heading (one source, fix 3.4b).
+const { ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const {
-  buildSessionFacts, outlineWriterInputs, articleWriterInputs, reworkHeroImage, getPromptBuilder, isPhotoExcluded, heroPhotoEntry,
-  whiteboardFilenameOf
+  buildSessionFacts, articleWriterInputs, getPromptBuilder, isPhotoExcluded, whiteboardFilenameOf
 } = require('./ai-nodes');
-// Phase 3 (3.7): every judge's JSON of an outline or an article leaves the writers'
-// questions out.
+// Phase 3 (3.7): the article judge's JSON of the outline and the article leaves the
+// writers' questions out.
 const { withoutWriterQuestions } = require('../../writer-questions');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
 // the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
@@ -71,9 +70,9 @@ const { isWeave, weaveForPrompt, weaveForJudge, weaveKey, withFactCheckMark, isW
 const { renderDirectorAnswers } = require('../../prompt-renderers/settled-weave');
 // The page's own rule for whether the writer's money tracker prints (printedWriterTracker).
 const { writerTrackerPrints } = require('../../template-assembler');
-// F1 (spec 2026-10-02 section 7): the director's edits are final. The outline and article
-// judges read the edits the judged output carries, and the verdict guard moves a finding
-// about one of them to advisoryWarnings under the one prefix.
+// F1 (spec 2026-10-02 section 7): the director's edits are final. The article judge reads
+// the edits the judged output carries, and the verdict guard moves a finding about one of
+// them to advisoryWarnings under the one prefix.
 const {
   carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, concernFinding, DIRECTOR_EDIT_PREFIX,
   EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE, PRINTED_FIELDS
@@ -84,9 +83,9 @@ const {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Each phase resolves its criteria through getPhaseCriteria(phase, theme): the weave's
-// fact check scores the truth criteria alone (phase 4, brief 4.4); the outline and
-// article judges add their weighted criteria (getOutlineCriteria, getArticleCriteria).
-// The detective's arc criteria went with its arc stage (ruling R1).
+// fact check scores the truth criteria alone (phase 4, brief 4.4); the article judge adds
+// its weighted criteria (getArticleCriteria). The detective's arc criteria went with its
+// arc stage (ruling R1), and the outline judge with the map (brief 4.6).
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TRUTH CRITERIA (phase 3, 3.4; spec section 4 and R2)
@@ -107,25 +106,25 @@ const {
 //
 // `phases` limits a group to the judges whose output it scores. A weave places no photos
 // and prints nothing, so the weave's fact check leaves out photos and the fiction's
-// words: there a criterion could only misfire, at the cost of an automatic fix.
+// words: there a criterion could only misfire, at the cost of an automatic fix. The
+// outline judge's wordings went with it (phase 4, brief 4.6).
 //
 // Phase 4 (brief 4.4): the arc stage's judge is the weave's fact check, and each of its
 // questions is worded for the weave (the `arcs` phase keeps its name, as the stop types
 // do, R3).
 
 /** What each judge scores, as the truth criteria name it. */
-const TRUTH_SUBJECTS = { arcs: 'the weave', outline: 'the outline', article: 'the article' };
+const TRUTH_SUBJECTS = { arcs: 'the weave', article: 'the article' };
 
 /**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
  * it under. The first twelve are the judge's inputs; the last two are the judged output's
- * own text, which only the article holds (an outline places cards by id and photos by
- * filename, and arcs place neither).
+ * own text, which only the article holds (the weave places neither cards nor photos).
  */
 const TRUTH_MATERIAL = Object.freeze({
   record: '<RECORD>',                       // the exposed documents (renderRecordView)
   timeline: '<morning-timeline>',           // the ledger and the evidence log, on the morning clock
-  financialSummary: '<FINANCIAL_SUMMARY>',  // the account totals the outline and article writers copy (3.9)
+  financialSummary: '<FINANCIAL_SUMMARY>',  // the account totals the article writer copies (3.9)
   notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
   answers: '<DIRECTOR_ANSWERS>',            // the director's answers at the story meeting (renderDirectorAnswers; brief 4.5)
   epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
@@ -155,8 +154,8 @@ const TRUTH_GROUPS = [
   {
     key: 'moneyTruth',
     rules: ['T5'],
-    // Phase 3 (3.9; the integrator's ruling): the outline and article judges read the
-    // FINANCIAL_SUMMARY their writers copy, so a correct code-made total is never taken
+    // Phase 3 (3.9; the integrator's ruling): the article judge reads the
+    // FINANCIAL_SUMMARY its writer copies, so a correct code-made total is never taken
     // for a sum the writer made up. The arc writer has no summary, so its judge has the
     // timeline alone. The buyer is Nova's suspicion (T5, R11).
     //
@@ -201,7 +200,7 @@ const TRUTH_GROUPS = [
   {
     key: 'wordsTruth',
     rules: ['T12'],
-    // Only the article prints a card's text; the arcs and the outline name cards by id.
+    // Only the article prints a card's text; the weave names a receipt by id.
     reads: (phase) => (phase === 'article' ? ['record', 'notes', 'printedCards'] : ['record', 'notes']),
     describe: (s, phase) => (phase === 'article'
       ? 'Is every quoted line in the article word for word from the record or the director\'s notes and in its real speaker\'s mouth, and does every card copy the record with no id or timestamp in its text (T12)?'
@@ -210,21 +209,17 @@ const TRUTH_GROUPS = [
   {
     key: 'photosTruth',
     rules: ['T13'],
-    phases: ['outline', 'article'],
-    // The outline has one photo slot per arc and one in FOLLOW THE MONEY, and no
-    // caption: placing every photo, and captioning it, is the article's work. The
-    // article judge reads the photos its writer was given (renderArticleJudgePhotos):
+    phases: ['article'],
+    // The article judge reads the photos its writer was given (renderArticleJudgePhotos):
     // since 3.9, every photo the director kept, so "every photo in PHOTOS" is T13's
     // every-photo check (the integrator's ruling).
-    reads: (phase) => (phase === 'article' ? ['photos', 'whiteboard', 'printedCaptions'] : ['photos', 'whiteboard']),
-    describe: (s, phase) => (phase === 'article'
-      ? 'Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director\'s description wherever PHOTOS gives one (T13)?'
-      : 'Does every photo the outline places come from PHOTOS, which leaves the whiteboard photo out, and does the outline cite nothing from the whiteboard (T13)? The outline places what its photo slots hold, one for each arc and one in FOLLOW THE MONEY, and the article places the rest.')
+    reads: () => ['photos', 'whiteboard', 'printedCaptions'],
+    describe: () => 'Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director\'s description wherever PHOTOS gives one (T13)?'
   },
   {
     key: 'fictionTruth',
     rules: ['T14'],
-    phases: ['outline', 'article'],
+    phases: ['article'],
     reads: () => ['truthRules'],
     describe: (s) => `Does every line of ${s} that reaches print speak the fiction's own words, with no production word in it (T14)?`
   }
@@ -233,7 +228,7 @@ const TRUTH_GROUPS = [
 /**
  * The truth criteria one journalist judge scores, each worded for that judge.
  *
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @returns {Object<string, {description: string, rules: string[], reads: string[], type: 'structural', truth: true}>}
  */
 function truthCriteria(phase) {
@@ -261,134 +256,6 @@ function truthCriteria(phase) {
  */
 function getArcCriteria() {
   return truthCriteria('arcs');
-}
-
-/**
- * Get theme-aware outline evaluation criteria
- * @param {string} theme - 'journalist' or 'detective'
- * @returns {Object} Outline quality criteria
- */
-function getOutlineCriteria(theme = 'journalist') {
-  const isDetective = theme === 'detective';
-
-  if (isDetective) {
-    return {
-      // STRUCTURAL CRITERIA - Block if failed
-      arcCoverage: {
-        description: 'Does outline address all selected narrative threads?',
-        weight: 0.25,
-        type: 'structural'
-      },
-      requiredSections: {
-        description: 'Are all required sections present (executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment)?',
-        weight: 0.25,
-        type: 'structural'
-      },
-      sectionDifferentiation: {
-        description: 'Does each section answer a DIFFERENT question about the case? No fact should repeat across sections.',
-        weight: 0.20,
-        type: 'structural'
-      },
-      // ADVISORY CRITERIA - Warn but don't block
-      sectionBalance: {
-        description: 'Are sections appropriately weighted within the ~750 word budget?',
-        weight: 0.10,
-        type: 'advisory'
-      },
-      flowLogic: {
-        description: 'Does the report flow logically from summary through evidence to assessment?',
-        weight: 0.05,
-        type: 'advisory'
-      },
-      evidenceSynthesis: {
-        description: 'Is evidence grouped thematically and synthesized (not listed individually)?',
-        weight: 0.10,
-        type: 'advisory'
-      },
-      wordBudget: {
-        description: 'Are section word budgets reasonable for a ~750 word report?',
-        weight: 0.05,
-        type: 'advisory'
-      }
-    };
-  }
-
-  // Journalist outline criteria. Phase 3 (3.4): each names the rule or craft item it
-  // scores, and keeps its type and weight; the truth criteria follow. Phase 3 (3.9; R2,
-  // R22): a structural criterion holds to the plan's wording, with no craft clause of
-  // its own; the craft reference and craft findings carry the rest.
-  return {
-    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.70)
-    arcCoverage: {
-      description: 'Does the outline carry every selected arc, each in at least one section (C16)?',
-      weight: 0.20,
-      type: 'structural'
-    },
-    requiredSections: {
-      description: 'Does each section the outline prints earn its place in the narrative (C2)?',
-      weight: 0.20,
-      type: 'structural'
-    },
-    arcSectionFlow: {
-      description: 'Is every section an essential part of one narrative, carrying the threads forward from its own angle, with nothing front-loaded into THE STORY (C2)? Not every arc appears in every section: each section carries the threads its angle needs.',
-      weight: 0.20,
-      type: 'structural'
-    },
-    // Final review (judges-factcheck[1]): it scores R8 (photos spread through the
-    // article, with no count), which no rule file states; C4, which it cited, says
-    // nothing about photos.
-    visualDistributionPlan: {
-      description: 'Do the photos spread through the article?',
-      weight: 0.10,
-      type: 'structural'
-    },
-    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.30)
-    sectionBalance: {
-      description: 'Is the plan sized for an article of about 1,500 words, with the thesis deciding where the words go (C4)?',
-      weight: 0.05,
-      type: 'advisory'
-    },
-    flowLogic: {
-      description: 'Does each section hand off to the next, building toward the thesis (C2)?',
-      weight: 0.05,
-      type: 'advisory'
-    },
-    photoPlacement: {
-      description: 'Is each photo placed where the story reaches the moment it shows (T13)?',
-      weight: 0.05,
-      type: 'advisory'
-    },
-    wordBudget: {
-      description: 'Do the section word budgets add up to about 1,500 words (C4)?',
-      weight: 0.05,
-      type: 'advisory'
-    },
-    // MOMENTUM CRITERIA (Commit 8.24; round 7: C16, C17, C19).
-    // Phase 3 (3.9; C16): a planted detail scores only when its payoff moves the throughline.
-    // Wave 4 integration: the threads are intercut (C16); callbacks are no longer the joint.
-    loopArchitecture: {
-      description: 'Do the arcs open questions that pull the reader forward and pay them off later, and does each detail planted early come back changed in a payoff that moves the throughline (C16, C4)?',
-      weight: 0.025,
-      type: 'advisory'
-    },
-    arcInterweaving: {
-      description: 'Are the threads intercut across the sections rather than told one after another (C16)?',
-      weight: 0.025,
-      type: 'advisory'
-    },
-    visualMomentum: {
-      description: 'Does each card and photo move the story on, closing a question an earlier section opened or opening the next one (C9, C4)?',
-      weight: 0.025,
-      type: 'advisory'
-    },
-    // Phase 3 (3.9): C16 of round 7: one convergence near the end, the thesis said once.
-    convergence: {
-      description: 'Do the threads meet at one convergence near the end, where the thesis lands, said once (C16)?',
-      weight: 0.025,
-      type: 'advisory'
-    },
-    ...truthCriteria('outline')
-  };
 }
 
 /**
@@ -500,14 +367,13 @@ function getArticleCriteria(theme = 'journalist') {
  * One phase's criteria for a theme: the one place a judge's criteria are resolved
  * (createEvaluator, and scripts/lib/render-calls.js for the renders).
  *
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @param {string} [theme='journalist']
  * @returns {Object}
  */
 function getPhaseCriteria(phase, theme = 'journalist') {
   switch (phase) {
     case 'arcs': return getArcCriteria();
-    case 'outline': return getOutlineCriteria(theme);
     case 'article': return getArticleCriteria(theme);
     default: throw new Error(`No quality criteria defined for phase: ${phase}`);
   }
@@ -567,12 +433,11 @@ function truthIssueLines(failed, written) {
  * without its code-owned keys (brief 4.5): the parts the guard reads of it leave out the
  * connections the director struck and the answers (lib/hand-edit-diff.js weaveParts).
  *
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @param {Object} state
  * @returns {Object|null}
  */
 function judgedOutput(phase, state) {
-  if (phase === 'outline') return state.outline || null;
   if (phase === 'article') return state.contentBundle || null;
   if (phase === 'arcs') return isWeave(state.weave) ? weaveForPrompt(state.weave) : null;
   return null;
@@ -585,12 +450,11 @@ function judgedOutput(phase, state) {
  * story meeting (brief 4.5), the director's changes the weave carries, each strike among
  * them.
  *
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @param {Object} state
  * @returns {Object[]}
  */
 function judgedEdits(phase, state) {
-  if (phase === 'outline') return carriedEdits(state._outlineHandEdits, state.outline);
   if (phase === 'article') return carriedEdits(state._articleHandEdits, state.contentBundle);
   if (phase === 'arcs') return carriedEdits(state._weaveHandEdits, judgedOutput('arcs', state));
   return [];
@@ -848,7 +712,7 @@ function directorWords(state) {
 }
 
 /**
- * The record as the outline and article judges read it, for the verdict guard (F1, fix
+ * The record as the article judge reads it, for the verdict guard (F1, fix
  * round 1, finding 2): the documents and the morning timeline (renderRecordView), the
  * director's words and the director's photo descriptions. A passage a finding quotes from
  * here that the writer's text also prints is the record the finding cites, not the
@@ -1074,11 +938,12 @@ function weightedCriteriaList(criteria, wanted) {
  * Build system prompt for evaluation
  *
  * Phase 3 (3.4): the journalist judges read the rule set (journalistEvaluationSystemPrompt);
- * the detective's outline and article judges are unchanged (detectiveEvaluationSystemPrompt,
- * spec D13). Phase 4 (brief 4.4): the weave's fact check is one prompt for every theme,
- * since the detective's arc judge went with its arc stage (ruling R1).
+ * the detective's article judge is unchanged (detectiveEvaluationSystemPrompt, spec D13).
+ * Phase 4 (brief 4.4): the weave's fact check is one prompt for every theme, since the
+ * detective's arc judge went with its arc stage (ruling R1); the outline judge went with
+ * the map, for both themes (brief 4.6).
  *
- * @param {string} phase - Phase name (arcs, outline, article)
+ * @param {string} phase - Phase name (arcs, article)
  * @param {Object} criteria - Quality criteria for phase
  * @param {string} theme - Theme name ('journalist' or 'detective')
  * @param {Object} [options]
@@ -1091,9 +956,10 @@ function buildEvaluationSystemPrompt(phase, criteria, theme = 'journalist', { se
 }
 
 /**
- * The detective's outline and article judges' system prompts, as they were before phase
- * 3 (parked, spec D13; __tests__/unit/workflow/evaluator-nodes.test.js pins them by
- * hash). Its arc judge went with its arc stage (phase 4, brief 4.4; ruling R1).
+ * The detective's article judge's system prompt, as it was before phase 3 (parked, spec
+ * D13; __tests__/unit/workflow/evaluator-nodes.test.js pins it by hash). Its arc judge
+ * went with its arc stage (phase 4, brief 4.4; ruling R1), and its outline judge with the
+ * map (brief 4.6; R1).
  *
  * @param {string} phase
  * @param {Object} criteria
@@ -1115,37 +981,6 @@ EVALUATION RULES:
 3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
 4. Content is READY if ALL structural criteria pass
 5. Content is NOT READY only if a STRUCTURAL criterion fails`;
-
-  // Commit 8.21: Use structural/advisory distinction for outline and article phases too
-  if (phase === 'outline') {
-    return `You are the OUTLINE Evaluator for an investigative case report about "About Last Night" - a crime thriller game.
-
-Your task is to evaluate if the case report outline is ready for human review.
-
-${boxedHeading('IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)')}
-The following inputs were approved in earlier phases and CANNOT be modified:
-- selectedArcs: The arcs chosen for this case report are final
-- evidenceBundle: The evidence is curated and locked
-
-Your feedback should focus on how the OUTLINE USES these inputs, not changing the inputs.
-
-${criteriaSections}
-
-CRITICAL OUTLINE CHECKS:
-- arcCoverage: Every selected thread should be addressed in the outline
-- requiredSections: executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment MUST exist
-- sectionDifferentiation: Each section must answer a DIFFERENT question (no repeated facts)
-
-CRITICAL: Your feedback MUST be actionable. Include:
-- SPECIFIC arc titles that are missing coverage
-- SPECIFIC section names that are missing
-- CONCRETE fixes (not "add more detail" but "add section X with Y content")
-
-${outputFormat('specific explanation')}
-
-Remember: You determine READINESS for human review, not approval. Human always makes final decision.
-STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
-  }
 
   if (phase === 'article') {
     return `You are the ARTICLE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
@@ -1196,10 +1031,10 @@ STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
 // in the user prompt, after the material it judges (buildEvaluationUserPrompt).
 
 /** The rule-set call each journalist judge reads (lib/rule-set.js): its writer's list. */
-const JUDGE_RULE_CALLS = { arcs: 'judge-arc', outline: 'judge-outline', article: 'judge-article' };
+const JUDGE_RULE_CALLS = { arcs: 'judge-arc', article: 'judge-article' };
 
 /** The writer whose output each judge judges, as the prompts name it. */
-const JUDGED_WRITERS = { arcs: 'arc writer', outline: 'outline writer', article: 'article writer' };
+const JUDGED_WRITERS = { arcs: 'arc writer', article: 'article writer' };
 
 /**
  * How a truth finding quotes the text at fault, per judge. A breach in the weave names
@@ -1207,7 +1042,6 @@ const JUDGED_WRITERS = { arcs: 'arc writer', outline: 'outline writer', article:
  */
 const TRUTH_FINDING_QUOTE = {
   arcs: 'quotes the text at fault, names the thread it is in by its id (or the field, for the story, the question, the headline, the convergence or a connection)',
-  outline: 'quotes the planned line and names its section',
   article: 'quotes the sentence and names its section'
 };
 
@@ -1234,7 +1068,7 @@ const JOURNALIST_EVALUATION_RULES = `EVALUATION RULES:
 /**
  * The truth criteria and how to write a breach, or '' when the criteria carry none.
  *
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @param {Object} criteria
  * @returns {string}
  */
@@ -1275,7 +1109,7 @@ The evaluation prompt ends with the craft guidance the ${JUDGED_WRITERS[phase]} 
  * the two places the OUTPUT FORMAT asks for them; it used to ask for them in general.
  * Judge text writes the bar as STRUCTURAL_PASS_SCORE, the detective's included.
  *
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @param {Object} criteria - getPhaseCriteria(phase, 'journalist'), or any criteria to render
  * @param {Object|null} sessionConfig - its reportingMode picks the mode block
  * @returns {string}
@@ -1287,8 +1121,8 @@ function journalistEvaluationSystemPrompt(phase, criteria, sessionConfig) {
   const writer = JUDGED_WRITERS[phase];
   const judged = TRUTH_SUBJECTS[phase];
   const frame = `The rules above are the ones the ${writer} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.`;
-  // The outline and article judges: the truth criteria, then the weighted criteria, the
-  // craft findings and the weighted scoring rules.
+  // The article judge: the truth criteria, then the weighted criteria, the craft findings
+  // and the weighted scoring rules.
   const judging = () => `${truthCriteriaSection(phase, criteria)}${boxedHeading('STRUCTURAL CRITERIA (MUST PASS - these block if failed)')}
 ${weightedCriteriaList(criteria, 'structural')}
 
@@ -1314,32 +1148,6 @@ Your task is to find each breach of the truth rules in the weave. ${frame}
 ${truthCriteriaSection(phase, criteria)}${TRUTH_ONLY_EVALUATION_RULES}
 
 ${truthOnlyOutputFormat('the breach: the text at fault, the thread it is in, and the record it contradicts')}`;
-  } else if (phase === 'outline') {
-    prompt = `You are the OUTLINE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
-
-${core}
-
-Your task is to evaluate if the article outline is ready for human review. ${frame}
-
-${boxedHeading('IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)')}
-The following inputs were approved in earlier phases and CANNOT be modified:
-- selectedArcs: The arcs chosen for this article are final
-- photoAnalyses: The photo descriptions are fixed upstream. ${DERIVED_LABELS.photoDescriptions}
-- evidenceBundle: The evidence is curated and locked
-
-Your feedback should focus on how the OUTLINE USES these inputs, not changing the inputs.
-
-${judging()}
-
-CRITICAL: Your feedback MUST be actionable. Include:
-- SPECIFIC arc titles that are missing coverage
-- SPECIFIC sections, by name
-- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "add more detail" but "add section X with Y content")
-
-${outputFormat('specific explanation')}
-
-Remember: You determine READINESS for human review, not approval. Human always makes final decision.
-STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
   } else {
     prompt = `You are the ARTICLE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
 
@@ -1381,88 +1189,17 @@ STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // The judges used to score what they could not see: the outline and article
-// judges had no documents, the article judge was asked whether every roster
-// member is named with no roster in its prompt, and the outline judge saw 5 of 9
-// photos and a null interweaving plan. Each judge now reads the record view and
-// the inputs its writer read, through the writers' own renderers and builders.
-// All three get the roster with pronouns, the director's notes with the
-// input-review corrections, and the director's accusation beside its parse
-// (roadmap 2.4, docs/superpowers/plans/2026-09-22-roadmap.md).
+// judges had no documents, and the article judge was asked whether every roster
+// member is named with no roster in its prompt. Each judge now reads the record view
+// and the inputs its writer read, through the writers' own renderers and builders,
+// with the roster with pronouns, the director's notes with the input-review
+// corrections, and the director's accusation beside its parse (roadmap 2.4,
+// docs/superpowers/plans/2026-09-22-roadmap.md). The outline judge went with the map
+// (phase 4, brief 4.6).
 
 /**
- * The interweaving plan the arc analysis produced.
- *
- * It lives in `_arcAnalysisCache.interweavingPlan` (arc-specialist-nodes.js), which
- * brief 2.2 keeps through an arc rework. The outline judge used to read
- * `state.narrativeArcsInterweavingPlan || state.interweavingPlan`, neither of which
- * is a state channel, so every outline evaluation was shown `null`.
- *
- * @param {Object} state
- * @returns {Object|null} the plan, or null when there is none or every field is empty
- */
-function interweavingPlanOf(state) {
-  const plan = state._arcAnalysisCache?.interweavingPlan;
-  // The arc reworker's rule, one function (final fix wave).
-  return hasInterweavingPlan(plan) ? plan : null;
-}
-
-/**
- * The outline judge's photos: exactly the set the outline writer could place, not
- * the first five analyses. That is the hero in its own slot, then the writer's own
- * list, both taken from the outline writer's inputs (`ai-nodes.js
- * outlineWriterInputs`, which the writer and its reworker build their prompts
- * from) with the hero they used (`reworkHeroImage`: the stored hero, else the one
- * generateOutline would select). Any exclusion the writer's list gains therefore
- * reaches the judge too.
- *
- * Each photo is the PHOTOS entry the article writer and judge list too
- * (`renderPhotoListEntry`: the filename, the names identified in it, and the
- * director's description from the character-IDs stop, joined by filename), then its
- * analysis, paired by the renderer's one join key (`photoKey`).
- *
- * The 4b fix batch (T13): a photo the director excluded is in neither the writer's list
- * nor the hero entry (isPhotoExcluded, through buildAvailablePhotos and heroPhotoEntry),
- * and the journalist header says the list holds what the director kept. The detective
- * keeps its header (D13).
- *
- * @param {Object} state
- * @returns {string}
- */
-function renderJudgePhotos(state) {
-  // outlineWriterInputs returns buildOutlinePrompt's arguments, in order: the hero
-  // image is the third, the available photos the fourth, the options the last.
-  const writerInputs = outlineWriterInputs(state, reworkHeroImage(state));
-  const hero = heroPhotoEntry(state, writerInputs[2] || null);
-  const availablePhotos = writerInputs[3] || [];
-  const { photoDescriptions } = writerInputs[writerInputs.length - 1] || {};
-  const analysisByKey = new Map(
-    (state.photoAnalyses?.analyses || [])
-      .filter(analysis => analysis && analysis.filename)
-      .map(analysis => [photoKey(analysis.filename), analysis])
-  );
-  const photos = [...(hero ? [hero] : []), ...availablePhotos];
-  if (photos.length === 0) return 'PHOTOS:\nNo session photos available';
-
-  const entries = photos.map((photo, i) => {
-    const analysis = analysisByKey.get(photoKey(photo.filename));
-    const analysisText = analysis
-      ? JSON.stringify(analysis, null, 2).split('\n').join('\n   ')
-      : 'none recorded for this photo';
-    return `${renderPhotoListEntry(photo, i, photoDescriptions || null)}\n   Photo analysis: ${analysisText}`;
-  });
-  // The detective's header is today's whenever its list has a hero, which only a stored
-  // hero the director excluded takes away.
-  const holds = (state.theme || 'journalist') === 'detective'
-    ? `${hero ? 'the hero image, then every other session photo' : 'every session photo'} except the whiteboard`
-    : `${judgePhotosOrder(photos)}, except the whiteboard`;
-  return `PHOTOS (all ${photos.length} photos the outline could place: ${holds}; each gives the names identified in it, the director's description joined by filename, and its photo analysis):
-
-${entries.join('\n\n')}`;
-}
-
-/**
- * What a judge's PHOTOS list holds, in order (T13): the article judge's and the
- * journalist outline judge's one phrase (the 4b fix batch).
+ * What a judge's PHOTOS list holds, in order (T13): the article judge's phrase (the 4b
+ * fix batch).
  *
  * @param {Array<{hero?: boolean}>} photos - the list, hero first when there is one
  * @returns {string}
@@ -1500,8 +1237,8 @@ ${entries.join('\n\n')}`;
 }
 
 /**
- * The account totals the outline and article writers copy (phase 3, 3.9; the
- * integrator's ruling): the writers' own FINANCIAL_SUMMARY, from the same builder and
+ * The account totals the article writer copies (phase 3, 3.9; the integrator's ruling):
+ * the writers' own FINANCIAL_SUMMARY, from the same builder and
  * the same input (PromptBuilder#_buildFinancialSummary over state.shellAccounts), so
  * moneyTruth checks a writer's figures against the figures it was given. At the gate
  * five of eight verdicts took the correct code-made total for a sum the writer made.
@@ -1514,7 +1251,7 @@ function renderJudgeFinancialSummary(state) {
 }
 
 /**
- * The session roster for the outline and article judges: the players present, by
+ * The session roster for the article judge: the players present, by
  * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts).
  *
  * @param {Object|null} sessionFacts
@@ -1565,8 +1302,8 @@ ${renderDirectorEnrichmentBlock({
 }
 
 /**
- * The director's words and the roster for the outline and article judges, which
- * read them as their writers do: the session roster, the roster with pronouns,
+ * The director's words and the roster for the article judge, which reads them as its
+ * writer does: the session roster, the roster with pronouns,
  * the verdict as SESSION_FACTS prints it (renderSessionFactsVerdict: the parsed
  * accusation, then the director's account word for word, then the whiteboard),
  * and the director's notes with the corrections after them.
@@ -1610,7 +1347,7 @@ ${advisory.text}`;
 
 /**
  * The director's edits in the judged output (F1; spec 2026-10-02 section 7), for the
- * outline and article judges of both themes, right after the output they judge: each by
+ * article judge of both themes, right after the output it judges: each by
  * id, with its place and the director's text, or for a cut the text removed; under a
  * rewrite, each sentence it removed (FA). EDIT_LINES_GUIDE says how to read the lines,
  * in the same words the reworks' <HAND_EDITS> block uses. The text
@@ -1626,7 +1363,7 @@ ${advisory.text}`;
  * director's is a concern for the meeting, under the change's id.
  *
  * @param {Object[]|undefined} edits - judgedEdits
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @param {string} theme
  * @returns {string}
  */
@@ -1639,7 +1376,7 @@ The lines below are the director's changes to the weave above. ${WEAVE_EDIT_LINE
 
 ${formatEditLines(list)}`;
   }
-  const output = phase === 'outline' ? 'the outline above' : 'the content bundle above';
+  const output = 'the content bundle above';
   const example = `${DIRECTOR_EDIT_PREFIX}E1: ${theme === 'detective' ? 'evidenceIntegration' : 'T1'}: <the concern>`;
   return `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
 Each edit below is text the director wrote into ${output}, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE} An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, or would bring back a cut or a removed sentence, write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${example}.
@@ -1652,7 +1389,7 @@ ${formatEditLines(list)}`;
  * the user prompt after the material it judges (the placement ruling). A craft finding
  * is should-consider; the system prompt says where it goes.
  *
- * @param {'arcs'|'outline'|'article'} phase
+ * @param {'arcs'|'article'} phase
  * @returns {string}
  */
 function renderJudgeCraft(phase) {
@@ -1740,52 +1477,6 @@ function printedWriterTracker(tracker, shellAccounts) {
   return { entries, ...pickFields(tracker, PRINTED_FIELDS.tracker) };
 }
 
-/** The outline judge's momentum questions as the detective judge reads them (parked, spec D13). */
-const DETECTIVE_MOMENTUM_EVALUATION = `═══════════════════════════════════════════════════════════════════════════
-MOMENTUM EVALUATION (Commit 8.24 - Compulsive Readability)
-═══════════════════════════════════════════════════════════════════════════
-
-Check for narrative momentum:
-
-1. LOOP ARCHITECTURE: Does each arc section open cognitive gaps (questions) and close them?
-   - Are there unanswered questions that pull readers forward?
-   - Do answers open NEW questions before fully closing?
-
-2. ARC INTERWEAVING: Are arcs connected through callbacks, not just sequential chapters?
-   - Do later sections reference and recontextualize earlier ones?
-   - Are there "wait, so THAT'S why..." moments planned?
-   - Does the outline use shared characters as bridges between arcs?
-
-3. VISUAL MOMENTUM: Do evidence cards, photos, and pull quotes serve loop mechanics?
-   - Is each visual component a CLOSER (proves what was hinted) or OPENER (raises new question)?
-   - Are photos placed for emotional pacing (breathe before escalation)?
-
-4. CONVERGENCE: Do arcs meet at a satisfying convergence point?
-   - Where do all threads meet (the murder, the accusation)?
-   - Is the convergence point given appropriate weight?`;
-
-/**
- * The journalist outline judge's momentum questions (phase 3, 3.4): cards and photos,
- * each photo at the moment it shows, and the convergence as C16 states it. Phase 3
- * (3.9): question 4 no longer repeats the convergence clause C16 of round 7 dropped.
- * Wave 4 integration: the questions point at C16, C17 and C19 as round 7 states them;
- * the callbacks, "wait, so THAT'S why" moments and loop mechanics they used to reward
- * are gone (rule-text read 2, section D: no unconditional reward for a planted detail).
- */
-const JOURNALIST_MOMENTUM_EVALUATION = `═══════════════════════════════════════════════════════════════════════════
-MOMENTUM EVALUATION
-═══════════════════════════════════════════════════════════════════════════
-
-Check the outline's momentum against the craft reference:
-
-1. LOOP ARCHITECTURE: Does each section raise the stakes or complicate the question the thesis carries (C19)? A detail planted early counts only where its payoff moves the throughline (C16).
-
-2. ARC INTERWEAVING: Are the threads intercut across the sections rather than told one after another (C16)?
-
-3. VISUAL MOMENTUM: Is each card a receipt set against the scene or claim it confirms or complicates (C17, C9), and is each photo placed where the story reaches the moment it shows?
-
-4. CONVERGENCE: Do the threads converge at a culmination near the end, where the thesis lands, said once (C16)?`;
-
 /**
  * Build user prompt with content to evaluate
  *
@@ -1795,9 +1486,10 @@ Check the outline's momentum against the craft reference:
  * mode line points at the mode block its system prompt carries. The detective's user
  * prompts are unchanged.
  *
- * Phase 3 (3.9), journalist only: the outline and article judges read the writers'
- * FINANCIAL_SUMMARY right after the record (renderJudgeFinancialSummary), and the
- * article judge's PHOTOS is every photo its writer was given (renderArticleJudgePhotos).
+ * Phase 3 (3.9), journalist only: the article judge reads its writer's FINANCIAL_SUMMARY
+ * right after the record (renderJudgeFinancialSummary), and its PHOTOS is every photo
+ * its writer was given (renderArticleJudgePhotos). Phase 4 (brief 4.6): the outline judge
+ * went with the map.
  *
  * @param {string} phase - Phase name
  * @param {Object} state - Current state with content
@@ -1807,8 +1499,8 @@ Check the outline's momentum against the craft reference:
  *   state's `_articleFactCheck` is not read: before this evaluation writes it, it
  *   belongs to the previous bundle.
  * @param {Object[]} [options.directorEdits] - the director's edits the judged output carries
- *   (judgedEdits; F1), printed right after that output: the outline's, the article's, and
- *   at the story meeting the weave's (brief 4.5)
+ *   (judgedEdits; F1), printed right after that output: the article's, and at the story
+ *   meeting the weave's (brief 4.5)
  * @returns {string} User prompt
  */
 function buildEvaluationUserPrompt(phase, state, options = {}) {
@@ -1842,51 +1534,6 @@ ${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}${answers ? `\n\n${answers}` 
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 Is the weave free of truth-rule breaches?`;
-    }
-
-    case 'outline': {
-      // Extract interweaving metadata from selected arcs for momentum evaluation
-      // Resolve arc IDs (strings) to full arc objects from narrativeArcs
-      const resolvedArcs = resolveArcs(state.selectedArcs, state.narrativeArcs);
-      const selectedArcsWithInterweaving = resolvedArcs.map(arc => ({
-        id: arc.id,
-        title: arc.title,
-        interweaving: arc.interweaving || {}
-      }));
-      // Brief 2.4: the plan the arc analysis produced. The section is left out when
-      // there is none, as the arc reworker's is (wave-2 ruling W2).
-      const interweavingPlan = interweavingPlanOf(state);
-      const interweavingSection = interweavingPlan
-        ? `INTERWEAVING PLAN (from arc analysis):
-${JSON.stringify(interweavingPlan, null, 2)}
-
-`
-        : '';
-      const momentum = journalist
-        ? `${renderJudgeCraft('outline')}
-
-${JOURNALIST_MOMENTUM_EVALUATION}`
-        : DETECTIVE_MOMENTUM_EVALUATION;
-      // Phase 3 (3.9): the account totals the outline writer copied, after the record.
-      const outlineMoney = journalist ? renderJudgeFinancialSummary(state) : '';
-
-      return `Evaluate this article outline:
-
-OUTLINE:
-${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
-
-${afterJudged}SELECTED ARCS (with interweaving metadata):
-${JSON.stringify(selectedArcsWithInterweaving, null, 2)}
-
-${interweavingSection}${renderJudgePhotos(state)}
-
-${renderJudgeSessionContext(state)}
-
-${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}${outlineMoney ? `\n\n${outlineMoney}` : ''}
-
-${momentum}
-
-Is this outline ready for human review?`;
     }
 
     case 'article': {
@@ -1929,8 +1576,8 @@ Is this article ready for human review?`;
         : 'The reporter watched the investigation from inside the room and spoke to people there, but was NOT at the party; the party reaches them only through exposed memories.';
 
       // Brief 2.4: the roster, the verdict, the notes and the record, each built by the
-      // function the article writer's prompt uses (renderJudgeSessionContext, shared
-      // with the outline judge), and the fact check's result for this bundle.
+      // function the article writer's prompt uses (renderJudgeSessionContext), and the
+      // fact check's result for this bundle.
       return `Evaluate this article content:
 
 REPORTING MODE FOR THIS SESSION: ${reportingMode}
@@ -1967,7 +1614,6 @@ Is this article ready for human review?`;
 function getRevisionCountField(phase) {
   switch (phase) {
     case 'arcs': return 'arcRevisionCount';
-    case 'outline': return 'outlineRevisionCount';
     case 'article': return 'articleRevisionCount';
     default: throw new Error(`Unknown phase: ${phase}`);
   }
@@ -1981,7 +1627,6 @@ function getRevisionCountField(phase) {
 function getRevisionCap(phase) {
   switch (phase) {
     case 'arcs': return REVISION_CAPS.ARCS;
-    case 'outline': return REVISION_CAPS.OUTLINE;
     case 'article': return REVISION_CAPS.ARTICLE;
     default: return 2;
   }
@@ -1995,7 +1640,6 @@ function getRevisionCap(phase) {
 function getCheckpointType(phase) {
   switch (phase) {
     case 'arcs': return CHECKPOINT_TYPES.ARC_SELECTION;
-    case 'outline': return CHECKPOINT_TYPES.OUTLINE;
     case 'article': return CHECKPOINT_TYPES.ARTICLE;
     default: return null;
   }
@@ -2009,7 +1653,6 @@ function getCheckpointType(phase) {
 function getPhaseConstant(phase) {
   switch (phase) {
     case 'arcs': return PHASES.ARC_EVALUATION;
-    case 'outline': return PHASES.OUTLINE_EVALUATION;
     case 'article': return PHASES.ARTICLE_EVALUATION;
     default: throw new Error(`Unknown phase: ${phase}`);
   }
@@ -2023,7 +1666,7 @@ function getPhaseConstant(phase) {
  * Create an evaluator function for a specific phase
  * DRY pattern: shared evaluation logic, phase-specific criteria
  *
- * @param {string} phase - Phase name (arcs, outline, article)
+ * @param {string} phase - Phase name (arcs, article)
  * @param {Object} options - Evaluator options
  * @returns {Function} Evaluator node function
  */
@@ -2055,11 +1698,9 @@ function createEvaluator(phase, options = {}) {
 
     // Skip logic 1: If user has already approved this phase (checkpoint approval flag set)
     // For arcs: the story meeting's approval (lib/weave.js isMeetingApproved)
-    // For outline: outlineApproved means user approved outline at checkpoint
     // For article: articleApproved means user approved article at checkpoint
     const hasUserApproved = (
       (phase === 'arcs' && isMeetingApproved(state)) ||
-      (phase === 'outline' && state.outlineApproved === true) ||
       (phase === 'article' && state.articleApproved === true)
     );
     if (hasUserApproved) {
@@ -2077,8 +1718,8 @@ function createEvaluator(phase, options = {}) {
       };
     }
 
-    // Skip logic 2: the weave's fact check skips by its mark on the weave; the outline
-    // and article judges by their most recent evaluation.
+    // Skip logic 2: the weave's fact check skips by its mark on the weave; the article
+    // judge by its most recent evaluation.
     if (phase === 'arcs') {
       // Phase 4 (brief 4.4): the weave's fact check runs once per round. It marks the
       // weave it judged (below), and skips a marked weave: the fix keeps the mark, a
@@ -2191,9 +1832,8 @@ function createEvaluator(phase, options = {}) {
 
     try {
       // The prompt is built inside the try (final fix wave): since 2.4 the build
-      // creates a PromptBuilder and a ThemeLoader and calls outlineWriterInputs /
-      // reworkHeroImage, and a throw there must land in state like an SDK failure,
-      // not reject the graph.
+      // creates a PromptBuilder and a ThemeLoader and calls the writers' input builders,
+      // and a throw there must land in state like an SDK failure, not reject the graph.
       const systemPrompt = buildEvaluationSystemPrompt(phase, criteria, theme, { sessionConfig: state.sessionConfig || null });
       // Brief 2.4: the article judge reads the fact check's result for THIS bundle
       // (computed above), never the state's _articleFactCheck from the previous one.
@@ -2469,12 +2109,6 @@ function createEvaluator(phase, options = {}) {
 const evaluateArcs = createEvaluator('arcs', { model: 'opus' });
 
 /**
- * Evaluate article outline for quality
- * Uses opus for high-quality evaluation (upgraded from haiku in Commit 8.22)
- */
-const evaluateOutline = createEvaluator('outline', { model: 'opus' });
-
-/**
  * Evaluate article content for quality
  * Uses opus for high-quality evaluation (upgraded from haiku in Commit 8.22)
  */
@@ -2561,9 +2195,6 @@ module.exports = {
   evaluateArcs: traceNode(evaluateArcs, 'evaluateArcs', {
     stateFields: ['weave', 'evaluationHistory']
   }),
-  evaluateOutline: traceNode(evaluateOutline, 'evaluateOutline', {
-    stateFields: ['outline', 'evaluationHistory']
-  }),
   evaluateArticle: traceNode(evaluateArticle, 'evaluateArticle', {
     stateFields: ['contentBundle', 'evaluationHistory']
   }),
@@ -2587,7 +2218,6 @@ module.exports = {
     isTruthOnly,
     truthOnlyVerdict,
     getArcCriteria,
-    getOutlineCriteria,
     getArticleCriteria,
     getPhaseCriteria,
     truthCriteria,
@@ -2631,17 +2261,6 @@ if (require.main === module) {
       };
     }
 
-    if (options.systemPrompt.includes('OUTLINE')) {
-      return {
-        ready: false,
-        overallScore: 0.6,
-        criteriaScores: {},
-        issues: ['Section 3 needs more detail'],
-        revisionGuidance: 'Expand section 3 with evidence references',
-        confidence: 'medium'
-      };
-    }
-
     return {
       ready: true,
       overallScore: 0.75,
@@ -2657,7 +2276,6 @@ if (require.main === module) {
     weave: { story: 'Test story.', threads: [{ id: 't1', claim: 'Test claim.', role: 'main-thread', receipt: 'ledger', verdict: true }], connections: [], questions: [] },
     playerFocus: { primaryInvestigation: 'Who is the Valet?' },
     evidenceBundle: { exposed: [{ id: 'e1' }], buried: [] },
-    outline: { sections: [{ title: 'Intro' }] },
     contentBundle: { headline: { main: 'Test' }, sections: [] }
   };
 
@@ -2670,15 +2288,6 @@ if (require.main === module) {
     console.log('Arcs result:', {
       ready: result.evaluationHistory?.ready,
       phase: result.currentPhase
-    });
-
-    console.log('\nTesting evaluateOutline...');
-    return evaluateOutline(mockState, mockConfig);
-  }).then(result => {
-    console.log('Outline result:', {
-      ready: result.evaluationHistory?.ready,
-      needsRevision: result.validationResults?.passed === false,
-      revisionCount: result.outlineRevisionCount
     });
 
     console.log('\nTesting evaluateArticle...');

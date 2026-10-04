@@ -5,7 +5,7 @@
  * Uses native LangGraph interrupt() for human checkpoints with DEDICATED
  * checkpoint nodes (SRP - separate data from checkpoints).
  *
- * Graph Flow (45 nodes - Commit 8.26: SRP checkpoint separation):
+ * Graph Flow (43 nodes - Commit 8.26: SRP checkpoint separation):
  *
  * PHASE 0: Input Parsing (reached from checkpointAwaitContext, not from START)
  * 0.1 parseRawInput → checkpointInputReview [interrupt: input-review]
@@ -44,8 +44,9 @@
  *  they predate the move and are display-only strings.)
  *
  * PHASE 3: Outline Generation
- * → generateOutline → evaluateOutline
- * → checkpointOutline [interrupt: outline] → [revision loop]
+ * → generateOutline → checkpointOutline [interrupt: outline] → [send-back loop]
+ * No model judge reads the outline (phase 4, brief 4.6; spec 5.4): the outline judge
+ * left the graph.
  *
  * PHASE 4: Article Generation
  * → generateContentBundle → evaluateArticle
@@ -114,28 +115,6 @@ function routeArcEvaluation(state) {
     return 'revise';
   }
   return 'checkpoint';
-}
-
-/**
- * Route function for outline evaluation results
- * @param {Object} state - Current graph state
- * @returns {string} 'checkpoint', 'revise', or 'error'
- */
-function routeOutlineEvaluation(state) {
-  if (state.currentPhase === PHASES.ERROR) {
-    return 'error';
-  }
-
-  const evalHistory = state.evaluationHistory || [];
-  const phaseEvals = evalHistory.filter(e => e.phase === 'outline');
-  const lastEval = phaseEvals[phaseEvals.length - 1];
-  const atCap = (state.outlineRevisionCount || 0) >= REVISION_CAPS.OUTLINE;
-
-  if (lastEval?.ready || atCap) {
-    return 'checkpoint';
-  }
-
-  return 'revise';
 }
 
 /**
@@ -387,6 +366,9 @@ function traceWithPass(state, phase, trace, before, pass, round, source) {
  *
  * Brief 2.7: an automatic pass also adds its entry to `_outlineTrace`. A send-back
  * rework is not an automatic pass and writes nothing there.
+ *
+ * Phase 4 (brief 4.6): no evaluation stub. The outline judge left the graph, so no
+ * evaluation of the outline can be skipped on a stale verdict.
  */
 async function incrementOutlineRevision(state) {
   const isHumanDriven = !!state._outlineFeedback;
@@ -405,14 +387,7 @@ async function incrementOutlineRevision(state) {
     outline: null,
     ...(!isHumanDriven && {
       _outlineTrace: traceWithPass(state, 'outline', state._outlineTrace, state.outline, newCount, newHumanCount + 1, source)
-    }),
-    evaluationHistory: {
-      phase: 'outline',
-      ready: false,
-      reason: 'revision-invalidated',
-      source,
-      timestamp: new Date().toISOString()
-    }
+    })
   };
 }
 
@@ -567,13 +542,11 @@ function createGraphBuilder() {
   // ═══════════════════════════════════════════════════════
 
   builder.addNode('generateOutline', nodes.generateOutline, LLM_RETRY);
-  // NOTE: validateOutlineStructure removed in Commit 8.23 - trust Opus evaluators instead
-  // Outline evaluation (no interrupt - SRP: checkpoint separate)
-  builder.addNode('evaluateOutline', nodes.evaluateOutline, LLM_RETRY);
+  // Phase 4 (brief 4.6; spec 5.4): no model judge reads the outline; evaluateOutline left
+  // the graph.
 
   // Outline checkpoint - interrupt() here (Commit 8.26: SRP separation)
   builder.addNode('checkpointOutline', nodes.checkpointOutline);
-  // NOTE: setOutlineCheckpoint removed - interrupt() now in evaluateOutline
   builder.addNode('incrementOutlineRevision', incrementOutlineRevision);
   // Revision node - uses buildRevisionContext helper for targeted fixes
   builder.addNode('reviseOutline', nodes.reviseOutline, LLM_RETRY);
@@ -724,20 +697,10 @@ function createGraphBuilder() {
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 3: Outline Generation
-  // Commit 8.23: Removed programmatic validation, trust Opus evaluators
+  // Phase 4 (brief 4.6): the outline goes straight to its stop; the outline judge left.
   // ═══════════════════════════════════════════════════════
 
-  builder.addEdge('generateOutline', 'evaluateOutline');
-
-  // Outline evaluation routing (Commit 8.26: SRP - checkpoint separate from evaluation)
-  // checkpoint: evaluation ready, proceed to checkpoint node for human approval
-  // revise: needs work, loop back for revision
-  // error: fatal error, end workflow
-  builder.addConditionalEdges('evaluateOutline', routeOutlineEvaluation, {
-    checkpoint: 'checkpointOutline',  // Route to checkpoint node, not directly to next phase
-    revise: 'incrementOutlineRevision',
-    error: END
-  });
+  builder.addEdge('generateOutline', 'checkpointOutline');
 
   // Checkpoint → conditional: approve forwards, reject enters revision loop
   builder.addConditionalEdges('checkpointOutline', routeAfterOutlineCheckpoint, {
@@ -745,10 +708,10 @@ function createGraphBuilder() {
     revise: 'incrementOutlineRevision'
   });
 
-  // Revision loop: increment → revise → evaluate (NOT back to generateOutline)
+  // Send-back loop: increment → revise → the stop again (NOT back to generateOutline)
   // reviseOutline receives previous output + feedback for TARGETED fixes
   builder.addEdge('incrementOutlineRevision', 'reviseOutline');
-  builder.addEdge('reviseOutline', 'evaluateOutline');
+  builder.addEdge('reviseOutline', 'checkpointOutline');
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 4: Article Generation
@@ -854,7 +817,6 @@ module.exports = {
     // Routing functions - evaluation-based (evaluation/schema logic)
     routeArcValidation,
     routeArcEvaluation,
-    routeOutlineEvaluation,
     routeArticleEvaluation,
     routeSchemaValidation,
     // Routing functions - checkpoint-based (human approval routing)

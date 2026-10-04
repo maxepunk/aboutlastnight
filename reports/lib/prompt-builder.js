@@ -1005,8 +1005,9 @@ ${loadRuleSet('outline').craft}`;
    *
    * Phase 2 (2.3): the writer's prompt is its system prompt
    * (buildArticleSystemPrompt), its user sections (buildArticleUserSections), then
-   * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>. The article reworker is built from the
-   * same two builders (ai-nodes.js buildArticleRevisionPrompt).
+   * <DIRECTOR_GUIDANCE>. The article reworker is built from the same two builders
+   * (ai-nodes.js buildArticleRevisionPrompt). The <SHOULD_CONSIDER> it carried, the
+   * outline evaluation's advisories, went with the outline judge (phase 4, brief 4.6).
    *
    * @param {Object} outline - Approved article outline
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
@@ -1014,7 +1015,8 @@ ${loadRuleSet('outline').craft}`;
    * @param {Object|null} sessionFacts - Session facts for non-roster character guardrail
    * @param {Object|null} directorNotes - Director observations for article grounding
    * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
-   * @param {Object} options - { directorGuidance, gateNotes, shouldConsider, evidenceBundle }
+   * @param {Object} options - { directorGuidance, gateNotes, evidenceBundle, directorCorrections,
+   *   photoDescriptions, photos }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildArticlePrompt(outline, heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
@@ -1022,9 +1024,6 @@ ${loadRuleSet('outline').craft}`;
     let userPrompt = await this.buildArticleUserSections(
       outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options
     );
-
-    // Brief 1.3: the previous stage's advisory findings, second to last.
-    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
 
     // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
     // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes

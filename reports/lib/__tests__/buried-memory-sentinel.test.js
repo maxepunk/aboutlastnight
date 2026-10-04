@@ -26,7 +26,7 @@ const path = require('path');
 const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const { generateOutline, reviseOutline, generateContentBundle, reviseContentBundle } = require('../workflow/nodes/ai-nodes');
 const { analyzeArcsPlayerFocusGuided, reviseArcs } = require('../workflow/nodes/arc-specialist-nodes');
-const { evaluateArcs, evaluateOutline, evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
+const { evaluateArcs, evaluateArticle } = require('../workflow/nodes/evaluator-nodes');
 const { extractCharacterData } = require('../workflow/nodes/character-data-nodes');
 const { parseRawInput } = require('../workflow/nodes/input-nodes');
 const { createEvidencePreprocessor } = require('../evidence-preprocessor');
@@ -197,23 +197,19 @@ describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge pro
     }
   });
 
-  it('the outline and article judges', async () => {
+  // Phase 4 (brief 4.6): the outline judge went; the article judge stays.
+  it('the article judge', async () => {
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
     const state = { ...sentinelState(theme), heroImage: 'hero.jpg', evaluationHistory: [] };
-    const outline = recordingSdk(verdict);
-    await evaluateOutline({ ...state, outlineApproved: false }, cfg(outline, theme));
     // At the cap the article judge runs whatever the fact check found.
     const article = recordingSdk(verdict);
     await evaluateArticle({ ...state, contentBundle: PREVIOUS_BUNDLE, articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE }, cfg(article, theme));
-    for (const sdk of [outline, article]) {
-      const prompts = promptsOf(sdk);
-      expect(prompts).toHaveLength(1);
-      expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
-      expect(leaksIn(prompts[0])).toEqual([]);
-    }
-    // The outline and article judges read the whole record view, timeline included.
-    expect(promptsOf(outline)[0]).toContain('<morning-timeline>');
-    expect(promptsOf(article)[0]).toContain('<morning-timeline>');
+    const prompts = promptsOf(article);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
+    expect(leaksIn(prompts[0])).toEqual([]);
+    // The article judge reads the whole record view, timeline included.
+    expect(prompts[0]).toContain('<morning-timeline>');
   });
 });
 

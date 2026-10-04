@@ -71,7 +71,6 @@ const SPEC_SECTION_8 = {
   article: ALL_CRAFT
 };
 SPEC_SECTION_8['judge-arc'] = [];
-SPEC_SECTION_8['judge-outline'] = SPEC_SECTION_8.outline;
 SPEC_SECTION_8['judge-article'] = SPEC_SECTION_8.article;
 
 /** The brief's map (spec section 8; the read's section C): each call's craft files, in order. */
@@ -84,7 +83,6 @@ const BRIEF_MAP = {
   ]
 };
 BRIEF_MAP['judge-arc'] = [];
-BRIEF_MAP['judge-outline'] = BRIEF_MAP.outline;
 BRIEF_MAP['judge-article'] = BRIEF_MAP.article;
 
 /** The line buildRevisionContext (node-helpers.js) prints after the director's send-back note. */
@@ -112,7 +110,8 @@ describe('the loader', () => {
     expect(path.resolve(DEFAULT_RULES_ROOT)).toBe(path.resolve(RULES_ROOT));
   });
 
-  it('serves exactly the six calls of the plan', () => {
+  // Phase 4 (brief 4.6): the outline judge's call went with it.
+  it('serves exactly the five calls of the plan', () => {
     expect(Object.keys(RULE_SET_CALLS).sort()).toEqual(Object.keys(BRIEF_MAP).sort());
   });
 
@@ -596,7 +595,6 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
       'arc writer': arcs.buildWeavePrompt(state),
       'arc reworker': arcs.buildArcRevisionPrompt(state, contextSection, previousOutputSection),
       'arc judge': judges.buildEvaluationUserPrompt('arcs', state, {}),
-      'outline judge': judges.buildEvaluationUserPrompt('outline', state, {}),
       'article judge': judges.buildEvaluationUserPrompt('article', state, {})
     };
 
@@ -739,29 +737,26 @@ describe('the removed-phrase fixture: the wording 3.8 retires from the rule file
 
 /**
  * The 3.6b fix batch: instructionText also strips the data prompts carry, built here by
- * the real builders: the outline judge's photo analyses (Haiku's output), and the
- * director's Blake and Valet sentences (the article writer's <NARRATIVE_TENSIONS> and the
- * arc writer's heading). The pipeline's labels around them stay scanned. The arc
- * packages' excerpts it stripped too went with the packages (phase 4, brief 4.6; R5).
+ * the real builders: the director's Blake and Valet sentences (the article writer's
+ * <NARRATIVE_TENSIONS> and the arc writer's heading). The pipeline's labels around them
+ * stay scanned. The arc packages' excerpts and the outline judge's photo analyses it
+ * stripped too went with the packages and the outline judge (phase 4, brief 4.6).
  */
-describe('instructionText: the photo analyses and the tension sentences (3.6b fix batch)', () => {
+describe('instructionText: the tension sentences (3.6b fix batch)', () => {
   const { reworkFixtureState } = require('./fixtures/rework-state');
   const { stubThemeLoader } = require('./fixtures/render-writers');
   const { PHASE_REQUIREMENTS } = require('../theme-loader');
   const { PromptBuilder } = require('../prompt-builder');
   const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');
   const { _testing: arcs } = require('../workflow/nodes/arc-specialist-nodes');
-  const { _testing: judges } = require('../workflow/nodes/evaluator-nodes');
 
   // Data that carries a removed phrase, as the director's and the documents' words may.
   const SENTENCE = 'Blake said the murder victim had paid the Valet twice.';
-  const ANALYSIS = "Nova and her camera stand by the murder victim's portrait.";
 
   const state = () => {
     const s = reworkFixtureState('journalist');
     s.directorNotes.rawProse = `${s.directorNotes.rawProse} ${SENTENCE}`;
     s.narrativeTensions = { tensions: [{ type: 'blake-proximity', observations: [SENTENCE] }] };
-    s.photoAnalyses.analyses[1] = { ...s.photoAnalyses.analyses[1], visualContent: ANALYSIS };
     return s;
   };
   const builderFor = (s) => new PromptBuilder(
@@ -772,16 +767,6 @@ describe('instructionText: the photo analyses and the tension sentences (3.6b fi
     s.outline, 'hero.jpg', s.shellAccounts, null, s.directorNotes, s.narrativeTensions,
     { evidenceBundle: s.evidenceBundle }
   ));
-
-  it("strips the outline judge's photo analyses, and keeps each photo's line and the analysis label", () => {
-    const render = judges.buildEvaluationUserPrompt('outline', state(), {});
-    expect(render).toContain(ANALYSIS);
-    const text = instructionText(render);
-    expect(findRemovedPhrases(text)).toEqual([]);
-    expect(text).not.toContain('camera');
-    expect(text).toMatch(/^ {3}Photo analysis: \{\n {3}\}$/m);
-    expect(text).toContain('PHOTOS (all ');
-  });
 
   it("strips the director's sentences under <NARRATIVE_TENSIONS>, and keeps the label", async () => {
     const render = await articleRender();
@@ -800,11 +785,5 @@ describe('instructionText: the photo analyses and the tension sentences (3.6b fi
     const after = render.indexOf(`- ${SENTENCE}`) + `- ${SENTENCE}`.length;
     const relabelled = `${render.slice(0, after)}\n\nRemember who killed Marcus.${render.slice(after)}`;
     expect(findRemovedPhrases(instructionText(relabelled))).toEqual(['who killed Marcus']);
-  });
-
-  describe('fails loud on a shape it cannot read', () => {
-    it('a photo analysis whose JSON never closes', () => {
-      expect(() => instructionText('1. hero.jpg: Alex\n   Photo analysis: {\n     "visualContent": "x"\n')).toThrow(/photo analysis/);
-    });
   });
 });

@@ -389,7 +389,8 @@ describe('pruneGateNotes (spec 2026-09-19 §5.4)', () => {
 
   test('PHASES_INVALIDATED_BY is exported with exactly the four regenerating points', () => {
     expect(Object.keys(PHASES_INVALIDATED_BY).sort()).toEqual(['article', 'character-ids', 'outline', 'photos']);
-    expect(PHASES_INVALIDATED_BY.outline).toEqual(['outline', 'article']);
+    // Phase 4 (brief 4.6; spec 15): the outline's stubs went with the outline judge.
+    expect(PHASES_INVALIDATED_BY.outline).toEqual(['article']);
     expect(PHASES_INVALIDATED_BY.article).toEqual(['article']);
   });
 

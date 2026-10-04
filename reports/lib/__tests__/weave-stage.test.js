@@ -10,7 +10,7 @@
 const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
 const { analyzeArcsPlayerFocusGuided, reviseArcs, validateArcStructure } = arcNodes;
 const { weaveSystemPrompt, buildWeavePrompt, buildWeaveSections, buildArcRevisionPrompt, getArcRevisionSystemPrompt } = arcNodes._testing;
-const { evaluateArcs, evaluateOutline, _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
+const { evaluateArcs, evaluateArticle, _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
 const { buildEvaluationSystemPrompt, buildEvaluationUserPrompt, getPhaseCriteria, TRUTH_ONLY_EVALUATION_RULES } = evalTesting;
 const { DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
 const { _testing: graphTesting } = require('../workflow/graph');
@@ -330,8 +330,9 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
 
   it('a judge is truth-only exactly when its criteria are all truth criteria, and its prompt carries the truth-only contract exactly then', () => {
     const truthOnlyJudges = [];
+    // Phase 4 (brief 4.6): the outline judge left the graph.
     for (const theme of ['journalist', 'detective']) {
-      for (const phase of ['arcs', 'outline', 'article']) {
+      for (const phase of ['arcs', 'article']) {
         const truthOnly = isTruthOnly(getPhaseCriteria(phase, theme));
         if (truthOnly) truthOnlyJudges.push(`${theme} ${phase}`);
         const format = formatOf(systemFor(phase, theme));
@@ -344,7 +345,8 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
     expect(isTruthOnly({})).toBe(false);
   });
 
-  it('the fact check is sent the truth-only schema, which differs from the shared one in those two fields alone; the outline judge keeps the shared one', async () => {
+  // Phase 4 (brief 4.6): the article judge, since the outline judge left the graph.
+  it('the fact check is sent the truth-only schema, which differs from the shared one in those two fields alone; the article judge keeps the shared one', async () => {
     const sdk = recordingSdk(CLEAN);
     await evaluateArcs(weaveState(), { configurable: { sdkClient: sdk } });
     const schema = sdk.calls[0].jsonSchema;
@@ -359,9 +361,10 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
     expect(ownScores.additionalProperties.properties).toEqual(sharedCriterion);
     expect(schema.required).toEqual(EVALUATION_JSON_SCHEMA.required);
 
-    const outline = recordingSdk({ ...CLEAN, overallScore: 0.9 });
-    await evaluateOutline(weaveState({ outlineApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: outline } });
-    expect(outline.calls[0].jsonSchema).toBe(EVALUATION_JSON_SCHEMA);
+    const article = recordingSdk({ ...CLEAN, overallScore: 0.9 });
+    // At the cap the article judge runs whatever the fact check found.
+    await evaluateArticle(weaveState({ contentBundle: {}, articleApproved: false, evaluationHistory: [], articleRevisionCount: REVISION_CAPS.ARTICLE }), { configurable: { sdkClient: article } });
+    expect(article.calls[0].jsonSchema).toBe(EVALUATION_JSON_SCHEMA);
   });
 
   it("a note on the writing reaches neither the meeting nor the fix, and a breach's fix stays a fix", async () => {
@@ -576,8 +579,9 @@ describe('the interweaving call is gone', () => {
     expect(() => loadRuleSet('interweaving')).toThrow(/Unknown call/);
   });
 
-  it('hasInterweavingPlan stays for the outline judge', () => {
-    expect(typeof arcNodes.hasInterweavingPlan).toBe('function');
+  // Phase 4 (brief 4.6): it went with the outline judge, its last reader.
+  it('hasInterweavingPlan went with the outline judge', () => {
+    expect(arcNodes.hasInterweavingPlan).toBeUndefined();
   });
 });
 

@@ -31,10 +31,8 @@ const DERIVED_LABELS = {
     "The pipeline's code gathered the sentences below by searching the director's notes for Blake and the Valet. " +
     "Each is the director's own sentence, copied as written, so each is part of the record; only the choice of sentences is the code's.",
 
-  /** photoAnalyses, from analyzePhotos and finalizePhotoAnalyses (Haiku). */
-  photoDescriptions:
-    'A model (Haiku) wrote them from the photos. They are derived, not the record: ' +
-    'where they differ from the record, the record decides.',
+  // photoDescriptions, the Haiku photo analyses' label, went with the outline judge, its
+  // last reader (phase 4, brief 4.6).
 
   /**
    * The director-notes indexes, from enrichDirectorNotes (Opus): <QUOTE_BANK>

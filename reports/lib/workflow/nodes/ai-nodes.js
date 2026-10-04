@@ -788,9 +788,9 @@ function isPhotoExcluded(state, filename) {
 
 /**
  * The hero image as a photo entry: its filename, the names identified in it, and
- * `hero: true`; null when there is no hero or the director excluded it (T13). One
- * builder for the article writer's photos (articleWriterInputs) and the outline judge's
- * (evaluator-nodes.js renderJudgePhotos), its analysis found by photoKey (the 4b fix batch).
+ * `hero: true`; null when there is no hero or the director excluded it (T13). The
+ * builder of the article writer's hero entry (articleWriterInputs), its analysis found by
+ * photoKey (the 4b fix batch).
  *
  * @param {Object} state
  * @param {string|null} heroImage - the hero's filename
@@ -1460,13 +1460,12 @@ function articleWriterInputs(state) {
     state.directorNotes || null,  // RC5: director observations for article grounding
     state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
     // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
-    // brief 1.3: the outline evaluation's advisory findings; brief 2.2: the director's
-    // input-review corrections and photo descriptions; phase 3 (3.9): every photo the
-    // article places.
+    // brief 2.2: the director's input-review corrections and photo descriptions; phase 3
+    // (3.9): every photo the article places. The outline evaluation's advisories
+    // (brief 1.3) went with the outline judge (phase 4, brief 4.6).
     {
       directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
-      shouldConsider: advisoriesFromPreviousStage(state, 'outline'),
       evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
       directorCorrections: state.inputReviewCorrections || [],
       photoDescriptions: state.photoDescriptions || null,
@@ -1860,9 +1859,8 @@ async function buildArticleRevisionSystemPrompt(promptBuilder, theme = 'journali
  * <RULES> it used to carry, and whose <SCHEMA> replaces its own copy). The arc
  * packages it carried went in phase 4 (brief 4.6; R5).
  *
- * The writer's <SHOULD_CONSIDER> is the outline evaluation's advisories, which the
- * article evaluation has overwritten by the time a rework runs; the revision
- * context carries the article evaluation's own.
+ * The writer reads no <SHOULD_CONSIDER> since the outline judge left (phase 4, brief
+ * 4.6); the revision context carries the article evaluation's own advisories.
  *
  * @param {Object} state - Current state
  * @param {string} contextSection - Formatted revision context

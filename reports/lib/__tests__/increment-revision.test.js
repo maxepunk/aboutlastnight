@@ -52,14 +52,12 @@ describe('incrementArcRevision', () => {
 });
 
 describe('incrementOutlineRevision', () => {
-  test('adds evaluation invalidation entry for outline phase', async () => {
+  // Phase 4 (brief 4.6; spec 15): no judge reads the outline, so no evaluation of it can
+  // be skipped on a stale verdict, and the increment writes no stub.
+  test('writes no evaluation stub: no judge reads the outline', async () => {
     const state = { outline: { sections: [] }, outlineRevisionCount: 0 };
     const result = await incrementOutlineRevision(state);
-    expect(result.evaluationHistory).toEqual(expect.objectContaining({
-      phase: 'outline',
-      ready: false,
-      reason: 'revision-invalidated'
-    }));
+    expect(result).not.toHaveProperty('evaluationHistory');
   });
 
   test('an automated pass bumps the automated counter and leaves the round alone', async () => {
@@ -67,7 +65,6 @@ describe('incrementOutlineRevision', () => {
     const result = await incrementOutlineRevision(state);
     expect(result.outlineRevisionCount).toBe(2);
     expect(result.humanOutlineRevisionCount).toBe(2);
-    expect(result.evaluationHistory.source).toBe('evaluator');
   });
 
   // Brief 1.4: one counter used to serve both the machine and the director, so two
@@ -78,7 +75,7 @@ describe('incrementOutlineRevision', () => {
     const result = await incrementOutlineRevision(state);
     expect(result.humanOutlineRevisionCount).toBe(1);
     expect(result.outlineRevisionCount).toBe(0);
-    expect(result.evaluationHistory.source).toBe('human');
+    expect(result).not.toHaveProperty('_outlineTrace');
   });
 });
 
@@ -241,11 +238,12 @@ describe('the trace entry (phase 2, brief 2.7)', () => {
     expect(result._outlineTrace).toEqual([expect.objectContaining({ pass: 1, round: 2 })]);
   });
 
-  test('nothing about the counters or the history stub changes', async () => {
+  // Phase 4 (brief 4.6): the outline's increment writes no history stub (no judge reads it).
+  test('nothing about the counters changes, and the outline gets no history stub', async () => {
     const result = await incrementOutlineRevision({ outline: {}, outlineRevisionCount: 1, humanOutlineRevisionCount: 2, validationResults: OUTLINE_VERDICT });
     expect(result.outlineRevisionCount).toBe(2);
     expect(result.humanOutlineRevisionCount).toBe(2);
-    expect(result.evaluationHistory).toEqual(expect.objectContaining({ phase: 'outline', reason: 'revision-invalidated', source: 'evaluator' }));
+    expect(result).not.toHaveProperty('evaluationHistory');
   });
 });
 

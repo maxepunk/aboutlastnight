@@ -591,23 +591,24 @@ describe('ai-nodes', () => {
         .toEqual(['Two arcs share a document']);
     });
 
-    it('hands the outline evaluation advisories to the article writer', async () => {
+    // Phase 4 (brief 4.6): the outline judge left the graph, and the advisories it handed
+    // the article writer with it.
+    it('hands the article writer no advisories: no judge reads the outline', async () => {
       const builder = spyBuilder();
       await generateContentBundle(
         { validationResults: { phase: 'outline', passed: true, advisoryWarnings: ['The lede frontloads the verdict'] } },
         configFor(builder, { contentBundle: mockContentBundle })
       );
-      expect(builder.buildArticlePrompt.mock.calls[0][6].shouldConsider)
-        .toEqual(['The lede frontloads the verdict']);
+      expect(builder.buildArticlePrompt.mock.calls[0][6]).not.toHaveProperty('shouldConsider');
     });
 
     it('ignores a block stamped for another phase', async () => {
       const builder = spyBuilder();
-      await generateContentBundle(
-        { validationResults: { phase: 'arcs', passed: true, advisoryWarnings: ['Two arcs share a document'] } },
-        configFor(builder, { contentBundle: mockContentBundle })
+      await generateOutline(
+        { validationResults: { phase: 'outline', passed: true, advisoryWarnings: ['The lede frontloads the verdict'] } },
+        configFor(builder, { outline: mockOutline })
       );
-      expect(builder.buildArticlePrompt.mock.calls[0][6].shouldConsider).toEqual([]);
+      expect(builder.buildOutlinePrompt.mock.calls[0][6].shouldConsider).toEqual([]);
     });
 
     it('passes an empty list when no evaluation has run', async () => {

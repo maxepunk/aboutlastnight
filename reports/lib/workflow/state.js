@@ -1174,7 +1174,7 @@ const PHASES = {
 
   // Outline sub-phases (Commit 8.6)
   OUTLINE_GENERATION: '3.1',
-  OUTLINE_EVALUATION: '3.2',
+  // OUTLINE_EVALUATION ('3.2') went with the outline judge (phase 4, brief 4.6).
   OUTLINE_CHECKPOINT: '3.25',       // Checkpoint: user approves outline (Commit 8.26 - SRP separation)
   GENERATE_OUTLINE: '3',            // @deprecated - use sub-phases
 
@@ -1207,17 +1207,19 @@ const PHASES = {
  * the fact check has judged the weave; the fix by the fact check's mark on the weave
  * (lib/weave.js, `fixes`). It was 2, which let the arc judge run three times on
  * 0926262.
- * Outline/Article: 2 per round. They were 3 when ONE counter served both the machine
- * and the director: on 091826 the director's two send-backs exhausted it and the
- * console declared the article final. A round starts the budget over, so the total
- * number of reworks a session may run is no longer bounded by this number.
+ * Outline: 1 per round (phase 4, brief 4.6; R6): one rework after a failed map check.
+ * No model judge reads the map, so nothing else spends it.
+ * Article: 2 per round. It was 3 when ONE counter served both the machine and the
+ * director: on 091826 the director's two send-backs exhausted it and the console
+ * declared the article final. A round starts the budget over, so the total number of
+ * reworks a session may run is no longer bounded by this number.
  *
  * There is no HUMAN_ARCS entry: the arc stop used to force an empty selection
  * forward at four rejections, which paid for an outline about nothing.
  */
 const REVISION_CAPS = {
   ARCS: 1,
-  OUTLINE: 2,
+  OUTLINE: 1,
   ARTICLE: 2
 };
 

@@ -24,8 +24,8 @@
  * Phase 3 (brief 3.0): every call the phase rewires is rendered:
  *   outline-generation.txt, outline-revision.txt, article-generation.txt,
  *   article-revision.txt, arc-generation.txt, arc-revision.txt  (as above)
- *   judge-arc.txt, judge-outline.txt, judge-article.txt
- *                      the three judges, from the thread's state, as createEvaluator
+ *   judge-arc.txt, judge-article.txt
+ *                      the judges, from the thread's state, as createEvaluator
  *                      builds them; the article judge's user prompt carries the fact
  *                      check run on the stored bundle (factCheckContentBundle)
  * The judges render through scripts/lib/render-calls.js, which repeats each node's
@@ -85,7 +85,6 @@ const REQUIRED_MARKERS = {
   'arc-reweave.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'arc-send-back.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'judge-arc.txt': ['<RECORD>'],
-  'judge-outline.txt': ['<RECORD>'],
   'judge-article.txt': ['<RECORD>']
 };
 
@@ -111,8 +110,11 @@ const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-genera
  * since brief 4.5 the reworker's automatic pass, reweave and send-back.
  */
 const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt', 'arc-reweave.txt', 'arc-send-back.txt'];
-/** Rendered as well, but not compared (phase 3, 3.0): the judges, by phase. */
-const JUDGE_FILES = { arcs: 'judge-arc.txt', outline: 'judge-outline.txt', article: 'judge-article.txt' };
+/**
+ * Rendered as well, but not compared (phase 3, 3.0): the judges, by phase. Phase 4
+ * (brief 4.6): judge-outline.txt went with the outline judge.
+ */
+const JUDGE_FILES = { arcs: 'judge-arc.txt', article: 'judge-article.txt' };
 const FIXED_FEEDBACK = 'RENDER-DIFF FIXED FEEDBACK: tighten the second section.';
 /** The round a fixed send back opens, for the rework banner (2.3; an older tree ignores it). */
 const FIXED_ROUND = 2;
@@ -312,7 +314,7 @@ async function render() {
   const articleHero = articleInputs ? (articleInputs[1] || null) : heroImage;
   const ag = await promptBuilder.buildArticlePrompt(outline, articleHero, state.shellAccounts || [],
     sessionFacts, state.directorNotes || null, state.narrativeTensions || null,
-    { directorGuidance: guidance, gateNotes: FIXED_NOTES, shouldConsider: FIXED_ADVISORIES,
+    { directorGuidance: guidance, gateNotes: FIXED_NOTES,
       evidenceBundle: state.evidenceBundle || null, ...directorWords, ...(articlePhotos && { photos: articlePhotos }) });
   write(FILES[2], ag.systemPrompt, ag.userPrompt);
 
@@ -350,9 +352,8 @@ async function render() {
     write(file, call.systemPrompt, call.prompt);
   }
 
-  // 7-9. the three judges, from the thread's state; the arcs judge is the story
-  // meeting's fact check on the weave, and the article judge's fact check is run on the
-  // stored bundle.
+  // 7-8. the judges, from the thread's state; the arcs judge is the story meeting's fact
+  // check on the weave, and the article judge's fact check is run on the stored bundle.
   for (const phase of JUDGE_PHASES) {
     const judge = await renderJudge(calls, state, phase);
     write(JUDGE_FILES[phase], judge.systemPrompt, judge.userPrompt);

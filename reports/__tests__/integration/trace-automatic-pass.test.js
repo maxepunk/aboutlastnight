@@ -154,65 +154,6 @@ describe('the trace through the real graph (phase 2, brief 2.7)', () => {
     expect(pass.changed.text).toBe('What changed: Section "opening"');
   });
 
-  it('an outline pass the evaluation triggered keeps the evaluation\'s reasons after the next one overwrites them', async () => {
-    const base = require('../fixtures/mock-responses/outline.json');
-    const before = JSON.parse(JSON.stringify(base));
-    const after = JSON.parse(JSON.stringify(base));
-    after.lede.hook = 'A sharper hook that names Zia.';
-    const failing = {
-      ready: false, structuralPassed: false, overallScore: 0.5,
-      structuralIssues: ['The LEDE names no roster member.'],
-      advisoryWarnings: ['The closing repeats the hook.'],
-      criteriaScores: { rosterCoverage: { score: 0.4, type: 'structural', notes: 'Zia is missing.', fix: 'Name Zia in the LEDE.' } },
-      revisionGuidance: 'Put Zia in the LEDE.',
-      confidence: 'high'
-    };
-    const sdk = scriptedSdk({ revised: after, evaluations: [failing, PASSING_EVALUATION] });
-
-    const { snapshot } = await runToStop({
-      sdk,
-      asNode: 'generateOutline',
-      values: {
-        sessionConfig: { roster: ['Vic', 'Zia'] },
-        outline: before,
-        selectedArcs: ['a1'],
-        evaluationHistory: [{ phase: 'arcs', ready: true }]
-      }
-    });
-
-    expect(snapshot.next).toEqual(['checkpointOutline']);
-    expect(sdk.calls).toEqual(['evaluation', 'Outline revision 1', 'evaluation']);
-    expect(snapshot.values.validationResults.revisionGuidance).toBe('');
-
-    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, snapshot.values);
-    expect(data.trace).toHaveLength(1);
-    expect(data.trace[0]).toEqual(expect.objectContaining({
-      pass: 1,
-      round: 1,
-      trigger: 'evaluation',
-      findings: {
-        structuralIssues: ['The LEDE names no roster member.'],
-        advisoryWarnings: ['The closing repeats the hook.'],
-        criteriaScores: failing.criteriaScores,
-        revisionGuidance: 'Put Zia in the LEDE.'
-      },
-      changedScopes: ['lede']
-    }));
-
-    // Final review (reworks[0]): the journalist automatic rework is not given the judge's
-    // revisionGuidance (node-helpers.js buildRevisionContext, since 3.10), so the trace
-    // says the guidance is the evaluation's and was not sent to the rework.
-    const reworkPrompt = sdk.reworkPrompts['Outline revision 1'];
-    expect(reworkPrompt).toContain('The LEDE names no roster member.');
-    expect(reworkPrompt).not.toContain('Put Zia in the LEDE.');
-
-    const [pass] = traceView(data.trace, 'journalist').passes;
-    expect(pass.triggerLabel).toBe('Why it ran: the evaluation failed.');
-    expect(pass.shouldConsider.items).toEqual(['The closing repeats the hook.']);
-    expect(pass.guidance).toBe("The evaluation's guidance, not sent to the rework: Put Zia in the LEDE.");
-    expect(pass.changed.text).toBe('What changed: LEDE');
-  });
-
   it('a send back opens a round with an empty trace, and its own rework adds no entry', async () => {
     const before = bundle(null);
     const after = bundle('Zia said nothing all night, and her account moved the most money.');

@@ -8,7 +8,7 @@ const { isTransientError } = require('../../llm/retry');
 const LLM_NODES = [
   'parseRawInput', 'analyzePhotos', 'finalizePhotoAnalyses', 'parseCharacterIds',
   'preprocessEvidence', 'extractCharacterData', 'curateEvidenceBundle',
-  'analyzeArcs', 'reviseArcs', 'evaluateArcs', 'evaluateOutline', 'evaluateArticle',
+  'analyzeArcs', 'reviseArcs', 'evaluateArcs', 'evaluateArticle',
   'generateOutline', 'reviseOutline', 'generateContentBundle', 'reviseContentBundle',
   'validateContentBundle'
 ];

@@ -6,8 +6,9 @@
  * director's edits must-fix (the closing stated Alex's motive as fact, T1; a cut
  * paragraph left a debated theory unreported, T2), and the automatic rework changed
  * both. The judges never saw which text was the director's. Now:
- *   - the outline and article judges' user prompts list the standing edits by id, each
- *     with its section and the director's text (or, for a cut, the text removed);
+ *   - the article judge's user prompt lists the standing edits by id, each with its
+ *     section and the director's text (or, for a cut, the text removed); the outline
+ *     judge, which did too, left the graph (phase 4, brief 4.6);
  *   - the verdict guard moves a structural issue that quotes the director's text to
  *     advisoryWarnings, under the one prefix and the edit's id, and a truth criterion
  *     holds the output only while an issue under its rules is still structural or its
@@ -16,11 +17,11 @@
  *
  * getSdkClient returns config.configurable.sdkClient as-is, so a jest.fn is the judge.
  */
-const { evaluateArticle, evaluateOutline, evaluateArcs, _testing: { buildEvaluationUserPrompt, buildFactCheckArgs } } =
+const { evaluateArticle, evaluateArcs, _testing: { buildEvaluationUserPrompt, buildFactCheckArgs } } =
   require('../../../lib/workflow/nodes/evaluator-nodes');
 const { standingAfterSendBack, DIRECTOR_EDIT_PREFIX } = require('../../../lib/hand-edit-diff');
 const { buildRevisionContext } = require('../../../lib/workflow/nodes/node-helpers');
-const { reworkFixtureState, PREVIOUS_BUNDLE, OUTLINE } = require('../../../lib/__tests__/fixtures/rework-state');
+const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -92,26 +93,10 @@ describe('the judges read the director\'s edits (F1)', () => {
     expect(prompt).toContain('score each criterion, and write each structural issue, on the writer\'s text alone');
   });
 
-  it.each(['journalist', 'detective'])('%s outline judge: lists the outline\'s standing edits after the outline', (theme) => {
-    const edited = clone(OUTLINE);
-    edited.lede.hook = 'Marcus died the morning his company sold.';
-    const state = {
-      ...reworkFixtureState(theme), outline: edited,
-      _outlineHandEdits: standingAfterSendBack(null, OUTLINE, edited, 'outline')
-    };
-    const edits = require('../../../lib/hand-edit-diff').carriedEdits(state._outlineHandEdits, state.outline);
-    const prompt = buildEvaluationUserPrompt('outline', state, { directorEdits: edits });
-    expect(prompt).toContain('E1 (lede, hook): "Marcus died the morning his company sold."');
-    expect(prompt.indexOf("THE DIRECTOR'S EDITS")).toBeGreaterThan(prompt.indexOf('OUTLINE:'));
-    expect(prompt.indexOf("THE DIRECTOR'S EDITS")).toBeLessThan(prompt.indexOf('SELECTED ARCS'));
-    expect(prompt).toContain('text the director wrote into the outline above, text they cut from it (marked cut), or a block they moved (marked moved)');
-  });
-
   it('carries no such section when there are no standing edits', () => {
     const state = articleState('journalist', { _articleHandEdits: null });
     expect(buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: [] })).not.toContain("THE DIRECTOR'S EDITS");
     expect(buildEvaluationUserPrompt('article', state, { factCheck: null })).not.toContain("THE DIRECTOR'S EDITS");
-    expect(buildEvaluationUserPrompt('outline', { ...reworkFixtureState('journalist') }, {})).not.toContain("THE DIRECTOR'S EDITS");
   });
 
   it('the article judge node sends the edits the bundle under review carries', async () => {
@@ -287,19 +272,6 @@ describe('the verdict guard (F1)', () => {
     }))));
     expect(result.evaluationHistory.advisoryWarnings).toEqual([concern, 'C10: the lede runs long.']);
     expect(result.validationResults.advisoryWarnings).toEqual(['C10: the lede runs long.']);
-  });
-
-  it('the outline judge\'s verdict is guarded the same way', async () => {
-    const edited = clone(OUTLINE);
-    edited.closing.systemicAngle = 'Markets for memory decided who the room could blame.';
-    const state = {
-      ...reworkFixtureState('journalist'), outline: edited, outlineApproved: false, evaluationHistory: [],
-      _outlineHandEdits: standingAfterSendBack(null, OUTLINE, edited, 'outline')
-    };
-    const issue = 'T2: "Markets for memory decided who the room could blame" grades the verdict.';
-    const result = await evaluateOutline(state, cfg(judging(verdict({ structuralIssues: [issue] }))));
-    expect(result.evaluationHistory.ready).toBe(true);
-    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E1: ${issue}`]);
   });
 
   it('with no standing edits nothing moves (the arc judge has none)', async () => {

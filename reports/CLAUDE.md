@@ -59,7 +59,7 @@ npx @langchain/langgraph-cli dev --tunnel  # With tunnel (for Safari/remote)
 
 ## Architecture
 
-### LangGraph Workflow (6 Phases, 44 Nodes)
+### LangGraph Workflow (6 Phases, 43 Nodes)
 
 ```
 Phase 0: Input Parsing (conditional) → Phase 1: Data Acquisition → Phase 1.6-1.8: Processing
@@ -235,7 +235,7 @@ lib/session-ledger.js               # The ledger from the session report: Adjust
 lib/director-enricher.js            # Opus director-notes enrichment: quote bank and epilogue checked against the director's words, transaction links by opaque row key
 lib/grounding.js                    # isVerbatimIn / normalizeForGrounding: whether a text is the director's words, word for word; namedOutsideQuote: whether those words name a quote's speaker or addressee; groundQuote: the one rule for a quote's speaker and addressee, which the enricher and the notes renderer both call (the final fix)
 lib/workflow/
-├── graph.js                        # LangGraph StateGraph (44 nodes, edges)
+├── graph.js                        # LangGraph StateGraph (43 nodes, edges)
 ├── state.js                        # State annotations, phases, reducers
 ├── checkpoint-helpers.js           # Native interrupt() helpers (DRY)
 └── nodes/
@@ -503,7 +503,7 @@ Web-based IDE for visualizing and debugging the LangGraph workflow.
 **Requirements:** LangSmith account + `LANGSMITH_API_KEY` in `.env`
 **Config:** `langgraph.json` defines graph as `./lib/studio/entry.js:graph`
 
-**Features:** Graph visualization (44 nodes), state inspection, time-travel debugging, prompt iteration
+**Features:** Graph visualization (43 nodes), state inspection, time-travel debugging, prompt iteration
 
 ## Console Frontend
 
