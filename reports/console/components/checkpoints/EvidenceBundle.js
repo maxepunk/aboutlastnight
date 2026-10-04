@@ -345,12 +345,12 @@ function EvidenceBundle({ data, onApprove }) {
 
     // ── Photos folder (optional, M4) ──
     React.createElement('div', { className: 'checkpoint-section' },
-      React.createElement('h4', { className: 'checkpoint-section__title' }, 'Photos folder (optional, for the photos step after arc selection)'),
+      React.createElement('h4', { className: 'checkpoint-section__title' }, 'Photos folder (optional, for the photos step after the story meeting)'),
       React.createElement('input', {
         id: 'eb-photos-path',
         type: 'text',
         className: 'input input-mono text-sm',
-        placeholder: 'leave blank to be asked after arc selection',
+        placeholder: 'leave blank to be asked after the story meeting',
         value: photosPath,
         onChange: (e) => setPhotosPath(e.target.value),
         'aria-label': 'Directory containing session photos'

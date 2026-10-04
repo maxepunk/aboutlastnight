@@ -574,7 +574,7 @@ function InputReview({ data, onApprove, onReject, theme }) {
         whiteboard.notes.length === 0 &&
         React.createElement('p', { className: 'enrichment__warning' },
           'No whiteboard analysis reached this checkpoint. The players\u2019 own ' +
-          'conclusions drive arc selection, so the arcs will be built from the ' +
+          'conclusions feed the story meeting, so its weave will be written from the ' +
           'accusation and the director notes alone.'
         )
     ),

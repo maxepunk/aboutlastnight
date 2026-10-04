@@ -81,7 +81,7 @@ function AwaitRoster({ data, onApprove }) {
     React.createElement('div', { className: 'checkpoint-section' },
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Why Roster Is Needed'),
       React.createElement('p', { className: 'text-sm text-secondary' },
-        'The roster is the set of CHARACTERS who were played this session \u2014 their in-game identities, not the real people. It sets each character\u2019s pronouns (the universe is gender-neutral, so the roster is the pronoun authority). This drives article references, enables character ID mapping, and prevents pronoun errors. Photos are not needed yet \u2014 the pipeline asks for the folder after arc selection.'
+        'The roster is the set of CHARACTERS who were played this session \u2014 their in-game identities, not the real people. It sets each character\u2019s pronouns (the universe is gender-neutral, so the roster is the pronoun authority). This drives article references, enables character ID mapping, and prevents pronoun errors. Photos are not needed yet \u2014 the pipeline asks for the folder after the story meeting.'
       )
     ),
 

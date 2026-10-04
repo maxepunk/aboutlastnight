@@ -57,7 +57,7 @@ function SessionStart({ dispatch, theme }) {
   const isValid = isValidSessionId(sessionId, allowNonstandardId);
   // Photo late-join: this is a PLACEHOLDER, not a default. buildRawInput omits
   // photosPath entirely when the field is blank, so the run reaches the `photos`
-  // gate after arc selection and asks for the folder then.
+  // gate after the story meeting and asks for the folder then.
   const suggestedPhotosPath = sessionId ? 'data/' + sessionId + '/photos' : '';
 
   /** Clear whatever the last attempt left on screen. */
@@ -205,7 +205,7 @@ function SessionStart({ dispatch, theme }) {
    * The old guard only rejected a thread with NO currentPhase, so a COMPLETE
    * session passed straight through to /resume and re-invoked the graph from START
    * (B9): every checkpoint's skip condition already satisfied, so it never paused —
-   * Notion re-fetch, Haiku vision on every photo, Opus arcs, outline, article, and
+   * Notion re-fetch, Haiku vision on every photo, the Opus weave, outline, article, and
    * an overwritten published report, unattended, from one click on a button that
    * does not sound destructive. The five branches below are the five things a
    * session can be; only two of them may start work.
@@ -468,8 +468,8 @@ function SessionStart({ dispatch, theme }) {
         }, 'Browse')
       ),
       React.createElement('p', { className: 'text-muted text-xs mt-xs' },
-        'Optional. Leave it blank and the pipeline will ask for the folder after arc selection, ' +
-        'so parsing, curation and arc analysis run while you are still curating the photos.' +
+        'Optional. Leave it blank and the pipeline will ask for the folder after the story meeting, ' +
+        'so parsing, curation and the meeting go ahead while you are still curating the photos.' +
         (suggestedPhotosPath ? ' Usual location: ' + suggestedPhotosPath + '.' : '')
       )
     ),

@@ -59,6 +59,40 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
   });
 });
 
+describe('4.8: every console string that names the arc stop or its cost says "story meeting" and R9\'s cost', () => {
+  const FILES = [
+    'components/checkpoints/Photos.js',
+    'components/RollbackPanel.js',
+    'components/checkpoints/InputReview.js',
+    'components/checkpoints/AwaitRoster.js',
+    'components/checkpoints/EvidenceBundle.js',
+    'components/SessionStart.js'
+  ];
+
+  it.each(FILES)('%s no longer names the arc stage', (rel) => {
+    expect(read(rel)).not.toMatch(/arc selection|arc analysis|re-runs arc|Opus arcs/i);
+  });
+
+  it('the photos stop offers the way back to the story meeting, at no model call', () => {
+    const src = read('components/checkpoints/Photos.js');
+    expect(src).toContain("onRollback('arc-selection')");
+    expect(src).toContain('Back to the story meeting (no model call)');
+  });
+
+  it('the roster stop, the evidence stop and the start form ask for the photos after the story meeting', () => {
+    expect(read('components/checkpoints/AwaitRoster.js')).toContain('asks for the folder after the story meeting');
+    expect(count(read('components/checkpoints/EvidenceBundle.js'), 'after the story meeting')).toBe(2);
+    expect(read('components/SessionStart.js')).toContain('ask for the folder after the story meeting');
+    expect(read('components/checkpoints/InputReview.js')).toContain('the story meeting');
+  });
+
+  it('the rollback panel says what a rollback costs through rollbackWarningLine', () => {
+    const src = read('components/RollbackPanel.js');
+    expect(src).toContain('rollbackWarningLine(targetCheckpoint)');
+    expect(src).not.toContain("'This will clear all data from this point forward.'");
+  });
+});
+
 describe('4.8: app.js\'s fallback payload for the meeting follows 4.5\'s', () => {
   const src = read('app.js');
 

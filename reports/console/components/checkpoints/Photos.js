@@ -3,8 +3,8 @@
  *
  * The photo branch's entry gate. It fires only when no photo folder has been
  * supplied yet — the whole point of the photo late-join is that parsing,
- * curation and arc analysis happen while the director is still curating and
- * cleaning the photos.
+ * curation and the story meeting happen while the director is still curating
+ * and cleaning the photos.
  *
  * Posts { photosPath } (valid at this checkpoint only — server.js gates it on
  * the interrupt type). Exports to window.Console.checkpoints.Photos
@@ -51,7 +51,7 @@ function Photos({ data, onApprove, onRollback }) {
       React.createElement('h4', { className: 'checkpoint-section__title' }, 'Why This Stop Is Here'),
       React.createElement('p', { className: 'text-sm text-secondary' },
         'Photos are the one input that needs work outside the pipeline, so the run does not wait for them. ' +
-        'Parsing, evidence curation and arc analysis are already done. From here the photos are resized, ' +
+        'Parsing, evidence curation and the story meeting are already done. From here the photos are resized, ' +
         'analysed by Haiku, and mapped to the roster at the next stop.'
       )
     ),
@@ -102,15 +102,14 @@ function Photos({ data, onApprove, onRollback }) {
         onClick: handleSubmit,
         disabled: !trimmed
       }, 'Use This Folder'),
-      // v2 M3: name the cost. This rollback clears narrativeArcs and
-      // evaluationHistory and re-runs the Opus arc analysis and evaluation, and the
-      // RollbackPanel's own warning ("This will clear all data from this point
-      // forward", RollbackPanel.js:61) does not say that.
+      // v2 M3: name the cost. R9 (task 4.8): going back to the story meeting reopens it
+      // as the director left it, with no model call, and the rollback panel says so
+      // (checkpoint-view-logic.js rollbackWarningLine).
       React.createElement('button', {
         className: 'btn btn-secondary',
         onClick: () => onRollback('arc-selection'),
         type: 'button'
-      }, 'Roll back to Arc Selection (re-runs arc analysis)')
+      }, 'Back to the story meeting (no model call)')
     ),
 
     React.createElement(FileBrowser, {
