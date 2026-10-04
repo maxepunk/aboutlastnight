@@ -1224,3 +1224,79 @@ describe("4.6: the map's rework context", () => {
     expect(sent.label).toBe('Map revision 1');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6b: the map's rework context names no evaluator
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// No evaluator reads the map (spec 5.4): its rework reads the map checks' lines under their
+// own label, or nothing when no check result is in hand (after going back to the map, R9,
+// the result is cleared and the checks skip the map they marked). The director's note keeps
+// its end marker, the NOTE line, which the removed-phrase scan reads as where the director's
+// words end (brief 4.5b).
+describe("4.6b: the map's rework context names no evaluator", () => {
+  const { MAP, reworkFixtureState } = require('./fixtures/rework-state');
+  const { standingOnMap } = require('../hand-edit-diff');
+  const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
+  const { reviseOutline } = require('../workflow/nodes/ai-nodes');
+  const { instructionText } = require('./fixtures/removed-phrases');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const NOTE = 'Lead with the envelope.';
+  const END = 'NOTE: The human reviewer has explicitly requested these changes.';
+
+  /** The director's map: b6's line rewritten, and b4 struck. */
+  function directorsMap() {
+    const left = clone(MAP);
+    left.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    left.leftOut.push(left.sections[1].beats.splice(2, 1)[0]);
+    return left;
+  }
+  /** The map checks' result on a map with Riley in no beat, as the check node writes it. */
+  function failingChecks() {
+    const failing = directorsMap();
+    failing.sections[3].beats[0].players = [];
+    failing.sections[1].beats[1].players = ['Morgan'];
+    return { failing, validationResults: checkMap({ ...reworkFixtureState(), outline: failing, _mapCheck: null }).validationResults };
+  }
+  const context = (options) => buildRevisionContext({ phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, theme: 'journalist', ...options }).contextSection;
+
+  it("a send-back with no check result in hand prints no evaluator line, and the director's note ends on the NOTE line", () => {
+    const left = directorsMap();
+    const text = context({ previousOutput: left, handEdits: standingOnMap(null, MAP, left), humanFeedback: NOTE, validationResults: null });
+    expect(text).not.toMatch(/evaluator/i);
+    expect(text).toContain(`REVISION CONTEXT: MAP (round 2: the director's send back)\n═══════════════════════════════════════════════════════════════════════════════\n\nHUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}\n\n${END}\n\n<HAND_EDITS>`);
+    expect(instructionText(text)).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n\n${END}`);
+  });
+
+  it("a send-back after a map check that still fails prints the check's lines under its own label, and no evaluator line", () => {
+    const { failing, validationResults } = failingChecks();
+    expect(validationResults).toMatchObject({ phase: 'outline', source: 'map-checks', passed: false });
+    const text = context({ previousOutput: failing, handEdits: standingOnMap(null, MAP, failing), humanFeedback: NOTE, validationResults });
+    expect(text).not.toMatch(/evaluator/i);
+    const lines = validationResults.structuralIssues.map((line) => `  - ${line}`).join('\n');
+    expect(text).toContain(`MAP CHECK FAILURES:\n${lines}\n\nHUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}\n\n${END}\n\n<HAND_EDITS>`);
+  });
+
+  it('the automatic pass after a failed check prints no evaluator line either', () => {
+    const { failing, validationResults } = failingChecks();
+    const text = context({ revisionCount: 1, previousOutput: failing, handEdits: standingOnMap(null, MAP, failing), humanFeedback: null, validationResults });
+    expect(text).not.toMatch(/evaluator/i);
+    expect(text).toContain('MAP CHECK FAILURES:');
+  });
+
+  it("the send-back's rework, as reviseOutline sends it, names no evaluator and keeps the NOTE line", async () => {
+    const left = directorsMap();
+    let sent;
+    await reviseOutline(
+      {
+        ...reworkFixtureState(), outline: null, _previousOutline: left, _outlineHandEdits: standingOnMap(null, MAP, left),
+        _outlineFeedback: NOTE, outlineRevisionCount: 0, humanOutlineRevisionCount: 1, validationResults: null
+      },
+      { configurable: { sdkClient: async (options) => { sent = options; return clone(left); }, theme: 'journalist' } }
+    );
+    expect(sent.label).toBe('Map revision 0');
+    const revision = sent.prompt.slice(sent.prompt.indexOf('REVISION CONTEXT: MAP'), sent.prompt.indexOf('WHAT THIS REWORK DOES'));
+    expect(revision).not.toMatch(/evaluator/i);
+    expect(revision).toContain(`${NOTE}\n\n${END}\n\n<HAND_EDITS>`);
+  });
+});

@@ -756,7 +756,10 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  *   at the cap — as does the fact-check short-circuit, so a rework that follows
  *   an evaluation never reads a stale verdict. (Its error branch and its two
  *   skip branches return no record at all, leaving whatever the channel held.)
- * @param {Object|Array} options.previousOutput - The full previous output to improve
+ * @param {Object|Array} options.previousOutput - The full previous output to improve. A story
+ *   map (phase 4, brief 4.6) gets the map's context: its edits' wording, and, since no
+ *   evaluator reads the map (spec 5.4; brief 4.6b), no evaluation line when no check result
+ *   is in hand and no line about the evaluator's issues after the director's note
  * @param {string|null} [options.humanFeedback] - Human reviewer feedback (highest priority in revision prompt)
  * @param {Object|Array|null} [options.handEdits] - the director's standing edits at this stop
  *   (lib/hand-edit-diff.js: the state channel, a list of edits, or a diff stored before the
@@ -812,6 +815,12 @@ function buildRevisionContext(options) {
   const meetingRound = meetingMode && MEETING_ROUNDS.includes(options.meetingRound) ? options.meetingRound : null;
   const directorsRound = meetingMode ? meetingRound !== null : Boolean(options.humanFeedback);
   const humanFeedback = meetingMode && !meetingRound ? null : options.humanFeedback;
+
+  // Brief 4.6: the map's context, when the version the rework starts from is a map. Its
+  // edits have their own wording below, and since no evaluator reads the map (spec 5.4;
+  // brief 4.6b), it prints no evaluation line without a check result and no line about the
+  // evaluator's issues after the director's note.
+  const mapMode = !meetingMode && !parkedDetective && phase === 'outline' && isMap(previousOutput);
 
   // F1: the director's edits the version this rework starts from carries, by id. FA
   // (requirement 7): the rework reads the verdict without the findings located in them.
@@ -1009,8 +1018,10 @@ ${feedback || '(no specific feedback provided)'}`;
   // Brief 4.5 (ruling 9): a code check has no confidence and no scores, so its rework
   // reads the check's lines alone, under the check's label. A director's round at the
   // story meeting reads no finding from before the round, so it prints no evaluation.
+  // Brief 4.6b: the map's rework reads the map checks' lines, or nothing when no check
+  // result is in hand (after going back to the map, R9, the result is cleared).
   let evaluationBlock;
-  if (meetingMode && directorsRound && !hasEvaluation) {
+  if (((meetingMode && directorsRound) || mapMode) && !hasEvaluation) {
     evaluationBlock = '';
   } else if (codeCheck && hasEvaluation) {
     evaluationBlock = `${issuesHeading}:
@@ -1053,8 +1064,7 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // outline's had: an automatic pass keeps every edit of the director's (code holds it to
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
   // note needs it, saying why. The wording names beats, photos and the top photo, so it is
-  // the map's when the version the rework starts from is a map.
-  const mapMode = !meetingMode && !parkedDetective && phase === 'outline' && isMap(previousOutput);
+  // the map's when the version the rework starts from is a map (mapMode, above).
   const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each removed sentence stays out, and the top photo they chose stays the top photo.';
   let handEditsRule;
   if (mapMode) {
@@ -1169,13 +1179,15 @@ ${scope}`;
   // where the director's words end, as the removed-phrase scan reads them
   // (lib/__tests__/fixtures/removed-phrases.js instructionText; brief 4.5b). At the story
   // meeting a director's round reads no finding, so only the line about the evaluator's
-  // issues stays out there (brief 4.5).
+  // issues stays out there (brief 4.5); on the map, which no evaluator reads, it stays out
+  // too (brief 4.6b).
+  const noEvaluatorLine = meetingMode || mapMode;
   const noteBlock = humanFeedback
     ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
 ${humanFeedback}
 
 NOTE: The human reviewer has explicitly requested these changes.
-${meetingMode ? '' : `Address human feedback FIRST, then address any remaining evaluator issues.
+${noEvaluatorLine ? '' : `Address human feedback FIRST, then address any remaining evaluator issues.
 `}`
     : '';
 
@@ -1184,7 +1196,7 @@ ${meetingMode ? '' : `Address human feedback FIRST, then address any remaining e
 REVISION CONTEXT: ${outputName.toUpperCase()} (${passLabel})
 ═══════════════════════════════════════════════════════════════════════════════
 
-${evaluationBlock ? `${evaluationBlock}\n\n` : ''}${noteBlock}${noteBlock && meetingMode ? '\n' : ''}${handEditsBlock}${instructionsSection}
+${evaluationBlock ? `${evaluationBlock}\n\n` : ''}${noteBlock}${noteBlock && noEvaluatorLine ? '\n' : ''}${handEditsBlock}${instructionsSection}
 `.trim();
 
   // ─────────────────────────────────────────────────────────────────────────────
