@@ -76,7 +76,9 @@ async function renderAll(req) {
       stubThemeLoader(PHASE_REQUIREMENTS[theme] || PHASE_REQUIREMENTS), theme, base.sessionConfig,
       base.canonicalCharacters, base.characterData.characters
     );
-    const tail = { _outlineGuidance: 'PIN GUIDANCE: lead with the money.', directorGateNotes: TAIL_NOTES };
+    // Phase 4 (brief 4.7b; R4): the arc selection's guidance went with its last readers, the
+    // article writer and its rework; the standing notes are the tail.
+    const tail = { directorGateNotes: TAIL_NOTES };
 
     // Phase 4 (brief 4.6): the outline is the story map, the journalist's alone (R1): the
     // parked detective has no map writer. The arc stage's advisories no longer reach it.

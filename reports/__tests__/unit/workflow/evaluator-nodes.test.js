@@ -2361,7 +2361,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       state.sessionPhotos = [...state.sessionPhotos, 'photos/p3-excluded.jpg'];
       state.photoDescriptions = { ...state.photoDescriptions, 'p3-excluded.jpg': 'Morgan mid-sentence, eyes half shut.' };
       const inputs = articleWriterInputs(state);
-      expect(inputs[1]).toBe('hero.jpg');
+      // Brief 4.7b: the writer's second input is the map it writes from, its top photo the hero.
+      expect(inputs[1].topPhoto).toBe('hero.jpg');
       expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
       const prompts = await articlePrompts(state);
       expect(prompts.judge).toContain('PHOTOS (the 3 photos the article writer was given');
@@ -2379,11 +2380,13 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       const { topPhoto: _excluded, ...map } = state.outline;
       state.outline = map;
       const inputs = articleWriterInputs(state);
-      expect(inputs[1]).toBeNull();
+      // Brief 4.7b: the map the writer reads has no top photo, and the HERO IMAGE line went:
+      // the instruction says the bundle takes no hero.
+      expect(inputs[1]).not.toHaveProperty('topPhoto');
       expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['p2.jpg', 'p9.jpg']);
       const prompts = await articlePrompts(state);
-      expect(prompts.writer).toContain('HERO IMAGE: none chosen: use the first photo the outline places');
-      expect(prompts.rework).toContain('HERO IMAGE: none chosen: use the first photo the outline places');
+      expect(prompts.writer).toContain('The map has no top photo, so the bundle has no "heroImage".');
+      expect(prompts.rework).toContain('The map has no top photo, so the bundle has no "heroImage".');
       expect(prompts.judge).toContain('PHOTOS (the 2 photos the article writer was given: every photo the director has not excluded');
       for (const prompt of Object.values(prompts)) {
         expect(prompt).not.toContain('hero.jpg');

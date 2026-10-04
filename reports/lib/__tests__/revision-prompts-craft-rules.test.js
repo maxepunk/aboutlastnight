@@ -36,7 +36,8 @@ const {
 
 const { createPromptBuilder } = require('../prompt-builder');
 // Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave.
-const { WEAVE } = require('./fixtures/rework-state');
+// Brief 4.7b: the article writer and its rework read the settled weave, then the map.
+const { WEAVE, MAP } = require('./fixtures/rework-state');
 
 describe('revision system prompts', () => {
   it('journalist keeps Nova as the reviser', async () => {
@@ -117,9 +118,9 @@ describe("revision user prompts: the writer's sections, then the revision block"
 
   it("article revision opens with the writer's sections and keeps the context before the previous output", async () => {
     const prompt = await buildArticleRevisionPrompt(
-      { outline: { lede: {} } }, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
+      { weave: WEAVE, outline: MAP }, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
     );
-    expect(prompt.startsWith('Generate article from outline with 1 sections')).toBe(true);
+    expect(prompt.startsWith(`Generate article from the settled weave and a map with ${MAP.sections.length} sections`)).toBe(true);
     expect(prompt.indexOf('CONTEXT-HERE')).toBeGreaterThan(0);
     expect(prompt.indexOf('PREVIOUS-HERE')).toBeGreaterThan(prompt.indexOf('CONTEXT-HERE'));
     expect(prompt).not.toContain('<RULES>');
@@ -137,13 +138,17 @@ describe("revision user prompts: the writer's sections, then the revision block"
     expect(prompt).not.toContain('SESSION CONTEXT');
   });
 
-  it('article revision carries <DIRECTOR_GUIDANCE> when the director set it, last', async () => {
+  // Brief 4.7b (R4): the guidance is the standing notes alone; the arc selection's
+  // emphasis went with its last readers, so a stored one prints nowhere.
+  it('article revision carries <DIRECTOR_GUIDANCE> when the director left a standing note, last', async () => {
+    const NOTE = { gate: 'outline', kind: 'approval', round: 1, text: 'Lead with the money, not the vote.', at: 't1' };
     const prompt = await buildArticleRevisionPrompt(
-      { _outlineGuidance: 'Lead with the money, not the vote.' },
-      'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
+      { _outlineGuidance: 'An emphasis stored before brief 4.7b.' },
+      'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder, [NOTE]
     );
     expect(prompt).toContain('<DIRECTOR_GUIDANCE>');
     expect(prompt).toContain('Lead with the money, not the vote.');
+    expect(prompt).not.toContain('An emphasis stored before brief 4.7b.');
     expect(prompt.indexOf('<DIRECTOR_GUIDANCE>')).toBeGreaterThan(prompt.indexOf('PREVIOUS-HERE'));
     expect(prompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
@@ -158,7 +163,7 @@ describe("revision user prompts: the writer's sections, then the revision block"
       {}, 'HUMAN FEEDBACK (HIGHEST PRIORITY):\ntighten the lede', 'p', promptBuilder
     );
     expect(prompt).toContain('tighten the lede');
-    expect(prompt.indexOf('tighten the lede')).toBeGreaterThan(prompt.indexOf('Generate article from outline'));
+    expect(prompt.indexOf('tighten the lede')).toBeGreaterThan(prompt.indexOf('Generate article from'));
   });
 });
 

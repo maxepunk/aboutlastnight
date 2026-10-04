@@ -69,7 +69,10 @@ describe('prompt files carry no leakable example content', () => {
     beforeAll(async () => {
       const { PromptBuilder } = require('../prompt-builder');
       const builder = new PromptBuilder({ loadPhasePrompts: async () => ({}) }, 'journalist', { roster: [] }, {}, null);
-      const { userPrompt } = await builder.buildArticlePrompt({ lede: {} }, 'hero.jpg', [], null, null, null);
+      // Brief 4.7b: the article writer writes from the settled weave and the map.
+      const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+      const { WEAVE, MAP } = require('./fixtures/rework-state');
+      const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null, null);
       instruction = userPrompt.slice(userPrompt.indexOf('<GENERATION_INSTRUCTION>'), userPrompt.indexOf('\n<SCHEMA>\n'));
     });
 

@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (86 total - includes revision context + human feedback):
+ * State Fields (85 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections,
@@ -897,22 +897,6 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * Director guidance captured at the arc-selection gate (Q2 decision).
-   *
-   * The director picks the arcs and then has no say until the outline is already
-   * written, where the only lever is reject-and-regenerate. This carries their
-   * emphasis into BOTH the outline and the article prompts as the final section.
-   * Written by nothing since the story meeting replaced the arc selection (brief 4.5).
-   * Read by the article writer and its rework (generateContentBundle,
-   * buildArticleRevisionPrompt) until their slice removes it (R4, brief 4.7); the map
-   * writer reads it no more (brief 4.6).
-   */
-  _outlineGuidance: Annotation({
-    reducer: replaceReducer,
-    default: () => null
-  }),
-
-  /**
    * The director's standing edits at the outline and article stops (F1 and FA; spec
    * 2026-10-02 section 7): `{kind, issued, edits}`, or null (lib/hand-edit-diff.js).
    *
@@ -1018,7 +1002,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (86 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks; phase 4, brief 4.6: -1 the arc packages (R5), -3 the old arc stage's narrativeArcs, selectedArcs and _arcAnalysisCache (R4), +2 the map's baseline and check mark)
+ * Get default state with all fields initialized (85 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks; phase 4, brief 4.6: -1 the arc packages (R5), -3 the old arc stage's narrativeArcs, selectedArcs and _arcAnalysisCache (R4), +2 the map's baseline and check mark; phase 4, brief 4.7b: -1 the arc selection's guidance, _outlineGuidance, with its last readers (R4))
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -1122,8 +1106,6 @@ function getDefaultState() {
     _previousPhotosPath: null,
     // Arc validation routing (Commit 8.xx)
     _arcValidation: null,
-    // Director guidance captured at arc selection (Q2)
-    _outlineGuidance: null,
     // Programmatic article fact-check (BASELINE §4)
     _articleFactCheck: null,
     // Human rejection feedback (consumed by revision nodes, cleared after use)
@@ -1339,7 +1321,6 @@ const ROLLBACK_CLEARS = {
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
-    '_outlineGuidance',
     // Spec 2026-09-19 §5.4: the director's gate notes describe outlines/articles that
     // this point regenerates from scratch, and arc notes describe arcs it re-picks.
     // The five points from the story meeting down (arc-selection, photos, character-ids,
@@ -1381,7 +1362,6 @@ const ROLLBACK_CLEARS = {
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
-    '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -1406,7 +1386,6 @@ const ROLLBACK_CLEARS = {
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
-    '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -1440,7 +1419,6 @@ const ROLLBACK_CLEARS = {
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
-    '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -1456,7 +1434,6 @@ const ROLLBACK_CLEARS = {
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
-    '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -1474,7 +1451,6 @@ const ROLLBACK_CLEARS = {
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
-    '_outlineGuidance',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -1494,9 +1470,6 @@ const ROLLBACK_CLEARS = {
     'narrativeTensions',
     '_arcReworkTimeout', '_arcFeedback',
     'meetingApproved', '_meetingRound', '_weaveHandEditReport', '_weaveMarks',
-    // Q2: _outlineGuidance was captured AT this gate until the meeting (brief 4.5), which
-    // writes it no more; it is cleared here until its last readers go (4.7).
-    '_outlineGuidance',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
@@ -1656,7 +1629,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 86
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 85
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

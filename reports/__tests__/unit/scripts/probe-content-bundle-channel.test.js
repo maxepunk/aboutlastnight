@@ -8,13 +8,18 @@
  *
  * Phase 4 (brief 4.6; R5): the arc packages went, so the probe packages nothing; its
  * record is the documents its synthetic arcs draw on (buildProbeRecord).
+ *
+ * Phase 4 (brief 4.7b): the probe builds its article call from the fixed weave and map,
+ * through the writer's own inputs (articleWriterInputs).
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {
-  tokensOf, paperEvidenceOf, loadSession, buildProbeRecord, buildProbePrompt, ITEMS_PER_ARC
+  tokensOf, paperEvidenceOf, loadSession, buildProbeRecord, probeArticleState, buildProbePrompt, ITEMS_PER_ARC
 } = require('../../../scripts/probe-content-bundle-channel');
+const { FIXED_MAP } = require('../../../scripts/lib/fixed-map');
+const { settledWeaveOf } = require('../../../lib/prompt-renderers/settled-weave');
 
 // Shaped like a current session's fetched/ files (field names only; the text is
 // synthetic): tokens carry tokenId + fullDescription, paper documents notionId +
@@ -130,27 +135,28 @@ describe('buildProbePrompt', () => {
   });
 
   // The 4b fix batch (3.9 review minor 1): since 3.9 the article writer lists its photos
-  // under PHOTOS (options.photos, from articleWriterInputs). The probe passed no photos, so
-  // its prompt printed "PHOTOS: none", while its outline placed photos and its HERO IMAGE
-  // named one. Its photos now come from the writer's own inputs, so its prompt is the
-  // writer's. Phase 4 (brief 4.6): one photo per synthetic arc, with no package to name it.
-  test("the article prompt lists the writer's photos, from articleWriterInputs: the hero, then each arc's photo once", async () => {
-    const { userPrompt } = await buildProbePrompt({
+  // under PHOTOS (options.photos, from articleWriterInputs), so the probe's photos come
+  // from the writer's own inputs and its prompt is the writer's. Brief 4.7b: the article
+  // writer writes from the settled weave and the map, so the probe builds its call from the
+  // fixed weave and map, through articleWriterInputs; its photos are the map's.
+  test("the article prompt is the writer's, from the fixed weave and map through articleWriterInputs", async () => {
+    const session = {
       sessionId: '092026',
       sessionConfig: { roster: ['Sam', 'Quinn'], accusation: { accused: ['Sam'] } },
       directorNotes: { observations: {} },
       tokens: TOKENS,
       paperEvidence: PAPER
-    });
+    };
+    const { userPrompt } = await buildProbePrompt(session);
 
+    expect(userPrompt.startsWith(settledWeaveOf(probeArticleState(session)))).toBe(true);
+    const map = userPrompt.slice(userPrompt.indexOf('<STORY_MAP>'), userPrompt.indexOf('</STORY_MAP>'));
+    expect(map).toContain(JSON.stringify(FIXED_MAP, null, 2));
     expect(userPrompt).not.toContain('PHOTOS: none');
-    expect(userPrompt).toContain('PHOTOS (every photo the director has not excluded, without the whiteboard: the hero image, then the rest;');
-    expect(userPrompt).toContain('1. [hero image] aln0509 (10 of 10).jpg: Sam, Quinn');
-    ITEMS_PER_ARC.forEach((_, arcIdx) => {
-      const filename = `aln0509 (${arcIdx + 1} of 10).jpg`;
-      expect(userPrompt).toContain(`${arcIdx + 2}. ${filename}: Sam, Quinn`);
-      expect(userPrompt.split(`${filename}: Sam, Quinn`).length - 1).toBe(1);
-    });
-    expect(userPrompt).not.toContain('ARC PHOTOS:');
+    expect(userPrompt).toContain(`1. [hero image] ${FIXED_MAP.topPhoto}: Sam, Quinn`);
+    expect(userPrompt).toContain('2. render-diff-photo-1.jpg: Sam, Quinn');
+    expect(userPrompt).toContain('3. render-diff-photo-2.jpg: Sam, Quinn');
+    expect(userPrompt).toContain(`"heroImage": {"filename": "${FIXED_MAP.topPhoto}", "caption": "..."}`);
+    expect(userPrompt).toContain('<FINANCIAL_SUMMARY>');
   });
 });

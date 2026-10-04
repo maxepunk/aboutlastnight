@@ -63,6 +63,12 @@
  * alone, rendered after the weave and the map are planted, so it reads the settled weave
  * and the map as the director left it, the planted ones on a thread that holds none.
  *
+ * Phase 4 (brief 4.7b): article-generation.txt and article-revision.txt are the article
+ * writer and its rework from the thread's weave and map, or the fixed ones planted above:
+ * the writer from its own inputs (articleWriterInputs), the rework as
+ * buildArticleRevisionPrompt builds it. Each opens on the settled weave, then the map in
+ * <STORY_MAP>.
+ *
  * --theme overrides the thread's theme for every render, so the detective prompts
  * can be rendered from a journalist thread and diffed against a baseline. The parked
  * detective has no map, so its map renders fail, naming the theme (R1).
@@ -95,8 +101,8 @@ const REQUIRED_MARKERS = {
   'outline-generation.txt': ['<SETTLED_WEAVE>', '<RECORD>', '<DIRECTOR_GUIDANCE>'],
   'outline-revision.txt': ['<SETTLED_WEAVE>', '<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'outline-check-rework.txt': ['<SETTLED_WEAVE>', '<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
-  'article-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
-  'article-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'article-generation.txt': ['<SETTLED_WEAVE>', '<STORY_MAP>', '<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'article-revision.txt': ['<SETTLED_WEAVE>', '<STORY_MAP>', '<RECORD>', '<DIRECTOR_GUIDANCE>'],
   'arc-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
   'arc-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'arc-reweave.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
@@ -207,9 +213,10 @@ async function render() {
   const { buildRevisionContext } = req('lib/workflow/nodes/node-helpers.js');
   const { _testing: aiTesting } = req('lib/workflow/nodes/ai-nodes.js');
   const { buildArticleRevisionPrompt, getArticleRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
-    buildSessionFacts, articleWriterInputs } = aiTesting;
+    articleWriterInputs } = aiTesting;
   // Phase 4 (brief 4.6): the map writer's inputs and its rework call, as the nodes build them.
-  requireExports('ai-nodes.js _testing', aiTesting, ['outlineWriterInputs', 'mapReworkCall']);
+  // Brief 4.7b: the article writer's inputs, which the article renders are built from.
+  requireExports('ai-nodes.js _testing', aiTesting, ['outlineWriterInputs', 'mapReworkCall', 'articleWriterInputs']);
   const mapNodes = req('lib/workflow/nodes/map-nodes.js');
   requireExports('map-nodes.js _testing', mapNodes._testing, ['checkMap']);
   const arcModule = req('lib/workflow/nodes/arc-specialist-nodes.js');
@@ -273,25 +280,6 @@ async function render() {
     characterData: (state.characterData && state.characterData.characters) || null
   });
 
-  // Mirror ai-nodes.js generateOutline / generateContentBundle (as data/review-2026-09-18/render-p1.js did).
-  // Brief 2.2: a tree that exports the writers' own builders (buildSessionFacts,
-  // buildAvailablePhotos) renders through them, so this script cannot drift from the
-  // nodes; the inline copies below are for a tree from before they existed (main).
-  const roster = (state.sessionConfig && state.sessionConfig.roster) || [];
-  const canonical = state.canonicalCharacters || {};
-  const sessionFacts = buildSessionFacts ? await buildSessionFacts(state) : (roster.length > 0 ? {
-    roster: roster.map((p) => { const n = p.name || p; return canonical[n] || n; }),
-    accusation: (state.sessionConfig && state.sessionConfig.accusation && state.sessionConfig.accusation.accused || []).join(' and ') || 'Unknown',
-    playerCount: roster.length
-  } : null);
-  const heroImage = state.heroImage || null;
-  // Brief 2.2: the director's own words the writers now read (ignored by an older tree).
-  const directorWords = {
-    directorCorrections: state.inputReviewCorrections || [],
-    photoDescriptions: state.photoDescriptions || null
-  };
-  const guidance = state._outlineGuidance || null;
-
   // Every render is written, then checked (brief 3.0); the run fails after all are written.
   const written = [];
   const problems = [];
@@ -317,18 +305,11 @@ async function render() {
   const checkPass = await aiTesting.mapReworkCall({ ...rework, _outlineFeedback: null, outlineRevisionCount: 1, validationResults: mapChecks }, promptBuilder, theme);
   write(MAP_FILES[0], checkPass.systemPrompt, checkPass.prompt);
 
-  // 3. article generation
-  // Phase 3 (3.9): the article writer's photos, as its node builds them
-  // (articleWriterInputs: the hero, then every photo the director kept). An older tree's
-  // inputs carry none, and its builder renders as it did. The hero is the node's too:
-  // a stored hero the director excluded is none (3.9 fix round 1).
-  const articleInputs = articleWriterInputs ? await articleWriterInputs(state) : null;
-  const articlePhotos = articleInputs ? (articleInputs[articleInputs.length - 1] || {}).photos : undefined;
-  const articleHero = articleInputs ? (articleInputs[1] || null) : heroImage;
-  const ag = await promptBuilder.buildArticlePrompt(state.outline || {}, articleHero, state.shellAccounts || [],
-    sessionFacts, state.directorNotes || null, state.narrativeTensions || null,
-    { directorGuidance: guidance, gateNotes: FIXED_NOTES,
-      evidenceBundle: state.evidenceBundle || null, ...directorWords, ...(articlePhotos && { photos: articlePhotos }) });
+  // 3. article generation, as generateContentBundle sends it (brief 4.7b): the writer's own
+  // inputs (articleWriterInputs: the settled weave, the map as the director left it, the
+  // money, the director's words and the photos it places), with the fixed notes, through
+  // its own builder. The weave and the map are the thread's, or the fixed ones planted above.
+  const ag = await promptBuilder.buildArticlePrompt(...await articleWriterInputs({ ...state, directorGateNotes: FIXED_NOTES }));
   write(FILES[2], ag.systemPrompt, ag.userPrompt);
 
   // 4. article revision (fixed hand edit: headline.main)
@@ -338,7 +319,9 @@ async function render() {
   const bundleDiff = diffMod ? await diffMod.diffBundle(bundle, editedBundle) : null;
   const arc = await buildRevisionContext({ phase: 'article', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
     previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: bundleDiff, theme });
-  const arPrompt = await buildArticleRevisionPrompt({ ...state, _outlineGuidance: guidance }, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES, theme);
+  // Brief 4.7b: the rework is its writer's sections (the settled weave and the map first),
+  // then the revision block, then the fixed notes.
+  const arPrompt = await buildArticleRevisionPrompt(state, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES, theme);
   const arSystem = buildArticleRevisionSystemPrompt
     ? await buildArticleRevisionSystemPrompt(promptBuilder, theme)
     : await getArticleRevisionSystemPrompt(theme, state.sessionConfig || {});

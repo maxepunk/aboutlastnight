@@ -311,12 +311,15 @@ describe('with no kept photo there is no hero', () => {
 
     const articleState = { ...state, heroImage, outline: OUTLINE };
     const inputs = articleWriterInputs(articleState);
-    expect(inputs[1]).toBeNull();
+    // Brief 4.7b: the map the article writer reads drops each photo the director left out,
+    // its top photo among them, and the instruction says the bundle takes no hero.
+    expect(inputs[1]).not.toHaveProperty('topPhoto');
+    expect(inputs[1].sections.flatMap((s) => s.photos)).toEqual([]);
     expect(inputs[inputs.length - 1].photos).toEqual([]);
     const articleSdk = recordingSdk(PREVIOUS_BUNDLE);
     await generateContentBundle({ ...articleState, contentBundle: null }, cfg(articleSdk));
     const [articlePrompt] = promptsOf(articleSdk);
-    expect(articlePrompt).toContain('\nHERO IMAGE: none chosen');
+    expect(articlePrompt).toContain('The map has no top photo, so the bundle has no "heroImage".');
     expect(articlePrompt).toContain('\nPHOTOS: none\n');
     expect(buildEvaluationUserPrompt('article', { ...articleState, contentBundle: PREVIOUS_BUNDLE }))
       .toContain('PHOTOS (the article writer was given none)');

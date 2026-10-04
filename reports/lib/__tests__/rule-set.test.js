@@ -481,17 +481,21 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     expect(text).toMatch(/^END PREVIOUS OUTPUT$/m);
   });
 
-  it('strips an APPROVED OUTLINE carrying "the murder victim", and still scans the text after it', () => {
+  // Brief 4.7b: the article writer prints the map in <STORY_MAP>, where it printed the
+  // approved outline under APPROVED OUTLINE.
+  it('strips a <STORY_MAP> carrying "the murder victim", and still scans the text after it', () => {
     const render = [
-      'APPROVED OUTLINE:',
-      JSON.stringify({ lede: { hook: 'Marcus, the murder victim, sold the company.', primaryArc: 'arc-sale' } }, null, 2),
+      '<STORY_MAP>',
+      'The story map as the director left it.',
+      JSON.stringify({ headline: 'Marcus, the murder victim, sold the company.', sections: [] }, null, 2),
+      '</STORY_MAP>',
       '',
-      'HERO IMAGE (CRITICAL - do NOT duplicate):'
+      'Write the article from the settled weave and the story map above.'
     ].join('\n');
     const text = instructionText(render);
     expect(findRemovedPhrases(text)).toEqual([]);
-    expect(text).toContain('APPROVED OUTLINE:');
-    expect(text).toContain('HERO IMAGE (CRITICAL - do NOT duplicate):');
+    expect(text).toContain('<STORY_MAP></STORY_MAP>');
+    expect(text).toContain('Write the article from the settled weave and the story map above.');
     expect(findRemovedPhrases(instructionText(`${render}\nRemember who killed Marcus.`))).toEqual(['who killed Marcus']);
   });
 
@@ -582,7 +586,7 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
         settledWeaveOf(state), [], state.shellAccounts, null, { evidenceBundle: state.evidenceBundle }
       )),
       'article writer': join(await builder.buildArticlePrompt(
-        state.outline, 'hero.jpg', state.shellAccounts, null, state.directorNotes, null,
+        settledWeaveOf(state), state.outline, state.shellAccounts, null, state.directorNotes, null,
         { evidenceBundle: state.evidenceBundle }
       )),
       'arc writer': arcs.buildWeavePrompt(state),
@@ -603,7 +607,7 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     });
 
     it('model output whose JSON never closes', () => {
-      expect(() => instructionText('APPROVED OUTLINE:\n{\n  "lede": {}\n')).toThrow(/APPROVED OUTLINE:/);
+      expect(() => instructionText('CONTENT BUNDLE:\n{\n  "sections": []\n')).toThrow(/CONTENT BUNDLE:/);
     });
 
     it('a previous version with no end line', () => {
@@ -756,8 +760,9 @@ describe('instructionText: the tension sentences (3.6b fix batch)', () => {
     stubThemeLoader(PHASE_REQUIREMENTS), 'journalist', s.sessionConfig, s.canonicalCharacters, s.characterData.characters
   );
   const join = ({ systemPrompt, userPrompt }) => `${systemPrompt}\n${userPrompt}`;
+  const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
   const articleRender = async (s = state()) => join(await builderFor(s).buildArticlePrompt(
-    s.outline, 'hero.jpg', s.shellAccounts, null, s.directorNotes, s.narrativeTensions,
+    settledWeaveOf(s), s.outline, s.shellAccounts, null, s.directorNotes, s.narrativeTensions,
     { evidenceBundle: s.evidenceBundle }
   ));
 

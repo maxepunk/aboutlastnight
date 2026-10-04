@@ -91,13 +91,15 @@ describe('leavePhotosOut: the one function that adds to the list', () => {
       photoAnalyses: { analyses: [{ filename: 'hero.jpg', identifiedCharacters: ['Alex', 'Sam'] }, { filename: 'p2.jpg', identifiedCharacters: ['Alex'] }, { filename: 'p3.jpg', identifiedCharacters: [] }] },
       characterIdMappings: { 'hero.jpg': mapping(false), 'p2.jpg': mapping(false), 'p3.jpg': mapping(false) },
       heroImage: 'hero.jpg',
-      outline: {}
+      outline: { topPhoto: 'hero.jpg', sections: [{ slot: 'lede', heading: '', job: 'Open.', beats: [], photos: [{ filename: 'p2.jpg' }, { filename: 'p3.jpg' }] }] }
     };
     const after = { ...state, ...leavePhotosOut(state, ['p2.jpg', 'hero.jpg']) };
 
     expect(buildAvailablePhotos(after, 'hero.jpg', null).map((p) => p.filename)).toEqual(['p3.jpg']);
     const inputs = articleWriterInputs(after);
-    expect(inputs[1]).toBeNull();   // the hero, left out, comes as none
+    // Brief 4.7b: the map the article writer reads drops both, the hero as its top photo.
+    expect(inputs[1]).not.toHaveProperty('topPhoto');
+    expect(inputs[1].sections[0].photos).toEqual([{ filename: 'p3.jpg' }]);
     expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['p3.jpg']);
   });
 

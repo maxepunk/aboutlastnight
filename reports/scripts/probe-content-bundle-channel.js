@@ -17,6 +17,12 @@
  * no paper documents. Phase 4 (brief 4.6; R5): the arc packages went, so the probe
  * packages nothing; its record is the documents its synthetic arcs draw on.
  *
+ * Phase 4 (brief 4.7b): the article writer writes from the settled weave and the story
+ * map, so the probe builds its call from the fixed weave and map render-prompts.js plants
+ * (scripts/lib/fixed-weave.js, scripts/lib/fixed-map.js), through the writer's own inputs
+ * (articleWriterInputs) and builder. The synthetic arcs' names and outline went with the
+ * outline.
+ *
  * Output: the full diagnostic envelope, regardless of success or failure.
  *
  * Exit code (phase 2 brief 2.0 gate): 0 only when the structured output arrived
@@ -96,15 +102,9 @@ function loadSession(dataDir) {
   };
 }
 
-// Five synthetic arcs with the evidence counts of the 050926 call this probe was built
-// to reproduce, so the prompt size is in the same range.
-const ARC_NAMES = [
-  "The Marcus Problem: Vic and Morgan's Convergent Interests",
-  "Sarah's Coronation: The Quietest Person in the Room",
-  "Marcus's Stolen Empire: Convergent Victims",
-  "The Black Market Confessional: Named Accounts, Performed Innocence",
-  "Remi's Engineered Exposure: The Cleanest Operator in the Room"
-];
+// The record's documents, in five shares with the evidence counts of the five synthetic
+// arcs of the 050926 call this probe was built to reproduce, so the prompt size is in the
+// same range.
 const ITEMS_PER_ARC = [13, 11, 21, 16, 12];
 
 /**
@@ -148,150 +148,75 @@ function buildProbeRecord({ tokens, paperEvidence }) {
 }
 
 /**
- * The article-generation prompt the probe sends, built the way generateContentBundle
- * builds it, from a session's saved inputs, synthetic arcs and a synthetic outline.
+ * The money figures the probe's FINANCIAL_SUMMARY prints: three accounts, the totals of
+ * the 050926 call this probe was built to reproduce.
+ */
+const PROBE_SHELL_ACCOUNTS = [
+  { name: 'Jamie', total: 1299997, tokenCount: 7 },
+  { name: 'Person', total: 930000, tokenCount: 4 },
+  { name: 'Sarah', total: 385003, tokenCount: 6 }
+];
+
+/**
+ * The state the probe's article call is built from (phase 4, brief 4.7b): the session's
+ * saved inputs and the probe's record, past the story meeting and the map. The weave and
+ * the map are the fixed ones scripts/render-prompts.js plants when a thread holds none
+ * (scripts/lib/fixed-weave.js, scripts/lib/fixed-map.js), the map as the director left
+ * it. The session's photos are the map's, each naming the first three of the roster, and
+ * the hero is the map's top photo, as code writes it at the map's approve (R7).
  *
  * @param {{sessionId: string, sessionConfig: Object, directorNotes: Object, tokens: Object[], paperEvidence: Object[]}} session
- * @returns {Promise<{systemPrompt: string, userPrompt: string, evidenceBundle: Object}>}
+ * @returns {Object} a state for articleWriterInputs
  */
-async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, tokens, paperEvidence }) {
-  const { createPromptBuilder } = require('../lib/prompt-builder');
+function probeArticleState({ sessionId, sessionConfig, directorNotes, tokens, paperEvidence }) {
+  const { fixedWeave } = require('./lib/fixed-weave');
+  const { fixedMap } = require('./lib/fixed-map');
 
   // Build canonicalCharacters map (name → name for roster members)
   const canonicalCharacters = {};
   for (const name of sessionConfig.roster) {
     canonicalCharacters[name] = name;
   }
-
-  const { evidenceBundle, arcDocuments } = buildProbeRecord({ tokens, paperEvidence });
-  const arcNames = ARC_NAMES;
-  // One photo per synthetic arc, each naming the first three of the roster.
-  const arcPhotos = ARC_NAMES.map((_, arcIdx) => ({
-    filename: `aln0509 (${arcIdx + 1} of 10).jpg`,
-    characters: sessionConfig.roster.slice(0, 3)
-  }));
-
-  // Synthetic outline matching the real one's shape (the user's edited version was ~17KB).
-  // We need similar prompt size and structure to trigger the same conditions.
-  const outline = {
-    metadata: { sessionId, theme: 'journalist' },
-    lede: {
-      hook: 'Eight people walked into that warehouse last night with a name on their lips. Marcus Blackwood.',
-      keyTension: 'The accusation that started the investigation landed on Vic. The verdict landed somewhere else entirely.',
-      primaryArc: 'arc-0',
-      selectedEvidence: tokens.slice(0, 2).map(t => t.id || t.tokenId)
-    },
-    theStory: {
-      arcInterweaving: {
-        interleavingPlan: 'Five arcs intercut around a 1:08 AM convergence point. Open with motive, plant the operator early, expose the fraud, recontextualize through the back-channel coordination.',
-        callbackOpportunities: [
-          { plantIn: 'arc-0', payoffIn: 'arc-4', detail: 'Open with the 8:23 PM meeting; pay off when Remi reveals who choreographed the moment.' },
-          { plantIn: 'arc-1', payoffIn: 'arc-3', detail: 'Plant Riley handing Mel the legal arsenal; pay off with the named-account ledger.' }
-        ],
-        convergencePoint: 'Arc 3 final paragraph: 1:08 AM, Remi turns Sam\'s laptop toward Vic and Alex.'
-      },
-      arcs: arcDocuments.map((ids, idx) => ({
-        name: `arc-${idx}`,
-        paragraphCount: 3,
-        evidenceCards: [
-          { tokenId: ids[0], placement: 'after para 1', loopFunction: 'OPENER' },
-          { tokenId: ids[1], placement: 'after para 3', loopFunction: 'CLOSER' }
-        ],
-        photoPlacement: { filename: arcPhotos[idx].filename, afterParagraph: 2, purpose: 'humanize' }
-      }))
-    },
-    followTheMoney: {
-      arcConnections: arcNames.map((name, i) => ({ arcName: `arc-${i}`, financialAngle: 'Shell account analysis with named vs pseudonymous routing patterns.' })),
-      shellAccounts: [
-        { name: 'Jamie', total: 1299997, inference: 'Bartender account, largest sum.', relatedArc: 'arc-3' },
-        { name: 'Person', total: 930000, inference: 'Anonymity by stylistic choice.', relatedArc: 'arc-3' },
-        { name: 'Sarah', total: 385003, inference: 'Six fragmented transactions in the widow\'s named account.', relatedArc: 'arc-1' }
-      ],
-      photoPlacement: null
-    },
-    thePlayers: {
-      arcConnections: arcNames.map((name, i) => ({ arcName: `arc-${i}`, characterAngle: 'Character role in this arc and how their exposure pattern relates.' })),
-      buried: ['Jamie', 'Sarah', 'Ashe'],
-      exposed: ['Alex', 'Remi', 'Vic'],
-      characterHighlights: {
-        Remi: 'Engineered the convergence. Walked away with nothing in her name.',
-        Vic: 'Confessed to the meeting, pled ignorance of the rest, and the room let him.'
-      },
-      pullQuotes: [
-        { type: 'verbatim', text: "He's out. You're in. Trust me. It's done.", attribution: 'Overheard by Jamie', advancesArc: 'arc-0' },
-        { type: 'crystallization', text: 'The quietest person in the room got the cleanest ending.', attribution: null, advancesArc: 'arc-1' }
-      ]
-    },
-    whatsMissing: {
-      arcConnections: arcNames.map((name, i) => ({ arcName: `arc-${i}`, openQuestion: 'Specific question this arc leaves unresolved.' })),
-      knownUnknowns: [
-        'What is in the three pseudonymous accounts totaling $1.66 million',
-        'Where Remi was between 9:37 PM and 11:29 PM'
-      ],
-      buriedItems: ['Jamie\'s 7 transactions', 'Person\'s 4 transactions'],
-      narrativePurpose: 'The gaps are not symmetrical. Some arcs end with mysteries; others end with suspicion that the visible answer is only part of the answer.'
-    },
-    closing: {
-      accusationHandling: 'The group unanimously concluded Marcus died by his own hand. State the verdict, then sit with what it does not address.',
-      arcResolutions: arcNames.map((name, i) => ({ arcName: `arc-${i}`, resolution: 'How this arc resolves under the chosen verdict.' })),
-      systemicAngle: 'A unanimous verdict in a room full of beneficiaries is the price of getting everyone out the door.',
-      finalLine: 'Eight people walked out this morning with a verdict. Whether they walked out with the truth is a question the ledger is not built to answer.'
-    }
+  const { evidenceBundle } = buildProbeRecord({ tokens, paperEvidence });
+  const map = fixedMap();
+  const mapPhotos = [map.topPhoto, ...map.sections.flatMap((section) => section.photos.map((photo) => photo.filename))];
+  return {
+    theme: 'journalist',
+    sessionId,
+    sessionConfig,
+    canonicalCharacters,
+    directorNotes,
+    evidenceBundle,
+    weave: fixedWeave(),
+    outline: map,
+    heroImage: map.topPhoto,
+    sessionPhotos: mapPhotos,
+    photoAnalyses: { analyses: mapPhotos.map((filename) => ({ filename, identifiedCharacters: sessionConfig.roster.slice(0, 3) })) },
+    shellAccounts: PROBE_SHELL_ACCOUNTS
   };
+}
 
-  // Shell accounts (need by buildArticlePrompt for financial summary)
-  const shellAccounts = outline.followTheMoney.shellAccounts;
+/**
+ * The article-generation prompt the probe sends, built as generateContentBundle builds
+ * it: the writer's own inputs (articleWriterInputs) from the probe's state, the settled
+ * weave and the map among them, through the writer's own builder.
+ *
+ * @param {{sessionId: string, sessionConfig: Object, directorNotes: Object, tokens: Object[], paperEvidence: Object[]}} session
+ * @returns {Promise<{systemPrompt: string, userPrompt: string, evidenceBundle: Object}>}
+ */
+async function buildProbePrompt(session) {
+  const { createPromptBuilder } = require('../lib/prompt-builder');
+  const { articleWriterInputs } = require('../lib/workflow/nodes/ai-nodes');
 
-  // sessionFacts for roster + accusation
-  const sessionFacts = {
-    roster: sessionConfig.roster,
-    accusation: sessionConfig.accusation?.accused?.join(' and ') || 'Unknown',
-    playerCount: sessionConfig.roster.length
-  };
-
-  // Build the prompt the same way generateContentBundle does
+  const state = probeArticleState(session);
   const promptBuilder = createPromptBuilder({
     theme: 'journalist',
-    sessionConfig,
-    canonicalCharacters,
+    sessionConfig: state.sessionConfig,
+    canonicalCharacters: state.canonicalCharacters,
     characterData: {}
   });
-
-  // Brief 2.1: the article writer reads each document once, in full, in <RECORD>. The
-  // probe's record is the documents its arcs draw on, which keeps the prompt near a real
-  // session's size.
-
-  // The 4b fix batch (3.9 review minor 1): the article writer lists its photos under
-  // PHOTOS (options.photos). The probe's photos come from the writer's own inputs
-  // (articleWriterInputs), as generateContentBundle's do: the hero first, then each arc's
-  // photo once. The hero is the group photo, so it names the roster.
-  const { articleWriterInputs } = require('../lib/workflow/nodes/ai-nodes');
-  const heroImage = 'aln0509 (10 of 10).jpg';
-  const sessionPhotos = [
-    { filename: heroImage, characters: sessionConfig.roster },
-    ...arcPhotos
-  ];
-  const writerInputs = articleWriterInputs({
-    theme: 'journalist',
-    sessionConfig,
-    canonicalCharacters,
-    heroImage,
-    sessionPhotos: sessionPhotos.map((photo) => photo.filename),
-    photoAnalyses: { analyses: sessionPhotos.map((photo) => ({ filename: photo.filename, identifiedCharacters: photo.characters })) }
-  });
-  const { photos } = writerInputs[writerInputs.length - 1];
-
-  const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
-    outline,
-    heroImage,
-    shellAccounts,
-    sessionFacts,
-    directorNotes,
-    null,
-    { evidenceBundle, photos }
-  );
-
-  return { systemPrompt, userPrompt, evidenceBundle };
+  const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(...articleWriterInputs(state));
+  return { systemPrompt, userPrompt, evidenceBundle: state.evidenceBundle };
 }
 
 async function main() {
@@ -394,4 +319,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, tokensOf, paperEvidenceOf, loadSession, buildProbeRecord, buildProbePrompt, ARC_NAMES, ITEMS_PER_ARC };
+module.exports = { main, tokensOf, paperEvidenceOf, loadSession, buildProbeRecord, probeArticleState, buildProbePrompt, ITEMS_PER_ARC };

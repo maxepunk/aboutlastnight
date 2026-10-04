@@ -7,8 +7,10 @@ const { ThemeLoader, PHASE_REQUIREMENTS } = require('../theme-loader');
 // Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave
 // first, as its task (lib/prompt-renderers/settled-weave.js).
 const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
-const { WEAVE: FIXTURE_WEAVE } = require('./fixtures/rework-state');
+const { WEAVE: FIXTURE_WEAVE, MAP: FIXTURE_MAP } = require('./fixtures/rework-state');
 const SETTLED_WEAVE = renderSettledWeave(FIXTURE_WEAVE, null);
+/** Brief 4.7b: the article writer writes from the settled weave and the story map as the director left it. */
+const STORY_MAP = JSON.parse(JSON.stringify(FIXTURE_MAP));
 /** The director's note from the story meeting: a standing note, so <DIRECTOR_GUIDANCE> prints. */
 const MEETING_NOTES = [{ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Lead with the money.', at: '2026-10-03T09:00:00.000Z' }];
 
@@ -153,11 +155,9 @@ describe('PromptBuilder', () => {
     });
   });
 
+  // Brief 4.7b: the article writer reads the settled weave, then the map as the director left it.
   describe('buildArticlePrompt', () => {
-    const mockOutline = {
-      lede: { hook: 'Something is rotten...' },
-      theStory: { arcs: [] }
-    };
+    const mockMap = { ...STORY_MAP, sections: STORY_MAP.sections.map((s, i) => (i === 0 ? { ...s, job: 'Something is rotten...' } : s)) };
 
     beforeEach(() => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
@@ -174,7 +174,7 @@ describe('PromptBuilder', () => {
 
     it('should return system and user prompts', async () => {
       const result = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(result).toHaveProperty('systemPrompt');
@@ -185,7 +185,7 @@ describe('PromptBuilder', () => {
     // retired craft files.
     it('loads no craft file: the journalist reads the rule set', async () => {
       await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
@@ -193,7 +193,7 @@ describe('PromptBuilder', () => {
 
     it('should carry the voice craft file in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(userPrompt).toContain('<craft-voice>');
@@ -202,7 +202,7 @@ describe('PromptBuilder', () => {
 
     it('should carry every article craft file in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       // Task 3.8: the eight craft files, grouped by the writer's job (spec section 8).
@@ -211,9 +211,9 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('Show dont tell');
     });
 
-    it('should include approved outline in user prompt', async () => {
+    it('should include the map in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(userPrompt).toContain('Something is rotten');
@@ -225,7 +225,7 @@ describe('PromptBuilder', () => {
     // the only spec the model sees, which has been brittle.
     it('embeds the content-bundle JSON schema under a <SCHEMA> tag', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(userPrompt).toContain('<SCHEMA>');
@@ -242,23 +242,26 @@ describe('PromptBuilder', () => {
     // Phase 3 (3.2): the em-dash house style is C4's, in craft-telling.
     it('should carry the telling craft file, where the em-dash house style lives', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(userPrompt).toContain('<craft-telling>');
     });
 
-    it('journalist prompt names the six section slots', async () => {
+    // Brief 4.7b: the sections are the map's, each named by its slot; no code names the
+    // theme's slots (the plan's "Themes" constraint).
+    it("journalist prompt names no fixed list of sections: each is the map's, by its slot", async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
-      expect(userPrompt).toContain('one of lede, the-story, follow-the-money, the-players, whats-missing or closing');
+      expect(userPrompt).toContain(`"id": the slot of the map's section it writes, as the map gives it.`);
+      expect(userPrompt).not.toContain('one of lede, the-story, follow-the-money, the-players, whats-missing or closing');
     });
 
     it('journalist prompt includes pullQuotes and financialTracker', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(userPrompt).toContain('pullQuotes');
@@ -269,7 +272,7 @@ describe('PromptBuilder', () => {
     // section went; C2 and C16 say what stays.
     it('journalist prompt carries neither VISUAL_DISTRIBUTION nor ARC_FLOW', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        mockOutline
+        SETTLED_WEAVE, mockMap
       );
 
       expect(userPrompt).not.toContain('VISUAL_DISTRIBUTION');
@@ -279,7 +282,7 @@ describe('PromptBuilder', () => {
     // Phase 3 (3.2): the length is C4's (about 1,500 words), in craft-telling.
     it('journalist article prompt leaves the word target to C4', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'test' } }, null
+        SETTLED_WEAVE, STORY_MAP
       );
       const generationInstruction = userPrompt.split('<GENERATION_INSTRUCTION>')[1] || '';
       expect(generationInstruction).not.toContain('1000-1500 words');
@@ -368,7 +371,7 @@ describe('PromptBuilder', () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode });
       return which === 'outline'
         ? b.buildOutlinePrompt(SETTLED_WEAVE)
-        : b.buildArticlePrompt({ sections: [] }, 'hero.jpg');
+        : b.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP);
     };
 
     it.each(['outline', 'article'])('the %s system prompt says the party was last night and the investigation this morning', async (which) => {
@@ -401,7 +404,7 @@ describe('PromptBuilder', () => {
       });
 
       const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, 'hero.jpg'
+        SETTLED_WEAVE, STORY_MAP
       );
 
       expect(userPrompt).toContain('"byline"');
@@ -421,7 +424,7 @@ describe('PromptBuilder', () => {
       });
 
       const { userPrompt } = await builder.buildArticlePrompt(
-        { sections: [] }, 'hero.jpg'
+        SETTLED_WEAVE, STORY_MAP
       );
 
       expect(userPrompt).toContain('Ashe Motoko');
@@ -478,7 +481,7 @@ describe('PromptBuilder', () => {
       ];
 
       const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'Hook' } }, 'hero.jpg', shellAccounts
+        SETTLED_WEAVE, STORY_MAP, shellAccounts
       );
 
       expect(userPrompt).toContain('FINANCIAL_SUMMARY');
@@ -498,7 +501,7 @@ describe('PromptBuilder', () => {
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'Hook' } }, 'hero.jpg', []
+        SETTLED_WEAVE, STORY_MAP, []
       );
 
       expect(userPrompt).not.toContain('FINANCIAL_SUMMARY');
@@ -572,8 +575,8 @@ describe('PromptBuilder', () => {
     it('should include SESSION_FACTS when sessionFacts provided', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, // outline
-        null, // heroImage
+        SETTLED_WEAVE, // the settled weave
+        STORY_MAP, // the map as the director left it
         [], // shellAccounts
         { // sessionFacts
           roster: ['Alex Reeves', 'Vic Kingsley', 'Sam Thorne'],
@@ -594,7 +597,7 @@ describe('PromptBuilder', () => {
     it('should omit SESSION_FACTS when sessionFacts is null', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, null, [], null
+        SETTLED_WEAVE, STORY_MAP, [], null
       );
       expect(userPrompt).not.toContain('<SESSION_FACTS>');
     });
@@ -620,7 +623,7 @@ describe('PromptBuilder', () => {
         whiteboard: { suspects: ['Vic'] }  // Should NOT be included
       };
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, null, [], null, directorNotes
+        SETTLED_WEAVE, STORY_MAP, [], null, directorNotes
       );
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('Blake solicited Vic three times');
@@ -635,7 +638,7 @@ describe('PromptBuilder', () => {
     it('should omit INVESTIGATION_OBSERVATIONS when directorNotes is null', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, null, [], null, null
+        SETTLED_WEAVE, STORY_MAP, [], null, null
       );
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
@@ -643,7 +646,7 @@ describe('PromptBuilder', () => {
     it('should omit INVESTIGATION_OBSERVATIONS when rawProse is empty', async () => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', {});
       const { userPrompt } = await b.buildArticlePrompt(
-        {}, null, [], null, { rawProse: '', quotes: [], transactionReferences: [], postInvestigationDevelopments: [] }
+        SETTLED_WEAVE, STORY_MAP, [], null, { rawProse: '', quotes: [], transactionReferences: [], postInvestigationDevelopments: [] }
       );
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
@@ -681,7 +684,7 @@ describe('PromptBuilder', () => {
     // Phase 4 (brief 4.6): the outline judge, whose advisories these were, left the graph.
     it('prints none in the article prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
-        {}, null, [], null, null, null, { shouldConsider: ADVISORIES }
+        SETTLED_WEAVE, STORY_MAP, [], null, null, null, { shouldConsider: ADVISORIES }
       );
       expect(userPrompt).not.toContain('SHOULD_CONSIDER');
       expect(userPrompt).not.toContain('- The lede frontloads the verdict');
@@ -692,8 +695,8 @@ describe('PromptBuilder', () => {
         SETTLED_WEAVE, [], [], null, { shouldConsider: ADVISORIES, gateNotes: MEETING_NOTES }
       );
       const article = await builder.buildArticlePrompt(
-        {}, null, [], null, null, null,
-        { shouldConsider: ADVISORIES, directorGuidance: 'Lead with the money.' }
+        SETTLED_WEAVE, STORY_MAP, [], null, null, null,
+        { shouldConsider: ADVISORIES, gateNotes: MEETING_NOTES }
       );
       for (const { userPrompt } of [outline, article]) {
         expect(userPrompt).not.toContain('SHOULD_CONSIDER');
@@ -819,7 +822,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
       expect(userPrompt).toContain('<INVESTIGATION_OBSERVATIONS>');
       expect(userPrompt).toContain('I watched Alex and Sam in the corner.');
       expect(userPrompt).not.toContain('"behaviorPatterns"');
@@ -832,7 +835,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
       expect(userPrompt).toContain('<QUOTE_BANK>');
       expect(userPrompt).toContain('we had to act');
     });
@@ -847,7 +850,7 @@ describe('PromptBuilder', () => {
         }],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
       expect(userPrompt).toContain('<TRANSACTION_LINKS>');
       // A buried memory's sale: account, amount and time, never its id (final fix wave).
       expect(userPrompt).toContain('amount: $450,000 | time: 09:40 PM');
@@ -863,7 +866,7 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: [{ headline: 'Sarah named interim CEO', detail: 'It has just been announced that Sarah is interim CEO.' }]
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
       // The epilogue is its own block, apart from the notes, holding the director's sentence as written.
       expect(userPrompt).toMatch(/<EPILOGUE>[\s\S]*It has just been announced that Sarah is interim CEO\.[\s\S]*<\/EPILOGUE>/);
       expect(userPrompt).not.toContain('Sarah named interim CEO');
@@ -876,14 +879,14 @@ describe('PromptBuilder', () => {
         transactionReferences: [],
         postInvestigationDevelopments: []
       };
-      const { userPrompt } = await builder.buildArticlePrompt(outline, null, [], null, directorNotes, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, directorNotes, null);
       expect(userPrompt).not.toContain('<QUOTE_BANK>');
       expect(userPrompt).not.toContain('<TRANSACTION_LINKS>');
       expect(userPrompt).not.toContain('<EPILOGUE>');
     });
 
     it('handles null directorNotes gracefully', async () => {
-      const { userPrompt } = await builder.buildArticlePrompt(outline, null, [], null, null, null);
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP, [], null, null, null);
       expect(userPrompt).not.toContain('<INVESTIGATION_OBSERVATIONS>');
     });
   });
@@ -1028,14 +1031,15 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     };
     return new PromptBuilder(themeLoader, theme, {});
   }
-  const options = { evidenceBundle, directorGuidance: 'Lead with the money.' };
+  // Brief 4.7b: the article writer's <DIRECTOR_GUIDANCE> is the standing notes alone (R4).
+  const options = { evidenceBundle, gateNotes: MEETING_NOTES };
   const shellAccounts = [{ name: 'Melanie', total: 75000, tokenCount: 1 }];
   // Phase 4 (brief 4.6): the map writer's standing notes carry the director's last word.
   const outlineFor = (theme) => builderFor(theme).buildOutlinePrompt(
     SETTLED_WEAVE, [], shellAccounts, null, { evidenceBundle, gateNotes: MEETING_NOTES }
   );
   const articleFor = (theme) => builderFor(theme).buildArticlePrompt(
-    { lede: {} }, 'hero.png', shellAccounts, null, null, null, options
+    SETTLED_WEAVE, STORY_MAP, shellAccounts, null, null, null, options
   );
 
   function expectOneRecord(userPrompt) {
@@ -1107,7 +1111,7 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
       ]
     };
     const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      {}, null, [], null, TENSION_NOTES, tensions, { evidenceBundle }
+      SETTLED_WEAVE, STORY_MAP, [], null, TENSION_NOTES, tensions, { evidenceBundle }
     );
     const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
     expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- Blake pulled Vic aside at the bar.\n- The Valet read the balances.\n`);
@@ -1122,7 +1126,7 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
       }]
     };
     const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      {}, null, [], null, TENSION_NOTES, tensions, { evidenceBundle }
+      SETTLED_WEAVE, STORY_MAP, [], null, TENSION_NOTES, tensions, { evidenceBundle }
     );
     const block = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
     expect(block).toBe(`<NARRATIVE_TENSIONS>\n${DERIVED_LABELS.narrativeTensions}\n- The Valet read the balances.\n`);
@@ -1132,7 +1136,7 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
   it('prints no tensions block when the thread has no notes to hold the sentences', async () => {
     const tensions = { tensions: [{ type: 'blake-proximity', observations: ['The Valet read the balances.'] }] };
     const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      {}, null, [], null, null, tensions, { evidenceBundle }
+      SETTLED_WEAVE, STORY_MAP, [], null, null, tensions, { evidenceBundle }
     );
     expect(userPrompt).not.toContain('<NARRATIVE_TENSIONS>');
   });
@@ -1140,7 +1144,7 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
   it('prints no tensions block when only old account-name notes are stored', async () => {
     const tensions = { tensions: [{ type: 'named-account', narrativeNote: 'Mel used their own name for a burial account.' }] };
     const { userPrompt } = await builderFor('journalist').buildArticlePrompt(
-      {}, null, [], null, null, tensions, { evidenceBundle }
+      SETTLED_WEAVE, STORY_MAP, [], null, null, tensions, { evidenceBundle }
     );
     expect(userPrompt).not.toContain('<NARRATIVE_TENSIONS>');
   });
@@ -1200,8 +1204,8 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
      { filename: 'aln092026 (2 of 9).jpg', fullPath: 'p/aln092026 (2 of 9).jpg', identifiedCharacters: [] }], [], facts, options
   );
   const article = (facts, options = {}) => builder().buildArticlePrompt(
-    {},
-    'hero.jpg', [], facts, DIRECTOR_NOTES, null, options
+    SETTLED_WEAVE,
+    STORY_MAP, [], facts, DIRECTOR_NOTES, null, options
   );
   const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close));
 
@@ -1278,8 +1282,8 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
     it('the article writer lists every photo it is given', async () => {
       const photos = [...ARTICLE_PHOTOS, { filename: 'aln092026 (9 of 9).jpg', identifiedCharacters: [] }];
       const { userPrompt } = await builder().buildArticlePrompt(
-        {},
-        'hero.jpg', [], null, DIRECTOR_NOTES, null, { photos }
+        SETTLED_WEAVE,
+        STORY_MAP, [], null, DIRECTOR_NOTES, null, { photos }
       );
       const list = between(userPrompt, '\nPHOTOS (', '<RECORD>');
       expect(list).toContain('PHOTOS (every photo the director has not excluded, without the whiteboard');
@@ -1352,7 +1356,7 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     SETTLED_WEAVE, [], ACCOUNTS, FACTS, { directorNotes: NOTES_NO_EPILOGUE, gateNotes: MEETING_NOTES }
   );
   const articleOf = (b, notes = NOTES_NO_EPILOGUE) => b.buildArticlePrompt(
-    { lede: { hook: 'h' } }, 'hero.jpg', ACCOUNTS, FACTS, notes, null, { directorGuidance: 'Lead with the money.' }
+    SETTLED_WEAVE, STORY_MAP, ACCOUNTS, FACTS, notes, null, { gateNotes: MEETING_NOTES }
   );
   const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close) + close.length);
 

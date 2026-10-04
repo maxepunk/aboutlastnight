@@ -253,10 +253,16 @@ const REPO = path.join(__dirname, '..', '..');
  * - Phase 4 (brief 4.7b), the writers’ questions leave the content bundle: the article
  *   writer’s <SCHEMA> loses the writerQuestions property (article-journalist 28708 ->
  *   27862). The other pins do not move.
+ * - Phase 4 (brief 4.7b), the article writer reads the settled weave first, then the map as
+ *   the director left it in <STORY_MAP>, where APPROVED OUTLINE printed, then its task
+ *   (ARTICLE_TASK); the HERO IMAGE line goes, and the instruction takes the sections, the
+ *   headline, the deck and the top photo from the map. The arc selection's guidance goes
+ *   with its last readers (R4), so the fixture's tail is the standing notes alone
+ *   (article-journalist 27862 -> 30762). The outline and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['62c525f1cbdd8d026f481a24ac11e75766f0307c6d036594f713157042861790', 18299],
-  'article-journalist': ['f590a8582bb88b09d7bc41d6df7346b3914b505e7f933fce781aea6b9bfdbfe6', 27862],
+  'article-journalist': ['82721db9c5e525e915e492694794e98f91221e0ad5d1432fb9c6b1168a079cdd', 30762],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
 

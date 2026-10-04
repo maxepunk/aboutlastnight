@@ -105,8 +105,11 @@ describe('contradiction data in arc prompt', () => {
 
     const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };
     const builder = new promptBuilderModule.PromptBuilder(themeLoader, 'journalist', { roster: ['Skyler', 'Alex'] });
+    // Brief 4.7b: the article writer writes from the settled weave and the map.
+    const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+    const { WEAVE, MAP } = require('./fixtures/rework-state');
     const { userPrompt } = await builder.buildArticlePrompt(
-      {}, null, [], null, state.directorNotes, state.narrativeTensions, { evidenceBundle: state.evidenceBundle }
+      renderSettledWeave(WEAVE, null), MAP, [], null, state.directorNotes, state.narrativeTensions, { evidenceBundle: state.evidenceBundle }
     );
     const articleBlock = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
     expect(listed(articleBlock)).toEqual(expected);

@@ -41,7 +41,10 @@ describe.each(['journalist'])('the %s article writer', (theme) => {
   let userPrompt;
   beforeAll(async () => {
     const builder = new PromptBuilder(stubThemeLoader(PHASE_REQUIREMENTS[theme]), theme, { roster: [] }, {}, null);
-    ({ userPrompt } = await builder.buildArticlePrompt({ lede: {} }, null, [], null, null, null));
+    // Brief 4.7b: the article writer writes from the settled weave and the map.
+    const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+    const { WEAVE, MAP } = require('./fixtures/rework-state');
+    ({ userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null, null));
   });
 
   it('carries none of the stale card instructions', () => {

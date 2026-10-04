@@ -198,7 +198,7 @@ describe('ReportStateAnnotation', () => {
 
     // Phase 4 (brief 4.6): the old arc channels went with their last readers (R4), and the
     // map's baseline and its checks' mark came.
-    it('includes all 86 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 85 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -303,8 +303,8 @@ describe('ReportStateAnnotation', () => {
         '_previousPhotosPath',   // Photo late-join: stash for the photos gate pre-fill on rollback
         // Arc validation routing (Commit 8.xx)
         '_arcValidation',
-        // Director guidance captured at arc selection (Q2)
-        '_outlineGuidance',
+        // Phase 4 (brief 4.7b; R4): the arc selection's guidance, _outlineGuidance, went with
+        // its last readers, the article writer and its rework.
         // Programmatic article fact-check (BASELINE §4)
         '_articleFactCheck',
         // Human rejection feedback (consumed by revision nodes, cleared after use)
@@ -482,7 +482,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(86);
+      expect(Object.keys(getDefaultState()).length).toBe(85);
     });
 
     it('declares the leave-out list (phase 4, brief 4.2)', () => {

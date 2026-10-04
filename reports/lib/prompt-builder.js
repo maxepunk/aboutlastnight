@@ -16,7 +16,6 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
 // writer embeds the schema above; its slots are the theme's.
 const { mapSchemaFor } = require('./map');
-const { withoutWriterQuestions } = require('./writer-questions');
 const { getThemeNPCEntries, mapSlotsOf } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -429,6 +428,25 @@ const THEME_SYSTEM_PROMPTS = {
   }
 };
 
+/**
+ * The article writer's map block (brief 4.7b): the tag the story map prints in, right after
+ * the settled weave, and the line that opens it.
+ */
+const STORY_MAP_TAG = 'STORY_MAP';
+const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat names its material; its "card" is the id of the document it prints as an inline evidence card, and its "connection" the id of the weave\'s connection that lands in it. A photo\'s "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map\'s notes to the director.';
+
+/**
+ * The article writer's task (brief 4.7b; spec 6.1; the approved read's section D), right
+ * after the settled weave and the map: the reading order, then what the writer writes from
+ * the map. It points at the rule items that say how (C16, C2, C4) and restates none of them.
+ */
+const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
+- every beat in the map's sections, and no other; the beats under leftOut stay out of the article, the director's strikes among them;
+- the map's sections in its order, each under its heading, with its beats as C2 (\`<craft-form>\`) sets them out; the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
+- each photo where the map places it, beside its beat, and the map's top photo at the top of the article;
+- the map's headline and deck as written;
+- about the map's expected length, as C4 (\`<craft-telling>\`) sets out.`;
+
 class PromptBuilder {
   /**
    * @param {ThemeLoader} themeLoader - Initialized ThemeLoader instance
@@ -724,41 +742,34 @@ ${loadRuleSet('outline').craft}`;
   }
 
   /**
-   * Build article generation prompt
-   * Phase 4: Generate final article HTML from approved outline
-   *
-   * Uses context engineering techniques:
-   * - XML tags for clear section boundaries
-   * - Recency bias: rules placed LAST in prompt
-   * - Voice checkpoint: model internalizes voice before generating
-   * - Voice self-check: model assesses own output
-   *
-   * Phase 2 (2.3): the writer's prompt is its system prompt
+   * The article writer's prompt (phase 2, 2.3; phase 4, brief 4.7b): its system prompt
    * (buildArticleSystemPrompt), its user sections (buildArticleUserSections), then
-   * <DIRECTOR_GUIDANCE>. The article reworker is built from the same two builders
-   * (ai-nodes.js buildArticleRevisionPrompt). The <SHOULD_CONSIDER> it carried, the
-   * outline evaluation's advisories, went with the outline judge (phase 4, brief 4.6).
+   * <DIRECTOR_GUIDANCE> last, with the standing notes, so they outrank the rules above. The
+   * article reworker is built from the same two builders (ai-nodes.js
+   * buildArticleRevisionPrompt), so whatever this writer is given reaches its rework without
+   * a second copy. The arc selection's guidance (`_outlineGuidance`) went with its last
+   * readers (R4), and the outline judge's <SHOULD_CONSIDER> with the outline judge (brief
+   * 4.6).
    *
-   * @param {Object} outline - Approved article outline
-   * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
+   * @param {string} settledWeave - the settled weave (prompt-renderers/settled-weave.js)
+   * @param {Object} map - the story map as the article reads it: the map as the director
+   *   left it, less the photos the director has left out since (ai-nodes.js articleMapOf)
    * @param {Array} shellAccounts - Shell account data for financial summary
    * @param {Object|null} sessionFacts - Session facts for non-roster character guardrail
    * @param {Object|null} directorNotes - Director observations for article grounding
    * @param {Object|null} narrativeTensions - Programmatic contradictions from surfaceContradictions node
-   * @param {Object} options - { directorGuidance, gateNotes, evidenceBundle, directorCorrections,
-   *   photoDescriptions, photos }
+   * @param {Object} options - { gateNotes, evidenceBundle, directorCorrections, photoDescriptions,
+   *   photos }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+  async buildArticlePrompt(settledWeave, map, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
     const systemPrompt = await this.buildArticleSystemPrompt();
     let userPrompt = await this.buildArticleUserSections(
-      outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options
+      settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options
     );
 
-    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
-    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
-    // (every rejection note still in state), as a second paragraph inside the same tag.
-    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
+    // The standing notes, LAST, so they outrank the rules above (Q2; spec 2026-09-19 §5.3).
+    userPrompt += this._buildDirectorGuidance(null, options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
   }
@@ -786,30 +797,44 @@ ${this._rosterSection()}`;
   }
 
   /**
-   * The article writer's user prompt up to, not including, <SHOULD_CONSIDER> and
-   * <DIRECTOR_GUIDANCE>: the data (outline, record, money, observations),
-   * the rules and the generation instruction with its schema. Shared with the article
-   * reworker (2.3). Takes buildArticlePrompt's arguments; the tail's options
-   * (shouldConsider, directorGuidance, gateNotes) are not read here.
+   * The article writer's user prompt up to, not including, <DIRECTOR_GUIDANCE> (brief
+   * 4.7b): the settled weave, the map, the task, then the data, the session facts, the
+   * generation instruction with its schema, and the craft files last. Shared with the
+   * article reworker (2.3), which follows it with its revision block and then its own
+   * <DIRECTOR_GUIDANCE>. Takes buildArticlePrompt's arguments; options.gateNotes is the
+   * tail's and is not read here.
    *
    * @returns {Promise<string>}
-   * @throws {Error} for a theme with no story map, such as the parked detective (R1)
+   * @throws {Error} for a theme with no story map, such as the parked detective (R1); with
+   *   no settled weave, or no map: the article is written from both
    */
-  async buildArticleUserSections(outline, heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+  async buildArticleUserSections(settledWeave, map, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
     mapSchemaFor(this.themeName);
+    if (typeof settledWeave !== 'string' || !settledWeave.trim()) {
+      throw new Error('The article writer reads the settled weave first, and this thread holds no weave: the story meeting settles it. Go back to the story meeting.');
+    }
+    if (!map || typeof map !== 'object' || Array.isArray(map) || !Array.isArray(map.sections)) {
+      throw new Error('The article writer writes from the story map, and this thread holds no map: the map\'s stop settles it. Go back to the map.');
+    }
     // Brief 2.1: the record, once, in the data part. Phase 4 (brief 4.6; R5): the arc
     // packages that named each arc's documents went; the record is whole.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
     return this._journalistArticleUserSections(
-      outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
+      settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
     );
   }
 
   /**
-   * The journalist article writer's user prompt up to <SHOULD_CONSIDER> and
-   * <DIRECTOR_GUIDANCE>: the data, the roster and verdict, the generation instruction
-   * with its schema, and the craft files last (phase 3, 3.2: the integrator's
-   * placement ruling; the world and the truth rules are in the system prompt).
+   * The journalist article writer's user prompt up to <DIRECTOR_GUIDANCE>.
+   *
+   * Brief 4.7b (spec 6.1): the settled weave first, then the story map as the director left
+   * it (<STORY_MAP>, where the approved outline printed until phase 4), then the task
+   * (ARTICLE_TASK), then what the writer read before: the data, the roster and verdict, the
+   * generation instruction with its schema, and the craft files last (phase 3, 3.2: the
+   * integrator's placement ruling; the world and the truth rules are in the system
+   * prompt). The instruction takes the sections, their ids and headings, the headline, the
+   * deck and the top photo from the map, so it names none of the theme's slots. The HERO
+   * IMAGE line went: the map's top photo is the hero, and the instruction names it.
    *
    * Gone, because the rule set states each once or contradicted it: the temporal
    * context key (M11: no document carries the field) and <TEMPORAL_DISCIPLINE> (the
@@ -827,12 +852,8 @@ ${this._rosterSection()}`;
    * evidence reference is described as the template prints it, a caption naming a
    * document (M1).
    *
-   * Phase 3 (3.7): APPROVED OUTLINE leaves out the outline writer's questions, which
-   * were the director's to answer at the outline stop.
-   *
    * Phase 3 (3.9; T13, the integrator's ruling): the article places every photo the
-   * director has not excluded, and the outline only what its photo slots hold, so the
-   * writer is given the outline writer's whole set less the excluded photos
+   * director has not excluded, so the writer is given every kept photo
    * (options.photos, from articleWriterInputs): the hero image, then every other photo
    * the director kept but the whiteboard. A hero the director excluded comes as none.
    * PHOTOS prints each one's entry once (renderPhotoListEntry, the entry the article
@@ -842,10 +863,10 @@ ${this._rosterSection()}`;
    *
    * @returns {string}
    */
-  _journalistArticleUserSections(outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
+  _journalistArticleUserSections(settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
     const photos = Array.isArray(options.photos) ? options.photos.filter(photo => photo && photo.filename) : [];
     const photoSection = photos.length > 0
-      ? `PHOTOS (every photo the director has not excluded, without the whiteboard${photos[0].hero ? ': the hero image, then the rest' : ''}; each gives the names identified in it and the director's description):
+      ? `PHOTOS (every photo the director has not excluded, without the whiteboard${photos[0].hero ? ': the map\'s top photo first, marked [hero image], then the rest' : ''}; each gives the names identified in it and the director's description):
 
 ${photos.map((photo, i) => renderPhotoListEntry(photo, i, options.photoDescriptions)).join('\n\n')}`
       : 'PHOTOS: none';
@@ -868,13 +889,22 @@ ${tensions.map(sentence => `- ${sentence}`).join('\n')}
         : [])
     ].join(', ');
 
-    return `<DATA_CONTEXT>
-APPROVED OUTLINE:
-${JSON.stringify(withoutWriterQuestions(outline), null, 2)}
+    // R7: the map's top photo prints at the top of the article, and code stamps it as the hero.
+    const topPhoto = typeof map.topPhoto === 'string' && map.topPhoto.trim() ? map.topPhoto : null;
+    const heroLine = topPhoto
+      ? `3. "heroImage": {"filename": "${topPhoto}", "caption": "..."}: the map's top photo, printed at the top of the article.`
+      : '3. The map has no top photo, so the bundle has no "heroImage".';
 
-HERO IMAGE: ${heroImage || 'none chosen: use the first photo the outline places'}
-It prints at the top of the article, as "heroImage". The other photos in PHOTOS print as inline photo blocks.
+    return `${settledWeave}
 
+<${STORY_MAP_TAG}>
+${STORY_MAP_LABEL}
+${JSON.stringify(map, null, 2)}
+</${STORY_MAP_TAG}>
+
+${ARTICLE_TASK}
+
+<DATA_CONTEXT>
 ${photoSection}
 
 ${recordSection}
@@ -887,10 +917,10 @@ ${this._sessionFactsSection(sessionFacts)}
 <GENERATION_INSTRUCTION>
 Write the article as a ContentBundle: JSON in the shape of the schema at the end of this instruction. Every object takes only the fields the schema lists for it, and every "type" only the values listed.
 
-1. "sections": the article's sections, in reading order. Each has:
-   - "id": the slot the section fills, one of lede, the-story, follow-the-money, the-players, whats-missing or closing. A slot the article does not use has no section.
+1. "sections": the article's sections, one for each section of the map, in the map's order. Each has:
+   - "id": the slot of the map's section it writes, as the map gives it.
    - "type": one of "narrative", "evidence-highlight", "investigation-notes" or "conclusion".
-   - "heading": optional. A section with none prints untitled.
+   - "heading": the map's heading for the section, as written. A section whose heading on the map is empty takes no "heading" and prints untitled.
    - "content": an array of blocks, each one of these:
      * {"type": "paragraph", "text": "..."}
      * {"type": "quote", "text": "...", "attribution": "..."}: "attribution" is the speaker.
@@ -899,8 +929,8 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
      * {"type": "photo", "filename": "...", "caption": "..."}: an inline photo, by its exact filename.
      * {"type": "list", "items": ["..."], "ordered": false}
 2. "evidenceCards": the sidebar's entries. Each names a document by its id in "tokenId", with a "headline", a one-line "summary" under 100 characters, and its "significance".
-3. "heroImage": {"filename": "<the HERO IMAGE filename>", "caption": "..."}.
-4. "headline": {"main": "...", "kicker": "...", "deck": "..."}.
+${heroLine}
+4. "headline": {"main": "<the map's headline>", "kicker": "...", "deck": "<the map's deck>"}.
 5. "byline": {${byline}}.
 6. "metadata": {"sessionId": "...", "theme": "journalist", "generatedAt": "<an ISO 8601 timestamp>"}. The server stamps these values.
 
@@ -993,6 +1023,8 @@ module.exports = {
   // map writer (the 4b fix batch; phase 4)
   rosterWithPronounsSection,
   buildDirectorGuidanceSection,
+  // Brief 4.7b: the tag the article writer prints the story map in
+  STORY_MAP_TAG,
   // Shared with buildRevisionContext (node-helpers.js), which introduces the detective
   // rework's advisory list with it; a journalist rework's list has its own line,
   // REWORK_SHOULD_CONSIDER_LINE (phase 3, 3.10).

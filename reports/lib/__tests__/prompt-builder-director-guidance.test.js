@@ -33,7 +33,7 @@ const GUIDANCE = 'Lead with the money, not the vote.';
 // director's note from the story meeting is a standing note, and the map writer's
 // <DIRECTOR_GUIDANCE> carries the standing notes. The detective has no map writer (R1).
 const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
-const { WEAVE } = require('./fixtures/rework-state');
+const { WEAVE, MAP } = require('./fixtures/rework-state');
 const SETTLED_WEAVE = renderSettledWeave(WEAVE, null);
 
 describe('buildOutlinePrompt — <DIRECTOR_GUIDANCE>', () => {
@@ -53,47 +53,38 @@ describe('buildOutlinePrompt — <DIRECTOR_GUIDANCE>', () => {
   });
 });
 
+// Phase 4 (brief 4.7b): the article writer reads the settled weave and the map, and its
+// <DIRECTOR_GUIDANCE> carries the standing notes alone, as the map writer's does: the arc
+// selection's emphasis went with its last readers (R4).
 describe('buildArticlePrompt — <DIRECTOR_GUIDANCE>', () => {
-  it('appends the guidance as the LAST section of the user prompt', async () => {
-    const { userPrompt } = await makeBuilder().buildArticlePrompt(
-      { lede: { hook: 'x' } }, 'hero.png', [], null, null, null,
-      { directorGuidance: GUIDANCE }
-    );
-    expect(userPrompt).toContain('<DIRECTOR_GUIDANCE>');
+  const MEETING_NOTE = { gate: 'arc-selection', kind: 'approval', round: 1, text: GUIDANCE, at: '2026-10-03T09:00:00.000Z' };
+
+  it("appends the standing notes, the meeting's note among them, as the LAST section of the user prompt", async () => {
+    const { userPrompt } = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, null, { gateNotes: [MEETING_NOTE] });
+    expect(userPrompt).toMatch(/^<DIRECTOR_GUIDANCE>$/m);
     expect(userPrompt).toContain(GUIDANCE);
     expect(userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 
-  it('omits the section entirely when there is no guidance', async () => {
-    const { userPrompt } = await makeBuilder().buildArticlePrompt(
-      { lede: { hook: 'x' } }, 'hero.png', [], null, null, null
-    );
-    expect(userPrompt).not.toContain('DIRECTOR_GUIDANCE');
+  it('omits the section entirely when there is no note, and reads no arc-selection emphasis', async () => {
+    const { userPrompt } = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, null, { directorGuidance: GUIDANCE });
+    expect(userPrompt).not.toMatch(/^<DIRECTOR_GUIDANCE>$/m);
+    expect(userPrompt).not.toContain(GUIDANCE);
   });
   // Phase 4 (brief 4.7b; R1): the detective's article writer went with the old stages.
 });
 
+// Phase 4 (brief 4.7b; R4): the story meeting wrote the arc selection's guidance no more
+// (brief 4.5), and its last readers, the article writer and its rework, read the standing
+// notes alone, so the channel went with them.
 describe('_outlineGuidance state channel', () => {
-  const { ReportStateAnnotation, ROLLBACK_CLEARS } = require('../workflow/state');
+  const { ReportStateAnnotation, ROLLBACK_CLEARS, ROLLBACK_CLEARS_EXEMPT, getDefaultState } = require('../workflow/state');
 
-  it('is a declared channel (LangGraph drops undeclared keys)', () => {
-    expect(Object.keys(ReportStateAnnotation.spec)).toContain('_outlineGuidance');
-  });
-
-  it('is cleared by every rollback point at or upstream of arc-selection', () => {
-    ['input-review', 'paper-evidence-selection', 'await-roster',
-     'await-full-context', 'pre-curation', 'evidence-and-photos', 'arc-selection']
-      .forEach((point) => {
-        expect(ROLLBACK_CLEARS[point]).toContain('_outlineGuidance');
-      });
-  });
-
-  it('SURVIVES a rollback into the photo branch or to outline/article', () => {
-    // The guidance is captured AT arc-selection, which is upstream of all four.
-    expect(ROLLBACK_CLEARS['photos']).not.toContain('_outlineGuidance');
-    expect(ROLLBACK_CLEARS['character-ids']).not.toContain('_outlineGuidance');
-    expect(ROLLBACK_CLEARS['outline']).not.toContain('_outlineGuidance');
-    expect(ROLLBACK_CLEARS['article']).not.toContain('_outlineGuidance');
+  it('is gone with its last readers: no channel, no default, and no rollback list names it', () => {
+    expect(Object.keys(ReportStateAnnotation.spec)).not.toContain('_outlineGuidance');
+    expect(getDefaultState()).not.toHaveProperty('_outlineGuidance');
+    Object.entries(ROLLBACK_CLEARS).forEach(([point, fields]) => expect(`${point}: ${fields.includes('_outlineGuidance')}`).toBe(`${point}: false`));
+    expect([...(ROLLBACK_CLEARS_EXEMPT || [])]).not.toContain('_outlineGuidance');
   });
 });
 
@@ -112,27 +103,27 @@ describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
 
   it('remote: carries the remote block and not the on-site one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
-      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
+      .buildArticlePrompt(SETTLED_WEAVE, MAP);
     expect(systemPrompt).toContain(JOURNALIST_REMOTE);
     expect(systemPrompt).not.toContain(JOURNALIST_ONSITE);
   });
 
   it('on-site: carries the on-site block and not the remote one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'on-site' })
-      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
+      .buildArticlePrompt(SETTLED_WEAVE, MAP);
     expect(systemPrompt).toContain(JOURNALIST_ONSITE);
     expect(systemPrompt).not.toContain(JOURNALIST_REMOTE);
   });
 
   it('defaults to on-site when the session config says nothing', async () => {
     const { systemPrompt } = await makeBuilder('journalist', {})
-      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
+      .buildArticlePrompt(SETTLED_WEAVE, MAP);
     expect(systemPrompt).toContain(JOURNALIST_ONSITE);
   });
 
   it('no longer tells the reporter to write "We decided"', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
-      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
+      .buildArticlePrompt(SETTLED_WEAVE, MAP);
     // This line directly contradicted the remote rule AND made Nova a member of
     // the room in both modes. It is gone, along with the stray detective line
     // that sat beside it in the JOURNALIST constraints.
@@ -259,8 +250,9 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
     const o = await makeBuilder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, { gateNotes: NOTES });
     expect(o.userPrompt).toContain('- [outline, rejection 1] Lead with the ledger.');
     expect(o.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
-    const a = await makeBuilder().buildArticlePrompt({ lede: { hook: 'x' } }, 'hero.png', [], null, null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
-    expect(a.userPrompt).toContain(GUIDANCE);
+    // Brief 4.7b: the article writer's section is the standing notes alone (R4).
+    const a = await makeBuilder().buildArticlePrompt(SETTLED_WEAVE, MAP, [], null, null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
+    expect(a.userPrompt).not.toContain(GUIDANCE);
     expect(a.userPrompt).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
     expect(a.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });

@@ -32,9 +32,9 @@ const { _testing: { buildArticleRevisionSystemPrompt } } = require('../workflow/
 const { loadModeBlock } = require('../rule-set');
 const { findRemovedPhrases } = require('./fixtures/removed-phrases');
 const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
-const { WEAVE } = require('./fixtures/rework-state');
+const { WEAVE, MAP } = require('./fixtures/rework-state');
 
-/** The settled weave the map writer reads first (phase 4, brief 4.6). */
+/** The settled weave the map writer and the article writer read first (phase 4, briefs 4.6 and 4.7b). */
 const SETTLED_WEAVE = renderSettledWeave(WEAVE, null);
 
 /**
@@ -54,8 +54,9 @@ async function renderArticlePrompt(mode) {
     theme: 'journalist',
     sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
   });
+  // Brief 4.7b: the article writer writes from the settled weave and the map.
   const { systemPrompt, userPrompt } = await builder.buildArticlePrompt(
-    { sections: [] }, null, [], null, DIRECTOR_NOTES, null, {}
+    SETTLED_WEAVE, MAP, [], null, DIRECTOR_NOTES, null, {}
   );
   return { systemPrompt, userPrompt, all: systemPrompt + '\n' + userPrompt };
 }
@@ -467,8 +468,9 @@ describe('presence lines outside the article prompt', () => {
       sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
     });
     const system = await buildArticleRevisionSystemPrompt(builder, 'journalist');
+    // Brief 4.7b: the rework is built from the writer's inputs, the weave and the map among them.
     const user = await buildArticleRevisionPrompt(
-      { outline: { sections: [] }, directorNotes: DIRECTOR_NOTES, sessionConfig: { roster: ['Vic'] } },
+      { weave: WEAVE, outline: MAP, directorNotes: DIRECTOR_NOTES, sessionConfig: { roster: ['Vic'] } },
       'CONTEXT', 'PREVIOUS', builder
     );
     const all = system + '\n' + user;

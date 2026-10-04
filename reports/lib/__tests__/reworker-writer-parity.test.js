@@ -184,7 +184,6 @@ describe('journalist article stop', () => {
     humanArticleRevisionCount: 1,
     articleRevisionCount: 0,
     directorGateNotes: notesFor('article', NOTE),
-    _outlineGuidance: 'Lead with the money.',
     validationResults: { phase: 'article', passed: true, structuralIssues: [], advisoryWarnings: [] }
   };
 
@@ -199,7 +198,9 @@ describe('journalist article stop', () => {
     expect(count(rework.user, '<craft-voice>')).toBe(1);
     expect(count(rework.user, '<SCHEMA>')).toBe(1);
     expect(rework.user).not.toContain('## OUTPUT SCHEMA');
-    expect(rework.user).toContain('APPROVED OUTLINE:');
+    // Brief 4.7b: the settled weave first, then the map as the director left it.
+    expect(rework.user.startsWith('<SETTLED_WEAVE>\n')).toBe(true);
+    expect(count(rework.user, '\n<STORY_MAP>\n')).toBe(1);
 
     const at = (s) => rework.user.indexOf(s);
     expect(at('HUMAN FEEDBACK (HIGHEST PRIORITY):')).toBeGreaterThan(writer.user.length);

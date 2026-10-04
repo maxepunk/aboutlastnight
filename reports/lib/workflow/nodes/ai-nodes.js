@@ -1344,30 +1344,59 @@ function reworkTask(phase) {
 }
 
 /**
- * The article writer's inputs, read from state: buildArticlePrompt's arguments, in
- * order (phase 2, brief 2.3). One function for the writer and its reworker. The
- * session facts are computed and never stored; they are recomputed here by the
- * writer's own builder.
- *
- * Phase 3 (3.9; T13, the integrator's ruling): `options.photos` is every photo the
- * article places, the outline writer's whole set less the photos the director
- * excluded: the hero image first (`hero: true`, with the names identified in it), then
- * buildAvailablePhotos, every other session photo without the whiteboard. The outline
- * has one photo slot per arc and one in FOLLOW THE MONEY, so it places only some
- * (092026: nine photos, six slots); the article places the rest. The article judge's
- * PHOTOS is built from this same list (evaluator-nodes.js renderArticleJudgePhotos).
- *
- * T13 (3.9 fix round 1): an excluded photo never appears. A stored hero the director
- * excluded is no hero: the writer is told none was chosen. The 4b fix batch: which
- * photos the director excluded is the one rule's (isPhotoExcluded, which
- * buildAvailablePhotos and the hero entry read too); this list used to read the
- * analysis's mark alone.
- *
- * Phase 4 (brief 4.6; R5): no arc packages; the article writer reads the record whole.
- * Brief 4.7b (R1): the parked detective's stored hero went with its article writer.
+ * The story map as the article writer and its rework read it (brief 4.7b): the map as the
+ * director left it (state.outline, R9), less each photo the director has left out since the
+ * map (isPhotoExcluded), from its sections and as its top photo. A photo deleted at the desk
+ * joins the leave-out list at the approve or send-back that carries the delete (server.js,
+ * the article arms), so after a send-back the rework is never told to place it. Nothing else
+ * of the map changes, and the stored map is untouched.
  *
  * @param {Object} state
- * @returns {Array} [outline, heroImage, shellAccounts, sessionFacts, directorNotes,
+ * @returns {Object|null} a copy of the map, or null when the thread holds none
+ */
+function articleMapOf(state) {
+  const stored = state && state.outline;
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return null;
+  const map = JSON.parse(JSON.stringify(stored));
+  const leftOut = (filename) => typeof filename === 'string' && isPhotoExcluded(state, filename);
+  if (leftOut(map.topPhoto)) delete map.topPhoto;
+  if (Array.isArray(map.sections)) {
+    map.sections = map.sections.map((section) => (section && Array.isArray(section.photos)
+      ? { ...section, photos: section.photos.filter((photo) => !(photo && leftOut(photo.filename))) }
+      : section));
+  }
+  return map;
+}
+
+/**
+ * The article writer's inputs, read from state: buildArticlePrompt's arguments, in
+ * order (phase 2, brief 2.3). One function for the writer and its reworker. The
+ * settled weave and the session facts are computed and never stored; they are
+ * recomputed here by their own builders.
+ *
+ * Brief 4.7b (spec 6.1): the settled weave first (settledWeaveOf, 4.5's renderer), then the
+ * map as the article reads it (articleMapOf), where the approved outline was passed until
+ * phase 4. The arc selection's guidance (`_outlineGuidance`) went with its last readers,
+ * the writer and its rework (R4).
+ *
+ * Phase 3 (3.9; T13, the integrator's ruling): `options.photos` is every photo the
+ * article places, every session photo less the photos the director excluded: the hero
+ * image first (`hero: true`, with the names identified in it), then
+ * buildAvailablePhotos, every other session photo without the whiteboard. The article
+ * judge's PHOTOS is built from this same list (evaluator-nodes.js
+ * renderArticleJudgePhotos), which reads the options as the last argument.
+ *
+ * T13 (3.9 fix round 1): an excluded photo never appears. A stored hero the director
+ * excluded is no hero. The 4b fix batch: which photos the director excluded is the one
+ * rule's (isPhotoExcluded, which buildAvailablePhotos and the hero entry read too).
+ *
+ * Phase 4 (brief 4.6; R5): no arc packages; the article writer reads the record whole.
+ * The hero is the map's top photo, which code writes to `heroImage` at the map writer's
+ * return and at the map's approve (R7). Brief 4.7b (R1): the parked detective's stored hero
+ * went with its article writer.
+ *
+ * @param {Object} state
+ * @returns {Array} [settledWeave, map, shellAccounts, sessionFacts, directorNotes,
  *   narrativeTensions, options]
  */
 function articleWriterInputs(state) {
@@ -1378,19 +1407,16 @@ function articleWriterInputs(state) {
     ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))
   ];
   return [
-    state.outline || {},
-    heroImage,  // Hero image filename (prevents duplicate in photos array)
+    settledWeaveOf(state),
+    articleMapOf(state),
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
     buildSessionFacts(state),
     state.directorNotes || null,  // RC5: director observations for article grounding
     state.narrativeTensions || null,  // Task F: programmatic contradictions for narrative weaving
-    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
-    // brief 2.2: the director's input-review corrections and photo descriptions; phase 3
-    // (3.9): every photo the article places. The outline evaluation's advisories
-    // (brief 1.3) went with the outline judge (phase 4, brief 4.6).
+    // Spec 2026-09-19 §5.3: the standing gate notes; brief 2.2: the director's input-review
+    // corrections and photo descriptions; phase 3 (3.9): every photo the article places.
     {
-      directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
       evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
       directorCorrections: state.inputReviewCorrections || [],
@@ -1722,16 +1748,18 @@ async function buildArticleRevisionSystemPrompt(promptBuilder) {
  * Build revision prompt for article with full context
  *
  * Phase 2 (2.3): the article writer's user prompt (every section but its
- * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>), built by the writer's own builder from
- * the writer's own inputs, then the revision block, then <DIRECTOR_GUIDANCE> last.
- * On 092026 the reworker saw no document text and deleted four correct evidence
- * cards; it now has the approved outline, the record, the money figures, the
- * director's notes and the writer's whole rule set (which replaces the three-file
- * <RULES> it used to carry, and whose <SCHEMA> replaces its own copy). The arc
+ * <DIRECTOR_GUIDANCE>), built by the writer's own builder from the writer's own inputs,
+ * then the revision block, then <DIRECTOR_GUIDANCE> last. On 092026 the reworker saw no
+ * document text and deleted four correct evidence cards; it now has what the writer has:
+ * the settled weave and the map as the director left it (brief 4.7b), the record, the
+ * money figures, the director's notes and the writer's whole rule set (which replaces the
+ * three-file <RULES> it used to carry, and whose <SCHEMA> replaces its own copy). The arc
  * packages it carried went in phase 4 (brief 4.6; R5).
  *
- * The writer reads no <SHOULD_CONSIDER> since the outline judge left (phase 4, brief
- * 4.6); the revision context carries the article evaluation's own advisories.
+ * Neither the writer nor the rework reads a <SHOULD_CONSIDER> (phase 4, briefs 4.6 and
+ * 4.7b): the revision context carries the article evaluation's own advisories. The arc
+ * selection's guidance went with them, its last readers (R4): the standing notes are the
+ * guidance's whole content.
  *
  * @param {Object} state - Current state
  * @param {string} contextSection - Formatted revision context
@@ -1744,7 +1772,7 @@ async function buildArticleRevisionSystemPrompt(promptBuilder) {
 async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
   await promptBuilder.requirePhasePrompts('articleGeneration');
   const writerSections = await promptBuilder.buildArticleUserSections(...articleWriterInputs(state));
-  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
+  const guidanceSection = buildDirectorGuidanceSection(null, gateNotes);
   return `${writerSections}
 
 ---
@@ -1816,8 +1844,9 @@ function createMockPromptBuilder() {
       return 'Mock system prompt for article generation\n\nMock article craft rules';
     },
 
-    async buildArticleUserSections(outline) {
-      return `Generate article from outline with ${Object.keys(outline || {}).length} sections`;
+    // Brief 4.7b: the article writer writes from the settled weave and the map.
+    async buildArticleUserSections(settledWeave, map) {
+      return `Generate article from ${settledWeave ? 'the settled weave' : 'no weave'} and a map with ${(map && Array.isArray(map.sections) ? map.sections : []).length} sections`;
     },
 
     async buildOutlinePrompt(settledWeave) {
@@ -1827,10 +1856,10 @@ function createMockPromptBuilder() {
       };
     },
 
-    async buildArticlePrompt(outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions) {
+    async buildArticlePrompt(settledWeave, map) {
       return {
         systemPrompt: 'Mock system prompt for article generation',
-        userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`
+        userPrompt: `Generate article from ${settledWeave ? 'the settled weave' : 'no weave'} and a map with ${(map && Array.isArray(map.sections) ? map.sections : []).length} sections`
       };
     }
   };
@@ -1870,6 +1899,8 @@ module.exports = {
   buildAvailablePhotos,
   outlineWriterInputs,
   articleWriterInputs,
+  // Brief 4.7b: the map as the article writer, its rework and its stamp read it
+  articleMapOf,
   isPhotoExcluded,
   // Brief 4.6: the photos kept for the article, which the map checks and the stop count
   keptPhotoFilenames,

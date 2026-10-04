@@ -287,7 +287,8 @@ describe('generators pass options.gateNotes', () => {
     const options = builder.buildArticlePrompt.mock.calls[0][6];
     // Phase 3 (3.9) added photos: the hero, then every photo the director kept (none here).
     // Phase 4 (brief 4.6): the outline judge's advisories (shouldConsider) went with it.
-    expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, evidenceBundle: null, directorCorrections: [], photoDescriptions: null, photos: [] });
+    // Brief 4.7b (R4): the arc selection's guidance went with its last readers.
+    expect(options).toEqual({ gateNotes: NOTES, evidenceBundle: null, directorCorrections: [], photoDescriptions: null, photos: [] });
   });
 
   it('with no notes the generators pass an empty list (prompt unchanged)', async () => {
@@ -305,10 +306,11 @@ describe('revision prompt builders accept gateNotes', () => {
     expect(prompt).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
     expect(prompt.indexOf('<DIRECTOR_GUIDANCE>')).toBeGreaterThan(prompt.indexOf('<RULES>'));
   });
-  it('article revision likewise, and omits the section with neither guidance nor notes', async () => {
-    const withNotes = await buildArticleRevisionPrompt({ _outlineGuidance: null }, 'CTX', 'PREV', promptBuilder, NOTES);
+  // Brief 4.7b (R4): the article rework's guidance is the standing notes alone.
+  it('article revision likewise, and omits the section with no notes', async () => {
+    const withNotes = await buildArticleRevisionPrompt({}, 'CTX', 'PREV', promptBuilder, NOTES);
     expect(withNotes).toContain('- [outline, rejection 1] Tighten the lede.');
-    const bare = await buildArticleRevisionPrompt({ _outlineGuidance: null }, 'CTX', 'PREV', promptBuilder, []);
+    const bare = await buildArticleRevisionPrompt({}, 'CTX', 'PREV', promptBuilder, []);
     expect(bare).not.toContain('DIRECTOR_GUIDANCE');
   });
 });

@@ -33,7 +33,10 @@ const PROMPTS = {
 async function journalistArticlePrompt() {
   const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue(PROMPTS), validate: jest.fn() };
   const builder = new PromptBuilder(themeLoader, 'journalist', {}, { Vic: 'Vic Kingsley' });
-  const { userPrompt } = await builder.buildArticlePrompt({ lede: { hook: 'x' } }, 'hero.png', [], null, null, null);
+  // Brief 4.7b: the article writer writes from the settled weave and the map.
+  const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+  const { WEAVE, MAP } = require('./fixtures/rework-state');
+  const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), MAP, [], null, null, null);
   return userPrompt;
 }
 

@@ -31,8 +31,6 @@ const contentBundleSchema = require('../schemas/content-bundle.schema.json');
 const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
 const aiNodes = require('../workflow/nodes/ai-nodes');
 const { _testing: { buildEvaluationUserPrompt } } = require('../workflow/nodes/evaluator-nodes');
-const { PromptBuilder } = require('../prompt-builder');
-const { PHASE_REQUIREMENTS } = require('../theme-loader');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
 const { TemplateAssembler } = require('../template-assembler');
 const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
@@ -264,20 +262,18 @@ describe('the questions never reach a later writer, a judge\'s JSON or the templ
     expect(prompt).not.toContain('writerQuestions');
   });
 
-  it('the article writer\'s APPROVED OUTLINE carries none of the outline\'s questions', async () => {
-    const state = withQuestions(reworkFixtureState('journalist'));
-    const builder = new PromptBuilder(
-      {
-        loadPhasePrompts: async (phase) => Object.fromEntries((PHASE_REQUIREMENTS.journalist[phase] || []).map((n) => [n, `STUB ${n}`])),
-        validate: async () => ({ valid: true, missing: [] })
-      },
-      'journalist', state.sessionConfig, state.canonicalCharacters, state.characterData.characters
-    );
+  // Brief 4.7b: the article writer reads the settled weave first, the weave's questions with
+  // the director's answers in it alone, then the map, whose schema holds no questions.
+  it("the article writer's prompt carries the weave's questions in the settled weave alone", async () => {
+    const state = reworkFixtureState('journalist');
     const sdk = sdkReturning(PREVIOUS_BUNDLE);
-    await aiNodes.generateContentBundle({ ...state, contentBundle: null }, { configurable: { sdkClient: sdk, promptBuilder: builder, theme: 'journalist' } });
+    await aiNodes.generateContentBundle({ ...state, heroImage: 'hero.jpg', contentBundle: null }, { configurable: { sdkClient: sdk, theme: 'journalist' } });
     const { prompt } = sdk.mock.calls[0][0];
-    expect(prompt).toContain('APPROVED OUTLINE:');
-    QUESTION_TEXTS.forEach((q) => expect(prompt).not.toContain(q));
+    const weaveQuestion = state.weave.questions[0].question;
+    const settled = prompt.slice(prompt.indexOf('<SETTLED_WEAVE>'), prompt.indexOf('</SETTLED_WEAVE>'));
+    expect(settled).toContain(weaveQuestion);
+    expect(prompt.split(weaveQuestion)).toHaveLength(2);
+    expect(prompt).not.toContain('writerQuestions');
   });
 
   // Phase 4 (brief 4.6): the outline judge left the graph.

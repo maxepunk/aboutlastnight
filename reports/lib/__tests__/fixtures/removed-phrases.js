@@ -358,6 +358,9 @@ const WHOLE_BLOCKS = [
   // Phase 4 (brief 4.6): the settled weave the map writer reads first, the weave's model
   // output with the director's changes and answers in it.
   'SETTLED_WEAVE',
+  // Brief 4.7b: the story map the article writer and its rework read after it, the map
+  // writer's output with the director's edits in it.
+  'STORY_MAP',
   'DIRECTOR_NOTES',
   'DIRECTOR_CORRECTIONS',
   'DIRECTOR_ACCUSATION',
@@ -406,8 +409,8 @@ const PREVIOUS_VERSION = /^(PREVIOUS [^\n]* OUTPUT\b[^\n]*:\n‚ïê+\n)[\s\S]*?(\n‚
  * with an indent: the value opens and closes on a line of its own).
  */
 const MODEL_OUTPUT_LABELS = new Set([
-  // the article writer and reworker
-  'APPROVED OUTLINE:',
+  // (the article writer's APPROVED OUTLINE went with brief 4.7b: it prints the map in
+  // <STORY_MAP>, a WHOLE_BLOCKS tag)
   // the outline writer and reworker: the arcs, then the rest of the arc analysis
   '<arc-metadata>',
   '<arc-analysis>',
@@ -546,7 +549,7 @@ function stripTensionSentences(text) {
  *   excerpts, stripped since the 3.6b fix batch, went with the packages: phase 4, brief
  *   4.6, R5.)
  * - a model's output the prompt carries as data: the previous version a rework shows,
- *   the JSON after each MODEL_OUTPUT_LABELS line (the approved outline, the arcs and the
+ *   the JSON after each MODEL_OUTPUT_LABELS line (the arcs and the
  *   rest of the arc analysis, the plans, the content bundle, the weave the fact check
  *   reads; phase 4, brief 4.4; the map the article judge reads, brief 4.7a), and the
  *   whiteboard reading's values. (The outline judge's
