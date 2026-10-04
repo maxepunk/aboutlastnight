@@ -391,25 +391,56 @@ function gendersOf(pronouns) {
   return Object.keys(GENDERED_PRONOUNS).filter(gender => GENDERED_PRONOUNS[gender].some(p => words.includes(p)));
 }
 
+/** A letter or digit, accented Latin ones included (exposé's): what stands either side of an apostrophe in a word. */
+const LETTER_OR_DIGIT = '[0-9A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F]';
+/** Double quotation marks, straight or curly, each read as any other: a span runs from one to the next. */
+const DOUBLE_QUOTED = '["“”][^"“”\\n]*["“”]';
+/** A single mark that opens a span: after no letter or digit, before a non-space. A curly ’ never opens. */
+const SINGLE_OPENING = `(?<!${LETTER_OR_DIGIT})['‘](?=\\S)`;
+/** A single mark that can close a span: after a non-space, before no letter or digit. A curly ‘ never closes. */
+const SINGLE_CLOSING = `(?<=\\S)['’](?!${LETTER_OR_DIGIT})`;
+/** A single mark after a plural (the players' votes): an s before it, a word after it on its line. */
+const AFTER_PLURAL = `(?<=[sS])['’](?=[^\\S\\n]+${LETTER_OR_DIGIT})`;
+/** A closing mark the rule reads as a close: one not after a plural. */
+const SINGLE_ENDING = `(?!${AFTER_PLURAL})${SINGLE_CLOSING}`;
 /**
- * The quoted spans the narrator checks never read, in the order they are taken out: double
- * quotes, straight or curly (each curly one read as a straight one), then curly single quotes.
- * One rule for stripQuotedSpans and maskQuotedSpans (brief 4.10e).
+ * A single-quoted span: an opening mark, then its line up to the first ending mark, or, with none
+ * on the line, up to the last mark after a plural.
  */
-const QUOTED_SPANS = [/"[^"\n]*"/g, /‘[^\n]*?’(?![A-Za-z])/g];
+const SINGLE_QUOTED = `${SINGLE_OPENING}(?:(?:(?!${SINGLE_ENDING})[^\\n])*${SINGLE_ENDING}|[^\\n]*${AFTER_PLURAL})`;
+
+/**
+ * The one rule of what a quoted span is (briefs 4.10e and 4.10f): someone else's words, which a
+ * narrator check never reads as the narrator's. Its readers:
+ *   - stripQuotedSpans: the phase 3 narrator checks (the pronouns, em-dashes, production words
+ *     and the head count);
+ *   - maskQuotedSpans: the reporter-mode check and its excerpts (phraseExcerpt, acrossExcerpt),
+ *     and the absence statements and their excerpts (findAbsenceStatements);
+ *   - PRINTED_GAP: what a space in a folded copy may stand for when printedExcerpt finds a
+ *     finding's excerpt in the printed text (the phase 3 narrator checks' hits, read in the
+ *     stripped copy, and the leaked examples, read in normalize's).
+ *
+ * No span crosses a line's end. A span in double quotation marks, straight or curly, runs from
+ * one mark to the next (DOUBLE_QUOTED). A span in single quotation marks, straight or curly
+ * (SINGLE_QUOTED), is told from an apostrophe by where each mark stands, since the writers quote
+ * speech in straight single marks too ('She means nothing to me.'):
+ *   - in a word (Kai's, don't, o'clock) a mark is an apostrophe: it neither opens nor closes;
+ *   - after a plural (the players' votes) a mark is an apostrophe while another mark on its line
+ *     can close the span, and closes it when none can;
+ *   - before a shortened word ('90s) a mark stands where an opening mark does, so it opens a span
+ *     only when a closing mark follows on its line.
+ * Where the rule cannot tell, it errs as the module does, toward not flagging: it reads the span.
+ */
+const QUOTED_SPANS = new RegExp(`(?:${DOUBLE_QUOTED}|${SINGLE_QUOTED})`, 'g');
 
 /** A text with each of its quoted spans (QUOTED_SPANS) replaced, as String#replace takes `replacement`. */
 function replaceQuotedSpans(text, replacement) {
-  return QUOTED_SPANS.reduce(
-    (out, span) => out.replace(span, replacement),
-    String(text == null ? '' : text).replace(/[“”]/g, '"')
-  );
+  return String(text == null ? '' : text).replace(QUOTED_SPANS, replacement);
 }
 
 /**
- * Text with its quoted spans taken out: double quotes, straight or curly, and curly
- * single quotes. A span the narrator quotes is someone else's words, which the
- * narrator checks never judge.
+ * Text with its quoted spans (QUOTED_SPANS) taken out. A span the narrator quotes is someone
+ * else's words, which the narrator checks never judge.
  */
 function stripQuotedSpans(text) {
   return replaceQuotedSpans(text, ' ');
@@ -421,9 +452,9 @@ const QUOTED_SPAN_MASK = '\u0000';
 /**
  * Text with each quoted span stripQuotedSpans takes out masked character for character
  * (QUOTED_SPAN_MASK), so every other character keeps its place (brief 4.10e). The reporter-mode
- * check reads the narrator's own words in it: no phrase is read inside a quoted span, and none
- * across one, since a mask is no space between two words; and a finding's excerpt is sliced from
- * the printed text where its match sits.
+ * check and the absence statements read the narrator's own words in it: no phrase is read inside
+ * a quoted span, and none across one, since a mask is no space between two words; and a
+ * finding's excerpt is sliced from the printed text where its match sits.
  */
 function maskQuotedSpans(text) {
   return replaceQuotedSpans(text, (span) => QUOTED_SPAN_MASK.repeat(span.length));
@@ -498,28 +529,25 @@ function findingExcerpt(text) {
   return out || null;
 }
 
-/** Every quotation mark the checks fold to one (normalize, stripQuotedSpans). */
+/** Every quotation mark normalize folds to one, each of which printedPattern reads as any other. */
 const QUOTE_MARKS = '\'‘’‚‛"“”„‟';
 
 /**
  * What a run of spaces in a folded copy can stand for in the printed text: spaces and the
- * quoted spans stripQuotedSpans takes out.
+ * quoted spans stripQuotedSpans takes out, read by the one rule (QUOTED_SPANS; brief 4.10f).
  */
-const PRINTED_GAP = '(?:\\s|"[^"\\n]*"|“[^”\\n]*”|‘[^\\n]*?’(?![A-Za-z]))+';
+const PRINTED_GAP = `(?:\\s|${QUOTED_SPANS.source})+`;
 
 /**
  * The pattern a hit is looked for by in the printed text (printedExcerpt): `target`, the hit
  * with its runs of whitespace as one space, where a space may stand for quoted spans, a
  * quotation mark for any quotation mark, a hyphen for a dash and three full stops for an
- * ellipsis. With `words` (brief 4.10d), the hit starts and ends on a word boundary wherever
- * it starts or ends with a word character, as findAbsenceStatements reads a statement (brief
- * 4.10e: the absence excerpt).
+ * ellipsis.
  *
  * @param {string} target
- * @param {{words?: boolean}} [options]
  * @returns {string} the pattern's source
  */
-function printedPattern(target, { words = false } = {}) {
+function printedPattern(target) {
   let source = '';
   for (let i = 0; i < target.length; i += 1) {
     const ch = target[i];
@@ -529,27 +557,23 @@ function printedPattern(target, { words = false } = {}) {
     else if ('-–—'.includes(ch)) source += '[-–—]';
     else source += escapeRegExp(ch);
   }
-  if (!words) return source;
-  const edge = (ch) => (/\w/.test(ch) ? '\\b' : '');
-  return `${edge(target[0])}${source}${edge(target[target.length - 1])}`;
+  return source;
 }
 
 /**
  * The printed text a hit stands for (brief 4.7a), so the desk finds a finding's excerpt in
  * its block (4.10): `wanted`, read from a folded copy of `printed` (normalize's lowercased
  * text, or the narrator's prose with its quoted spans taken out), looked for in `printed`
- * itself as printedPattern reads it, in any case; with `words`, as whole words (brief 4.10d).
- * `wanted` when `printed` does not hold it.
+ * itself as printedPattern reads it, in any case. `wanted` when `printed` does not hold it.
  *
  * @param {string} printed - the text as the page prints it
  * @param {string} wanted - the hit as the check read it
- * @param {{words?: boolean}} [options]
  * @returns {string}
  */
-function printedExcerpt(printed, wanted, { words = false } = {}) {
+function printedExcerpt(printed, wanted) {
   const target = typeof wanted === 'string' ? wanted.replace(/\s+/g, ' ').trim() : '';
   if (typeof printed !== 'string' || !printed || !target) return wanted;
-  const match = new RegExp(printedPattern(target, { words }), 'i').exec(printed);
+  const match = new RegExp(printedPattern(target), 'i').exec(printed);
   return match ? match[0] : wanted;
 }
 
@@ -957,8 +981,9 @@ function visibleText(contentBundle, theme) {
  * reporter mode stays narrow. Narrow here is also the lenient direction — the
  * phrases are narrator claims, and a claim the narrator does not make in their own
  * prose is not a persona breach. Since brief 4.10e reporter mode reads these pieces
- * with their quoted spans masked (maskQuotedSpans), so a player's line quoted inside
- * a paragraph is no claim of the narrator's either.
+ * with their quoted spans masked (maskQuotedSpans), and since brief 4.10f the absence
+ * statements do too, so a player's line quoted inside a paragraph is no claim of the
+ * narrator's either.
  *
  * @param {Object} contentBundle
  * @returns {string}
@@ -968,24 +993,29 @@ function narratorText(contentBundle) {
 }
 
 /**
- * Every ABSENCE_STATEMENTS match in narrator text, in the text's own casing.
+ * Every ABSENCE_STATEMENTS match in narrator text, in the text's order.
  *
- * Double-quoted spans are skipped first: a paragraph that quotes a player's
- * alibi ("I wasn't in the room") is reporting what someone said, not the
- * narrator stating where they were. Lenient on purpose, like the rest of the
- * module.
+ * Each is the narrator's own words, read as the reporter-mode check reads its phrases (brief
+ * 4.10f): outside the quoted spans (maskQuotedSpans), as whole words with whitespace alone
+ * between them on one line, a curly apostrophe read as a straight one ("I wasn’t there"). A
+ * paragraph that quotes a player's alibi ('I wasn't in the room') is reporting what someone
+ * said, not the narrator stating where they were, and a statement whose words a quoted span
+ * separates is no statement, as a reporter-mode phrase is none (brief 4.10e). Lenient on
+ * purpose, like the rest of the module.
  *
- * @param {string} text - narratorText output
- * @returns {string[]}
+ * @param {string} text - narratorText output, or one narrator piece
+ * @returns {Array<{statement: string, excerpt: string}>} each statement as the check reads it
+ *   (its whitespace as one space, a curly apostrophe as a straight one), for the message, and
+ *   its excerpt: the printed text where the check read it
  */
 function findAbsenceStatements(text) {
-  const unquoted = String(text == null ? '' : text)
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/"[^"\n]*"/g, ' ')
-    .replace(/[ \t]+/g, ' ');
-  const pattern = new RegExp(`\\b(?:${ABSENCE_STATEMENTS.map(escapeRegExp).join('|')})\\b`, 'gi');
-  return unquoted.match(pattern) || [];
+  const printed = String(text == null ? '' : text);
+  const words = maskQuotedSpans(printed).replace(/[‘’]/g, "'");
+  const pattern = new RegExp(`\\b(?:${ABSENCE_STATEMENTS.map(s => s.split(' ').map(escapeRegExp).join('[ \\t]+')).join('|')})\\b`, 'gi');
+  return [...words.matchAll(pattern)].map(match => ({
+    statement: match[0].replace(/[ \t]+/g, ' '),
+    excerpt: printed.slice(match.index, match.index + match[0].length)
+  }));
 }
 
 /**
@@ -1553,18 +1583,18 @@ function factCheckContentBundle({
     const absences = findAbsenceStatements(narratorText(bundle));
     if (absences.length > 1) {
       const message =
-        `Absence stated ${absences.length} times (remote): ${absences.map(a => `"${a}"`).join(', ')}. ` +
+        `Absence stated ${absences.length} times (remote): ${absences.map(a => `"${a.statement}"`).join(', ')}. ` +
         (journalist
           ? `Nova says so once, early; after that, the room's events are told as scenes (T8).`
           : `Say that you were not in the room at most once in the whole article, or not at all; ` +
             `everywhere else, show where each fact came from by attributing it to the people who told you.`);
       advisoryWarnings.push(message);
       // Brief 4.7a: a statement sits inside one narrator piece (the joined text keeps each
-      // piece on its own line), so each is found in its piece. Brief 4.10e: on whole words, as
-      // the count reads it, so beside "Kai wasn't there" it quotes the narrator's statement.
+      // piece on its own line), so each is found in its piece. Brief 4.10f: its excerpt is the
+      // printed text where the count read it, so beside "Kai wasn't there" or a quoted line it
+      // quotes the narrator's own statement.
       for (const segment of narratorSegments(bundle)) {
-        for (const statement of findAbsenceStatements(segment.text)) {
-          const shown = printedExcerpt(segment.text, statement, { words: true });
+        for (const { excerpt: shown } of findAbsenceStatements(segment.text)) {
           found('repeatedAbsence', 'advisory', segment.place, shown, message,
             `${quoted(shown)} is one of ${absences.length} places the article says the reporter was not in the room; once, early, is enough.`);
         }

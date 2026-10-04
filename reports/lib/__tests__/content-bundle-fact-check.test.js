@@ -2577,3 +2577,119 @@ describe('4.10e: the reporter-mode check reads the narrator\'s own words', () =>
     ]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Brief 4.10f: one quoted-span rule, straight single quotation marks included (the integrator's
+// ruling 1 on the sixth wave's findings: 4.10e's minors 1 and 2). The rule held double quotation
+// marks, straight or curly, and curly single ones, while the stored drafts quote speech in straight
+// single ones too ('You can have him,' 'She means nothing to me.'), so "Kai told me, 'I voted for
+// Mel.'" failed the article and spent a paid automatic rework. Two readers kept their own copies of
+// the rule: the excerpt's gap read a curly double span only as a matched pair, and the absence
+// statements skipped double-quoted spans alone. Every reader reads the one rule now. A single
+// quotation mark is told from an apostrophe by where it stands: in a word (Kai's), after a plural
+// (the players' votes), before a shortened word ('90s); where the rule cannot tell, it errs toward
+// not flagging (scratch p4/4.10e-review/probe-rule-limits.js; p4/rul6/quotes-probe.js). Each
+// message, its prefix and its status stay as they were.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10f: one quoted-span rule, straight single quotation marks included', () => {
+  const para = (text) => ({ type: 'paragraph', text });
+  /** Each reporter-mode finding as [its place, its excerpt, its line]. */
+  const reporterFindings = (result) => result.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line]);
+  const VOTES = ' makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.';
+  const NARRATORS_VOTE = [[{ section: 'the-story', paragraph: 1 }, 'I voted', `"I voted"${VOTES}`]];
+  const absenceAdvisories = (result) => result.advisoryWarnings.filter((w) => w.startsWith('Absence stated '));
+  /** Each absence finding as [its place, its excerpt]. */
+  const absenceFindings = (result) => result.findings.filter((f) => f.kind === 'repeatedAbsence').map((f) => [f.place, f.excerpt]);
+
+  it("a player's line in straight single quotation marks: no reporter-mode finding", () => {
+    ["Kai told me, 'I voted for Mel.'", "'I voted for Alex,' Ashe told the group."].forEach((text) => {
+      const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para(text)) }));
+      expect([text, reporterFindings(result), result.structuralIssues, result.reporterMode.violations]).toEqual([text, [], [], []]);
+    });
+  });
+
+  it("the narrator's own \"I voted\" beside possessives and contractions: a finding, its excerpt as printed", () => {
+    [
+      "Kai's ledger and the players' votes said one thing, but I voted for Mel.",
+      // The narrator's words between two apostrophes, which a rule pairing any two marks would mask.
+      "Kai's ledger said one thing, but I voted for Mel, as the players' votes didn't.",
+      "It's five o'clock, and I voted for Mel; the players' count won't move."
+    ].forEach((text) => {
+      const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para(text)) }));
+      expect([text, reporterFindings(result)]).toEqual([text, NARRATORS_VOTE]);
+      expect([text, result.structuralIssues]).toEqual([text, [expect.stringMatching(/^Reporter-mode violation: "i voted"\. /)]]);
+    });
+  });
+
+  it('a shortened word with no closing mark masks nothing', () => {
+    const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para("Back in the '90s, I voted for change.")) }));
+    expect(reporterFindings(result)).toEqual(NARRATORS_VOTE);
+    expect(result.reporterMode.violations).toEqual(['i voted']);
+  });
+
+  it('a quoted span between two words is no space, in straight single quotation marks: the excerpt is where the narrator\'s words meet with whitespace alone, in a piece or across two', () => {
+    const inPiece = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para("He said I 'never' voted that way, but I voted.")) }));
+    expect(reporterFindings(inPiece)).toEqual(NARRATORS_VOTE);
+    // A player's line ahead of the narrator's own: the excerpt is the narrator's words, not the line's.
+    const lineFirst = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para("Kai said 'i VOTED for Mel,' and I 'never' voted that way, but I voted.")) }));
+    expect(reporterFindings(lineFirst)).toEqual(NARRATORS_VOTE);
+    // Probes A and B: a junction where a quoted span stands between the words comes before the
+    // junction that holds the phrase.
+    [
+      ["Asked who broke the tie, he said I 'never'", 'voted that way. The vote came and I', 'voted again.'],
+      ['The last word was mine, and I', "'finally' voted. Later I", 'voted again.']
+    ].forEach((texts) => {
+      const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(...texts.map(para)) }));
+      expect([texts, reporterFindings(result)]).toEqual([texts, [[null, 'I voted', `"I voted" (across two pieces)${VOTES}`]]]);
+    });
+    // A quoted word between the two words of a phrase leaves no phrase to find.
+    const between = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para("Then I 'finally' voted for lunch.")) }));
+    expect([reporterFindings(between), between.structuralIssues]).toEqual([[], []]);
+  });
+
+  it("a phase 3 narrator check reads the same rule: an em-dash inside a straight single-quoted line is no advisory, and the narrator's own still is", () => {
+    const emDashes = (result) => result.advisoryWarnings.filter((w) => w.startsWith("Em-dash in the narrator's prose:"));
+    const quotedOnly = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para("Kai said, 'It was mine — all of it.' The room moved on.")) }));
+    expect(emDashes(quotedOnly)).toEqual([]);
+    const text = "Kai said, 'It was mine — all of it.' The ledger moved — twice.";
+    const both = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para(text)) }));
+    expect(emDashes(both)).toEqual([expect.stringMatching(/^Em-dash in the narrator's prose: 1 em-dash \(in section "the-story", paragraph 1\)\. /)]);
+    expect(both.findings.filter((f) => f.kind === 'emDash').map((f) => [f.place, f.excerpt, f.line])).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, text, 'This paragraph has an em-dash outside quoted speech; house style uses none.']
+    ]);
+  });
+
+  it("the absence statements read the same rule: a player's line in single quotation marks is none, and the narrator's own with a curly apostrophe is one", () => {
+    ["'I wasn't there,' Kai said.", '‘I wasn’t there,’ Kai said.'].forEach((text) => {
+      const result = factCheckContentBundle(baseArgs({ reportingMode: 'remote', contentBundle: storyWith(para(text), para('I was not in the room.')) }));
+      expect([text, absenceAdvisories(result), absenceFindings(result)]).toEqual([text, [], []]);
+    });
+    const curly = factCheckContentBundle(baseArgs({ reportingMode: 'remote', contentBundle: storyWith(para('I wasn’t there.'), para('I was not in the room.')) }));
+    expect(absenceAdvisories(curly)).toEqual([expect.stringMatching(/^Absence stated 2 times \(remote\): "I wasn't there", "I was not in the room"\. /)]);
+    expect(absenceFindings(curly)).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, 'I wasn’t there'],
+      [{ section: 'the-story', paragraph: 2 }, 'I was not in the room']
+    ]);
+  });
+
+  it('an excerpt across a mixed pair of double quotation marks (“abc") quotes the narrator\'s words with whitespace alone between them', () => {
+    // A statement whose words a quoted span separates is no statement, as a reporter-mode phrase
+    // is none (4.10e): the narrator's statement is the one with whitespace alone between its words.
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote',
+      contentBundle: storyWith(para('I was not “abc" there at noon, and I was not there at one.'), para('I was not in the room.'))
+    }));
+    expect(absenceAdvisories(result)).toEqual([expect.stringMatching(/^Absence stated 2 times \(remote\): "I was not there", "I was not in the room"\. /)]);
+    expect(absenceFindings(result)).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, 'I was not there'],
+      [{ section: 'the-story', paragraph: 2 }, 'I was not in the room']
+    ]);
+  });
+
+  it("the excerpt's gap reads the same rule: a check that read the prose without its quoted spans finds its excerpt in print across a mixed pair or straight single quotation marks", () => {
+    ['Kai said “abc" and I left — fast.', "Kai said 'abc' and I left — fast."].forEach((text) => {
+      const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para(text)) }));
+      expect([text, result.findings.filter((f) => f.kind === 'emDash').map((f) => f.excerpt)]).toEqual([text, [text]]);
+    });
+  });
+});
