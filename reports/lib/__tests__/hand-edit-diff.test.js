@@ -2879,6 +2879,84 @@ describe('4.5e: a connection the director brought back goes back as the meeting 
   });
 });
 
+describe('4.5e: the restore never puts back a photo the article cannot print', () => {
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const T = { id: 't', type: 'narrative', content: [paragraph('Tango paragraph sits alone in the second section of the article.')] };
+  const photo = (filename, caption) => ({ type: 'photo', filename, caption });
+  const WRITERS_CAPTION = 'The huddle at the bar.';
+  const CAPTION = 'Six people huddle at the bar, late in the evening.';
+  /** The photos the article can print: the photos the session kept. */
+  const PHOTOS = ['a.jpg', 'b.jpg'];
+  /** An article whose section "s" holds `content`, and section "t" after it. */
+  const article = (content) => ({
+    metadata: { sessionId: '0926262' },
+    headline: { main: 'The Room Voted Five to Four' },
+    sections: [{ id: 's', type: 'narrative', content: content.map(clone) }, clone(T)]
+  });
+  /** The director captions the writer's photo at the desk and sends back: E1, the caption. */
+  const settle = (filename, after, options = {}) => {
+    const sentBack = article([A, photo(filename, CAPTION), B]);
+    const standing = D.standingAfterSendBack(null, article([A, photo(filename, WRITERS_CAPTION), B]), sentBack, 'bundle');
+    return D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1, photos: PHOTOS, ...options });
+  };
+
+  it.each([
+    ['renames it to a kept photo', article([A, photo('a.jpg', CAPTION), B])],
+    ['takes it out', article([A, B])]
+  ])("an automatic pass that %s keeps its fix: code leaves out the photo the session does not hold, and the report says the caption was on a photo the article cannot print", (_name, after) => {
+    const { output, report } = settle('not-ours.jpg', after);
+    expect(output.sections).toEqual(after.sections);
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', where: 'section "s", photo not-ours.jpg, caption', director: CAPTION, became: null, restored: false, unprintable: true
+    })]);
+  });
+
+  it("a photo the session holds goes back as before; so does every photo with no list, and a send-back's rework is left as it is", () => {
+    const held = settle('b.jpg', article([A, B]));
+    expect(held.output.sections[0].content).toEqual([A, photo('b.jpg', CAPTION), B]);
+    expect(held.report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+    const noList = settle('not-ours.jpg', article([A, B]), { photos: undefined });
+    expect(noList.output.sections[0].content).toEqual([A, photo('not-ours.jpg', CAPTION), B]);
+    const sendBack = settle('not-ours.jpg', article([A, B]), { pass: D.SEND_BACK_PASS });
+    expect(sendBack.output.sections[0].content).toEqual([A, B]);
+    [held, noList, sendBack].forEach(({ report }) => expect(report.changed[0]).not.toHaveProperty('unprintable'));
+  });
+
+  it('a section put back whole for an edit in it comes back without its photos the article cannot print', () => {
+    const A2 = paragraph('Alpha paragraph, as the director rewrote it at the desk, opens the section.');
+    const sentBack = article([A2, photo('not-ours.jpg', WRITERS_CAPTION), B]);
+    const standing = D.standingAfterSendBack(null, article([A, photo('not-ours.jpg', WRITERS_CAPTION), B]), sentBack, 'bundle');
+    expect(standing.edits.map((e) => e.path)).toEqual(['sections[#s].content[0].text']);
+    const { output, report } = D.settleEdits(null, {
+      edits: D.carriedEdits(standing, sentBack), before: sentBack, after: { ...clone(sentBack), sections: [clone(T)] }, pass: 1, photos: PHOTOS
+    });
+    expect(output.sections).toEqual([{ id: 's', type: 'narrative', content: [A2, B] }, T]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+  });
+
+  // The fact check requires this module, so the restore keeps its own copy of how a photo
+  // reference is matched (photoBasename), held to the fact check here.
+  it('given the kept photos, the restore refuses exactly the photos the fact check reads as invalid references', () => {
+    const { factCheckContentBundle } = require('../content-bundle-fact-check');
+    const { printableBlock } = D._testing;
+    const filenames = ['a.jpg', 'photos/a.jpg', 'A.jpg', 'sub\\b.jpg', 'not-ours.jpg', 'a.jpeg', 'c.jpg', 'wb.jpg', ''];
+    const result = factCheckContentBundle({
+      contentBundle: { sections: [{ id: 's', type: 'narrative', content: filenames.map((filename) => photo(filename, CAPTION)) }], evidenceCards: [] },
+      evidenceBundle: { exposed: { tokens: [], paperEvidence: [] } },
+      roster: [],
+      sessionPhotos: ['/data/0926262/photos/a.jpg', 'C:\\data\\0926262\\photos\\b.jpg', 'photos/c.jpg', 'photos/wb.jpg'],
+      excludedPhotos: ['photos/c.jpg'],
+      whiteboardPhoto: 'wb.jpg',
+      reportingMode: 'on-site'
+    });
+    // The kept photos: the session's, less the one the director left out and the whiteboard.
+    const refused = filenames.filter((filename) => !printableBlock(photo(filename, CAPTION), ['a.jpg', 'b.jpg']));
+    expect(refused).toEqual(['A.jpg', 'not-ours.jpg', 'a.jpeg', 'c.jpg', 'wb.jpg']);
+    expect(refused).toEqual(result.photoReferences.invalid);
+  });
+});
+
 describe('4.5e: one rule names an element', () => {
   const { nameOf, identityOf, canon } = D._testing;
   /** Elements of a collection, named by `key`: a name twice (once padded), another, a number, the number as text, an empty name and none. */

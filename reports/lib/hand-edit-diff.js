@@ -2800,6 +2800,56 @@ function takeOutPassCopies(out, before, identity, keptIndex) {
   return copies;
 }
 
+/**
+ * A photo's filename as the fact check matches a photo reference: its basename, exactly
+ * (content-bundle-fact-check.js, which requires this module, so a test holds the two alike).
+ */
+function photoBasename(filename) {
+  return String(filename == null ? '' : filename).split(/[/\\]/).filter(Boolean).pop() || '';
+}
+
+/**
+ * Can the article print this block, as far as a photo goes (task 4.5e)? A block that is no
+ * photo can, and so can a photo among `photos`, the photos the article can print, and one
+ * with no filename, which prints no photo (lib/publish-photos.js printedPhotos). With no
+ * list, or an empty one, every block can: the fact check checks no photo against an empty
+ * list either. Given the kept photos, it refuses exactly the photos the fact check reads as
+ * invalid references.
+ *
+ * @param {*} block
+ * @param {string[]} [photos]
+ * @returns {boolean}
+ */
+function printableBlock(block, photos) {
+  if (!Array.isArray(photos) || photos.length === 0 || !isObj(block) || block.type !== 'photo') return true;
+  if (typeof block.filename !== 'string' || block.filename === '') return true;
+  const name = photoBasename(block.filename);
+  return photos.some((photo) => photoBasename(photo) === name);
+}
+
+/**
+ * An element a restore puts back, as the article can print it (task 4.5e): null for a photo
+ * block the article cannot print (printableBlock), a section without such blocks, and any
+ * other element as it is.
+ */
+function printableElement(collection, element, photos) {
+  if (collection === 'content') return printableBlock(element, photos) ? element : null;
+  if (collection !== 'sections' || !isObj(element) || !Array.isArray(element.content)) return element;
+  const content = element.content.filter((block) => printableBlock(block, photos));
+  return content.length === element.content.length ? element : { ...element, content };
+}
+
+/**
+ * Does an edit sit on a photo the article cannot print (task 4.5e): is a section's block on
+ * its place, in the version the pass started from, a photo printableBlock refuses? Code never
+ * puts such a block back, so the edit stays out with it.
+ */
+function onUnprintablePhoto(edit, before, photos) {
+  if (isCut(edit) || ownsNoText(edit) || mapAddressOf(edit)) return false;
+  const place = placeCarrying(before, edit);
+  return Boolean(place) && place.chain.some((link) => link.collection === 'content' && !printableBlock(link.holder[link.index], photos));
+}
+
 /** The blocks an element of `collection` puts back: the block itself, or a section's blocks. */
 function blocksOf(collection, element) {
   if (collection === 'content') return [element];
@@ -2812,12 +2862,18 @@ function blocksOf(collection, element) {
  * from, into `out`, and write the director's value at its field. An element the pass
  * removed goes back where it sat, as it was in `before`, and each block that puts back, the
  * block itself or a section's blocks, loses the copy a pass left in another section
- * (takeOutPassCopies; task 4.3c). A moved block goes back into the director's section as
- * the pass left it (restoreMove). A cut is never put back.
+ * (takeOutPassCopies; task 4.3c). What goes back holds no photo block the article cannot
+ * print (printableElement; task 4.5e): such a block stays out, with the edit on it, and a
+ * section or a section's blocks go back without it. A moved block goes back into the
+ * director's section as the pass left it (restoreMove). A cut is never put back.
  *
+ * @param {Object} edit
+ * @param {Object} before - the version the pass started from
+ * @param {Object} out - the pass's output, changed in place
+ * @param {string[]} [photos] - the photos the article can print (printableBlock)
  * @returns {boolean} whether anything was written
  */
-function restoreEdit(edit, before, out) {
+function restoreEdit(edit, before, out, photos) {
   if (isCut(edit) || !isObj(out)) return false;
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
@@ -2839,7 +2895,10 @@ function restoreEdit(edit, before, out) {
         return true;
       }
       if (!isObj(cur[link.key]) && !Array.isArray(cur[link.key])) {
-        cur[link.key] = clone(link.holder[link.key]);
+        const value = clone(link.holder[link.key]);
+        cur[link.key] = Array.isArray(value)
+          ? value.map((element) => printableElement(link.key, element, photos)).filter((element) => element !== null)
+          : value;
         if (link.key === 'content' && Array.isArray(cur.content)) printOnce(cur.content, section);
         return true;
       }
@@ -2850,23 +2909,22 @@ function restoreEdit(edit, before, out) {
     const partner = partnerIndex(link.collection, link.holder, cur, link.index);
     const inSections = link.collection === 'sections' && cur === out.sections;
     const putBack = (element) => {
+      const printable = printableElement(link.collection, element, photos);
+      if (printable === null) return false;
       const at = Math.min(link.index, cur.length);
-      cur.splice(at, 0, element);
-      printOnce(blocksOf(link.collection, element), inSections ? at : section);
+      cur.splice(at, 0, printable);
+      printOnce(blocksOf(link.collection, printable), inSections ? at : section);
+      return true;
     };
     if (last) {
       const element = clone(edit.after);
       if (partner !== -1 && sameKind(cur[partner], element)) {
         cur[partner] = isObj(cur[partner]) && isObj(element) ? { ...cur[partner], ...element } : element;
-      } else {
-        putBack(element);
+        return true;
       }
-      return true;
+      return putBack(element);
     }
-    if (partner === -1) {
-      putBack(clone(link.holder[link.index]));
-      return true;
-    }
+    if (partner === -1) return putBack(clone(link.holder[link.index]));
     if (inSections) section = partner;
     cur = cur[partner];
   }
@@ -2888,7 +2946,8 @@ function backInSection(edit, after, stored) {
  * The stop's report after one more pass of the round. For each edit the pass started
  * from:
  * - a field or element the pass changed: the director's text, what it became (null:
- *   gone), and whether code put it back (`restored`);
+ *   gone), and whether code put it back (`restored`); `unprintable` marks one on a photo the
+ *   article cannot print, which code left out with its photo (task 4.5e);
  * - a block the director moved that the pass took to another section (`moved`, `became`
  *   that section) or removed (`became` null), and whether the block is back in the
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
@@ -2912,10 +2971,12 @@ function backInSection(edit, after, stored) {
  * @param {string|number} pass.pass - SEND_BACK_PASS, or the automatic pass's number
  * @param {Array<{id: string, reason: string}>} [pass.reasons] - the rework's changed edits
  * @param {string[]} [pass.restored] - the edits code put back after the pass
+ * @param {string[]} [pass.unprintable] - the edits code left out with a photo the article
+ *   cannot print (settleEdits; task 4.5e)
  * @param {Object} [pass.stored] - the version stored after the pass (default `after`)
  * @returns {{checked: string[], changed: Object[]}|null}
  */
-function reportAfterPass(previous, { edits = [], before = null, after = null, pass, reasons = [], restored = [], stored = after } = {}) {
+function reportAfterPass(previous, { edits = [], before = null, after = null, pass, reasons = [], restored = [], unprintable = [], stored = after } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
   if (carried.length === 0) return previous || null;
   const prior = handEditReportOf(previous) || { checked: [], changed: [] };
@@ -2924,6 +2985,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     .map((r) => [r.id.trim(), r.reason.trim()]));
   const automatic = pass !== SEND_BACK_PASS && pass !== REWEAVE_PASS;
   const putBack = new Set(Array.isArray(restored) ? restored : []);
+  const leftOut = new Set(Array.isArray(unprintable) ? unprintable : []);
   const entry = (e, fields) => ({
     id: e.id, scope: e.scope, where: editWhere(e), cut: false, removed: false, moved: false,
     director: '', became: null, pass, automatic, reason: why.get(e.id) || null, restored: false,
@@ -2948,7 +3010,8 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     }
     if (!editCarried(after, e)) {
       changed.push(entry(e, {
-        director: editValueText(e.after), became: becameOf(e, before, after), restored: putBack.has(e.id)
+        director: editValueText(e.after), became: becameOf(e, before, after), restored: putBack.has(e.id),
+        ...(leftOut.has(e.id) && { unprintable: true })
       }));
     }
     const back = removedReturnedIn(stored, e);
@@ -2975,18 +3038,26 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * round 1). A send-back's rework is left as it is: the director's note may
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed, and strikes
- * again, by id, each connection the director struck that it brought back. The report
- * records what each pass did and each restore.
+ * again, by id, each connection the director struck that it brought back. Code never puts
+ * back a photo block the article cannot print (`photos`; task 4.5e): an edit on such a block,
+ * a caption the director wrote under its photo, stays out with it, so an automatic pass that
+ * fixed an invalid photo keeps its fix. The report records what each pass did and each
+ * restore, and marks an edit left out with its photo `unprintable`.
  *
  * @param {Object|null} previous - the round's report so far
  * @param {Object} pass - as reportAfterPass takes it: {edits, before, after, pass, reasons}
+ * @param {string[]} [pass.photos] - the photos the article can print: the photos the session
+ *   kept (ai-nodes.js keptPhotoFilenames), each matched by its basename as the fact check
+ *   matches a photo reference (printableBlock). With no list, or an empty one, every photo
+ *   goes back; the story meeting's and the map's passes give none
  * @returns {{output: *, report: Object|null}} the version to store, and the report
  */
-function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [] } = {}) {
+function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [], photos } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
   if (carried.length === 0) return { output: after, report: previous || null };
   let output = after;
   const restored = [];
+  const unprintable = [];
   if (pass !== SEND_BACK_PASS && isObj(after)) {
     const outcome = (e) => moveOutcome(e, before, after).outcome;
     const changed = carried.filter((e) => !isCut(e) && (isMove(e) ? outcome(e) !== 'kept' : !editCarried(after, e)));
@@ -3000,18 +3071,21 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // The moves first, so a field edit on a moved block finds the block where the
       // director put it. A move whose section the pass removed waits for the field edits,
       // one of which may put that section back whole, block included.
-      const waiting = moves.filter((e) => !restoreEdit(e, before, output));
-      fields.forEach((e) => restoreEdit(e, before, output));
-      waiting.forEach((e) => restoreEdit(e, before, output));
+      const waiting = moves.filter((e) => !restoreEdit(e, before, output, photos));
+      fields.forEach((e) => restoreEdit(e, before, output, photos));
+      waiting.forEach((e) => restoreEdit(e, before, output, photos));
       // Brief 4.6, fix round 1: a beat or photo put back whole keeps its copy in the
       // director's place and loses the pass's other copies, one of which may have held a
       // field the director wrote; that field goes back on the copy kept.
       carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
-        .forEach((e) => restoreEdit(e, before, output));
-      changed.forEach((e) => { if (editCarried(output, e) || backInSection(e, after, output)) restored.push(e.id); });
+        .forEach((e) => restoreEdit(e, before, output, photos));
+      changed.forEach((e) => {
+        if (editCarried(output, e) || backInSection(e, after, output)) restored.push(e.id);
+        else if (onUnprintablePhoto(e, before, photos)) unprintable.push(e.id);
+      });
     }
   }
-  return { output, report: reportAfterPass(previous, { edits: carried, before, after, pass, reasons, restored, stored: output }) };
+  return { output, report: reportAfterPass(previous, { edits: carried, before, after, pass, reasons, restored, unprintable, stored: output }) };
 }
 
 /**
@@ -3047,7 +3121,8 @@ module.exports = {
     stayingInSection, pathOf,
     // Brief 4.5c: the weave's fields and elements, which the console copies (a test holds them equal)
     WEAVE_FIELDS, WEAVE_ELEMENTS,
-    // Task 4.5e: one rule names an element (a test holds nameOf to identityOf)
-    nameOf, identityOf
+    // Task 4.5e: one rule names an element (a test holds nameOf to identityOf), and the
+    // restore reads a photo as the fact check does (a test holds printableBlock to it)
+    nameOf, identityOf, printableBlock
   }
 };
