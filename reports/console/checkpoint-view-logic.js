@@ -1977,6 +1977,22 @@
     return markPlace(mark) + ': taken out this round. Before: "' + asString(mark.before) + '"';
   }
 
+  /**
+   * The one line for an edit of a field of an element the round took out whole (brief 4.10c): the
+   * element taken out, with what it held, as removedLine says it, then the field the director gave
+   * it, which went with it, and the pass that took it out, with the rework's reason, in
+   * changedEditLine's words.
+   *
+   * @param {Object} mark - the round's mark that took the element out
+   * @param {Object} entry - the report's entry for the director's edit of one of its fields
+   * @param {string} field - that field (`role`)
+   */
+  function takenOutWithEditLine(mark, entry, field) {
+    var pass = passWords(entry);
+    return removedLine(mark) + '. The ' + field + ' you gave it, "' + roleWord(asString(entry.director)) + '", went with it ('
+      + pass.by + (pass.held ? ', which should have kept your edit). No reason given.' : '). ' + pass.why);
+  }
+
   /** The line for any other mark whose line the page does not show: what changed, and what the place holds now. */
   function elsewhereLine(mark) {
     var after = asString(mark.after);
@@ -2103,7 +2119,11 @@
     return { byLine: byLine, other: other };
   }
 
-  /** The words lib/hand-edit-diff.js editWhere closes a place with when the edit is a whole element or a cut. */
+  /**
+   * The words lib/hand-edit-diff.js editWhere closes a place with when the edit is a whole element or
+   * a cut. A test holds the meeting's reading of a place to editWhere, each of these words included,
+   * through markOfEntry (brief 4.10c).
+   */
   var WHOLE_EDIT_WORDS = /(^|, )(added|cut|struck|brought back)$/;
 
   /** An element of the weave in a report entry's place, as editWhere writes it: `thread "t3", role`. */
@@ -2126,7 +2146,8 @@
    * Is a mark of the round's changes about the edit a report entry names (brief 4.10b)? Text
    * the director took out that came back (a cut, a removed sentence) is about the line it came
    * back in; any other entry is about its own place: the same line, and the same field of it
-   * unless one of the two is the whole line or element.
+   * unless one of the two is the whole line or element. Exported for the test that holds the
+   * place's reading to lib/hand-edit-diff.js editWhere (brief 4.10c).
    */
   function markOfEntry(mark, entry) {
     if (entry.cut === true || entry.removed === true) {
@@ -2148,9 +2169,14 @@
    *   stop does not ask;
    * - `edits`: the lines of the report's entries (`entries`, changedEditsToShow's) that no mark
    *   is about.
-   * One line per edit (brief 4.10b): where a mark and an entry are about the same edit
+   * One line per edit (briefs 4.10b and 4.10c): where a mark and an entry are about the same edit
    * (markOfEntry), the entry's line, which says what the round did to the director's edit,
    * stands in the mark's place, and the entry is not listed again.
+   * - Several marks about one entry, such as two fields of a thread the director added: the
+   *   entry's line stands in the first mark's place, and the other marks show nothing.
+   * - A mark that took an element out whole, about an entry for one of its fields, such as the
+   *   role the director gave a thread a send-back took out: one line says both
+   *   (takenOutWithEditLine).
    *
    * @param {Object} data - the stop's payload
    * @param {Set<string>} onPage - the lines the page shows
@@ -2165,27 +2191,35 @@
       if (list.indexOf(line) === -1) list.push(line);
       map.set(key, list);
     };
-    var pending = asArray(entries).map(function (entry) { return { entry: entry, line: changedEditLine(entry, MEETING_EDIT_LINE) }; });
-    /** The lines of the entries a mark is about, each taken off the list: what the page shows in the mark's place. */
-    var editsOf = function (mark) {
-      var taken = pending.filter(function (p) { return markOfEntry(mark, p.entry); });
-      pending = pending.filter(function (p) { return taken.indexOf(p) === -1; });
-      return taken.map(function (p) { return p.line; });
+    var lines = asArray(entries).map(function (entry) { return { entry: entry, line: changedEditLine(entry, MEETING_EDIT_LINE), shown: false }; });
+    /**
+     * What the page shows in a mark's place for the entries the mark is about: each entry's line
+     * the first time a mark is about it, worded with the element when the mark took the element out
+     * whole and the entry is one of its fields; null when no entry is about the mark, which then
+     * shows its own line.
+     */
+    var editLinesOf = function (mark, elementTakenOut) {
+      var about = lines.filter(function (l) { return markOfEntry(mark, l.entry); });
+      if (about.length === 0) return null;
+      return about.filter(function (l) { return !l.shown; }).map(function (l) {
+        l.shown = true;
+        var field = entryLineOf(l.entry).field;
+        return elementTakenOut && field ? takenOutWithEditLine(mark, l.entry, field) : l.line;
+      });
     };
     var round = isPlainObject(data.marks) ? data.marks : {};
     asArray(round.marks).filter(isPlainObject).forEach(function (mark) {
       var key = lineKeyOf(mark.path);
-      var edits = editsOf(mark);
       if (!asString(mark.after) && (isElementPath(mark.path) || !onPage.has(key))) {
-        out.removed.push.apply(out.removed, edits.length > 0 ? edits : [removedLine(mark)]);
+        out.removed.push.apply(out.removed, editLinesOf(mark, isElementPath(mark.path)) || [removedLine(mark)]);
         if (key !== null) out.takenOut.add(key);
       } else if (onPage.has(key)) {
-        (edits.length > 0 ? edits : [markLine(mark)]).forEach(function (line) { add(marks, key, line); });
+        (editLinesOf(mark, false) || [markLine(mark)]).forEach(function (line) { add(marks, key, line); });
       } else {
-        out.otherMarks.push.apply(out.otherMarks, edits.length > 0 ? edits : [elsewhereLine(mark)]);
+        out.otherMarks.push.apply(out.otherMarks, editLinesOf(mark, false) || [elsewhereLine(mark)]);
       }
     });
-    out.edits = pending.map(function (p) { return p.line; });
+    out.edits = lines.filter(function (l) { return !l.shown; }).map(function (l) { return l.line; });
     return out;
   }
 
@@ -2215,9 +2249,10 @@
    *   shows, changedEditsToShow: a send-back's with their reasons, and what no pass put back;
    *   task 4.10), `kept`, the line that says the director's edits stand when none of theirs is
    *   shown (editsStandLine; brief 4.10b), `marked` and the marks no line shows (`removed`,
-   *   `otherMarks`), and the concerns no line shows (`otherConcerns`). One line per edit (brief
-   *   4.10b): a changed edit that a mark of the round is about stands in that mark's place,
-   *   beside its line or listed with the marks no line shows, and `changedEdits` lists the rest.
+   *   `otherMarks`), and the concerns no line shows (`otherConcerns`). One line per edit (briefs
+   *   4.10b and 4.10c): a changed edit that a mark of the round is about stands in that mark's
+   *   place, the first mark's when several are about it, beside its line or listed with the
+   *   marks no line shows, and `changedEdits` lists the rest (besideLines).
    * The questions are the stop's (`data.questions`), each paired with its place in the
    * director's weave, whose answer the box shows and sets.
    *
@@ -3643,6 +3678,9 @@
     // a card's document (a copy of lib/content-bundle-fact-check.js DOCUMENT_SLOT, held equal by a test)
     editsStandLine: editsStandLine,
     DOCUMENT_SLOT: DOCUMENT_SLOT,
+    // Brief 4.10c: whether a mark of the round is about a report entry, the meeting's reading of the
+    // entry's place, which a test holds to lib/hand-edit-diff.js editWhere
+    markOfEntry: markOfEntry,
     deskAnchorKey: deskAnchorKey,
     deskMarks: deskMarks,
     deskMarksAt: deskMarksAt,

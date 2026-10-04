@@ -1133,7 +1133,12 @@ describe("4.10b: the map lists a restore out of the director's order, and says w
     return ViewLogic.mapView(d, opened(d));
   };
 
-  test("a photo code put back out of the director's order is listed, with the line that asks the director to move it", () => {
+  // 4.10c: only the desk produces an out-of-order restore. lib/hand-edit-diff.js reportAfterPass
+  // writes `inOrder` only for a block moved within its section; the map records a move only from
+  // one place to another (mapElementEdits: an order within a section is the writer's), and the
+  // weave records no move at all. This entry is built by hand to hold the map to the rule every
+  // stop reads (changedEditsToShow); no map round writes one.
+  test("the shared rule, on an entry only the desk writes: one code put back out of the director's order is listed, with the line that asks the director to move it", () => {
     const outOfOrder = entry({
       id: 'E1', scope: 'map', where: 'section "closing", photo "p2.jpg", moved from section "theStory"', moved: true,
       director: 'filename: p2.jpg', became: 'section "theStory"', pass: 1, automatic: true, restored: true, inOrder: false

@@ -1275,3 +1275,116 @@ describe('4.10c: a caption left out with a photo the article cannot print reads 
     expect(view.kept).toBe('');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10c: the meeting's last lines (the integrator's ruling 2 on 4.10b's minors). One line per
+// edit at the meeting, in the two shapes 4.10b's review found (scratch
+// p4/4.10b-review/meeting-probe.js): several fields of a thread the director added, which the
+// round marks one by one; and a field the director edited on a thread a send-back took out. The
+// meeting's reading of a report entry's place is held to lib/hand-edit-diff.js editWhere, every
+// word it closes a whole element's place with included.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10c: one line per edit at the meeting, where the round marks an edit twice', () => {
+  /** Every line the page shows about the round's changes: beside its lines, listed with their places, and the changed edits. */
+  function roundLines(view) {
+    return [view.story, view.question, view.headline, view.fromYourNotes, view.convergence, view.strongerMainThread]
+      .concat(view.threads, view.connections, view.questions)
+      .filter(Boolean)
+      .flatMap((line) => line.marks)
+      .concat(view.removed, view.otherMarks, view.changedEdits);
+  }
+
+  /** The meeting after the director's send-back, from the version the director left. */
+  function afterSendBack(left, weave, edits, report) {
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(weave, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
+      _weaveMarks: { round: 'send-back', from: left }, humanArcRevisionCount: 1
+    }));
+    return { data, view: meetingView(data, meetingDraftOf(data, undefined)) };
+  }
+
+  test("a thread the director added whose claim and role a send-back changed: the edit's line once, beside the thread, and no line for its second field", () => {
+    const left = directorsVersion();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = clone(left);
+    const t6 = reworked.threads.find((t) => t.id === 't6');
+    t6.role = 'complicates-it';
+    t6.claim = 'Riley kept two ledgers, one for Marcus.';
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS });
+    const { data, view } = afterSendBack(left, reworked, edits, report);
+    expect(data.marks.marks.map((m) => m.path)).toEqual(['threads[#t6].claim', 'threads[#t6].role']);
+    const line = 'Thread "t6", added: your "id: t6; claim: Riley kept a second ledger.; role: grounds-it" became "id: t6; claim: Riley kept two ledgers, one for Marcus.; role: complicates-it" (the rework of your send-back). No reason given.';
+    expect(view.threads.find((t) => t.id === 't6').marks).toEqual([line]);
+    expect(roundLines(view)).toEqual([line]);
+  });
+
+  test('a thread whose role the director changed, which a send-back took out: one line says the thread went, with its claim and receipt, the role the director gave it, and why', () => {
+    const left = directorsVersion();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = clone(left);
+    reworked.threads = reworked.threads.filter((t) => t.id !== 't3');
+    reworked.connections = reworked.connections.filter((c) => !(c.joins || []).includes('t3'));
+    const report = reportAfterPass(null, {
+      edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E2', reason: 'The note folded the payment into the main thread.' }]
+    });
+    expect(report.changed.map((c) => [c.id, c.where, c.became])).toEqual([['E2', 'thread "t3", role', null]]);
+    const { data, view } = afterSendBack(left, reworked, edits, report);
+    expect(data.marks.marks.map((m) => m.path)).toEqual(['threads[#t3]', 'connections[#c1]']);
+    const line = 'Thread "t3": taken out this round. Before: "id: t3; claim: Morgan paid Riley at the bar, out of sight.; role: mirrors-it; receipt: mor001". ' +
+      'The role you gave it, "Mirrors it", went with it (the rework of your send-back). Why: The note folded the payment into the main thread.';
+    // The connection the rework took out with the thread is no edit of the director's: its own line.
+    const connection = 'Connection "c1": taken out this round. Before: "id: c1; kind: person; joins: t1 / t3; detail: Morgan: one side of the deadlock, and the payer at the bar."';
+    expect(view.removed).toEqual([line, connection]);
+    expect(view.changedEdits).toEqual([]);
+    expect(roundLines(view)).toEqual([line, connection]);
+  });
+});
+
+describe("4.10c: the meeting reads a report entry's place as lib/hand-edit-diff.js editWhere writes it", () => {
+  const { editWhere, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
+  const { markOfEntry } = ViewLogic;
+  const struck = () => {
+    const weave = clone(WEAVE);
+    weave.connections[1].struck = true;
+    return weave;
+  };
+  /** A weave that carries none of the director's edits, so the report holds an entry for each. */
+  const away = () => ({ ...clone(WEAVE), story: 'Another story altogether.', threads: [], connections: [] });
+
+  test('each kind of edit the meeting makes, its place read back to its own line and field; a whole element read as every field of it', () => {
+    // The first look: the story, a role, a thread added and a connection struck. A later look
+    // brings back a connection struck at an earlier one.
+    const left = directorsVersion();
+    const firstLook = standingAtMeeting(null, WEAVE, left).edits;
+    const broughtBack = standingAtMeeting(standingAtMeeting(null, clone(WEAVE), struck()), struck(), clone(WEAVE)).edits;
+    const entries = [
+      ...reportAfterPass(null, { edits: firstLook, before: left, after: away(), pass: SEND_BACK_PASS }).changed,
+      ...reportAfterPass(null, { edits: broughtBack, before: clone(WEAVE), after: away(), pass: REWEAVE_PASS }).changed
+    ];
+    expect([...firstLook, ...broughtBack].map((edit) => editWhere(edit))).toEqual([
+      'story', 'thread "t3", role', 'thread "t6", added', 'connection "c2", struck', 'connection "c2", brought back'
+    ]);
+    expect(entries.map((entry) => entry.where)).toEqual([...firstLook, ...broughtBack].map((edit) => editWhere(edit)));
+    const about = (where, path) => markOfEntry({ path, before: 'before', after: 'after' }, entries.find((entry) => entry.where === where));
+    // [the entry's place, a mark's path, whether the mark is about the entry]
+    const CASES = [
+      ['story', 'story', true],
+      ['story', 'question', false],
+      ['thread "t3", role', 'threads[#t3].role', true],
+      ['thread "t3", role', 'threads[#t3]', true],
+      ['thread "t3", role', 'threads[#t3].claim', false],
+      ['thread "t3", role', 'threads[#t1].role', false],
+      ['thread "t6", added', 'threads[#t6]', true],
+      ['thread "t6", added', 'threads[#t6].claim', true],
+      ['thread "t6", added', 'threads[#t6].role', true],
+      ['thread "t6", added', 'threads[#t1].role', false],
+      ['connection "c2", struck', 'connections[#c2]', true],
+      ['connection "c2", struck', 'connections[#c2].detail', true],
+      ['connection "c2", struck', 'connections[#c1].detail', false],
+      ['connection "c2", brought back', 'connections[#c2]', true],
+      ['connection "c2", brought back', 'connections[#c2].detail', true],
+      ['connection "c2", brought back', 'connections[#c1].detail', false]
+    ];
+    CASES.forEach(([where, path, expected]) => expect([where, path, about(where, path)]).toEqual([where, path, expected]));
+  });
+});
