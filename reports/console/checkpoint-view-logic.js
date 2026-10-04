@@ -509,11 +509,20 @@
 
   /**
    * What the line says of a block the director wrote that code put back where it could not tell
-   * which block was the pass's version of it (task 4.14c: the entry's `maybeCopy`, the text of a
-   * block that may be): the director checks whether their text now prints twice.
+   * which block was the pass's version of it (task 4.14c: the entry's `maybeCopies`, the texts of
+   * the blocks that may be, the closest first): the director checks whether their text now prints
+   * twice, and deletes each block that repeats it (fix round 2: two blocks may each be).
    */
-  function maybeCopyLine(text) {
-    return '"' + text + '" may be the pass\'s version of it: delete that block if your text now prints twice.';
+  function maybeCopyLine(texts) {
+    var quoted = texts.map(function (text) { return '"' + text + '"'; });
+    if (quoted.length === 1) return quoted[0] + ' may be the pass\'s version of it: delete that block if your text now prints twice.';
+    return quoted.slice(0, -1).join(', ') + ' and ' + quoted[quoted.length - 1] +
+      ' may each be the pass\'s version of it: delete each block that repeats your text.';
+  }
+
+  /** The texts of the blocks a report entry names as ones that may be a pass's version of the director's (`maybeCopies`, task 4.14c); [] for none. */
+  function maybeCopyTexts(entry) {
+    return Array.isArray(entry.maybeCopies) ? entry.maybeCopies.filter(function (text) { return typeof text === 'string'; }) : [];
   }
 
   /**
@@ -584,8 +593,8 @@
    *   map (task 4.9) names the element a beat or a photo, and the desk a Key Evidence entry an
    *   entry (task 4.14c).
    * - A block the director wrote that code put back where it could not tell which block was the
-   *   pass's version of it (`maybeCopy`, task 4.14c): the block that may be, for the director to
-   *   check.
+   *   pass's version of it (`maybeCopies`, task 4.14c): the blocks that may be, for the director
+   *   to check.
    * - A change a send-back's rework made: the rework's reason, or that it gave none.
    *
    * @param {Object} entry - one of the report's `changed` entries (lib/hand-edit-diff.js reportAfterPass)
@@ -636,9 +645,9 @@
       if (entry.restored === true) return label + ': ' + by + ' took out a photo you placed here, which the article cannot print. ' + PUT_BACK_WITHOUT_PHOTO;
       return label + ': ' + by + ' took out the photo, which the article cannot print, so your "' + director + '" was not put back.';
     }
-    if (held && entry.restored === true && typeof entry.maybeCopy === 'string') {
+    if (held && entry.restored === true && maybeCopyTexts(entry).length > 0) {
       return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' took out your "' + director + '"') +
-        '. Your text was put back. ' + maybeCopyLine(valueText(entry.maybeCopy));
+        '. Your text was put back. ' + maybeCopyLine(maybeCopyTexts(entry).map(function (text) { return valueText(text); }));
     }
     if (held && entry.restored === true) {
       return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' removed your "' + director + '"') + '. Your text was put back.';
@@ -658,7 +667,7 @@
    * an element the director put in whole that code put back without a photo the article cannot
    * print, which a pass took out of print (`unprintable` beside `restored`, task 4.5g): its line
    * asks the director for a photo the article can print. So is a block the director wrote that
-   * code put back where it could not tell which block was the pass's version of it (`maybeCopy`
+   * code put back where it could not tell which block was the pass's version of it (`maybeCopies`
    * beside `restored`, task 4.14c): its line asks the director whether their text prints twice.
    * Any other entry code put back asks nothing of the director, so no stop shows it beside the
    * edit; at the desk it stays in the folded record of the round (RevisionDiff, steeringView).
@@ -672,7 +681,7 @@
     if (!read) return [];
     return read.changed.filter(function (entry) {
       return entry.pass === SEND_BACK_PASS || entry.restored !== true || entry.inOrder === false || entry.unprintable === true ||
-        typeof entry.maybeCopy === 'string';
+        maybeCopyTexts(entry).length > 0;
     });
   }
 
@@ -3661,7 +3670,7 @@
    * became, or, for a block a pass moved, the block itself, the entry's section first; for an
    * entry about a whole section, whose text no one piece prints, on that section's heading (brief
    * 4.10e); beside the director's text code put back, for a block that may print twice (task
-   * 4.14c, `maybeCopy`); possibly resolved when only the article as the stop opened it printed
+   * 4.14c, `maybeCopies`); possibly resolved when only the article as the stop opened it printed
    * that; beside no piece when the pass took it out.
    */
   function changedPlace(entry, ctx) {
@@ -3672,7 +3681,7 @@
       var went = /section "([^"]*)"/.exec(entry.became);
       if (went) prefer = inSection(went[1]);
       target = asString(entry.director);
-    } else if (typeof entry.maybeCopy === 'string') {
+    } else if (maybeCopyTexts(entry).length > 0) {
       target = asString(entry.director);
     } else {
       target = typeof entry.became === 'string' ? entry.became : '';
