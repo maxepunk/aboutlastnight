@@ -2045,4 +2045,94 @@ describe('4.6: the map\'s edits', () => {
       expect(D.scopeKeys(D.diffOutline(writers(), left))).toEqual(['deck', 'section:lede']);
     });
   });
+
+  // Fix round 1, finding 1: an edit of a whole beat or photo is carried only while the beat
+  // or photo sits where the director put it and nowhere else. A copy a pass put in another
+  // place is taken out by code, as the director's strike or placement is put back.
+  describe('fix round 1: a beat or a photo the director placed sits there and nowhere else', () => {
+    const editsOf = (map) => D.carriedEdits(D.standingOnMap(null, writers(), map), map);
+    const storyIds = (map) => map.sections.flatMap((s) => s.beats.map((b) => b.id));
+    const photosBySection = (map) => map.sections.map((s) => s.photos.map((p) => p.filename));
+
+    it('a struck beat a pass copies back into a section, leaving it in leftOut, is struck again by id, and the report says where the copy was', () => {
+      const struck = writers();
+      struck.leftOut.push(struck.sections[0].beats.pop());
+      const edits = editsOf(struck);
+      expect(edits.map((e) => e.path)).toEqual(['leftOut[#b2]']);
+      const pass = clone(struck);
+      pass.sections[1].beats.push(clone(pass.leftOut[1]));
+      expect(D.carriedEdits(edits, pass)).toEqual([]);
+
+      const settled = D.settleEdits(null, { edits, before: struck, after: pass, pass: 1 });
+      expect(storyIds(settled.output)).toEqual(['b1', 'b3', 'b4']);
+      expect(settled.output.leftOut.map((b) => b.id)).toEqual(['b9', 'b2']);
+      expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1']);
+      expect(settled.report.changed).toEqual([expect.objectContaining({
+        id: 'E1', struck: true, moved: true, automatic: true, pass: 1, restored: true,
+        where: 'left out, beat "b2", struck from section "lede"', became: 'section "theStory"'
+      })]);
+    });
+
+    it('a photo the director moved, which a pass also places in another section, is taken out of that section and recorded', () => {
+      const moved = writers();
+      moved.sections[0].photos.push(moved.sections[1].photos.pop());
+      const edits = editsOf(moved);
+      expect(edits.map((e) => e.path)).toEqual(['sections[#lede].photos[#cards.jpg]']);
+      const pass = clone(moved);
+      pass.sections[1].photos.push({ filename: 'cards.jpg' });
+      expect(D.carriedEdits(edits, pass)).toEqual([]);
+
+      const settled = D.settleEdits(null, { edits, before: moved, after: pass, pass: 1 });
+      expect(photosBySection(settled.output)).toEqual([['cards.jpg'], ['theory.jpg']]);
+      expect(settled.report.changed).toEqual([expect.objectContaining({
+        id: 'E1', moved: true, automatic: true, restored: true,
+        where: 'section "lede", photo "cards.jpg", moved from section "theStory"', became: 'section "theStory"'
+      })]);
+    });
+
+    it('the top photo the director chose, which a pass also places in a section, prints once, at the top', () => {
+      const chosen = writers();
+      chosen.topPhoto = 'cards.jpg';
+      chosen.sections[1].photos[1] = { filename: 'huddle.jpg' };
+      const edits = editsOf(chosen);
+      const pass = clone(chosen);
+      pass.sections[0].photos.push({ filename: 'CARDS.JPG' });
+
+      const settled = D.settleEdits(null, { edits, before: chosen, after: pass, pass: 1 });
+      expect(settled.output.topPhoto).toBe('cards.jpg');
+      expect(photosBySection(settled.output)).toEqual([[], ['theory.jpg', 'huddle.jpg']]);
+      expect(D.carriedEdits(edits, settled.output)).toHaveLength(2);
+      expect(settled.report.changed).toEqual([expect.objectContaining({ where: expect.stringMatching(/^the top photo, photo "cards\.jpg"/), restored: true, became: 'section "lede"' })]);
+    });
+
+    it('a beat the director added, which a pass copies into another section, prints once, where they put it, as they wrote it', () => {
+      const added = writers();
+      added.sections[1].beats.push({ ...ADDED });
+      const edits = editsOf(added);
+      const pass = clone(added);
+      pass.sections[0].beats.push({ ...ADDED, material: 'Kai took the coats' });
+
+      const settled = D.settleEdits(null, { edits, before: added, after: pass, pass: 1 });
+      expect(settled.output.sections.map((s) => s.beats.map((b) => b.id))).toEqual([['b1', 'b2'], ['b3', 'b4', 'b10']]);
+      expect(settled.output.sections[1].beats[2]).toEqual(ADDED);
+      expect(settled.report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true, became: 'section "lede"' })]);
+    });
+
+    it('a line the director wrote on a struck beat, held only by the copy code takes out, goes back on the beat it keeps', () => {
+      const struck = writers();
+      const b2 = struck.sections[0].beats.pop();
+      const line = 'Rowan: "Somebody framed me, and I know who"';
+      struck.leftOut.push({ ...b2, material: line });
+      const edits = editsOf(struck);
+      expect(edits.map((e) => e.path)).toEqual(['leftOut[#b2]', 'leftOut[#b2].material']);
+      const pass = clone(struck);
+      pass.sections[1].beats.push(clone(pass.leftOut[1]));
+      pass.leftOut[1].material = 'Rowan says someone framed him';
+
+      const settled = D.settleEdits(null, { edits, before: struck, after: pass, pass: 1 });
+      expect(storyIds(settled.output)).not.toContain('b2');
+      expect(settled.output.leftOut[1]).toEqual({ ...b2, material: line });
+      expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
+    });
+  });
 });

@@ -244,6 +244,46 @@ describe('the map checks (spec 5.4)', () => {
   it('a value that is no map is one failure', () => {
     expect(mapFindings(null, inputs()).failures.map((f) => f.type)).toEqual(['no-map']);
   });
+
+  // Fix round 1, finding 1: a copy of the director's beat or photo that a pass put in a
+  // second place is the pass's, so the check never files it against the director's edit,
+  // and after an automatic pass code has already taken it out.
+  describe("fix round 1: a copy a pass put in a second place is the pass's", () => {
+    const { settleEdits } = require('../hand-edit-diff');
+
+    it('a struck beat a pass copies back into the story repeats an id as the writer\'s failure; struck again by code, the map passes', () => {
+      const struck = writers();
+      struck.leftOut.push(struck.sections[1].beats.splice(1, 1)[0]);
+      const standing = standingOnMap(null, writers(), struck);
+      const pass = clone(struck);
+      pass.sections[1].beats.splice(1, 0, clone(pass.leftOut[1]));
+
+      const asPassed = mapFindings(pass, inputs({ edits: carriedEdits(standing, pass) }));
+      expect(typesOf(asPassed.failures)).toEqual(['duplicate-beat-id']);
+      expect(asPassed.concerns).toEqual([]);
+
+      const { output } = settleEdits(null, { edits: carriedEdits(standing, struck), before: struck, after: pass, pass: 1 });
+      expect(output.leftOut.map((b) => b.id)).toEqual(['b9', 'b4']);
+      expect(mapFindings(output, inputs({ edits: carriedEdits(standing, output) }))).toEqual({ failures: [], concerns: [] });
+    });
+
+    it("a photo the director moved, which a pass also places in another section, is placed twice by the writer, never by the director's move; code takes the copy out", () => {
+      const moved = writers();
+      moved.sections[0].photos.push(moved.sections[1].photos.pop());
+      const standing = standingOnMap(null, writers(), moved);
+      const pass = clone(moved);
+      pass.sections[1].photos.push({ filename: 'cards.jpg' });
+
+      const asPassed = mapFindings(pass, inputs({ edits: carriedEdits(standing, pass) }));
+      expect(typesOf(asPassed.failures)).toEqual(['photo-placed-twice']);
+      expect(asPassed.failures[0].message).toMatch(/^Photos placed more than once: cards\.jpg\. /);
+      expect(asPassed.concerns).toEqual([]);
+
+      const { output } = settleEdits(null, { edits: carriedEdits(standing, moved), before: moved, after: pass, pass: 1 });
+      expect(output.sections.map((s) => s.photos.map((p) => p.filename))).toEqual([['cards.jpg'], ['theory.jpg']]);
+      expect(mapFindings(output, inputs({ edits: carriedEdits(standing, output) }))).toEqual({ failures: [], concerns: [] });
+    });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -87,11 +87,13 @@
  * id and each photo by its filename, wherever it sits (mapEditsBetween): a field the
  * director rewrote is one edit, carried while the beat holds it wherever a pass moved it;
  * a beat or a photo they moved to another section, struck into leftOut, brought back from
- * leftOut or added is one edit of its place, and the top photo they chose is the photo they
- * moved to the top. After an automatic pass code puts back each line the pass changed,
- * strikes again by id a struck beat that came back, and puts back a beat they added, a beat
- * they struck and a photo they placed that the pass removed; a beat they only moved between
- * sections, which a pass removed, stays out, as a moved block does at the desk (settleEdits).
+ * leftOut or added is one edit of its place, carried while it sits there and nowhere else,
+ * and the top photo they chose is the photo they moved to the top. After an automatic pass
+ * code puts back each line the pass changed, strikes again by id a struck beat that came
+ * back (a copy the pass left in a section included), takes out a copy the pass put beside
+ * a beat or photo the director placed, and puts back a beat they added, a beat they struck
+ * and a photo they placed that the pass removed; a beat they only moved between sections,
+ * which a pass removed, stays out, as a moved block does at the desk (settleEdits).
  */
 'use strict';
 
@@ -2111,16 +2113,19 @@ function mapCutReturned(obj, edit, address) {
  * Does `obj` still carry an edit on the map's beats or photos (brief 4.6)? A cut, while
  * what it cut is back nowhere in the story; a field, while the beat or photo, wherever it
  * sits, holds the director's value; a move, while the beat or photo sits in the place the
- * director gave it, whatever its fields (its text is the writer's); a beat the director
- * added, while it sits there with the fields they gave it.
+ * director gave it and nowhere else, whatever its fields (its text is the writer's); a beat
+ * the director added, while it sits there, and nowhere else, with the fields they gave it.
+ * A copy a pass put in a second place (a struck beat copied back into a section, a placed
+ * photo placed again) leaves the edit uncarried, so code puts the beat or photo back once
+ * (restoreMapEdit) and the checks read the copy as the pass's (fix round 1, finding 1).
  */
 function mapEditCarried(obj, edit, address) {
   if (isCut(edit)) return mapCutReturned(obj, edit, address) === null;
   const places = mapPlaces(obj, address.kind, address.identity);
   if (address.fieldSteps.length > 0) return places.some((place) => matchesAfter(valueAtSteps(place.element, address.fieldSteps), edit.after));
-  const inPlace = places.filter((place) => place.container === address.container);
-  if (!edit.from || (edit.from === MAP_NONE && address.container !== MAP_TOP_PHOTO)) return inPlace.some((place) => matchesAfter(place.element, edit.after));
-  return inPlace.length > 0;
+  if (places.length !== 1 || places[0].container !== address.container) return false;
+  if (!edit.from || (edit.from === MAP_NONE && address.container !== MAP_TOP_PHOTO)) return matchesAfter(places[0].element, edit.after);
+  return true;
 }
 
 /** What a move on the map met in a pass's output: kept, moved (to `section`, a place) or gone. */
@@ -2139,7 +2144,11 @@ function mapContainerWords(container) {
   return `section "${container}"`;
 }
 
-/** What an edit on the map's beats or photos became in a pass's output, or null when it is gone. */
+/**
+ * What an edit on the map's beats or photos became in a pass's output, or null when it is
+ * gone. For a beat or photo placed whole: the place a pass took it to, or put a copy of it
+ * in (fix round 1, finding 1), else its fields where the director put it.
+ */
 function mapBecame(edit, address, after) {
   if (isCut(edit)) return mapCutReturned(after, edit, address);
   const places = mapPlaces(after, address.kind, address.identity);
@@ -2149,8 +2158,9 @@ function mapBecame(edit, address, after) {
     return value === undefined || value === null ? null : editValueText(value);
   }
   const pinned = places.find((place) => place.container === address.container);
-  if (pinned) return editValueText(pinned.element);
-  return places.length > 0 ? mapContainerWords(places[0].container) : null;
+  const other = places.find((place) => place !== pinned);
+  if (other) return mapContainerWords(other.container);
+  return pinned ? editValueText(pinned.element) : null;
 }
 
 /**
@@ -2689,6 +2699,11 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       const waiting = moves.filter((e) => !restoreEdit(e, before, output));
       fields.forEach((e) => restoreEdit(e, before, output));
       waiting.forEach((e) => restoreEdit(e, before, output));
+      // Brief 4.6, fix round 1: a beat or photo put back whole keeps its copy in the
+      // director's place and loses the pass's other copies, one of which may have held a
+      // field the director wrote; that field goes back on the copy kept.
+      carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
+        .forEach((e) => restoreEdit(e, before, output));
       changed.forEach((e) => { if (editCarried(output, e)) restored.push(e.id); });
     }
   }

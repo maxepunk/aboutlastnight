@@ -243,6 +243,39 @@ describe('the story map through the real graph (phase 4, brief 4.6)', () => {
     expect(reopened.data).toMatchObject({ humanRevisionCount: 1, revisionCount: 1 });
   });
 
+  it('an automatic pass that copies the struck beat back into the story, leaving it in leftOut, has it struck again: the stop opens with the beat once and no failure (fix round 1)', async () => {
+    const sdk = scriptedSdk();
+    const { graph, thread } = await toMap(sdk);
+
+    // The director strikes the paternity beat and sends the map back. The send-back's
+    // rework drops the lede's connection, so the check fails on the writer's text; the
+    // check's rework, the round's last, lands it again and copies the struck beat back into
+    // the story while leaving it in leftOut.
+    const left = clone(MAP);
+    left.leftOut.push(left.sections[1].beats.splice(2, 1)[0]);
+    const sentBack = clone(left);
+    delete sentBack.sections[0].beats[0].connection;
+    const checkRework = clone(left);
+    checkRework.sections[1].beats.push(clone(MAP.sections[1].beats[2]));
+    thread.configurable.sdkClient = scriptedSdk({ reworks: [sentBack, checkRework] });
+    await act(graph, thread, { outline: 'send-back', map: left, note: 'Keep my strike.' });
+
+    const reopened = await stopOf(graph, thread);
+    expect(reopened.type).toBe(CHECKPOINT_TYPES.OUTLINE);
+    expect(thread.configurable.sdkClient.calls).toEqual(['Map revision 0', 'Map revision 1']);
+    const { outline } = reopened.values;
+    expect(outline.sections[1].beats.map((b) => b.id)).toEqual(['b2', 'b3']);
+    expect(outline.leftOut.map((b) => b.id)).toEqual(['b9', 'b4']);
+    expect(reopened.data.checkFailures).toEqual([]);
+    expect(reopened.data.handEditReport.changed).toEqual([expect.objectContaining({
+      id: 'E1', where: 'left out, beat "b4", struck from section "theStory"', struck: true,
+      automatic: true, pass: 1, restored: true, became: 'section "theStory"'
+    })]);
+    // The strike's own effects (Sarah in no beat, two cards) are concerns on it, never a rework.
+    expect(reopened.data.concerns.length).toBeGreaterThan(0);
+    reopened.data.concerns.forEach((concern) => expect(concern.editIds).toEqual(['E1']));
+  });
+
   it("going back to the map (R9): no call; the map as the director left it, its edits, their baseline, its hero and its check's mark kept", async () => {
     const sdk = scriptedSdk();
     const { graph, thread } = await toMap(sdk);
