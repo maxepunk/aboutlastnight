@@ -336,15 +336,15 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   return React.createElement('div', { className: 'meeting flex flex-col gap-md' },
 
     // What happened since the director last looked: a round that did not run, a check still
-    // failing, the edits a send-back changed or that the director's edits stand, the marks'
-    // banner, and anything no line shows.
+    // failing, the edits a round changed that no mark beside their line shows, or that the
+    // director's edits stand, the marks' banner, and anything no line shows.
     roundLines && React.createElement('section', { className: 'meeting__round', 'aria-label': 'Since you last looked' },
       view.didNotRun && React.createElement('p', { className: 'meeting__did-not-run', role: 'status' }, view.didNotRun),
       view.checkFailures.map(function (text, i) {
         return React.createElement('p', { key: 'check-' + i, className: 'meeting__check', role: 'alert' }, text);
       }),
       view.changedEdits.length > 0 && React.createElement('div', null,
-        React.createElement('p', { className: 'meeting__label' }, 'Your edits the send-back changed'),
+        React.createElement('p', { className: 'meeting__label' }, 'Your edits a rework changed'),
         React.createElement('ul', { className: 'meeting__list' },
           view.changedEdits.map(function (text, i) { return React.createElement('li', { key: 'changed-' + i, className: 'meeting__changed' }, text); })
         )

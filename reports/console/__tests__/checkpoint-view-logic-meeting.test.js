@@ -646,12 +646,15 @@ describe('4.8: after a reweave, a send-back, and a reweave that did not run', ()
       _weaveMarks: { round: 'send-back', from: left }, humanArcRevisionCount: 1
     }));
     const view = meetingView(data, meetingDraftOf(data, undefined));
+    // 4.10b: one line per edit. The round's mark on t3 and the changed-edit line are about the
+    // same edit, so the edit's line, with its reason, stands beside t3 in the mark's place.
     expect(view.changedEdits).toEqual([
-      'Thread "t3", role: your "Mirrors it" became "Grounds it" (the rework of your send-back). Why: The note made the ledger the main thread.',
       'Connection "c2", struck: the rework of your send-back brought it back. No reason given.'
     ]);
     expect(view.marked).toBe('After your send-back, each line the writer changed from the weave you left is marked.');
-    expect(view.threads.find((t) => t.id === 't3').marks).toEqual(['Changed this round (role). Before: "Mirrors it"']);
+    expect(view.threads.find((t) => t.id === 't3').marks).toEqual([
+      'Thread "t3", role: your "Mirrors it" became "Grounds it" (the rework of your send-back). Why: The note made the ledger the main thread.'
+    ]);
   });
 
   test('a reweave\'s restores are not a send-back\'s changes: they are not listed', () => {
@@ -1172,5 +1175,83 @@ describe("4.10b: the meeting says when the director's edits stand", () => {
     const sendBack = { id: 'E1', scope: 'story', where: 'story', cut: false, removed: false, moved: false, director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false, reason: null, restored: false };
     expect(viewOf({ ...payloadOf(stateAt()), handEditReport: { checked: ['E1', 'E2'], changed: [sendBack] } }).kept).toBe('');
     expect(viewOf(payloadOf(stateAt())).kept).toBe('');
+  });
+});
+
+describe('4.10b: one line per edit at the meeting', () => {
+  const { settleEdits, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
+
+  /** Every line the page shows about the round's changes: beside its lines, listed with their places, and the changed edits. */
+  function roundLines(view) {
+    return [view.story, view.question, view.headline, view.fromYourNotes, view.convergence, view.strongerMainThread]
+      .concat(view.threads, view.connections, view.questions)
+      .filter(Boolean)
+      .flatMap((line) => line.marks)
+      .concat(view.removed, view.otherMarks, view.changedEdits);
+  }
+
+  /** The meeting after a director's round, from the version the director left. */
+  function after(round, left, weave, edits, report) {
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(weave, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
+      _weaveMarks: { round, from: left }, humanArcRevisionCount: 1
+    }));
+    return { data, view: meetingView(data, meetingDraftOf(data, undefined)) };
+  }
+
+  test("a send-back that changed the director's role: one line beside the thread, the edit's, with its reason", () => {
+    const left = directorsVersion();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = clone(left);
+    reworked.threads[2].role = 'grounds-it';
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E2', reason: 'The note made the ledger the main thread.' }] });
+    const { data, view } = after('send-back', left, reworked, edits, report);
+    expect(data.marks.marks.map((m) => m.path)).toEqual(['threads[#t3].role']);
+    const line = 'Thread "t3", role: your "Mirrors it" became "Grounds it" (the rework of your send-back). Why: The note made the ledger the main thread.';
+    expect(view.threads.find((t) => t.id === 't3').marks).toEqual([line]);
+    expect(roundLines(view)).toEqual([line]);
+  });
+
+  test('a thread the director added that the send-back took out: one line, listed with its place', () => {
+    const left = directorsVersion();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = clone(left);
+    reworked.threads.splice(5, 1);
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS });
+    const { view } = after('send-back', left, reworked, edits, report);
+    const line = 'Thread "t6", added: your "id: t6; claim: Riley kept a second ledger.; role: grounds-it" is gone (the rework of your send-back). No reason given.';
+    expect(view.removed).toEqual([line]);
+    expect(roundLines(view)).toEqual([line]);
+  });
+
+  test('a sentence the director removed that a reweave put in another line: one line, beside the line it came back in', () => {
+    const writers = clone(WEAVE);
+    writers.story = 'The room called it an accidental overdose. The ledger points at a sale Marcus made the night he died.';
+    const left = clone(writers);
+    left.story = 'The room called it an accidental overdose.';
+    const edits = standingAtMeeting(null, writers, left);
+    const reworked = clone(left);
+    reworked.convergence = `${WEAVE.convergence} The ledger points at a sale Marcus made the night he died.`;
+    const { output, report } = settleEdits(null, { edits: edits.edits, before: left, after: reworked, pass: REWEAVE_PASS });
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', removed: true, became: reworked.convergence })]);
+    const { view } = after('reweave', left, output, edits, report);
+    const line = `The story: a sentence you removed came back as "${reworked.convergence}" (your reweave). It is still in the weave: cut it again if it should go.`;
+    expect(view.convergence.marks).toEqual([line]);
+    expect(roundLines(view)).toEqual([line]);
+  });
+
+  test("a change beside the edit's own field keeps its own mark, and the edit its own line", () => {
+    const left = directorsVersion();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = clone(left);
+    reworked.threads[2].role = 'grounds-it';
+    reworked.threads[2].claim = 'Morgan paid Riley in the back room.';
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS });
+    const { view } = after('send-back', left, reworked, edits, report);
+    expect(view.threads.find((t) => t.id === 't3').marks).toEqual([
+      'Changed this round (claim). Before: "Morgan paid Riley at the bar, out of sight."',
+      'Thread "t3", role: your "Mirrors it" became "Grounds it" (the rework of your send-back). No reason given.'
+    ]);
+    expect(view.changedEdits).toEqual([]);
   });
 });
