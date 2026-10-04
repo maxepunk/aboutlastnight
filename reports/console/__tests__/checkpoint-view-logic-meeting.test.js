@@ -1388,3 +1388,26 @@ describe("4.10c: the meeting reads a report entry's place as lib/hand-edit-diff.
     CASES.forEach(([where, path, expected]) => expect([where, path, about(where, path)]).toEqual([where, path, expected]));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5g: a whole element that came back without a photo the article cannot print shows at every
+// stop (the integrator's ruling 1 on 4.5f's findings): it asks the director for a photo the
+// article can print, so changedEditsToShow keeps it, and every stop phrases it through one line
+// (changedEditLine). Only the desk's passes are given the photos, so this entry is built by hand,
+// as 4.10c's caption entry above is.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.5g: a whole element that came back without a photo the article cannot print shows at the meeting too', () => {
+  test('the line every stop phrases its report with says the pass took out the photo and the rest of the edit stands, and the edits do not all stand', () => {
+    const entry = {
+      id: 'E1', scope: 'section:aftermath', where: 'section "aftermath"', cut: false, removed: false, moved: false,
+      director: 'id: aftermath; heading: Aftermath; content: The morning after. / filename: lost.jpg; caption: Six people.',
+      became: null, pass: 1, automatic: true, reason: null, restored: true, unprintable: true
+    };
+    const data = { ...payloadOf(stateAt()), handEditReport: { checked: ['E1'], changed: [entry] } };
+    const view = meetingView(data, meetingDraftOf(data, undefined));
+    expect(view.changedEdits).toEqual([
+      'Section "aftermath": automatic pass 1 took out a photo you placed here, which the article cannot print. The rest of your edit stands: place a photo the article can print here if it should have one.'
+    ]);
+    expect(view.kept).toBe('');
+  });
+});

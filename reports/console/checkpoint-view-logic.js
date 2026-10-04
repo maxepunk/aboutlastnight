@@ -499,6 +499,14 @@
   var PUT_BACK_OUT_OF_ORDER = 'It was put back in its section, but not in the order you left it: move it again if the order matters.';
 
   /**
+   * What the line says of an element the director put in whole that code put back without a photo
+   * the article cannot print, which a pass took out of print (task 4.5g: the entry's `unprintable`
+   * beside `restored`): the rest of the director's edit stands, and the place may want a photo the
+   * article can print.
+   */
+  var PUT_BACK_WITHOUT_PHOTO = 'The rest of your edit stands: place a photo the article can print here if it should have one.';
+
+  /**
    * Which pass made a report entry's change, in a line's words, and the reason a send-back's
    * rework gave: `held` for a pass held to the director's edits (an automatic pass or a reweave),
    * whose changes code puts back. changedEditLine reads it, and so does the meeting's line for a
@@ -529,8 +537,11 @@
    *   after an automatic pass or a reweave, whether code struck it again.
    * - A field or element an automatic pass changed: code put it back (`restored`), and
    *   the line says so; an entry from before FA says the pass should have kept it.
-   * - One on a photo the article cannot print (`unprintable`, task 4.5e), such as a caption the
-   *   director wrote under it: code left it out, and the line says why (brief 4.10c).
+   * - One on a photo the article cannot print (`unprintable`, task 4.5e), which a pass took out of
+   *   print: a caption the director wrote under it, which code left out with it, and the line says
+   *   why (brief 4.10c); or, beside `restored`, an element the director put in whole that code put
+   *   back without that photo, whose line asks for a photo the article can print (task 4.5g). An
+   *   entry whose photo still prints carries no `unprintable` and reads as any other change.
    * - A cut, or a sentence a rewrite removed, that came back: it is still in the output,
    *   because code never takes text out.
    * - A block the director moved that a pass took to another section: where it went, and
@@ -578,9 +589,14 @@
     }
     // Brief 4.10c: an edit on a photo the article cannot print (`unprintable`, task 4.5e), such as a
     // caption the director wrote under it. The pass's output holds no photo of that name, and code
-    // never puts such a photo back, so an automatic pass that fixed it keeps its fix. The line says
-    // so and claims nothing more: a pass that renamed the photo may have kept the caption's words.
-    if (entry.unprintable === true) return label + ': ' + by + ' took out the photo, which the article cannot print, so your "' + director + '" was not put back.';
+    // never puts back such a photo a pass took out of print, so an automatic pass that fixed it keeps
+    // its fix. The line says so and claims nothing more: a pass that renamed the photo may have kept
+    // the caption's words. Task 4.5g: an element the director put in whole went back without that
+    // photo (`restored` beside it), so the line says what is gone, and that the rest stands.
+    if (entry.unprintable === true) {
+      if (entry.restored === true) return label + ': ' + by + ' took out a photo you placed here, which the article cannot print. ' + PUT_BACK_WITHOUT_PHOTO;
+      return label + ': ' + by + ' took out the photo, which the article cannot print, so your "' + director + '" was not put back.';
+    }
     if (held && entry.restored === true) {
       return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' removed your "' + director + '"') + '. Your text was put back.';
     }
@@ -595,10 +611,13 @@
    * change any other pass made that code did not put back: a cut or a removed sentence that
    * came back, a moved element a pass removed, a struck connection that could not be struck
    * again. A block code put back in its section out of the director's order (`inOrder` false,
-   * task 4.3c) is shown too (brief 4.10b): its line asks the director to move it again. Any
-   * other entry code put back asks nothing of the director, so no stop shows it beside the
-   * edit; at the desk it stays in the folded record of the round (RevisionDiff, steeringView).
-   * One rule for the story meeting (meetingView), the map (mapView) and the desk (deskMarks).
+   * task 4.3c) is shown too (brief 4.10b): its line asks the director to move it again. So is
+   * an element the director put in whole that code put back without a photo the article cannot
+   * print, which a pass took out of print (`unprintable` beside `restored`, task 4.5g): its line
+   * asks the director for a photo the article can print. Any other entry code put back asks
+   * nothing of the director, so no stop shows it beside the edit; at the desk it stays in the
+   * folded record of the round (RevisionDiff, steeringView). One rule for the story meeting
+   * (meetingView), the map (mapView) and the desk (deskMarks).
    *
    * @param {*} report - a stop's handEditReport
    * @returns {Object[]} the entries, in the report's order
@@ -607,7 +626,7 @@
     var read = editReportOf(report);
     if (!read) return [];
     return read.changed.filter(function (entry) {
-      return entry.pass === SEND_BACK_PASS || entry.restored !== true || entry.inOrder === false;
+      return entry.pass === SEND_BACK_PASS || entry.restored !== true || entry.inOrder === false || entry.unprintable === true;
     });
   }
 

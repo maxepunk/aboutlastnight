@@ -922,3 +922,83 @@ describe('4.10c: the folded record says the edits stand, as the map and the meet
     expect(ViewLogic.steeringView(null, []).kept).toBe('');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5g: each stop says what happened to a photo the article cannot print (the integrator's
+// ruling 1 on 4.5f's findings, progress.md 2026-10-04). The restore leaves such a photo out only
+// where the pass took it out of print, so an entry reads in one of three forms:
+// - a caption left out with its photo (`unprintable`, not restored), in 4.10c's line;
+// - a whole element that came back without its photo (`unprintable` and `restored`), shown beside
+//   the edits because it asks the director for a photo the article can print;
+// - an edit whose photo still prints, an ordinary change.
+// Every report here is lib/hand-edit-diff.js settleEdits', given the kept photos as the article's
+// rework gives them.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.5g: each stop says what happened to a photo the article cannot print', () => {
+  const KEPT = ['huddle.jpg', 'theory.jpg'];
+  const CAPTION = 'Mel bent over the ledger, late in the evening.';
+  const AFTERMATH = 'The morning after, the account was still open.';
+  /** The fixture as the director sent it back (`direct`), then an automatic pass's version of that (`pass`), settled with the kept photos. */
+  const settled = (direct, pass) => {
+    const writers = article();
+    const directors = clone(writers);
+    direct(directors);
+    const edits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    const after = clone(directors);
+    pass(after);
+    return settleEdits(null, { edits, before: directors, after, pass: 1, photos: KEPT });
+  };
+  /** The desk's marks of the round's changes: beside no piece, and beside a piece. */
+  const changedMarks = (output, report) => {
+    const d = payloadFor(output, { handEditReport: report });
+    const marks = deskMarks(d, d.contentBundle);
+    return {
+      apart: marks.apart.filter((m) => m.tone === 'changed').map((m) => m.text),
+      at: Object.keys(marks.at).flatMap((key) => marks.at[key]).filter((m) => m.tone === 'changed').map((m) => m.text)
+    };
+  };
+
+  test("a caption the director wrote on a photo a pass took out of print: left out with its photo, and shown, in 4.10c's line", () => {
+    const { output, report } = settled((v) => { v.sections[1].content[3].caption = CAPTION; }, (v) => { v.sections[1].content.splice(3, 1); });
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: false, unprintable: true })]);
+    expect(changedEditsToShow(report)).toEqual(report.changed);
+    expect(changedMarks(output, report)).toEqual({
+      apart: [`The Story: Eight Minutes, photo nope.jpg, caption: automatic pass 1 took out the photo, which the article cannot print, so your "${CAPTION}" was not put back.`],
+      at: []
+    });
+  });
+
+  test('a section the director added whole, which came back without the photo a pass took out of print: shown beside the edits, saying so, so the edits do not all stand', () => {
+    const { output, report } = settled(
+      (v) => { v.sections.push({ id: 'aftermath', type: 'narrative', heading: 'Aftermath', content: [paragraph(AFTERMATH), photo('lost.jpg', CAPTION)] }); },
+      (v) => { v.sections[4].content.splice(1, 1); }
+    );
+    expect(output.sections[4].content).toEqual([paragraph(AFTERMATH)]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', where: 'section "aftermath"', restored: true, unprintable: true })]);
+    expect(changedEditsToShow(report)).toEqual(report.changed);
+    const LINE = 'automatic pass 1 took out a photo you placed here, which the article cannot print. The rest of your edit stands: place a photo the article can print here if it should have one.';
+    expect(changedMarks(output, report)).toEqual({ apart: [`Aftermath: ${LINE}`], at: [] });
+    const record = ViewLogic.steeringView(report, []);
+    expect(record.changedEdits.map((e) => e.line)).toEqual([`E1, section "aftermath": ${LINE}`]);
+    expect(record.kept).toBe('');
+  });
+
+  test('a caption the director wrote on a photo a pass moved and recaptioned, which still prints: put back, it reads as an ordinary change in the folded record, and the edit stands', () => {
+    const { output, report } = settled(
+      (v) => { v.sections[1].content[3].caption = CAPTION; },
+      (v) => {
+        const [moved] = v.sections[1].content.splice(3, 1);
+        v.sections[2].content.push({ ...moved, caption: 'A caption the pass wrote.' });
+      }
+    );
+    expect(output.sections[1].content[3]).toEqual(photo('nope.jpg', CAPTION));
+    expect(output.sections[2].content).toEqual(article().sections[2].content);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+    expect(report.changed[0]).not.toHaveProperty('unprintable');
+    expect(changedEditsToShow(report)).toEqual([]);
+    expect(changedMarks(output, report)).toEqual({ apart: [], at: [] });
+    const record = ViewLogic.steeringView(report, []);
+    expect(record.changedEdits.map((e) => e.line)).toEqual([`E1, section "theStory", photo nope.jpg, caption: automatic pass 1 removed your "${CAPTION}". Your text was put back.`]);
+    expect(record.kept).toBe('Your edit stands.');
+  });
+});
