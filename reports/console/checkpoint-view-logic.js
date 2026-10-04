@@ -2386,7 +2386,9 @@
   // `{outline: 'approve' | 'send-back', map, note}` (lib/map.js mapResume), each held first to
   // mapProblems, the gate's decisions. What the director types is sent as typed. The slots, their
   // order and their labels are the theme's, which the payload carries (`mapSlots`), so nothing
-  // here names a theme's slots.
+  // here names a theme's slots. Whether a value is a map, a beat's id and card, where each beat
+  // and photo sits and what the map repeats, the page takes from outline-edit-logic.js's
+  // readers, the ones its client gate reads.
 
   /** The map's stop type: the stop types keep their names (R3). */
   var MAP_STOP = 'outline';
@@ -2419,16 +2421,6 @@
   /** How much of a beat's material a "beside" choice shows. */
   var BESIDE_TEXT_LENGTH = 60;
 
-  /** Is `value` a story map: an object with a list of sections (lib/map.js isMapValue)? */
-  function isMapShape(value) {
-    return isPlainObject(value) && Array.isArray(value.sections);
-  }
-
-  /** A beat's id as the map's edits read it: trimmed text, as a thread's is at the meeting. */
-  function beatIdOf(beat) {
-    return weaveIdOf(beat);
-  }
-
   /** The theme's slots the payload carries (`mapSlots`), each `{key, label}`. */
   function slotsOf(data) {
     return asArray(isPlainObject(data) ? data.mapSlots : null)
@@ -2458,26 +2450,6 @@
   function shortText(text) {
     var t = asString(text).trim();
     return t.length > BESIDE_TEXT_LENGTH ? t.slice(0, BESIDE_TEXT_LENGTH - 1) + '…' : t;
-  }
-
-  /** The ids, or the keys, a list holds more than once, each once. */
-  function repeatedOf(keys) {
-    var seen = {};
-    var repeated = [];
-    keys.forEach(function (key) {
-      if (!key) return;
-      if (seen[key] && repeated.indexOf(key) === -1) repeated.push(key);
-      seen[key] = true;
-    });
-    return repeated;
-  }
-
-  /** Every beat id of a map, the sections' and left out's. */
-  function mapBeatIds(map) {
-    var beats = [];
-    asArray(map.sections).filter(isPlainObject).forEach(function (section) { beats.push.apply(beats, asArray(section.beats)); });
-    beats.push.apply(beats, asArray(map.leftOut));
-    return beats.map(beatIdOf);
   }
 
   /**
@@ -2511,9 +2483,10 @@
    * @returns {Object|null}
    */
   function mapDraftOf(data, pending) {
-    if (mapSlotFits(data, pending) && isMapShape(pending.map)) return cloneJson(pending.map);
+    var editLogic = outlineEditLogic();
+    if (mapSlotFits(data, pending) && editLogic.isMapValue(pending.map)) return cloneJson(pending.map);
     var d = isPlainObject(data) ? data : {};
-    return isMapShape(d.outline) ? cloneJson(d.outline) : null;
+    return editLogic.isMapValue(d.outline) ? cloneJson(d.outline) : null;
   }
 
   /** The map's note box on (re)mount: the director's note, under the same rule as their map. */
@@ -2526,7 +2499,7 @@
     var parts = asString(path).split('/').filter(Boolean);
     var m = isPlainObject(map) ? map : {};
     var tail = function (rest) { return rest.length > 0 ? ', ' + rest.join(', ') : ''; };
-    var beatName = function (beat, index) { return beatIdOf(beat) || String(Number(index) + 1); };
+    var beatName = function (beat, index) { return outlineEditLogic().beatIdOf(beat) || String(Number(index) + 1); };
     var heads = {
       headline: 'the headline', deck: 'the deck', topPhoto: 'the top photo', expectedLength: 'the expected length',
       gapNote: 'the gap note', weaveChanges: "the map's changes to the weave"
@@ -2590,7 +2563,7 @@
     if (MAP_ACTIONS.indexOf(action) === -1) {
       throw new Error('mapPayload: the map takes approve or send-back, not ' + String(action));
     }
-    if (!isMapShape(map)) return null;
+    if (!outlineEditLogic().isMapValue(map)) return null;
     var typed = typeof note === 'string' ? note : '';
     var hasNote = typed.trim().length > 0;
     if (action === 'send-back' && !hasNote) return null;
@@ -2668,19 +2641,16 @@
     return m ? m[1] : null;
   }
 
-  /** The lines the map's page shows, by their keys (mapLineKeyOf). */
+  /** The lines the map's page shows, by their keys (mapLineKeyOf): each beat and photo where the map places it. */
   function mapLinesOnPage(map) {
+    var editLogic = outlineEditLogic();
     var keys = new Set(['headline', 'deck', 'expectedLength', 'weaveChanges']);
-    var photoKey = outlineEditLogic().photoKey;
     if (isPlainObject(map.gapNote)) keys.add('gapNote');
-    if (asString(map.topPhoto).trim()) keys.add('topPhoto');
-    asArray(map.sections).filter(isPlainObject).forEach(function (section) {
-      keys.add('section:' + section.slot);
-      asArray(section.photos).filter(isPlainObject).forEach(function (photo) {
-        if (asString(photo.filename).trim()) keys.add('photo:' + photoKey(photo.filename));
-      });
+    asArray(map.sections).filter(isPlainObject).forEach(function (section) { keys.add('section:' + section.slot); });
+    editLogic.mapPhotoPlacements(map).forEach(function (placement) {
+      keys.add(placement.at === editLogic.MAP_TOP_PHOTO ? 'topPhoto' : 'photo:' + editLogic.photoKey(placement.filename));
     });
-    mapBeatIds(map).forEach(function (id) { if (id) keys.add('beat:' + id); });
+    editLogic.mapBeatPlacements(map).forEach(function (placement) { keys.add('beat:' + placement.id); });
     asArray(map.dropped).filter(isPlainObject).forEach(function (entry) { keys.add('dropped:' + entry.slot); });
     return keys;
   }
@@ -2725,7 +2695,8 @@
    *   from the map as edited (mapTallyOf); `leftOut`, folded, each item with the sections it can
    *   come back to; `weaveChanges`, each with its source;
    * - every concern beside the line of the edit it is about (concernsBesideLines), and a line
-   *   under a writer's repeated id or photo `locked`, its controls off, with `lockedHint`.
+   *   under a repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its
+   *   controls off, with `lockedHint`.
    *
    * @param {Object} data - the stop's payload
    * @param {Object|null} map - the map as the director has it (mapDraftOf, then their changes)
@@ -2733,18 +2704,17 @@
    */
   function mapView(data, map) {
     var d = isPlainObject(data) ? data : {};
+    var editLogic = outlineEditLogic();
     var slots = slotsOf(d);
     var story = isPlainObject(d.settledStory)
       ? { story: asString(d.settledStory.story), question: asString(d.settledStory.question) }
       : null;
-    if (!isMapShape(map)) {
+    if (!editLogic.isMapValue(map)) {
       return { hasMap: false, emptyLine: EMPTY_MAP_LINE, settledStory: story, storyHint: STORY_HINT };
     }
-    var editLogic = outlineEditLogic();
-    var shown = isMapShape(d.outline) ? d.outline : null;
-    var shownBeatIds = shown ? mapBeatIds(shown) : [];
-    var lockedBeats = shown ? repeatedOf(shownBeatIds) : [];
-    var lockedPhotos = shown ? repeatedOf(editLogic.mapPhotoPlacements(shown).map(function (p) { return editLogic.photoKey(p.filename); })) : [];
+    var shown = editLogic.isMapValue(d.outline) ? d.outline : null;
+    var shownBeatIds = editLogic.mapBeatPlacements(shown).map(function (placement) { return placement.id; });
+    var writers = editLogic.mapRepeats(shown);
     var placed = concernsBesideLines(d.concerns, mapLinesOnPage(map), mapLineKeyOf);
     var at = function (key) { return placed.byLine.get(key) || []; };
     var sections = asArray(map.sections).filter(isPlainObject);
@@ -2753,7 +2723,7 @@
 
     var beatView = function (beat, index, slot) {
       var b = isPlainObject(beat) ? beat : {};
-      var id = beatIdOf(b);
+      var id = editLogic.beatIdOf(b);
       return {
         key: (slot === null ? 'leftOut' : slot) + '-beat-' + index,
         id: id,
@@ -2761,11 +2731,11 @@
         kindLabel: hasOwn(BEAT_KIND_LABELS, b.kind) ? BEAT_KIND_LABELS[b.kind] : '',
         material: asString(b.material),
         players: stringList(b.players).join(', '),
-        card: asString(b.card).trim(),
+        card: editLogic.beatCardOf(b),
         connection: asString(b.connection).trim(),
         concerns: id ? at('beat:' + id) : [],
         added: id !== '' && shownBeatIds.indexOf(id) === -1,
-        locked: id === '' || lockedBeats.indexOf(id) !== -1,
+        locked: id === '' || writers.beatIds.indexOf(id) !== -1,
         moveTargets: slot === null ? targets : others(slot)
       };
     };
@@ -2776,8 +2746,8 @@
       var key = editLogic.photoKey(filename);
       var beside = asString(p.beat).trim();
       var options = [{ value: '', label: BY_ITSELF_LABEL }].concat(asArray(section.beats)
-        .filter(function (b) { return beatIdOf(b) !== ''; })
-        .map(function (b) { return { value: beatIdOf(b), label: 'Beside ' + beatIdOf(b) + ': ' + shortText(b.material) }; }));
+        .filter(function (b) { return editLogic.beatIdOf(b) !== ''; })
+        .map(function (b) { return { value: editLogic.beatIdOf(b), label: 'Beside ' + editLogic.beatIdOf(b) + ': ' + shortText(b.material) }; }));
       if (beside && !options.some(function (o) { return o.value === beside; })) {
         options.push({ value: beside, label: 'Beside ' + beside + ', which is not in this section' });
       }
@@ -2790,13 +2760,13 @@
         besideOptions: options,
         moveTargets: [{ value: editLogic.MAP_TOP_PHOTO, label: TOP_PHOTO_LABEL }].concat(others(section.slot)),
         concerns: at('photo:' + key),
-        locked: !filename.trim() || lockedPhotos.indexOf(key) !== -1
+        locked: !filename.trim() || writers.photoKeys.indexOf(key) !== -1
       };
     };
 
     var topName = asString(map.topPhoto);
     var topPhoto = topName.trim()
-      ? { filename: topName, concerns: at('topPhoto'), moveTargets: targets, locked: lockedPhotos.indexOf(editLogic.photoKey(topName)) !== -1 }
+      ? { filename: topName, concerns: at('topPhoto'), moveTargets: targets, locked: writers.photoKeys.indexOf(editLogic.photoKey(topName)) !== -1 }
       : null;
 
     var sectionViews = sections.map(function (section, i) {

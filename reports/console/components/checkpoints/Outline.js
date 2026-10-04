@@ -195,12 +195,6 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   function backToMeeting() { if (onRollback) onRollback('arc-selection'); }
 
   function sectionOf(slot) { return draft.sections.filter(function (s) { return s && s.slot === slot; })[0]; }
-  // A beat by its id as the view reads it, trimmed, in a section or in left out.
-  function beatOf(id) {
-    const beats = draft.sections.reduce(function (all, s) { return all.concat(s && Array.isArray(s.beats) ? s.beats : []); }, []);
-    return beats.concat(Array.isArray(draft.leftOut) ? draft.leftOut : [])
-      .filter(function (b) { return b && typeof b.id === 'string' && b.id.trim() === id; })[0];
-  }
 
   function movePhotoTo(fromSlot, fromIndex, toSlot) {
     change(EditLogic.movePhoto(draft, fromSlot, fromIndex, toSlot));
@@ -291,7 +285,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     if (isEditing('beat', beat.id)) {
       return React.createElement('li', { key: beat.key, className: 'map__beat map__editing' },
         React.createElement(BeatEditor, {
-          beat: beatOf(beat.id),
+          beat: EditLogic.beatWithId(draft, beat.id),
           onSave: function (built) { save(EditLogic.mergeBeat(draft, beat.id, built)); },
           onCancel: cancel
         })

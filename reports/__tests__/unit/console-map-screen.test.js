@@ -92,6 +92,36 @@ describe('4.9: CHECKPOINT_RECEIVED keeps the map\'s slot as it keeps the meeting
   });
 });
 
+describe("4.9 fix round 1: the map's readers are outline-edit-logic.js's alone", () => {
+  it('the view reads whether a value is a map, a beat\'s id and card, where each beat and photo sits and what a map repeats from the edit logic, and keeps no copy', () => {
+    const view = read('checkpoint-view-logic.js');
+    const mapPart = view.slice(view.indexOf("var MAP_STOP = 'outline';"), view.indexOf('// ── RevisionDiff'));
+    ['isMapShape', 'beatIdOf', 'repeatedOf', 'mapBeatIds'].forEach((copy) => {
+      expect(`${copy}: ${new RegExp(`function ${copy}\\(`).test(view)}`).toBe(`${copy}: false`);
+    });
+    ['isMapValue', 'beatIdOf', 'beatCardOf', 'mapBeatPlacements', 'mapPhotoPlacements', 'mapRepeats'].forEach((rule) => {
+      expect(`${rule}: ${mapPart.includes(`.${rule}(`)}`).toBe(`${rule}: true`);
+    });
+    expect(mapPart).not.toMatch(/\.card\b/);
+  });
+
+  it('the validator reads the photos where mapPhotoPlacements places them, and each map\'s repeats through mapRepeats', () => {
+    const logic = read('outline-edit-logic.js');
+    ['photoEntries', 'beatEntries', 'allBeats'].forEach((copy) => {
+      expect(`${copy}: ${new RegExp(`function ${copy}\\(`).test(logic)}`).toBe(`${copy}: false`);
+    });
+    const gate = logic.slice(logic.indexOf('function validateMapShape('), logic.indexOf('function validateOutlineShape('));
+    expect(count(gate, 'mapRepeats(')).toBe(2);
+    expect(count(gate, 'mapPhotoPlacements(')).toBe(2);
+  });
+
+  it("Outline.js opens a beat's editor on the beat the edit logic finds by its id", () => {
+    const src = read('components/checkpoints/Outline.js');
+    expect(count(src, 'EditLogic.beatWithId(draft, beat.id)')).toBe(1);
+    expect(src).not.toMatch(/\.id\.trim\(\)/);
+  });
+});
+
 describe('4.9: the map\'s styles', () => {
   const css = read('console.css');
 

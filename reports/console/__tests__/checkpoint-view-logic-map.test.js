@@ -332,6 +332,7 @@ const DECISION_CASES = [
   ['the map as shown', true, () => [clone(MAP), clone(MAP)]],
   ["every change the map's controls make", true, () => [everyChange(clone(MAP)), clone(MAP)]],
   ['a beat the director added with only its id and its material', true, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'b11', material: 'x' }); return [m, clone(MAP)]; }],
+  ['a beat the director added under an id every object carries, once', true, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'toString', material: 'x' }); return [m, clone(MAP)]; }],
   ['no top photo', true, () => { const m = clone(MAP); delete m.topPhoto; return [m, clone(MAP)]; }],
   ["the writer's repeated beat id, left as shown", true, () => [writersRepeat(), writersRepeat()]],
   ["the writer's repeat left alone, another beat struck", true, () => [EditLogic.strikeBeat(writersRepeat(), 'b4'), writersRepeat()]],
@@ -373,7 +374,8 @@ const PHOTO_CASES = [
   ['a top photo set to a photo already in a section', false, () => { const m = clone(MAP); m.topPhoto = 'p2.jpg'; return [m, clone(MAP)]; }],
   ['a photo copied into a second section', false, () => { const m = clone(MAP); m.sections[3].photos.push({ filename: 'P2.JPG' }); return [m, clone(MAP)]; }],
   ["the writer's photo placed twice, left as shown", true, () => { const w = clone(MAP); w.sections[3].photos.push({ filename: 'p2.jpg' }); return [clone(w), w]; }],
-  ['every photo moved by the controls, each placed once', true, () => [everyChange(clone(MAP)), clone(MAP)]]
+  ['every photo moved by the controls, each placed once', true, () => [everyChange(clone(MAP)), clone(MAP)]],
+  ['a photo placed once under a name every object carries', true, () => { const m = clone(MAP); m.sections[2].photos.push({ filename: 'constructor' }); return [m, clone(MAP)]; }]
 ];
 
 // Brief 4.9, ruling 3: 4.6b adds this rule to the gate in the same run, and the integrator
@@ -392,6 +394,89 @@ describe('4.9: a photo the director\'s changes place more than once is refused (
     const [left, shown] = PHOTO_CASES[0][2]();
     expect(ViewLogic.mapProblems(left, { outline: shown, mapSlots: SLOTS }))
       .toBe('The map cannot be sent yet: the top photo places p2.jpg a second time: your changes made this repeat. Place each photo once.');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The map's readers are the edit logic's: one rule for a repeat (fix round 1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * A map whose writer gave two beats the id b2 (one read trimmed) and placed p2.jpg twice (once
+ * under a folder, in capitals), beside a beat and a photo under names every object carries.
+ */
+function writersRepeats() {
+  const map = clone(MAP);
+  map.sections[3].beats.push({ id: ' b2 ', kind: 'line', material: 'A second beat under b2', players: [] });
+  map.sections[0].beats.push({ id: 'toString', kind: 'scene', material: 'A beat under a name every object carries', players: [] });
+  map.sections[3].photos.push({ filename: 'photos/P2.JPG' });
+  map.sections[2].photos.push({ filename: 'constructor' });
+  return map;
+}
+
+describe("4.9 fix round 1: the validator and the page read one rule for a repeat, and the map's readers are the edit logic's", () => {
+  test('mapRepeats lists each beat id and each photo a map repeats, once, in the order of its first place', () => {
+    expect(EditLogic.mapRepeats(writersRepeats())).toEqual({ beatIds: ['b2'], photoKeys: ['p2.jpg'] });
+    const two = clone(MAP);
+    two.sections[3].beats.push({ id: 'b5', material: 'x' }, { id: 'b1', material: 'y' });
+    two.sections[1].photos.push({ filename: 'HERO.jpg' });
+    expect(EditLogic.mapRepeats(two)).toEqual({ beatIds: ['b1', 'b5'], photoKeys: ['hero.jpg'] });
+    expect(EditLogic.mapRepeats(clone(MAP))).toEqual({ beatIds: [], photoKeys: [] });
+    expect(EditLogic.mapRepeats(null)).toEqual({ beatIds: [], photoKeys: [] });
+  });
+
+  test("each beat and photo is listed where the gate's paths name it; a beat with no id and a photo with no filename are not listed", () => {
+    const map = clone(MAP);
+    map.leftOut.push({ material: 'A beat with no id' });
+    map.sections[2].photos.push({ beat: 'b5' });
+    expect(EditLogic.mapBeatPlacements(map)).toEqual([
+      { id: 'b1', at: 'lede', path: '/sections/0/beats/0' },
+      { id: 'b2', at: 'theStory', path: '/sections/1/beats/0' },
+      { id: 'b3', at: 'theStory', path: '/sections/1/beats/1' },
+      { id: 'b4', at: 'theStory', path: '/sections/1/beats/2' },
+      { id: 'b5', at: 'followTheMoney', path: '/sections/2/beats/0' },
+      { id: 'b6', at: 'closing', path: '/sections/3/beats/0' },
+      { id: 'b9', at: 'leftOut', path: '/leftOut/0' }
+    ]);
+    expect(EditLogic.mapPhotoPlacements(map)).toEqual([
+      { filename: 'hero.jpg', at: 'topPhoto', path: '/topPhoto' },
+      { filename: 'p2.jpg', at: 'theStory', path: '/sections/1/photos/0' }
+    ]);
+  });
+
+  test('the page locks the lines under the repeats mapRepeats finds in the map shown, and no other line', () => {
+    const shown = writersRepeats();
+    const d = payloadOf(stateAt({ outline: shown, _mapBaseline: clone(shown) }));
+    const view = ViewLogic.mapView(d, opened(d));
+    const beats = [...view.sections.flatMap((s) => s.beats), ...view.leftOut.items];
+    const photos = view.sections.flatMap((s) => s.photos);
+    expect(beats.filter((b) => b.locked).map((b) => b.id)).toEqual(['b2', 'b2']);
+    expect(photos.filter((p) => p.locked).map((p) => p.filename)).toEqual(['p2.jpg', 'photos/P2.JPG']);
+  });
+
+  test("the validator takes the writer's repeats the page locks, and refuses the same repeats as the director's, at the places the map shown does not hold", () => {
+    const shown = writersRepeats();
+    expect(EditLogic.validateMapShape(clone(shown), { slots: SLOTS, shown })).toEqual({ valid: true, errors: [] });
+    expect(EditLogic.validateMapShape(clone(shown), { slots: SLOTS, shown: clone(MAP) }).errors.map((e) => e.path))
+      .toEqual(['/sections/3/beats/1', '/sections/3/photos/0']);
+  });
+
+  test("a beat's editor opens on the beat the moves find: by its id read trimmed, in a section or in left out", () => {
+    const map = clone(MAP);
+    expect(EditLogic.beatWithId(map, 'b3')).toBe(map.sections[1].beats[1]);
+    expect(EditLogic.beatWithId(map, ' b9 ')).toBe(map.leftOut[0]);
+    expect(EditLogic.beatWithId(map, 'b77')).toBeNull();
+    expect(EditLogic.beatWithId(null, 'b1')).toBeNull();
+  });
+
+  test("a beat's card on the page is beatCardOf's, the one rule for which beats are cards", () => {
+    const map = clone(MAP);
+    map.sections[1].beats[1].card = '  mor001  ';
+    map.sections[1].beats[2].card = '   ';
+    const data = payloadOf(stateAt());
+    const view = ViewLogic.mapView(data, map);
+    expect(view.sections[1].beats.map((b) => b.card)).toEqual(map.sections[1].beats.map(EditLogic.beatCardOf));
+    expect(view.sections[1].beats.map((b) => b.card)).toEqual(['ale003', 'mor001', '']);
   });
 });
 

@@ -6,6 +6,9 @@
  * module.exports under Node so it can be unit-tested in node-env Jest.
  *
  * It holds the rules the map's readers share and the map's editors:
+ *   - the map's readers (K): whether a value is a map, a beat's id and card, where the map
+ *     places each beat and photo, and what it repeats (mapRepeats). The client gate, the moves
+ *     and the map on screen (checkpoint-view-logic.js) take each of these from here;
  *   - the map's client gate, validateMapShape (I): the gate's decisions, held to the
  *     director-side map schema and to lib/map.js directorMapProblems by tests (brief 4.6;
  *     task 4.9, ruling 3), so the server refuses nothing the console sends;
@@ -67,11 +70,6 @@
   /** The map's place for its top photo: a copy of lib/hand-edit-diff.js MAP_TOP_PHOTO (a test holds the two equal). */
   var MAP_TOP_PHOTO = 'topPhoto';
 
-  /** Is `value` a story map: an object with a list of sections? */
-  function isMapValue(value) {
-    return isPlainObject(value) && Array.isArray(value.sections);
-  }
-
   /** A copy of the map to change, or a throw naming the operation for anything that is no map. */
   function editedMap(map, operation) {
     if (!isMapValue(map)) throw new Error(operation + ': the map editors change a story map, an object with a list of sections');
@@ -82,11 +80,6 @@
     return typeof value === 'string' ? value : '';
   }
 
-  /** A beat's id as every join on the map reads it, trimmed (lib/map.js repeatedBeatIds). */
-  function beatIdOf(beat) {
-    return isPlainObject(beat) && typeof beat.id === 'string' ? beat.id.trim() : '';
-  }
-
   /** The section of `map` that fills `slot`. */
   function sectionAt(map, slot, operation) {
     var section = map.sections.filter(function (s) { return isPlainObject(s) && s.slot === slot; })[0];
@@ -94,46 +87,59 @@
     return section;
   }
 
-  /** Every beat of `map`: the sections' in order, then left out's, as the edits read them. */
-  function allBeats(map) {
-    var out = [];
-    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section) {
-      if (isPlainObject(section) && Array.isArray(section.beats)) out.push.apply(out, section.beats);
-    });
-    if (Array.isArray(map.leftOut)) out.push.apply(out, map.leftOut);
-    return out;
-  }
-
-  /** Where the beat with `id` sits: its list and index, and its section (null in left out). */
-  function beatAt(map, id, operation) {
+  /**
+   * Where the beat with `id` sits, as every move finds it: the first beat with that id
+   * (beatIdOf), in the sections in order, then in left out. Its list and index, and its section
+   * (null in left out); null when no beat holds the id.
+   */
+  function placeOfBeat(map, id) {
     var wanted = typeof id === 'string' ? id.trim() : '';
+    if (!wanted) return null;
     var sections = map.sections.filter(isPlainObject);
     for (var s = 0; s < sections.length; s += 1) {
       var beats = Array.isArray(sections[s].beats) ? sections[s].beats : [];
       for (var b = 0; b < beats.length; b += 1) {
-        if (wanted && beatIdOf(beats[b]) === wanted) return { section: sections[s], list: beats, index: b };
+        if (beatIdOf(beats[b]) === wanted) return { section: sections[s], list: beats, index: b };
       }
     }
     var left = Array.isArray(map.leftOut) ? map.leftOut : [];
     for (var l = 0; l < left.length; l += 1) {
-      if (wanted && beatIdOf(left[l]) === wanted) return { section: null, list: left, index: l };
+      if (beatIdOf(left[l]) === wanted) return { section: null, list: left, index: l };
     }
-    throw new Error(operation + ': the map holds no beat ' + String(id));
+    return null;
+  }
+
+  /** placeOfBeat, or a throw naming the operation when no beat holds the id. */
+  function beatAt(map, id, operation) {
+    var place = placeOfBeat(map, id);
+    if (!place) throw new Error(operation + ': the map holds no beat ' + String(id));
+    return place;
+  }
+
+  /**
+   * The beat with `id` as the moves find it (placeOfBeat): the beat its editor opens on and
+   * builds from. Null for anything that is no map, and for an id no beat holds.
+   *
+   * @param {*} map
+   * @param {string} id
+   * @returns {Object|null}
+   */
+  function beatWithId(map, id) {
+    var place = isMapValue(map) ? placeOfBeat(map, id) : null;
+    return place ? place.list[place.index] : null;
   }
 
   /** An id no beat of the map holds: b and one more than the highest b-number, so b10 after b9. */
   function freshBeatId(map) {
-    var taken = {};
+    var taken = new Set();
     var top = 0;
-    allBeats(map).forEach(function (beat) {
-      var id = beatIdOf(beat);
-      if (!id) return;
-      taken[id] = true;
-      var m = /^b(\d+)$/.exec(id);
+    mapBeatPlacements(map).forEach(function (placement) {
+      taken.add(placement.id);
+      var m = /^b(\d+)$/.exec(placement.id);
       if (m) top = Math.max(top, Number(m[1]));
     });
     var n = top + 1;
-    while (taken['b' + n]) n += 1;
+    while (taken.has('b' + n)) n += 1;
     return 'b' + n;
   }
 
@@ -485,67 +491,23 @@
   }
 
   /**
-   * Each beat id of a map with its place and path, in the order the gate reads them
-   * (lib/map.js repeatedBeatIds: the sections' beats, then left out's, each id trimmed).
-   */
-  function beatEntries(map) {
-    var out = [];
-    if (!isPlainObject(map)) return out;
-    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section, s) {
-      if (!isPlainObject(section)) return;
-      (Array.isArray(section.beats) ? section.beats : []).forEach(function (beat, b) {
-        if (beatIdOf(beat)) out.push({ key: beatIdOf(beat), name: beatIdOf(beat), place: section.slot, path: '/sections/' + s + '/beats/' + b });
-      });
-    });
-    (Array.isArray(map.leftOut) ? map.leftOut : []).forEach(function (beat, b) {
-      if (beatIdOf(beat)) out.push({ key: beatIdOf(beat), name: beatIdOf(beat), place: 'leftOut', path: '/leftOut/' + b });
-    });
-    return out;
-  }
-
-  /**
-   * Each photo a map places with its place and path, as mapPhotoPlacements reads them (the
-   * top photo, then each section's), keyed by photoKey, the one join key for a photo.
-   */
-  function photoEntries(map) {
-    var out = [];
-    if (!isPlainObject(map)) return out;
-    if (typeof map.topPhoto === 'string' && map.topPhoto.trim()) {
-      out.push({ key: photoKey(map.topPhoto), name: map.topPhoto, place: MAP_TOP_PHOTO, path: '/topPhoto' });
-    }
-    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section, s) {
-      if (!isPlainObject(section)) return;
-      (Array.isArray(section.photos) ? section.photos : []).forEach(function (photo, p) {
-        if (isPlainObject(photo) && typeof photo.filename === 'string' && photo.filename.trim()) {
-          out.push({ key: photoKey(photo.filename), name: photo.filename, place: section.slot, path: '/sections/' + s + '/photos/' + p });
-        }
-      });
-    });
-    return out;
-  }
-
-  /** The keys more than one entry carries, each once, in the order they first repeat. */
-  function repeatedKeys(entries) {
-    var seen = {};
-    var repeated = [];
-    entries.forEach(function (entry) {
-      if (seen[entry.key] && repeated.indexOf(entry.key) === -1) repeated.push(entry.key);
-      seen[entry.key] = true;
-    });
-    return repeated;
-  }
-
-  /**
    * The repeats the director's changes made, by the gate's rule for repeats: a key the map
-   * repeats that the map the stop showed does not. Each comes with the entry to name: the
-   * first one in a place where the map shown does not hold the key, else the last.
+   * repeats that the map the stop showed does not, both as mapRepeats reads them. Each comes
+   * with the placement to name: the first one in a place where the map shown does not hold the
+   * key, else the last.
+   *
+   * @param {string[]} repeated - the map's repeats, of one kind
+   * @param {string[]} shownRepeated - the map shown's: the writer's
+   * @param {Array<{at: string, path: string}>} placements - the map's (mapBeatPlacements or mapPhotoPlacements)
+   * @param {Array<{at: string}>} shownPlacements - the map shown's
+   * @param {function(Object): string} keyOf - the key a placement is read under
+   * @returns {Array<Object>} one placement for each repeat the director made
    */
-  function directorsRepeats(entries, shownEntries) {
-    var writers = repeatedKeys(shownEntries);
-    return repeatedKeys(entries).filter(function (key) { return writers.indexOf(key) === -1; }).map(function (key) {
-      var mine = entries.filter(function (entry) { return entry.key === key; });
-      var shownPlaces = shownEntries.filter(function (entry) { return entry.key === key; }).map(function (entry) { return entry.place; });
-      return mine.filter(function (entry) { return shownPlaces.indexOf(entry.place) === -1; })[0] || mine[mine.length - 1];
+  function directorsRepeats(repeated, shownRepeated, placements, shownPlacements, keyOf) {
+    return repeated.filter(function (key) { return shownRepeated.indexOf(key) === -1; }).map(function (key) {
+      var mine = placements.filter(function (placement) { return keyOf(placement) === key; });
+      var shownPlaces = shownPlacements.filter(function (placement) { return keyOf(placement) === key; }).map(function (placement) { return placement.at; });
+      return mine.filter(function (placement) { return shownPlaces.indexOf(placement.at) === -1; })[0] || mine[mine.length - 1];
     });
   }
 
@@ -558,6 +520,7 @@
    *   map the stop showed (`shown`) holds is the writer's, which the map checks report;
    * - a photo the director's changes place more than once (4.6b's rule, the same reading of a
    *   repeat): each kept photo is placed once (T13).
+   * mapRepeats reads both maps' repeats: the rule by which the map on screen locks the writer's.
    *
    * @param {*} map
    * @param {Object} [options]
@@ -627,12 +590,16 @@
       stringAt(errors, path + '/change', change.change);
     });
     var shown = opts.shown === undefined ? null : opts.shown;
-    directorsRepeats(beatEntries(map), beatEntries(shown)).forEach(function (entry) {
-      errors.push({ path: entry.path, message: 'shares its id with another beat: your changes made this repeat. Give each beat an id of its own.' });
-    });
-    directorsRepeats(photoEntries(map), photoEntries(shown)).forEach(function (entry) {
-      errors.push({ path: entry.path, message: 'places ' + entry.name + ' a second time: your changes made this repeat. Place each photo once.' });
-    });
+    var repeats = mapRepeats(map);
+    var writers = mapRepeats(shown);
+    directorsRepeats(repeats.beatIds, writers.beatIds, mapBeatPlacements(map), mapBeatPlacements(shown), beatPlacementKey)
+      .forEach(function (placement) {
+        errors.push({ path: placement.path, message: 'shares its id with another beat: your changes made this repeat. Give each beat an id of its own.' });
+      });
+    directorsRepeats(repeats.photoKeys, writers.photoKeys, mapPhotoPlacements(map), mapPhotoPlacements(shown), photoPlacementKey)
+      .forEach(function (placement) {
+        errors.push({ path: placement.path, message: 'places ' + placement.filename + ' a second time: your changes made this repeat. Place each photo once.' });
+      });
     return { valid: errors.length === 0, errors: errors };
   }
 
@@ -729,11 +696,29 @@
     return { valid: errors.length === 0, errors: errors };
   }
 
-  // ── (K) THE MAP: EVERYONE AND THE COUNTS (phase 4, brief 4.6) ──────────────
+  // ── (K) THE MAP'S READERS, AND EVERYONE AND THE COUNTS (phase 4, brief 4.6) ──
+  //
+  // How the map is read: whether a value is a map, a beat's id and card, where the map places
+  // each beat and photo, and what it repeats. The client gate, the moves and the map on screen
+  // (checkpoint-view-logic.js, task 4.9) take each of these from here, so the lines the page
+  // locks sit under exactly the repeats the client gate takes as the writer's.
   //
   // Everyone, the cards and the photos are built by one function from the beats, so the
   // stop's payload, the map on screen as the director edits it (task 4.9) and the map checks
   // (lib/map.js) count alike. A name in a beat counts for the roster member it names.
+
+  /** Is `value` a story map: an object with a list of sections? */
+  function isMapValue(value) {
+    return isPlainObject(value) && Array.isArray(value.sections);
+  }
+
+  /**
+   * A beat's id as every reader and move on the map reads it: its text trimmed, or '' for a
+   * beat with no string id (the director-side schema requires one).
+   */
+  function beatIdOf(beat) {
+    return isPlainObject(beat) && typeof beat.id === 'string' ? beat.id.trim() : '';
+  }
 
   /**
    * The roster member a name names, by the member's roster name: the first name, the full
@@ -780,24 +765,89 @@
   /**
    * Where the map places each photo, in order: the top photo first (`at: 'topPhoto'`),
    * then each section's photos (`at`: the section's slot). A photo placed twice is listed
-   * twice.
+   * twice. `path` is the place as the client gate's paths name it (`/topPhoto`,
+   * `/sections/1/photos/0`). A photo with no filename is not listed.
    *
    * @param {*} map
-   * @returns {Array<{filename: string, at: string}>}
+   * @returns {Array<{filename: string, at: string, path: string}>}
    */
   function mapPhotoPlacements(map) {
     var out = [];
     if (!isPlainObject(map)) return out;
-    if (typeof map.topPhoto === 'string' && map.topPhoto.trim()) out.push({ filename: map.topPhoto, at: 'topPhoto' });
-    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section) {
+    if (typeof map.topPhoto === 'string' && map.topPhoto.trim()) out.push({ filename: map.topPhoto, at: MAP_TOP_PHOTO, path: '/topPhoto' });
+    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section, s) {
       if (!isPlainObject(section)) return;
-      (Array.isArray(section.photos) ? section.photos : []).forEach(function (photo) {
+      (Array.isArray(section.photos) ? section.photos : []).forEach(function (photo, p) {
         if (isPlainObject(photo) && typeof photo.filename === 'string' && photo.filename.trim()) {
-          out.push({ filename: photo.filename, at: section.slot });
+          out.push({ filename: photo.filename, at: section.slot, path: '/sections/' + s + '/photos/' + p });
         }
       });
     });
     return out;
+  }
+
+  /**
+   * Where the map places each beat, in order: the sections' beats (`at`: the section's slot),
+   * then left out's (`at: 'leftOut'`), each under its id (beatIdOf). `path` is the place as the
+   * client gate's paths name it (`/sections/1/beats/0`, `/leftOut/0`). A beat with no id, which
+   * no edit can find, is not listed.
+   *
+   * @param {*} map
+   * @returns {Array<{id: string, at: string, path: string}>}
+   */
+  function mapBeatPlacements(map) {
+    var out = [];
+    if (!isPlainObject(map)) return out;
+    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section, s) {
+      if (!isPlainObject(section)) return;
+      (Array.isArray(section.beats) ? section.beats : []).forEach(function (beat, b) {
+        var id = beatIdOf(beat);
+        if (id) out.push({ id: id, at: section.slot, path: '/sections/' + s + '/beats/' + b });
+      });
+    });
+    (Array.isArray(map.leftOut) ? map.leftOut : []).forEach(function (beat, b) {
+      var id = beatIdOf(beat);
+      if (id) out.push({ id: id, at: 'leftOut', path: '/leftOut/' + b });
+    });
+    return out;
+  }
+
+  /** The key a beat's placement is read under: its id. */
+  function beatPlacementKey(placement) {
+    return placement.id;
+  }
+
+  /** The key a photo's placement is read under: its join key (photoKey). */
+  function photoPlacementKey(placement) {
+    return photoKey(placement.filename);
+  }
+
+  /** The keys a list holds more than once, each once, in the order of its first place. */
+  function repeatedKeys(keys) {
+    var counts = new Map();
+    keys.forEach(function (key) { counts.set(key, (counts.get(key) || 0) + 1); });
+    var repeated = [];
+    counts.forEach(function (count, key) { if (count > 1) repeated.push(key); });
+    return repeated;
+  }
+
+  /**
+   * What a map repeats: each beat id more than one of its beats carries, in the sections and
+   * in left out, and each photo it places more than once, the top photo included, by its join
+   * key; each once, in the order of its first place. No edit can find a beat or a photo by a
+   * repeated key, so a repeat in the map the stop showed is the writer's: the client gate takes
+   * it (validateMapShape), and the map on screen turns off the controls of the lines under it
+   * (checkpoint-view-logic.js mapView). The gate decides repeats alike (lib/map.js
+   * directorMapProblems; a test holds the decisions equal).
+   *
+   * @param {*} map
+   * @returns {{beatIds: string[], photoKeys: string[]}}
+   */
+  function mapRepeats(map) {
+    return {
+      beatIds: repeatedKeys(mapBeatPlacements(map).map(beatPlacementKey)),
+      photoKeys: repeatedKeys(mapPhotoPlacements(map).map(photoPlacementKey))
+    };
   }
 
   /**
@@ -875,6 +925,7 @@
 
     // Task 4.9: the map's editors (init, build, merge) and its moves
     MAP_TOP_PHOTO: MAP_TOP_PHOTO,
+    beatWithId: beatWithId,
     initMapHead: initMapHead,
     buildMapHead: buildMapHead,
     mergeMapHead: mergeMapHead,
@@ -911,7 +962,13 @@
     photoKey: photoKey,
     beatCardOf: beatCardOf,
     mapPhotoPlacements: mapPhotoPlacements,
-    mapTally: mapTally
+    mapTally: mapTally,
+
+    // Task 4.9: the map's readers, which the client gate, the moves and the map on screen share
+    isMapValue: isMapValue,
+    beatIdOf: beatIdOf,
+    mapBeatPlacements: mapBeatPlacements,
+    mapRepeats: mapRepeats
   };
 
   if (typeof window !== 'undefined') {

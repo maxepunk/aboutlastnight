@@ -315,9 +315,9 @@ describe('4.6: Everyone and the counts, one function from the beats (mapTally)',
 
   it("mapPhotoPlacements lists the top photo first, then each section's photos in order", () => {
     expect(L.mapPhotoPlacements(map())).toEqual([
-      { filename: 'huddle.jpg', at: 'topPhoto' },
-      { filename: 'theory.jpg', at: 'theStory' },
-      { filename: 'theory.jpg', at: 'theStory' }
+      { filename: 'huddle.jpg', at: 'topPhoto', path: '/topPhoto' },
+      { filename: 'theory.jpg', at: 'theStory', path: '/sections/1/photos/0' },
+      { filename: 'theory.jpg', at: 'theStory', path: '/sections/1/photos/1' }
     ]);
   });
 
