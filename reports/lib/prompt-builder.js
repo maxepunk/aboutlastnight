@@ -35,8 +35,9 @@ const { loadModeBlock, loadRuleSet } = require('./rule-set');
 /**
  * The map task's line on the top photo (brief 4.6b): code's pick is the photo
  * <available-photos> marks [hero image] (renderPhotoListEntry marks the entry whose `hero`
- * is set), so the line prints only when a photo is marked. With none marked the director
- * kept no photo, and there is no top photo to choose.
+ * is set), so the line prints only when a photo is marked. The writer's inputs mark code's
+ * pick whenever the director kept a photo (ai-nodes.js outlineWriterInputs), so with none
+ * marked there is no top photo to choose.
  */
 const MAP_TASK_TOP_PHOTO = "- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.";
 
