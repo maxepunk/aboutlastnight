@@ -523,3 +523,28 @@ describe('4.12c: the desk\'s folded record and money tracker print as the desk p
     });
   });
 });
+
+// ── Task 4.12d ──────────────────────────────────────────────────────────────
+// The review of 4.12c (minor 6): the module kept two lists of the stops with a page, PAGE_STOPS,
+// which the harness prints by, and PAGES' keys, which wordsShown counts by, and nothing held them
+// equal. A page added to one alone would be counted and never printed.
+describe('4.12d: one list of the stops with a page, PAGE_STOPS, derived from PAGES', () => {
+  const { CHECKPOINT_ORDER } = require('../../console/session-start-logic');
+
+  it('is the five stops with a page, in the order a run reaches them, and frozen', () => {
+    expect(PAGE_STOPS).toEqual(['input-review', 'arc-selection', 'character-ids', 'outline', 'article']);
+    expect(CHECKPOINT_ORDER.filter((stop) => PAGE_STOPS.includes(stop))).toEqual(PAGE_STOPS);
+    expect(Object.isFrozen(PAGE_STOPS)).toBe(true);
+  });
+
+  it('is the keys of PAGES, so a stop is in it exactly when it has a page', () => {
+    const src = fs.readFileSync(require.resolve('../stop-pages'), 'utf8');
+    expect(src).toMatch(/const PAGE_STOPS = Object\.freeze\(Object\.keys\(PAGES\)\);/);
+    const payloads = {
+      'input-review': inputReviewData(), 'arc-selection': meetingData(), 'character-ids': characterIdsData(), outline: mapData(), article: deskData()
+    };
+    [...CHECKPOINT_ORDER, 'no-such-stop'].forEach((stop) => {
+      expect([stop, stopPage(stop, payloads[stop] || { type: stop }) !== null]).toEqual([stop, PAGE_STOPS.includes(stop)]);
+    });
+  });
+});

@@ -406,3 +406,34 @@ describe('4.12c: one round rule everywhere: the trace\'s round and the reworks\'
     expect(call.prompt).toContain(`(round ${stopRoundOf('outline', map)}: the director's send back)`);
   });
 });
+
+// Task 4.12d (the review of 4.12c, minor 5): STOP_OUTPUTS says which channel holds what each stop
+// shows, which rewritesStop reads, and it restates what getCheckpointData sends. If a stop's
+// output moved to another channel, a rewritten stop would stop counting as a return with no test
+// failing, so each entry is held to the stop's payload.
+describe('4.12d: STOP_OUTPUTS is held to the server: each stop\'s payload carries the channel it names', () => {
+  const { getCheckpointData } = require('../../server.js');
+  const { PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
+
+  /** A thread whose every output channel holds a value of its own, so a payload carrying another channel's would show it. */
+  const withOutputs = () => ({
+    ...reworkFixtureState('journalist'),
+    paperEvidence: [{ notionId: 'p-dna', name: 'DNA test', description: 'A paternity result.' }],
+    preprocessedEvidence: { items: [{ id: 'ale003', summary: 'Marcus brags about the sale.' }] },
+    contentBundle: JSON.parse(JSON.stringify(PREVIOUS_BUNDLE))
+  });
+
+  it('names a channel the thread holds for every stop it lists, each a different one', () => {
+    const state = withOutputs();
+    const channels = Object.values(stopsLog.STOP_OUTPUTS);
+    expect(new Set(channels).size).toBe(channels.length);
+    channels.forEach((channel) => expect([channel, Boolean(state[channel])]).toEqual([channel, true]));
+  });
+
+  it.each(Object.entries(stopsLog.STOP_OUTPUTS))('the %s stop\'s payload carries %s from the state', async (stop, channel) => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    const state = withOutputs();
+    const data = await getCheckpointData(stop, state);
+    expect([channel, Boolean(state[channel]), data[channel]]).toEqual([channel, true, state[channel]]);
+  });
+});

@@ -54,9 +54,6 @@ const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 
 const { INPUT_REVIEW, ARC_SELECTION, CHARACTER_IDS, OUTLINE, ARTICLE } = CHECKPOINT_TYPES;
 
-/** The stops that show a page, in the order a run reaches them (the stop types keep their names, R3). */
-const PAGE_STOPS = Object.freeze([INPUT_REVIEW, ARC_SELECTION, CHARACTER_IDS, OUTLINE, ARTICLE]);
-
 /**
  * The headings each page words itself, in its component's words (task 4.12c). A heading with a
  * count is the words before the count. Every other title on a page is a view model's (the
@@ -703,6 +700,7 @@ function deskPage(data, theme) {
   return page.done();
 }
 
+/** Each stop's page, in the order a run reaches the stops (the stop types keep their names, R3). */
 const PAGES = {
   [INPUT_REVIEW]: (data) => inputReviewPage(data),
   [ARC_SELECTION]: (data) => meetingPage(data),
@@ -710,6 +708,12 @@ const PAGES = {
   [OUTLINE]: mapPage,
   [ARTICLE]: deskPage
 };
+
+/**
+ * The stops that show a page, in the order a run reaches them: PAGES' keys (task 4.12d), so the
+ * stops the harness prints (scripts/e2e-walkthrough.js) are the stops wordsShown counts.
+ */
+const PAGE_STOPS = Object.freeze(Object.keys(PAGES));
 
 /**
  * The page a stop shows, built from its payload, or null for a stop with no page.
