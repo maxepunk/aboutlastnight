@@ -142,9 +142,8 @@ function repeatedIds(elements) {
  * Each element's place under its id (weaveIdOf), index for index with the list:
  * `${occurrence}:${id}`, the first element under an id occurrence 0 and a second under the
  * same id occurrence 1, so the elements under an id a list repeats pair in order between
- * two versions, as the diff pairs them. The diff (lib/hand-edit-diff.js elementsById) keeps
- * its own copy of this rule, which lib/__tests__/hand-edit-diff.test.js holds to this one
- * (brief 4.5b, fix round 1). The questions' carry reads it as a question's place
+ * two versions. The diff (lib/hand-edit-diff.js elementsById) keys its elements by it
+ * (brief 4.5b; the integrator's merge). The questions' carry reads it as a question's place
  * (lib/writer-questions.js carriedWeaveQuestions). An element with no id has no place: null.
  *
  * @param {*} elements - a weave's threads, connections or questions

@@ -1759,7 +1759,7 @@ describe('4.5: the meeting\'s edits', () => {
 //
 // The diff pairs the elements under an id in order (elementsById), and the questions' carry
 // reads a question's place by lib/weave.js occurrenceKeys. Two copies of one rule can drift
-// apart; until the diff calls occurrenceKeys itself, this holds the two to one pairing.
+// apart; the diff calls occurrenceKeys itself (the 4.5b merge), and this holds the pairing.
 describe('4.5b: the diff pairs the elements under an id as lib/weave.js occurrenceKeys places them', () => {
   const { occurrenceKeys } = require('../weave');
   /** Threads under these ids, each claim naming its version and its index. */

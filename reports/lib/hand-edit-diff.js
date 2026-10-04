@@ -90,7 +90,9 @@ const { isVerbatimIn, normalizeForGrounding, quotedPassages } = require('./groun
 const {
   pairSectionBlocks, stayingInSection, blockText, blockKey, sectionKey
 } = require('../console/article-desk-logic');
-const { isWeave, isStruck, STRUCK_KEY, weaveIdOf, repeatedIds, WEAVE_PRINTED_FIELDS, printedWeaveFields } = require('./weave');
+const {
+  isWeave, isStruck, STRUCK_KEY, weaveIdOf, repeatedIds, occurrenceKeys, WEAVE_PRINTED_FIELDS, printedWeaveFields
+} = require('./weave');
 const { WEAVE_ANSWER_KEY } = require('./writer-questions');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
@@ -1146,21 +1148,19 @@ function carriedEdits(handEdits, obj) {
  * A collection's elements by their id, read as every join at the meeting reads one
  * (lib/weave.js weaveIdOf; fix round 1, finding 3): `{list, map, repeated}`. Each element
  * is under its id and its occurrence, the first element under an id occurrence 0 and a
- * second under the same id occurrence 1, so the elements under an id the collection
- * repeats (`repeated`, lib/weave.js repeatedIds) pair in order between two versions and
- * none is dropped. An element with no id names nothing.
+ * second under the same id occurrence 1 (lib/weave.js occurrenceKeys, the one rule the
+ * questions' carry reads too), so the elements under an id the collection repeats
+ * (`repeated`, lib/weave.js repeatedIds) pair in order between two versions and none is
+ * dropped. An element with no id names nothing.
  */
 function elementsById(list) {
-  const out = { list: [], map: new Map(), repeated: new Set(repeatedIds(list)) };
-  const seen = new Map();
-  (Array.isArray(list) ? list : []).forEach((element, index) => {
-    const id = weaveIdOf(element);
-    if (!id) return;
-    const occurrence = seen.get(id) || 0;
-    seen.set(id, occurrence + 1);
-    const key = `${occurrence}:${id}`;
+  const elements = Array.isArray(list) ? list : [];
+  const out = { list: [], map: new Map(), repeated: new Set(repeatedIds(elements)) };
+  occurrenceKeys(elements).forEach((key, index) => {
+    if (!key) return;
+    const element = elements[index];
     out.map.set(key, element);
-    out.list.push({ id, key, element, index });
+    out.list.push({ id: weaveIdOf(element), key, element, index });
   });
   return out;
 }

@@ -590,9 +590,9 @@ ${ARC_REWORK_TASK}${buildArcStandingNotes(state)}`;
 /**
  * The weave a rework returned, as the state stores it (weaveFromOutput: no answer and no
  * strike the rework wrote):
- * - the questions (carriedWeaveQuestions, brief 4.5): every answered question whole, with
- *   the director's answer, and every question the rework did not answer, whatever kind of
- *   rework; an answer the rework wrote is no answer;
+ * - the questions (carriedWeaveQuestions, briefs 4.5 and 4.5b): every answered question,
+ *   its words and the director's answer kept (it may take a new id), and every question the
+ *   rework did not answer, whatever kind of rework; an answer the rework wrote is no answer;
  * - the connections the director struck, which the rework never saw (they are out of its
  *   view), back where they sat, still struck (withStruckConnections). One the rework
  *   returned under a struck connection's id comes back live, and code strikes it again

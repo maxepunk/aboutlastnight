@@ -21,8 +21,9 @@
  * Brief 4.5 (C15, ruling 4): the director answers each question in its own box at the
  * story meeting, and the answer (`answer`, WEAVE_ANSWER_KEY) travels with its question
  * to every later writer as the director's words. Code keeps each answered question
- * whole, apart from any model's output: every rework keeps each question the director has
- * not answered, and no answer is ever read from a rework's returned questions
+ * apart from any model's output, its words and the answer as the director left them (it
+ * may take a new id when a rework gives its id away): every rework keeps each question
+ * the director has not answered, and no answer is ever read from a rework's returned questions
  * (carriedWeaveQuestions). The writer's schema has no `answer`; the director-side schema
  * (lib/meeting.js) adds it.
  */
@@ -365,7 +366,7 @@ function namesOneSubject(about, other) {
  *    answered question's place the question's own words must be the same too: the rework
  *    reads the director's answer, so a question it puts there in other words is a new one.
  * A question on another player or another ledger entry is a new question wherever the
- * rework puts it (fix round 3). A question's place is its occurrence under its id
+ * rework puts it (fix round 3), unless the two `about`s hold the same numbers (below). A question's place is its occurrence under its id
  * (lib/weave.js occurrenceKeys), as the diff pairs elements, so the questions under an id
  * the weave repeats pair in order.
  * - An answered question stays whole, as the director answered it, in its place: code
@@ -393,6 +394,12 @@ function namesOneSubject(about, other) {
  *   past one subject ("7:50" for "07:50", a nickname), is a new question: an unanswered
  *   question then shows twice, and an answered one is asked again.
  * - Two questions on one subject that a rework rewords can pair the wrong way round.
+ * - Two `about`s that hold the same numbers name one subject (namesOneSubject), whatever
+ *   their words: two sales at one minute for one amount into different accounts, or two
+ *   lines said in the room naming one figure. A question on the other one in a question's
+ *   place reads as that question (step 5), and as its subject at steps 3 and 4 when the
+ *   `about` is the bare time and amount. Thirteen of 48 sessions with timed sales hold two
+ *   such sales.
  *
  * @param {*} returned - the rework's questions (undefined when it returned none)
  * @param {*} previous - the questions of the weave the rework started from

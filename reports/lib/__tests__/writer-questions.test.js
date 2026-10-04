@@ -777,7 +777,7 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
       .toEqual([{ ...FIGURE, id: 'q2', answer: 'A duplicate.' }, DEREK_SALE]);
   });
 
-  it("the re-review's case: a new figure in the same words in the answered question's place stays, and the answered question stays whole, once", () => {
+  it("the re-review's case: a new figure in the same words in the answered question's place stays, and the answered question stays once, its words and answer kept", () => {
     const melanieRenumbered = { ...FIGURE, id: 'q2', about: '07:50 AM, $75,000 into Melanie' };
     const carried = carriedWeaveQuestions([clone(DEREK_SALE), clone(melanieRenumbered)], [{ ...FIGURE, answer: 'A duplicate.' }]);
     expect(carried).toContainEqual(DEREK_SALE);
