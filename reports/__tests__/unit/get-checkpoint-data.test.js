@@ -676,13 +676,14 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
     // Brief 4.6c: the documents by id (evidenceIndex), and the roster and the kept photos
     // the count reads, so the page names each document and rebuilds the count as edited.
-    // Brief 4.6d: the count is the page's alone, so the payload sends no tally. Task 4.14e: a
+    // Brief 4.6d: the count is the page's alone, so the payload sends no tally. Task 4.14b: the
+    // photos the map places that the director left out, which the page marks. Task 4.14e: a
     // send-back whose rework did not run (roundDidNotRun). Brief 4.14a: the meeting's changes the
     // weave carries, each by its id and its place.
     expect(Object.keys(data).sort()).toEqual([
       'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
-      'mapSlots', 'maxRevisions', 'meetingChanges', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'roundDidNotRun',
-      'settledStory', 'trace'
+      'leftOutPhotos', 'mapSlots', 'maxRevisions', 'meetingChanges', 'outline', 'previousFeedback', 'revisionCount', 'roster',
+      'roundDidNotRun', 'settledStory', 'trace'
     ]);
   });
 

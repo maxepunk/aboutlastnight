@@ -2608,6 +2608,12 @@
   var BESIDE_TEXT_LENGTH = 60;
 
   /**
+   * The line beside a photo the map places that the director left out of the article since,
+   * such as one deleted at the desk (task 4.14b): the article reads the map without it.
+   */
+  var LEFT_OUT_PHOTO_LINE = 'You left this photo out of the article, so it does not print.';
+
+  /**
    * A dropped section's line on the page when the director emptied it: the reason the gate
    * writes for the writers (outline-edit-logic.js EMPTIED_SECTION_REASON), in the director's
    * own words (task 4.14b).
@@ -2735,16 +2741,17 @@
    * directorMapProblems does (a test holds the decisions equal), given the theme's slots and
    * the map the stop showed, whose repeats are the writer's. The validator reads the map shown
    * through shownMapOf, as the gate and mapView do, so a value that is no map is no map shown
-   * (tasks 4.6c and 4.6e).
+   * (tasks 4.6c and 4.6e). It reads the photos the director left out (`leftOutPhotos`), as the
+   * gate does, so a left-out photo their changes put at the top is refused here too (task 4.14b).
    *
    * @param {*} map - the map as the director left it
-   * @param {Object} data - the stop's payload: the map it showed and the theme's slots
+   * @param {Object} data - the stop's payload: the map it showed, the theme's slots and the photos left out
    * @returns {string|null}
    */
   function mapProblems(map, data) {
     var d = isPlainObject(data) ? data : {};
     var editLogic = outlineEditLogic();
-    var result = editLogic.validateOutlineShape(map, null, d.mapSlots, d.outline);
+    var result = editLogic.validateOutlineShape(map, null, d.mapSlots, d.outline, asArray(d.leftOutPhotos));
     if (result.valid) return null;
     var slots = slotsOf(d);
     var text = result.errors.map(function (error) {
@@ -2922,13 +2929,17 @@
    *   so an editor open on it survives a strike or a move above it; a beat whose id another beat
    *   of its list holds, or with none, by its place (task 4.14b). A photo sits beside the beat
    *   it names unless that beat is struck (photoBeatOf; task 4.14b);
+   * - a photo the map places that the director left out of the article since (the payload's
+   *   `leftOutPhotos`), at the top or in a section, is `leftOut`: marked with
+   *   LEFT_OUT_PHOTO_LINE before its concerns, its controls off, and no place to move to (task
+   *   4.14b);
    * - `dropped`, each with its reason, a section the director emptied with EMPTIED_SECTION_LINE;
    *   `tally`, the lines of Everyone and the counts, rebuilt from the map as edited
    *   (mapTallyOf); `leftOut`, folded, each item with the sections it can come back to;
    *   `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
    * - every concern beside the line of the edit it is about (concernsBesideLines), and a line
    *   under a repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its
-   *   controls off, with `lockedHint`.
+   *   controls off, with `lockedHint`, which speaks of those repeats alone.
    *
    * The stop always holds a map (task 4.11): the map writer, its rework and the director's
    * gate each leave one, and only a thread from before the story meeting holds an outline
@@ -2951,11 +2962,20 @@
     var shown = editLogic.shownMapOf(d.outline);
     var shownBeatIds = editLogic.mapBeatPlacements(shown).map(function (placement) { return placement.id; });
     var writers = editLogic.mapRepeats(shown);
+    var leftOutKeys = asArray(d.leftOutPhotos).filter(function (name) { return asString(name).trim() !== ''; }).map(editLogic.photoKey);
     var placed = concernsBesideLines(d.concerns, mapLinesOnPage(map), mapLineKeyOf);
     var at = function (key) { return placed.byLine.get(key) || []; };
     var sections = asArray(map.sections).filter(isPlainObject);
     var targets = sections.map(function (s) { return { value: s.slot, label: slotLabelOf(s.slot, slots) }; });
     var others = function (slot) { return targets.filter(function (t) { return t.value !== slot; }); };
+    /** A photo under a repeat of the map shown, the writer's, or with no filename: no control can find it. */
+    var photoRepeated = function (filename) {
+      return !asString(filename).trim() || writers.photoKeys.indexOf(editLogic.photoKey(filename)) !== -1;
+    };
+    /** A photo the director left out of the article since the map (task 4.14b). */
+    var photoLeftOut = function (filename) {
+      return asString(filename).trim() !== '' && leftOutKeys.indexOf(editLogic.photoKey(filename)) !== -1;
+    };
     /** The ids of a list of beats, as the row keys read them. */
     var idsOf = function (beats) { return asArray(beats).map(function (b) { return editLogic.beatIdOf(isPlainObject(b) ? b : {}); }); };
 
@@ -2986,6 +3006,7 @@
       var p = isPlainObject(photo) ? photo : {};
       var filename = asString(p.filename);
       var key = editLogic.photoKey(filename);
+      var leftOut = photoLeftOut(filename);
       var beside = editLogic.photoBeatOf(map, p);
       var options = [{ value: '', label: BY_ITSELF_LABEL }].concat(asArray(section.beats)
         .filter(function (b) { return editLogic.beatIdOf(b) !== ''; })
@@ -3000,15 +3021,23 @@
         filename: filename,
         beat: beside,
         besideOptions: options,
-        moveTargets: [{ value: editLogic.MAP_TOP_PHOTO, label: TOP_PHOTO_LABEL }].concat(others(section.slot)),
-        concerns: at('photo:' + key),
-        locked: !filename.trim() || writers.photoKeys.indexOf(key) !== -1
+        moveTargets: leftOut ? [] : [{ value: editLogic.MAP_TOP_PHOTO, label: TOP_PHOTO_LABEL }].concat(others(section.slot)),
+        concerns: (leftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('photo:' + key)),
+        leftOut: leftOut,
+        locked: leftOut || photoRepeated(filename)
       };
     };
 
     var topName = asString(map.topPhoto);
+    var topLeftOut = photoLeftOut(topName);
     var topPhoto = topName.trim()
-      ? { filename: topName, concerns: at('topPhoto'), moveTargets: targets, locked: writers.photoKeys.indexOf(editLogic.photoKey(topName)) !== -1 }
+      ? {
+          filename: topName,
+          concerns: (topLeftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('topPhoto')),
+          moveTargets: topLeftOut ? [] : targets,
+          leftOut: topLeftOut,
+          locked: topLeftOut || photoRepeated(topName)
+        }
       : null;
 
     var sectionViews = sections.map(function (section, i) {
@@ -3039,9 +3068,10 @@
     var lineOptions = mapEditLineOptions(slots);
     var human = Number(d.humanRevisionCount) || 0;
     var feedback = asString(d.previousFeedback).trim();
+    // The hint speaks of the writer's repeats: a photo the director left out is marked on its own line.
     var anyLocked = sectionViews.some(function (s) {
-      return s.beats.some(function (b) { return b.locked; }) || s.photos.some(function (p) { return p.locked; });
-    }) || leftItems.some(function (b) { return b.locked; }) || Boolean(topPhoto && topPhoto.locked);
+      return s.beats.some(function (b) { return b.locked; }) || s.photos.some(function (p) { return photoRepeated(p.filename); });
+    }) || leftItems.some(function (b) { return b.locked; }) || Boolean(topPhoto && photoRepeated(topPhoto.filename));
 
     return {
       settledStory: story,
@@ -3945,9 +3975,10 @@
     mapEditLineOptions: mapEditLineOptions,
     mapView: mapView,
     mapPhotoUrl: mapPhotoUrl,
-    // Task 4.14b: going back to the map, a section the director emptied, and a change to the
-    // weave named by its place
+    // Task 4.14b: going back to the map, a photo left out since the map, a section the director
+    // emptied, and a change to the weave named by its place
     MAP_ROLLBACK_LINE: MAP_ROLLBACK_LINE,
+    LEFT_OUT_PHOTO_LINE: LEFT_OUT_PHOTO_LINE,
     EMPTIED_SECTION_LINE: EMPTIED_SECTION_LINE,
     weaveChangeSource: weaveChangeSource,
     // Phase 4, task 4.10: the desk's marks, and one rule for the changed lines a stop shows

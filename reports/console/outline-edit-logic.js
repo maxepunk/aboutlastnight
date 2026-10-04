@@ -666,6 +666,29 @@
   }
 
   /**
+   * The top photo, when it is a photo the director left out of the article and their changes put
+   * it at the top (task 4.14b): the map the stop showed (`shown`, read through shownMapOf) has
+   * another top photo, or none. The article reads the map without such a photo (ai-nodes.js
+   * articleMapOf), so it would print no top photo: the gate refuses it (lib/map.js
+   * directorMapProblems), and the console's gate with it (validateMapShape). A left-out top photo
+   * the map shown holds is no change of the director's. '' for any other map.
+   *
+   * @param {*} map
+   * @param {*} shown - the map the stop showed
+   * @param {string[]} leftOut - the filenames of the photos the director left out
+   * @returns {string} the top photo's filename, or ''
+   */
+  function leftOutTopPhoto(map, shown, leftOut) {
+    var top = isPlainObject(map) && typeof map.topPhoto === 'string' ? map.topPhoto.trim() : '';
+    if (!top) return '';
+    var keys = (Array.isArray(leftOut) ? leftOut : []).filter(nonEmpty).map(photoKey);
+    if (keys.indexOf(photoKey(top)) === -1) return '';
+    var was = shownMapOf(shown);
+    var shownTop = was && typeof was.topPhoto === 'string' ? was.topPhoto.trim() : '';
+    return shownTop && photoKey(shownTop) === photoKey(top) ? '' : top;
+  }
+
+  /**
    * The map's client gate: the decisions the gate makes (lib/map.js directorMapProblems), so a
    * map the server would refuse is caught before the POST, and a map it accepts passes:
    * - the director-side schema's checks. With `slots` (the stop's `mapSlots`, as keys or as
@@ -673,7 +696,10 @@
    * - a beat id the director's changes repeat: the edits find a beat by its id. A repeat the
    *   map the stop showed (`shown`) holds is the writer's, which the map checks report;
    * - a photo the director's changes place more than once (4.6b's rule, the same reading of a
-   *   repeat): each kept photo is placed once (T13).
+   *   repeat): each kept photo is placed once (T13);
+   * - a top photo the director left out of the article that their changes put at the top
+   *   (leftOutTopPhoto; task 4.14b), given the photos left out (`leftOut`, the stop's
+   *   `leftOutPhotos`).
    * mapRepeats reads both maps' repeats: the rule by which the map on screen locks the writer's.
    * The map shown is read as the gate reads it (shownMapOf; task 4.6e).
    *
@@ -681,6 +707,7 @@
    * @param {Object} [options]
    * @param {Array} [options.slots]
    * @param {*} [options.shown] - the map the stop showed; without it, or with a value that is no map, every repeat is the director's
+   * @param {string[]} [options.leftOut] - the filenames of the photos the director left out
    * @returns {{valid: boolean, errors: Array<{path: string, message: string}>}}
    */
   function validateMapShape(map, options) {
@@ -755,6 +782,10 @@
       .forEach(function (placement) {
         errors.push({ path: placement.path, message: 'places ' + placement.filename + ' a second time: your changes made this repeat. Place each photo once.' });
       });
+    var leftOutTop = leftOutTopPhoto(map, shown, opts.leftOut);
+    if (leftOutTop) {
+      errors.push({ path: '/topPhoto', message: 'is ' + leftOutTop + ', a photo you left out of the article, so it would not print. Move another photo to the top.' });
+    }
     return { valid: errors.length === 0, errors: errors };
   }
 
@@ -767,9 +798,10 @@
    * @param {Array} [slots] - the stop's mapSlots
    * @param {*} [shown] - the map the stop showed, whose repeats are the writer's; a value that is
    *   no map is read as none (shownMapOf, task 4.6e)
+   * @param {string[]} [leftOut] - the photos the director left out, the stop's leftOutPhotos (task 4.14b)
    */
-  function validateOutlineShape(outline, theme, slots, shown) {
-    return validateMapShape(outline, { slots: slots, shown: shown });
+  function validateOutlineShape(outline, theme, slots, shown, leftOut) {
+    return validateMapShape(outline, { slots: slots, shown: shown, leftOut: leftOut });
   }
 
   // ── (I2) ARTICLE CLIENT GATE (B6) ─────────────────────────────────────────
@@ -1122,13 +1154,14 @@
     removeBeat: removeBeat,
     movePhoto: movePhoto,
     setPhotoBeside: setPhotoBeside,
-    // Task 4.14b: a struck beat's photos, read as by itself and stored so; and the sections the
-    // director emptied, dropped
+    // Task 4.14b: a struck beat's photos, read as by itself and stored so; the sections the
+    // director emptied, dropped; and a left-out photo the director put at the top
     isStruckBeat: isStruckBeat,
     photoBeatOf: photoBeatOf,
     freeStruckBeatPhotos: freeStruckBeatPhotos,
     EMPTIED_SECTION_REASON: EMPTIED_SECTION_REASON,
     dropEmptiedSections: dropEmptiedSections,
+    leftOutTopPhoto: leftOutTopPhoto,
 
     validateOutlineShape: validateOutlineShape,
     validateMapShape: validateMapShape,

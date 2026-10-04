@@ -52,7 +52,7 @@ const { roundNoteOf, roundDidNotRunAt } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const {
   mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue, shownMapOf,
-  freeStruckBeatPhotos, dropEmptiedSections
+  freeStruckBeatPhotos, dropEmptiedSections, leftOutTopPhoto
 } = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
@@ -189,6 +189,24 @@ function placedPhotos(map) {
 function repeatedPhotos(map) {
   const placed = placedPhotos(map);
   return new Map(mapRepeats(map).photoKeys.map((key) => [key, placed.get(key)]));
+}
+
+/**
+ * The photos a map places that the director has left out of the article (task 4.14b): at the
+ * photos stop, or by deleting one at the desk after the map, which joins the leave-out list
+ * (lib/photo-leave-out.js). Read by the one rule the article reads the map by (ai-nodes.js
+ * isPhotoExcluded, through articleMapOf), so the map's page marks exactly the photos the article
+ * leaves out, and its gate refuses one the director's changes put at the top. Each photo once, by
+ * its join key, under the name its first place gives it; none for anything that is no map.
+ *
+ * @param {Object} state - the session: its photo mappings and analyses
+ * @param {*} map
+ * @returns {string[]} filenames
+ */
+function mapLeftOutPhotos(state, map) {
+  // The one rule, required here rather than at the top: ai-nodes.js requires this module.
+  const { isPhotoExcluded } = require('./workflow/nodes/ai-nodes');
+  return [...placedPhotos(map).values()].filter((filename) => isPhotoExcluded(state || {}, filename));
 }
 
 /** The director's edits on the map's beats and photos, each with what it is about. */
@@ -559,15 +577,18 @@ function directorMapSchemaFor(theme) {
  * the console's mapRepeats, the rule its validator and the map on screen read (task 4.6c).
  * The gate reads the map the stop showed through the helper the console's validator calls
  * (shownMapOf): a value that is no map is no map shown, so every repeat is the director's
- * (tasks 4.6d and 4.6e).
+ * (tasks 4.6d and 4.6e). Past the repeats, a top photo the director left out of the article
+ * that their changes put at the top is refused, since the article would print no top photo
+ * (leftOutTopPhoto, the rule the console's validator reads too; task 4.14b).
  *
  * @param {*} map - the map as the director left it
  * @param {Object} options
  * @param {string} options.theme
  * @param {*} [options.shown] - the map the stop showed; a value that is no map is read as none
+ * @param {string[]} [options.leftOut] - the photos the director left out (mapLeftOutPhotos)
  * @returns {string|null}
  */
-function directorMapProblems(map, { theme, shown = null } = {}) {
+function directorMapProblems(map, { theme, shown = null, leftOut = [] } = {}) {
   if (!map || typeof map !== 'object' || Array.isArray(map)) return 'The map must be an object: the map as the director left it.';
   if (!directorValidators.has(theme)) {
     directorValidators.set(theme, new Ajv({ allErrors: true, strict: true }).compile(directorMapSchemaFor(theme)));
@@ -588,6 +609,10 @@ function directorMapProblems(map, { theme, shown = null } = {}) {
   if (theirPhotos.length > 0) {
     const many = theirPhotos.length > 1;
     return `${listOf(theirPhotos)} ${many ? 'are' : 'is'} placed more than once: the director's changes made ${many ? 'these repeats' : 'this repeat'}. Place each photo once: as the top photo, or in one section.`;
+  }
+  const leftOutTop = leftOutTopPhoto(map, shownMap, leftOut);
+  if (leftOutTop) {
+    return `The top photo "${leftOutTop}" is a photo the director left out of the article, so it would not print: the director's changes put it at the top. Move another photo to the top.`;
   }
   return null;
 }
@@ -621,9 +646,11 @@ const RETIRED_OUTLINE_KEYS = Object.freeze(['outlineEdits', 'outlineFeedback', '
  * checkpointOutline). The old outline payload is refused by name, and so is a payload for a
  * theme with no map (the parked detective, R1).
  *
- * The gate stores the director's version as every later reader takes it (task 4.14b): each
- * photo a strike freed by itself in its section (freeStruckBeatPhotos), and each section the
- * director emptied in the dropped list, with the line that says so (dropEmptiedSections).
+ * The gate refuses a photo the director left out of the article as the top photo their changes
+ * chose (mapLeftOutPhotos, directorMapProblems), and stores the director's version as every
+ * later reader takes it (task 4.14b): each photo a strike freed by itself in its section
+ * (freeStruckBeatPhotos), and each section the director emptied in the dropped list, with the
+ * line that says so (dropEmptiedSections).
  *
  * @param {Object} approvals - the request body
  * @param {Object} currentState - the thread's state at the stop
@@ -649,7 +676,7 @@ function mapResume(approvals, currentState = {}, { theme, names } = {}) {
   if (body.outline === 'approve' && (body.map === undefined || body.map === null)) return refuse('An approve carries the map as the director left it.');
   const shown = currentState.outline || null;
   const sent = body.map === undefined || body.map === null ? shown : body.map;
-  const problems = directorMapProblems(sent, { theme, shown });
+  const problems = directorMapProblems(sent, { theme, shown, leftOut: mapLeftOutPhotos(currentState, sent) });
   if (problems) return refuse(problems);
 
   const left = dropEmptiedSections(freeStruckBeatPhotos(sent), shown);
@@ -745,15 +772,17 @@ function settledStoryOf(weave) {
  * which the page names them by, as the story meeting names each receipt's; brief 4.6c); the
  * roster and the kept photos, from which the console builds Everyone and the counts as the
  * director edits (checkpoint-view-logic.js mapTallyOf, through mapTally, the checks' count),
- * so the payload carries no count of its own (task 4.6d); a check still failing on the map
- * in hand; the concerns beside their lines; the edits a send-back changed (the report); the
- * standing notes; the round's counters and its note, the one the director sent the map back with,
- * read from the director's notes (lib/workflow/state.js roundNoteOf; task 4.12e), since the rework
- * clears `_outlineFeedback` before the stop opens; and a send-back whose rework did not run, with
- * its note (lib/workflow/state.js roundDidNotRunAt; task 4.14e).
- * `meetingChanges` (brief 4.14a) lists each change
- * of the director's at the story meeting that the weave carries, `{id, place}` (meetingChangesOf),
- * so the page names a map change's source by its place, as the meeting names the line.
+ * so the payload carries no count of its own (task 4.6d); the photos the map places that the
+ * director has left out since (`leftOutPhotos`, mapLeftOutPhotos), which the page marks as left
+ * out and the console's gate refuses as a top photo the director chose (task 4.14b); a check
+ * still failing on the map in hand; the concerns beside their lines; the edits a send-back
+ * changed (the report); the standing notes; the round's counters and its note, the one the
+ * director sent the map back with, read from the director's notes (lib/workflow/state.js
+ * roundNoteOf; task 4.12e), since the rework clears `_outlineFeedback` before the stop opens; and
+ * a send-back whose rework did not run, with its note (lib/workflow/state.js roundDidNotRunAt;
+ * task 4.14e). `meetingChanges` (brief 4.14a) lists each change of the director's at the story
+ * meeting that the weave carries, `{id, place}` (meetingChangesOf), so the page names a map
+ * change's source by its place, as the meeting names the line.
  *
  * @param {Object} state
  * @param {Object} options
@@ -772,6 +801,7 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
     evidenceIndex,
     roster,
     keptPhotos,
+    leftOutPhotos: mapLeftOutPhotos(s, s.outline),
     checkFailures: mapCheckFailures(s),
     concerns: mapConcerns(s),
     handEditReport: handEditReportOf(s._outlineHandEditReport),
@@ -799,6 +829,7 @@ module.exports = {
   directorMapSchemaFor,
   directorMapProblems,
   topPhotoOf,
+  mapLeftOutPhotos,
   mapResume,
   mapCheckFailures,
   mapConcerns,

@@ -1375,3 +1375,69 @@ describe('4.14b: a section the director empties is dropped, and the page shows i
     expect(ViewLogic.EMPTIED_SECTION_LINE).toBe('You emptied this section on the map.');
   });
 });
+
+describe('4.14b: a photo on the leave-out list shows as left out on the map, and is refused as the top photo', () => {
+  const { leavePhotosOut } = require('../../lib/photo-leave-out');
+  const { mapResume } = require('../../lib/map');
+  /** The map's stop after the director deleted p2.jpg at the desk and went back to the map (R9). */
+  function deletedAtDesk(overrides = {}) {
+    const state = stateAt(overrides);
+    return { ...state, ...leavePhotosOut(state, ['p2.jpg']) };
+  }
+  /** The fixture's map with p2.jpg at the top and the hero in The Story. */
+  const p2OnTop = () => EditLogic.movePhoto(clone(MAP), 'theStory', 0, EditLogic.MAP_TOP_PHOTO);
+
+  test('the payload names each photo the map places that the director left out', () => {
+    expect(payloadOf(deletedAtDesk())).toMatchObject({ keptPhotos: ['hero.jpg'], leftOutPhotos: ['p2.jpg'] });
+    expect(payloadOf(stateAt()).leftOutPhotos).toEqual([]);
+  });
+
+  test("the page marks it left out and offers it no move; the kept photos, the count and the hint for the writer's repeats are as they were", () => {
+    const data = payloadOf(deletedAtDesk());
+    const view = ViewLogic.mapView(data, opened(data));
+    expect(view.sections[1].photos[0]).toMatchObject({
+      filename: 'p2.jpg', leftOut: true, locked: true, moveTargets: [], concerns: [ViewLogic.LEFT_OUT_PHOTO_LINE]
+    });
+    expect(ViewLogic.LEFT_OUT_PHOTO_LINE).toBe('You left this photo out of the article, so it does not print.');
+    expect(view.topPhoto).toMatchObject({ filename: 'hero.jpg', leftOut: false, locked: false, concerns: [] });
+    expect(view.topPhoto.moveTargets).toHaveLength(4);
+    expect(view.lockedHint).toBe('');
+    expect(view.tally.photos).toBe('Photos: 1 of 1');
+  });
+
+  test('moved to the top all the same, the console and the gate refuse it, saying why', () => {
+    const state = deletedAtDesk();
+    const data = payloadOf(state);
+    const moved = EditLogic.movePhoto(opened(data), 'theStory', 0, EditLogic.MAP_TOP_PHOTO);
+    expect(ViewLogic.mapProblems(moved, data)).toBe('The map cannot be sent yet: the top photo is p2.jpg, a photo you left out of the article, so it would not print. Move another photo to the top.');
+    const { error } = mapResume({ outline: 'approve', map: moved }, state, { theme: 'journalist' });
+    expect(error).toBe("The top photo \"p2.jpg\" is a photo the director left out of the article, so it would not print: the director's changes put it at the top. Move another photo to the top.");
+    expect(directorMapProblems(moved, { theme: 'journalist', shown: data.outline, leftOut: ['p2.jpg'] })).toBe(error);
+    expect(EditLogic.validateOutlineShape(moved, 'journalist', SLOTS, data.outline, ['P2.JPG']).valid).toBe(false);
+  });
+
+  test('approved as the director left it, the map goes through, and the article reads it without the photo', () => {
+    const state = deletedAtDesk();
+    const data = payloadOf(state);
+    expect(ViewLogic.mapProblems(opened(data), data)).toBeNull();
+    const { error, stateUpdates } = mapResume({ outline: 'approve', map: opened(data) }, state, { theme: 'journalist' });
+    expect(error).toBeNull();
+    const { articleMapOf } = require('../../lib/workflow/nodes/ai-nodes');
+    expect(articleMapOf({ ...state, ...stateUpdates }).sections[1].photos).toEqual([]);
+  });
+
+  test('a top photo left out after the map is marked so, with no move; as the map the stop showed holds it, both gates take the map as left', () => {
+    const state = deletedAtDesk({ outline: p2OnTop(), _mapBaseline: p2OnTop() });
+    const data = payloadOf(state);
+    expect(data.leftOutPhotos).toEqual(['p2.jpg']);
+    const view = ViewLogic.mapView(data, opened(data));
+    expect(view.topPhoto).toMatchObject({ filename: 'p2.jpg', leftOut: true, locked: true, moveTargets: [], concerns: [ViewLogic.LEFT_OUT_PHOTO_LINE] });
+    expect(ViewLogic.mapProblems(opened(data), data)).toBeNull();
+    expect(mapResume({ outline: 'approve', map: opened(data) }, state, { theme: 'journalist' }).error).toBeNull();
+    // Another photo moved to the top trades places with it, and the map goes through.
+    const traded = EditLogic.movePhoto(opened(data), 'theStory', 0, EditLogic.MAP_TOP_PHOTO);
+    expect([traded.topPhoto, traded.sections[1].photos]).toEqual(['hero.jpg', [{ filename: 'p2.jpg' }]]);
+    expect(ViewLogic.mapProblems(traded, data)).toBeNull();
+    expect(ViewLogic.mapView(data, traded).sections[1].photos[0]).toMatchObject({ filename: 'p2.jpg', leftOut: true, moveTargets: [] });
+  });
+});

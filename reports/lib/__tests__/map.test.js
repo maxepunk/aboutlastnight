@@ -1153,3 +1153,41 @@ describe('4.14b: a section the director empties is dropped, at approve and at se
     expect(stateUpdates.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
   });
 });
+
+describe('4.14b: the gate refuses a photo the director left out as the top photo the director chose', () => {
+  const { directorMapProblems, mapResume, mapCheckpointData } = require('../map');
+  const { leavePhotosOut } = require('../photo-leave-out');
+  const { MAP, reworkFixtureState } = require('./fixtures/rework-state');
+  const EditLogic = require('../../console/outline-edit-logic');
+  /** A state at the map after p2.jpg was deleted at the desk: on the leave-out list. */
+  function deletedAtDesk(outline = clone(MAP)) {
+    const state = { ...reworkFixtureState('journalist'), outline, _mapBaseline: clone(outline) };
+    return { ...state, ...leavePhotosOut(state, ['p2.jpg']) };
+  }
+  const p2OnTop = () => EditLogic.movePhoto(clone(MAP), 'theStory', 0, EditLogic.MAP_TOP_PHOTO);
+  const REFUSAL = "The top photo \"p2.jpg\" is a photo the director left out of the article, so it would not print: the director's changes put it at the top. Move another photo to the top.";
+
+  it('the payload lists each photo the map places that the director left out, by the rule the article reads (isPhotoExcluded)', () => {
+    expect(mapCheckpointData(deletedAtDesk(), {}).leftOutPhotos).toEqual(['p2.jpg']);
+    expect(mapCheckpointData(deletedAtDesk(p2OnTop()), {}).leftOutPhotos).toEqual(['p2.jpg']);
+    expect(mapCheckpointData({ ...reworkFixtureState('journalist') }, {}).leftOutPhotos).toEqual([]);
+    // An exclusion read from the mapping alone counts too, in any case of the filename.
+    const excluded = { ...reworkFixtureState('journalist'), characterIdMappings: { 'P2.JPG': { exclude: true } } };
+    expect(mapCheckpointData(excluded, {}).leftOutPhotos).toEqual(['p2.jpg']);
+  });
+
+  it("refuses the director's change that puts a left-out photo at the top, saying why", () => {
+    const state = deletedAtDesk();
+    const moved = EditLogic.movePhoto(clone(MAP), 'theStory', 0, EditLogic.MAP_TOP_PHOTO);
+    expect(mapResume({ outline: 'approve', map: moved }, state, { theme: 'journalist' }))
+      .toEqual({ resume: {}, stateUpdates: {}, note: null, error: REFUSAL });
+    expect(mapResume({ outline: 'send-back', map: moved, note: 'Lead with the photo.' }, state, { theme: 'journalist' }).error).toBe(REFUSAL);
+    expect(directorMapProblems(moved, { theme: 'journalist', shown: clone(MAP), leftOut: ['P2.jpg'] })).toBe(REFUSAL);
+  });
+
+  it('takes a left-out top photo the map the stop showed holds, a map with no left-out photo at the top, and a map with no list', () => {
+    expect(mapResume({ outline: 'approve', map: p2OnTop() }, deletedAtDesk(p2OnTop()), { theme: 'journalist' }).error).toBeNull();
+    expect(mapResume({ outline: 'approve', map: clone(MAP) }, deletedAtDesk(), { theme: 'journalist' }).error).toBeNull();
+    expect(directorMapProblems(p2OnTop(), { theme: 'journalist', shown: clone(MAP) })).toBeNull();
+  });
+});
