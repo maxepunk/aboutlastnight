@@ -222,11 +222,13 @@ describe('4.7c: the hero comes from one source, the map as the article reads it'
 describe("4.7c: the headline and the deck hold the director's words", () => {
   const { standingAfterSendBack } = require('../hand-edit-diff');
   const DESK = 'The Director Rewrote This Headline at the Desk';
+  /** The instruction's line on the headline: the task decides the headline and the deck. */
+  const ITEM_4 = '4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them.';
 
-  /** A send-back rework, the director's desk headline standing in place of the map's. */
-  async function sendBackPrompt() {
+  /** A send-back rework, the director's desk text standing in one field of the headline. */
+  async function sendBackPrompt(field = 'main', text = DESK) {
     const shown = { ...clone(PREVIOUS_BUNDLE), headline: { main: MAP.headline, kicker: 'NovaNews', deck: MAP.deck } };
-    const sentBack = { ...clone(shown), headline: { ...shown.headline, main: DESK } };
+    const sentBack = { ...clone(shown), headline: { ...shown.headline, [field]: text } };
     const sdk = recordingSdk(sentBack);
     await reviseContentBundle(articleState({
       _previousContentBundle: sentBack, articleRevisionCount: 0, humanArticleRevisionCount: 1,
@@ -245,15 +247,22 @@ describe("4.7c: the headline and the deck hold the director's words", () => {
     expect(lines.filter((line) => line.startsWith('- the headline and the deck:'))).toEqual([
       "- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;"
     ]);
-    expect(lines.filter((line) => line.startsWith('4. "headline"'))).toEqual([
-      '4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them, and your own kicker.'
-    ]);
+    expect(lines.filter((line) => line.startsWith('4. "headline"'))).toEqual([ITEM_4]);
     expect(prompt).not.toMatch(/the map's headline|the map's deck/);
+  });
+
+  it("a send-back rework with the director's kicker standing gives the kicker to no one else", async () => {
+    const kicker = 'THE DIRECTOR\'S KICKER';
+    const prompt = await sendBackPrompt('kicker', kicker);
+    expect(block(prompt, 'HAND_EDITS')).toContain(`E1 (headline, kicker): "${kicker}"`);
+    expect(prompt.split('\n').filter((line) => /kicker/i.test(line) && !line.includes(kicker) && !/^\s*"kicker": \{/.test(line)))
+      .toEqual([ITEM_4]);
+    expect(prompt).not.toMatch(/your own kicker|kicker is yours/i);
   });
 
   it("the task names the director's own headline and deck first, then the map's, and the instruction defers to the task", async () => {
     const { user } = await writerPrompt(articleState());
     expect(user).toContain("- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;");
-    expect(block(user, 'GENERATION_INSTRUCTION')).toContain('4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them, and your own kicker.');
+    expect(block(user, 'GENERATION_INSTRUCTION')).toContain(ITEM_4);
   });
 });

@@ -266,11 +266,13 @@ const REPO = path.join(__dirname, '..', '..');
  *   the two lines' own +74 and +47). The hero is the map's top photo, read through
  *   topPhotoOf; the fixture's stored hero is that photo, so PHOTOS and the hero line do not
  *   move. The guidance parameter went from <DIRECTOR_GUIDANCE>, whose every caller passed
- *   none, so the outline and arc pins do not move.
+ *   none, so the outline and arc pins do not move. The instruction's headline line then
+ *   drops its "and your own kicker", which a rework would read beside a kicker the director
+ *   edited at the desk (article-journalist 30883 -> 30862, the clause's -21).
  */
 const PINNED = {
   'outline-journalist': ['62c525f1cbdd8d026f481a24ac11e75766f0307c6d036594f713157042861790', 18299],
-  'article-journalist': ['d6a689a6a49eb424e073fe53cc5b93dda75b18c8b41169778de3c6c8b08e0193', 30883],
+  'article-journalist': ['6c344a66edfde7744866352b0241a3ea5d3a67c0b1b75c97c1b9d5ee8b4524f7', 30862],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
 

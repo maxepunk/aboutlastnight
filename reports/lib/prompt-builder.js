@@ -429,7 +429,9 @@ const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s sto
  * Brief 4.7c: the article rework carries this task word for word, so each line holds beside
  * the director's edits at the desk. The headline and the deck are the director's own where
  * they edited one, which the rework's <HAND_EDITS> lists (the stamp records a line they wrote
- * on the map the same way), and the map's otherwise.
+ * on the map the same way), and the map's otherwise. The instruction's headline line defers
+ * to this one and gives the kicker no owner, so a kicker the director edited at the desk
+ * stands on <HAND_EDITS> alone.
  */
 const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
 - every beat in the map's sections, and no other; the beats under leftOut stay out of the article, the director's strikes among them;
@@ -922,7 +924,7 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
      * {"type": "list", "items": ["..."], "ordered": false}
 2. "evidenceCards": the sidebar's entries. Each names a document by its id in "tokenId", with a "headline", a one-line "summary" under 100 characters, and its "significance".
 ${heroLine}
-4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them, and your own kicker.
+4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them.
 5. "byline": {${byline}}.
 6. "metadata": {"sessionId": "...", "theme": "journalist", "generatedAt": "<an ISO 8601 timestamp>"}. The server stamps these values.
 
