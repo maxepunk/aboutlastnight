@@ -10,14 +10,16 @@
  * - the character-IDs stop: characterIdsPayload when the run gives the director's photo
  *   descriptions, characterIdsSkipPayload otherwise. The leave-out boxes start from the photos
  *   the server lists as left out, as the console's do (characterIdLeaveOutTicks), and the run's
- *   --leave-out ticks the photos it names, as a director's ticks do. The payload carries the
- *   list as the boxes leave it, as the console's does, an empty one included (task 4.12c).
+ *   --leave-out only ticks the photos it names (task 4.12d). The payload carries the list as the
+ *   boxes leave it, as the console's does (task 4.12c): empty only when the server lists none and
+ *   the run names none.
  * The harness edits nothing: it sends each stop's output as the stop shows it, with the
  * director's action and note. A payload carrying the director's own changes goes as a file
- * (--approve-file). The server refuses the old payloads by name (selectedArcs, outline: true).
+ * (--approve-file), sent as it is. The server refuses the old payloads by name (selectedArcs,
+ * outline: true).
  *
- * optionsRefusal says when a run's options do not fit together (task 4.12c), from the lists the
- * payloads are built from.
+ * optionsRefusal says when a run's options do not fit together (tasks 4.12c and 4.12d), from the
+ * lists the payloads are built from.
  */
 'use strict';
 
@@ -47,9 +49,9 @@ const STOP_NAMES = Object.freeze({
 
 const SEND_BACK_NEEDS_A_NOTE = 'A send-back needs a note: give it with --note.';
 
-/** Words joined as a list is read: "a", "a or b", "a, b or c". */
-function listOf(words) {
-  return words.length > 1 ? `${words.slice(0, -1).join(', ')} or ${words[words.length - 1]}` : words.join('');
+/** Words joined as a list is read: "a", "a or b", "a, b or c" (or with "and"). */
+function listOf(words, conjunction = 'or') {
+  return words.length > 1 ? `${words.slice(0, -1).join(', ')} ${conjunction} ${words[words.length - 1]}` : words.join('');
 }
 
 /** A stop's name inside a sentence: "the story meeting", "the character-IDs stop". */
@@ -150,8 +152,11 @@ const ACTION_NOTE_REFUSAL = `--action and --note go with --approve <stop> and --
 }.`;
 
 /**
- * Why a run's options do not fit together, or null when they do (task 4.12c). The harness stops
- * on a refusal before it posts anything:
+ * Why a run's options do not fit together, or null when they do (tasks 4.12c and 4.12d). The
+ * harness stops on a refusal before it posts anything:
+ * - --approve-file sends its file as it is (task 4.12d), so --action, --note and --leave-out,
+ *   which build the payload the file replaces, would be dropped without a word. The file carries
+ *   the action, the note and the photos left out.
  * - --action and --note are the director's at the one stop --approve names in step mode, a stop
  *   STOP_ACTIONS lists. Anywhere else they would act at every stop a run passes, or at a stop
  *   that takes no action of its own.
@@ -164,10 +169,17 @@ const ACTION_NOTE_REFUSAL = `--action and --note go with --approve <stop> and --
  * @param {string|null} [options.action] - --action as given, null when absent
  * @param {string|null} [options.note] - --note as given, null when absent
  * @param {boolean} [options.leaveOut] - whether --leave-out was given, with names or none
+ * @param {string|null} [options.approveFile] - --approve-file as given, null when absent
  * @returns {string|null}
  */
-function optionsRefusal({ approveType = null, stepMode = false, action = null, note = null, leaveOut = false } = {}) {
+function optionsRefusal({ approveType = null, stepMode = false, action = null, note = null, leaveOut = false, approveFile = null } = {}) {
   const given = (value) => value !== null && value !== undefined;
+  if (given(approveFile)) {
+    const dropped = [given(action) && '--action', given(note) && '--note', leaveOut && '--leave-out'].filter(Boolean);
+    if (dropped.length > 0) {
+      return `--approve-file sends its file as it is, so it takes no --action, --note or --leave-out (got ${listOf(dropped, 'and')}): put the action, the note and the photos left out in the file.`;
+    }
+  }
   const takesActions = Boolean(approveType) && stepMode && Object.prototype.hasOwnProperty.call(STOP_ACTIONS, approveType);
   if ((given(action) || given(note)) && !takesActions) return ACTION_NOTE_REFUSAL;
   if (leaveOut && approveType && approveType !== LEAVE_OUT_STOP) {

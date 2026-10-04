@@ -326,3 +326,34 @@ describe('4.12c: the harness\'s options say what they take (optionsRefusal)', ()
     expect(optionsRefusal({ leaveOut: true })).toBeNull();
   });
 });
+
+// Task 4.12d (the review of 4.12c, minor 4): with --approve-file the harness sends the file as it
+// is, so --action, --note and --leave-out, which build the payload, were dropped without a word,
+// for example `--approve outline --approve-file f.json --action send-back --note x --step`.
+describe('4.12d: --approve-file sends its file as it is, so the options it would drop are refused (optionsRefusal)', () => {
+  const { optionsRefusal } = require('../../../scripts/lib/stop-payloads');
+  const FILE = 'my-map.json';
+
+  it('refuses --action, --note and --leave-out with --approve-file, naming the ones given and where their content goes', () => {
+    [
+      [{ approveType: 'outline', stepMode: true, action: 'send-back', note: 'Move the vote earlier.' }, '--action and --note'],
+      [{ approveType: 'arc-selection', stepMode: true, action: 'reweave' }, '--action'],
+      [{ approveType: 'article', stepMode: true, note: 'Tighten the story.' }, '--note'],
+      [{ approveType: 'character-ids', stepMode: true, leaveOut: true }, '--leave-out'],
+      [{ approveType: 'outline', stepMode: true, action: 'approve', note: 'x', leaveOut: true }, '--action, --note and --leave-out']
+    ].forEach(([options, given]) => {
+      // Each of these runs is taken without the file: the refusal is the file's alone.
+      expect([given, optionsRefusal({ ...options, leaveOut: options.leaveOut && options.approveType === 'character-ids' })]).toEqual([given, null]);
+      const refusal = optionsRefusal({ ...options, approveFile: FILE });
+      expect([given, refusal]).toEqual([given, expect.stringMatching(/^--approve-file sends its file as it is, so it takes no --action, --note or --leave-out/)]);
+      expect([given, refusal.includes(`(got ${given})`)]).toEqual([given, true]);
+      expect(refusal).toMatch(/the action, the note and the photos left out/);
+    });
+  });
+
+  it('takes --approve-file with the options that do not build its payload, and alone', () => {
+    expect(optionsRefusal({ approveType: 'outline', stepMode: true, approveFile: FILE })).toBeNull();
+    expect(optionsRefusal({ approveType: 'character-ids', stepMode: true, approveFile: FILE })).toBeNull();
+    expect(optionsRefusal({ approveType: 'character-ids', stepMode: true, approveFile: null, leaveOut: true })).toBeNull();
+  });
+});

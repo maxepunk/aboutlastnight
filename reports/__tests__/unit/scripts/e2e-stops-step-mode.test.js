@@ -221,9 +221,10 @@ describe('4.12c: the harness prints the input review and the character-IDs stop 
     });
   });
 
+  // Task 4.12d: and --approve-file, which sends its file as it is, refuses the options it would drop.
   it('refuses a run whose options do not fit, through optionsRefusal, before anything is posted', () => {
     const fn = body('async function runWalkthrough(');
-    expect(fn).toMatch(/const refusal = optionsRefusal\(\{ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN \}\);/);
+    expect(fn).toMatch(/const refusal = optionsRefusal\(\{ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN, approveFile: APPROVE_FILE \}\);/);
     expect(fn.indexOf('optionsRefusal(')).toBeLessThan(fn.indexOf('await login()'));
     expect(SRC).toMatch(/const LEAVE_OUT_GIVEN = args\.includes\('--leave-out'\);/);
     expect(SRC).not.toMatch(/--action and --note go with/);
@@ -384,5 +385,26 @@ describe('4.12c, fix round 1: the harness prints beside a page the blocks its sc
     const fn = body('async function handleCharacterIds(');
     expect(fn.indexOf("printStop('character-ids', checkpoint, currentPhase)")).toBeGreaterThan(-1);
     expect(fn.indexOf("printStop('character-ids', checkpoint, currentPhase)")).toBeLessThan(fn.indexOf('await prompt('));
+  });
+});
+
+// ── Task 4.12d ──────────────────────────────────────────────────────────────
+// The review of 4.12c (minors 3 and 4): --approve-file sends its file as it is, so the harness
+// refuses the options it would drop (scripts/lib/stop-payloads.js optionsRefusal), and
+// --leave-out only ticks. The help says so.
+describe('4.12d: --help says what --leave-out and --approve-file take', () => {
+  it('--help says --leave-out only ticks: a photo the server lists cannot be unticked, and the list goes out empty only when the server lists none', () => {
+    const help = body('function showHelp(').replace(/\s+/g, ' ');
+    const leaveOut = help.slice(help.indexOf('--leave-out <files>'), help.indexOf('--theme <theme>'));
+    expect(leaveOut).toMatch(/only ticks/);
+    expect(leaveOut).toMatch(/a photo the server already lists cannot be unticked/);
+    expect(leaveOut).toMatch(/the list goes out empty only when the server lists none/);
+    expect(leaveOut).not.toMatch(/an empty one included/);
+  });
+
+  it('--help says --approve-file takes no --action, --note or --leave-out', () => {
+    const help = body('function showHelp(').replace(/\s+/g, ' ');
+    const file = help.slice(help.indexOf('--approve-file <f>'), help.indexOf('--photo-descriptions <f>'));
+    expect(file).toMatch(/takes no --action, --note or --leave-out/);
   });
 });

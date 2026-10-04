@@ -103,8 +103,9 @@ const NOTE = NOTE_ARG || '';
 // The integrator's ruling 1 (task 4.12a): the photos to leave out at the character-IDs stop,
 // sent through the console's builders. Task 4.12c: the boxes start from the photos the server
 // lists, as the console's do, and the option ticks the photos it names; the payload carries the
-// list as the boxes leave it, an empty one included. LEAVE_OUT_GIVEN is whether the option was
-// given at all, with names or none, for optionsRefusal.
+// list as the boxes leave it. Task 4.12d: the option only ticks, so the list goes out empty only
+// when the server lists none. LEAVE_OUT_GIVEN is whether the option was given at all, with names
+// or none, for optionsRefusal.
 const LEAVE_OUT_GIVEN = args.includes('--leave-out');
 const LEAVE_OUT = (getArgValue('--leave-out') || '').split(',').map((name) => name.trim()).filter(Boolean);
 const THEME = getArgValue('--theme') || DEFAULT_THEME;  // Report theme (journalist|detective)
@@ -555,7 +556,8 @@ ${color('OPTIONS:', 'cyan')}
                      sent with the action, as the stop's note box sends it
   --approve-file <f> Use custom JSON payload for approval (with --approve), sent
                      as it is: the way to send a weave, a map or an article you
-                     changed
+                     changed. It takes no --action, --note or --leave-out: put
+                     the action, the note and the photos left out in the file
   --photo-descriptions <f>
                      JSON file of {"photo filename": "the director's description"}.
                      At the character-IDs stop the approval is the console's
@@ -567,9 +569,10 @@ ${color('OPTIONS:', 'cyan')}
   --leave-out <files>
                      Comma-separated photo filenames to leave out at the
                      character-IDs stop. Its boxes start from the photos the server
-                     already lists as left out, as the console's do, and these are
-                     ticked too; the approval carries the list as the boxes leave
-                     it, an empty one included. With --approve, only with
+                     already lists as left out, as the console's do, and the option
+                     only ticks the photos it names: a photo the server already
+                     lists cannot be unticked, and the list goes out empty only
+                     when the server lists none. With --approve, only with
                      --approve character-ids
   --theme <theme>    Report theme: journalist (default) or detective
   --verbose, -v      Show full request/response JSON
@@ -2149,9 +2152,10 @@ async function runWalkthrough() {
   // Task 4.12a: --action and --note are the director's at the one stop --approve names in step
   // mode, a stop whose actions the console's builders take; anywhere else they would act at
   // every stop a run passes, or at a stop that takes no action of its own. Task 4.12c: and
-  // --leave-out goes with the character-IDs stop. A run whose options do not fit stops here,
-  // before anything is posted, saying what each option takes (optionsRefusal).
-  const refusal = optionsRefusal({ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN });
+  // --leave-out goes with the character-IDs stop. Task 4.12d: --approve-file sends its file as it
+  // is, so none of the three goes with it. A run whose options do not fit stops here, before
+  // anything is posted, saying what each option takes (optionsRefusal).
+  const refusal = optionsRefusal({ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN, approveFile: APPROVE_FILE });
   if (refusal) {
     console.error(color(refusal, 'red'));
     return;
