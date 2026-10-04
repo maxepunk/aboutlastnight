@@ -1070,3 +1070,42 @@ describe('4.6d: the gate and the console read the map the stop showed by one rul
       .toEqual({ gate: true, console: null });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6d: one helper frees the photos beside a beat (the integrator's ruling 3 on the
+// follow-ups' findings, minor 3)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The strike and the take-out each leave the photos beside the beat in its section by
+// themselves, through one helper both call (freePhotosBeside).
+describe('4.6d: one helper frees the photos beside a beat, for the strike and the take-out', () => {
+  const fs = require('fs');
+  const path = require('path');
+  /** The map after the director added b10 to The Story, with two photos beside it and one beside b3. */
+  function besideB10() {
+    const map = EditLogic.addBeat(opened(), 'theStory', 'Alex at the window', 'Alex');
+    map.sections[1].photos = [{ filename: 'p2.jpg', beat: 'b10' }, { filename: 'p3.jpg', beat: ' b10 ' }, { filename: 'p4.jpg', beat: 'b3' }];
+    return map;
+  }
+
+  test.each([
+    ['struck into left out', (map) => EditLogic.strikeBeat(map, 'b10')],
+    ['taken out', (map) => EditLogic.removeBeat(map, 'b10')]
+  ])('a beat %s leaves each photo beside it in its section, by itself, and a photo beside another beat where it was', (_name, move) => {
+    const map = besideB10();
+    expect(move(map).sections[1].photos).toEqual([{ filename: 'p2.jpg' }, { filename: 'p3.jpg' }, { filename: 'p4.jpg', beat: 'b3' }]);
+    expect(map.sections[1].photos[0]).toEqual({ filename: 'p2.jpg', beat: 'b10' });
+  });
+
+  test('the statement that frees them is written once, in the helper both moves call', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'outline-edit-logic.js'), 'utf8');
+    /** A function's body in the module, from its declaration to its closing brace. */
+    const body = (name) => {
+      const start = src.indexOf(`function ${name}(`);
+      return start === -1 ? '' : src.slice(start, src.indexOf('\n  }\n', start));
+    };
+    expect(src.split('{ delete photo.beat; })').length - 1).toBe(1);
+    expect(body('freePhotosBeside')).toContain('{ delete photo.beat; })');
+    ['strikeBeat', 'removeBeat'].forEach((name) => expect(`${name}: ${body(name).includes('freePhotosBeside(')}`).toBe(`${name}: true`));
+  });
+});

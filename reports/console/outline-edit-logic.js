@@ -282,6 +282,15 @@
   }
 
   /**
+   * The photos of `section` beside the beat `id`, left in the section by themselves, with
+   * their people: what the strike and the take-out each do when the beat leaves the section
+   * (task 4.6d). A move takes them along instead (moveBeat).
+   */
+  function freePhotosBeside(section, id) {
+    besideBeat(section, id).forEach(function (photo) { delete photo.beat; });
+  }
+
+  /**
    * A beat moved to the end of the section `toSlot`, from a section or from left out. A photo
    * beside it goes with it, beside it still, so the photo stays with its moment. The order of
    * the beats within a section is the article writer's, so the end is as good as any place.
@@ -317,7 +326,7 @@
     var beat = place.list.splice(place.index, 1)[0];
     if (!Array.isArray(next.leftOut)) next.leftOut = [];
     next.leftOut.push(beat);
-    besideBeat(place.section, beatIdOf(beat)).forEach(function (photo) { delete photo.beat; });
+    freePhotosBeside(place.section, beatIdOf(beat));
     return next;
   }
 
@@ -350,13 +359,14 @@
   /**
    * A beat taken out of the map whole: the screen offers it for a beat the director added at
    * this look. A photo beside it stays in its section, by itself with its people, as one
-   * beside a struck beat does (task 4.6c).
+   * beside a struck beat does (task 4.6c), through the same helper (freePhotosBeside; task
+   * 4.6d).
    */
   function removeBeat(map, id) {
     var next = editedMap(map, 'removeBeat');
     var place = beatAt(next, id, 'removeBeat');
     var beat = place.list.splice(place.index, 1)[0];
-    if (place.section) besideBeat(place.section, beatIdOf(beat)).forEach(function (photo) { delete photo.beat; });
+    if (place.section) freePhotosBeside(place.section, beatIdOf(beat));
     return next;
   }
 
