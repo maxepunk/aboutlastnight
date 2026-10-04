@@ -263,3 +263,61 @@ describe('4.12a fix round 1: a stop\'s round is one rule, stopRoundOf (lib/workf
     });
   });
 });
+
+// The re-review of 4.12a's fix round, out of scope there: the trace's round and the reworks'
+// banner round computed the rule again. Each calls stopRoundOf now.
+describe('4.12c: one round rule everywhere: the trace\'s round and the reworks\' banner round call stopRoundOf', () => {
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const read = (rel) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
+  /** A function's body, from its signature to its closing brace at the left margin. */
+  const body = (src, signature) => {
+    const block = src.slice(src.indexOf(signature));
+    return block.slice(0, block.indexOf('\n}\n'));
+  };
+  const COPY = /human(?:Arc|Outline|Article)RevisionCount \|\| 0\) \+ 1/;
+
+  it('the server\'s trace and the increments\' trace and log read the round from stopRoundOf, and keep no copy of the rule', () => {
+    const server = read('server.js');
+    expect(server).not.toMatch(COPY);
+    expect(body(server, 'async function getCheckpointData(').match(/traceForStop\([^\n]*stopRoundOf\(/g)).toHaveLength(2);
+    const graph = read('lib/workflow/graph.js');
+    expect(graph).not.toMatch(/newHumanCount \+ 1/);
+    ['async function incrementOutlineRevision(', 'async function incrementArticleRevision('].forEach((signature) => {
+      expect([signature, /stopRoundOf\(/.test(body(graph, signature))]).toEqual([signature, true]);
+    });
+  });
+
+  it('the arc, map and article reworks\' banner round reads stopRoundOf, and keeps no copy of the rule', () => {
+    const arc = read('lib/workflow/nodes/arc-specialist-nodes.js');
+    const ai = read('lib/workflow/nodes/ai-nodes.js');
+    expect(arc).not.toMatch(COPY);
+    expect(ai).not.toMatch(COPY);
+    expect(body(arc, 'function arcReworkCall(')).toMatch(/round: stopRoundOf\(/);
+    expect(body(ai, 'async function mapReworkCall(')).toMatch(/round: stopRoundOf\(/);
+    expect(body(ai, 'async function reviseContentBundle(')).toMatch(/round: stopRoundOf\(/);
+  });
+
+  it('the rounds they give are the stop\'s: the trace a stop shows, the trace a pass writes, and the round a send-back\'s banner names', async () => {
+    const { getCheckpointData } = require('../../server.js');
+    const { _testing: graphTesting } = require('../workflow/graph');
+    const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
+    const { _testing: aiTesting } = require('../workflow/nodes/ai-nodes');
+    const { MAP } = require('./fixtures/rework-state');
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const entry = (round) => ({ pass: 1, round, trigger: 'check', findings: null, before: clone(MAP), at: 't0' });
+    const atMap = { ...reworkFixtureState('journalist'), humanOutlineRevisionCount: 2, _outlineTrace: [entry(2), entry(3)] };
+    const shown = await getCheckpointData('outline', atMap);
+    expect(shown.trace.map((pass) => pass.round)).toEqual([stopRoundOf('outline', atMap)]);
+
+    const pass = await graphTesting.incrementOutlineRevision({ ...reworkFixtureState('journalist'), humanOutlineRevisionCount: 2, _outlineTrace: [] });
+    expect(pass._outlineTrace.map((e) => e.round)).toEqual([stopRoundOf('outline', { humanOutlineRevisionCount: 2 })]);
+
+    const meeting = { ...meetingState(), meetingApproved: false, _meetingRound: 'send-back', _arcFeedback: 'Rethink the money thread.', humanArcRevisionCount: 2, arcRevisionCount: 0 };
+    expect(arcTesting.arcReworkCall(meeting).prompt).toContain(`(round ${stopRoundOf('arc-selection', meeting)}: the director's send back)`);
+
+    const map = { ...reworkFixtureState('journalist'), _previousOutline: clone(MAP), outline: null, _outlineFeedback: 'Move the vote earlier.', humanOutlineRevisionCount: 2 };
+    const call = await aiTesting.mapReworkCall(map, aiTesting.getPromptBuilder({}, map));
+    expect(call.prompt).toContain(`(round ${stopRoundOf('outline', map)}: the director's send back)`);
+  });
+});

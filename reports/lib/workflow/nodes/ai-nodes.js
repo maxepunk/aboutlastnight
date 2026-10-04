@@ -21,7 +21,8 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
-const { PHASES } = require('../state');
+const { PHASES, stopRoundOf } = require('../state');
+const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { SchemaValidator } = require('../../schema-validator');
 const {
   createPromptBuilder,
@@ -1219,8 +1220,9 @@ async function mapReworkCall(state, promptBuilder, theme = state.theme || 'journ
     phase: 'outline',
     outputName: 'map',
     revisionCount,
-    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
-    round: (state.humanOutlineRevisionCount || 0) + 1,
+    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it (task
+    // 4.12c: the stop's round, the one rule).
+    round: stopRoundOf(CHECKPOINT_TYPES.OUTLINE, state),
     validationResults: state.validationResults,
     previousOutput: before,
     humanFeedback: state._outlineFeedback || null,
@@ -1695,8 +1697,9 @@ async function reviseContentBundle(state, config) {
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
     phase: 'article',
     revisionCount,
-    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
-    round: (state.humanArticleRevisionCount || 0) + 1,
+    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it (task
+    // 4.12c: the stop's round, the one rule).
+    round: stopRoundOf(CHECKPOINT_TYPES.ARTICLE, state),
     validationResults: state.validationResults,
     previousOutput: previousContentBundle,
     humanFeedback: state._articleFeedback || null,

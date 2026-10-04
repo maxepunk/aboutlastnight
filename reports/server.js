@@ -320,7 +320,8 @@ function leaveDeskDeletesOut(currentState, desk) {
  * @param {Array|null} entries - state._outlineTrace or state._articleTrace
  * @param {Object|null} current - the outline or bundle at the stop
  * @param {Function} diffFn - diffOutline or diffBundle
- * @param {number} round - the current round, 1-based (human counter + 1)
+ * @param {number} round - the stop's current round, stopRoundOf's (task 4.12c), the round each
+ *   entry records (graph.js traceWithPass)
  * @returns {Array<{pass, round, trigger, findings, at, diff, changedScopes}>}
  */
 function traceForStop(entries, current, diffFn, round) {
@@ -470,14 +471,15 @@ async function getCheckpointData(checkpointType, state) {
             // Brief 4.6c: evidenceIndex names each card's and each beat's document, as at the
             // meeting, and the roster and the kept photos go with them, so the page builds
             // Everyone and the counts (task 4.6d: the payload sends no count).
-            // Brief 2.7: the automatic passes of this round, with what each changed.
+            // Brief 2.7: the automatic passes of this round, with what each changed. Task 4.12c:
+            // the round is the stop's, the one rule (stopRoundOf).
             return {
                 ...mapCheckpointData(state, {
                     keptPhotos: keptPhotoFilenames(state, state.outline && state.outline.topPhoto),
                     evidenceIndex: buildEvidenceIndex(state.evidenceBundle),
                     maxRevisions: REVISION_CAPS.OUTLINE
                 }),
-                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1)
+                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, stopRoundOf(CHECKPOINT_TYPES.OUTLINE, state))
             };
         case CHECKPOINT_TYPES.ARTICLE:
             return {
@@ -504,10 +506,10 @@ async function getCheckpointData(checkpointType, state) {
                 // Brief 4.7b: the story the director settled at the meeting, as the map's stop
                 // shows it, in place of the old outline's thesis.
                 settledStory: settledStoryOf(state.weave),
-                // Brief 2.7: the automatic passes of this round, with what each changed.
-                // Brief 4.7b: the writers' questions left the article (spec section 10): they
-                // are asked at the story meeting alone.
-                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1)
+                // Brief 2.7: the automatic passes of this round, with what each changed (task
+                // 4.12c: in the stop's round, stopRoundOf). Brief 4.7b: the writers' questions
+                // left the article (spec section 10): they are asked at the story meeting alone.
+                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, stopRoundOf(CHECKPOINT_TYPES.ARTICLE, state))
             };
         case CHECKPOINT_TYPES.PRE_CURATION:
             return {

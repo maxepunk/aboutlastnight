@@ -30,7 +30,8 @@
  * a thread's stop types and checkpoints keep their names (R3).
  */
 
-const { PHASES } = require('../state');
+const { PHASES, stopRoundOf } = require('../state');
+const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { isSdkTimeoutError } = require('../../llm');
 // The pure module, not lib/llm's index: several node tests mock lib/llm with a factory.
 const { isRefusalError } = require('../../llm/refusal');
@@ -630,8 +631,9 @@ function arcReworkCall(state) {
     phase: 'arcs',
     outputName: 'weave',
     revisionCount,
-    // Brief 2.3: a round's banner names the round it opens, as the stop shows it.
-    round: (state.humanArcRevisionCount || 0) + 1,
+    // Brief 2.3: a round's banner names the round it opens, as the stop shows it (task 4.12c:
+    // the stop's round, the one rule).
+    round: stopRoundOf(CHECKPOINT_TYPES.ARC_SELECTION, state),
     validationResults: directorRound ? null : state.validationResults,
     previousOutput: before,
     handEdits: state._weaveHandEdits,

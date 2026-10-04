@@ -68,7 +68,8 @@
  */
 
 const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
-const { ReportStateAnnotation, PHASES, REVISION_CAPS } = require('./state');
+const { ReportStateAnnotation, PHASES, REVISION_CAPS, stopRoundOf } = require('./state');
+const { CHECKPOINT_TYPES } = require('./checkpoint-helpers');
 const nodes = require('./nodes');
 const { isTransientError } = require('../llm/retry');
 const { weaveKey, factCheckMarkOf, isWeave, isWeaveJudged, isMeetingApproved, meetingRoundOf } = require('../weave');
@@ -400,6 +401,10 @@ function traceWithPass(state, phase, trace, before, pass, round, source) {
  * Phase 4 (brief 4.6): no evaluation stub. The outline judge left the graph, so no
  * evaluation of the outline can be skipped on a stale verdict. Every automatic pass on the
  * map is the map checks' rework, so the trace marks it `check`.
+ *
+ * Task 4.12c: the round the pass runs in is the stop's, stopRoundOf over the new count (a
+ * send back's pass runs in the round it opens), the round the trace entry records and the
+ * server's traceForStop keeps.
  */
 async function incrementOutlineRevision(state) {
   const isHumanDriven = !!state._outlineFeedback;
@@ -408,8 +413,9 @@ async function incrementOutlineRevision(state) {
     ? (state.humanOutlineRevisionCount || 0) + 1
     : (state.humanOutlineRevisionCount || 0);
   const source = isHumanDriven ? 'human' : 'check';
+  const round = stopRoundOf(CHECKPOINT_TYPES.OUTLINE, { humanOutlineRevisionCount: newHumanCount });
 
-  console.log(`[incrementOutlineRevision] automatedPass=${newCount}, round=${newHumanCount + 1}, source=${source}`);
+  console.log(`[incrementOutlineRevision] automatedPass=${newCount}, round=${round}, source=${source}`);
 
   return {
     outlineRevisionCount: newCount,
@@ -417,7 +423,7 @@ async function incrementOutlineRevision(state) {
     _previousOutline: state.outline,
     outline: null,
     ...(!isHumanDriven && {
-      _outlineTrace: traceWithPass(state, 'outline', state._outlineTrace, state.outline, newCount, newHumanCount + 1, source)
+      _outlineTrace: traceWithPass(state, 'outline', state._outlineTrace, state.outline, newCount, round, source)
     })
   };
 }
@@ -428,7 +434,8 @@ async function incrementOutlineRevision(state) {
  * Clears contentBundle and assembledHtml so generateContentBundle skip logic doesn't trigger
  *
  * Two counters, as incrementOutlineRevision above (brief 1.4), and the same trace
- * entry on an automatic pass only (brief 2.7), in `_articleTrace`.
+ * entry on an automatic pass only (brief 2.7), in `_articleTrace`, in the stop's round
+ * (stopRoundOf; task 4.12c).
  */
 async function incrementArticleRevision(state) {
   const isHumanDriven = !!state._articleFeedback;
@@ -437,8 +444,9 @@ async function incrementArticleRevision(state) {
     ? (state.humanArticleRevisionCount || 0) + 1
     : (state.humanArticleRevisionCount || 0);
   const source = isHumanDriven ? 'human' : automatedRevisionSource(state, 'article');
+  const round = stopRoundOf(CHECKPOINT_TYPES.ARTICLE, { humanArticleRevisionCount: newHumanCount });
 
-  console.log(`[incrementArticleRevision] automatedPass=${newCount}, round=${newHumanCount + 1}, source=${source}`);
+  console.log(`[incrementArticleRevision] automatedPass=${newCount}, round=${round}, source=${source}`);
 
   return {
     articleRevisionCount: newCount,
@@ -447,7 +455,7 @@ async function incrementArticleRevision(state) {
     contentBundle: null,
     assembledHtml: null,
     ...(!isHumanDriven && {
-      _articleTrace: traceWithPass(state, 'article', state._articleTrace, state.contentBundle, newCount, newHumanCount + 1, source)
+      _articleTrace: traceWithPass(state, 'article', state._articleTrace, state.contentBundle, newCount, round, source)
     }),
     evaluationHistory: {
       phase: 'article',
