@@ -1336,3 +1336,61 @@ describe('4.5: the story meeting through buildResumePayload', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5b: at the story meeting, only the meeting's own action is taken
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// 4.5's guard (I3) the other way round. Every other stop's arm writes the resume its own
+// stop reads, and the meeting's stop reads `{approved: true}` as its approval: a stale
+// console tab's {outline: true} approved the meeting with no weave, no edits and no note,
+// and wrote weave.approved.json, which the readout reads as the director's settled story.
+describe("4.5b: at the story meeting only the meeting's own action is taken", () => {
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { withFactCheckMark } = require('../../lib/weave');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const atMeeting = () => ({ weave: withFactCheckMark(clone(WEAVE), { at: 't', ready: true, fixes: 0 }), _weaveBaseline: clone(WEAVE) });
+  const edited = () => ({ ...clone(WEAVE), threads: clone(WEAVE).threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t)) });
+
+  /** Each other stop's approval or send-back, as its console sends it, with the stop it answers. */
+  const OTHER_STOPS = [
+    ['input-review', { inputReview: true }],
+    ['input-review', { inputReview: false, inputFeedback: 'Blake said the dead-man line.' }],
+    ['paper-evidence-selection', { selectedPaperEvidence: [{ notionId: 'p-dna' }] }],
+    ['await-roster', { roster: ['Alex', 'Morgan'], rosterPronouns: { Alex: 'he/him' } }],
+    ['await-full-context', { fullContext: { accusation: 'a', sessionReport: 's', directorNotes: 'd' } }],
+    ['pre-curation', { preCuration: true }],
+    ['evidence-and-photos', { evidenceBundle: true, rescuedItems: ['p-rescued'] }],
+    ['character-ids', { characterIdsRaw: 'p1.jpg: Alex at the bar' }],
+    ['character-ids', { characterIds: { 'p1.jpg': { characters: ['Alex'] } } }],
+    ['outline', { outline: true }],
+    ['outline', { outline: false, outlineFeedback: 'Tighten the map.' }],
+    ['article', { article: true }],
+    ['article', { article: false, articleFeedback: 'Cut the sidebar.' }]
+  ];
+
+  it.each(OTHER_STOPS)("refuses the %s stop's %j at the meeting, naming the stop the thread is paused at, and writes nothing", (_stop, approvals) => {
+    const result = buildResumePayload(approvals, atMeeting(), 'journalist', 'arc-selection');
+    expect(result.error).toMatch(/^The thread is paused at the story meeting \(arc-selection\), which takes only its own action/);
+    expect(result.error).toContain(`This request carries ${Object.keys(approvals)[0]}, another stop's approval.`);
+    expect(result.resume).toEqual({});
+    expect(result.stateUpdates).toEqual({});
+  });
+
+  it.each(OTHER_STOPS)("takes the %s stop's %j at that stop, so the list the meeting refuses is each stop's own", (stop, approvals) => {
+    expect(buildResumePayload(approvals, atMeeting(), 'journalist', stop).error).toBeNull();
+  });
+
+  it("refuses another stop's key beside the meeting's own action: a reweave never turns into an approval", () => {
+    const result = buildResumePayload({ meeting: 'reweave', weave: edited(), outline: true, article: true }, atMeeting(), 'journalist', 'arc-selection');
+    expect(result.error).toContain("This request carries outline and article, other stops' approvals.");
+    expect(result.resume).toEqual({});
+    expect(result.stateUpdates).toEqual({});
+  });
+
+  it("still takes the meeting's own action there", () => {
+    const result = buildResumePayload({ meeting: 'reweave', weave: edited() }, atMeeting(), 'journalist', 'arc-selection');
+    expect(result.error).toBeNull();
+    expect(result.resume).toEqual({ approved: false, round: 'reweave' });
+  });
+});

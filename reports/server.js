@@ -599,6 +599,39 @@ function validateEdits(schemaName, edits, noun) {
 }
 
 /**
+ * The keys with which each stop other than the story meeting is approved or sent back
+ * (brief 4.5b): the story meeting refuses a request that carries one (meetingOnlyRefusal).
+ * Each of their arms in buildResumePayload writes the resume its own stop reads, and the
+ * meeting's stop reads `{approved: true}` as its own approval. The photos folder is not
+ * among them: at the meeting it rides along with the meeting's own action
+ * (PHOTOS_PATH_GATES), and alone it approves nothing there.
+ */
+const OTHER_STOPS_APPROVAL_KEYS = Object.freeze([
+    'inputReview', 'selectedPaperEvidence', 'roster', 'fullContext', 'preCuration',
+    'evidenceBundle', 'characterIdsRaw', 'characterIds', 'outline', 'article'
+]);
+
+/**
+ * The refusal for a request posted while the thread is paused at the story meeting that
+ * carries another stop's approval key, or null (brief 4.5b). The meeting is approved only by
+ * its own action: a stale console tab's `{outline: true}` approved it with no weave, no
+ * edits and no note, and wrote the approved weave the readout takes as the director's
+ * settled story.
+ *
+ * @param {object} approvals - the request body
+ * @returns {string|null}
+ */
+function meetingOnlyRefusal(approvals) {
+    const carried = Object.keys(approvals || {}).filter((key) => OTHER_STOPS_APPROVAL_KEYS.includes(key) && approvals[key] !== undefined);
+    if (carried.length === 0) return null;
+    const keys = carried.length > 1 ? `${carried.slice(0, -1).join(', ')} and ${carried[carried.length - 1]}` : carried[0];
+    return 'The thread is paused at the story meeting (arc-selection), which takes only its own action: ' +
+        '{meeting: "approve" | "reweave" | "send-back", weave, note}. ' +
+        `This request carries ${keys}, ${carried.length > 1 ? "other stops' approvals" : "another stop's approval"}. ` +
+        'Reload the console to act at the story meeting.';
+}
+
+/**
  * Build resume payload from approval decisions (DRY helper)
  * Used by /api/session/:id/approve endpoint with Command({ resume })
  *
@@ -612,7 +645,9 @@ function validateEdits(schemaName, edits, noun) {
  *   I3: some approval shapes are only meaningful at one gate. `{photosPath}` posted at
  *   `outline`/`article`/`arc-selection` used to count as a valid approval whose resume
  *   value was neither an approve nor a reject-with-feedback, which routes straight into
- *   a PAID revision loop. Gate those shapes on the type.
+ *   a PAID revision loop. Gate those shapes on the type. Brief 4.5b: at the story meeting
+ *   (`arc-selection`) only the meeting's own arm is taken, and another stop's approval key
+ *   is refused (meetingOnlyRefusal).
  * @param {object} [options]
  * @param {string} [options.dataDir] - the folder holding each session's data/<id>/ (default
  *   the server's data/); the article approve checks the printed photos against its
@@ -624,6 +659,14 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     const stateUpdates = {};
     let error = null;
     let validApprovalDetected = false;
+
+    // Brief 4.5b: while the thread is paused at the story meeting, only the meeting's own
+    // arm is taken (4.5's guard, I3, the other way round). Refused before any arm runs, so
+    // nothing is written.
+    if (checkpointType === CHECKPOINT_TYPES.ARC_SELECTION) {
+        const refusal = meetingOnlyRefusal(approvals);
+        if (refusal) return { resume: {}, stateUpdates: {}, error: refusal };
+    }
 
     // Input review: approve the parse, or reject it with written corrections (B2/B8).
     //
