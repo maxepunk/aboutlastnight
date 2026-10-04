@@ -341,7 +341,7 @@ function editsRemovingConnection(entries, connection) {
  *   (`photo-not-offered`; T13);
  * - each card names a document in the record (`card-not-in-record`), and the cards number
  *   three to five (`card-count`; C9);
- * - every live connection of the settled weave lands in a section's beat
+ * - every connection the settled weave keeps lands in a section's beat
  *   (`connection-not-landed`);
  * - each change to the weave names a meeting edit's id or the meeting's approval note
  *   (`weave-change-source`), and there is none when the director changed nothing and left no
@@ -360,7 +360,8 @@ function editsRemovingConnection(entries, connection) {
  * @param {Array} inputs.roster - mapRosterOf's roster
  * @param {string[]} inputs.keptPhotos - the filenames of the photos kept for the article
  * @param {Iterable<string>} inputs.recordIds - the ids a document in the record answers to
- * @param {string[]} inputs.connections - the ids of the settled weave's live connections
+ * @param {string[]} inputs.connections - the ids of the connections the settled weave keeps
+ *   (lib/weave.js storyConnections: none struck, and none that joins a left-out thread)
  * @param {string[]} inputs.meetingEdits - the ids of the director's edits at the meeting
  * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
@@ -448,7 +449,7 @@ function mapFindings(map, inputs = {}) {
     if (owners.writers) fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
   }
 
-  // Every live connection of the settled weave lands in a beat.
+  // Every connection the settled weave keeps lands in a beat.
   const landed = new Set(sectionBeats(map).map(({ beat }) => textOf(beat.connection)).filter(Boolean));
   const unlanded = [];
   (Array.isArray(inputs.connections) ? inputs.connections : []).map(textOf).filter(Boolean).forEach((connection) => {

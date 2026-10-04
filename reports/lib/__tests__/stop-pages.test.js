@@ -626,3 +626,22 @@ describe('4.12d: the input review\'s page counts what the ruling counts', () => 
     expect(bullet).toMatch(/director's own notes[^.]*director's words[^.]*not counted/);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14a: a connection that goes with a left-out thread says so on the page (the final review,
+// ruling 1): the line meetingView gives it sits right after the connection, as ArcSelection.js
+// shows it under the connection's words.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14a: the story meeting\'s page says which connections go out with a left-out thread', () => {
+  it('prints the line right after the connection it is about, and none once the thread is back in the story', () => {
+    const data = meetingData();
+    data.weave = clone(data.weave);
+    data.weave.threads[2].role = 'left-out';
+    const view = View.meetingView(data, View.meetingDraftOf(data), '');
+    expect(view.connections[0].leftOut).toMatch(/^Out of the story with thread t3/);
+    const lines = stopPage('arc-selection', data).lines;
+    const at = lines.findIndex((line) => line.text === `${view.connections[0].kindLabel} · ${view.connections[0].detail}`);
+    expect(lines[at + 1]).toMatchObject({ text: view.connections[0].leftOut, folded: false });
+    expect(textsOf(stopPage('arc-selection', meetingData()))).not.toContainEqual(expect.stringMatching(/^Out of the story/));
+  });
+});

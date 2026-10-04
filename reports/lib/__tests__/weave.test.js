@@ -715,3 +715,48 @@ describe("4.5b: an element's place under its id (occurrenceKeys)", () => {
     expect(occurrenceKeys(undefined)).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14a: the meeting's last defects (the final review, ruling 1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Meeting 2: a connection that joins a thread the director left out stayed in the story, so
+// the map check demanded it land in a beat and spent the map's one rework. It goes out of the
+// story with its thread, as a struck connection does, and comes back when the thread does;
+// the weave's own checks still read every connection the director did not strike.
+describe('4.14a: a connection that joins a left-out thread goes out of the story with it', () => {
+  const { storyConnections, liveConnections, leftOutThreadsJoined } = require('../weave');
+  /** WEAVE with one thread's role set. c1 joins t1 and t3; c3 joins t4 and t5. */
+  const withRole = (weave, id, role) => ({ ...weave, threads: weave.threads.map((t) => (t.id === id ? { ...t, role } : t)) });
+
+  it('leaves out a connection that joins a left-out thread, as it leaves out a struck one, and names the thread it goes with', () => {
+    const weave = withRole(clone(WEAVE), 't3', 'left-out');
+    weave.connections[1].struck = true;
+    expect(storyConnections(weave).map((c) => c.id)).toEqual(['c3', 'c4']);
+    expect(liveConnections(weave).map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
+    expect(leftOutThreadsJoined(weave.connections[0], weave)).toEqual(['t3']);
+    expect(leftOutThreadsJoined(weave.connections[2], weave)).toEqual([]);
+    const both = withRole(withRole(clone(WEAVE), 't4', 'left-out'), 't5', 'left-out');
+    expect(leftOutThreadsJoined(both.connections[2], both)).toEqual(['t4', 't5']);
+    expect(storyConnections(null)).toEqual([]);
+  });
+
+  it('a connection to the thread comes back when the thread does', () => {
+    const out = withRole(clone(WEAVE), 't3', 'left-out');
+    expect(storyConnections(out).map((c) => c.id)).not.toContain('c1');
+    expect(storyConnections(withRole(out, 't3', 'mirrors-it')).map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
+  });
+
+  it("a thread id that also names a thread in the story keeps the connection in it: the writer's repeat is the checks' to name", () => {
+    const weave = withRole(clone(WEAVE), 't3', 'left-out');
+    weave.threads.push({ id: 't3', claim: 'A second thread under t3.', role: 'grounds-it', receipt: 'ledger' });
+    expect(storyConnections(weave).map((c) => c.id)).toContain('c1');
+  });
+
+  it("the weave's own checks still read it: a connection that joins a thread the weave does not hold is the writer's failure", () => {
+    const weave = withRole(clone(WEAVE), 't3', 'left-out');
+    weave.threads[2].reason = 'The director left it out.';
+    weave.connections.push({ id: 'c5', kind: 'person', joins: ['t3', 't9'], detail: 'Someone the weave never names.' });
+    expect(typesOf(check(weave))).toEqual(['connection-joins-unknown-thread']);
+  });
+});

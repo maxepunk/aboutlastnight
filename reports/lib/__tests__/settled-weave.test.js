@@ -273,3 +273,22 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
     expect(text).not.toMatch(/[–—]/);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14a: the meeting's last defects (the final review, ruling 1)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14a: the settled weave tells the story the director settled', () => {
+  // Meeting 2: a connection that joins a left-out thread is out of the story, as a struck one is.
+  it('leaves out a connection that joins a thread the director left out, and prints it again when the thread comes back', () => {
+    const left = clone(WRITERS);
+    left.threads[2].role = 'left-out';
+    left.threads[2].reason = 'The director left it out.';
+    const out = renderSettledWeave(left, carriedEdits(standingAtMeeting(null, WRITERS, left), left));
+    expect(out).not.toContain(WRITERS.connections[0].detail);
+    expect(out).toContain('- c2, a moment, joining t1 and t2: The scoreboard brought the money into the vote.');
+    expect(out.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/^- t3 \(left out\): .*\[the director's changes E1: the role; E2: the reason\]$/);
+    const back = clone(left);
+    back.threads[2].role = 'mirrors-it';
+    expect(renderSettledWeave(back, [])).toContain('- c1, a shared person, joining t1 and t3: Sloane turned the room against Rowan.');
+  });
+});

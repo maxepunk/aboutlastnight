@@ -1600,3 +1600,47 @@ describe('4.10e: a reason ends before the next begins', () => {
     expect(ViewLogic.changedEditLine(entry)).toBe('E2, thread "t3", role: your "mirrors-it" became "grounds-it" (the rework of your send-back). Why: The note made the ledger the main thread.');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14a: the meeting's last defects (the final review, ruling 1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Meeting 2: a connection that joins a thread left out is out of the story with it, so its
+// line says so, and bringing the thread in brings the connection back. The console reads which
+// threads it goes with by a copy of lib/weave.js leftOutThreadsJoined, held to it here.
+describe('4.14a: a connection that joins a left-out thread says it goes with that thread', () => {
+  const data = payloadOf(stateAt());
+  const leftOutLines = (weave) => meetingView(data, weave).connections.map((c) => [c.id, c.leftOut]);
+
+  test('its line names the thread it goes out with, and is gone once the thread is back in the story', () => {
+    const draft = setThreadRole(meetingDraftOf(data, undefined), 2, 'left-out');
+    expect(leftOutLines(draft)).toEqual([
+      ['c1', 'Out of the story with thread t3, which is left out. Bring t3 in and this connection comes back.'],
+      ['c2', '']
+    ]);
+    expect(leftOutLines(setThreadRole(draft, 2, 'mirrors-it'))).toEqual([['c1', ''], ['c2', '']]);
+  });
+
+  test('a connection that joins two left-out threads names both; a struck one says nothing, since the strike keeps it out', () => {
+    const both = setThreadRole(setThreadRole(meetingDraftOf(data, undefined), 1, 'left-out'), 3, 'left-out');
+    expect(leftOutLines(both)).toEqual([
+      ['c1', ''],
+      ['c2', 'Out of the story with threads t2 and t4, which are left out. Bring both in and this connection comes back.']
+    ]);
+    expect(leftOutLines(setConnectionStruck(both, 1, true))).toEqual([['c1', ''], ['c2', '']]);
+  });
+
+  test("the console reads which left-out threads a connection joins as lib/weave.js does, on one corpus", () => {
+    expect(ViewLogic.LEFT_OUT_ROLE).toBe(weaveLib.LEFT_OUT_ROLE);
+    const withRoles = (roles) => ({ ...clone(WEAVE), threads: clone(WEAVE).threads.map((t) => (roles[t.id] ? { ...t, role: roles[t.id] } : t)) });
+    const repeat = withRoles({ t3: 'left-out' });
+    repeat.threads.push({ id: 't3', claim: 'A second thread under t3, in the story.', role: 'grounds-it', receipt: 'ledger' });
+    const odd = withRoles({ t1: 'left-out' });
+    odd.connections.push({ id: 'c3', kind: 'line', joins: [' t1 ', 't9'], detail: 'A join to a thread the weave does not hold.' });
+    odd.connections.push({ id: 'c4', kind: 'person', joins: 't1', detail: 'Joins that are no list.' });
+    const corpus = [clone(WEAVE), withRoles({ t3: 'left-out' }), withRoles({ t2: 'left-out', t4: 'left-out' }), repeat, odd];
+    corpus.forEach((weave) => weave.connections.forEach((connection) => {
+      expect([connection.id, ViewLogic.leftOutThreadsOf(connection, weave)]).toEqual([connection.id, weaveLib.leftOutThreadsJoined(connection, weave)]);
+    }));
+  });
+});

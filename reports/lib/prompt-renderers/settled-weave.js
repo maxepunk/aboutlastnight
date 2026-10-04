@@ -8,8 +8,9 @@
  *   rests on;
  * - every thread with its role, the main thread first and the left-out threads last, each
  *   with its receipt, a thread the director added among them;
- * - the live connections and the convergence. A connection the director struck is gone
- *   from it, so no later writer meets the link;
+ * - the connections the story keeps and the convergence (lib/weave.js storyConnections). A
+ *   connection the director struck is gone from it, and since brief 4.14a so is one that
+ *   joins a thread left out, so no later writer meets the link;
  * - every question with what its answer changes, and the director's answer word for word
  *   or the mark that it is unanswered;
  * - each change the director made at the meeting, marked on its line by its edit's id
@@ -27,7 +28,7 @@
  */
 'use strict';
 
-const { isWeave, liveConnections, WEAVE_ROLES } = require('../weave');
+const { isWeave, storyConnections, WEAVE_ROLES } = require('../weave');
 const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../writer-questions');
 const { weaveDirectorsShare, carriedEdits } = require('../hand-edit-diff');
 
@@ -124,7 +125,7 @@ function renderSettledWeave(weave, edits) {
     lines.push(`- ${id} (${roleWords(thread.role)}): ${textOf(thread.claim)}${receipt}${verdict}${reason}${changeMark(parts)}`);
   });
 
-  const connections = liveConnections(weave);
+  const connections = storyConnections(weave);
   if (connections.length > 0) {
     lines.push('', 'CONNECTIONS:');
     connections.forEach((connection) => {

@@ -284,6 +284,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
                 }, connection.struck ? 'Unstrike' : 'Strike')
               ),
               React.createElement('p', { className: 'meeting__detail' }, connection.detail),
+              // Brief 4.14a: out of the story with a left-out thread, and why.
+              connection.leftOut && React.createElement('p', { className: 'text-xs text-muted' }, connection.leftOut),
               beside(connection)
             );
           })

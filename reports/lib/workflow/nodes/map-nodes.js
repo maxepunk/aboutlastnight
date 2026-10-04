@@ -3,9 +3,10 @@
  * writer or a rework returned, before the map's stop opens. No model judge reads the map.
  *
  * The checks (lib/map.js mapFindings) read the map against the session: the roster, the
- * photos kept for the article, the record's document ids, the settled weave's live
- * connections, and the director's changes and note at the meeting. A failure the director
- * caused on the map is a concern on their edit, never a rework.
+ * photos kept for the article, the record's document ids, the connections the settled weave
+ * keeps (lib/weave.js storyConnections: none the director struck, and none that joins a
+ * thread left out; brief 4.14a), and the director's changes and note at the meeting. A
+ * failure the director caused on the map is a concern on their edit, never a rework.
  *
  * They mark the map they checked (`_mapCheck`, stamped with its mapKey) and write
  * validationResults on every outcome, under their own source (lib/map.js MAP_CHECKS_SOURCE;
@@ -25,7 +26,7 @@ const { PHASES } = require('../state');
 const { traceNode } = require('../../observability');
 const { mapFindings, mapKey, mapRosterOf, meetingEditIdsOf, meetingNoteOf, topPhotoOf, MAP_CHECKS_SOURCE } = require('../../map');
 const { carriedEdits, directorEditConcern } = require('../../hand-edit-diff');
-const { liveConnections, weaveIdOf } = require('../../weave');
+const { storyConnections, weaveIdOf } = require('../../weave');
 const { buildValidEvidenceIds } = require('./node-helpers');
 const { keptPhotoFilenames } = require('./ai-nodes');
 
@@ -41,7 +42,9 @@ function mapCheckInputsOf(state, map) {
     roster: mapRosterOf(state.sessionConfig, state.canonicalCharacters),
     keptPhotos: keptPhotoFilenames(state, topPhotoOf(map)),
     recordIds: buildValidEvidenceIds(state.evidenceBundle),
-    connections: liveConnections(state.weave).map(weaveIdOf).filter(Boolean),
+    // Brief 4.14a: a connection that joins a left-out thread is out of the story with it, so
+    // no map is asked to land it.
+    connections: storyConnections(state.weave).map(weaveIdOf).filter(Boolean),
     meetingEdits: meetingEditIdsOf(state),
     meetingNote: meetingNoteOf(state),
     edits: carriedEdits(state._outlineHandEdits, map)

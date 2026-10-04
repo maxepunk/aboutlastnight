@@ -31,11 +31,13 @@
  * At the story meeting (brief 4.5) the director leaves the weave with their changes in it:
  * edited fields, roles, added threads, an `answer` on a question, and `struck: true` on a
  * connection they struck (STRUCK_KEY). A struck connection stays in the weave so the
- * meeting can show it struck; every reader of the story reads the live connections alone
- * (liveConnections). The checks read only the writer's text (R11): the director's share
- * of the weave, read from their standing edits (lib/hand-edit-diff.js
- * weaveDirectorsShare), is never a check's failure, and a receipt the director typed that
- * names no document is a concern (weaveFindings).
+ * meeting can show it struck; the meeting prints and the checks read the live connections
+ * (liveConnections). A connection that joins a left-out thread is out of the story with it
+ * (brief 4.14a), so every reader of the story reads the connections the story keeps
+ * (storyConnections): neither struck nor joining a thread left out. The checks read only
+ * the writer's text (R11): the director's share of the weave, read from their standing
+ * edits (lib/hand-edit-diff.js weaveDirectorsShare), is never a check's failure, and a
+ * receipt the director typed that names no document is a concern (weaveFindings).
  *
  * Generic: a weave is a story, threads, connections and questions, so nothing here names
  * a theme.
@@ -182,9 +184,47 @@ function isStruck(connection) {
   return Boolean(connection && typeof connection === 'object' && connection[STRUCK_KEY] === true);
 }
 
-/** The connections the story keeps: every one the director did not strike. */
+/**
+ * The live connections: every one the director did not strike. The meeting prints them, a
+ * connection that joins a left-out thread among them, and the weave's checks read them all,
+ * so a connection that joins a thread the weave does not hold is still the writer's failure.
+ */
 function liveConnections(weave) {
   return objectsOf(weave && weave.connections).filter(connection => !isStruck(connection));
+}
+
+/**
+ * The left-out threads a connection joins (brief 4.14a): each id it joins under which the
+ * weave holds threads and every one of them is left out, in the order the connection names
+ * them, each once. An id that also names a thread in the story keeps the connection there,
+ * since a repeated id is the writer's to clear, which the checks report; an id the weave
+ * does not hold is the checks' failure, not a left-out thread.
+ *
+ * @param {Object} connection
+ * @param {Object} weave
+ * @returns {string[]}
+ */
+function leftOutThreadsJoined(connection, weave) {
+  const joins = connection && typeof connection === 'object' && Array.isArray(connection.joins) ? connection.joins.map(textOf) : [];
+  const threads = objectsOf(weave && weave.threads);
+  return [...new Set(joins.filter(Boolean))].filter((id) => {
+    const under = threads.filter((thread) => weaveIdOf(thread) === id);
+    return under.length > 0 && under.every((thread) => thread.role === LEFT_OUT_ROLE);
+  });
+}
+
+/**
+ * The connections the story keeps (brief 4.14a): the live connections that join no left-out
+ * thread. A connection that joins a left-out thread goes out of the story with it, as a
+ * struck one does, and comes back when the thread does. Every reader of the story's
+ * connections reads these: the settled weave, and through it the map writer and the article
+ * writer, and the map check.
+ *
+ * @param {Object} weave
+ * @returns {Object[]}
+ */
+function storyConnections(weave) {
+  return liveConnections(weave).filter(connection => leftOutThreadsJoined(connection, weave).length === 0);
 }
 
 /**
@@ -589,5 +629,9 @@ module.exports = {
   // read, and an element's place under its id, which the questions' carry pairs by
   WEAVE_PRINTED_FIELDS,
   printedWeaveFields,
-  occurrenceKeys
+  occurrenceKeys,
+  // Brief 4.14a: the connections the story keeps, the left-out threads a connection goes out
+  // with
+  storyConnections,
+  leftOutThreadsJoined
 };

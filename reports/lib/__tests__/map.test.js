@@ -990,3 +990,48 @@ describe('4.6e: "no note" means no approval note, and the note\'s pointer has on
     expect(clause).not.toContain('<DIRECTOR_GUIDANCE>');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14a: the map reads the meeting as the director settled it (the final review, ruling 1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Meeting 2: a connection that joins a thread the director left out goes out of the story with
+// it, so the map check no longer demands it land.
+describe('4.14a: the map reads the meeting as the director settled it', () => {
+  const { reworkFixtureState, WEAVE: FIXTURE_WEAVE, MAP } = require('./fixtures/rework-state');
+  const { _testing: { mapCheckInputsOf } } = require('../workflow/nodes/map-nodes');
+  const { standingAtMeeting } = require('../hand-edit-diff');
+
+  /** The state at the map after the director approved the meeting with `change` made to the writer's weave. */
+  function approvedWith(change) {
+    const left = clone(FIXTURE_WEAVE);
+    change(left);
+    return {
+      ...reworkFixtureState('journalist'),
+      weave: left,
+      _weaveBaseline: clone(FIXTURE_WEAVE),
+      _weaveHandEdits: standingAtMeeting(null, clone(FIXTURE_WEAVE), left),
+      outline: clone(MAP),
+      _mapBaseline: clone(MAP),
+      _outlineHandEdits: null
+    };
+  }
+  /** The fixture's map with t3's material kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
+  const keepsT3Out = () => {
+    const map = clone(MAP);
+    delete map.sections[0].beats[0].connection;
+    map.leftOut.push(map.sections[1].beats.splice(1, 1)[0]);
+    map.sections[1].beats.push({ id: 'b10', kind: 'receipt', material: 'p-rescued', players: ['Morgan', 'Riley'], card: 'p-rescued' });
+    return map;
+  };
+
+  it('the map check passes on a map that keeps a left-out thread out, and wants its connection back when the thread comes back', () => {
+    const out = approvedWith((w) => { w.threads[2].role = 'left-out'; });
+    const map = keepsT3Out();
+    expect(mapCheckInputsOf(out, map).connections).toEqual(['c2']);
+    expect(mapFindings(map, mapCheckInputsOf(out, map))).toEqual({ failures: [], concerns: [] });
+    const back = approvedWith((w) => { w.threads[2].role = 'mirrors-it'; });
+    expect(mapCheckInputsOf(back, map).connections).toEqual(['c1', 'c2']);
+    expect(typesOf(mapFindings(map, mapCheckInputsOf(back, map)).failures)).toEqual(['connection-not-landed']);
+  });
+});

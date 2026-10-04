@@ -1249,6 +1249,9 @@
   /** What two threads share at a connection. The keys are lib/weave.js CONNECTION_KINDS (a test holds them equal). */
   var CONNECTION_KIND_LABELS = { person: 'A shared person', moment: 'A moment', document: 'A document', line: 'A line' };
 
+  /** The role of a thread the story does not need: a copy of lib/weave.js LEFT_OUT_ROLE (a test holds the two equal). */
+  var LEFT_OUT_ROLE = 'left-out';
+
   /**
    * Copies of lib/weave.js LEDGER_RECEIPT and STRUCK_KEY and of lib/writer-questions.js
    * WEAVE_ANSWER_KEY, which the browser cannot import; a test holds each equal.
@@ -1615,6 +1618,46 @@
 
   function isStruckConnection(connection) {
     return Boolean(connection && typeof connection === 'object' && connection[STRUCK_KEY] === true);
+  }
+
+  /**
+   * The left-out threads a connection joins (brief 4.14a): each id it joins under which the weave
+   * holds threads and every one of them is left out, in the order it names them, each once. A copy
+   * of lib/weave.js leftOutThreadsJoined, which the browser cannot import; a test holds the two
+   * equal on one corpus. Such a connection is out of the story with its thread, and comes back
+   * when the thread does.
+   *
+   * @param {Object} connection
+   * @param {Object} weave - the weave as the director has it
+   * @returns {string[]}
+   */
+  function leftOutThreadsOf(connection, weave) {
+    var joins = isPlainObject(connection) && Array.isArray(connection.joins) ? connection.joins : [];
+    var threads = asArray(isPlainObject(weave) ? weave.threads : null).filter(isPlainObject);
+    var out = [];
+    joins.map(function (id) { return asString(id).trim(); }).forEach(function (id) {
+      if (!id || out.indexOf(id) !== -1) return;
+      var under = threads.filter(function (thread) { return weaveIdOf(thread) === id; });
+      if (under.length > 0 && under.every(function (thread) { return thread.role === LEFT_OUT_ROLE; })) out.push(id);
+    });
+    return out;
+  }
+
+  /**
+   * The line under a connection that goes out of the story with a left-out thread (brief 4.14a),
+   * or '' for a connection in the story: which threads it goes with, and that bringing them in
+   * brings it back.
+   *
+   * @param {string[]} threads - the left-out threads it joins (leftOutThreadsOf)
+   * @returns {string}
+   */
+  function leftOutLine(threads) {
+    if (threads.length === 0) return '';
+    if (threads.length === 1) {
+      return 'Out of the story with thread ' + threads[0] + ', which is left out. Bring ' + threads[0] + ' in and this connection comes back.';
+    }
+    var named = threads.slice(0, -1).join(', ') + ' and ' + threads[threads.length - 1];
+    return 'Out of the story with threads ' + named + ', which are left out. Bring ' + (threads.length === 2 ? 'both' : 'all of them') + ' in and this connection comes back.';
   }
 
   /**
@@ -2300,6 +2343,9 @@
    *   in it is left out.
    * - each line the page shows (linesOnPage) carries the concerns about the director's edit
    *   on it, and the marks of what the round's passes changed on it;
+   * - each connection that joins a left-out thread, unstruck, carries `leftOut`, the line that
+   *   says it is out of the story with that thread and comes back with it (leftOutThreadsOf;
+   *   brief 4.14a), read from the weave as the director has it, so it follows their roles;
    * - `thinNotes`: the one line beside the story when the weave has no "from your notes",
    *   unless the round took it out: then the director's notes held a read the rework
    *   dropped, and the mark of it is listed instead;
@@ -2366,6 +2412,7 @@
       var id = weaveIdOf(connection);
       var kind = asString(connection.kind);
       var b = id ? at('connection:' + id) : { concerns: [], marks: [] };
+      var struck = isStruckConnection(connection);
       return {
         key: 'connection-' + index,
         index: index,
@@ -2374,7 +2421,9 @@
         kindLabel: hasOwn(CONNECTION_KIND_LABELS, kind) ? CONNECTION_KIND_LABELS[kind] : kind,
         detail: asString(connection.detail),
         joins: asArray(connection.joins).map(function (joined) { return String(joined); }).join(' and '),
-        struck: isStruckConnection(connection),
+        struck: struck,
+        // Brief 4.14a: out of the story with a left-out thread, said under it; a strike already keeps it out.
+        leftOut: struck ? '' : leftOutLine(leftOutThreadsOf(connection, weave)),
         repeatedId: id !== '' && connectionRepeats.has(id),
         concerns: b.concerns,
         marks: b.marks
@@ -3733,6 +3782,9 @@
     THIN_NOTES_LINE: THIN_NOTES_LINE,
     MEETING_LINE_LABELS: MEETING_LINE_LABELS,
     MEETING_ROLLBACK_LINE: MEETING_ROLLBACK_LINE,
+    // Brief 4.14a: the console's copy of lib/weave.js's left-out rule, held equal by a test
+    LEFT_OUT_ROLE: LEFT_OUT_ROLE,
+    leftOutThreadsOf: leftOutThreadsOf,
     meetingWeaveOf: meetingWeaveOf,
     meetingVersion: meetingVersion,
     meetingPendingSlot: meetingPendingSlot,

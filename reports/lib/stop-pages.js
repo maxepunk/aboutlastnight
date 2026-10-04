@@ -511,6 +511,8 @@ const MEETING_SECTIONS = {
       const text = `${connection.kindLabel} · ${connection.detail}`;
       if (connection.struck) page.struck(text, label);
       else page.text(text, label);
+      // Brief 4.14a: out of the story with a left-out thread, said under the connection.
+      page.note(connection.leftOut);
       page.beside(connection.concerns, connection.marks);
     });
     addWeaveLine(page, 'convergence', view.convergence);
