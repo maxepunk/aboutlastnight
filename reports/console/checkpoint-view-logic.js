@@ -508,12 +508,25 @@
   var PUT_BACK_WITHOUT_PHOTO = 'The rest of your edit stands: place a photo the article can print here if it should have one.';
 
   /**
+   * A reason a rework gave, as a sentence the next reason can follow (brief 4.10e): closed with a
+   * full stop, in place of a comma, colon, semicolon or dash it trails off on, unless it ends on its
+   * own closing punctuation (a full stop, a question or exclamation mark, or an ellipsis, with any
+   * closing quotation mark or bracket after it). '' for none.
+   */
+  function closedReason(text) {
+    var reason = asString(text).trim();
+    if (!reason || /[.!?…]["'”’)\]]*$/.test(reason)) return reason;
+    return reason.replace(/[\s,;:\-–—]+$/, '') + '.';
+  }
+
+  /**
    * Which pass made a report entry's change, in a line's words, and the reason a send-back's
    * rework gave: `held` for a pass held to the director's edits (an automatic pass or a reweave),
    * whose changes code puts back. changedEditLine reads it for one entry, and the meeting's line
    * for an element a round took out reads it for the edits of the element's fields
    * (takenOutWithEditLine; brief 4.10d): given the entries of one pass, `why` gives each reason
-   * the rework gave for them once, in their order.
+   * the rework gave for them once, in their order, each closed with a full stop (closedReason;
+   * brief 4.10e), so one reason ends before the next begins.
    *
    * @param {Object|Object[]} entries - a report entry, or the entries of one pass
    * @returns {{held: boolean, by: string, why: string}}
@@ -525,7 +538,7 @@
     var reweave = entry.pass === REWEAVE_PASS;
     var reasons = [];
     list.forEach(function (each) {
-      var reason = asString(each.reason).trim();
+      var reason = closedReason(each.reason);
       if (reason && reasons.indexOf(reason) === -1) reasons.push(reason);
     });
     return {

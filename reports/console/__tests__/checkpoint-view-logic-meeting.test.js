@@ -1546,3 +1546,57 @@ describe("4.10d: the meeting's concerns read past their rule ids", () => {
     expect([...placed.byLine]).toEqual([['headline', ['Concern: The figure is not the ledger\'s.']]]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10e: a reason ends before the next begins (the integrator's ruling 2 on the fifth wave's
+// findings, 4.10d's minor 2). passWords joined the rework's reasons with a space, so a reason
+// with no closing punctuation ran into the next: "Why: The note folds the payment into the main
+// thread No receipt left to cite." (scratch p4/4.10d-review/probe-meeting.js, case 1). Each reason
+// is closed with a full stop, so the line reads as sentences at every stop.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10e: a reason ends before the next begins', () => {
+  /** The meeting's one line for t3, whose claim and role the director edited, after a send-back took it out with these reasons. */
+  function removedLineWith(reasons) {
+    const left = clone(WEAVE);
+    left.threads[2].role = 'mirrors-it';
+    left.threads[2].claim = 'Morgan paid Riley twice.';
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = clone(left);
+    reworked.threads = reworked.threads.filter((t) => t.id !== 't3');
+    reworked.connections = reworked.connections.filter((c) => !(c.joins || []).includes('t3'));
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons });
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
+      _weaveMarks: { round: 'send-back', from: left }, humanArcRevisionCount: 1
+    }));
+    return meetingView(data, meetingDraftOf(data, undefined)).removed[0];
+  }
+  const WHY = /\(the rework of your send-back\)\. (Why: .*|No reason given\.)$/;
+  const whyOf = (line) => WHY.exec(line)[1];
+
+  test('two reasons, neither closed: each closed with a full stop, in the line', () => {
+    expect(whyOf(removedLineWith([
+      { id: 'E1', reason: 'The note folds the payment into the main thread' },
+      { id: 'E2', reason: 'No receipt left to cite' }
+    ]))).toBe('Why: The note folds the payment into the main thread. No receipt left to cite.');
+  });
+
+  test('a reason closed by its own punctuation keeps it, and a reason the rework gave twice, once with its full stop, is one reason', () => {
+    expect(whyOf(removedLineWith([
+      { id: 'E1', reason: 'Was the payment ever its own thread?' },
+      { id: 'E2', reason: 'The note said "fold it in."' }
+    ]))).toBe('Why: Was the payment ever its own thread? The note said "fold it in."');
+    expect(whyOf(removedLineWith([
+      { id: 'E1', reason: 'No receipt left to cite' },
+      { id: 'E2', reason: 'No receipt left to cite.' }
+    ]))).toBe('Why: No receipt left to cite.');
+  });
+
+  test("one reason with no closing punctuation, in a send-back's changed line at any stop", () => {
+    const entry = {
+      id: 'E2', scope: 'threads', where: 'thread "t3", role', cut: false, removed: false, moved: false,
+      director: 'mirrors-it', became: 'grounds-it', pass: SEND_BACK_PASS, automatic: false, reason: 'The note made the ledger the main thread', restored: false
+    };
+    expect(ViewLogic.changedEditLine(entry)).toBe('E2, thread "t3", role: your "mirrors-it" became "grounds-it" (the rework of your send-back). Why: The note made the ledger the main thread.');
+  });
+});
