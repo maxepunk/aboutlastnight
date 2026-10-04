@@ -5,8 +5,8 @@
  * console/__tests__/checkpoint-view-logic.test.js (traceView) and its wiring here, on
  * the source text, in the style of console-edit-gates.test.js: each stop reads the
  * payload's `trace` through ViewLogic.traceView and renders the shared TracePanel
- * once: the article stop after its evaluation bar, as the brief places it, and the map
- * (task 4.9) folded below itself.
+ * once, folded below its output: the map (task 4.9) and the desk (task 4.10), where
+ * nothing sits in front of the article.
  */
 const fs = require('fs');
 const path = require('path');
@@ -46,17 +46,18 @@ describe.each([
   });
 });
 
-describe('the article stop renders the trace right after the evaluation bar', () => {
+// Task 4.10 (spec 6.3): nothing sits in front of the article, and what the automatic passes
+// did stays folded below it, after the note box and the buttons, as on the map.
+describe('the desk folds the trace below the article', () => {
   const src = read('components/checkpoints/Article.js');
 
-  it('renders the panel once, right after the evaluation bar', () => {
+  it('renders the panel once, folded, after the buttons', () => {
     expect(count(src, 'React.createElement(TracePanel, { view: trace })')).toBe(1);
-    const evalAt = src.indexOf('React.createElement(EvalBar, { view: evaluation })');
-    const traceAt = src.indexOf('React.createElement(TracePanel, { view: trace })');
-    expect(evalAt).toBeGreaterThan(-1);
-    expect(traceAt).toBeGreaterThan(evalAt);
-    // Nothing else is rendered between them.
-    expect(src.slice(evalAt, traceAt).match(/React\.createElement\(/g)).toHaveLength(1);
+    const foldAt = src.indexOf('React.createElement(CollapsibleSection, { title: trace.title }');
+    const buttonsAt = src.indexOf("className: 'action-modes mt-md'");
+    expect(buttonsAt).toBeGreaterThan(-1);
+    expect(foldAt).toBeGreaterThan(buttonsAt);
+    expect(src.indexOf('React.createElement(TracePanel, { view: trace })')).toBeGreaterThan(foldAt);
   });
 });
 

@@ -1671,53 +1671,6 @@ textarea.input {
   tab-size: 2;
 }
 
-/* ── Evaluation Bar ── */
-.eval-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
-  background: rgba(10, 14, 22, 0.5);
-  border: 1px solid rgba(212, 168, 83, 0.1);
-  border-radius: var(--radius-md);
-  flex-wrap: wrap;
-}
-
-.eval-bar__score {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  color: var(--accent-amber);
-}
-
-.eval-bar__issues {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--accent-red);
-}
-
-/* H6: the evaluation's own sentences, not just its counts. Structural reads as
-   an error, advisory as amber (the same convention the article fact-check list
-   uses). */
-.eval-bar__list {
-  margin: var(--space-xs) 0 0;
-  padding-left: 1.2rem;
-  font-size: 0.8rem;
-  line-height: 1.5;
-}
-
-.eval-bar__list--structural {
-  color: var(--accent-red);
-}
-
-.eval-bar__list--advisory {
-  color: var(--accent-amber);
-}
-
-.eval-bar__escalation {
-  margin: var(--space-xs) 0 0;
-}
-
 /* ── Paste receipt (baseline §6(a)) ──
    `N words - ends with: "..."` under each free-text field, so a paste that
    stopped early is visible before submit. Session 062726's director notes
@@ -1744,21 +1697,13 @@ textarea.input {
 }
 
 /* ── Article Fact-Check (baseline §5) ──
-   The programmatic check of the bundle being approved. Structural items read as
-   errors, advisory as amber, matching the evaluation bar's convention. */
+   The programmatic check of the bundle being approved, folded below the article (task
+   4.10). Structural items read as errors, advisory as amber. */
 .fact-check {
   padding: var(--space-sm) var(--space-md);
   background: rgba(10, 14, 22, 0.5);
   border: 1px solid var(--accent-red);
   border-radius: var(--radius-md);
-}
-
-.fact-check__title {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  color: var(--accent-red);
-  margin: 0 0 var(--space-sm);
 }
 
 .fact-check__group {
@@ -1800,7 +1745,7 @@ textarea.input {
 /* ── The Trace (phase 2, brief 2.7) ──
    The automatic reworks that ran this round before the director reached the stop.
    History, not a defect list, so the frame is amber; the findings inside keep the
-   structural-red / advisory-amber convention of the evaluation bar and fact-check. */
+   structural-red / advisory-amber convention of the fact check. */
 .trace {
   padding: var(--space-sm) var(--space-md);
   background: rgba(10, 14, 22, 0.5);
@@ -2476,12 +2421,6 @@ textarea.input {
     min-height: 200px;
   }
 
-  .eval-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-sm);
-  }
-
   .rollback-modal__panel {
     max-width: 100%;
     margin: var(--space-sm);
@@ -2645,15 +2584,6 @@ textarea.input {
 .progress-eventlog__item--error { color: var(--accent-red, #f87171); }
 .progress-eventlog__item--retry { color: var(--accent-amber, #fbbf24); }
 
-/* Read-only echo of the thesis at the article gate (§6.2) */
-.article-thesis-echo {
-  border-left: 2px solid rgba(212, 168, 83, 0.6);
-  background: rgba(212, 168, 83, 0.06);
-  padding: var(--space-sm) var(--space-md);
-  margin-bottom: var(--space-md);
-  border-radius: 4px;
-}
-
 /* Hand-edit report and standing notes inside RevisionDiff (spec 2026-09-19) */
 .revision-diff__hand-edits { margin-top: var(--space-sm); }
 /* Advisory, not a blocker: the muted amber language of `.session-start__confirm`,
@@ -2669,39 +2599,6 @@ textarea.input {
 .revision-diff__hand-edits--kept { padding-left: var(--space-md); }
 .revision-diff__notes-list { list-style: none; padding-left: 0; margin: var(--space-xs) 0 0; }
 .revision-diff__notes-list li { margin-bottom: var(--space-xs); }
-
-/* ── The writer's questions (phase 3, brief 3.7) ──
-   What the writer asks the director instead of guessing, above the output at the arc,
-   outline and article stops. Cyan, apart from the trace's amber and the findings' red
-   and amber: a question is not a defect. */
-.writer-questions {
-  padding: var(--space-sm) var(--space-md);
-  background: rgba(10, 14, 22, 0.5);
-  border: 1px solid rgba(78, 205, 196, 0.35);
-  border-radius: var(--radius-md);
-}
-
-.writer-questions__list {
-  list-style: disc;
-  padding-left: 1.2rem;
-  margin: var(--space-xs) 0;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.writer-questions__about {
-  color: var(--accent-cyan);
-}
-
-/* Fix 3.7b: the question's kind (player, pronoun, ledger), a small tag before its subject. */
-.writer-questions__kind {
-  margin-right: var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-}
 
 /* ── 4.2: the leave-out box ──
    One "leave this photo out" box on each photo card at the character-IDs stop (phase 4,
@@ -3253,4 +3150,76 @@ textarea.input {
 .map__hint {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+/* ── 4.10: the desk's marks ──
+   Nothing sits in front of the article (spec 2026-10-02 section 6.3). Each mark sits in the
+   row of the piece it is about, under the piece, so it never covers the prose; a mark with no
+   piece sits beside the approve button; the marks the director's edits may have resolved fold
+   below the article. Red for a fact the judge could not fix and a code check's must-fix flag,
+   amber for the director's own lines, muted for the house's flags. */
+.desk-marks {
+  list-style: none;
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.desk-mark {
+  margin-top: 2px;
+  padding: 2px var(--space-sm);
+  border-left: 2px solid rgba(212, 168, 83, 0.4);
+}
+
+.desk-mark__label {
+  font-weight: 600;
+}
+
+.desk-mark__where {
+  color: var(--text-secondary);
+}
+
+.desk-mark--judge,
+.desk-mark--structural {
+  border-left-color: var(--accent-red);
+  background: rgba(231, 76, 60, 0.06);
+  color: var(--accent-red);
+}
+
+.desk-mark--concern,
+.desk-mark--changed {
+  border-left-color: var(--accent-amber);
+  background: rgba(212, 168, 83, 0.08);
+  color: var(--accent-amber);
+}
+
+.desk-mark--advisory {
+  color: var(--text-secondary);
+}
+
+/* The settled story above the headline: read-only, with no pencil. */
+.desk-echo {
+  border-left: 2px solid rgba(212, 168, 83, 0.6);
+  background: rgba(212, 168, 83, 0.06);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 4px;
+}
+
+/* The marks with no piece, beside the approve button. */
+.desk-apart {
+  padding: var(--space-sm) var(--space-md);
+  border-left: 2px solid var(--accent-amber);
+  background: rgba(212, 168, 83, 0.06);
+}
+
+.desk-apart__title {
+  font-size: 0.85rem;
+  color: var(--accent-amber);
+  margin: 0;
+}
+
+/* The marks the director's edits may have resolved, folded below the article. */
+.desk-resolved {
+  padding: var(--space-xs) 0;
 }

@@ -1,8 +1,9 @@
 /**
  * RevisionDiff Component
- * The revision diff at the article stop (the map prints its own round, task 4.9).
- * Shows revision number banner, previous feedback, shallow object diff,
- * and escalation warning when at max revisions.
+ * The round's record at the article stop, folded below the article (task 4.10; the map
+ * prints its own round, task 4.9): the round banner, the note it was sent back with, every
+ * change a pass made to the director's edits (code's restores among them, which no mark
+ * shows beside the edit), the standing notes, and the shallow diff.
  * Exports to window.Console.RevisionDiff
  */
 

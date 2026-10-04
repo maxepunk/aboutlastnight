@@ -148,13 +148,13 @@ describe('the uncalibrated label (phase 2, brief 2.4)', () => {
     expect(view.calibration).toBe('');
   });
 
-  it('the evaluation bar renders the phrase from the view and carries no wording of its own', () => {
+  // Task 4.10 (spec 6.3): the article stop was the evaluation bar's last screen, and it shows no
+  // score, so the bar went with it. The harness still prints the phrase from this view (4.12).
+  it('no console screen renders a score: the evaluation bar is gone from utils.js', () => {
     const fs = require('fs');
     const path = require('path');
     const src = fs.readFileSync(path.join(__dirname, '..', 'utils.js'), 'utf8');
-    const evalBar = src.slice(src.indexOf('function EvalBar'), src.indexOf('function TracePanel'));
-    expect(evalBar).toContain('view.calibration');
-    expect(evalBar).not.toMatch(/uncalibrated/i);
+    expect(src).not.toMatch(/function EvalBar|view\.calibration|view\.score/);
   });
 });
 
@@ -888,19 +888,24 @@ describe('traceView (phase 2, brief 2.7)', () => {
     expect(missing.changed.text).toBe('What changed: not recorded, because one of the two versions is missing.');
   });
 
-  test('an evaluation pass carries its guidance and one line per scored criterion', () => {
+  // Task 4.10 (spec 6.3 and section 10): the judges' scores go at every stop, the article's
+  // folded trace included, so a pass shows its findings and guidance and none of its scores.
+  test('an evaluation pass carries its guidance, and no score', () => {
     const view = traceView([checkPass, evaluationPass], 'journalist');
     expect(view.title).toBe('Trace: 2 automatic reworks ran this round before you arrived');
     const pass = view.passes[1];
     expect(pass.triggerLabel).toBe('Why it ran: the evaluation failed.');
     expect(pass.guidance).toBe("The evaluation's guidance, not sent to the rework: Put Zia in the opening.");
-    expect(pass.criteriaLabel).toBe('Scores (2)');
-    expect(pass.criteria).toEqual([
-      { key: 'rosterCoverage', text: 'rosterCoverage: 0.40 (structural). Zia is missing. Fix: Name Zia.' },
-      { key: 'voice', text: 'voice: 0.90' }
-    ]);
+    expect(pass).not.toHaveProperty('criteria');
+    expect(pass).not.toHaveProperty('criteriaLabel');
+    expect(JSON.stringify(pass)).not.toMatch(/0\.40|0\.90|Zia is missing/);
     expect(pass.mustFix.items).toEqual([]);
     expect(pass.noFindings).toBe(false);
+  });
+
+  test('a pass whose only record is its scores has no findings', () => {
+    const pass = traceView([{ ...evaluationPass, findings: { ...evaluationPass.findings, revisionGuidance: null } }]).passes[0];
+    expect(pass.noFindings).toBe(true);
   });
 
   // Final review (reworks[0]): since 3.10 a journalist automatic pass carries no
@@ -922,7 +927,6 @@ describe('traceView (phase 2, brief 2.7)', () => {
     const pass = traceView([{ pass: 1, trigger: 'evaluation', findings: null, changedScopes: [] }]).passes[0];
     expect(pass.noFindings).toBe(true);
     expect(pass.guidance).toBe('');
-    expect(pass.criteria).toEqual([]);
   });
 
   test('an unknown trigger, a missing number and an unreadable time degrade to words, not blanks', () => {

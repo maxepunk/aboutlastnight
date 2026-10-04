@@ -735,6 +735,101 @@
     return Boolean(found) && Number.isInteger(blockIndex) && blockIndex >= 0 && blockIndex < found.unchanged;
   }
 
+  // ── the pieces a mark sits beside (task 4.10) ─────────────────────────────
+
+  /**
+   * The fields of each kind of block that print the article's words: the printed fields of
+   * lib/hand-edit-diff.js PRINTED_BLOCK_FIELDS, less the type, the ids, the filename and a
+   * list's numbering. A test holds the two equal. A block of a type the page does not know
+   * prints as a paragraph.
+   */
+  var PRINTED_TEXT_FIELDS = {
+    paragraph: ['text'],
+    quote: ['text', 'attribution'],
+    'evidence-reference': ['caption'],
+    list: ['items'],
+    photo: ['caption'],
+    'evidence-card': ['headline', 'content', 'owner']
+  };
+
+  /** The words a block prints, field by field (PRINTED_TEXT_FIELDS), a list's items one each. */
+  function printedTexts(block) {
+    if (!isPlainObject(block)) return [];
+    var fields = Object.prototype.hasOwnProperty.call(PRINTED_TEXT_FIELDS, block.type) ? PRINTED_TEXT_FIELDS[block.type] : ['text'];
+    var out = [];
+    fields.forEach(function (field) {
+      var value = block[field];
+      if (typeof value === 'string') out.push(value);
+      if (Array.isArray(value)) {
+        value.forEach(function (item) {
+          if (typeof item === 'string') out.push(item);
+          else if (isPlainObject(item) && typeof item.text === 'string') out.push(item.text);
+        });
+      }
+    });
+    return out;
+  }
+
+  /**
+   * The index of a section's nth paragraph block, counting its paragraph blocks from 1 as the
+   * fact check's findings count them (lib/content-bundle-fact-check.js narratorSegments), or -1.
+   */
+  function paragraphBlockIndex(blocks, ordinal) {
+    var list = Array.isArray(blocks) ? blocks : [];
+    var n = 0;
+    for (var i = 0; i < list.length; i += 1) {
+      if (isPlainObject(list[i]) && list[i].type === 'paragraph') {
+        n += 1;
+        if (n === ordinal) return i;
+      }
+    }
+    return -1;
+  }
+
+  /** The strings of a list of values, in order. */
+  function stringsOf(values) {
+    return values.filter(function (v) { return typeof v === 'string'; });
+  }
+
+  /**
+   * The pieces of the desk a mark can sit beside, in reading order, each with the words it
+   * prints: the headline (its main line, kicker and deck), the byline, the hero while it
+   * names a photo, then each section's heading and each block the desk renders, then each
+   * sidebar card. A piece's `anchor` names it as the desk renders it: {kind: 'headline'},
+   * {kind: 'byline'}, {kind: 'hero'}, {kind: 'heading', section}, {kind: 'block', section,
+   * block} or {kind: 'sidebar', index}, by its indexes in this bundle. A heading and a block
+   * carry their section's key (sectionKey), and a block, the hero and a sidebar card the
+   * value itself.
+   *
+   * @param {Object} bundle
+   * @returns {Array<{anchor: Object, texts: string[], sectionKey?: string, block?: Object}>}
+   */
+  function printedPlaces(bundle) {
+    var b = isPlainObject(bundle) ? bundle : {};
+    var head = isPlainObject(b.headline) ? b.headline : {};
+    var byline = isPlainObject(b.byline) ? b.byline : {};
+    var places = [
+      { anchor: { kind: 'headline' }, texts: stringsOf([head.main, head.kicker, head.deck]) },
+      { anchor: { kind: 'byline' }, texts: stringsOf([byline.author, byline.title, byline.guestReporter]) }
+    ];
+    if (isPlainObject(b.heroImage) && asString(b.heroImage.filename)) {
+      places.push({ anchor: { kind: 'hero' }, texts: stringsOf([b.heroImage.caption]), block: b.heroImage });
+    }
+    sectionsOf(b).forEach(function (section, s) {
+      var key = sectionKey(section, s);
+      places.push({ anchor: { kind: 'heading', section: s }, sectionKey: key, texts: stringsOf([isPlainObject(section) ? section.heading : null]) });
+      contentOf(section).forEach(function (block, j) {
+        if (!isPlainObject(block) || !block.type) return;
+        places.push({ anchor: { kind: 'block', section: s, block: j }, sectionKey: key, texts: printedTexts(block), block: block });
+      });
+    });
+    (Array.isArray(b.evidenceCards) ? b.evidenceCards : []).forEach(function (card, k) {
+      if (!isPlainObject(card)) return;
+      places.push({ anchor: { kind: 'sidebar', index: k }, texts: stringsOf([card.headline, card.summary]), block: card });
+    });
+    return places;
+  }
+
   // ── what the desk shows ───────────────────────────────────────────────────
 
   /** The words of the article's paragraphs, in the bundle as edited. */
@@ -895,6 +990,11 @@
     deskChanges: deskChanges,
     untouchedThrough: untouchedThrough,
     sectionLabel: sectionLabel,
+    // Task 4.10: the pieces of the desk the marks sit beside
+    PRINTED_TEXT_FIELDS: PRINTED_TEXT_FIELDS,
+    printedTexts: printedTexts,
+    paragraphBlockIndex: paragraphBlockIndex,
+    printedPlaces: printedPlaces,
 
     wordCount: wordCount,
     stripScripts: stripScripts,

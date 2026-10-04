@@ -12,7 +12,9 @@
  * Finding 5: the article gate's thesis echo rendered `outlineThesis.hook` raw,
  * unlike every sibling renderer in that file — a non-string field (a number or an
  * object from an older/edited outline) is a React render throw on a read-only
- * panel. It renders through a string-or-'(empty)' guard.
+ * panel. It renders through a string-or-'(empty)' guard. Task 4.10: the echo shows
+ * the settled story and its question, which the view logic's deskEcho returns as
+ * text, so the guard is the view's (pinned in checkpoint-view-logic-desk.test.js).
  *
  * The console has no DOM harness (reports/CLAUDE.md), so these are source
  * contracts — the right shape for a defect that IS a duplicated block.
@@ -96,16 +98,17 @@ describe('Article.js checks the bundle on the desk in one place, on every approv
   });
 });
 
-describe('Article.js thesis echo is type-guarded (spec 2026-09-19 §6.2)', () => {
+// Task 4.10: the echo above the headline shows the settled story and its question, as the view
+// logic's deskEcho returns them, text in every field (a non-string reads as empty).
+describe("Article.js's echo of the settled story renders the view's text (spec 2026-09-19 §6.2; task 4.10)", () => {
   const src = read('components/checkpoints/Article.js');
 
-  it('renders each field through the string-or-(empty) guard', () => {
-    expect(src).toContain("typeof value === 'string' && value.trim()");
+  it('renders each line from the view, with an (empty) line for a blank one', () => {
+    expect(src).toContain('echoLine(desk.echo.storyLabel, desk.echo.story)');
+    expect(src).toContain('echoLine(desk.echo.questionLabel, desk.echo.question)');
   });
 
-  it('never renders a raw outlineThesis field', () => {
-    ['hook', 'keyTension', 'primaryArc'].forEach((field) => {
-      expect(src).not.toContain('outlineThesis.' + field + " || '(empty)'");
-    });
+  it('never renders a raw payload field: no settledStory read and no outlineThesis', () => {
+    expect(src).not.toMatch(/data\.settledStory|settledStory\.|outlineThesis/);
   });
 });

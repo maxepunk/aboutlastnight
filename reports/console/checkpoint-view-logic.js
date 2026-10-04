@@ -34,6 +34,11 @@
  *     and edited line by line in minutes. It reads 4.6's payload (lib/map.js
  *     mapCheckpointData) and sends only 4.6's payloads (mapPayload).
  *
+ *   deskView (task 4.10)
+ *     the article stop is the director's desk: the article as it will print, each fact
+ *     the judge could not fix and each code check's flag marked beside the piece it is
+ *     about, and nothing in front of it, no score and no note on the writing.
+ *
  *   accusationView
  *     the block read `reasoning` and `confidence`; the parse emits `charge` and
  *     `notes`, so the whole parsed accusation (votes, motive, alternative
@@ -93,8 +98,9 @@
   }
 
   /**
-   * The one phrase a model evaluation's score carries, at all three stops (phase 2,
-   * brief 2.4).
+   * The one phrase a model evaluation's score carries (phase 2, brief 2.4). Since task 4.10
+   * no stop shows a score (spec 6.3); the e2e harness prints the phrase beside the score it
+   * still prints, until task 4.12.
    *
    * No judge has yet been checked against the director's own approvals and send
    * backs; that calibration is phase 7. All eight evaluations of 091826 and 092026
@@ -141,9 +147,11 @@
   }
 
   /**
-   * Display shape for the evaluation bar, shared by all three gates.
+   * An evaluation's parts, as the e2e harness prints them. No stop renders it since task
+   * 4.10: the desk marks an escalated evaluation's issues and its concerns itself
+   * (deskMarks), and shows no score.
    *
-   * Two field-name hazards handled here rather than in three components:
+   * Two field-name hazards handled here rather than in each reader:
    *   - the score is 0-1, and the old bars printed it as `0.95/10`;
    *   - `structuralPassed` is only on the fact-check-sourced entry; the Opus
    *     history entry (evaluator-nodes.js historyEntry) carries `ready` instead.
@@ -415,7 +423,8 @@
   }
 
   /**
-   * The article fact-check as a defect list the gate can render.
+   * The article fact-check as a defect list the gate can render: the whole list, which the
+   * desk folds below the article since each finding is marked beside its piece (task 4.10).
    *
    * F1: a hit located in the director's own edit, or caused by the director's cut, is an
    * advisory opening with DIRECTOR_EDIT_PREFIX. Those form one group of their own
@@ -730,7 +739,9 @@
    * (changedEditLine), `automatic` marking a change an automatic pass made and
    * `restored` one code put back (FA), each read from the entry's own flags;
    * `keptCount` is the edits checked when none changed. `notes` are standingNoteItems',
-   * under `labels`, the console's stop labels.
+   * under `labels`, the console's stop labels. Task 4.10: this is the whole record of the
+   * round, which the desk folds below the article; beside an edit a stop shows only
+   * changedEditsToShow's entries.
    */
   function steeringView(handEditReport, gateNotes, labels) {
     var report = editReportOf(handEditReport);
@@ -1134,26 +1145,6 @@
     return pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
 
-  /**
-   * One line per criterion the evaluation scored, in its own order. Accepts the
-   * current `{score, type, notes, fix}` object and a bare number, as
-   * buildRevisionContext does.
-   */
-  function traceCriteria(scores) {
-    if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return [];
-    return Object.keys(scores).map(function (name) {
-      var value = scores[name];
-      var detail = value && typeof value === 'object' ? value : {};
-      var score = typeof value === 'number' ? value
-        : (typeof detail.score === 'number' ? detail.score : null);
-      var text = name + ': ' + (score === null ? 'unscored' : score.toFixed(2));
-      if (asString(detail.type)) text += ' (' + detail.type + ')';
-      if (asString(detail.notes).trim()) text += '. ' + detail.notes.trim();
-      if (asString(detail.fix).trim()) text += ' Fix: ' + detail.fix.trim();
-      return { key: name, text: text };
-    });
-  }
-
   function traceFindingList(label, items) {
     return { label: label + ' (' + items.length + ')', items: items };
   }
@@ -1191,14 +1182,17 @@
   /**
    * The trace panel's model for one stop.
    *
-   * @param {Array|null} trace - data.trace at the outline or article stop
+   * Task 4.10 (spec 6.3 and section 10): the judges' scores go at every stop, so a pass shows
+   * what it had to fix, what it was told to consider, the evaluation's guidance and what it
+   * changed, and none of the scores its findings recorded (`criteriaScores`).
+   *
+   * @param {Array|null} trace - data.trace at the map or the article stop
    * @param {string} [theme='journalist'] - the session's theme, which decides whether a
    *   pass's rework was given the evaluation's guidance (TRACE_GUIDANCE_LABELS)
    * @returns {{any: boolean, title: string, passes: Array<{key: string, heading: string,
    *            triggerLabel: string, mustFix: {label: string, items: string[]},
    *            shouldConsider: {label: string, items: string[]}, noFindings: boolean,
-   *            changed: {labels: string[], text: string}, guidance: string,
-   *            criteria: Array<{key: string, text: string}>, criteriaLabel: string}>}}
+   *            changed: {labels: string[], text: string}, guidance: string}>}}
    */
   function traceView(trace, theme) {
     var guidanceLabel = TRACE_GUIDANCE_LABELS[theme === 'detective' ? 'detective' : 'journalist'];
@@ -1211,18 +1205,15 @@
         var mustFix = stringList(findings.structuralIssues);
         var shouldConsider = stringList(findings.advisoryWarnings);
         var guidance = asString(findings.revisionGuidance).trim();
-        var criteria = traceCriteria(findings.criteriaScores);
         return {
           key: 'pass-' + number + '-' + index,
           heading: 'Automatic pass ' + number + (time ? ', at ' + time : ''),
           triggerLabel: TRACE_TRIGGER_LABELS[p.trigger] || 'Why it ran: not recorded.',
           mustFix: traceFindingList('Must fix', mustFix),
           shouldConsider: traceFindingList('Should consider', shouldConsider),
-          noFindings: mustFix.length === 0 && shouldConsider.length === 0 && !guidance && criteria.length === 0,
+          noFindings: mustFix.length === 0 && shouldConsider.length === 0 && !guidance,
           changed: traceChanged(p.changedScopes),
-          guidance: guidance ? guidanceLabel + guidance : '',
-          criteria: criteria,
-          criteriaLabel: 'Scores (' + criteria.length + ')'
+          guidance: guidance ? guidanceLabel + guidance : ''
         };
       });
     var n = passes.length;
@@ -2902,6 +2893,613 @@
     };
   }
 
+  // ── The desk's marks (phase 4, task 4.10; spec 6.2 and 6.3) ──────────────────
+  //
+  // The article stop is the director's desk: the article as it will print, with nothing in
+  // front of it. A fact the judge could not fix within its budget and a code check's flag sit
+  // beside the paragraph, card or photo they are about; a concern about one of the director's
+  // edits, and an edit a rework changed, beside the edit. There is no score and no note on the
+  // writing. A mark whose text the director's edit has since changed or taken out folds below
+  // the article as possibly resolved, and one with no piece to sit beside goes in one line
+  // beside the approve button. Article.js renders the desk from deskView, and the harness
+  // prints the desk from the same model (task 4.12).
+
+  /**
+   * console/article-desk-logic.js, read when it runs, as outlineEditLogic is: that module loads
+   * after this one in the browser, and the desk calls it long after both.
+   */
+  function deskLogic() {
+    var desk = (typeof window !== 'undefined' && window.Console && window.Console.articleDeskLogic)
+      || (typeof require === 'function' ? require('./article-desk-logic') : null);
+    if (!desk || typeof desk.printedPlaces !== 'function') {
+      throw new Error("checkpoint-view-logic: the desk's marks read console/article-desk-logic.js, which is not loaded");
+    }
+    return desk;
+  }
+
+  /** What the desk calls each kind of mark, by its tone. */
+  var DESK_MARK_LABELS = {
+    judge: 'The judge could not fix this',
+    structural: 'Fact check',
+    concern: 'Concern about your edit',
+    changed: 'Your edit',
+    advisory: 'Fact check, advisory'
+  };
+
+  /** The order marks sit in beside one piece: the errors of fact first, then the director's own lines, then the house's flags. */
+  var DESK_MARK_ORDER = ['judge', 'structural', 'concern', 'changed', 'advisory'];
+
+  /** The kind the fact check gives the length (lib/content-bundle-fact-check.js), which sits on its section's heading. */
+  var LENGTH_KIND = 'length';
+
+  /** The source of the fact check's own entry in the evaluation history (evaluator-nodes.js), which is never the judge's. */
+  var FACT_CHECK_SOURCE = 'fact-check';
+
+  /** The echo above the headline, the meeting's story, and the fold of what the director's edits may have resolved. */
+  var DESK_ECHO_TITLE = 'Settled at the story meeting';
+  var DESK_RESOLVED_HINT = 'Each was about a line, a card or a photo you have since changed or taken out.';
+
+  /** Text with its runs of whitespace as one space, trimmed: how a finding's excerpt is written. */
+  function collapsedText(text) {
+    return asString(text).replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * A text as lib/grounding.js normalizeForGrounding reads it, for the browser that cannot
+   * import it: curly quotation marks straight, every dash a hyphen, its whitespace one space.
+   * A test holds the two equal.
+   */
+  function groundingText(value) {
+    return String(value || '')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2013\u2014-]/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * A letter or a digit, as the quotes' rule reads one: a character with a case, or 0 to 9.
+   * The server reads any letter or number (\p{L}, \p{N}); the console keeps to the regular
+   * expressions the browser's Babel compiles, and the game's text is written in English.
+   */
+  function isLetterOrDigit(ch) {
+    return typeof ch === 'string' && ch.length > 0 && (/[0-9]/.test(ch) || ch.toLowerCase() !== ch.toUpperCase());
+  }
+
+  /**
+   * The single-quoted passages of a text, as lib/grounding.js quotedPassages finds them: from a
+   * quotation mark no letter or digit precedes, past each apostrophe inside a word, to a
+   * quotation mark no letter or digit follows.
+   */
+  function singleQuotedPassages(text) {
+    var out = [];
+    var i = 0;
+    while (i < text.length) {
+      if (text.charAt(i) !== "'" || isLetterOrDigit(text.charAt(i - 1))) {
+        i += 1;
+        continue;
+      }
+      var j = i + 1;
+      while (j < text.length && (text.charAt(j) !== "'" || (isLetterOrDigit(text.charAt(j - 1)) && isLetterOrDigit(text.charAt(j + 1))))) j += 1;
+      if (j < text.length && j > i + 1 && !isLetterOrDigit(text.charAt(j + 1))) {
+        out.push(text.slice(i, j + 1));
+        i = j + 1;
+      } else {
+        i += 1;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The passages a finding quotes, as lib/grounding.js quotedPassages reads them, for the
+   * browser that cannot import it: the double-quoted passages, then the single-quoted ones,
+   * each without its quotation marks and trimmed. A test holds the two equal.
+   *
+   * @param {*} value - a finding
+   * @returns {string[]}
+   */
+  function quotedPassagesOf(value) {
+    var text = groundingText(value);
+    var doubles = text.match(/"[^"]+"/g) || [];
+    return doubles.concat(singleQuotedPassages(text))
+      .map(function (passage) { return passage.slice(1, -1).trim(); })
+      .filter(Boolean);
+  }
+
+  /** An elision inside a quoted passage, where the passage is split (lib/hand-edit-diff.js ELLIPSIS). */
+  var ELISION = /\s*(?:\[\s*(?:\.{3}|\u2026)\s*\]|\.{3}|\u2026)\s*/;
+
+  /** The fewest words a quoted passage needs to locate anything (lib/hand-edit-diff.js MIN_LOCATING_WORDS; a test holds the two equal). */
+  var MIN_QUOTE_WORDS = 3;
+
+  /** How many words a text holds: each run that opens on a letter or a digit, through its letters, digits, apostrophes and hyphens. */
+  function wordsIn(text) {
+    var t = asString(text);
+    var n = 0;
+    var inWord = false;
+    for (var i = 0; i < t.length; i += 1) {
+      var ch = t.charAt(i);
+      if (isLetterOrDigit(ch)) {
+        if (!inWord) n += 1;
+        inWord = true;
+      } else if (!(inWord && (ch === "'" || ch === '-'))) {
+        inWord = false;
+      }
+    }
+    return n;
+  }
+
+  /** A text as a quote is looked for in it: grounding's reading, in lower case (lib/hand-edit-diff.js fold). */
+  function foldQuote(text) {
+    return groundingText(text).toLowerCase();
+  }
+
+  /**
+   * The passages that can locate a finding, as lib/hand-edit-diff.js locateQuotedText reads
+   * them: each passage it quotes, split at an elision, of MIN_QUOTE_WORDS words or more, and
+   * none that is one of the article's section headings, which a finding quotes to say where
+   * the problem is.
+   *
+   * @param {string} text - a finding
+   * @param {Set<string>} headings - the article's section headings, folded
+   * @returns {string[]}
+   */
+  function locatingPassages(text, headings) {
+    var out = [];
+    quotedPassagesOf(text).forEach(function (passage) {
+      passage.split(ELISION).forEach(function (piece) {
+        var p = piece.trim();
+        if (wordsIn(p) >= MIN_QUOTE_WORDS && !headings.has(foldQuote(p))) out.push(p);
+      });
+    });
+    return out;
+  }
+
+  /**
+   * A piece of the desk as the key Article.js renders its marks under ('headline', 'byline',
+   * 'hero', 'heading:<s>', 'block:<s>:<b>', 'sidebar:<k>'), from its anchor
+   * (article-desk-logic.js printedPlaces).
+   *
+   * @param {Object} anchor
+   * @returns {string}
+   */
+  function deskAnchorKey(anchor) {
+    if (!isPlainObject(anchor)) return '';
+    if (anchor.kind === 'block') return 'block:' + anchor.section + ':' + anchor.block;
+    if (anchor.kind === 'heading') return 'heading:' + anchor.section;
+    if (anchor.kind === 'sidebar') return 'sidebar:' + anchor.index;
+    return asString(anchor.kind);
+  }
+
+  /** A piece of the desk in words, in the bundle its anchor indexes: "The Story, block 3". */
+  function pieceWords(anchor, bundle) {
+    var sections = isPlainObject(bundle) && Array.isArray(bundle.sections) ? bundle.sections : [];
+    var label = function (s) { return deskLogic().sectionLabel(sections[s], s); };
+    if (anchor.kind === 'headline') return 'The headline';
+    if (anchor.kind === 'byline') return 'The byline';
+    if (anchor.kind === 'hero') return 'The top photo';
+    if (anchor.kind === 'heading') return label(anchor.section) + ', heading';
+    if (anchor.kind === 'block') return label(anchor.section) + ', block ' + (anchor.block + 1);
+    if (anchor.kind === 'sidebar') return 'Sidebar card ' + (anchor.index + 1);
+    return '';
+  }
+
+  /** A section's id as a finding's place names it: its id trimmed, or null for a section with none (lib/content-bundle-fact-check.js sectionIdOf). */
+  function findingSectionId(section) {
+    return isPlainObject(section) && typeof section.id === 'string' && section.id.trim() ? section.id.trim() : null;
+  }
+
+  function sectionsIn(bundle) {
+    return isPlainObject(bundle) && Array.isArray(bundle.sections) ? bundle.sections : [];
+  }
+
+  /** The index of the one section a finding's place names, or -1 when none, or more than one, has that id. */
+  function sectionNamed(bundle, sectionId) {
+    var sections = sectionsIn(bundle);
+    var found = -1;
+    for (var s = 0; s < sections.length; s += 1) {
+      if (findingSectionId(sections[s]) === sectionId) {
+        if (found !== -1) return -1;
+        found = s;
+      }
+    }
+    return found;
+  }
+
+  /** The index of a bundle's section under a key (article-desk-logic.js sectionKey), or -1. */
+  function sectionWithKey(bundle, key) {
+    var sections = sectionsIn(bundle);
+    for (var s = 0; s < sections.length; s += 1) {
+      if (deskLogic().sectionKey(sections[s], s) === key) return s;
+    }
+    return -1;
+  }
+
+  /** The label of a bundle's section under a key, as the desk reads it: its heading, else its id; the key itself for none. */
+  function sectionLabelOfKey(bundle, key) {
+    var s = sectionWithKey(bundle, key);
+    return s === -1 ? key : deskLogic().sectionLabel(sectionsIn(bundle)[s], s);
+  }
+
+  /** The pieces of a section, by its key, or null for no section. */
+  function inSection(key) {
+    return key === null || key === undefined ? null : function (piece) { return piece.sectionKey === key; };
+  }
+
+  /** Does a piece print `text`, its runs of whitespace as one space? */
+  function holdsText(piece, text) {
+    var wanted = collapsedText(text);
+    return wanted !== '' && piece.texts.some(function (t) { return collapsedText(t).indexOf(wanted) !== -1; });
+  }
+
+  /** Does a piece print a passage a finding quotes, as the server's guard looks for it, in any case? */
+  function holdsQuote(piece, passage) {
+    var wanted = foldQuote(passage);
+    return wanted !== '' && piece.texts.some(function (t) { return foldQuote(t).indexOf(wanted) !== -1; });
+  }
+
+  /** The first piece that passes the test: among the preferred pieces first, then any. */
+  function firstPiece(pieces, test, prefer) {
+    var i;
+    if (typeof prefer === 'function') {
+      for (i = 0; i < pieces.length; i += 1) if (prefer(pieces[i]) && test(pieces[i])) return pieces[i];
+    }
+    for (i = 0; i < pieces.length; i += 1) if (test(pieces[i])) return pieces[i];
+    return null;
+  }
+
+  /**
+   * Where a mark sits: beside the first piece on the desk that passes the test (`{at}`); folded
+   * below as possibly resolved when only the article as the stop opened it held such a piece,
+   * so the director's edit changed or took it out (`{was}`, where it was then); or null, beside
+   * no piece.
+   */
+  function locate(ctx, test, prefer) {
+    var now = firstPiece(ctx.currentPieces, test, prefer);
+    if (now) return { at: now.anchor };
+    var before = firstPiece(ctx.openedPieces, test, prefer);
+    return before ? { was: before.anchor } : null;
+  }
+
+  /** The headline's main line, kicker or deck, as text. */
+  function headlineField(bundle, name) {
+    var head = isPlainObject(bundle) && isPlainObject(bundle.headline) ? bundle.headline : {};
+    return asString(head[name]);
+  }
+
+  /** A finding on the headline, the kicker or the deck: beside the headline while the field is as the stop opened it or holds the excerpt. */
+  function fieldPlace(field, excerpt, ctx) {
+    var name = field.indexOf('headline.') === 0 ? field.slice('headline.'.length) : '';
+    if (!name) return null;
+    var now = headlineField(ctx.current, name);
+    var wanted = collapsedText(excerpt);
+    if (now === headlineField(ctx.opened, name) || (wanted !== '' && collapsedText(now).indexOf(wanted) !== -1)) return { at: { kind: 'headline' } };
+    return { was: { kind: 'headline' } };
+  }
+
+  /**
+   * A finding on a card or a photo, found by what names it (the integrator's ruling 4): its id
+   * or its filename, in the sidebar, the hero or a section's blocks. Beside it, wherever it now
+   * sits, while it is as the stop opened it; possibly resolved once the director's edit changed
+   * or deleted it. Its excerpt (the card's headline, the photo's caption) decides nothing: the
+   * director fixing a card's text leaves its headline as it was. `occurrence` says which of the
+   * cards or photos of that name in the finding's section it is about.
+   */
+  function identityPlace(place, occurrence, ctx) {
+    var card = typeof place.tokenId === 'string';
+    var kind = place.sidebar === true ? 'sidebar' : (place.hero === true ? 'hero' : 'block');
+    var named = function (piece) {
+      if (piece.anchor.kind !== kind || !isPlainObject(piece.block)) return false;
+      if (card) return piece.block.tokenId === place.tokenId && (kind === 'sidebar' || piece.block.type === 'evidence-card');
+      return piece.block.filename === place.filename && (kind === 'hero' || piece.block.type === 'photo');
+    };
+    var opened = ctx.openedPieces.filter(named);
+    var inItsSection = kind === 'block' && hasOwn(place, 'section')
+      ? opened.filter(function (piece) { return findingSectionId(sectionsIn(ctx.opened)[piece.anchor.section]) === place.section; })
+      : opened;
+    var was = inItsSection[occurrence] || inItsSection[0] || opened[0] || null;
+    if (!was) {
+      var now = firstPiece(ctx.currentPieces, named, null);
+      return now ? { at: now.anchor } : null;
+    }
+    var unchanged = function (piece) { return named(piece) && ctx.desk.sameBlock(piece.block, was.block); };
+    var found = firstPiece(ctx.currentPieces, unchanged, inSection(was.sectionKey));
+    return found ? { at: found.anchor } : { was: was.anchor };
+  }
+
+  /**
+   * Where a fact check's finding sits (brief 4.7a's places; the integrator's rulings 1 to 4):
+   * - a paragraph, by its section and ordinal while no block at or before it in that section
+   *   was inserted, deleted, moved or edited (article-desk-logic.js untouchedThrough), and by its
+   *   excerpt otherwise, its own section first;
+   * - the headline, the kicker or the deck: beside the headline (fieldPlace);
+   * - a card or a photo, by what names it (identityPlace);
+   * - the length, on the heading of each section it counts;
+   * - a quote block, by its excerpt;
+   * - no place (a player never named, a phrase across two pieces): beside no piece.
+   */
+  function findingPlace(finding, occurrence, ctx) {
+    var place = finding.place;
+    if (!isPlainObject(place)) return null;
+    if (typeof place.field === 'string') return fieldPlace(place.field, finding.excerpt, ctx);
+    if (typeof place.tokenId === 'string' || typeof place.filename === 'string') return identityPlace(place, occurrence, ctx);
+    var os = sectionNamed(ctx.opened, place.section);
+    var key = os === -1 ? null : ctx.desk.sectionKey(sectionsIn(ctx.opened)[os], os);
+    if (finding.kind === LENGTH_KIND) {
+      var heading = key === null ? -1 : sectionWithKey(ctx.current, key);
+      return heading === -1 ? null : { at: { kind: 'heading', section: heading } };
+    }
+    if (typeof place.paragraph === 'number' && key !== null) {
+      var block = ctx.desk.paragraphBlockIndex(sectionsIn(ctx.opened)[os].content, place.paragraph);
+      var cs = sectionWithKey(ctx.current, key);
+      if (block !== -1 && cs !== -1 && ctx.desk.untouchedThrough(ctx.changes, key, block)) return { at: { kind: 'block', section: cs, block: block } };
+    }
+    if (!collapsedText(finding.excerpt)) return null;
+    return locate(ctx, function (piece) { return piece.anchor.kind === 'block' && holdsText(piece, finding.excerpt); }, inSection(key));
+  }
+
+  /**
+   * Where a finding that quotes the article sits (a judge's issue, a judge's concern): beside the
+   * first piece that holds a passage it quotes (locatingPassages), never a section's heading.
+   */
+  function quotePlace(text, ctx) {
+    var passages = locatingPassages(text, ctx.headings);
+    var holding = function (passage) {
+      return function (piece) { return piece.anchor.kind !== 'heading' && holdsQuote(piece, passage); };
+    };
+    var i;
+    for (i = 0; i < passages.length; i += 1) {
+      var now = firstPiece(ctx.currentPieces, holding(passages[i]), null);
+      if (now) return { at: now.anchor };
+    }
+    for (i = 0; i < passages.length; i += 1) {
+      var before = firstPiece(ctx.openedPieces, holding(passages[i]), null);
+      if (before) return { was: before.anchor };
+    }
+    return null;
+  }
+
+  /** The pieces a report entry's scope names, looked in first: its section's, the headline's, the byline's, the hero's or the sidebar's. */
+  function scopePieces(scope) {
+    var m = /^section:(.*)$/.exec(asString(scope));
+    if (m) return inSection(m[1]);
+    var kinds = { headline: 'headline', byline: 'byline', heroImage: 'hero', evidenceCards: 'sidebar' };
+    var kind = hasOwn(kinds, scope) ? kinds[scope] : null;
+    return kind ? function (piece) { return piece.anchor.kind === kind; } : null;
+  }
+
+  /** The filename or the id an element's text names, as lib/hand-edit-diff.js editValueText writes an element ("filename: p3.jpg; caption: ..."). */
+  function namedIn(text) {
+    var m = /(?:^|; )(filename|tokenId): ([^;]+)/.exec(asString(text));
+    return m ? { field: m[1], value: m[2].trim() } : null;
+  }
+
+  /**
+   * Where an edit a round changed sits: beside the piece that prints what the director's text
+   * became, or, for a block a pass moved, the block itself, the entry's section first; possibly
+   * resolved when only the article as the stop opened it printed that; beside no piece when the
+   * pass took it out.
+   */
+  function changedPlace(entry, ctx) {
+    var prefer = scopePieces(entry.scope);
+    var target;
+    if (entry.moved === true) {
+      if (typeof entry.became !== 'string') return null;
+      var went = /section "([^"]*)"/.exec(entry.became);
+      if (went) prefer = inSection(went[1]);
+      target = asString(entry.director);
+    } else {
+      target = typeof entry.became === 'string' ? entry.became : '';
+    }
+    if (!collapsedText(target)) return null;
+    var name = namedIn(target);
+    return locate(ctx, function (piece) {
+      return holdsText(piece, target) || (name !== null && isPlainObject(piece.block) && piece.block[name.field] === name.value);
+    }, prefer);
+  }
+
+  /**
+   * How the desk phrases an edit a round changed (changedEditLine, every stop's builder): its
+   * place as the report names it, each section by its label on the desk (its heading, else its
+   * id), with no edit id, since the desk shows none.
+   */
+  function deskEditLineOptions(bundle) {
+    var words = function (text) {
+      return asString(text).replace(/section "([^"]*)"/gi, function (_, key) { return sectionLabelOfKey(bundle, key); });
+    };
+    return {
+      place: function (entry) { return capitalized(words(asString(entry.where) || scopeLabel(entry.scope))); },
+      valueText: function (text) {
+        var m = /^(another place in )?section "([^"]*)"$/.exec(asString(text));
+        return m ? (m[1] || '') + sectionLabelOfKey(bundle, m[2]) : text;
+      }
+    };
+  }
+
+  /** The article's section headings, folded as a quote is looked for. */
+  function headingsOf(bundle) {
+    var out = new Set();
+    sectionsIn(bundle).forEach(function (section) {
+      if (isPlainObject(section) && asString(section.heading).trim()) out.add(foldQuote(section.heading));
+    });
+    return out;
+  }
+
+  /**
+   * The marks in their order (DESK_MARK_ORDER), each beside its piece, folded below as possibly
+   * resolved, or beside no piece; a mark that repeats another of its tone and text at the same
+   * place is shown once.
+   */
+  function placeMarks(found, ctx) {
+    var ordered = found.map(function (mark, i) { return { mark: mark, i: i }; }).sort(function (a, b) {
+      return (DESK_MARK_ORDER.indexOf(a.mark.tone) - DESK_MARK_ORDER.indexOf(b.mark.tone)) || (a.i - b.i);
+    });
+    var at = {};
+    var apart = [];
+    var resolved = [];
+    var put = function (list, mark) {
+      if (!list.some(function (m) { return m.tone === mark.tone && m.text === mark.text; })) list.push(mark);
+    };
+    ordered.forEach(function (entry, n) {
+      var place = entry.mark.place;
+      var mark = { key: 'mark-' + n, tone: entry.mark.tone, label: DESK_MARK_LABELS[entry.mark.tone], text: entry.mark.text, where: '', anchor: null };
+      if (place && place.at) {
+        mark.anchor = place.at;
+        mark.where = pieceWords(place.at, ctx.current);
+        var key = deskAnchorKey(place.at);
+        if (!hasOwn(at, key)) at[key] = [];
+        put(at[key], mark);
+      } else if (place && hasOwn(place, 'was')) {
+        mark.where = pieceWords(place.was, ctx.opened);
+        put(resolved, mark);
+      } else {
+        put(apart, mark);
+      }
+    });
+    return { at: at, apart: apart, resolved: resolved };
+  }
+
+  /**
+   * The desk's marks (spec 6.2 and 6.3): each mark, `{key, tone, label, text, where, anchor}`,
+   * beside the piece of the desk it is about, or apart:
+   * - the judge's issues left unresolved at the cap (an escalated evaluation's structural
+   *   issues), each by the sentence it quotes (tone `judge`);
+   * - the fact check's findings (brief 4.7a), each by its place (findingPlace): its must-fix
+   *   flags (`structural`) and its advisories (`advisory`); one under a director's edit's id is a
+   *   concern (`concern`), its finding shown past the prefix and the id;
+   * - the judge's concerns about the director's edits, each beside the line it quotes (`concern`);
+   * - the edits a round changed that a stop shows (changedEditsToShow), each beside what the
+   *   director's text became (`changed`), with the rework's reason for a send-back's.
+   * The judge's score, its notes on the writing and every other advisory of its are not marks.
+   *
+   * @param {Object} data - the article stop's payload: `contentBundle` (the article as the stop
+   *   opened it), `factCheck`, `lastEvaluation`, `handEditReport`
+   * @param {Object} current - the bundle on the desk (Article.js getCurrentBundle)
+   * @returns {{at: Object<string, Object[]>, apart: Object[], resolved: Object[]}} the marks by
+   *   the key of the piece they sit beside (deskAnchorKey), the marks beside no piece, and the
+   *   marks possibly resolved, each `where` naming the piece it was beside when the stop opened
+   */
+  function deskMarks(data, current) {
+    var d = isPlainObject(data) ? data : {};
+    var desk = deskLogic();
+    var opened = isPlainObject(d.contentBundle) ? d.contentBundle : {};
+    var onDesk = isPlainObject(current) ? current : opened;
+    var ctx = {
+      desk: desk,
+      opened: opened,
+      current: onDesk,
+      changes: desk.deskChanges(opened, onDesk),
+      openedPieces: desk.printedPlaces(opened),
+      currentPieces: desk.printedPlaces(onDesk),
+      headings: headingsOf(opened)
+    };
+    var found = [];
+    var add = function (tone, text, place) {
+      if (asString(text).trim()) found.push({ tone: tone, text: asString(text), place: place });
+    };
+
+    var evaluation = isPlainObject(d.lastEvaluation) && d.lastEvaluation.source !== FACT_CHECK_SOURCE ? d.lastEvaluation : null;
+    if (evaluation && evaluation.escalatedToHuman === true) {
+      stringList(evaluation.structuralIssues).forEach(function (issue) { add('judge', issue, quotePlace(issue, ctx)); });
+    }
+
+    var occurrences = {};
+    asArray(isPlainObject(d.factCheck) ? d.factCheck.findings : null).filter(isPlainObject).forEach(function (finding) {
+      var key = asString(finding.kind) + '\u0000' + asString(finding.message) + '\u0000' + JSON.stringify(finding.place || null);
+      var occurrence = hasOwn(occurrences, key) ? occurrences[key] : 0;
+      occurrences[key] = occurrence + 1;
+      var concern = typeof finding.editId === 'string' && finding.editId !== '';
+      var tone = concern ? 'concern' : (finding.status === 'structural' ? 'structural' : 'advisory');
+      add(tone, concern ? concernFindingOf(finding.message) : finding.message, findingPlace(finding, occurrence, ctx));
+    });
+
+    if (evaluation) {
+      stringList(evaluation.advisoryWarnings).filter(isDirectorEditConcern).forEach(function (text) {
+        add('concern', concernFindingOf(text), quotePlace(text, ctx));
+      });
+    }
+
+    var lineOptions = deskEditLineOptions(onDesk);
+    changedEditsToShow(d.handEditReport).forEach(function (entry) {
+      add('changed', changedEditLine(entry, lineOptions), changedPlace(entry, ctx));
+    });
+
+    return placeMarks(found, ctx);
+  }
+
+  /**
+   * The marks beside one piece of the desk.
+   *
+   * @param {Object} marks - deskMarks(...)
+   * @param {Object} anchor - the piece, as printedPlaces names it
+   * @returns {Object[]}
+   */
+  function deskMarksAt(marks, anchor) {
+    var at = isPlainObject(marks) && isPlainObject(marks.at) ? marks.at : {};
+    var key = deskAnchorKey(anchor);
+    return key && hasOwn(at, key) ? at[key] : [];
+  }
+
+  /**
+   * The echo above the headline (task 4.10; the integrator's ruling 5): the story the director
+   * settled at the meeting and the question it carries, read-only, each as text (a non-string
+   * reads as empty), under the labels the meeting gives them; null when the stop sends none.
+   *
+   * @param {Object} data - the article stop's payload, with its `settledStory`
+   * @returns {{title: string, storyLabel: string, story: string, questionLabel: string, question: string}|null}
+   */
+  function deskEcho(data) {
+    var settled = isPlainObject(data) && isPlainObject(data.settledStory) ? data.settledStory : null;
+    if (!settled) return null;
+    return {
+      title: DESK_ECHO_TITLE,
+      storyLabel: MEETING_LINE_LABELS.story,
+      story: asString(settled.story).trim(),
+      questionLabel: MEETING_LINE_LABELS.question,
+      question: asString(settled.question).trim()
+    };
+  }
+
+  /**
+   * The desk (spec 6.3): everything Article.js and the harness show of the article stop beside
+   * the article itself.
+   * - `echo`: the settled story above the headline (deskEcho);
+   * - `marks`: deskMarks', each beside its piece (deskMarksAt);
+   * - `apart`: the marks with no piece, one line each beside the approve button, where its
+   *   count is;
+   * - `folds`, below the article: the marks possibly resolved, the fact check's list
+   *   (factCheckSummary, whose structural count is the approve button's), and the title of the
+   *   round's record (RevisionDiff). The trace folds there too, through traceView.
+   * There is no score.
+   *
+   * @param {Object} data - the article stop's payload
+   * @param {Object} current - the bundle on the desk
+   * @returns {Object}
+   */
+  function deskView(data, current) {
+    var d = isPlainObject(data) ? data : {};
+    var marks = deskMarks(d, current);
+    var summary = factCheckSummary(d.factCheck || null);
+    var rounds = roundsBanner(d.humanRevisionCount, d.revisionCount, d.maxRevisions);
+    return {
+      echo: deskEcho(d),
+      marks: marks,
+      apart: { any: marks.apart.length > 0, title: 'Not beside any block (' + marks.apart.length + ')', items: marks.apart },
+      folds: {
+        resolved: {
+          any: marks.resolved.length > 0,
+          title: 'Possibly resolved by your edits (' + marks.resolved.length + ')',
+          hint: DESK_RESOLVED_HINT,
+          items: marks.resolved
+        },
+        factCheck: { any: summary.groups.length > 0, title: 'Fact check: ' + summary.structural + ' structural, ' + summary.advisory + ' advisory', summary: summary },
+        rounds: { title: rounds.roundLabel + ': your notes, and what the reworks did to your edits' }
+      }
+    };
+  }
+
   // ── RevisionDiff's key walk (fix 3.7b) ──────────────────────────────────────
 
   /**
@@ -3024,9 +3622,18 @@
     mapEditLineOptions: mapEditLineOptions,
     mapView: mapView,
     mapPhotoUrl: mapPhotoUrl,
-    // Phase 4, task 4.10: one rule for the changed lines a stop shows
+    // Phase 4, task 4.10: the desk's marks, and one rule for the changed lines a stop shows
     REWEAVE_PASS: REWEAVE_PASS,
     changedEditsToShow: changedEditsToShow,
+    deskAnchorKey: deskAnchorKey,
+    deskMarks: deskMarks,
+    deskMarksAt: deskMarksAt,
+    deskEcho: deskEcho,
+    deskView: deskView,
+    // The console's copies of the server's quote rules (lib/grounding.js, lib/hand-edit-diff.js; held equal by a test)
+    quotedPassagesOf: quotedPassagesOf,
+    groundingText: groundingText,
+    MIN_QUOTE_WORDS: MIN_QUOTE_WORDS,
     // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
     revisionDiffKeys: revisionDiffKeys,
     REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS

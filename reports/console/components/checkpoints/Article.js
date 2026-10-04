@@ -14,12 +14,21 @@
  * The block operations, the checks and the change report are console/article-desk-logic.js,
  * pure and node-tested; this component is a thin consumer. The JSON editor stays as the
  * advanced path. Exports to window.Console.checkpoints.Article
+ *
+ * The desk's marks (task 4.10): nothing sits in front of the article. A fact the judge could
+ * not fix within its budget and a code check's flag are marked in the row of the paragraph,
+ * card or photo they are about; a concern about one of the director's edits, and an edit a
+ * rework changed, in the row of the edit; a mark with no piece to sit beside, in one line
+ * beside the approve button. There is no score and no note on the writing. The settled story
+ * echoes above the headline, and the round's record folds below the article: the marks the
+ * director's edits may have resolved, the fact check's list, the trace and the round. Where
+ * each mark sits is console/checkpoint-view-logic.js deskView's, node-tested.
  */
 
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, safeStringify, editBtn, EvalBar, TracePanel, WriterQuestionsPanel } = window.Console.utils;
+const { Badge, CollapsibleSection, safeStringify, editBtn, TracePanel } = window.Console.utils;
 const { RevisionDiff } = window.Console;
 const ArticleEditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
@@ -33,10 +42,11 @@ const ARTICLE_PREVIEW_DELAY_MS = 400;
 const NO_PREVIEW = { html: null, error: '', pending: false };
 
 /**
- * The programmatic fact-check, in front of the person approving the article
- * (baseline §5: "half the refinement work was already on screen as an advisory
- * and was ignored" - in fact it was not on screen at all; lib/content-bundle-
- * fact-check.js reached the reviser as prompt text and the operator never).
+ * The programmatic fact-check's whole list (baseline §5: "half the refinement work was
+ * already on screen as an advisory and was ignored" - in fact it was not on screen at all;
+ * lib/content-bundle-fact-check.js reached the reviser as prompt text and the operator never).
+ * Task 4.10: each finding is marked beside its piece of the article, and this list folds
+ * below the article, under the fold's title, which gives its counts.
  *
  * The four measured failure classes it reports are evidence cards carrying
  * invented text under real token ids (15 items across 4 of 5 sessions, each a
@@ -47,9 +57,6 @@ function FactCheckPanel({ summary, cardHeadlines }) {
   if (!summary || summary.groups.length === 0) return null;
 
   return React.createElement('div', { className: 'fact-check mb-md' },
-    React.createElement('h4', { className: 'fact-check__title' },
-      'Fact-check: ' + summary.structural + ' structural, ' + summary.advisory + ' advisory'
-    ),
     summary.groups.map(function (group) {
       return React.createElement('div', { key: group.key, className: 'fact-check__group' },
         React.createElement('p', {
@@ -72,15 +79,33 @@ function FactCheckPanel({ summary, cardHeadlines }) {
 }
 
 /**
- * One thesis-echo line (spec 2026-09-19 §6.2), through the same
- * string-or-'(empty)' guard the outline THESIS panel uses: `outlineThesis` comes
- * off the approved outline, where a field can be absent or non-string, and a raw
- * render of a number or object throws on a read-only panel.
+ * One line of the echo above the headline (spec 2026-09-19 §6.2; task 4.10): the settled
+ * story or its question, as the view's deskEcho gives it, text in every field, with an
+ * "(empty)" line for a blank one.
  */
-function thesisField(label, value, className) {
-  return React.createElement('p', { className: className },
+function echoLine(label, value) {
+  return React.createElement('p', { className: 'text-sm mb-sm' },
     React.createElement('strong', null, label + ': '),
-    typeof value === 'string' && value.trim() ? value : React.createElement('span', { className: 'text-muted' }, '(empty)')
+    value || React.createElement('span', { className: 'text-muted' }, '(empty)')
+  );
+}
+
+/**
+ * A list of marks (task 4.10): each mark's label, then its text, in the tone deskMarks gives
+ * it, and, with `showWhere`, the piece it was about in brackets. Under a piece in its row, the
+ * marks beside it; beside the approve button, the marks with no piece; in the fold below the
+ * article, the marks possibly resolved. Nothing for no marks.
+ */
+function deskMarksList(marks, showWhere) {
+  if (!marks || marks.length === 0) return null;
+  return React.createElement('ul', { className: 'desk-marks' },
+    marks.map(function (mark) {
+      return React.createElement('li', { key: mark.key, className: 'desk-mark desk-mark--' + mark.tone },
+        React.createElement('strong', { className: 'desk-mark__label' }, mark.label + ': '),
+        mark.text,
+        showWhere && mark.where && React.createElement('span', { className: 'desk-mark__where' }, ' (' + mark.where + ')')
+      );
+    })
   );
 }
 
@@ -495,23 +520,12 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // Theme detection: prop > metadata > fallback
   const isDetective = theme === 'detective' ||
     (!theme && contentBundle.metadata && contentBundle.metadata.theme === 'detective');
-  // H6: `data.evaluationHistory` is an append-only ARRAY mixing all three phases;
-  // the old renderEvalBar read `.overallScore` (and `advisoryNotes`, not a field)
-  // off it and rendered null in every session.
-  const evaluation = ViewLogic.evaluationView(ViewLogic.lastEvaluationFrom(data, 'article'));
-  // Brief 2.7: what the automatic passes of this round did before the director arrived.
-  // Final review (reworks[0]): the theme decides whether a pass's rework was given the
-  // evaluation's guidance, which the panel's label says.
+  // Brief 2.7: what the automatic passes of this round did before the director arrived,
+  // folded below the article (task 4.10). Final review (reworks[0]): the theme decides
+  // whether a pass's rework was given the evaluation's guidance, which the panel's label says.
   const trace = ViewLogic.traceView(data && data.trace, theme);
-  // Brief 3.7: the article writer's questions for the director; task 3.11: the stop's
-  // hint says answers go with a send back, since Approve publishes the article as it is.
-  const writerQuestions = ViewLogic.writerQuestionsView(data && data.writerQuestions, 'article');
   // Absolute paths of this session's photos, for photoUrl (H13/F9).
   const sessionPhotos = (data && data.sessionPhotos) || [];
-  // Task 3.6's programmatic fact-check of THIS bundle (baseline §5).
-  const factCheck = ViewLogic.factCheckSummary((data && data.factCheck) || null);
-  // Thesis echo (spec 2026-09-19 §6.2): the approved outline's LEDE thesis, read-only.
-  const outlineThesis = (data && data.outlineThesis) || null;
   const previousArticle = (revisionCache && revisionCache.article) || null;
   const previousFeedback = (data && data.previousFeedback) || null;
   const revisionCount = (data && data.revisionCount) || 0;
@@ -550,6 +564,18 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const [sendBackArmed, setSendBackArmed] = React.useState(false);
   const [showHtmlPreview, setShowHtmlPreview] = React.useState(false);
   const [expandedPhoto, setExpandedPhoto] = React.useState(null);
+
+  // The desk (task 4.10): the settled story's echo, every mark beside its piece of the bundle on
+  // the desk or apart, and what folds below the article. Built again only when the stop's payload
+  // or the bundle on the desk changes, not on each keystroke in the note box.
+  const desk = React.useMemo(function () {
+    return ViewLogic.deskView(data, editedBundle || contentBundle);
+  }, [data, editedBundle]);
+
+  /** The marks beside one piece of the article, as deskView placed them. */
+  function marksAt(anchor) {
+    return ViewLogic.deskMarksAt(desk.marks, anchor);
+  }
 
   // Reset when data changes
   // Both counters: the automated one resets to 0 at every round of the director's,
@@ -868,15 +894,21 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // -- The desk's rows --
 
   /**
-   * One editable piece of the article: its content, and its rail, a column of its own
-   * beside it holding the pencil and any other control, so every editor is visible and
-   * none covers the prose (spec 2026-10-02 section 6.3).
+   * One editable piece of the article: its content with its marks under it (task 4.10), and
+   * its rail, a column of its own beside it holding the pencil and any other control, so
+   * every editor is visible and neither a control nor a mark covers the prose (spec
+   * 2026-10-02 section 6.3).
    */
-  function deskRow(key, className, body, onEdit, controls) {
+  function deskRow(key, className, body, onEdit, controls, marks) {
     return React.createElement('div', { key: key, className: 'desk-row ' + className },
-      React.createElement('div', { className: 'desk-row__body' }, body),
+      React.createElement('div', { className: 'desk-row__body' }, body, deskMarksList(marks)),
       React.createElement('div', { className: 'desk-rail' }, editBtn(onEdit), controls || null)
     );
+  }
+
+  /** A piece's open editor with the piece's marks under it, so the director fixes what they flag with them in view. */
+  function withMarks(key, editor, marks) {
+    return React.createElement(React.Fragment, { key: key }, editor, deskMarksList(marks));
   }
 
   /** One control in a block's rail. */
@@ -1000,35 +1032,36 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   function renderBlock(block, sectionIdx, blockIdx) {
     if (!block || !block.type) return null;
+    var marks = marksAt({ kind: 'block', section: sectionIdx, block: blockIdx });
 
     if (isEditing('block', sectionIdx, blockIdx)) {
-      return React.createElement(BlockEditor, {
-        key: 'edit-' + sectionIdx + '-' + blockIdx,
+      return withMarks('edit-' + sectionIdx + '-' + blockIdx, React.createElement(BlockEditor, {
         block: block,
         sectionIdx: sectionIdx,
         blockIdx: blockIdx,
         onSave: saveBlockEdit,
         onCancel: cancelEdit
-      });
+      }), marks);
     }
 
     return deskRow('block-' + sectionIdx + '-' + blockIdx,
       'desk-row--block' + (DeskLogic.isEmptyBlock(block) ? ' desk-row--empty' : ''),
       blockBody(block),
       function () { startBlockEdit(sectionIdx, blockIdx); },
-      blockControls(sectionIdx, blockIdx));
+      blockControls(sectionIdx, blockIdx),
+      marks);
   }
 
   // -- Section heading: its editor, and insertion at the top of the section --
 
   function renderSectionHeading(section, sectionIdx) {
+    var marks = marksAt({ kind: 'heading', section: sectionIdx });
     if (isEditing('heading', sectionIdx)) {
-      return React.createElement(SectionHeadingEditor, {
-        key: 'heading-edit-' + sectionIdx,
+      return withMarks('heading-edit-' + sectionIdx, React.createElement(SectionHeadingEditor, {
         heading: section.heading || '',
         onSave: function (heading) { saveHeadingEdit(sectionIdx, heading); },
         onCancel: cancelEdit
-      });
+      }), marks);
     }
     var body = React.createElement('div', { className: 'flex gap-sm items-center' },
       React.createElement('h4', { className: 'outline-section__title' + (section.heading ? '' : ' text-muted') },
@@ -1041,21 +1074,22 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       React.createElement(React.Fragment, null,
         deskButton('+\u00B6', 'Insert a paragraph at the top of this section', function () { insertAt(sectionIdx, 0, 'paragraph'); }),
         deskButton('+\u275D', 'Insert a quote at the top of this section', function () { insertAt(sectionIdx, 0, 'quote'); })
-      ));
+      ),
+      marks);
   }
 
   // -- Evidence card renderer (sidebar) --
 
   function renderSidebarEvidenceCard(card, idx) {
+    var marks = marksAt({ kind: 'sidebar', index: idx });
     if (isEditing('sidebar', 'evidenceCards', idx)) {
-      return React.createElement(SidebarEvidenceCardEditor, {
-        key: 'ec-edit-' + idx,
+      return withMarks('ec-edit-' + idx, React.createElement(SidebarEvidenceCardEditor, {
         card: card,
         idx: idx,
         original: card,
         onSave: saveSidebarCardEdit,
         onCancel: cancelEdit
-      });
+      }), marks);
     }
 
     // What the sidebar prints (templates/journalist/partials/sidebar/evidence-card.hbs): the
@@ -1076,7 +1110,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       ),
       card.tokenId && React.createElement('span', { className: 'text-xs text-muted d-block mt-sm' }, card.tokenId)
     );
-    return deskRow('ec-' + idx, 'desk-row--card', body, function () { startSidebarEdit('evidenceCards', idx); });
+    return deskRow('ec-' + idx, 'desk-row--card', body, function () { startSidebarEdit('evidenceCards', idx); }, null, marks);
   }
 
   // -- Financial tracker: the writer's, only when the page prints it --
@@ -1112,14 +1146,14 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   function renderHeroImage() {
     var currentHero = getCurrentBundle().heroImage || null;
     if (!currentHero || !currentHero.filename) return null;
+    var marks = marksAt({ kind: 'hero' });
 
     if (isEditing('sidebar', 'heroImage', 0)) {
-      return React.createElement(HeroImageEditor, {
-        key: 'hero-edit',
+      return withMarks('hero-edit', React.createElement(HeroImageEditor, {
         hero: currentHero,
         onSave: saveHeroImageEdit,
         onCancel: cancelEdit
-      });
+      }), marks);
     }
 
     var heroSrc = photoUrl(currentHero.filename);
@@ -1135,43 +1169,43 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
             currentHero.filename + ' (not among the photos this session carries)'),
       currentHero.caption && React.createElement('figcaption', { className: 'article-photo__caption' }, currentHero.caption)
     );
-    return deskRow('hero', 'desk-row--hero', body, function () { startSidebarEdit('heroImage', 0); });
+    return deskRow('hero', 'desk-row--hero', body, function () { startSidebarEdit('heroImage', 0); }, null, marks);
   }
 
   // -- Headline and byline --
 
   function renderHeadline() {
     var currentHeadline = getCurrentBundle().headline || {};
+    var marks = marksAt({ kind: 'headline' });
     if (isEditing('headline')) {
-      return React.createElement(HeadlineEditor, {
-        key: 'headline-edit',
+      return withMarks('headline-edit', React.createElement(HeadlineEditor, {
         headline: currentHeadline,
         onSave: saveHeadlineEdit,
         onCancel: cancelEdit
-      });
+      }), marks);
     }
     var body = React.createElement('div', { className: 'outline-section' },
       currentHeadline.kicker && React.createElement('p', { className: 'text-xs text-muted mb-sm article-headline__kicker' }, currentHeadline.kicker),
       React.createElement('h3', { className: 'article-headline__main' + (currentHeadline.main ? '' : ' text-muted') }, currentHeadline.main || 'No headline'),
       currentHeadline.deck && React.createElement('p', { className: 'text-sm text-secondary mt-sm article-headline__deck' }, currentHeadline.deck)
     );
-    return deskRow('headline', 'desk-row--headline', body, startHeadlineEdit);
+    return deskRow('headline', 'desk-row--headline', body, startHeadlineEdit, null, marks);
   }
 
   function renderByline() {
     var currentByline = getCurrentBundle().byline || {};
+    var marks = marksAt({ kind: 'byline' });
     if (isEditing('sidebar', 'byline', 0)) {
-      return React.createElement(BylineEditor, {
-        key: 'byline-edit',
+      return withMarks('byline-edit', React.createElement(BylineEditor, {
         byline: currentByline,
         onSave: saveBylineEdit,
         onCancel: cancelEdit
-      });
+      }), marks);
     }
     // As the page prints it (DeskLogic.bylineLabel, the header partial's rule): the title and
     // the guest reporter's credit print only with an author.
     var body = React.createElement('div', { className: 'text-xs text-muted mb-md' }, DeskLogic.bylineLabel(currentByline));
-    return deskRow('byline', 'desk-row--byline', body, function () { startSidebarEdit('byline', 0); });
+    return deskRow('byline', 'desk-row--byline', body, function () { startSidebarEdit('byline', 0); }, null, marks);
   }
 
   // -- Expanded photo overlay --
@@ -1208,7 +1242,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     });
   });
 
-  var approve = ViewLogic.approveLabel(factCheck, hasEdits);
+  // The count on the button is the fact check's structural issues alone (approveLabel).
+  var approve = ViewLogic.approveLabel(desk.folds.factCheck.summary, hasEdits);
   const sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'article');
 
   var currentSections = deskBundleNow.sections || [];
@@ -1227,29 +1262,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   return React.createElement('div', { className: 'flex flex-col gap-md' },
 
-    // Revision diff
-    React.createElement(RevisionDiff, {
-      previous: previousArticle,
-      current: contentBundle,
-      revisionCount: revisionCount,
-      maxRevisions: maxRevisions,
-      previousFeedback: previousFeedback,
-      humanRevisionCount: (data && data.humanRevisionCount) || 0,
-      handEditReport: (data && data.handEditReport) || null,
-      gateNotes: (data && data.directorGateNotes) || []
-    }),
-
-    // Evaluation bar
-    React.createElement(EvalBar, { view: evaluation }),
-
-    // The trace (brief 2.7): the automatic reworks of this round, before the director
-    React.createElement(TracePanel, { view: trace }),
-
-    // The writer's questions (brief 3.7), above the article
-    React.createElement(WriterQuestionsPanel, { view: writerQuestions }),
-
-    // Fact-check defect list, above the article body
-    React.createElement(FactCheckPanel, { summary: factCheck, cardHeadlines: cardHeadlines }),
+    // Nothing sits in front of the article (task 4.10): the marks sit beside their pieces,
+    // and the round's record folds below the article.
 
     // Word count + edit indicator
     React.createElement('div', { className: 'flex gap-md items-center' },
@@ -1263,13 +1277,13 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     // Hero image
     renderHeroImage(),
 
-    // Thesis echo (spec 2026-09-19 §6.2): read-only, from the approved outline, so the
-    // headline is judged against the thesis it must serve. No pencil.
-    outlineThesis && React.createElement('div', { className: 'article-thesis-echo' },
-      React.createElement('h4', { className: 'outline-section__title' }, 'THESIS (from the approved outline)'),
-      thesisField('Hook', outlineThesis.hook, 'text-sm mb-sm'),
-      thesisField('Key tension', outlineThesis.keyTension, 'text-sm mb-sm'),
-      thesisField('Primary arc', outlineThesis.primaryArc, 'text-sm')
+    // The echo (spec 2026-09-19 §6.2; task 4.10): the story the director settled at the
+    // meeting and its question, read-only, so the headline is judged against the story it
+    // must serve. No pencil: the story is changed at the meeting.
+    desk.echo && React.createElement('div', { className: 'desk-echo', 'aria-label': desk.echo.title },
+      React.createElement('h4', { className: 'outline-section__title' }, desk.echo.title),
+      echoLine(desk.echo.storyLabel, desk.echo.story),
+      echoLine(desk.echo.questionLabel, desk.echo.question)
     ),
 
     // Headline and byline
@@ -1367,6 +1381,13 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       })
     ),
 
+    // The marks with no piece to sit beside, such as a roster gap, one line each beside the
+    // approve button, where its count is (task 4.10).
+    desk.apart.any && React.createElement('div', { className: 'desk-apart', role: 'status' },
+      React.createElement('p', { className: 'desk-apart__title' }, desk.apart.title),
+      deskMarksList(desk.apart.items)
+    ),
+
     // Action buttons
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
@@ -1408,6 +1429,32 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         'aria-label': 'Save JSON and approve'
       }, 'Save & Approve')
     ),
+
+    // Folded below the article (task 4.10; spec 6.3): the marks the director's edits may have
+    // resolved, the fact check's whole list, what the automatic passes did, and the round's
+    // record (its banner, the note it was sent back with, every change to the director's
+    // edits, code's restores among them, and the standing notes).
+    desk.folds.resolved.any && React.createElement(CollapsibleSection, { title: desk.folds.resolved.title },
+      React.createElement('div', { className: 'desk-resolved' },
+        React.createElement('p', { className: 'text-xs text-muted' }, desk.folds.resolved.hint),
+        deskMarksList(desk.folds.resolved.items, true)
+      )
+    ),
+    desk.folds.factCheck.any && React.createElement(CollapsibleSection, { title: desk.folds.factCheck.title },
+      React.createElement(FactCheckPanel, { summary: desk.folds.factCheck.summary, cardHeadlines: cardHeadlines })),
+    trace.any && React.createElement(CollapsibleSection, { title: trace.title },
+      React.createElement(TracePanel, { view: trace })),
+    React.createElement(CollapsibleSection, { title: desk.folds.rounds.title },
+      React.createElement(RevisionDiff, {
+        previous: previousArticle,
+        current: contentBundle,
+        revisionCount: revisionCount,
+        maxRevisions: maxRevisions,
+        previousFeedback: previousFeedback,
+        humanRevisionCount: (data && data.humanRevisionCount) || 0,
+        handEditReport: (data && data.handEditReport) || null,
+        gateNotes: (data && data.directorGateNotes) || []
+      })),
 
     // Expanded photo overlay
     renderExpandedPhoto()

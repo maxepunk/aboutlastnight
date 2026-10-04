@@ -1,12 +1,12 @@
 /**
- * The writer's questions panel at the arc, outline and article stops (phase 3, brief
- * 3.7; spec C15, D8).
+ * The writer's questions on the console's screens (phase 3, brief 3.7; spec C15, D8).
  *
- * The console has no DOM harness, so the panel's logic is pinned in
- * console/__tests__/checkpoint-view-logic.test.js (writerQuestionsView) and its wiring
- * here, on the source text, in the style of console-trace-panel.test.js: each stop
- * reads the payload's `writerQuestions` through ViewLogic.writerQuestionsView and
- * renders the shared WriterQuestionsPanel once, above the output.
+ * Phase 4: the questions are asked at the story meeting alone (spec section 10), through the
+ * meeting's own view with an answer box on each (task 4.8). The map holds none (task 4.9), and
+ * the article stop none (brief 4.7b), so the shared WriterQuestionsPanel went with its last
+ * use, the desk (task 4.10). writerQuestionsView stays for the harness (task 4.12); its logic
+ * is pinned in console/__tests__/checkpoint-view-logic.test.js, and the wiring here, on the
+ * source text, in the style of console-trace-panel.test.js.
  */
 const fs = require('fs');
 const path = require('path');
@@ -17,33 +17,6 @@ const read = (rel) => fs.readFileSync(path.join(CONSOLE_DIR, rel), 'utf8');
 function count(haystack, needle) {
   return haystack.split(needle).length - 1;
 }
-
-describe('the panel is shared from utils.js', () => {
-  const src = read('utils.js');
-
-  it('defines WriterQuestionsPanel and publishes it on window.Console.utils', () => {
-    expect(src).toMatch(/function WriterQuestionsPanel\(\{ view \}\)/);
-    const exported = src.slice(src.indexOf('window.Console.utils = {'));
-    expect(exported).toMatch(/\bWriterQuestionsPanel,/);
-  });
-
-  it('renders nothing for a view with no questions, and folds away', () => {
-    const fn = src.slice(src.indexOf('function WriterQuestionsPanel('));
-    const body = fn.slice(0, fn.indexOf('\n}\n'));
-    expect(body).toMatch(/if \(!view \|\| !view\.any\) return null;/);
-    expect(body).toMatch(/React\.createElement\(CollapsibleSection, \{ title: view\.title, defaultOpen: true \}/);
-    expect(body).toMatch(/item\.about/);
-    expect(body).toMatch(/item\.question/);
-  });
-
-  // Fix 3.7b (finding 1): each line shows the question's kind before what it is about.
-  it('shows the kind, when the question has one, before what it is about', () => {
-    const fn = src.slice(src.indexOf('function WriterQuestionsPanel('));
-    const body = fn.slice(0, fn.indexOf('\n}\n'));
-    expect(body).toMatch(/item\.kindLabel && React\.createElement\('span', \{ className: 'writer-questions__kind' \}, item\.kindLabel\)/);
-    expect(body.indexOf('item.kindLabel')).toBeLessThan(body.indexOf('item.about'));
-  });
-});
 
 // Fix 3.7b (finding 4): RevisionDiff's shallow diff walks ViewLogic.revisionDiffKeys,
 // which skips writerQuestions (pinned in checkpoint-view-logic.test.js), not its own
@@ -56,37 +29,6 @@ describe('RevisionDiff skips the questions in its key walk', () => {
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     expect(body).toMatch(/const allKeys = ViewLogic\.revisionDiffKeys\(previous, current\);/);
     expect(body).not.toMatch(/new Set\(/);
-  });
-});
-
-// Task 3.11: each stop names itself, so the panel's hint says what an answer does there
-// (checkpoint-view-logic.test.js pins the three hints). Task 4.8: the story meeting shows
-// its questions through its own view, each with its answer box (the describe below), so
-// the arc stop's row went with the arc cards it was placed above. Task 4.9: the map holds no
-// questions (brief 4.6), so its row went with the old outline's screen.
-describe.each([
-  ['Article', 'components/checkpoints/Article.js', 'article', /React\.createElement\(FactCheckPanel, /]
-])('the %s stop renders the panel', (_name, rel, stop, output) => {
-  const src = read(rel);
-
-  it('destructures WriterQuestionsPanel from utils at load time', () => {
-    const line = src.split('\n').find((l) => l.includes('= window.Console.utils;'));
-    expect(line).toMatch(/\bWriterQuestionsPanel\b/);
-  });
-
-  it('builds the panel model from the payload key through the view logic, naming its stop', () => {
-    expect(count(src, `ViewLogic.writerQuestionsView(data && data.writerQuestions, '${stop}')`)).toBe(1);
-    expect(count(src, 'ViewLogic.writerQuestionsView(')).toBe(1);
-  });
-
-  it('renders the panel once, above the output', () => {
-    expect(count(src, 'React.createElement(WriterQuestionsPanel, { view: writerQuestions })')).toBe(1);
-    const panelAt = src.indexOf('React.createElement(WriterQuestionsPanel, { view: writerQuestions })');
-    const outputAt = src.search(output);
-    expect(outputAt).toBeGreaterThan(-1);
-    expect(panelAt).toBeLessThan(outputAt);
-    const evalAt = src.indexOf('React.createElement(EvalBar, { view: evaluation })');
-    expect(panelAt).toBeGreaterThan(evalAt);
   });
 });
 
@@ -114,5 +56,20 @@ describe('4.9: the map renders no questions panel', () => {
   it('reads neither the shared panel nor its view model nor a questions key', () => {
     const src = read('components/checkpoints/Outline.js');
     expect(src).not.toMatch(/WriterQuestionsPanel|writerQuestionsView|writerQuestions/);
+  });
+});
+
+// Task 4.10: the article stop holds no questions (brief 4.7b), and it was the shared panel's
+// last use, so the panel went with it. The desk names neither the panel nor a questions key.
+describe('4.10: the desk renders no questions panel, and utils.js defines none', () => {
+  it('the desk reads neither the panel nor its view model nor a questions key', () => {
+    const src = read('components/checkpoints/Article.js');
+    expect(src).not.toMatch(/WriterQuestionsPanel|writerQuestionsView|writerQuestions/);
+  });
+
+  it('utils.js neither defines nor publishes the panel, and its styles went with it', () => {
+    const utils = read('utils.js');
+    expect(utils).not.toMatch(/WriterQuestionsPanel/);
+    expect(read('console.css')).not.toMatch(/.writer-questions/);
   });
 });

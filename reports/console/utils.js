@@ -103,93 +103,13 @@ function formatElapsed(ms) {
 }
 
 /**
- * The Opus evaluation for one gate (R5 F4 / CODE-REVIEW H6).
- *
- * Shared by arc-selection, outline and article: all three used to own a private
- * `renderEvalBar` that read `.overallScore` off the evaluationHistory ARRAY (and
- * `advisoryNotes`, which is not a field), so the evaluator's verdict — the whole
- * point of the evaluate/revise loop — rendered on no screen in any session.
- *
- * Takes an already-computed view so utils.js keeps no dependency on
- * checkpoint-view-logic.js (which loads after it): callers pass
- * `checkpointViewLogic.evaluationView(checkpointViewLogic.lastEvaluationFrom(data, phase))`.
- *
- * The structural issues are listed, not just counted: showing "3 structural
- * issues" without the sentences would repeat the original failure, since each
- * string is the self-contained instruction the reviser would have been given.
- *
- * Under the score line sits the view's `calibration` phrase (phase 2, brief 2.4):
- * the score is the model's own, not yet checked against the director's
- * decisions. The wording comes from checkpoint-view-logic.js, not from here.
- *
- * F1: the judge's concerns about the director's own edits (`directorEditConcerns`)
- * render last, under their own heading and hint from the view.
- *
- * @param {{view: object|null}} props
- */
-function EvalBar({ view }) {
-  if (!view) return null;
-
-  const parts = [];
-  if (view.score !== null) parts.push('Score ' + view.score);
-  parts.push('structural: ' + (view.passed ? 'passed' : 'failed'));
-  parts.push(view.structuralIssues.length + ' structural issue' +
-    (view.structuralIssues.length === 1 ? '' : 's'));
-  if (view.confidence) parts.push('confidence: ' + view.confidence);
-  // Only on a real revision: "after revision 0" on a first pass is noise.
-  if (view.revisionNumber > 0) parts.push('after revision ' + view.revisionNumber);
-  if (view.source) parts.push('source: ' + view.source);
-
-  return React.createElement('div', { className: 'eval-bar mb-md flex-col items-start' },
-    React.createElement('span', {
-      className: view.passed ? 'eval-bar__score' : 'eval-bar__issues'
-    }, parts.join(' · ')),
-
-    view.calibration && React.createElement('p', { className: 'text-xs text-muted' }, view.calibration),
-
-    view.escalationReason && React.createElement('p', {
-      className: 'eval-bar__escalation validation-error',
-      role: 'alert'
-    }, 'Escalated to you: ' + view.escalationReason),
-
-    view.structuralIssues.length > 0 && React.createElement('ul', { className: 'eval-bar__list eval-bar__list--structural' },
-      view.structuralIssues.map((issue, i) =>
-        React.createElement('li', { key: 'si-' + i }, issue)
-      )
-    ),
-
-    view.advisoryWarnings.length > 0 && React.createElement('ul', { className: 'eval-bar__list eval-bar__list--advisory' },
-      view.advisoryWarnings.map((warning, i) =>
-        React.createElement('li', { key: 'aw-' + i }, warning)
-      )
-    ),
-
-    // F1: the judge's concerns about the director's own edits, under their own heading,
-    // apart from the must-fix items and the other advisories. Nothing sends them back.
-    view.directorEditConcerns && view.directorEditConcerns.length > 0 && React.createElement('div', {
-      className: 'eval-bar__concerns', 'aria-label': view.directorEditConcernsLabel
-    },
-      React.createElement('p', { className: 'text-xs text-muted' },
-        React.createElement('strong', null, view.directorEditConcernsLabel), ' ', view.directorEditConcernsHint),
-      React.createElement('ul', { className: 'eval-bar__list eval-bar__list--advisory' },
-        view.directorEditConcerns.map((concern, i) =>
-          React.createElement('li', { key: 'de-' + i }, concern)
-        )
-      )
-    ),
-
-    view.revisionGuidance && React.createElement('p', { className: 'text-xs text-muted' },
-      'Revision guidance: ' + view.revisionGuidance
-    )
-  );
-}
-
-/**
  * The trace (phase 2, brief 2.7): the automatic reworks that ran this round before
- * the director reached the outline or article stop. Each pass: why it ran, what it
- * had to fix, what it was told to consider, and what it changed. Read-only.
+ * the director reached the map or the article stop, folded below each. Each pass: why it
+ * ran, what it had to fix, what it was told to consider, and what it changed, with no
+ * score (task 4.10). Read-only.
  *
- * Takes an already-computed view, like EvalBar: callers pass
+ * Takes an already-computed view, so utils.js keeps no dependency on
+ * checkpoint-view-logic.js (which loads after it): callers pass
  * `checkpointViewLogic.traceView(data.trace, theme)`.
  *
  * @param {{view: object|null}} props
@@ -216,41 +136,8 @@ function TracePanel({ view }) {
           'No findings were recorded for this pass.'
         ),
         React.createElement('p', { className: 'trace__changed' }, pass.changed.text),
-        pass.guidance && React.createElement('p', { className: 'text-xs text-muted' }, pass.guidance),
-        pass.criteria.length > 0 && React.createElement(CollapsibleSection, { title: pass.criteriaLabel },
-          React.createElement('ul', { className: 'trace__list' },
-            pass.criteria.map((c) => React.createElement('li', { key: c.key }, c.text))
-          )
-        )
+        pass.guidance && React.createElement('p', { className: 'text-xs text-muted' }, pass.guidance)
       )
-    )
-  );
-}
-
-/**
- * The writer's questions for the director (phase 3, brief 3.7; spec C15, D8), above
- * the output at the arc, outline and article stops: one line per question, its kind
- * (fix 3.7b) and what it is about first, folded away on a click, then the stop's hint for
- * answering them in the note box (task 3.11). Nothing renders when the writer raised none.
- *
- * Takes an already-computed view, like EvalBar: callers pass
- * `checkpointViewLogic.writerQuestionsView(data.writerQuestions, '<their stop>')`.
- *
- * @param {{view: object|null}} props
- */
-function WriterQuestionsPanel({ view }) {
-  if (!view || !view.any) return null;
-  return React.createElement('section', { className: 'writer-questions mb-md', 'aria-label': 'Questions from the writer' },
-    React.createElement(CollapsibleSection, { title: view.title, defaultOpen: true },
-      React.createElement('ul', { className: 'writer-questions__list' },
-        view.items.map((item) => React.createElement('li', { key: item.key, className: 'writer-questions__item' },
-          item.kindLabel && React.createElement('span', { className: 'writer-questions__kind' }, item.kindLabel),
-          React.createElement('strong', { className: 'writer-questions__about' }, item.about),
-          ': ',
-          item.question
-        ))
-      ),
-      React.createElement('p', { className: 'text-xs text-muted' }, view.hint)
     )
   );
 }
@@ -298,9 +185,7 @@ window.Console.utils = {
   CollapsibleSection,
   JsonViewer,
   formatElapsed,
-  EvalBar,
   TracePanel,
-  WriterQuestionsPanel,
   editBtn,
   CHECKPOINT_ORDER,
   CHECKPOINT_LABELS
