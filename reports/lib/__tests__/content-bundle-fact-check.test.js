@@ -2693,3 +2693,38 @@ describe('4.10f: one quoted-span rule, straight single quotation marks included'
     });
   });
 });
+
+// The integrator, on the review of 4.10f (findings 1 and 2): two readings of the quoted-span
+// rule that no test held. A change to either is then a deliberate one.
+describe('4.10f, the integrator\'s pins: where a quoted span may run', () => {
+  const para = (text) => ({ type: 'paragraph', text });
+  const reporterFindings = (result) => result.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt]);
+
+  it("a known limit: an opening-shaped mark with a plural's mark later on its line reads as one span, so the narrator's words between them are masked", () => {
+    // The module errs toward not flagging (SINGLE_QUOTED's plural fallback). The article judge
+    // still reads such a line under novaPositionTruth.
+    [
+      "In the '90s I voted, as the players' votes show.",
+      "I told 'em I voted for Mel, and it was the players' choice."
+    ].forEach((text) => {
+      const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para(text)) }));
+      expect([text, reporterFindings(result), result.reporterMode.violations]).toEqual([text, [], []]);
+    });
+  });
+
+  it("no span crosses a line's end: a mark the deck leaves open closes nothing in a paragraph, so the absence count and its findings read each piece alike", () => {
+    const contentBundle = {
+      ...storyWith(para("I was not there,' I wrote later, and I voted for no one."), para('I was not in the room.')),
+      headline: { main: 'H', deck: "Remi began: 'Where was everyone" }
+    };
+    const result = factCheckContentBundle(baseArgs({ reportingMode: 'remote', contentBundle }));
+    expect(reporterFindings(result)).toEqual([[{ section: 'the-story', paragraph: 1 }, 'I voted']]);
+    expect(result.advisoryWarnings.filter((w) => w.startsWith('Absence stated '))).toEqual([
+      expect.stringMatching(/^Absence stated 2 times \(remote\): "I was not there", "I was not in the room"\. /)
+    ]);
+    expect(result.findings.filter((f) => f.kind === 'repeatedAbsence').map((f) => [f.place, f.excerpt])).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, 'I was not there'],
+      [{ section: 'the-story', paragraph: 2 }, 'I was not in the room']
+    ]);
+  });
+});

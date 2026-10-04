@@ -38,7 +38,7 @@ const {
   weaveIdOf, repeatedIds
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
-const { stopRoundOf } = require('./workflow/state');
+const { stopRoundOf, isNoteOf } = require('./workflow/state');
 const {
   standingAtMeeting, carriedEdits, concernEditIds, editWhere, weaveMarks, handEditReportOf, weaveEditsBetween
 } = require('./hand-edit-diff');
@@ -295,8 +295,7 @@ function unrunRoundNoteIndex(state) {
   const text = round && round.note ? round.note.trim() : '';
   if (!text || !Array.isArray(state.directorGateNotes)) return -1;
   const stopRound = stopRoundOf(MEETING_GATE, state);
-  return state.directorGateNotes.findIndex((n) => Boolean(n) && typeof n === 'object' && n.gate === MEETING_GATE
-    && (n.kind || 'rejection') === 'rejection' && n.stopRound === stopRound
+  return state.directorGateNotes.findIndex((n) => isNoteOf(n, MEETING_GATE, 'rejection', stopRound)
     && typeof n.text === 'string' && n.text.trim() === text);
 }
 

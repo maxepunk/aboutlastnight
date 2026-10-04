@@ -437,3 +437,36 @@ describe('4.12d: STOP_OUTPUTS is held to the server: each stop\'s payload carrie
     expect([channel, Boolean(state[channel]), data[channel]]).toEqual([channel, true, state[channel]]);
   });
 });
+
+// The integrator, on the review of 4.12e (finding 3): one rule finds the director's notes, and
+// each reader of a note's gate, kind or round reads it.
+describe("4.12e, the integrator's consolidation: one rule for finding a note", () => {
+  const { noteKindOf, isNoteOf, roundNoteOf } = require('../workflow/state');
+  const sentBack = { gate: 'outline', kind: 'rejection', round: 1, stopRound: 1, text: 'Move the vote earlier.' };
+
+  it('a note with no kind is a rejection, as notes filed before the kinds were', () => {
+    expect(noteKindOf({ gate: 'outline', text: 'x' })).toBe('rejection');
+    expect(noteKindOf({ gate: 'outline', kind: 'approval', text: 'x' })).toBe('approval');
+    expect(noteKindOf(null)).toBe('rejection');
+  });
+
+  it('isNoteOf matches the gate and the kind, and the round when one is given', () => {
+    expect(isNoteOf(sentBack, 'outline', 'rejection')).toBe(true);
+    expect(isNoteOf(sentBack, 'outline', 'rejection', 1)).toBe(true);
+    expect(isNoteOf(sentBack, 'outline', 'rejection', 2)).toBe(false);
+    expect(isNoteOf(sentBack, 'article', 'rejection')).toBe(false);
+    expect(isNoteOf(sentBack, 'outline', 'approval')).toBe(false);
+    expect(isNoteOf({ gate: 'outline', text: 'x' }, 'outline', 'rejection', 1)).toBe(false);
+    expect(isNoteOf(null, 'outline', 'rejection')).toBe(false);
+  });
+
+  it('roundNoteOf, the meeting and appendGateNote read it: their sources hold no copy of the kind default', () => {
+    const fs = require('fs');
+    const path = require('path');
+    ['../workflow/state.js', '../meeting.js', '../../server.js', '../prompt-builder.js'].forEach((file) => {
+      const source = fs.readFileSync(path.join(__dirname, file), 'utf8');
+      expect([file, /kind \|\| 'rejection'/.test(source.replace(/function noteKindOf[\s\S]*?\n\}/, ''))]).toEqual([file, false]);
+    });
+    expect(roundNoteOf('outline', { humanOutlineRevisionCount: 1, directorGateNotes: [sentBack] })).toBe('Move the vote earlier.');
+  });
+});

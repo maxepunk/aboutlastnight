@@ -2265,6 +2265,9 @@ async function runWalkthrough() {
   let iteration = 0;
   const maxIterations = 20; // Safety limit
   let currentData = null;
+  // The review of 4.12e: a refusal at the stop (an --action it does not take, a send-back with no
+  // --note, a photo it does not show) posts nothing, as an options refusal does, and exits as one.
+  let refusedAtStop = false;
 
   // Initial request (task 3.11). With --approve the harness reads GET /checkpoint first:
   // a thread already paused at that stop is approved from that read, with no /resume
@@ -2425,6 +2428,7 @@ async function runWalkthrough() {
               approvals = defaultApproval(checkpointType, checkpoint);
             } catch (refusal) {
               console.error(color(`\n${refusal.message}`, 'red'));
+              refusedAtStop = true;
               break;
             }
           }
@@ -2529,6 +2533,7 @@ async function runWalkthrough() {
   if (iteration >= maxIterations) {
     console.log(color('\nMax iterations reached - possible infinite loop', 'red'));
   }
+  return refusedAtStop ? { refused: true } : undefined;
 }
 
 // ============================================================================
@@ -2565,7 +2570,7 @@ async function main() {
   }
 
   // Task 4.12e: a run whose options were refused ran nothing, and exits non-zero, so a scripted
-  // gate run sees the refusal.
+  // gate run sees the refusal; so does a run refused at its stop, which posted nothing there.
   if (outcome && outcome.refused) process.exit(OPTIONS_REFUSED_EXIT_CODE);
 
   console.log(color('\nWalkthrough complete.', 'green'));

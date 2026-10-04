@@ -20,7 +20,8 @@ const {
   VALID_ROLLBACK_POINTS,
   REVISION_CAPS,
   stopRoundOf,
-  roundNoteOf
+  roundNoteOf,
+  isNoteOf
 } = require('./lib/workflow/state');
 const {
   CHECKPOINT_TYPES,
@@ -590,11 +591,10 @@ function appendGateNote(stateUpdates, currentState, gate, text, kind) {
     const notes = Array.isArray(stateUpdates.directorGateNotes) ? stateUpdates.directorGateNotes : currentState.directorGateNotes;
     const existing = Array.isArray(notes) ? notes.filter(n => n && typeof n === 'object') : [];
     const stopRound = stopRoundOf(gate, currentState);
-    const sameKind = (n) => n.gate === gate && (n.kind || 'rejection') === kind;
-    const filed = existing.some((n) => sameKind(n) && n.stopRound === stopRound
+    const filed = existing.some((n) => isNoteOf(n, gate, kind, stopRound)
         && typeof n.text === 'string' && n.text.trim() === String(text).trim());
     if (filed) return;
-    const round = existing.filter(sameKind).length + 1;
+    const round = existing.filter((n) => isNoteOf(n, gate, kind)).length + 1;
     stateUpdates.directorGateNotes = [...existing, { gate, kind, round, stopRound, text, at: new Date().toISOString() }];
 }
 

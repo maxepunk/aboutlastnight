@@ -22,6 +22,8 @@ const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER } = requir
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
+// A standing note's kind, the one rule (review of 4.12e).
+const { noteKindOf } = require('./workflow/state');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
 /**
@@ -232,7 +234,7 @@ function formatGateNotes(gateNotes) {
     ? gateNotes.filter(n => n && typeof n.text === 'string' && n.text.trim())
     : [];
   if (list.length === 0) return '';
-  const lines = list.map(n => `- [${n.gate}, ${n.kind || 'rejection'} ${n.round || 1}] ${n.text.trim()}`);
+  const lines = list.map(n => `- [${n.gate}, ${noteKindOf(n)} ${n.round || 1}] ${n.text.trim()}`);
   return 'Standing notes the director gave at earlier stops, in order.\n' +
          'Each carries its kind: a rejection note was applied by the rework at its own stop;\n' +
          'an approval note is forward guidance no writer has acted on yet.\n' +
@@ -270,7 +272,7 @@ function filterGateNotes(gateNotes, currentFeedback, gate) {
   if (!current) return list;
   return list.filter(n => {
     const text = typeof n.text === 'string' ? n.text.trim() : '';
-    const isRejection = (n.kind || 'rejection') === 'rejection';
+    const isRejection = noteKindOf(n) === 'rejection';
     return !(text === current && isRejection && n.gate === gate);
   });
 }

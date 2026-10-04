@@ -1650,10 +1650,38 @@ function stopRoundOf(stop, state) {
 function roundNoteOf(stop, state) {
   const s = state && typeof state === 'object' ? state : {};
   const sentIn = stopRoundOf(stop, s) - 1;
-  const sent = (Array.isArray(s.directorGateNotes) ? s.directorGateNotes : []).filter((n) => Boolean(n) && typeof n === 'object'
-    && n.gate === stop && (n.kind || 'rejection') === 'rejection' && n.stopRound === sentIn
+  const sent = (Array.isArray(s.directorGateNotes) ? s.directorGateNotes : []).filter((n) => isNoteOf(n, stop, 'rejection', sentIn)
     && typeof n.text === 'string' && n.text.trim());
   return sent.length > 0 ? sent[sent.length - 1].text : null;
+}
+
+/**
+ * A note's kind: 'rejection' (sent with a send-back) or 'approval' (sent with an approve). A note
+ * filed before the kinds were is a rejection.
+ *
+ * @param {Object} note - one of the director's notes (`directorGateNotes`)
+ * @returns {string}
+ */
+function noteKindOf(note) {
+  return (note && note.kind) || 'rejection';
+}
+
+/**
+ * Whether `note` is one of the director's notes of `kind` filed at `gate`, and, given `stopRound`,
+ * in that round of the stop (the round server.js appendGateNote records). The one rule for
+ * finding a note (review of 4.12e): server.js appendGateNote (a note filed twice, and the count of
+ * a kind), lib/meeting.js unrunRoundNoteIndex (the note of a round that did not run) and
+ * roundNoteOf (the note that opened a round) read it.
+ *
+ * @param {Object} note
+ * @param {string} gate - the stop the note was filed at
+ * @param {string} kind - 'rejection' or 'approval' (noteKindOf)
+ * @param {number} [stopRound] - the stop's round; any round when left out
+ * @returns {boolean}
+ */
+function isNoteOf(note, gate, kind, stopRound) {
+  return Boolean(note) && typeof note === 'object' && note.gate === gate && noteKindOf(note) === kind
+    && (stopRound === undefined || note.stopRound === stopRound);
 }
 
 /**
@@ -1671,10 +1699,12 @@ module.exports = {
   ROLLBACK_CLEARS_EXEMPT,
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS,
-  // A stop's round (task 4.12a), and the note that opened it (task 4.12e)
+  // A stop's round (task 4.12a), the note that opened it (task 4.12e), and the one rule for a note
   DIRECTOR_ROUND_COUNTERS,
   stopRoundOf,
   roundNoteOf,
+  noteKindOf,
+  isNoteOf,
   // Fresh-start configuration (C1) — a separate list, not a rollback target
   FRESH_START_CLEARS,
   FRESH_START_KEEPS,

@@ -568,3 +568,23 @@ describe('4.12e: a run whose options are refused exits non-zero, before it posts
     expect(run(['--help']).status).toBe(0);
   }, 60000);
 });
+
+// The integrator, on the review of 4.12e (findings 1 and 5): a refusal at the stop exits as an
+// options refusal does, and the run reads --approve-file in the one place optionsRefusal names.
+describe("4.12e, the integrator's pins: the stop's refusals, and where the file is read", () => {
+  it('a refusal at the stop marks the run refused, and main exits with the refused code', () => {
+    const fn = body('async function runWalkthrough(');
+    expect(fn).toMatch(/approvals = defaultApproval\(checkpointType, checkpoint\);\n\s*\} catch \(refusal\) \{\n[^\n]*\n\s*refusedAtStop = true;\n\s*break;/);
+    expect(fn).toMatch(/return refusedAtStop \? \{ refused: true \} : undefined;$/);
+    expect(body('async function main(')).toMatch(/if \(outcome && outcome\.refused\) process\.exit\(OPTIONS_REFUSED_EXIT_CODE\);/);
+  });
+
+  it('reads --approve-file once, in step mode with --approve, where optionsRefusal says the run reads it', () => {
+    // The definition and its one call.
+    expect(SRC.match(/loadApprovalFile\(/g)).toHaveLength(2);
+    const fn = body('async function runWalkthrough(');
+    const before = fn.slice(0, fn.indexOf('approvals = loadApprovalFile(APPROVE_FILE);'));
+    const stepBranch = before.slice(before.lastIndexOf('if (STEP_MODE) {'));
+    expect(stepBranch).toMatch(/^if \(STEP_MODE\) \{[\s\S]*\bif \(APPROVE_TYPE\) \{[\s\S]*\bif \(APPROVE_FILE\) \{\n\s*$/);
+  });
+});

@@ -405,7 +405,9 @@ const AFTER_PLURAL = `(?<=[sS])['’](?=[^\\S\\n]+${LETTER_OR_DIGIT})`;
 const SINGLE_ENDING = `(?!${AFTER_PLURAL})${SINGLE_CLOSING}`;
 /**
  * A single-quoted span: an opening mark, then its line up to the first ending mark, or, with none
- * on the line, up to the last mark after a plural.
+ * on the line, up to the last mark after a plural. So a mark before a shortened word ('90s) with a
+ * plural's mark later on its line masks every word between them, the narrator's included: a known
+ * limit, in the module's direction, pinned by test.
  */
 const SINGLE_QUOTED = `${SINGLE_OPENING}(?:(?:(?!${SINGLE_ENDING})[^\\n])*${SINGLE_ENDING}|[^\\n]*${AFTER_PLURAL})`;
 
