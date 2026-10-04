@@ -85,8 +85,9 @@
  * alone, as a block moved at the desk is (task 4.5d): carried while a live connection under
  * its id is in the weave, whatever its words, which stay the writer's, so a pass may reword
  * it and a finding that quotes it is the writer's; a pass that drops it has it put back as
- * the meeting showed it. A whole element stays one edit when the director later changes part
- * of it (fix round 1, finding 1). Each look reads the director's version
+ * the meeting last showed it, since each look takes its words from the connection the
+ * meeting showed under its id (task 4.5e). A whole element stays one edit when the director
+ * later changes part of it (fix round 1, finding 1). Each look reads the director's version
  * against what the meeting showed at the places their standing edits are (withShownEdits),
  * so a change there is theirs with or without a pass since. And a reweave is held to them as
  * an automatic pass is (REWEAVE_PASS). The answers are the director's words, kept by their
@@ -1458,6 +1459,29 @@ function withShownEdits(baseline, edits, shown) {
 }
 
 /**
+ * A connection the director brought back, as the meeting showed it at this look (task 4.5e):
+ * the same edit, its `after` the live connection under its id in the weave the meeting showed.
+ * Its words are the writer's (task 4.5d), so a round's pass may have reworded them, the fix of
+ * a false link among them; a pass that drops the connection later has it put back with the
+ * words the meeting last showed, never the words it had when the director brought it back.
+ * Any other edit, and an un-strike whose id names no single live connection in the weave the
+ * meeting showed, is as it was.
+ *
+ * @param {Object} edit - a standing edit
+ * @param {Object|null} shown - the weave the meeting showed
+ * @returns {Object}
+ */
+function unstrikeAsShown(edit, shown) {
+  if (!isUnstrike(edit)) return edit;
+  const [head, step] = stepsOf(edit);
+  const id = isElementStep(step) ? weaveIdOf(step.match) : '';
+  if (!id || !head || !('key' in head)) return edit;
+  const there = elementsUnder(shown, head.key, id);
+  if (there.length !== 1 || isStruck(there[0].element)) return edit;
+  return { ...edit, after: clone(there[0].element) };
+}
+
+/**
  * The director's edits at the story meeting after an approve, a reweave or a send-back
  * (brief 4.5; K3 of the plan review): the meeting's edits stand past approve, so each of
  * the three actions makes them, against the writer's last weave (`baseline`).
@@ -1469,6 +1493,9 @@ function withShownEdits(baseline, edits, shown) {
  *   checks.
  * - Each other earlier edit the director's version still carries stands, with its id; one
  *   it no longer carries (the director undid it, or a send-back's rework changed it) goes.
+ *   A connection they brought back takes its words from the connection the meeting showed
+ *   (unstrikeAsShown; task 4.5e), so a pass that drops it later puts back what the meeting
+ *   last showed.
  * - Each difference between the baseline and the director's version that no standing
  *   edit is at, or inside of for a whole element, joins them, numbered on from every id
  *   given at the stop.
@@ -1502,7 +1529,7 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
   const issued = prior ? prior.issued : 0;
   const kept = prior
     ? prior.edits
-      .map((e) => wholeElementAsLeft(e, shown, left) || (editCarried(left, e) ? stillRemoved(e, [left]) : null))
+      .map((e) => wholeElementAsLeft(e, shown, left) || (editCarried(left, e) ? stillRemoved(unstrikeAsShown(e, shown), [left]) : null))
       .filter(Boolean)
     : [];
   const covered = (at) => {

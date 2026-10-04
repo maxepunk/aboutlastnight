@@ -2841,6 +2841,43 @@ describe('4.5d: two photos or two cards swapped are two moves, each keeping its 
 // - one rule names an element: nameOf derives from identityOf;
 // - a sidebar card's field goes back on its own card, beside the card a pass put at its index.
 // Invented text.
+describe('4.5e: a connection the director brought back goes back as the meeting last showed it', () => {
+  const { WEAVE } = require('./fixtures/rework-state');
+  const C1 = WEAVE.connections[0];
+  const FIXED = 'The result came back weeks after the sale, by the ledger.';
+  const writers = () => clone(WEAVE);
+  const struck = () => {
+    const weave = writers();
+    weave.connections[1].struck = true;
+    return weave;
+  };
+  /** The writer's weave with c2's words as a fix pass reworded them. */
+  const reworded = () => {
+    const weave = writers();
+    weave.connections[1].detail = FIXED;
+    return weave;
+  };
+  /** Look 1 strikes c2 (E1), and look 2 brings it back (E2). */
+  const broughtBack = () => D.standingAtMeeting(D.standingAtMeeting(null, writers(), struck()), struck(), writers());
+
+  it('a later look takes its words from the connection the meeting showed, so a pass that drops it after a round reworded it puts back the rewording', () => {
+    // Round A: the fix rewords c2, a false cause in the writer's words, and code keeps the words.
+    const roundA = D.settleEdits(null, { edits: D.carriedEdits(broughtBack(), writers()), before: writers(), after: reworded(), pass: 1 });
+    expect(roundA.output.connections[1].detail).toBe(FIXED);
+    // Look 3: the meeting shows the rewording; the director changes the headline and reweaves.
+    const left = { ...reworded(), headline: 'The Ledger Kept a Second Book.' };
+    const look3 = D.standingAtMeeting(broughtBack(), reworded(), left, { shown: reworded() });
+    expect(look3.edits.map((e) => [e.id, e.path, e.unstruck === true])).toEqual([['E2', 'connections[#c2]', true], ['E3', 'headline', false]]);
+    expect(look3.edits[0].after).toEqual(reworded().connections[1]);
+    // Round B: the reweave drops c2, and code puts it back with the words the meeting last showed.
+    const dropped = { ...clone(left), connections: [clone(C1)] };
+    const roundB = D.settleEdits(null, { edits: D.carriedEdits(look3, left), before: left, after: dropped, pass: D.REWEAVE_PASS });
+    expect(roundB.output.connections).toEqual([C1, reworded().connections[1]]);
+    expect(roundB.report.changed).toEqual([expect.objectContaining({
+      id: 'E2', director: expect.stringContaining(FIXED), became: null, restored: true
+    })]);
+  });
+});
 
 describe('4.5e: one rule names an element', () => {
   const { nameOf, identityOf, canon } = D._testing;
