@@ -2740,6 +2740,90 @@ function partnerIndex(collection, beforeArr, afterArr, bi) {
   return pair && sameKind(afterArr[pair.ai], element) && nameOf(collection, afterArr[pair.ai]) === nameOf(collection, element) ? pair.ai : -1;
 }
 
+/**
+ * How much of the director's block a block must hold to be a pass's copy of it, and how much
+ * of that block the director's must hold (task 4.14c): four words in five, both ways. On the 11
+ * stored articles no two of an article's paragraphs or quotes share that many words; a pass that
+ * reworded the opening of the director's paragraph ("Later that night, ...") keeps it.
+ */
+const COPY_SHARE = 0.8;
+
+/**
+ * How much of the director's block a block a pass wrote must hold for the stop to ask whether it
+ * is the pass's version of theirs (task 4.14c): half its words. A heavier rewrite, a paragraph
+ * the pass merged it into, or one of its own about the same moment: code cannot tell which.
+ */
+const MAYBE_COPY_SHARE = 0.5;
+
+/** A word, as the copy test counts them: letters and digits, with an apostrophe or a hyphen inside. */
+const COPY_WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu;
+
+/** The blocks a filename or a tokenId names (blockIdentity); every other block is named by its words. */
+const NAMED_BLOCK_TYPES = ['photo', 'evidence-card', 'evidence-reference'];
+
+/** The words a block prints (blockParts), folded as grounding.js folds text. */
+function copyWords(block) {
+  return fold(blockParts(block).map((part) => part.text).join(' ')).match(COPY_WORD) || [];
+}
+
+/** The share of `words` that `others` holds, each word counted as often as it occurs. */
+function shareHeld(words, others) {
+  if (words.length === 0) return 0;
+  const left = new Map();
+  others.forEach((word) => left.set(word, (left.get(word) || 0) + 1));
+  let held = 0;
+  words.forEach((word) => {
+    const n = left.get(word) || 0;
+    if (n > 0) { held += 1; left.set(word, n - 1); }
+  });
+  return held / words.length;
+}
+
+/** Every block of a version's sections as it is (canon), so a block the pass wrote is one this set lacks. */
+function blocksHeldBy(version) {
+  return new Set((isObj(version) && Array.isArray(version.sections) ? version.sections : [])
+    .flatMap((section) => (isObj(section) && Array.isArray(section.content) ? section.content : []))
+    .map(canon));
+}
+
+/**
+ * The blocks of `version` that may be a pass's version of a block the director wrote (task
+ * 4.14c), the closest first: each block of its type, in any section, that `before`, the version
+ * the pass started from, does not hold as it is, holding at least MAYBE_COPY_SHARE of the
+ * director's words. `share` is how much of the director's block it holds, `back` how much of it
+ * the director's holds. A photo, a card or a reference is found by its name, never by its words.
+ *
+ * @returns {Array<{section: number, index: number, block: Object, share: number, back: number}>}
+ */
+function rewordingsOf(block, before, version) {
+  if (!isObj(block) || NAMED_BLOCK_TYPES.includes(block.type) || !isObj(version) || !Array.isArray(version.sections)) return [];
+  const own = copyWords(block);
+  if (own.length === 0) return [];
+  const held = blocksHeldBy(before);
+  const found = [];
+  version.sections.forEach((section, s) => {
+    (isObj(section) && Array.isArray(section.content) ? section.content : []).forEach((candidate, index) => {
+      if (!isObj(candidate) || candidate.type !== block.type || held.has(canon(candidate))) return;
+      const theirs = copyWords(candidate);
+      const share = shareHeld(own, theirs);
+      if (share >= MAYBE_COPY_SHARE) found.push({ section: s, index, block: candidate, share, back: shareHeld(theirs, own) });
+    });
+  });
+  return found.sort((x, y) => (y.share - x.share) || (y.back - x.back));
+}
+
+/**
+ * The pass's copy of a block the director wrote, which nothing pairs it with (task 4.14c): the
+ * one block of `version` holding COPY_SHARE of the director's words and held as much by them
+ * (rewordingsOf). Null when there is none, or more than one, so code cannot tell which.
+ *
+ * @returns {{section: number, index: number}|null}
+ */
+function passCopyOf(block, before, version) {
+  const copies = rewordingsOf(block, before, version).filter((r) => r.share >= COPY_SHARE && r.back >= COPY_SHARE);
+  return copies.length === 1 ? copies[0] : null;
+}
+
 /** What finds a moved block in any version: its type with its filename, tokenId or text. */
 function moveIdentity(edit) {
   const steps = stepsOf(edit);
@@ -2876,7 +2960,13 @@ function becameOf(edit, before, after) {
       continue;
     }
     if (!Array.isArray(cur)) return null;
-    const partner = partnerIndex(link.collection, link.holder, cur, link.index);
+    let partner = partnerIndex(link.collection, link.holder, cur, link.index);
+    // Task 4.14c: the pass's copy of a block nothing pairs, as the restore finds it.
+    const copy = partner === -1 && link.collection === 'content' ? passCopyOf(link.holder[link.index], before, after) : null;
+    if (copy) {
+      cur = after.sections[copy.section].content;
+      partner = copy.index;
+    }
     if (partner === -1) return null;
     cur = cur[partner];
   }
@@ -3142,7 +3232,10 @@ function blocksOf(collection, element) {
  * it, into the director's section, losing the copy the pass left in another section (task
  * 4.5g). A connection the director brought back goes back as `before` holds it, since its
  * words are the writer's (restoredValue; task 4.5f). A moved block goes back into the
- * director's section as the pass left it (restoreMove). A cut is never put back.
+ * director's section as the pass left it (restoreMove). A cut is never put back. A block
+ * named by its words that nothing pairs, because the pass reworded it and moved the blocks
+ * around it, goes back in place of the pass's copy of it where code can tell which block that
+ * is (passCopyOf; task 4.14c), and where it sat otherwise.
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
@@ -3184,7 +3277,16 @@ function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
       continue;
     }
     if (!Array.isArray(cur)) return false;
-    const partner = partnerIndex(link.collection, link.holder, cur, link.index);
+    let partner = partnerIndex(link.collection, link.holder, cur, link.index);
+    // Task 4.14c: a block nothing pairs, which a pass reworded in place while it moved the
+    // blocks around it, has its copy take the director's text where the pass put it, so the
+    // page prints it once.
+    const copy = partner === -1 && link.collection === 'content' ? passCopyOf(link.holder[link.index], before, out) : null;
+    if (copy) {
+      cur = out.sections[copy.section].content;
+      partner = copy.index;
+      section = copy.section;
+    }
     const inSections = link.collection === 'sections' && cur === out.sections;
     const putBack = (element) => {
       const restored = withoutLeftOut(link.collection, element, leavesOut);
@@ -3231,6 +3333,65 @@ function backInSection(edit, after, stored) {
  */
 function isBundle(obj) {
   return isObj(obj) && Array.isArray(obj.sections) && !isWeave(obj) && !isMap(obj);
+}
+
+/**
+ * The blocks of `version` that sit where a block of the version the pass started from sat (task
+ * 4.14c): in its section, after the partner of the block before it and before the partner of the
+ * block after it, the nearest of each that `version` still pairs (pairSectionBlocks), from the
+ * section's start or to its end where there is none.
+ *
+ * @param {Object} place - where the block sat in the version the pass started from (placeCarrying's)
+ * @param {Object} version
+ * @returns {Object[]}
+ */
+function blocksWhereItSat(place, version) {
+  const sectionLink = place.chain.find((l) => l.collection === 'sections');
+  const contentLink = place.chain.find((l) => l.collection === 'content');
+  if (!sectionLink || !contentLink || !isObj(version) || !Array.isArray(version.sections)) return [];
+  const key = sectionKey(sectionLink.holder[sectionLink.index], sectionLink.index);
+  const section = version.sections.find((s, i) => sectionKey(s, i) === key);
+  const content = isObj(section) && Array.isArray(section.content) ? section.content : [];
+  const pairs = matchBlocks(contentLink.holder, content).pairs;
+  const partnerOf = (bi) => {
+    const pair = pairs.find((p) => p.bi === bi);
+    return pair ? pair.ai : null;
+  };
+  let from = -1;
+  for (let bi = contentLink.index - 1; bi >= 0 && from === -1; bi -= 1) if (partnerOf(bi) !== null) from = partnerOf(bi);
+  let to = content.length;
+  for (let bi = contentLink.index + 1; bi < contentLink.holder.length && to === content.length; bi += 1) if (partnerOf(bi) !== null) to = partnerOf(bi);
+  return from < to ? content.slice(from + 1, to) : [];
+}
+
+/**
+ * The text of a block of `stored` that may be a pass's version of a block the director wrote,
+ * named by its words, which the pass took out and code put back where it sat (task 4.14c), or
+ * null. Code could not tell which block was the pass's copy, so the stop asks the director
+ * whether their text now prints twice. The block is one the pass wrote that does not hold the
+ * director's text: the closest of its rewordings (rewordingsOf), else one of its type in the
+ * place it sat (blocksWhereItSat), such as a full rewrite of it.
+ *
+ * @param {Object} edit - an edit code put back after the pass, whose text the pass's output held nowhere (becameOf null)
+ * @param {Object} before - the version the pass started from, which carries the edit
+ * @param {Object} stored - the version stored after the pass
+ * @returns {string|null}
+ */
+function maybeCopyOf(edit, before, stored) {
+  const place = placeCarrying(before, edit);
+  const link = place ? place.chain.find((l) => l.collection === 'content') : null;
+  const block = link ? link.holder[link.index] : null;
+  if (!isObj(block) || NAMED_BLOCK_TYPES.includes(block.type)) return null;
+  const steps = stepsOf(edit);
+  const blockStep = steps.findIndex((step, i) => isElementStep(step) && collectionAt(steps, i) === 'content');
+  const fieldSteps = steps.slice(blockStep + 1);
+  const holdsDirectors = (candidate) => (fieldSteps.length === 0 ? matchesAfter(candidate, edit.after) : same(valueAtSteps(candidate, fieldSteps), edit.after));
+  const byWords = rewordingsOf(block, before, stored).find((r) => !holdsDirectors(r.block));
+  if (byWords) return blockText(byWords.block).trim();
+  const held = blocksHeldBy(before);
+  const inItsPlace = blocksWhereItSat(place, stored)
+    .find((candidate) => isObj(candidate) && candidate.type === block.type && !held.has(canon(candidate)) && !holdsDirectors(candidate));
+  return inItsPlace ? blockText(inItsPlace).trim() : null;
 }
 
 /**
@@ -3301,6 +3462,9 @@ function cameBackStillIn(report, stored) {
  *   (`cut`, `removed`), with the text where it came back: code never takes it out; in the
  *   article's report each carries the `pieces` it is read by, and stays only while the version
  *   stored after the round's latest pass holds them (cameBackStillIn; task 4.14c);
+ * - beside `restored`, `maybeCopy` on a block the director wrote that the pass's output held no
+ *   version of, so code put it back where it sat: the text of a block the pass wrote that may be
+ *   its version of the director's (maybeCopyOf; task 4.14c);
  * - each with the pass (SEND_BACK_PASS, REWEAVE_PASS or the automatic pass's number),
  *   whether an automatic pass made it, and the rework's reason (null: none given);
  * - a connection the director struck that a pass brought back (brief 4.5) is marked
@@ -3356,9 +3520,14 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       return;
     }
     if (!editCarried(after, e)) {
+      const became = becameOf(e, before, after);
+      // Task 4.14c: only where the pass's output held no version of the director's text for code
+      // to write it onto, so code put it back where it sat.
+      const maybeCopy = putBack.has(e.id) && became === null ? maybeCopyOf(e, before, stored) : null;
       changed.push(entry(e, {
-        director: editValueText(restoredValue(e, before)), became: becameOf(e, before, after), restored: putBack.has(e.id),
-        ...(leftOut.has(e.id) && { unprintable: true })
+        director: editValueText(restoredValue(e, before)), became, restored: putBack.has(e.id),
+        ...(leftOut.has(e.id) && { unprintable: true }),
+        ...(maybeCopy !== null && { maybeCopy })
       }));
     }
     const back = removedReturnedIn(stored, e);

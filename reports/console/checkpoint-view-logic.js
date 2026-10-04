@@ -508,6 +508,15 @@
   var PUT_BACK_WITHOUT_PHOTO = 'The rest of your edit stands: place a photo the article can print here if it should have one.';
 
   /**
+   * What the line says of a block the director wrote that code put back where it could not tell
+   * which block was the pass's version of it (task 4.14c: the entry's `maybeCopy`, the text of a
+   * block that may be): the director checks whether their text now prints twice.
+   */
+  function maybeCopyLine(text) {
+    return '"' + text + '" may be the pass\'s version of it: delete that block if your text now prints twice.';
+  }
+
+  /**
    * A reason a rework gave, as a sentence the next reason can follow (brief 4.10e): closed with a
    * full stop, in place of a comma, colon, semicolon or dash it trails off on, unless it ends on its
    * own closing punctuation (a full stop, a question or exclamation mark, or an ellipsis, with any
@@ -574,6 +583,9 @@
    *   pass removed: that code left it out, since only its place was the director's edit. The
    *   map (task 4.9) names the element a beat or a photo, and the desk a Key Evidence entry an
    *   entry (task 4.14c).
+   * - A block the director wrote that code put back where it could not tell which block was the
+   *   pass's version of it (`maybeCopy`, task 4.14c): the block that may be, for the director to
+   *   check.
    * - A change a send-back's rework made: the rework's reason, or that it gave none.
    *
    * @param {Object} entry - one of the report's `changed` entries (lib/hand-edit-diff.js reportAfterPass)
@@ -624,6 +636,10 @@
       if (entry.restored === true) return label + ': ' + by + ' took out a photo you placed here, which the article cannot print. ' + PUT_BACK_WITHOUT_PHOTO;
       return label + ': ' + by + ' took out the photo, which the article cannot print, so your "' + director + '" was not put back.';
     }
+    if (held && entry.restored === true && typeof entry.maybeCopy === 'string') {
+      return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' took out your "' + director + '"') +
+        '. Your text was put back. ' + maybeCopyLine(valueText(entry.maybeCopy));
+    }
     if (held && entry.restored === true) {
       return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' removed your "' + director + '"') + '. Your text was put back.';
     }
@@ -641,10 +657,12 @@
    * task 4.3c) is shown too (brief 4.10b): its line asks the director to move it again. So is
    * an element the director put in whole that code put back without a photo the article cannot
    * print, which a pass took out of print (`unprintable` beside `restored`, task 4.5g): its line
-   * asks the director for a photo the article can print. Any other entry code put back asks
-   * nothing of the director, so no stop shows it beside the edit; at the desk it stays in the
-   * folded record of the round (RevisionDiff, steeringView). One rule for the story meeting
-   * (meetingView), the map (mapView) and the desk (deskMarks).
+   * asks the director for a photo the article can print. So is a block the director wrote that
+   * code put back where it could not tell which block was the pass's version of it (`maybeCopy`
+   * beside `restored`, task 4.14c): its line asks the director whether their text prints twice.
+   * Any other entry code put back asks nothing of the director, so no stop shows it beside the
+   * edit; at the desk it stays in the folded record of the round (RevisionDiff, steeringView).
+   * One rule for the story meeting (meetingView), the map (mapView) and the desk (deskMarks).
    *
    * @param {*} report - a stop's handEditReport
    * @returns {Object[]} the entries, in the report's order
@@ -653,7 +671,8 @@
     var read = editReportOf(report);
     if (!read) return [];
     return read.changed.filter(function (entry) {
-      return entry.pass === SEND_BACK_PASS || entry.restored !== true || entry.inOrder === false || entry.unprintable === true;
+      return entry.pass === SEND_BACK_PASS || entry.restored !== true || entry.inOrder === false || entry.unprintable === true ||
+        typeof entry.maybeCopy === 'string';
     });
   }
 
@@ -3641,8 +3660,9 @@
    * Where an edit a round changed sits: beside the piece that prints what the director's text
    * became, or, for a block a pass moved, the block itself, the entry's section first; for an
    * entry about a whole section, whose text no one piece prints, on that section's heading (brief
-   * 4.10e); possibly resolved when only the article as the stop opened it printed that; beside no
-   * piece when the pass took it out.
+   * 4.10e); beside the director's text code put back, for a block that may print twice (task
+   * 4.14c, `maybeCopy`); possibly resolved when only the article as the stop opened it printed
+   * that; beside no piece when the pass took it out.
    */
   function changedPlace(entry, ctx) {
     var prefer = scopePieces(entry.scope);
@@ -3651,6 +3671,8 @@
       if (typeof entry.became !== 'string') return null;
       var went = /section "([^"]*)"/.exec(entry.became);
       if (went) prefer = inSection(went[1]);
+      target = asString(entry.director);
+    } else if (typeof entry.maybeCopy === 'string') {
       target = asString(entry.director);
     } else {
       target = typeof entry.became === 'string' ? entry.became : '';

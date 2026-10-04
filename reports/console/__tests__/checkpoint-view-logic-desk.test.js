@@ -1108,6 +1108,24 @@ describe('4.14c: the desk says what each pass did, and only what still holds', (
     ];
   };
 
+  test("where code cannot tell which block is the pass's version of the director's paragraph, the line sits beside the paragraph code put back", () => {
+    const DIRECTORS = 'Thirteen sales landed in one account, and the room never asked whose account it was.';
+    // About three in four of the director's words: a rewrite of theirs, or a paragraph of the pass's own.
+    const REWRITE = 'Thirteen sales landed in a single account, and nobody in the room asked who held it.';
+    const directors = clone(article());
+    directors.sections[2].content[0] = paragraph(DIRECTORS);
+    const edits = carriedEdits(standingAfterSendBack(null, article(), directors, 'bundle'), directors);
+    // The pass moved the photo up and rewrote the paragraph under it.
+    const pass = clone(directors);
+    pass.sections[2].content = [photo('theory.jpg', 'Mel lays out the theory.'), paragraph(REWRITE)];
+    const { output, report } = settleEdits(null, { edits, before: directors, after: pass, pass: 1 });
+    expect(output.sections[2].content.map((b) => b.text || b.filename)).toEqual([DIRECTORS, 'theory.jpg', REWRITE]);
+    expect(changedEditsToShow(report)).toHaveLength(1);
+    const d = payloadFor(output, { handEditReport: report });
+    expect(changedAt(d)).toEqual([[at(2, 0),
+      `Follow the Money, paragraph: automatic pass 1 took out your "${DIRECTORS}". Your text was put back. "${REWRITE}" may be the pass's version of it: delete that block if your text now prints twice.`]]);
+  });
+
   test("a cut that came back in one pass and left in the next shows no line, and the record says the edit stands", () => {
     const writers = article();
     const cut = clone(writers);

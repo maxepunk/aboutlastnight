@@ -3608,6 +3608,97 @@ describe('4.14c: a Key Evidence entry the director deleted or moved stands throu
   });
 });
 
+// Desk 2: after a send-back, an automatic pass reworded the opening of the director's paragraph
+// and removed or inserted a block before it, so nothing paired the director's block with the
+// pass's version of it. Code put the director's paragraph back beside the pass's copy, and the
+// stop printed it twice, in two wordings, with no mark.
+describe("4.14c: a restore never prints the director's paragraph twice", () => {
+  const A = paragraph('Everyone in the room heard Marcus brag about the sale before midnight.');
+  const B = paragraph('Marcus bragged about the sale the night he died, and nobody stopped him.');
+  const WRITERS = paragraph('Morgan handed Riley an envelope by the bar, and a paternity result named Sarah as the heir.');
+  const LAST = paragraph('Riley says they only kept the books for the man who paid them.');
+  const DIRECTORS = 'Morgan paid Riley at the bar, out of sight, and the result named Sarah.';
+  const REWORDED = `Later that night, m${DIRECTORS.slice(1)}`;
+  const CLOSING = 'Whether the verdict costs Alex anything is still open.';
+  const story = (...content) => ({
+    headline: { main: 'The Room Voted Overdose Anyway', deck: 'A deck.' },
+    sections: [
+      { id: 'the-story', type: 'narrative', heading: 'The Story', content: content.map(clone) },
+      { id: 'closing', type: 'conclusion', heading: 'Closing', content: [paragraph(CLOSING)] }
+    ]
+  });
+  const textsOf = (bundle) => bundle.sections.map((s) => s.content.map((b) => b.text));
+  const settleFrom = (shown, desk, after) => D.settleEdits(null, {
+    edits: D.carriedEdits(D.standingAfterSendBack(null, shown, desk, 'bundle'), desk), before: desk, after, pass: 1
+  });
+  /** The director rewrote the writer's third paragraph, and an automatic pass returned `after`. */
+  const rewrite = (after) => settleFrom(story(A, B, WRITERS, LAST), story(A, B, paragraph(DIRECTORS), LAST), after);
+
+  test("a pass that rewords its opening and removes a block before it: the director's text goes back in place of the pass's copy", () => {
+    const { output, report } = rewrite(story(B, paragraph(REWORDED), LAST));
+    expect(textsOf(output)).toEqual([[B.text, DIRECTORS, LAST.text], [CLOSING]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', director: DIRECTORS, became: REWORDED, restored: true, automatic: true })]);
+    expect(report.changed[0]).not.toHaveProperty('maybeCopy');
+  });
+
+  test('so does one that inserts a block before it', () => {
+    const NEW = paragraph('A new opening line the pass wrote for the section.');
+    const { output, report } = rewrite(story(NEW, A, B, paragraph(REWORDED), LAST));
+    expect(textsOf(output)).toEqual([[NEW.text, A.text, B.text, DIRECTORS, LAST.text], [CLOSING]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: REWORDED, restored: true })]);
+  });
+
+  test("so does one that moved the reworded copy to another section: the copy takes the director's text where the pass put it", () => {
+    const after = story(A, B, LAST);
+    after.sections[1].content.unshift(paragraph(REWORDED));
+    const { output } = rewrite(after);
+    expect(textsOf(output)).toEqual([[A.text, B.text, LAST.text], [DIRECTORS, CLOSING]]);
+  });
+
+  test('a paragraph the director inserted, reworded by a pass that removed a block before it, prints once', () => {
+    const INSERTED = 'Nobody in the room asked who paid for the scoreboard.';
+    const { output, report } = settleFrom(story(A, B, LAST), story(A, B, paragraph(INSERTED), LAST), story(B, paragraph(`Still, n${INSERTED.slice(1)}`), LAST));
+    expect(textsOf(output)).toEqual([[B.text, INSERTED, LAST.text], [CLOSING]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+    expect(report.changed[0]).not.toHaveProperty('maybeCopy');
+  });
+
+  test('a pass that took the paragraph out has it put back where it sat, with nothing to ask', () => {
+    const { output, report } = rewrite(story(A, B, LAST));
+    expect(textsOf(output)).toEqual([[A.text, B.text, DIRECTORS, LAST.text], [CLOSING]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: true })]);
+    expect(report.changed[0]).not.toHaveProperty('maybeCopy');
+  });
+
+  test("where code cannot tell which block is the pass's version, the director's text goes back and the entry names the block that may be", () => {
+    // Fewer than four in five of the director's words: a rewrite, or another paragraph.
+    const REWRITE = 'Morgan slipped Riley cash by the bar while nobody watched, and the lab named Sarah.';
+    const { output, report } = rewrite(story(B, paragraph(REWRITE), LAST));
+    expect(textsOf(output)).toEqual([[B.text, REWRITE, DIRECTORS, LAST.text], [CLOSING]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', director: DIRECTORS, became: null, restored: true, maybeCopy: REWRITE })]);
+  });
+
+  test("a pass that merged the director's text into another paragraph: the writer's words stay, and the entry names that paragraph", () => {
+    const MERGED = `${LAST.text} ${REWORDED}`;
+    const { output, report } = rewrite(story(B, paragraph(MERGED)));
+    expect(textsOf(output)).toEqual([[B.text, MERGED, DIRECTORS], [CLOSING]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true, maybeCopy: MERGED })]);
+  });
+
+  test('a full rewrite in its place, with a block inserted before it, shares too few words to read as a copy: the entry names the paragraph in its place', () => {
+    // The real graph's shape (the final review's p06): the pass rewrote the director's paragraph
+    // where it sat and brought a card back above it.
+    const FULL = 'The writer rewrote this line entirely.';
+    const CARD = { type: 'evidence-card', tokenId: 'ale003', headline: 'The brag', content: 'Marcus raises a glass to the sale.', significance: 'critical' };
+    const { output, report } = rewrite(story(A, B, CARD, paragraph(FULL), LAST));
+    expect(output.sections[0].content.map((b) => b.text || b.tokenId)).toEqual([A.text, B.text, DIRECTORS, 'ale003', FULL, LAST.text]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: true, maybeCopy: FULL })]);
+    // A paragraph the pass wrote beside a copy it reworded, which code wrote the director's text onto, is no question.
+    const NEW = paragraph('A new opening line the pass wrote for the section.');
+    expect(rewrite(story(A, B, NEW, paragraph(REWORDED), LAST)).report.changed[0]).not.toHaveProperty('maybeCopy');
+  });
+});
+
 // Desk 3: a cut that came back in automatic pass 1 and left in pass 2 still showed the line
 // asking the director to cut text the article no longer held. Each "came back" entry of the
 // article's report is read against the version stored after each pass, the last of which is the
