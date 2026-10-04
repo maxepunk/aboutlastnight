@@ -8,12 +8,17 @@
  * refuses it, and tells the director to roll back to the story meeting, which keeps the
  * parse, the curation and the photos and writes the weave fresh.
  *
- * A thread is old when it holds no weave and its stop is the story meeting's or a later
- * one in the console's CHECKPOINT_ORDER (the stop it is paused at), or it is complete. A
- * thread of the new code reaches none of those without a weave: the arc writer writes it
- * before the meeting opens, and every rollback that clears it reopens a stop before the
- * meeting. A thread at no stop (a run in flight, or one that stopped without a pause) is
- * not judged here.
+ * A thread is old when it holds no weave and has reached the story meeting: it is paused at
+ * the meeting's stop or a later one in the console's CHECKPOINT_ORDER, it is complete, or it
+ * holds an outline or an article, which only a stage after the meeting writes. The last
+ * covers a thread at no stop (fix round 1, finding 1): one that stopped on an error, or
+ * whose run was killed, after the old stages wrote its outline. A resume replayed it from
+ * START, and once its fresh meeting was approved the map writer skipped on the old outline
+ * (it skips on any outline), so the map's stop opened on it. A thread of the new code
+ * reaches none of those without a weave: the arc writer writes it before the meeting
+ * opens, and every rollback or fresh start that clears it clears the outline and the
+ * article too. A thread at no stop that holds neither (a run in flight, or one that stopped
+ * before the outline writer) is left alone: its resume writes the weave and the map fresh.
  *
  * server.js applies it: /approve, /resume and every /rollback past the meeting answer 409
  * with OLD_THREAD_MESSAGE, and GET /checkpoint carries the flag, which the console shows
@@ -38,6 +43,18 @@ const MEETING_INDEX = CHECKPOINT_ORDER.indexOf(OLD_THREAD_ROLLBACK);
 const OLD_THREAD_ROLLBACK_POINTS = Object.freeze(CHECKPOINT_ORDER.slice(0, MEETING_INDEX + 1));
 
 /**
+ * Whether the thread holds what only a stage after the story meeting writes: an outline (the
+ * map's channel) or an article. Read as the map writer and the article writer read them, who
+ * skip on any value.
+ *
+ * @param {Object} state
+ * @returns {boolean}
+ */
+function holdsOutputPastTheMeeting(state) {
+  return Boolean(state.outline) || Boolean(state.contentBundle);
+}
+
+/**
  * The flag for a thread from before the story meeting, or null for any other thread.
  *
  * @param {Object|undefined} values - the thread's state values
@@ -47,8 +64,10 @@ const OLD_THREAD_ROLLBACK_POINTS = Object.freeze(CHECKPOINT_ORDER.slice(0, MEETI
 function oldThreadOf(values, pausedAt) {
   const state = values || {};
   if (isWeave(state.weave)) return null;
-  const pastTheMeeting = state.currentPhase === PHASES.COMPLETE || CHECKPOINT_ORDER.indexOf(pausedAt) >= MEETING_INDEX;
-  if (!pastTheMeeting) return null;
+  const reachedTheMeeting = state.currentPhase === PHASES.COMPLETE
+    || CHECKPOINT_ORDER.indexOf(pausedAt) >= MEETING_INDEX
+    || holdsOutputPastTheMeeting(state);
+  if (!reachedTheMeeting) return null;
   return { message: OLD_THREAD_MESSAGE, rollbackTo: OLD_THREAD_ROLLBACK, rollbackPoints: [...OLD_THREAD_ROLLBACK_POINTS] };
 }
 

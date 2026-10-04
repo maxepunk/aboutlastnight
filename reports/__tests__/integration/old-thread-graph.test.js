@@ -2,6 +2,7 @@
  * A thread from before the story meeting, through the REAL compiled graph and the real
  * Express app (phase 4, task 4.11; R2). The brief's verification: an old-shape thread
  * paused at the photos stop is refused on approve, and a rollback to the meeting proceeds.
+ * Fix round 1 adds one that stopped on an error after its article was approved, at no stop.
  *
  * The thread is seeded as a thread from before phase 4 reaches the photos stop: the parse,
  * the curation and the photos' earlier stops answered, no weave, and the old arc stage's
@@ -186,5 +187,75 @@ describe("4.11, the brief's verification: an old thread paused at the photos sto
     expect(after.body.oldThread).toBeNull();
     expect(after.body.checkpointType).toBe('arc-selection');
     expect(isWeave(after.body.checkpoint.weave)).toBe(true);
+  });
+});
+
+// Fix round 1, finding 1: a thread from before phase 4 that stopped on an error after its
+// article was approved sits at no stop, with its old outline and article. A resume replayed
+// it from START: a fresh weave and meeting, then the map writer skipped on the old outline
+// and the map's stop opened on it, and /approve's recovery offered a rollback to the article.
+describe('4.11 fix round 1: an old thread that stopped on an error after its article was approved', () => {
+  const STOPPED = '1004112';
+  const thread = { configurable: { thread_id: STOPPED, sessionId: STOPPED, theme: 'journalist', dataDir: null } };
+  const graph = () => createReportGraphWithCheckpointer(saver);
+  /** The outline and the article in the shapes the old stages wrote. Invented text. */
+  const OLD_OUTLINE = { lede: { hook: 'An old hook.' }, theStory: { arcs: [] }, closing: { theme: 'An old close.' }, writerQuestions: [] };
+  const OLD_BUNDLE = { headline: { main: 'An old headline' }, sections: [], writerQuestions: [] };
+
+  /** The thread as one from before phase 4 stops when its publish fails: no weave, no meeting, at no stop. */
+  async function seedStoppedOnError() {
+    const { weave: _weave, meetingApproved: _approved, ...state } = reworkFixtureState('journalist');
+    thread.configurable.dataDir = dataDir;
+    await graph().updateState(thread, {
+      ...state, ...ANSWERED_BEFORE_THE_MEETING, sessionId: STOPPED,
+      weave: null, _weaveBaseline: null,
+      outline: OLD_OUTLINE, _mapBaseline: null, outlineApproved: true, heroImage: null,
+      contentBundle: OLD_BUNDLE, articleApproved: true, photosPath: null,
+      currentPhase: 'error',
+      arcRevisionCount: 2, humanArcRevisionCount: 1,
+      evaluationHistory: [{ phase: 'arcs', ready: true }, { phase: 'article', ready: true }]
+    }, 'assembleHtml');
+  }
+
+  const stopOf = async () => {
+    const snapshot = await graph().getState(thread);
+    const task = snapshot.tasks[0];
+    return { type: task && task.interrupts[0] ? task.interrupts[0].value.type : null, values: snapshot.values, id: snapshot.config.configurable.checkpoint_id };
+  };
+
+  it('is flagged, refused on resume, approve and a rollback to the article, and a rollback to the meeting clears the old outline and article', async () => {
+    mockSdk = scriptedSdk();
+    await seedStoppedOnError();
+    const stopped = await stopOf();
+    expect(stopped.type).toBeNull();
+    expect(stopped.values.currentPhase).toBe('error');
+    expect(isWeave(stopped.values.weave)).toBe(false);
+
+    // GET /checkpoint flags it: the Session screen shows the message and the rollback instead of resuming.
+    const checkpoint = await send('GET', `/api/session/${STOPPED}/checkpoint`);
+    expect(checkpoint.body).toMatchObject({ interrupted: false, checkpoint: null, oldThread: { message: MESSAGE, rollbackTo: 'arc-selection' } });
+
+    // Resume, approve and the rollback the recovery offered are refused, and nothing ran.
+    for (const [route, body] of [['resume', {}], ['resume', { force: true }], ['approve', { article: true }], ['rollback', { rollbackTo: 'article' }]]) {
+      const res = await send('POST', `/api/session/${STOPPED}/${route}`, body);
+      expect(`${route} ${res.status} ${res.body.error}`).toBe(`${route} 409 ${MESSAGE}`);
+    }
+    expect((await stopOf()).id).toBe(stopped.id);
+    expect(mockSdk.calls).toEqual([]);
+
+    // The rollback to the meeting proceeds: the old outline and article go, the weave is
+    // written fresh with its fact check, and the arc counters start over.
+    const rollback = await send('POST', `/api/session/${STOPPED}/rollback`, { rollbackTo: 'arc-selection' });
+    expect(rollback.status).toBe(200);
+    await Promise.allSettled([..._inFlight]);
+    expect(getSessionOutcome(STOPPED)).toMatchObject({ outcome: 'interrupted', checkpointType: 'arc-selection' });
+
+    const meeting = await stopOf();
+    expect(meeting.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
+    expect(mockSdk.calls).toEqual(['weave writer', 'fact check']);
+    expect(isWeave(meeting.values.weave)).toBe(true);
+    expect(meeting.values).toMatchObject({ outline: null, contentBundle: null, arcRevisionCount: 0, humanArcRevisionCount: 0 });
+    expect(meeting.values.articleApproved).not.toBe(true);
+    expect((await send('GET', `/api/session/${STOPPED}/checkpoint`)).body.oldThread).toBeNull();
   });
 });

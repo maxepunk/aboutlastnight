@@ -5,8 +5,8 @@
  * stop, or anything after it, the new stages would replay it on the old shapes, so the
  * server refuses it and tells the director to roll back to the story meeting, which keeps
  * the parse, the curation and the photos and writes the weave fresh. The rule is
- * lib/old-thread.js's, by the weave and by the thread's stop in the console's
- * CHECKPOINT_ORDER (ruling 1: detect by the weave).
+ * lib/old-thread.js's, by the weave (ruling 1), and by the thread's stop in the console's
+ * CHECKPOINT_ORDER, its completion, or the outline or article it holds (fix round 1).
  */
 const {
   OLD_THREAD_MESSAGE,
@@ -17,13 +17,16 @@ const {
   oldThreadRollbackState
 } = require('../old-thread');
 const { CHECKPOINT_ORDER } = require('../../console/session-start-logic');
-const { VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS } = require('../workflow/state');
-const { reworkFixtureState } = require('./fixtures/rework-state');
+const { VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS, ROLLBACK_CLEARS, FRESH_START_CLEARS } = require('../workflow/state');
+const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 
 const WEAVE = reworkFixtureState('journalist').weave;
 const MESSAGE = 'This session was started before the story meeting. Roll back to the story meeting to continue.';
 const MEETING_AND_BEFORE = ['paper-evidence-selection', 'await-roster', 'await-full-context', 'input-review', 'pre-curation', 'evidence-and-photos', 'arc-selection'];
 const PAST_THE_MEETING = ['photos', 'character-ids', 'outline', 'article'];
+/** An outline and an article in the shapes the old stages wrote, before phase 4. Invented text. */
+const OLD_OUTLINE = { lede: { hook: 'An old hook.' }, theStory: { arcs: [] }, closing: { theme: 'An old close.' }, writerQuestions: [] };
+const OLD_BUNDLE = { headline: { main: 'An old headline' }, sections: [], writerQuestions: [] };
 
 describe('4.11: the message and the rollback an old thread is given', () => {
   it("the message is the brief's, word for word", () => {
@@ -63,9 +66,10 @@ describe('4.11: which thread is old (R2; ruling 1)', () => {
     expect(oldThreadOf({ currentPhase: '1.8' }, stop)).toBeNull();
   });
 
-  it('a thread at no stop and not complete is not: a run in flight, or one that stopped without a pause', () => {
+  it('a thread at no stop that holds no outline and no article is not: a run in flight, or one that stopped before the outline writer, whose resume writes the weave and the map fresh', () => {
     expect(oldThreadOf({ currentPhase: '2.1' }, null)).toBeNull();
     expect(oldThreadOf({ currentPhase: 'error' }, null)).toBeNull();
+    expect(oldThreadOf({ currentPhase: 'error', outline: null, contentBundle: null }, null)).toBeNull();
   });
 
   it('a value that is no weave counts as none, as the arc writer reads it', () => {
@@ -82,6 +86,48 @@ describe('4.11: which thread is old (R2; ruling 1)', () => {
     const first = oldThreadOf({ currentPhase: 'complete' }, null);
     first.rollbackPoints.push('photos');
     expect(oldThreadOf({ currentPhase: 'complete' }, null).rollbackPoints).toEqual(MEETING_AND_BEFORE);
+  });
+});
+
+// Fix round 1, finding 1: a thread from before phase 4 that stopped on an error, or whose run
+// was killed, after the old stages wrote its outline or its article sits at no stop. A resume
+// replayed it from START: the arc writer wrote a weave, the meeting opened, and once it was
+// approved the map writer skipped on the old outline (it skips on any outline), so the map's
+// stop opened on it, or the article writer and the publish ran on the old article. Only a
+// stage after the meeting writes an outline or an article, and a new thread holds neither
+// without a weave, so a thread that holds one with no weave is old wherever it sits.
+describe('4.11 fix round 1: a thread that holds an outline or an article with no weave is old, at no stop too', () => {
+  const FLAG = { message: MESSAGE, rollbackTo: 'arc-selection', rollbackPoints: MEETING_AND_BEFORE };
+
+  it.each([
+    ['stopped on an error after its outline was written', { currentPhase: 'error', outline: OLD_OUTLINE }],
+    ['stopped on an error after its article was approved', { currentPhase: 'error', outline: OLD_OUTLINE, contentBundle: OLD_BUNDLE, articleApproved: true }],
+    ['killed while its article was being written', { currentPhase: '3.25', outline: OLD_OUTLINE, outlineApproved: true }],
+    ['holding an article alone', { currentPhase: 'error', contentBundle: OLD_BUNDLE }]
+  ])('a thread at no stop that %s is old', (_case, values) => {
+    expect(oldThreadOf(values, null)).toEqual(FLAG);
+  });
+
+  it('any value counts, as the map writer and the article writer each skip on any', () => {
+    expect(oldThreadOf({ currentPhase: 'error', outline: {} }, null)).toEqual(FLAG);
+    expect(oldThreadOf({ currentPhase: 'error', contentBundle: {} }, null)).toEqual(FLAG);
+  });
+
+  it('a thread paused before the meeting that holds one is old too: approving its stop would carry the old outline to the map writer', () => {
+    expect(oldThreadOf({ currentPhase: '1.8', outline: OLD_OUTLINE }, 'evidence-and-photos')).toEqual(FLAG);
+  });
+
+  it('a new thread that stopped on an error past the meeting holds a weave, and is not', () => {
+    expect(oldThreadOf({ currentPhase: 'error', weave: WEAVE, outline: MAP, contentBundle: PREVIOUS_BUNDLE, articleApproved: true }, null)).toBeNull();
+  });
+
+  it("the rule's premise: every rollback point and the fresh start that clear the weave clear the outline and the article too, so a new thread never holds either without one", () => {
+    const clearsWeave = Object.entries(ROLLBACK_CLEARS).filter(([, fields]) => fields.includes('weave'));
+    expect(clearsWeave.map(([point]) => point).sort()).toEqual(MEETING_AND_BEFORE.filter((point) => point !== 'arc-selection').sort());
+    clearsWeave.forEach(([point, fields]) => {
+      expect(`${point}: ${['outline', 'contentBundle'].filter((field) => !fields.includes(field))}`).toBe(`${point}: `);
+    });
+    expect(FRESH_START_CLEARS).toEqual(expect.arrayContaining(['weave', 'outline', 'contentBundle']));
   });
 });
 

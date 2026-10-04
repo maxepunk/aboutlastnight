@@ -3,12 +3,12 @@
  * task 4.11; R2).
  *
  * A thread started before phase 4 holds no weave. Paused at the story meeting's stop or
- * any stop after it (the photos, the character IDs, the map, the article), or complete,
- * it is refused on /approve, /resume and every /rollback past the meeting, with one
- * message, and GET /checkpoint flags it, so the console shows the message and the
- * rollback before any stop renders. A rollback to the meeting, or to a point before it,
- * proceeds. A thread with a weave, and a thread paused before the meeting, are not
- * touched.
+ * any stop after it (the photos, the character IDs, the map, the article), complete, or at
+ * no stop holding an outline or an article (fix round 1), it is refused on /approve,
+ * /resume and every /rollback past the meeting, with one message, and GET /checkpoint
+ * flags it, so the console shows the message and the rollback before any stop renders. A
+ * rollback to the meeting, or to a point before it, proceeds. A thread with a weave, a
+ * thread paused before the meeting, and one at no stop that holds neither are not touched.
  *
  * Boots the actual `app` exported by server.js, as session-id-and-resume-guard does, with
  * the LangGraph module mocked: a refusal returns before any invoke, so `invoke` not being
@@ -88,6 +88,16 @@ function pausedAt(stop, values) {
 function complete(values) {
   const state = { values: { ...values, currentPhase: 'complete' }, config: { configurable: { checkpoint_id: 'ckpt-1' } }, createdAt: 'now', tasks: [] };
   return { getState: jest.fn().mockResolvedValue(state), invoke: jest.fn().mockResolvedValue(state.values) };
+}
+
+/**
+ * A graph whose thread sits at no stop, holding `values`: stopped on an error (no task left),
+ * or killed mid-run (`pending`, a task with no interrupt).
+ */
+function atNoStop(values, pending = null) {
+  const tasks = pending ? [{ id: 't1', name: pending, interrupts: [] }] : [];
+  const state = { values, config: { configurable: { checkpoint_id: 'ckpt-1' } }, createdAt: 'now', tasks };
+  return { getState: jest.fn().mockResolvedValue(state), invoke: jest.fn().mockResolvedValue(values) };
 }
 
 /** A thread from before phase 4: no weave, and the old outline once it is past the map. */
@@ -198,6 +208,64 @@ describe('4.11: an old thread that is complete is refused', () => {
     expect(res.body.currentPhase).toBe('complete');
     expect(res.body.checkpoint).toBeNull();
     expect(res.body.oldThread).toEqual(FLAG);
+  });
+});
+
+// Fix round 1, finding 1: a thread from before phase 4 that stopped on an error, or whose run
+// was killed, after the old stages wrote its outline or article sits at no stop. Its resume
+// replayed it onto the old outline after a fresh meeting, and /approve's error recovery sent
+// it to a rollback to the article. Both are refused now, before either branch.
+describe('4.11 fix round 1: an old thread at no stop that holds an outline or an article is refused', () => {
+  /** Stopped on an error after its article was approved: the case /approve's recovery branch answers. */
+  const errored = () => oldValues({ currentPhase: 'error', contentBundle: { headline: { main: 'An old headline' }, sections: [] }, articleApproved: true });
+
+  it("/approve answers 409 with the message, not the recovery that pointed at a rollback to the article; nothing runs", async () => {
+    mockGraph = atNoStop(errored());
+    expectRefused(await send('POST', '/api/session/092626/approve', { article: true }));
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it('/resume answers 409, with force too: stopped on an error, or killed mid-run', async () => {
+    mockGraph = atNoStop(errored());
+    expectRefused(await send('POST', '/api/session/092626/resume', {}));
+    expectRefused(await send('POST', '/api/session/092626/resume', { force: true }));
+    mockGraph = atNoStop(oldValues({ currentPhase: '4.1', outlineApproved: true }), 'generateContentBundle');
+    expectRefused(await send('POST', '/api/session/092626/resume', {}));
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it.each(PAST_THE_MEETING)('/rollback to %s answers 409', async (target) => {
+    mockGraph = atNoStop(errored());
+    expectRefused(await send('POST', '/api/session/092626/rollback', { rollbackTo: target }));
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it('/rollback to the story meeting proceeds: the old outline and article are cleared, and the arc counters start over', async () => {
+    mockGraph = atNoStop(errored());
+    const res = await send('POST', '/api/session/092626/rollback', { rollbackTo: 'arc-selection' });
+    expect(res.status).toBe(200);
+    await flushBackground();
+    expect(mockGraph.invoke.mock.calls[0][0]).toMatchObject({
+      outline: null, contentBundle: null, articleApproved: null, arcRevisionCount: 0, humanArcRevisionCount: 0
+    });
+  });
+
+  it('GET /checkpoint flags it, with no checkpoint', async () => {
+    mockGraph = atNoStop(errored());
+    const res = await send('GET', '/api/session/092626/checkpoint');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ interrupted: false, checkpointType: null, checkpoint: null, currentPhase: 'error' });
+    expect(res.body.oldThread).toEqual(FLAG);
+  });
+
+  it('a thread at no stop that holds neither is resumed: its replay writes the weave and the map fresh', async () => {
+    mockGraph = atNoStop(oldValues({ currentPhase: 'error', outline: null }));
+    expect((await send('GET', '/api/session/092626/checkpoint')).body.oldThread).toBeNull();
+    const res = await send('POST', '/api/session/092626/resume', {});
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('processing');
+    await flushBackground();
+    expect(mockGraph.invoke).toHaveBeenCalledTimes(1);
   });
 });
 
