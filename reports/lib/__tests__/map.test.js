@@ -405,3 +405,144 @@ describe("4.6: the map's schemas", () => {
     expect(() => directorMapSchemaFor('detective')).toThrow('The "detective" theme has no story map');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6b: the card count is the director's only when their edits change it
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A count that fails is the director's concern only when their edits change how many card
+// beats the sections hold: a card beat added, brought back, struck or cut, or a card added
+// to a beat or cleared from one. An edit that changes which document a card prints, or
+// moves a card beat between sections, leaves the count as the writer made it, so a count
+// that fails then is the writer's, and the round's check rework fixes it (R11).
+describe("4.6b: the card count is the director's only when their edits change it", () => {
+  /** The director's standing edits on `left`, made against the writer's `base`. */
+  const editsAgainst = (base, left) => carriedEdits(standingOnMap(null, base, left), left);
+  /** The writer's map with five cards: b1 and b4 carry one too. */
+  const fiveCards = () => {
+    const map = writers();
+    map.sections[0].beats[0].card = 'row004';
+    map.sections[1].beats[1].card = 'row002';
+    return map;
+  };
+  /** The writer's map with six cards, one over the count: b2 carries one too. */
+  const sixCards = () => {
+    const map = fiveCards();
+    map.sections[0].beats[1].card = 'row001';
+    return map;
+  };
+  const cardCount = (findings) => ({
+    failures: findings.failures.filter((f) => f.type === 'card-count').map((f) => f.message),
+    concerns: findings.concerns.filter((c) => c.type === 'card-count')
+  });
+
+  it("an edit that swaps a card's document leaves the count the writer's: a failure, and no concern", () => {
+    const base = sixCards();
+    const left = clone(base);
+    left.sections[1].beats[0].card = 'row004';
+    const edits = editsAgainst(base, left);
+    expect(edits.map((e) => e.path)).toEqual(['sections[#theStory].beats[#b3].card']);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(/^The map carries 6 cards\. Mark 3 to 5 beats as cards/)],
+      concerns: []
+    });
+  });
+
+  it("an edit that strikes a card beat makes the count the director's: a concern on the strike, and no failure", () => {
+    const base = writers();
+    const left = clone(base);
+    left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
+    const edits = editsAgainst(base, left);
+    expect(edits.map((e) => [e.id, e.path, e.struck])).toEqual([['E1', 'leftOut[#b6]', true]]);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [],
+      concerns: [{ type: 'card-count', editIds: ['E1'], finding: 'The map carries 2 cards; the article carries 3 to 5.' }]
+    });
+  });
+
+  const broughtBackBase = () => {
+    const map = fiveCards();
+    map.leftOut[0].card = 'row004';
+    return map;
+  };
+  it.each([
+    ['a card beat cut', writers, (map) => { map.sections[1].beats.splice(3, 1); }, 2],
+    ['a card cleared from a beat', writers, (map) => { delete map.sections[1].beats[3].card; }, 2],
+    ['a card added to a beat', fiveCards, (map) => { map.sections[0].beats[1].card = 'row003'; }, 6],
+    ['a card beat added', fiveCards, (map) => { map.sections[1].beats.push({ id: 'b10', material: 'row004, the receipt', card: 'row004' }); }, 6],
+    ['a card beat brought back from left out', broughtBackBase, (map) => { map.sections[0].beats.push(map.leftOut.splice(0, 1)[0]); }, 6]
+  ])("%s makes the count the director's: a concern on that edit", (_name, baseOf, change, cards) => {
+    const base = baseOf();
+    const left = clone(base);
+    change(left);
+    const edits = editsAgainst(base, left);
+    expect(edits).toHaveLength(1);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [],
+      concerns: [{ type: 'card-count', editIds: [edits[0].id], finding: `The map carries ${cards} cards; the article carries 3 to 5.` }]
+    });
+  });
+
+  it("a card beat moved to another section leaves the count the writer's: a failure, and no concern", () => {
+    const base = sixCards();
+    const left = clone(base);
+    left.sections[0].beats.push(left.sections[1].beats.splice(0, 1)[0]);
+    const edits = editsAgainst(base, left);
+    expect(edits.map((e) => [e.path, e.from])).toEqual([['sections[#lede].beats[#b3]', 'theStory']]);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(/^The map carries 6 cards\. /)],
+      concerns: []
+    });
+  });
+
+  it('the concern names only the edits that changed the count, not a card swap beside them', () => {
+    const base = writers();
+    const left = clone(base);
+    left.sections[1].beats[0].card = 'row004';
+    left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
+    const edits = editsAgainst(base, left);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b3].card'], ['E2', 'leftOut[#b6]']]);
+    expect(cardCount(mapFindings(left, inputs({ edits }))).concerns).toEqual([
+      { type: 'card-count', editIds: ['E2'], finding: 'The map carries 2 cards; the article carries 3 to 5.' }
+    ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6b: the gate refuses a photo the director's changes place more than once
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// By the gate's rule for repeats: a repeat the map the stop showed holds is the writer's,
+// which the checks report and a rework fixes; one it does not hold is the director's,
+// refused, so their placement is never a copy no edit carries.
+describe("4.6b: the gate refuses a photo the director's changes place more than once", () => {
+  const { directorMapProblems } = require('../map');
+  const gate = (left, shown = writers()) => directorMapProblems(left, { theme: 'journalist', shown });
+
+  it('a top photo set to a photo a section already places is refused, naming the photo and the director', () => {
+    const left = writers();
+    left.topPhoto = 'cards.jpg';
+    expect(gate(left)).toBe("\"cards.jpg\" is placed more than once: the director's changes made this repeat. Place each photo once: as the top photo, or in one section.");
+  });
+
+  it('a photo placed again in a second section is refused, in any case of its name, and each repeat is named as first placed', () => {
+    const left = writers();
+    left.sections[0].photos.push({ filename: 'THEORY.JPG' });
+    left.topPhoto = 'Cards.jpg';
+    expect(gate(left)).toBe("\"Cards.jpg\" and \"THEORY.JPG\" are placed more than once: the director's changes made these repeats. Place each photo once: as the top photo, or in one section.");
+  });
+
+  it("a repeat the map the stop showed holds is the writer's: the gate lets it through to the checks", () => {
+    const shown = writers();
+    shown.sections[0].photos.push({ filename: 'cards.jpg' });
+    expect(gate(clone(shown), shown)).toBeNull();
+    expect(typesOf(mapFindings(shown, inputs()).failures)).toEqual(['photo-placed-twice']);
+  });
+
+  it('a photo moved to the top from its section is placed once: accepted', () => {
+    const left = writers();
+    left.sections[1].photos = [{ filename: 'theory.jpg', beat: 'b4' }, { filename: 'huddle.jpg' }];
+    left.topPhoto = 'cards.jpg';
+    expect(gate(left)).toBeNull();
+  });
+});

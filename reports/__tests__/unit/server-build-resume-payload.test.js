@@ -1415,3 +1415,34 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     expect(resume.approved).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6b: the map's gate refuses a photo the director's changes place more than once
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// lib/map.js directorMapProblems, by its rule for repeats: a repeat the map the stop showed
+// does not hold is the director's. Refused at the gate, their choice of a top photo never
+// becomes a double placement that no edit carries, that the check files as the writer's and
+// that an automatic pass could undo unrestored.
+describe("4.6b: the map's gate refuses a photo the director's changes place more than once", () => {
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const atMap = (extra = {}) => ({ outline: mapFixture(), _mapBaseline: mapFixture(), sessionConfig: { roster: ['Alex', 'Morgan', 'Riley', 'Sarah'] }, directorGateNotes: [], ...extra });
+
+  it.each(['approve', 'send-back'])('%s: a top photo set to a photo already placed is refused, naming the director, and nothing is written', (action) => {
+    const map = mapFixture();
+    expect(map.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b2' }]);
+    map.topPhoto = 'p2.jpg';
+    expect(buildResumePayload({ outline: action, map, note: 'Lead with the ledger.' }, atMap(), 'journalist', 'outline')).toEqual({
+      resume: {}, stateUpdates: {},
+      error: "\"p2.jpg\" is placed more than once: the director's changes made this repeat. Place each photo once: as the top photo, or in one section."
+    });
+  });
+
+  it("a repeat the map the stop showed holds is the writer's: approved as left, for the checks to report", () => {
+    const shown = mapFixture();
+    shown.sections[3].photos.push({ filename: 'p2.jpg' });
+    const { error, stateUpdates } = buildResumePayload({ outline: 'approve', map: clone(shown) }, atMap({ outline: shown, _mapBaseline: shown }), 'journalist', 'outline');
+    expect(error).toBeNull();
+    expect(stateUpdates.outline).toEqual(shown);
+  });
+});

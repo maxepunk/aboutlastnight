@@ -171,18 +171,57 @@ function editsOnPhoto(entries, filename) {
 }
 
 /**
- * The ids of the director's edits that touch the map's cards: a card beat they cut, struck,
- * added or brought back, and a beat's card they changed. With `beatId`, only that beat's.
+ * The ids of the director's edits on one beat's card, for a card that names no document in
+ * the record: a card they gave the beat, and the beat they cut, struck, added or brought
+ * back with its card.
  */
-function editsOnCards(entries, beatId = null) {
+function editsOnCards(entries, beatId) {
   return entries.filter(({ edit, address }) => {
-    if (!address || address.kind !== 'beat') return false;
-    if (beatId !== null && String(address.identity.id).trim() !== beatId) return false;
+    if (!address || address.kind !== 'beat' || String(address.identity.id).trim() !== beatId) return false;
     if (address.fieldSteps.length > 0) return address.fieldSteps[0].key === 'card';
     if (isCut(edit)) return Boolean(beatCardOf(edit.before));
     const bringsIn = edit.from === MAP_NONE || edit.from === MAP_LEFT_OUT;
     return Boolean(beatCardOf(edit.after)) && (bringsIn || address.container === MAP_LEFT_OUT);
   }).map(({ edit }) => edit.id);
+}
+
+/**
+ * The ids of the director's edits that changed how many card beats the map's sections hold,
+ * the count the card check reads (mapTally; brief 4.6b): a card beat they added, brought
+ * back, struck or cut, and a card they added to a beat or cleared from one. Each beat their
+ * edits touch is read where it sat, with its card, before their edits and where it sits
+ * now: their edits on it count when it is a card beat in a section on one side only. An
+ * edit that changes which document a card prints, or moves a card beat between sections,
+ * leaves the count as the writer made it.
+ */
+function editsChangingCardCount(entries) {
+  const beats = new Map();
+  entries.forEach(({ edit, address }) => {
+    if (!address || address.kind !== 'beat') return;
+    const onCard = address.fieldSteps.length === 1 && address.fieldSteps[0].key === 'card';
+    if (address.fieldSteps.length > 0 && !onCard) return;
+    const id = String(address.identity.id).trim();
+    beats.set(id, { ...beats.get(id), [onCard ? 'card' : 'place']: { edit, address } });
+  });
+  const inSections = (container) => container !== MAP_LEFT_OUT && container !== MAP_NONE;
+  const cardOf = (value) => beatCardOf({ card: value });
+  const ids = [];
+  beats.forEach(({ place, card }) => {
+    let was;
+    let now;
+    if (place && isCut(place.edit)) {
+      was = inSections(place.address.container) && Boolean(beatCardOf(place.edit.before));
+      now = false;
+    } else {
+      const sits = (place || card).address.container;
+      const sat = place && place.edit.from ? place.edit.from : sits;
+      const nowCard = card ? cardOf(card.edit.after) : beatCardOf(place.edit.after);
+      now = inSections(sits) && Boolean(nowCard);
+      was = inSections(sat) && Boolean(card ? cardOf(card.edit.before) : nowCard);
+    }
+    if (was !== now) ids.push(...[place, card].filter(Boolean).map(({ edit }) => edit.id));
+  });
+  return ids;
 }
 
 /** The ids of the director's edits that took a connection off the map's beats. */
@@ -214,10 +253,11 @@ function editsRemovingConnection(entries, connection) {
  *   meeting and left no note (`weave-change-unasked`).
  *
  * A failure the director caused is a concern on their edit, beside its line, never a
- * rework (R11): a beat they struck or cut that held the only place of a player, a card or
- * a connection; a card or a photo they placed; a beat they added under an id the map
- * holds. A failure partly theirs splits: the writer's part fails, the director's is a
- * concern.
+ * rework (R11): a beat they struck or cut that held the only place of a player or a
+ * connection; a card or a photo they placed; the card count, when their edits changed how
+ * many card beats the sections hold (editsChangingCardCount; brief 4.6b); a beat they added
+ * under an id the map holds. A failure partly theirs splits: the writer's part fails, the
+ * director's is a concern.
  *
  * @param {*} map
  * @param {Object} inputs
@@ -313,7 +353,7 @@ function mapFindings(map, inputs = {}) {
     fail('card-not-in-record', `Cards naming no document in <RECORD>: ${unknown.join(', ')}. A card names the id of a document in <RECORD>: ${[...(inputs.recordIds || [])].join(', ')}.`);
   }
   if (tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max) {
-    const ids = editsOnCards(entries);
+    const ids = editsChangingCardCount(entries);
     const carries = `The map carries ${tally.cards} card${tally.cards === 1 ? '' : 's'}`;
     if (ids.length > 0) concern('card-count', ids, `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`);
     else fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
@@ -418,10 +458,33 @@ function repeatedBeatIds(map) {
 }
 
 /**
+ * The photos a map places more than once, the top photo and the sections' photos read by
+ * the one join key (photoKey): each once, under the name its first place gives it, in the
+ * map's order.
+ *
+ * @param {*} map
+ * @returns {Map<string, string>} photoKey -> filename
+ */
+function repeatedPhotos(map) {
+  const placements = mapPhotoPlacements(map);
+  const counts = new Map();
+  placements.forEach(({ filename }) => counts.set(photoKey(filename), (counts.get(photoKey(filename)) || 0) + 1));
+  const repeated = new Map();
+  placements.forEach(({ filename }) => {
+    const key = photoKey(filename);
+    if (counts.get(key) > 1 && !repeated.has(key)) repeated.set(key, filename);
+  });
+  return repeated;
+}
+
+/**
  * What the director-side schema finds wrong with a map, as one refusal that says where, or
- * null for a map it accepts. Past the schema, every beat has an id of its own: the edits
- * find a beat by its id. A repeat the map the stop showed holds is the writer's, which the
- * map checks report and a rework fixes; one it does not hold is the director's, refused.
+ * null for a map it accepts. Past the schema, every beat has an id of its own, since the
+ * edits find a beat by its id, and every photo is placed once (brief 4.6b), since a photo
+ * the director's changes place twice is a copy no edit carries: the check would file it as
+ * the writer's, and an automatic pass could undo the director's choice unrestored. For
+ * both, a repeat the map the stop showed holds is the writer's, which the map checks report
+ * and a rework fixes; one it does not hold is the director's, refused.
  *
  * @param {*} map - the map as the director left it
  * @param {Object} options
@@ -443,6 +506,12 @@ function directorMapProblems(map, { theme, shown = null } = {}) {
   const theirs = repeatedBeatIds(map).filter((id) => !writers.has(id));
   if (theirs.length > 0) {
     return `Two beats share the id ${listOf(theirs.map((id) => `"${id}"`))}: the director's changes made ${theirs.length > 1 ? 'these repeats' : 'this repeat'}. Give each beat an id of its own.`;
+  }
+  const writersPhotos = repeatedPhotos(shown);
+  const theirPhotos = [...repeatedPhotos(map)].filter(([key]) => !writersPhotos.has(key)).map(([, filename]) => `"${filename}"`);
+  if (theirPhotos.length > 0) {
+    const many = theirPhotos.length > 1;
+    return `${listOf(theirPhotos)} ${many ? 'are' : 'is'} placed more than once: the director's changes made ${many ? 'these repeats' : 'this repeat'}. Place each photo once: as the top photo, or in one section.`;
   }
   return null;
 }
