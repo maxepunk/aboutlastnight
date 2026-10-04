@@ -139,6 +139,28 @@ function repeatedIds(elements) {
 }
 
 /**
+ * Each element's place under its id (weaveIdOf), index for index with the list:
+ * `${occurrence}:${id}`, the first element under an id occurrence 0 and a second under the
+ * same id occurrence 1, so the elements under an id a list repeats pair in order between
+ * two versions, as the diff pairs them (lib/hand-edit-diff.js elementsById). The questions'
+ * carry pairs by it (lib/writer-questions.js carriedWeaveQuestions; brief 4.5b). An element
+ * with no id has no place: null.
+ *
+ * @param {*} elements - a weave's threads, connections or questions
+ * @returns {Array<string|null>}
+ */
+function occurrenceKeys(elements) {
+  const seen = new Map();
+  return (Array.isArray(elements) ? elements : []).map((element) => {
+    const id = weaveIdOf(element);
+    if (!id) return null;
+    const occurrence = seen.get(id) || 0;
+    seen.set(id, occurrence + 1);
+    return `${occurrence}:${id}`;
+  });
+}
+
+/**
  * The director's share of the weave, with each part present: `{addedThreads,
  * reroledThreads, fields, threadFields}`, each a map from what the director changed to
  * the id of their standing edit (lib/hand-edit-diff.js weaveDirectorsShare builds it):
@@ -563,7 +585,9 @@ module.exports = {
   // Fix round 1, finding 3: the one reading of an id, and the one rule for a repeated id
   weaveIdOf,
   repeatedIds,
-  // Brief 4.5b: the one list of the fields the meeting prints, which the edits and the length read
+  // Brief 4.5b: the one list of the fields the meeting prints, which the edits and the length
+  // read, and an element's place under its id, which the questions' carry pairs by
   WEAVE_PRINTED_FIELDS,
-  printedWeaveFields
+  printedWeaveFields,
+  occurrenceKeys
 };

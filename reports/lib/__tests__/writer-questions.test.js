@@ -586,3 +586,63 @@ describe('the arc reworker carries the writer\'s OUTPUT FORMAT with the field', 
   });
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5b: question repeats clear on a rework
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// carriedWeaveQuestions pairs the questions under a repeated id by occurrence, as the diff
+// pairs elements (lib/hand-edit-diff.js): the first under an id with the first, the second
+// with the second. An occurrence the rework returned under no such place is one it gave an
+// id of its own: it pairs, in order, with the rework's questions under the ids the weave
+// did not hold. Keyed by id alone, a repeated question id survived every rework, and a
+// rework that renumbered printed one question twice (4.5 re-review).
+describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () => {
+  const { carriedWeaveQuestions } = require('../writer-questions');
+  const MORGAN = { ...W_SARAH, about: 'Morgan', question: 'The record holds nothing Morgan did: what did Morgan do?', changes: 'Whether Morgan prints.' };
+  const ANSWER = 'Morgan ran the door.';
+  const ids = (questions) => questions.map((q) => q.id);
+  const abouts = (questions) => questions.map((q) => q.about);
+
+  it("the re-review's case: the rework renumbers to q1, q2; the answer stays with its question, under the rework's id, and no question appears twice", () => {
+    const previous = [W_SARAH, { ...MORGAN, answer: ANSWER }];
+    const returned = [clone(W_SARAH), { ...MORGAN, id: 'q2' }];
+    const carried = carriedWeaveQuestions(returned, previous);
+    expect(carried).toEqual([W_SARAH, { ...MORGAN, id: 'q2', answer: ANSWER }]);
+    expect(abouts(carried)).toEqual(['Sarah', 'Morgan']);
+  });
+
+  it('a rework that renumbers two unanswered questions clears the repeat', () => {
+    const carried = carriedWeaveQuestions([{ ...W_SARAH, question: 'Where was Sarah at nine?' }, { ...MORGAN, id: 'q4' }], [W_SARAH, MORGAN]);
+    expect(ids(carried)).toEqual(['q1', 'q4']);
+    expect(abouts(carried)).toEqual(['Sarah', 'Morgan']);
+    expect(carried[0].question).toBe('Where was Sarah at nine?');
+  });
+
+  it('a rework that keeps the repeat keeps each question once, paired in order: each keeps its own question', () => {
+    const reworded = [{ ...W_SARAH, question: 'Where was Sarah at nine?' }, { ...MORGAN, question: 'What did Morgan do at the door?' }];
+    expect(carriedWeaveQuestions(reworded, [W_SARAH, MORGAN])).toEqual(reworded);
+    expect(carriedWeaveQuestions(reworded, [W_SARAH, { ...MORGAN, answer: ANSWER }])).toEqual([reworded[0], { ...MORGAN, answer: ANSWER }]);
+  });
+
+  it("an occurrence the rework left out comes back in its place, and the rework's other new questions follow", () => {
+    expect(carriedWeaveQuestions([clone(W_SARAH)], [W_SARAH, { ...MORGAN, answer: ANSWER }])).toEqual([W_SARAH, { ...MORGAN, answer: ANSWER }]);
+    const carried = carriedWeaveQuestions([clone(W_SARAH), { ...MORGAN, id: 'q2' }, clone(W_PRONOUN)], [W_SARAH, MORGAN]);
+    expect(ids(carried)).toEqual(['q1', 'q2', 'q3']);
+    expect(abouts(carried)).toEqual(['Sarah', 'Morgan', 'Riley']);
+  });
+
+  it('through the arc rework: the weave it stores holds each question once, and the checks find no repeat', async () => {
+    const state = reworkFixtureState('journalist');
+    const previous = { ...clone(state.weave), questions: [W_SARAH, { ...MORGAN, answer: ANSWER }] };
+    const fixState = {
+      ...state, weave: previous, arcRevisionCount: 1,
+      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Two questions share the id "q1". Give each question an id of its own.'] }
+    };
+    const rework = { ...clone(previous), questions: [clone(W_SARAH), { ...MORGAN, id: 'q2' }] };
+    const result = await arcNodes.reviseArcs(fixState, { configurable: { sdkClient: sdkReturning(rework) } });
+    expect(result.weave.questions).toEqual([W_SARAH, { ...MORGAN, id: 'q2', answer: ANSWER }]);
+    const checked = arcNodes.validateArcStructure({ ...fixState, ...result }, {});
+    expect(checked._arcValidation.failures).toEqual([]);
+  });
+});

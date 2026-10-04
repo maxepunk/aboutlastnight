@@ -699,3 +699,15 @@ describe("4.5b: one list of the weave's printed fields", () => {
     expect(weaveWordCount(weave)).toBe(fields.length - 1);
   });
 });
+
+// The questions' carry pairs a repeated id's elements by their place under it, as the diff
+// pairs them (brief 4.5b): one rule for that place, beside the one reading of an id.
+describe("4.5b: an element's place under its id (occurrenceKeys)", () => {
+  const { occurrenceKeys } = require('../weave');
+
+  it('numbers each element under its id in order, index for index with the list, and gives an element with no id no place', () => {
+    expect(occurrenceKeys([{ id: 'q1' }, { id: 'q2' }, { id: ' q1 ' }, { id: '' }, null, { id: 'q1' }]))
+      .toEqual(['0:q1', '0:q2', '1:q1', null, null, '2:q1']);
+    expect(occurrenceKeys(undefined)).toEqual([]);
+  });
+});
