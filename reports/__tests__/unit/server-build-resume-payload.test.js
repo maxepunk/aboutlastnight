@@ -258,7 +258,8 @@ describe('buildResumePayload — photosPath is a photos-gate-only approval (C1/I
     // outline — so those two cases passed because the whole call was refused, not
     // because the photosPath block declined to write.
     const APPROVAL_BY_TYPE = {
-      'character-ids': { characterIds: { 'Person in red': 'Sarah' } },
+      // Task 4.3c: the structured form holds a mapping object per photo.
+      'character-ids': { characterIds: { 'p1.jpg': { characterMappings: [{ descriptionIndex: 0, characterName: 'Sarah' }] } } },
       outline: { outline: 'approve', map: mapFixture() },  // brief 4.6: the map's approve
       article: { article: true }
     };
@@ -1444,5 +1445,43 @@ describe("4.6b: the map's gate refuses a photo the director's changes place more
     const { error, stateUpdates } = buildResumePayload({ outline: 'approve', map: clone(shown) }, atMap({ outline: shown, _mapBaseline: shown }), 'journalist', 'outline');
     expect(error).toBeNull();
     expect(stateUpdates.outline).toEqual(shown);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.3c: a structured character-IDs answer holds mappings
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The structured arm took any object under `characterIds`, a list included, and any value
+// under each photo's key, while the parse and the console's payloads write one mapping
+// object per photo. A hand-built answer whose value was text or a list then sat in the
+// mappings, where photoMappingOf passes it over and the photo's identifications and
+// exclusion go unread. The arm refuses such an answer, naming the key, and keeps the stop's
+// Skip, an empty object.
+describe('4.3c: a structured character-IDs answer holds mappings', () => {
+  const at = (characterIds) => buildResumePayload({ characterIds }, {}, 'journalist', 'character-ids');
+
+  it('refuses a value that is not a mapping object, naming its key, and writes nothing', () => {
+    [['Vic', 'Vic'], ['a list', ['Sam']], ['null', null], ['a number', 7]].forEach(([what, value]) => {
+      const { error, stateUpdates, resume } = at({ 'b.jpg': { characterMappings: [] }, 'aln (7 of 9).jpg': value });
+      expect([what, error]).toEqual([what, 'characterIds["aln (7 of 9).jpg"] must be a mapping object']);
+      expect(stateUpdates).toEqual({});
+      expect(resume).toEqual({});
+    });
+  });
+
+  it('refuses an answer that is not an object of photo filename -> mapping', () => {
+    [['a list', [{ characterMappings: [] }]], ['text', 'Photo 1: Vic'], ['null', null]].forEach(([what, value]) => {
+      expect([what, at(value).error]).toEqual([what, 'characterIds must be an object of photo filename -> mapping']);
+    });
+  });
+
+  it('takes {} (the stop\'s Skip) and an object of mappings', () => {
+    expect(at({}).error).toBeNull();
+    expect(at({}).stateUpdates.characterIdMappings).toEqual({});
+    const ids = { 'aln (7 of 9).jpg': { characterMappings: [{ descriptionIndex: 0, characterName: 'Kai' }] }, 'b.jpg': {} };
+    const { error, stateUpdates } = at(ids);
+    expect(error).toBeNull();
+    expect(stateUpdates.characterIdMappings).toEqual(ids);
   });
 });

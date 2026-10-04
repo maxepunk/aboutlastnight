@@ -551,6 +551,23 @@ function normalizePhotoDescriptions(value) {
 }
 
 /**
+ * The refusal for a structured character-IDs answer that does not hold mappings, or null
+ * (task 4.3c). The answer is an object of photo filename -> mapping object, as the parse
+ * and the console's payloads write it; an empty one is the stop's Skip. A value that is
+ * text or a list would sit in the mappings where photoMappingOf passes it over, and the
+ * photo's identifications and exclusion would go unread.
+ *
+ * @param {*} value - approvals.characterIds
+ * @returns {string|null}
+ */
+function characterIdsRefusal(value) {
+    const isMapping = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+    if (!isMapping(value)) return 'characterIds must be an object of photo filename -> mapping';
+    const key = Object.keys(value).find((k) => !isMapping(value[k]));
+    return key === undefined ? null : `characterIds["${key}"] must be a mapping object`;
+}
+
+/**
  * What a send-back records its edits with (FA, requirement 9): the roster's names, so a
  * cut or a rewrite records which of them the director's version no longer names, and a
  * roster gap is blamed on the director only for those. Nothing when there is no roster.
@@ -692,7 +709,13 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         validApprovalDetected = true;
         stateUpdates.characterIdsRaw = approvals.characterIdsRaw;
         resume.characterIdsRaw = approvals.characterIdsRaw;
-    } else if (approvals.characterIds && typeof approvals.characterIds === 'object') {
+    } else if (approvals.characterIds !== undefined) {
+        // Task 4.3c: the structured form holds one mapping object per photo, refused
+        // otherwise with the key at fault; {} is the stop's Skip.
+        const refusal = characterIdsRefusal(approvals.characterIds);
+        if (refusal) {
+            return { resume, stateUpdates, error: refusal };
+        }
         validApprovalDetected = true;
         stateUpdates.characterIdMappings = approvals.characterIds;
         resume.characterIdMappings = approvals.characterIds;
