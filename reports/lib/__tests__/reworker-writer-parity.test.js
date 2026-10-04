@@ -93,13 +93,22 @@ describe('journalist map stop', () => {
   const EDITED = (() => { const m = clone(OUTLINE); m.headline = 'The Headline the Director Wrote'; return m; })();
   const NOTE = 'Open on the vote, not the sale.';
 
+  /**
+   * The writer runs on the thread as it stood when it wrote the map, with the notes the
+   * meeting left (brief 4.6c: the map's task points at the meeting's approval note only when
+   * the notes hold it, so the writer and its rework read one set of meeting notes). Its own
+   * <DIRECTOR_GUIDANCE> tail is not among the sections its rework carries, so it is set aside.
+   */
   async function writerAndRework(reworkOverrides) {
     const state = reworkFixtureState(theme);
+    const meetingNotes = (reworkOverrides.directorGateNotes || []).filter((note) => note.gate === 'arc-selection');
     const writerSdk = recordingSdk(OUTLINE);
-    const { heroImage } = await generateOutline({ ...state, outline: null }, cfg(writerSdk, theme));
+    const { heroImage } = await generateOutline({ ...state, outline: null, directorGateNotes: meetingNotes }, cfg(writerSdk, theme));
     const reworkSdk = recordingSdk(EDITED);
     await reviseOutline({ ...state, heroImage, outline: null, ...reworkOverrides }, cfg(reworkSdk, theme));
-    return { writer: call(writerSdk), rework: call(reworkSdk) };
+    const writer = call(writerSdk);
+    const guidanceAt = writer.user.lastIndexOf('\n<DIRECTOR_GUIDANCE>\n');
+    return { writer: { ...writer, user: guidanceAt === -1 ? writer.user : writer.user.slice(0, guidanceAt) }, rework: call(reworkSdk) };
   }
 
   const SEND_BACK = {
@@ -116,6 +125,8 @@ describe('journalist map stop', () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
     expectWriterSectionsFirst(writer.user, rework.user, '# Map Revision Request\n');
     expectOneRecordAndGuidanceLast(rework.user);
+    // The meeting's approval note stands for both, so both tasks point at it (brief 4.6c).
+    expect(writer.user).toContain("each change the director's note from the meeting asks for");
 
     // The settled weave first, as the writer's task; the record: every document in full.
     expect(rework.user.startsWith('<SETTLED_WEAVE>\n')).toBe(true);

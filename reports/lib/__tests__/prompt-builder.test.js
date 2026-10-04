@@ -1561,3 +1561,43 @@ describe("4.6b: the map writer's task says what is true", () => {
     expect(meetingNoteOf({ directorGateNotes: rejection })).toBe(false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6c: the map writer's task points at the meeting's note only when the prompt holds it
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The meeting's note is the approval note marked arc-selection, by lib/map.js meetingNoteOf's
+// rule, which the map checks read too. Pointed at a note its prompt does not hold, the writer
+// names "note" as a change's source, the check fails the change, and the round's one rework
+// goes on that failure (0926262).
+describe("4.6c: the map writer's task points at the meeting's note only when its prompt holds it", () => {
+  const { meetingNoteOf } = require('../map');
+  const HERO = { filename: 'hero.jpg', identifiedCharacters: ['Alex'], hero: true };
+  const builder = () => new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
+  /** The task's line on the meeting's changes: from the story's line to the sections' line. */
+  const changeLineOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("- The story is the director's"), userPrompt.indexOf('- Give each section you use'));
+  /** The map writer's task: from its first line to the theme's slots. */
+  const taskOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
+  const WITH_NOTE = "- The story is the director's, and the map's part in it is C16's (`<craft-story>`). Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or \"note\".\n";
+  const WITHOUT_NOTE = "- The story is the director's, and the map's part in it is C16's (`<craft-story>`). Fit in each change the director made at the meeting, marked above by its edit's id. List each change you make to fit one in under weaveChanges, with its source: the edit's id.\n";
+
+  it("with the meeting's approval note among the notes, the line points at it and offers \"note\" as a source", async () => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: MEETING_NOTES });
+    expect(meetingNoteOf({ directorGateNotes: MEETING_NOTES })).toBe(true);
+    expect(changeLineOf(userPrompt)).toBe(WITH_NOTE);
+    expect(userPrompt).toContain('- [arc-selection, approval 1] Lead with the money.');
+  });
+
+  it.each([
+    ['no notes at all', []],
+    ["the meeting's note sent with a reweave or a send-back, a rejection", [{ ...MEETING_NOTES[0], kind: 'rejection' }]],
+    ['an approval note from another stop', [{ ...MEETING_NOTES[0], gate: 'outline' }]],
+    ['an approval note at the meeting with no words', [{ ...MEETING_NOTES[0], text: '   ' }]]
+  ])("with %s, the line names the edits' ids alone, and no note", async (_name, gateNotes) => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes });
+    expect(meetingNoteOf({ directorGateNotes: gateNotes })).toBe(false);
+    expect(changeLineOf(userPrompt)).toBe(WITHOUT_NOTE);
+    expect(taskOf(userPrompt)).not.toContain("the director's note from the meeting");
+    expect(taskOf(userPrompt)).not.toContain('"note"');
+  });
+});

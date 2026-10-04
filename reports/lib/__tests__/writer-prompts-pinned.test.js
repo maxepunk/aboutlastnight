@@ -269,9 +269,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   none, so the outline and arc pins do not move. The instruction's headline line then
  *   drops its "and your own kicker", which a rework would read beside a kicker the director
  *   edited at the desk (article-journalist 30883 -> 30862, the clause's -21).
+ * - Phase 4 (brief 4.6c), the map writer's task points at the meeting's note, and offers
+ *   "note" as a change's source, only when the prompt's standing notes hold the director's
+ *   approval note from the meeting (lib/map.js meetingNoteOf). The fixture's note at the
+ *   meeting is a rejection (render-writers.js TAIL_NOTES), so both clauses go: the 138
+ *   characters of MAP_TASK_NOTE_CHANGE and MAP_TASK_NOTE_SOURCE (outline-journalist 18299 ->
+ *   18161). The article and arc pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['62c525f1cbdd8d026f481a24ac11e75766f0307c6d036594f713157042861790', 18299],
+  'outline-journalist': ['1cecd0c98a0d14cf6cbec182113f5835288f30f6e1597b6e5f26497279636a34', 18161],
   'article-journalist': ['6c344a66edfde7744866352b0241a3ea5d3a67c0b1b75c97c1b9d5ee8b4524f7', 30862],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };

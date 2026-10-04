@@ -14,8 +14,9 @@ const { renderSessionFactsVerdict, renderPhotoListEntry } = require('./prompt-re
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map writer embeds the map's schema for its theme as its
 // <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
-// writer embeds the schema above; its slots are the theme's.
-const { mapSchemaFor, topPhotoOf } = require('./map');
+// writer embeds the schema above; its slots are the theme's. Brief 4.6c: its task points
+// at the meeting's note by the rule the map checks read the note by (meetingNoteOf).
+const { mapSchemaFor, topPhotoOf, meetingNoteOf } = require('./map');
 const { getThemeNPCEntries, mapSlotsOf } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -30,6 +31,14 @@ const { loadModeBlock, loadRuleSet } = require('./rule-set');
 const MAP_TASK_TOP_PHOTO = "- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.";
 
 /**
+ * The map task's pointers at the director's note from the story meeting (brief 4.6c): the
+ * changes it asks for, and "note" as a change's source. They print only when the prompt's
+ * standing notes hold that note.
+ */
+const MAP_TASK_NOTE_CHANGE = ", and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>)";
+const MAP_TASK_NOTE_SOURCE = ', or "note"';
+
+/**
  * The map writer's task (phase 4, brief 4.6), right after the settled weave: lay the weave
  * across the sections. It names what goes where in the map and points at the rule items
  * that say how (spec 5.1 and 5.2; the approved read's section D), stating none of them.
@@ -38,14 +47,20 @@ const MAP_TASK_TOP_PHOTO = "- Choose the top photo. The photo marked [hero image
  * note marked arc-selection in <DIRECTOR_GUIDANCE>, the one note the map checks take as a
  * change's source "note" (lib/map.js meetingNoteOf); a reweave's or a send-back's note at
  * the meeting prints there marked as a rejection. The line on the top photo prints only
- * when a photo is marked [hero image] (MAP_TASK_TOP_PHOTO).
+ * when a photo is marked [hero image] (MAP_TASK_TOP_PHOTO). Brief 4.6c: the line on the
+ * meeting's changes points at that note, and offers "note" as a source, only when the
+ * prompt's notes hold it (MAP_TASK_NOTE_CHANGE, MAP_TASK_NOTE_SOURCE). Pointed at a note it
+ * does not hold, the writer names "note" as a change's source, the check fails the change,
+ * and the round's one rework goes on that failure (0926262).
  *
  * @param {boolean} heroMarked - whether <available-photos> marks a photo [hero image]
+ * @param {boolean} meetingNote - whether <DIRECTOR_GUIDANCE> holds the director's approval
+ *   note from the story meeting (lib/map.js meetingNoteOf)
  * @returns {string}
  */
-function mapTask(heroMarked) {
+function mapTask(heroMarked, meetingNote) {
   return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map runs to about 450 words and writes no prose.
-- The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or "note".
+- The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id${meetingNote ? MAP_TASK_NOTE_CHANGE : ''}. List each change you make to fit one in under weaveChanges, with its source: the edit's id${meetingNote ? MAP_TASK_NOTE_SOURCE : ''}.
 - Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out, each beat naming its material. Drop each slot the story does not use, with its reason.
 ${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
 - A part of the story the record cannot carry, a player you cannot place, or a link you see that the weave lacks goes in gapNote, the one line at the top, as C7 (\`<craft-material>\`) and C16 set out.
@@ -699,10 +714,13 @@ ${loadRuleSet('outline').core}`;
     const photoList = Array.isArray(photos) ? photos : [];
     // Brief 4.6b: the entry renderPhotoListEntry marks [hero image].
     const heroMarked = photoList.some((photo) => Boolean(photo && photo.hero));
+    // Brief 4.6c: the meeting's approval note among the notes <DIRECTOR_GUIDANCE> prints, by
+    // the rule the map checks take "note" as a source by.
+    const meetingNote = meetingNoteOf({ directorGateNotes: options.gateNotes });
 
     return `${settledWeave}
 
-${mapTask(heroMarked)}
+${mapTask(heroMarked, meetingNote)}
 
 <SLOTS>
 The article's slots, in their usual order, each with the heading the map starts from:
