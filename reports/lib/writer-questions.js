@@ -370,7 +370,8 @@ function namesOneSubject(about, other) {
  * the weave repeats pair in order.
  * - An answered question stays whole, as the director answered it, in its place: code
  *   keeps it apart from the model's output, so a rework that drops it or rewords it
- *   changes nothing. Paired, it takes its partner's id.
+ *   changes nothing in it but its id. Paired, it takes its partner's id; left out, it
+ *   keeps its own unless another question holds it (below).
  * - An unanswered question paired with one of the rework's is the rework's version, in the
  *   previous place; one the rework left out comes back, in its place.
  * - The ids the rework gave stand. A question that comes back keeps its id unless another
