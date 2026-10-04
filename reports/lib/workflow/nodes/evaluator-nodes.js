@@ -1780,11 +1780,10 @@ function createEvaluator(phase, options = {}) {
         // findings the guard moved, then the director's criteria it carried to the
         // concerns, follow the judge's own advisories, for the stop. FA: an advisory that
         // quotes the director's text is a concern in its own place (guard.advisories).
+        // Task 4.12c: the entry keeps no `issues` key. It repeated the structural issues for
+        // the e2e harness, which reads `structuralIssues` since task 4.12a.
         structuralIssues: judgeStructuralIssues,
         advisoryWarnings: [...guard.advisories, ...guard.moved, ...guard.concerns],
-        // The structural issues again, under the key the e2e harness's evaluation box reads.
-        // Brief 4.7c: never the judge's own `issues` array, which lies outside its contract.
-        issues: judgeStructuralIssues,
         confidence: evaluation.confidence || 'medium',
         revisionNumber: currentRevisions
       };

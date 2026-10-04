@@ -723,9 +723,10 @@ describe('evaluator-nodes', () => {
       expect(result.evaluationHistory.confidence).toBe('medium');
     });
 
-    // Brief 4.7c: an `issues` array lies outside the judge's contract, so the history entry's
-    // `issues` are its structural issues, never the array.
-    it('lists the structural issues as issues, never an issues array outside the contract', async () => {
+    // Brief 4.7c: an `issues` array lies outside the judge's contract, so the history entry
+    // never carries the array. Task 4.12c: nor the `issues` alias that repeated its structural
+    // issues for the e2e harness, which reads `structuralIssues` since task 4.12a.
+    it('lists the structural issues under structuralIssues alone, never an issues key', async () => {
       const breach = 'T3: "Morgan sold the BizAI memory" in thread t2 states what a buried memory held. Report the sale.';
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
@@ -737,11 +738,12 @@ describe('evaluator-nodes', () => {
 
       const result = await evaluateArcs(weaveState(), config);
 
-      expect(result.evaluationHistory.issues).toEqual([breach]);
+      expect(result.evaluationHistory.structuralIssues).toEqual([breach]);
+      expect(result.evaluationHistory).not.toHaveProperty('issues');
       expect(result.validationResults).not.toHaveProperty('issues');
     });
 
-    it('defaults issues to empty array', async () => {
+    it('defaults the structural issues to an empty list, with no issues key', async () => {
       const mockClient = jest.fn().mockResolvedValue({
         ready: true,
         overallScore: 0.9
@@ -751,7 +753,8 @@ describe('evaluator-nodes', () => {
 
       const result = await evaluateArcs(weaveState(), config);
 
-      expect(result.evaluationHistory.issues).toEqual([]);
+      expect(result.evaluationHistory.structuralIssues).toEqual([]);
+      expect(result.evaluationHistory).not.toHaveProperty('issues');
     });
   });
 
