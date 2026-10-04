@@ -422,7 +422,11 @@ const REMOVED_PHRASES = [
 
   // Phase 4, 4.6d: the map's schema says "note" is the meeting's approval note, when the
   // prompt holds it. The shorter "the director's note from the meeting" stays live.
-  '"note" for the director\x27s note from the meeting'
+  '"note" for the director\x27s note from the meeting',
+
+  // Phase 4, 4.13: the parked detective's inline mode blocks went (R1); every theme's block is
+  // its own mode file. The remote one's "reached you as tips" is on the list above.
+  'You watched the investigation from inside the room'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

@@ -1612,8 +1612,10 @@ const DIRECTOR_ROUND_COUNTERS = Object.freeze({
  * DIRECTOR_ROUND_COUNTERS keeps at the story meeting, the map and the article and the
  * corrections sent back keep at the input review; one at every other stop. The one rule for
  * a stop's round (task 4.12a): the stops log writes it on each line (lib/stops-log.js), each
- * of the director's notes records it as `stopRound` (server.js appendGateNote), and the
- * readout joins the two on it.
+ * of the director's notes records it as `stopRound` (server.js appendGateNote), the meeting
+ * finds a round's note by it (lib/meeting.js unrunRoundNoteIndex), and the readout joins the
+ * log and the notes on it. reviseArcs gives the meeting's counter back when a round's rework
+ * times out, so a round that did not run keeps its number (brief 4.5c).
  *
  * @param {string} stop - the stop's type (lib/workflow/checkpoint-helpers.js CHECKPOINT_TYPES)
  * @param {Object} state - the thread's state values

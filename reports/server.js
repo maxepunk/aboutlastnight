@@ -18,7 +18,8 @@ const {
   PHASES,
   ROLLBACK_CLEARS,
   VALID_ROLLBACK_POINTS,
-  REVISION_CAPS
+  REVISION_CAPS,
+  stopRoundOf
 } = require('./lib/workflow/state');
 const {
   CHECKPOINT_TYPES,
@@ -556,17 +557,6 @@ function sanitizePhotosPath(raw) {
 }
 
 /**
- * The counter of the director's rounds that ran at each stop that takes a note: the stop's
- * round is one more than it (brief 4.5c). reviseArcs gives the meeting's back when a round's
- * rework times out, so a round that did not run keeps its number.
- */
-const DIRECTOR_ROUNDS_BY_GATE = Object.freeze({
-    'arc-selection': 'humanArcRevisionCount',
-    outline: 'humanOutlineRevisionCount',
-    article: 'humanArticleRevisionCount'
-});
-
-/**
  * Append one director gate note (spec 2026-09-19 §5.2). The channel is a REPLACE
  * channel, so this writes the full array; buildResumePayload has the current state
  * and the per-session lock rules out a concurrent writer. `round` counts the
@@ -590,7 +580,7 @@ const DIRECTOR_ROUNDS_BY_GATE = Object.freeze({
 function appendGateNote(stateUpdates, currentState, gate, text, kind) {
     const notes = Array.isArray(stateUpdates.directorGateNotes) ? stateUpdates.directorGateNotes : currentState.directorGateNotes;
     const existing = Array.isArray(notes) ? notes.filter(n => n && typeof n === 'object') : [];
-    const stopRound = (Number(currentState[DIRECTOR_ROUNDS_BY_GATE[gate]]) || 0) + 1;
+    const stopRound = stopRoundOf(gate, currentState);
     const sameKind = (n) => n.gate === gate && (n.kind || 'rejection') === kind;
     const filed = existing.some((n) => sameKind(n) && n.stopRound === stopRound
         && typeof n.text === 'string' && n.text.trim() === String(text).trim());

@@ -84,7 +84,8 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     // The arc writer was never told where the reporter was, so a remote session's
     // arc summaries said "I watched". The block is the same one the article system
     // prompt carries, in the same position: after the identity line. Phase 3 (3.1):
-    // the journalist's is the rule set's mode file; the detective keeps the old block.
+    // the journalist's is the rule set's mode file. The parked detective has none since
+    // brief 4.13 (R1), and its calls throw.
     // Brief 4.13 (R14): a call names the theme whose rules folder it reads.
     const loadModeBlock = (mode) => require('../rule-set').loadModeBlock(mode, { theme: 'journalist' });
     const remote = { reportingMode: 'remote' };

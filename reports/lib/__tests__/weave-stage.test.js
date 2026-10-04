@@ -332,7 +332,7 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
     expect(format).not.toMatch(/suggestion|blocker/i);
   });
 
-  it('both judges, for every theme, score the truth criteria alone and carry the truth-only OUTPUT FORMAT', () => {
+  it('both judges score the truth criteria alone; the journalist judges carry the truth-only OUTPUT FORMAT, and the parked detective has no judge prompt', () => {
     // Phase 4 (brief 4.6): the outline judge left the graph. Brief 4.13 (R14; R1): a judge's
     // prompt is its theme's, so only a theme with its own rules has one; the parked
     // detective names none.
