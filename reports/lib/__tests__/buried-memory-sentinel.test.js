@@ -198,6 +198,9 @@ describe('journalist: the article writer and its rework carry no buried memory',
     const rework = recordingSdk(() => PREVIOUS_BUNDLE);
     await reviseContentBundle({ ...state, contentBundle: null, _previousContentBundle: PREVIOUS_BUNDLE, articleRevisionCount: 1 }, cfg(rework, theme));
     for (const prompt of [...promptsOf(writer), ...promptsOf(rework)]) {
+      // Brief 4.7b: the settled weave and the map are among what the scan reads.
+      expect(prompt).toContain('<SETTLED_WEAVE>');
+      expect(prompt).toContain('<STORY_MAP>');
       expect(prompt).toContain('<TRANSACTION_LINKS>');
       expect(prompt).toContain('<morning-timeline>');
       expect(leaksIn(prompt)).toEqual([]);
