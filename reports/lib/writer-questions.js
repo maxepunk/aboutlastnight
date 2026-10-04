@@ -325,14 +325,19 @@ function idOfItsOwn(id, held) {
 /**
  * A weave rework's questions (C15, ruling 4 of brief 4.5): every rework, an automatic
  * pass or the director's round alike, keeps each question the director has not answered.
- * Each previous question pairs with at most one of the rework's, and only with the same
- * question (brief 4.5b, fix round 1). The pairing runs in four steps, each over every
- * previous question before the next, so no question takes another's partner:
+ * Each previous question pairs with at most one of the rework's, and only with what reads
+ * as the same question (brief 4.5b, fix rounds 1 and 2). The pairing runs in five steps,
+ * each over every previous question before the next, so no question takes another's
+ * partner:
  * 1. the same words (the kind, `about` and question, case and spacing folded), in its place;
  * 2. the same words in another place: a question the rework renumbered or moved;
  * 3. the same subject (subjectKey: the kind and `about`, the outline carry's rule), in its
  *    place: a question the rework reworded;
- * 4. the same subject in another place: a question the rework reworded and renumbered.
+ * 4. the same subject in another place: a question the rework reworded and renumbered;
+ * 5. in its place and of its kind: a question whose `about` the rework rephrased, as 4.5
+ *    read a question under its id. In an answered question's place the question's own
+ *    words must be the same too: the rework reads the director's answer, so a question it
+ *    puts there in other words is a new one.
  * A question's place is its occurrence under its id (lib/weave.js occurrenceKeys), as the
  * diff pairs elements, so the questions under an id the weave repeats pair in order.
  * - An answered question stays whole, as the director answered it, in its place: code
@@ -351,11 +356,12 @@ function idOfItsOwn(id, held) {
  * No answer is ever read from the rework's returned questions.
  *
  * The pairing reads each case it cannot tell apart one way. A question on a previous
- * question's subject (steps 3 and 4) is that question reworded, so a second question a
- * rework asks on the subject of an answered question is not kept. A question on another
- * subject under a previous question's id, a rephrased `about` among them, is a new
- * question, and both stay. And two questions on one subject that a rework rewords can pair
- * the wrong way round.
+ * question's subject (steps 3 and 4), or of its kind in an unanswered question's place
+ * (step 5), is that question reworded: so a second question a rework asks on the subject of
+ * an answered question is not kept, and a new question of its kind that a rework puts in an
+ * unanswered question's place replaces it. A question a rework rewords in both its `about`
+ * and its words, in an answered question's place, stays beside it as a new question. And
+ * two questions on one subject that a rework rewords can pair the wrong way round.
  *
  * @param {*} returned - the rework's questions (undefined when it returned none)
  * @param {*} previous - the questions of the weave the rework started from
@@ -373,11 +379,15 @@ function carriedWeaveQuestions(returned, previous) {
   const sameSubject = (i, j) => subjectKey(previousQuestions[i]) === subjectKey(returnedQuestions[j]);
   const sameWords = (i, j) => sameSubject(i, j) && questionKey(previousQuestions[i]) === questionKey(returnedQuestions[j]);
   const samePlace = (i, j) => previousPlaces[i] === returnedPlaces[j];
+  const sameQuestion = (i, j) => fold(previousQuestions[i].question) === fold(returnedQuestions[j].question);
+  const rephrased = (i, j) => samePlace(i, j) && previousQuestions[i].kind === returnedQuestions[j].kind
+    && (!isAnswered(previousQuestions[i]) || sameQuestion(i, j));
   const steps = [
     (i, j) => sameWords(i, j) && samePlace(i, j),
     sameWords,
     (i, j) => sameSubject(i, j) && samePlace(i, j),
-    sameSubject
+    sameSubject,
+    rephrased
   ];
   const partners = previousQuestions.map(() => null);
   const paired = new Set();

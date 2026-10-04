@@ -591,17 +591,20 @@ describe('the arc reworker carries the writer\'s OUTPUT FORMAT with the field', 
 // 4.5b: question repeats clear on a rework
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// carriedWeaveQuestions pairs a previous question with the rework's only when they are the
-// same question: the same words, then, for a question the rework reworded, the same
-// subject (its kind and `about`), each in its place under its id first. A question's place
-// is its occurrence under its id (lib/weave.js occurrenceKeys), as the diff pairs elements:
-// the first under an id with the first, the second with the second. The rework's ids
-// stand, and a question that comes back takes an id of its own when another holds its id.
-// Keyed by id alone, a repeated question id survived every rework, and a rework that
-// renumbered printed one question twice (4.5 re-review). Paired by place alone, a rework
-// that renumbered in order handed the director's answer to another question and dropped a
-// question (fix round 1, finding 1). A question that came back beside the rework's question
-// under its id made a repeat the rework never returned (fix round 2, finding 4).
+// carriedWeaveQuestions pairs a previous question with the rework's only when they read as
+// the same question: the same words, then the same subject (its kind and `about`), each in
+// its place under its id first, then a question of its kind in its place, whose `about` the
+// rework rephrased (in an answered question's place, with the question's own words too). A
+// question's place is its occurrence under its id (lib/weave.js occurrenceKeys), as the diff
+// pairs elements: the first under an id with the first, the second with the second. The
+// rework's ids stand, and a question that comes back takes an id of its own when another
+// holds its id. Keyed by id alone, a repeated question id survived every rework, and a
+// rework that renumbered printed one question twice (4.5 re-review). Paired by place alone,
+// a rework that renumbered in order handed the director's answer to another question and
+// dropped a question (fix round 1, finding 1). Paired by sameness alone, a rephrased `about`
+// kept the answered question beside the rework's copy of it, and a question that came back
+// beside the rework's question under its id made a repeat the rework never returned (fix
+// round 2, findings 3 and 4).
 describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () => {
   const { carriedWeaveQuestions } = require('../writer-questions');
   const MORGAN = { ...W_SARAH, about: 'Morgan', question: 'The record holds nothing Morgan did: what did Morgan do?', changes: 'Whether Morgan prints.' };
@@ -698,11 +701,36 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
       .toEqual([{ ...WHERE, id: 'q4', answer: ANSWER }, { ...VOTE, id: 'q3' }]);
   });
 
-  it("a question the rework asks on another subject under a previous question's id is a new question: both stay, the previous one under an id of its own", () => {
-    // Under an answered question's id: the answer stays with its question.
+  // Fix round 2, finding 3: a question in a previous question's place and of its kind is
+  // that question with its `about` rephrased (4.5 read a question under its id as the same
+  // question). In an answered question's place the question's own words must be the same
+  // too: the rework reads the director's answer, so a question in other words there is new.
+  const SARAH_IN_FULL = { ...W_SARAH, about: 'Sarah Blackwood' };
+  const FIGURE = { ...W_FIGURE, id: 'q1' };
+  const SARAH_PRONOUN = { ...W_SARAH, kind: 'pronoun', question: 'The roster gives Sarah no pronoun: which one?', changes: "Sarah's pronoun in print." };
+
+  it("an answered question whose `about` the rework gives in full, in its place, is the answered question: it stays whole, once", () => {
+    expect(carriedWeaveQuestions([clone(SARAH_IN_FULL)], [{ ...W_SARAH, answer: ANSWER }])).toEqual([{ ...W_SARAH, answer: ANSWER }]);
+  });
+
+  it("a figure whose `about` the rework rephrases, in its place, is the same question: the rework's version once, or, answered, the director's whole", () => {
+    const rephrased = { ...FIGURE, about: '07:50 AM, $75,000 into Melanie' };
+    expect(carriedWeaveQuestions([clone(rephrased)], [FIGURE])).toEqual([rephrased]);
+    expect(carriedWeaveQuestions([{ ...FIGURE, about: 'The $75,000 sale into Melanie at 07:50 AM' }, clone(RILEY)], [{ ...FIGURE, answer: 'A duplicate.' }, RILEY]))
+      .toEqual([{ ...FIGURE, answer: 'A duplicate.' }, RILEY]);
+  });
+
+  it("a question of its kind in an unanswered question's place is that question reworded: the rework's version stands", () => {
+    expect(carriedWeaveQuestions([clone(MORGAN)], [W_SARAH])).toEqual([MORGAN]);
+  });
+
+  it("a question of its kind in other words, in an answered question's place, is a new question: both stay, the answered one under an id of its own", () => {
     expect(carriedWeaveQuestions([clone(MORGAN)], [{ ...W_SARAH, answer: ANSWER }])).toEqual([{ ...W_SARAH, id: 'q2', answer: ANSWER }, MORGAN]);
-    // Under an unanswered question's id: the question the rework dropped comes back, in its place.
-    expect(carriedWeaveQuestions([clone(MORGAN)], [W_SARAH])).toEqual([{ ...W_SARAH, id: 'q2' }, MORGAN]);
+  });
+
+  it("a question of another kind under a previous question's id is a new question: both stay, the previous one under an id of its own", () => {
+    expect(carriedWeaveQuestions([clone(SARAH_PRONOUN)], [{ ...W_SARAH, answer: ANSWER }])).toEqual([{ ...W_SARAH, id: 'q2', answer: ANSWER }, SARAH_PRONOUN]);
+    expect(carriedWeaveQuestions([clone(SARAH_PRONOUN)], [W_SARAH])).toEqual([{ ...W_SARAH, id: 'q2' }, SARAH_PRONOUN]);
   });
 
   // Fix round 2, finding 4: the ids the rework gave stand. A question the carry puts back
@@ -773,6 +801,13 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
       );
       expect(questions).toEqual([W_SARAH, { ...MORGAN, answer: ANSWER }]);
       expect(failures).toEqual([REPEAT_FAILURE]);
+    });
+
+    // Fix round 2, finding 3.
+    it("a send-back that gives an answered question's `about` in full: the answered question once, and no repeat", async () => {
+      const { questions, failures } = await reworkQuestions([{ ...W_SARAH, answer: ANSWER }], [clone(SARAH_IN_FULL)], 'send-back');
+      expect(questions).toEqual([{ ...W_SARAH, answer: ANSWER }]);
+      expect(failures).toEqual([]);
     });
 
     // Fix round 2, finding 4.
