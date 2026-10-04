@@ -2870,6 +2870,69 @@
     };
   }
 
+  /**
+   * What the line says of a section the director emptied that an automatic pass put back (task
+   * 4.14b, fix round 1): code takes out only an empty one (lib/hand-edit-diff.js settleEdits), so
+   * the section holds what the pass put in it, for the director to empty again.
+   */
+  var EMPTIED_SECTION_STILL_ON_MAP = 'It is still on the map: empty it again if it should go.';
+
+  /**
+   * The slot a report entry names as one of the two edits a section the director emptied leaves
+   * on the map (task 4.14b, fix round 1), as lib/hand-edit-diff.js mapEditWhere names them: the
+   * section's cut (`section "<slot>", cut`) or its dropped slot (`dropped slot "<slot>"`); null for
+   * any other entry. The map has no section delete, so a section's cut is always such a drop.
+   *
+   * @param {Object} entry - a report entry
+   * @param {'cut'|'dropped'} kind - which of the two edits
+   * @returns {string|null}
+   */
+  function emptiedSectionSlotOf(entry, kind) {
+    var where = asString(entry.where);
+    var m = kind === 'cut' ? /^section "([^"]*)", cut$/.exec(where) : /^dropped slot "([^"]*)"$/.exec(where);
+    if (!m || (kind === 'cut' && entry.cut !== true)) return null;
+    return m[1];
+  }
+
+  /**
+   * The lines for the edits a pass changed that the map's page shows (changedEditsToShow), each by
+   * changedEditLine with the map's places (mapEditLineOptions), except a section the director
+   * emptied that a pass put back (task 4.14b, fix round 1): one line, the section's, in the words
+   * of its dropped line ("You emptied this section on the map."), in place of the line each of the
+   * drop's two edits gives, its cut come back and its dropped slot gone. After an automatic pass
+   * it asks the director to empty the section again; after a send-back it gives the rework's
+   * reasons for both edits.
+   *
+   * @param {*} report - the stop's handEditReport
+   * @param {Array} slots - slotsOf(data)
+   * @returns {string[]}
+   */
+  function mapChangedEditLines(report, slots) {
+    var entries = changedEditsToShow(report);
+    var lineOptions = mapEditLineOptions(slots);
+    var keyOf = function (slot, entry) { return slot + '|' + String(entry.pass); };
+    var cuts = {};
+    entries.forEach(function (entry) {
+      var slot = emptiedSectionSlotOf(entry, 'cut');
+      if (slot !== null) cuts[keyOf(slot, entry)] = true;
+    });
+    var gone = {};
+    var shown = entries.filter(function (entry) {
+      var slot = emptiedSectionSlotOf(entry, 'dropped');
+      if (slot === null || !cuts[keyOf(slot, entry)]) return true;
+      gone[keyOf(slot, entry)] = entry;
+      return false;
+    });
+    return shown.map(function (entry) {
+      var slot = emptiedSectionSlotOf(entry, 'cut');
+      if (slot === null) return changedEditLine(entry, lineOptions);
+      var drop = gone[keyOf(slot, entry)];
+      var pass = passWords(drop ? [entry, drop] : entry);
+      return slotLabelOf(slot, slots) + ': ' + pass.by + ' put back the section you emptied. '
+        + (pass.held ? EMPTIED_SECTION_STILL_ON_MAP : pass.why);
+    });
+  }
+
   /** A served copy of a session photo, for the map's thumbnails: the session's photos folder (server.js /sessionphotos). */
   function mapPhotoUrl(sessionId, filename) {
     if (!sessionId || !asString(filename)) return '';
@@ -2918,8 +2981,10 @@
    * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (one line
    *   each), `changedEdits` (each edit a rework changed that a stop shows, changedEditsToShow,
    *   by changedEditLine with the map's places: a send-back's with its reason, and what no pass
-   *   put back; task 4.10), `kept`, the line that says the director's edits stand when none of
-   *   theirs is listed (editsStandLine; brief 4.10b), and `otherConcerns`, the concerns none of
+   *   put back; task 4.10; a section the director emptied that a pass put back as one line, the
+   *   section's, mapChangedEditLines, task 4.14b fix round 1), `kept`, the line that says the
+   *   director's edits stand when none of theirs is listed (editsStandLine; brief 4.10b), and
+   *   `otherConcerns`, the concerns none of
    *   whose places the page shows;
    * - `gapNote`, `headline`, `deck` and `topPhoto`;
    * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
@@ -3065,7 +3130,6 @@
     var unplaced = tally.unplaced.filter(function (name) { return tally.raised.indexOf(name) === -1; });
     var cardsOff = tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max;
     var length = map.expectedLength;
-    var lineOptions = mapEditLineOptions(slots);
     var human = Number(d.humanRevisionCount) || 0;
     var feedback = asString(d.previousFeedback).trim();
     // The hint speaks of the writer's repeats: a photo the director left out is marked on its own line.
@@ -3083,7 +3147,7 @@
         .map(function (failure) { return asString(failure.message).trim(); })
         .filter(Boolean)
         .map(function (message) { return 'Check still failing: ' + message; }),
-      changedEdits: changedEditsToShow(d.handEditReport).map(function (entry) { return changedEditLine(entry, lineOptions); }),
+      changedEdits: mapChangedEditLines(d.handEditReport, slots),
       kept: editsStandLine(d.handEditReport),
       otherConcerns: placed.other,
       gapNote: isPlainObject(map.gapNote)

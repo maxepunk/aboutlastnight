@@ -19,7 +19,9 @@
  *     the director types is kept as typed;
  *   - the map as the gate stores it (D, task 4.14b): a struck beat's photos freed
  *     (freeStruckBeatPhotos, read so everywhere through photoBeatOf) and each section the
- *     director emptied dropped (dropEmptiedSections), which lib/map.js mapResume applies;
+ *     director emptied dropped (dropEmptiedSections), which lib/map.js mapResume applies; and
+ *     the drop held after an automatic pass (holdDroppedSections, fix round 1), which
+ *     lib/hand-edit-diff.js settleEdits applies;
  *   - the article's client gate, validateBundleShape (I2), and the reset key both stops use.
  *
  * MUST NOT reference React or window at module-evaluation time except the
@@ -402,6 +404,38 @@
     emptied.forEach(function (slot) {
       var listed = next.dropped.some(function (entry) { return isPlainObject(entry) && entry.slot === slot; });
       if (!listed) next.dropped.push({ slot: slot, reason: EMPTIED_SECTION_REASON });
+    });
+    return next;
+  }
+
+  /**
+   * The map with each slot the director dropped held, as code stores an automatic pass on the
+   * map once it has put back the director's other edits (lib/hand-edit-diff.js settleEdits; task
+   * 4.14b, fix round 1; R11). A section the pass put back under a dropped slot goes again when it
+   * holds nothing, by the rule the gate drops it by (holdsNothing, dropEmptiedSections), so the
+   * director's dropped entry names the slot alone. One that holds a beat or a photo the pass put
+   * there stays, since code takes out only what the director took out (and each kept photo stays
+   * placed, T13), and the dropped list gives up the slot, so the map names each slot once; the
+   * report records the section's cut as come back, for the stop to show. The same map when no
+   * section fills a dropped slot, and anything that is no map as it was.
+   *
+   * @param {*} map - the pass's map, with the director's other edits put back
+   * @param {string[]} slots - the slots the director dropped
+   * @returns {*}
+   */
+  function holdDroppedSections(map, slots) {
+    if (!isMapValue(map)) return map;
+    var dropped = Array.isArray(slots) ? slots : [];
+    var back = dropped.filter(function (slot) { return sectionWithSlot(map, slot) !== null; });
+    if (back.length === 0) return map;
+    var next = deepClone(map);
+    back.forEach(function (slot) {
+      next.sections = next.sections.filter(function (section) {
+        return !(isPlainObject(section) && section.slot === slot && holdsNothing(section));
+      });
+      if (sectionWithSlot(next, slot) && Array.isArray(next.dropped)) {
+        next.dropped = next.dropped.filter(function (entry) { return !(isPlainObject(entry) && entry.slot === slot); });
+      }
     });
     return next;
   }
@@ -1161,6 +1195,7 @@
     freeStruckBeatPhotos: freeStruckBeatPhotos,
     EMPTIED_SECTION_REASON: EMPTIED_SECTION_REASON,
     dropEmptiedSections: dropEmptiedSections,
+    holdDroppedSections: holdDroppedSections,
     leftOutTopPhoto: leftOutTopPhoto,
 
     validateOutlineShape: validateOutlineShape,

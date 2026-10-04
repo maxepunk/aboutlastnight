@@ -1441,3 +1441,66 @@ describe('4.14b: a photo on the leave-out list shows as left out on the map, and
     expect(ViewLogic.mapView(data, traded).sections[1].photos[0]).toMatchObject({ filename: 'p2.jpg', leftOut: true, moveTargets: [] });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14b, fix round 1: a section the director emptied that a pass put back reads as one line on
+// the map, the section's, in the words of its dropped line. The drop is two edits, its dropped
+// slot and its cut; a pass that put the section back gives a line for each, one of them the
+// entry's fields as written. After an automatic pass the section stays only when the pass put
+// something in it (lib/hand-edit-diff.js settleEdits), so the line asks the director to empty it
+// again; after a send-back it gives the rework's reasons.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14b fix round 1: a section the director emptied that a pass put back reads as one line, the section\'s', () => {
+  const { mapResume } = require('../../lib/map');
+  const entry = (fields) => ({ scope: 'map', cut: false, removed: false, moved: false, reason: null, restored: false, ...fields });
+  const slotGone = (pass, fields) => entry({
+    id: 'E1', where: 'dropped slot "followTheMoney"', director: 'slot: followTheMoney; reason: The director emptied this section on the map.',
+    became: null, pass, automatic: pass !== SEND_BACK_PASS, ...fields
+  });
+  const sectionBack = (pass, fields) => entry({
+    id: 'E2', where: 'section "followTheMoney", cut', cut: true, director: 'slot: followTheMoney; heading: Follow the Money; job: What the sale paid, and to whom.',
+    became: 'Follow the Money', pass, automatic: pass !== SEND_BACK_PASS, ...fields
+  });
+  /** The map's changed lines for a report holding these entries. */
+  function linesFor(changed) {
+    const d = { ...payloadOf(stateAt()), handEditReport: { checked: ['E1', 'E2', 'E3'], changed } };
+    return ViewLogic.mapView(d, opened(d)).changedEdits;
+  }
+  const AUTOMATIC_LINE = 'Follow the Money: automatic pass 1 put back the section you emptied. It is still on the map: empty it again if it should go.';
+
+  test('after an automatic pass: one line, which asks the director to empty it again', () => {
+    expect(linesFor([slotGone(1), sectionBack(1)])).toEqual([AUTOMATIC_LINE]);
+    // The pass kept the slot's entry, which code then took out: the section's line alone.
+    expect(linesFor([sectionBack(1)])).toEqual([AUTOMATIC_LINE]);
+  });
+
+  test("after a send-back's rework: one line, with the rework's reasons", () => {
+    const reason = 'The note asks for the money again.';
+    expect(linesFor([slotGone(SEND_BACK_PASS, { reason }), sectionBack(SEND_BACK_PASS, { reason })]))
+      .toEqual([`Follow the Money: the rework of your send-back put back the section you emptied. Why: ${reason}`]);
+  });
+
+  test('any other line reads as before, beside it', () => {
+    const other = entry({ id: 'E3', where: 'section "closing", beat "b6", material', cut: true, director: 'and the second ledger', became: 'Riley: "I kept the books, and the second ledger"', pass: 1, automatic: true });
+    expect(linesFor([slotGone(1), sectionBack(1), other])).toEqual([
+      AUTOMATIC_LINE,
+      'Closing, beat "b6", material: the text you cut came back as "Riley: "I kept the books, and the second ledger"" (automatic pass 1). It is still on the map: cut it again if it should go.'
+    ]);
+  });
+
+  test('through the stop: an automatic pass that filled the section the director emptied, as code stores it and the page shows it', () => {
+    const { error, stateUpdates } = mapResume({ outline: 'send-back', map: EditLogic.strikeBeat(opened(), 'b5'), note: 'Tighten the lede.' }, stateAt(), { theme: 'journalist' });
+    expect(error).toBeNull();
+    const before = stateUpdates.outline;
+    const pass = clone(before);
+    pass.sections.splice(2, 0, { ...clone(MAP.sections[2]), beats: [{ id: 'b7', kind: 'figure', material: 'The Melanie account took $75,000', players: [] }] });
+    pass.dropped = pass.dropped.filter((d) => d.slot !== 'followTheMoney');
+    const edits = stateUpdates._outlineHandEdits.edits;
+    const settled = settleEdits(null, { edits, before, after: pass, pass: 1 });
+    const d = payloadOf(stateAt({ outline: settled.output, _mapBaseline: settled.output, _outlineHandEdits: stateUpdates._outlineHandEdits, _outlineHandEditReport: settled.report }));
+    const view = ViewLogic.mapView(d, opened(d));
+    expect(view.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'followTheMoney', 'closing']);
+    expect(view.dropped.map((x) => x.slot)).toEqual(['thePlayers', 'whatsMissing']);
+    expect([view.changedEdits, view.kept]).toEqual([[AUTOMATIC_LINE], '']);
+  });
+});

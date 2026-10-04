@@ -109,7 +109,11 @@
  * added, a beat they struck and a photo they placed that the pass removed; a beat they only
  * moved between sections, which a pass removed, stays out, as a moved block does at the
  * desk (settleEdits). A strike frees the photos beside its beat as part of the strike, so the
- * edits record the strike alone, never a cut of the photo's place (task 4.14b).
+ * edits record the strike alone, never a cut of the photo's place (task 4.14b). A section the
+ * director emptied leaves the map as two edits, its dropped slot added and the section cut, and
+ * after an automatic pass code holds the drop by its slot: a section the pass put back goes again
+ * when it holds nothing, and one the pass filled stays, out of the dropped list (droppedSlotsOf;
+ * task 4.14b, fix round 1).
  */
 'use strict';
 
@@ -128,8 +132,9 @@ const { WEAVE_ANSWER_KEY, pairWeaveQuestions } = require('./writer-questions');
 // it, as the map checks, the kept photos and the leave-out box do (brief 4.6, fix round 1).
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 // Which beats a map holds only in left out, the strike's rule for the photos beside them
-// (task 4.14b), from the map's console module, as the desk's naming rule comes from the desk's.
-const { isStruckBeat } = require('../console/outline-edit-logic');
+// (task 4.14b), and the rule that holds a section the director dropped after an automatic pass
+// (fix round 1), from the map's console module, as the desk's naming rule comes from the desk's.
+const { isStruckBeat, holdDroppedSections } = require('../console/outline-edit-logic');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
 // which do not name metadata, voice_self_check or _revisionHistory.
@@ -2036,9 +2041,10 @@ const MAP_SCOPE = 'map';
 
 /**
  * How to read the map's edit lines (formatEditLines), for the map's reworks'
- * <HAND_EDITS> block (brief 4.6).
+ * <HAND_EDITS> block (brief 4.6). A section the director emptied reads as two lines, its
+ * dropped slot and its cut (task 4.14b, fix round 1).
  */
-const MAP_EDIT_LINES_GUIDE = "Each line is one change of the director's on the map, by its id and place: a line they rewrote, with their text; a beat they added (added, with its fields); a beat or a photo they moved (moved, or brought back from left out), whose own text is still the writer's; a beat they struck (struck, now in leftOut), which is out of the story; and the top photo they chose. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+const MAP_EDIT_LINES_GUIDE = "Each line is one change of the director's on the map, by its id and place: a line they rewrote, with their text; a beat they added (added, with its fields); a beat or a photo they moved (moved, or brought back from left out), whose own text is still the writer's; a beat they struck (struck, now in leftOut), which is out of the story; a section they dropped, in two lines (its dropped slot with the reason, and the section marked cut), which is out of the story; and the top photo they chose. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
 
 /**
  * Is this a story map (brief 4.6): sections with beats, or a left-out list, and no
@@ -2482,6 +2488,30 @@ function freedByStrike(change, left) {
   if (!address || address.kind !== 'photo' || !isCut(change)) return false;
   const field = address.fieldSteps.length === 1 && 'key' in address.fieldSteps[0] ? address.fieldSteps[0].key : null;
   return field === 'beat' && typeof change.before === 'string' && change.before.trim() !== '' && isStruckBeat(left, change.before.trim());
+}
+
+/**
+ * The slots the director dropped on the map (task 4.14b, fix round 1): each slot a standing edit
+ * names as a section cut or as a dropped slot they added. The map has no section delete, so a
+ * section leaves it only when the director empties it and the gate drops it (console/
+ * outline-edit-logic.js dropEmptiedSections), which records both edits; either one names the
+ * slot, so a send-back's rework that changed the other leaves the drop still held.
+ *
+ * @param {Object[]} edits - the standing edits a version carries
+ * @returns {string[]} the slots, each once, in the edits' order
+ */
+function droppedSlotsOf(edits) {
+  const slots = [];
+  (Array.isArray(edits) ? edits : []).forEach((edit) => {
+    if (!isObj(edit) || edit.scope !== MAP_SCOPE) return;
+    const steps = stepsOf(edit);
+    if (steps.length !== 2 || !('key' in steps[0]) || !isElementStep(steps[1]) || !isObj(steps[1].match)) return;
+    const slot = steps[1].match.slot;
+    const sectionCut = steps[0].key === 'sections' && isCut(edit);
+    const slotAdded = steps[0].key === 'dropped' && !isCut(edit) && (edit.before === null || edit.before === undefined);
+    if ((sectionCut || slotAdded) && typeof slot === 'string' && slot && !slots.includes(slot)) slots.push(slot);
+  });
+  return slots;
 }
 
 /** A field edit on a beat or photo, its steps re-anchored to where it sits now in `map`. */
@@ -3192,7 +3222,11 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * round 1). A send-back's rework is left as it is: the director's note may
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed, and strikes
- * again, by id, each connection the director struck that it brought back. Code never puts
+ * again, by id, each connection the director struck that it brought back. On the map, once the
+ * other edits are back, code holds each section the director dropped by its slot (droppedSlotsOf,
+ * console/outline-edit-logic.js holdDroppedSections; task 4.14b, fix round 1): a section the pass
+ * put back goes again when it holds nothing, and one the pass filled stays, out of the dropped
+ * list, its cut reported as come back. Code never puts
  * back a photo the article cannot print that the pass took out of print, by removing or
  * renaming it (`photos` and `whiteboard`; leftOutOfRestore; tasks 4.5e and 4.5g): an edit on
  * such a block, a caption the director wrote under its photo, stays out with it, and a section
@@ -3238,7 +3272,10 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
     const moves = changed.filter((e) => isMove(e)
       && (outcome(e) === 'moved' || outcome(e) === 'reordered' || (outcome(e) === 'gone' && mapRestoresWhenGone(e))));
     const fields = changed.filter((e) => !isMove(e));
-    if (moves.length + fields.length > 0) {
+    // Task 4.14b, fix round 1: a section the pass put back under a slot the director dropped.
+    const droppedSlots = isMap(after) ? droppedSlotsOf(carried) : [];
+    const sectionBack = droppedSlots.some((slot) => after.sections.some((section) => isObj(section) && section.slot === slot));
+    if (moves.length + fields.length > 0 || sectionBack) {
       output = clone(after);
       // Task 4.5g: the restore leaves out only a photo the article cannot print that the
       // version the pass returned prints nowhere: `after`, not the output the restores change.
@@ -3254,6 +3291,11 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // field the director wrote; that field goes back on the copy kept.
       carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
         .forEach((e) => restoreEdit(e, before, output, leavesOut));
+      // Task 4.14b, fix round 1: the director's drop held by its slot, once their other edits are
+      // back, so a beat they struck that the pass brought into the section has left it again. An
+      // empty section goes; one the pass filled stays, out of the dropped list, and its cut is
+      // reported as come back (holdDroppedSections).
+      if (sectionBack) output = holdDroppedSections(output, droppedSlots);
       // Task 4.5f: one reading on every path of the restore. An edit is put back when the
       // version stored carries it as the restore puts it back (editAsRestored), and one put
       // back without a photo the restore left out stands so from here on (4.5g, fix round 1).

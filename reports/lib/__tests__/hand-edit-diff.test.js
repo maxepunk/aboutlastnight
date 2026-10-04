@@ -3411,3 +3411,92 @@ describe("4.14b: the map's standing edits record no cut of the place of a photo 
     expect(edits(byItself)).toEqual([['sections[#theStory].photos[#p2.jpg].beat', 'b2', null]]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14b, fix round 1: a section the director dropped stays dropped through an automatic pass
+// (R11). The gate records the drop as two edits, the dropped slot added and the section cut.
+// After an automatic pass code puts back the director's other edits, then holds the drop by its
+// slot: a section the pass put back goes again when it holds nothing, and one the pass filled
+// stays, flagged as the cut that came back, with the slot out of the dropped list, so the map
+// names each slot once.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14b fix round 1: an automatic pass is held to a section the director dropped', () => {
+  const { MAP } = require('./fixtures/rework-state');
+  const EditLogic = require('../../console/outline-edit-logic');
+  /** The map the gate stores after the director strikes b5, Follow the Money's one beat (lib/map.js mapResume). */
+  const dropped = () => EditLogic.dropEmptiedSections(EditLogic.strikeBeat(clone(MAP), 'b5'), clone(MAP));
+  const editsOf = (left) => D.carriedEdits(D.standingOnMap(null, clone(MAP), left), left);
+  const slots = (map) => map.sections.map((s) => `${s.slot}[${s.beats.map((b) => b.id).join(',')}]`);
+  /** A pass that puts Follow the Money back where the writer had it, holding these beats and photos. */
+  function putBack(before, { beats, photos = [], keepEntry = false }) {
+    const pass = clone(before);
+    pass.sections.splice(2, 0, { ...clone(MAP.sections[2]), beats, photos });
+    pass.leftOut = pass.leftOut.filter((b) => !beats.some((beat) => beat.id === b.id));
+    if (!keepEntry) pass.dropped = pass.dropped.filter((d) => d.slot !== 'followTheMoney');
+    return pass;
+  }
+  const B7 = { id: 'b7', kind: 'figure', material: 'The Melanie account took $75,000', players: [] };
+
+  it('the drop is two edits beside the strike: the dropped slot added and the section cut', () => {
+    expect(editsOf(dropped()).map((e) => e.path)).toEqual(['dropped[#followTheMoney]', 'sections[#followTheMoney]', 'leftOut[#b5]']);
+  });
+
+  it("a pass that brings the struck beat back into the section: code strikes it again and the section goes, the director's entry in its place", () => {
+    const before = dropped();
+    const edits = editsOf(before);
+    const settled = D.settleEdits(null, { edits, before, after: putBack(before, { beats: [clone(MAP.sections[2].beats[0])] }), pass: 1 });
+    expect(slots(settled.output)).toEqual(['lede[b1]', 'theStory[b2,b3,b4]', 'closing[b6]']);
+    expect(settled.output.dropped).toEqual(before.dropped);
+    expect(settled.output.leftOut.map((b) => b.id)).toEqual(['b9', 'b5']);
+    expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
+    expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E3', true]]);
+  });
+
+  it('a pass that puts the section back empty and keeps its entry: the section goes, and the map is the one the pass started from', () => {
+    const before = dropped();
+    const edits = editsOf(before);
+    const settled = D.settleEdits(null, { edits, before, after: putBack(before, { beats: [], keepEntry: true }), pass: 1 });
+    expect(settled.output).toEqual(before);
+    expect(settled.report.changed).toEqual([]);
+  });
+
+  it.each([
+    ['a beat of its own, its entry taken out', { beats: [B7] }],
+    ['a beat of its own, its entry kept', { beats: [B7], keepEntry: true }],
+    ['the struck beat and a beat of its own', { beats: [clone(MAP.sections[2].beats[0]), B7] }]
+  ])("a pass that fills the section with %s: the section stays, flagged as the cut that came back, and the slot leaves the dropped list", (_, fill) => {
+    const before = dropped();
+    const edits = editsOf(before);
+    const settled = D.settleEdits(null, { edits, before, after: putBack(before, fill), pass: 1 });
+    expect(slots(settled.output)).toEqual(['lede[b1]', 'theStory[b2,b3,b4]', 'followTheMoney[b7]', 'closing[b6]']);
+    expect(settled.output.dropped.map((d) => d.slot)).toEqual(['thePlayers', 'whatsMissing']);
+    expect(settled.output.leftOut.map((b) => b.id)).toEqual(['b9', 'b5']);
+    expect(settled.report.changed.find((c) => c.id === 'E2')).toMatchObject({ cut: true, became: 'Follow the Money', restored: false });
+    expect(settled.report.changed.filter((c) => c.id === 'E1').every((c) => c.restored === false)).toBe(true);
+  });
+
+  it('a pass that moves a photo into the section: the section stays with it, since each kept photo is placed once (T13)', () => {
+    const before = dropped();
+    const edits = editsOf(before);
+    const pass = putBack(before, { beats: [], photos: [{ filename: 'p2.jpg' }] });
+    pass.sections[1].photos = [];
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+    expect(settled.output.sections.map((s) => [s.slot, s.photos])).toEqual([
+      ['lede', []], ['theStory', []], ['followTheMoney', [{ filename: 'p2.jpg' }]], ['closing', []]
+    ]);
+    expect(settled.output.dropped.map((d) => d.slot)).toEqual(['thePlayers', 'whatsMissing']);
+  });
+
+  it("a send-back's rework is left as it is, the section it put back included", () => {
+    const before = dropped();
+    const pass = putBack(before, { beats: [B7], keepEntry: true });
+    expect(D.settleEdits(null, { edits: editsOf(before), before, after: pass, pass: D.SEND_BACK_PASS }).output).toEqual(pass);
+  });
+
+  it('holdDroppedSections gives back the same map when no section fills a dropped slot, and anything that is no map as it was', () => {
+    const map = dropped();
+    expect(EditLogic.holdDroppedSections(map, ['followTheMoney'])).toBe(map);
+    expect(EditLogic.holdDroppedSections(map, [])).toBe(map);
+    expect(EditLogic.holdDroppedSections(null, ['followTheMoney'])).toBeNull();
+  });
+});

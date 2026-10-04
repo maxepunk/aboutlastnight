@@ -1049,8 +1049,10 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // outline's had: an automatic pass keeps every edit of the director's (code holds it to
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
   // note needs it, saying why. The wording names beats, photos and the top photo, so it is
-  // the map's when the version the rework starts from is a map (mapMode, above).
-  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each removed sentence stays out, and the top photo they chose stays the top photo.';
+  // the map's when the version the rework starts from is a map (mapMode, above). Task 4.14b,
+  // fix round 1: a section the director emptied is dropped, and stays so as a struck beat stays
+  // struck (code holds it by its slot too, lib/hand-edit-diff.js settleEdits).
+  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.';
   // Brief 4.7f: the article's edits, one list for both kinds of rework. The integrator, at
   // 4.7f's merge: the send-back's exception comes first, as the map's and the meeting's do,
   // and what a cut block said has a sentence of its own, bounded to that block.

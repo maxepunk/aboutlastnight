@@ -1124,7 +1124,8 @@ describe("4.6: the map's rework context", () => {
   const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
   const { reviseOutline } = require('../workflow/nodes/ai-nodes');
   const clone = (v) => JSON.parse(JSON.stringify(v));
-  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each removed sentence stays out, and the top photo they chose stays the top photo.';
+  // Task 4.14b, fix round 1: a section the director dropped stays in dropped.
+  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.';
 
   /** The director's map: b6's line rewritten, and b4 struck. */
   function directorsMap() {
@@ -1396,5 +1397,75 @@ describe("4.14b: a director's round on the map reads no check failures from befo
     const { failing, validationResults } = openedWithFailure();
     const prompt = await promptSent({ _previousOutline: failing, _outlineFeedback: null, outlineRevisionCount: 1, validationResults });
     expect(prompt).toContain("MAP CHECK FAILURES:\n  - Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14b, fix round 1: a send-back that empties a section, then an automatic pass that puts it
+// back (R11). The rework reads the drop in <HAND_EDITS>, as a section the director dropped, which
+// stays in dropped; and code holds the drop by its slot when a pass puts the section back anyway
+// (lib/hand-edit-diff.js settleEdits), so the article writer never gets the empty section.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14b fix round 1: a send-back that empties a section, then an automatic pass that puts it back', () => {
+  const { MAP, reworkFixtureState } = require('./fixtures/rework-state');
+  const { mapResume } = require('../map');
+  const { MAP_EDIT_LINES_GUIDE } = require('../hand-edit-diff');
+  const { reviseOutline } = require('../workflow/nodes/ai-nodes');
+  const EditLogic = require('../../console/outline-edit-logic');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  /** A map check failure on the send-back rework's map: the writer's, so an automatic pass runs. */
+  const FAILED = {
+    phase: 'outline', source: 'map-checks', passed: false, ready: false, structuralPassed: false,
+    structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out."]
+  };
+
+  /** The director strikes b5, Follow the Money's one beat, and sends the map back; the send-back's rework keeps the drop. */
+  function sentBack() {
+    const state = reworkFixtureState();
+    const { error, stateUpdates } = mapResume(
+      { outline: 'send-back', map: EditLogic.strikeBeat(clone(MAP), 'b5'), note: 'Tighten the lede.' }, state, { theme: 'journalist' }
+    );
+    expect(error).toBeNull();
+    return { ...state, ...stateUpdates, _outlineFeedback: null, _mapBaseline: clone(stateUpdates.outline) };
+  }
+
+  /** The automatic pass, the SDK returning `pass`: the prompt it sent and the state it returned. */
+  async function automaticPass(round, pass) {
+    let sent;
+    const out = await reviseOutline(
+      { ...round, outline: null, _previousOutline: clone(round.outline), outlineRevisionCount: 1, validationResults: FAILED },
+      { configurable: { sdkClient: async (options) => { sent = options; return clone(pass); }, theme: 'journalist' } }
+    );
+    return { prompt: sent.prompt, out };
+  }
+
+  it('the rework reads the drop as a section the director dropped, which stays in dropped', async () => {
+    const round = sentBack();
+    const { prompt } = await automaticPass(round, round.outline);
+    const block = prompt.slice(prompt.indexOf('<HAND_EDITS>'), prompt.indexOf('</HAND_EDITS>'));
+    expect(MAP_EDIT_LINES_GUIDE).toContain('a section they dropped, in two lines (its dropped slot with the reason, and the section marked cut), which is out of the story;');
+    expect(block).toContain(`The director's edits on the map, by id. ${MAP_EDIT_LINES_GUIDE}`);
+    expect(block).toContain("This automatic pass fixes the writer's lines. Each edit of the director's is final: the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.");
+    expect(block).toContain('E1 (dropped slot "followTheMoney"): slot "followTheMoney"; reason "The director emptied this section on the map."');
+    expect(block).toContain('E2 (section "followTheMoney", cut): slot "followTheMoney"; heading "Follow the Money"; job "What the sale paid, and to whom."');
+  });
+
+  it("a pass that puts the section back with the struck beat: code stores the map with the section dropped, and approved as shown it stays dropped", async () => {
+    const round = sentBack();
+    const pass = clone(round.outline);
+    pass.sections.splice(2, 0, clone(MAP.sections[2]));
+    pass.leftOut = pass.leftOut.filter((b) => b.id !== 'b5');
+    pass.dropped = pass.dropped.filter((d) => d.slot !== 'followTheMoney');
+    const { out } = await automaticPass(round, pass);
+    expect(out.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
+    expect(out.outline.dropped.map((d) => [d.slot, d.reason])).toEqual([
+      ['thePlayers', 'Every player appears above.'], ['whatsMissing', "Its question is the closing's."], ['followTheMoney', EditLogic.EMPTIED_SECTION_REASON]
+    ]);
+    expect(out._mapBaseline).toEqual(out.outline);
+    const atStop = { ...round, outline: out.outline, _mapBaseline: out._mapBaseline, _outlineHandEditReport: out._outlineHandEditReport };
+    const approved = mapResume({ outline: 'approve', map: clone(out.outline) }, atStop, { theme: 'journalist' });
+    expect(approved.error).toBeNull();
+    expect(approved.stateUpdates.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
+    expect(approved.stateUpdates._outlineHandEdits.edits.map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
   });
 });
