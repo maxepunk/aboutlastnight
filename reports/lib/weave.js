@@ -166,13 +166,57 @@ function liveConnections(weave) {
 }
 
 /**
- * The writer's words in the fields the meeting prints: the story, the question, the
- * headline, the convergence, each thread's claim and reason, each live connection's
- * detail, the stronger main thread's reason, and each question with what it is about and
- * what its answer changes. "From your notes" and the answers are the director's words,
- * so they do not count. Given the director's share of the weave (brief 4.5), the
- * director's own text does not count either: a field they rewrote, a thread they added,
- * a thread's claim or reason they typed.
+ * The fields of the weave the story meeting prints, part by part, in the order it prints
+ * them (brief 4.5b): the one list the edits read a weave's text by (lib/hand-edit-diff.js
+ * weaveParts) and the writer's length is counted on (weaveWordCount), so a field added to
+ * the weave is added here once. The parts are the weave's own fields, then each thread's,
+ * each live connection's, the stronger main thread's and each question's. A question's
+ * answer is no printed field of the weave's: it is the director's words, kept with the
+ * question (lib/writer-questions.js).
+ *
+ * `directorsWords` names the one field the two readers read differently: "from your notes"
+ * quotes the director's notes, so the edits read it as the meeting prints it, and the
+ * writer's length leaves it out.
+ */
+const WEAVE_PRINTED_FIELDS = Object.freeze({
+  weave: Object.freeze(['story', 'question', 'headline', 'fromYourNotes', 'convergence']),
+  threads: Object.freeze(['claim', 'reason']),
+  connections: Object.freeze(['detail']),
+  strongerMainThread: Object.freeze(['reason']),
+  questions: Object.freeze(['about', 'question', 'changes']),
+  directorsWords: Object.freeze(['fromYourNotes'])
+});
+
+/**
+ * The weave's printed fields (WEAVE_PRINTED_FIELDS), each as it stands in the weave, in the
+ * order the meeting prints them: `{part, field, text, element?, directorsWords?}`, where
+ * `part` is the weave's part (`weave`, `threads`, `connections`, `strongerMainThread`,
+ * `questions`), `element` the thread, connection or question the field belongs to, and
+ * `text` the field's value. A struck connection prints nothing (liveConnections).
+ *
+ * @param {Object} weave
+ * @returns {Array<{part: string, field: string, text: *, element?: Object, directorsWords?: true}>}
+ */
+function printedWeaveFields(weave) {
+  if (!weave || typeof weave !== 'object') return [];
+  const fieldsOf = (part, element) => WEAVE_PRINTED_FIELDS[part].map((field) => ({ part, field, text: element[field], element }));
+  const stronger = weave.strongerMainThread && typeof weave.strongerMainThread === 'object' ? weave.strongerMainThread : {};
+  return [
+    ...WEAVE_PRINTED_FIELDS.weave.map((field) => ({
+      part: 'weave', field, text: weave[field], ...(WEAVE_PRINTED_FIELDS.directorsWords.includes(field) && { directorsWords: true })
+    })),
+    ...objectsOf(weave.threads).flatMap((thread) => fieldsOf('threads', thread)),
+    ...liveConnections(weave).flatMap((connection) => fieldsOf('connections', connection)),
+    ...fieldsOf('strongerMainThread', stronger),
+    ...objectsOf(weave.questions).flatMap((question) => fieldsOf('questions', question))
+  ];
+}
+
+/**
+ * The writer's words in the fields the meeting prints (printedWeaveFields). "From your
+ * notes" and the answers are the director's words, so they do not count. Given the
+ * director's share of the weave (brief 4.5), the director's own text does not count
+ * either: a field they rewrote, a thread they added, a thread's claim or reason they typed.
  *
  * @param {Object} weave
  * @param {Object} [directorsShare] - shareOf's parts
@@ -181,18 +225,12 @@ function liveConnections(weave) {
 function weaveWordCount(weave, directorsShare) {
   if (!weave || typeof weave !== 'object') return 0;
   const share = shareOf(directorsShare);
-  const writers = (field) => !has(share.fields, field);
-  const threadText = (thread, field) => (has(share.threadFields, `${weaveIdOf(thread)}.${field}`) ? '' : thread[field]);
-  const texts = [
-    ...['story', 'question', 'headline', 'convergence'].filter(writers).map(field => weave[field]),
-    ...objectsOf(weave.threads)
-      .filter(thread => !has(share.addedThreads, weaveIdOf(thread)))
-      .flatMap(thread => [threadText(thread, 'claim'), threadText(thread, 'reason')]),
-    ...liveConnections(weave).map(c => c.detail),
-    weave.strongerMainThread && weave.strongerMainThread.reason,
-    ...objectsOf(weave.questions).flatMap(q => [q.about, q.question, q.changes])
-  ];
-  return texts.reduce((sum, text) => sum + wordCount(textOf(text)), 0);
+  const directors = ({ part, field, element, directorsWords }) => Boolean(directorsWords)
+    || (part === 'weave' && has(share.fields, field))
+    || (part === 'threads' && (has(share.addedThreads, weaveIdOf(element)) || has(share.threadFields, `${weaveIdOf(element)}.${field}`)));
+  return printedWeaveFields(weave)
+    .filter((entry) => !directors(entry))
+    .reduce((sum, entry) => sum + wordCount(textOf(entry.text)), 0);
 }
 
 /**
@@ -524,5 +562,8 @@ module.exports = {
   weaveFindings,
   // Fix round 1, finding 3: the one reading of an id, and the one rule for a repeated id
   weaveIdOf,
-  repeatedIds
+  repeatedIds,
+  // Brief 4.5b: the one list of the fields the meeting prints, which the edits and the length read
+  WEAVE_PRINTED_FIELDS,
+  printedWeaveFields
 };

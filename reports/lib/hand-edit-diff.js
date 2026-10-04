@@ -90,7 +90,7 @@ const { isVerbatimIn, normalizeForGrounding, quotedPassages } = require('./groun
 const {
   pairSectionBlocks, stayingInSection, blockText, blockKey, sectionKey
 } = require('../console/article-desk-logic');
-const { isWeave, isStruck, STRUCK_KEY, weaveIdOf, repeatedIds } = require('./weave');
+const { isWeave, isStruck, STRUCK_KEY, weaveIdOf, repeatedIds, WEAVE_PRINTED_FIELDS, printedWeaveFields } = require('./weave');
 const { WEAVE_ANSWER_KEY } = require('./writer-questions');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
@@ -209,8 +209,8 @@ const ELEMENT_KEYS = {
   questions: 'id'
 };
 
-/** The weave's text fields, each one place (brief 4.5). */
-const WEAVE_FIELDS = ['story', 'question', 'headline', 'fromYourNotes', 'convergence'];
+/** The weave's text fields, each one place (brief 4.5): the weave's own printed fields (lib/weave.js WEAVE_PRINTED_FIELDS; brief 4.5b). */
+const WEAVE_FIELDS = WEAVE_PRINTED_FIELDS.weave;
 
 /** The weave's collections, by the word for one of their elements (brief 4.5). */
 const WEAVE_ELEMENTS = { threads: 'thread', connections: 'connection', questions: 'question' };
@@ -494,18 +494,15 @@ function sectionParts(section) {
 /**
  * The weave's text, part by part (brief 4.5): the fields the meeting prints and later
  * writers read, the struck connections and the director's answers left out (a struck
- * connection is out of the story, and an answer is the director's words, record).
+ * connection is out of the story, and an answer is the director's words, record). The
+ * fields are the one list the writer's length reads too (lib/weave.js printedWeaveFields;
+ * brief 4.5b), "from your notes" among them.
  */
 function weaveParts(weave) {
-  const objects = (list) => (Array.isArray(list) ? list.filter(isObj) : []);
-  const stronger = isObj(weave.strongerMainThread) ? weave.strongerMainThread : {};
-  return [
-    ...WEAVE_FIELDS.map((field) => weave[field]),
-    ...objects(weave.threads).flatMap((thread) => [thread.claim, thread.reason]),
-    ...objects(weave.connections).filter((connection) => !isStruck(connection)).map((connection) => connection.detail),
-    stronger.reason,
-    ...objects(weave.questions).flatMap((question) => [question.about, question.question, question.changes])
-  ].filter((text) => typeof text === 'string' && text.trim()).map((text) => ({ text, cardContent: false }));
+  return printedWeaveFields(weave)
+    .map((entry) => entry.text)
+    .filter((text) => typeof text === 'string' && text.trim())
+    .map((text) => ({ text, cardContent: false }));
 }
 
 /**

@@ -646,3 +646,56 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
     }]);
   });
 });
+
+// The fields the story meeting prints are one list (WEAVE_PRINTED_FIELDS), which the edits'
+// reading of a weave (lib/hand-edit-diff.js weaveParts) and the writer's length
+// (weaveWordCount) both walk, so a field added to the weave is added once (4.5 review,
+// minor 10). "From your notes" is the one field they read differently: it quotes the
+// director, so it adds nothing to the writer's length.
+describe("4.5b: one list of the weave's printed fields", () => {
+  const { WEAVE_PRINTED_FIELDS, printedWeaveFields } = require('../weave');
+  const { _testing: { printedLeaves } } = require('../hand-edit-diff');
+
+  /** A weave whose every printed field holds a word of its own, and a struck connection. */
+  function marked() {
+    const word = (where) => `w-${where}`;
+    const weave = Object.fromEntries(WEAVE_PRINTED_FIELDS.weave.map((field) => [field, word(field)]));
+    const element = (part, i) => Object.fromEntries(WEAVE_PRINTED_FIELDS[part].map((field) => [field, word(`${part}${i}-${field}`)]));
+    weave.threads = [0, 1].map((i) => ({ id: `t${i}`, role: 'grounds-it', ...element('threads', i) }));
+    weave.connections = [{ id: 'c0', kind: 'person', joins: ['t0', 't1'], ...element('connections', 0) }, { id: 'c1', kind: 'line', joins: ['t0', 't1'], detail: 'struck words', struck: true }];
+    weave.strongerMainThread = { thread: 't1', ...element('strongerMainThread', 0) };
+    weave.questions = [{ id: 'q0', kind: 'player', ...element('questions', 0) }];
+    return weave;
+  }
+
+  it('names each part of the weave and its fields, and flags "from your notes" as the director\'s words', () => {
+    expect(WEAVE_PRINTED_FIELDS).toEqual({
+      weave: ['story', 'question', 'headline', 'fromYourNotes', 'convergence'],
+      threads: ['claim', 'reason'],
+      connections: ['detail'],
+      strongerMainThread: ['reason'],
+      questions: ['about', 'question', 'changes'],
+      directorsWords: ['fromYourNotes']
+    });
+    expect(Object.isFrozen(WEAVE_PRINTED_FIELDS)).toBe(true);
+  });
+
+  it('the edits read every printed field, in the order the meeting prints it, and no struck connection', () => {
+    const weave = marked();
+    const texts = printedWeaveFields(weave).map((entry) => entry.text);
+    expect(printedLeaves(weave)).toEqual(texts);
+    expect(texts).toEqual([
+      'w-story', 'w-question', 'w-headline', 'w-fromYourNotes', 'w-convergence',
+      'w-threads0-claim', 'w-threads0-reason', 'w-threads1-claim', 'w-threads1-reason',
+      'w-connections0-detail', 'w-strongerMainThread0-reason',
+      'w-questions0-about', 'w-questions0-question', 'w-questions0-changes'
+    ]);
+  });
+
+  it('the writer\'s length counts the same fields but "from your notes"', () => {
+    const weave = marked();
+    const fields = printedWeaveFields(weave);
+    expect(fields.filter((entry) => entry.directorsWords).map((entry) => entry.field)).toEqual(['fromYourNotes']);
+    expect(weaveWordCount(weave)).toBe(fields.length - 1);
+  });
+});
