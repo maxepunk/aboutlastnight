@@ -45,7 +45,7 @@ const { photoKey } = require('./lib/prompt-renderers/director-words-renderer');
 const { meetingResume, meetingCheckpointData, unrunRoundNoteIndex } = require('./lib/meeting');
 // Phase 4 (brief 4.6): the map's payloads and what its stop shows; the photos kept for the
 // article, which Everyone and the counts read.
-const { mapResume, mapCheckpointData } = require('./lib/map');
+const { mapResume, mapCheckpointData, settledStoryOf } = require('./lib/map');
 const { keptPhotoFilenames } = require('./lib/workflow/nodes/ai-nodes');
 const { isWeave } = require('./lib/weave');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
@@ -247,14 +247,6 @@ function summarizeEnrichment(directorNotes) {
         fallback: notes._enrichmentFallback || null,
         warnings: notes._enrichmentWarnings || null
     };
-}
-
-/** The approved outline's thesis for the article gate (spec 2026-09-19 §6.2). Journalist only. */
-function outlineThesisOf(state) {
-    if ((state.theme || 'journalist') === 'detective') return null;
-    const lede = state.outline && state.outline.lede;
-    if (!lede || typeof lede !== 'object') return null;
-    return { hook: lede.hook || '', keyTension: lede.keyTension || '', primaryArc: lede.primaryArc || '' };
 }
 
 /**
@@ -497,7 +489,9 @@ async function getCheckpointData(checkpointType, state) {
                 previousFeedback: state._articleFeedback || null,
                 handEditReport: handEditReportOf(state._articleHandEditReport),   // F1, as at the outline stop
                 directorGateNotes: state.directorGateNotes || [],
-                outlineThesis: outlineThesisOf(state),
+                // Brief 4.7b: the story the director settled at the meeting, as the map's stop
+                // shows it, in place of the old outline's thesis.
+                settledStory: settledStoryOf(state.weave),
                 // Brief 2.7: the automatic passes of this round, with what each changed.
                 // Brief 4.7b: the writers' questions left the article (spec section 10): they
                 // are asked at the story meeting alone.

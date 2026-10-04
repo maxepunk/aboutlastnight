@@ -238,12 +238,12 @@ describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
     expect(data.directorGateNotes).toEqual([]);
   });
 
-  it('article carries handEditReport, directorGateNotes and the journalist outlineThesis', async () => {
-    const lede = { hook: 'H', keyTension: 'T', primaryArc: 'A', selectedEvidence: ['e'] };
-    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, outline: { lede }, _articleHandEditReport: { checked: ['E1', 'E2'], changed: [CHANGED] }, directorGateNotes: NOTES });
+  // Brief 4.7b: the outline's thesis went with the outline; the settled story took its place
+  // (the 4.7b describe at the end).
+  it('article carries handEditReport and directorGateNotes', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, _articleHandEditReport: { checked: ['E1', 'E2'], changed: [CHANGED] }, directorGateNotes: NOTES });
     expect(data.handEditReport).toEqual({ checked: ['E1', 'E2'], changed: [CHANGED] });
     expect(data.directorGateNotes).toEqual(NOTES);
-    expect(data.outlineThesis).toEqual({ hook: 'H', keyTension: 'T', primaryArc: 'A' });
   });
 
   it('a report written before F1 (scope keys, no ids) reaches the stop as none', async () => {
@@ -253,12 +253,6 @@ describe('steering keys (spec 2026-09-19 §4.4, §5.5, §6.2)', () => {
     expect(outline.handEditReport).toBeNull();
   });
 
-  it('article outlineThesis is null for the detective theme and when the outline has no lede', async () => {
-    const d = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, theme: 'detective', outline: { lede: { hook: 'H' } } });
-    expect(d.outlineThesis).toBeNull();
-    const none = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null, outline: {} });
-    expect(none.outlineThesis).toBeNull();
-  });
 
   it('arc-selection carries directorGateNotes', async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { evaluationHistory: [], narrativeArcs: [], directorGateNotes: NOTES });
@@ -737,5 +731,33 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     expect(merged.type).toBe(CHECKPOINT_TYPES.OUTLINE);
     expect(merged.tally.unplaced).toEqual(['Sarah', 'Jamie']);
     expect(merged.checkFailures).toHaveLength(1);
+  });
+});
+
+// 4.7b (the integrator's ruling 6): the settled story replaces the outline's thesis at the
+// article stop. It comes from settledStoryOf (lib/map.js), the function the map's stop uses,
+// so both stops show the story and the question the director settled at the meeting.
+describe('4.7b: the settled story at the article stop', () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const atArticle = () => ({ evaluationHistory: [], contentBundle: null, weave: JSON.parse(JSON.stringify(WEAVE)) });
+
+  it("sends the story and the question the director settled at the meeting, as the map's stop does, and no outline thesis", async () => {
+    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, atArticle());
+    const map = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atArticle());
+    expect(article.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+    expect(article.settledStory).toEqual(map.settledStory);
+    expect(article).not.toHaveProperty('outlineThesis');
+  });
+
+  it('is null on a thread with no weave', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null });
+    expect(data.settledStory).toBeNull();
+  });
+
+  it('survives the merge with the interrupt payload', async () => {
+    const state = atArticle();
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARTICLE, contentBundle: null }, state);
+    expect(merged.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
   });
 });

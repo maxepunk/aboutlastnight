@@ -726,5 +726,6 @@ module.exports = {
   mapConcerns,
   meetingEditIdsOf,
   meetingNoteOf,
+  settledStoryOf,
   mapCheckpointData
 };

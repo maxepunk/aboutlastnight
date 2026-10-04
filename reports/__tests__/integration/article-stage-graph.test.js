@@ -29,7 +29,7 @@ const { _testing: { buildFactCheckArgs } } = require('../../lib/workflow/nodes/e
 const { printedPhotos } = require('../../lib/publish-photos');
 const Desk = require('../../console/article-desk-logic');
 const { articleReviewPayload } = require('../../console/checkpoint-view-logic');
-const { reworkFixtureState, MAP, DOCUMENT_TEXT } = require('../../lib/__tests__/fixtures/rework-state');
+const { reworkFixtureState, MAP, WEAVE, DOCUMENT_TEXT } = require('../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const paragraph = (text) => ({ type: 'paragraph', text });
@@ -151,6 +151,10 @@ describe('the article stage through the real graph (phase 4, brief 4.7b)', () =>
     expect(stop.values._articleHandEdits.edits).toEqual([
       expect.objectContaining({ id: 'E1', path: 'headline.main', after: DIRECTORS_HEADLINE })
     ]);
+
+    // The stop shows the story the director settled at the meeting, as the map's stop did.
+    expect(stop.data.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+    expect(stop.data).not.toHaveProperty('outlineThesis');
   });
 
   it('a photo deleted at the desk, then a send-back: it stays out of PHOTOS, the map the rework reads, the judge and print', async () => {
