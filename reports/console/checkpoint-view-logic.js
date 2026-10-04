@@ -1694,9 +1694,37 @@
     return null;
   }
 
-  /** Whether the director changed the weave a reweave fits in: anything but an answer (ruling 5). */
+  /** Whether the director changed the weave at this look: anything but an answer (ruling 5). */
   function hasWeaveChanges(shown, weave) {
     return isPlainObject(shown) && isPlainObject(weave) && meetingWeaveChanges(withoutCodeOwned(shown), withoutCodeOwned(weave)).length > 0;
+  }
+
+  /**
+   * Whether a round that did not run (lib/meeting.js roundDidNotRunOf) was a reweave with no
+   * note. Such a reweave carried a change (ruling 5), and the meeting reopened on the
+   * director's version with that change in it, not yet fitted in: lib/meeting.js
+   * meetingResume stored it before the rework, and the gate takes a retry as the director's
+   * standing edits.
+   */
+  function isUnfittedReweave(round) {
+    return isPlainObject(round) && round.round === 'reweave' && !asString(round.note).trim();
+  }
+
+  /**
+   * Whether a reweave has something to fit in (the integrator's ruling 5): the director has
+   * changed the weave, anything but an answer, or written a note. The changes of a reweave
+   * that did not run count, since they are the director's and still unfitted
+   * (isUnfittedReweave). The buttons and the payload read this one rule.
+   *
+   * @param {Object} data - the stop's payload: the weave it showed and a round that did not run
+   * @param {*} weave - the weave as the director left it
+   * @param {string} note - the meeting's note box
+   * @returns {boolean}
+   */
+  function reweaveHasSomething(data, weave, note) {
+    var d = isPlainObject(data) ? data : {};
+    if (typeof note === 'string' && note.trim()) return true;
+    return hasWeaveChanges(d.weave, weave) || (isWeaveValue(weave) && isUnfittedReweave(d.roundDidNotRun));
   }
 
   /** Whether the director's version differs from the weave shown in anything, as typed, answers included. */
@@ -1718,22 +1746,23 @@
   /**
    * One of the meeting's payloads, 4.5's (lib/meeting.js meetingResume):
    * - approve: `{meeting: 'approve', weave, note?}`;
-   * - reweave: `{meeting: 'reweave', weave, note?}`, offered only on a change or a note
-   *   (ruling 5): null when there is neither, answers alone being no change;
+   * - reweave: `{meeting: 'reweave', weave, note?}`, offered only when it has something to
+   *   fit in (reweaveHasSomething, ruling 5): null otherwise, answers alone being no change;
    * - send-back: `{meeting: 'send-back', note, weave?}`, null without a note; the weave
    *   rides along when the director changed it in anything, answers included.
    * The weave goes without its code-owned keys, and the note as typed, when it is not blank.
    *
    * @param {string} action - 'approve', 'reweave' or 'send-back'
-   * @param {*} shown - the weave the meeting showed (data.weave)
+   * @param {Object} data - the stop's payload: the weave it showed and a round that did not run
    * @param {Object} weave - the weave as the director left it
    * @param {string} note - the meeting's note box
    * @returns {Object|null}
    */
-  function meetingPayload(action, shown, weave, note) {
+  function meetingPayload(action, data, weave, note) {
     if (MEETING_ACTIONS.indexOf(action) === -1) {
       throw new Error('meetingPayload: the story meeting takes approve, reweave or send-back, not ' + String(action));
     }
+    var shown = isPlainObject(data) ? data.weave : null;
     var typed = typeof note === 'string' ? note : '';
     var hasNote = typed.trim().length > 0;
     var left = isPlainObject(weave) ? withoutCodeOwned(weave) : null;
@@ -1743,20 +1772,21 @@
       if (left && weaveDiffers(shown, left)) back.weave = left;
       return back;
     }
-    if (action === 'reweave' && !hasNote && !hasWeaveChanges(shown, left)) return null;
+    if (action === 'reweave' && !reweaveHasSomething(data, left, typed)) return null;
     var payload = { meeting: action, weave: left };
     if (hasNote) payload.note = typed;
     return payload;
   }
 
   /**
-   * The meeting's three buttons: Approve; Reweave, offered while the director has changed
-   * the weave or written a note, and only then (ruling 5); Send back, on its note, in two
-   * clicks (sendBackButton).
+   * The meeting's three buttons: Approve; Reweave, offered while it has something to fit in,
+   * and only then (reweaveHasSomething, ruling 5); Send back, on its note, in two clicks
+   * (sendBackButton).
+   *
+   * @param {Object} data - the stop's payload: the weave it showed and a round that did not run
    */
-  function meetingButtons(shown, weave, note, sendBackArmed) {
-    var hasNote = typeof note === 'string' && note.trim().length > 0;
-    var canReweave = hasNote || hasWeaveChanges(shown, weave);
+  function meetingButtons(data, weave, note, sendBackArmed) {
+    var canReweave = reweaveHasSomething(data, weave, note);
     return {
       approve: { label: 'Approve', ariaLabel: 'Approve the weave as you left it, with your note' },
       reweave: {
@@ -1907,14 +1937,21 @@
     return where + ': your "' + director + '" became "' + became + '" (' + by + ').' + why;
   }
 
-  /** The one line for a round whose rework timed out (lib/meeting.js roundDidNotRunOf). */
+  /**
+   * The one line for a round whose rework timed out (lib/meeting.js roundDidNotRunOf), which
+   * says how to retry with what the buttons offer: a reweave with no note left its changes in
+   * the weave, so Reweave retries it as it stands (isUnfittedReweave); a round that carried a
+   * note takes it again from the box, so the line gives it back word for word.
+   */
   function didNotRunLine(round) {
     if (!isPlainObject(round)) return '';
     var kind = round.round === 'send-back' ? 'send-back' : 'reweave';
-    var line = 'Your ' + kind + ' did not run: the writer timed out, and the weave is as you left it.'
-      + (kind === 'reweave' ? ' Reweave again to retry.' : '');
+    var line = 'Your ' + kind + ' did not run: the writer timed out, and the weave is as you left it.';
+    if (isUnfittedReweave(round)) return line + ' Reweave again to retry.';
+    var action = kind === 'reweave' ? 'reweave' : 'send the weave back';
     var note = asString(round.note).trim();
-    return note ? line + ' Your note was: "' + note + '"' : line;
+    if (!note) return line + ' To retry, write a note and ' + action + '.';
+    return line + ' To retry, write your note in the box again and ' + action + '. Your note was: "' + note + '"';
   }
 
   /**

@@ -35,6 +35,13 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
     expect(src).not.toMatch(/selectedArcs|outlineGuidance|arcFeedback|arcReviewPayload/);
   });
 
+  // Fix round 1, finding 1: whether a reweave has something to fit in reads a round that did
+  // not run, which only the stop's payload carries.
+  it('hands the buttons and the payloads the stop\'s payload, not the weave alone', () => {
+    expect(src).toContain('ViewLogic.meetingButtons(data, draft, note, sendBackArmed)');
+    expect(src).toContain('ViewLogic.meetingPayload(action, data, draft, note)');
+  });
+
   it('edits the weave only through the view logic\'s operations: the four fields, a role, an added thread, a strike, an answer', () => {
     ['setMeetingField(', 'setThreadRole(', 'addMeetingThread(', 'removeMeetingThread(', 'setConnectionStruck(', 'setQuestionAnswer('].forEach((op) => {
       expect(count(src, `ViewLogic.${op}`)).toBe(1);
@@ -97,7 +104,7 @@ describe('4.8: app.js\'s fallback payload for the meeting follows 4.5\'s', () =>
   const src = read('app.js');
 
   it('approves with the weave the meeting showed, through the view logic', () => {
-    expect(src).toContain("'arc-selection': meetingPayload('approve', state.checkpointData.weave, meetingWeaveOf(state.checkpointData.weave), '')");
+    expect(src).toContain("'arc-selection': meetingPayload('approve', state.checkpointData, meetingWeaveOf(state.checkpointData.weave), '')");
     expect(src).toMatch(/^const \{ noteSlotKey, meetingPayload, meetingWeaveOf \} = window\.Console\.checkpointViewLogic;$/m);
     expect(src).not.toMatch(/selectedArcs/);
   });

@@ -10,7 +10,7 @@ const ViewLogic = require('../checkpoint-view-logic');
 const { computeResetKey } = require('../outline-edit-logic');
 const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
 const {
-  meetingCheckpointData, directorWeaveProblems, DIRECTOR_WEAVE_SCHEMA, MEETING_ACTIONS
+  meetingCheckpointData, meetingResume, directorWeaveProblems, DIRECTOR_WEAVE_SCHEMA, MEETING_ACTIONS
 } = require('../../lib/meeting');
 const weaveLib = require('../../lib/weave');
 const { WEAVE_ANSWER_KEY, WEAVE_QUESTION_KINDS } = require('../../lib/writer-questions');
@@ -325,45 +325,109 @@ describe('4.8: the director\'s changes at the meeting, each as typed', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('4.8: the meeting\'s payloads are 4.5\'s', () => {
-  const shown = () => weaveLib.withFactCheckMark(clone(WEAVE), MARK);
-  const untouched = () => meetingWeaveOf(shown());
+  // The payloads and the buttons read the stop's payload: the weave it showed, and a round
+  // that did not run (fix round 1, finding 1).
+  const data = () => payloadOf(stateAt());
+  const untouched = () => meetingWeaveOf(data().weave);
   const answeredOnly = () => setQuestionAnswer(untouched(), 0, 'Sarah ran the bar.');
   const reroled = () => setThreadRole(untouched(), 2, 'mirrors-it');
 
   test('approve carries the weave as the director left it, without the code-owned keys, and a note only as typed', () => {
-    expect(meetingPayload('approve', shown(), untouched(), '')).toEqual({ meeting: 'approve', weave: clone(WEAVE) });
-    expect(meetingPayload('approve', shown(), untouched(), '   ')).toEqual({ meeting: 'approve', weave: clone(WEAVE) });
-    expect(meetingPayload('approve', shown(), reroled(), ' Lead with the vote. ')).toEqual({ meeting: 'approve', weave: reroled(), note: ' Lead with the vote. ' });
+    expect(meetingPayload('approve', data(), untouched(), '')).toEqual({ meeting: 'approve', weave: clone(WEAVE) });
+    expect(meetingPayload('approve', data(), untouched(), '   ')).toEqual({ meeting: 'approve', weave: clone(WEAVE) });
+    expect(meetingPayload('approve', data(), reroled(), ' Lead with the vote. ')).toEqual({ meeting: 'approve', weave: reroled(), note: ' Lead with the vote. ' });
   });
 
   test('a reweave carries the weave and its note; with no change and no note there is none to send, and answers alone are no change', () => {
-    expect(meetingPayload('reweave', shown(), reroled(), '')).toEqual({ meeting: 'reweave', weave: reroled() });
-    expect(meetingPayload('reweave', shown(), untouched(), 'Make the sale the main thread.')).toEqual({ meeting: 'reweave', weave: clone(WEAVE), note: 'Make the sale the main thread.' });
-    expect(meetingPayload('reweave', shown(), untouched(), '')).toBeNull();
-    expect(meetingPayload('reweave', shown(), answeredOnly(), '  ')).toBeNull();
+    expect(meetingPayload('reweave', data(), reroled(), '')).toEqual({ meeting: 'reweave', weave: reroled() });
+    expect(meetingPayload('reweave', data(), untouched(), 'Make the sale the main thread.')).toEqual({ meeting: 'reweave', weave: clone(WEAVE), note: 'Make the sale the main thread.' });
+    expect(meetingPayload('reweave', data(), untouched(), '')).toBeNull();
+    expect(meetingPayload('reweave', data(), answeredOnly(), '  ')).toBeNull();
   });
 
   test('a send-back carries its note, and the weave only when the director changed it, answers included', () => {
-    expect(meetingPayload('send-back', shown(), untouched(), 'Rethink the money thread.')).toEqual({ meeting: 'send-back', note: 'Rethink the money thread.' });
-    expect(meetingPayload('send-back', shown(), answeredOnly(), 'Rethink it.')).toEqual({ meeting: 'send-back', note: 'Rethink it.', weave: answeredOnly() });
-    expect(meetingPayload('send-back', shown(), reroled(), '')).toBeNull();
+    expect(meetingPayload('send-back', data(), untouched(), 'Rethink the money thread.')).toEqual({ meeting: 'send-back', note: 'Rethink the money thread.' });
+    expect(meetingPayload('send-back', data(), answeredOnly(), 'Rethink it.')).toEqual({ meeting: 'send-back', note: 'Rethink it.', weave: answeredOnly() });
+    expect(meetingPayload('send-back', data(), reroled(), '')).toBeNull();
   });
 
   test('an action the meeting does not take throws', () => {
-    expect(() => meetingPayload('select', shown(), untouched(), '')).toThrow(/approve, reweave or send-back/);
+    expect(() => meetingPayload('select', data(), untouched(), '')).toThrow(/approve, reweave or send-back/);
   });
 
   test('the buttons: Approve, Reweave offered only on a change or a note, Send back on its note in two clicks', () => {
-    const idle = meetingButtons(shown(), untouched(), '', false);
+    const idle = meetingButtons(data(), untouched(), '', false);
     expect(idle.approve.label).toBe('Approve');
     expect(idle.reweave).toMatchObject({ label: 'Reweave', disabled: true });
     expect(idle.reweave.hint).toMatch(/change the weave or write a note/);
     expect(idle.sendBack).toMatchObject({ label: 'Send back', disabled: true });
-    expect(meetingButtons(shown(), answeredOnly(), '', false).reweave.disabled).toBe(true);
-    expect(meetingButtons(shown(), reroled(), '', false).reweave).toMatchObject({ disabled: false, hint: '' });
-    expect(meetingButtons(shown(), untouched(), 'A note.', false).reweave.disabled).toBe(false);
-    expect(meetingButtons(shown(), untouched(), 'A note.', false).sendBack).toMatchObject({ label: 'Send back', disabled: false });
-    expect(meetingButtons(shown(), untouched(), 'A note.', true).sendBack).toMatchObject({ label: 'Confirm send back, starts a rework', armed: true });
+    expect(meetingButtons(data(), answeredOnly(), '', false).reweave.disabled).toBe(true);
+    expect(meetingButtons(data(), reroled(), '', false).reweave).toMatchObject({ disabled: false, hint: '' });
+    expect(meetingButtons(data(), untouched(), 'A note.', false).reweave.disabled).toBe(false);
+    expect(meetingButtons(data(), untouched(), 'A note.', false).sendBack).toMatchObject({ label: 'Send back', disabled: false });
+    expect(meetingButtons(data(), untouched(), 'A note.', true).sendBack).toMatchObject({ label: 'Confirm send back, starts a rework', armed: true });
+  });
+});
+
+// Fix round 1, finding 1. A director's round whose rework times out reopens the meeting on
+// the director's own version: lib/meeting.js meetingResume stored it before the rework, and
+// reviseArcs gives the round back. So the weave shown already holds the changes the round
+// carried, still to fit in. The round's line says how to retry, and the buttons offer
+// exactly that, with nothing new typed when the round carried no note.
+describe('4.8 fix round 1: a round that did not run says how to retry, and the buttons offer it', () => {
+  /** The state a director's round leaves when its rework times out (reviseArcs' timeout path). */
+  function reopenedAfter(payload, before = stateAt()) {
+    const taken = meetingResume(payload, before);
+    expect(taken.error).toBeNull();
+    return {
+      ...before,
+      ...taken.stateUpdates,
+      _meetingRound: null,
+      _arcFeedback: null,
+      _arcReworkTimeout: { consecutive: 1, attempt: 0, round: taken.stateUpdates._meetingRound, note: taken.stateUpdates._arcFeedback, at: '2026-10-03T22:00:00.000Z' },
+      humanArcRevisionCount: before.humanArcRevisionCount
+    };
+  }
+
+  test('a reweave with no note: the meeting reopens on its changes, Reweave is offered with nothing new typed, and the retry is a payload the gate takes', () => {
+    const first = payloadOf(stateAt());
+    const reopened = reopenedAfter(meetingPayload('reweave', first, setThreadRole(meetingDraftOf(first, undefined), 2, 'mirrors-it'), ''));
+    const data = payloadOf(reopened);
+    const draft = meetingDraftOf(data, pendingEditsAfterCheckpoint({}, 'arc-selection', data)['arc-selection']);
+    const view = meetingView(data, draft);
+    expect(view.threads[2].roleLabel).toBe('Mirrors it');
+    expect(view.didNotRun).toBe('Your reweave did not run: the writer timed out, and the weave is as you left it. Reweave again to retry.');
+    expect(meetingButtons(data, draft, '', false).reweave).toMatchObject({ disabled: false, hint: '' });
+
+    const retry = meetingPayload('reweave', data, draft, '');
+    expect(retry).toEqual({ meeting: 'reweave', weave: draft });
+    const taken = meetingResume(retry, reopened);
+    expect(taken.error).toBeNull();
+    expect(taken.resume).toEqual({ approved: false, round: 'reweave' });
+    expect(taken.stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].role']);
+  });
+
+  test('a reweave with a note: the line gives the note back to write again, and Reweave comes on once it is written', () => {
+    const first = payloadOf(stateAt());
+    const reopened = reopenedAfter(meetingPayload('reweave', first, meetingDraftOf(first, undefined), 'Make the sale the main thread.'));
+    const data = payloadOf(reopened);
+    const draft = meetingDraftOf(data, undefined);
+    expect(meetingView(data, draft).didNotRun).toBe('Your reweave did not run: the writer timed out, and the weave is as you left it. To retry, write your note in the box again and reweave. Your note was: "Make the sale the main thread."');
+    expect(meetingButtons(data, draft, '', false).reweave.disabled).toBe(true);
+    expect(meetingPayload('reweave', data, draft, '')).toBeNull();
+    expect(meetingButtons(data, draft, 'Make the sale the main thread.', false).reweave.disabled).toBe(false);
+  });
+
+  test('a send-back: the line gives the note back to write again, and Send back comes on once it is written', () => {
+    const first = payloadOf(stateAt());
+    const reopened = reopenedAfter(meetingPayload('send-back', first, meetingDraftOf(first, undefined), 'Rethink the money thread.'));
+    const data = payloadOf(reopened);
+    const draft = meetingDraftOf(data, undefined);
+    expect(meetingView(data, draft).didNotRun).toBe('Your send-back did not run: the writer timed out, and the weave is as you left it. To retry, write your note in the box again and send the weave back. Your note was: "Rethink the money thread."');
+    const idle = meetingButtons(data, draft, '', false);
+    expect(idle.sendBack.disabled).toBe(true);
+    expect(idle.reweave.disabled).toBe(true);
+    expect(meetingButtons(data, draft, 'Rethink the money thread.', false).sendBack.disabled).toBe(false);
   });
 });
 
@@ -608,7 +672,7 @@ describe('4.8: after a reweave, a send-back, and a reweave that did not run', ()
   test('a send-back that did not run names its note, so the director can send it again', () => {
     const data = payloadOf(stateAt({ _arcReworkTimeout: { consecutive: 1, attempt: 0, round: 'send-back', note: 'Rethink the money thread.', at: null } }));
     expect(meetingView(data, meetingDraftOf(data, undefined)).didNotRun)
-      .toBe('Your send-back did not run: the writer timed out, and the weave is as you left it. Your note was: "Rethink the money thread."');
+      .toBe('Your send-back did not run: the writer timed out, and the weave is as you left it. To retry, write your note in the box again and send the weave back. Your note was: "Rethink the money thread."');
   });
 });
 

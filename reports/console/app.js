@@ -651,7 +651,7 @@ function App() {
                       'pre-curation': { preCuration: true },
                       'evidence-and-photos': { evidenceBundle: true },
                       // Task 4.8: the story meeting's approve, 4.5's payload, with the weave as shown.
-                      'arc-selection': meetingPayload('approve', state.checkpointData.weave, meetingWeaveOf(state.checkpointData.weave), ''),
+                      'arc-selection': meetingPayload('approve', state.checkpointData, meetingWeaveOf(state.checkpointData.weave), ''),
                       // M6: if Photos.js fails to register, the fallback must still
                       // post a shape the server accepts at this gate.
                       'photos': { photosPath: state.checkpointData.defaultDir || '' },

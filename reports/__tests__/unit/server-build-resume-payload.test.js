@@ -1318,6 +1318,7 @@ describe('4.6: the map through buildResumePayload', () => {
 describe('4.8: the meeting\'s payload builders through buildResumePayload', () => {
   const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
   const { withFactCheckMark } = require('../../lib/weave');
+  const { meetingCheckpointData } = require('../../lib/meeting');
   const {
     meetingWeaveOf, meetingPayload, setMeetingField, setThreadRole, addMeetingThread, setConnectionStruck, setQuestionAnswer
   } = require('../../console/checkpoint-view-logic');
@@ -1329,6 +1330,8 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     directorGateNotes: []
   });
   const take = (payload, state = atMeeting()) => buildResumePayload(payload, state, 'journalist', 'arc-selection');
+  /** The stop's payload at a state, which the console's builders read (server.js getCheckpointData's arm). */
+  const dataOf = (state) => meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 });
 
   /** A role changed, a thread added, a connection struck, a question answered and the story edited, each as typed. */
   const changed = (shown) => {
@@ -1343,7 +1346,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
 
   test('approve: the director\'s weave is stored as typed, each change is an edit, and the note joins as an approval note', () => {
     const state = atMeeting();
-    const { resume, stateUpdates, error } = take(meetingPayload('approve', state.weave, changed(state.weave), 'Lead with the vote.'), state);
+    const { resume, stateUpdates, error } = take(meetingPayload('approve', dataOf(state), changed(state.weave), 'Lead with the vote.'), state);
     expect(error).toBeNull();
     expect(resume).toEqual({ approved: true });
     expect(stateUpdates.weave.story).toBe('The room named an overdose; the ledger names a sale. ');
@@ -1356,7 +1359,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
 
   test('approve untouched: the weave as the meeting showed it, with no edit', () => {
     const state = atMeeting();
-    const { stateUpdates, error } = take(meetingPayload('approve', state.weave, meetingWeaveOf(state.weave), ''), state);
+    const { stateUpdates, error } = take(meetingPayload('approve', dataOf(state), meetingWeaveOf(state.weave), ''), state);
     expect(error).toBeNull();
     expect(stateUpdates._weaveHandEdits).toBeNull();
     expect(stateUpdates.directorGateNotes).toBeUndefined();
@@ -1364,7 +1367,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
 
   test('a reweave with a change and no note is the director\'s round, marked', () => {
     const state = atMeeting();
-    const payload = meetingPayload('reweave', state.weave, setThreadRole(meetingWeaveOf(state.weave), 4, 'grounds-it'), '');
+    const payload = meetingPayload('reweave', dataOf(state), setThreadRole(meetingWeaveOf(state.weave), 4, 'grounds-it'), '');
     const { resume, stateUpdates, error } = take(payload, state);
     expect(error).toBeNull();
     expect(resume).toEqual({ approved: false, round: 'reweave' });
@@ -1372,21 +1375,42 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t5].role']);
   });
 
+  // Fix round 1, finding 1: a reweave whose rework timed out reopens the meeting on the
+  // director's version (reviseArcs' timeout path), so its changes are in the weave shown. The
+  // console offers Reweave again with nothing new typed, and the gate takes that retry,
+  // carrying the changes as the director's standing edits.
+  test('the retry of a reweave that did not run, sent with nothing new typed, is a payload the gate takes', () => {
+    const state = atMeeting();
+    const first = take(meetingPayload('reweave', dataOf(state), setThreadRole(meetingWeaveOf(state.weave), 4, 'grounds-it'), ''), state);
+    expect(first.error).toBeNull();
+    const reopened = {
+      ...state, ...first.stateUpdates, _meetingRound: null, _arcFeedback: null,
+      _arcReworkTimeout: { consecutive: 1, attempt: 0, round: 'reweave', note: null, at: 't' }
+    };
+    const data = dataOf(reopened);
+    const retry = meetingPayload('reweave', data, meetingWeaveOf(data.weave), '');
+    expect(retry).not.toBeNull();
+    const { resume, stateUpdates, error } = take(retry, reopened);
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: false, round: 'reweave' });
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t5].role']);
+  });
+
   test('a send-back with only a note leaves the weave as shown; one with an answer stores the answer', () => {
     const state = atMeeting();
-    const plain = take(meetingPayload('send-back', state.weave, meetingWeaveOf(state.weave), 'Rethink the money thread.'), state);
+    const plain = take(meetingPayload('send-back', dataOf(state), meetingWeaveOf(state.weave), 'Rethink the money thread.'), state);
     expect(plain.error).toBeNull();
     expect(plain.resume).toEqual({ approved: false, round: 'send-back', feedback: 'Rethink the money thread.' });
     expect(plain.stateUpdates.weave).toEqual(state.weave);
 
-    const answered = take(meetingPayload('send-back', state.weave, setQuestionAnswer(meetingWeaveOf(state.weave), 0, 'Sarah ran the bar.'), 'Rethink it.'), atMeeting());
+    const answered = take(meetingPayload('send-back', dataOf(state), setQuestionAnswer(meetingWeaveOf(state.weave), 0, 'Sarah ran the bar.'), 'Rethink it.'), atMeeting());
     expect(answered.error).toBeNull();
     expect(answered.stateUpdates.weave.questions[0].answer).toBe('Sarah ran the bar.');
   });
 
   test('app.js\'s fallback approve, built the same way, is the payload the gate takes', () => {
     const state = atMeeting();
-    const { error, resume } = take(meetingPayload('approve', state.weave, meetingWeaveOf(state.weave), ''), state);
+    const { error, resume } = take(meetingPayload('approve', dataOf(state), meetingWeaveOf(state.weave), ''), state);
     expect(error).toBeNull();
     expect(resume.approved).toBe(true);
   });

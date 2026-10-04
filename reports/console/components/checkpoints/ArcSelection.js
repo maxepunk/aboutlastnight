@@ -51,7 +51,9 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
 
   const shown = data && data.weave;
   const view = ViewLogic.meetingView(data, draft);
-  const buttons = ViewLogic.meetingButtons(shown, draft, note, sendBackArmed);
+  // The buttons and the payloads read the stop's payload: the weave it showed, and a round
+  // that did not run, whose changes a reweave still has to fit in.
+  const buttons = ViewLogic.meetingButtons(data, draft, note, sendBackArmed);
   const standing = ViewLogic.meetingStandingNotes(data && data.directorGateNotes, CHECKPOINT_LABELS);
 
   /** Every change: on screen, and in the meeting's pending slot under the version it was made on. */
@@ -90,7 +92,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
       setSendBackArmed(false);
       return;
     }
-    const payload = ViewLogic.meetingPayload(action, shown, draft, note);
+    const payload = ViewLogic.meetingPayload(action, data, draft, note);
     if (!payload) return;
     keep(draft, note);
     if (action === 'approve') onApprove(payload);
