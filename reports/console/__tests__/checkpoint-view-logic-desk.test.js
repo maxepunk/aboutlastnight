@@ -486,7 +486,10 @@ describe("4.10: the desk's copies of the server's rules are held to the server's
     'T5: in "follow the money" the sums disagree.',
     'T5: under "Money-and where it went" the figure is wrong.',
     'T5: "Follow the Money ... and then the vote" runs two passages together.',
-    'T5: the moneyTruth criterion failed.'
+    'T5: the moneyTruth criterion failed.',
+    // 4.10b: an accented letter inside a word. "naïve plan" is two words to the server, which
+    // reads any letter; a letter test that reads only A to Z splits "naïve" and counts three.
+    'T1: "naïve plan" and "résumé gap here" quote the page.'
   ];
 
   /** A text as the guard and the desk both look for a quote in it: grounding's reading, in lower case. */
