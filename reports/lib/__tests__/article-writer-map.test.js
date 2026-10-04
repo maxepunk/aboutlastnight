@@ -123,10 +123,12 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
     expect(instruction).not.toMatch(/the-story|follow-the-money|whats-missing/);
   });
 
-  it("asks for the map's headline and deck, and its top photo as the hero", async () => {
+  // Brief 4.7c: the instruction's headline line defers to the task's, which gives the
+  // director's own headline and deck first and the map's otherwise.
+  it("asks for the headline and deck the task gives, and the map's top photo as the hero", async () => {
     const instruction = block((await writerPrompt(articleState())).user, 'GENERATION_INSTRUCTION');
     expect(instruction).toContain('"heroImage": {"filename": "hero.jpg", "caption": "..."}');
-    expect(instruction).toContain('"headline": {"main": "<the map\'s headline>", "kicker": "...", "deck": "<the map\'s deck>"}');
+    expect(instruction).toContain('"headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them');
   });
 
   it('reads no arc-stop guidance and no <SHOULD_CONSIDER>, even from a stored state that still holds the old channel', async () => {
@@ -167,5 +169,91 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
     const builder = new PromptBuilder({ loadPhasePrompts: async () => ({}), validate: async () => ({ valid: true, missing: [] }) }, 'journalist', {});
     await expect(builder.buildArticlePrompt('', clone(MAP))).rejects.toThrow(/settled weave/);
     await expect(builder.buildArticlePrompt(settledWeaveOf(articleState()), null)).rejects.toThrow(/story map/);
+  });
+});
+
+// Brief 4.7c (4.7b's minor 1): the hero comes from one source, the map as the article reads
+// it (topPhotoOf(articleMapOf(state))). 4.6's invariant writes `heroImage` equal to the map's
+// top photo, so in production the two agree; a state where they differ shows which one each
+// reader names.
+describe('4.7c: the hero comes from one source, the map as the article reads it', () => {
+  const { topPhotoOf } = require('../map');
+  const { _testing: { buildEvaluationUserPrompt } } = require('../workflow/nodes/evaluator-nodes');
+  /** The stored hero is p2.jpg; the map's top photo is hero.jpg. */
+  const differing = (overrides = {}) => articleState({ heroImage: 'p2.jpg', ...overrides });
+
+  it("PHOTOS, the instruction and the stamp name the map's top photo, not the stored hero", async () => {
+    const sdk = recordingSdk(PREVIOUS_BUNDLE);
+    const update = await generateContentBundle(differing(), cfg(sdk));
+    const user = sdk.mock.calls[0][0].prompt;
+    const photos = block(user, 'DATA_CONTEXT');
+    expect(photos).toMatch(/^1\. \[hero image\] hero\.jpg/m);
+    expect(photos).not.toMatch(/\[hero image\] p2\.jpg/);
+    expect(photos).toMatch(/^2\. p2\.jpg/m);
+    expect(block(user, 'GENERATION_INSTRUCTION')).toContain('"heroImage": {"filename": "hero.jpg", "caption": "..."}');
+    expect(update.contentBundle.heroImage.filename).toBe('hero.jpg');
+  });
+
+  it("the judge's PHOTOS, built from the writer's inputs, names the map's top photo too", () => {
+    const prompt = buildEvaluationUserPrompt('article', differing({ contentBundle: clone(PREVIOUS_BUNDLE) }), { factCheck: null });
+    const photos = prompt.slice(prompt.indexOf('\nPHOTOS ('), prompt.indexOf('<SETTLED_WEAVE>'));
+    expect(photos).toMatch(/^1\. \[hero image\] hero\.jpg/m);
+    expect(photos).not.toMatch(/\[hero image\] p2\.jpg/);
+  });
+
+  it('articleWriterInputs marks as the hero the top photo of the map it passes', () => {
+    const inputs = articleWriterInputs(differing());
+    const { photos } = inputs[inputs.length - 1];
+    expect(photos.filter((photo) => photo.hero).map((photo) => photo.filename)).toEqual([topPhotoOf(inputs[1])]);
+    expect(topPhotoOf(inputs[1])).toBe('hero.jpg');
+  });
+
+  it('a map with no top photo gives no hero, whatever the stored hero', () => {
+    const map = clone(MAP);
+    delete map.topPhoto;
+    const inputs = articleWriterInputs(differing({ outline: map }));
+    expect(inputs[inputs.length - 1].photos.filter((photo) => photo.hero)).toEqual([]);
+  });
+});
+
+// Brief 4.7c (4.7b's minor 2): the headline and the deck hold the director's words. The
+// rework carries its writer's sections word for word, so the writer's task and its
+// instruction are worded to stand beside a headline the director edited at the desk.
+describe("4.7c: the headline and the deck hold the director's words", () => {
+  const { standingAfterSendBack } = require('../hand-edit-diff');
+  const DESK = 'The Director Rewrote This Headline at the Desk';
+
+  /** A send-back rework, the director's desk headline standing in place of the map's. */
+  async function sendBackPrompt() {
+    const shown = { ...clone(PREVIOUS_BUNDLE), headline: { main: MAP.headline, kicker: 'NovaNews', deck: MAP.deck } };
+    const sentBack = { ...clone(shown), headline: { ...shown.headline, main: DESK } };
+    const sdk = recordingSdk(sentBack);
+    await reviseContentBundle(articleState({
+      _previousContentBundle: sentBack, articleRevisionCount: 0, humanArticleRevisionCount: 1,
+      _articleFeedback: 'Move the photos closer to their beats.',
+      _articleHandEdits: standingAfterSendBack(null, shown, sentBack, 'bundle')
+    }), cfg(sdk));
+    return sdk.mock.calls[0][0].prompt;
+  }
+
+  it("a send-back rework whose desk headline differs from the map's asks for nothing that contradicts it", async () => {
+    const prompt = await sendBackPrompt();
+    expect(block(prompt, 'HAND_EDITS')).toContain(`E1 (headline, main): "${DESK}"`);
+    // The task's line and the instruction's line on the headline: the director's own first,
+    // the map's otherwise; and no line asks for the map's headline or deck alone.
+    const lines = prompt.split('\n');
+    expect(lines.filter((line) => line.startsWith('- the headline and the deck:'))).toEqual([
+      "- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;"
+    ]);
+    expect(lines.filter((line) => line.startsWith('4. "headline"'))).toEqual([
+      '4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them, and your own kicker.'
+    ]);
+    expect(prompt).not.toMatch(/the map's headline|the map's deck/);
+  });
+
+  it("the task names the director's own headline and deck first, then the map's, and the instruction defers to the task", async () => {
+    const { user } = await writerPrompt(articleState());
+    expect(user).toContain("- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;");
+    expect(block(user, 'GENERATION_INSTRUCTION')).toContain('4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them, and your own kicker.');
   });
 });

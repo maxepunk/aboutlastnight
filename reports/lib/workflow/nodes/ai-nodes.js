@@ -1388,21 +1388,26 @@ function articleMapOf(state) {
  * judge's PHOTOS is built from this same list (evaluator-nodes.js
  * renderArticleJudgePhotos), which reads the options as the last argument.
  *
- * T13 (3.9 fix round 1): an excluded photo never appears. A stored hero the director
- * excluded is no hero. The 4b fix batch: which photos the director excluded is the one
- * rule's (isPhotoExcluded, which buildAvailablePhotos and the hero entry read too).
+ * T13 (3.9 fix round 1): an excluded photo never appears. A hero the director excluded
+ * is no hero. The 4b fix batch: which photos the director excluded is the one rule's
+ * (isPhotoExcluded, which articleMapOf, buildAvailablePhotos and the hero entry read too).
  *
  * Phase 4 (brief 4.6; R5): no arc packages; the article writer reads the record whole.
- * The hero is the map's top photo, which code writes to `heroImage` at the map writer's
- * return and at the map's approve (R7). Brief 4.7b (R1): the parked detective's stored hero
- * went with its article writer.
+ * Brief 4.7b (R1): the parked detective's stored hero went with its article writer.
+ *
+ * Brief 4.7c (R7): the hero is the map's top photo, read from the map these inputs pass
+ * (topPhotoOf on articleMapOf's copy, so a top photo the director has left out since is no
+ * hero): the one reading the writer's PHOTOS, its instruction (prompt-builder.js), the stamp
+ * (stampFromMap) and the judge's PHOTOS (renderArticleJudgePhotos) share. The stored
+ * `heroImage` is the map's writer's and the map's stop's to write.
  *
  * @param {Object} state
  * @returns {Array} [settledWeave, map, shellAccounts, sessionFacts, directorNotes,
  *   narrativeTensions, options]
  */
 function articleWriterInputs(state) {
-  const heroImage = state.heroImage && isPhotoExcluded(state, state.heroImage) ? null : state.heroImage;
+  const map = articleMapOf(state);
+  const heroImage = topPhotoOf(map);
   const hero = heroPhotoEntry(state, heroImage);
   const photos = [
     ...(hero ? [hero] : []),
@@ -1410,7 +1415,7 @@ function articleWriterInputs(state) {
   ];
   return [
     settledWeaveOf(state),
-    articleMapOf(state),
+    map,
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
     buildSessionFacts(state),
@@ -1429,14 +1434,21 @@ function articleWriterInputs(state) {
 }
 
 /**
- * Generate structured ContentBundle from approved outline
+ * The article writer's first draft (phase 4, brief 4.7b; spec 6.1): one call, its prompt
+ * built from the writer's own inputs (articleWriterInputs: the settled weave, the map as
+ * the article reads it, the money, the session facts, the director's notes, the narrative
+ * tensions, and the standing notes, the record, the input-review corrections, the photo
+ * descriptions and the photos it places), its output held to the content bundle's schema.
+ * Code stamps the map's headline, deck and top photo into the draft (stampFromMap; R7). A
+ * thread that already holds a bundle (a resume) passes through with no call.
  *
- * Uses Claude with JSON schema for structured output.
- * Generates the complete article content in JSON format.
- *
- * @param {Object} state - Current state with outline, evidenceBundle
- * @param {Object} config - Graph config with optional configurable.contentBundleSchema
- * @returns {Object} Partial state update with contentBundle, currentPhase
+ * @param {Object} state - the writer's inputs, and the director's standing edits on the map,
+ *   which the stamp reads
+ * @param {Object} config - Graph config: the SDK client, the PromptBuilder and an optional
+ *   configurable.contentBundleSchema
+ * @returns {Object} the stamped draft (contentBundle), the director's lines the stamp
+ *   records as the article stop's standing edits (_articleHandEdits, null when the map
+ *   carries none of them), and currentPhase; currentPhase alone when a bundle is in hand
  */
 async function generateContentBundle(state, config) {
   // Skip if content bundle already exists (resume case or pre-populated)
@@ -1528,10 +1540,18 @@ async function generateContentBundle(state, config) {
  * director edits them at the desk. A line the map writer wrote is stamped and stays the
  * writer's.
  *
+ * Brief 4.7c: a top photo the director removed on the map (a cut at its top photo the map
+ * carries) is recorded as the director's cut of `heroImage`, `before` the hero it removed and
+ * `after` none, ahead of the lines above. A cut is carried while its text is printed nowhere
+ * (lib/hand-edit-diff.js), so the round's report flags the hero when a later automatic pass
+ * brings it back, and code leaves it where the pass put it, as for any cut. A draft that
+ * already prints that photo carries no such cut.
+ *
  * @param {Object} bundle - the writer's first draft
  * @param {Object} state - reads the map, the director's edits on it and the leave-out list
  * @returns {{contentBundle: Object, edits: Object|null}} the stamped draft, and the article
- *   stop's standing edits (null when the director wrote none of the three)
+ *   stop's standing edits (null when the director wrote none of the three and cut no top
+ *   photo)
  */
 function stampFromMap(bundle, state) {
   const map = articleMapOf(state);
@@ -1550,9 +1570,14 @@ function stampFromMap(bundle, state) {
 
   // The director's lines on the map: the map's standing edits at its headline, its deck
   // and its top photo that the map as left carries.
-  const theirs = new Set(carriedEdits(state._outlineHandEdits, state.outline)
-    .filter((edit) => !isCut(edit) && Array.isArray(edit.at) && edit.at.length === 1)
-    .map((edit) => edit.at[0].key));
+  const onMap = carriedEdits(state._outlineHandEdits, state.outline)
+    .filter((edit) => Array.isArray(edit.at) && edit.at.length === 1);
+  const theirs = new Set(onMap.filter((edit) => !isCut(edit)).map((edit) => edit.at[0].key));
+  // Brief 4.7c: each top photo the director cut, as the edit a send-back from a version
+  // whose hero is that photo to one with no hero records: a cut of heroImage.
+  const cutHeroes = onMap
+    .filter((edit) => isCut(edit) && edit.at[0].key === MAP_TOP_PHOTO && edit.before && typeof edit.before.filename === 'string')
+    .reduce((standing, edit) => standingAfterSendBack(standing, { heroImage: { filename: edit.before.filename } }, {}, 'bundle'), null);
   // The draft with the director's lines taken out: the stamp's diff against it records
   // each of them as the director's, with no writer's text before it.
   const without = { ...stamped, headline: { ...stamped.headline } };
@@ -1562,7 +1587,7 @@ function stampFromMap(bundle, state) {
     const { filename: _chosen, ...rest } = stamped.heroImage;
     without.heroImage = rest;
   }
-  return { contentBundle: stamped, edits: standingAfterSendBack(null, without, stamped, 'bundle') };
+  return { contentBundle: stamped, edits: standingAfterSendBack(cutHeroes, without, stamped, 'bundle') };
 }
 
 /**

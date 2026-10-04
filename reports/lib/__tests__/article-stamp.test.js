@@ -132,3 +132,59 @@ describe("4.7b: the stamp puts the map's headline, deck and top photo into the f
     ]);
   });
 });
+
+// Brief 4.7c (4.7b's minor 4): a top photo the director removed on the map (a cut at
+// topPhoto, standingOnMap) is the director's cut of the hero at the article stop, so the
+// report flags a hero that a later automatic pass adds back.
+describe("4.7c: a top photo the director cut on the map is the director's cut of the hero", () => {
+  /** A photo named the way the director names a session's photos. */
+  const CUT = 'aln010126 (1 of 3).jpg';
+  /** The map with its top photo, CUT, removed by the director, and nothing chosen in its place. */
+  const cutMap = (change = () => {}) => {
+    const baseline = clone(MAP);
+    baseline.topPhoto = CUT;
+    const left = clone(baseline);
+    delete left.topPhoto;
+    change(left);
+    return { outline: left, _mapBaseline: baseline, _outlineHandEdits: standingOnMap(null, baseline, left), heroImage: left.topPhoto || null };
+  };
+
+  it('the stamp records it as a cut of heroImage: before, the hero it removed; after, none', async () => {
+    const state = atArticle(cutMap());
+    expect(carriedEdits(state._outlineHandEdits, state.outline)).toEqual([
+      expect.objectContaining({ path: 'topPhoto', before: { filename: CUT }, after: null })
+    ]);
+    const { contentBundle, _articleHandEdits } = await firstDraft(state);
+    expect(contentBundle).not.toHaveProperty('heroImage');
+    expect(_articleHandEdits.edits).toEqual([
+      expect.objectContaining({ id: 'E1', path: 'heroImage', before: { filename: CUT }, after: null })
+    ]);
+    expect(carriedEdits(_articleHandEdits, contentBundle).map((edit) => edit.id)).toEqual(['E1']);
+  });
+
+  it('an automatic pass that brings the hero back is flagged in the report, and left as the pass wrote it', async () => {
+    const state = atArticle(cutMap());
+    const { contentBundle, _articleHandEdits } = await firstDraft(state);
+    const withHero = { ...clone(contentBundle), heroImage: { filename: CUT, caption: 'The room at the start.' } };
+    const update = await reviseContentBundle({
+      ...state, _articleHandEdits, _previousContentBundle: clone(contentBundle), articleRevisionCount: 1
+    }, cfg(recordingSdk(withHero)));
+    expect(update._articleHandEditReport.changed).toEqual([
+      expect.objectContaining({ id: 'E1', cut: true, automatic: true, director: `filename: ${CUT}`, became: CUT, restored: false })
+    ]);
+    expect(update.contentBundle.heroImage.filename).toBe(CUT);
+  });
+
+  it('beside a top photo the director chose in its place: the cut, then the choice', async () => {
+    const { contentBundle, _articleHandEdits } = await firstDraft(atArticle(cutMap((left) => {
+      left.topPhoto = 'p2.jpg';
+      left.sections[1].photos = [];
+    })), { ...clone(WRITERS_DRAFT), heroImage: { filename: 'p2.jpg', caption: 'Alex leans over the ledger.' } });
+    expect(contentBundle.heroImage).toEqual({ filename: 'p2.jpg', caption: 'Alex leans over the ledger.' });
+    expect(_articleHandEdits.edits.map(({ id, path, before, after }) => [id, path, before, after])).toEqual([
+      ['E1', 'heroImage', { filename: CUT }, null],
+      ['E2', 'heroImage.filename', null, 'p2.jpg']
+    ]);
+    expect(carriedEdits(_articleHandEdits, contentBundle).map((edit) => edit.id)).toEqual(['E1', 'E2']);
+  });
+});

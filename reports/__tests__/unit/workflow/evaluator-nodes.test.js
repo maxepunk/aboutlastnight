@@ -2325,9 +2325,10 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       expect(section).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
     });
 
-    it('with no stored hero, the writer and the judge list every kept photo and mark none as the hero', () => {
+    // Brief 4.7c (R7): the hero is the map's top photo, whatever the stored heroImage.
+    it('with no top photo on the map, the writer and the judge list every kept photo and mark none as the hero', () => {
       const state = withKeptPhoto();
-      delete state.heroImage;
+      delete state.outline.topPhoto;
       const inputs = articleWriterInputs(state);
       expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
       expect(userFor('article', state)).not.toContain('[hero image]');

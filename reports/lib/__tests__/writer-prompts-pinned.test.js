@@ -259,10 +259,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   headline, the deck and the top photo from the map. The arc selection's guidance goes
  *   with its last readers (R4), so the fixture's tail is the standing notes alone
  *   (article-journalist 27862 -> 30762). The outline and arc pins do not move.
+ * - Phase 4 (brief 4.7c), the headline and the deck hold the director's words: the task's
+ *   line names the director's own headline and deck first and the map's otherwise, and the
+ *   instruction's headline line defers to the task, so a rework, which carries both word
+ *   for word, never asks for the map's over a desk edit (article-journalist 30762 -> 30883,
+ *   the two lines' own +74 and +47). The hero is the map's top photo, read through
+ *   topPhotoOf; the fixture's stored hero is that photo, so PHOTOS and the hero line do not
+ *   move. The outline and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['62c525f1cbdd8d026f481a24ac11e75766f0307c6d036594f713157042861790', 18299],
-  'article-journalist': ['82721db9c5e525e915e492694794e98f91221e0ad5d1432fb9c6b1168a079cdd', 30762],
+  'article-journalist': ['d6a689a6a49eb424e073fe53cc5b93dda75b18c8b41169778de3c6c8b08e0193', 30883],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
 

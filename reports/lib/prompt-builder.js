@@ -15,7 +15,7 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map writer embeds the map's schema for its theme as its
 // <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
 // writer embeds the schema above; its slots are the theme's.
-const { mapSchemaFor } = require('./map');
+const { mapSchemaFor, topPhotoOf } = require('./map');
 const { getThemeNPCEntries, mapSlotsOf } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -441,12 +441,17 @@ const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s sto
  * The article writer's task (brief 4.7b; spec 6.1; the approved read's section D), right
  * after the settled weave and the map: the reading order, then what the writer writes from
  * the map. It points at the rule items that say how (C16, C2, C4) and restates none of them.
+ *
+ * Brief 4.7c: the article rework carries this task word for word, so each line holds beside
+ * the director's edits at the desk. The headline and the deck are the director's own where
+ * they edited one, which the rework's <HAND_EDITS> lists (the stamp records a line they wrote
+ * on the map the same way), and the map's otherwise.
  */
 const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
 - every beat in the map's sections, and no other; the beats under leftOut stay out of the article, the director's strikes among them;
 - the map's sections in its order, each under its heading, with its beats as C2 (\`<craft-form>\`) sets them out; the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
 - each photo where the map places it, beside its beat, and the map's top photo at the top of the article;
-- the map's headline and deck as written;
+- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;
 - about the map's expected length, as C4 (\`<craft-telling>\`) sets out.`;
 
 class PromptBuilder {
@@ -892,7 +897,9 @@ ${tensions.map(sentence => `- ${sentence}`).join('\n')}
     ].join(', ');
 
     // R7: the map's top photo prints at the top of the article, and code stamps it as the hero.
-    const topPhoto = typeof map.topPhoto === 'string' && map.topPhoto.trim() ? map.topPhoto : null;
+    // Brief 4.7c: read through topPhotoOf on the map these inputs pass, as PHOTOS, the stamp
+    // and the judge read it (ai-nodes.js articleWriterInputs).
+    const topPhoto = topPhotoOf(map);
     const heroLine = topPhoto
       ? `3. "heroImage": {"filename": "${topPhoto}", "caption": "..."}: the map's top photo, printed at the top of the article.`
       : '3. The map has no top photo, so the bundle has no "heroImage".';
@@ -932,7 +939,7 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
      * {"type": "list", "items": ["..."], "ordered": false}
 2. "evidenceCards": the sidebar's entries. Each names a document by its id in "tokenId", with a "headline", a one-line "summary" under 100 characters, and its "significance".
 ${heroLine}
-4. "headline": {"main": "<the map's headline>", "kicker": "...", "deck": "<the map's deck>"}.
+4. "headline": {"main": "...", "kicker": "...", "deck": "..."}: the headline and the deck as the task above gives them, and your own kicker.
 5. "byline": {${byline}}.
 6. "metadata": {"sessionId": "...", "theme": "journalist", "generatedAt": "<an ISO 8601 timestamp>"}. The server stamps these values.
 
