@@ -821,6 +821,15 @@
   // so a second key would append the same sentence twice.
 
   /**
+   * The desk's two actions, the ones reviewPayload builds (task 4.14g): the one list, read by
+   * reviewPayload's guard, by console/unsaved-input-logic.js's held line and by the harness
+   * (scripts/lib/stop-payloads.js STOP_ACTIONS), as the meeting's and the map's are read from
+   * MEETING_ACTIONS and MAP_ACTIONS. The server keeps no copy: its article arm reads
+   * `article: true | false`.
+   */
+  var DESK_ACTIONS = ['approve', 'send-back'];
+
+  /**
    * Both failure modes here are silent by nature, so both are closed (review fix
    * round 1): an unrecognised action used to fall through to the approve branch, so
    * a typo shipped the outline; a send back with a blank note used to build a
@@ -830,12 +839,13 @@
    * @param {object} keys - the four payload keys for the stop
    * @param {object|null} edits - the director's edited object, or null
    * @param {string} note - what the director wrote in the stop's note box
-   * @param {string} action - 'approve' or 'send-back'
+   * @param {string} action - one of DESK_ACTIONS
    * @returns {object|null} the payload, or null for a send back with no note
    */
   function reviewPayload(keys, edits, note, action) {
-    if (action !== 'approve' && action !== 'send-back') {
-      throw new Error("reviewPayload: action must be 'approve' or 'send-back', got " + String(action));
+    if (DESK_ACTIONS.indexOf(action) === -1) {
+      throw new Error('reviewPayload: action must be ' + DESK_ACTIONS.map(function (a) { return "'" + a + "'"; }).join(' or ') +
+        ', got ' + String(action));
     }
     var text = typeof note === 'string' ? note.trim() : '';
     if (action === 'send-back' && !text) return null;
@@ -4003,6 +4013,8 @@
     editReportOf: editReportOf,
     traceView: traceView,
     roundsBanner: roundsBanner,
+    // Task 4.14g: the desk's actions, one list
+    DESK_ACTIONS: DESK_ACTIONS,
     articleReviewPayload: articleReviewPayload,
     sendBackButton: sendBackButton,
     noteSlotKey: noteSlotKey,

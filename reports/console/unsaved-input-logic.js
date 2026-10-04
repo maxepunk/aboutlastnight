@@ -41,7 +41,7 @@
  *     the actions once it holds text. Every other change at the meeting is kept as it is typed.
  * An editor this module cannot name still holds the actions: a new kind of editor is named
  * generically, never dropped. The line names a stop's actions from the list its payload builder
- * takes (checkpoint-view-logic.js MEETING_ACTIONS and MAP_ACTIONS; the desk's two), and a desk
+ * takes (checkpoint-view-logic.js MEETING_ACTIONS, MAP_ACTIONS and DESK_ACTIONS), and a desk
  * section as the desk's move control names it (article-desk-logic.js sectionLabel).
  *
  * MUST NOT reference React, and must not touch `window` at module-evaluation time except the
@@ -78,27 +78,27 @@
   // ── The actions that wait ─────────────────────────────────────────────────
 
   /**
-   * console/checkpoint-view-logic.js, whose MEETING_ACTIONS and MAP_ACTIONS are the meeting's and
-   * the map's actions as their payload builders take them, read when a line is asked for: the
-   * stops load it before they render.
+   * console/checkpoint-view-logic.js, whose MEETING_ACTIONS, MAP_ACTIONS and DESK_ACTIONS are the
+   * meeting's, the map's and the desk's actions as their payload builders take them, read when a
+   * line is asked for: the stops load it before they render.
    */
   function viewLogic() {
     var view = (typeof window !== 'undefined' && window.Console && window.Console.checkpointViewLogic)
       || (typeof require === 'function' ? require('./checkpoint-view-logic') : null);
-    if (!view || !Array.isArray(view.MEETING_ACTIONS) || !Array.isArray(view.MAP_ACTIONS)) {
-      throw new Error('unsaved-input-logic: the meeting\'s and the map\'s actions are console/checkpoint-view-logic.js\'s, which is not loaded');
+    if (!view || !Array.isArray(view.MEETING_ACTIONS) || !Array.isArray(view.MAP_ACTIONS) || !Array.isArray(view.DESK_ACTIONS)) {
+      throw new Error('unsaved-input-logic: the meeting\'s, the map\'s and the desk\'s actions are console/checkpoint-view-logic.js\'s, which is not loaded');
     }
     return view;
   }
 
   /**
-   * Each stop's actions, by their ids. The desk's are the ones articleReviewPayload takes: its
-   * Approve and Send back, and the JSON editor's Save & Approve, which it takes as an approve.
+   * Each stop's actions, by their ids. The JSON editor's Save & Approve is one of the desk's: an
+   * approve that sends the JSON (articleReviewPayload takes it as one).
    */
   var ACTIONS = {
     'arc-selection': function () { return viewLogic().MEETING_ACTIONS; },
     outline: function () { return viewLogic().MAP_ACTIONS; },
-    article: function () { return ['approve', 'send-back']; },
+    article: function () { return viewLogic().DESK_ACTIONS; },
     'article-json': function () { return ['approve']; }
   };
 

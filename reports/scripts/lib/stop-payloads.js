@@ -27,13 +27,13 @@ const View = require('../../console/checkpoint-view-logic');
 
 /**
  * The actions each decision stop takes, by its stop type: the director's --action chooses among
- * them, and --note goes with it. The character-IDs stop takes approve alone and no note, so it
- * is not among them.
+ * them, and --note goes with it. Each is the console's own list (the desk's since task 4.14g).
+ * The character-IDs stop takes approve alone and no note, so it is not among them.
  */
 const STOP_ACTIONS = Object.freeze({
   'arc-selection': View.MEETING_ACTIONS,
   outline: View.MAP_ACTIONS,
-  article: ['approve', 'send-back']
+  article: View.DESK_ACTIONS
 });
 
 /** The stop whose leave-out boxes --leave-out ticks. */

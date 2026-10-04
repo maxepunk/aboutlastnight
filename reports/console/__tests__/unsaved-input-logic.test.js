@@ -248,3 +248,47 @@ describe('4.14d fix round 1, finding 1: the JSON editor\'s Save & Approve waits 
     expect(() => unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: { text: SEED, seed: SEED, seededAt: 2 } })).toThrow(/deskVersion/);
   });
 });
+
+describe('4.14g: the desk\'s actions are one list, checkpoint-view-logic.js DESK_ACTIONS, which its three readers read', () => {
+  // The review of 4.14d (finding 3): the desk's ['approve', 'send-back'] was stated three times, in this
+  // module's line, in reviewPayload's guard and in the harness's STOP_ACTIONS, where the meeting's and
+  // the map's actions are each one exported list.
+  const View = require('../checkpoint-view-logic');
+  const { STOP_ACTIONS } = require('../../scripts/lib/stop-payloads');
+  const OPEN_BLOCK = { type: 'block', sectionIdx: 1, blockIdx: 0 };
+
+  /** Runs `fn` with the desk taking `actions`, then gives the desk its own list back. */
+  function withDeskActions(actions, fn) {
+    const own = View.DESK_ACTIONS.slice();
+    View.DESK_ACTIONS.splice(0, View.DESK_ACTIONS.length, ...actions);
+    try {
+      return fn();
+    } finally {
+      View.DESK_ACTIONS.splice(0, View.DESK_ACTIONS.length, ...own);
+    }
+  }
+
+  it('the console exports the desk\'s two actions, which articleReviewPayload builds', () => {
+    expect(View.DESK_ACTIONS).toEqual(['approve', 'send-back']);
+    expect(View.articleReviewPayload(null, 'Keep the vote.', 'approve')).toEqual({ article: true, articleNote: 'Keep the vote.' });
+    expect(View.articleReviewPayload(null, 'Cut the lede.', 'send-back')).toEqual({ article: false, articleFeedback: 'Cut the lede.' });
+  });
+
+  it('the harness reads the list itself', () => {
+    expect(STOP_ACTIONS.article).toBe(View.DESK_ACTIONS);
+  });
+
+  it('the held line names the actions the list holds', () => {
+    withDeskActions(['approve', 'reweave', 'send-back'], () => {
+      expect(unsavedInputLine('article', { editor: OPEN_BLOCK, bundle: deskBundle() }))
+        .toBe('Before you approve, reweave or send back, save or cancel your edit to the paragraph in "The Story".');
+    });
+  });
+
+  it('reviewPayload\'s guard takes the actions the list holds, and refuses the rest, naming the list', () => {
+    withDeskActions(['approve'], () => {
+      expect(() => View.articleReviewPayload(null, 'Cut the lede.', 'send-back')).toThrow("reviewPayload: action must be 'approve', got send-back");
+      expect(View.articleReviewPayload(null, 'Keep the vote.', 'approve')).toEqual({ article: true, articleNote: 'Keep the vote.' });
+    });
+  });
+});
