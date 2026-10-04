@@ -378,16 +378,12 @@ const PHOTO_CASES = [
   ['a photo placed once under a name every object carries', true, () => { const m = clone(MAP); m.sections[2].photos.push({ filename: 'constructor' }); return [m, clone(MAP)]; }]
 ];
 
-// Brief 4.9, ruling 3: 4.6b adds this rule to the gate in the same run, and the integrator
-// merges 4.6b first. The console refuses a photo the director's changes place more than once
-// now; the gate's side of each case is held as soon as the gate holds the rule.
+// Brief 4.9, ruling 3: 4.6b added this rule to the gate (lib/map.js directorMapProblems), and
+// the console refuses what the gate refuses: each case holds both sides.
 describe('4.9: a photo the director\'s changes place more than once is refused (4.6b\'s rule, ruling 3)', () => {
-  const gateHoldsTheRule = !gateTakes(PHOTO_CASES[0][2]()[0], clone(MAP));
-
   test.each(PHOTO_CASES)('%s', (_name, accepts, build) => {
     const [left, shown] = build();
-    expect(consoleTakes(left, shown)).toBe(accepts);
-    if (gateHoldsTheRule) expect(gateTakes(left, shown)).toBe(accepts);
+    expect({ gate: gateTakes(left, shown), console: consoleTakes(left, shown) }).toEqual({ gate: accepts, console: accepts });
   });
 
   test('the refusal names the photo and says the repeat is the director\'s', () => {

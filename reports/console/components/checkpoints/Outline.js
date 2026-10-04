@@ -540,7 +540,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         value: note,
         rows: 3,
         onChange: function (e) { editNote(e.target.value); },
-        placeholder: 'e.g. Keep the bonus beat in the money section.',
+        placeholder: 'e.g. Move the vote earlier, and keep the ledger beats together.',
         'aria-label': 'Note to the writer, sent with approve or send back'
       }),
       standing.any && React.createElement(CollapsibleSection, { title: standing.title },

@@ -28,7 +28,7 @@ const initialState = {
   llmActivity: null,       // { label, model, startTime, phase, streamText, tokenCount, ttftMs, lastEventAt, error, response } or null
   lastLlmActivity: null,   // Last completed LLM call (with response) for panel display
   // Revision tracking (client-side cache for diff display)
-  revisionCache: { outline: null, article: null },
+  revisionCache: { article: null },
   // Pending edits (survives component unmount during processing) — namespaced by checkpoint type
   pendingEdits: {},
   // Errors

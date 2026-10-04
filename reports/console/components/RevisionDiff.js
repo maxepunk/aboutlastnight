@@ -1,6 +1,6 @@
 /**
  * RevisionDiff Component
- * Shared component for displaying revision diffs in outline/article checkpoints.
+ * The revision diff at the article stop (the map prints its own round, task 4.9).
  * Shows revision number banner, previous feedback, shallow object diff,
  * and escalation warning when at max revisions.
  * Exports to window.Console.RevisionDiff
