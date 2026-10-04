@@ -354,3 +354,28 @@ describe('shouldApplyAttachPoll', () => {
     expect(shouldApplyAttachPoll({ stillProcessing: 1, stillAttached: '091826' })).toBe(false);
   });
 });
+
+// ── 4.8: the theme choice says a parked theme is parked (R1) ───────────────────
+// The server holds the parked themes (server.js PARKED_THEMES) and refuses a session on
+// one at /start; /api/config sends them as `parkedThemes`, theme -> the refusal's message.
+// The start form words its line from them, so a theme unparked later needs no console change.
+describe('4.8: parkedThemeNote', () => {
+  const { parkedThemeNote } = require('../session-start-logic');
+  const PARKED = { detective: 'The detective theme is parked until it has its own files for the story meeting, the map and the article. Start this session with the journalist theme.' };
+
+  it('gives a parked theme the server\'s own line', () => {
+    expect(parkedThemeNote('detective', PARKED)).toBe(PARKED.detective);
+  });
+
+  it('gives a theme that is not parked no line', () => {
+    expect(parkedThemeNote('journalist', PARKED)).toBe('');
+  });
+
+  it('reads no line from a config that has not answered, or from a malformed one', () => {
+    expect(parkedThemeNote('detective', undefined)).toBe('');
+    expect(parkedThemeNote('detective', {})).toBe('');
+    expect(parkedThemeNote('detective', ['detective'])).toBe('');
+    expect(parkedThemeNote('detective', { detective: '   ' })).toBe('');
+    expect(parkedThemeNote('constructor', {})).toBe('');
+  });
+});

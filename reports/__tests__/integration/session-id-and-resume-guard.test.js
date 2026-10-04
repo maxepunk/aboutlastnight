@@ -532,6 +532,23 @@ describe('GET /api/config allowNonstandardSessionId', () => {
 
   it('still does not leak the Notion token', async () => {
     const res = await send('GET', '/api/config');
-    expect(Object.keys(res.body).sort()).toEqual(['allowNonstandardSessionId', 'notionConfigured']);
+    // Task 4.8 adds the parked themes, which the start form's theme choice reads (R1).
+    expect(Object.keys(res.body).sort()).toEqual(['allowNonstandardSessionId', 'notionConfigured', 'parkedThemes']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4.8: the parked themes reach the console (R1; the integrator's ruling 2)
+// ─────────────────────────────────────────────────────────────────────────────
+// server.js PARKED_THEMES is the one list: /start refuses a parked theme with its message,
+// and /api/config sends the same map, so the start form words its line from it and a theme
+// unparked later needs no console change.
+describe('4.8: GET /api/config parkedThemes', () => {
+  it('sends each parked theme with the message /start refuses it with', async () => {
+    const config = await send('GET', '/api/config');
+    expect(Object.keys(config.body.parkedThemes)).toEqual(['detective']);
+    const refused = await send('POST', '/api/session/100326/start', { theme: 'detective', rawSessionInput: {} });
+    expect(refused.status).toBe(400);
+    expect(config.body.parkedThemes.detective).toBe(refused.body.error);
   });
 });

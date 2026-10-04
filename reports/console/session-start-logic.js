@@ -256,6 +256,24 @@
     'article'
   ];
 
+  /**
+   * R1 (task 4.8): the line the theme choice shows for a parked theme, which starts no
+   * session. The server holds the list (server.js PARKED_THEMES) and refuses a parked
+   * theme at /start with this line; GET /api/config sends it as `parkedThemes`, theme ->
+   * line. So the console words nothing of its own, and a theme unparked later needs no
+   * console change.
+   *
+   * @param {string} theme
+   * @param {Object|undefined} parkedThemes - /api/config parkedThemes
+   * @returns {string} the line, or '' for a theme that is not parked
+   */
+  function parkedThemeNote(theme, parkedThemes) {
+    if (!parkedThemes || typeof parkedThemes !== 'object' || Array.isArray(parkedThemes)) return '';
+    if (!Object.prototype.hasOwnProperty.call(parkedThemes, theme)) return '';
+    const line = parkedThemes[theme];
+    return typeof line === 'string' ? line.trim() : '';
+  }
+
   const api = {
     isValidSessionId,
     classifyCheckpointResponse,
@@ -264,6 +282,7 @@
     shouldApplyAttachPoll,
     buildReportLinks,
     completedResultFrom,
+    parkedThemeNote,
     SESSION_ID_PATTERN,
     CHECKPOINT_ORDER
   };

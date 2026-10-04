@@ -1901,7 +1901,10 @@ app.get('/api/config', requireAuth, (req, res) => {
         // The console enforces the same session-ID contract /start does, so it has
         // to know when the opt-out is on — otherwise it would reject a harness id
         // the route would have accepted.
-        allowNonstandardSessionId: process.env.ALLOW_NONSTANDARD_SESSION_ID === 'true'
+        allowNonstandardSessionId: process.env.ALLOW_NONSTANDARD_SESSION_ID === 'true',
+        // R1 (task 4.8): the themes /start refuses, each with the line it refuses them with,
+        // so the start form says a parked theme is parked in the server's own words.
+        parkedThemes: PARKED_THEMES
     });
 });
 

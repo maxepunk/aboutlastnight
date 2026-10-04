@@ -16,7 +16,7 @@ const { FileBrowser } = window.Console;
 // Pure, node-tested (console/__tests__/session-start-logic.test.js). This component
 // is a thin consumer: it does not decide what a valid ID is or what a session state
 // means, it only renders the answer.
-const { isValidSessionId, classifyCheckpointResponse, startFreshDecision, completedResultFrom } =
+const { isValidSessionId, classifyCheckpointResponse, startFreshDecision, completedResultFrom, parkedThemeNote } =
   window.Console.sessionStartLogic;
 
 function SessionStart({ dispatch, theme }) {
@@ -31,6 +31,9 @@ function SessionStart({ dispatch, theme }) {
   // Mirrors the server's ALLOW_NONSTANDARD_SESSION_ID so this screen accepts exactly
   // what POST /start accepts. Defaults to the strict contract until /api/config answers.
   const [allowNonstandardId, setAllowNonstandardId] = React.useState(false);
+  // R1 (task 4.8): the themes the server starts no session on, theme -> its line, from
+  // /api/config's parkedThemes (server.js PARKED_THEMES). Empty until the config answers.
+  const [parkedThemes, setParkedThemes] = React.useState({});
   const [reporterName, setReporterName] = React.useState('');
   const [reportingMode, setReportingMode] = React.useState('on-site');
   const [guestReporterName, setGuestReporterName] = React.useState('');
@@ -44,9 +47,16 @@ function SessionStart({ dispatch, theme }) {
 
   React.useEffect(() => {
     sessionApi.getConfig()
-      .then((cfg) => setAllowNonstandardId(cfg && cfg.allowNonstandardSessionId === true))
+      .then((cfg) => {
+        setAllowNonstandardId(cfg && cfg.allowNonstandardSessionId === true);
+        setParkedThemes((cfg && cfg.parkedThemes) || {});
+      })
       .catch(() => { /* Unreachable config: hold the strict contract. */ });
   }, []);
+
+  // R1: a parked theme's line, from the server's own wording, beside its choice.
+  const detectiveParked = parkedThemeNote('detective', parkedThemes);
+  const journalistParked = parkedThemeNote('journalist', parkedThemes);
 
   // B9 companion: the session ID is the session DATE (MMDDYY, plus one digit for a
   // second session that day), not a label. The follow-up emailer builds every
@@ -316,7 +326,7 @@ function SessionStart({ dispatch, theme }) {
         React.createElement('button', {
           className: 'theme-option' + (theme === 'journalist' ? ' active' : ''),
           onClick: () => dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: 'journalist' }),
-          disabled: loading,
+          disabled: loading || Boolean(journalistParked),
           type: 'button',
           'aria-pressed': theme === 'journalist'
         },
@@ -326,13 +336,17 @@ function SessionStart({ dispatch, theme }) {
         React.createElement('button', {
           className: 'theme-option' + (theme === 'detective' ? ' active' : ''),
           onClick: () => dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: 'detective' }),
-          disabled: loading,
+          disabled: loading || Boolean(detectiveParked),
           type: 'button',
           'aria-pressed': theme === 'detective'
         },
           React.createElement('span', { className: 'theme-option__name' }, 'Detective Case Report'),
           React.createElement('span', { className: 'theme-option__desc' }, 'Official case file by Det. Anondono (~750 words)')
         )
+      ),
+      // R1: a parked theme starts no session; the server's own line says why.
+      [journalistParked, detectiveParked].filter(Boolean).map((line) =>
+        React.createElement('p', { key: line, className: 'text-muted text-xs mt-xs' }, line)
       )
     ),
 

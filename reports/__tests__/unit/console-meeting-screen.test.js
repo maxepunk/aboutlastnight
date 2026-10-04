@@ -103,6 +103,16 @@ describe('4.8: app.js\'s fallback payload for the meeting follows 4.5\'s', () =>
   });
 });
 
+describe('4.8: the theme choice at session start says the detective is parked (R1)', () => {
+  const src = read('components/SessionStart.js');
+
+  it('reads the parked themes from /api/config and words each one\'s line through parkedThemeNote', () => {
+    expect(src).toMatch(/cfg\.parkedThemes/);
+    expect(count(src, 'parkedThemeNote(')).toBeGreaterThanOrEqual(1);
+    expect(src).toMatch(/^const \{ isValidSessionId, classifyCheckpointResponse, startFreshDecision, completedResultFrom, parkedThemeNote \} =$/m);
+  });
+});
+
 describe('4.8: the meeting\'s styles', () => {
   const css = read('console.css');
 
