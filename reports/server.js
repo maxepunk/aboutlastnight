@@ -39,8 +39,6 @@ const { rosterNames } = require('./lib/content-bundle-fact-check');
 const { missingPrintedPhotos } = require('./lib/publish-photos');
 // Brief 4.2: the leave-out box, the list the character-IDs stop's boxes write.
 const { leftOutPhotosOf, listAfterStopChoices, isPlainObject } = require('./lib/photo-leave-out');
-// Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
-const { writerQuestionsOf } = require('./lib/writer-questions');
 // Brief 4.5: the story meeting's payloads and what its stop sends.
 const { meetingResume, meetingCheckpointData, unrunRoundNoteIndex } = require('./lib/meeting');
 // Phase 4 (brief 4.6): the map's payloads and what its stop shows; the photos kept for the
@@ -449,9 +447,9 @@ async function getCheckpointData(checkpointType, state) {
                 directorGateNotes: state.directorGateNotes || [],
                 outlineThesis: outlineThesisOf(state),
                 // Brief 2.7: the automatic passes of this round, with what each changed.
-                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1),
-                // Brief 3.7: the article writer's questions for the director (C15)
-                writerQuestions: writerQuestionsOf(state.contentBundle?.writerQuestions)
+                // Brief 4.7b: the writers' questions left the article (spec section 10): they
+                // are asked at the story meeting alone.
+                trace: traceForStop(state._articleTrace, state.contentBundle, diffBundle, (state.humanArticleRevisionCount || 0) + 1)
             };
         case CHECKPOINT_TYPES.PRE_CURATION:
             return {

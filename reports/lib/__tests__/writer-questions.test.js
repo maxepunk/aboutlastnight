@@ -12,21 +12,17 @@
  * kinds are C15's player, pronoun and figure. lib/__tests__/weave.test.js pins their
  * shape; this file follows their carry through the arc rework (R5).
  *
- * - A rework carries forward every question it did not answer (R5): only the director
- *   answers one. On an automatic pass a question the rework returns replaces each
- *   earlier question of the same kind and `about` (case and spacing folded), in its
- *   place, and an earlier question whose kind and `about` the rework returned nothing
- *   for is kept (phase 3, 3.10); after the director's note the rework's list replaces
- *   the old one; a rework that returns no field keeps the previous list.
+ * - A weave rework carries forward every question the director has not answered (R5).
  * - The field never prints, and never reaches the template, the fact check's printed
  *   text or a later writer's prompt.
  * - Roster coverage left the arc stage (phase 4, brief 4.4), and with it the rule that a
  *   question of kind "player" covered a player there. The article fact check's
  *   coverage is unchanged.
- * - The detective is parked (spec D13): its outline and article schemas, prompts and
- *   checks do not change. Its arc stage went (R1).
+ * - The detective is parked (R1): its arc, outline and article stages went.
  * - Phase 4 (brief 4.6): the outline is the story map, and the writers' questions left
- *   its schema. The map's rework carries none; the article's stay until 4.7.
+ *   its schema. Brief 4.7b: they left the article's too (spec section 10), so the
+ *   questions are asked at the story meeting alone, and the outline and article carry
+ *   rule (R5, 3.10) went with the field.
  */
 
 const { SchemaValidator } = require('../schema-validator');
@@ -62,19 +58,6 @@ beforeAll(() => {
 });
 afterAll(() => jest.restoreAllMocks());
 
-/** The field, wherever a schema defines it: an optional list of {kind, about, question}. */
-function expectQuestionsField(schema, label) {
-  const field = schema.properties && schema.properties.writerQuestions;
-  expect(`${label}: ${field ? 'has' : 'lacks'} writerQuestions`).toBe(`${label}: has writerQuestions`);
-  expect(field.type).toBe('array');
-  expect(field.items.type).toBe('object');
-  expect(field.items.properties.kind).toEqual(expect.objectContaining({ type: 'string', enum: ['player', 'pronoun', 'ledger'] }));
-  expect(field.items.properties.about.type).toBe('string');
-  expect(field.items.properties.question.type).toBe('string');
-  expect(field.items.required).toEqual(['kind', 'about', 'question']);
-  expect(schema.required || []).not.toContain('writerQuestions');
-}
-
 function sdkReturning(...values) {
   const sdk = jest.fn();
   values.forEach((value) => sdk.mockImplementationOnce(async () => clone(value)));
@@ -82,13 +65,14 @@ function sdkReturning(...values) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// The four schemas
+// The schemas after the meeting
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Phase 4 (brief 4.4): the arc writer's and the arc reworker's schemas went with the
 // weave, whose questions have their own property (weave.test.js). Brief 4.6: the outline's
-// went with the map. The field stays on the bundle until 4.7 drops it.
-describe('the optional writerQuestions field in the four schemas', () => {
+// went with the map. Brief 4.7b: the article's went (spec section 10: the writers'
+// questions at the outline and article stops go), so no writer after the meeting asks.
+describe('the writerQuestions field after the story meeting', () => {
   it("the map's schema has none, and the director-side gate refuses the field (brief 4.6)", () => {
     const { directorMapProblems } = require('../map');
     expect(outlineSchema.properties).not.toHaveProperty('writerQuestions');
@@ -97,39 +81,12 @@ describe('the optional writerQuestions field in the four schemas', () => {
       .toMatch(/must NOT have additional properties/);
   });
 
-  it('the content-bundle schema, at the top level, and the validator accepts it', () => {
-    expectQuestionsField(contentBundleSchema, 'content-bundle.schema.json');
+  it("the content bundle's schema has none, and the validator refuses the field (brief 4.7b)", () => {
+    expect(contentBundleSchema.properties).not.toHaveProperty('writerQuestions');
     const validator = new SchemaValidator();
     const bundle = clone(require('../../__tests__/fixtures/content-bundles/valid-journalist.json'));
     expect(validator.validate('content-bundle', bundle).valid).toBe(true);
-    expect(validator.validate('content-bundle', { ...bundle, writerQuestions: [Q_LEDGER] }).valid).toBe(true);
-    const { kind, ...noKind } = Q_LEDGER;
-    expect(validator.validate('content-bundle', { ...bundle, writerQuestions: [noKind] }).valid).toBe(false);
-  });
-
-  it('the descriptions state the shape and name C15, with no em-dash', () => {
-    for (const schema of [contentBundleSchema]) {
-      const field = schema.properties.writerQuestions;
-      expect(field.description).toMatch(/C15/);
-      expect(field.items.properties.kind.description).toMatch(/C15/);
-      expect(field.items.properties.about.description).toMatch(/player's name/);
-      expect(JSON.stringify(field)).not.toMatch(/—/);
-    }
-  });
-
-  // Fix 3.7b (finding 3): one wording for the field. The arc schemas use the JS
-  // constant itself; the JSON files repeat it, with the `additionalProperties:
-  // false` those files put on every object, so a wording change must touch them all.
-  // Phase 4 (brief 4.7b; R1): the detective's frozen copy of the content-bundle schema
-  // went with the detective's article writer, the one call that printed it.
-  it('one wording: each JSON schema defines the field exactly as WRITER_QUESTIONS_PROPERTY', () => {
-    const { WRITER_QUESTIONS_PROPERTY } = require('../writer-questions');
-    const expected = { ...WRITER_QUESTIONS_PROPERTY, items: { ...WRITER_QUESTIONS_PROPERTY.items, additionalProperties: false } };
-    for (const [label, schema] of [
-      ['content-bundle.schema.json', contentBundleSchema]
-    ]) {
-      expect({ label, field: schema.properties.writerQuestions }).toEqual({ label, field: expected });
-    }
+    expect(validator.validate('content-bundle', { ...bundle, writerQuestions: [Q_LEDGER] }).valid).toBe(false);
   });
 });
 
@@ -149,128 +106,12 @@ describe("the arc writer's questions reach the weave", () => {
   });
 });
 
-describe('the rework rule: only the director answers a question (R5)', () => {
-  const { carriedWriterQuestions, withCarriedWriterQuestions } = require('../writer-questions');
-  const Q_NEW = { about: 'Melanie', question: 'Did Melanie leave before the vote?' };
-
-  it('throws unless the caller says whether the rework followed the director\'s note', () => {
-    expect(() => carriedWriterQuestions([Q_LEDGER], [Q_SARAH])).toThrow(/afterDirectorNote/);
-    expect(() => carriedWriterQuestions([Q_LEDGER], [Q_SARAH], {})).toThrow(/afterDirectorNote/);
-    expect(() => carriedWriterQuestions([Q_LEDGER], [Q_SARAH], { afterDirectorNote: 'yes' })).toThrow(/afterDirectorNote/);
-    expect(() => withCarriedWriterQuestions({ writerQuestions: [] }, { writerQuestions: [Q_SARAH] })).toThrow(/afterDirectorNote/);
-  });
-
-  it('an automatic pass keeps every previous question, in order, then the new ones', () => {
-    expect(carriedWriterQuestions([Q_NEW], [Q_SARAH, Q_LEDGER], { afterDirectorNote: false })).toEqual([Q_SARAH, Q_LEDGER, Q_NEW]);
-    expect(carriedWriterQuestions([], [Q_SARAH, Q_LEDGER], { afterDirectorNote: false })).toEqual([Q_SARAH, Q_LEDGER]);
-  });
-
-  it('an automatic pass that returns a kept question lists it once, whatever its case and spacing', () => {
-    const restated = { about: '  sarah ', question: Q_SARAH.question.toUpperCase().replace(/ /g, '  ') };
-    expect(carriedWriterQuestions([restated, Q_NEW, Q_NEW], [Q_SARAH], { afterDirectorNote: false })).toEqual([Q_SARAH, Q_NEW]);
-  });
-
-  it('after the director\'s note the rework\'s list replaces the old one, an empty list included', () => {
-    expect(carriedWriterQuestions([Q_LEDGER], [Q_SARAH, Q_LEDGER], { afterDirectorNote: true })).toEqual([Q_LEDGER]);
-    expect(carriedWriterQuestions([], [Q_SARAH], { afterDirectorNote: true })).toEqual([]);
-  });
-
-  it('a rework that returns no field keeps the previous list, on either kind of pass', () => {
-    for (const afterDirectorNote of [false, true]) {
-      expect(carriedWriterQuestions(undefined, [Q_SARAH], { afterDirectorNote })).toEqual([Q_SARAH]);
-      expect(withCarriedWriterQuestions({ lede: {} }, { writerQuestions: [Q_SARAH] }, { afterDirectorNote })).toEqual({ lede: {}, writerQuestions: [Q_SARAH] });
-    }
-  });
-
-  it('an output with no field and nothing to carry comes back as it was', () => {
-    const output = { lede: {} };
-    expect(withCarriedWriterQuestions(output, { lede: {} }, { afterDirectorNote: false })).toBe(output);
-  });
-});
-
-/**
- * Phase 3, brief 3.10 (the ledger's ruling on 3.7 finding 6, after the gate): on an
- * automatic pass a rework's question replaces the earlier ones on its subject. The union
- * kept a question and its reworded copy, so the gate's arc and outline stops showed 16
- * questions with one pronoun asked two or three times, in a list built to be skimmed
- * (D8). Every unanswered subject is still kept (R5): an earlier question stays whenever
- * the rework returned nothing of its kind and `about`.
- *
- * The gate's call log (092026, every arc, outline and article write and rework) worded a
- * repeated question's `about` the same across passes when it named one player ("Mel",
- * "Remi"), and differently when the writer regrouped its subjects: "Kai", "Remi" and
- * "Mel" became "Kai, Remi, Mel" and "Alex, Jess, Kai, Mel, Sam, Sarah, Vic"; a ledger
- * question's time and amount were reworded between the arcs and the outline; the article
- * names a player in full ("Ashe Motoko") where the arcs used the first name. Only case
- * and spacing are folded, so a regrouped subject is a new subject, and its earlier
- * questions stay.
- */
-describe('an automatic pass replaces each earlier question on the subject the rework asks about (phase 3, 3.10)', () => {
-  const { carriedWriterQuestions } = require('../writer-questions');
-  const AUTOMATIC = { afterDirectorNote: false };
-  const pronoun = (about, question) => ({ kind: 'pronoun', about, question });
-
-  it("the gate's case: one pronoun question asked three times across passes ends as one", () => {
-    const asked = [
-      pronoun('Remi', "Neither the roster nor the notes give Remi's pronouns. Which should print?"),
-      pronoun('Remi', 'The evaluation reports the roster gives Remi she/her. Confirm for print?'),
-      pronoun(' REMI ', 'The arcs use she/her for Remi, as the evaluation reports. Confirm?')
-    ];
-    let questions = [Q_SARAH, asked[0]];
-    questions = carriedWriterQuestions([Q_SARAH, asked[1]], questions, AUTOMATIC);
-    questions = carriedWriterQuestions([Q_SARAH, asked[2]], questions, AUTOMATIC);
-    expect(questions.filter((q) => q.kind === 'pronoun')).toEqual([{ ...asked[2], about: 'REMI' }]);
-    expect(questions).toHaveLength(2);
-  });
-
-  it('a replacement takes the place of the question it replaces, and new questions follow', () => {
-    const reworded = { ...Q_LEDGER, question: 'Is the 07:50 AM sale entered twice?' };
-    expect(carriedWriterQuestions([Q_PRONOUN, reworded], [Q_SARAH, Q_LEDGER, Q_FULL], AUTOMATIC))
-      .toEqual([Q_SARAH, reworded, Q_FULL, Q_PRONOUN]);
-  });
-
-  it('each earlier question of the subject goes, and every question the rework asks on it takes the first one\'s place', () => {
-    const second = { ...Q_SARAH, question: 'Did Sarah vote?' };
-    const restated = { ...Q_SARAH, question: 'What did Sarah do this morning?' };
-    const followUp = { ...Q_SARAH, question: 'Who saw Sarah with Blake?' };
-    expect(carriedWriterQuestions([restated, followUp], [Q_SARAH, Q_LEDGER, second], AUTOMATIC))
-      .toEqual([restated, followUp, Q_LEDGER]);
-  });
-
-  it('`about` is compared with case and spacing folded, and nothing looser', () => {
-    const spaced = { kind: 'player', about: '  sarah ', question: 'Where was Sarah at the check-in?' };
-    expect(carriedWriterQuestions([spaced], [Q_SARAH], AUTOMATIC)).toEqual([{ ...spaced, about: 'sarah' }]);
-    // A full name, or a group of names, is another subject: the earlier question stays.
-    expect(carriedWriterQuestions([Q_FULL], [Q_SARAH], AUTOMATIC)).toEqual([Q_SARAH, Q_FULL]);
-    const group = pronoun('Kai, Riley', 'The roster gives Kai and Riley no pronoun: which ones?');
-    expect(carriedWriterQuestions([group], [Q_PRONOUN], AUTOMATIC)).toEqual([Q_PRONOUN, group]);
-  });
-
-  it('the kind must match too, and an absent kind matches only an absent kind', () => {
-    const ledgerOnSarah = { kind: 'ledger', about: 'Sarah', question: 'Is the Sarah account entered twice?' };
-    expect(carriedWriterQuestions([ledgerOnSarah], [Q_SARAH], AUTOMATIC)).toEqual([Q_SARAH, ledgerOnSarah]);
-    const oldNoKind = { about: 'Sarah', question: 'Where was Sarah?' };
-    const newNoKind = { about: 'Sarah', question: 'Where was Sarah during the vote?' };
-    expect(carriedWriterQuestions([newNoKind], [oldNoKind, Q_SARAH], AUTOMATIC)).toEqual([newNoKind, Q_SARAH]);
-    expect(carriedWriterQuestions([newNoKind], [Q_SARAH], AUTOMATIC)).toEqual([Q_SARAH, newNoKind]);
-  });
-
-  it('an earlier question is kept when the rework returns nothing of its kind and about', () => {
-    expect(carriedWriterQuestions([Q_PRONOUN], [Q_SARAH, Q_LEDGER], AUTOMATIC)).toEqual([Q_SARAH, Q_LEDGER, Q_PRONOUN]);
-    expect(carriedWriterQuestions([], [Q_SARAH, Q_LEDGER], AUTOMATIC)).toEqual([Q_SARAH, Q_LEDGER]);
-  });
-
-  it('after the director\'s note the rework\'s list still replaces the old one, and no list keeps it', () => {
-    const reworded = { ...Q_SARAH, question: 'Where was Sarah at the vote?' };
-    expect(carriedWriterQuestions([reworded], [Q_SARAH, Q_LEDGER], { afterDirectorNote: true })).toEqual([reworded]);
-    expect(carriedWriterQuestions(undefined, [Q_SARAH, Q_LEDGER], AUTOMATIC)).toEqual([Q_SARAH, Q_LEDGER]);
-  });
-
-  // Phase 4 (brief 4.4): the weave's questions carry an id, and the arc rework's
-  // version of a question replaces it by that id (carriedWeaveQuestions). Brief 4.6: the
-  // map's rework has no questions.
-  it('the arc and article reworks replace in place on an automatic pass', async () => {
-    const reworded = { ...Q_SARAH, question: 'What did Sarah do at the check-in?' };
+// Phase 4 (brief 4.4): the weave's questions carry an id, and the arc rework's version of a
+// question replaces it in its place (carriedWeaveQuestions). Brief 4.6: the map's rework has
+// no questions; brief 4.7b: nor has the article's, and the outline and article carry
+// (carriedWriterQuestions, writerQuestionsOf) went with the field.
+describe('the arc rework replaces a question in place on an automatic pass', () => {
+  it("the rework's reworded question takes the previous one's place", async () => {
     const rewordedInWeave = { ...W_SARAH, question: 'What did Sarah do at the check-in?' };
     const arcState = reworkFixtureState('journalist');
     const arcResult = await arcNodes.reviseArcs(
@@ -278,29 +119,6 @@ describe('an automatic pass replaces each earlier question on the subject the re
       { configurable: { sdkClient: sdkReturning({ ...clone(arcState.weave), questions: [rewordedInWeave] }) } }
     );
     expect(arcResult.weave.questions).toEqual([rewordedInWeave, W_FIGURE]);
-
-    const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: aiNodes.createMockPromptBuilder(), theme: 'journalist' } });
-    const articleResult = await aiNodes.reviseContentBundle(
-      { _previousContentBundle: { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_SARAH, Q_LEDGER] }, articleRevisionCount: 1 },
-      cfg(sdkReturning({ ...clone(PREVIOUS_BUNDLE), writerQuestions: [reworded] }))
-    );
-    expect(articleResult.contentBundle.writerQuestions).toEqual([reworded, Q_LEDGER]);
-  });
-});
-
-// Fix 3.7b (finding 1): the normalizer keeps a question's kind when it is one of the
-// three, and still keeps a question with no kind (a list from before the field had
-// one), so an old list renders.
-describe('writerQuestionsOf keeps the kind', () => {
-  const { writerQuestionsOf } = require('../writer-questions');
-
-  it('keeps each of the three kinds', () => {
-    expect(writerQuestionsOf([Q_SARAH, Q_PRONOUN, Q_LEDGER])).toEqual([Q_SARAH, Q_PRONOUN, Q_LEDGER]);
-  });
-
-  it('keeps a question with no kind, or an unknown one, without a kind', () => {
-    expect(writerQuestionsOf([{ about: 'Sarah', question: 'Where?' }, { kind: 'other', about: 'Alex', question: 'Who?' }]))
-      .toEqual([{ about: 'Sarah', question: 'Where?' }, { about: 'Alex', question: 'Who?' }]);
   });
 });
 
@@ -391,12 +209,12 @@ describe('an arc rework carries forward the questions it did not answer (R5)', (
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// The outline and the article: the rework keeps what it did not answer
+// The map and the article: no questions to carry
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Brief 4.6: the map holds no questions, so the map's rework carries none; the article's
-// rework keeps what it did not answer.
-describe('an outline or article rework carries forward the questions it did not answer (R5)', () => {
+// Brief 4.6: the map holds no questions, so the map's rework carries none. Brief 4.7b: nor
+// does the article, so its rework carries none either.
+describe('a map or article rework carries no questions', () => {
   const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: aiNodes.createMockPromptBuilder(), theme: 'journalist' } });
 
   it("reviseOutline: the map's rework carries no questions, even from a map stored with them", async () => {
@@ -406,28 +224,10 @@ describe('an outline or article rework carries forward the questions it did not 
     expect(result.outline).not.toHaveProperty('writerQuestions');
   });
 
-  it('reviseContentBundle keeps the previous article\'s questions when the rework returns no field', async () => {
+  it("reviseContentBundle: the article's rework carries no questions, even from a bundle stored with them (brief 4.7b)", async () => {
     const previous = { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_LEDGER] };
     const result = await aiNodes.reviseContentBundle({ _previousContentBundle: previous, articleRevisionCount: 1 }, cfg(sdkReturning(PREVIOUS_BUNDLE)));
-    expect(result.contentBundle.writerQuestions).toEqual([Q_LEDGER]);
-  });
-
-  it('reviseContentBundle on an automatic pass keeps a question its rework left out, beside the rework\'s own', async () => {
-    const previous = { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_LEDGER] };
-    const result = await aiNodes.reviseContentBundle(
-      { _previousContentBundle: previous, articleRevisionCount: 1 },
-      cfg(sdkReturning({ ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_PRONOUN] }))
-    );
-    expect(result.contentBundle.writerQuestions).toEqual([Q_LEDGER, Q_PRONOUN]);
-  });
-
-  it('reviseContentBundle takes the rework\'s list after the director\'s note, dropping the answered question', async () => {
-    const previous = { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_LEDGER, Q_PRONOUN] };
-    const result = await aiNodes.reviseContentBundle(
-      { _previousContentBundle: previous, _articleFeedback: 'The 07:50 AM sale is not a duplicate.', articleRevisionCount: 1 },
-      cfg(sdkReturning({ ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_PRONOUN] }))
-    );
-    expect(result.contentBundle.writerQuestions).toEqual([Q_PRONOUN]);
+    expect(result.contentBundle).not.toHaveProperty('writerQuestions');
   });
 });
 
@@ -488,13 +288,14 @@ describe('the questions never reach a later writer, a judge\'s JSON or the templ
     }
   });
 
-  it('the template context and the page carry none of them', async () => {
+  // Brief 4.7b: the content bundle's schema carries no questions, so the page refuses a
+  // bundle that carries them before it prints a word.
+  it('the template context carries none of them, and the page refuses a bundle that carries them', async () => {
     const bundle = { ...clone(require('../../__tests__/fixtures/content-bundles/valid-journalist.json')), writerQuestions: [Q_LEDGER] };
     const assembler = new TemplateAssembler('journalist');
     const context = await assembler.buildContext(bundle, '010126', []);
     expect(context).not.toHaveProperty('writerQuestions');
-    const html = await assembler.assemble(bundle);
-    expect(html).not.toContain(Q_LEDGER.question);
+    await expect(assembler.assemble(bundle)).rejects.toThrow(/Invalid ContentBundle/);
   });
 
   it('the fact check\'s printed text carries none of them', () => {

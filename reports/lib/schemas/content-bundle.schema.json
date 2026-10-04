@@ -372,20 +372,6 @@
         },
         "additionalProperties": false
       }
-    },
-    "writerQuestions": {
-      "type": "array",
-      "description": "Questions for the director (C15), each with its kind, what it is about and the question",
-      "items": {
-        "type": "object",
-        "required": ["kind", "about", "question"],
-        "additionalProperties": false,
-        "properties": {
-          "kind": { "type": "string", "enum": ["player", "pronoun", "ledger"], "description": "The C15 case the question raises" },
-          "about": { "type": "string", "description": "The player's name, or for a ledger question the entry's time and amount" },
-          "question": { "type": "string" }
-        }
-      }
     }
   },
   "additionalProperties": false

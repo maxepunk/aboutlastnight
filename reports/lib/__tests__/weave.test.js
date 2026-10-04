@@ -21,10 +21,10 @@ const {
   isMeetingApproved, checkWeave
 } = require('../weave');
 const { WEAVE_SCHEMA } = require('../sdk-client/subagents');
+const writerQuestions = require('../writer-questions');
 const {
-  WEAVE_QUESTIONS_KEY, WEAVE_QUESTION_KINDS, WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions,
-  WRITER_QUESTIONS_PROPERTY
-} = require('../writer-questions');
+  WEAVE_QUESTIONS_KEY, WEAVE_QUESTION_KINDS, WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions
+} = writerQuestions;
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -149,9 +149,13 @@ describe("the weave's questions (C15)", () => {
     expect(WEAVE_QUESTIONS_PROPERTY.items.properties.about.description).toMatch(/figure/);
   });
 
-  it('the outline and bundle keep their own property until their writers drop the field', () => {
-    expect(WRITER_QUESTIONS_PROPERTY).not.toBe(WEAVE_QUESTIONS_PROPERTY);
-    expect(WRITER_QUESTIONS_PROPERTY.items.properties.kind.enum).toEqual(['player', 'pronoun', 'ledger']);
+  // Brief 4.6: the outline's questions went with the map; brief 4.7b: the article's, the
+  // last writer's questions after the meeting (spec section 10). The weave's are the only
+  // questions a writer asks.
+  it("the map and the article carry none: the weave's are the only writer's questions", () => {
+    expect(writerQuestions).not.toHaveProperty('WRITER_QUESTIONS_PROPERTY');
+    expect(require('../schemas/content-bundle.schema.json').properties).not.toHaveProperty('writerQuestions');
+    expect(require('../schemas/outline.schema.json').properties).not.toHaveProperty('writerQuestions');
   });
 
   describe('weaveQuestionsOf', () => {

@@ -444,13 +444,12 @@ describe('trace (phase 2, brief 2.7)', () => {
   });
 });
 
-// Phase 3, brief 3.7 (spec C15): each stop sends the current output's questions for the
-// director, a key no interrupt payload uses. An entry without both strings is not a
-// question and is not sent. Brief 4.5: the story meeting sends the weave's as `questions`.
-// Brief 4.6: the writers' questions left the outline's schema, so the map's stop sends
-// none, and the article carries its own at its top level as `writerQuestions`.
+// Phase 3, brief 3.7 (spec C15): each stop sent the current output's questions for the
+// director, a key no interrupt payload uses. Brief 4.5: the story meeting sends the weave's
+// as `questions`. Brief 4.6: the writers' questions left the outline's schema, so the map's
+// stop sends none; brief 4.7b: they left the article's, so the article's stop sends none
+// either (spec section 10). The questions are asked at the story meeting alone.
 describe('writerQuestions (phase 3, brief 3.7)', () => {
-  const { buildCompleteCheckpointData } = require('../../server.js');
   const Q1 = { about: 'Sarah', question: 'The record holds nothing about Sarah: where was Sarah?' };
   const Q2 = { about: 'The 10:02 AM sale', question: 'Is this a duplicate?' };
 
@@ -472,65 +471,40 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
     expect('writerQuestions' in data).toBe(false);
   });
 
-  it('the article stop sends the article\'s questions', async () => {
+  it('the article stop sends no questions: they left the article (brief 4.7b), even from a bundle stored with them', async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
       evaluationHistory: [], contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q1] }
     });
-    expect(data.writerQuestions).toEqual([Q1]);
+    expect('writerQuestions' in data).toBe(false);
   });
 
-  it('is an empty list at each stop when the output has none, or there is no output yet', async () => {
+  it('the meeting sends an empty list when the weave has none, or there is no weave yet', async () => {
     const arcs = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { weave: null });
-    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: VALID_BUNDLE() });
-    const noBundle = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null });
-    expect([arcs.questions, article.writerQuestions, noBundle.writerQuestions]).toEqual([[], [], []]);
-  });
-
-  it('sends only entries with both an about and a question', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
-      evaluationHistory: [], contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q1, { about: 'Alex' }, { about: '  ', question: 'x' }, 'loose', null] }
-    });
-    expect(data.writerQuestions).toEqual([Q1]);
-  });
-
-  it('survives the merge with the interrupt payload', async () => {
-    const state = { evaluationHistory: [], contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q1] } };
-    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARTICLE, contentBundle: state.contentBundle }, state);
-    expect(merged.writerQuestions).toEqual([Q1]);
+    expect(arcs.questions).toEqual([]);
   });
 
   // Fix 3.7b (finding 5): a rollback to a stop clears that stop's questions with its
-  // output, through the field each stop reads them from (ROLLBACK_CLEARS clears the
-  // contentBundle), and keeps the questions of the stops before it, whose output it keeps.
-  // Brief 4.5 (R9): a rollback to the story meeting keeps the weave, so the meeting reopens
-  // with its questions and their answers; the evidence stop above it writes the weave again.
-  // Brief 4.6: the map holds no questions; a rollback to it clears the article's.
+  // output. Brief 4.5 (R9): a rollback to the story meeting keeps the weave, so the meeting
+  // reopens with its questions and their answers; the evidence stop above it writes the
+  // weave again. Briefs 4.6 and 4.7b: the map and the article hold no questions.
   describe('a rollback clears a stop\'s questions with its output', () => {
     const { buildRollbackState } = require('../../lib/api-helpers');
-    const Q3 = { kind: 'ledger', about: 'The 10:14 AM sale of $50,000', question: 'Is this a second entry for one sale?' };
     const W1 = { id: 'q1', kind: 'player', about: 'Sarah', question: 'What did Sarah do?', changes: 'Where Sarah prints.', answer: 'Ran the bar.' };
-    const withQuestions = () => ({
-      evaluationHistory: [],
-      weave: { threads: [], questions: [W1] },
-      contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q3] }
-    });
-    const questionsAtEachStop = async (state) => ({
-      'arc-selection': (await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).questions,
-      article: (await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, state)).writerQuestions
-    });
+    const withQuestions = () => ({ evaluationHistory: [], weave: { threads: [], questions: [W1] }, contentBundle: VALID_BUNDLE() });
+    const meetingQuestions = async (state) => (await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).questions;
 
-    it('every stop shows its questions before the rollback', async () => {
-      expect(await questionsAtEachStop(withQuestions())).toEqual({ 'arc-selection': [W1], article: [Q3] });
+    it('the meeting shows its questions before the rollback', async () => {
+      expect(await meetingQuestions(withQuestions())).toEqual([W1]);
     });
 
     it.each([
-      ['evidence-and-photos', { 'arc-selection': [], article: [] }],
-      ['arc-selection', { 'arc-selection': [W1], article: [] }],
-      ['outline', { 'arc-selection': [W1], article: [] }],
-      ['article', { 'arc-selection': [W1], article: [] }]
+      ['evidence-and-photos', []],
+      ['arc-selection', [W1]],
+      ['outline', [W1]],
+      ['article', [W1]]
     ])('a rollback to %s', async (point, expected) => {
       const state = { ...withQuestions(), ...buildRollbackState(point) };
-      expect(await questionsAtEachStop(state)).toEqual(expected);
+      expect(await meetingQuestions(state)).toEqual(expected);
     });
   });
 });

@@ -53,9 +53,6 @@ const { directorAccusationText } = require('../../accusation-verdict');
 const { photoKey } = require('../../prompt-renderers/director-words-renderer');
 // Brief 4.2b: a photo's mapping, the one lookup isPhotoExcluded shares with the photo nodes
 const { photoMappingOf } = require('../../photo-leave-out');
-// Phase 3 (3.7): the writers' questions for the director (C15), kept through a rework
-// (R5) and out of every later prompt.
-const { withCarriedWriterQuestions } = require('../../writer-questions');
 
 /**
  * Get PromptBuilder from config or create default
@@ -1619,19 +1616,14 @@ async function reviseContentBundle(state, config) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[reviseContentBundle] Complete in ${duration}s`);
 
-    // Update contentBundle with revision history. Phase 3 (3.7; R5): only the director's
-    // note answers a question, so an automatic pass keeps every previous subject; the
-    // rework's question replaces the earlier ones of its kind and `about` (3.10).
-    const updatedBundle = withCarriedWriterQuestions(revised || previousContentBundle, previousContentBundle, {
-      afterDirectorNote: Boolean(state._articleFeedback)
-    });
     // FA (spec 2026-10-02 section 7): after an automatic pass, code puts back any of the
     // director's edits the pass changed, field by field; a send-back's rework is left as
     // it is, with its reasons. Spec §4.4: verify on EVERY pass. F1: the report adds this
     // pass's changes and restores to the round's (the server resets it at a send-back);
-    // the edits stay, for the gate to clear on approve.
+    // the edits stay, for the gate to clear on approve. Brief 4.7b: the article carries no
+    // writers' questions (spec section 10), so the rework carries none forward.
     const settled = settleEdits(state._articleHandEditReport, {
-      edits: handEdits, before: previousContentBundle, after: updatedBundle,
+      edits: handEdits, before: previousContentBundle, after: revised || previousContentBundle,
       pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
     });
 

@@ -169,7 +169,10 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
     expect(next.values.weave.questions).toEqual([W_ZIA, W_FIGURE]);
   });
 
-  it('the article stop: the questions survive a send back whose rework returns no field', async () => {
+  // Brief 4.7b (spec section 10): the writers' questions left the article. The questions
+  // are asked at the story meeting alone, so the article's stop sends none, before or after
+  // a send-back, and its rework stores none, even from a bundle stored with them.
+  it('the article stop: no questions, before or after a send back', async () => {
     const sdk = scriptedSdk({ reworks: [bundle(null)], evaluations: [PASSING_EVALUATION] });
 
     const { graph, thread, snapshot } = await runToStop({
@@ -184,12 +187,13 @@ describe("the writers' questions through the real graph (phase 3, brief 3.7)", (
     });
     expect(snapshot.next).toEqual(['checkpointArticle']);
     let data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, snapshot.values);
-    expect(data.writerQuestions).toEqual([Q_LEDGER]);
+    expect('writerQuestions' in data).toBe(false);
     expect(data.htmlPreview || '').not.toContain(Q_LEDGER.question);
 
     const next = await sendBack(graph, thread, snapshot.values, { article: false, articleFeedback: 'Tighten the opening.' });
     expect(next.next).toEqual(['checkpointArticle']);
     data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, next.values);
-    expect(data.writerQuestions).toEqual([Q_LEDGER]);
+    expect('writerQuestions' in data).toBe(false);
+    expect(next.values.contentBundle).not.toHaveProperty('writerQuestions');
   });
 });
