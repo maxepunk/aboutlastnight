@@ -595,11 +595,13 @@ describe('the arc reworker carries the writer\'s OUTPUT FORMAT with the field', 
 // same question: the same words, then, for a question the rework reworded, the same
 // subject (its kind and `about`), each in its place under its id first. A question's place
 // is its occurrence under its id (lib/weave.js occurrenceKeys), as the diff pairs elements:
-// the first under an id with the first, the second with the second. Keyed by id alone, a
-// repeated question id survived every rework, and a rework that renumbered printed one
-// question twice (4.5 re-review). Paired by place alone, a rework that renumbered in order
-// handed the director's answer to another question and dropped a question (fix round 1,
-// finding 1).
+// the first under an id with the first, the second with the second. The rework's ids
+// stand, and a question that comes back takes an id of its own when another holds its id.
+// Keyed by id alone, a repeated question id survived every rework, and a rework that
+// renumbered printed one question twice (4.5 re-review). Paired by place alone, a rework
+// that renumbered in order handed the director's answer to another question and dropped a
+// question (fix round 1, finding 1). A question that came back beside the rework's question
+// under its id made a repeat the rework never returned (fix round 2, finding 4).
 describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () => {
   const { carriedWeaveQuestions } = require('../writer-questions');
   const MORGAN = { ...W_SARAH, about: 'Morgan', question: 'The record holds nothing Morgan did: what did Morgan do?', changes: 'Whether Morgan prints.' };
@@ -628,8 +630,8 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
     expect(carriedWeaveQuestions(reworded, [W_SARAH, { ...MORGAN, answer: ANSWER }])).toEqual([reworded[0], { ...MORGAN, answer: ANSWER }]);
   });
 
-  it("an occurrence the rework left out comes back in its place, and the rework's other new questions follow", () => {
-    expect(carriedWeaveQuestions([clone(W_SARAH)], [W_SARAH, { ...MORGAN, answer: ANSWER }])).toEqual([W_SARAH, { ...MORGAN, answer: ANSWER }]);
+  it("an occurrence the rework left out comes back in its place, under an id of its own when the rework holds its id, and the rework's other new questions follow", () => {
+    expect(carriedWeaveQuestions([clone(W_SARAH)], [W_SARAH, { ...MORGAN, answer: ANSWER }])).toEqual([W_SARAH, { ...MORGAN, id: 'q2', answer: ANSWER }]);
     const carried = carriedWeaveQuestions([clone(W_SARAH), { ...MORGAN, id: 'q2' }, clone(W_PRONOUN)], [W_SARAH, MORGAN]);
     expect(ids(carried)).toEqual(['q1', 'q2', 'q3']);
     expect(abouts(carried)).toEqual(['Sarah', 'Morgan', 'Riley']);
@@ -696,23 +698,50 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
       .toEqual([{ ...WHERE, id: 'q4', answer: ANSWER }, { ...VOTE, id: 'q3' }]);
   });
 
-  it("a question the rework asks on another subject under a previous question's id is a new question, and none is dropped", () => {
-    // Under an answered question's id: the answer stays with its question, and the new question follows.
-    expect(carriedWeaveQuestions([clone(MORGAN)], [{ ...W_SARAH, answer: ANSWER }])).toEqual([{ ...W_SARAH, answer: ANSWER }, MORGAN]);
+  it("a question the rework asks on another subject under a previous question's id is a new question: both stay, the previous one under an id of its own", () => {
+    // Under an answered question's id: the answer stays with its question.
+    expect(carriedWeaveQuestions([clone(MORGAN)], [{ ...W_SARAH, answer: ANSWER }])).toEqual([{ ...W_SARAH, id: 'q2', answer: ANSWER }, MORGAN]);
     // Under an unanswered question's id: the question the rework dropped comes back, in its place.
-    expect(carriedWeaveQuestions([clone(MORGAN)], [W_SARAH])).toEqual([W_SARAH, MORGAN]);
+    expect(carriedWeaveQuestions([clone(MORGAN)], [W_SARAH])).toEqual([{ ...W_SARAH, id: 'q2' }, MORGAN]);
+  });
+
+  // Fix round 2, finding 4: the ids the rework gave stand. A question the carry puts back
+  // keeps its id unless another question holds it, and then takes an id no question in
+  // either version holds, so every repeated id the checks see is one the rework returned.
+  it("an answered question the rework left out, whose id it gave to another question, comes back under an id neither version holds", () => {
+    expect(carriedWeaveQuestions([{ ...RILEY, id: 'q1' }], [{ ...W_SARAH, answer: ANSWER }, RILEY]))
+      .toEqual([{ ...W_SARAH, id: 'q3', answer: ANSWER }, { ...RILEY, id: 'q1' }]);
+  });
+
+  it('an unanswered question the rework left out, whose id it gave to the next question, comes back under an id of its own', () => {
+    const SALE = { ...W_FIGURE, id: 'q3' };
+    expect(carriedWeaveQuestions([{ ...RILEY, id: 'q1' }, { ...SALE, id: 'q2' }], [W_SARAH, RILEY, SALE]))
+      .toEqual([{ ...W_SARAH, id: 'q4' }, { ...RILEY, id: 'q1' }, { ...SALE, id: 'q2' }]);
+  });
+
+  it('the questions under a repeated id that the rework left out come back each under an id of its own', () => {
+    expect(carriedWeaveQuestions([], [W_SARAH, MORGAN])).toEqual([W_SARAH, { ...MORGAN, id: 'q2' }]);
+  });
+
+  it('an id with no number at its end takes one', () => {
+    expect(carriedWeaveQuestions([{ ...RILEY, id: 'sarah' }], [{ ...W_SARAH, id: 'sarah', answer: ANSWER }]))
+      .toEqual([{ ...W_SARAH, id: 'sarah-1', answer: ANSWER }, { ...RILEY, id: 'sarah' }]);
   });
 
   describe('through the arc rework, then the checks', () => {
-    /** The arc rework on a weave with these questions, returning those; then the checks on what it stored. */
-    async function reworkQuestions(previousQuestions, reworkedQuestions) {
+    /**
+     * The arc rework on a weave with these questions, returning those; then the checks on
+     * what it stored. With a round, the director's round with a note; without, an
+     * automatic pass after the check.
+     */
+    async function reworkQuestions(previousQuestions, reworkedQuestions, round = null) {
       const state = reworkFixtureState('journalist');
       const previous = { ...clone(state.weave), questions: previousQuestions };
       // The meeting is open, so the checks run whatever the shared fixture holds.
-      const fixState = {
-        ...state, weave: previous, arcRevisionCount: 1, meetingApproved: null,
-        validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: [REPEAT_FAILURE.message] }
-      };
+      const open = { ...state, weave: previous, arcRevisionCount: 1, meetingApproved: null };
+      const fixState = round
+        ? { ...open, _meetingRound: round, _arcFeedback: 'Rethink the main thread around the money.', validationResults: null }
+        : { ...open, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: [REPEAT_FAILURE.message] } };
       const rework = { ...clone(previous), questions: reworkedQuestions };
       const result = await arcNodes.reviseArcs(fixState, { configurable: { sdkClient: sdkReturning(rework) } });
       const checked = arcNodes.validateArcStructure({ ...fixState, ...result }, {});
@@ -744,6 +773,27 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
       );
       expect(questions).toEqual([W_SARAH, { ...MORGAN, answer: ANSWER }]);
       expect(failures).toEqual([REPEAT_FAILURE]);
+    });
+
+    // Fix round 2, finding 4.
+    it.each([['an automatic pass', null], ['a send-back', 'send-back']])(
+      "%s that leaves out an answered question and gives its id to the next: each question once, and no repeat",
+      async (_name, round) => {
+        const { questions, failures } = await reworkQuestions([{ ...W_SARAH, answer: ANSWER }, RILEY], [{ ...RILEY, id: 'q1' }], round);
+        expect(questions).toEqual([{ ...W_SARAH, id: 'q3', answer: ANSWER }, { ...RILEY, id: 'q1' }]);
+        expect(failures).toEqual([]);
+      }
+    );
+
+    it('a send-back that leaves out an answered question in the middle and renumbers the one after it: each question once, and no repeat', async () => {
+      const SALE = { ...W_FIGURE, id: 'q3' };
+      const { questions, failures } = await reworkQuestions(
+        [W_SARAH, { ...RILEY, answer: 'she/her' }, SALE],
+        [clone(W_SARAH), { ...SALE, id: 'q2' }],
+        'send-back'
+      );
+      expect(questions).toEqual([W_SARAH, { ...RILEY, id: 'q4', answer: 'she/her' }, { ...SALE, id: 'q2' }]);
+      expect(failures).toEqual([]);
     });
   });
 });
