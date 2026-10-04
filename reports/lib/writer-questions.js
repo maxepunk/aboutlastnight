@@ -10,8 +10,9 @@
  * print. The outline's `writerQuestions` went with the map (brief 4.6), and the
  * article's with brief 4.7b, their carry through a rework (carriedWriterQuestions) and
  * their normalizer with them. Their strip from what prints (withoutWriterQuestions) went
- * with task 4.11: only a thread from before the story meeting carried the field, and the
- * server refuses such a thread (lib/old-thread.js).
+ * with task 4.11: the field rode only on an outline or an article written before phase 4,
+ * and the server refuses every thread that holds one with no weave, at a stop or at none
+ * (lib/old-thread.js).
  *
  * Brief 4.5 (C15, ruling 4): the director answers each question in its own box at the
  * story meeting, and the answer (`answer`, WEAVE_ANSWER_KEY) travels with its question
