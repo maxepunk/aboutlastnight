@@ -1856,9 +1856,10 @@ describe('4.7a: each finding with its place', () => {
   it('a paragraph: the section id and the paragraph ordinal, with an excerpt and its message', () => {
     const result = located();
     const message = result.advisoryWarnings.find((w) => w.startsWith("Em-dash in the narrator's prose:"));
-    // Brief 4.10b: each finding also carries the director's line for its place.
+    // Brief 4.10b: each finding also carries the director's line for its place (4.10c: counting
+    // the em-dashes outside quoted speech, as the check does).
     expect(result.findings.filter((f) => f.kind === 'emDash' && f.place && f.place.section)).toEqual([
-      { kind: 'emDash', status: 'advisory', place: { section: 'the-story', paragraph: 2 }, excerpt: DASHED, message, line: 'This paragraph has an em-dash; house style uses none.' }
+      { kind: 'emDash', status: 'advisory', place: { section: 'the-story', paragraph: 2 }, excerpt: DASHED, message, line: 'This paragraph has an em-dash outside quoted speech; house style uses none.' }
     ]);
   });
 
@@ -2003,9 +2004,10 @@ describe('4.7a: each finding with its place', () => {
     }));
     const message = result.advisoryWarnings.find((w) => w.startsWith('Over length:'));
     expect(message).toContain('the-story 1,010, closing 900');
+    // 4.10c: the line counts the article's words of prose.
     expect(result.findings.filter((f) => f.kind === 'length')).toEqual([
-      { kind: 'length', status: 'advisory', place: { section: 'the-story' }, excerpt: null, message, line: "This section has 1,010 of the article's 1,917 words; the article aims at about 1,500." },
-      { kind: 'length', status: 'advisory', place: { section: 'closing' }, excerpt: null, message, line: "This section has 900 of the article's 1,917 words; the article aims at about 1,500." }
+      { kind: 'length', status: 'advisory', place: { section: 'the-story' }, excerpt: null, message, line: "This section has 1,010 of the article's 1,917 words of prose; the article aims at about 1,500." },
+      { kind: 'length', status: 'advisory', place: { section: 'closing' }, excerpt: null, message, line: "This section has 900 of the article's 1,917 words of prose; the article aims at about 1,500." }
     ]);
   });
 });
@@ -2185,9 +2187,10 @@ describe("4.10b: each finding carries the director's line for its place", () => 
       sessionPhotos: ['/p/kept.jpg', '/p/gone.jpg', '/p/wb.jpg'], excludedPhotos: ['/p/gone.jpg'], whiteboardPhoto: '/p/wb.jpg',
       contentBundle: storyWith(photo('nope.jpg'), photo('gone.jpg'), photo('wb.jpg'))
     }));
+    // 4.10c: the photo the director left out says the article still prints it.
     expect(linesOf(result, 'photoReferences')).toEqual([
       [{ filename: 'nope.jpg', section: 'the-story' }, "This photo, nope.jpg, is not one of the session's photos."],
-      [{ filename: 'gone.jpg', section: 'the-story' }, 'You left this photo, gone.jpg, out of the article.'],
+      [{ filename: 'gone.jpg', section: 'the-story' }, 'The article still prints this photo, gone.jpg, which you left out.'],
       [{ filename: 'wb.jpg', section: 'the-story' }, "This photo, wb.jpg, is the whiteboard: the room's working notes, which stay out of the article."]
     ]);
     const unchecked = factCheckContentBundle(baseArgs({ contentBundle: storyWith(photo('kept.jpg')) }));
@@ -2218,9 +2221,10 @@ describe("4.10b: each finding carries the director's line for its place", () => 
       [{ section: 'the-story', paragraph: 1 }, '"I voted" makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.'],
       [{ section: 'the-story', paragraph: 2 }, '"I was in the room" puts the reporter in the room, but the reporter covered this session remotely.']
     ]);
+    // 4.10c: the phrase as the article prints it, across two pieces.
     const across = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('The vote came and I'), para('voted again.')) }));
     expect(linesOf(across, 'reporterMode')).toEqual([
-      [null, '"i voted" (across two paragraphs) makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.']
+      [null, '"I voted" (across two pieces) makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.']
     ]);
   });
 
@@ -2263,9 +2267,10 @@ describe("4.10b: each finding carries the director's line for its place", () => 
         evidenceCards: []
       }
     }));
+    // 4.10c: the count is the em-dashes outside quoted speech, which the check counts.
     expect(linesOf(result, 'emDash')).toEqual([
-      [{ field: 'headline.deck' }, 'The deck has an em-dash; house style uses none.'],
-      [{ section: 'the-story', paragraph: 1 }, 'This paragraph has 2 em-dashes; house style uses none.']
+      [{ field: 'headline.deck' }, 'The deck has an em-dash outside quoted speech; house style uses none.'],
+      [{ section: 'the-story', paragraph: 1 }, 'This paragraph has 2 em-dashes outside quoted speech; house style uses none.']
     ]);
     expect(linesOf(result, 'productionWords')).toEqual([
       [{ section: 'the-story', paragraph: 2 }, 'This paragraph says "tier", a word from behind the scenes of the game.'],
@@ -2284,9 +2289,10 @@ describe("4.10b: each finding carries the director's line for its place", () => 
         evidenceCards: []
       }
     }));
+    // 4.10c: the words the length counts are the article's words of prose.
     expect(linesOf(result, 'length')).toEqual([
-      [{ section: 'the-story' }, "This section has 1,010 of the article's 1,917 words; the article aims at about 1,500."],
-      [{ section: 'closing' }, "This section has 900 of the article's 1,917 words; the article aims at about 1,500."]
+      [{ section: 'the-story' }, "This section has 1,010 of the article's 1,917 words of prose; the article aims at about 1,500."],
+      [{ section: 'closing' }, "This section has 900 of the article's 1,917 words of prose; the article aims at about 1,500."]
     ]);
   });
 
@@ -2359,5 +2365,79 @@ describe("4.5f: the vote fix line reads the director's words for who turned a me
     expect(message.startsWith('Reporter-mode violation: "i voted".')).toBe(true);
     expect(message.endsWith("an exposure stays anonymous unless the evidence log or the director's words name who turned it in.")).toBe(true);
     expect(message).not.toContain("the director's notes");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Brief 4.10c: each line says exactly what the article prints (the integrator's ruling 2 on
+// 4.10b's minors, minor 6). The director reads the line beside the article, so it names what
+// the check counted in the article's own terms: a photo the director left out that the
+// article still prints, the em-dashes outside quoted speech, the article's words of prose,
+// and a phrase that runs across two pieces (the deck and a paragraph, or two paragraphs) as
+// the article prints it. Each message, which the rework reads, stays as it was.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10c: each line says exactly what the article prints', () => {
+  const para = (text) => ({ type: 'paragraph', text });
+  const words = (n) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+  /** Each finding of a kind as [its place, its line]. */
+  const linesOf = (result, kind) => result.findings.filter((f) => f.kind === kind).map((f) => [f.place, f.line]);
+
+  it('a photo the director left out that the article still prints: the line says the article prints it', () => {
+    const result = factCheckContentBundle(baseArgs({
+      sessionPhotos: ['/p/kept.jpg', '/p/gone.jpg'], excludedPhotos: ['/p/gone.jpg'],
+      contentBundle: storyWith(para('Vic argued at the bar.'), { type: 'photo', filename: 'gone.jpg', caption: 'Kai at the coat check.' })
+    }));
+    expect(linesOf(result, 'photoReferences')).toEqual([
+      [{ filename: 'gone.jpg', section: 'the-story' }, 'The article still prints this photo, gone.jpg, which you left out.']
+    ]);
+    expect(result.structuralIssues).toEqual(['Invalid photo reference "gone.jpg": the director excluded this photo. Use one of [kept.jpg] or remove the reference.']);
+  });
+
+  it('the em-dash count is the em-dashes outside quoted speech, the ones the check counts', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(para('Vic signed—fast—and Mel said, "Wait—not yet."'))
+    }));
+    expect(linesOf(result, 'emDash')).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, 'This paragraph has 2 em-dashes outside quoted speech; house style uses none.']
+    ]);
+    expect(result.advisoryWarnings.filter((w) => w.startsWith('Em-dash'))).toEqual([
+      'Em-dash in the narrator\'s prose: 2 em-dashes (in section "the-story", paragraph 1 twice). House style puts a comma, a colon or a full stop where an em-dash might go (C4).'
+    ]);
+  });
+
+  it("the length counts the article's words of prose: by section, and with no section to sit on", () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        headline: { main: 'Short' },
+        sections: [
+          { id: 'the-story', type: 'narrative', content: [para(words(1000)), { type: 'quote', text: words(400) }] },
+          { id: 'closing', type: 'narrative', content: [para(words(900))] }
+        ],
+        evidenceCards: []
+      }
+    }));
+    // The quote's 400 words are no part of the count: they are someone else's words, not prose.
+    expect(linesOf(result, 'length')).toEqual([
+      [{ section: 'the-story' }, "This section has 1,000 of the article's 1,901 words of prose; the article aims at about 1,500."],
+      [{ section: 'closing' }, "This section has 900 of the article's 1,901 words of prose; the article aims at about 1,500."]
+    ]);
+    const noSection = factCheckContentBundle(baseArgs({ contentBundle: { headline: { main: words(1900) }, sections: [], evidenceCards: [] } }));
+    expect(linesOf(noSection, 'length')).toEqual([[null, 'The article runs 1,900 words of prose; it aims at about 1,500.']]);
+  });
+
+  it('a phrase that runs across two pieces prints as the article prints it: from one paragraph to the next, and from the deck to a paragraph', () => {
+    const LINE = ' (across two pieces) makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.';
+    const paragraphs = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('The vote came and I'), para('voted again.')) }));
+    expect(paragraphs.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line])).toEqual([
+      [null, 'I voted', `"I voted"${LINE}`]
+    ]);
+    const deck = factCheckContentBundle(baseArgs({
+      contentBundle: { headline: { main: 'The Vote', deck: 'Nine players, a scoreboard, and I' }, ...storyWith(para('Voted with the room at noon.')) }
+    }));
+    expect(deck.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line])).toEqual([
+      [null, 'I Voted', `"I Voted"${LINE}`]
+    ]);
+    // The rework's message reads the phrase as the check read it, as before.
+    [paragraphs, deck].forEach((result) => expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\. /)]));
   });
 });

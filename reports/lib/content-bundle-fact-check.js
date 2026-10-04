@@ -1318,9 +1318,10 @@ function factCheckContentBundle({
     }[photoReasonOf(filename)];
     return `Invalid photo reference "${filename}": ${reason} ${useKept}`;
   };
+  // Brief 4.10c: a photo the director left out says what the article does with it: it prints it.
   const photoLine = (filename) => ({
     whiteboard: `This photo, ${filename}, is the whiteboard: the room's working notes, which stay out of the article.`,
-    excluded: `You left this photo, ${filename}, out of the article.`,
+    excluded: `The article still prints this photo, ${filename}, which you left out.`,
     notTheSessions: `This photo, ${filename}, is not one of the session's photos.`
   })[photoReasonOf(filename)];
   for (const filename of invalidPhotos) {
@@ -1359,8 +1360,9 @@ function factCheckContentBundle({
    * pieces under different edits is one concern per edit, and each finding carries its own
    * piece's edit and that edit's concern.
    *
-   * Brief 4.10b: each finding's line is `lineOf` the phrase as the piece prints it, quoted,
-   * or as the check read it with "(across two paragraphs)" when it has no one place.
+   * Brief 4.10b: each finding's line is `lineOf` the phrase as the piece prints it, quoted.
+   * Brief 4.10c: a phrase with no one place is quoted as the article prints it across its two
+   * pieces, which can be the deck and a paragraph, with "(across two pieces)".
    */
   const reporterHit = (phrase, message, lineOf) => {
     const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
@@ -1375,9 +1377,9 @@ function factCheckContentBundle({
     const marks = holding
       .filter(segment => directors || !segment.editId)
       .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase), editId: directors ? segment.editId : null }));
-    (marks.length > 0 ? marks : [{ place: null, excerpt: phrase, editId: null }])
+    (marks.length > 0 ? marks : [{ place: null, excerpt: printedExcerpt(narratorText(bundle), phrase), editId: null }])
       .forEach(({ place, excerpt, editId }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt,
-        editId ? concerns.get(editId) : message, lineOf(place ? quoted(excerpt) : `${quoted(excerpt)} (across two paragraphs)`), editId));
+        editId ? concerns.get(editId) : message, lineOf(place ? quoted(excerpt) : `${quoted(excerpt)} (across two pieces)`), editId));
   };
   // Brief 4.10b: the director's lines say what T8 asks of the reporter in either theme.
   const votesLine = (phrase) => `${phrase} makes the reporter one of the room: the reporter never votes, joins the room's accusation or exposes a memory.`;
@@ -1526,7 +1528,8 @@ function factCheckContentBundle({
     }
 
     // 'emDash' ADVISORY: C4's house rule. Brief 4.7a: a finding at each piece that holds
-    // one, its excerpt the text around the piece's first.
+    // one, its excerpt the text around the piece's first. Brief 4.10c: the line counts what
+    // the check counts, the em-dashes outside quoted speech.
     const dashes = segments
       .map(segment => ({ segment, where: segment.where, n: (segment.text.match(/—/g) || []).length }))
       .filter(d => d.n > 0);
@@ -1539,7 +1542,7 @@ function factCheckContentBundle({
       advisoryWarnings.push(message);
       for (const { segment, n } of dashes) {
         found('emDash', 'advisory', segment.place, printedExcerpt(segment.original, windowAround(segment.text, segment.text.indexOf('—'), 1)), message,
-          `${pieceOf(segment.place)} has ${n === 1 ? 'an em-dash' : `${n} em-dashes`}; house style uses none.`);
+          `${pieceOf(segment.place)} has ${n === 1 ? 'an em-dash' : `${n} em-dashes`} outside quoted speech; house style uses none.`);
       }
     }
 
@@ -1584,17 +1587,19 @@ function factCheckContentBundle({
         `the ${fmt(LENGTH_FLAG_WORDS)}-word flag for an article of about ${fmt(LENGTH_TARGET_WORDS)} words (C4): ` +
         `${[...bySection].map(([key, n]) => `${key} ${fmt(n)}`).join(', ')}. Cut what the thesis does not need.`;
       advisoryWarnings.push(message);
-      // Each section's words, by its place (brief 4.10b: the section's part of the line).
+      // Each section's words, by its place (brief 4.10b: the section's part of the line). Brief
+      // 4.10c: the words counted are the article's words of prose, never a card's, a quote's or
+      // a caption's.
       const sections = new Map();
       for (const segment of unstripped) {
         if (segment.section !== null) sections.set(segment.place.section, (sections.get(segment.place.section) || 0) + wordCount(segment.text));
       }
       if (sections.size === 0) {
-        found('length', 'advisory', null, null, message, `The article runs ${fmt(totalWords)} words; it aims at about ${fmt(LENGTH_TARGET_WORDS)}.`);
+        found('length', 'advisory', null, null, message, `The article runs ${fmt(totalWords)} words of prose; it aims at about ${fmt(LENGTH_TARGET_WORDS)}.`);
       }
       for (const [section, words] of sections) {
         found('length', 'advisory', { section }, null, message,
-          `This section has ${fmt(words)} of the article's ${fmt(totalWords)} words; the article aims at about ${fmt(LENGTH_TARGET_WORDS)}.`);
+          `This section has ${fmt(words)} of the article's ${fmt(totalWords)} words of prose; the article aims at about ${fmt(LENGTH_TARGET_WORDS)}.`);
       }
     }
 

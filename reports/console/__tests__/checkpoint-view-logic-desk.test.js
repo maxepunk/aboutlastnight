@@ -699,14 +699,15 @@ describe("4.10b: each mark says what is wrong in the article and where, in the d
     expect(textsAt(block(1, 3))).toEqual(["This photo, nope.jpg, is not one of the session's photos."]);
   });
 
+  // 4.10c: the em-dashes counted are the ones outside quoted speech, and the words the article's words of prose.
   test("a paragraph: each paragraph carries its own part of a finding that sits at several", () => {
-    expect(textsAt(block(1, 1))).toEqual(['This paragraph has an em-dash; house style uses none.']);
-    expect(textsAt(block(2, 2))).toEqual(['This paragraph has 2 em-dashes; house style uses none.']);
+    expect(textsAt(block(1, 1))).toEqual(['This paragraph has an em-dash outside quoted speech; house style uses none.']);
+    expect(textsAt(block(2, 2))).toEqual(['This paragraph has 2 em-dashes outside quoted speech; house style uses none.']);
   });
 
   test("the length at two sections: each heading carries its own section's words, once", () => {
-    expect(textsAt({ kind: 'heading', section: 1 })).toEqual(["This section has 1,031 of the article's 1,998 words; the article aims at about 1,500."]);
-    expect(textsAt({ kind: 'heading', section: 3 })).toEqual(["This section has 914 of the article's 1,998 words; the article aims at about 1,500."]);
+    expect(textsAt({ kind: 'heading', section: 1 })).toEqual(["This section has 1,031 of the article's 1,998 words of prose; the article aims at about 1,500."]);
+    expect(textsAt({ kind: 'heading', section: 3 })).toEqual(["This section has 914 of the article's 1,998 words of prose; the article aims at about 1,500."]);
   });
 
   test('a finding with no block: one line beside the approve button, naming the player', () => {
