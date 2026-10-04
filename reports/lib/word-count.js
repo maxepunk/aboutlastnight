@@ -3,9 +3,8 @@
  * text between whitespace that holds a letter or a digit, so a lone dash or bullet is
  * not a word.
  *
- * Phase 4 (brief 4.4): the weave's bound (lib/weave.js) counts by it. The article's
- * length check (content-bundle-fact-check.js) applies the same rule through a private
- * copy, which its own slice moves onto this module, so the two lengths are counted
+ * Phase 4: the weave's bound (lib/weave.js, brief 4.4) and the article's length check
+ * (content-bundle-fact-check.js, brief 4.7a) count by it, so the two lengths are counted
  * one way.
  */
 

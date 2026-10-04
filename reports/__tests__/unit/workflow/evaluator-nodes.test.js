@@ -2124,8 +2124,13 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // and its pin with it. Brief 4.6, the map: the fixture's outline is a map, which the
     // article judge prints under OUTLINE:, and nothing else moves (with the fixture's old
     // outline the judge sends 6e6ee008..., the hash before).
+    // Brief 4.7a, the fact check: its roster check covers the players the map places, so
+    // the fact check's line this judge prints names the map's beat as the fix ("... are on
+    // the session roster and placed in a beat on the map, but never named anywhere the
+    // reader can see. Write the beat the map gives each of them."), and nothing else moves
+    // (with the old line the judge sends 010dfb12..., the hash before).
     const PINNED = {
-      article: '010dfb12413aaef2cba89d4dcc3a5ed5134d4900e194c4da52378c00e646c0d5'
+      article: '487c18ee99382b3d2b6242132468a9dd3e2acb939d88bfefdbb41096a3887d8d'
     };
     const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
     const JUDGES = {

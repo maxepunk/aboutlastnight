@@ -61,13 +61,18 @@ const {
   buildSessionFacts, articleWriterInputs, getPromptBuilder, isPhotoExcluded, whiteboardFilenameOf
 } = require('./ai-nodes');
 // Phase 3 (3.7): the article judge's JSON of the outline and the article leaves the
-// writers' questions out.
-const { withoutWriterQuestions } = require('../../writer-questions');
+// writers' questions out. Brief 4.7a: the director's answers at the story meeting, which
+// the fact check reads among the director's words (T1).
+const { withoutWriterQuestions, weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../../writer-questions');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
 // the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
 // (no struck connection, no answer), and the director's answers, which it reads as record.
 const { isWeave, weaveForPrompt, weaveForJudge, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
 const { renderDirectorAnswers } = require('../../prompt-renderers/settled-weave');
+// Brief 4.7a: the players the map places, for the fact check's roster check: Everyone's one
+// function (console/outline-edit-logic.js mapTally) over the map's roster (lib/map.js).
+const { mapTally } = require('../../../console/outline-edit-logic');
+const { mapRosterOf } = require('../../map');
 // The page's own rule for whether the writer's money tracker prints (printedWriterTracker).
 const { writerTrackerPrints } = require('../../template-assembler');
 // F1 (spec 2026-10-02 section 7): the director's edits are final. The article judge reads
@@ -75,7 +80,7 @@ const { writerTrackerPrints } = require('../../template-assembler');
 // them to advisoryWarnings under the one prefix.
 const {
   carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, concernFinding, DIRECTOR_EDIT_PREFIX,
-  EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE, PRINTED_FIELDS
+  EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE, PRINTED_FIELDS, isMap
 } = require('../../hand-edit-diff');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -695,9 +700,21 @@ function truthOnlyVerdict(guard, criteria) {
 }
 
 /**
- * The director's words: the notes, the input-review corrections and the accusation. The
- * fact check's pronoun check reads them (buildFactCheckArgs), and the verdict guard reads
- * them as record (recordTexts).
+ * The director's answers at the story meeting, each word for word (brief 4.7a; T1 as
+ * rewritten: the answers count like the notes). Only answered questions give one.
+ *
+ * @param {Object} state
+ * @returns {string[]}
+ */
+function meetingAnswers(state) {
+  const weave = state.weave;
+  return weaveQuestionsOf(weave && weave.questions).filter(isAnswered).map((question) => question[WEAVE_ANSWER_KEY]);
+}
+
+/**
+ * The director's words: the notes, the input-review corrections, the accusation and, since
+ * brief 4.7a, the answers at the story meeting (T1). The fact check's pronoun check reads
+ * them (buildFactCheckArgs), and the verdict guard reads them as record (recordTexts).
  *
  * @param {Object} state
  * @returns {string[]}
@@ -707,8 +724,24 @@ function directorWords(state) {
   return [
     notes.rawProse,
     ...(Array.isArray(state.inputReviewCorrections) ? state.inputReviewCorrections : []),
-    directorAccusationText(state)
+    directorAccusationText(state),
+    ...meetingAnswers(state)
   ].filter(text => typeof text === 'string' && text.trim());
+}
+
+/**
+ * The roster players the map, as the director left it, places in a beat (brief 4.7a):
+ * Everyone, from the map's one function for it (console/outline-edit-logic.js mapTally)
+ * over the map's roster (lib/map.js mapRosterOf). The fact check's roster check covers
+ * these alone; a state holding no map gives none, and every roster player is checked.
+ *
+ * @param {Object} state
+ * @returns {string[]|undefined}
+ */
+function mapPlacedPlayers(state) {
+  if (!isMap(state.outline)) return undefined;
+  const { everyone } = mapTally(state.outline, { roster: mapRosterOf(state.sessionConfig, state.canonicalCharacters) });
+  return everyone.flatMap((section) => section.players);
 }
 
 /**
@@ -756,6 +789,10 @@ function recordTexts(state) {
  * Phase 4 (brief 4.6; R5): the cards' sources are the record's alone, the evidence
  * bundle's; the arc packages went.
  *
+ * Brief 4.7a: the players the map places (mapPlacedPlayers), so a roster player the map as
+ * the director left it does not place is no finding; and the director's answers at the
+ * story meeting among the director's words (T1).
+ *
  * @param {Object} state
  * @returns {Object}
  */
@@ -767,6 +804,7 @@ function buildFactCheckArgs(state) {
     contentBundle: state.contentBundle,
     evidenceBundle: state.evidenceBundle,
     roster: config.roster,
+    placedPlayers: mapPlacedPlayers(state),
     sessionPhotos: state.sessionPhotos,
     excludedPhotos: (Array.isArray(state.sessionPhotos) ? state.sessionPhotos : [])
       .filter(photo => typeof photo === 'string' && isPhotoExcluded(state, photo)),

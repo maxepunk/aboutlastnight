@@ -532,6 +532,7 @@ describe('advisory-only checks (I2b)', () => {
 });
 
 describe('shape and resilience', () => {
+  // Brief 4.7a: `findings`, each hit with where it sits, is part of the shape.
   it('returns the documented shape for an empty bundle', () => {
     const result = factCheckContentBundle({});
     expect(result).toEqual({
@@ -540,7 +541,8 @@ describe('shape and resilience', () => {
       cardFidelity: [],
       rosterCoverage: { missing: [] },
       photoReferences: { invalid: [] },
-      reporterMode: { violations: [] }
+      reporterMode: { violations: [] },
+      findings: []
     });
   });
 
@@ -1815,5 +1817,191 @@ describe('a block the director only moved is the writer\'s at the fact check (FA
     expect(result.reporterMode.violations).toEqual(['i voted']);
     expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\./)]);
     expect(result.advisoryWarnings.filter((w) => w.startsWith(DIRECTOR_EDIT_PREFIX))).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Brief 4.7a (phase 4; spec 6.2 and 6.3): the fact check returns each finding with its
+// place, so the desk can mark it beside its paragraph (4.10); its roster check covers the
+// players the map, as the director left it, places; and it counts words one way, with
+// lib/word-count.js. The judge's half of the brief is in article-judge.test.js.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.7a: each finding with its place', () => {
+  const { DIRECTOR_EDIT_PREFIX, standingAfterSendBack, carriedEdits } = require('../hand-edit-diff');
+  const DASHED = 'Vic signed—and Mel watched the ledger.';
+  const NOT_VERBATIM = 'Vic told me the job was already handed out to somebody else.';
+
+  /** One section holding a paragraph with an em-dash, a card that is not verbatim and a photo the session never took. */
+  const located = (extra = {}) => factCheckContentBundle(baseArgs({
+    sessionPhotos: ['/photos/a.jpg'],
+    contentBundle: {
+      headline: { main: 'The Offer', deck: 'A deck—with a dash.' },
+      heroImage: { filename: 'hero-not-ours.jpg', caption: 'The room at noon.' },
+      sections: [{
+        id: 'the-story', type: 'narrative', content: [
+          { type: 'paragraph', text: 'Vic never looked up.' },
+          { type: 'paragraph', text: DASHED },
+          inlineCard({ content: NOT_VERBATIM }),
+          { type: 'photo', filename: 'nope.jpg', caption: 'Mel at the ledger.' }
+        ]
+      }],
+      evidenceCards: [card({ tokenId: 'nope999', headline: 'A card no document backs' })]
+    },
+    ...extra
+  }));
+
+  it('a paragraph: the section id and the paragraph ordinal, with an excerpt and its message', () => {
+    const result = located();
+    const message = result.advisoryWarnings.find((w) => w.startsWith("Em-dash in the narrator's prose:"));
+    expect(result.findings.filter((f) => f.kind === 'emDash' && f.place && f.place.section)).toEqual([
+      { kind: 'emDash', status: 'advisory', place: { section: 'the-story', paragraph: 2 }, excerpt: DASHED, message }
+    ]);
+  });
+
+  it('a card: its id, with the section it sits in, or the sidebar', () => {
+    const result = located();
+    const notVerbatim = result.structuralIssues.find((m) => m.startsWith('Evidence card "vic001"'));
+    const unknown = result.structuralIssues.find((m) => m.startsWith('Evidence card "nope999"'));
+    expect(result.findings.filter((f) => f.kind === 'cardFidelity')).toEqual([
+      { kind: 'cardFidelity', status: 'structural', place: { tokenId: 'vic001', section: 'the-story' }, excerpt: 'The Offer', message: notVerbatim },
+      { kind: 'cardFidelity', status: 'structural', place: { tokenId: 'nope999', sidebar: true }, excerpt: 'A card no document backs', message: unknown }
+    ]);
+  });
+
+  it('a photo: its filename, with the section it sits in, or the hero', () => {
+    const result = located();
+    const of = (filename) => result.structuralIssues.find((m) => m.startsWith(`Invalid photo reference "${filename}"`));
+    expect(result.findings.filter((f) => f.kind === 'photoReferences')).toEqual([
+      { kind: 'photoReferences', status: 'structural', place: { filename: 'hero-not-ours.jpg', hero: true }, excerpt: 'The room at noon.', message: of('hero-not-ours.jpg') },
+      { kind: 'photoReferences', status: 'structural', place: { filename: 'nope.jpg', section: 'the-story' }, excerpt: 'Mel at the ledger.', message: of('nope.jpg') }
+    ]);
+  });
+
+  it('the headline, the kicker and the deck: the field', () => {
+    const result = located();
+    const finding = result.findings.find((f) => f.kind === 'emDash' && f.place && f.place.field);
+    expect(finding).toEqual(expect.objectContaining({ place: { field: 'headline.deck' }, excerpt: 'A deck—with a dash.' }));
+  });
+
+  it('every message has a finding, and every finding carries a message from the list its status names', () => {
+    const result = located({ roster: ['Vic', 'Mel', 'Kai'], reportingMode: 'remote' });
+    expect(result.findings.length).toBeGreaterThan(0);
+    for (const finding of result.findings) {
+      const list = finding.status === 'structural' ? result.structuralIssues : result.advisoryWarnings;
+      expect([finding.kind, list.includes(finding.message)]).toEqual([finding.kind, true]);
+    }
+    for (const message of [...result.structuralIssues, ...result.advisoryWarnings]) {
+      expect([message, result.findings.some((f) => f.message === message)]).toEqual([message, true]);
+    }
+    // A player the article never names has no place to sit beside.
+    expect(result.findings.find((f) => f.kind === 'rosterCoverage')).toEqual(expect.objectContaining({ place: null, status: 'structural' }));
+  });
+
+  it('a hit in one of the director\'s edits carries the edit\'s id', () => {
+    const writers = storyWith({ type: 'paragraph', text: 'Vic leaned in at the bar.' });
+    const directors = storyWith({ type: 'paragraph', text: 'Vic leaned in at the bar.' }, inlineCard({ content: NOT_VERBATIM }));
+    const directorEdits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    const result = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits }));
+    expect(result.findings).toEqual([{
+      kind: 'cardFidelity', status: 'advisory', place: { tokenId: 'vic001', section: 'the-story' }, excerpt: 'The Offer',
+      message: result.advisoryWarnings[0], editId: 'E1'
+    }]);
+    expect(result.advisoryWarnings[0].startsWith(`${DIRECTOR_EDIT_PREFIX}E1: `)).toBe(true);
+  });
+
+  // R11: a finding located in the director's text is a concern. A phrase in the writer's
+  // paragraph and in one the director wrote is the writer's hit, marked at the writer's
+  // paragraph alone.
+  it('a structural reporter-mode hit is marked at the writer\'s pieces only, never beside the director\'s line', () => {
+    const para = (text) => ({ type: 'paragraph', text });
+    const writers = storyWith(para('The room voted at noon.'), para('Then I voted with the room.'));
+    const directors = storyWith(para('The room voted at noon, and I voted with them.'), para('Then I voted with the room.'));
+    const directorEdits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    const result = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits }));
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\./)]);
+    expect(result.findings.filter((f) => f.kind === 'reporterMode')).toEqual([
+      { kind: 'reporterMode', status: 'structural', place: { section: 'the-story', paragraph: 2 }, excerpt: 'i voted', message: result.structuralIssues[0] }
+    ]);
+  });
+});
+
+describe('4.7a: the roster check covers the players the map places', () => {
+  const paragraphs = (...texts) => ({ sections: [{ id: 'the-story', type: 'narrative', content: texts.map((text) => ({ type: 'paragraph', text })) }], evidenceCards: [] });
+
+  it('a roster player the map does not place is the director\'s decision, and no finding', () => {
+    const result = factCheckContentBundle(baseArgs({
+      roster: ['Vic', 'Mel', 'Kai'], placedPlayers: ['Vic', 'Mel'],
+      contentBundle: paragraphs('Vic and Mel argued at the bar.')
+    }));
+    expect(result.rosterCoverage.missing).toEqual([]);
+    expect(result.structuralIssues).toEqual([]);
+    expect(result.findings.filter((f) => f.kind === 'rosterCoverage')).toEqual([]);
+  });
+
+  it('a player the map places and the article never names is a gap, with the map\'s beat as its fix', () => {
+    const result = factCheckContentBundle(baseArgs({
+      roster: ['Vic', 'Mel', 'Kai'], placedPlayers: ['Vic', 'Mel'],
+      contentBundle: paragraphs('Vic argued at the bar.')
+    }));
+    expect(result.rosterCoverage.missing).toEqual(['Mel']);
+    expect(result.structuralIssues).toEqual([
+      'Roster coverage gap: Mel is on the session roster and placed in a beat on the map, but never named anywhere the reader can see. Write the beat the map gives each of them.'
+    ]);
+  });
+
+  it('with no map, every roster player is checked, as C7 asks', () => {
+    const result = factCheckContentBundle(baseArgs({ roster: ['Vic', 'Mel'], contentBundle: paragraphs('Vic argued at the bar.') }));
+    expect(result.rosterCoverage.missing).toEqual(['Mel']);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Roster coverage gap: Mel is on the session roster but never named anywhere the reader can see\./)]);
+  });
+
+  it('buildFactCheckArgs gives it the players the map as the director left it places, through mapTally', () => {
+    const { _testing: { buildFactCheckArgs } } = require('../workflow/nodes/evaluator-nodes');
+    const { reworkFixtureState, MAP } = require('./fixtures/rework-state');
+    const map = JSON.parse(JSON.stringify(MAP));
+    // Riley leaves the map: off the envelope beat, and the closing's line struck to leftOut.
+    map.sections[1].beats[1].players = ['Morgan'];
+    const [line] = map.sections[3].beats.splice(0, 1);
+    map.leftOut.push(line);
+    const state = { ...reworkFixtureState('journalist'), outline: map, contentBundle: paragraphs('Alex, Morgan and Sarah argued.') };
+    expect(buildFactCheckArgs(state).placedPlayers).toEqual(['Alex', 'Morgan', 'Sarah']);
+    const result = factCheckContentBundle(buildFactCheckArgs(state));
+    expect(result.rosterCoverage.missing).toEqual([]);
+    expect(result.structuralIssues.filter((m) => m.startsWith('Roster coverage gap:'))).toEqual([]);
+    // A state with no map hands it no placed players, so every roster player is checked.
+    expect(buildFactCheckArgs({ ...state, outline: {} }).placedPlayers).toBeUndefined();
+  });
+});
+
+// T1 (section B of the rule-text read): the director's answers at the story meeting count
+// like the notes, so the fact check's director text holds them (a pronoun an answer gives is
+// not invented), and the verdict guard reads them as record.
+describe('4.7a: the fact check reads the director\'s answers as the director\'s words', () => {
+  const { _testing: { buildFactCheckArgs } } = require('../workflow/nodes/evaluator-nodes');
+  const { reworkFixtureState } = require('./fixtures/rework-state');
+
+  it('buildFactCheckArgs puts each answer, word for word, in the director text', () => {
+    const state = reworkFixtureState('journalist');
+    state.weave.questions[0].answer = 'Sarah ran the bar all morning, and Blake said she was never paid.';
+    const { directorText } = buildFactCheckArgs(state);
+    expect(directorText).toContain('Sarah ran the bar all morning, and Blake said she was never paid.');
+    expect(directorText).toContain(state.directorNotes.rawProse);
+  });
+
+  it('an unanswered question adds nothing to it', () => {
+    const state = reworkFixtureState('journalist');
+    expect(buildFactCheckArgs(state).directorText).not.toContain(state.weave.questions[0].question);
+  });
+});
+
+describe('4.7a: one word count', () => {
+  it('the length check counts words with lib/word-count.js', () => {
+    jest.isolateModules(() => {
+      jest.doMock('../word-count', () => ({ wordCount: () => 1000 }));
+      const { factCheckContentBundle: isolated } = require('../content-bundle-fact-check');
+      const result = isolated(baseArgs({ contentBundle: { headline: { main: 'Short' }, sections: [{ id: 's', type: 'narrative', content: [{ type: 'paragraph', text: 'Two words.' }] }] } }));
+      expect(result.advisoryWarnings).toEqual([expect.stringMatching(/^Over length: the narrator's prose \(headline, deck and paragraphs\) runs 2,000 words/)]);
+    });
+    jest.dontMock('../word-count');
   });
 });
