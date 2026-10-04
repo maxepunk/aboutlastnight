@@ -314,4 +314,38 @@ describe('the leave-out box through the real graph (phase 4, brief 4.2)', () => 
       expect(photos2[photos2.length - 1].photos.map((p) => p.filename)).toContain('p2.jpg');
     });
   });
+
+  /**
+   * Task 4.3c: a kept photo's analysis carries no exclusion from an earlier round. After a
+   * Skip no photo is identified, so after a rollback finalizePhotoAnalyses runs again on
+   * the analyses the rollback kept, one of them still marked excluded by the round before.
+   */
+  describe('a kept photo\'s analysis (task 4.3c)', () => {
+    it('Skip with one box ticked, a rollback, then Skip with that box clear: the analysis and the count agree with the mapping', async () => {
+      const sdk = scriptedSdk();
+      const graph = createReportGraphWithCheckpointer(saver);
+      const thread = threadFor('stale-mark-test', sdk);
+      await graph.updateState(thread, atCharacterIdsStop(), 'detectWhiteboard');
+      await run(graph, thread, null);
+
+      // Round 1: the director ticks p3.jpg's box and skips.
+      const round1 = await skipCharacterIds(graph, thread, { 'p3.jpg': true });
+      const state1 = round1.after.values;
+      expect(state1.photoAnalyses.analyses.find((a) => a.filename === 'p3.jpg').excluded).toBe(true);
+      expect(state1.photoAnalyses.enrichmentStats.excluded).toBe(1);
+
+      // Round 2: back to the stop, which still holds round 1's mark on p3.jpg's analysis,
+      // and Skip with every box clear.
+      await graph.updateState(thread, buildRollbackState('character-ids'), 'detectWhiteboard');
+      await run(graph, thread, null);
+      const round2 = await skipCharacterIds(graph, thread, {});
+      expect(round2.atStop.photoAnalyses.analyses.find((a) => a.filename === 'p3.jpg').excluded).toBe(true);
+      const state2 = round2.after.values;
+      expect(state2.characterIdMappings['p3.jpg'].exclude).toBe(false);
+      expect(state2.photoAnalyses.analyses.map((a) => [a.filename, 'excluded' in a])).toEqual([
+        ['hero.jpg', false], ['p2.jpg', false], ['p3.jpg', false]
+      ]);
+      expect(state2.photoAnalyses.enrichmentStats.excluded).toBe(0);
+    });
+  });
 });

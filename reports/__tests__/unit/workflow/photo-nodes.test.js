@@ -879,3 +879,52 @@ describe('finalizePhotoAnalyses: the leave-out box, follow-ups (brief 4.2b)', ()
     expect(result.photoAnalyses.enrichmentStats.retriedPhotos).toBe(1);
   });
 });
+
+/**
+ * A kept photo's analysis carries no exclusion from an earlier round (phase 4, task 4.3c).
+ * A rollback to the character-IDs stop keeps the analyses, and finalizePhotoAnalyses runs
+ * again when no photo was identified, so an analysis can arrive still marked excluded from
+ * the round before. A photo the mapping keeps loses that mark in each branch that keeps it,
+ * so the analysis and enrichmentStats.excluded agree with the mapping.
+ */
+describe('finalizePhotoAnalyses: a kept photo loses a stale exclusion (task 4.3c)', () => {
+  const mapping = (exclude, extra = {}) => ({ characterMappings: [], additionalCharacters: [], corrections: {}, ...extra, exclude });
+  const named = (name) => ({ characterMappings: [{ descriptionIndex: 0, characterName: name }] });
+  const config = (sdk) => ({ configurable: { sdkClient: sdk, imagePromptBuilder: mockImagePromptBuilder } });
+  const staleAnalysis = (filename) => ({
+    filename,
+    excluded: true,
+    visualContent: 'Two people at a table',
+    narrativeMoment: 'A negotiation',
+    suggestedCaption: 'A deal at the table',
+    characterDescriptions: [{ description: 'person in a grey coat', role: 'seated' }]
+  });
+
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('drops the mark when the photo is kept with no identification, enriched, or enriched by the fallback after an error', async () => {
+    const sdk = jest.fn(async (options) => {
+      if (options.prompt.includes('Filename: failed.jpg')) throw new Error('SDK error');
+      return { identifiedCharacters: ['Vic'], enrichedVisualContent: 'Vic at a table', enrichedNarrativeMoment: 'A negotiation', finalCaption: 'Vic waits' };
+    });
+    const result = await finalizePhotoAnalyses({
+      photoAnalyses: { analyses: ['plain.jpg', 'named.jpg', 'failed.jpg', 'out.jpg'].map(staleAnalysis) },
+      characterIdMappings: {
+        'plain.jpg': mapping(false), 'named.jpg': mapping(false, named('Vic')), 'failed.jpg': mapping(false, named('Sam')), 'out.jpg': mapping(true)
+      },
+      roster: ['Vic', 'Sam']
+    }, config(sdk));
+
+    expect(sdk).toHaveBeenCalledTimes(2);
+    const byName = Object.fromEntries(result.photoAnalyses.analyses.map((a) => [a.filename, a]));
+    ['plain.jpg', 'named.jpg', 'failed.jpg'].forEach((filename) => expect([filename, 'excluded' in byName[filename]]).toEqual([filename, false]));
+    expect(byName['named.jpg'].identifiedCharacters).toEqual(['Vic']);
+    expect(byName['failed.jpg']._enrichmentError).toBe('SDK error');
+    expect(byName['out.jpg'].excluded).toBe(true);
+    expect(result.photoAnalyses.enrichmentStats.excluded).toBe(1);
+  });
+});

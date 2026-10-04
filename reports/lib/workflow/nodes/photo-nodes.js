@@ -769,7 +769,8 @@ async function parseCharacterIds(state, config) {
  * finds (lib/photo-leave-out.js), the entry isPhotoExcluded reads, and isPhotoExcluded,
  * the one rule for a left-out photo, decides which photos get the `excluded` mark and
  * which failed analyses are retried. A retry is a paid vision call, so it goes only to a
- * photo that prints.
+ * photo that prints. A photo the rule keeps loses a mark an earlier round left on its
+ * analysis (task 4.3c): a rollback to character-ids keeps the analyses.
  *
  * @param {Object} state - Current state with photoAnalyses, characterIdMappings
  * @param {Object} config - Graph config with optional configurable.sdkClient
@@ -885,6 +886,11 @@ async function finalizePhotoAnalyses(state, config) {
       });
     }
 
+    // Task 4.3c: a photo the rule keeps carries no exclusion an earlier round marked on its
+    // analysis, so the analysis and enrichmentStats.excluded agree with the mapping.
+    const kept = { ...analysis };
+    delete kept.excluded;
+
     // If no mappings or corrections, do simple passthrough (no SDK call needed)
     const hasMappings = (userInput.characterMappings?.length > 0) || (userInput.additionalCharacters?.length > 0);
     const hasCorrections = userInput.corrections && Object.values(userInput.corrections).some(v => v);
@@ -892,7 +898,7 @@ async function finalizePhotoAnalyses(state, config) {
     if (!hasMappings && !hasCorrections) {
       console.log(`[finalizePhotoAnalyses] No enrichment data for: ${analysis.filename}`);
       return Promise.resolve({
-        ...analysis,
+        ...kept,
         identifiedCharacters: [],
         enrichedVisualContent: analysis.visualContent,
         enrichedNarrativeMoment: analysis.narrativeMoment,
@@ -923,7 +929,7 @@ async function finalizePhotoAnalyses(state, config) {
         });
 
         return {
-          ...analysis,
+          ...kept,
           // Enriched fields
           identifiedCharacters: enrichment.identifiedCharacters || [],
           enrichedVisualContent: enrichment.enrichedVisualContent || analysis.visualContent,
@@ -947,7 +953,7 @@ async function finalizePhotoAnalyses(state, config) {
         ];
 
         return {
-          ...analysis,
+          ...kept,
           identifiedCharacters: allCharacters,
           enrichedVisualContent: analysis.visualContent,
           enrichedNarrativeMoment: analysis.narrativeMoment,
