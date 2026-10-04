@@ -1,5 +1,6 @@
 /**
- * Step mode's print of the story meeting, the map and the desk (phase 4, brief 4.12a): the page
+ * Step mode's print of a stop with a page (phase 4, briefs 4.12a and 4.12c: the input review, the
+ * story meeting, the character-IDs stop, the map and the desk): the page
  * lib/stop-pages.js builds from the console's view models, one printed line per line of the page,
  * so the harness shows what the console shows and the stops log counts. A title prints as its
  * heading; any other line as its label and its text; a concern or a mark that sits beside a line,

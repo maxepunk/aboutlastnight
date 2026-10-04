@@ -128,11 +128,12 @@ describe('4.12a: step mode prints the three stops from the console\'s view model
 });
 
 describe('4.12a: the harness prints and approves the three stops through the shared modules', () => {
+  // Task 4.12c: step mode prints every stop with a page through printStop, these three among them.
   it('prints the story meeting, the map and the desk through scripts/lib/stop-print.js in step mode, with the run\'s theme', () => {
     expect(SRC).toMatch(/const \{ stopPrint \} = require\('\.\/lib\/stop-print'\);/);
     const fn = body('function displayCheckpointData(');
-    ['arc-selection', 'outline', 'article'].forEach((stop) => expect(fn).toContain(`case '${stop}':`));
-    expect(fn).toMatch(/case 'arc-selection':\n\s*case 'outline':\n\s*case 'article':\n\s*printStop\(checkpointType, checkpoint, currentPhase\);/);
+    expect(fn).toMatch(/if \(PAGE_STOPS\.includes\(checkpointType\)\) \{\n\s*printStop\(checkpointType, checkpoint, currentPhase\);\n\s*return;\n\s*\}/);
+    ['arc-selection', 'outline', 'article'].forEach((stop) => expect(fn).not.toContain(`case '${stop}':`));
     expect(body('function printStop(')).toMatch(/stopPrint\(stop, checkpoint, \{ theme: THEME \}\)/);
   });
 
@@ -144,7 +145,7 @@ describe('4.12a: the harness prints and approves the three stops through the sha
   });
 
   it('builds the default approval at those stops and at the character-IDs stop with stopApproval, from the run\'s options', () => {
-    expect(SRC).toMatch(/const \{ stopApproval, STOP_ACTIONS \} = require\('\.\/lib\/stop-payloads'\);/);
+    expect(SRC).toMatch(/const \{ stopApproval, STOP_ACTIONS(, optionsRefusal)? \} = require\('\.\/lib\/stop-payloads'\);/);
     const fn = body('function defaultApproval(');
     expect(fn).toMatch(/stopApproval\(checkpointType, checkpointData, \{ action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS \}\)/);
   });
@@ -176,5 +177,55 @@ describe('4.12a: the harness prints and approves the three stops through the sha
   it('reads a verdict\'s structural issues, never its issues: the completion counts the last verdict\'s structuralIssues', () => {
     expect(SRC).not.toMatch(/\.issues\b/);
     expect(SRC).toMatch(/currentData\.validationResults\.structuralIssues/);
+  });
+});
+
+// Task 4.12c: the input review and the character-IDs stop have a page (lib/stop-pages.js), so
+// the harness prints them as the console shows them, as it prints the three decision stops,
+// and its options say what they take (scripts/lib/stop-payloads.js optionsRefusal).
+describe('4.12c: the harness prints the input review and the character-IDs stop from their pages', () => {
+  const InputLogic = require('../../../console/input-review-logic');
+
+  it('prints the input review\'s parse and the character-IDs stop\'s cards through stop-print', () => {
+    const review = {
+      type: 'input-review',
+      sessionConfig: { accusation: { accused: ['Alex'], charge: 'Sold the company out from under Marcus', verdictKind: 'culprit' } },
+      directorNotes: { whiteboard: { ambiguities: ['A name under the coffee stain'] } },
+      ledger: { clock: { decided: true, evening: true, firstTime: '07:50 PM' }, adjustmentsParsed: true, accounts: [{ name: 'Melanie', total: 75000, tokenCount: 1 }], adjustments: [], mismatches: [], unclassified: [] }
+    };
+    const text = textOf(stopPrint('input-review', review));
+    expect(text).toContain('Alex');
+    expect(text).toContain('Sold the company out from under Marcus');
+    expect(text).toContain(InputLogic.ledgerView(review.ledger).clockLine);
+    expect(text).toContain('A name under the coffee stain');
+
+    const photos = {
+      type: 'character-ids',
+      photoAnalyses: { analyses: [{ filename: 'hero.jpg', visualContent: 'Alex and Morgan at the bar.', characterDescriptions: [{ role: 'CENTRAL', description: 'A man in a grey suit.' }] }] },
+      sessionPhotos: ['/p/hero.jpg'],
+      leftOutPhotos: ['hero.jpg']
+    };
+    const printed = stopPrint('character-ids', photos);
+    expect(textOf(printed)).toContain('hero.jpg');
+    expect(textOf(printed)).toContain('Alex and Morgan at the bar.');
+    expect(textOf(printed)).toContain('A man in a grey suit.');
+    expect(printed.some((line) => /left out/i.test(line.text))).toBe(true);
+  });
+
+  it('step mode and the two stops\' handlers print the page; the handlers\' own displays, which read fields the parse no longer writes, went', () => {
+    expect(SRC).toMatch(/const \{ PAGE_STOPS \} = require\('\.\.\/lib\/stop-pages'\);/);
+    expect(body('async function handleInputReview(')).toMatch(/printStop\('input-review', checkpoint, currentPhase\)/);
+    expect(body('async function handleCharacterIds(')).toMatch(/printStop\('character-ids', checkpoint, currentPhase\)/);
+    ['DIRECTOR OBSERVATIONS', 'votingResults', 'questionsRaised', 'accusation.reasoning', 'relevanceScore'].forEach((gone) => {
+      expect(`${gone}: ${SRC.includes(gone)}`).toBe(`${gone}: false`);
+    });
+  });
+
+  it('refuses a run whose options do not fit, through optionsRefusal, before anything is posted', () => {
+    const fn = body('async function runWalkthrough(');
+    expect(fn).toMatch(/const refusal = optionsRefusal\(\{ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN \}\);/);
+    expect(fn.indexOf('optionsRefusal(')).toBeLessThan(fn.indexOf('await login()'));
+    expect(SRC).toMatch(/const LEAVE_OUT_GIVEN = args\.includes\('--leave-out'\);/);
+    expect(SRC).not.toMatch(/--action and --note go with/);
   });
 });

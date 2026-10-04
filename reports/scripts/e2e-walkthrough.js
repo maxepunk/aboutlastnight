@@ -29,7 +29,8 @@
  *
  * Task 4.12a: the story meeting, the map and the desk print as the console shows them
  * (scripts/lib/stop-print.js, from the console's view models), and their payloads, with the
- * character-IDs stop's, are the console's own (scripts/lib/stop-payloads.js).
+ * character-IDs stop's, are the console's own (scripts/lib/stop-payloads.js). Task 4.12c: so do
+ * the input review and the character-IDs stop, every stop with a page (lib/stop-pages.js).
  */
 
 require('dotenv').config();
@@ -47,9 +48,11 @@ const {
 // paired with its photo by filename, as the console pairs them.
 const ViewLogic = require('../console/checkpoint-view-logic');
 // Task 4.12a: the story meeting, the map and the desk as the console shows them, and the
-// payloads its builders make at those stops and at the character-IDs stop.
+// payloads its builders make at those stops and at the character-IDs stop. Task 4.12c: every
+// stop with a page prints it, and the options say what they take (optionsRefusal).
 const { stopPrint } = require('./lib/stop-print');
-const { stopApproval, STOP_ACTIONS } = require('./lib/stop-payloads');
+const { stopApproval, STOP_ACTIONS, optionsRefusal } = require('./lib/stop-payloads');
+const { PAGE_STOPS } = require('../lib/stop-pages');
 
 // Configuration
 const API_BASE = process.env.API_BASE || 'http://localhost:3001';
@@ -98,10 +101,12 @@ const NOTE_ARG = getArgValue('--note');
 const ACTION = ACTION_ARG || 'approve';
 const NOTE = NOTE_ARG || '';
 // The integrator's ruling 1 (task 4.12a): the photos to leave out at the character-IDs stop,
-// sent through the console's builders; without the option no list is sent, which leaves the
-// list as it is.
-const LEAVE_OUT_NAMES = (getArgValue('--leave-out') || '').split(',').map((name) => name.trim()).filter(Boolean);
-const LEAVE_OUT = LEAVE_OUT_NAMES.length > 0 ? LEAVE_OUT_NAMES : null;
+// sent through the console's builders. Task 4.12c: the boxes start from the photos the server
+// lists, as the console's do, and the option ticks the photos it names; the payload carries the
+// list as the boxes leave it, an empty one included. LEAVE_OUT_GIVEN is whether the option was
+// given at all, with names or none, for optionsRefusal.
+const LEAVE_OUT_GIVEN = args.includes('--leave-out');
+const LEAVE_OUT = (getArgValue('--leave-out') || '').split(',').map((name) => name.trim()).filter(Boolean);
 const THEME = getArgValue('--theme') || DEFAULT_THEME;  // Report theme (journalist|detective)
 // The director's {filename: description} map (phase 2 final fix wave): at the character-IDs
 // stop the approval is the console's Approve with them (task 4.12a), and a payload that
@@ -546,8 +551,8 @@ ${color('OPTIONS:', 'cyan')}
                      meeting only) or send-back. Sent through the console's own
                      payload builders; a send-back needs --note, and a reweave
                      needs a note or a change, so it takes --note here
-  --note <text>      With --approve and --step: the note sent with the action, as
-                     the stop's note box sends it
+  --note <text>      With --approve and --step, at the same three stops: the note
+                     sent with the action, as the stop's note box sends it
   --approve-file <f> Use custom JSON payload for approval (with --approve), sent
                      as it is: the way to send a weave, a map or an article you
                      changed
@@ -561,8 +566,11 @@ ${color('OPTIONS:', 'cyan')}
                      added
   --leave-out <files>
                      Comma-separated photo filenames to leave out at the
-                     character-IDs stop, sent as the console's leave-out boxes;
-                     without it no list is sent, which leaves the list as it is
+                     character-IDs stop. Its boxes start from the photos the server
+                     already lists as left out, as the console's do, and these are
+                     ticked too; the approval carries the list as the boxes leave
+                     it, an empty one included. With --approve, only with
+                     --approve character-ids
   --theme <theme>    Report theme: journalist (default) or detective
   --verbose, -v      Show full request/response JSON
   --help, -h         Show this help message
@@ -604,9 +612,10 @@ ${color('EXAMPLES:', 'cyan')}
   node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --leave-out "p3.jpg" --step
 
 ${color('STOPS:', 'cyan')}
-  The story meeting, the map and the desk print as the console shows them, from the
-  console's own view models: what the page folds is marked with ▸, and the desk lists
-  what the console would refuse before an approve. At those three stops you can:
+  The input review, the story meeting, the character-IDs stop, the map and the desk
+  print as the console shows them, from the console's own view models: what the page
+  folds is marked with ▸, and the desk lists what the console would refuse before an
+  approve. At the story meeting, the map and the desk you can:
   - [A]pprove   - Send the weave, the map or the article as the stop shows it
   - [R]eweave   - The story meeting only: the writer fits your note into the weave
   - [S]end back - With your note: the writer reworks the weave, the map or the article
@@ -860,8 +869,6 @@ const DISPLAY_LIMITS = {
   MAX_PREVIEW_ITEMS: 5,        // Max items shown in preview lists
   ISSUE_TEXT_LENGTH: 70,       // Truncation for issue text
   EVIDENCE_DESC_LENGTH: 80,    // Truncation for evidence descriptions
-  VISUAL_CONTENT_LENGTH: 120,  // Truncation for visual content
-  CHARACTER_DESC_LENGTH: 70,   // Truncation for character descriptions
   DEFAULT_TRUNCATE: 60         // Default truncation length
 };
 
@@ -1058,47 +1065,6 @@ function displayField(label, value, options = {}) {
       displayValue = displayValue.substring(0, maxLength - 3) + '...';
     }
     console.log(`${prefix}${color(label + ':', labelColor)} ${displayValue}`);
-  }
-}
-
-/**
- * Display a list with bullet points
- * @param {string[]} items - List items
- * @param {Object} options - Display options
- */
-function displayList(items, options = {}) {
-  const { indent = 4, bullet = '•', maxItems = 10, emptyMessage = '(none)' } = options;
-  const prefix = ' '.repeat(indent);
-
-  if (!items || items.length === 0) {
-    console.log(`${prefix}${color(emptyMessage, 'dim')}`);
-    return;
-  }
-
-  const displayItems = items.slice(0, maxItems);
-  displayItems.forEach(item => {
-    const text = typeof item === 'string' ? item : JSON.stringify(item);
-    console.log(`${prefix}${bullet} ${text}`);
-  });
-
-  if (items.length > maxItems) {
-    console.log(color(`${prefix}  ... and ${items.length - maxItems} more`, 'dim'));
-  }
-}
-
-/**
- * Display a confidence/strength indicator
- * @param {string} level - Confidence level (high/medium/low or strong/moderate/weak)
- */
-function displayConfidence(level) {
-  if (!level) return color('(unknown)', 'dim');
-  const normalized = level.toLowerCase();
-  if (normalized === 'high' || normalized === 'strong') {
-    return color(`[${level.toUpperCase()}]`, 'green');
-  } else if (normalized === 'medium' || normalized === 'moderate') {
-    return color(`[${level.toUpperCase()}]`, 'yellow');
-  } else {
-    return color(`[${level.toUpperCase()}]`, 'red');
   }
 }
 
@@ -1327,94 +1293,10 @@ function showConfirmationPreview(original, edits, fieldDefs = {}) {
 // ============================================================================
 
 async function handleInputReview(checkpoint, currentPhase) {
-  checkpointHeader('INPUT_REVIEW', currentPhase);
-
-  const sessionConfig = checkpoint.sessionConfig || {};
-  const playerFocus = checkpoint.playerFocus || {};
-  const directorNotes = checkpoint.directorNotes || {};
-  const enrichment = checkpoint.enrichment || null;
-
-  // Header with session info
-  sectionBox('INPUT REVIEW');
-  displayField('Session ID', sessionConfig.sessionId, { indent: 2 });
-  displayField('Journalist', sessionConfig.journalistFirstName, { indent: 2 });
-  displayField('Reporting mode', sessionConfig.reportingMode, { indent: 2 });
-  if (enrichment) {
-    // H25: an empty enrichment used to look identical to notes with nothing in
-    // them. `fallback` is the enricher's own marker for "this is not a result".
-    console.log(color(
-      `  Enrichment: ${enrichment.quotes} quote(s), ${enrichment.characterMentions} character(s), ` +
-      `${enrichment.transactionReferences} transaction link(s)`,
-      'dim'
-    ));
-    if (enrichment.fallback) {
-      console.log(color(`  WARNING: enrichment fell back - ${enrichment.fallback.reason}`, 'red'));
-    }
-    if (enrichment.warnings) {
-      console.log(color(`  Note: ${JSON.stringify(enrichment.warnings)}`, 'yellow'));
-    }
-  }
-
-  // Roster section
-  sectionDivider(`ROSTER (${sessionConfig.roster?.length || 0})`);
-  if (sessionConfig.roster?.length > 0) {
-    console.log(`  ${sessionConfig.roster.join(', ')}`);
-  } else {
-    console.log(color('  (no roster defined)', 'dim'));
-  }
-
-  // Accusation section
-  sectionDivider('ACCUSATION');
-  const accusation = sessionConfig.accusation || {};
-  displayField('Accused', accusation.accused, { indent: 2 });
-  displayField('Reasoning', accusation.reasoning, { indent: 2, maxLength: 120 });
-  console.log(`  ${color('Confidence:', 'bright')} ${displayConfidence(accusation.confidence)}`);
-
-  // Player Focus section
-  sectionDivider('PLAYER FOCUS');
-  displayField('Primary Investigation', playerFocus.primaryInvestigation, { indent: 2, maxLength: 120 });
-  displayField('Primary Suspects', playerFocus.primarySuspects, { indent: 2 });
-  displayField('Player Theory', playerFocus.playerTheory, { indent: 2, maxLength: 120 });
-  console.log(`  ${color('Confidence:', 'bright')} ${displayConfidence(playerFocus.confidenceLevel)}`);
-
-  if (playerFocus.secondaryThreads?.length > 0) {
-    console.log(color('  Secondary Threads:', 'bright'));
-    displayList(playerFocus.secondaryThreads, { indent: 4 });
-  }
-
-  // Director Observations section
-  sectionDivider('DIRECTOR OBSERVATIONS');
-  if (directorNotes.observations?.length > 0) {
-    displayList(directorNotes.observations, { indent: 2 });
-  } else {
-    console.log(color('  (no observations recorded)', 'dim'));
-  }
-
-  // Whiteboard section
-  const whiteboard = directorNotes.whiteboard || {};
-  if (whiteboard.connectionsMade || whiteboard.questionsRaised || whiteboard.votingResults) {
-    sectionDivider('WHITEBOARD CAPTURED');
-    if (whiteboard.connectionsMade?.length > 0) {
-      console.log(color('  Connections Made:', 'bright'));
-      displayList(whiteboard.connectionsMade, { indent: 4 });
-    }
-    if (whiteboard.questionsRaised?.length > 0) {
-      console.log(color('  Questions Raised:', 'bright'));
-      displayList(whiteboard.questionsRaised, { indent: 4 });
-    }
-    if (whiteboard.votingResults) {
-      console.log(color('  Voting Results:', 'bright'));
-      if (typeof whiteboard.votingResults === 'object') {
-        Object.entries(whiteboard.votingResults).forEach(([name, votes]) => {
-          console.log(`    ${name}: ${votes} vote(s)`);
-        });
-      } else {
-        console.log(`    ${whiteboard.votingResults}`);
-      }
-    }
-  }
-
-  sectionEnd();
+  // Task 4.12c: the parse as the console shows it, the page the stops log counts. The display
+  // this replaced read fields the parse no longer writes (the accusation's reasoning and
+  // confidence, the notes' observations, the whiteboard's old shape).
+  printStop('input-review', checkpoint, currentPhase);
 
   // DRY: Use centralized helpers
   const autoApproval = handleAutoApproval('input-review', checkpoint, '[AUTO] Approving input...');
@@ -1544,85 +1426,11 @@ function characterIdsApprovalFor(checkpoint, photoDescriptions) {
 }
 
 async function handleCharacterIds(checkpoint, currentPhase) {
-  checkpointHeader('CHARACTER_IDS', currentPhase);
-
+  // Task 4.12c: the cards as the console shows them, the page the stops log counts.
+  printStop('character-ids', checkpoint, currentPhase);
   const cards = characterIdCardsOf(checkpoint);
-  const roster = checkpoint.sessionConfig?.roster || [];
 
-  sectionBox(`CHARACTER IDENTIFICATION (${cards.length} photos)`);
-
-  // Show roster for reference
-  console.log(color('  Available Characters (Roster):', 'bright'));
-  if (roster.length > 0) {
-    console.log(`  ${roster.join(', ')}`);
-  } else {
-    console.log(color('  (no roster defined)', 'dim'));
-  }
-
-  sectionDivider('PHOTO ANALYSES');
-
-  cards.forEach((card, i) => {
-    const analysis = card.analysis;
-
-    console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${card.displayName}${card.leftOut ? color(' [LEFT OUT]', 'yellow') : ''}`);
-
-    // Relevance score if available
-    if (analysis.relevanceScore !== undefined) {
-      const scoreColor = analysis.relevanceScore >= 7 ? 'green' : analysis.relevanceScore >= 4 ? 'yellow' : 'dim';
-      console.log(`  ${color('Relevance:', 'bright')} ${color(`${analysis.relevanceScore}/10`, scoreColor)}`);
-    }
-
-    // Visual content (truncated)
-    if (analysis.visualContent) {
-      const maxLen = DISPLAY_LIMITS.VISUAL_CONTENT_LENGTH;
-      const visual = analysis.visualContent.length > maxLen
-        ? analysis.visualContent.substring(0, maxLen - 3) + '...'
-        : analysis.visualContent;
-      console.log(`  ${color('Scene:', 'dim')} ${visual}`);
-    }
-
-    // Environment details
-    if (analysis.environmentDetails) {
-      console.log(`  ${color('Environment:', 'dim')} ${analysis.environmentDetails}`);
-    }
-
-    // Character descriptions with role and physical markers
-    const charDescs = analysis.characterDescriptions || [];
-    if (charDescs.length > 0) {
-      console.log(color(`  People (${charDescs.length}):`, 'bright'));
-      charDescs.forEach((desc, j) => {
-        const text = typeof desc === 'string' ? desc : desc.description || '';
-        const maxLen = DISPLAY_LIMITS.CHARACTER_DESC_LENGTH;
-        const truncated = text.length > maxLen ? text.substring(0, maxLen - 3) + '...' : text;
-
-        // Role indicator
-        const role = desc.role || 'unknown';
-        const roleColor = role === 'central' ? 'green' : role === 'background' ? 'dim' : 'yellow';
-        const roleIndicator = color(`[${role.toUpperCase()}]`, roleColor);
-
-        console.log(`    ${j + 1}. ${roleIndicator} ${truncated}`);
-
-        // Physical markers
-        if (desc.physicalMarkers?.length > 0) {
-          const markers = Array.isArray(desc.physicalMarkers)
-            ? desc.physicalMarkers.slice(0, 3).join(', ')
-            : desc.physicalMarkers;
-          console.log(color(`       Markers: ${markers}`, 'dim'));
-        }
-      });
-    } else {
-      console.log(color('  No people detected', 'dim'));
-    }
-
-    // Suggested caption
-    if (analysis.suggestedCaption) {
-      console.log(`  ${color('Caption:', 'dim')} "${analysis.suggestedCaption}"`);
-    }
-  });
-
-  sectionEnd();
-
-  if (LEAVE_OUT) console.log(color(`  Leaving out (--leave-out): ${LEAVE_OUT.join(', ')}`, 'yellow'));
+  if (LEAVE_OUT.length > 0) console.log(color(`  Also leaving out (--leave-out): ${LEAVE_OUT.join(', ')}`, 'yellow'));
 
   // Task 4.12a: the console's two payloads. With the director's descriptions (--photo-descriptions)
   // the default is the console's Approve, and without them its Skip.
@@ -2107,11 +1915,13 @@ async function handleEvidenceBundle(checkpoint, currentPhase) {
 }
 
 // ============================================================================
-// The story meeting, the map and the desk (task 4.12a)
+// The story meeting, the map and the desk (task 4.12a), and every stop with a page (task 4.12c)
 // ============================================================================
 
-/** How the harness heads each of the three decision stops. */
-const STOP_HEADINGS = { 'arc-selection': 'STORY MEETING', outline: 'MAP', article: 'DESK' };
+/** How the harness heads each stop it prints from a page. */
+const STOP_HEADINGS = {
+  'input-review': 'INPUT REVIEW', 'arc-selection': 'STORY MEETING', 'character-ids': 'CHARACTER IDS', outline: 'MAP', article: 'DESK'
+};
 
 /** The colour of each kind of line on a stop's page (lib/stop-pages.js). */
 const TONE_COLORS = {
@@ -2129,10 +1939,10 @@ const TONE_COLORS = {
 const STOP_OUTPUT_KEYS = { 'arc-selection': 'weave', outline: 'outline', article: 'contentBundle' };
 
 /**
- * The story meeting, the map or the desk as the console shows it, from the console's own view
- * models (scripts/lib/stop-print.js): each line coloured by its kind, and what the page folds
- * dimmed behind its ▸. The desk shows its marks beside their pieces, the marks beside no piece,
- * the problems the console would refuse before an approve, and no score.
+ * A stop with a page, as the console shows it, from the console's own view models
+ * (scripts/lib/stop-print.js): each line coloured by its kind, and what the page folds dimmed
+ * behind its ▸. The desk shows its marks beside their pieces, the marks beside no piece, the
+ * problems the console would refuse before an approve, and no score.
  */
 function printStop(stop, checkpoint, currentPhase) {
   checkpointHeader(STOP_HEADINGS[stop] || stop, currentPhase);
@@ -2201,24 +2011,13 @@ const checkpointHandlers = {
 // Display checkpoint data without interactive prompts (for step mode)
 // NEW SIGNATURE: Receives checkpoint data directly (DRY - extracted once in main loop)
 function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
+  // Task 4.12c: every stop with a page prints it as the console shows it (lib/stop-pages.js):
+  // the input review, the story meeting, the character-IDs stop, the map and the desk.
+  if (PAGE_STOPS.includes(checkpointType)) {
+    printStop(checkpointType, checkpoint, currentPhase);
+    return;
+  }
   switch (checkpointType) {
-    case 'input-review':
-      checkpointHeader('INPUT_REVIEW', currentPhase);
-      if (checkpoint.enrichment) {
-        console.log(color('Director-notes enrichment:', 'bright'));
-        prettyPrint(checkpoint.enrichment);
-      }
-      console.log('\n' + color('Session Config:', 'bright'));
-      if (checkpoint.sessionConfig) {
-        console.log(`  Roster: ${checkpoint.sessionConfig.roster?.join(', ')}`);
-        console.log(`  Accused: ${checkpoint.sessionConfig.accusation?.accused?.join(', ')}`);
-      }
-      console.log('\n' + color('Player Focus:', 'bright'));
-      if (checkpoint.playerFocus) {
-        console.log(`  Primary: ${checkpoint.playerFocus.primaryInvestigation}`);
-      }
-      break;
-
     case 'paper-evidence-selection':
       checkpointHeader('PAPER_EVIDENCE_SELECTION', currentPhase);
       const evidence = checkpoint.paperEvidence || [];
@@ -2227,30 +2026,6 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
         console.log(`  ${i + 1}. ${item.name || item.title || item.description || 'Untitled'}`);
         if (item.type) console.log(color(`     Type: ${item.type}`, 'dim'));
       });
-      break;
-
-    case 'character-ids':
-      checkpointHeader('CHARACTER_IDS', currentPhase);
-      // Each analysis with its photo, paired by filename as the console pairs them (task 4.12a).
-      const cards = characterIdCardsOf(checkpoint);
-      const roster = checkpoint.sessionConfig?.roster || [];
-      console.log(color(`Photos to identify (${cards.length}):`, 'bright'));
-      cards.forEach((card, i) => {
-        const analysis = card.analysis;
-        console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${card.displayName}${card.leftOut ? color(' [LEFT OUT]', 'yellow') : ''}`);
-        console.log(`  ${color('Visual:', 'dim')} ${analysis.visualContent?.substring(0, 100)}...`);
-        const charDescs = analysis.characterDescriptions || analysis.peopleDescriptions || [];
-        console.log(`  ${color('People:', 'dim')} ${charDescs.length} detected`);
-        charDescs.slice(0, 3).forEach((desc, j) => {
-          // Handle both string and object formats
-          const descText = typeof desc === 'string' ? desc : desc.description || JSON.stringify(desc);
-          console.log(`    ${j + 1}. ${descText.substring(0, 80)}...`);
-        });
-        if (charDescs.length > 3) {
-          console.log(color(`    ... and ${charDescs.length - 3} more`, 'dim'));
-        }
-      });
-      console.log(color(`\nRoster: ${roster.join(', ')}`, 'bright'));
       break;
 
     case 'await-roster':
@@ -2323,12 +2098,6 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
       }
       break;
 
-    case 'arc-selection':
-    case 'outline':
-    case 'article':
-      printStop(checkpointType, checkpoint, currentPhase);
-      break;
-
     default:
       console.log(color(`Unknown checkpoint type: ${checkpointType}`, 'yellow'));
       prettyPrint(checkpoint);
@@ -2374,10 +2143,13 @@ async function runWalkthrough() {
   if (VERBOSE) console.log(color('Verbose mode enabled', 'dim'));
 
   // Task 4.12a: --action and --note are the director's at the one stop --approve names in step
-  // mode, a stop whose payload the console's builders make. Anywhere else they would act at
-  // every stop a run passes, or at a stop that takes no action of its own, so the run stops.
-  if ((ACTION_ARG || NOTE_ARG) && !(APPROVE_TYPE && STEP_MODE && Object.prototype.hasOwnProperty.call(STOP_ACTIONS, APPROVE_TYPE))) {
-    console.error(color('--action and --note go with --approve <stop> and --step, at the story meeting (arc-selection), the map (outline) or the article.', 'red'));
+  // mode, a stop whose actions the console's builders take; anywhere else they would act at
+  // every stop a run passes, or at a stop that takes no action of its own. Task 4.12c: and
+  // --leave-out goes with the character-IDs stop. A run whose options do not fit stops here,
+  // before anything is posted, saying what each option takes (optionsRefusal).
+  const refusal = optionsRefusal({ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN });
+  if (refusal) {
+    console.error(color(refusal, 'red'));
     return;
   }
 

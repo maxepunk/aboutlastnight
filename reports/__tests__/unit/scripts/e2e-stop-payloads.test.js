@@ -7,10 +7,11 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
  * (console/checkpoint-view-logic.js): the meeting's through meetingPayload, the map's through
  * mapPayload(action, mapDraftOf(data), note), the desk's through articleReviewPayload with
  * articleEdits, and the character-IDs stop's through characterIdsPayload and
- * characterIdsSkipPayload, which send the photos to leave out only when the run names them.
- * Each payload here goes through the server's own gate (server.js buildResumePayload) on a
- * state in the new shape, and is taken. The old payloads the harness used to send are refused
- * by name. Invented text throughout.
+ * characterIdsSkipPayload, whose leave-out boxes start from the photos the server lists and
+ * take the photos the run names (task 4.12c). Each payload here goes through the server's own
+ * gate (server.js buildResumePayload) on a state in the new shape, and is taken. The old
+ * payloads the harness used to send are refused by name, and a run whose options do not fit
+ * is refused before it posts (optionsRefusal, task 4.12c). Invented text throughout.
  */
 const fs = require('fs');
 const os = require('os');
@@ -170,16 +171,21 @@ describe('4.12a: the desk\'s payload carries the article as articleEdits', () =>
   });
 });
 
-describe('4.12a: the character-IDs payload is the console\'s, with the photos to leave out only when the run names them (ruling 1)', () => {
+// Task 4.12c: the boxes start from the photos the server lists, as the console's do, so the
+// payload always carries the list, as the console's builders build it (4.12c's describe below).
+describe('4.12a: the character-IDs payload is the console\'s, with the photos the run names left out (ruling 1)', () => {
   const state = () => ({ ...reworkFixtureState('journalist'), characterIdMappings: null });
 
-  it('skips with no list when the run names no photo, which leaves the list as it is', async () => {
+  it('skips with the boxes as the server lists them when the run names no photo, which leaves the list as it is', async () => {
     const s = state();
-    const built = stopApproval('character-ids', await payloadAt('character-ids', s), {});
-    expect(built.payload).toEqual({ characterIds: {} });
+    const data = await payloadAt('character-ids', s);
+    const cards = View.characterIdCards(data.photoAnalyses.analyses, data.sessionPhotos, data.leftOutPhotos);
+    const built = stopApproval('character-ids', data, {});
+    expect(built.payload).toEqual(View.characterIdsSkipPayload(cards, View.characterIdLeaveOutTicks(cards)));
+    expect(built.payload).toEqual({ characterIds: {}, leftOutPhotos: [] });
     const { stateUpdates, error } = gate(built.payload, s, 'character-ids');
     expect(error).toBeNull();
-    expect(stateUpdates).not.toHaveProperty('leftOutPhotos');
+    expect(stateUpdates.leftOutPhotos).toEqual([]);
   });
 
   it('skips through characterIdsSkipPayload with the photos the run names, matched as the cards match them', async () => {
@@ -194,15 +200,15 @@ describe('4.12a: the character-IDs payload is the console\'s, with the photos to
     expect(stateUpdates.leftOutPhotos).toEqual(['p2.jpg']);
   });
 
-  it('approves through characterIdsPayload when the run gives the director\'s descriptions, with the list only when named', async () => {
+  it('approves through characterIdsPayload when the run gives the director\'s descriptions, with the list as the boxes leave it', async () => {
     const s = state();
     const data = await payloadAt('character-ids', s);
     const descriptions = { 'p2.jpg': 'Alex leans over the ledger and points at a line.' };
     const cards = View.characterIdCards(data.photoAnalyses.analyses, data.sessionPhotos, data.leftOutPhotos);
 
     const described = stopApproval('character-ids', data, { photoDescriptions: descriptions });
-    const { leftOutPhotos: _none, ...withoutList } = View.characterIdsPayload(cards, descriptions, {});
-    expect(described.payload).toEqual(withoutList);
+    expect(described.payload).toEqual(View.characterIdsPayload(cards, descriptions, View.characterIdLeaveOutTicks(cards)));
+    expect(described.payload.leftOutPhotos).toEqual([]);
     expect(gate(described.payload, s, 'character-ids')).toMatchObject({ error: null, stateUpdates: { photoDescriptions: descriptions } });
 
     const both = stopApproval('character-ids', data, { photoDescriptions: descriptions, leaveOut: ['hero.jpg'] });
@@ -233,5 +239,90 @@ describe('4.12a: every other stop keeps the harness\'s own default, and the old 
     expect(gate({ selectedArcs: ['t1', 't2', 't3'] }, s, 'arc-selection').error).toMatch(/selectedArcs/);
     expect(gate({ selectedArcs: ['t1'] }, s, null).error).toMatch(/arc selection is gone/);
     expect(gate({ outline: true }, reworkFixtureState('journalist'), 'outline').error).toMatch(/The map takes/);
+  });
+});
+
+// Task 4.12c (ruling 4 on 4.12a's minors): the console starts its leave-out boxes from the
+// photos the server lists (characterIdLeaveOutTicks), and the harness built its ticks from
+// nothing, so a photo already left out came back unless --leave-out named it again, and no
+// empty list could be sent. The harness's boxes start where the console's do, and the run's
+// option ticks the photos it names, as a director's ticks do.
+describe('4.12c: the leave-out boxes start where the console\'s do', () => {
+  const listed = () => ({ ...reworkFixtureState('journalist'), characterIdMappings: null, leftOutPhotos: ['hero.jpg'] });
+  const cardsOf = (data) => View.characterIdCards(data.photoAnalyses.analyses, data.sessionPhotos, data.leftOutPhotos);
+
+  it('a photo the server lists stays out when the run names another one', async () => {
+    const s = listed();
+    const data = await payloadAt('character-ids', s);
+    expect(data.leftOutPhotos).toEqual(['hero.jpg']);
+    const cards = cardsOf(data);
+    const built = stopApproval('character-ids', data, { leaveOut: ['p2.jpg'] });
+    expect(built.payload).toEqual(View.characterIdsSkipPayload(cards, { ...View.characterIdLeaveOutTicks(cards), 'p2.jpg': true }));
+    expect(built.payload.leftOutPhotos).toEqual(['hero.jpg', 'p2.jpg']);
+    const { stateUpdates, error } = gate(built.payload, s, 'character-ids');
+    expect(error).toBeNull();
+    expect(stateUpdates.leftOutPhotos).toEqual(['hero.jpg', 'p2.jpg']);
+  });
+
+  it('with no photo named, the boxes are the server\'s list, sent as the console sends them, and the list stays as it is', async () => {
+    const s = listed();
+    const data = await payloadAt('character-ids', s);
+    const descriptions = { 'p2.jpg': 'Alex leans over the ledger and points at a line.' };
+    [stopApproval('character-ids', data, {}), stopApproval('character-ids', data, { leaveOut: [] }), stopApproval('character-ids', data, { photoDescriptions: descriptions })]
+      .forEach((built) => {
+        expect(built.payload.leftOutPhotos).toEqual(['hero.jpg']);
+        expect(gate(built.payload, s, 'character-ids').stateUpdates.leftOutPhotos).toEqual(['hero.jpg']);
+      });
+  });
+
+  it('sends an explicit empty list when no box is ticked, whether the run gave --leave-out with no photo or no --leave-out, and the gate takes it', async () => {
+    const s = { ...reworkFixtureState('journalist'), characterIdMappings: null, leftOutPhotos: [] };
+    const data = await payloadAt('character-ids', s);
+    // The harness passes the names the option gave, an empty list for `--leave-out ""`, and null with no option.
+    [[], null].forEach((leaveOut) => {
+      const built = stopApproval('character-ids', data, { leaveOut });
+      expect([leaveOut, built.payload]).toEqual([leaveOut, { characterIds: {}, leftOutPhotos: [] }]);
+      const { stateUpdates, error } = gate(built.payload, s, 'character-ids');
+      expect(error).toBeNull();
+      expect(stateUpdates.leftOutPhotos).toEqual([]);
+    });
+  });
+});
+
+// Task 4.12c (ruling 4 on 4.12a's minors): the harness's options say what they take. The
+// --action and --note guard named the meeting, the map and the article while it took the
+// character-IDs stop too, and --leave-out at any other stop was dropped without a word.
+describe('4.12c: the harness\'s options say what they take (optionsRefusal)', () => {
+  const { STOP_ACTIONS, optionsRefusal } = require('../../../scripts/lib/stop-payloads');
+
+  it('--action and --note go with --approve <stop> and --step at a stop STOP_ACTIONS lists, and the refusal names each stop with what it takes', () => {
+    // The character-IDs stop takes one action and no note, so it is not among them.
+    expect(Object.keys(STOP_ACTIONS)).toEqual(['arc-selection', 'outline', 'article']);
+    const refusal = optionsRefusal({ approveType: 'character-ids', stepMode: true, action: 'approve' });
+    expect(refusal).toMatch(/^--action and --note go with --approve <stop> and --step/);
+    Object.entries(STOP_ACTIONS).forEach(([stop, actions]) => {
+      expect([stop, refusal.includes(stop)]).toEqual([stop, true]);
+      actions.forEach((action) => expect([action, refusal.includes(action)]).toEqual([action, true]));
+    });
+    expect(refusal).not.toMatch(/character-ids/);
+    // The same refusal wherever the two go astray: no --step, no --approve, or a stop that takes neither.
+    [
+      { approveType: 'outline', stepMode: false, note: 'Move the vote earlier.' },
+      { stepMode: true, action: 'send-back' },
+      { approveType: 'input-review', stepMode: true, note: 'x' }
+    ].forEach((options) => expect(optionsRefusal(options)).toBe(refusal));
+    expect(optionsRefusal({ approveType: 'outline', stepMode: true, action: 'send-back', note: 'Move the vote earlier.' })).toBeNull();
+    expect(optionsRefusal({ approveType: 'outline', stepMode: true })).toBeNull();
+    expect(optionsRefusal({})).toBeNull();
+  });
+
+  it('--leave-out with an --approve for any stop but character-ids is refused, saying so', () => {
+    ['arc-selection', 'outline', 'article', 'input-review', 'photos'].forEach((stop) => {
+      const refusal = optionsRefusal({ approveType: stop, stepMode: true, leaveOut: true });
+      expect([stop, /--leave-out/.test(refusal), /character-ids/.test(refusal), refusal.includes(`--approve ${stop}`)]).toEqual([stop, true, true, true]);
+    });
+    expect(optionsRefusal({ approveType: 'character-ids', stepMode: true, leaveOut: true })).toBeNull();
+    // With no --approve, the run ticks the boxes when it reaches the stop.
+    expect(optionsRefusal({ leaveOut: true })).toBeNull();
   });
 });
