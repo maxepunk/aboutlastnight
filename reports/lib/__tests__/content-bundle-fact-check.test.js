@@ -2346,3 +2346,18 @@ describe("4.10b: each finding carries the director's line for its place", () => 
     ]);
   });
 });
+
+// Task 4.5f (the integrator's ruling 3 on 4.5e's findings, 4.7d's hand-off): the vote fix line
+// names who may be credited with a turn-in as the article judge's T6 clause has since 4.7d, the
+// evidence log or the director's words (the notes, the corrections, the accusation and the
+// answers at the story meeting), which the article reads as record (T1).
+describe("4.5f: the vote fix line reads the director's words for who turned a memory in", () => {
+  it("names the evidence log or the director's words", () => {
+    const [message] = factCheckContentBundle(baseArgs({
+      contentBundle: { headline: { main: 'h', deck: 'd' }, sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text: 'I voted with the room.' }] }], evidenceCards: [] }
+    })).structuralIssues;
+    expect(message.startsWith('Reporter-mode violation: "i voted".')).toBe(true);
+    expect(message.endsWith("an exposure stays anonymous unless the evidence log or the director's words name who turned it in.")).toBe(true);
+    expect(message).not.toContain("the director's notes");
+  });
+});

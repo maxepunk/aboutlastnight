@@ -1388,12 +1388,14 @@ function factCheckContentBundle({
       // Phase 3 (3.4): the fix never sends the rework to name who acted; an exposure
       // stays anonymous unless the record names who turned it in (spec T6, T8).
       // Phase 3 (3.9): T8's first sentence as round 7 words it (R21): "accuses" is
-      // joining the room's accusation. A rework reads this line as must-fix.
+      // joining the room's accusation. A rework reads this line as must-fix. Task 4.5f: who
+      // turned a memory in is named by the evidence log or the director's words, as the
+      // article judge's T6 clause reads them since 4.7d (T1).
       reporterHit(phrase, journalist
         ? `Reporter-mode violation: "${phrase}". Nova reports on the room from outside its choices: Nova never ` +
           `votes, joins the room's accusation or exposes a memory, and is never one of the room (T8). Rewrite the ` +
           `sentence without Nova in the vote or the exposure: the vote is the room's, and an exposure stays ` +
-          `anonymous unless the evidence log or the director's notes name who turned it in.`
+          `anonymous unless the evidence log or the director's words name who turned it in.`
         : `Reporter-mode violation: "${phrase}". The reporter covers the room, they are not a member ` +
           `of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.`,
         votesLine
