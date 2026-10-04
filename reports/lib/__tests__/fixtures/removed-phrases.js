@@ -426,7 +426,13 @@ const REMOVED_PHRASES = [
 
   // Phase 4, 4.13: the parked detective's inline mode blocks went (R1); every theme's block is
   // its own mode file. The remote one's "reached you as tips" is on the list above.
-  'You watched the investigation from inside the room'
+  'You watched the investigation from inside the room',
+
+  // Phase 4, 4.7e and 4.5f: the article task's beats and words lines name the director's desk
+  // edits first, and the vote fix line reads the director's words for who turned a memory in.
+  'the beats under leftOut stay out of the article',
+  'each with its beats as C2',
+  "or the director's notes name who turned it in"
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
