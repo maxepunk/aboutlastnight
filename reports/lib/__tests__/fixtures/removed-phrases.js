@@ -388,7 +388,30 @@ const REMOVED_PHRASES = [
   'Remember: You are IMPROVING, not regenerating.',
   'CRITICAL REVISION RULES:',
   'DETECTIVE VOICE:',
-  'Before generating, internalize Detective Anondono'
+  'Before generating, internalize Detective Anondono',
+
+  // Phase 4, 4.7c: the arc stop's guidance input went from <DIRECTOR_GUIDANCE>, the parked
+  // detective's rework text with it (R1), the weighted judge contract went (both judges are
+  // truth-only), and the headline line names the director's words first.
+  'The director reviewed the arcs and asks for this emphasis',
+  'Apply them where they serve the piece. They are not requirements.',
+  'CRITICAL REVISION INSTRUCTIONS',
+  'with all original content plus fixes',
+  'Maintain consistency with the original structure and organization',
+  'Focus on the issues identified below.',
+  '"type": "structural" | "advisory",',
+  'issues that are suggestions, not blockers',
+  'Suggestions, not blockers, one self-contained sentence each',
+  "the map's headline and deck as written",
+  "<the map's headline>",
+  "<the map's deck>",
+  'and your own kicker',
+
+  // Phase 4, 4.5d: a connection the director brought back stays in the weave, and its words
+  // are the writer's.
+  'which is back in the story',
+  'each thread they added stays in the weave, and each connection they struck',
+  "This automatic pass fixes the writer's text. Each change of the director's is final"
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
