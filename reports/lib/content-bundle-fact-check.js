@@ -218,6 +218,9 @@ const LEAKED_PROMPT_EXAMPLES = [
  * room, not a member of it, and never casts a vote or owns a memory.
  * PRESENCE applies only to `remote`, where every exposure and the verdict
  * reached the reporter as a tip from someone who was there.
+ *
+ * Brief 4.10d: each phrase matches whole words wherever the check reads it (wholePhrase,
+ * and printedExcerpt's `words`), so "Remi voted" holds no "i voted".
  */
 const NEVER_VOTES = ['i voted', 'my vote', 'one of them was mine'];
 // First-person presence claims only. 'from inside the room' was tempting and
@@ -478,20 +481,17 @@ const QUOTE_MARKS = '\'‘’‚‛"“”„‟';
 const PRINTED_GAP = '(?:\\s|"[^"\\n]*"|“[^”\\n]*”|‘[^\\n]*?’(?![A-Za-z]))+';
 
 /**
- * The printed text a hit stands for (brief 4.7a), so the desk finds a finding's excerpt in
- * its block (4.10): `wanted`, read from a folded copy of `printed` (normalize's lowercased
- * text, or the narrator's prose with its quoted spans taken out), looked for in `printed`
- * itself, where a space may stand for quoted spans, a quotation mark for any quotation
- * mark, a hyphen for a dash and three full stops for an ellipsis, in any case. `wanted`
- * when `printed` does not hold it.
+ * The pattern a hit is looked for by in the printed text (printedExcerpt): `target`, the hit
+ * with its runs of whitespace as one space, where a space may stand for quoted spans, a
+ * quotation mark for any quotation mark, a hyphen for a dash and three full stops for an
+ * ellipsis. With `words` (brief 4.10d), the hit starts and ends on a word boundary wherever
+ * it starts or ends with a word character, as wholePhrase reads a reporter-mode phrase.
  *
- * @param {string} printed - the text as the page prints it
- * @param {string} wanted - the hit as the check read it
- * @returns {string}
+ * @param {string} target
+ * @param {{words?: boolean}} [options]
+ * @returns {string} the pattern's source
  */
-function printedExcerpt(printed, wanted) {
-  const target = typeof wanted === 'string' ? wanted.replace(/\s+/g, ' ').trim() : '';
-  if (typeof printed !== 'string' || !printed || !target) return wanted;
+function printedPattern(target, { words = false } = {}) {
   let source = '';
   for (let i = 0; i < target.length; i += 1) {
     const ch = target[i];
@@ -501,8 +501,68 @@ function printedExcerpt(printed, wanted) {
     else if ('-–—'.includes(ch)) source += '[-–—]';
     else source += escapeRegExp(ch);
   }
-  const match = new RegExp(source, 'i').exec(printed);
+  if (!words) return source;
+  const edge = (ch) => (/\w/.test(ch) ? '\\b' : '');
+  return `${edge(target[0])}${source}${edge(target[target.length - 1])}`;
+}
+
+/**
+ * The printed text a hit stands for (brief 4.7a), so the desk finds a finding's excerpt in
+ * its block (4.10): `wanted`, read from a folded copy of `printed` (normalize's lowercased
+ * text, or the narrator's prose with its quoted spans taken out), looked for in `printed`
+ * itself as printedPattern reads it, in any case; with `words`, as whole words (brief 4.10d).
+ * `wanted` when `printed` does not hold it.
+ *
+ * @param {string} printed - the text as the page prints it
+ * @param {string} wanted - the hit as the check read it
+ * @param {{words?: boolean}} [options]
+ * @returns {string}
+ */
+function printedExcerpt(printed, wanted, { words = false } = {}) {
+  const target = typeof wanted === 'string' ? wanted.replace(/\s+/g, ' ').trim() : '';
+  if (typeof printed !== 'string' || !printed || !target) return wanted;
+  const match = new RegExp(printedPattern(target, { words }), 'i').exec(printed);
   return match ? match[0] : wanted;
+}
+
+/**
+ * A reporter-mode phrase as a pattern on folded text (normalize's), matching whole words only
+ * (brief 4.10d). The phrases matched as plain substrings, so "remi voted" held "i voted", and
+ * so did a paragraph ending "kai" before one opening "voted". ALN's names end in "i" often
+ * (Remi, Kai, Dani), and each false structural failure spends a paid rework.
+ *
+ * @param {string} phrase - one of NEVER_VOTES or PRESENCE_CLAIMS
+ * @returns {RegExp}
+ */
+function wholePhrase(phrase) {
+  return new RegExp(`\\b${escapeRegExp(phrase)}\\b`);
+}
+
+/**
+ * The printed text of a reporter-mode phrase that no one piece holds (brief 4.10d): the first
+ * match, on word boundaries as printedExcerpt reads a hit, that starts in one piece and ends in
+ * the next, the pieces with text taken in order. A quoted span can stand for a space in a
+ * match, so a match inside one piece is passed over: the excerpt sits where the two pieces
+ * meet. The check's own phrase when no two adjacent pieces hold it, as when it runs across
+ * three.
+ *
+ * @param {string[]} pieces - the narrator's pieces as the page prints them (narratorSegments)
+ * @param {string} phrase - the phrase as the check reads it
+ * @returns {string}
+ */
+function acrossExcerpt(pieces, phrase) {
+  const printed = pieces.filter((text) => typeof text === 'string' && text.trim() !== '');
+  const pattern = new RegExp(printedPattern(phrase, { words: true }), 'gi');
+  for (let i = 0; i + 1 < printed.length; i += 1) {
+    const meet = printed[i].length;
+    const joined = `${printed[i]}\n${printed[i + 1]}`;
+    pattern.lastIndex = 0;
+    for (let match = pattern.exec(joined); match; match = pattern.exec(joined)) {
+      if (match.index < meet && match.index + match[0].length > meet) return match[0];
+      pattern.lastIndex = match.index + 1;
+    }
+  }
+  return phrase;
 }
 
 /** The text `reach` characters either side of a hit at `index`, `length` long. */
@@ -1364,9 +1424,13 @@ function factCheckContentBundle({
    * Brief 4.10b: each finding's line is `lineOf` the phrase as the piece prints it, quoted.
    * Brief 4.10c: a phrase with no one place is quoted as the article prints it across its two
    * pieces, which can be the deck and a paragraph, with "(across two pieces)".
+   *
+   * Brief 4.10d: the phrase matches whole words in the prose, in each piece and in the text a
+   * finding quotes, and a phrase with no one place is quoted from where two adjacent pieces
+   * meet in it (acrossExcerpt).
    */
   const reporterHit = (phrase, message, lineOf) => {
-    const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
+    const holding = segmentEdits.filter(segment => wholePhrase(phrase).test(segment.text));
     const directors = holding.length > 0 && holding.every(segment => segment.editId);
     const concerns = new Map();   // edit id -> its concern, filed once
     if (directors) {
@@ -1377,8 +1441,8 @@ function factCheckContentBundle({
     }
     const marks = holding
       .filter(segment => directors || !segment.editId)
-      .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase), editId: directors ? segment.editId : null }));
-    (marks.length > 0 ? marks : [{ place: null, excerpt: printedExcerpt(narratorText(bundle), phrase), editId: null }])
+      .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase, { words: true }), editId: directors ? segment.editId : null }));
+    (marks.length > 0 ? marks : [{ place: null, excerpt: acrossExcerpt(segmentEdits.map(segment => segment.original), phrase), editId: null }])
       .forEach(({ place, excerpt, editId }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt,
         editId ? concerns.get(editId) : message, lineOf(place ? quoted(excerpt) : `${quoted(excerpt)} (across two pieces)`), editId));
   };
@@ -1387,7 +1451,7 @@ function factCheckContentBundle({
   const presenceLine = (phrase) => `${phrase} puts the reporter in the room, but the reporter covered this session remotely.`;
 
   for (const phrase of NEVER_VOTES) {
-    if (normProse.includes(phrase)) {
+    if (wholePhrase(phrase).test(normProse)) {
       // Phase 3 (3.4): the fix never sends the rework to name who acted; an exposure
       // stays anonymous unless the record names who turned it in (spec T6, T8).
       // Phase 3 (3.9): T8's first sentence as round 7 words it (R21): "accuses" is
@@ -1407,7 +1471,7 @@ function factCheckContentBundle({
   }
   if (mode === 'remote') {
     for (const phrase of PRESENCE_CLAIMS) {
-      if (normProse.includes(phrase)) {
+      if (wholePhrase(phrase).test(normProse)) {
         // Phase 3 (3.4): exposed memories reach Nova by turn-in, never as tips (spec T6, T8).
         // Phase 3 (3.9): the remote mode block of round 7 (R13): Nova never claims to have
         // seen or heard the room, and the event is told as a scene, attributed where it

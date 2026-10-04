@@ -2441,3 +2441,63 @@ describe('4.10c: each line says exactly what the article prints', () => {
     [paragraphs, deck].forEach((result) => expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\. /)]));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Brief 4.10d: the phrases match words, not letters (the integrator's ruling 1 on 4.6e's and
+// 4.10c's minors). The vote and presence phrases matched as plain substrings, in the narrator's
+// whole prose and in each piece's text, so "Remi voted with the room." held "i voted", and a
+// paragraph ending "…was Kai" before one opening "Voted to adjourn" held it across two pieces.
+// ALN's names end in "i" often (Remi, Kai, Dani), and each false structural failure spends a paid
+// automatic rework. A phrase no one piece holds is excerpted where two adjacent pieces meet in
+// it, or is the check's own phrase when no two meet in it (scratch p4/4.10c-review/
+// probe-across.js). Each message and its status stay as they were.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10d: the reporter-mode phrases match words, not letters', () => {
+  const para = (text) => ({ type: 'paragraph', text });
+  /** Each reporter-mode finding as [its place, its excerpt, its line]. */
+  const reporterFindings = (result) => result.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line]);
+  const VOTES = ' makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.';
+  const PRESENCE = ' puts the reporter in the room, but the reporter covered this session remotely.';
+
+  it('"Remi voted with the room.", and every other phrase whose letters a name holds: no finding', () => {
+    [
+      ['on-site', 'Remi voted with the room.'],
+      ['on-site', 'Dani voted last, and Kai voted with the room.'],
+      ['on-site', 'Jimmy voted to adjourn.'],
+      ['remote', 'Remi was in the room when the count came.']
+    ].forEach(([reportingMode, text]) => {
+      const result = factCheckContentBundle(baseArgs({ reportingMode, contentBundle: storyWith(para(text)) }));
+      expect([text, reporterFindings(result), result.structuralIssues, result.reporterMode.violations]).toEqual([text, [], [], []]);
+    });
+  });
+
+  it('"Kai" ending one paragraph and "Voted to adjourn" opening the next: no finding', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(para('The last to speak was Kai'), para('Voted to adjourn, said the room.'))
+    }));
+    expect(reporterFindings(result)).toEqual([]);
+    expect(result.structuralIssues).toEqual([]);
+  });
+
+  it("a phrase in a paragraph that also holds a name ending in \"i\": the finding quotes the phrase, not the name's letters, and keeps its message", () => {
+    const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('Remi voted first, and then I voted.')) }));
+    expect(reporterFindings(result)).toEqual([[{ section: 'the-story', paragraph: 1 }, 'I voted', `"I voted"${VOTES}`]]);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\. /)]);
+    expect(result.reporterMode.violations).toEqual(['i voted']);
+  });
+
+  it('a phrase across two pieces is excerpted where they meet, past a quoted span in the first that holds its words', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(para('Then I "finally" voted for lunch.'), para('The vote came and I'), para('voted again.'))
+    }));
+    expect(reporterFindings(result)).toEqual([[null, 'I voted', `"I voted" (across two pieces)${VOTES}`]]);
+  });
+
+  it("a phrase no two adjacent pieces hold is quoted as the check's own phrase", () => {
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote', contentBundle: storyWith(para('At noon I'), para('was in'), para('the room with the others.'))
+    }));
+    expect(reporterFindings(result)).toEqual([[null, 'i was in the room', `"i was in the room" (across two pieces)${PRESENCE}`]]);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation \(remote\): "i was in the room"\. /)]);
+  });
+});
