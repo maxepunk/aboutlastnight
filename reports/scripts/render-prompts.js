@@ -235,11 +235,7 @@ async function render() {
   // Brief 3.0: the judges render through scripts/lib/render-calls.js, which a test holds
   // to what their nodes send.
   const calls = loadCallModules(req);
-  let diffMod = null;
-  // Only a MISSING module is expected (main has no hand-edit module). Anything else -
-  // a syntax error, a throwing dependency - would make the guard pass vacuously (M4).
-  try { diffMod = req('lib/hand-edit-diff.js'); }
-  catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
+  const diffMod = req('lib/hand-edit-diff.js');
 
   const state = await loadState(dbPath, sessionId);
   // --theme renders every call for that theme, whatever the thread ran as: every

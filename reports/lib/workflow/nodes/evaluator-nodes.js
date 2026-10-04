@@ -1929,16 +1929,20 @@ const evaluateArticle = createEvaluator('article', { model: 'opus' });
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Create mock evaluator for testing
+ * Create mock evaluator for testing. Its breaches go where the truth-only contract keeps them,
+ * as createEvaluator writes them: `structuralIssues`, in the history entry and, when it is not
+ * ready, in validationResults (brief 4.7d; the contract holds no `issues` array).
+ *
  * @param {string} phase - Phase name
- * @param {Object} options - Mock options
+ * @param {Object} options - Mock options: ready, overallScore, structuralIssues, shouldFail,
+ *   errorMessage
  * @returns {Function} Mock evaluator function
  */
 function createMockEvaluator(phase, options = {}) {
   const {
     ready = true,
     overallScore = 0.85,
-    issues = [],
+    structuralIssues = [],
     shouldFail = false,
     errorMessage = 'Mock evaluation error'
   } = options;
@@ -1973,7 +1977,7 @@ function createMockEvaluator(phase, options = {}) {
       timestamp: new Date().toISOString(),
       ready,
       overallScore,
-      issues,
+      structuralIssues,
       confidence: 'high',
       revisionNumber: currentRevisions
     };
@@ -1994,7 +1998,7 @@ function createMockEvaluator(phase, options = {}) {
       validationResults: {
         passed: false,
         feedback: 'Mock revision guidance',
-        issues
+        structuralIssues
       }
     };
   };
@@ -2057,32 +2061,19 @@ module.exports = {
 if (require.main === module) {
   console.log('Evaluator Nodes Self-Test\n');
 
-  // Test with mock SDK client - returns parsed objects directly
-  const mockSdkClient = async (options) => {
-    // Return different scores based on phase
-    if (options.systemPrompt.includes('WEAVE fact check')) {
-      return {
-        ready: true,
-        overallScore: 0.85,
-        criteriaScores: {
-          coherence: { score: 0.9, notes: 'Good coherence' },
-          evidenceGrounding: { score: 0.8, notes: 'Well grounded' }
-        },
-        issues: [],
-        revisionGuidance: null,
-        confidence: 'high'
-      };
-    }
-
-    return {
-      ready: true,
-      overallScore: 0.75,
-      criteriaScores: {},
-      issues: [],
-      revisionGuidance: null,
-      confidence: 'medium'
-    };
-  };
+  // Each judge's stand-in returns parsed objects directly: a verdict in the truth-only
+  // contract with no breach, every truth criterion of the phase it judges scored (brief 4.7d).
+  const cleanVerdict = (phase) => ({
+    ready: true,
+    overallScore: 1,
+    structuralPassed: true,
+    criteriaScores: Object.fromEntries(Object.keys(getPhaseCriteria(phase)).map((key) => [key, { score: 1 }])),
+    structuralIssues: [],
+    advisoryWarnings: [],
+    revisionGuidance: '',
+    confidence: 'high'
+  });
+  const configFor = (phase) => ({ configurable: { sdkClient: async () => cleanVerdict(phase) } });
 
   const mockState = {
     sessionId: 'self-test',
@@ -2092,19 +2083,15 @@ if (require.main === module) {
     contentBundle: { headline: { main: 'Test' }, sections: [] }
   };
 
-  const mockConfig = {
-    configurable: { sdkClient: mockSdkClient }
-  };
-
   console.log('Testing evaluateArcs...');
-  evaluateArcs(mockState, mockConfig).then(result => {
+  evaluateArcs(mockState, configFor('arcs')).then(result => {
     console.log('Arcs result:', {
       ready: result.evaluationHistory?.ready,
       phase: result.currentPhase
     });
 
     console.log('\nTesting evaluateArticle...');
-    return evaluateArticle(mockState, mockConfig);
+    return evaluateArticle(mockState, configFor('article'));
   }).then(result => {
     console.log('Article result:', {
       ready: result.evaluationHistory?.ready,

@@ -581,12 +581,24 @@ describe('evaluator-nodes', () => {
     });
 
     it('creates mock that returns not ready when configured', async () => {
-      const mock = createMockEvaluator('arcs', { ready: false, issues: ['Issue 1'] });
+      const mock = createMockEvaluator('arcs', { ready: false, structuralIssues: ['T3: Issue 1'] });
       const result = await mock({ arcRevisionCount: 0 }, {});
 
       // Mock evaluator no longer sets awaitingApproval - checkpoint handles it
       expect(result.arcRevisionCount).toBe(1);
       expect(result.validationResults.passed).toBe(false);
+    });
+
+    // Brief 4.7d: the stand-in writes its breaches where the truth-only contract keeps them,
+    // as createEvaluator does; the contract holds no `issues` array.
+    it('reports its breaches under structuralIssues, in the history entry and in validationResults', async () => {
+      const mock = createMockEvaluator('article', { ready: false, structuralIssues: ['T3: Issue 1'] });
+      const result = await mock({ articleRevisionCount: 0 }, {});
+
+      expect(result.evaluationHistory.structuralIssues).toEqual(['T3: Issue 1']);
+      expect(result.validationResults.structuralIssues).toEqual(['T3: Issue 1']);
+      expect(result.evaluationHistory).not.toHaveProperty('issues');
+      expect(result.validationResults).not.toHaveProperty('issues');
     });
 
     it('can simulate failure', async () => {
