@@ -61,14 +61,16 @@ const CHECKPOINT_TYPES = {
  * - Otherwise, call interrupt() to pause execution
  * - When resumed via Command({ resume: value }), interrupt() returns the value
  *
- * Usage in node:
+ * Usage in node (the story meeting's stop, checkpoint-nodes.js checkpointArcSelection):
  * ```javascript
+ * const skipCondition = isMeetingApproved(state) ? true : null;
  * const resume = checkpointInterrupt(
  *   CHECKPOINT_TYPES.ARC_SELECTION,
- *   { narrativeArcs: state.narrativeArcs },
- *   state.selectedArcs?.length > 0 ? state.selectedArcs : null
+ *   { weave: state.weave },
+ *   skipCondition
  * );
- * return { selectedArcs: resume.selectedArcs || resume };
+ * if (skipCondition) return { currentPhase: PHASES.ARC_SELECTION };
+ * if (resume?.approved === true) return { meetingApproved: true, currentPhase: PHASES.ARC_SELECTION };
  * ```
  *
  * @param {string} type - Checkpoint type from CHECKPOINT_TYPES
