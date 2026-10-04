@@ -428,10 +428,14 @@
     return '';
   }
 
+  /** A block's type, or '' for one that names none. */
+  function blockType(block) {
+    return isPlainObject(block) && typeof block.type === 'string' ? block.type : '';
+  }
+
   /** A block's type and its text's first 40 characters, lower case, with runs of space folded. */
   function blockKey(block) {
-    var type = isPlainObject(block) && typeof block.type === 'string' ? block.type : '';
-    return type + '|' + blockText(block).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 40);
+    return blockType(block) + '|' + blockText(block).toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 40);
   }
 
   /** What names a photo, a card or a reference whatever its other fields; null for a block its text names. */
@@ -448,8 +452,10 @@
    * A section's blocks in two versions, paired: a block with its unchanged self; then a
    * photo, a card or a reference with itself, whatever its other fields; then a block with one
    * of its type whose text opens with the same 40 characters (blockKey), so a block inserted
-   * before it does not throw it off; then, for what is left, the block in the same place.
-   * Each block pairs once, with the first one the test finds.
+   * before it does not throw it off; then, for what is left, the block in the same place when
+   * it is of the same type (task 4.3c). Each block pairs once, with the first one the test
+   * finds. Every pair is of one type, so a block retyped (the JSON editor's) pairs with
+   * nothing: it was deleted and another inserted.
    *
    * @param {Array} openedBlocks - the section in the older version
    * @param {Array} currentBlocks - the section in the newer version
@@ -484,8 +490,8 @@
     pairOn(trimmedCanonical);
     pairOn(blockIdentity);
     pairOn(blockKey);
-    current.forEach(function (_block, ai) {
-      if (!usedCurrent[ai] && ai < opened.length && !usedOpened[ai]) {
+    current.forEach(function (block, ai) {
+      if (!usedCurrent[ai] && ai < opened.length && !usedOpened[ai] && blockType(opened[ai]) === blockType(block)) {
         usedOpened[ai] = true;
         usedCurrent[ai] = true;
         byPlace.push({ bi: ai, ai: ai });

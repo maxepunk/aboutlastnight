@@ -608,3 +608,50 @@ test('a failed preview says why, in the error\'s own words (task 4.3b)', () => {
     .toBe('The preview could not be reached (Unexpected token < in JSON at position 0).');
   [undefined, null, new Error(''), {}].forEach((error) => expect(Desk.previewFailure(error)).toBe('The preview could not be reached.'));
 });
+
+// Task 4.3c: the naming rule's last pass, by place, paired two blocks at one index whatever
+// their types. A photo moved to another section, with a paragraph inserted where it stood,
+// then read as the photo edited into the paragraph, in the desk's report and in the standing
+// edits alike, and a pass that took the photo back was neither restored nor reported. The
+// pass pairs only blocks of one type now, so a block retyped through the JSON editor reads as
+// a cut and an addition.
+describe('4.3c: blocks pair by place only with blocks of their own type', () => {
+  const D = require('../../lib/hand-edit-diff');
+
+  test('pairSectionBlocks pairs two blocks by their place only when they are of one type', () => {
+    // A photo and a paragraph at one index stay apart.
+    expect(Desk.pairSectionBlocks([photo('theory.jpg', 'Mel lays out the theory.'), paragraph(STORY_2)], [paragraph(LEDE), paragraph(STORY_2)]))
+      .toEqual({ pairs: [{ bi: 1, ai: 1 }], removed: [0], added: [0] });
+    // Two paragraphs at one index pair, their opening words rewritten.
+    expect(Desk.pairSectionBlocks([paragraph(STORY_1), paragraph(STORY_2)], [paragraph(LEDE), paragraph(STORY_2)]))
+      .toEqual({ pairs: [{ bi: 1, ai: 1 }, { bi: 0, ai: 0 }], removed: [], added: [] });
+  });
+
+  test('a photo moved to another section with a paragraph inserted where it stood: the desk names it moved, and the paragraph inserted, as the standing edits do', () => {
+    const opened = journalistBundle();
+    let desk = Desk.moveToSection(opened, { section: 1, block: 1 }, 3);
+    desk = Desk.setBlock(Desk.insertBlock(desk, 1, 1, 'paragraph'), 1, 1, paragraph('Then the scoreboard went up on the wall.'));
+    const report = Desk.deskChanges(opened, desk);
+    const move = { from: { section: 'the-story', block: 1 }, to: { section: 'closing', block: 1 } };
+    expect(report[1]).toEqual({ section: 'the-story', inserted: [1], deleted: [], moved: [move], edited: [], unchanged: 1 });
+    expect(report[3]).toEqual({ section: 'closing', inserted: [], deleted: [], moved: [move], edited: [], unchanged: 1 });
+    const { edits } = D.standingAfterSendBack(null, opened, desk, 'bundle');
+    expect(edits.map((e) => [e.scope, e.from || null, e.after.type])).toEqual([
+      ['section:the-story', null, 'paragraph'],
+      ['section:closing', 'the-story', 'photo']
+    ]);
+  });
+
+  test('a block retyped through the JSON editor is a cut and an addition: the desk names it deleted and inserted, as the standing edits record it', () => {
+    const opened = journalistBundle();
+    const desk = Desk.setBlock(opened, 2, 0, { type: 'quote', text: MONEY_1, attribution: 'Nova' });
+    expect(Desk.deskChanges(opened, desk)[2]).toEqual({
+      section: 'follow-the-money', inserted: [0], deleted: [0], moved: [], edited: [], unchanged: 0
+    });
+    const { edits } = D.standingAfterSendBack(null, opened, desk, 'bundle');
+    expect(edits.map((e) => [e.path, e.after === null ? 'cut' : 'addition'])).toEqual([
+      ['sections[#follow-the-money].content[-]', 'cut'],
+      ['sections[#follow-the-money].content[0]', 'addition']
+    ]);
+  });
+});

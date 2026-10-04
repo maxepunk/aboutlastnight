@@ -918,11 +918,13 @@ describe('carriedEdits (F1)', () => {
     expect(D.carriedEdits(s, shifted)).toHaveLength(2);
   });
 
+  // Task 4.3c: a block the director added carries its fields. The test used to retype the
+  // paragraph into the quote, which is a cut and an addition now, and the cut stays carried.
   test('a field of the director\'s that the rework removed is not carried', () => {
     const sentBack = bundleBefore();
-    sentBack.sections[0].content[1] = { type: 'quote', text: 'Second paragraph, rewritten.', attribution: 'Vic' };
+    sentBack.sections[0].content.push({ type: 'quote', text: 'Second paragraph, rewritten.', attribution: 'Vic' });
     const s = D.standingAfterSendBack(null, bundleBefore(), sentBack, 'bundle');
-    const stripped = clone(sentBack); delete stripped.sections[0].content[1].attribution;
+    const stripped = clone(sentBack); delete stripped.sections[0].content[2].attribution;
     expect(D.carriedEdits(s, stripped)).toEqual([]);
   });
 
@@ -2283,5 +2285,56 @@ describe('4.3c: a restored block prints once, and the report says where it is', 
       expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: 'another place in section "s"', restored: false })]);
       expect(report.changed[0]).not.toHaveProperty('inOrder');
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.3c: a section's blocks pair by place only with blocks of their own type
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The naming rule's last pass, by place, paired blocks of any two types, so a photo moved to
+// another section, with a paragraph inserted where it stood, was a retype and an addition,
+// and a pass that took the photo back was neither restored nor reported (scratch
+// crosstype.js).
+describe('4.3c: blocks pair by place only with blocks of their own type', () => {
+  const T = paragraph('Tango paragraph sits alone in the second section of the article.');
+  const P = { type: 'photo', filename: 'whiteboard.jpg', caption: 'Mel lays out the theory at the whiteboard.' };
+  const X = paragraph('Xray paragraph opens the section with a long first line here.');
+  const Y = paragraph('Yankee paragraph follows with another long first line of text.');
+  const Z = paragraph('Zulu paragraph the director wrote at the top of the section.');
+  /** An article whose section "s" holds `s` and whose section "t" holds `t`. */
+  const article = (s, t = [T]) => ({
+    metadata: { sessionId: '0926262' },
+    headline: { main: 'The Room Voted Five to Four' },
+    sections: [
+      { id: 's', type: 'narrative', content: s.map(clone) },
+      { id: 't', type: 'narrative', content: t.map(clone) }
+    ]
+  });
+  /** A section's blocks as letters: P for the photo, else each block's first letter. */
+  const letters = (output, i) => output.sections[i].content.map((b) => (b.type === 'photo' ? 'P' : b.text[0])).join('');
+
+  test('a photo moved to another section, with a paragraph inserted where it stood, is a move; a pass that takes it back has it restored and reported', () => {
+    const opened = article([P, X, Y]);
+    const desk = article([Z, X, Y], [T, P]);
+    const standing = D.standingAfterSendBack(null, opened, desk, 'bundle');
+    expect(standing.edits.map((e) => [e.path, e.from || null, e.after.type])).toEqual([
+      ['sections[#s].content[0]', null, 'paragraph'],
+      ['sections[#t].content[1]', 's', 'photo']
+    ]);
+
+    const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(standing, desk), before: desk, after: article([P, Z, X, Y]), pass: 1 });
+    expect([letters(output, 0), letters(output, 1)]).toEqual(['ZXY', 'TP']);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E2', moved: true, became: 'section "s"', restored: true })]);
+  });
+
+  test('a block retyped through the JSON editor is a cut and an addition', () => {
+    const opened = article([X, Y]);
+    const desk = article([{ type: 'quote', text: X.text, attribution: 'Mel' }, Y]);
+    const { edits } = D.standingAfterSendBack(null, opened, desk, 'bundle');
+    expect(edits.map((e) => [e.path, e.before && e.before.type, e.after && e.after.type])).toEqual([
+      ['sections[#s].content[-]', 'paragraph', null],
+      ['sections[#s].content[0]', null, 'quote']
+    ]);
   });
 });

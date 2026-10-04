@@ -23,8 +23,10 @@
  *   type with its text, filename or tokenId) and `index` where it sat in the director's
  *   version. `path` is the same place as a string, for reading.
  * - A field edit's `before` and `after` are the field's values, the writer's and the
- *   director's. An element the director added whole, or a block retyped, is one edit
- *   whose `after` is the element. Block-level matching only finds where an edit is.
+ *   director's. An element the director added whole is one edit whose `after` is the
+ *   element. Block-level matching only finds where an edit is, and pairs a block only
+ *   with one of its type, so a block retyped (the JSON editor's) is a cut and an
+ *   addition (task 4.3c).
  * - A null `after` is a cut: `before` is the text the director removed, and `pieces` each
  *   of its sentences of three words or more that the director's version no longer held.
  * - A rewritten text field also records `removed` (FA, requirement 3): each sentence of
@@ -786,7 +788,9 @@ function lastKey(steps) {
  * One change per field that differs between two versions of a value, at the steps from
  * the root: objects field by field, collections of objects element by element (paired
  * by what names each element, then by index), and everything else, an array of strings
- * included, as one value. A block retyped is one change of the whole block.
+ * included, as one value. An element retyped (a pull quote's, say) is one change of the
+ * whole element. A section's blocks reach here already paired by the desk's naming rule,
+ * each with one of its type, so a block retyped is a cut and an addition (task 4.3c).
  */
 function valueEdits(b, a, at) {
   if (same(b, a)) return [];
@@ -2372,7 +2376,8 @@ function sameKind(a, b) {
 /**
  * Where an element of the version a pass started from is in the version it returned, or
  * -1: by what names it (a section's id, a card's tokenId, a paragraph's text), then as
- * the collection pairs (blocks by type and opening words, then by index), of the same kind.
+ * the collection pairs (pairElements; a section's blocks by the desk's naming rule,
+ * pairSectionBlocks), of the same kind.
  */
 function partnerIndex(collection, beforeArr, afterArr, bi) {
   const element = beforeArr[bi];
@@ -2409,9 +2414,9 @@ function sectionHoldingIdentity(obj, identity) {
 /**
  * Does the director's section of `after` still hold the block a move placed, which the
  * pass rewrote in place: the block at `link` in the version the pass started from has a
- * partner among the section's blocks of its type, paired by opening words, then by order.
- * Only blocks of its type pair, so a block of another type that left the section never
- * takes its partner.
+ * partner among the section's blocks of its type, paired by the desk's naming rule
+ * (pairSectionBlocks). Only blocks of its type are paired, so a block of another type that
+ * left the section never takes its partner.
  */
 function rewrittenInPlace(link, afterContent) {
   const block = link.holder[link.index];
