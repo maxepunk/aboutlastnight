@@ -404,3 +404,19 @@ describe("4.6: the map's channels (brief 4.6)", () => {
     [...THE_DIRECTORS_MAP, ...THE_ROUND].forEach((field) => expect(ROLLBACK_CLEARS_EXEMPT.has(field)).toBe(false));
   });
 });
+
+// 4.14e: each stop's rework record goes with the round it belongs to. A rollback that clears
+// the round's note clears the record too, so a reopened stop never says a round did not run
+// when the director has since acted at it.
+describe('4.14e: the rework records clear with their round', () => {
+  test.each(Object.keys(ROLLBACK_CLEARS))('%s clears each record exactly where it clears that stop\'s note', (point) => {
+    const list = ROLLBACK_CLEARS[point];
+    expect([point, list.includes('_outlineRework')]).toEqual([point, list.includes('_outlineFeedback')]);
+    expect([point, list.includes('_articleRework')]).toEqual([point, list.includes('_articleFeedback')]);
+  });
+
+  test('neither record is exempt', () => {
+    expect(ROLLBACK_CLEARS_EXEMPT.has('_outlineRework')).toBe(false);
+    expect(ROLLBACK_CLEARS_EXEMPT.has('_articleRework')).toBe(false);
+  });
+});

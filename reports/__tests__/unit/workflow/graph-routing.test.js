@@ -185,11 +185,59 @@ describe('4.6: routeMapChecks', () => {
     const edges = [...builder.edges];
     const has = (from, to) => edges.some(([f, t]) => f === from && t === to);
     expect(has('generateOutline', 'checkMap')).toBe(true);
-    expect(has('reviseOutline', 'checkMap')).toBe(true);
+    // Task 4.14e: the rework reaches the checks through its own route, which may run it again.
+    expect(builder.branches.reviseOutline.condition.ends.checks).toBe('checkMap');
     expect(has('incrementOutlineRevision', 'reviseOutline')).toBe(true);
     expect(builder.branches.checkMap.condition.ends).toEqual({
       checkpoint: 'checkpointOutline', revise: 'incrementOutlineRevision', error: '__end__'
     });
     expect(Object.keys(builder.nodes)).not.toContain('evaluateOutline');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14e: a failed rework keeps the version it started from (the final review's ruling 5).
+// A rework call that failed on a transient error runs again, by the route after the rework;
+// a rework that gave up opens its stop with that version, and no automatic pass runs on it.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14e: the routes after a rework that failed', () => {
+  const { routeAfterMapRework, routeAfterArticleRework, routeMapChecks, routeArticleEvaluation, createGraphBuilder } = _testing;
+  const { PHASES } = require('../../../lib/workflow/state');
+  const RUNNING = { round: null, note: null, countsBefore: {}, failures: 0, status: 'running' };
+  const RETRYING = { ...RUNNING, failures: 1, at: 't', error: 'SDK timeout after 900s', status: 'retrying' };
+  const DID_NOT_RUN = { ...RUNNING, round: 'send-back', note: 'Tighten it.', failures: 3, at: 't', error: 'SDK timeout after 900s', status: 'did-not-run' };
+  const FAILED = { mapKey: 'k', passed: false, failures: [{ type: 'player-not-placed', message: 'Riley is in no beat.' }] };
+
+  test('after the map\'s rework: a call to retry runs the rework again, anything else goes to the checks, and an error ends the run', () => {
+    expect(routeAfterMapRework({ _outlineRework: RETRYING })).toBe('retry');
+    expect(routeAfterMapRework({ _outlineRework: null })).toBe('checks');
+    expect(routeAfterMapRework({ _outlineRework: DID_NOT_RUN })).toBe('checks');
+    expect(routeAfterMapRework({ _outlineRework: DID_NOT_RUN, currentPhase: PHASES.ERROR })).toBe('error');
+  });
+
+  test('after the article\'s rework: a call to retry runs the rework again, anything else goes to the evaluation, and an error ends the run', () => {
+    expect(routeAfterArticleRework({ _articleRework: RETRYING })).toBe('retry');
+    expect(routeAfterArticleRework({ _articleRework: null })).toBe('evaluate');
+    expect(routeAfterArticleRework({ _articleRework: DID_NOT_RUN })).toBe('evaluate');
+    expect(routeAfterArticleRework({ _articleRework: { ...DID_NOT_RUN, round: null }, currentPhase: PHASES.ERROR })).toBe('error');
+  });
+
+  test('the map checks open the stop on a rework that did not run, whatever the check found', () => {
+    expect(routeMapChecks({ _mapCheck: FAILED, outlineRevisionCount: 0, _outlineRework: DID_NOT_RUN })).toBe('checkpoint');
+    // A rework that ran keeps the route as it was: a failed check under the cap gets its rework.
+    expect(routeMapChecks({ _mapCheck: FAILED, outlineRevisionCount: 0, _outlineRework: null })).toBe('revise');
+  });
+
+  test('an evaluation escalated to the director opens the article\'s stop under the cap, as the cap\'s escalation does at it', () => {
+    expect(routeArticleEvaluation({ evaluationHistory: [{ phase: 'article', ready: false, escalatedToHuman: true }], articleRevisionCount: 0 })).toBe('checkpoint');
+    expect(routeArticleEvaluation({ evaluationHistory: [{ phase: 'article', ready: false }], articleRevisionCount: 0 })).toBe('revise');
+  });
+
+  test('each rework routes on its own outcome: to itself to retry, on to its checks or evaluation, or to the end', () => {
+    const builder = createGraphBuilder();
+    expect(builder.branches.reviseOutline.condition.ends).toEqual({ checks: 'checkMap', retry: 'reviseOutline', error: '__end__' });
+    expect(builder.branches.reviseContentBundle.condition.ends).toEqual({ evaluate: 'evaluateArticle', retry: 'reviseContentBundle', error: '__end__' });
+    const edges = [...builder.edges];
+    expect(edges.some(([from]) => from === 'reviseOutline' || from === 'reviseContentBundle')).toBe(false);
   });
 });

@@ -21,8 +21,11 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
-const { PHASES, stopRoundOf } = require('../state');
+const { PHASES, REWORK_STATUS, reworkOpened, stopRoundOf } = require('../state');
 const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
+// Task 4.14e: which failures a rework calls again (rate limits, overloads, stalls), the one
+// classifier the nodes' retry policy reads too (graph.js LLM_RETRY).
+const { isTransientError } = require('../../llm/retry');
 const { SchemaValidator } = require('../../schema-validator');
 const {
   createPromptBuilder,
@@ -1090,6 +1093,127 @@ function takeChangedEdits(result) {
   return { output, reasons: Array.isArray(list) ? list : [] };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// A REWORK THAT FAILS (task 4.14e; the final review's ruling 5)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// A rework that fails never costs the director their work. The map's rework and the
+// article's keep the version they started from as their stop's output, as the story
+// meeting's rework does (arc-specialist-nodes.js reviseArcs, ruling 6 of brief 4.5):
+// - a call that fails on a transient error, with calls left, changes nothing but the
+//   rework's record, and the route after the rework runs it again (graph.js
+//   routeAfterMapRework, routeAfterArticleRework), spending no automated budget;
+// - a rework that gives up on the director's round leaves the director's version, gives the
+//   round's counts back and empties its slot, and the stop reopens saying the round did not
+//   run, with its note (lib/workflow/state.js roundDidNotRunAt);
+// - an automatic pass that gives up ends the run in an error, as the meeting's does, with the
+//   version it started from kept, so Retry and going back reopen the stop with no call. Its
+//   trace entry goes: the pass never returned, so it changed nothing.
+
+/**
+ * The calls a rework makes before it gives up on transient failures (task 4.14e): as many as
+ * the nodes' retry policy makes (graph.js LLM_RETRY), and the story meeting's third timeout in
+ * a row ends its rework.
+ */
+const REWORK_CALLS = 3;
+
+/**
+ * A rework's record after one of its calls failed (task 4.14e): the failure counted, with when
+ * and why. A transient failure (lib/llm/retry.js isTransientError, which never reads a declined
+ * request, a model substitution or a schema failure as transient) with calls left asks for the
+ * call again (REWORK_STATUS.RETRYING); any other failure, or the last call's, gives the rework
+ * up (REWORK_STATUS.DID_NOT_RUN).
+ *
+ * @param {Object|null} record - the record the increment opened, or null for a rework run
+ *   without one, which opens it from the stop's feedback slot (reworkOpened)
+ * @param {string|null} feedback - the stop's feedback slot (`_outlineFeedback`, `_articleFeedback`)
+ * @param {Error} error - the call's failure
+ * @returns {Object} the record
+ */
+function failedReworkRecord(record, feedback, error) {
+  const opened = record && typeof record === 'object' ? record : reworkOpened(feedback, null);
+  const failures = (Number(opened.failures) || 0) + 1;
+  const retry = isTransientError(error) && failures < REWORK_CALLS;
+  return {
+    ...opened,
+    failures,
+    at: new Date().toISOString(),
+    error: (error && error.message) || String(error),
+    status: retry ? REWORK_STATUS.RETRYING : REWORK_STATUS.DID_NOT_RUN
+  };
+}
+
+/**
+ * The counts a director's round that did not run gives back (task 4.14e): the counts its rework
+ * started from, as the increment recorded them, so the stop reads as it did before the round
+ * (its round, its automatic passes, and the version its pending slot is keyed by). A rework run
+ * without a record gives back the round alone, as the story meeting does.
+ *
+ * @param {Object} record - the rework's record
+ * @param {Object} state
+ * @param {string} roundCounter - the stop's count of the director's rounds
+ * @returns {Object} the counts, by channel
+ */
+function countsGivenBack(record, state, roundCounter) {
+  if (record.countsBefore && typeof record.countsBefore === 'object') return { ...record.countsBefore };
+  return { [roundCounter]: Math.max(0, (Number(state[roundCounter]) || 1) - 1) };
+}
+
+/**
+ * A stop's trace without the automatic pass that did not run (task 4.14e): the increment wrote
+ * the pass's entry before the rework ran, and the pass never returned, so the trace would say it
+ * changed nothing.
+ *
+ * @param {Array|null} trace - `_outlineTrace` or `_articleTrace`
+ * @param {number} pass - the pass's number (the stop's automatic count)
+ * @param {number} round - the stop's round (stopRoundOf)
+ * @returns {Array|null}
+ */
+function withoutPass(trace, pass, round) {
+  return Array.isArray(trace) ? trace.filter((entry) => !(entry && entry.pass === pass && entry.round === round)) : trace;
+}
+
+/**
+ * What the map's rework leaves when a call fails (task 4.14e): the call again, the director's
+ * round given up with their map, or an automatic pass given up with the run's error. The map it
+ * started from (`_previousOutline`) is the director's on their round, and the stop's `outline`
+ * all along, which the increment left in place.
+ *
+ * @param {Object} state - the rework's state
+ * @param {Object} previousOutline - the map the rework started from
+ * @param {Error} error
+ * @returns {Object} partial state
+ */
+function mapReworkFailed(state, previousOutline, error) {
+  const record = failedReworkRecord(state._outlineRework, state._outlineFeedback, error);
+  if (record.status === REWORK_STATUS.RETRYING) {
+    console.warn(`[reviseOutline] Call ${record.failures} of ${REWORK_CALLS} failed on a transient error: the rework runs again`);
+    return { _outlineRework: record };
+  }
+  const kept = { outline: previousOutline, _previousOutline: null, _outlineRework: record };
+  if (record.round) {
+    console.warn(`[reviseOutline] The director's ${record.round} did not run (${record.error}): the map reopens as the director left it`);
+    return {
+      ...kept,
+      _outlineFeedback: null,
+      ...countsGivenBack(record, state, 'humanOutlineRevisionCount'),
+      currentPhase: PHASES.OUTLINE_GENERATION
+    };
+  }
+  console.error(`[reviseOutline] The automatic rework did not run (${record.error}): the run ends with the map it started from`);
+  return {
+    ...kept,
+    _outlineTrace: withoutPass(state._outlineTrace, state.outlineRevisionCount || 0, stopRoundOf(CHECKPOINT_TYPES.OUTLINE, state)),
+    errors: [{
+      phase: PHASES.GENERATE_OUTLINE,
+      type: 'outline-revision-failed',
+      message: `The map's automatic rework did not run: ${record.error}. Retry opens the map as the writer left it.`,
+      timestamp: new Date().toISOString()
+    }],
+    currentPhase: PHASES.ERROR
+  };
+}
+
 /**
  * The map's rework (phase 4, brief 4.6): one pass on the map, built from the writer's own
  * sections (buildOutlineRevisionPrompt), with the map's schema for the theme. An automatic
@@ -1104,6 +1228,10 @@ function takeChangedEdits(result) {
  * each restore. The map a pass leaves is the writer's last map (`_mapBaseline`), unchecked
  * (`_mapCheck: null`), and its top photo is the hero. It stamps the map writer's phase,
  * OUTLINE_GENERATION, as the writer does (brief 4.6b).
+ *
+ * A call that fails keeps the map the rework started from (task 4.14e; mapReworkFailed): a
+ * transient failure is called again, and a rework that gives up leaves the stop's map as it
+ * was. A rework that completes clears its record.
  *
  * @param {Object} state - Current state with _previousOutline, validationResults, the note
  * @param {Object} config - Graph config with SDK client
@@ -1172,27 +1300,16 @@ async function reviseOutline(state, config) {
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
       _outlineHandEditReport: settled.report,
+      _outlineRework: null,  // Task 4.14e: the rework completed
       currentPhase: PHASES.OUTLINE_GENERATION
     };
 
   } catch (error) {
     console.error('[reviseOutline] Error:', error.message);
 
-    // _outlineHandEdits / _outlineHandEditReport are deliberately NOT returned: this
-    // routes to ERROR and never reaches a gate, so the previous pass's report is read
-    // by nobody, and clearing it would lose it for a rollback that replays from here.
-    return {
-      outline: null,
-      _previousOutline: null,  // Clear temporary field
-      _outlineFeedback: null,  // Clear human feedback after consumption
-      errors: [{
-        phase: PHASES.GENERATE_OUTLINE,
-        type: 'outline-revision-failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
-      }],
-      currentPhase: PHASES.ERROR
-    };
+    // _outlineHandEdits / _outlineHandEditReport are deliberately NOT returned: the
+    // director's edits stand for their next round, and the report is the round's.
+    return mapReworkFailed(state, previousOutline, error);
   }
 }
 
@@ -1687,39 +1804,40 @@ async function reviseContentBundle(state, config) {
     };
   }
 
-  // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round.
-  // This node never clears them; the gate does, on approve. F1 (spec 2026-10-02
-  // section 7): the edits the version this pass starts from carries, by id.
-  const handEdits = carriedEdits(state._articleHandEdits, previousContentBundle);
-  const sendBack = Boolean(state._articleFeedback);
-
-  // Build revision context using centralized helper (DRY)
-  const { contextSection, previousOutputSection } = buildRevisionContextDRY({
-    phase: 'article',
-    revisionCount,
-    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it (task
-    // 4.12c: the stop's round, the one rule).
-    round: stopRoundOf(CHECKPOINT_TYPES.ARTICLE, state),
-    validationResults: state.validationResults,
-    previousOutput: previousContentBundle,
-    humanFeedback: state._articleFeedback || null,
-    handEdits
-  });
-
   const sdk = getSdkClient(config, 'reviseContent');
   const promptBuilder = getPromptBuilder(config, state);
 
-  // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
-  // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
-  // The gate narrows the match to THIS stop's rejection note (phase 1 brief 1.1):
-  // an approval note reusing the same sentence must survive.
-  const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback, 'article');
-
   try {
-    // INSIDE the try: buildArticleRevisionPrompt loads the writer's craft files and
-    // THROWS if any are missing. Outside, that throw escaped as a graph-level
-    // rejection instead of this node's error-contract return, which is what clears
-    // _previousContentBundle / _articleFeedback and leaves the run resumable.
+    // INSIDE the try: the context and buildArticleRevisionPrompt, which loads the writer's
+    // craft files and THROWS if any are missing. Outside, a throw escaped as a graph-level
+    // rejection instead of this node's failure path (task 4.14e: articleReworkFailed), which
+    // keeps the article the rework started from and leaves the run resumable.
+
+    // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round.
+    // This node never clears them; the gate does, on approve. F1 (spec 2026-10-02
+    // section 7): the edits the version this pass starts from carries, by id.
+    const handEdits = carriedEdits(state._articleHandEdits, previousContentBundle);
+    const sendBack = Boolean(state._articleFeedback);
+
+    // Build revision context using centralized helper (DRY)
+    const { contextSection, previousOutputSection } = buildRevisionContextDRY({
+      phase: 'article',
+      revisionCount,
+      // Brief 2.3: a send back's banner names the round it opens, as the stop shows it (task
+      // 4.12c: the stop's round, the one rule).
+      round: stopRoundOf(CHECKPOINT_TYPES.ARTICLE, state),
+      validationResults: state.validationResults,
+      previousOutput: previousContentBundle,
+      humanFeedback: state._articleFeedback || null,
+      handEdits
+    });
+
+    // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
+    // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
+    // The gate narrows the match to THIS stop's rejection note (phase 1 brief 1.1):
+    // an approval note reusing the same sentence must survive.
+    const gateNotes = filterGateNotes(state.directorGateNotes, state._articleFeedback, 'article');
+
     const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
     const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder);
 
@@ -1776,28 +1894,93 @@ async function reviseContentBundle(state, config) {
       _articleFeedback: null,  // Clear human feedback after consumption
       _articleHandEditReport: settled.report,
       ...(standing !== state._articleHandEdits && { _articleHandEdits: standing }),
+      _articleRework: null,  // Task 4.14e: the rework completed
       currentPhase: PHASES.GENERATE_CONTENT
     };
 
   } catch (error) {
     console.error('[reviseContentBundle] Error:', error.message);
 
-    // _articleHandEdits / _articleHandEditReport are deliberately NOT returned: this
-    // routes to ERROR and never reaches a gate, so the previous pass's report is read
-    // by nobody, and clearing it would lose it for a rollback that replays from here.
+    // _articleHandEdits / _articleHandEditReport are deliberately NOT returned: the
+    // director's edits stand for their next round, and the report is the round's.
+    return articleReworkFailed(state, previousContentBundle, error);
+  }
+}
+
+/** The stubs that mark an article's verdict stale (graph.js incrementArticleRevision, lib/api-helpers.js buildRollbackState): no verdict. */
+const STALE_VERDICT_REASONS = new Set(['revision-invalidated', 'rollback-invalidated']);
+
+/**
+ * The article's verdict after its rework gave up (task 4.14e), appended after the stub the
+ * increment wrote, so a replay skips the judge (evaluator-nodes.js evaluatePhase skips a ready
+ * or an escalated verdict) and the route opens the stop (graph.js routeArticleEvaluation): the
+ * last verdict before the stub, stated again. On the director's round it is the verdict the desk
+ * opened on, ready or escalated, which stands, as the story meeting keeps its fact check's mark.
+ * On an automatic pass it is the verdict the pass was fixing, now the director's, as the cap
+ * escalates it.
+ *
+ * @param {Array} history - evaluationHistory
+ * @param {Object} record - the rework's record, given up
+ * @returns {Object} the entry to append
+ */
+function verdictAfterFailedRework(history, record) {
+  const verdicts = (Array.isArray(history) ? history : [])
+    .filter((entry) => entry && entry.phase === 'article' && !STALE_VERDICT_REASONS.has(entry.reason));
+  const verdict = verdicts.length > 0 ? verdicts[verdicts.length - 1] : null;
+  const settled = Boolean(verdict) && (verdict.ready === true || verdict.escalatedToHuman === true);
+  const why = record.round ? `The director's ${record.round} did not run` : 'The automatic rework did not run';
+  return {
+    ...(verdict || { phase: 'article', ready: false, structuralIssues: [], advisoryWarnings: [] }),
+    ...(!settled && { escalatedToHuman: true, escalationReason: `${why}: ${record.error}` }),
+    reworkDidNotRun: true,
+    timestamp: new Date().toISOString()
+  };
+}
+
+/**
+ * What the article's rework leaves when a call fails (task 4.14e), as mapReworkFailed leaves the
+ * map's: the call again, the director's round given up with their desk, or an automatic pass
+ * given up with the run's error. Either give-up states the article's verdict again
+ * (verdictAfterFailedRework), so no judge reads the article the stop keeps.
+ *
+ * @param {Object} state - the rework's state
+ * @param {Object} previousContentBundle - the article the rework started from
+ * @param {Error} error
+ * @returns {Object} partial state
+ */
+function articleReworkFailed(state, previousContentBundle, error) {
+  const record = failedReworkRecord(state._articleRework, state._articleFeedback, error);
+  if (record.status === REWORK_STATUS.RETRYING) {
+    console.warn(`[reviseContentBundle] Call ${record.failures} of ${REWORK_CALLS} failed on a transient error: the rework runs again`);
+    return { _articleRework: record };
+  }
+  const kept = {
+    contentBundle: previousContentBundle,
+    _previousContentBundle: null,
+    _articleRework: record,
+    evaluationHistory: verdictAfterFailedRework(state.evaluationHistory, record)
+  };
+  if (record.round) {
+    console.warn(`[reviseContentBundle] The director's ${record.round} did not run (${record.error}): the desk reopens as the director left it`);
     return {
-      contentBundle: null,
-      _previousContentBundle: null,  // Clear temporary field
-      _articleFeedback: null,  // Clear human feedback after consumption
-      errors: [{
-        phase: PHASES.GENERATE_CONTENT,
-        type: 'article-revision-failed',
-        message: error.message,
-        timestamp: new Date().toISOString()
-      }],
-      currentPhase: PHASES.ERROR
+      ...kept,
+      _articleFeedback: null,
+      ...countsGivenBack(record, state, 'humanArticleRevisionCount'),
+      currentPhase: PHASES.GENERATE_CONTENT
     };
   }
+  console.error(`[reviseContentBundle] The automatic rework did not run (${record.error}): the run ends with the article it started from`);
+  return {
+    ...kept,
+    _articleTrace: withoutPass(state._articleTrace, state.articleRevisionCount || 0, stopRoundOf(CHECKPOINT_TYPES.ARTICLE, state)),
+    errors: [{
+      phase: PHASES.GENERATE_CONTENT,
+      type: 'article-revision-failed',
+      message: `The article's automatic rework did not run: ${record.error}. Retry opens the article as the writer left it.`,
+      timestamp: new Date().toISOString()
+    }],
+    currentPhase: PHASES.ERROR
+  };
 }
 
 /**

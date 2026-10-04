@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (85 total - includes revision context + human feedback):
+ * State Fields (87 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections,
@@ -31,6 +31,7 @@
  *     outlineRevisionCount, humanOutlineRevisionCount, articleRevisionCount,
  *     humanArticleRevisionCount
  *   - Trace (phase 2, brief 2.7): _outlineTrace, _articleTrace
+ *   - The reworks in hand (task 4.14e): _outlineRework, _articleRework
  */
 
 const { Annotation } = require('@langchain/langgraph');
@@ -826,9 +827,10 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * Previous outline before revision (for revision context)
-   * Set by incrementOutlineRevision, consumed by reviseOutline
-   * Contains full outline object from failed evaluation
+   * The map the rework starts from (for revision context). Set by incrementOutlineRevision,
+   * consumed by reviseOutline, which clears it on every exit but a call it runs again. The map
+   * itself stays in `outline` while the rework runs (task 4.14e), so a rework that fails, or a
+   * run that ends in an error, leaves it.
    */
   _previousOutline: Annotation({
     reducer: replaceReducer,
@@ -836,9 +838,9 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   /**
-   * Previous content bundle before revision (for revision context)
-   * Set by incrementArticleRevision, consumed by reviseContentBundle
-   * Contains full contentBundle object from failed evaluation
+   * The article the rework starts from (for revision context). Set by incrementArticleRevision,
+   * consumed by reviseContentBundle, which clears it on every exit but a call it runs again. The
+   * article itself stays in `contentBundle` while the rework runs (task 4.14e).
    */
   _previousContentBundle: Annotation({
     reducer: replaceReducer,
@@ -869,6 +871,34 @@ const ReportStateAnnotation = Annotation.Root({
    * Cleared after revision completes — follows _previousContentBundle pattern
    */
   _articleFeedback: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * The map's rework in hand (task 4.14e; the final review's ruling 5), the record a failure
+   * reads. incrementOutlineRevision opens it as each rework starts: the director's round the
+   * rework runs (`round: 'send-back'`, with the round's `note`), or none for an automatic pass,
+   * and the counts it started from (`countsBefore`). reviseOutline keeps it: a call that fails
+   * on a transient error is counted (`failures`, `at`, `error`) and run again
+   * (REWORK_STATUS.RETRYING), up to ai-nodes.js REWORK_CALLS calls in all; a rework that fails
+   * on anything else, or on its last call, gives up (REWORK_STATUS.DID_NOT_RUN). The map it
+   * started from stays the stop's, and the director's round gives its counts back. A rework
+   * that completes clears it. The map's stop reads a round that did not run from it
+   * (roundDidNotRunAt), and the map checks' route opens the stop on it. Cleared wherever
+   * `_outlineFeedback` is.
+   */
+  _outlineRework: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * The article's rework in hand (task 4.14e), as `_outlineRework` is the map's: opened by
+   * incrementArticleRevision, kept by reviseContentBundle, read by the desk's payload
+   * (roundDidNotRunAt). Cleared wherever `_articleFeedback` is.
+   */
+  _articleRework: Annotation({
     reducer: replaceReducer,
     default: () => null
   }),
@@ -1004,7 +1034,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (85 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks; phase 4, brief 4.6: -1 the arc packages (R5), -3 the old arc stage's narrativeArcs, selectedArcs and _arcAnalysisCache (R4), +2 the map's baseline and check mark; phase 4, brief 4.7b: -1 the arc selection's guidance, _outlineGuidance, with its last readers (R4))
+ * Get default state with all fields initialized (87 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks; phase 4, brief 4.6: -1 the arc packages (R5), -3 the old arc stage's narrativeArcs, selectedArcs and _arcAnalysisCache (R4), +2 the map's baseline and check mark; phase 4, brief 4.7b: -1 the arc selection's guidance, _outlineGuidance, with its last readers (R4); task 4.14e: +2 the map's and the article's rework records, _outlineRework and _articleRework)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -1113,6 +1143,10 @@ function getDefaultState() {
     // Human rejection feedback (consumed by revision nodes, cleared after use)
     _outlineFeedback: null,
     _articleFeedback: null,
+    // The map's and the article's rework in hand: its round, the counts it started from, and
+    // how it failed (task 4.14e)
+    _outlineRework: null,
+    _articleRework: null,
     _arcFeedback: null,
     // Director steering (spec 2026-09-19): hand edits sent with a rejection, what the
     // rework did to them, and the standing gate notes
@@ -1330,8 +1364,8 @@ const ROLLBACK_CLEARS = {
     // meeting's point and the map's reopen their stop as the director left it (R9).
     'directorGateNotes',
     // Generation
-    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     // Evaluation history
     'evaluationHistory'
   ],
@@ -1365,8 +1399,8 @@ const ROLLBACK_CLEARS = {
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
-    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1389,8 +1423,8 @@ const ROLLBACK_CLEARS = {
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
-    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1422,8 +1456,8 @@ const ROLLBACK_CLEARS = {
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
-    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1437,8 +1471,8 @@ const ROLLBACK_CLEARS = {
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
-    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1454,8 +1488,8 @@ const ROLLBACK_CLEARS = {
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
-    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
 
@@ -1472,8 +1506,8 @@ const ROLLBACK_CLEARS = {
     'narrativeTensions',
     '_arcReworkTimeout', '_arcFeedback',
     'meetingApproved', '_meetingRound', '_weaveHandEditReport', '_weaveMarks',
-    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
@@ -1494,8 +1528,8 @@ const ROLLBACK_CLEARS = {
     'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses',
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'heroImage',
-    'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
+    'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ],
 
@@ -1518,8 +1552,8 @@ const ROLLBACK_CLEARS = {
   'character-ids': [
     'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'heroImage',
-    'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
+    'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ],
 
@@ -1527,18 +1561,19 @@ const ROLLBACK_CLEARS = {
   // director last left it, with no model call, as going back to the meeting does: the map
   // stays, with the checks' mark, the director's standing edits and their baseline
   // (`_mapCheck`, `_outlineHandEdits`, `_mapBaseline`), the hero its top photo names, and the
-  // map's counters (ROLLBACK_COUNTER_RESETS). The approval, the round's note, report and
-  // trace go, so the stop reopens; the article goes, so it is written from the map as left.
+  // map's counters (ROLLBACK_COUNTER_RESETS). The approval, the round's note, report and trace
+  // and its rework's record (task 4.14e) go, so the stop reopens; the article goes, so it is
+  // written from the map as left.
   // evaluationHistory is kept (the meeting's fact check sits in it); the article's verdict
   // is invalidated (lib/api-helpers.js PHASES_INVALIDATED_BY).
   'outline': [
-    'outlineApproved', '_outlineFeedback', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEditReport', '_outlineTrace',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ],
 
   // Phase 4.2: Article
   'article': [
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ]
 };
 
@@ -1685,6 +1720,64 @@ function isNoteOf(note, gate, kind, stopRound) {
 }
 
 /**
+ * Where a rework stands (task 4.14e), in its stop's record (`_outlineRework`, `_articleRework`):
+ * running, from the increment that opened it; retrying, after a call that failed on a transient
+ * error with calls left, which the route after the rework runs again; did not run, once the
+ * rework gave up and its stop kept the version it started from. The rework nodes write it, and
+ * the routes and roundDidNotRunAt read it.
+ */
+const REWORK_STATUS = Object.freeze({ RUNNING: 'running', RETRYING: 'retrying', DID_NOT_RUN: 'did-not-run' });
+
+/** The channel each stop keeps its rework's record in: the map's and the desk's (task 4.14e). */
+const REWORK_CHANNELS = Object.freeze({ outline: '_outlineRework', article: '_articleRework' });
+
+/**
+ * The record a rework opens as it starts (task 4.14e), in its stop's channel: the director's
+ * round it runs, a send-back with its note, or none for an automatic pass, and the counts it
+ * started from, which the round gives back if its rework gives up. The increments open it
+ * (graph.js incrementOutlineRevision, incrementArticleRevision); a rework run without one opens
+ * it from its stop's feedback slot, with no counts (ai-nodes.js failedReworkRecord).
+ *
+ * @param {string|null} note - the round's note (the stop's feedback slot), or null on an automatic pass
+ * @param {Object|null} countsBefore - the stop's two counters as the rework found them, by channel
+ * @returns {{round: string|null, note: string|null, countsBefore: Object|null, failures: number, status: string}}
+ */
+function reworkOpened(note, countsBefore) {
+  const written = typeof note === 'string' && note.trim() ? note : null;
+  return {
+    round: written ? 'send-back' : null,
+    note: written,
+    countsBefore: countsBefore || null,
+    failures: 0,
+    status: REWORK_STATUS.RUNNING
+  };
+}
+
+/**
+ * The director's round at the map or the desk that did not run, or null (task 4.14e; the final
+ * review's ruling 5), shaped as the story meeting's is (lib/meeting.js roundDidNotRunOf): the
+ * round's rework gave up, the stop kept the director's version and gave the round's counts back,
+ * and the round's note comes with it, for the director to send again. An automatic pass that
+ * gave up runs inside the stop's round, so it is no round of the director's that did not run.
+ * The map's and the desk's payloads send it (lib/map.js mapCheckpointData, server.js
+ * getCheckpointData), and the console's line reads it (checkpoint-view-logic.js
+ * reworkDidNotRunLine).
+ *
+ * @param {string} stop - 'outline' or 'article' (CHECKPOINT_TYPES)
+ * @param {Object} state - the thread's state values
+ * @returns {{round: string, at: string|null, note: string|null}|null}
+ * @throws {Error} for a stop that keeps no rework record
+ */
+function roundDidNotRunAt(stop, state) {
+  if (!Object.prototype.hasOwnProperty.call(REWORK_CHANNELS, stop)) {
+    throw new Error(`roundDidNotRunAt: the ${stop} stop keeps no rework record; the map's and the desk's do (${Object.keys(REWORK_CHANNELS).join(', ')})`);
+  }
+  const record = state && typeof state === 'object' ? state[REWORK_CHANNELS[stop]] : null;
+  if (!record || typeof record !== 'object' || record.status !== REWORK_STATUS.DID_NOT_RUN || !record.round) return null;
+  return { round: record.round, at: record.at || null, note: typeof record.note === 'string' ? record.note : null };
+}
+
+/**
  * Valid rollback points (for validation)
  */
 const VALID_ROLLBACK_POINTS = Object.keys(ROLLBACK_CLEARS);
@@ -1705,6 +1798,11 @@ module.exports = {
   roundNoteOf,
   noteKindOf,
   isNoteOf,
+  // A rework that fails (task 4.14e): where it stands, where each stop keeps it, and the round that did not run
+  REWORK_STATUS,
+  REWORK_CHANNELS,
+  reworkOpened,
+  roundDidNotRunAt,
   // Fresh-start configuration (C1) — a separate list, not a rollback target
   FRESH_START_CLEARS,
   FRESH_START_KEEPS,
@@ -1722,7 +1820,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 85
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 87
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

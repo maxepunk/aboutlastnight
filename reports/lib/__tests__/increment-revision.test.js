@@ -327,3 +327,57 @@ describe('routeArcEvaluation', () => {
     expect(routeArcEvaluation({ weave: { ...WEAVE, _factCheck: { at: 't', ready: true, fixes: 0 } } })).toBe('checkpoint');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14e: a failed rework keeps the version it started from (the final review's ruling 5).
+// The increments leave the stop's output where it is, so a rework that fails, or a run that
+// ends in an error, leaves it; the rework reads the version it starts from in its own slot.
+// Each increment opens the rework's record: the director's round it runs, with its note, or
+// none for an automatic pass, and the counts it started from, which a round that does not run
+// gives back.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14e: the increments keep the stop\'s output and open the rework\'s record', () => {
+  test('the map stays the stop\'s while its rework runs, and the rework reads it from its own slot', async () => {
+    const outline = { headline: "The director's headline", sections: [] };
+    const result = await incrementOutlineRevision({ outline, outlineRevisionCount: 1, humanOutlineRevisionCount: 2, _outlineFeedback: 'Tighten it.' });
+    expect(result).not.toHaveProperty('outline');
+    expect(result._previousOutline).toBe(outline);
+  });
+
+  test('a send-back at the map opens a record naming its round, its note and the counts it started from', async () => {
+    const result = await incrementOutlineRevision({
+      outline: {}, outlineRevisionCount: 1, humanOutlineRevisionCount: 2, _outlineFeedback: 'Tighten it.',
+      _outlineRework: { round: 'send-back', note: 'An earlier round.', status: 'did-not-run', failures: 3 }
+    });
+    expect(result._outlineRework).toEqual({
+      round: 'send-back', note: 'Tighten it.', countsBefore: { outlineRevisionCount: 1, humanOutlineRevisionCount: 2 }, failures: 0, status: 'running'
+    });
+  });
+
+  test('an automatic pass at the map opens a record with no round', async () => {
+    const result = await incrementOutlineRevision({ outline: {}, outlineRevisionCount: 0, humanOutlineRevisionCount: 1 });
+    expect(result._outlineRework).toEqual({
+      round: null, note: null, countsBefore: { outlineRevisionCount: 0, humanOutlineRevisionCount: 1 }, failures: 0, status: 'running'
+    });
+  });
+
+  test('the article stays the stop\'s while its rework runs; the assembled page goes, and the record opens', async () => {
+    const contentBundle = { headline: { main: "The director's headline" } };
+    const result = await incrementArticleRevision({
+      contentBundle, assembledHtml: '<html>', articleRevisionCount: 2, humanArticleRevisionCount: 0, _articleFeedback: 'Lead with the envelope.'
+    });
+    expect(result).not.toHaveProperty('contentBundle');
+    expect(result._previousContentBundle).toBe(contentBundle);
+    expect(result.assembledHtml).toBeNull();
+    expect(result._articleRework).toEqual({
+      round: 'send-back', note: 'Lead with the envelope.', countsBefore: { articleRevisionCount: 2, humanArticleRevisionCount: 0 }, failures: 0, status: 'running'
+    });
+  });
+
+  test('an automatic pass at the desk opens a record with no round', async () => {
+    const result = await incrementArticleRevision({ contentBundle: {}, articleRevisionCount: 1, humanArticleRevisionCount: 1 });
+    expect(result._articleRework).toEqual({
+      round: null, note: null, countsBefore: { articleRevisionCount: 1, humanArticleRevisionCount: 1 }, failures: 0, status: 'running'
+    });
+  });
+});

@@ -198,7 +198,7 @@ describe('ReportStateAnnotation', () => {
 
     // Phase 4 (brief 4.6): the old arc channels went with their last readers (R4), and the
     // map's baseline and its checks' mark came.
-    it('includes all 85 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 87 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -310,6 +310,10 @@ describe('ReportStateAnnotation', () => {
         // Human rejection feedback (consumed by revision nodes, cleared after use)
         '_outlineFeedback',
         '_articleFeedback',
+        // The map's and the article's rework in hand: its round, the counts it started from,
+        // and how it failed (task 4.14e)
+        '_outlineRework',
+        '_articleRework',
         '_arcFeedback',
         // Director steering (spec 2026-09-19): hand edits, the rework report, gate notes
         '_outlineHandEdits',
@@ -481,8 +485,9 @@ describe('ReportStateAnnotation', () => {
 
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
-      // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(85);
+      // self-test) together if the field set changes. Task 4.14e: +2, the map's and the
+      // article's rework records (_outlineRework, _articleRework).
+      expect(Object.keys(getDefaultState()).length).toBe(87);
     });
 
     it('declares the leave-out list (phase 4, brief 4.2)', () => {
@@ -958,5 +963,49 @@ describe('state self-test validation', () => {
       // NOTE: awaitingApproval removed in interrupt() migration
       // Nodes now use interrupt() from checkpoint-helpers.js
     }).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14e: a failed rework keeps the version it started from (the final review's ruling 5).
+// Each stop's rework keeps a record (the increment opens it, the rework keeps it up), from
+// which the map's and the desk's payloads read a director's round that did not run, shaped
+// as the story meeting's is (lib/meeting.js roundDidNotRunOf).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14e: the reworks\' records and the round that did not run', () => {
+  const { roundDidNotRunAt, REWORK_STATUS } = require('../../../lib/workflow/state');
+  const GAVE_UP = { round: 'send-back', note: 'Tighten the money section.', countsBefore: {}, failures: 3, at: '2026-10-04T10:00:00.000Z', error: 'SDK timeout after 900s', status: 'did-not-run' };
+
+  it('declares the map\'s and the article\'s rework records as nullable REPLACE channels', () => {
+    ['_outlineRework', '_articleRework'].forEach((channel) => {
+      expect(Object.keys(ReportStateAnnotation.spec)).toContain(channel);
+      expect(getDefaultState()).toHaveProperty(channel, null);
+      const operator = ReportStateAnnotation.spec[channel].operator;
+      expect(operator({ status: 'running' }, null)).toBeNull();
+    });
+  });
+
+  it('names the statuses a rework record holds', () => {
+    expect(REWORK_STATUS).toEqual({ RUNNING: 'running', RETRYING: 'retrying', DID_NOT_RUN: 'did-not-run' });
+  });
+
+  it('reads a send-back that did not run at the map and at the desk, as the meeting\'s round is shaped', () => {
+    expect(roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, { _outlineRework: GAVE_UP }))
+      .toEqual({ round: 'send-back', at: '2026-10-04T10:00:00.000Z', note: 'Tighten the money section.' });
+    expect(roundDidNotRunAt(CHECKPOINT_TYPES.ARTICLE, { _articleRework: GAVE_UP }))
+      .toEqual({ round: 'send-back', at: '2026-10-04T10:00:00.000Z', note: 'Tighten the money section.' });
+    // Each stop reads its own record.
+    expect(roundDidNotRunAt(CHECKPOINT_TYPES.ARTICLE, { _outlineRework: GAVE_UP })).toBeNull();
+  });
+
+  it('reads nothing for a rework still running or retrying, one that completed, or an automatic pass that gave up', () => {
+    [null, { ...GAVE_UP, status: 'running' }, { ...GAVE_UP, status: 'retrying' }, { ...GAVE_UP, round: null, note: null }]
+      .forEach((record) => expect(roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, { _outlineRework: record })).toBeNull());
+    expect(roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, {})).toBeNull();
+    expect(roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, null)).toBeNull();
+  });
+
+  it('throws for a stop that keeps no rework record', () => {
+    expect(() => roundDidNotRunAt(CHECKPOINT_TYPES.ARC_SELECTION, {})).toThrow(/arc-selection/);
   });
 });

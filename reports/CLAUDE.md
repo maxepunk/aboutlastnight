@@ -473,7 +473,7 @@ For XML format details, see `PIPELINE_DEEP_DIVE.md#xml-tag-format-migration-comm
 |--------|-----------------|-----------|
 | AI Calls | `sdkQuery()` makes all Claude requests | Routes between nodes |
 | Structured Output | JSON schemas via `jsonSchema` param | N/A |
-| State Management | N/A | 85 state fields with reducers |
+| State Management | N/A | 87 state fields with reducers |
 | Checkpointing | N/A | MemorySaver/SqliteSaver |
 | Human Approval | N/A | Native `interrupt()` pattern |
 | Revision Loops | N/A | Conditional edges with caps |

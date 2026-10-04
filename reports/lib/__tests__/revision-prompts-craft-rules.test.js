@@ -307,9 +307,11 @@ describe('a missing craft file becomes the node error contract, not a graph reje
     );
 
     expect(result.currentPhase).toBe(PHASES.ERROR);
-    expect(result.outline).toBeNull();
+    // Task 4.14e: a rework that fails keeps the map it started from as the stop's, and this
+    // automatic pass (no note in the slot) leaves the empty slot as it is.
+    expect(result.outline).toEqual({ lede: {} });
     expect(result._previousOutline).toBeNull();
-    expect(result._outlineFeedback).toBeNull();
+    expect(result._outlineFeedback).toBeUndefined();
     expect(result.errors[0].type).toBe('outline-revision-failed');
     expect(result.errors[0].message).toMatch(/Missing or empty rule files for call "outline"/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();
@@ -323,9 +325,10 @@ describe('a missing craft file becomes the node error contract, not a graph reje
     );
 
     expect(result.currentPhase).toBe(PHASES.ERROR);
-    expect(result.contentBundle).toBeNull();
+    // Task 4.14e: as at the map, the article the rework started from stays the stop's.
+    expect(result.contentBundle).toEqual({ sections: [] });
     expect(result._previousContentBundle).toBeNull();
-    expect(result._articleFeedback).toBeNull();
+    expect(result._articleFeedback).toBeUndefined();
     expect(result.errors[0].type).toBe('article-revision-failed');
     expect(result.errors[0].message).toMatch(/Missing or empty rule files for call "article"/);
     expect(cfg.configurable.sdkClient).not.toHaveBeenCalled();

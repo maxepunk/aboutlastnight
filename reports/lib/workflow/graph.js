@@ -54,6 +54,12 @@
  * → checkpointArticle [interrupt: article] → [revision loop]
  * → validateContentBundle
  *
+ * A rework that fails, at the map or the article (task 4.14e): a call that failed on a
+ * transient error runs again (reviseOutline → reviseOutline, reviseContentBundle →
+ * reviseContentBundle); a send-back that gives up reopens its stop with the director's
+ * version; an automatic pass that gives up ends the run in an error, the version it started
+ * from kept.
+ *
  * PHASE 5: Assembly
  * → assembleHtml → COMPLETE
  *
@@ -68,7 +74,7 @@
  */
 
 const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
-const { ReportStateAnnotation, PHASES, REVISION_CAPS, stopRoundOf } = require('./state');
+const { ReportStateAnnotation, PHASES, REVISION_CAPS, REWORK_STATUS, reworkOpened, stopRoundOf } = require('./state');
 const { CHECKPOINT_TYPES } = require('./checkpoint-helpers');
 const nodes = require('./nodes');
 const { isTransientError } = require('../llm/retry');
@@ -120,14 +126,38 @@ function routeArcEvaluation(state) {
 }
 
 /**
+ * Whether a rework's record says it gave up (task 4.14e): its stop keeps the version the
+ * rework started from, and no automatic pass runs on it until the director acts there.
+ *
+ * @param {Object|null} record - `_outlineRework` or `_articleRework`
+ * @returns {boolean}
+ */
+function reworkGaveUp(record) {
+  return Boolean(record) && record.status === REWORK_STATUS.DID_NOT_RUN;
+}
+
+/**
+ * Whether a rework's record asks for its call again (task 4.14e): the call failed on a
+ * transient error with calls left, and the rework changed nothing else.
+ *
+ * @param {Object|null} record - `_outlineRework` or `_articleRework`
+ * @returns {boolean}
+ */
+function reworkRetrying(record) {
+  return Boolean(record) && record.status === REWORK_STATUS.RETRYING;
+}
+
+/**
  * Route after the map checks (phase 4, brief 4.6; R6): a failed check sends the map back
  * for one automatic rework in the round, under the check's lines. Everything else goes to
  * the map's stop: a passing map, a check still failing after its rework (the stop shows
- * it), and an approved map. A rework that failed ends the run in an error.
+ * it), an approved map, and a map whose rework gave up (task 4.14e). An automatic pass that
+ * gave up ends the run in an error before the checks (routeAfterMapRework).
  *
  * On a replay the checks skip a map they already marked, so the route reads that map's
  * mark and the round's count: a map whose rework ran is at the cap and goes to the stop,
- * and no rework runs on it again.
+ * and no rework runs on it again. A director's round that did not run gave its counts back
+ * (reviseOutline), so the map it reopens on reads as it did before the round.
  *
  * @param {Object} state - Current graph state with _mapCheck
  * @returns {string} 'checkpoint', 'revise' or 'error'
@@ -135,6 +165,10 @@ function routeArcEvaluation(state) {
 function routeMapChecks(state) {
   if (state.currentPhase === PHASES.ERROR) {
     return 'error';
+  }
+  if (reworkGaveUp(state._outlineRework)) {
+    console.log('[routeMapChecks] The rework did not run: the stop opens with the map it started from');
+    return 'checkpoint';
   }
   const check = state._mapCheck;
   if (state.outlineApproved === true || !check || check.passed !== false) {
@@ -149,7 +183,15 @@ function routeMapChecks(state) {
 }
 
 /**
- * Route function for article evaluation results
+ * Route function for article evaluation results: a ready article, one at the cap, and one
+ * whose evaluation was escalated to the director go to the stop; anything else goes to an
+ * automatic pass.
+ *
+ * An escalated evaluation is the verdict on the article at the stop, which a replay skips
+ * (evaluator-nodes.js evaluatePhase), so the route takes it to the stop on its own: the cap's
+ * escalation sits at the cap, and a rework that did not run escalates the verdict it was
+ * fixing below it (task 4.14e; ai-nodes.js reviseContentBundle).
+ *
  * @param {Object} state - Current graph state
  * @returns {string} 'checkpoint', 'revise', or 'error'
  */
@@ -163,11 +205,57 @@ function routeArticleEvaluation(state) {
   const lastEval = phaseEvals[phaseEvals.length - 1];
   const atCap = (state.articleRevisionCount || 0) >= REVISION_CAPS.ARTICLE;
 
-  if (lastEval?.ready || atCap) {
+  if (lastEval?.ready || lastEval?.escalatedToHuman === true || atCap) {
     return 'checkpoint';
   }
 
   return 'revise';
+}
+
+/**
+ * Route after the map's rework (task 4.14e; the final review's ruling 5). A call that failed
+ * on a transient error, with calls left, runs the rework again: the rework changed nothing but
+ * its record (reviseOutline), so the retry spends no automated budget and opens no round. A
+ * rework that completed, or gave up on the director's round, goes on to the checks, which
+ * skip the map they marked and open the stop on a rework that gave up (routeMapChecks). An
+ * automatic pass that gave up ends the run in an error, with the map it started from kept,
+ * so Retry opens the stop with no call, as the story meeting's automatic pass does.
+ *
+ * @param {Object} state - Current graph state with `_outlineRework`
+ * @returns {string} 'retry', 'checks' or 'error'
+ */
+function routeAfterMapRework(state) {
+  if (state.currentPhase === PHASES.ERROR) {
+    return 'error';
+  }
+  const record = state._outlineRework;
+  if (reworkRetrying(record)) {
+    console.log(`[routeAfterMapRework] The rework's call ${record.failures} failed on a transient error: it runs again`);
+    return 'retry';
+  }
+  return 'checks';
+}
+
+/**
+ * Route after the article's rework (task 4.14e), as routeAfterMapRework routes the map's: a
+ * call to retry runs the rework again; a rework that completed, or gave up on the director's
+ * round, goes on to the evaluation, which skips the verdict a rework that gave up states again
+ * (reviseContentBundle) and opens the stop; an automatic pass that gave up ends the run in an
+ * error, with the article it started from kept.
+ *
+ * @param {Object} state - Current graph state with `_articleRework`
+ * @returns {string} 'retry', 'evaluate' or 'error'
+ */
+function routeAfterArticleRework(state) {
+  if (state.currentPhase === PHASES.ERROR) {
+    return 'error';
+  }
+  const record = state._articleRework;
+  if (reworkRetrying(record)) {
+    console.log(`[routeAfterArticleRework] The rework's call ${record.failures} failed on a transient error: it runs again`);
+    return 'retry';
+  }
+  return 'evaluate';
 }
 
 /**
@@ -385,9 +473,13 @@ function traceWithPass(state, phase, trace, before, pass, round, source) {
 }
 
 /**
- * Increment outline revision count and preserve/clear outline for regeneration
- * Preserves current outline in _previousOutline for revision context
- * Clears outline so generateOutline skip logic doesn't trigger
+ * Count one more pass on the map, and hand its rework the map it starts from.
+ *
+ * Task 4.14e: the map stays in `outline` while its rework runs (the rework reads its copy in
+ * `_previousOutline`), so a rework that fails, or a run that ends in an error, leaves the
+ * stop's map as it was: on the director's round, the director's. The increment opens the
+ * rework's record (reworkOpened). The rework loop never runs the map writer, so nothing here
+ * needs the map cleared.
  *
  * Brief 1.4: two counters, the way incrementArcRevision has had them. A send back
  * opens a ROUND (never capped) and starts the automated budget over; a failed check
@@ -421,7 +513,10 @@ async function incrementOutlineRevision(state) {
     outlineRevisionCount: newCount,
     humanOutlineRevisionCount: newHumanCount,
     _previousOutline: state.outline,
-    outline: null,
+    _outlineRework: reworkOpened(isHumanDriven ? state._outlineFeedback : null, {
+      outlineRevisionCount: state.outlineRevisionCount || 0,
+      humanOutlineRevisionCount: state.humanOutlineRevisionCount || 0
+    }),
     ...(!isHumanDriven && {
       _outlineTrace: traceWithPass(state, 'outline', state._outlineTrace, state.outline, newCount, round, source)
     })
@@ -429,13 +524,17 @@ async function incrementOutlineRevision(state) {
 }
 
 /**
- * Increment article revision count and preserve/clear content for regeneration
- * Preserves current contentBundle in _previousContentBundle for revision context
- * Clears contentBundle and assembledHtml so generateContentBundle skip logic doesn't trigger
+ * Count one more pass on the article, and hand its rework the article it starts from.
+ *
+ * Task 4.14e: the article stays in `contentBundle` while its rework runs (the rework reads
+ * its copy in `_previousContentBundle`), as the map does (incrementOutlineRevision), and the
+ * increment opens the rework's record. The assembled page goes: it was the article before
+ * this pass.
  *
  * Two counters, as incrementOutlineRevision above (brief 1.4), and the same trace
  * entry on an automatic pass only (brief 2.7), in `_articleTrace`, in the stop's round
- * (stopRoundOf; task 4.12c).
+ * (stopRoundOf; task 4.12c). The history stub marks the article's verdict stale, so the
+ * pass's output is evaluated.
  */
 async function incrementArticleRevision(state) {
   const isHumanDriven = !!state._articleFeedback;
@@ -452,7 +551,10 @@ async function incrementArticleRevision(state) {
     articleRevisionCount: newCount,
     humanArticleRevisionCount: newHumanCount,
     _previousContentBundle: state.contentBundle,
-    contentBundle: null,
+    _articleRework: reworkOpened(isHumanDriven ? state._articleFeedback : null, {
+      articleRevisionCount: state.articleRevisionCount || 0,
+      humanArticleRevisionCount: state.humanArticleRevisionCount || 0
+    }),
     assembledHtml: null,
     ...(!isHumanDriven && {
       _articleTrace: traceWithPass(state, 'article', state._articleTrace, state.contentBundle, newCount, round, source)
@@ -744,8 +846,8 @@ function createGraphBuilder() {
   builder.addEdge('generateOutline', 'checkMap');
 
   // After the checks: a failed check sends the map back for the round's one rework; a
-  // passing map, a check still failing after its rework and an approved map go to the
-  // stop; a rework that failed ends the run.
+  // passing map, a check still failing after its rework, an approved map and a map whose
+  // rework gave up (task 4.14e) go to the stop.
   builder.addConditionalEdges('checkMap', routeMapChecks, {
     checkpoint: 'checkpointOutline',
     revise: 'incrementOutlineRevision',
@@ -758,9 +860,15 @@ function createGraphBuilder() {
     revise: 'incrementOutlineRevision'
   });
 
-  // Rework loop: increment → rework → the checks (never back to the map writer)
+  // Rework loop: increment → rework → the checks (never back to the map writer). Task 4.14e:
+  // a call that failed on a transient error runs the rework again; an automatic pass that
+  // gave up ends the run, with the map it started from kept.
   builder.addEdge('incrementOutlineRevision', 'reviseOutline');
-  builder.addEdge('reviseOutline', 'checkMap');
+  builder.addConditionalEdges('reviseOutline', routeAfterMapRework, {
+    checks: 'checkMap',
+    retry: 'reviseOutline',
+    error: END
+  });
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 4: Article Generation
@@ -786,9 +894,15 @@ function createGraphBuilder() {
   });
 
   // Revision loop: increment → revise → evaluate (NOT back to generateContentBundle)
-  // reviseContentBundle receives previous output + feedback for TARGETED fixes
+  // reviseContentBundle receives previous output + feedback for TARGETED fixes. Task 4.14e:
+  // a call that failed on a transient error runs the rework again; an automatic pass that
+  // gave up ends the run, with the article it started from kept, and no evaluation reads it.
   builder.addEdge('incrementArticleRevision', 'reviseContentBundle');
-  builder.addEdge('reviseContentBundle', 'evaluateArticle');
+  builder.addConditionalEdges('reviseContentBundle', routeAfterArticleRework, {
+    evaluate: 'evaluateArticle',
+    retry: 'reviseContentBundle',
+    error: END
+  });
 
   // Schema validation routing
   builder.addConditionalEdges('validateContentBundle', routeSchemaValidation, {
@@ -869,6 +983,9 @@ module.exports = {
     routeMapChecks,
     routeArticleEvaluation,
     routeSchemaValidation,
+    // Routing functions - after a rework that failed (task 4.14e)
+    routeAfterMapRework,
+    routeAfterArticleRework,
     // Routing functions - checkpoint-based (human approval routing)
     routeAfterInputReview,
     routeAfterArcCheckpoint,
