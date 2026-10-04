@@ -1598,6 +1598,37 @@ const ROLLBACK_COUNTER_RESETS = {
 };
 
 /**
+ * The channel that counts the director's rounds at each stop that has them: the story
+ * meeting's reweaves and send-backs, the map's send-backs and the article's.
+ */
+const DIRECTOR_ROUND_COUNTERS = Object.freeze({
+  'arc-selection': 'humanArcRevisionCount',
+  'outline': 'humanOutlineRevisionCount',
+  'article': 'humanArticleRevisionCount'
+});
+
+/**
+ * The round a stop is in: one more than the director's rounds there, which
+ * DIRECTOR_ROUND_COUNTERS keeps at the story meeting, the map and the article and the
+ * corrections sent back keep at the input review; one at every other stop. The one rule for
+ * a stop's round (task 4.12a): the stops log writes it on each line (lib/stops-log.js), each
+ * of the director's notes records it as `stopRound` (server.js appendGateNote), and the
+ * readout joins the two on it.
+ *
+ * @param {string} stop - the stop's type (lib/workflow/checkpoint-helpers.js CHECKPOINT_TYPES)
+ * @param {Object} state - the thread's state values
+ * @returns {number}
+ */
+function stopRoundOf(stop, state) {
+  const s = state && typeof state === 'object' ? state : {};
+  if (stop === 'input-review') {
+    return (Array.isArray(s.inputReviewCorrections) ? s.inputReviewCorrections.length : 0) + 1;
+  }
+  const counter = DIRECTOR_ROUND_COUNTERS[stop];
+  return counter ? (Number(s[counter]) || 0) + 1 : 1;
+}
+
+/**
  * Valid rollback points (for validation)
  */
 const VALID_ROLLBACK_POINTS = Object.keys(ROLLBACK_CLEARS);
@@ -1612,6 +1643,9 @@ module.exports = {
   ROLLBACK_CLEARS_EXEMPT,
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS,
+  // A stop's round (task 4.12a)
+  DIRECTOR_ROUND_COUNTERS,
+  stopRoundOf,
   // Fresh-start configuration (C1) — a separate list, not a rollback target
   FRESH_START_CLEARS,
   FRESH_START_KEEPS,

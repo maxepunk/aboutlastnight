@@ -20,6 +20,7 @@ const stopsLog = require('../stops-log');
 const { wordsShown } = require('../stop-pages');
 const { meetingCheckpointData } = require('../meeting');
 const { mapCheckpointData } = require('../map');
+const { stopRoundOf } = require('../workflow/state');
 const { reworkFixtureState } = require('./fixtures/rework-state');
 const { buildResumePayload } = require('../../server.js');
 const View = require('../../console/checkpoint-view-logic');
@@ -120,14 +121,14 @@ describe('4.12a: a line for each pause at a new stop or a new round of one', () 
   });
 
   it('numbers the round: the director\'s rounds at the meeting, the map and the article, the corrections at the input review, one elsewhere', () => {
-    expect(stopsLog.stopRound('arc-selection', { humanArcRevisionCount: 2 })).toBe(3);
-    expect(stopsLog.stopRound('outline', { humanOutlineRevisionCount: 1 })).toBe(2);
-    expect(stopsLog.stopRound('article', { humanArticleRevisionCount: 0 })).toBe(1);
-    expect(stopsLog.stopRound('article', {})).toBe(1);
-    expect(stopsLog.stopRound('input-review', { inputReviewCorrections: ['The room accused no one.'] })).toBe(2);
-    expect(stopsLog.stopRound('input-review', { inputReviewCorrections: null })).toBe(1);
+    expect(stopRoundOf('arc-selection', { humanArcRevisionCount: 2 })).toBe(3);
+    expect(stopRoundOf('outline', { humanOutlineRevisionCount: 1 })).toBe(2);
+    expect(stopRoundOf('article', { humanArticleRevisionCount: 0 })).toBe(1);
+    expect(stopRoundOf('article', {})).toBe(1);
+    expect(stopRoundOf('input-review', { inputReviewCorrections: ['The room accused no one.'] })).toBe(2);
+    expect(stopRoundOf('input-review', { inputReviewCorrections: null })).toBe(1);
     ['photos', 'character-ids', 'await-roster', 'evidence-and-photos'].forEach((stop) => {
-      expect([stop, stopsLog.stopRound(stop, { humanArcRevisionCount: 4 })]).toEqual([stop, 1]);
+      expect([stop, stopRoundOf(stop, { humanArcRevisionCount: 4 })]).toEqual([stop, 1]);
     });
   });
 });
@@ -190,5 +191,75 @@ describe('4.12a: the stops log never throws into a run', () => {
     stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: {}, data: { type: 'arc-selection' } });
     expect(linesOf().map((line) => [line.stop, line.words])).toEqual([['arc-selection', null]]);
     expect(warn.mock.calls.map((call) => call.join(' ')).join('\n')).toMatch(/story meeting.*weave/);
+  });
+});
+
+// The review of 4.12a, finding 1: the log, the director's notes (each note's `stopRound`,
+// server.js appendGateNote) and the meeting's lookup of a round's note (lib/meeting.js
+// unrunRoundNoteIndex) each counted a stop's round in a copy of their own, and the readout
+// joins the log's lines to the notes on that round. The log reads the one rule where the
+// thread state keeps it; the notes and the lookup are held to it here.
+describe('4.12a fix round 1: a stop\'s round is one rule, stopRoundOf (lib/workflow/state.js)', () => {
+  const { DIRECTOR_ROUND_COUNTERS } = require('../workflow/state');
+  const { CHECKPOINT_TYPES } = require('../workflow/checkpoint-helpers');
+  const { unrunRoundNoteIndex } = require('../meeting');
+  const { PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
+  const NOTE = 'Make the ledger the main thread.';
+
+  it('the log writes stopRoundOf\'s round on every line and keeps no copy of the rule', () => {
+    expect(DIRECTOR_ROUND_COUNTERS).toEqual({
+      [CHECKPOINT_TYPES.ARC_SELECTION]: 'humanArcRevisionCount',
+      [CHECKPOINT_TYPES.OUTLINE]: 'humanOutlineRevisionCount',
+      [CHECKPOINT_TYPES.ARTICLE]: 'humanArticleRevisionCount'
+    });
+    expect(Object.isFrozen(DIRECTOR_ROUND_COUNTERS)).toBe(true);
+    expect(stopsLog).not.toHaveProperty('stopRound');
+    expect(fs.readFileSync(require.resolve('../stops-log'), 'utf8')).not.toMatch(/human(Arc|Outline|Article)RevisionCount|inputReviewCorrections/);
+
+    const state = { ...meetingState(), humanArcRevisionCount: 2, humanOutlineRevisionCount: 1, humanArticleRevisionCount: 3 };
+    stopsLog.recordPause(SESSION, { stop: 'arc-selection', state, data: meetingData(state) });
+    stopsLog.recordPause(SESSION, { stop: 'input-review', state, data: { type: 'input-review' } });
+    ['arc-selection', 'outline', 'article', 'input-review', 'photos'].forEach((stop) => {
+      stopsLog.recordAction(SESSION, { stop, state, resume: { approved: true } });
+    });
+    expect(linesOf().map((line) => [line.kind, line.stop, line.round])).toEqual([
+      ['pause', 'arc-selection', 3],
+      ['pause', 'input-review', 2],
+      ['action', 'arc-selection', 3],
+      ['action', 'outline', 2],
+      ['action', 'article', 4],
+      ['action', 'input-review', 2],
+      ['action', 'photos', 1]
+    ]);
+    expect(linesOf().every((line) => line.round === stopRoundOf(line.stop, state))).toBe(true);
+  });
+
+  it('each director\'s note records the same round (server.js appendGateNote), and the meeting finds a round\'s note by it (lib/meeting.js unrunRoundNoteIndex)', () => {
+    /** The note the server files with an action at a stop: the last of the standing notes it writes. */
+    const noteFiled = (stop, state, payload) => {
+      const { stateUpdates, error } = buildResumePayload(payload, state, 'journalist', stop);
+      expect(error).toBeNull();
+      return stateUpdates.directorGateNotes[stateUpdates.directorGateNotes.length - 1];
+    };
+    [0, 2].forEach((rounds) => {
+      const meeting = { ...meetingState(), humanArcRevisionCount: rounds };
+      const data = meetingData(meeting);
+      const map = { ...reworkFixtureState('journalist'), humanOutlineRevisionCount: rounds };
+      const desk = { ...reworkFixtureState('journalist'), contentBundle: PREVIOUS_BUNDLE, humanArticleRevisionCount: rounds };
+      expect([
+        noteFiled('arc-selection', meeting, View.meetingPayload('reweave', data, View.meetingDraftOf(data), NOTE)).stopRound,
+        noteFiled('outline', map, View.mapPayload('send-back', View.mapDraftOf(mapData(map)), NOTE)).stopRound,
+        noteFiled('article', desk, View.articleReviewPayload(null, NOTE, 'send-back')).stopRound
+      ]).toEqual([stopRoundOf('arc-selection', meeting), stopRoundOf('outline', map), stopRoundOf('article', desk)]);
+
+      // A round that did not run: the meeting takes its note back only from the round stopRoundOf gives.
+      const round = stopRoundOf('arc-selection', meeting);
+      const lookup = (filedIn) => unrunRoundNoteIndex({
+        humanArcRevisionCount: rounds,
+        _arcReworkTimeout: { round: 'reweave', note: NOTE },
+        directorGateNotes: [{ gate: 'arc-selection', kind: 'rejection', round: 1, stopRound: filedIn, text: NOTE, at: 't0' }]
+      });
+      expect([lookup(round - 1), lookup(round), lookup(round + 1)]).toEqual([-1, 0, -1]);
+    });
   });
 });

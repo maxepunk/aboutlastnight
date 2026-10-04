@@ -14,6 +14,8 @@
  * - an action, `{at, kind: 'action', stop, round, action}`, for each action the director takes:
  *   approve, reweave or send back, read from the resume the server builds (actionOf), in the
  *   round the stop was in when they took it.
+ * `round` is the stop's round, lib/workflow/state.js stopRoundOf, the round each of the
+ * director's notes records as `stopRound`.
  * `at` is kept only to order the lines and to join the call log (llm-log/index.jsonl), never to
  * time the director: the readout reports no time at a stop (spec, Decisions).
  *
@@ -27,7 +29,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
+const { stopRoundOf } = require('./workflow/state');
 const { MEETING_ROUNDS } = require('./weave');
 const { wordsShown } = require('./stop-pages');
 
@@ -57,34 +59,6 @@ function isEnabled() {
 /** Where a session's log is: `<root>/<id>/stops.jsonl`, the root being the server's data folder. */
 function stopsLogPath(sessionId) {
   return path.join(logRoot || DEFAULT_ROOT, String(sessionId), 'stops.jsonl');
-}
-
-/**
- * The channel that counts the director's rounds at each stop that has them: the story meeting's,
- * the map's and the article's send-backs and reweaves (a round opens with each).
- */
-const ROUND_COUNTERS = Object.freeze({
-  [CHECKPOINT_TYPES.ARC_SELECTION]: 'humanArcRevisionCount',
-  [CHECKPOINT_TYPES.OUTLINE]: 'humanOutlineRevisionCount',
-  [CHECKPOINT_TYPES.ARTICLE]: 'humanArticleRevisionCount'
-});
-
-/**
- * The round a stop is in: one more than the director's rounds there, which the counters keep at
- * the meeting, the map and the article, and the corrections the director sent back keep at the
- * input review; one at every other stop.
- *
- * @param {string} stop
- * @param {Object} state - the thread's state values
- * @returns {number}
- */
-function stopRound(stop, state) {
-  const s = state && typeof state === 'object' ? state : {};
-  if (stop === CHECKPOINT_TYPES.INPUT_REVIEW) {
-    return (Array.isArray(s.inputReviewCorrections) ? s.inputReviewCorrections.length : 0) + 1;
-  }
-  const counter = ROUND_COUNTERS[stop];
-  return counter ? (Number(s[counter]) || 0) + 1 : 1;
 }
 
 /**
@@ -148,7 +122,7 @@ function recordPause(sessionId, { stop, state, data, fresh = false }) {
   if (!sessionId || !stop || !isEnabled()) return;
   const file = stopsLogPath(sessionId);
   try {
-    const round = stopRound(stop, state);
+    const round = stopRoundOf(stop, state);
     const last = fresh ? null : lastLine(file);
     if (last && last.kind === 'pause' && last.stop === stop && last.round === round) return;
     const theme = (state && state.theme) || 'journalist';
@@ -171,7 +145,7 @@ function recordAction(sessionId, { stop, state, resume }) {
   if (!sessionId || !stop || !isEnabled()) return;
   const file = stopsLogPath(sessionId);
   try {
-    append(file, { at: new Date().toISOString(), kind: 'action', stop, round: stopRound(stop, state), action: actionOf(resume) });
+    append(file, { at: new Date().toISOString(), kind: 'action', stop, round: stopRoundOf(stop, state), action: actionOf(resume) });
   } catch (err) {
     warnOnce(err, file);
   }
@@ -179,7 +153,6 @@ function recordAction(sessionId, { stop, state, resume }) {
 
 module.exports = {
   stopsLogPath,
-  stopRound,
   actionOf,
   recordPause,
   recordAction,
