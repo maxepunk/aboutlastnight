@@ -79,11 +79,12 @@
  * and send-back, against the writer's last weave (standingAtMeeting), and stand past
  * approve. Each is one place (weaveEditsBetween): a field rewritten, a thread's field (its
  * role among them), a thread added whole, or a connection struck whole (`struck: true` on
- * the edit), which code strikes again by id when a pass brings it back. A whole element
- * stays one edit when the director later changes part of it (fix round 1, finding 1). And
- * a reweave is held to them as an automatic pass is (REWEAVE_PASS). The answers are the
- * director's words, kept by their own rule (lib/writer-questions.js carriedWeaveQuestions):
- * no edit.
+ * the edit), which code strikes again by id when a pass brings it back. A connection they
+ * struck and then bring back is one edit of the whole connection too (`unstruck: true`;
+ * brief 4.5c), carried while it is live. A whole element stays one edit when the director
+ * later changes part of it (fix round 1, finding 1). And a reweave is held to them as an
+ * automatic pass is (REWEAVE_PASS). The answers are the director's words, kept by their own
+ * rule (lib/writer-questions.js carriedWeaveQuestions): no edit.
  *
  * THE MAP (brief 4.6): the director's edits on the story map go through the same
  * machinery, as the meeting's do. They are made at every approve and send-back, against
@@ -112,7 +113,7 @@ const {
 const {
   isWeave, isStruck, STRUCK_KEY, weaveIdOf, repeatedIds, occurrenceKeys, WEAVE_PRINTED_FIELDS, printedWeaveFields
 } = require('./weave');
-const { WEAVE_ANSWER_KEY } = require('./writer-questions');
+const { WEAVE_ANSWER_KEY, pairWeaveQuestions } = require('./writer-questions');
 // The one join key for a photo, its basename in lower case: the map's edits find a photo by
 // it, as the map checks, the kept photos and the leave-out box do (brief 4.6, fix round 1).
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
@@ -150,7 +151,7 @@ const EDIT_LINES_GUIDE = "An edit covers only the place its line names: a place 
  * How to read the weave's edit lines (brief 4.5; formatEditLines), for the weave's
  * reworks' <HAND_EDITS> block and the meeting's fact check alike.
  */
-const WEAVE_EDIT_LINES_GUIDE = "Each line is one change by its id and place, with the director's text or value: a field they rewrote, a field of a thread they changed (its role among them), a whole thread they added (marked added), or a connection they struck (marked struck), which is out of the story. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+const WEAVE_EDIT_LINES_GUIDE = "Each line is one change by its id and place, with the director's text or value: a field they rewrote, a field of a thread they changed (its role among them), a whole thread they added (marked added), a connection they struck (marked struck), which is out of the story, or a connection they struck at an earlier look and brought back (marked brought back), which is back in the story. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
 
 /** The pass a report entry names when the rework of the director's send-back changed an edit. */
 const SEND_BACK_PASS = 'send-back';
@@ -885,6 +886,14 @@ function isMoveWithin(edit) { return isMove(edit) && isObj(edit.between); }
  */
 function isStrike(edit) { return Boolean(edit && edit.struck === true) && !isCut(edit); }
 
+/**
+ * An un-strike (brief 4.5c): a connection the director struck at an earlier look and brought
+ * back, one edit of the whole connection, its `after` the connection as they left it, live.
+ * It stands while that connection is in the story (editCarried), and its words are the
+ * director's from then on, as a strike's are.
+ */
+function isUnstrike(edit) { return Boolean(edit && edit.unstruck === true) && !isCut(edit); }
+
 function editNumber(id) {
   const m = /^E(\d+)$/.exec(String(id));
   return m ? Number(m[1]) : 0;
@@ -1030,6 +1039,9 @@ function editCarried(obj, edit) {
     if (movedBlockPlaces(obj, edit).length === 0) return false;
     return !isMoveWithin(edit) || inDirectorsOrder(obj.sections[moveSectionIndex(obj, edit)].content, edit);
   }
+  // Brief 4.5c: a struck connection holds every field of the live one, so an un-strike is
+  // carried only where its connection is live.
+  if (isUnstrike(edit)) return placesOf(obj, stepsOf(edit)).some((place) => !isStruck(place.value) && matchesAfter(place.value, edit.after));
   return placeCarrying(obj, edit) !== undefined;
 }
 
@@ -1060,13 +1072,14 @@ function completeEdit(edit, sentBackText, names) {
   if (edit.from) out.from = edit.from;
   if (isObj(edit.between)) out.between = edit.between;
   if (edit.struck === true) out.struck = true;
+  if (edit.unstruck === true) out.unstruck = true;
   const parts = sentBackText ? sentBackText.map((part) => ({ text: part.text })) : null;
   if (isCut(out)) {
     if (sentBackText) out.pieces = cutSentences(out).filter((sentence) => !partHolding(sentBackText, sentence));
     if (names && parts) out.names = droppedNames(valueTexts(out, out.before), parts, names);
     return out;
   }
-  if (out.before !== null && !out.from && !isStrike(out)) {
+  if (out.before !== null && !out.from && !isStrike(out) && !isUnstrike(out)) {
     const own = sentBackText || versionText({ value: valueTexts(out, out.after) });
     const removed = valueTexts(out, out.before).flatMap(writtenSentences).filter((sentence) => !removedHeld(own, sentence));
     if (removed.length > 0) {
@@ -1225,14 +1238,55 @@ function without(element, key) {
 }
 
 /**
+ * The questions' changes between two versions of a weave (brief 4.5c): each question of
+ * `after` is read against the question of `before` it is, by the carry's rule of sameness
+ * (lib/writer-questions.js pairWeaveQuestions), so a question a rework only renumbered is no
+ * change. A pair's changes are its fields, at the id `after` gives it, never the id or the
+ * director's answer; a question one version lacks is added whole or cut whole. A question
+ * with no id names no place, and the diff reads none (elementsById's rule). A change under
+ * an id either version repeats carries `repeatedId: true`.
+ */
+function questionChanges(beforeList, afterList) {
+  const named = (list) => (Array.isArray(list) ? list : []).filter((question) => isObj(question) && weaveIdOf(question));
+  const b = named(beforeList);
+  const a = named(afterList);
+  const partners = pairWeaveQuestions(b, a);
+  const priorOf = new Map(partners.map((j, i) => [j, i]).filter(([j]) => j !== null));
+  const repeated = new Set([...repeatedIds(b), ...repeatedIds(a)]);
+  const change = (at, before, after, id) => ({ scope: 'questions', at, before, after, ...(repeated.has(id) && { repeatedId: true }) });
+  const out = [];
+  a.forEach((question, index) => {
+    const id = weaveIdOf(question);
+    const at = [{ key: 'questions' }, { index, match: { id } }];
+    if (!priorOf.has(index)) {
+      out.push(change(at, null, question, id));
+      return;
+    }
+    const prior = b[priorOf.get(index)];
+    unionKeys(prior, question).filter((field) => field !== 'id' && field !== WEAVE_ANSWER_KEY).forEach((field) => {
+      if (!same(prior[field], question[field])) {
+        out.push(change([...at, { key: field }], prior[field] === undefined ? null : prior[field], question[field] === undefined ? null : question[field], id));
+      }
+    });
+  });
+  b.forEach((question, i) => {
+    const id = weaveIdOf(question);
+    if (partners[i] === null) out.push(change([{ key: 'questions' }, { index: null, match: { id } }], question, null, id));
+  });
+  return out;
+}
+
+/**
  * The changes between two versions of a weave, one per place, in the order the meeting
  * prints them (brief 4.5): each text field (WEAVE_FIELDS) and the stronger main thread
  * whole; then the threads and the connections, each element found by its id, field by
  * field (a thread's role is one field); an element one version lacks is added whole or
  * cut whole. A connection struck in `after` is one change of the whole connection, marked
- * `struck`; one `after` unstruck is no change, since it is the writer's connection again.
- * With `questions`, the questions too, never their answers, which are the director's
- * words and no edit.
+ * `struck`; one struck in `before` and live in `after` is one change of the whole
+ * connection too, marked `unstruck`: the director brought back a connection they had
+ * struck (brief 4.5c). With `questions`, the questions too, each read against the question
+ * it is by the carry's rule (questionChanges), never their answers, which are the
+ * director's words and no edit.
  *
  * An id is read as the meeting's gate and the checks read it (lib/weave.js weaveIdOf), and
  * the elements under an id either version repeats (repeatedIds) pair in order (fix round
@@ -1243,7 +1297,7 @@ function without(element, key) {
  * @param {Object} after
  * @param {Object} [options]
  * @param {boolean} [options.questions] - read the questions as well (the marks do)
- * @returns {Array<{scope: string, at: Object[], before: *, after: *, struck?: true, repeatedId?: true}>}
+ * @returns {Array<{scope: string, at: Object[], before: *, after: *, struck?: true, unstruck?: true, repeatedId?: true}>}
  */
 function weaveEditsBetween(before, after, { questions = false } = {}) {
   if (!isObj(before) || !isObj(after)) return [];
@@ -1254,8 +1308,7 @@ function weaveEditsBetween(before, after, { questions = false } = {}) {
   [...WEAVE_FIELDS, 'strongerMainThread'].forEach((field) => {
     if (!same(before[field], after[field])) change(field, [{ key: field }], before[field], after[field]);
   });
-  const collections = questions ? ['threads', 'connections', 'questions'] : ['threads', 'connections'];
-  collections.forEach((collection) => {
+  ['threads', 'connections'].forEach((collection) => {
     const b = elementsById(before[collection]);
     const a = elementsById(after[collection]);
     const flag = (id) => (b.repeated.has(id) || a.repeated.has(id) ? { repeatedId: true } : {});
@@ -1266,13 +1319,12 @@ function weaveEditsBetween(before, after, { questions = false } = {}) {
         change(collection, at, null, element, flag(id));
         return;
       }
-      if (collection === 'connections' && isStruck(element) && !isStruck(prior)) {
-        change(collection, at, prior, element, { struck: true, ...flag(id) });
+      if (collection === 'connections' && isStruck(element) !== isStruck(prior)) {
+        change(collection, at, prior, element, { ...(isStruck(element) ? { struck: true } : { unstruck: true }), ...flag(id) });
         return;
       }
-      const ignored = collection === 'questions' ? WEAVE_ANSWER_KEY : (collection === 'connections' ? STRUCK_KEY : null);
-      const p = ignored ? without(prior, ignored) : prior;
-      const e = ignored ? without(element, ignored) : element;
+      const p = collection === 'connections' ? without(prior, STRUCK_KEY) : prior;
+      const e = collection === 'connections' ? without(element, STRUCK_KEY) : element;
       unionKeys(p, e).forEach((field) => {
         if (!same(p[field], e[field])) change(collection, [...at, { key: field }], p[field], e[field], flag(id));
       });
@@ -1281,6 +1333,7 @@ function weaveEditsBetween(before, after, { questions = false } = {}) {
       if (!a.map.has(key)) change(collection, [{ key: collection }, { index: null, match: { id } }], element, null, flag(id));
     });
   });
+  if (questions) out.push(...questionChanges(before.questions, after.questions));
   return out;
 }
 
@@ -1336,6 +1389,30 @@ function wholeElementAsLeft(edit, shown, left) {
 }
 
 /**
+ * The weave the director's changes at a look are read against (brief 4.5c): the writer's
+ * last weave, with each connection that a standing strike of the director's struck in the
+ * weave the meeting showed struck there too. A strike made at an approve, or in a round
+ * whose rework did not run, is in the weave the meeting shows before any pass has kept it
+ * in the baseline; read against it, bringing that connection back is the director's change,
+ * as it is once a pass has kept the strike.
+ *
+ * @param {Object} baseline - the writer's last weave
+ * @param {Object[]} edits - the meeting's standing edits so far
+ * @param {Object|null} shown - the weave the meeting showed
+ * @returns {Object}
+ */
+function withShownStrikes(baseline, edits, shown) {
+  const ids = edits.filter((e) => isStrike(e) && editCarried(shown, e))
+    .map((e) => { const steps = stepsOf(e); return weaveIdOf(steps[1] && steps[1].match); })
+    .filter((id) => id && elementsUnder(baseline, 'connections', id).length === 1);
+  if (ids.length === 0) return baseline;
+  return {
+    ...baseline,
+    connections: baseline.connections.map((c) => (ids.includes(weaveIdOf(c)) && !isStruck(c) ? { ...c, [STRUCK_KEY]: true } : c))
+  };
+}
+
+/**
  * The director's edits at the story meeting after an approve, a reweave or a send-back
  * (brief 4.5; K3 of the plan review): the meeting's edits stand past approve, so each of
  * the three actions makes them, against the writer's last weave (`baseline`).
@@ -1352,7 +1429,9 @@ function wholeElementAsLeft(edit, shown, left) {
  *   given at the stop.
  * The baseline is the weave as the writer's last pass left it, the director's lines a
  * reweave kept among it, so an edit made before a reweave stands as the earlier edit and
- * is never given a second id.
+ * is never given a second id. A connection the meeting showed struck by a standing strike
+ * reads as struck in it (withShownStrikes), so bringing it back is an edit, an un-strike
+ * (brief 4.5c), whether or not a pass has kept the strike.
  *
  * Every edit finds its element by its id, so a difference under an id the weave repeats
  * (weaveEditsBetween's `repeatedId`) can be no edit (fix round 1, finding 3). The meeting's
@@ -1384,7 +1463,8 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
   };
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const leftText = versionText(left);
-  const changes = weaveEditsBetween(isObj(baseline) ? baseline : left, left).filter((raw) => !covered(raw.at));
+  const base = isObj(baseline) ? withShownStrikes(baseline, prior ? prior.edits : [], shown) : left;
+  const changes = weaveEditsBetween(base, left).filter((raw) => !covered(raw.at));
   const unfindable = changes.find((raw) => raw.repeatedId);
   if (unfindable) {
     throw new Error(`standingAtMeeting: the director's version changes ${editWhere(unfindable)}, under an id the weave repeats, so no edit could find that element by its id. The meeting's gate (lib/meeting.js directorWeaveProblems) refuses such a change first.`);
@@ -1432,17 +1512,20 @@ function weaveDirectorsShare(edits) {
  * What a rework changed in the weave, from the director's version (brief 4.5): the marks
  * the meeting shows after a reweave or a send-back. One per place, as weaveEditsBetween
  * finds them with the questions, each `{path, where, before, after}` with the director's
- * text and the rework's (empty for a place one of them lacks). The director's lines code
- * kept, their struck connections and their answers are the same on both sides, so they
- * carry no mark. A mark under an id one of the two repeats says so (`repeatedId`, fix
- * round 1, finding 3): its place names more than one element.
+ * text and the rework's (empty for a place one of them lacks). A question is read against
+ * the question it is by the carry's rule, so one a rework only renumbered carries no mark
+ * (brief 4.5c). The director's lines code kept, their struck connections and their answers
+ * are the same on both sides, so they carry no mark. A struck connection a send-back's
+ * rework brought back carries none either: the round's report lists it as the edit the
+ * send-back changed, with the rework's reason. A mark under an id one of the two repeats
+ * says so (`repeatedId`, fix round 1, finding 3): its place names more than one element.
  *
  * @param {Object} from - the weave as the director left it, which the round's rework started from
  * @param {Object} weave - the weave the round's passes left
  * @returns {Array<{path: string, where: string, before: string, after: string, repeatedId?: true}>}
  */
 function weaveMarks(from, weave) {
-  return weaveEditsBetween(from, weave, { questions: true }).map((change) => ({
+  return weaveEditsBetween(from, weave, { questions: true }).filter((change) => change.unstruck !== true).map((change) => ({
     path: pathOf(change.at),
     where: editWhere(change),
     before: editValueText(change.before),
@@ -1550,6 +1633,7 @@ function editWhere(edit) {
   }
   if (isCut(edit)) parts.push('cut');
   if (isStrike(edit)) parts.push('struck');
+  if (isUnstrike(edit)) parts.push('brought back');
   if (edit.from) parts.push(isObj(edit.between) ? 'moved within the section' : `moved from section "${edit.from}"`);
   return parts.filter(Boolean).join(', ');
 }
@@ -1571,8 +1655,9 @@ function moveLine(edit) {
 }
 
 /**
- * A strike's line (brief 4.5): its id and place, then the connection the director struck,
- * by its fields, its id and the strike itself said by the place.
+ * A strike's line (brief 4.5), or an un-strike's (brief 4.5c): its id and place, then the
+ * connection the director struck or brought back, by its fields, its id and the strike
+ * itself said by the place.
  */
 function strikeLine(edit) {
   const connection = isObj(edit.after) ? edit.after : {};
@@ -1584,8 +1669,8 @@ function strikeLine(edit) {
  * One line per edit, by id and place, with the director's text whole: a cut's line
  * holds the text the director removed, and a rewrite's removed sentences follow it, one
  * `removed:` line each. Text is quoted; an element prints its fields, never JSON. A
- * move's line names the block and its place (moveLine); a strike's, the connection the
- * director struck (strikeLine).
+ * move's line names the block and its place (moveLine); a strike's or an un-strike's, the
+ * connection the director struck or brought back (strikeLine).
  *
  * @param {Object[]} edits
  * @returns {string}
@@ -1596,7 +1681,7 @@ function formatEditLines(edits) {
     // place; its own text is the writer's.
     if (e.scope === MAP_SCOPE && isMove(e)) return e.from === MAP_NONE ? `${e.id} (${editWhere(e)}): ${valueLine(e.after)}` : `${e.id} (${editWhere(e)})`;
     if (isMove(e)) return moveLine(e);
-    if (isStrike(e)) return strikeLine(e);
+    if (isStrike(e) || isUnstrike(e)) return strikeLine(e);
     return [
       `${e.id} (${editWhere(e)}): ${valueLine(isCut(e) ? e.before : e.after)}`,
       ...(Array.isArray(e.removed) ? e.removed : []).map((sentence) => `  removed: "${String(sentence).trim()}"`)

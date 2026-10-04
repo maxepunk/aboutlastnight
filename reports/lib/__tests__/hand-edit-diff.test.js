@@ -1488,8 +1488,13 @@ describe('4.5: the meeting\'s edits', () => {
       expect(struck).toMatchObject({ scope: 'connections', struck: true, before: writers().connections[1], after: directors().connections[1] });
     });
 
-    it('a connection unstruck puts the writer\'s connection back, and is no edit', () => {
-      expect(D.weaveEditsBetween(directors(), { ...directors(), connections: writers().connections })).toEqual([]);
+    // Brief 4.5c (the ledger's ruling on 4.5b's minor 5): bringing a struck connection back is
+    // the director's change, one change of the whole connection, marked unstruck. It was no
+    // change until then, so a reweave carrying only it was refused as empty.
+    it('a connection unstruck puts the writer\'s connection back, one change of the whole connection, marked unstruck', () => {
+      expect(D.weaveEditsBetween(directors(), { ...directors(), connections: writers().connections })).toEqual([
+        expect.objectContaining({ scope: 'connections', before: directors().connections[1], after: writers().connections[1], unstruck: true })
+      ]);
     });
 
     it('a thread removed is a cut; the questions are read only when asked for, never their answers', () => {
@@ -1686,7 +1691,9 @@ describe('4.5: the meeting\'s edits', () => {
       expect(byPath(second.edits)['connections[#c2]']).toMatchObject({ struck: true, after: detailed.connections[1] });
       const unstruck = directors();
       delete unstruck.connections[1].struck;
-      expect(D.standingAtMeeting(first, rewoven(), unstruck, { shown: rewoven() }).edits.map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
+      // Brief 4.5c: the strike goes, and bringing the connection back is the next edit.
+      expect(D.standingAtMeeting(first, rewoven(), unstruck, { shown: rewoven() }).edits.map((e) => [e.id, e.path, e.unstruck === true]))
+        .toEqual([['E1', 'story', false], ['E2', 'threads[#t3].role', false], ['E3', 'threads[#t7]', false], ['E5', 'connections[#c2]', true]]);
     });
 
     it("a thread a send-back's rework changed, which the director leaves as the meeting showed it, is the writer's again", () => {
@@ -2450,6 +2457,110 @@ describe('4.3c fix round 1: one rule finds the copy a pass left in another secti
       expect(letters(output, 't')).toBe('T');
       expect(letters(output, 'u')).toBe('UK');
       expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: true })]);
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5c: an un-strike is the director's change, and the marks pair questions as the carry does
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The ledger's ruling on 4.5b's minor 5: bringing back a connection the director struck is
+// their change at the meeting, an edit that stands like any other, so a reweave whose only
+// change it is has something to fit in. And the meeting's marks read a question across two
+// versions by the carry's rule of sameness (lib/writer-questions.js pairWeaveQuestions), so a
+// question a rework only renumbered shows as unchanged. Invented text.
+describe('4.5c: the meeting\'s un-strike, and the marks\' questions', () => {
+  const { WEAVE } = require('./fixtures/rework-state');
+  const { carriedWeaveQuestions } = require('../writer-questions');
+  const C2 = WEAVE.connections[1];
+  /** The writer's weave with c2 struck by the director. */
+  const struck = () => {
+    const weave = clone(WEAVE);
+    weave.connections[1].struck = true;
+    return weave;
+  };
+  /** The director's strike of c2 against the writer's weave: E1. */
+  const strike = () => D.standingAtMeeting(null, clone(WEAVE), struck());
+  const idsOf = (standing) => standing.edits.map((e) => [e.id, e.path, e.struck === true ? 'struck' : (e.unstruck === true ? 'brought back' : '')]);
+
+  it('weaveEditsBetween reads a connection struck before and live after as one change of the whole connection, marked unstruck', () => {
+    expect(D.weaveEditsBetween(struck(), clone(WEAVE))).toEqual([{
+      scope: 'connections', at: [{ key: 'connections' }, { index: 1, match: { id: 'c2' } }], before: struck().connections[1], after: C2, unstruck: true
+    }]);
+    // A connection struck on both sides, or live on both, is no change.
+    expect(D.weaveEditsBetween(struck(), struck())).toEqual([]);
+    expect(D.weaveEditsBetween(clone(WEAVE), clone(WEAVE))).toEqual([]);
+  });
+
+  describe("bringing back a connection they struck is the director's edit", () => {
+    it('after a round, whose weave holds the strike: the strike goes, and the un-strike is the next edit, which the weave carries', () => {
+      const standing = D.standingAtMeeting(strike(), struck(), clone(WEAVE));
+      expect(idsOf(standing)).toEqual([['E2', 'connections[#c2]', 'brought back']]);
+      expect(standing.issued).toBe(2);
+      expect(D.carriedEdits(standing, clone(WEAVE)).map((e) => e.id)).toEqual(['E2']);
+    });
+
+    it('with no round since the strike (an approve, then back to the meeting; a round that did not run): the meeting showed it struck, so bringing it back is their edit too', () => {
+      const standing = D.standingAtMeeting(strike(), clone(WEAVE), clone(WEAVE), { shown: struck() });
+      expect(idsOf(standing)).toEqual([['E2', 'connections[#c2]', 'brought back']]);
+      expect(D.carriedEdits(standing, clone(WEAVE)).map((e) => e.id)).toEqual(['E2']);
+    });
+
+    it('stands while the connection is in the story, and goes when they strike it again, which is a strike again', () => {
+      const unstrike = D.standingAtMeeting(strike(), struck(), clone(WEAVE));
+      // A later look, after a round that kept the connection: the un-strike stands by its id.
+      expect(idsOf(D.standingAtMeeting(unstrike, clone(WEAVE), clone(WEAVE)))).toEqual([['E2', 'connections[#c2]', 'brought back']]);
+      // A weave holding the connection struck carries no un-strike of it.
+      expect(D.carriedEdits(unstrike, struck())).toEqual([]);
+      const again = D.standingAtMeeting(unstrike, clone(WEAVE), struck(), { shown: clone(WEAVE) });
+      expect(idsOf(again)).toEqual([['E3', 'connections[#c2]', 'struck']]);
+      expect(again.issued).toBe(3);
+    });
+
+    it('a reweave is held to it: a pass that drops the connection gets it back, and the report says so', () => {
+      const edits = D.carriedEdits(D.standingAtMeeting(strike(), struck(), clone(WEAVE)), clone(WEAVE));
+      const rework = clone(WEAVE);
+      rework.connections.splice(1, 1);
+      const { output, report } = D.settleEdits(null, { edits, before: clone(WEAVE), after: rework, pass: D.REWEAVE_PASS });
+      expect(output.connections).toEqual(WEAVE.connections);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E2', where: 'connection "c2", brought back', restored: true, pass: 'reweave', automatic: false })]);
+      // A pass that keeps it changes no edit.
+      expect(D.settleEdits(null, { edits, before: clone(WEAVE), after: clone(WEAVE), pass: D.REWEAVE_PASS }).report.changed).toEqual([]);
+    });
+
+    it("its line names the connection, marked brought back, by its fields; the guide says what such a line is; a finding that quotes it is about the director's edit", () => {
+      const edits = D.standingAtMeeting(strike(), struck(), clone(WEAVE)).edits;
+      expect(D.formatEditLines(edits)).toBe(`E2 (connection "c2", brought back): kind "moment"; joins "t2" / "t4"; detail "${C2.detail}"`);
+      expect(D.WEAVE_EDIT_LINES_GUIDE).toContain('a connection they struck at an earlier look and brought back (marked brought back), which is back in the story');
+      expect(D.locateQuotedText(`T1: "${C2.detail}" is a false cause.`, edits, clone(WEAVE)).editIds).toEqual(['E2']);
+    });
+  });
+
+  describe('weaveMarks reads the questions as the carry pairs them', () => {
+    const pronoun = (id, who) => ({ id, kind: 'pronoun', about: who, question: 'Which pronoun does the article use?', changes: `${who}'s pronoun in print.` });
+    const withQuestions = (questions) => ({ ...clone(WEAVE), questions });
+
+    it("after a rework that gives the director's answered question's id to a new one, the answered question is unchanged and the new one is new", () => {
+      const left = withQuestions([{ ...pronoun('q1', 'Riley'), answer: 'she/her' }]);
+      const after = withQuestions(carriedWeaveQuestions([pronoun('q1', 'Jordan')], left.questions));
+      expect(after.questions.map((q) => `${q.id}:${q.about}`)).toEqual(['q2:Riley', 'q1:Jordan']);
+      expect(D.weaveMarks(left, after)).toEqual([
+        { path: 'questions[#q1]', where: 'question "q1", added', before: '', after: expect.stringContaining('about: Jordan') }
+      ]);
+    });
+
+    it('a question only renumbered is no change; one reworded in its new place is a change at its new id', () => {
+      const left = withQuestions([pronoun('q1', 'Riley'), pronoun('q2', 'Sam')]);
+      expect(D.weaveMarks(left, withQuestions([pronoun('q3', 'Riley'), pronoun('q2', 'Sam')]))).toEqual([]);
+      const reworded = withQuestions([{ ...pronoun('q3', 'Riley'), question: 'Is Riley he or she?' }, pronoun('q2', 'Sam')]);
+      expect(D.weaveMarks(left, reworded)).toEqual([
+        { path: 'questions[#q3].question', where: 'question "q3", question', before: 'Which pronoun does the article use?', after: 'Is Riley he or she?' }
+      ]);
+    });
+
+    it("a connection the round brought back is no mark: the send-back's report says it, with its reason", () => {
+      expect(D.weaveMarks(struck(), clone(WEAVE))).toEqual([]);
     });
   });
 });

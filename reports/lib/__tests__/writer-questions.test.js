@@ -859,3 +859,31 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5c: the carry's pairing is one exported function, which the meeting's marks read too
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.5c: pairWeaveQuestions is the carry's pairing, exported", () => {
+  const { pairWeaveQuestions, carriedWeaveQuestions, weaveQuestionsOf } = require('../writer-questions');
+  const pronoun = (id, who, extra = {}) => ({ id, kind: 'pronoun', about: who, question: 'Which pronoun does the article use?', changes: `${who}'s pronoun in print.`, ...extra });
+
+  it('gives, for each question of the first version, the index of the same question in the other, or null', () => {
+    // Renumbered in order: each question pairs with its own.
+    expect(pairWeaveQuestions([pronoun('q1', 'Sarah'), pronoun('q2', 'Riley')], [pronoun('q2', 'Sarah'), pronoun('q3', 'Riley')])).toEqual([0, 1]);
+    // A question on another player in an answered question's place is another question.
+    expect(pairWeaveQuestions([pronoun('q1', 'Riley', { answer: 'she/her' })], [pronoun('q1', 'Jordan')])).toEqual([null]);
+    expect(pairWeaveQuestions([], [pronoun('q1', 'Riley')])).toEqual([]);
+  });
+
+  it('is the pairing the carry keeps by: a paired answered question takes its partner\'s id, and an unpaired one comes back', () => {
+    const previous = [pronoun('q1', 'Riley', { answer: 'she/her' }), pronoun('q2', 'Sam')];
+    const returned = [pronoun('q5', 'Riley'), pronoun('q1', 'Jordan')];
+    expect(pairWeaveQuestions(weaveQuestionsOf(previous), weaveQuestionsOf(returned))).toEqual([0, null]);
+    expect(carriedWeaveQuestions(returned, previous).map((q) => `${q.id}:${q.about}${q.answer ? ' (answered)' : ''}`))
+      .toEqual(['q5:Riley (answered)', 'q2:Sam', 'q1:Jordan']);
+  });
+
+  it('reads a question with a field missing as one with that field empty, so the marks can read any question the weave holds', () => {
+    expect(pairWeaveQuestions([{ id: 'q1', kind: 'player', about: 'Riley' }], [{ id: 'q2', kind: 'player', about: 'Riley', question: 'Where was Riley?' }])).toEqual([0]);
+  });
+});

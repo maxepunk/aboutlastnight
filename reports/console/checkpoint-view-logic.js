@@ -1613,9 +1613,9 @@
    * weaveEditsBetween finds them (a test holds the two equal): each text field and the
    * stronger main thread whole; each thread and connection found by its id, field by
    * field, added whole or taken out whole; a connection struck as one change of the whole,
-   * one unstruck as none. The questions are not read: an answer is the director's words,
-   * no edit. Each change under an id either weave repeats carries `repeatedId`, since no
-   * edit can find its element by the id.
+   * and one brought back as one change of the whole too (task 4.5c). The questions are not
+   * read: an answer is the director's words, no edit. Each change under an id either weave
+   * repeats carries `repeatedId`, since no edit can find its element by the id.
    *
    * @param {*} before
    * @param {*} after
@@ -1640,8 +1640,8 @@
           change(collection, entry.id, null, repeated(entry.id), false);
           return;
         }
-        if (collection === 'connections' && isStruckConnection(entry.element) && !isStruckConnection(prior)) {
-          change(collection, entry.id, null, repeated(entry.id), true);
+        if (collection === 'connections' && isStruckConnection(entry.element) !== isStruckConnection(prior)) {
+          change(collection, entry.id, null, repeated(entry.id), isStruckConnection(entry.element));
           return;
         }
         var p = collection === 'connections' ? withoutKey(prior, STRUCK_KEY) : prior;

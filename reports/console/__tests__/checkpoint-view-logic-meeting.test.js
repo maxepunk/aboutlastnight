@@ -895,3 +895,36 @@ describe('4.8: a meeting with no weave', () => {
     expect(view.emptyLine).toMatch(/No weave reached the story meeting/);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5c: the meeting's follow-ups on the screen
+// ═══════════════════════════════════════════════════════════════════════════
+
+// The ledger's ruling on 4.5b's minor 5: bringing back a connection the director struck is
+// their change, at the gate (lib/hand-edit-diff.js weaveEditsBetween) and so on the screen.
+describe('4.5c: bringing back a struck connection is a change on screen, as at the gate', () => {
+  test('a meeting that shows c2 struck offers Reweave once the director brings it back, and the gate takes that reweave', () => {
+    const struck = setConnectionStruck(clone(WEAVE), 1, true);
+    const state = stateAt({ weave: weaveLib.withFactCheckMark(struck, MARK), _weaveHandEdits: standingAtMeeting(null, WEAVE, struck) });
+    const data = payloadOf(state);
+    const back = setConnectionStruck(meetingDraftOf(data, undefined), 1, false);
+    expect(meetingWeaveChanges(meetingWeaveOf(data.weave), back)).toEqual([{ scope: 'connections', id: 'c2', field: null, repeatedId: false, struck: false }]);
+    expect(meetingButtons(data, back, '', false).reweave).toMatchObject({ disabled: false, hint: '' });
+    const taken = meetingResume(meetingPayload('reweave', data, back, ''), state);
+    expect(taken.error).toBeNull();
+    expect(taken.resume).toEqual({ approved: false, round: 'reweave' });
+  });
+
+  test("the console's validator decides as the gate does on a connection brought back, under the writer's repeated id too", () => {
+    const struck = setConnectionStruck(clone(WEAVE), 1, true);
+    const repeatStruck = writersRepeat();
+    repeatStruck.connections[2].struck = true;
+    [
+      [setConnectionStruck(struck, 1, false), struck, true],
+      [setConnectionStruck(repeatStruck, 2, false), repeatStruck, false]
+    ].forEach(([left, shown, accepts]) => {
+      const gate = directorWeaveProblems(weaveLib.weaveForPrompt(left), { shown: weaveLib.weaveForPrompt(shown) });
+      expect({ gateAccepts: gate === null, consoleAccepts: meetingWeaveProblems(left, shown) === null }).toEqual({ gateAccepts: accepts, consoleAccepts: accepts });
+    });
+  });
+});
