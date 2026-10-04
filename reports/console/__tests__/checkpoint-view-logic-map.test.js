@@ -748,8 +748,10 @@ describe("4.9: the map's changes to the weave, and the standing notes", () => {
   test('each change to the weave with its source: an edit at the meeting, or the meeting note', () => {
     const map = { ...clone(MAP), weaveChanges: [{ source: 'E2', change: 'The envelope lands in the lede.' }, { source: 'note', change: 'The heir thread closes the map.' }] };
     const d = payloadOf(stateAt({ outline: map, _mapBaseline: clone(map) }));
+    // 4.14b: an edit is named by its place among the meeting's changes, never by an id the
+    // meeting does not show; this state's weave carries no change of the director's.
     expect(ViewLogic.mapView(d, opened(d)).weaveChanges).toEqual([
-      { key: 'change-0', source: 'Your change E2 at the meeting', change: 'The envelope lands in the lede.' },
+      { key: 'change-0', source: 'Your change at the meeting', change: 'The envelope lands in the lede.' },
       { key: 'change-1', source: 'Your note at the meeting', change: 'The heir thread closes the map.' }
     ]);
   });
@@ -1242,5 +1244,36 @@ describe('4.14b: going back to the map says what it costs: the map reopens as le
     ['contentBundle', '_articleHandEdits', 'articleApproved', 'assembledHtml'].forEach((cleared) => {
       expect(`${cleared}: ${ROLLBACK_CLEARS.outline.includes(cleared)}`).toBe(`${cleared}: true`);
     });
+  });
+});
+
+describe('4.14b: the map names each meeting change by its place, as the meeting names the line', () => {
+  /** The meeting's changes the weave carries, as 4.14a's payload field gives them: `{id, place}`. */
+  const MEETING_CHANGES = [
+    { id: 'M1', place: "the role of 'Morgan paid Riley at the bar'" },
+    { id: 'M2', place: 'the story' }
+  ];
+  const viewWith = (weaveChanges, meetingChanges) => {
+    const map = { ...clone(MAP), weaveChanges };
+    const d = { ...payloadOf(stateAt({ outline: map, _mapBaseline: clone(map) })), ...(meetingChanges ? { meetingChanges } : {}) };
+    return ViewLogic.mapView(d, opened(d));
+  };
+
+  test("a change names the line the meeting changed, and the meeting's note by its name", () => {
+    const view = viewWith([
+      { source: 'M1', change: 'The envelope beat now sits beside the vote.' },
+      { source: 'note', change: 'The heir thread closes the map.' },
+      { source: 'M2', change: 'The lede opens on the sale.' }
+    ], MEETING_CHANGES);
+    expect(view.weaveChanges).toEqual([
+      { key: 'change-0', source: "Your change to the role of 'Morgan paid Riley at the bar'", change: 'The envelope beat now sits beside the vote.' },
+      { key: 'change-1', source: 'Your note at the meeting', change: 'The heir thread closes the map.' },
+      { key: 'change-2', source: 'Your change to the story', change: 'The lede opens on the sale.' }
+    ]);
+  });
+
+  test('a source the meeting does not show is named by no id, with or without the meeting changes in the payload', () => {
+    expect(viewWith([{ source: 'E7', change: 'A change.' }], MEETING_CHANGES).weaveChanges[0].source).toBe('Your change at the meeting');
+    expect(viewWith([{ source: 'M1', change: 'A change.' }], null).weaveChanges[0].source).toBe('Your change at the meeting');
   });
 });

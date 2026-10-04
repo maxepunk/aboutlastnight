@@ -2607,6 +2607,15 @@
   /** How much of a beat's material a "beside" choice shows. */
   var BESIDE_TEXT_LENGTH = 60;
 
+  /**
+   * How a change to the weave names its source (task 4.14b): the meeting's change by the place
+   * the meeting names it by (the payload's `meetingChanges`, `{id, place}`), the meeting's note
+   * by its name, and any other source as a change at the meeting, by no id, since the meeting
+   * shows none.
+   */
+  var WEAVE_CHANGE_NOTE = 'Your note at the meeting';
+  var WEAVE_CHANGE_UNNAMED = 'Your change at the meeting';
+
   /** The theme's slots the payload carries (`mapSlots`), each `{key, label}`. */
   function slotsOf(data) {
     return asArray(isPlainObject(data) ? data.mapSlots : null)
@@ -2869,6 +2878,26 @@
   }
 
   /**
+   * The words a change to the weave names its source by (task 4.14b): a change of the
+   * director's at the meeting by the place the meeting names its line by, from the payload's
+   * `meetingChanges` (`{id, place}`: the meeting's changes the weave carries), as "Your change
+   * to the role of 'Morgan paid Riley at the bar'"; the meeting's note by its name; and any
+   * other source as a change at the meeting. Never by an id: the meeting shows none.
+   *
+   * @param {*} source - the change's `source`
+   * @param {*} meetingChanges - data.meetingChanges
+   * @returns {string}
+   */
+  function weaveChangeSource(source, meetingChanges) {
+    var id = asString(source).trim();
+    if (id === MAP_NOTE_SOURCE) return WEAVE_CHANGE_NOTE;
+    var named = asArray(meetingChanges).filter(function (change) {
+      return isPlainObject(change) && id !== '' && asString(change.id).trim() === id && asString(change.place).trim() !== '';
+    })[0];
+    return named ? 'Your change to ' + asString(named.place).trim() : WEAVE_CHANGE_UNNAMED;
+  }
+
+  /**
    * The map's page (spec 5.2): the stop's payload (4.6's, lib/map.js mapCheckpointData) with the
    * map as the director has it.
    * - `settledStory` at the top, read-only, with `storyHint`, the way back to the meeting;
@@ -2885,7 +2914,7 @@
    *   the payload's evidenceIndex; mapDocumentText);
    * - `dropped`, each with its reason; `tally`, the lines of Everyone and the counts, rebuilt
    *   from the map as edited (mapTallyOf); `leftOut`, folded, each item with the sections it can
-   *   come back to; `weaveChanges`, each with its source;
+   *   come back to; `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
    * - every concern beside the line of the edit it is about (concernsBesideLines), and a line
    *   under a repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its
    *   controls off, with `lockedHint`.
@@ -3038,10 +3067,9 @@
         items: leftItems
       },
       weaveChanges: asArray(map.weaveChanges).filter(isPlainObject).map(function (change, i) {
-        var source = asString(change.source).trim();
         return {
           key: 'change-' + i,
-          source: source === MAP_NOTE_SOURCE ? 'Your note at the meeting' : 'Your change ' + source + ' at the meeting',
+          source: weaveChangeSource(change.source, d.meetingChanges),
           change: asString(change.change)
         };
       }),
@@ -3894,8 +3922,9 @@
     mapEditLineOptions: mapEditLineOptions,
     mapView: mapView,
     mapPhotoUrl: mapPhotoUrl,
-    // Task 4.14b: going back to the map
+    // Task 4.14b: going back to the map, and a change to the weave named by its place
     MAP_ROLLBACK_LINE: MAP_ROLLBACK_LINE,
+    weaveChangeSource: weaveChangeSource,
     // Phase 4, task 4.10: the desk's marks, and one rule for the changed lines a stop shows
     REWEAVE_PASS: REWEAVE_PASS,
     changedEditsToShow: changedEditsToShow,
