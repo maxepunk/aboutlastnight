@@ -18,8 +18,8 @@
  *     map's moves. Each returns a new map and leaves the one it was given as it was, and what
  *     the director types is kept as typed;
  *   - the map as the gate stores it (D, task 4.14b): a struck beat's photos freed
- *     (freeStruckBeatPhotos, read so everywhere through photoBeatOf), which lib/map.js
- *     mapResume applies;
+ *     (freeStruckBeatPhotos, read so everywhere through photoBeatOf) and each section the
+ *     director emptied dropped (dropEmptiedSections), which lib/map.js mapResume applies;
  *   - the article's client gate, validateBundleShape (I2), and the reset key both stops use.
  *
  * MUST NOT reference React or window at module-evaluation time except the
@@ -352,6 +352,56 @@
     var next = deepClone(map);
     next.sections.filter(isPlainObject).forEach(function (section) {
       struck.forEach(function (id) { freePhotosBeside(section, id); });
+    });
+    return next;
+  }
+
+  /**
+   * The reason the gate writes in the dropped list for a section the director emptied (task
+   * 4.14b). The article writer and the map's rework read the dropped list, so it names the
+   * director in the third person; the map's page says it in the director's own words
+   * (checkpoint-view-logic.js mapView).
+   */
+  var EMPTIED_SECTION_REASON = 'The director emptied this section on the map.';
+
+  /** Does a section hold nothing: no beat and no photo? */
+  function holdsNothing(section) {
+    return !(Array.isArray(section.beats) && section.beats.length > 0)
+      && !(Array.isArray(section.photos) && section.photos.length > 0);
+  }
+
+  /**
+   * The map as the gate stores it at approve and at send-back (lib/map.js mapResume; task
+   * 4.14b), with each section the director emptied moved to the dropped list under
+   * EMPTIED_SECTION_REASON: a section that holds no beat and no photo, where the map the stop
+   * showed (`shown`, read through shownMapOf) held one in its section of that slot. The map has
+   * no section delete, so a director who strikes or moves every beat out of a section has
+   * dropped it, and the article writer gets no section with nothing to write. A section that
+   * still holds a photo stays, since each kept photo is placed once (T13); a section the writer
+   * left empty stays, since the director did not empty it; and a slot the dropped list already
+   * names keeps its one entry. The same map when the director emptied none.
+   *
+   * @param {*} map - the map as the director left it
+   * @param {*} shown - the map the stop showed
+   * @returns {*}
+   */
+  function dropEmptiedSections(map, shown) {
+    var was = shownMapOf(shown);
+    if (!isMapValue(map) || !was) return map;
+    var emptied = map.sections.filter(function (section) {
+      if (!isPlainObject(section) || !holdsNothing(section)) return false;
+      var before = sectionWithSlot(was, section.slot);
+      return Boolean(before) && !holdsNothing(before);
+    }).map(function (section) { return section.slot; });
+    if (emptied.length === 0) return map;
+    var next = deepClone(map);
+    next.sections = next.sections.filter(function (section) {
+      return !(isPlainObject(section) && emptied.indexOf(section.slot) !== -1 && holdsNothing(section));
+    });
+    if (!Array.isArray(next.dropped)) next.dropped = [];
+    emptied.forEach(function (slot) {
+      var listed = next.dropped.some(function (entry) { return isPlainObject(entry) && entry.slot === slot; });
+      if (!listed) next.dropped.push({ slot: slot, reason: EMPTIED_SECTION_REASON });
     });
     return next;
   }
@@ -1072,10 +1122,13 @@
     removeBeat: removeBeat,
     movePhoto: movePhoto,
     setPhotoBeside: setPhotoBeside,
-    // Task 4.14b: a struck beat's photos, read as by itself and stored so
+    // Task 4.14b: a struck beat's photos, read as by itself and stored so; and the sections the
+    // director emptied, dropped
     isStruckBeat: isStruckBeat,
     photoBeatOf: photoBeatOf,
     freeStruckBeatPhotos: freeStruckBeatPhotos,
+    EMPTIED_SECTION_REASON: EMPTIED_SECTION_REASON,
+    dropEmptiedSections: dropEmptiedSections,
 
     validateOutlineShape: validateOutlineShape,
     validateMapShape: validateMapShape,

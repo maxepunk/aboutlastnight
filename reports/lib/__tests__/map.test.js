@@ -1111,3 +1111,45 @@ describe("4.14b: the gate stores a struck beat's photo by itself", () => {
     expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.path, e.from])).toEqual([['leftOut[#b2]', 'theStory']]);
   });
 });
+
+describe('4.14b: a section the director empties is dropped, at approve and at send-back', () => {
+  const { mapResume } = require('../map');
+  const { MAP, reworkFixtureState } = require('./fixtures/rework-state');
+  const EditLogic = require('../../console/outline-edit-logic');
+  const state = () => ({ ...reworkFixtureState('journalist'), directorGateNotes: [] });
+  const sent = (action, map, at = state()) => mapResume({ outline: action, map, note: 'Tighten the lede.' }, at, { theme: 'journalist' });
+
+  it.each(['approve', 'send-back'])("%s: the section moves to the dropped list, with the line that says the director emptied it, and the drop stands as the director's edit", (action) => {
+    // The director strikes b5, Follow the Money's one beat, and moves no photo into it.
+    const { error, stateUpdates } = sent(action, EditLogic.strikeBeat(clone(MAP), 'b5'));
+    expect(error).toBeNull();
+    expect(stateUpdates.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
+    expect(stateUpdates.outline.dropped).toEqual([...clone(MAP).dropped, { slot: 'followTheMoney', reason: EditLogic.EMPTIED_SECTION_REASON }]);
+    expect(EditLogic.EMPTIED_SECTION_REASON).toBe('The director emptied this section on the map.');
+    expect(EditLogic.EMPTIED_SECTION_REASON).not.toMatch(/\u2014|Nova/);
+    expect(stateUpdates._outlineHandEdits.edits.map((e) => e.path).sort()).toEqual(['dropped[#followTheMoney]', 'leftOut[#b5]', 'sections[#followTheMoney]']);
+  });
+
+  it('a section moved empty the same way, every beat moved out, is dropped too', () => {
+    const { stateUpdates } = sent('approve', EditLogic.moveBeat(clone(MAP), 'b5', 'closing'));
+    expect(stateUpdates.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
+    expect(stateUpdates.outline.dropped.map((d) => d.slot)).toEqual(['thePlayers', 'whatsMissing', 'followTheMoney']);
+  });
+
+  it('a section that keeps a photo stays, and so do a section the writer left empty and a section already dropped', () => {
+    // The Story's beats struck: p2.jpg stays in the section, with its people.
+    let left = clone(MAP);
+    ['b2', 'b3', 'b4'].forEach((id) => { left = EditLogic.strikeBeat(left, id); });
+    expect(sent('approve', left).stateUpdates.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'followTheMoney', 'closing']);
+    // The writer's empty section, approved as shown.
+    const writers = clone(MAP);
+    writers.sections[2].beats = [];
+    expect(sent('approve', clone(writers), { ...state(), outline: writers, _mapBaseline: clone(writers) }).stateUpdates.outline).toEqual(writers);
+    // A slot already in the dropped list keeps its one entry.
+    const twice = clone(MAP);
+    twice.dropped.push({ slot: 'followTheMoney', reason: 'The writer dropped it too.' });
+    const { stateUpdates } = sent('approve', EditLogic.strikeBeat(clone(twice), 'b5'), { ...state(), outline: twice, _mapBaseline: clone(twice) });
+    expect(stateUpdates.outline.dropped.filter((d) => d.slot === 'followTheMoney')).toEqual([{ slot: 'followTheMoney', reason: 'The writer dropped it too.' }]);
+    expect(stateUpdates.outline.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
+  });
+});

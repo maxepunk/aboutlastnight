@@ -2608,6 +2608,13 @@
   var BESIDE_TEXT_LENGTH = 60;
 
   /**
+   * A dropped section's line on the page when the director emptied it: the reason the gate
+   * writes for the writers (outline-edit-logic.js EMPTIED_SECTION_REASON), in the director's
+   * own words (task 4.14b).
+   */
+  var EMPTIED_SECTION_LINE = 'You emptied this section on the map.';
+
+  /**
    * How a change to the weave names its source (task 4.14b): the meeting's change by the place
    * the meeting names it by (the payload's `meetingChanges`, `{id, place}`), the meeting's note
    * by its name, and any other source as a change at the meeting, by no id, since the meeting
@@ -2915,9 +2922,10 @@
    *   so an editor open on it survives a strike or a move above it; a beat whose id another beat
    *   of its list holds, or with none, by its place (task 4.14b). A photo sits beside the beat
    *   it names unless that beat is struck (photoBeatOf; task 4.14b);
-   * - `dropped`, each with its reason; `tally`, the lines of Everyone and the counts, rebuilt
-   *   from the map as edited (mapTallyOf); `leftOut`, folded, each item with the sections it can
-   *   come back to; `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
+   * - `dropped`, each with its reason, a section the director emptied with EMPTIED_SECTION_LINE;
+   *   `tally`, the lines of Everyone and the counts, rebuilt from the map as edited
+   *   (mapTallyOf); `leftOut`, folded, each item with the sections it can come back to;
+   *   `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
    * - every concern beside the line of the edit it is about (concernsBesideLines), and a line
    *   under a repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its
    *   controls off, with `lockedHint`.
@@ -3056,7 +3064,14 @@
       topPhoto: topPhoto,
       sections: sectionViews,
       dropped: asArray(map.dropped).filter(isPlainObject).map(function (entry) {
-        return { key: 'dropped-' + entry.slot, slot: entry.slot, label: slotLabelOf(entry.slot, slots), reason: asString(entry.reason), concerns: at('dropped:' + entry.slot) };
+        var reason = asString(entry.reason);
+        return {
+          key: 'dropped-' + entry.slot,
+          slot: entry.slot,
+          label: slotLabelOf(entry.slot, slots),
+          reason: reason === editLogic.EMPTIED_SECTION_REASON ? EMPTIED_SECTION_LINE : reason,
+          concerns: at('dropped:' + entry.slot)
+        };
       }),
       tally: {
         everyone: tally.everyone.map(function (entry) { return entry.players.join(', ') + ' (' + slotLabelOf(entry.slot, slots) + ')'; }).join(' · '),
@@ -3930,8 +3945,10 @@
     mapEditLineOptions: mapEditLineOptions,
     mapView: mapView,
     mapPhotoUrl: mapPhotoUrl,
-    // Task 4.14b: going back to the map, and a change to the weave named by its place
+    // Task 4.14b: going back to the map, a section the director emptied, and a change to the
+    // weave named by its place
     MAP_ROLLBACK_LINE: MAP_ROLLBACK_LINE,
+    EMPTIED_SECTION_LINE: EMPTIED_SECTION_LINE,
     weaveChangeSource: weaveChangeSource,
     // Phase 4, task 4.10: the desk's marks, and one rule for the changed lines a stop shows
     REWEAVE_PASS: REWEAVE_PASS,

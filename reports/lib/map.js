@@ -52,7 +52,7 @@ const { roundNoteOf, roundDidNotRunAt } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const {
   mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue, shownMapOf,
-  freeStruckBeatPhotos
+  freeStruckBeatPhotos, dropEmptiedSections
 } = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
@@ -622,7 +622,8 @@ const RETIRED_OUTLINE_KEYS = Object.freeze(['outlineEdits', 'outlineFeedback', '
  * theme with no map (the parked detective, R1).
  *
  * The gate stores the director's version as every later reader takes it (task 4.14b): each
- * photo a strike freed by itself in its section (freeStruckBeatPhotos).
+ * photo a strike freed by itself in its section (freeStruckBeatPhotos), and each section the
+ * director emptied in the dropped list, with the line that says so (dropEmptiedSections).
  *
  * @param {Object} approvals - the request body
  * @param {Object} currentState - the thread's state at the stop
@@ -651,7 +652,7 @@ function mapResume(approvals, currentState = {}, { theme, names } = {}) {
   const problems = directorMapProblems(sent, { theme, shown });
   if (problems) return refuse(problems);
 
-  const left = freeStruckBeatPhotos(sent);
+  const left = dropEmptiedSections(freeStruckBeatPhotos(sent), shown);
   const baseline = isMap(currentState._mapBaseline) ? currentState._mapBaseline : shown;
   const stateUpdates = {
     outline: left,

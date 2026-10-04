@@ -1356,3 +1356,22 @@ describe('4.14b: striking a beat and bringing it back keeps its photo', () => {
     expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([]);
   });
 });
+
+describe('4.14b: a section the director empties is dropped, and the page shows it there', () => {
+  const { mapResume } = require('../../lib/map');
+
+  test.each(['approve', 'send-back'])("at %s, the section moves to the dropped list, and the page reads its line in the director's words", (action) => {
+    const emptied = EditLogic.strikeBeat(opened(), 'b5');
+    const { error, stateUpdates } = mapResume({ outline: action, map: emptied, note: 'Tighten the lede.' }, stateAt(), { theme: 'journalist' });
+    expect(error).toBeNull();
+    const d = payloadOf(stateAt({ outline: stateUpdates.outline, _mapBaseline: clone(MAP), _outlineHandEdits: stateUpdates._outlineHandEdits }));
+    const view = ViewLogic.mapView(d, opened(d));
+    expect(view.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'closing']);
+    expect(view.dropped.map((entry) => [entry.label, entry.reason])).toEqual([
+      ['The Players', 'Every player appears above.'],
+      ["What's Missing", "Its question is the closing's."],
+      ['Follow the Money', ViewLogic.EMPTIED_SECTION_LINE]
+    ]);
+    expect(ViewLogic.EMPTIED_SECTION_LINE).toBe('You emptied this section on the map.');
+  });
+});
