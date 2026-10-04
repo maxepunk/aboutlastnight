@@ -661,9 +661,11 @@ describe('4.6: the map\'s payload at the outline stop', () => {
       sessionConfig: { roster: ['Alex', 'Morgan', 'Riley', 'Sarah', 'Jamie'] },
       sessionPhotos: ['/s/hero.jpg', '/s/p2.jpg', '/s/p3.jpg', '/s/whiteboard.jpg'],
       whiteboardPhotoPath: '/s/whiteboard.jpg',
-      _outlineFeedback: 'Strike the paternity card.',
+      // Task 4.12e: as the rework leaves the stop, the slot cleared and the note filed in the
+      // round it was sent in (stopRound), where the payload reads the round's note.
+      _outlineFeedback: null,
       _outlineHandEditReport: { checked: ['E1'], changed: [] },
-      directorGateNotes: [{ gate: 'outline', kind: 'rejection', round: 1, text: 'Strike the paternity card.', at: 't' }],
+      directorGateNotes: [{ gate: 'outline', kind: 'rejection', round: 1, stopRound: 1, text: 'Strike the paternity card.', at: 't' }],
       outlineRevisionCount: 1,
       humanOutlineRevisionCount: 1,
       evaluationHistory: [{ phase: 'outline', ready: true, overallScore: 1 }]
@@ -882,5 +884,89 @@ describe("4.10c: the article payload names each card's document", () => {
     const state = atDesk();
     const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARTICLE, contentBundle: state.contentBundle }, state);
     expect(Object.keys(merged.evidenceIndex)).toEqual(['ale003', 'mor001', 'p-dna', 'p-rescued']);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.12e: the round line carries the note the director sent the stop back with
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The map's and the desk's payloads read `previousFeedback` from `_outlineFeedback` and
+// `_articleFeedback`, which each reworker clears before the stop opens, so in a real run the
+// map's round 2 read "Round 2" alone and the desk printed no note (4.12d's verification). The
+// note survives in directorGateNotes: the send-back files it as a rejection note at its stop,
+// in the round it was sent in (`stopRound`, server.js appendGateNote).
+describe('4.12e: at round 2 or later the map and the desk carry the note they were sent back with', () => {
+  const { buildResumePayload } = require('../../server.js');
+  const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { _testing: { incrementOutlineRevision, incrementArticleRevision } } = require('../../lib/workflow/graph');
+  const { stopPage } = require('../../lib/stop-pages');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const MAP_NOTE = 'Move the vote earlier.';
+  const DESK_NOTE = 'Tighten the closing.';
+  /** A rejection note as appendGateNote files it: at its stop, in the round it was sent in. */
+  const rejection = (gate, stopRound, text) => ({ gate, kind: 'rejection', round: stopRound, stopRound, text, at: 't' });
+
+  /** The map as reviseOutline leaves it after the director sent round `round - 1` back: the slot cleared, the notes as filed. */
+  const mapAt = (round, notes) => ({ ...reworkFixtureState('journalist'), _outlineFeedback: null, humanOutlineRevisionCount: round - 1, directorGateNotes: notes });
+  /** The desk as reviseContentBundle leaves it after the director sent round `round - 1` back. */
+  const deskAt = (round, notes) => ({
+    ...reworkFixtureState('journalist'), contentBundle: clone(PREVIOUS_BUNDLE), _articleFeedback: null, humanArticleRevisionCount: round - 1, directorGateNotes: notes
+  });
+
+  it("the map's payload at round 2 carries the note from the director's notes, and the map's page says it on the round line", async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, mapAt(2, [rejection('outline', 1, MAP_NOTE)]));
+    expect(data.previousFeedback).toBe(MAP_NOTE);
+    const page = stopPage('outline', { type: 'outline', ...data });
+    expect(page.lines.filter((line) => line.tone === 'note').map((line) => line.label || line.text))
+      .toEqual(expect.arrayContaining(['Round 2', `You sent the map back with: "${MAP_NOTE}"`]));
+  });
+
+  it("the desk's payload at round 2 carries the note, and the desk's page says it in the round's record", async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, deskAt(2, [rejection('article', 1, DESK_NOTE)]));
+    expect(data.previousFeedback).toBe(DESK_NOTE);
+    const page = stopPage('article', { type: 'article', ...data });
+    expect(page.lines.find((line) => line.label === 'You sent it back with')).toMatchObject({ tone: 'note', text: DESK_NOTE, folded: true });
+  });
+
+  it('carries the note a send-back filed, once the round\'s rework has cleared its slot', async () => {
+    // The map: the server files the note (buildResumePayload), the round opens
+    // (incrementOutlineRevision), and the rework clears the slot it consumed.
+    const atMap = { ...reworkFixtureState('journalist'), directorGateNotes: [] };
+    const mapSent = buildResumePayload({ outline: 'send-back', note: MAP_NOTE }, atMap, 'journalist', CHECKPOINT_TYPES.OUTLINE);
+    expect(mapSent.error).toBeNull();
+    const mapSentState = { ...atMap, ...mapSent.stateUpdates };
+    const { humanOutlineRevisionCount } = await incrementOutlineRevision(mapSentState);
+    const mapRound2 = { ...mapSentState, humanOutlineRevisionCount, _outlineFeedback: null };
+    expect((await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, mapRound2)).previousFeedback).toBe(MAP_NOTE);
+
+    // The desk, the same way, with the article payload the console sends back.
+    const atDesk = { ...reworkFixtureState('journalist'), contentBundle: clone(PREVIOUS_BUNDLE), directorGateNotes: [] };
+    const deskSent = buildResumePayload({ article: false, articleFeedback: DESK_NOTE }, atDesk, 'journalist', CHECKPOINT_TYPES.ARTICLE);
+    expect(deskSent.error).toBeNull();
+    const deskSentState = { ...atDesk, ...deskSent.stateUpdates };
+    const { humanArticleRevisionCount } = await incrementArticleRevision(deskSentState);
+    const deskRound2 = { ...deskSentState, humanArticleRevisionCount, _articleFeedback: null };
+    expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, deskRound2)).previousFeedback).toBe(DESK_NOTE);
+  });
+
+  it('carries the note that opened the round the stop is in: at round 3, the second send-back\'s', async () => {
+    const mapNotes = [rejection('outline', 1, 'Lead with the bonus.'), rejection('outline', 2, MAP_NOTE)];
+    expect((await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, mapAt(3, mapNotes))).previousFeedback).toBe(MAP_NOTE);
+    const deskNotes = [rejection('article', 1, 'Cut the bar scene.'), rejection('article', 2, DESK_NOTE)];
+    expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, deskAt(3, deskNotes))).previousFeedback).toBe(DESK_NOTE);
+  });
+
+  it('carries no note where no send-back opened the round: round 1, an approval note, another stop\'s note', async () => {
+    const approval = { ...rejection('outline', 1, 'Keep the bonus beat.'), kind: 'approval' };
+    const cases = [
+      ['round 1', mapAt(1, []), deskAt(1, [])],
+      ['an approval note', mapAt(2, [approval]), deskAt(2, [{ ...approval, gate: 'article' }])],
+      ["another stop's note", mapAt(2, [rejection('article', 1, DESK_NOTE)]), deskAt(2, [rejection('outline', 1, MAP_NOTE)])]
+    ];
+    for (const [name, map, desk] of cases) {
+      expect([name, (await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, map)).previousFeedback]).toEqual([name, null]);
+      expect([name, (await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, desk)).previousFeedback]).toEqual([name, null]);
+    }
   });
 });

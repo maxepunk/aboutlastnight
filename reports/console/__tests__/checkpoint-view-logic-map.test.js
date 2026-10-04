@@ -700,7 +700,10 @@ describe('4.9: after a send-back and an automatic pass', () => {
   const STRUCK = EditLogic.strikeBeat(EditLogic.moveBeat(clone(MAP), 'b3', 'closing'), 'b4');
 
   test('the round and the note it was sent back with', () => {
-    const d = payloadOf(stateAt({ humanOutlineRevisionCount: 1, _outlineFeedback: 'Lead with the bonus.' }));
+    // Task 4.12e: the state as the rework leaves it, the slot cleared and the note filed in the
+    // round it was sent in, where the payload reads the round's note (roundNoteOf).
+    const sent = { gate: 'outline', kind: 'rejection', round: 1, stopRound: 1, text: 'Lead with the bonus.', at: 't' };
+    const d = payloadOf(stateAt({ humanOutlineRevisionCount: 1, _outlineFeedback: null, directorGateNotes: [sent] }));
     expect(ViewLogic.mapView(d, opened(d)).round).toEqual({ label: 'Round 2', note: 'You sent the map back with: "Lead with the bonus."' });
   });
 

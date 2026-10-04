@@ -1615,9 +1615,10 @@ const DIRECTOR_ROUND_COUNTERS = Object.freeze({
  * corrections sent back keep at the input review; one at every other stop. The one rule for
  * a stop's round (task 4.12a): the stops log writes it on each line (lib/stops-log.js), each
  * of the director's notes records it as `stopRound` (server.js appendGateNote), the meeting
- * finds a round's note by it (lib/meeting.js unrunRoundNoteIndex), and the readout joins the
- * log and the notes on it. reviseArcs gives the meeting's counter back when a round's rework
- * times out, so a round that did not run keeps its number (brief 4.5c).
+ * finds a round's note by it (lib/meeting.js unrunRoundNoteIndex), the map and the desk find the
+ * note that opened their round by it (roundNoteOf), and the readout joins the log and the notes
+ * on it. reviseArcs gives the meeting's counter back when a round's rework times out, so a round
+ * that did not run keeps its number (brief 4.5c).
  *
  * @param {string} stop - the stop's type (lib/workflow/checkpoint-helpers.js CHECKPOINT_TYPES)
  * @param {Object} state - the thread's state values
@@ -1630,6 +1631,29 @@ function stopRoundOf(stop, state) {
   }
   const counter = DIRECTOR_ROUND_COUNTERS[stop];
   return counter ? (Number(s[counter]) || 0) + 1 : 1;
+}
+
+/**
+ * The note the director sent a stop back with, which opened the round the stop is in, or null
+ * (task 4.12e): the rejection note filed at the stop in the round before this one, since each note
+ * records the round it was sent in (`stopRound`, server.js appendGateNote). The round's rework
+ * clears the slot that carried the note to it (`_outlineFeedback`, `_articleFeedback`) before the
+ * stop opens, so the director's notes are where it survives. Where a round filed two, the later
+ * is the one its rework read. Null in a stop's first round, which no send-back opened. The map's
+ * and the desk's payloads send it as `previousFeedback` (lib/map.js mapCheckpointData, server.js
+ * getCheckpointData), the round line's note.
+ *
+ * @param {string} stop - the stop's type, which its notes name as their gate
+ * @param {Object} state - the thread's state values
+ * @returns {string|null}
+ */
+function roundNoteOf(stop, state) {
+  const s = state && typeof state === 'object' ? state : {};
+  const sentIn = stopRoundOf(stop, s) - 1;
+  const sent = (Array.isArray(s.directorGateNotes) ? s.directorGateNotes : []).filter((n) => Boolean(n) && typeof n === 'object'
+    && n.gate === stop && (n.kind || 'rejection') === 'rejection' && n.stopRound === sentIn
+    && typeof n.text === 'string' && n.text.trim());
+  return sent.length > 0 ? sent[sent.length - 1].text : null;
 }
 
 /**
@@ -1647,9 +1671,10 @@ module.exports = {
   ROLLBACK_CLEARS_EXEMPT,
   ROLLBACK_COUNTER_RESETS,
   VALID_ROLLBACK_POINTS,
-  // A stop's round (task 4.12a)
+  // A stop's round (task 4.12a), and the note that opened it (task 4.12e)
   DIRECTOR_ROUND_COUNTERS,
   stopRoundOf,
+  roundNoteOf,
   // Fresh-start configuration (C1) — a separate list, not a rollback target
   FRESH_START_CLEARS,
   FRESH_START_KEEPS,

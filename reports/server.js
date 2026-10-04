@@ -19,7 +19,8 @@ const {
   ROLLBACK_CLEARS,
   VALID_ROLLBACK_POINTS,
   REVISION_CAPS,
-  stopRoundOf
+  stopRoundOf,
+  roundNoteOf
 } = require('./lib/workflow/state');
 const {
   CHECKPOINT_TYPES,
@@ -500,7 +501,10 @@ async function getCheckpointData(checkpointType, state) {
                 revisionCount: state.articleRevisionCount || 0,
                 humanRevisionCount: state.humanArticleRevisionCount || 0,
                 maxRevisions: REVISION_CAPS.ARTICLE,
-                previousFeedback: state._articleFeedback || null,
+                // Task 4.12e: the note the director sent the desk back with, read from the
+                // director's notes as the map's is (roundNoteOf), since the rework clears
+                // _articleFeedback before the stop opens.
+                previousFeedback: roundNoteOf(CHECKPOINT_TYPES.ARTICLE, state),
                 handEditReport: handEditReportOf(state._articleHandEditReport),   // F1, as at the outline stop
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 4.7b: the story the director settled at the meeting, as the map's stop
