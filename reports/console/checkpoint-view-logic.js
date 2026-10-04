@@ -2050,19 +2050,73 @@
     return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
   }
 
-  /** The line beside a line of the page that the round's passes changed. */
-  function markLine(mark) {
+  /** The field of a thread that marks it as carrying the room's verdict, which a mark says in words (brief 4.14a). */
+  var VERDICT_FIELD = 'verdict';
+
+  /**
+   * A value a mark names, as the meeting names it elsewhere on its page (brief 4.14a): a receipt by
+   * its document, as the thread's receipt line names it (receiptView); a role as the role picker
+   * names it; any other text as it is.
+   *
+   * @param {string} field - the field of an element the mark is at, or ''
+   * @param {*} text - the mark's before or after
+   * @param {Object} evidenceIndex - the stop's evidenceIndex
+   * @returns {string}
+   */
+  function markValueWords(field, text, evidenceIndex) {
+    var value = asString(text);
+    if (field === 'receipt' && value.trim()) return receiptView(value, evidenceIndex).label;
+    return roleWord(value);
+  }
+
+  /** A mark of a thread's verdict flag, in words (brief 4.14a): whether the thread carries the room's verdict now. */
+  function verdictMarkLine(mark) {
+    if (asString(mark.after).trim() === 'true') return "Changed this round: carries the room's verdict.";
+    if (asString(mark.before).trim() === 'true') return "Changed this round: no longer carries the room's verdict.";
+    return "Changed this round: does not carry the room's verdict.";
+  }
+
+  /** The line beside a line of the page that the round's passes changed: what it was, as the meeting names it. */
+  function markLine(mark, evidenceIndex) {
     var field = elementFieldOf(mark.path);
+    if (field === VERDICT_FIELD) return verdictMarkLine(mark);
     var which = field ? ' (' + field + ')' : '';
     var before = asString(mark.before);
     if (!before) return isElementPath(mark.path) ? 'New this round.' : 'Added this round' + which + '.';
-    if (!asString(mark.after)) return 'Emptied this round' + which + '. Before: "' + roleWord(before) + '"';
-    return 'Changed this round' + which + '. Before: "' + roleWord(before) + '"';
+    var was = markValueWords(field, before, evidenceIndex);
+    if (!asString(mark.after)) return 'Emptied this round' + which + '. Before: "' + was + '"';
+    return 'Changed this round' + which + '. Before: "' + was + '"';
   }
 
-  /** The line for a line or an element the round's passes took out, which the page no longer shows. */
+  /**
+   * What an element the round took out whole held, as the meeting shows it (brief 4.14a): a thread
+   * by its claim and its role, a connection by its words, its kind and the threads it joins, a
+   * question by its words and its kind. Read from the element the mark carries (lib/hand-edit-diff.js
+   * weaveMarks); null for a mark that carries none.
+   */
+  function takenOutWords(mark) {
+    var element = isPlainObject(mark.element) ? mark.element : null;
+    var collection = (/^([A-Za-z]+)\[/.exec(asString(mark.path)) || [])[1];
+    if (!element || !isElementPath(mark.path)) return null;
+    var quoted = function (text) { return '"' + asString(text).trim() + '"'; };
+    var about = function (parts) {
+      var said = parts.filter(Boolean).join(', ');
+      return said ? ' (' + said + ')' : '';
+    };
+    if (collection === 'threads') return quoted(element.claim) + about([roleWord(asString(element.role))]);
+    if (collection === 'connections') {
+      var kind = asString(element.kind);
+      var joins = asArray(element.joins).map(function (joined) { return String(joined); }).join(' and ');
+      return quoted(element.detail) + about([hasOwn(CONNECTION_KIND_LABELS, kind) ? CONNECTION_KIND_LABELS[kind] : kind, joins ? 'joining ' + joins : '']);
+    }
+    var questionKind = asString(element.kind);
+    return quoted(element.question) + about([hasOwn(WRITER_QUESTION_KIND_LABELS, questionKind) ? WRITER_QUESTION_KIND_LABELS[questionKind] : '']);
+  }
+
+  /** The line for a line or an element the round's passes took out, which the page no longer shows: what it held, in words. */
   function removedLine(mark) {
-    return markPlace(mark) + ': taken out this round. Before: "' + asString(mark.before) + '"';
+    var words = takenOutWords(mark);
+    return markPlace(mark) + ': taken out this round. Before: ' + (words !== null ? words : '"' + asString(mark.before) + '"');
   }
 
   /**
@@ -2088,9 +2142,10 @@
   }
 
   /** The line for any other mark whose line the page does not show: what changed, and what the place holds now. */
-  function elsewhereLine(mark) {
-    var after = asString(mark.after);
-    return markPlace(mark) + ': ' + lowerFirst(markLine(mark)) + (after ? ' Now: "' + roleWord(after) + '"' : '');
+  function elsewhereLine(mark, evidenceIndex) {
+    var field = elementFieldOf(mark.path);
+    var after = field === VERDICT_FIELD ? '' : asString(mark.after);
+    return markPlace(mark) + ': ' + lowerFirst(markLine(mark, evidenceIndex)) + (after ? ' Now: "' + markValueWords(field, after, evidenceIndex) + '"' : '');
   }
 
   /** The banner over the marks after a round. */
@@ -2316,9 +2371,9 @@
         out.removed.push.apply(out.removed, editLinesOf(mark, isElementPath(mark.path)) || [removedLine(mark)]);
         if (key !== null) out.takenOut.add(key);
       } else if (onPage.has(key)) {
-        (editLinesOf(mark, false) || [markLine(mark)]).forEach(function (line) { add(marks, key, line); });
+        (editLinesOf(mark, false) || [markLine(mark, data.evidenceIndex)]).forEach(function (line) { add(marks, key, line); });
       } else {
-        out.otherMarks.push.apply(out.otherMarks, editLinesOf(mark, false) || [elsewhereLine(mark)]);
+        out.otherMarks.push.apply(out.otherMarks, editLinesOf(mark, false) || [elsewhereLine(mark, data.evidenceIndex)]);
       }
     });
     out.edits = lines.filter(function (l) { return !l.shown; }).map(function (l) { return l.line; });

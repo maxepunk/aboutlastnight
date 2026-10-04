@@ -1607,11 +1607,14 @@ function weaveDirectorsShare(edits) {
  * are the same on both sides, so they carry no mark. A struck connection a send-back's
  * rework brought back carries none either: the round's report lists it as the edit the
  * send-back changed, with the rework's reason. A mark under an id one of the two repeats
- * says so (`repeatedId`, fix round 1, finding 3): its place names more than one element.
+ * says so (`repeatedId`, fix round 1, finding 3): its place names more than one element. A
+ * mark of a thread, a connection or a question the round took out whole carries the element
+ * as `from` held it (`element`; brief 4.14a), so the meeting reads it by its words and its
+ * role or kind, the element under a repeated id by its place under the id.
  *
  * @param {Object} from - the weave as the director left it, which the round's rework started from
  * @param {Object} weave - the weave the round's passes left
- * @returns {Array<{path: string, where: string, before: string, after: string, repeatedId?: true}>}
+ * @returns {Array<{path: string, where: string, before: string, after: string, repeatedId?: true, element?: Object}>}
  */
 function weaveMarks(from, weave) {
   return weaveEditsBetween(from, weave, { questions: true }).filter((change) => change.unstruck !== true).map((change) => ({
@@ -1619,7 +1622,8 @@ function weaveMarks(from, weave) {
     where: editWhere(change),
     before: editValueText(change.before),
     after: editValueText(change.after),
-    ...(change.repeatedId && { repeatedId: true })
+    ...(change.repeatedId && { repeatedId: true }),
+    ...(change.at.length === 2 && isCut(change) && isObj(change.before) && { element: clone(change.before) })
   }));
 }
 

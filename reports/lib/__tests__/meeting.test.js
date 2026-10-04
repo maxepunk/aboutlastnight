@@ -380,3 +380,35 @@ describe('4.5b: an empty reweave is refused, with its reason', () => {
     expect(meetingResume({ meeting: 'approve', weave: answered() }, atMeeting()).error).toBeNull();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14a: the meeting's marks say what changed in words (the final review, ruling 1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Meeting 5: a thread a round took out read as a field dump ("id: t5; claim: ...; role: ...").
+// Each mark of a thread or a connection a round took out carries the element as the director
+// left it, so the meeting reads it by its words and its role or kind.
+describe("4.14a: each mark of an element a round took out carries the element", () => {
+  it('a thread and a connection a round took out each carry the element as the version the director left held it; a field mark carries none', () => {
+    const left = leftByDirector();
+    const reworked = clone(left);
+    reworked.threads = reworked.threads.filter((t) => t.id !== 't5');
+    reworked.connections = reworked.connections.filter((c) => c.id !== 'c1');
+    reworked.headline = 'A headline the reweave wrote.';
+    const { marks } = meetingMarksOf(atMeeting({ weave: reworked, _weaveMarks: { round: 'reweave', from: left, at: 't' } }));
+    expect(marks.map((m) => [m.path, m.element])).toEqual([
+      ['headline', undefined],
+      ['threads[#t5]', left.threads.find((t) => t.id === 't5')],
+      ['connections[#c1]', left.connections.find((c) => c.id === 'c1')]
+    ]);
+  });
+
+  it("under an id the director's version repeats, each mark carries the element the round took out, by its place under the id", () => {
+    const left = clone(FIXTURE_WEAVE);
+    left.threads.push({ id: 't2', claim: 'A second thread the writer put under t2.', role: 'mirrors-it', receipt: 'ledger' });
+    const reworked = clone(left);
+    reworked.threads = reworked.threads.filter((t) => t.claim !== 'A second thread the writer put under t2.');
+    const { marks } = meetingMarksOf(atMeeting({ weave: reworked, _weaveMarks: { round: 'send-back', from: left, at: 't' } }));
+    expect(marks.map((m) => [m.path, m.element && m.element.claim])).toEqual([['threads[#t2]', 'A second thread the writer put under t2.']]);
+  });
+});

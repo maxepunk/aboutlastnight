@@ -1318,7 +1318,8 @@ describe('4.10c: one line per edit at the meeting, where the round marks an edit
     expect(roundLines(view)).toEqual([line]);
   });
 
-  test('a thread whose role the director changed, which a send-back took out: one line says the thread went, with its claim and receipt, the role the director gave it, and why', () => {
+  // Brief 4.14a: the thread that went reads by its claim and its role, never as a field dump.
+  test('a thread whose role the director changed, which a send-back took out: one line says the thread went, with its claim and role, the role the director gave it, and why', () => {
     const left = directorsVersion();
     const edits = standingAtMeeting(null, WEAVE, left);
     const reworked = clone(left);
@@ -1330,10 +1331,10 @@ describe('4.10c: one line per edit at the meeting, where the round marks an edit
     expect(report.changed.map((c) => [c.id, c.where, c.became])).toEqual([['E2', 'thread "t3", role', null]]);
     const { data, view } = afterSendBack(left, reworked, edits, report);
     expect(data.marks.marks.map((m) => m.path)).toEqual(['threads[#t3]', 'connections[#c1]']);
-    const line = 'Thread "t3": taken out this round. Before: "id: t3; claim: Morgan paid Riley at the bar, out of sight.; role: mirrors-it; receipt: mor001". ' +
+    const line = 'Thread "t3": taken out this round. Before: "Morgan paid Riley at the bar, out of sight." (Mirrors it). ' +
       'The role you gave it, "Mirrors it", went with it (the rework of your send-back). Why: The note folded the payment into the main thread.';
     // The connection the rework took out with the thread is no edit of the director's: its own line.
-    const connection = 'Connection "c1": taken out this round. Before: "id: c1; kind: person; joins: t1 / t3; detail: Morgan: one side of the deadlock, and the payer at the bar."';
+    const connection = 'Connection "c1": taken out this round. Before: "Morgan: one side of the deadlock, and the payer at the bar." (A shared person, joining t1 and t3)';
     expect(view.removed).toEqual([line, connection]);
     expect(view.changedEdits).toEqual([]);
     expect(roundLines(view)).toEqual([line, connection]);
@@ -1460,8 +1461,9 @@ describe('4.10d: one line per removed element at the meeting, its pass in passWo
     return weave;
   }
 
-  const T3_REMOVED = 'Thread "t3": taken out this round. Before: "id: t3; claim: Morgan paid Riley twice.; role: mirrors-it; receipt: mor001".';
-  const C1_REMOVED = 'Connection "c1": taken out this round. Before: "id: c1; kind: person; joins: t1 / t3; detail: Morgan: one side of the deadlock, and the payer at the bar."';
+  // Brief 4.14a: an element taken out reads by its words and its role or kind, never as a field dump.
+  const T3_REMOVED = 'Thread "t3": taken out this round. Before: "Morgan paid Riley twice." (Mirrors it).';
+  const C1_REMOVED = 'Connection "c1": taken out this round. Before: "Morgan: one side of the deadlock, and the payer at the bar." (A shared person, joining t1 and t3)';
   const GAVE_BOTH = ' The claim you gave it, "Morgan paid Riley twice.", and the role you gave it, "Mirrors it", went with it (the rework of your send-back).';
 
   test('a send-back that took out a thread whose claim and role the director edited: one line for the removal, naming both fields', () => {
@@ -1608,6 +1610,8 @@ describe('4.10e: a reason ends before the next begins', () => {
 // Meeting 2: a connection that joins a thread left out is out of the story with it, so its
 // line says so, and bringing the thread in brings the connection back. The console reads which
 // threads it goes with by a copy of lib/weave.js leftOutThreadsJoined, held to it here.
+// Meeting 5: the round's marks said what changed in raw values: a receipt's id, "true" for the
+// verdict flag, and a field dump for a thread taken out. They say it in the meeting's words.
 describe('4.14a: a connection that joins a left-out thread says it goes with that thread', () => {
   const data = payloadOf(stateAt());
   const leftOutLines = (weave) => meetingView(data, weave).connections.map((c) => [c.id, c.leftOut]);
@@ -1642,5 +1646,42 @@ describe('4.14a: a connection that joins a left-out thread says it goes with tha
     corpus.forEach((weave) => weave.connections.forEach((connection) => {
       expect([connection.id, ViewLogic.leftOutThreadsOf(connection, weave)]).toEqual([connection.id, weaveLib.leftOutThreadsJoined(connection, weave)]);
     }));
+  });
+});
+
+describe("4.14a: the round's marks say what changed in the meeting's words", () => {
+  /** The meeting after a reweave whose rework turned the weave the director left into `reworked`. */
+  function afterReweave(reworked) {
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveMarks: { round: 'reweave', from: clone(WEAVE) }, humanArcRevisionCount: 1
+    }));
+    return meetingView(data, meetingDraftOf(data, undefined));
+  }
+
+  test('a receipt the round changed is named by its document, as the receipt line names it', () => {
+    const reworked = clone(WEAVE);
+    reworked.threads[2].receipt = 'p-dna';
+    const t3 = afterReweave(reworked).threads.find((t) => t.id === 't3');
+    expect(t3.receipt.label).toBe('Paternity test result');
+    expect(t3.marks).toEqual(['Changed this round (receipt). Before: "MOR001 - The envelope (Morgan Reed)"']);
+  });
+
+  test("the verdict flag reads as carrying the room's verdict, or no longer carrying it", () => {
+    const reworked = clone(WEAVE);
+    reworked.threads[0].verdict = false;
+    reworked.threads[1].verdict = true;
+    const view = afterReweave(reworked);
+    expect(view.threads.find((t) => t.id === 't1').marks).toEqual(["Changed this round: no longer carries the room's verdict."]);
+    expect(view.threads.find((t) => t.id === 't2').marks).toEqual(["Changed this round: carries the room's verdict."]);
+  });
+
+  test('a thread the round took out reads by its claim and its role, and a connection by its words, its kind and its threads', () => {
+    const reworked = clone(WEAVE);
+    reworked.threads = reworked.threads.filter((t) => t.id !== 't5');
+    reworked.connections = reworked.connections.filter((c) => c.id !== 'c1');
+    expect(afterReweave(reworked).removed).toEqual([
+      'Thread "t5": taken out this round. Before: "An unsigned letter threatened Marcus over the patents." (Left out)',
+      'Connection "c1": taken out this round. Before: "Morgan: one side of the deadlock, and the payer at the bar." (A shared person, joining t1 and t3)'
+    ]);
   });
 });
