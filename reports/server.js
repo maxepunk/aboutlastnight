@@ -489,6 +489,9 @@ async function getCheckpointData(checkpointType, state) {
                 writerTrackerPrints: writerTrackerPrints(state.contentBundle, state.shellAccounts),
                 sessionPhotos: state.sessionPhotos,
                 factCheck: state._articleFactCheck || null,
+                // Brief 4.10c: each card's document by its id, as at the meeting and on the map,
+                // so a mark at the desk names the document its card cites.
+                evidenceIndex: buildEvidenceIndex(state.evidenceBundle),
                 lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'article'),
                 evaluationHistory: state.evaluationHistory,
                 sessionId: state.sessionId,

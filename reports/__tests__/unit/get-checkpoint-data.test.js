@@ -839,3 +839,48 @@ describe("4.6d: the map's payload carries no tally", () => {
     expect(mapTallyOf(merged, merged.outline).unplaced).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10c: the article payload names each card's document
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The desk names a card's document through the stop's evidenceIndex, as the story meeting names
+// a receipt and the map a beat's card (receiptView; brief 4.10b). The article payload carries
+// the index the meeting's and the map's payloads carry (buildEvidenceIndex), so a card's mark
+// reads its document's name and owner, never "the document it cites" (4.10b's hand-off).
+describe("4.10c: the article payload names each card's document", () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { factCheckContentBundle } = require('../../lib/content-bundle-fact-check');
+  const { deskMarks, deskMarksAt } = require('../../console/checkpoint-view-logic');
+
+  /** A state at the desk: the article's ale003 card holds a sentence its memory does not. */
+  const atDesk = () => {
+    const state = reworkFixtureState('journalist');
+    const bundle = JSON.parse(JSON.stringify(PREVIOUS_BUNDLE));
+    bundle.sections[0].content[1].content = 'Marcus said the sale was worth every cent he lost.';
+    state.contentBundle = bundle;
+    state._articleFactCheck = factCheckContentBundle({ contentBundle: bundle, evidenceBundle: state.evidenceBundle, roster: [], sessionPhotos: [] });
+    return state;
+  };
+
+  it("sends the index the story meeting's and the map's payloads send", async () => {
+    const state = atDesk();
+    const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, state);
+    expect(article.evidenceIndex).toEqual((await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).evidenceIndex);
+    expect(article.evidenceIndex).toEqual((await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state)).evidenceIndex);
+    expect(Object.keys(article.evidenceIndex)).toEqual(['ale003', 'mor001', 'p-dna', 'p-rescued']);
+  });
+
+  it("a card's mark at the desk names its document by its name and owner", async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, atDesk());
+    expect(deskMarksAt(deskMarks(data, data.contentBundle), { kind: 'block', section: 0, block: 1 }).map((m) => m.text))
+      .toEqual(["This card's text does not match ALE003 - The sale (Alex Reeves) word for word."]);
+  });
+
+  it('survives the merge with the interrupt payload', async () => {
+    const state = atDesk();
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARTICLE, contentBundle: state.contentBundle }, state);
+    expect(Object.keys(merged.evidenceIndex)).toEqual(['ale003', 'mor001', 'p-dna', 'p-rescued']);
+  });
+});
