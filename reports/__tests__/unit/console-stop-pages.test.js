@@ -7,7 +7,8 @@
  * heading, would change what the director reads without changing the stops log's count or the
  * harness's print. The console has no DOM harness, so the two are held together here on the
  * component sources, in the style of console-trace-panel.test.js:
- * - each heading in PAGE_HEADINGS is a string its component renders, and the page words no
+ * - each heading in PAGE_HEADINGS is a heading its component renders (task 4.12d: where it
+ *   renders it, lib/__tests__/fixtures/component-source.js rendersHeading), and the page words no
  *   heading of its own outside that list (the rest are the view models' titles, which the
  *   component reads too);
  * - each part a page folds sits folded in its component, and at the three decision stops nothing
@@ -22,6 +23,7 @@ const { PAGE_HEADINGS, CARD_CUTS, stopPage } = require('../../lib/stop-pages');
 const { meetingCheckpointData } = require('../../lib/meeting');
 const { mapCheckpointData } = require('../../lib/map');
 const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
+const { rendersHeading, loadInputReview, textOf, elementsOf } = require('../../lib/__tests__/fixtures/component-source');
 
 const ROOT = path.join(__dirname, '..', '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -47,10 +49,12 @@ describe('4.12c: each page heads its parts in its component\'s words', () => {
     expect(Object.keys(PAGE_HEADINGS).sort()).toEqual(Object.keys(COMPONENTS).sort());
   });
 
-  it.each(Object.entries(COMPONENTS))('the %s page\'s headings are strings its component renders', (stop, rel) => {
+  // Task 4.12d: matched where the component renders a heading, not as any quoted string in its
+  // source, since an aria-label is a string the screen does not print.
+  it.each(Object.entries(COMPONENTS))('the %s page\'s headings are headings its component renders', (stop, rel) => {
     const src = read(rel);
     Object.values(PAGE_HEADINGS[stop]).forEach((heading) => {
-      expect([heading, src.includes(`'${heading}`)]).toEqual([heading, true]);
+      expect([heading, rendersHeading(src, heading)]).toEqual([heading, true]);
     });
   });
 
@@ -125,5 +129,86 @@ describe('4.12c: each page folds what its component folds', () => {
     expect(src).toContain(`isExpanded ? desc.description : truncate(desc.description, ${CARD_CUTS.description})`);
     expect(src).toContain('isExpanded && desc.physicalMarkers');
     expect(src).toContain('isExpanded && caption');
+  });
+});
+
+// ── Task 4.12d ──────────────────────────────────────────────────────────────
+// The review of 4.12c (minor 7): three of the page's headings were strings their components give
+// only as an aria-label, which a screen reader reads and the screen does not print, so the harness
+// printed headings the console never shows. They are labels the page does not print.
+describe('4.12d: a part its component names only as an aria-label is a label the page does not print', () => {
+  const { PAGE_REGIONS } = require('../../lib/stop-pages');
+  const { stopPrint } = require('../../scripts/lib/stop-print');
+
+  /** The story meeting after a round that left the director's edit standing: the round's line shows. */
+  const meetingAfterARound = () => ({
+    type: 'arc-selection',
+    ...meetingCheckpointData({ ...reworkFixtureState('journalist'), meetingApproved: null }, { evidenceIndex: {}, maxRevisions: 1 }),
+    handEditReport: { checked: ['E1'], changed: [] }
+  });
+
+  /** The map in the round after a send-back: the round's label and the director's note show. */
+  const mapAfterASendBack = () => ({
+    type: 'outline',
+    ...mapCheckpointData(reworkFixtureState('journalist'), { keptPhotos: ['hero.jpg', 'p2.jpg'], evidenceIndex: {}, maxRevisions: 1 }),
+    humanRevisionCount: 1,
+    previousFeedback: 'Move the vote earlier.',
+    trace: []
+  });
+
+  it('names three parts, each an aria-label its component gives and no heading it renders, and none among the page\'s headings', () => {
+    expect(PAGE_REGIONS).toEqual({
+      'arc-selection': { round: 'Since you last looked' },
+      outline: { round: 'Since you last looked', top: 'The headline, the deck and the top photo', tally: 'Everyone and the counts' }
+    });
+    Object.entries(PAGE_REGIONS).forEach(([stop, regions]) => {
+      const src = read(COMPONENTS[stop]);
+      Object.values(regions).forEach((name) => {
+        expect([stop, name, src.includes(`'aria-label': '${name}'`), rendersHeading(src, name)]).toEqual([stop, name, true, false]);
+        expect([stop, name, Object.values(PAGE_HEADINGS[stop]).includes(name)]).toEqual([stop, name, false]);
+      });
+    });
+  });
+
+  it('carries each name on the lines of its part, as their region, and no title of the page or line of the harness\'s print shows it', () => {
+    const meeting = meetingAfterARound();
+    const meetingView = View.meetingView(meeting, View.meetingDraftOf(meeting), '');
+    const meetingPage = stopPage('arc-selection', meeting);
+    expect(meetingPage.lines.filter((line) => line.region === PAGE_REGIONS['arc-selection'].round).map((line) => line.text)).toEqual([meetingView.kept]);
+
+    const map = mapAfterASendBack();
+    const mapView = View.mapView(map, View.mapDraftOf(map));
+    const mapPage = stopPage('outline', map);
+    const R = PAGE_REGIONS.outline;
+    const inRegion = (name) => mapPage.lines.filter((line) => line.region === name).map((line) => line.text || line.label);
+    expect(inRegion(R.round)).toEqual([mapView.round.label, mapView.round.note]);
+    expect(inRegion(R.top).slice(0, 2)).toEqual([mapView.headline.text, mapView.deck.text]);
+    expect(inRegion(R.tally)).toEqual(expect.arrayContaining([mapView.tally.everyone, mapView.tally.cards, mapView.tally.photos, mapView.tally.length]));
+
+    [['arc-selection', meeting, meetingPage], ['outline', map, mapPage]].forEach(([stop, data, page]) => {
+      const names = Object.values(PAGE_REGIONS[stop]);
+      const titles = page.lines.filter((line) => line.tone === 'title').map((line) => line.label);
+      const printed = stopPrint(stop, data).map((line) => line.text);
+      names.forEach((name) => {
+        expect([stop, name, titles.includes(name), printed.some((text) => text.includes(name))]).toEqual([stop, name, false, false]);
+      });
+    });
+  });
+});
+
+// The ruling on 4.12c's minor 2: the input review's page counts the notes receipt (wordTail), so
+// its words are the screen's, held here on InputReview.js run with a React that builds a tree.
+describe('4.12d: the input review\'s notes receipt reads as InputReview.js renders it', () => {
+  const { NOTES_RECEIPT_LABEL } = require('../../lib/stop-pages');
+
+  it('says how many words of the director\'s notes arrived and how they end, in the screen\'s words', () => {
+    const { InputReview } = loadInputReview();
+    ['Done.', 'Alex and Morgan argued at the bar.', `${'Riley watched the ledger all morning. '.repeat(6)}Then the room voted.`].forEach((rawProse) => {
+      const data = { type: 'input-review', directorNotes: { rawProse } };
+      const screen = InputReview({ data, onApprove() {}, onReject() {}, theme: 'journalist' });
+      const receipts = elementsOf(screen, (element) => element.type === 'p' && element.props.className === 'paste-receipt').map(textOf);
+      const line = stopPage('input-review', data).lines.find((l) => l.label === NOTES_RECEIPT_LABEL);
+      expect([rawProse, line && `${line.label}: ${line.text}`]).toEqual([rawProse, receipts[0]]);
+    });
   });
 });

@@ -1297,8 +1297,9 @@ function showConfirmationPreview(original, edits, fieldDefs = {}) {
 
 async function handleInputReview(checkpoint, currentPhase) {
   // Task 4.12c: the stop as the console shows it: the parse's page, which the stops log counts,
-  // with the session's settings, the roster, the player focus and the enricher's result beside it
-  // (an enrichment that fell back prints in red). The display this replaced read fields the parse
+  // with the session's settings, the roster, the player focus and the enrichment panel's counts
+  // and sentences beside it (an enrichment that fell back prints in red; task 4.12d: the
+  // enricher's other warnings are the page's). The display this replaced read fields the parse
   // no longer writes (the accusation's reasoning and confidence, the notes' observations, the
   // whiteboard's old shape).
   printStop('input-review', checkpoint, currentPhase);

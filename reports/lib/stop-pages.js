@@ -1,17 +1,22 @@
 /**
- * The pages the stops show (phase 4, briefs 4.12a and 4.12c; spec section 13), each as the lines
- * its view models render. They are the models the console's components render, so a page here is
- * the console's page:
+ * The pages the stops show (phase 4, briefs 4.12a, 4.12c and 4.12d; spec section 13), each as the
+ * lines its view models render. They are the models the console's components render, so a page
+ * here is the console's page:
  * - the story meeting, the map and the desk: console/checkpoint-view-logic.js meetingView, mapView
  *   and deskView, with console/article-desk-logic.js for the desk's pieces;
- * - the input review (task 4.12c): the parse the director checks there, as InputReview.js renders
- *   it through console/checkpoint-view-logic.js and console/input-review-logic.js. That is the
- *   verdict (accusationView, verdictView, votesView), the ledger (ledgerView), the exposures
- *   (exposuresView), the whiteboard (whiteboardView), and the director's notes as the enricher
- *   indexed them (quoteView, epilogueItemView). The roster and the session's settings are what
- *   the director entered, and the component renders the rest of its payload with no view model,
- *   so neither is on the page or in its count. The harness prints the session's settings, the
- *   roster, the player focus and the enricher's result beside the page (scripts/lib/stop-print.js);
+ * - the input review (tasks 4.12c and 4.12d): the parse the director checks there, through the
+ *   ten view models InputReview.js renders it with, and nothing else: the verdict (accusationView,
+ *   verdictView, votesView), the ledger (ledgerView), the exposures (exposuresView), the notes
+ *   receipt (wordTail), the director's notes as the enricher indexed them (quoteView,
+ *   epilogueItemView), the whiteboard (whiteboardView) and the enricher's warnings
+ *   (enrichmentWarningLines). The director's own notes, which the screen shows below the receipt,
+ *   are the director's words, not something the pipeline asks them to read, so they are not
+ *   counted and not on the page. The rest of the screen is what the director entered (the
+ *   session's settings, the roster) or renders from the payload with no view model (the player
+ *   focus, the enrichment panel's counts and sentences, the character mentions, the transaction
+ *   cross-references, the entity notes), and is not on the page either. The harness prints the
+ *   settings, the roster, the player focus and the panel's counts and sentences beside the page
+ *   (scripts/lib/stop-print.js);
  * - the character-IDs stop (task 4.12c): its cards (characterIdCards), each text cut where the
  *   card cuts it until the director opens the card. The harness prints the roster bar above them.
  * Two readers share a page:
@@ -30,15 +35,19 @@
  *   map's left out (until a concern opens it), the trace, the desk's folds below the article, the
  *   input review's closed sections, and what a character-IDs card shows only once opened;
  * - `beside` marks a concern or a mark that sits beside the line before it;
- * - `piece` is the desk's key for the piece a line prints or sits beside (deskAnchorKey).
+ * - `piece` is the desk's key for the piece a line prints or sits beside (deskAnchorKey);
+ * - `region` names the part of the screen a line sits in, where the component names that part
+ *   only as an aria-label (PAGE_REGIONS, task 4.12d): a screen reader reads the name and the
+ *   screen prints none, so the page keeps it on the part's lines and does not print it.
  *
  * The words a stop shows are lib/word-count.js's count of the text of every line the page does
  * not fold. A label is not counted: an id is a handle, and a heading is the page's wording, not
  * what the director reads at the stop.
  *
- * Which parts fold, and the headings a page words itself (PAGE_HEADINGS), are decided in each
- * stop's component; __tests__/unit/console-stop-pages.test.js holds the two together on the
- * component sources.
+ * Which parts fold, the headings a page words itself (PAGE_HEADINGS) and the parts it names
+ * without a heading (PAGE_REGIONS) are decided in each stop's component, and again here;
+ * __tests__/unit/console-stop-pages.test.js holds the page to its component on the component's
+ * source.
  *
  * Every other stop renders its payload in its component with no view model, so it has no page
  * here, and its words are not counted. A page reads the stop's output as the payload carries it,
@@ -55,10 +64,10 @@ const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const { INPUT_REVIEW, ARC_SELECTION, CHARACTER_IDS, OUTLINE, ARTICLE } = CHECKPOINT_TYPES;
 
 /**
- * The headings each page words itself, in its component's words (task 4.12c). A heading with a
- * count is the words before the count. Every other title on a page is a view model's (the
- * standing notes, left out, the trace, the desk's echo and folds, a map section's label) or a
- * card's photo, which the component reads as well.
+ * The headings each page words itself, in its component's words (task 4.12c), each one a heading
+ * the component renders (task 4.12d). A heading with a count is the words before the count. Every
+ * other title on a page is a view model's (the standing notes, left out, the trace, the desk's
+ * echo and folds, a map section's label) or a card's photo, which the component reads as well.
  */
 const PAGE_HEADINGS = Object.freeze({
   [INPUT_REVIEW]: Object.freeze({
@@ -68,10 +77,10 @@ const PAGE_HEADINGS = Object.freeze({
     exposures: 'Exposed Memories',
     quotes: 'Quote Bank',
     epilogue: 'Post-Investigation Developments',
-    whiteboard: 'Whiteboard'
+    whiteboard: 'Whiteboard',
+    enrichment: 'Director-Notes Enrichment'
   }),
   [ARC_SELECTION]: Object.freeze({
-    round: 'Since you last looked',
     changedEdits: 'Your edits a rework changed',
     verdict: 'The verdict',
     threads: 'The threads',
@@ -81,12 +90,9 @@ const PAGE_HEADINGS = Object.freeze({
   [CHARACTER_IDS]: Object.freeze({}),
   [OUTLINE]: Object.freeze({
     settledStory: 'The settled story',
-    round: 'Since you last looked',
     changedEdits: 'Your edits a rework changed',
     gap: 'The gap',
-    top: 'The headline, the deck and the top photo',
     dropped: 'Dropped',
-    tally: 'Everyone and the counts',
     weaveChanges: 'What the map changed to fit your meeting'
   }),
   [ARTICLE]: Object.freeze({
@@ -95,6 +101,24 @@ const PAGE_HEADINGS = Object.freeze({
     problems: 'To fix before you approve or send back'
   })
 });
+
+/**
+ * The parts of a page its component names only as an aria-label (task 4.12d): the round since
+ * the director last looked, at the story meeting and on the map, and the map's headline, deck and
+ * top photo and its count of everyone. The screen prints no heading over them, so the page prints
+ * none: each line of the part carries its name as the line's `region`.
+ */
+const PAGE_REGIONS = Object.freeze({
+  [ARC_SELECTION]: Object.freeze({ round: 'Since you last looked' }),
+  [OUTLINE]: Object.freeze({
+    round: 'Since you last looked',
+    top: 'The headline, the deck and the top photo',
+    tally: 'Everyone and the counts'
+  })
+});
+
+/** The notes receipt's label: InputReview.js's words before the count of the director's notes (wordTail). */
+const NOTES_RECEIPT_LABEL = 'Director notes received';
 
 /** Where a character-IDs card cuts its texts until the director opens it: the scene at 100 characters, a person at 80. */
 const CARD_CUTS = Object.freeze({ visual: 100, description: 80 });
@@ -117,15 +141,18 @@ function textOf(value) {
 /**
  * A page under construction: its lines in the order the stop shows them. A line with no text is
  * no line, except one the page shows by its label alone (`tag`, `title`). Everything added inside
- * `folded(...)` is folded, and everything inside `inPiece(key, ...)` carries the desk's key.
+ * `folded(...)` is folded, everything inside `inPiece(key, ...)` carries the desk's key, and
+ * everything inside `inRegion(name, ...)` carries the name of its part (PAGE_REGIONS).
  */
 function pageOf(stop) {
   const lines = [];
   let folding = false;
   let piece = null;
+  let region = null;
   const push = (tone, text, label, extra) => {
     const line = { tone, text, label, folded: folding };
     if (piece !== null) line.piece = piece;
+    if (region !== null) line.region = region;
     lines.push(Object.assign(line, extra));
   };
   const add = (tone, text, label, extra) => {
@@ -167,6 +194,13 @@ function pageOf(stop) {
       fn();
       piece = was;
     },
+    /** Lines in a part the component names only as an aria-label (PAGE_REGIONS). */
+    inRegion: (name, fn) => {
+      const was = region;
+      region = name;
+      fn();
+      region = was;
+    },
     done: () => ({ stop, lines })
   };
 }
@@ -198,11 +232,24 @@ function addTrace(page, trace, theme) {
   });
 }
 
-// ── The input review (InputReview.js renders the same view models; task 4.12c) ──
+// ── The input review (InputReview.js renders the same view models; tasks 4.12c and 4.12d) ──
 
-/** A whiteboard entry as the component prints it: its text, or the entry as JSON. */
+/**
+ * A value as console/utils.js safeStringify prints it: indented JSON, or the value as a string
+ * when it has no JSON. utils.js is no module the server can require, so this is its copy;
+ * lib/__tests__/stop-pages.test.js holds the two equal.
+ */
+function consoleJson(value) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/** A whiteboard entry as the component prints it: its text, or the entry as safeStringify prints it (task 4.12d). */
 function entryText(item) {
-  return typeof item === 'string' ? item : JSON.stringify(item);
+  return typeof item === 'string' ? item : consoleJson(item);
 }
 
 /** The accusation, as the component heads it: who the room accused, the verdict, the charge, a split vote, the notes. */
@@ -252,6 +299,16 @@ function addExposures(page, sessionConfig) {
       page.text([row.exposer && `exposed by ${row.exposer}`, row.time, row.owner && `owner ${row.owner}`].filter(Boolean).join(' · '), row.tokenId);
     });
   });
+}
+
+/**
+ * The notes receipt (wordTail), in InputReview.js's words: how many words of the director's notes
+ * arrived and how they end. It opens the director's notes, which the page does not hold.
+ */
+function addNotesReceipt(page, rawProse) {
+  if (!rawProse) return;
+  const receipt = View.wordTail(rawProse);
+  page.text(`${receipt.words} word${receipt.words === 1 ? '' : 's'}, ends with “${receipt.truncated ? '…' : ''}${receipt.tail}”`, NOTES_RECEIPT_LABEL);
 }
 
 /** The quote bank, folded: each quote under its speaker, with the director's correction and its context. */
@@ -304,8 +361,19 @@ function addWhiteboard(page, whiteboardValue) {
 }
 
 /**
+ * The enrichment panel's heading, then the enricher's warnings (enrichmentWarningLines), last on
+ * the screen. The panel's counts and its own sentences render from the payload with no view model.
+ */
+function addEnrichmentWarnings(page, enrichment) {
+  if (!isPlainObject(enrichment)) return;
+  page.title(PAGE_HEADINGS[INPUT_REVIEW].enrichment);
+  InputLogic.enrichmentWarningLines(enrichment.warnings || null).forEach((line) => page.toned('concern', line));
+}
+
+/**
  * The input review's page: the parse in the component's order (the accusation, the ledger, the
- * exposures, the quote bank and the epilogue folded, the whiteboard).
+ * exposures, the notes receipt, the quote bank and the epilogue folded, the whiteboard, the
+ * enricher's warnings).
  */
 function inputReviewPage(data) {
   const sessionConfig = isPlainObject(data.sessionConfig) ? data.sessionConfig : {};
@@ -314,9 +382,11 @@ function inputReviewPage(data) {
   addAccusation(page, sessionConfig.accusation);
   addLedger(page, data.ledger);
   addExposures(page, sessionConfig);
+  addNotesReceipt(page, notes.rawProse);
   addQuotes(page, listOf(notes.quotes));
   addEpilogue(page, listOf(notes.postInvestigationDevelopments));
   addWhiteboard(page, notes.whiteboard);
+  addEnrichmentWarnings(page, data.enrichment);
   return page.done();
 }
 
@@ -370,23 +440,27 @@ function characterIdsPage(data) {
 
 // ── The story meeting (meetingView; ArcSelection.js renders the same view) ─────
 
-/** What happened since the director last looked, above the meeting's page, as ArcSelection.js shows it. */
+/**
+ * What happened since the director last looked, above the meeting's page, as ArcSelection.js
+ * shows it: a part it names only as an aria-label (PAGE_REGIONS).
+ */
 function addMeetingRound(page, view) {
   const H = PAGE_HEADINGS[ARC_SELECTION];
   const any = view.didNotRun || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.marked
     || view.removed.length > 0 || view.otherMarks.length > 0 || view.otherConcerns.length > 0;
   if (!any) return;
-  page.title(H.round);
-  page.note(view.didNotRun);
-  view.checkFailures.forEach((text) => page.alert(text));
-  if (view.changedEdits.length > 0) {
-    page.title(H.changedEdits);
-    view.changedEdits.forEach((text) => page.toned('mark', text));
-  }
-  page.note(view.kept);
-  page.note(view.marked);
-  view.removed.concat(view.otherMarks).forEach((text) => page.toned('mark', text));
-  view.otherConcerns.forEach((text) => page.toned('concern', text));
+  page.inRegion(PAGE_REGIONS[ARC_SELECTION].round, () => {
+    page.note(view.didNotRun);
+    view.checkFailures.forEach((text) => page.alert(text));
+    if (view.changedEdits.length > 0) {
+      page.title(H.changedEdits);
+      view.changedEdits.forEach((text) => page.toned('mark', text));
+    }
+    page.note(view.kept);
+    page.note(view.marked);
+    view.removed.concat(view.otherMarks).forEach((text) => page.toned('mark', text));
+    view.otherConcerns.forEach((text) => page.toned('concern', text));
+  });
 }
 
 /** One of the weave's lines, under the label the meeting heads it with, and what sits beside it. */
@@ -484,10 +558,12 @@ function addBeat(page, beat) {
  * The map's page (spec 5.2): the settled story, what happened since the director last looked,
  * the gap note, the headline, the deck and the top photo, the sections, what was dropped, the
  * counts, left out (folded unless a concern opens it), the map's changes to the weave, then the
- * standing notes and the trace, folded.
+ * standing notes and the trace, folded. The round, the headline's part and the counts are parts
+ * Outline.js names only as an aria-label (PAGE_REGIONS).
  */
 function mapPage(data, theme) {
   const H = PAGE_HEADINGS[OUTLINE];
+  const R = PAGE_REGIONS[OUTLINE];
   const map = View.mapDraftOf(data);
   if (!map) throw new Error("The map's payload holds no map to page: every map's stop holds one since task 4.11.");
   const view = View.mapView(data, map);
@@ -501,18 +577,19 @@ function mapPage(data, theme) {
   page.hint(view.storyHint);
 
   if (view.round || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.otherConcerns.length > 0) {
-    page.title(H.round);
-    if (view.round) {
-      page.tag(view.round.label, 'note');
-      page.note(view.round.note);
-    }
-    view.checkFailures.forEach((text) => page.alert(text));
-    if (view.changedEdits.length > 0) {
-      page.title(H.changedEdits);
-      view.changedEdits.forEach((text) => page.toned('mark', text));
-    }
-    page.note(view.kept);
-    view.otherConcerns.forEach((text) => page.toned('concern', text));
+    page.inRegion(R.round, () => {
+      if (view.round) {
+        page.tag(view.round.label, 'note');
+        page.note(view.round.note);
+      }
+      view.checkFailures.forEach((text) => page.alert(text));
+      if (view.changedEdits.length > 0) {
+        page.title(H.changedEdits);
+        view.changedEdits.forEach((text) => page.toned('mark', text));
+      }
+      page.note(view.kept);
+      view.otherConcerns.forEach((text) => page.toned('concern', text));
+    });
   }
   page.hint(view.lockedHint);
 
@@ -523,15 +600,16 @@ function mapPage(data, theme) {
     page.beside(view.gapNote.concerns, []);
   }
 
-  page.title(H.top);
-  page.text(view.headline.text, 'Headline');
-  page.beside(view.headline.concerns, []);
-  page.text(view.deck.text, 'Deck');
-  page.beside(view.deck.concerns, []);
-  if (view.topPhoto) {
-    page.tag(`Top photo ${view.topPhoto.filename}`);
-    page.beside(view.topPhoto.concerns, []);
-  }
+  page.inRegion(R.top, () => {
+    page.text(view.headline.text, 'Headline');
+    page.beside(view.headline.concerns, []);
+    page.text(view.deck.text, 'Deck');
+    page.beside(view.deck.concerns, []);
+    if (view.topPhoto) {
+      page.tag(`Top photo ${view.topPhoto.filename}`);
+      page.beside(view.topPhoto.concerns, []);
+    }
+  });
 
   view.sections.forEach((section) => {
     page.title(section.label);
@@ -554,15 +632,16 @@ function mapPage(data, theme) {
     });
   }
 
-  page.title(H.tally);
-  if (view.tally.everyone) page.text(view.tally.everyone, 'Everyone');
-  else page.tag('Everyone: no roster player is in a beat');
-  page.alert(view.tally.unplaced);
-  page.text(view.tally.raised);
-  page.text(view.tally.cards);
-  page.text(view.tally.photos);
-  page.text(view.tally.length);
-  page.beside(view.tally.lengthConcerns, []);
+  page.inRegion(R.tally, () => {
+    if (view.tally.everyone) page.text(view.tally.everyone, 'Everyone');
+    else page.tag('Everyone: no roster player is in a beat');
+    page.alert(view.tally.unplaced);
+    page.text(view.tally.raised);
+    page.text(view.tally.cards);
+    page.text(view.tally.photos);
+    page.text(view.tally.length);
+    page.beside(view.tally.lengthConcerns, []);
+  });
 
   const addLeftOut = () => {
     page.title(view.leftOut.title);
@@ -745,4 +824,4 @@ function wordsShown(stop, data, options) {
   return page.lines.filter((line) => !line.folded).reduce((sum, line) => sum + wordCount(line.text), 0);
 }
 
-module.exports = { PAGE_STOPS, PAGE_HEADINGS, CARD_CUTS, stopPage, wordsShown };
+module.exports = { PAGE_STOPS, PAGE_HEADINGS, PAGE_REGIONS, NOTES_RECEIPT_LABEL, CARD_CUTS, stopPage, wordsShown };

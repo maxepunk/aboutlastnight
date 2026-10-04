@@ -352,10 +352,11 @@ describe('4.12c, fix round 1: the harness prints beside a page the blocks its sc
       expect([needle, found >= at]).toEqual([needle, true]);
       at = found + 1;
     });
-    // None of the blocks beside the page is a line of it, so none is counted.
+    // None of the blocks beside the page is a line of it, so none is counted. Task 4.12d: the
+    // enricher's warnings are the page's (enrichmentWarningLines), so the bare payload keeps them.
     const onPage = page.lines.map((line) => `${line.label} ${line.text}`).join('\n');
     ['remote', 'enrichment failed', 'she/her', 'Who sold the company?'].forEach((text) => expect([text, onPage.includes(text)]).toEqual([text, false]));
-    const bare = reviewData({ playerFocus: null, canonicalCharacters: {}, enrichment: null });
+    const bare = reviewData({ playerFocus: null, canonicalCharacters: {}, enrichment: { warnings: { unrecordedSpeakers: 1 } } });
     bare.sessionConfig = { accusation: bare.sessionConfig.accusation, exposures: bare.sessionConfig.exposures, exposedTokenCount: 1 };
     expect(wordsShown('input-review', data)).toBe(wordsShown('input-review', bare));
   });
@@ -372,10 +373,12 @@ describe('4.12c, fix round 1: the harness prints beside a page the blocks its sc
     expect(wordsShown('character-ids', photosData())).toBe(wordsShown('character-ids', photosData({ roster: [] })));
   });
 
+  // Task 4.12d: each heading matched where its component renders it, not as any quoted string.
   it('heads each block in its component\'s words, and the fallback\'s alert is the enrichment panel\'s sentence', () => {
+    const { rendersHeading } = require('../../../lib/__tests__/fixtures/component-source');
     expect(Object.keys(BESIDE_HEADINGS).sort()).toEqual(['character-ids', 'input-review']);
     Object.entries(BESIDE_HEADINGS).forEach(([stop, headings]) => {
-      Object.values(headings).forEach((heading) => expect([stop, heading, COMPONENT_SRC[stop].includes(`'${heading}'`)]).toEqual([stop, heading, true]));
+      Object.values(headings).forEach((heading) => expect([stop, heading, rendersHeading(COMPONENT_SRC[stop], heading)]).toEqual([stop, heading, true]));
     });
     ['Director-notes enrichment failed (', 'no reason recorded', 'The article will have no quote bank. Reject with corrections to retry.']
       .forEach((words) => expect([words, COMPONENT_SRC['input-review'].includes(`'${words}'`)]).toEqual([words, true]));
@@ -406,5 +409,61 @@ describe('4.12d: --help says what --leave-out and --approve-file take', () => {
     const help = body('function showHelp(').replace(/\s+/g, ' ');
     const file = help.slice(help.indexOf('--approve-file <f>'), help.indexOf('--photo-descriptions <f>'));
     expect(file).toMatch(/takes no --action, --note or --leave-out/);
+  });
+});
+
+// The re-review of 4.12c's fix round: the harness's copies of the enrichment panel's counts line
+// and its dropped-quotes sentence were held to nothing. They are held here to InputReview.js run
+// with a React that builds a tree (lib/__tests__/fixtures/component-source.js), so the harness
+// prints what the panel renders. With the ruling on 4.12c's minor 2, the enricher's warnings and
+// the notes receipt are the page's, and the harness places its blocks around them as the screen
+// does.
+describe('4.12d: the harness prints the input review\'s panel and notes as the screen renders them', () => {
+  const { loadInputReview, textOf, elementsOf } = require('../../../lib/__tests__/fixtures/component-source');
+  const { NOTES_RECEIPT_LABEL } = require('../../../lib/stop-pages');
+
+  /** The input review's payload, with the enrichment and the notes a case gives. */
+  const reviewWith = (extra = {}) => ({
+    type: 'input-review',
+    sessionConfig: {
+      sessionId: '100426', roster: ['Alex', 'Morgan'],
+      accusation: { accused: ['Alex'], charge: 'Sold the company out from under Marcus', verdictKind: 'culprit' },
+      exposures: [{ tokenId: 'ale003', exposer: 'Quinn', time: '08:10 PM', owner: 'Alex Reeves' }],
+      exposedTokenCount: 1
+    },
+    directorNotes: { whiteboard: { names: ['Alex', 'Morgan'] } },
+    playerFocus: { primaryInvestigation: 'Who sold the company?' },
+    ...extra
+  });
+  const titleAt = (printed, label) => printed.findIndex((line) => line.tone === 'title' && line.text.replace(/^▸ /, '') === `── ${label} ──`);
+
+  it('prints the enrichment panel under its heading as the component renders it: the counts, the fallback, the quotes dropped, the enricher\'s warnings', () => {
+    const { EnrichmentPanel } = loadInputReview();
+    [
+      { quotes: 3, characterMentions: 2, transactionReferences: 1, fallback: null, warnings: {} },
+      { quotes: 0, characterMentions: 0, transactionReferences: 0, fallback: { reason: 'SDK timeout' }, warnings: { droppedQuotes: 1, unrecordedSpeakers: 2, droppedContexts: 1 } },
+      { fallback: {}, warnings: { droppedQuotes: 2, droppedExcerpts: 1 } }
+    ].forEach((enrichment) => {
+      const printed = stopPrint('input-review', reviewWith({ enrichment }));
+      const at = titleAt(printed, 'Director-Notes Enrichment');
+      expect(at).toBeGreaterThan(-1);
+      const panel = elementsOf(EnrichmentPanel({ enrichment }), (element) => element.type === 'p').map(textOf);
+      expect(printed.slice(at + 1).map((line) => line.text.trim())).toEqual(panel);
+    });
+    // No enrichment, no panel, on the screen and in the print.
+    expect(EnrichmentPanel({ enrichment: null })).toBeNull();
+    expect(titleAt(stopPrint('input-review', reviewWith({ enrichment: null })), 'Director-Notes Enrichment')).toBe(-1);
+  });
+
+  it('prints the player focus before the director\'s notes, which the notes receipt opens, as the screen does', () => {
+    const data = reviewWith({
+      directorNotes: { rawProse: 'Alex and Morgan argued at the bar.', quotes: [{ speaker: 'Morgan', text: 'I only kept the books' }], whiteboard: {} }
+    });
+    const printed = stopPrint('input-review', data);
+    const focus = titleAt(printed, 'Player Focus');
+    const receipt = printed.findIndex((line) => line.text.trim().startsWith(`${NOTES_RECEIPT_LABEL}: `));
+    expect(titleAt(printed, 'Exposed Memories (1)')).toBeLessThan(focus);
+    expect([focus > -1, receipt > focus]).toEqual([true, true]);
+    expect(receipt).toBeLessThan(titleAt(printed, 'Quote Bank (1)'));
   });
 });

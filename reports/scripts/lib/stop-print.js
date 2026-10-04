@@ -11,13 +11,14 @@
  * fix round 1). The print shows them beside the page, where the screen shows them, headed in the
  * component's words (BESIDE_HEADINGS); the stops log counts the page alone:
  * - the input review: the session's settings and the roster with each pronoun above the page, the
- *   player focus before the director's notes, and the enricher's result below the page, its
- *   fallback an alert, since the article would have no quote bank;
+ *   player focus before the director's notes, and the enrichment panel's counts and sentences
+ *   under the panel's heading on the page, its fallback an alert, since the article would have no
+ *   quote bank. The enricher's other warnings follow them on the page (task 4.12d);
  * - the character-IDs stop: the session's roster above the cards.
  */
 'use strict';
 
-const { stopPage, PAGE_HEADINGS } = require('../../lib/stop-pages');
+const { stopPage, PAGE_HEADINGS, NOTES_RECEIPT_LABEL } = require('../../lib/stop-pages');
 const InputLogic = require('../../console/input-review-logic');
 const { validateRosterEntry } = require('../../console/await-roster-logic');
 
@@ -26,8 +27,7 @@ const BESIDE_HEADINGS = Object.freeze({
   'input-review': Object.freeze({
     session: 'Session Info',
     roster: 'Roster',
-    focus: 'Player Focus',
-    enrichment: 'Director-Notes Enrichment'
+    focus: 'Player Focus'
   }),
   'character-ids': Object.freeze({ roster: 'Session Roster' })
 });
@@ -90,15 +90,15 @@ function playerFocusLines(focus) {
 }
 
 /**
- * What the director-notes enricher indexed, as InputReview.js's EnrichmentPanel shows it: the
- * counts, the fallback as an alert, the quotes dropped and the enricher's other warnings.
+ * The enrichment panel's own lines, as InputReview.js's EnrichmentPanel shows them under its
+ * heading: the counts, the fallback as an alert and the quotes dropped. The page holds the heading
+ * and the enricher's other warnings after these (enrichmentWarningLines).
  */
 function enrichmentLines(enrichment) {
   if (!isPlainObject(enrichment)) return [];
   const fallback = enrichment.fallback || null;
   const warnings = enrichment.warnings || null;
   const lines = [
-    besideLine('title', '', BESIDE_HEADINGS['input-review'].enrichment),
     besideLine('text', `Quotes indexed: ${enrichment.quotes || 0} · Character mentions: ${enrichment.characterMentions || 0} · Transaction links: ${enrichment.transactionReferences || 0}`)
   ];
   if (fallback) {
@@ -108,29 +108,41 @@ function enrichmentLines(enrichment) {
   if (dropped > 0) {
     lines.push(besideLine('concern', `${dropped} quote${dropped === 1 ? '' : 's'} dropped: not found verbatim in the prose. Anything a player actually said has to be in the notes word for word to reach the article.`));
   }
-  InputLogic.enrichmentWarningLines(warnings).forEach((text) => lines.push(besideLine('concern', text)));
   return lines;
 }
 
-/** Where the director's notes begin on the input review's page: its quote bank, its epilogue or its whiteboard, whichever comes first. */
+/**
+ * Where the director's notes begin on the input review's page: its notes receipt, its quote bank,
+ * its epilogue or its whiteboard, whichever comes first.
+ */
 function notesStart(pageLines) {
   const H = PAGE_HEADINGS['input-review'];
-  const opensNotes = (label) => label === H.whiteboard || label.startsWith(`${H.quotes} (`) || label.startsWith(`${H.epilogue} (`);
-  const at = pageLines.findIndex((line) => line.tone === 'title' && opensNotes(line.label));
+  const opensNotes = (line) => (line.tone === 'title'
+    ? line.label === H.whiteboard || line.label.startsWith(`${H.quotes} (`) || line.label.startsWith(`${H.epilogue} (`)
+    : line.label === NOTES_RECEIPT_LABEL);
+  const at = pageLines.findIndex(opensNotes);
   return at === -1 ? pageLines.length : at;
 }
 
-/** The input review as its screen shows it: the settings and the roster, the page with the player focus before the notes, the enricher's result. */
+/** Where the enrichment panel's own lines go on the input review's page: right under its heading, or at the end when it has none. */
+function panelStart(pageLines) {
+  const at = pageLines.findIndex((line) => line.tone === 'title' && line.label === PAGE_HEADINGS['input-review'].enrichment);
+  return at === -1 ? pageLines.length : at + 1;
+}
+
+/** The input review as its screen shows it: the settings and the roster, the page with the player focus before the notes and the panel's lines under its heading. */
 function inputReviewLines(data, pageLines, theme) {
   const config = isPlainObject(data.sessionConfig) ? data.sessionConfig : {};
-  const at = notesStart(pageLines);
+  const notesAt = notesStart(pageLines);
+  const panelAt = panelStart(pageLines);
   return [
     ...sessionInfoLines(config, theme),
     ...rosterLines(config, data.canonicalCharacters),
-    ...pageLines.slice(0, at),
+    ...pageLines.slice(0, notesAt),
     ...playerFocusLines(isPlainObject(data.playerFocus) ? data.playerFocus : {}),
-    ...pageLines.slice(at),
-    ...enrichmentLines(data.enrichment)
+    ...pageLines.slice(notesAt, panelAt),
+    ...enrichmentLines(data.enrichment),
+    ...pageLines.slice(panelAt)
   ];
 }
 

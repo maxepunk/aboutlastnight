@@ -548,3 +548,80 @@ describe('4.12d: one list of the stops with a page, PAGE_STOPS, derived from PAG
     });
   });
 });
+
+// The ruling on 4.12c's minor 2: the input review's page counts the brief's six view models plus
+// votesView, whiteboardView, enrichmentWarningLines and wordTail, and not the director's own notes,
+// which are their words, not something the pipeline asks them to read. A whiteboard entry that is
+// not text prints as the component prints it, in safeStringify's indented JSON.
+describe('4.12d: the input review\'s page counts what the ruling counts', () => {
+  const { NOTES_RECEIPT_LABEL } = require('../stop-pages');
+  const { consoleSafeStringify } = require('./fixtures/component-source');
+  const TEN = [
+    'accusationView', 'verdictView', 'votesView', 'exposuresView', 'whiteboardView', 'wordTail',
+    'ledgerView', 'quoteView', 'epilogueItemView', 'enrichmentWarningLines'
+  ];
+  const NOTES = `${'Alex and Morgan argued at the bar while Riley watched the ledger. '.repeat(5)}Then six votes said overdose.`;
+
+  it('shows the notes receipt and the enricher\'s warnings, and counts them, and not the director\'s own notes', () => {
+    const warnings = { droppedQuotes: 3, unrecordedSpeakers: 1, droppedEpilogueItems: 2 };
+    const data = inputReviewData({
+      directorNotes: { ...inputReviewData().directorNotes, rawProse: NOTES },
+      enrichment: { quotes: 1, characterMentions: 0, transactionReferences: 0, fallback: null, warnings }
+    });
+    const receipt = View.wordTail(NOTES);
+    const receiptText = `${receipt.words} words, ends with “…${receipt.tail}”`;
+    const lines = InputLogic.enrichmentWarningLines(warnings);
+    expect(lines).toHaveLength(2);
+    const page = stopPage('input-review', data);
+    const shown = textsOf(page);
+    expect(shown).toContain(receiptText);
+    expect(page.lines.find((line) => line.text === receiptText).label).toBe(NOTES_RECEIPT_LABEL);
+    lines.forEach((line) => expect(shown).toContain(line));
+    expect(page.lines.map((line) => `${line.label} ${line.text}`).join('\n')).not.toContain(NOTES);
+
+    // The words are the receipt's and the warnings', whatever the notes' own length.
+    const bare = inputReviewData({ directorNotes: { ...inputReviewData().directorNotes, rawProse: '' }, enrichment: null });
+    const added = [receiptText, ...lines].reduce((sum, text) => sum + wordCount(text), 0);
+    expect(wordsShown('input-review', data)).toBe(wordsShown('input-review', bare) + added);
+    const longer = inputReviewData({
+      directorNotes: { ...inputReviewData().directorNotes, rawProse: `${'The director wrote far more than the receipt shows. '.repeat(40)}${NOTES}` },
+      enrichment: data.enrichment
+    });
+    expect(wordsShown('input-review', longer)).toBe(wordsShown('input-review', data));
+  });
+
+  it('prints a whiteboard entry that is not text as the console prints it: safeStringify\'s indented JSON', () => {
+    const stringify = consoleSafeStringify();
+    const unread = { text: 'A name under the coffee stain', where: 'top left' };
+    const data = inputReviewData({
+      directorNotes: {
+        whiteboard: {
+          ambiguities: [unread], names: ['Alex', { name: 'Riley?' }],
+          regions: [{ label: 'SUSPECTS', location: 'left', entries: ['Alex', { name: 'Mel', crossedOut: true }] }],
+          notes: [{ note: 'BizAI?' }]
+        }
+      }
+    });
+    const texts = stopPage('input-review', data).lines.map((line) => line.text);
+    [
+      stringify(unread),
+      `Alex, ${stringify({ name: 'Riley?' })}`,
+      `"SUSPECTS" (left): Alex, ${stringify({ name: 'Mel', crossedOut: true })}`,
+      stringify({ note: 'BizAI?' })
+    ].forEach((text) => expect([text, texts.includes(text)]).toEqual([text, true]));
+    expect(stringify(unread)).toContain('\n  "where": "top left"');
+  });
+
+  it('reads the ten view models and no other, and its module doc says so, and that the director\'s own notes are not counted', () => {
+    const src = fs.readFileSync(require.resolve('../stop-pages'), 'utf8');
+    const section = src.slice(src.indexOf('// ── The input review'), src.indexOf('// ── The character-IDs stop'));
+    const read = new Set([...section.matchAll(/\b(?:View|InputLogic)\.(\w+)\b/g)].map((match) => match[1]));
+    expect([...read].sort()).toEqual([...TEN].sort());
+    // The module doc as prose: its comment's line prefixes and line breaks read as spaces.
+    const doc = src.slice(0, src.indexOf("'use strict'")).replace(/\n \*/g, ' ').replace(/\s+/g, ' ');
+    const bullet = doc.slice(doc.indexOf('- the input review'), doc.indexOf('- the character-IDs stop'));
+    TEN.forEach((name) => expect([name, bullet.includes(name)]).toEqual([name, true]));
+    expect(bullet).toMatch(/ten view models/);
+    expect(bullet).toMatch(/director's own notes[^.]*director's words[^.]*not counted/);
+  });
+});
