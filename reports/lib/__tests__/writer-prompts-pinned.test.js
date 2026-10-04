@@ -241,9 +241,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   outline is now a map, which the article writer prints whole under APPROVED OUTLINE
  *   (article-journalist 27446 -> 28708, article-detective 28425 -> 29687); the article
  *   writer is 4.7's. arcs-journalist does not move.
+ * - Phase 4 (brief 4.6b), the map writer's task names the meeting's note as "the approval
+ *   note marked arc-selection", the one note the map checks take as the source "note"
+ *   (lib/map.js meetingNoteOf), where it said "the standing note". The two words are the
+ *   same length, so outline-journalist moves by hash alone (18299). Its line on the top
+ *   photo prints only when a photo is marked [hero image]; the fixture's hero is marked, so
+ *   the line stays. No other pin moves.
  */
 const PINNED = {
-  'outline-journalist': ['c03d677e9e3a6b1be5f3ed36f5a818dc56d2ec0c98e1f49aedc465864dfbeddc', 18299],
+  'outline-journalist': ['62c525f1cbdd8d026f481a24ac11e75766f0307c6d036594f713157042861790', 18299],
   'article-journalist': ['b712378e34a076d1b5ba8e1f7000c8e942c2059aad5307f907cde828cb3cac18', 28708],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892],
   'article-detective': ['10c1f23e9ecf6ab47e2eb4444e2a9fe5753eefb805ecac55f3a9d22a98665ad1', 29687]

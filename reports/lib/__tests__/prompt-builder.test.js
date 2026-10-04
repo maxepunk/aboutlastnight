@@ -1726,3 +1726,53 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6b: the map writer's task says what is true of the prompt it sits in
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The meeting's note is the approval note marked arc-selection, the one note the map's
+// check accepts as a change's source (lib/map.js meetingNoteOf); a reweave's or a
+// send-back's note prints marked as a rejection. The top photo starts from the photo marked
+// [hero image] only when <available-photos> marks one.
+describe("4.6b: the map writer's task says what is true", () => {
+  const { meetingNoteOf } = require('../map');
+  const TOP_PHOTO_LINE = "- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.";
+  const HERO = { filename: 'hero.jpg', identifiedCharacters: ['Alex'], hero: true };
+  const OTHER = { filename: 'p2.jpg', identifiedCharacters: [] };
+  const builder = () => new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
+  /** The map writer's task: from its first line to the theme's slots. */
+  const taskOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
+
+  it('with a photo marked [hero image], the top photo starts from it', async () => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO, OTHER], [], null, { gateNotes: MEETING_NOTES });
+    expect(taskOf(userPrompt)).toContain(`${TOP_PHOTO_LINE}\n- List what you considered and did not use under leftOut`);
+    expect(userPrompt).toContain('1. [hero image] hero.jpg: Alex');
+  });
+
+  it.each([
+    ['no photo at all', []],
+    ['photos, none of them marked', [OTHER]]
+  ])("with %s, no line points at a photo marked [hero image], and none is marked", async (_name, photos) => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, photos, [], null, { gateNotes: MEETING_NOTES });
+    const task = taskOf(userPrompt);
+    expect(task).toContain('- Give each section you use its heading');
+    expect(task).not.toContain('Choose the top photo');
+    expect(userPrompt).not.toContain('[hero image]');
+  });
+
+  it("names the meeting's note as the approval note marked arc-selection: the note the map's check counts as the source \"note\"", async () => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: MEETING_NOTES });
+    const task = taskOf(userPrompt);
+    expect(task).toContain('each change the director\'s note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>)');
+    expect(task).not.toContain('standing note');
+    // The approval note prints marked [arc-selection, approval N], and the check counts it;
+    // a rejection note at the meeting prints marked as one, and the check does not.
+    expect(userPrompt).toContain('- [arc-selection, approval 1] Lead with the money.');
+    expect(meetingNoteOf({ directorGateNotes: MEETING_NOTES })).toBe(true);
+    const rejection = [{ ...MEETING_NOTES[0], kind: 'rejection' }];
+    const { userPrompt: sentBack } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: rejection });
+    expect(sentBack).toContain('- [arc-selection, rejection 1] Lead with the money.');
+    expect(meetingNoteOf({ directorGateNotes: rejection })).toBe(false);
+  });
+});

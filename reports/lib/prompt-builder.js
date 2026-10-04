@@ -33,18 +33,36 @@ const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
 /**
+ * The map task's line on the top photo (brief 4.6b): code's pick is the photo
+ * <available-photos> marks [hero image] (renderPhotoListEntry marks the entry whose `hero`
+ * is set), so the line prints only when a photo is marked. With none marked the director
+ * kept no photo, and there is no top photo to choose.
+ */
+const MAP_TASK_TOP_PHOTO = "- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.";
+
+/**
  * The map writer's task (phase 4, brief 4.6), right after the settled weave: lay the weave
  * across the sections. It names what goes where in the map and points at the rule items
  * that say how (spec 5.1 and 5.2; the approved read's section D), stating none of them.
+ *
+ * Brief 4.6b: each line is true of the prompt it sits in. The meeting's note is the approval
+ * note marked arc-selection in <DIRECTOR_GUIDANCE>, the one note the map checks take as a
+ * change's source "note" (lib/map.js meetingNoteOf); a reweave's or a send-back's note at
+ * the meeting prints there marked as a rejection. The line on the top photo prints only
+ * when a photo is marked [hero image] (MAP_TASK_TOP_PHOTO).
+ *
+ * @param {boolean} heroMarked - whether <available-photos> marks a photo [hero image]
+ * @returns {string}
  */
-const MAP_TASK = `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map runs to about 450 words and writes no prose.
-- The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the standing note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or "note".
+function mapTask(heroMarked) {
+  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map runs to about 450 words and writes no prose.
+- The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or "note".
 - Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out, each beat naming its material. Drop each slot the story does not use, with its reason.
-- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.
-- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
+${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
 - A part of the story the record cannot carry, a player you cannot place, or a link you see that the weave lacks goes in gapNote, the one line at the top, as C7 (\`<craft-material>\`) and C16 set out.
 - Set expectedLength from what the map holds, as C4 (\`<craft-telling>\`) sets out.
 Code builds Everyone from each beat's players, and checks the players, the photos, the cards and the connections. A player named among gapNote's players counts as raised.`;
+}
 
 /** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */
 const PRONOUN_NOT_GIVEN = 'pronoun not given';
@@ -748,10 +766,12 @@ ${loadRuleSet('outline').core}`;
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
     const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
     const photoList = Array.isArray(photos) ? photos : [];
+    // Brief 4.6b: the entry renderPhotoListEntry marks [hero image].
+    const heroMarked = photoList.some((photo) => Boolean(photo && photo.hero));
 
     return `${settledWeave}
 
-${MAP_TASK}
+${mapTask(heroMarked)}
 
 <SLOTS>
 The article's slots, in their usual order, each with the heading the map starts from:
