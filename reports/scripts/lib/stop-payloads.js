@@ -18,8 +18,8 @@
  * (--approve-file), sent as it is. The server refuses the old payloads by name (selectedArcs,
  * outline: true).
  *
- * optionsRefusal says when a run's options do not fit together (tasks 4.12c and 4.12d), from the
- * lists the payloads are built from.
+ * optionsRefusal says when a run's options do not fit together (tasks 4.12c, 4.12d and 4.12e), from
+ * the lists the payloads are built from, and the harness exits OPTIONS_REFUSED_EXIT_CODE on one.
  */
 'use strict';
 
@@ -152,9 +152,18 @@ const ACTION_NOTE_REFUSAL = `--action and --note go with --approve <stop> and --
 }.`;
 
 /**
- * Why a run's options do not fit together, or null when they do (tasks 4.12c and 4.12d). The
- * harness stops on a refusal before it posts anything:
- * - --approve-file sends its file as it is (task 4.12d), so --action, --note and --leave-out,
+ * The harness's exit code when optionsRefusal refuses a run (task 4.12e): not 0, so a scripted
+ * gate run sees the refusal, and not the 1 a crash exits with. 2 is the usage error's code.
+ */
+const OPTIONS_REFUSED_EXIT_CODE = 2;
+
+/**
+ * Why a run's options do not fit together, or null when they do (tasks 4.12c, 4.12d and 4.12e).
+ * The harness stops on a refusal before it posts anything, and exits OPTIONS_REFUSED_EXIT_CODE:
+ * - --approve-file is read only with --approve in step mode, where step mode sends it as the
+ *   approval at that stop (task 4.12e). Anywhere else the run never reads the file, so the file
+ *   itself is refused, naming what the run lacks.
+ * - Where it is read, it is sent as it is (task 4.12d), so --action, --note and --leave-out,
  *   which build the payload the file replaces, would be dropped without a word. The file carries
  *   the action, the note and the photos left out.
  * - --action and --note are the director's at the one stop --approve names in step mode, a stop
@@ -175,6 +184,10 @@ const ACTION_NOTE_REFUSAL = `--action and --note go with --approve <stop> and --
 function optionsRefusal({ approveType = null, stepMode = false, action = null, note = null, leaveOut = false, approveFile = null } = {}) {
   const given = (value) => value !== null && value !== undefined;
   if (given(approveFile)) {
+    const lacks = [!approveType && '--approve', !stepMode && '--step'].filter(Boolean);
+    if (lacks.length > 0) {
+      return `--approve-file goes with --approve <stop> and --step: step mode sends the file as the approval at that stop. This run has no ${listOf(lacks, 'and no')}, so it would never read the file.`;
+    }
     const dropped = [given(action) && '--action', given(note) && '--note', leaveOut && '--leave-out'].filter(Boolean);
     if (dropped.length > 0) {
       return `--approve-file sends its file as it is, so it takes no --action, --note or --leave-out (got ${listOf(dropped, 'and')}): put the action, the note and the photos left out in the file.`;
@@ -188,4 +201,4 @@ function optionsRefusal({ approveType = null, stepMode = false, action = null, n
   return null;
 }
 
-module.exports = { STOP_ACTIONS, stopApproval, optionsRefusal };
+module.exports = { STOP_ACTIONS, stopApproval, optionsRefusal, OPTIONS_REFUSED_EXIT_CODE };

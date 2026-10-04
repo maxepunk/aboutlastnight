@@ -49,9 +49,10 @@ const {
 const ViewLogic = require('../console/checkpoint-view-logic');
 // Task 4.12a: the story meeting, the map and the desk as the console shows them, and the
 // payloads its builders make at those stops and at the character-IDs stop. Task 4.12c: every
-// stop with a page prints it, and the options say what they take (optionsRefusal).
+// stop with a page prints it, and the options say what they take (optionsRefusal). Task 4.12e: a
+// refused run exits OPTIONS_REFUSED_EXIT_CODE.
 const { stopPrint } = require('./lib/stop-print');
-const { stopApproval, STOP_ACTIONS, optionsRefusal } = require('./lib/stop-payloads');
+const { stopApproval, STOP_ACTIONS, optionsRefusal, OPTIONS_REFUSED_EXIT_CODE } = require('./lib/stop-payloads');
 const { PAGE_STOPS } = require('../lib/stop-pages');
 
 // Configuration
@@ -554,10 +555,12 @@ ${color('OPTIONS:', 'cyan')}
                      needs a note or a change, so it takes --note here
   --note <text>      With --approve and --step, at the same three stops: the note
                      sent with the action, as the stop's note box sends it
-  --approve-file <f> Use custom JSON payload for approval (with --approve), sent
-                     as it is: the way to send a weave, a map or an article you
-                     changed. It takes no --action, --note or --leave-out: put
-                     the action, the note and the photos left out in the file
+  --approve-file <f> With --approve and --step, a custom JSON payload sent as
+                     the approval, as it is: the way to send a weave, a map or
+                     an article you changed. It takes no --action, --note or
+                     --leave-out: put the action, the note and the photos left
+                     out in the file. Without --approve and --step the run
+                     never reads the file, so it is refused
   --photo-descriptions <f>
                      JSON file of {"photo filename": "the director's description"}.
                      At the character-IDs stop the approval is the console's
@@ -629,6 +632,8 @@ ${color('STOPS:', 'cyan')}
   The character-IDs stop offers [A]pprove with a description per photo, or [S]kip.
 
 ${color('NOTES:', 'cyan')}
+  - A run whose options do not fit together says why, posts nothing and
+    exits ${OPTIONS_REFUSED_EXIT_CODE}
   - Server must be running at ${API_BASE}
   - --session must be the session date as MMDDYY (e.g. 091826). For a throwaway
     id like 1225, set ALLOW_NONSTANDARD_SESSION_ID=true in the SERVER's .env
@@ -2158,12 +2163,13 @@ async function runWalkthrough() {
   // mode, a stop whose actions the console's builders take; anywhere else they would act at
   // every stop a run passes, or at a stop that takes no action of its own. Task 4.12c: and
   // --leave-out goes with the character-IDs stop. Task 4.12d: --approve-file sends its file as it
-  // is, so none of the three goes with it. A run whose options do not fit stops here, before
-  // anything is posted, saying what each option takes (optionsRefusal).
+  // is, so none of the three goes with it. Task 4.12e: and the file goes with --approve and
+  // --step, the one place the run reads it. A run whose options do not fit stops here, before
+  // anything is posted, saying what each option takes (optionsRefusal), and main exits non-zero.
   const refusal = optionsRefusal({ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN, approveFile: APPROVE_FILE });
   if (refusal) {
     console.error(color(refusal, 'red'));
-    return;
+    return { refused: true };
   }
 
   console.log('');
@@ -2545,8 +2551,9 @@ async function main() {
     createReadline();
   }
 
+  let outcome;
   try {
-    await runWalkthrough();
+    outcome = await runWalkthrough();
   } catch (error) {
     console.error(color(`\nFatal error: ${error.message}`, 'red'));
     console.error(error.stack);
@@ -2556,6 +2563,10 @@ async function main() {
       rl.close();
     }
   }
+
+  // Task 4.12e: a run whose options were refused ran nothing, and exits non-zero, so a scripted
+  // gate run sees the refusal.
+  if (outcome && outcome.refused) process.exit(OPTIONS_REFUSED_EXIT_CODE);
 
   console.log(color('\nWalkthrough complete.', 'green'));
   process.exit(0);

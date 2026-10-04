@@ -145,7 +145,8 @@ describe('4.12a: the harness prints and approves the three stops through the sha
   });
 
   it('builds the default approval at those stops and at the character-IDs stop with stopApproval, from the run\'s options', () => {
-    expect(SRC).toMatch(/const \{ stopApproval, STOP_ACTIONS(, optionsRefusal)? \} = require\('\.\/lib\/stop-payloads'\);/);
+    // Task 4.12e: the import also takes the exit code a refused run exits with.
+    expect(SRC).toMatch(/const \{ stopApproval, STOP_ACTIONS(, optionsRefusal)?(, OPTIONS_REFUSED_EXIT_CODE)? \} = require\('\.\/lib\/stop-payloads'\);/);
     const fn = body('function defaultApproval(');
     expect(fn).toMatch(/stopApproval\(checkpointType, checkpointData, \{ action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS \}\)/);
   });
@@ -528,4 +529,42 @@ describe('4.12e: the print breaks where the part of the screen changes, and name
   it('colours a break as the harness colours what it dims', () => {
     expect(SRC).toMatch(/const TONE_COLORS = \{[^}]*\bbreak: 'dim'/);
   });
+});
+
+// Task 4.12e (the ruling on 4.12d's cannotVerify 3): a run whose options optionsRefusal refused
+// printed the refusal and exited 0, so a scripted gate run read a refused run as one that went
+// through. The harness runs here as a command, as a gate run would run it.
+describe('4.12e: a run whose options are refused exits non-zero, before it posts anything', () => {
+  const { spawnSync } = require('child_process');
+  const { OPTIONS_REFUSED_EXIT_CODE } = require('../../../scripts/lib/stop-payloads');
+  /**
+   * The harness as a command. API_BASE names a port nothing listens on and ACCESS_PASSWORD is set,
+   * so a run that went on past its options would fail to connect, and never reach a server.
+   */
+  const run = (args) => spawnSync(process.execPath, [path.join(SCRIPTS, 'e2e-walkthrough.js'), ...args], {
+    cwd: path.join(SCRIPTS, '..'),
+    encoding: 'utf8',
+    timeout: 60000,
+    env: { ...process.env, API_BASE: 'http://127.0.0.1:9', ACCESS_PASSWORD: 'not-the-password' }
+  });
+
+  it.each([
+    ['--approve-file beside the options it replaces', ['--approve', 'outline', '--approve-file', 'map.json', '--action', 'send-back', '--note', 'Move the vote earlier.', '--step'], /^--approve-file sends its file as it is/],
+    ['--approve-file where step mode never reads it', ['--approve-file', 'map.json', '--step'], /^--approve-file goes with --approve <stop> and --step/],
+    ['--approve-file outside step mode', ['--approve', 'outline', '--approve-file', 'map.json'], /^--approve-file goes with --approve <stop> and --step/],
+    ['--note at a stop that takes no note', ['--approve', 'input-review', '--note', 'x', '--step'], /^--action and --note go with --approve <stop> and --step/],
+    ["--leave-out with another stop's --approve", ['--approve', 'outline', '--leave-out', 'p2.jpg', '--step'], /^--leave-out ticks/]
+  ])('%s', (name, args, refusal) => {
+    const result = run(['--session', '100426', ...args]);
+    expect([name, result.error, result.status]).toEqual([name, undefined, OPTIONS_REFUSED_EXIT_CODE]);
+    // eslint-disable-next-line no-control-regex
+    expect([name, result.stderr.replace(/\x1b\[[0-9;]*m/g, '').trim()]).toEqual([name, expect.stringMatching(refusal)]);
+    expect([name, /Authenticating|Walkthrough complete/.test(result.stdout)]).toEqual([name, false]);
+  }, 60000);
+
+  it('is a code of its own, apart from the 1 a crash exits with, and a run its options fit still exits 0', () => {
+    expect(Number.isInteger(OPTIONS_REFUSED_EXIT_CODE)).toBe(true);
+    expect([0, 1]).not.toContain(OPTIONS_REFUSED_EXIT_CODE);
+    expect(run(['--help']).status).toBe(0);
+  }, 60000);
 });

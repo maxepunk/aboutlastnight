@@ -357,3 +357,39 @@ describe('4.12d: --approve-file sends its file as it is, so the options it would
     expect(optionsRefusal({ approveType: 'character-ids', stepMode: true, approveFile: null, leaveOut: true })).toBeNull();
   });
 });
+
+// Task 4.12e (the ruling on 4.12d's minor 2 and concern 1): the harness reads --approve-file only
+// with --approve in step mode (scripts/e2e-walkthrough.js), where it refuses the options the file
+// replaces. Anywhere else the run never reads the file, and the refusal it gave there, that the
+// file takes no --action, --note or --leave-out, did not hold: the file itself is what the run
+// drops. So there it refuses the file, saying the run would never read it.
+describe('4.12e: --approve-file is refused where the run never reads it, with that reason', () => {
+  const { optionsRefusal } = require('../../../scripts/lib/stop-payloads');
+  const FILE = 'my-map.json';
+  const OWN_REASON = /^--approve-file goes with --approve <stop> and --step: step mode sends the file as the approval at that stop\. /;
+
+  it('refuses the file without --approve, without --step, or without both, naming what the run lacks', () => {
+    [
+      [{ stepMode: true }, '--approve'],
+      [{ approveType: 'outline' }, '--step'],
+      [{ approveType: 'character-ids', stepMode: false }, '--step'],
+      [{}, '--approve and no --step']
+    ].forEach(([options, missing]) => {
+      const refusal = optionsRefusal({ ...options, approveFile: FILE });
+      expect([missing, refusal]).toEqual([missing, expect.stringMatching(OWN_REASON)]);
+      expect([missing, refusal.endsWith(`This run has no ${missing}, so it would never read the file.`)]).toEqual([missing, true]);
+      expect(refusal).not.toMatch(/sends its file as it is/);
+    });
+  });
+
+  it('gives the file\'s own reason there even beside --action, --note or --leave-out, since the run would not read the file they compete with', () => {
+    expect(optionsRefusal({ approveFile: FILE, action: 'send-back', note: 'x', leaveOut: true })).toMatch(OWN_REASON);
+    expect(optionsRefusal({ approveType: 'outline', approveFile: FILE, note: 'x' })).toMatch(OWN_REASON);
+  });
+
+  it('with --approve and --step it reads the file, and refuses only the options the file replaces, as before', () => {
+    expect(optionsRefusal({ approveType: 'outline', stepMode: true, approveFile: FILE })).toBeNull();
+    expect(optionsRefusal({ approveType: 'outline', stepMode: true, approveFile: FILE, note: 'x' }))
+      .toMatch(/^--approve-file sends its file as it is, so it takes no --action, --note or --leave-out \(got --note\)/);
+  });
+});
