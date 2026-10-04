@@ -163,7 +163,10 @@ function isVerbatim(cardContent, sourceText) {
  *                    (Marcus written "she"), and a gendered pronoun for an NPC the
  *                    canon gives none (Blake) that neither the director's words nor
  *                    the roster give (spec T9), in the forms NPC_GENDERED_PRONOUNS
- *                    lists.
+ *                    lists. Task 4.14c, journalist: the they/them forms it reads are
+ *                    the subject and the reflexive (NPC_THEY_PRONOUNS), and a
+ *                    pronoun in a speech tag ("Marcus, she said, was") is the
+ *                    speaker's.
  *   'leakedExample'- a two-word substring match on illustrative prompt strings.
  *                    The prompt files ship placeholders now, so a hit is far more
  *                    likely to be a session that legitimately wrote the sentence.
@@ -253,7 +256,8 @@ const ABSENCE_STATEMENTS = [
 ];
 
 /**
- * They/them pronouns, for the NPC pronoun scan.
+ * They/them pronouns, every form, for the parked detective's NPC pronoun scan
+ * (scanNpcPronouns). The journalist's scan reads NPC_THEY_PRONOUNS.
  *
  * BASELINE §4 class 3: 26 fact errors across 4 of 5 sessions, "above all Marcus
  * written they/them". The victim is never on the session roster, so his pronouns
@@ -370,6 +374,33 @@ const NPC_GENDERED_PRONOUNS = {
   masculine: ['he', 'his', 'himself'],
   feminine: ['she', 'herself']
 };
+
+/**
+ * The they/them forms an NPC scan reads, as it reads the gendered forms (NPC_GENDERED_PRONOUNS):
+ * the subject and the reflexive (task 4.14c). The object "them" and the possessives "their" and
+ * "theirs" point at other people: on the 11 stored articles every one read after Marcus did
+ * ("Marcus built them to", "Marcus had a room full of them", "ran their stolen engine"), four
+ * false marks beside correct paragraphs at the desk and no true one.
+ */
+const NPC_THEY_PRONOUNS = ['they', 'themself', 'themselves'];
+
+/**
+ * Verbs of saying. A pronoun right before one, set off from the words before it by a comma, a
+ * dash, a bracket or a quoted line, is a speech tag ("Marcus, she said, was ..."; "Marcus was
+ * “a thief,” she said"): the speaker's, never the person named before it (task 4.14c).
+ */
+const SPEECH_VERBS = [
+  'said', 'says', 'told', 'tells', 'asked', 'asks', 'added', 'adds', 'admitted', 'admits', 'answered', 'answers',
+  'argued', 'argues', 'claimed', 'claims', 'explained', 'explains', 'insisted', 'insists', 'noted', 'notes',
+  'recalled', 'recalls', 'remembered', 'remembers', 'replied', 'replies', 'swore', 'swears', 'wrote', 'writes',
+  'went on', 'goes on'
+];
+
+/** A verb of saying right after a pronoun. */
+const SPEECH_VERB_AFTER = new RegExp(`^\\s+(?:${SPEECH_VERBS.map((verb) => verb.split(' ').join('\\s+')).join('|')})\\b`, 'i');
+
+/** What sets a speech tag off from the words before it: a comma, a dash, an opening bracket or a quoted line (QUOTED_SPAN_MASK). */
+const SET_OFF_BEFORE = /(?:[,(—–\u0000]|\s-)$/;
 
 /**
  * The possessives an NPC scan reads, and when (findPronounNear's `possessives`): "his"
@@ -686,6 +717,48 @@ function pieceOf(place) {
 }
 
 /**
+ * The sentences of a piece's text as `text.split(/[.?!]+/)` gives them, each with where it
+ * starts in the text.
+ *
+ * @returns {Array<{sentence: string, at: number}>}
+ */
+function sentencesWithOffsets(text) {
+  const out = [];
+  const breaks = /[.?!]+/g;
+  let start = 0;
+  let match;
+  while ((match = breaks.exec(text)) !== null) {
+    out.push({ sentence: text.slice(start, match.index), at: start });
+    start = match.index + match[0].length;
+  }
+  out.push({ sentence: text.slice(start), at: start });
+  return out;
+}
+
+/**
+ * A piece's text with each quoted span as one QUOTED_SPAN_MASK, character for character beside
+ * the quote-stripped text, which holds a space there (stripQuotedSpans); the stripped text itself
+ * for a piece that does not carry its printed text.
+ */
+function quotedLinesMarked(segment) {
+  const marked = typeof segment.original === 'string' ? replaceQuotedSpans(segment.original, QUOTED_SPAN_MASK) : segment.text;
+  return marked.length === segment.text.length ? marked : segment.text;
+}
+
+/**
+ * Is the pronoun at `at` in a speech tag (task 4.14c)? It is followed by a verb of saying and set
+ * off from the words before it (SPEECH_VERB_AFTER, SET_OFF_BEFORE): "Marcus, she said, was", and
+ * "Marcus was “a thief,” she said". Such a pronoun is the speaker's.
+ *
+ * @param {string} marked - the piece's text, quotedLinesMarked's
+ * @param {number} at - where the pronoun starts
+ * @param {number} length - the pronoun's length
+ */
+function inSpeechTag(marked, at, length) {
+  return SPEECH_VERB_AFTER.test(marked.slice(at + length)) && SET_OFF_BEFORE.test(marked.slice(0, at).replace(/\s+$/, ''));
+}
+
+/**
  * The first pronoun from `pronouns` within PRONOUN_WINDOW words after one of `names`,
  * in a sentence of the narrator's (quote-stripped) prose, where it can only be about
  * that person. Lenient, as the module is: a hit is skipped when another known person is
@@ -693,7 +766,8 @@ function pieceOf(place) {
  * pronoun (an antecedent nearer than the name), or a conjunction joins another name to
  * it ("Marcus and Alex ... their"). A pronoun in `possessives` is read only where it is
  * that person's possessive (NPC_POSSESSIVE_PRONOUNS); one that is not is passed over for
- * the next pronoun in the window.
+ * the next pronoun in the window, and so is a pronoun in a speech tag, which is the
+ * speaker's (inSpeechTag; task 4.14c).
  *
  * @param {Array<{where: string, text: string, place: Object, original: string}>} segments -
  *   quotes already stripped from `text`; `original` is the piece as it prints
@@ -710,7 +784,8 @@ function findPronounNear(segments, names, pronouns, others, { possessives = [] }
   const othersRe = others.length > 0 ? new RegExp(`\\b(?:${others.map(escapeRegExp).join('|')})\\b`, 'i') : null;
   const possessive = new Set(possessives.map(p => p.toLowerCase()));
   for (const segment of segments) {
-    for (const sentence of segment.text.split(/[.?!]+/)) {
+    const marked = quotedLinesMarked(segment);
+    for (const { sentence, at } of sentencesWithOffsets(segment.text)) {
       if (othersRe && othersRe.test(sentence)) continue;
       for (const name of names) {
         // "Nova News" is the outlet; "NovaNews" never matches the word "Nova".
@@ -718,12 +793,14 @@ function findPronounNear(segments, names, pronouns, others, { possessives = [] }
         let match;
         while ((match = nameRe.exec(sentence)) !== null) {
           const span = String(match[1] || '');
+          const spanAt = at + match.index + match[0].length - span.length;
           pronounRe.lastIndex = 0;
           let hit;
           while ((hit = pronounRe.exec(span)) !== null) {
             const before = span.slice(0, hit.index);
             if (/[A-Z][a-z]/.test(before) || /(?:\band\b|\bor\b|\bnor\b|,)\s+[A-Z]/.test(before)) break;
             if (possessive.has(hit[1].toLowerCase()) && GOVERNED_BY_PREPOSITION.test(sentence.slice(0, match.index))) continue;
+            if (inSpeechTag(marked, spanAt + hit.index, hit[1].length)) continue;
             const matched = `${name}${before}${hit[1]}`;
             return { name, pronoun: hit[1], excerpt: excerptOf(matched), where: segment.where, place: segment.place, matched, original: segment.original };
           }
@@ -1627,14 +1704,16 @@ function factCheckContentBundle({
 
     // ── 5, phase 3 (3.4). NPC pronouns, read in the narrator's prose (spec T9).
     // 'npcPronouns' ADVISORY. Marcus: they/them or the other gender against his canon
-    // pronoun. Blake (no canon pronoun): any gendered pronoun the director's words and
-    // the roster do not give. Nova is never scanned here: Nova's rule is its own check.
+    // pronoun, each in the forms an NPC scan reads (task 4.14c: the subject and the
+    // reflexive of they/them, NPC_THEY_PRONOUNS). Blake (no canon pronoun): any gendered
+    // pronoun the director's words and the roster do not give. Nova is never scanned here:
+    // Nova's rule is its own check.
     for (const entry of npcEntries.filter(e => !e.aliasOf && e.name !== NARRATOR)) {
       const own = [entry.name, ...npcEntries.filter(alias => alias.aliasOf === entry.name).map(alias => alias.name)];
       const declared = gendersOf(entry.pronouns);
       if (entry.pronouns) {
         if (String(entry.pronouns).toLowerCase().includes('they')) continue;
-        const wrong = [...THEY_THEM, ...Object.keys(GENDERED_PRONOUNS).filter(g => !declared.includes(g)).flatMap(g => NPC_GENDERED_PRONOUNS[g])];
+        const wrong = [...NPC_THEY_PRONOUNS, ...Object.keys(GENDERED_PRONOUNS).filter(g => !declared.includes(g)).flatMap(g => NPC_GENDERED_PRONOUNS[g])];
         const hit = findPronounNear(segments, own, wrong, othersThan(own), { possessives: NPC_POSSESSIVE_PRONOUNS });
         if (hit) {
           const message =

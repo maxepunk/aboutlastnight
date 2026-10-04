@@ -493,7 +493,7 @@ describe('advisory-only checks (I2b)', () => {
         sections: [{
           id: 'lede',
           type: 'narrative',
-          content: [{ type: 'paragraph', text: 'Marcus signed their own name to the transfer.' }]
+          content: [{ type: 'paragraph', text: 'Marcus said they would sign the transfer.' }]
         }],
         evidenceCards: []
       }
@@ -1372,7 +1372,7 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
     it('flags Marcus written she, and still flags Marcus written they', () => {
       const she = run(paragraphs('Marcus said she would sell the company.'));
       expect(flagged(she, 'npcPronouns')[0]).toMatch(/^Pronoun error: Marcus takes he\/him/);
-      const they = run(paragraphs('Marcus signed their own name to the transfer.'));
+      const they = run(paragraphs('Marcus said they would sign the transfer.'));
       expect(flagged(they, 'npcPronouns')[0]).toMatch(/^Pronoun error: Marcus takes he\/him/);
       expect(flagged(run(paragraphs('Marcus said he would sell the company.')), 'npcPronouns')).toEqual([]);
     });
@@ -1551,7 +1551,7 @@ describe('the fix lines follow the rules (phase 3, 3.4)', () => {
       contentBundle: {
         headline: { main: 'h', deck: 'I was not there.' },
         sections: [{ id: 'lede', type: 'narrative', content: [
-          { type: 'paragraph', text: 'I was in the room and I voted. I was not in that room. Marcus signed their name. Blake said he was done — for good.' },
+          { type: 'paragraph', text: 'I was in the room and I voted. I was not in that room. Marcus said they would sign. Blake said he was done — for good.' },
           { type: 'photo', filename: 'not-ours.jpg', caption: 'x' },
           inlineCard({ tokenId: 'vic001', content: 'A sentence that appears nowhere in the source text at all.' }),
           inlineCard({ tokenId: 'nope999', content: 'Whatever this is, no session item carries that id.' })
@@ -2726,5 +2726,65 @@ describe('4.10f, the integrator\'s pins: where a quoted span may run', () => {
       [{ section: 'the-story', paragraph: 1 }, 'I was not there'],
       [{ section: 'the-story', paragraph: 2 }, 'I was not in the room']
     ]);
+  });
+});
+
+// Task 4.14c (the final review's desk 5): the Marcus scan read the object "them", the possessive
+// "their" and a "she" in a speech tag after his name as his, so 5 of the 11 stored articles carried
+// a false mark beside a correct paragraph at the desk. It reads they/them as it reads the gendered
+// forms since fixes 3.4c and 3.4cb, the subject and the reflexive alone, and a pronoun in a speech
+// tag is the speaker's. Invented text in the shape of each false mark.
+describe("4.14c: the Marcus scan reads they/them as it reads the gendered forms, and a speech tag is the speaker's", () => {
+  const NPCS = [
+    { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him' },
+    { name: 'Nova', fullName: 'Nova' },
+    { name: 'Blake', fullName: 'Blake' },
+    { name: 'Valet', aliasOf: 'Blake' }
+  ];
+  const run = (...texts) => factCheckContentBundle(baseArgs({
+    theme: 'journalist', npcs: NPCS,
+    contentBundle: storyWith(...texts.map((text) => ({ type: 'paragraph', text })))
+  }));
+  const hits = (result) => result.findings.filter((f) => f.kind === 'npcPronouns').map((f) => f.excerpt);
+  const none = (sentences) => expect(sentences.map((s) => [s, hits(run(s))])).toEqual(sentences.map((s) => [s, []]));
+
+  it('reads no object "them", no possessive "their" and no "theirs" after Marcus as his', () => {
+    none([
+      'Sarah and Jess could have spent the morning at war. Marcus built them to.',
+      'Everyone in the house wanted Marcus diminished, and one of them already had the thing he valued most.',
+      'Marcus stole code, stole memories and ran their engine on a room full of guests.',
+      'Start with the enemies, because Marcus had a room full of them.',
+      'Marcus took what was theirs.'
+    ]);
+  });
+
+  it("reads a pronoun in a speech tag as the speaker's: set off by a comma, a dash or a quoted line, before a verb of saying", () => {
+    none([
+      'Jess kept going. Marcus, she said, was “running a program” that took memories.',
+      'Marcus was “a thief and a liar,” she said.',
+      'Marcus never meant to sell, they told me.',
+      'Marcus, she added, had the codes all along.',
+      'Marcus had the codes all along—she insisted on it.'
+    ]);
+  });
+
+  it('still finds Marcus written they in a clause about him alone, and the reflexive', () => {
+    expect(hits(run('Marcus said they would never sell the company.'))).toEqual(['Marcus said they']);
+    expect(hits(run('Marcus kept the ledger to themselves.'))).toEqual(['Marcus kept the ledger to themselves']);
+    expect(hits(run('Marcus signed the transfer themself.'))).toEqual(['Marcus signed the transfer themself']);
+    // A pronoun after a verb of saying, with no comma, dash or quoted line before it, is no tag.
+    expect(hits(run('Marcus said they told the board.'))).toEqual(['Marcus said they']);
+    expect(hits(run('Marcus said she would sell.'))).toEqual(['Marcus said she']);
+    const messages = run('Marcus said they would never sell the company.').advisoryWarnings.filter((w) => w.startsWith('Pronoun error:'));
+    expect(messages).toEqual(['Pronoun error: Marcus takes he/him, but the article writes "Marcus said they" (in section "the-story", paragraph 1). ' +
+      "The roster block's non-player-character line is the authority. Correct every pronoun used of Marcus."]);
+  });
+
+  it("the parked detective's scan is unchanged: it still reads every they/them form", () => {
+    const result = factCheckContentBundle(baseArgs({
+      theme: 'detective', npcPronouns: { Marcus: 'he/him' },
+      contentBundle: storyWith({ type: 'paragraph', text: 'Marcus signed their name.' })
+    }));
+    expect(result.findings.filter((f) => f.kind === 'npcPronouns').map((f) => f.excerpt)).toEqual(['Marcus signed their name']);
   });
 });

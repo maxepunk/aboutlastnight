@@ -116,8 +116,12 @@ describe('fact-check pronoun scan (class 3)', () => {
     expect(result.structuralIssues).toEqual([]);
   });
 
-  it('flags a possessive their near Marcus', () => {
-    const result = factCheckContentBundle(prose('Marcus kept their own counsel about the compound.'));
+  // Task 4.14c (the final review's desk 5): the scan reads they/them as it reads the gendered
+  // forms, the subject and the reflexive alone. On the stored articles every possessive "their"
+  // and object "them" read after Marcus was someone else's.
+  it("reads a possessive their near Marcus as someone else's, and flags the reflexive", () => {
+    expect(factCheckContentBundle(prose('Marcus kept their own counsel about the compound.')).advisoryWarnings).toEqual([]);
+    const result = factCheckContentBundle(prose('Marcus kept the compound to themselves.'));
     expect(result.advisoryWarnings.join(' ')).toMatch(/pronoun/i);
     expect(result.structuralIssues).toEqual([]);
   });
