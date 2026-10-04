@@ -2814,6 +2814,20 @@ function photoBasename(filename) {
 }
 
 /**
+ * Is this the whiteboard's photo? Its basename equals the whiteboard's, when the session names
+ * a whiteboard. The one rule (the integrator, at 4.5g's merge): the restore refuses it
+ * (printableBlock), and the fact check reads a printed one as an invalid reference.
+ *
+ * @param {*} filename - the photo's filename or path
+ * @param {*} whiteboard - the whiteboard photo's filename or path, or none
+ * @returns {boolean}
+ */
+function isWhiteboardPhoto(filename, whiteboard) {
+  const board = photoBasename(whiteboard);
+  return board !== '' && photoBasename(filename) === board;
+}
+
+/**
  * The session's photo names: the basename of each of the session's photos (photoBasename), the
  * empty ones left out. The one rule for which photos the session holds (task 4.5g): the fact
  * check reads a printed photo against these names, and checks none but the whiteboard when
@@ -2846,9 +2860,8 @@ function sessionPhotoNames(sessionPhotos) {
 function printableBlock(block, photos, whiteboard) {
   if (!isObj(block) || block.type !== 'photo') return true;
   if (typeof block.filename !== 'string' || block.filename === '') return true;
+  if (isWhiteboardPhoto(block.filename, whiteboard)) return false;
   const name = photoBasename(block.filename);
-  const board = photoBasename(whiteboard);
-  if (board !== '' && name === board) return false;
   return !Array.isArray(photos) || photos.some((photo) => photoBasename(photo) === name);
 }
 
@@ -3282,7 +3295,7 @@ module.exports = {
   // Task 4.5f: a photo's name as a photo reference is matched, which the fact check imports.
   // Task 4.5g: the session's photo names, which the fact check and the article's rework read,
   // and the standing edits after a pass, which the article's rework stores (fix round 1)
-  photoBasename, sessionPhotoNames, standingAfterPass,
+  photoBasename, sessionPhotoNames, isWhiteboardPhoto, standingAfterPass,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,

@@ -37,7 +37,7 @@ const { DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 // the rule the restore reads too (photoBasename), so the restore reads as unprintable exactly
 // the photos this check reads as invalid. Task 4.5g: the session's photo names, the one rule
 // for which photos the session holds, which the article's rework reads too (sessionPhotoNames).
-const { editLocator, directorEditConcern, sectionKey, namesPerson, photoBasename: basename, sessionPhotoNames } = require('./hand-edit-diff');
+const { editLocator, directorEditConcern, sectionKey, namesPerson, photoBasename: basename, sessionPhotoNames, isWhiteboardPhoto } = require('./hand-edit-diff');
 // FA (requirement 12): the photos the page prints, the one rule the publish step and the
 // article approve read too (lib/publish-photos.js keeps the function's meaning).
 const { printedPhotos } = require('./publish-photos');
@@ -1297,8 +1297,7 @@ function factCheckContentBundle({
   // of the article): the whiteboard photo is no usable reference either, and no fix line
   // offers it; a printed one says what it is. Its filename is known whatever the
   // session's photo list holds, so it is checked even when that list is empty.
-  const whiteboard = basename(whiteboardPhoto);
-  const isWhiteboard = (name) => whiteboard !== '' && name === whiteboard;
+  const isWhiteboard = (name) => isWhiteboardPhoto(name, whiteboardPhoto);
   const available = new Set(sessionPhotoNames(sessionPhotos));
   const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
   const kept = Array.from(available).filter(filename => !excluded.has(filename) && !isWhiteboard(filename));

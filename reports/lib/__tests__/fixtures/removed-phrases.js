@@ -447,7 +447,10 @@ const REMOVED_PHRASES = [
   'the text the director has written into the article stays as written',
   'a block the director has moved stays where the director put it',
   'which this rework retells in no other words',
-  'An edit is the final word on its text, so the text the director wrote'
+  'An edit is the final word on its text, so the text the director wrote',
+
+  // Phase 4, 4.10d: a truth criterion's fallback line names its subject, never its key.
+  /\b[a-z]+Truth criterion failed\b/
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
