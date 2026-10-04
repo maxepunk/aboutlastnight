@@ -15,7 +15,9 @@
  *
  * Task 4.12a (R8): the stops log (lib/stops-log.js) gets the director's action, when the
  * handler names one, as the run starts, so a request refused with the lock's 409 leaves no
- * line; and the pause the run ends at, when that is a new stop or a new round of one.
+ * line; and the pause the run ends at, when that is a new stop or a new round of one. Task
+ * 4.12c: a rollback's handler names the point it rolled back to, which the log reads to count
+ * a stop the rollback wrote again as a new return.
  *
  * @module api-background-runner
  */
@@ -37,12 +39,14 @@ const stopsLog = require('./stops-log');
  * @param {object}   [a.processingExtra]        - extra fields merged into the {status:'processing'} body
  * @param {{stop: string, state: object, resume: object}} [a.action] - the director's action at a
  *   stop (/approve), for the stops log
+ * @param {string|null} [a.rolledBackTo]        - the point a /rollback rolled back to, for the
+ *   stops log's pause (lib/stops-log.js rewritesStop)
  * @param {object}   [a.deps]                   - injectable singletons for tests
  * @returns {{scheduled: boolean, task: Promise|null}}
  */
 function runGraphInBackground({
   sessionId, invoke, getState, buildResponse, res,
-  inFlightTasks, processingExtra = {}, action = null, deps = {}
+  inFlightTasks, processingExtra = {}, action = null, rolledBackTo = null, deps = {}
 }) {
   const _acquire = deps.acquireSessionLock || acquireSessionLock;
   const _release = deps.releaseSessionLock || releaseSessionLock;
@@ -82,7 +86,9 @@ function runGraphInBackground({
           // DEL-1: persist the outcome FIRST so a dropped SSE is recoverable via GET /state.
           _record(sessionId, _buildOutcome(response));
           if (response && response.interrupted === true && response.checkpoint) {
-            _stopsLog.recordPause(sessionId, { stop: response.checkpoint.type, state: graphState && graphState.values, data: response.checkpoint });
+            _stopsLog.recordPause(sessionId, {
+              stop: response.checkpoint.type, state: graphState && graphState.values, data: response.checkpoint, rolledBackTo
+            });
           }
           _emitComplete(sessionId, response);
         } catch (error) {

@@ -1,16 +1,20 @@
 /**
- * The stops log (phase 4, brief 4.12a; R8; spec section 13): `data/<id>/stops.jsonl`, one JSON
- * line per event, which the next session's readout reads beside the approved weave, map and
- * article and the call log, to count what the pipeline asked of the director: how many times it
- * called them back, and how much they read at each return.
+ * The stops log (phase 4, briefs 4.12a and 4.12c; R8; spec section 13): `data/<id>/stops.jsonl`,
+ * one JSON line per event, which the next session's readout reads beside the approved weave, map
+ * and article and the call log, to count what the pipeline asked of the director: how many times
+ * it called them back, and how much they read at each return.
  *
  * Two kinds of line:
  * - a pause, `{at, kind: 'pause', stop, round, words}`, each time a run pauses at a new stop or
  *   at a new round of one. `words` is what the stop shows, counted over its view models' page
  *   (lib/stop-pages.js wordsShown), or null at a stop with no page. A run that arrives where the
  *   log's last line already has the director, the same stop in the same round (a /resume replay,
- *   a rollback that reopens the stop they are at), is no new pause. The first pause of a fresh
- *   start always is.
+ *   a rollback that reopens the stop they are at), is no new pause. Two pauses always are:
+ *   - the first pause of a fresh start, whose line also carries `fresh: true`, since /start with
+ *     `force` appends to the run it replaced and the readout measures the run from that line;
+ *   - a pause after a rollback that wrote the stop's output again (rewritesStop): a rollback to
+ *     the article writes a new article from the map and starts its rounds over (R9), so the
+ *     director returns to a new article in round 1 again.
  * - an action, `{at, kind: 'action', stop, round, action}`, for each action the director takes:
  *   approve, reweave or send back, read from the resume the server builds (actionOf), in the
  *   round the stop was in when they took it.
@@ -20,18 +24,52 @@
  * time the director: the readout reports no time at a stop (spec, Decisions).
  *
  * The server writes it (server.js /start, and lib/api-background-runner.js for /approve, /resume
- * and /rollback). As the call log does, it writes nothing under Jest until a test sets its root,
- * and it never throws into a run: a line it cannot write is warned once, and a page it cannot
- * count is recorded with no words and warned, since a missing line must never cost the director
- * a stop.
+ * and /rollback, which hands the runner the point it rolled back to). As the call log does, it
+ * writes nothing under Jest until a test sets its root, and it never throws into a run: a line
+ * it cannot write is warned once, and a page it cannot count is recorded with no words and
+ * warned, since a missing line must never cost the director a stop.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const { stopRoundOf } = require('./workflow/state');
+const { stopRoundOf, ROLLBACK_CLEARS } = require('./workflow/state');
+const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const { MEETING_ROUNDS } = require('./weave');
 const { wordsShown } = require('./stop-pages');
+
+/**
+ * The channel that holds what each stop shows of a run's work: the parse, the paper evidence,
+ * the preprocessed evidence, the curated bundle, the weave, the photo analyses, the map and the
+ * article. The stops that collect the director's input (the roster, the full context, the photo
+ * folder) show none.
+ */
+const STOP_OUTPUTS = Object.freeze({
+  [CHECKPOINT_TYPES.INPUT_REVIEW]: 'sessionConfig',
+  [CHECKPOINT_TYPES.PAPER_EVIDENCE_SELECTION]: 'paperEvidence',
+  [CHECKPOINT_TYPES.PRE_CURATION]: 'preprocessedEvidence',
+  [CHECKPOINT_TYPES.EVIDENCE_AND_PHOTOS]: 'evidenceBundle',
+  [CHECKPOINT_TYPES.ARC_SELECTION]: 'weave',
+  [CHECKPOINT_TYPES.CHARACTER_IDS]: 'photoAnalyses',
+  [CHECKPOINT_TYPES.OUTLINE]: 'outline',
+  [CHECKPOINT_TYPES.ARTICLE]: 'contentBundle'
+});
+
+/**
+ * Whether a rollback wrote a stop's output again: the rollback point clears the channel that
+ * holds what the stop shows (ROLLBACK_CLEARS), so the run writes it anew. A rollback to the
+ * article does; a rollback to the map or the story meeting reopens its stop as the director left
+ * it (R9), and does not.
+ *
+ * @param {string|null} rollbackTo - the point the run rolled back to, or null for no rollback
+ * @param {string} stop - the stop the run paused at
+ * @returns {boolean}
+ */
+function rewritesStop(rollbackTo, stop) {
+  if (!rollbackTo || !Object.prototype.hasOwnProperty.call(ROLLBACK_CLEARS, rollbackTo)) return false;
+  if (!Object.prototype.hasOwnProperty.call(STOP_OUTPUTS, stop)) return false;
+  return ROLLBACK_CLEARS[rollbackTo].includes(STOP_OUTPUTS[stop]);
+}
 
 const DEFAULT_ROOT = path.resolve(__dirname, '..', 'data');
 
@@ -109,7 +147,8 @@ function wordsAt(stop, data, theme) {
 }
 
 /**
- * A pause: a line when the run paused at a new stop or a new round of one.
+ * A pause: a line when the run paused at a new stop or a new round of one, at the first pause of
+ * a fresh start, and after a rollback that wrote the stop's output again.
  *
  * @param {string} sessionId
  * @param {Object} pause
@@ -117,16 +156,22 @@ function wordsAt(stop, data, theme) {
  * @param {Object} pause.state - the thread's state values at the pause
  * @param {Object} pause.data - the stop's payload, as the server sends it
  * @param {boolean} [pause.fresh] - true for the first pause of a fresh start, which is always new
+ *   and is marked `fresh: true` on its line
+ * @param {string|null} [pause.rolledBackTo] - the point the run rolled back to, when it was a
+ *   rollback's (rewritesStop decides whether it wrote the stop's output again)
  */
-function recordPause(sessionId, { stop, state, data, fresh = false }) {
+function recordPause(sessionId, { stop, state, data, fresh = false, rolledBackTo = null }) {
   if (!sessionId || !stop || !isEnabled()) return;
   const file = stopsLogPath(sessionId);
   try {
     const round = stopRoundOf(stop, state);
-    const last = fresh ? null : lastLine(file);
+    const last = fresh || rewritesStop(rolledBackTo, stop) ? null : lastLine(file);
     if (last && last.kind === 'pause' && last.stop === stop && last.round === round) return;
     const theme = (state && state.theme) || 'journalist';
-    append(file, { at: new Date().toISOString(), kind: 'pause', stop, round, words: wordsAt(stop, data, theme) });
+    append(file, {
+      at: new Date().toISOString(), kind: 'pause', stop, round, words: wordsAt(stop, data, theme),
+      ...(fresh && { fresh: true })
+    });
   } catch (err) {
     warnOnce(err, file);
   }
@@ -154,6 +199,8 @@ function recordAction(sessionId, { stop, state, resume }) {
 module.exports = {
   stopsLogPath,
   actionOf,
+  STOP_OUTPUTS,
+  rewritesStop,
   recordPause,
   recordAction,
   setStopsLogRoot,

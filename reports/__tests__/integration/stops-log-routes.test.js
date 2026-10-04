@@ -230,3 +230,36 @@ describe('4.12a: a run that arrives where the director already is writes nothing
     expect(summary()).toEqual([]);
   });
 });
+
+// Task 4.12c (ruling 4 on 4.12a's minors): the readout tells a fresh start from a rollback to
+// the first stop, and counts the article a rollback writes again as a return.
+describe('4.12c: a fresh start\'s first pause is marked, and a stop a rollback rewrote is a new return', () => {
+  const { _inFlight } = require('../../server.js');
+  const { PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
+  /** Every background run the server started, waited for to its end (the desk's payload renders its preview). */
+  const settle = () => Promise.all([..._inFlight]);
+  const atDesk = () => pausedAt('article', {
+    ...reworkFixtureState('journalist'), sessionId: SESSION, contentBundle: JSON.parse(JSON.stringify(PREVIOUS_BUNDLE)), humanArticleRevisionCount: 0
+  });
+
+  it('/start writes its first pause with fresh: true, on a first start and on a forced one', async () => {
+    mockGraph = graphOf([{ values: {}, tasks: [] }, pausedAt('paper-evidence-selection', { sessionId: SESSION }, {})]);
+    await send('POST', `/api/session/${SESSION}/start`, { theme: 'journalist', rawSessionInput: {} });
+    mockGraph = graphOf([{ values: { currentPhase: 'paper-evidence-selection' }, tasks: [] }, pausedAt('paper-evidence-selection', { sessionId: SESSION }, {})]);
+    await send('POST', `/api/session/${SESSION}/start`, { theme: 'journalist', rawSessionInput: {}, force: true });
+    expect(linesOf().map((line) => [line.stop, line.fresh])).toEqual([['paper-evidence-selection', true], ['paper-evidence-selection', true]]);
+  });
+
+  it('a rollback to the article at the desk in round 1 writes the new article\'s pause, in round 1 again', async () => {
+    mockGraph = graphOf([atDesk(), atDesk()]);
+    await send('POST', `/api/session/${SESSION}/resume`, {});
+    await settle();
+    mockGraph = graphOf([atDesk(), atDesk()]);
+    const res = await send('POST', `/api/session/${SESSION}/rollback`, { rollbackTo: 'article' });
+    expect(res.status).toBe(200);
+    await settle();
+    expect(summary()).toEqual([['pause', 'article', 1], ['pause', 'article', 1]]);
+    expect(linesOf()[1].words).toBe(wordsShown('article', await checkpointPayload()));
+    expect(linesOf().every((line) => !Object.prototype.hasOwnProperty.call(line, 'fresh'))).toBe(true);
+  });
+});

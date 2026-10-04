@@ -1716,7 +1716,8 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         if (interrupted) {
             const interruptData = getInterruptData(graphState);
             const checkpointData = await buildCompleteCheckpointData(interruptData, graphState.values);
-            // Task 4.12a (R8): the fresh run's first pause, whatever the run this start replaced last logged.
+            // Task 4.12a (R8): the fresh run's first pause, whatever the run this start replaced last
+            // logged. Task 4.12c: its line is marked `fresh: true`, where the readout's run begins.
             stopsLog.recordPause(sessionId, { stop: interruptData.type, state: graphState.values, data: checkpointData, fresh: true });
             return res.json(buildInterruptResponse(sessionId, checkpointData, result.currentPhase));
         }
@@ -1926,8 +1927,11 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
 
         // Non-blocking: rollback re-invokes from the rollback point. Usually re-pauses fast,
         // but a rollback upstream of a long node can exceed the proxy timeouts on a held POST.
+        // Task 4.12c: the stops log gets the point, so a stop the rollback wrote again (the
+        // article, written from the map in round 1 again) is a new return there.
         runGraphInBackground({
             sessionId,
+            rolledBackTo: rollbackTo,
             invoke: () => graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }),
             getState: () => graph.getState(config),
             buildResponse: async (result, graphState) => {

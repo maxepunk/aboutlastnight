@@ -264,6 +264,63 @@ describe('4.12a fix round 1: a stop\'s round is one rule, stopRoundOf (lib/workf
   });
 });
 
+// Task 4.12c (ruling 4 on 4.12a's minors): a forced /start appended to the old run's log with no
+// mark, so the readout could not tell where the run it measures begins.
+describe('4.12c: a fresh start\'s first pause is marked', () => {
+  it('carries fresh: true, so the readout sees where the run it measures begins', () => {
+    const state = meetingState();
+    stopsLog.recordPause(SESSION, { stop: 'paper-evidence-selection', state, data: { type: 'paper-evidence-selection' } });
+    stopsLog.recordPause(SESSION, { stop: 'paper-evidence-selection', state, data: { type: 'paper-evidence-selection' }, fresh: true });
+    const [before, fresh] = linesOf();
+    expect(Object.keys(fresh)).toEqual(['at', 'kind', 'stop', 'round', 'words', 'fresh']);
+    expect(fresh).toMatchObject({ kind: 'pause', stop: 'paper-evidence-selection', round: 1, fresh: true });
+    // Every other line carries no mark.
+    expect(before).not.toHaveProperty('fresh');
+    stopsLog.recordAction(SESSION, { stop: 'paper-evidence-selection', state, resume: { approved: true } });
+    expect(linesOf()[2]).not.toHaveProperty('fresh');
+  });
+});
+
+// Task 4.12c (ruling 4 on 4.12a's minors): a rollback to the article writes it again from the map
+// and starts its rounds over (R9), so the director's new article in round 1 got no line.
+describe('4.12c: a pause after a rollback that rewrote its stop is a new return', () => {
+  const { ROLLBACK_CLEARS, VALID_ROLLBACK_POINTS } = require('../workflow/state');
+  const deskState = (extra = {}) => ({ ...reworkFixtureState('journalist'), humanArticleRevisionCount: 0, ...extra });
+  const deskData = () => ({ type: 'article', contentBundle: require('./fixtures/rework-state').PREVIOUS_BUNDLE, directorGateNotes: [], trace: [] });
+
+  it('a rollback to the article writes the article again in round 1: its pause is a new line, though the last line is the article in round 1', () => {
+    stopsLog.recordPause(SESSION, { stop: 'article', state: deskState(), data: deskData() });
+    stopsLog.recordPause(SESSION, { stop: 'article', state: deskState(), data: deskData(), rolledBackTo: 'article' });
+    expect(linesOf().map((line) => [line.kind, line.stop, line.round])).toEqual([['pause', 'article', 1], ['pause', 'article', 1]]);
+    // Its line is a pause like any other: the words the new article shows.
+    expect(linesOf()[1]).toEqual({ at: linesOf()[1].at, kind: 'pause', stop: 'article', round: 1, words: wordsShown('article', deskData()) });
+  });
+
+  it('a rollback that reopens a stop as the director left it is no new line: the map, the story meeting (R9)', () => {
+    const map = reworkFixtureState('journalist');
+    stopsLog.recordPause(SESSION, { stop: 'outline', state: map, data: mapData(map) });
+    stopsLog.recordPause(SESSION, { stop: 'outline', state: map, data: mapData(map), rolledBackTo: 'outline' });
+    const meeting = meetingState();
+    stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: meeting, data: meetingData(meeting) });
+    stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: meeting, data: meetingData(meeting), rolledBackTo: 'arc-selection' });
+    expect(linesOf().map((line) => [line.stop, line.round])).toEqual([['outline', 1], ['arc-selection', 1]]);
+  });
+
+  it('a stop is rewritten when the rollback point clears the output it shows (rewritesStop, read from ROLLBACK_CLEARS)', () => {
+    const { rewritesStop, STOP_OUTPUTS } = stopsLog;
+    expect(rewritesStop('article', 'article')).toBe(true);
+    expect(rewritesStop('evidence-and-photos', 'evidence-and-photos')).toBe(true);
+    ['outline', 'arc-selection', 'input-review', 'character-ids', 'paper-evidence-selection', 'pre-curation'].forEach((point) => {
+      expect([point, rewritesStop(point, point)]).toEqual([point, false]);
+    });
+    expect(rewritesStop(null, 'article')).toBe(false);
+    expect(rewritesStop('article', 'photos')).toBe(false);
+    VALID_ROLLBACK_POINTS.forEach((point) => Object.keys(STOP_OUTPUTS).forEach((stop) => {
+      expect([point, stop, rewritesStop(point, stop)]).toEqual([point, stop, ROLLBACK_CLEARS[point].includes(STOP_OUTPUTS[stop])]);
+    }));
+  });
+});
+
 // The re-review of 4.12a's fix round, out of scope there: the trace's round and the reworks'
 // banner round computed the rule again. Each calls stopRoundOf now.
 describe('4.12c: one round rule everywhere: the trace\'s round and the reworks\' banner round call stopRoundOf', () => {

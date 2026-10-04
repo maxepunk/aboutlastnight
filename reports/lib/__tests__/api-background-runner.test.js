@@ -134,3 +134,87 @@ describe('runGraphInBackground', () => {
     expect(inFlight.size).toBe(0);      // nothing scheduled/tracked
   });
 });
+
+// Task 4.12c: the review of 4.12a asked for the runner's stops-log paths under test, with a stub
+// for deps.stopsLog. The action is written once the run holds the lock, and a pause only for a
+// run that ends paused at a stop; a rollback's run hands the log the point it rolled back to.
+describe('4.12c: the stops log\'s lines the runner writes (deps.stopsLog)', () => {
+  function stubLog() {
+    const actions = [];
+    const pauses = [];
+    return {
+      actions, pauses,
+      log: {
+        recordAction: (id, action) => actions.push({ id, ...action }),
+        recordPause: (id, pause) => pauses.push({ id, ...pause })
+      }
+    };
+  }
+  const ACTION = { stop: 'outline', state: { humanOutlineRevisionCount: 0 }, resume: { approved: true } };
+  const PAUSED = { values: { humanOutlineRevisionCount: 1 } };
+  const pausedAt = (stop) => () => ({ sessionId: 's', interrupted: true, checkpoint: { type: stop, map: {} } });
+
+  it('the lock\'s 409 writes no action line, and no pause', async () => {
+    const { log, actions, pauses } = stubLog();
+    const { deps, held } = makeDeps({ stopsLog: log });
+    held.add('s6');
+    const out = runGraphInBackground({
+      sessionId: 's6', action: ACTION,
+      invoke: async () => ({}), getState: async () => PAUSED, buildResponse: pausedAt('outline'),
+      res: makeRes(), inFlightTasks: new Set(), deps
+    });
+    expect(out.scheduled).toBe(false);
+    expect([actions, pauses]).toEqual([[], []]);
+  });
+
+  it('a run that fails writes the director\'s action, and no pause line', async () => {
+    const { log, actions, pauses } = stubLog();
+    const { deps } = makeDeps({ stopsLog: log });
+    const out = runGraphInBackground({
+      sessionId: 's7', action: ACTION,
+      invoke: async () => { throw new Error('SDK timeout'); }, getState: async () => PAUSED, buildResponse: pausedAt('outline'),
+      res: makeRes(), inFlightTasks: new Set(), deps
+    });
+    await out.task;
+    expect(actions).toEqual([{ id: 's7', ...ACTION }]);
+    expect(pauses).toEqual([]);
+  });
+
+  it('a run that ends paused writes one pause line, with the stop, the state and the payload it paused with', async () => {
+    const { log, actions, pauses } = stubLog();
+    const { deps } = makeDeps({ stopsLog: log });
+    const out = runGraphInBackground({
+      sessionId: 's8', action: ACTION,
+      invoke: async () => ({}), getState: async () => PAUSED, buildResponse: pausedAt('article'),
+      res: makeRes(), inFlightTasks: new Set(), deps
+    });
+    await out.task;
+    expect(actions).toHaveLength(1);
+    expect(pauses).toEqual([{ id: 's8', stop: 'article', state: PAUSED.values, data: { type: 'article', map: {} }, rolledBackTo: null }]);
+  });
+
+  it('a run that ends complete writes no pause line', async () => {
+    const { log, pauses } = stubLog();
+    const { deps } = makeDeps({ stopsLog: log });
+    const out = runGraphInBackground({
+      sessionId: 's9', invoke: async () => ({}), getState: async () => ({ values: {} }),
+      buildResponse: () => ({ sessionId: 's9', currentPhase: 'complete' }),
+      res: makeRes(), inFlightTasks: new Set(), deps
+    });
+    await out.task;
+    expect(pauses).toEqual([]);
+  });
+
+  it('a rollback\'s run hands its pause the point it rolled back to, and writes no action', async () => {
+    const { log, actions, pauses } = stubLog();
+    const { deps } = makeDeps({ stopsLog: log });
+    const out = runGraphInBackground({
+      sessionId: 's10', rolledBackTo: 'article',
+      invoke: async () => ({}), getState: async () => PAUSED, buildResponse: pausedAt('article'),
+      res: makeRes(), inFlightTasks: new Set(), deps
+    });
+    await out.task;
+    expect(actions).toEqual([]);
+    expect(pauses.map((pause) => [pause.stop, pause.rolledBackTo])).toEqual([['article', 'article']]);
+  });
+});
