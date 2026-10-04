@@ -55,6 +55,8 @@ const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
 const { isSessionLocked } = require('./lib/session-locks');
 const { runGraphInBackground } = require('./lib/api-background-runner');
+// Task 4.12a (R8): the stops log: a line for each new pause and each action of the director's.
+const stopsLog = require('./lib/stops-log');
 const { SchemaValidator } = require('./lib/schema-validator');
 // Task 4.3: the article as it will print, one renderer for htmlPreview and the desk's preview route.
 const { previewOptionsOf, articlePreviewHtml, writerTrackerPrints } = require('./lib/article-preview');
@@ -1719,6 +1721,8 @@ app.post('/api/session/:id/start', requireAuth, async (req, res) => {
         if (interrupted) {
             const interruptData = getInterruptData(graphState);
             const checkpointData = await buildCompleteCheckpointData(interruptData, graphState.values);
+            // Task 4.12a (R8): the fresh run's first pause, whatever the run this start replaced last logged.
+            stopsLog.recordPause(sessionId, { stop: interruptData.type, state: graphState.values, data: checkpointData, fresh: true });
             return res.json(buildInterruptResponse(sessionId, checkpointData, result.currentPhase));
         }
 
@@ -1786,8 +1790,9 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
         config.configurable.theme = theme;
 
         // Build resume payload from approvals (pass current state for incremental input merging)
+        const checkpointType = getInterruptData(graphState)?.type || null;
         const { resume, stateUpdates, error: validationError } = buildResumePayload(
-            approvals, graphState.values, theme, getInterruptData(graphState)?.type || null
+            approvals, graphState.values, theme, checkpointType
         );
         if (validationError) {
             return res.status(400).json({ sessionId, error: validationError });
@@ -1797,9 +1802,11 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
 
         // Non-blocking via the shared runner: it acquires the sessionId lock (409 on a
         // second concurrent approve), returns {status:'processing'}, runs the graph in the
-        // background, records the outcome, and emits the result via SSE.
+        // background, records the outcome, and emits the result via SSE. Task 4.12a (R8): the
+        // runner writes the director's action on the stops log as the run starts, once it holds the lock.
         runGraphInBackground({
             sessionId,
+            action: { stop: checkpointType, state: graphState.values, resume },
             invoke: () => graph.invoke(
                 new Command({ resume, update: stateUpdates }),
                 { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }

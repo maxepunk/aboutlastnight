@@ -10,8 +10,12 @@
  * guard, building the `invoke`/`getState` thunks and the `buildResponse` callback.
  * THIS runner owns everything from the lock acquire onward: 409 on contention, the
  * immediate {status:'processing'} response, the setImmediate background invoke,
- * getState, buildResponse, outcome record, emitComplete, error path, lock release,
- * and inFlight tracking for graceful drain.
+ * getState, buildResponse, outcome record, the stops log's lines, emitComplete, error
+ * path, lock release, and inFlight tracking for graceful drain.
+ *
+ * Task 4.12a (R8): the stops log (lib/stops-log.js) gets the director's action, when the
+ * handler names one, as the run starts, so a request refused with the lock's 409 leaves no
+ * line; and the pause the run ends at, when that is a new stop or a new round of one.
  *
  * @module api-background-runner
  */
@@ -20,6 +24,7 @@ const { acquireSessionLock, releaseSessionLock } = require('./session-locks');
 const { recordSessionOutcome, buildOutcomeRecord } = require('./session-outcome');
 const { progressEmitter } = require('./observability');
 const { PHASES } = require('./workflow/state');
+const stopsLog = require('./stops-log');
 
 /**
  * @param {object} a
@@ -30,18 +35,21 @@ const { PHASES } = require('./workflow/state');
  * @param {object}   a.res                      - Express response (runner sends 409 or 200-processing)
  * @param {Set}      a.inFlightTasks            - server-owned Set for SIGINT drain (DUR-2)
  * @param {object}   [a.processingExtra]        - extra fields merged into the {status:'processing'} body
+ * @param {{stop: string, state: object, resume: object}} [a.action] - the director's action at a
+ *   stop (/approve), for the stops log
  * @param {object}   [a.deps]                   - injectable singletons for tests
  * @returns {{scheduled: boolean, task: Promise|null}}
  */
 function runGraphInBackground({
   sessionId, invoke, getState, buildResponse, res,
-  inFlightTasks, processingExtra = {}, deps = {}
+  inFlightTasks, processingExtra = {}, action = null, deps = {}
 }) {
   const _acquire = deps.acquireSessionLock || acquireSessionLock;
   const _release = deps.releaseSessionLock || releaseSessionLock;
   const _record = deps.recordSessionOutcome || recordSessionOutcome;
   const _buildOutcome = deps.buildOutcomeRecord || buildOutcomeRecord;
   const _emitComplete = deps.emitComplete || ((id, payload) => progressEmitter.emitComplete(id, payload));
+  const _stopsLog = deps.stopsLog || stopsLog;
 
   // CONC-1: refuse a concurrent invoke on this session (lock is sessionId-keyed, so this
   // spans resume/rollback/approve). The loser gets a 409, not a second 'processing'.
@@ -65,6 +73,7 @@ function runGraphInBackground({
     const task = new Promise((resolve) => {
       setImmediate(async () => {
         try {
+          if (action) _stopsLog.recordAction(sessionId, action);
           const result = await invoke();
           const graphState = await getState();
           // buildResponse may be async (the article gate renders an HTML preview, H13).
@@ -72,6 +81,9 @@ function runGraphInBackground({
           const response = await buildResponse(result, graphState);
           // DEL-1: persist the outcome FIRST so a dropped SSE is recoverable via GET /state.
           _record(sessionId, _buildOutcome(response));
+          if (response && response.interrupted === true && response.checkpoint) {
+            _stopsLog.recordPause(sessionId, { stop: response.checkpoint.type, state: graphState && graphState.values, data: response.checkpoint });
+          }
           _emitComplete(sessionId, response);
         } catch (error) {
           console.error(`[${new Date().toISOString()}] Background workflow error for session ${sessionId}:`, error);
