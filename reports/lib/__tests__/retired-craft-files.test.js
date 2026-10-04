@@ -91,23 +91,34 @@ describe('the retired journalist craft files', () => {
    * Task 4c-fix (3.12 review minor 5): each standalone agent lists exactly the rule files
    * its pipeline counterpart reads, so an agent's list cannot fall behind a change to
    * RULE_SET_CALLS. Every call reads the world and the truth rules, then its craft files
-   * in RULE_SET_CALLS order, then the reporting-mode block (spec section 8). The evidence
-   * curator and the image analyzer write no story text, so they read the world file
-   * alone, for the game's facts and what each memory became. The three specialists left
-   * the skill path when the standalone path was rewritten to defer to the rule set:
-   * nothing started them.
+   * in RULE_SET_CALLS order, then the reporting-mode block (the phase 4 spec's section 11,
+   * which was the rule-set spec's section 8). The evidence curator and the image analyzer
+   * write no story text, so they read the world file alone, for the game's facts and what
+   * each memory became. The three specialists left the skill path when the standalone path
+   * was rewritten to defer to the rule set: nothing started them.
+   *
+   * Phase 4 (brief 4.12b; R13): the arc analyzer writes the weave and the outline generator
+   * the map, the pipeline's `arc` and `outline` calls. The article validator is the article
+   * judge's counterpart, `judge-article`: it checks the draft against the truth rules and
+   * writes no notes on the writing, so it reads no craft file (spec 6.2 and section 11).
    */
   const AGENT_CALLS = {
     'journalist-arc-analyzer.md': 'arc',
     'journalist-outline-generator.md': 'outline',
     'journalist-article-generator.md': 'article',
-    'journalist-article-validator.md': 'article',
+    'journalist-article-validator.md': 'judge-article',
     'journalist-evidence-curator.md': null,
     'journalist-image-analyzer.md': null
   };
 
   it('maps every agent definition to its pipeline counterpart', () => {
     expect(fs.readdirSync(path.join(REPO, '.claude', 'agents')).sort()).toEqual(Object.keys(AGENT_CALLS).sort());
+  });
+
+  it('maps each agent to a call the rule set has, so a retired call fails here', () => {
+    Object.entries(AGENT_CALLS).filter(([, call]) => call !== null).forEach(([agent, call]) => {
+      expect(`${agent}: ${call}: ${Object.prototype.hasOwnProperty.call(RULE_SET_CALLS, call)}`).toBe(`${agent}: ${call}: true`);
+    });
   });
 
   it.each(Object.entries(AGENT_CALLS))('%s lists exactly the rule files the %s call reads', (agent, call) => {

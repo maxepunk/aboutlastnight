@@ -3,18 +3,18 @@
 The shapes of the files the journalist skill's steps pass to one another, under `data/<session-id>/`. Angle brackets hold placeholders, and `a | b` lists the allowed values. The inputs and the record keep every text, name and figure as their source gives it; the record puts logged times on the session clock.
 
 What the article says, and how, is the rule set's (`references/rules/`). Two files take their shape from JSON schemas instead of this page:
-- `analysis/article-outline.json`: `lib/schemas/outline.schema.json`;
+- `analysis/article-outline.json`, the story map: `lib/schemas/outline.schema.json`;
 - `output/content-bundle.json`: `lib/schemas/content-bundle.schema.json`, which `scripts/assemble-article.js` validates.
 
 A **document** is any item of the record, an exposed memory or a piece of paper evidence, named by its `id`.
 
-A **question** for the director, wherever a file carries one, has the shape the two JSON schemas give each item of `writerQuestions`:
+A **record question** is one the session report or the record leaves for the director at the record's stop:
 
 ```
 {"kind": "player | pronoun | ledger", "about": "<the player's name, or for a ledger question the entry's time and amount, or the account>", "question": "<the question>"}
 ```
 
-`kind` names the case: `player` when the record holds nothing about a player, `pronoun` when a roster pronoun is missing, `ledger` when a ledger entry or an account's total looks wrong.
+`kind` names the case: `player` when the record holds nothing about a player, `pronoun` when a roster pronoun is missing, `ledger` when a ledger entry or an account's total looks wrong. The weave's questions, asked at the story meeting, have the weave's own shape.
 
 ## Inputs
 
@@ -39,7 +39,7 @@ The director's words, in one place: the notes given at intake, and every note gi
 ```
 {
   "notes": "<the director's notes, the epilogue included>",
-  "stopNotes": [{"stop": "record | arcs | outline | article", "kind": "approval | send-back", "text": "<the director's note>"}]
+  "stopNotes": [{"stop": "record | meeting | map | article", "kind": "approval | reweave | send-back", "text": "<the director's note>"}]
 }
 ```
 
@@ -53,7 +53,7 @@ The session report's rows, figures and times as written.
   "sales": [{"time": "<as logged>", "amount": <number>, "account": "<account>"}],
   "adjustments": [{"kind": "bonus | transfer", "time": "<as logged>", "amount": <number>, "from": "<account> | null", "to": "<account>"}],
   "finalStandings": [{"account": "<account>", "total": <number>}],
-  "questions": [<question>]
+  "questions": [<record question>]
 }
 ```
 
@@ -124,75 +124,45 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
   "accounts": [{"name": "<account>", "total": <number>, "sales": <number>}],
   "clock": "<as in the ledger>",
   "verdict": "<the group statement>",
-  "questions": [<question>]
+  "questions": [<record question>]
 }
 ```
 
-## The arcs
+## The weave
 
-### analysis/arc-analysis.json
+### analysis/weave.json
+
+The arc analyzer writes the weave. The director's changes at the story meeting are written into it, and every later step reads the weave as the director left it.
 
 ```
 {
-  "thesis": "<the proposed thesis>",
-  "narrativeArcs": [{
-    "id": "<arc id>",
-    "title": "<title>",
-    "summary": "<the storyline>",
-    "arcSource": "accusation | whiteboard | observation | discovered",
-    "keyEvidence": ["<document id>"],
-    "characterPlacements": {"<player>": "<what the record shows they did in this arc>"},
-    "evidenceStrength": "strong | moderate | weak | speculative",
-    "caveats": ["<what complicates the arc>"],
-    "unansweredQuestions": ["<what the record leaves open>"],
-    "analysisNotes": {"financial": "<the money lens>", "behavioral": "<the behaviour lens>", "victimization": "<the victimization lens>"},
-    "interweaving": {"sharedCharacters": ["<character>"], "callbackSeeds": ["<a detail to plant early>"], "convergenceRole": "<what this arc brings to the convergence>"}
-  }],
-  "interweavingPlan": {
-    "suggestedOrder": ["<arc id>"],
-    "convergencePoint": "<where the threads meet>",
-    "keyCallbacks": [{"plantIn": "<arc id>", "payoffIn": "<arc id>", "detail": "<the detail>"}]
-  },
-  "heroSuggestion": {"filename": "<file>", "reason": "<why>"},
-  "writerQuestions": [<question>],
-  "userSelections": null | {"selectedArcs": ["<arc id>"], "heroImage": "<filename>"}
+  "story": "<the thesis, in one to three sentences>",
+  "question": "<the question the story carries through the article>",
+  "headline": "<a working headline>",
+  "fromYourNotes": "<the director's own words the story rests on, copied exactly>",
+  "threads": [{"id": "<thread id>", "claim": "<what the thread claims, in one line>", "role": "main-thread | grounds-it | complicates-it | mirrors-it | carries-it-forward | left-out", "receipt": "<document id> | ledger", "reason": "<for a left-out thread, why the story does not need it>", "verdict": true}],
+  "connections": [{"id": "<connection id>", "kind": "person | moment | document | line", "joins": ["<thread id>", "<thread id>"], "detail": "<where the two threads touch, named exactly>", "struck": true}],
+  "convergence": "<where the threads converge and the story lands>",
+  "strongerMainThread": {"thread": "<thread id>", "reason": "<why, in one line>"},
+  "questions": [{"id": "<question id>", "kind": "player | pronoun | figure", "about": "<the player's name; for a figure, the ledger entry's time and amount or the words said in the room>", "question": "<the question>", "changes": "<what its answer changes in print>", "answer": "<the director's answer, word for word>"}],
+  "directorChanges": [{"id": "E<n>", "change": "<what the director changed at the story meeting, as they gave it>"}]
 }
 ```
 
-### summaries/arc-summary.json
+`fromYourNotes` is there only when the story starts from the director's read, `verdict` only on the thread that carries the room's verdict, and `strongerMainThread` only when the writer sees one. A thread the director adds has an id of its own and may have no receipt. `struck`, `answer` and `directorChanges` are the director's, written at the story meeting: `struck` on each connection they struck, `answer` on each question they answered, and in `directorChanges` each change they made, under the next id from E1.
 
-```
-{
-  "thesis": "<the proposed thesis>",
-  "arcs": [{"id": "<arc id>", "title": "<title>", "arcSource": "<source>", "evidenceStrength": "<strength>", "summary": "<one line>"}],
-  "heroSuggestion": {"filename": "<file>", "reason": "<why>"},
-  "writerQuestions": [<question>]
-}
-```
+## The map
 
-`arcs` follows `interweavingPlan.suggestedOrder`.
+### analysis/article-outline.json
 
-## The outline
-
-### summaries/outline-summary.json
-
-```
-{
-  "sections": [{"slot": "lede | theStory | followTheMoney | thePlayers | whatsMissing | closing", "plan": "<one line>"}],
-  "cards": [{"documentId": "<id>", "slot": "<slot>"}],
-  "photos": [{"filename": "<file>", "slot": "<slot>"}],
-  "writerQuestions": [<question>]
-}
-```
-
-`sections` lists the slots the outline fills, in reading order.
+The story map, in the shape of `lib/schemas/outline.schema.json`. Each section's `slot`, and each dropped slot, is one of the journalist theme's slots, `map.slots` in `lib/theme-config.js`. The director's changes at the map's stop are written into it: a struck beat moves to `leftOut`, and a beat brought back moves into the section the director picks.
 
 ## The article
 
 ### output/article-metadata.json
 
 ```
-{"narratorWords": <n>, "cards": <n>, "photos": <n>, "writerQuestions": [<question>], "generatedAt": "<ISO timestamp>"}
+{"narratorWords": <n>, "cards": <n>, "photos": <n>, "generatedAt": "<ISO timestamp>"}
 ```
 
 `narratorWords` counts the headline, the deck and the paragraphs.
@@ -204,8 +174,8 @@ The article validator's reply.
 ```
 {
   "passed": <true when mustFix is empty>,
-  "mustFix": [{"rule": "<T1 to T15, or C7 for a missing player>", "text": "<the printed words at fault>", "record": "<what the record shows>", "fix": "<the change>"}],
-  "shouldConsider": [{"rule": "<C1 to C19>", "text": "<the printed words>", "suggestion": "<the change>"}],
+  "mustFix": [{"rule": "<T1 to T15, or placed-player for a player the map places whom the page never names>", "text": "<the printed words at fault>", "record": "<what the record shows>", "fix": "<the change>"}],
+  "flags": [{"flag": "em-dash | over-length", "where": "<the section id, or headline>", "text": "<the printed words, or the words per section>"}],
   "narratorWords": {"total": <n>, "bySection": {"<section id>": <n>}}
 }
 ```

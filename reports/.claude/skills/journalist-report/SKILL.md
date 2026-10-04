@@ -8,6 +8,8 @@ description: |
 
 This skill makes one session's article, with the director deciding at each stop. The rule set in `references/rules/` decides what the article says and how: `world.md` (the game, what each memory became, the record), `truth-rules.md` (T1 to T15), the `craft-*.md` files (C1 to C19) and the mode files `mode-on-site.md` and `mode-remote.md`. Each agent reads the rule files its job needs. This skill holds the steps, the stops and the files passed between them; where anything below differs from the rule set, the rule set decides.
 
+The story is settled in stages, as in the console: the record; the weave, the one story the article will tell, which the director settles at the story meeting; the story map, the weave laid across the article's sections, which the director settles at the map's stop; and the article, written from both.
+
 Run every command from `reports/`. The session id is the session date as MMDDYY. The session's files live in `data/<session-id>/`, in the shapes `references/schemas.md` gives.
 
 ## The agents
@@ -16,20 +18,20 @@ Run every command from `reports/`. The session id is the session date as MMDDYY.
 |---|---|---|
 | 5 | `journalist-image-analyzer` | one photo's analysis, in its reply |
 | 7 | `journalist-evidence-curator` | `analysis/evidence-bundle.json`, `summaries/evidence-summary.json` |
-| 8 | `journalist-arc-analyzer` | `analysis/arc-analysis.json`, `summaries/arc-summary.json` |
-| 9 | `journalist-outline-generator` | `analysis/article-outline.json`, `summaries/outline-summary.json` |
+| 8 | `journalist-arc-analyzer` | `analysis/weave.json` |
+| 9 | `journalist-outline-generator` | `analysis/article-outline.json` |
 | 10 | `journalist-article-generator` | `output/content-bundle.json`, `output/article-metadata.json`, `output/article.html` |
 | 11 | `journalist-article-validator` | the validation result, in its reply |
 
-Start each one with the Agent tool, giving it the session id; its definition names the files it reads. Read each step's summary file yourself; the agents work from the full files.
+Start each one with the Agent tool, giving it the session id, and for a round from a stop, which round it is; its definition names the files it reads.
 
 ## Stops
 
-At a stop, show the director the step's summary with its questions (`questions` or `writerQuestions`), then ask with AskUserQuestion whether to approve or send back. The director answers the questions and gives direction in a note.
+At a stop, show the director what the stop decides, then ask with AskUserQuestion whether to approve or send back, and at the story meeting whether to reweave. The record's stop shows `summaries/evidence-summary.json` with its questions; the story meeting, the weave; the map's stop, the map; the article's stop, the page with the validation result.
 
-Add every note the director gives at a stop to `stopNotes` in `inputs/director-notes.json`, word for word, with its stop and whether it came with an approval or a send-back. Every later agent reads the director's words there.
+At the story meeting and the map's stop the director's changes are final: write each into the step's file as the director gives it, word for word. Add every note the director gives at a stop to `stopNotes` in `inputs/director-notes.json`, word for word, with its stop and its kind: an approval, a reweave or a send-back. Every later agent reads the director's words there.
 
-A send-back runs the step's agent again, starting from the files it wrote last time.
+A send-back needs a note. It runs the step's agent again, starting from the files it wrote last time, with the note as its task.
 
 ## Steps
 
@@ -94,29 +96,54 @@ Start `journalist-evidence-curator`.
 
 **Stop: the record.** Show `summaries/evidence-summary.json` with its questions. The director approves or corrects. A correction to something the record copies (a pronoun, the reporting mode, a ledger row) is made in the input file that holds it, and the curator runs again.
 
-### 8. Find the arcs
+### 8. Write the weave
 
 Start `journalist-arc-analyzer`.
 
-**Stop: the arcs.** Show `summaries/arc-summary.json`: the thesis, the arcs in their suggested order, the suggested opening photo and the writer's questions. Ask which three to five arcs to build on and which photo opens the article, and write both into `userSelections` in `analysis/arc-analysis.json`.
+**Stop: the story meeting.** Show the weave as one page of about 400 words, in this order:
+1. the verdict: the group statement, from the record;
+2. the story, the question it carries and the working headline;
+3. from your notes, or, when the weave has none, the line "Your notes end without your read of the session, so this story is the writer's proposal.";
+4. the threads, each with its role and its receipt by the document's name, a left-out thread with its reason;
+5. the connections, each with the threads it joins, and where they converge;
+6. the stronger main thread, when the weave has one;
+7. the questions, each with what its answer changes.
 
-### 9. Plan the outline
+The director can edit the story, the question, the headline and the convergence; change a thread's role; add a thread in one line, with a role; strike a connection, or bring a struck one back; answer each question; and leave a note. Write each answer on its question, and each other change into `analysis/weave.json`, listed in `directorChanges` (`references/schemas.md`, "The weave"). Then:
+- **Approve**: go on to step 9.
+- **Reweave**, once the director has changed more than the answers or written a note: start `journalist-arc-analyzer` for a reweave, then hold this stop again.
+- **Send back**, with a note: start it for a send-back, then hold this stop again, showing each of the director's changes the rework changed, with its reason.
+
+### 9. Lay out the map
 
 Start `journalist-outline-generator`.
 
-**Stop: the outline.** Show `summaries/outline-summary.json`.
+**Stop: the map.** Show the map as one page of about 450 words, in this order:
+1. the settled story: the weave's story and question, read-only;
+2. the gap line, when the map has one;
+3. the headline, the deck and the top photo;
+4. each section in the map's order, under its slot's label: its heading, its job, its beats with their material, cards and players, and its photos;
+5. the dropped sections, each with its reason;
+6. Everyone: where each roster player appears, from the beats' players; then the cards, the photos placed of those the director kept, and the expected length;
+7. left out;
+8. what the map changed to fit the meeting's changes, each with its source.
+
+The director can edit any line; move a beat to another section, or a photo to another section or the top; strike a beat into left out; bring a beat back from left out into a section they pick; add a beat; and leave a note. Write each change into `analysis/article-outline.json` (`references/schemas.md`, "The map"). Then:
+- **Approve**: go on to step 10.
+- **Send back**, with a note: start `journalist-outline-generator` again, then hold this stop again.
+- **Back to the story meeting**, to change the story itself: hold step 8's stop again on the weave as the director left it, with no agent run. After its approval, step 9 writes the map again.
 
 ### 10. Write the article
 
-Start `journalist-article-generator`. It writes the bundle and renders `output/article.html`.
+Start `journalist-article-generator`. It writes from the settled weave and the map as the director left them, and renders `output/article.html`.
 
 ### 11. Check the article
 
-Start `journalist-article-validator`. When its `mustFix` list holds findings, show them and ask the director whether to send them back to the article generator as a rework or to go on to the stop. That rework gets the `mustFix` list alone: the `shouldConsider` list is the editor's notes for the director, shown at step 12. Check every rework again.
+Start `journalist-article-validator`. When its `mustFix` list holds findings, show them and ask the director whether to send them back to the article generator as a rework or to go on to the stop. That rework gets the `mustFix` list alone: the flags are the director's, shown at step 12. Check every rework again.
 
 ### 12. Stop: the article, and publish
 
-Show the director the validation result, its should-consider list included, the writer's questions from `output/article-metadata.json`, and the page. The copy in the session folder shows no photos; the published copy does. A send-back is a rework of step 10.
+Show the director the validation result, its flags included, and the page. The copy in the session folder shows no photos; the published copy does. A send-back is a rework of step 10.
 
 On approval, publish:
 - `output/article.html` as `outputs/report-<session-id>.html`;

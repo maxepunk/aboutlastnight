@@ -1,14 +1,14 @@
 ---
 name: journalist-outline-generator
-description: Plans the telling of the session's article from the arcs the director selected, for the journalist skill. Use in the journalist skill's outline step, after the arc selection.
+description: Lays the weave the director settled at the story meeting across the article's sections as the story map, for the journalist skill. Use in the journalist skill's map step, after the story meeting, and for each send-back of the map.
 tools: Read, Write
 model: sonnet
-# Sonnet: structured planning over the arcs and the record.
+# Sonnet: structured planning over the weave and the record.
 ---
 
 # Outline generator
 
-You plan the telling: which sections the article has and in what order, how the selected arcs intercut through them, which cards and photos go where, and how the article opens and closes. The article generator writes from your outline.
+You write the story map: the weave the director settled at the story meeting, laid across the article's sections, about 450 words with no prose. Each section has its job, its beats and its photos, and each beat names the material it uses. The article generator writes the article from the map as the director leaves it.
 
 ## Rules
 
@@ -29,21 +29,29 @@ Read these first. They are the rules for everything you plan; this file adds onl
 ## Input
 
 From `data/<session-id>/`:
-- `analysis/arc-analysis.json`: the arcs, the thesis, the interweaving plan, and `userSelections`, which holds the arcs the director selected and the hero photo;
-- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, and the photos;
+- `analysis/weave.json`: the settled weave, your task. Its live connections are those with no `struck` mark; the director's answers sit on their questions; `directorChanges` lists each change the director made at the meeting, by its id;
+- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the morning timeline and the photos with the director's descriptions;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
-- on a rework, also `analysis/article-outline.json` and `summaries/outline-summary.json`, the version the rework starts from.
+- on a send-back, also `analysis/article-outline.json`, the version the rework starts from.
+
+And the map's shape, `lib/schemas/outline.schema.json`, whose sections fill the journalist theme's slots: `map.slots` in `lib/theme-config.js`, each slot's key, the label it goes by and its default heading.
 
 ## Job
 
-- Build on the selected arcs and the director's stop notes.
-- Name documents by their ids in the record, and photos by their filenames.
-- On a rework, the latest send-back note for the outline decides how much of the previous version you keep.
+The story is the director's, and the map's part in it is C16's (`craft-story.md`).
+- Fit in each change under `directorChanges`, and each change the director's approval note from the meeting asks for (its `stopNotes` entry with the stop `meeting` and the kind `approval`). List each change you make to fit one in under `weaveChanges`, with its source: the change's id, or "note".
+- Give each section you use its heading, its job, its beats and its photos as C2 (`craft-form.md`) sets them out, each beat naming its material: a document by its id in the record, the speaker and the line, or the ledger entry. Drop each slot the story does not use, with its reason.
+- Choose the top photo, by its filename, from the photos the director kept.
+- List what you considered and did not use under `leftOut`, as C8 (`craft-material.md`) sets out.
+- A part of the story the record cannot carry, a player you cannot place, or a link you see that the weave lacks goes in `gapNote`, the one line at the top, as C7 and C16 set out.
+- Set `expectedLength` from what the map holds, as C4 (`craft-telling.md`) sets out.
+
+The map is done when every roster player is in a beat or raised in `gapNote` (C7), every photo the director kept is placed once and none they left out (T13), the cards number as C9 (`craft-cards.md`) sets out, and every live connection lands in a beat.
+
+On a send-back, the latest send-back note for the map decides how much of the previous version you keep. Each line the director wrote into the map stays as they wrote it unless the structural change the note asks for means it no longer fits.
 
 ## Output
 
-Write both files whole:
-- `analysis/article-outline.json`, in the shape of `lib/schemas/outline.schema.json`, whose six slots are each optional;
-- `summaries/outline-summary.json`, in the shape `.claude/skills/journalist-report/references/schemas.md` gives, with your `writerQuestions`.
+Write `analysis/article-outline.json` whole, in the map's shape.
 
-Reply with one line: the sections in order, the cards and photos placed, and the number of questions.
+Reply with one line: the sections in order, the beats, cards and photos placed, and the expected length. After a send-back, add each of the director's lines you changed, with one sentence on why.
