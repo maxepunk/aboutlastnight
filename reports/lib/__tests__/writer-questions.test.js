@@ -593,18 +593,20 @@ describe('the arc reworker carries the writer\'s OUTPUT FORMAT with the field', 
 //
 // carriedWeaveQuestions pairs a previous question with the rework's only when they read as
 // the same question: the same words, then the same subject (its kind and `about`), each in
-// its place under its id first, then a question of its kind in its place, whose `about` the
-// rework rephrased (in an answered question's place, with the question's own words too). A
-// question's place is its occurrence under its id (lib/weave.js occurrenceKeys), as the diff
-// pairs elements: the first under an id with the first, the second with the second. The
-// rework's ids stand, and a question that comes back takes an id of its own when another
-// holds its id. Keyed by id alone, a repeated question id survived every rework, and a
-// rework that renumbered printed one question twice (4.5 re-review). Paired by place alone,
-// a rework that renumbered in order handed the director's answer to another question and
-// dropped a question (fix round 1, finding 1). Paired by sameness alone, a rephrased `about`
-// kept the answered question beside the rework's copy of it, and a question that came back
-// beside the rework's question under its id made a repeat the rework never returned (fix
-// round 2, findings 3 and 4).
+// its place under its id first, then a question of its kind in its place whose `about` names
+// the same subject in other words (in an answered question's place, with the question's own
+// words too). A question's place is its occurrence under its id (lib/weave.js
+// occurrenceKeys), as the diff pairs elements: the first under an id with the first, the
+// second with the second. The rework's ids stand, and a question that comes back takes an id
+// of its own when another holds its id. Keyed by id alone, a repeated question id survived
+// every rework, and a rework that renumbered printed one question twice (4.5 re-review).
+// Paired by place alone, a rework that renumbered in order handed the director's answer to
+// another question and dropped a question (fix round 1, finding 1). Paired by sameness alone,
+// a rephrased `about` kept the answered question beside the rework's copy of it, and a
+// question that came back beside the rework's question under its id made a repeat the rework
+// never returned (fix round 2, findings 3 and 4). Paired in its place by kind alone, a
+// question on another player or another ledger entry took a previous question's place and
+// one of the two was dropped (fix round 3, finding 1).
 describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () => {
   const { carriedWeaveQuestions } = require('../writer-questions');
   const MORGAN = { ...W_SARAH, about: 'Morgan', question: 'The record holds nothing Morgan did: what did Morgan do?', changes: 'Whether Morgan prints.' };
@@ -703,8 +705,9 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
 
   // Fix round 2, finding 3: a question in a previous question's place and of its kind is
   // that question with its `about` rephrased (4.5 read a question under its id as the same
-  // question). In an answered question's place the question's own words must be the same
-  // too: the rework reads the director's answer, so a question in other words there is new.
+  // question), when its `about` names the same subject (fix round 3). In an answered
+  // question's place the question's own words must be the same too: the rework reads the
+  // director's answer, so a question in other words there is new.
   const SARAH_IN_FULL = { ...W_SARAH, about: 'Sarah Blackwood' };
   const FIGURE = { ...W_FIGURE, id: 'q1' };
   const SARAH_PRONOUN = { ...W_SARAH, kind: 'pronoun', question: 'The roster gives Sarah no pronoun: which one?', changes: "Sarah's pronoun in print." };
@@ -720,8 +723,8 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
       .toEqual([{ ...FIGURE, answer: 'A duplicate.' }, RILEY]);
   });
 
-  it("a question of its kind in an unanswered question's place is that question reworded: the rework's version stands", () => {
-    expect(carriedWeaveQuestions([clone(MORGAN)], [W_SARAH])).toEqual([MORGAN]);
+  it("a question of its kind on another player, in an unanswered question's place, is a new question: both stay, the previous one under an id of its own", () => {
+    expect(carriedWeaveQuestions([clone(MORGAN)], [W_SARAH])).toEqual([{ ...W_SARAH, id: 'q2' }, MORGAN]);
   });
 
   it("a question of its kind in other words, in an answered question's place, is a new question: both stay, the answered one under an id of its own", () => {
@@ -754,6 +757,47 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
   it('an id with no number at its end takes one', () => {
     expect(carriedWeaveQuestions([{ ...RILEY, id: 'sarah' }], [{ ...W_SARAH, id: 'sarah', answer: ANSWER }]))
       .toEqual([{ ...W_SARAH, id: 'sarah-1', answer: ANSWER }, { ...RILEY, id: 'sarah' }]);
+  });
+
+  // Fix round 3, finding 1: in a previous question's place, a question of its kind pairs
+  // only when its `about` names the same subject. A figure's `about` names its ledger entry
+  // by its time and amount, so two that both hold numbers name one entry when they hold the
+  // same numbers; otherwise one holds every word of the other, as a name given in full holds
+  // the name. A question on another player or another entry is a new question, and both stay.
+  const WHICH_PRONOUN = 'Which pronoun does the article use?';
+  const RILEY_PRONOUN = { ...W_PRONOUN, id: 'q1', question: WHICH_PRONOUN };
+  const JORDAN_PRONOUN = { ...RILEY_PRONOUN, about: 'Jordan', changes: "Jordan's pronoun in print." };
+  const DEREK_SALE = { ...FIGURE, about: 'The 08:10 AM sale of $50,000 into Derek' };
+  const SARAH_BLACKWOOD = { ...W_SARAH, about: 'Sarah Blackwood', question: 'Where was Sarah Blackwood this morning?' };
+
+  it("a question of its kind in the same words on another subject, in an answered question's place, is a new question: both stay, the answered one under an id of its own", () => {
+    expect(carriedWeaveQuestions([clone(JORDAN_PRONOUN)], [{ ...RILEY_PRONOUN, answer: 'she/her' }]))
+      .toEqual([{ ...RILEY_PRONOUN, id: 'q2', answer: 'she/her' }, JORDAN_PRONOUN]);
+    expect(carriedWeaveQuestions([clone(DEREK_SALE)], [{ ...FIGURE, answer: 'A duplicate.' }]))
+      .toEqual([{ ...FIGURE, id: 'q2', answer: 'A duplicate.' }, DEREK_SALE]);
+  });
+
+  it("the re-review's case: a new figure in the same words in the answered question's place stays, and the answered question stays whole, once", () => {
+    const melanieRenumbered = { ...FIGURE, id: 'q2', about: '07:50 AM, $75,000 into Melanie' };
+    const carried = carriedWeaveQuestions([clone(DEREK_SALE), clone(melanieRenumbered)], [{ ...FIGURE, answer: 'A duplicate.' }]);
+    expect(carried).toContainEqual(DEREK_SALE);
+    expect(carried.filter((q) => q.answer)).toEqual([{ ...FIGURE, id: 'q3', answer: 'A duplicate.' }]);
+  });
+
+  it('a name given in full, or shortened, in its place is the same player: the rework\'s version stands; a family name two players share is not', () => {
+    expect(carriedWeaveQuestions([clone(SARAH_BLACKWOOD)], [W_SARAH])).toEqual([SARAH_BLACKWOOD]);
+    expect(carriedWeaveQuestions([clone(W_SARAH)], [SARAH_BLACKWOOD])).toEqual([W_SARAH]);
+    const marcus = { ...SARAH_BLACKWOOD, about: 'Marcus Blackwood', question: 'Where was Marcus Blackwood this morning?' };
+    expect(carriedWeaveQuestions([clone(marcus)], [SARAH_BLACKWOOD])).toEqual([{ ...SARAH_BLACKWOOD, id: 'q2' }, marcus]);
+  });
+
+  it("a figure's `about` names its entry by its numbers: the same time and amount in other words is the same entry; another time and amount, or the time alone, is another entry", () => {
+    const reworded = { ...FIGURE, about: "07:50 AM: $75,000 into Melanie's account", question: 'Was this sale logged twice?' };
+    expect(carriedWeaveQuestions([clone(reworded)], [FIGURE])).toEqual([reworded]);
+    const derek = { ...DEREK_SALE, question: 'Was this sale logged twice?' };
+    expect(carriedWeaveQuestions([clone(derek)], [FIGURE])).toEqual([{ ...FIGURE, id: 'q2' }, derek]);
+    const sameMinute = { ...derek, about: 'The 07:50 AM sale into Derek' };
+    expect(carriedWeaveQuestions([clone(sameMinute)], [FIGURE])).toEqual([{ ...FIGURE, id: 'q2' }, sameMinute]);
   });
 
   describe('through the arc rework, then the checks', () => {
@@ -828,6 +872,19 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
         'send-back'
       );
       expect(questions).toEqual([W_SARAH, { ...RILEY, id: 'q4', answer: 'she/her' }, { ...SALE, id: 'q2' }]);
+      expect(failures).toEqual([]);
+    });
+
+    // Fix round 3, finding 1.
+    it("a send-back that puts a question on another player, in the same words, in an answered question's place: both questions, and no repeat", async () => {
+      const { questions, failures } = await reworkQuestions([{ ...RILEY_PRONOUN, answer: 'she/her' }], [clone(JORDAN_PRONOUN)], 'send-back');
+      expect(questions).toEqual([{ ...RILEY_PRONOUN, id: 'q2', answer: 'she/her' }, JORDAN_PRONOUN]);
+      expect(failures).toEqual([]);
+    });
+
+    it("an automatic pass that puts a question on another player in an unanswered question's place: both questions, and no repeat", async () => {
+      const { questions, failures } = await reworkQuestions([W_SARAH], [clone(MORGAN)]);
+      expect(questions).toEqual([{ ...W_SARAH, id: 'q2' }, MORGAN]);
       expect(failures).toEqual([]);
     });
   });

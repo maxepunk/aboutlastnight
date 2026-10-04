@@ -323,10 +323,35 @@ function idOfItsOwn(id, held) {
 }
 
 /**
+ * Whether two questions' `about`s name one subject, in the same words or in others (brief
+ * 4.5b, fix round 3). A figure's `about` names its ledger entry by its time and amount, so
+ * two that both hold numbers name one entry when they hold the same numbers ("The 07:50 AM
+ * sale of $75,000 into Melanie" and "07:50 AM: $75,000 into Melanie's account"). Otherwise
+ * one holds every word of the other, as a name given in full holds the name ("Sarah" and
+ * "Sarah Blackwood"). So "Riley" and "Jordan" are two players, "Sarah Blackwood" and "Marcus
+ * Blackwood" too, and a sale at another time or for another amount is another entry.
+ *
+ * @param {string} about - one question's `about`
+ * @param {string} other - the other question's `about`
+ * @returns {boolean}
+ */
+function namesOneSubject(about, other) {
+  const numbers = (text) => new Set(text.match(/\d+/g) || []);
+  const words = (text) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
+  const within = (some, all) => some.size > 0 && [...some].every((item) => all.has(item));
+  const [aboutNumbers, otherNumbers] = [numbers(about), numbers(other)];
+  if (aboutNumbers.size > 0 && otherNumbers.size > 0) {
+    return within(aboutNumbers, otherNumbers) && within(otherNumbers, aboutNumbers);
+  }
+  const [aboutWords, otherWords] = [words(about), words(other)];
+  return within(aboutWords, otherWords) || within(otherWords, aboutWords);
+}
+
+/**
  * A weave rework's questions (C15, ruling 4 of brief 4.5): every rework, an automatic
  * pass or the director's round alike, keeps each question the director has not answered.
  * Each previous question pairs with at most one of the rework's, and only with what reads
- * as the same question (brief 4.5b, fix rounds 1 and 2). The pairing runs in five steps,
+ * as the same question (brief 4.5b, fix rounds 1 to 3). The pairing runs in five steps,
  * each over every previous question before the next, so no question takes another's
  * partner:
  * 1. the same words (the kind, `about` and question, case and spacing folded), in its place;
@@ -334,12 +359,15 @@ function idOfItsOwn(id, held) {
  * 3. the same subject (subjectKey: the kind and `about`, the outline carry's rule), in its
  *    place: a question the rework reworded;
  * 4. the same subject in another place: a question the rework reworded and renumbered;
- * 5. in its place and of its kind: a question whose `about` the rework rephrased, as 4.5
- *    read a question under its id. In an answered question's place the question's own
- *    words must be the same too: the rework reads the director's answer, so a question it
- *    puts there in other words is a new one.
- * A question's place is its occurrence under its id (lib/weave.js occurrenceKeys), as the
- * diff pairs elements, so the questions under an id the weave repeats pair in order.
+ * 5. in its place, of its kind, with an `about` that names the same subject in other words
+ *    (namesOneSubject: the same numbers, or every word of one in the other): a question
+ *    whose `about` the rework rephrased, as 4.5 read a question under its id. In an
+ *    answered question's place the question's own words must be the same too: the rework
+ *    reads the director's answer, so a question it puts there in other words is a new one.
+ * A question on another player or another ledger entry is a new question wherever the
+ * rework puts it (fix round 3). A question's place is its occurrence under its id
+ * (lib/weave.js occurrenceKeys), as the diff pairs elements, so the questions under an id
+ * the weave repeats pair in order.
  * - An answered question stays whole, as the director answered it, in its place: code
  *   keeps it apart from the model's output, so a rework that drops it or rewords it
  *   changes nothing. Paired, it takes its partner's id.
@@ -355,13 +383,15 @@ function idOfItsOwn(id, held) {
  * - A rework that returns no list keeps the previous one.
  * No answer is ever read from the rework's returned questions.
  *
- * The pairing reads each case it cannot tell apart one way. A question on a previous
- * question's subject (steps 3 and 4), or of its kind in an unanswered question's place
- * (step 5), is that question reworded: so a second question a rework asks on the subject of
- * an answered question is not kept, and a new question of its kind that a rework puts in an
- * unanswered question's place replaces it. A question a rework rewords in both its `about`
- * and its words, in an answered question's place, stays beside it as a new question. And
- * two questions on one subject that a rework rewords can pair the wrong way round.
+ * The pairing reads each case it cannot tell apart one way:
+ * - A question the rework asks on the subject of a question it left out is that question
+ *   reworded (steps 3 to 5): it takes an unanswered question's place, and an answered
+ *   question absorbs it. Under a rephrased `about`, an answered question absorbs only a
+ *   question in its own words, and a question there in other words stays beside it.
+ * - A question whose `about` the rework rephrases and moves to another place, or rephrases
+ *   past one subject ("7:50" for "07:50", a nickname), is a new question: an unanswered
+ *   question then shows twice, and an answered one is asked again.
+ * - Two questions on one subject that a rework rewords can pair the wrong way round.
  *
  * @param {*} returned - the rework's questions (undefined when it returned none)
  * @param {*} previous - the questions of the weave the rework started from
@@ -381,6 +411,7 @@ function carriedWeaveQuestions(returned, previous) {
   const samePlace = (i, j) => previousPlaces[i] === returnedPlaces[j];
   const sameQuestion = (i, j) => fold(previousQuestions[i].question) === fold(returnedQuestions[j].question);
   const rephrased = (i, j) => samePlace(i, j) && previousQuestions[i].kind === returnedQuestions[j].kind
+    && namesOneSubject(previousQuestions[i].about, returnedQuestions[j].about)
     && (!isAnswered(previousQuestions[i]) || sameQuestion(i, j));
   const steps = [
     (i, j) => sameWords(i, j) && samePlace(i, j),
