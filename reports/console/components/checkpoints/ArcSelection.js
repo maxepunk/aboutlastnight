@@ -444,8 +444,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
       }, buttons.sendBack.label)
     ),
 
-    // Task 4.14d: what holds the buttons, beside them.
-    held && React.createElement('p', { className: 'validation-error', role: 'status' }, held)
+    // Task 4.14d: what holds the buttons, beside them; a hold, not an error (task 4.14g).
+    held && React.createElement('p', { className: 'held-line', role: 'status' }, held)
   );
 }
 

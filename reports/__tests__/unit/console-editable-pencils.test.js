@@ -145,7 +145,8 @@ describe('Article.js puts every pencil in the desk\'s rail', () => {
   it('renders its one pencil inside deskRow, the rail every editable piece goes through', () => {
     expect(count(src, 'editBtn(')).toBe(1);
     const row = src.slice(src.indexOf('function deskRow('));
-    expect(row.slice(0, row.indexOf('\n  }\n'))).toContain("React.createElement('div', { className: 'desk-rail' }, editBtn(onEdit)");
+    // Task 4.14g: the pencil waits for an editor left open (editHeld).
+    expect(row.slice(0, row.indexOf('\n  }\n'))).toContain("React.createElement('div', { className: 'desk-rail' }, editBtn(onEdit, editHeld)");
   });
 
   it('gives each piece of the article its row: blocks, section headings, the headline, the byline, the hero, sidebar cards, tracker rows', () => {

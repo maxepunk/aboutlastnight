@@ -43,9 +43,11 @@ describe('4.10: Article.js renders the desk from the view logic', () => {
   it('a piece open in its editor keeps its marks under the editor: a block, a heading, a sidebar card, the hero, the headline, the byline', () => {
     const block = src.slice(src.indexOf('function renderBlock('), src.indexOf('function renderSectionHeading('));
     expect(block).toMatch(/withMarks\('edit-' \+ sectionIdx \+ '-' \+ blockIdx, React\.createElement\(BlockEditor, \{[\s\S]*?\}\), marks\)/);
+    // Task 4.14g: between the editor and its marks, the line saying the desk's other controls wait
+    // for it; and a tracker row's editor, which has no marks, renders through withMarks for that line.
     const helper = src.slice(src.indexOf('function withMarks('));
-    expect(helper.slice(0, helper.indexOf('\n  }\n'))).toContain('React.createElement(React.Fragment, { key: key }, editor, deskMarksList(marks))');
-    expect(count(src, 'withMarks(')).toBe(7);
+    expect(helper.slice(0, helper.indexOf('\n  }\n'))).toContain('React.createElement(React.Fragment, { key: key }, editor, heldLine(editHeld), deskMarksList(marks))');
+    expect(count(src, 'withMarks(')).toBe(8);
   });
 
   it('shows the settled story above the headline, with no thesis of the old outline', () => {

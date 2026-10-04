@@ -30,6 +30,12 @@
  * in the JSON editor holds Approve and Send back the same way, since only the JSON editor's own
  * Save & Approve sends it, and a change made on the desk after the JSON editor opened holds that
  * Save & Approve, since its JSON lacks the change (fix round 1).
+ *
+ * No control drops what the director typed (task 4.14g): an open editor also holds every control
+ * that would close or replace it, the pencils, the moves, the deletes and the inserts. Each held
+ * control is disabled with the rule's line as its tooltip, its handler returns first, and the line
+ * shows under the open editor. A hold is not an error, so its lines have a style of their own
+ * (heldLine).
  */
 
 window.Console = window.Console || {};
@@ -115,6 +121,14 @@ function deskMarksList(marks, showWhere) {
       );
     })
   );
+}
+
+/**
+ * The line beside what waits for unsaved input (tasks 4.14d and 4.14g): the rule's line, or nothing
+ * for none. A hold, not an error, so it is styled .held-line, calmer than a refusal's red.
+ */
+function heldLine(text) {
+  return text ? React.createElement('p', { className: 'held-line', role: 'status' }, text) : null;
 }
 
 /** Last path segment, tolerating both separators (the photo paths are Windows). */
@@ -604,6 +618,14 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   };
   const held = unsavedInputLine('article', unsaved);
   const jsonHeld = unsavedInputLine('article-json', unsaved);
+  // Task 4.14g: every control that would close or replace the open editor waits for it too. A pencil
+  // opens its editor in place of the open one, and a move, a delete or an insert puts a new bundle on
+  // the desk, which closes it (applyDesk). Each kind asks once; a held control is disabled with the
+  // line as its tooltip, its handler returns first, and the line shows under the open editor.
+  const editHeld = unsavedInputLine('article', unsaved, 'edit');
+  const moveHeld = unsavedInputLine('article', unsaved, 'move');
+  const deleteHeld = unsavedInputLine('article', unsaved, 'delete');
+  const insertHeld = unsavedInputLine('article', unsaved, 'insert');
 
   // Reset when data changes
   // Both counters: the automated one resets to 0 at every round of the director's,
@@ -685,8 +707,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   /**
-   * Put a new bundle on the desk. Blocks are addressed by index, so a move, a delete or
-   * an insert closes the open editor; an insert opens it on the block it added.
+   * Put a new bundle on the desk. Blocks are addressed by index, so a new bundle closes the
+   * open editor: an editor's own save closes it, and a move, a delete or an insert waits until
+   * none is open (task 4.14g). An insert opens the editor on the block it added.
    */
   function applyDesk(next, openEditor) {
     setEditedBundle(next);
@@ -699,22 +722,28 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   // -- Edit helpers --
 
+  // A pencil opens its editor in place of the open one, so each waits while one is open (task 4.14g).
+
   function startBlockEdit(sectionIdx, blockIdx) {
+    if (editHeld) return;
     setArmedDelete(null);
     setEditingBlock({ type: 'block', sectionIdx: sectionIdx, blockIdx: blockIdx });
   }
 
   function startHeadingEdit(sectionIdx) {
+    if (editHeld) return;
     setArmedDelete(null);
     setEditingBlock({ type: 'heading', sectionIdx: sectionIdx });
   }
 
   function startSidebarEdit(category, idx) {
+    if (editHeld) return;
     setArmedDelete(null);
     setEditingBlock({ type: 'sidebar', category: category, idx: idx });
   }
 
   function startHeadlineEdit() {
+    if (editHeld) return;
     setArmedDelete(null);
     setEditingBlock({ type: 'headline' });
   }
@@ -761,19 +790,24 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   // -- The desk's hands: move, delete, insert --
+  // Each puts a new bundle on the desk, which closes the open editor, so each waits while one is
+  // open (task 4.14g).
 
   function moveStep(sectionIdx, blockIdx, direction) {
+    if (moveHeld) return;
     var bundle = getCurrentBundle();
     var to = DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, direction);
     if (to) applyDesk(DeskLogic.moveBlock(bundle, { section: sectionIdx, block: blockIdx }, to));
   }
 
   function moveToSection(sectionIdx, blockIdx, targetSection) {
+    if (moveHeld) return;
     applyDesk(DeskLogic.moveToSection(getCurrentBundle(), { section: sectionIdx, block: blockIdx }, targetSection));
   }
 
   /** A delete takes two clicks, as a send back does: the first arms it on that block. */
   function deleteClick(sectionIdx, blockIdx) {
+    if (deleteHeld) return;
     var key = sectionIdx + ':' + blockIdx;
     if (armedDelete !== key) {
       setArmedDelete(key);
@@ -783,12 +817,14 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function insertAt(sectionIdx, blockIdx, type) {
+    if (insertHeld) return;
     applyDesk(DeskLogic.insertBlock(getCurrentBundle(), sectionIdx, blockIdx, type),
       { type: 'block', sectionIdx: sectionIdx, blockIdx: blockIdx });
   }
 
   /** One step up or down for a Key Evidence entry, within the sidebar (task 4.14c). */
   function sidebarStep(idx, direction) {
+    if (moveHeld) return;
     var bundle = getCurrentBundle();
     var to = DeskLogic.sidebarStepTarget(bundle, idx, direction);
     if (to !== null) applyDesk(DeskLogic.moveSidebarCard(bundle, idx, to));
@@ -796,6 +832,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
   /** A Key Evidence entry's delete takes two clicks, as a block's does; it arms as 'sidebar:<index>'. */
   function sidebarDeleteClick(idx) {
+    if (deleteHeld) return;
     var key = 'sidebar:' + idx;
     if (armedDelete !== key) {
       setArmedDelete(key);
@@ -955,25 +992,31 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   function deskRow(key, className, body, onEdit, controls, marks) {
     return React.createElement('div', { key: key, className: 'desk-row ' + className },
       React.createElement('div', { className: 'desk-row__body' }, body, deskMarksList(marks)),
-      React.createElement('div', { className: 'desk-rail' }, editBtn(onEdit), controls || null)
+      React.createElement('div', { className: 'desk-rail' }, editBtn(onEdit, editHeld), controls || null)
     );
   }
 
-  /** A piece's open editor with the piece's marks under it, so the director fixes what they flag with them in view. */
+  /**
+   * A piece's open editor with the piece's marks under it, so the director fixes what they flag with
+   * them in view, and, between them, the line saying the desk's other controls wait for it (task 4.14g).
+   */
   function withMarks(key, editor, marks) {
-    return React.createElement(React.Fragment, { key: key }, editor, deskMarksList(marks));
+    return React.createElement(React.Fragment, { key: key }, editor, heldLine(editHeld), deskMarksList(marks));
   }
 
-  /** One control in a block's rail. */
+  /**
+   * One control in a block's rail. `held` is the rule's line while the control waits for an open
+   * editor (task 4.14g): the control is disabled, and the line is its tooltip.
+   */
   function deskButton(label, title, onClick, options) {
     var opts = options || {};
     return React.createElement('button', {
       type: 'button',
       className: 'desk-rail__btn' + (opts.armed ? ' desk-rail__btn--armed' : ''),
       onClick: function (e) { e.stopPropagation(); onClick(); },
-      disabled: !!opts.disabled,
+      disabled: !!opts.disabled || !!opts.held,
       'aria-label': title,
-      title: title
+      title: opts.held || title
     }, label);
   }
 
@@ -983,15 +1026,16 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     var armed = armedDelete === sectionIdx + ':' + blockIdx;
     return React.createElement(React.Fragment, null,
       deskButton('\u2191', 'Move this block up', function () { moveStep(sectionIdx, blockIdx, 'up'); },
-        { disabled: !DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, 'up') }),
+        { held: moveHeld, disabled: !DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, 'up') }),
       deskButton('\u2193', 'Move this block down', function () { moveStep(sectionIdx, blockIdx, 'down'); },
-        { disabled: !DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, 'down') }),
+        { held: moveHeld, disabled: !DeskLogic.stepTarget(bundle, sectionIdx, blockIdx, 'down') }),
       React.createElement('select', {
         className: 'desk-rail__move',
         value: '',
+        disabled: !!moveHeld,
         onChange: function (e) { if (e.target.value !== '') moveToSection(sectionIdx, blockIdx, Number(e.target.value)); },
         'aria-label': 'Move this block to the end of a section',
-        title: 'Move this block to the end of a section'
+        title: moveHeld || 'Move this block to the end of a section'
       },
         React.createElement('option', { value: '' }, 'Move to'),
         (bundle.sections || []).map(function (section, s) {
@@ -999,9 +1043,11 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         })
       ),
       deskButton(armed ? 'Delete?' : '\u2715', armed ? 'Click again to delete this block' : 'Delete this block',
-        function () { deleteClick(sectionIdx, blockIdx); }, { armed: armed }),
-      deskButton('+\u00B6', 'Insert a paragraph after this block', function () { insertAt(sectionIdx, blockIdx + 1, 'paragraph'); }),
-      deskButton('+\u275D', 'Insert a quote after this block', function () { insertAt(sectionIdx, blockIdx + 1, 'quote'); })
+        function () { deleteClick(sectionIdx, blockIdx); }, { held: deleteHeld, armed: armed }),
+      deskButton('+\u00B6', 'Insert a paragraph after this block', function () { insertAt(sectionIdx, blockIdx + 1, 'paragraph'); },
+        { held: insertHeld }),
+      deskButton('+\u275D', 'Insert a quote after this block', function () { insertAt(sectionIdx, blockIdx + 1, 'quote'); },
+        { held: insertHeld })
     );
   }
 
@@ -1015,11 +1061,11 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     var armed = armedDelete === 'sidebar:' + idx;
     return React.createElement(React.Fragment, null,
       deskButton('\u2191', 'Move this entry up', function () { sidebarStep(idx, 'up'); },
-        { disabled: DeskLogic.sidebarStepTarget(bundle, idx, 'up') === null }),
+        { held: moveHeld, disabled: DeskLogic.sidebarStepTarget(bundle, idx, 'up') === null }),
       deskButton('\u2193', 'Move this entry down', function () { sidebarStep(idx, 'down'); },
-        { disabled: DeskLogic.sidebarStepTarget(bundle, idx, 'down') === null }),
+        { held: moveHeld, disabled: DeskLogic.sidebarStepTarget(bundle, idx, 'down') === null }),
       deskButton(armed ? 'Delete?' : '\u2715', armed ? 'Click again to delete this entry' : 'Delete this entry',
-        function () { sidebarDeleteClick(idx); }, { armed: armed })
+        function () { sidebarDeleteClick(idx); }, { held: deleteHeld, armed: armed })
     );
   }
 
@@ -1143,8 +1189,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     return deskRow('heading-' + sectionIdx, 'desk-row--heading', body,
       function () { startHeadingEdit(sectionIdx); },
       React.createElement(React.Fragment, null,
-        deskButton('+\u00B6', 'Insert a paragraph at the top of this section', function () { insertAt(sectionIdx, 0, 'paragraph'); }),
-        deskButton('+\u275D', 'Insert a quote at the top of this section', function () { insertAt(sectionIdx, 0, 'quote'); })
+        deskButton('+\u00B6', 'Insert a paragraph at the top of this section', function () { insertAt(sectionIdx, 0, 'paragraph'); },
+          { held: insertHeld }),
+        deskButton('+\u275D', 'Insert a quote at the top of this section', function () { insertAt(sectionIdx, 0, 'quote'); },
+          { held: insertHeld })
       ),
       marks);
   }
@@ -1193,13 +1241,13 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       React.createElement('h4', { className: 'outline-section__title' }, 'FINANCIAL TRACKER'),
       entries.map(function (entry, i) {
         if (isEditing('sidebar', 'financialEntry', i)) {
-          return React.createElement(FinancialEntryEditor, {
-            key: 'ft-edit-' + i,
+          // A tracker row carries no marks; withMarks gives its editor the held line (task 4.14g).
+          return withMarks('ft-edit-' + i, React.createElement(FinancialEntryEditor, {
             entry: entry,
             idx: i,
             onSave: saveFinancialEntryEdit,
             onCancel: cancelEdit
-          });
+          }), null);
         }
         // The row as the page prints it: the account and its amount.
         var body = React.createElement('div', { className: 'desk-tracker-row' },
@@ -1490,7 +1538,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     ),
 
     // Task 4.14d: what holds the buttons, beside them.
-    held && React.createElement('p', { className: 'validation-error', role: 'status' }, held),
+    heldLine(held),
 
     // JSON editor mode
     mode === 'json' && React.createElement('div', { className: 'flex flex-col gap-sm mt-md fade-in' },
@@ -1510,7 +1558,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         'aria-label': 'Save JSON and approve'
       }, 'Save & Approve'),
       // Task 4.14d: what holds the JSON editor's Save & Approve, beside it.
-      jsonHeld && React.createElement('p', { className: 'validation-error', role: 'status' }, jsonHeld)
+      heldLine(jsonHeld)
     ),
 
     // Folded below the article (task 4.10; spec 6.3): the marks the director's edits may have

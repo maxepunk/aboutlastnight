@@ -249,6 +249,80 @@ describe('4.14d fix round 1, finding 1: the JSON editor\'s Save & Approve waits 
   });
 });
 
+describe('4.14g: every control that would close or replace an open editor or add line waits for it, as the actions do', () => {
+  // The review of 4.14d (minor 4, ruled in the ledger): at the desk, the pencil on another piece
+  // opened its editor in place of the open one (Article.js startBlockEdit), and a move, a delete or
+  // an insert put a new bundle on the desk, which closed it (applyDesk). On the map, another line's
+  // pencil replaced the open editor, and "+ Add a beat" in another section reset an add line holding
+  // a typed beat. None said a word. Asked about a kind of control, the rule answers the line that
+  // holds it, or null: the line names the unsaved piece and every control that piece holds.
+  const OPEN_BLOCK = { type: 'block', sectionIdx: 1, blockIdx: 0 };
+  const DESK_CONTROLS = ['edit', 'move', 'delete', 'insert'];
+  const DESK_LINE = 'Before you edit, move, delete or insert anything else, save or cancel your edit to the paragraph in "The Story".';
+
+  describe('the desk: a pencil, a move, a delete and an insert each wait for an open editor', () => {
+    it.each(DESK_CONTROLS)('%s waits while an editor is open, and the line names the editor', (control) => {
+      expect(unsavedInputLine('article', { editor: OPEN_BLOCK, bundle: deskBundle() }, control)).toBe(DESK_LINE);
+    });
+
+    it.each(DESK_CONTROLS)('%s is free while no editor is open, as before', (control) => {
+      expect(unsavedInputLine('article', { editor: null, bundle: deskBundle() }, control)).toBeNull();
+    });
+
+    it.each(DESK_CONTROLS)('%s is free beside JSON typed in the JSON editor, which it neither closes nor replaces', (control) => {
+      const seed = JSON.stringify(deskBundle(), null, 2);
+      const typed = seed.replace('We only kept the books.', 'We kept two sets of books.');
+      expect(unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: { text: typed, seed, seededAt: 0 }, deskVersion: 0 }, control)).toBeNull();
+    });
+
+    it('names each editor the desk opens as the actions\' line does, and one it cannot name generically', () => {
+      expect(unsavedInputLine('article', { editor: { type: 'sidebar', category: 'byline', idx: 0 }, bundle: deskBundle() }, 'move'))
+        .toBe('Before you edit, move, delete or insert anything else, save or cancel your edit to the byline.');
+      expect(unsavedInputLine('article', { editor: { type: 'something-new' }, bundle: deskBundle() }, 'insert'))
+        .toBe('Before you edit, move, delete or insert anything else, save or cancel the edit you have open.');
+    });
+  });
+
+  describe('the map: a pencil waits for an open editor, and "+ Add a beat" for an add line that holds text', () => {
+    const HEAD = { line: 'head', key: 'head' };
+    const TYPED = { slot: 'theStory', material: 'Morgan pays Riley at the bar', players: '' };
+    const ADD_LINE = 'Before you add a beat in another section, add or cancel the new beat in "The Story".';
+
+    it('a pencil waits while an editor is open, and the line names the editor', () => {
+      expect(unsavedInputLine('outline', { editor: HEAD, adding: null, sections: MAP_SECTIONS }, 'edit'))
+        .toBe('Before you edit another line, save or cancel your edit to the headline and deck.');
+      expect(unsavedInputLine('outline', { editor: { line: 'beat', key: 'b4' }, adding: TYPED, sections: MAP_SECTIONS }, 'edit'))
+        .toBe('Before you edit another line, save or cancel your edit to beat b4.');
+    });
+
+    it('a pencil is free beside an add line holding text, which it does not close', () => {
+      expect(unsavedInputLine('outline', { editor: null, adding: TYPED, sections: MAP_SECTIONS }, 'edit')).toBeNull();
+    });
+
+    it('"+ Add a beat" waits while the add line holds a beat or only its players, and the line names its section', () => {
+      expect(unsavedInputLine('outline', { editor: null, adding: TYPED, sections: MAP_SECTIONS }, 'add')).toBe(ADD_LINE);
+      expect(unsavedInputLine('outline', { editor: HEAD, adding: { slot: 'theStory', material: ' ', players: 'Morgan' }, sections: MAP_SECTIONS }, 'add')).toBe(ADD_LINE);
+    });
+
+    it('"+ Add a beat" is free while the add line is blank, since moving it loses nothing, and beside an open editor, which it does not close', () => {
+      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', material: '', players: '  ' }, sections: MAP_SECTIONS }, 'add')).toBeNull();
+      expect(unsavedInputLine('outline', { editor: HEAD, adding: null, sections: MAP_SECTIONS }, 'add')).toBeNull();
+    });
+  });
+
+  it('refuses a control a stop does not have, naming it, and any control at the story meeting or for the JSON editor', () => {
+    expect(() => unsavedInputLine('article', { editor: null, bundle: deskBundle() }, 'add')).toThrow(/\badd\b/);
+    expect(() => unsavedInputLine('outline', { editor: null, adding: null, sections: MAP_SECTIONS }, 'delete')).toThrow(/delete/);
+    expect(() => unsavedInputLine('arc-selection', { addLine: 'Riley kept a second ledger.' }, 'edit')).toThrow(/arc-selection/);
+    expect(() => unsavedInputLine('article-json', { editor: null, bundle: deskBundle(), json: null }, 'edit')).toThrow(/article-json/);
+  });
+
+  it('asked about no control, answers for the stop\'s actions as before', () => {
+    expect(unsavedInputLine('article', { editor: OPEN_BLOCK, bundle: deskBundle() }))
+      .toBe('Before you approve or send back, save or cancel your edit to the paragraph in "The Story".');
+  });
+});
+
 describe('4.14g: with the JSON editor and an editor both open, the line under Save & Approve names every step that releases it', () => {
   // The re-review of 4.14d fix round 1 (a new minor): with both open, the line under Save & Approve
   // said only to save or cancel the edit. A save changes the desk, so a second hold followed (close

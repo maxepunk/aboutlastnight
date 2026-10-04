@@ -145,14 +145,17 @@ function TracePanel({ view }) {
 /**
  * Edit button (pencil icon)
  * @param {function} onClick
+ * @param {string|null} [held] - while the pencil waits for an editor left open, the line saying so
+ *   (console/unsaved-input-logic.js, task 4.14g): the pencil is disabled, with the line as its tooltip
  * @returns {React.ReactElement}
  */
-function editBtn(onClick) {
+function editBtn(onClick, held) {
   return React.createElement('button', {
     className: 'article-block__edit-btn',
     onClick: function (e) { e.stopPropagation(); onClick(); },
+    disabled: !!held,
     'aria-label': 'Edit',
-    title: 'Edit'
+    title: held || 'Edit'
   }, '✎');
 }
 

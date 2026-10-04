@@ -1,20 +1,27 @@
 /**
  * unsaved-input-logic.js — PURE logic for input the director has typed at a stop and not saved
- * (phase 4, task 4.14d: input that lands).
+ * (phase 4, tasks 4.14d and 4.14g: input that lands, and no control drops it).
  *
  * Dual-export: registers on window.Console.unsavedInputLogic for the browser AND exposes the same
  * surface via module.exports under Node, so it is unit-tested in node-env Jest
  * (console/__tests__/unsaved-input-logic.test.js; reports/CLAUDE.md: the console has no DOM harness).
  *
- * Nothing the director types is lost by pressing one of a stop's actions. The actions send what the
- * stop holds: the weave, the map or the bundle on the desk, and the note box. Text typed in an editor
- * the director has not saved, or in an add line whose button they have not pressed, is in none of
- * them, and the final review saw each screen drop it without a word (screens 1): at the desk,
- * Approve published the writer's paragraph over the director's open edit; on the map, a headline
- * typed in its open editor never reached the map the article writer reads; at the story meeting, a
- * thread typed in the add line was missing from the approved weave. So while a stop has such input
- * its actions wait (Approve, Reweave, Send back, and the desk's JSON Save & Approve), and one line
- * beside the buttons names each unsaved piece and says to save or discard it first.
+ * Nothing the director types is lost by any click. The actions send what the stop holds: the weave,
+ * the map or the bundle on the desk, and the note box. Text typed in an editor the director has not
+ * saved, or in an add line whose button they have not pressed, is in none of them, and the final
+ * review saw each screen drop it without a word (screens 1): at the desk, Approve published the
+ * writer's paragraph over the director's open edit; on the map, a headline typed in its open editor
+ * never reached the map the article writer reads; at the story meeting, a thread typed in the add
+ * line was missing from the approved weave. So while a stop has such input its actions wait
+ * (Approve, Reweave, Send back, and the desk's JSON Save & Approve), and one line beside the buttons
+ * names each unsaved piece and says to save or discard it first.
+ *
+ * Other controls dropped it the same way (task 4.14g; the review of 4.14d, minor 4). At the desk the
+ * pencil on another piece opened its editor in place of the open one, and a move, a delete or an
+ * insert put a new bundle on the desk, which closed it (Article.js applyDesk). On the map another
+ * line's pencil replaced the open editor, and "+ Add a beat" in another section reset an add line
+ * holding a typed beat. So every control that would close or replace an editor or an add line
+ * holding input waits for it as the actions do, and its line names the unsaved piece.
  *
  * The desk sends two things (fix round 1). Approve and Send back send the bundle on the desk, so JSON
  * the director typed in the JSON editor holds them too: only that editor's own Save & Approve sends
@@ -25,9 +32,10 @@
  * step that releases it, in order (task 4.14g): a save changes the desk, so after one the JSON
  * editor takes the desk's text again, and a cancel changes nothing.
  *
- * unsavedInputLine(stop, open) is the one rule. Each stop's component asks it once per render for
- * each set of buttons that sends one thing, with what it has open, and gets back the line for those
- * buttons, or null when nothing waits:
+ * unsavedInputLine(stop, open, control) is the one rule. Each stop's component asks it once per
+ * render for each set of buttons that sends one thing, and for each kind of control that would close
+ * or replace what it has open, with what it has open, and gets back the line for those buttons or
+ * that control, or null when nothing waits:
  *   - 'article', the desk's Approve and Send back: { editor, bundle, json, deskVersion }. `editor` is
  *     Article.js's editingBlock: an open editor holds the actions whatever it holds, since the desk
  *     cannot see an editor's form. `deskVersion` is Article.js's count of the changes on the desk.
@@ -41,10 +49,11 @@
  *     the page's sections as mapView lists them, whose labels name a section.
  *   - 'arc-selection', the story meeting: { addLine }, the add-a-thread line's text, which holds
  *     the actions once it holds text. Every other change at the meeting is kept as it is typed.
- * An editor this module cannot name still holds the actions: a new kind of editor is named
- * generically, never dropped. The line names a stop's actions from the list its payload builder
- * takes (checkpoint-view-logic.js MEETING_ACTIONS, MAP_ACTIONS and DESK_ACTIONS), and a desk
- * section as the desk's move control names it (article-desk-logic.js sectionLabel).
+ * `control`, when given, is a kind of control at the desk or on the map (CONTROLS below); without it,
+ * the rule answers for the stop's actions. An editor this module cannot name still holds them: a new
+ * kind of editor is named generically, never dropped. The line names a stop's actions from the list
+ * its payload builder takes (checkpoint-view-logic.js MEETING_ACTIONS, MAP_ACTIONS and DESK_ACTIONS),
+ * and a desk section as the desk's move control names it (article-desk-logic.js sectionLabel).
  *
  * MUST NOT reference React, and must not touch `window` at module-evaluation time except the
  * guarded window.Console write.
@@ -67,6 +76,11 @@
 
   function quoted(text) {
     return '"' + text + '"';
+  }
+
+  /** Words joined as a list is read: "a", "a or b", "a, b or c". */
+  function listOf(words) {
+    return words.length > 1 ? words.slice(0, -1).join(', ') + ' or ' + words[words.length - 1] : words.join('');
   }
 
   /** What the line asks of an open editor it cannot name. */
@@ -109,13 +123,12 @@
 
   /** The actions that wait at a stop, in the line's words, joined as a list is read: "approve, reweave or send back". */
   function actionsAt(stop) {
-    var words = ACTIONS[stop]().map(function (id) {
+    return listOf(ACTIONS[stop]().map(function (id) {
       if (!Object.prototype.hasOwnProperty.call(ACTION_WORDS, id)) {
         throw new Error('unsavedInputLine: the ' + stop + ' stop takes ' + String(id) + ', which the line has no word for');
       }
       return ACTION_WORDS[id];
-    });
-    return words.length > 1 ? words.slice(0, -1).join(', ') + ' or ' + words[words.length - 1] : words.join('');
+    }));
   }
 
   // ── The desk ──────────────────────────────────────────────────────────────
@@ -275,15 +288,20 @@
     return '';
   }
 
-  function mapInstructions(open) {
-    var instructions = [];
-    if (isPlainObject(open.editor)) instructions.push(saveOrCancel(mapEditorName(open.editor, open.sections)));
+  /** An open map editor's instruction. */
+  function mapEditorInstructions(open) {
+    return isPlainObject(open.editor) ? [saveOrCancel(mapEditorName(open.editor, open.sections))] : [];
+  }
+
+  /** The add line's instruction once it holds text: its two buttons, Add the beat and Cancel. */
+  function mapAddLineInstructions(open) {
     var adding = open.adding;
-    if (isPlainObject(adding) && (holdsText(adding.material) || holdsText(adding.players))) {
-      // The add line's two buttons: Add the beat, and Cancel.
-      instructions.push('add or cancel the new beat in ' + mapSectionName(open.sections, adding.slot));
-    }
-    return instructions;
+    if (!isPlainObject(adding) || !(holdsText(adding.material) || holdsText(adding.players))) return [];
+    return ['add or cancel the new beat in ' + mapSectionName(open.sections, adding.slot)];
+  }
+
+  function mapInstructions(open) {
+    return mapEditorInstructions(open).concat(mapAddLineInstructions(open));
   }
 
   // ── The story meeting ─────────────────────────────────────────────────────
@@ -300,29 +318,78 @@
     'article-json': jsonEditorInstructions
   };
 
+  // ── The controls that wait (task 4.14g) ───────────────────────────────────
+
   /**
-   * The line beside a stop's buttons while it holds input the director has not saved, or null when
-   * nothing waits, so the stop's actions behave as they always have. The line names each unsaved
-   * piece and says to save or discard it before the stop's actions: "Before you approve or send
-   * back, save or cancel your edit to the paragraph in "The Story"."
+   * The controls besides a stop's actions that would close or replace what the director has open,
+   * grouped by the piece that holds them: each group's `controls` are the kinds a component asks
+   * about, named by their verbs, which the line joins before the group's `object` ("Before you edit,
+   * move, delete or insert anything else, ..."), and `instructions` is that piece's instruction while
+   * it holds input.
+   * - The desk: a pencil opens its editor in place of the open one, and a move, a delete or an insert
+   *   puts a new bundle on the desk, which closes the open editor (Article.js applyDesk). None of them
+   *   closes the JSON editor, so JSON typed there holds none of them.
+   * - The map: a pencil opens its editor in place of the open one, and "+ Add a beat" opens the add
+   *   line in its section in place of the open one. Neither closes what the other holds.
+   * The story meeting has none: no control there closes or replaces its add line.
+   */
+  var CONTROLS = {
+    article: [
+      { controls: ['edit', 'move', 'delete', 'insert'], object: 'anything else', instructions: deskEditorInstructions }
+    ],
+    outline: [
+      { controls: ['edit'], object: 'another line', instructions: mapEditorInstructions },
+      { controls: ['add'], object: 'a beat in another section', instructions: mapAddLineInstructions }
+    ]
+  };
+
+  /** The group of controls a control belongs to at a stop, refusing a control the stop does not have. */
+  function controlGroup(stop, control) {
+    if (!Object.prototype.hasOwnProperty.call(CONTROLS, stop)) {
+      throw new Error('unsavedInputLine: the ' + stop + ' stop has no control that closes or replaces what the director has open; ask it about its actions');
+    }
+    var group = CONTROLS[stop].filter(function (g) { return g.controls.indexOf(control) !== -1; })[0];
+    if (!group) {
+      var kinds = CONTROLS[stop].reduce(function (all, g) { return all.concat(g.controls); }, []);
+      throw new Error('unsavedInputLine: the ' + stop + ' stop has no control ' + String(control) + '; its controls are ' + listOf(kinds));
+    }
+    return group;
+  }
+
+  /**
+   * The line: "Before you <what waits>, <instruction>." or, for more than one, "...: <a>; <b>." Null
+   * for none, without asking what waits.
+   */
+  function lineOf(instructions, waiting) {
+    if (instructions.length === 0) return null;
+    var before = 'Before you ' + waiting();
+    if (instructions.length === 1) return before + ', ' + instructions[0] + '.';
+    return before + ': ' + instructions.join('; ') + '.';
+  }
+
+  /**
+   * The line beside a stop's buttons, or beside a control, while it holds input the director has not
+   * saved, or null when nothing waits, so the buttons and the controls behave as they always have.
+   * The line names each unsaved piece and says to save or discard it first: "Before you approve or
+   * send back, save or cancel your edit to the paragraph in "The Story"."
    *
    * @param {string} stop - 'arc-selection', 'outline', 'article', or 'article-json' for the desk's
    *   JSON editor
    * @param {Object} open - what the stop has open (see the header)
+   * @param {string} [control] - a kind of control at the desk ('edit', 'move', 'delete', 'insert')
+   *   or on the map ('edit', 'add'); omitted, the stop's actions
    * @returns {string|null}
    */
-  function unsavedInputLine(stop, open) {
+  function unsavedInputLine(stop, open, control) {
     if (!Object.prototype.hasOwnProperty.call(INSTRUCTIONS, stop)) {
       throw new Error('unsavedInputLine: no rule for the stop ' + String(stop) + '; the story meeting, the map, the desk and the desk\'s JSON editor have one');
     }
     if (!isPlainObject(open)) {
       throw new Error('unsavedInputLine: the ' + stop + ' stop must say what it has open');
     }
-    var instructions = INSTRUCTIONS[stop](open);
-    if (instructions.length === 0) return null;
-    var before = 'Before you ' + actionsAt(stop);
-    if (instructions.length === 1) return before + ', ' + instructions[0] + '.';
-    return before + ': ' + instructions.join('; ') + '.';
+    if (control === undefined) return lineOf(INSTRUCTIONS[stop](open), function () { return actionsAt(stop); });
+    var group = controlGroup(stop, control);
+    return lineOf(group.instructions(open), function () { return listOf(group.controls) + ' ' + group.object; });
   }
 
   var api = {

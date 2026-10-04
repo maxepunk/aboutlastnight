@@ -18,6 +18,12 @@
  * The desk sends two things, so it asks twice (fix round 1): its Approve and Send back send the
  * bundle on the desk and wait on `held`, which JSON typed in the JSON editor also sets; the JSON
  * editor's Save & Approve sends that JSON and waits on `jsonHeld`.
+ *
+ * Task 4.14g: no control drops what the director typed. Every control that would close or replace an
+ * open editor, or an add line holding text, waits for it as the actions do: the map and the desk ask
+ * the rule once per render for each kind of control, each such control is disabled while its answer
+ * holds and its handler returns first, and a line beside the open piece says why. A hold is not an
+ * error: every held line has a style of its own, `.held-line`.
  */
 const fs = require('fs');
 const path = require('path');
@@ -29,8 +35,13 @@ const count = (haystack, needle) => haystack.split(needle).length - 1;
 const IMPORT = /^const \{ unsavedInputLine \} = window\.Console\.unsavedInputLogic;$/m;
 /** The first statement of a send path held by the answer named `hold`. */
 const guard = (hold) => `if (${hold}) return;`;
-/** The line that shows the answer named `hold` beside the buttons it holds. */
-const line = (hold) => `${hold} && React.createElement('p', { className: 'validation-error', role: 'status' }, ${hold})`;
+/**
+ * The line that shows the answer named `hold` beside what it holds, styled as a hold (task 4.14g):
+ * the story meeting writes its one line out, and the map and the desk render theirs through their
+ * own heldLine.
+ */
+const MEETING_LINE = (hold) => `${hold} && React.createElement('p', { className: 'held-line', role: 'status' }, ${hold})`;
+const HELD_LINE = (hold) => `heldLine(${hold})`;
 
 /** The body of the component's function `name`, from its declaration to the brace that closes it. */
 function functionBody(src, name) {
@@ -80,39 +91,46 @@ describe('4.14d: the module loads before the three stops that read it', () => {
   });
 });
 
-// Each send path and each action button is paired with the answer that holds it.
+// Each send path and each action button is paired with the answer that holds it. `controls` are the
+// asks for the controls that would close what is open (task 4.14g, pinned in its describes below).
 describe.each([
   {
     stop: 'the story meeting',
     rel: 'components/checkpoints/ArcSelection.js',
     asks: ["const held = unsavedInputLine('arc-selection', { addLine: newClaim });"],
+    controls: [],
     paths: [['send', 'held'], ['send', 'held']],
     payload: 'ViewLogic.meetingPayload(',
-    buttons: [['onClick: handleApproveClick', 'held'], ["send('reweave')", 'held'], ['onClick: handleSendBackClick', 'held'], ["aria-label': approveAsk.keep.ariaLabel", 'held'], ["aria-label': approveAsk.clear.ariaLabel", 'held']]
+    buttons: [['onClick: handleApproveClick', 'held'], ["send('reweave')", 'held'], ['onClick: handleSendBackClick', 'held'], ["aria-label': approveAsk.keep.ariaLabel", 'held'], ["aria-label': approveAsk.clear.ariaLabel", 'held']],
+    line: MEETING_LINE
   },
   {
     stop: 'the map',
     rel: 'components/checkpoints/Outline.js',
-    asks: ["const held = unsavedInputLine('outline', { editor: editing, adding: adding, sections: view.sections });"],
+    asks: ["const held = unsavedInputLine('outline', unsaved);"],
+    controls: ["const editHeld = unsavedInputLine('outline', unsaved, 'edit');", "const addHeld = unsavedInputLine('outline', unsaved, 'add');"],
     paths: [['send', 'held'], ['send', 'held']],
     payload: 'ViewLogic.mapPayload(',
-    buttons: [["send('approve')", 'held'], ['onClick: handleSendBackClick', 'held']]
+    buttons: [["send('approve')", 'held'], ['onClick: handleSendBackClick', 'held']],
+    line: HELD_LINE
   },
   {
     stop: 'the desk',
     rel: 'components/checkpoints/Article.js',
     asks: ["const held = unsavedInputLine('article', unsaved);", "const jsonHeld = unsavedInputLine('article-json', unsaved);"],
+    controls: ['edit', 'move', 'delete', 'insert'].map((kind) => `const ${kind}Held = unsavedInputLine('article', unsaved, '${kind}');`),
     paths: [['handleApprove', 'held'], ['handleJsonApprove', 'jsonHeld'], ['handleReject', 'held']],
     payload: 'ViewLogic.articleReviewPayload(',
-    buttons: [['onClick: handleApprove,', 'held'], ['onClick: handleSendBackClick', 'held'], ['onClick: handleJsonApprove', 'jsonHeld']]
+    buttons: [['onClick: handleApprove,', 'held'], ['onClick: handleSendBackClick', 'held'], ['onClick: handleJsonApprove', 'jsonHeld']],
+    line: HELD_LINE
   }
-])('4.14d: $stop holds its actions while it has unsaved input', ({ rel, asks, paths, payload, buttons }) => {
+])('4.14d: $stop holds its actions while it has unsaved input', ({ rel, asks, controls, paths, payload, buttons, line }) => {
   const src = read(rel);
 
-  it('reads the rule at load, from the module, and asks it once per render for each set of buttons that sends one thing', () => {
+  it('reads the rule at load, from the module, and asks it once per render for each set of buttons that sends one thing, and for each kind of control (4.14g)', () => {
     expect(src).toMatch(IMPORT);
-    expect(count(src, 'unsavedInputLine(')).toBe(asks.length);
-    asks.forEach((ask) => expect(src).toContain(ask));
+    expect(count(src, 'unsavedInputLine(')).toBe(asks.length + controls.length);
+    asks.concat(controls).forEach((ask) => expect([ask, count(src, ask)]).toEqual([ask, 1]));
   });
 
   it('consults the answer that holds it on every path a payload leaves by, before it builds the payload', () => {
@@ -143,8 +161,8 @@ describe('4.14d: at the desk, the JSON editor', () => {
   it('shows its own answer\'s line inside the JSON editor, after its Save & Approve', () => {
     const json = src.slice(src.indexOf("mode === 'json' && React.createElement("));
     const panel = json.slice(0, json.indexOf('// Folded below the article'));
-    expect(count(src, line('jsonHeld'))).toBe(1);
-    expect(panel.indexOf(line('jsonHeld'))).toBeGreaterThan(panel.indexOf("'Save & Approve'"));
+    expect(count(src, HELD_LINE('jsonHeld'))).toBe(1);
+    expect(panel.indexOf(HELD_LINE('jsonHeld'))).toBeGreaterThan(panel.indexOf("'Save & Approve'"));
   });
 
   it('tells both asks, while it is open, what it holds, the text it opened with and the desk\'s count of changes then, beside the count now (fix round 1)', () => {
@@ -173,5 +191,148 @@ describe('4.14d: at the desk, the JSON editor', () => {
       const block = src.slice(at, src.indexOf('\n  }', at));
       expect([where, block.includes('setDeskVersion(')]).toEqual([where, true]);
     });
+  });
+});
+
+/** The first statement of a function body as functionBody returns it. */
+const firstStatement = (body) => body.split('\n')[1].trim();
+
+/** The name of the function a place in the source sits in, or a word saying it has none. */
+function enclosingFunction(src, at) {
+  const found = /^function (\w*)\(/.exec(src.slice(src.lastIndexOf('function ', at)));
+  return found && found[1] ? found[1] : '(an anonymous function)';
+}
+
+// Task 4.14g. At the desk, a pencil opens its editor in place of the open one (startBlockEdit and its
+// three siblings), and a move, a delete or an insert puts a new bundle on the desk through applyDesk,
+// which closes the open editor. Each kind of control asks the rule, and waits while it answers.
+describe('4.14g: at the desk, a pencil, a move, a delete and an insert wait for an open editor', () => {
+  const src = read('components/checkpoints/Article.js');
+  const HANDLERS = [
+    ['startBlockEdit', 'editHeld'], ['startHeadingEdit', 'editHeld'], ['startSidebarEdit', 'editHeld'], ['startHeadlineEdit', 'editHeld'],
+    ['moveStep', 'moveHeld'], ['moveToSection', 'moveHeld'], ['sidebarStep', 'moveHeld'],
+    ['deleteClick', 'deleteHeld'], ['sidebarDeleteClick', 'deleteHeld'],
+    ['insertAt', 'insertHeld']
+  ];
+
+  it('each handler that opens an editor, moves, deletes or inserts returns first while its answer holds', () => {
+    HANDLERS.forEach(([name, hold]) => {
+      expect([name, firstStatement(functionBody(src, name))]).toEqual([name, guard(hold)]);
+    });
+  });
+
+  it('opens an editor and puts a bundle on the desk only in those handlers, an editor\'s own Save, and applyDesk itself', () => {
+    const guarded = HANDLERS.map(([name]) => name);
+    [...src.matchAll(/\bsetEditingBlock\(\{/g)].forEach((m) => {
+      const name = enclosingFunction(src, m.index);
+      expect([name, guarded.includes(name)]).toEqual([name, true]);
+    });
+    [...src.matchAll(/\bapplyDesk\(/g)].forEach((m) => {
+      const name = enclosingFunction(src, m.index);
+      expect([name, name === 'applyDesk' || guarded.includes(name) || /^save\w+Edit$/.test(name)]).toEqual([name, true]);
+    });
+  });
+
+  it('holds each control while its answer holds: the pencil in every row, and every button and select in a rail', () => {
+    expect(functionBody(src, 'deskRow')).toContain('editBtn(onEdit, editHeld)');
+    // deskButton disables a held button and gives it the line as its tooltip.
+    const button = functionBody(src, 'deskButton');
+    expect(button).toContain('disabled: !!opts.disabled || !!opts.held,');
+    expect(button).toContain('title: opts.held || title');
+    // Every rail button carries the answer of its kind: a block's up, down, delete and two inserts;
+    // a section heading's two inserts; a Key Evidence entry's up, down and delete.
+    const calls = count(src, 'deskButton(') - 1;
+    expect(calls).toBe(10);
+    expect(count(src, 'held: moveHeld') + count(src, 'held: deleteHeld') + count(src, 'held: insertHeld')).toBe(calls);
+    const block = functionBody(src, 'blockControls');
+    expect([count(block, 'held: moveHeld'), count(block, 'held: deleteHeld'), count(block, 'held: insertHeld')]).toEqual([2, 1, 2]);
+    expect(count(functionBody(src, 'renderSectionHeading'), 'held: insertHeld')).toBe(2);
+    const sidebar = functionBody(src, 'sidebarControls');
+    expect([count(sidebar, 'held: moveHeld'), count(sidebar, 'held: deleteHeld')]).toEqual([2, 1]);
+    // The block's move-to select.
+    expect(block).toContain('disabled: !!moveHeld,');
+    expect(block).toContain("title: moveHeld || 'Move this block to the end of a section'");
+  });
+
+  it('shows the line under the open editor, through which every editor on the desk renders', () => {
+    expect(functionBody(src, 'withMarks')).toContain('React.createElement(React.Fragment, { key: key }, editor, heldLine(editHeld), deskMarksList(marks))');
+    ['BlockEditor', 'SectionHeadingEditor', 'HeadlineEditor', 'SidebarEvidenceCardEditor', 'FinancialEntryEditor', 'HeroImageEditor', 'BylineEditor'].forEach((editor) => {
+      const call = `React.createElement(${editor}, {`;
+      const at = src.indexOf(call);
+      expect([editor, count(src, call), src.slice(src.lastIndexOf('\n', at), at).includes('withMarks(')]).toEqual([editor, 1, true]);
+    });
+  });
+});
+
+// Task 4.14g. On the map, a pencil opens its editor in place of the open one, and "+ Add a beat" opens
+// the add line in its section in place of the open one.
+describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a beat" for an add line that holds text', () => {
+  const src = read('components/checkpoints/Outline.js');
+
+  it('asks the rule about the same description of what is open as the actions', () => {
+    expect(count(src, 'const unsaved = { editor: editing, adding: adding, sections: view.sections };')).toBe(1);
+  });
+
+  it('opens an editor only through open, and an add line only through openAddLine, each returning first while its answer holds', () => {
+    expect(firstStatement(functionBody(src, 'open'))).toBe(guard('editHeld'));
+    expect(firstStatement(functionBody(src, 'openAddLine'))).toBe(guard('addHeld'));
+    [...src.matchAll(/\bsetEditing\(\{/g)].forEach((m) => expect(enclosingFunction(src, m.index)).toBe('open'));
+    [...src.matchAll(/\bsetAdding\(\{ slot:/g)].forEach((m) => expect(enclosingFunction(src, m.index)).toBe('openAddLine'));
+  });
+
+  it('holds every pencil and every "+ Add a beat" while its answer holds', () => {
+    expect(count(src, 'editBtn(')).toBe(5);
+    expect(count(src, '); }, editHeld)')).toBe(5);
+    const add = buttonProps(src, "'+ Add a beat'");
+    expect(add).toMatch(/disabled: !!addHeld\b/);
+    expect(add).toContain('title: addHeld || undefined');
+    expect(add).toContain('openAddLine(slot)');
+  });
+
+  it('shows the pencils\' line under every open editor, and "+ Add a beat"\'s under the add line', () => {
+    const editing = [...src.matchAll(/map__editing'/g)].map((m) => m.index);
+    expect(editing.length).toBe(5);
+    expect(count(src, HELD_LINE('editHeld'))).toBe(5);
+    // Each editor's container holds the line, before the line's own row and its pencil.
+    editing.forEach((at) => {
+      const container = src.slice(at, src.indexOf('editBtn(', at));
+      expect([container.split('\n')[0], container.includes(HELD_LINE('editHeld'))]).toEqual([container.split('\n')[0], true]);
+    });
+    expect(count(src, HELD_LINE('addHeld'))).toBe(1);
+    expect(functionBody(src, 'addLine')).toContain(HELD_LINE('addHeld'));
+  });
+});
+
+// Task 4.14g (the review of 4.14d, finding 5): a hold is not an error. A held line said why a button
+// waits in the same red as a real refusal, so a director could look for something broken.
+describe('4.14g: a hold is not an error', () => {
+  const STOPS = ['ArcSelection.js', 'Outline.js', 'Article.js'];
+
+  it('every held line at the three stops is a held-line with role status, and none is in the error\'s style', () => {
+    expect(count(read('components/checkpoints/ArcSelection.js'), MEETING_LINE('held'))).toBe(1);
+    ['Outline.js', 'Article.js'].forEach((name) => {
+      const src = read(`components/checkpoints/${name}`);
+      const helper = src.slice(src.indexOf('function heldLine('), src.indexOf('\n}\n', src.indexOf('function heldLine(')));
+      expect([name, helper.includes("React.createElement('p', { className: 'held-line', role: 'status' }, text)")]).toEqual([name, true]);
+    });
+    STOPS.forEach((name) => {
+      expect([name, /validation-error', role: 'status'/.test(read(`components/checkpoints/${name}`))]).toEqual([name, false]);
+    });
+  });
+
+  it('console.css gives .held-line a style of its own, with none of the error\'s red', () => {
+    const css = read('console.css');
+    const rule = css.slice(css.indexOf('.held-line {'));
+    expect(css.indexOf('.held-line {')).toBeGreaterThan(-1);
+    expect(rule.slice(0, rule.indexOf('}'))).not.toMatch(/accent-red|#e74c3c|231, 76, 60/);
+  });
+
+  it('a held pencil is disabled and says why in its tooltip, and reads as held', () => {
+    const utils = read('utils.js');
+    const editBtn = utils.slice(utils.indexOf('function editBtn('), utils.indexOf('\n}\n', utils.indexOf('function editBtn(')));
+    expect(editBtn).toContain('function editBtn(onClick, held)');
+    expect(editBtn).toContain('disabled: !!held,');
+    expect(editBtn).toContain("title: held || 'Edit'");
+    expect(read('console.css')).toContain('.article-block__edit-btn:disabled');
   });
 });

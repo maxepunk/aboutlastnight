@@ -23,7 +23,11 @@
  * (mapPendingSlot), so they survive a remount of that version and clear when a new one
  * arrives (pendingEditsAfterCheckpoint, in state.js).
  * An open editor, or an add line that holds text, holds both buttons, and a line beside them says
- * to save or discard it first (unsavedInputLine, task 4.14d).
+ * to save or discard it first (unsavedInputLine, task 4.14d). Nor does any other control drop it
+ * (task 4.14g): while an editor is open every pencil waits, since a pencil opens its editor in the
+ * open one's place, and while the add line holds text every "+ Add a beat" waits, since it opens
+ * the add line in another section; each is disabled with the rule's line as its tooltip, and the
+ * line shows under the open editor or the add line, in the hold's own style (heldLine).
  * Exports to window.Console.checkpoints.Outline
  */
 
@@ -39,6 +43,14 @@ const { unsavedInputLine } = window.Console.unsavedInputLogic;
 // integrator's ruling 6): the line sits at the host's left and its controls under it, so the
 // top-right corner is free for the pencil. Pinned by __tests__/unit/console-editable-pencils.test.js.
 const ALWAYS = 'article-block--editable article-block--editable-always';
+
+/**
+ * The line beside what waits for unsaved input (tasks 4.14d and 4.14g): the rule's line, or nothing
+ * for none. A hold, not an error, so it is styled .held-line, calmer than a refusal's red.
+ */
+function heldLine(text) {
+  return text ? React.createElement('p', { className: 'held-line', role: 'status' }, text) : null;
+}
 
 // ═══════════════════════════════════════════════════════
 // The editors: each opens on its line's init, and saves its build
@@ -168,7 +180,12 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   const buttons = ViewLogic.mapButtons(note, sendBackArmed);
   // Task 4.14d: an editor's form and the add line reach the map only when the director saves or
   // adds them, so while either holds input both buttons wait, and this line says why.
-  const held = unsavedInputLine('outline', { editor: editing, adding: adding, sections: view.sections });
+  const unsaved = { editor: editing, adding: adding, sections: view.sections };
+  const held = unsavedInputLine('outline', unsaved);
+  // Task 4.14g: a pencil opens its editor in place of the open one, and "+ Add a beat" opens the add
+  // line in its section in place of the open one, so each waits as the buttons do.
+  const editHeld = unsavedInputLine('outline', unsaved, 'edit');
+  const addHeld = unsavedInputLine('outline', unsaved, 'add');
   const standing = ViewLogic.standingNotesView(data && data.directorGateNotes, CHECKPOINT_LABELS);
   // Brief 2.7: what the automatic rework of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace, theme);
@@ -197,7 +214,19 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   }
 
   function isEditing(line, key) { return editing !== null && editing.line === line && editing.key === key; }
-  function open(line, key) { setEditing({ line: line, key: key }); }
+
+  /** A pencil: opens its line's editor in place of the open one, so it waits while one is open (task 4.14g). */
+  function open(line, key) {
+    if (editHeld) return;
+    setEditing({ line: line, key: key });
+  }
+
+  /** "+ Add a beat": opens the add line in its section in place of the open one, so it waits while that holds text (task 4.14g). */
+  function openAddLine(slot) {
+    if (addHeld) return;
+    setAdding({ slot: slot, material: '', players: '' });
+  }
+
   function cancel() { setEditing(null); }
   function editNote(text) { keep(draft, text); setSendBackArmed(false); }
   function backToMeeting() { if (onRollback) onRollback('arc-selection'); }
@@ -300,11 +329,12 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           beat: EditLogic.beatWithId(draft, beat.id),
           onSave: function (built) { save(EditLogic.mergeBeat(draft, beat.id, built)); },
           onCancel: cancel
-        })
+        }),
+        heldLine(editHeld)
       );
     }
     return React.createElement('li', { key: beat.key, className: 'map__beat ' + ALWAYS + (beat.locked ? ' map__beat--locked' : '') },
-      !beat.locked && editBtn(function () { open('beat', beat.id); }),
+      !beat.locked && editBtn(function () { open('beat', beat.id); }, editHeld),
       beatBody(beat),
       React.createElement('div', { className: 'map__controls' },
         moveSelect('Move to…', beat.moveTargets, beat.locked, 'Move beat ' + beat.id + ' to another section',
@@ -355,7 +385,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       return React.createElement('button', {
         type: 'button',
         className: 'btn btn-ghost btn-sm map__add-open',
-        onClick: function () { setAdding({ slot: slot, material: '', players: '' }); }
+        disabled: !!addHeld,
+        title: addHeld || undefined,
+        onClick: function () { openAddLine(slot); }
       }, '+ Add a beat');
     }
     return React.createElement('div', { className: 'map__add' },
@@ -376,7 +408,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         'aria-label': 'The players the beat shows'
       }),
       React.createElement('button', { type: 'button', className: 'btn btn-secondary btn-sm', disabled: !adding.material.trim(), onClick: addTheBeat }, 'Add the beat'),
-      React.createElement('button', { type: 'button', className: 'btn btn-ghost btn-sm', onClick: function () { setAdding(null); } }, 'Cancel')
+      React.createElement('button', { type: 'button', className: 'btn btn-ghost btn-sm', onClick: function () { setAdding(null); } }, 'Cancel'),
+      heldLine(addHeld)
     );
   }
 
@@ -422,9 +455,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     // The gap note: the one line at the top of the map.
     view.gapNote && (isEditing('gapNote', 'gap')
       ? React.createElement('div', { className: 'map__gap map__editing' },
-          React.createElement(GapNoteEditor, { gapNote: draft.gapNote, onSave: function (g) { save(EditLogic.mergeGapNote(draft, g)); }, onCancel: cancel }))
+          React.createElement(GapNoteEditor, { gapNote: draft.gapNote, onSave: function (g) { save(EditLogic.mergeGapNote(draft, g)); }, onCancel: cancel }),
+          heldLine(editHeld))
       : React.createElement('div', { className: 'map__gap ' + ALWAYS },
-          editBtn(function () { open('gapNote', 'gap'); }),
+          editBtn(function () { open('gapNote', 'gap'); }, editHeld),
           React.createElement('p', { className: 'map__label' }, 'The gap'),
           React.createElement('p', null, view.gapNote.line),
           view.gapNote.players && React.createElement('p', { className: 'text-xs text-muted' }, 'It raises: ' + view.gapNote.players),
@@ -434,9 +468,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     React.createElement('section', { className: 'map__top', 'aria-label': 'The headline, the deck and the top photo' },
       isEditing('head', 'head')
         ? React.createElement('div', { className: 'map__head map__editing' },
-            React.createElement(HeadEditor, { map: draft, onSave: function (head) { save(EditLogic.mergeMapHead(draft, head)); }, onCancel: cancel }))
+            React.createElement(HeadEditor, { map: draft, onSave: function (head) { save(EditLogic.mergeMapHead(draft, head)); }, onCancel: cancel }),
+            heldLine(editHeld))
         : React.createElement('div', { className: 'map__head ' + ALWAYS },
-            editBtn(function () { open('head', 'head'); }),
+            editBtn(function () { open('head', 'head'); }, editHeld),
             React.createElement('p', { className: 'map__headline' }, view.headline.text),
             concernsOf(view.headline.concerns),
             React.createElement('p', { className: 'map__deck' }, view.deck.text),
@@ -461,9 +496,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
                 section: EditLogic.sectionWithSlot(draft, section.slot),
                 onSave: function (fields) { save(EditLogic.mergeMapSection(draft, section.slot, fields)); },
                 onCancel: cancel
-              }))
+              }),
+              heldLine(editHeld))
           : React.createElement('div', { className: 'map__section-head ' + ALWAYS },
-              editBtn(function () { open('section', section.slot); }),
+              editBtn(function () { open('section', section.slot); }, editHeld),
               React.createElement('h4', { className: 'map__label' }, section.label),
               React.createElement('p', { className: 'text-sm' },
                 React.createElement('span', { className: 'text-muted' }, 'Heading: '), section.heading || 'none printed'),
@@ -496,9 +532,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       React.createElement('p', null, view.tally.cards + ' · ' + view.tally.photos),
       isEditing('length', 'length')
         ? React.createElement('div', { className: 'map__length map__editing' },
-            React.createElement(LengthEditor, { map: draft, onSave: function (n) { save(EditLogic.mergeMapLength(draft, n)); }, onCancel: cancel }))
+            React.createElement(LengthEditor, { map: draft, onSave: function (n) { save(EditLogic.mergeMapLength(draft, n)); }, onCancel: cancel }),
+            heldLine(editHeld))
         : React.createElement('div', { className: 'map__length ' + ALWAYS },
-            editBtn(function () { open('length', 'length'); }),
+            editBtn(function () { open('length', 'length'); }, editHeld),
             React.createElement('p', null, view.tally.length),
             concernsOf(view.tally.lengthConcerns))
     ),
@@ -573,7 +610,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     ),
 
     // Task 4.14d: what holds the buttons, beside them.
-    held && React.createElement('p', { className: 'validation-error', role: 'status' }, held),
+    heldLine(held),
 
     // The trace of an automatic rework, folded below the map.
     trace.any && React.createElement(CollapsibleSection, { title: trace.title },

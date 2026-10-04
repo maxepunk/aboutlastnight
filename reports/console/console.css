@@ -1341,6 +1341,19 @@ textarea.input {
   margin-top: var(--space-xs);
 }
 
+/* ── Held Line (tasks 4.14d and 4.14g) ──
+   What waits for input the director has not saved, and what releases it: an action, a pencil, a
+   move, a delete, an insert or "+ Add a beat" held by an open editor or an add line. A hold, not
+   an error, so it reads calmer than .validation-error's red, which stays for a real refusal. */
+.held-line {
+  margin-top: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-left: 2px solid var(--accent-cyan);
+  background: rgba(78, 205, 196, 0.06);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
 /* ── Context Status ── */
 .context-status__item {
   display: flex;
@@ -2075,6 +2088,16 @@ textarea.input {
   opacity: 1;
 }
 
+/* A pencil held by an editor left open (task 4.14g) stays dim on hover too: its tooltip says why. */
+.article-block__edit-btn:disabled,
+.article-block__edit-btn:disabled:hover,
+.article-block--editable-always:hover .article-block__edit-btn:disabled,
+.article-block--editable-always:focus-within .article-block__edit-btn:disabled {
+  background: rgba(212, 168, 83, 0.15);
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* ── Inline Edit Form ── */
 .article-block--editing {
   border: 1px solid var(--accent-amber);
@@ -2701,6 +2724,12 @@ textarea.input {
   font-size: 0.7rem;
 }
 
+/* The move control held by an editor left open (task 4.14g), dim as the rail's held buttons are. */
+.desk-rail__move:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* An empty block, caught before an approve or a send-back. */
 .desk-row--empty > .desk-row__body {
   outline: 1px dashed var(--accent-red);
@@ -3123,6 +3152,11 @@ textarea.input {
 
 .map__add-open {
   align-self: flex-start;
+}
+
+/* The add line's held line takes a row of its own under the inputs (task 4.14g). */
+.map__add > .held-line {
+  flex-basis: 100%;
 }
 
 .map__unplaced {
