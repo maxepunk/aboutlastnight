@@ -4,9 +4,9 @@
  * Phase 4: the questions are asked at the story meeting alone (spec section 10), through the
  * meeting's own view with an answer box on each (task 4.8). The map holds none (task 4.9), and
  * the article stop none (brief 4.7b), so the shared WriterQuestionsPanel went with its last
- * use, the desk (task 4.10). writerQuestionsView stays for the harness (task 4.12); its logic
- * is pinned in console/__tests__/checkpoint-view-logic.test.js, and the wiring here, on the
- * source text, in the style of console-trace-panel.test.js.
+ * use, the desk (task 4.10), and writerQuestionsView with its last reader, the harness (task
+ * 4.12a). The wiring is pinned here, on the source text, in the style of
+ * console-trace-panel.test.js.
  */
 const fs = require('fs');
 const path = require('path');
@@ -51,7 +51,7 @@ describe('4.8: the story meeting shows its questions through its own view', () =
 });
 
 // Task 4.9: the map writer asks nothing and the map's stop sends no questions (brief 4.6), so
-// the map renders no questions panel. writerQuestionsView stays for the harness (4.12).
+// the map renders no questions panel.
 describe('4.9: the map renders no questions panel', () => {
   it('reads neither the shared panel nor its view model nor a questions key', () => {
     const src = read('components/checkpoints/Outline.js');

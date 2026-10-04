@@ -7,9 +7,6 @@
  * React components are thin consumers verified by a manual click-through.
  *
  * Each function exists because a screen was reading a field that does not exist:
- *   lastEvaluationFrom  - R5 F4: evaluationHistory is an ARRAY of per-phase
- *                         records; all three eval bars read `.overallScore` off
- *                         the array and rendered nothing, for every session.
  *   accusationView      - R5 F7: the accusation block read `reasoning` and
  *                         `confidence`; the parse emits `charge` and `notes`, so
  *                         the 400-character motive/vote record was never shown.
@@ -22,134 +19,15 @@
  *                         in front of the person approving the article.
  */
 const {
-  lastEvaluationFrom,
-  evaluationView,
   accusationView,
   whiteboardView,
   factCheckSummary
 } = require('../checkpoint-view-logic');
 
-describe('lastEvaluationFrom', () => {
-  it('prefers the server-selected lastEvaluation', () => {
-    const evaluation = { overallScore: 0.9 };
-    expect(lastEvaluationFrom({ lastEvaluation: evaluation })).toBe(evaluation);
-  });
-
-  it('falls back to the last entry for the phase in an old evaluationHistory payload', () => {
-    const data = {
-      evaluationHistory: [
-        { phase: 'arcs', overallScore: 0.8 },
-        { phase: 'outline', overallScore: 0.7 }
-      ]
-    };
-    expect(lastEvaluationFrom(data, 'outline')).toEqual({ phase: 'outline', overallScore: 0.7 });
-  });
-
-  it('takes the LAST entry for the phase, not the first (revision loops append)', () => {
-    const data = {
-      evaluationHistory: [
-        { phase: 'article', overallScore: 0.4, revisionNumber: 0 },
-        { phase: 'outline', overallScore: 0.9 },
-        { phase: 'article', overallScore: 0.93, revisionNumber: 1 }
-      ]
-    };
-    expect(lastEvaluationFrom(data, 'article').overallScore).toBe(0.93);
-  });
-
-  it('returns null when nothing matches, when the payload is empty, and when evaluationHistory is not an array', () => {
-    expect(lastEvaluationFrom({ evaluationHistory: [{ phase: 'arcs' }] }, 'outline')).toBeNull();
-    expect(lastEvaluationFrom({})).toBeNull();
-    expect(lastEvaluationFrom(null)).toBeNull();
-    // The bug this replaces: the array was read as an object.
-    expect(lastEvaluationFrom({ evaluationHistory: { overallScore: 0.9 } }, 'arcs')).toBeNull();
-  });
-});
-
-describe('evaluationView', () => {
-  it('reads structuralPassed when present and falls back to ready', () => {
-    expect(evaluationView({ structuralPassed: false, ready: true }).passed).toBe(false);
-    // The Opus history entry stores only `ready` (evaluator-nodes historyEntry).
-    expect(evaluationView({ ready: true }).passed).toBe(true);
-  });
-
-  it('formats the 0-1 score to two decimals and defaults every list', () => {
-    const view = evaluationView({ overallScore: 0.912, ready: true });
-    expect(view.score).toBe('0.91');
-    expect(view.structuralIssues).toEqual([]);
-    expect(view.advisoryWarnings).toEqual([]);
-  });
-
-  it('carries escalation, guidance, confidence and source through', () => {
-    const view = evaluationView({
-      overallScore: 0,
-      structuralPassed: false,
-      structuralIssues: ['card t1 is not verbatim'],
-      advisoryWarnings: ['tighten the lede'],
-      revisionGuidance: 'Step 1: fix the card.',
-      confidence: 'high',
-      revisionNumber: 2,
-      escalatedToHuman: true,
-      escalationReason: 'Reached revision cap (3)',
-      source: 'fact-check'
-    });
-    expect(view.score).toBe('0.00');
-    expect(view.passed).toBe(false);
-    expect(view.structuralIssues).toEqual(['card t1 is not verbatim']);
-    expect(view.advisoryWarnings).toEqual(['tighten the lede']);
-    expect(view.revisionGuidance).toBe('Step 1: fix the card.');
-    expect(view.confidence).toBe('high');
-    expect(view.revisionNumber).toBe(2);
-    expect(view.escalationReason).toBe('Reached revision cap (3)');
-    expect(view.source).toBe('fact-check');
-  });
-
-  it('returns null for a missing evaluation', () => {
-    expect(evaluationView(null)).toBeNull();
-  });
-
-  it('leaves the score null when the evaluator recorded no number', () => {
-    expect(evaluationView({ ready: false, _error: 'boom' }).score).toBeNull();
-  });
-});
-
-describe('the uncalibrated label (phase 2, brief 2.4)', () => {
-  // No judge has been checked against the director's decisions yet (phase 7), and
-  // all eight evaluations of 091826 and 092026 passed. The score is labelled so,
-  // in one phrase from this module, at all three stops.
-  const { UNCALIBRATED_SCORE_LABEL } = require('../checkpoint-view-logic');
-
-  it('is one plain phrase that says the score is uncalibrated', () => {
-    expect(UNCALIBRATED_SCORE_LABEL).toBe(
-      'Uncalibrated: the model\'s own score, not yet checked against your approvals and send-backs.'
-    );
-  });
-
-  it('labels a model evaluation\'s score at every stop', () => {
-    const data = {
-      evaluationHistory: [
-        { phase: 'arcs', overallScore: 0.98, ready: true },
-        { phase: 'outline', overallScore: 0.92, ready: true },
-        { phase: 'article', overallScore: 0.6, ready: false, escalatedToHuman: true }
-      ]
-    };
-    ['arcs', 'outline', 'article'].forEach((phase) => {
-      expect(evaluationView(lastEvaluationFrom(data, phase)).calibration).toBe(UNCALIBRATED_SCORE_LABEL);
-    });
-  });
-
-  it('leaves an entry with no score unlabelled', () => {
-    expect(evaluationView({ ready: false, _error: 'boom' }).calibration).toBe('');
-    expect(evaluationView({ phase: 'article', ready: false, reason: 'rollback-invalidated', source: 'rollback' }).calibration).toBe('');
-  });
-
-  it('leaves the fact check\'s entry unlabelled: its 0 is not a model\'s score, and a check is definite', () => {
-    const view = evaluationView({ overallScore: 0, structuralPassed: false, source: 'fact-check' });
-    expect(view.score).toBe('0.00');
-    expect(view.calibration).toBe('');
-  });
-
+describe('no stop shows a score (task 4.10)', () => {
   // Task 4.10 (spec 6.3): the article stop was the evaluation bar's last screen, and it shows no
-  // score, so the bar went with it. The harness still prints the phrase from this view (4.12).
+  // score, so the bar went with it. Task 4.12a: the harness prints none either, and the
+  // evaluation's view and its label went with it.
   it('no console screen renders a score: the evaluation bar is gone from utils.js', () => {
     const fs = require('fs');
     const path = require('path');
@@ -552,7 +430,7 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
 // count as unresolved on the approve button.
 describe('concerns about the director\'s edits (F1)', () => {
   const {
-    evaluationView, factCheckSummary, approveLabel, DIRECTOR_EDIT_PREFIX, SEND_BACK_PASS,
+    factCheckSummary, approveLabel, DIRECTOR_EDIT_PREFIX, SEND_BACK_PASS,
     DIRECTOR_EDIT_CONCERNS_LABEL
   } = require('../checkpoint-view-logic');
   const CONCERN = "Director's edit E2: T1: the closing states Alex's motive as fact.";
@@ -575,19 +453,6 @@ describe('concerns about the director\'s edits (F1)', () => {
     expect(DIRECTOR_EDIT_PREFIX).toBe(server.DIRECTOR_EDIT_PREFIX);
     expect(typeof SEND_BACK_PASS === 'string' && SEND_BACK_PASS.length > 0).toBe(true);
     expect(SEND_BACK_PASS).toBe(server.SEND_BACK_PASS);
-  });
-
-  test('evaluationView lists the judge\'s concerns apart from its other advisories', () => {
-    const view = evaluationView({ ready: true, overallScore: 0.9, structuralIssues: [], advisoryWarnings: [CONCERN, 'C10: the lede runs long.'] });
-    expect(view.directorEditConcerns).toEqual([CONCERN]);
-    expect(view.advisoryWarnings).toEqual(['C10: the lede runs long.']);
-    expect(view.directorEditConcernsLabel).toBe(`${DIRECTOR_EDIT_CONCERNS_LABEL} (1)`);
-  });
-
-  test('evaluationView without concerns has an empty list', () => {
-    const view = evaluationView({ ready: true, overallScore: 0.9, advisoryWarnings: ['C10: x'] });
-    expect(view.directorEditConcerns).toEqual([]);
-    expect(view.advisoryWarnings).toEqual(['C10: x']);
   });
 
   test('the fact check\'s concerns are a group of their own, never in the card list or the general advisories', () => {
@@ -1000,92 +865,15 @@ describe('the fact check\'s new advisory groups (phase 3, 3.4)', () => {
   });
 });
 
-// Phase 3, brief 3.7 (spec C15, D8): the writer's questions for the director, one line
-// per question with what it is about first, at the arc, outline and article stops. The
-// director answers with the stop's note box. An empty list shows no panel.
-describe('writerQuestionsView (phase 3, brief 3.7)', () => {
-  const { writerQuestionsView } = require('../checkpoint-view-logic');
-  const Q1 = { kind: 'player', about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
-  // Phase 4 (brief 4.4): the kinds are the weave's, C15's three cases with a figure in
-  // place of a ledger entry.
-  const Q2 = { kind: 'figure', about: 'The 10:02 AM sale of $250,000', question: 'Is this sale a duplicate?' };
-
-  it.each([
-    ['undefined', undefined],
-    ['null', null],
-    ['an empty list', []],
-    ['a list of nothing usable', [null, 'loose', { about: 'Sarah' }, { about: ' ', question: ' ' }]]
-  ])('shows no panel for %s', (_name, value) => {
-    const view = writerQuestionsView(value, 'outline');
-    expect(view.any).toBe(false);
-    expect(view.items).toEqual([]);
-  });
-
-  it('lists each question with what it is about first, in the writer\'s order', () => {
-    const view = writerQuestionsView([Q1, Q2], 'outline');
-    expect(view.any).toBe(true);
-    expect(view.items.map((item) => [item.about, item.question])).toEqual([
-      ['Sarah', Q1.question],
-      ['The 10:02 AM sale of $250,000', 'Is this sale a duplicate?']
-    ]);
-    expect(new Set(view.items.map((item) => item.key)).size).toBe(2);
-  });
-
-  it('counts the questions in its title', () => {
-    expect(writerQuestionsView([Q1], 'arc-selection').title).toBe('Questions from the writer (1)');
-    expect(writerQuestionsView([Q1, Q2], 'arc-selection').title).toBe('Questions from the writer (2)');
-  });
-
-  // Task 3.11 (final review, questions-console-docs finding 3): each stop's hint says
-  // what an answer does there. At the arc and outline stops the note reaches the next
-  // writer whichever button is pressed, but that writer never sees the questions, so
-  // each answer says what it is about. At the article stop Approve goes straight to
-  // assembly and nothing reads its note, so answers go with a send back.
-  it.each(['arc-selection', 'outline'])('at the %s stop, asks for the answers in the note, each saying what it is about', (stop) => {
-    expect(writerQuestionsView([Q1], stop).hint).toBe('Answer them in the note below, saying what each answer is about.');
-  });
-
-  it('at the article stop, says the answers go with a send back, and that Approve publishes the article as it is', () => {
-    expect(writerQuestionsView([Q1], 'article').hint)
-      .toBe('Send back with your answers in the note below to have the writer apply them. Approve publishes the article as it is.');
-  });
-
-  it.each([
-    ['no stop', undefined],
-    ['a stop with no questions panel', 'input-review'],
-    ['the phase name for the arcs', 'arcs']
-  ])('throws on %s, naming the three stops', (_name, stop) => {
-    expect(() => writerQuestionsView([Q1], stop)).toThrow(/'arc-selection', 'outline' or 'article'/);
-    expect(() => writerQuestionsView([], stop)).toThrow(/'arc-selection', 'outline' or 'article'/);
-  });
-
-  // Fix 3.7b (finding 1): each line shows the question's kind; a question with no kind,
-  // or an unknown one, from a list made before the field had one, still renders.
-  // Phase 4 (brief 4.4): the labels follow the weave's kinds, the questions the story
-  // meeting asks (lib/writer-questions.js WEAVE_QUESTION_KINDS).
+// Phase 3, brief 3.7: the kinds of the writer's questions. Phase 4 (brief 4.4): the story
+// meeting asks them and shows each one's kind; task 4.12a retired writerQuestionsView, the
+// harness's panel, with its last reader.
+describe('WRITER_QUESTION_KIND_LABELS', () => {
   it('labels exactly the weave\'s kinds (lib/writer-questions.js)', () => {
     const { WRITER_QUESTION_KIND_LABELS } = require('../checkpoint-view-logic');
     const { WEAVE_QUESTION_KINDS } = require('../../lib/writer-questions');
     expect(Object.keys(WRITER_QUESTION_KIND_LABELS)).toEqual([...WEAVE_QUESTION_KINDS]);
     expect(WRITER_QUESTION_KIND_LABELS).toEqual({ player: 'Player', pronoun: 'Pronoun', figure: 'Figure' });
-  });
-
-  it('shows each question\'s kind', () => {
-    const view = writerQuestionsView([Q1, Q2, { kind: 'pronoun', about: 'Riley', question: 'Which pronoun?' }], 'article');
-    expect(view.items.map((item) => [item.kind, item.kindLabel])).toEqual([
-      ['player', 'Player'], ['figure', 'Figure'], ['pronoun', 'Pronoun']
-    ]);
-  });
-
-  it('renders a question with no kind, or an unknown one, with no kind shown', () => {
-    const view = writerQuestionsView([{ about: 'Sarah', question: 'Where?' }, { kind: 'other', about: 'Alex', question: 'Who?' }], 'article');
-    expect(view.any).toBe(true);
-    expect(view.items.map((item) => [item.kind, item.kindLabel, item.about])).toEqual([[null, '', 'Sarah'], [null, '', 'Alex']]);
-  });
-
-  it('trims the ends of each string and skips an entry missing either one', () => {
-    const view = writerQuestionsView([{ about: '  Sarah ', question: ' Where? ' }, { question: 'No subject?' }], 'arc-selection');
-    expect(view.items.map((item) => [item.about, item.question])).toEqual([['Sarah', 'Where?']]);
   });
 });
 

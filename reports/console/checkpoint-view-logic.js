@@ -14,15 +14,6 @@
  * articles first-pass at every checkpoint and then made 20-41 fixes each,
  * because the gates were rendering nothing:
  *
- *   lastEvaluationFrom / evaluationView
- *     state.evaluationHistory is an APPEND-ONLY ARRAY mixing all three phases;
- *     Outline.js and Article.js read `.overallScore` straight off the array and
- *     ArcSelection.js read a per-arc `arc.evaluationHistory` that is never
- *     populated, so the Opus verdict — the entire point of the evaluate/revise
- *     loop — never appeared on any screen (R5 F4, CODE-REVIEW H6). The server
- *     now sends `lastEvaluation` pre-selected per phase; the array fallback is
- *     kept for a payload captured before Task 3.
- *
  *   meetingView (task 4.8)
  *     the arc stop is the story meeting: one weave, read and settled in minutes.
  *     The arc cards it replaced read the arc schema's fields (CODE-REVIEW H7);
@@ -74,43 +65,6 @@
     return asArray(value).filter(function (v) { return typeof v === 'string' && v.length > 0; });
   }
 
-  // ── Evaluation ────────────────────────────────────────────────────────────
-
-  /**
-   * The evaluation to render on this screen.
-   *
-   * `data.lastEvaluation` is what server.js#lastEvaluationFor already selected
-   * for the phase. The `evaluationHistory` branch is the fallback for a payload
-   * produced before that existed: the array mixes phases AND revision-invalidated
-   * stubs, so "the last entry" is routinely another phase's verdict — filter by
-   * phase and take the last, exactly as the server does.
-   *
-   * @param {object|null} data - checkpoint payload
-   * @param {string} [phase] - 'arcs' | 'outline' | 'article'
-   * @returns {object|null}
-   */
-  function lastEvaluationFrom(data, phase) {
-    var payload = data || {};
-    if (payload.lastEvaluation) return payload.lastEvaluation;
-    var entries = asArray(payload.evaluationHistory)
-      .filter(function (e) { return e && e.phase === phase; });
-    return entries.length > 0 ? entries[entries.length - 1] : null;
-  }
-
-  /**
-   * The one phrase a model evaluation's score carries (phase 2, brief 2.4). Since task 4.10
-   * no stop shows a score (spec 6.3); the e2e harness prints the phrase beside the score it
-   * still prints, until task 4.12.
-   *
-   * No judge has yet been checked against the director's own approvals and send
-   * backs; that calibration is phase 7. All eight evaluations of 091826 and 092026
-   * passed with no structural issue, and one of them cited "I was not in that
-   * room" as good voice. A score says what the model thought, not how likely the
-   * director is to accept the output.
-   */
-  var UNCALIBRATED_SCORE_LABEL =
-    'Uncalibrated: the model\'s own score, not yet checked against your approvals and send-backs.';
-
   // ── The director's edits are final (F1, spec 2026-10-02 section 7) ──────────
 
   /**
@@ -135,73 +89,11 @@
    */
   var REWEAVE_PASS = 'reweave';
 
-  /** The heading the concerns about the director's edits sit under, in the fact check's list and an evaluation's parts. */
+  /** The heading the concerns about the director's edits sit under, in the fact check's list. */
   var DIRECTOR_EDIT_CONCERNS_LABEL = 'Concerns about your edits';
-
-  /** What a concern is, under that heading in an evaluation's parts (evaluationView). */
-  var DIRECTOR_EDIT_CONCERNS_HINT =
-    'The judge disagrees with these lines you wrote or cut. Nothing was sent back for them: they are yours to decide.';
 
   function isDirectorEditConcern(text) {
     return typeof text === 'string' && text.indexOf(DIRECTOR_EDIT_PREFIX) === 0;
-  }
-
-  /**
-   * An evaluation's parts, as the e2e harness prints them. No stop renders it since task
-   * 4.10: the desk marks an escalated evaluation's issues and its concerns itself
-   * (deskMarks), and shows no score.
-   *
-   * Two field-name hazards handled here rather than in each reader:
-   *   - the score is 0-1, and the old bars printed it as `0.95/10`;
-   *   - `structuralPassed` is only on the fact-check-sourced entry; the Opus
-   *     history entry (evaluator-nodes.js historyEntry) carries `ready` instead.
-   *
-   * `calibration` is UNCALIBRATED_SCORE_LABEL whenever the entry carries a model's
-   * score. It is '' for an entry with no score, and for the fact check's entry
-   * (`source: 'fact-check'`), whose 0 is a placeholder the evaluator writes when
-   * the check stops a bundle before the model sees it: a check's answer is
-   * definite and has nothing to calibrate.
-   *
-   * F1: the advisories that open with DIRECTOR_EDIT_PREFIX are the judge's concerns
-   * about the director's own edits. They come apart from the other advisories, under
-   * their own heading (`directorEditConcerns`, `directorEditConcernsLabel`).
-   *
-   * @param {object|null} evaluation
-   * @returns {{score: string|null, calibration: string, passed: boolean,
-   *            structuralIssues: string[], advisoryWarnings: string[],
-   *            directorEditConcerns: string[], directorEditConcernsLabel: string,
-   *            directorEditConcernsHint: string,
-   *            revisionGuidance: string, confidence: string,
-   *            revisionNumber: number|null, escalated: boolean,
-   *            escalationReason: string, source: string}|null}
-   */
-  function evaluationView(evaluation) {
-    if (!evaluation || typeof evaluation !== 'object') return null;
-    var score = typeof evaluation.overallScore === 'number' && !Number.isNaN(evaluation.overallScore)
-      ? evaluation.overallScore.toFixed(2)
-      : null;
-    var passed = evaluation.structuralPassed !== undefined
-      ? evaluation.structuralPassed === true
-      : evaluation.ready === true;
-    var source = asString(evaluation.source);
-    var advisories = stringList(evaluation.advisoryWarnings);
-    var concerns = advisories.filter(isDirectorEditConcern);
-    return {
-      score: score,
-      calibration: score !== null && source !== 'fact-check' ? UNCALIBRATED_SCORE_LABEL : '',
-      passed: passed,
-      structuralIssues: stringList(evaluation.structuralIssues),
-      advisoryWarnings: advisories.filter(function (text) { return !isDirectorEditConcern(text); }),
-      directorEditConcerns: concerns,
-      directorEditConcernsLabel: DIRECTOR_EDIT_CONCERNS_LABEL + ' (' + concerns.length + ')',
-      directorEditConcernsHint: DIRECTOR_EDIT_CONCERNS_HINT,
-      revisionGuidance: asString(evaluation.revisionGuidance),
-      confidence: asString(evaluation.confidence),
-      revisionNumber: typeof evaluation.revisionNumber === 'number' ? evaluation.revisionNumber : null,
-      escalated: evaluation.escalatedToHuman === true,
-      escalationReason: asString(evaluation.escalationReason),
-      source: source
-    };
   }
 
   // ── Documents by name (brief 1.2) ─────────────────────────────────────────
@@ -1248,67 +1140,12 @@
   // ── The writer's questions (phase 3, brief 3.7) ────────────────────────────
 
   /**
-   * Each kind a question can have and the word the panel shows for it (fix 3.7b). Phase 4
-   * (brief 4.4): the weave's three, lib/writer-questions.js WEAVE_QUESTION_KINDS, since
-   * the story meeting asks the questions (a test holds the keys equal to that list). A
-   * question of another kind renders with no kind shown.
+   * Each kind a question can have and the word the story meeting shows for it (fix 3.7b).
+   * Phase 4 (brief 4.4): the weave's three, lib/writer-questions.js WEAVE_QUESTION_KINDS,
+   * since the story meeting asks the questions (a test holds the keys equal to that list).
+   * A question of another kind renders with no kind shown.
    */
   var WRITER_QUESTION_KIND_LABELS = { player: 'Player', pronoun: 'Pronoun', figure: 'Figure' };
-
-  /**
-   * What the panel tells the director an answer does at each stop (task 3.11; final
-   * review, questions-console-docs finding 3). At the arc and outline stops the note
-   * reaches the next writer whichever button is pressed, as guidance or a standing
-   * note, but that writer never sees the questions, so each answer says what it is
-   * about. At the article stop Approve goes straight to assembly and nothing reads
-   * its note, so the answers go with a send back.
-   */
-  var WRITER_QUESTIONS_HINTS = {
-    'arc-selection': 'Answer them in the note below, saying what each answer is about.',
-    outline: 'Answer them in the note below, saying what each answer is about.',
-    article: 'Send back with your answers in the note below to have the writer apply them. Approve publishes the article as it is.'
-  };
-
-  /**
-   * The writer's questions panel at the arc, outline and article stops (spec C15,
-   * D8): one line per question, its kind and what it is about first, skimmed in a
-   * glance, then the stop's hint for answering them. An entry without both strings is
-   * left out, and an empty list shows no panel. A question with no kind, or an unknown
-   * one (a list from before the field had a kind), renders with none.
-   *
-   * @param {Array|null} questions - data.writerQuestions
-   * @param {string} stop - 'arc-selection', 'outline' or 'article': the stop showing
-   *   the panel, whose hint says what an answer does there; any other value throws
-   * @returns {{any: boolean, title: string, hint: string,
-   *            items: Array<{key: string, kind: (string|null), kindLabel: string, about: string, question: string}>}}
-   */
-  function writerQuestionsView(questions, stop) {
-    if (!Object.prototype.hasOwnProperty.call(WRITER_QUESTIONS_HINTS, stop)) {
-      throw new Error("writerQuestionsView: stop must be 'arc-selection', 'outline' or 'article', got " + String(stop));
-    }
-    var items = asArray(questions)
-      .filter(function (q) { return q && typeof q === 'object'; })
-      .map(function (q) {
-        var kind = Object.prototype.hasOwnProperty.call(WRITER_QUESTION_KIND_LABELS, q.kind) ? q.kind : null;
-        return { kind: kind, about: asString(q.about).trim(), question: asString(q.question).trim() };
-      })
-      .filter(function (q) { return q.about.length > 0 && q.question.length > 0; })
-      .map(function (q, index) {
-        return {
-          key: 'question-' + index,
-          kind: q.kind,
-          kindLabel: q.kind ? WRITER_QUESTION_KIND_LABELS[q.kind] : '',
-          about: q.about,
-          question: q.question
-        };
-      });
-    return {
-      any: items.length > 0,
-      title: 'Questions from the writer (' + items.length + ')',
-      hint: WRITER_QUESTIONS_HINTS[stop],
-      items: items
-    };
-  }
 
   // ── The story meeting (phase 4, task 4.8; spec 4.3 and 4.4) ────────────────
   //
@@ -3662,10 +3499,6 @@
   }
 
   var api = {
-    lastEvaluationFrom: lastEvaluationFrom,
-    evaluationView: evaluationView,
-    // Phase 2, brief 2.4: the score's label at all three stops
-    UNCALIBRATED_SCORE_LABEL: UNCALIBRATED_SCORE_LABEL,
     // F1: the director's edits are final (copies of lib/hand-edit-diff.js, held equal by a test)
     DIRECTOR_EDIT_PREFIX: DIRECTOR_EDIT_PREFIX,
     SEND_BACK_PASS: SEND_BACK_PASS,
@@ -3696,8 +3529,7 @@
     // Phase 4, brief 4.2: the leave-out box at the character-IDs stop
     characterIdLeaveOutTicks: characterIdLeaveOutTicks,
     characterIdsSkipPayload: characterIdsSkipPayload,
-    // Phase 3, brief 3.7: the writer's questions at the arc, outline and article stops
-    writerQuestionsView: writerQuestionsView,
+    // Phase 3, brief 3.7: the kinds of the writer's questions, which the story meeting asks
     WRITER_QUESTION_KIND_LABELS: WRITER_QUESTION_KIND_LABELS,
     // Phase 4, task 4.8: the story meeting on screen
     MEETING_STOP: MEETING_STOP,

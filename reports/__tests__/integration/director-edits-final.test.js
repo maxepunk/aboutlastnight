@@ -26,7 +26,7 @@ const { mocks } = require('../../lib/workflow/nodes');
 const { getCheckpointData, buildResumePayload } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 const { DIRECTOR_EDIT_PREFIX, CHANGED_EDITS_KEY } = require('../../lib/hand-edit-diff');
-const { evaluationView, steeringView } = require('../../console/checkpoint-view-logic');
+const { deskView, steeringView } = require('../../console/checkpoint-view-logic');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const paragraph = (text) => ({ type: 'paragraph', text });
@@ -195,9 +195,12 @@ describe('0926262\'s shape: the judge flags the director\'s edits after a send-b
       `${DIRECTOR_EDIT_PREFIX}E2: ${CLOSING_FINDING}`,
       `${DIRECTOR_EDIT_PREFIX}E1: ${THEORY_FINDING}`
     ]);
-    const view = evaluationView(data.lastEvaluation);
-    expect(view.directorEditConcerns).toHaveLength(2);
-    expect(view.advisoryWarnings).toEqual([]);
+    // Task 4.12a: the stop shows them as the desk does (task 4.10), each a concern about the
+    // director's edit; the evaluation's own view went with the harness, its last reader.
+    const desk = deskView(data, data.contentBundle);
+    const marks = [...Object.values(desk.marks.at).flat(), ...desk.marks.apart, ...desk.marks.resolved];
+    expect(marks.filter((mark) => mark.tone === 'concern').map((mark) => mark.text))
+      .toEqual(expect.arrayContaining([CLOSING_FINDING, THEORY_FINDING]));
 
     // The stored article never carries the rework's list, and the report says every edit was kept.
     expect(next.values.contentBundle).not.toHaveProperty(CHANGED_EDITS_KEY);

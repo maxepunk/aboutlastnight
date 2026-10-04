@@ -23,7 +23,6 @@ const { createReportGraphWithCheckpointer, RECURSION_LIMIT } = require('../../li
 const { mocks } = require('../../lib/workflow/nodes');
 const { getCheckpointData, buildResumePayload } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
-const { writerQuestionsView } = require('../../console/checkpoint-view-logic');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
