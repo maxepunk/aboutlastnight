@@ -1277,3 +1277,27 @@ describe('4.14b: the map names each meeting change by its place, as the meeting 
     expect(viewWith([{ source: 'M1', change: 'A change.' }], null).weaveChanges[0].source).toBe('Your change at the meeting');
   });
 });
+
+describe("4.14b: the map's beat rows are keyed by the beat's id, so an open editor survives a strike or a move above it", () => {
+  const data = payloadOf(stateAt());
+
+  test("each beat row's key names its beat, in a section and in left out", () => {
+    const view = ViewLogic.mapView(data, opened(data));
+    expect(view.sections[1].beats.map((b) => b.key)).toEqual(['theStory-beat-b2', 'theStory-beat-b3', 'theStory-beat-b4']);
+    expect(view.leftOut.items.map((b) => b.key)).toEqual(['leftOut-beat-b9']);
+  });
+
+  test('a strike or a move above a beat leaves its key as it was', () => {
+    const keyOfB4 = (map) => ViewLogic.mapView(data, map).sections[1].beats.find((b) => b.id === 'b4').key;
+    expect(keyOfB4(EditLogic.strikeBeat(opened(data), 'b3'))).toBe(keyOfB4(opened(data)));
+    expect(keyOfB4(EditLogic.moveBeat(opened(data), 'b2', 'closing'))).toBe(keyOfB4(opened(data)));
+  });
+
+  test('a beat whose id another beat of its list holds, or with none, is keyed by its place, so no two rows of a list share a key', () => {
+    const map = clone(MAP);
+    map.sections[1].beats.push({ id: 'b3', kind: 'line', material: 'A second beat under b3', players: [] }, { kind: 'scene', material: 'A beat with no id', players: [] });
+    const keys = ViewLogic.mapView(data, map).sections[1].beats.map((b) => b.key);
+    expect(keys).toEqual(['theStory-beat-b2', 'theStory-beat@1', 'theStory-beat-b4', 'theStory-beat@3', 'theStory-beat@4']);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});

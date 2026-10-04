@@ -2911,7 +2911,9 @@
    * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
    *   and photos, each beat and photo with the places it can move to, and each beat's material
    *   and card as the page prints them (`materialText`, `cardText`: the document named, through
-   *   the payload's evidenceIndex; mapDocumentText);
+   *   the payload's evidenceIndex; mapDocumentText). Each beat row is keyed by its beat's id,
+   *   so an editor open on it survives a strike or a move above it; a beat whose id another beat
+   *   of its list holds, or with none, by its place (task 4.14b);
    * - `dropped`, each with its reason; `tally`, the lines of Everyone and the counts, rebuilt
    *   from the map as edited (mapTallyOf); `leftOut`, folded, each item with the sections it can
    *   come back to; `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
@@ -2945,13 +2947,16 @@
     var sections = asArray(map.sections).filter(isPlainObject);
     var targets = sections.map(function (s) { return { value: s.slot, label: slotLabelOf(s.slot, slots) }; });
     var others = function (slot) { return targets.filter(function (t) { return t.value !== slot; }); };
+    /** The ids of a list of beats, as the row keys read them. */
+    var idsOf = function (beats) { return asArray(beats).map(function (b) { return editLogic.beatIdOf(isPlainObject(b) ? b : {}); }); };
 
-    var beatView = function (beat, index, slot) {
+    var beatView = function (beat, index, slot, ids) {
       var b = isPlainObject(beat) ? beat : {};
       var id = editLogic.beatIdOf(b);
       var card = editLogic.beatCardOf(b);
+      var ownId = id !== '' && ids.filter(function (other) { return other === id; }).length === 1;
       return {
-        key: (slot === null ? 'leftOut' : slot) + '-beat-' + index,
+        key: (slot === null ? 'leftOut' : slot) + (ownId ? '-beat-' + id : '-beat@' + index),
         id: id,
         index: index,
         kindLabel: hasOwn(BEAT_KIND_LABELS, b.kind) ? BEAT_KIND_LABELS[b.kind] : '',
@@ -2998,6 +3003,7 @@
       : null;
 
     var sectionViews = sections.map(function (section, i) {
+      var ids = idsOf(section.beats);
       return {
         key: 'section-' + i,
         slot: section.slot,
@@ -3005,13 +3011,14 @@
         heading: asString(section.heading),
         job: asString(section.job),
         concerns: at('section:' + section.slot),
-        beats: asArray(section.beats).map(function (beat, j) { return beatView(beat, j, section.slot); }),
+        beats: asArray(section.beats).map(function (beat, j) { return beatView(beat, j, section.slot, ids); }),
         photos: asArray(section.photos).map(function (photo, j) { return photoView(photo, j, section); })
       };
     });
 
+    var leftIds = idsOf(map.leftOut);
     var leftItems = asArray(map.leftOut).map(function (beat, j) {
-      var view = beatView(beat, j, null);
+      var view = beatView(beat, j, null, leftIds);
       view.targets = targets;
       return view;
     });

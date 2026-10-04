@@ -150,3 +150,17 @@ describe('4.6c: Outline.js reads the map through the edit logic and names its do
     expect(src).not.toMatch(/beat\.material\b(?!Text)|'Card: ' \+ beat\.card\b(?!Text)/);
   });
 });
+
+// Task 4.14b: the beat rows are keyed by the beat's id, which mapView's key carries
+// (console/__tests__/checkpoint-view-logic-map.test.js holds the key to the id), so an editor
+// open on a beat survives a strike or a move above it.
+describe("4.14b: Outline.js keys each beat row by the view's key, the beat's id", () => {
+  const src = read('components/checkpoints/Outline.js');
+
+  it('both of a beat row\'s forms, the editor and the row, and each left-out row take the view\'s key', () => {
+    const row = src.slice(src.indexOf('function beatRow('), src.indexOf('function photoRow('));
+    expect(count(row, "React.createElement('li', { key: beat.key,")).toBe(2);
+    expect(count(src, "React.createElement('li', { key: item.key, className: 'map__left-out' }")).toBe(1);
+    expect(src).not.toMatch(/key: (beat|item)\.index|'-beat-' \+/);
+  });
+});

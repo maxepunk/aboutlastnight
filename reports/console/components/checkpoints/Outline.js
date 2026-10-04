@@ -283,6 +283,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     );
   }
 
+  // A beat's row is keyed by its beat's id (mapView's `key`), not its place, so an editor open
+  // on a beat keeps what was typed when a beat above it is struck or moved (task 4.14b).
   function beatRow(beat) {
     if (isEditing('beat', beat.id)) {
       return React.createElement('li', { key: beat.key, className: 'map__beat map__editing' },
