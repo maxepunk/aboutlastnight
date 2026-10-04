@@ -1687,12 +1687,14 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
   // rework that cannot fix it. Each criterion names the material it reads, and each
   // judge's prompts must print every one.
   describe('each truth criterion reads only what its judge\'s prompt holds', () => {
-    const { _testing: { TRUTH_MATERIAL } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+    const { _testing: { TRUTH_MATERIAL, judgedEdits } } = require('../../../lib/workflow/nodes/evaluator-nodes');
     const { renderPhotoEntry } = require('../../../lib/prompt-renderers/director-words-renderer');
+    const { standingAfterSendBack } = require('../../../lib/hand-edit-diff');
 
     /**
      * The fixture, with a bundle that prints a hero image and a captioned photo beside its
      * cards, and (brief 4.5) a weave question the director answered at the story meeting.
+     * Brief 4.7f: and a paragraph the director added at the desk, an edit verdictTruth reads.
      */
     const fullState = () => {
       const state = stateFor('journalist');
@@ -1700,13 +1702,17 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       state.heroImage = 'hero.jpg';
       state.contentBundle.heroImage = { filename: 'hero.jpg', caption: 'The room before the vote.' };
       state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
+      const writers = clone(state.contentBundle);
+      state.contentBundle.sections[0].content.push({ type: 'paragraph', text: 'The director added this paragraph at the desk.' });
+      state._articleHandEdits = standingAfterSendBack(null, writers, state.contentBundle, 'bundle');
       return state;
     };
     const truthOf = (phase) => Object.entries(getPhaseCriteria(phase, 'journalist')).filter(([, c]) => c.truth);
 
     it.each(['arcs', 'article'])('every material a %s truth criterion reads is printed in that judge\'s prompts', (phase) => {
       const state = fullState();
-      const prompts = `${systemFor(phase, state)}\n${userFor(phase, state)}`;
+      // The director's edits as createEvaluator sends them (judgedEdits).
+      const prompts = `${systemFor(phase, state)}\n${buildEvaluationUserPrompt(phase, state, { factCheck: null, directorEdits: judgedEdits(phase, state) })}`;
       const missing = [];
       for (const [key, criterion] of truthOf(phase)) {
         expect(Array.isArray(criterion.reads) && criterion.reads.length > 0).toBe(true);

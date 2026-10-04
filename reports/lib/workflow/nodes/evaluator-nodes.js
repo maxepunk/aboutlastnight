@@ -130,7 +130,7 @@ const JUDGE_MAP_LABEL = 'MAP:';
 
 /**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
- * it under. The first fifteen are the judge's inputs; the last two are the judged
+ * it under. The first sixteen are the judge's inputs; the last two are the judged
  * output's own text, which only the article holds (the weave places neither cards nor
  * photos).
  */
@@ -143,6 +143,7 @@ const TRUTH_MATERIAL = Object.freeze({
   answers: '<DIRECTOR_ANSWERS>',            // the director's answers at the story meeting (renderDirectorAnswers; brief 4.5)
   weave: '<SETTLED_WEAVE>',                 // the weave as the director settled it, every question with its answer or none (settledWeaveOf; brief 4.7a)
   map: `\n${JUDGE_MAP_LABEL}\n`,           // the map as the director left it, its struck beats in leftOut (brief 4.7a)
+  directorEdits: "THE DIRECTOR'S EDITS (",  // the director's edits, right after the output judged, when it carries one (renderJudgeDirectorEdits; brief 4.7f)
   epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
   verdict: '<DIRECTOR_ACCUSATION>',         // the room's verdict, in the director's words
   roster: 'CANONICAL CHARACTER ROSTER:',    // each player with the roster's pronoun
@@ -227,14 +228,22 @@ const TRUTH_GROUPS = [
   {
     key: 'verdictTruth',
     rules: ['T2'],
-    reads: (phase) => (phase === 'arcs' ? ['verdict', 'notes'] : ['verdict', 'notes', 'answers', 'map']),
+    reads: (phase) => (phase === 'arcs' ? ['verdict', 'notes'] : ['verdict', 'notes', 'answers', 'map', 'directorEdits']),
     // Phase 4 (brief 4.4; T2 as rewritten): the map places the theories the room debated,
     // so the weave's question asks for the verdict as the official story alone. Brief 4.7a:
     // the article reports every theory the map, as the director left it, carries, and a
     // theory in its leftOut, where the director's strikes go, stays out of print.
+    //
+    // Brief 4.7f (R11): the article's question reads the map as the director's desk edits
+    // leave it, edits first. The map keeps the beat of a card the director cut at the desk, so
+    // the question read such a theory as unreported, and a finding that quoted neither the cut
+    // text nor the edit's id stayed structural (guardDirectorEdits): an automatic rework was
+    // sent to bring the cut back. A theory the director wrote into the article from leftOut
+    // read as a breach the same way. A sentence a rewrite took out is cut text too, as the
+    // edit lines' removed: line names it.
     describe: (s, phase) => (phase === 'arcs'
       ? `Is the verdict in ${s} told as the room's official story, ungraded against any hidden answer (T2)? The theories the room debated are the map's to place, so the weave keeps T2 whether it names them or not.`
-      : `Is the verdict in ${s} told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?`)
+      : `Is the verdict in ${s} told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)? The director's edits come first, where THE DIRECTOR'S EDITS lists them, so the map is read as they leave it: a theory the director cut, or took out in a rewrite, is out of its sections, and a theory the director's own text reports is in them, from its leftOut too.`)
   },
   {
     key: 'stagesTruth',

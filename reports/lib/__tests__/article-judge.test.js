@@ -33,6 +33,12 @@ const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('./fixtures/rework-
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const count = (text, part) => text.split(part).length - 1;
 
+/**
+ * The article's verdictTruth question (T2 as rewritten; brief 4.7f): the map's theories, read as
+ * the director's edits leave the map.
+ */
+const VERDICT_QUESTION = "Is the verdict in the article told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)? The director's edits come first, where THE DIRECTOR'S EDITS lists them, so the map is read as they leave it: a theory the director cut, or took out in a rewrite, is out of its sections, and a theory the director's own text reports is in them, from its leftOut too.";
+
 beforeAll(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -106,12 +112,13 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
   // Brief 4.7c: a question that names where the director's words come from names the four
   // sources the fact check reads as the director's words (buildFactCheckArgs' directorWords).
   // Brief 4.7d: evidenceTruth's T6 clause reads an exposer from the director's words too.
+  // Brief 4.7f: verdictTruth reads the map as the director's edits leave it.
   it('each truth question is worded as section B of the rule-text read gives it', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
       evidenceTruth: "Is every claim in the article written as its evidence allows, the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) included as record (T1); with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's words name (T6)?",
       moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the morning as FINANCIAL_SUMMARY gives it; a balance the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
-      verdictTruth: "Is the verdict in the article told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?",
+      verdictTruth: VERDICT_QUESTION,
       stagesTruth: "In the article, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
       novaPositionTruth: "In the article, is Nova the uninterested third party, reporting on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and witnesses only what this session's mode block allows (T8)?",
       playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes, the input-review corrections, the accusation and the answers at the story meeting), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
@@ -121,13 +128,14 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
     });
   });
 
-  // Brief 4.7c: a question that names the director's words reads all four sources.
+  // Brief 4.7c: a question that names the director's words reads all four sources. Brief 4.7f:
+  // verdictTruth reads the director's edits too, under the heading its question names.
   it('the answers from the story meeting join the reads of evidenceTruth, moneyTruth, playersTruth and verdictTruth (T1)', () => {
     const reads = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.reads]));
     expect(reads).toEqual({
       evidenceTruth: ['record', 'timeline', 'notes', 'corrections', 'verdict', 'answers'],
       moneyTruth: ['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'weave'],
-      verdictTruth: ['verdict', 'notes', 'answers', 'map'],
+      verdictTruth: ['verdict', 'notes', 'answers', 'map', 'directorEdits'],
       stagesTruth: ['record', 'modeBlock', 'epilogue', 'timeline'],
       novaPositionTruth: ['modeBlock'],
       playersTruth: ['roster', 'notes', 'corrections', 'verdict', 'answers'],
@@ -274,7 +282,12 @@ describe('4.7a: what the article judge reads', () => {
     state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
     // An article that prints a captioned photo, as photosTruth reads its captions.
     state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
-    const prompts = `${systemFor(state)}\n${userFor(state)}`;
+    // Brief 4.7f: an edit of the director's, as verdictTruth reads them, sent as createEvaluator
+    // sends them (judgedEdits).
+    const writers = clone(state.contentBundle);
+    state.contentBundle.sections[0].content.push({ type: 'paragraph', text: 'The director added this paragraph at the desk.' });
+    state._articleHandEdits = standingAfterSendBack(null, writers, state.contentBundle, 'bundle');
+    const prompts = `${systemFor(state)}\n${buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: evalTesting.judgedEdits('article', state) })}`;
     const missing = Object.entries(getPhaseCriteria('article', 'journalist'))
       .flatMap(([key, c]) => c.reads.filter((m) => !prompts.includes(TRUTH_MATERIAL[m])).map((m) => `${key} reads ${m}`));
     expect(missing).toEqual([]);
@@ -332,7 +345,7 @@ describe('4.7a: a theory struck from the map stays out, through the judge', () =
     const map = mapIn(prompt);
     expect(map.sections.flatMap((s) => s.beats).map((b) => b.id)).not.toContain('b7');
     expect(map.leftOut.find((b) => b.id === 'b7')).toEqual({ id: 'b7', kind: 'line', material: THEORY, players: ['Morgan'] });
-    expect(systemPrompt).toContain("- verdictTruth (T2; must pass): Is the verdict in the article told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?");
+    expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
     // The question that asked for every theory the room debated, whatever the map said, is gone.
     expect(systemPrompt).not.toContain('with the alternative theories the room debated reported');
   });
@@ -436,5 +449,65 @@ describe("4.7d: the director's words are one list", () => {
       return `${material}: ${inner.includes(PLANTED[material])}`;
     });
     expect(placed).toEqual(DIRECTOR_WORDS_MATERIAL.map((material) => `${material}: true`));
+  });
+});
+
+// Brief 4.7f (ruling 2 on 4.5f's and 4.7e's findings): the judge reads the map as the director's
+// desk edits leave it. The map keeps the beat of a card the director deleted at the desk, so a
+// question that asked for every theory a beat in the map's sections carries read a theory whose
+// card the director cut as unreported: a finding that quoted neither the cut text nor the edit's
+// id stayed structural, and an automatic rework was sent to bring the cut back. A theory the
+// director printed from leftOut in their own words read as a breach the same way.
+describe("4.7f: the judge reads the map as the director's edits leave it", () => {
+  const { judgedEdits } = evalTesting;
+  /** A theory the room debated, carried in THE STORY by beat b3, the mor001 card. Invented text. */
+  const CARD_THEORY = 'The room weighed whether Morgan paid Riley to keep the books quiet';
+
+  /** The writer's article prints b3's card in THE STORY, and the director cut it at the desk. */
+  function cutTheoryCardState() {
+    const map = clone(MAP);
+    map.sections[1].beats[1].material = CARD_THEORY;
+    const writers = clone(PREVIOUS_BUNDLE);
+    writers.sections[0].content.splice(2, 0, {
+      type: 'evidence-card', tokenId: 'mor001', headline: 'The envelope', content: 'Morgan hands Riley an envelope by the bar.', owner: 'Morgan Reed', significance: 'supporting'
+    });
+    const directors = clone(writers);
+    directors.sections[0].content.splice(2, 1);
+    return articleState('journalist', { outline: map, contentBundle: directors, _articleHandEdits: standingAfterSendBack(null, writers, directors, 'bundle') });
+  }
+
+  it("the question reads the director's edits first, under the heading the judge's prompt prints them", () => {
+    const { verdictTruth } = getPhaseCriteria('article', 'journalist');
+    expect(verdictTruth.description).toBe(VERDICT_QUESTION);
+    expect(verdictTruth.reads).toContain('directorEdits');
+    expect(VERDICT_QUESTION).toContain(`where ${TRUTH_MATERIAL.directorEdits.replace(/ \($/, '')} lists them`);
+    const state = cutTheoryCardState();
+    const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: judgedEdits('article', state) });
+    expect(prompt).toContain(`\n${TRUTH_MATERIAL.directorEdits}record: the director's own text`);
+  });
+
+  it("a theory whose card the director cut: the map still carries its beat, the judge reads the cut among the director's edits, and the question takes the theory out of the map's sections", async () => {
+    const sdk = judging(CLEAN);
+    await evaluateArticle(atCap(cutTheoryCardState()), cfg(sdk));
+    const { systemPrompt, prompt } = sdk.mock.calls[0][0];
+    expect(mapIn(prompt).sections[1].beats.filter((beat) => beat.card === 'mor001').map((beat) => beat.material)).toEqual([CARD_THEORY]);
+    const edits = prompt.indexOf(TRUTH_MATERIAL.directorEdits);
+    expect(edits).toBeGreaterThan(prompt.indexOf('CONTENT BUNDLE:'));
+    expect(prompt.slice(edits)).toContain('E1 (section "the-story", evidence-card mor001, cut)');
+    expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
+  });
+
+  it("a theory the director printed from leftOut in their own words: the judge reads their paragraph among the director's edits, and the question puts the theory in the map's sections", async () => {
+    const state = struckTheoryState();
+    const writers = clone(state.contentBundle);
+    const DIRECTORS = `${THEORY}, and the director printed it at the desk.`;
+    state.contentBundle.sections[0].content.push({ type: 'paragraph', text: DIRECTORS });
+    state._articleHandEdits = standingAfterSendBack(null, writers, state.contentBundle, 'bundle');
+    const sdk = judging(CLEAN);
+    await evaluateArticle(atCap(state), cfg(sdk));
+    const { systemPrompt, prompt } = sdk.mock.calls[0][0];
+    expect(mapIn(prompt).leftOut.filter((beat) => beat.id === 'b7').map((beat) => beat.material)).toEqual([THEORY]);
+    expect(prompt.slice(prompt.indexOf(TRUTH_MATERIAL.directorEdits))).toContain(`E1 (section "the-story", paragraph): "${DIRECTORS}"`);
+    expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
   });
 });
