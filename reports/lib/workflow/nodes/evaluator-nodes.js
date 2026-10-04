@@ -1646,9 +1646,9 @@ function createEvaluator(phase, options = {}) {
     // human with the fact-check attached, because a human needs the full picture.
     // ─────────────────────────────────────────────────────────────────────────
     let factCheck = null;
-    // Guarded on contentBundle: reviseContentBundle's error path returns a null
-    // bundle and the edge into here is unconditional. A MISSING bundle is not a
-    // fact-check failure (it would report every roster member as uncovered and
+    // Guarded on contentBundle. Since task 4.14e a rework that fails keeps its bundle
+    // and its route (graph.js routeAfterArticleRework) never reaches here. A MISSING
+    // bundle is not a fact-check failure (it would report every roster member as uncovered and
     // route to a reviser that has nothing to revise) — let the normal path
     // handle it.
     if (phase === 'article' && state.contentBundle) {

@@ -74,7 +74,7 @@
  */
 
 const { StateGraph, START, END, MemorySaver } = require('@langchain/langgraph');
-const { ReportStateAnnotation, PHASES, REVISION_CAPS, REWORK_STATUS, reworkOpened, stopRoundOf } = require('./state');
+const { ReportStateAnnotation, PHASES, REVISION_CAPS, REWORK_STATUS, STALE_VERDICT_REASONS, reworkOpened, stopRoundOf } = require('./state');
 const { CHECKPOINT_TYPES } = require('./checkpoint-helpers');
 const nodes = require('./nodes');
 const { isTransientError } = require('../llm/retry');
@@ -562,7 +562,7 @@ async function incrementArticleRevision(state) {
     evaluationHistory: {
       phase: 'article',
       ready: false,
-      reason: 'revision-invalidated',
+      reason: STALE_VERDICT_REASONS.REVISION,
       source,
       timestamp: new Date().toISOString()
     }

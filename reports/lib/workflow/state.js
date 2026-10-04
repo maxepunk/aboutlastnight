@@ -1732,6 +1732,15 @@ function isNoteOf(note, gate, kind, stopRound) {
  */
 const REWORK_STATUS = Object.freeze({ RUNNING: 'running', RETRYING: 'retrying', DID_NOT_RUN: 'did-not-run' });
 
+/**
+ * The reasons a stub in the evaluations gives, which is no verdict: a rework's increment marks its
+ * phase's verdict stale (graph.js incrementArticleRevision), and a rollback marks each phase it
+ * invalidates (lib/api-helpers.js buildEvaluationInvalidationStubs). Every reader that looks for
+ * the last verdict skips both (ai-nodes.js verdictAfterFailedRework). One list, so a renamed reason
+ * reaches every reader (review of 4.14e).
+ */
+const STALE_VERDICT_REASONS = Object.freeze({ REVISION: 'revision-invalidated', ROLLBACK: 'rollback-invalidated' });
+
 /** The channel each stop keeps its rework's record in: the map's and the desk's (task 4.14e). */
 const REWORK_CHANNELS = Object.freeze({ outline: '_outlineRework', article: '_articleRework' });
 
@@ -1805,6 +1814,7 @@ module.exports = {
   isNoteOf,
   // A rework that fails (task 4.14e): where it stands, where each stop keeps it, and the round that did not run
   REWORK_STATUS,
+  STALE_VERDICT_REASONS,
   REWORK_CHANNELS,
   reworkOpened,
   roundDidNotRunAt,

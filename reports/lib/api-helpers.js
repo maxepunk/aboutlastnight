@@ -15,7 +15,8 @@ const {
   ROLLBACK_CLEARS,
   ROLLBACK_COUNTER_RESETS,
   FRESH_START_CLEARS,
-  PHASES
+  PHASES,
+  STALE_VERDICT_REASONS
 } = require('./workflow/state');
 
 /**
@@ -127,7 +128,7 @@ function buildEvaluationInvalidationStubs(rollbackPoint) {
   return (PHASES_INVALIDATED_BY[rollbackPoint] || []).map(phase => ({
     phase,
     ready: false,
-    reason: 'rollback-invalidated',
+    reason: STALE_VERDICT_REASONS.ROLLBACK,
     source: 'rollback',
     timestamp
   }));

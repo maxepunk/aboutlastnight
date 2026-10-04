@@ -301,7 +301,8 @@ async function render() {
   // the director's standing edits: the director's send-back with the fixed note, round
   // FIXED_ROUND; then the automatic pass after the map checks, with the checks' lines, as
   // the check node writes them on the map.
-  const rework = { ...mapState, _previousOutline: state.outline, outline: null, humanOutlineRevisionCount: FIXED_ROUND - 1 };
+  // As the increment leaves it since task 4.14e: the map kept in outline and in _previousOutline.
+  const rework = { ...mapState, _previousOutline: state.outline, humanOutlineRevisionCount: FIXED_ROUND - 1 };
   const sendBack = await aiTesting.mapReworkCall({ ...rework, _outlineFeedback: FIXED_FEEDBACK, outlineRevisionCount: 0 }, promptBuilder, theme);
   write(FILES[1], sendBack.systemPrompt, sendBack.prompt);
   const { validationResults: mapChecks } = mapNodes._testing.checkMap({ ...state, _mapCheck: null, outlineApproved: false, currentPhase: null });

@@ -21,7 +21,7 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
-const { PHASES, REWORK_STATUS, reworkOpened, stopRoundOf, isNoteOf, DIRECTOR_ROUND_COUNTERS } = require('../state');
+const { PHASES, REWORK_STATUS, STALE_VERDICT_REASONS, reworkOpened, stopRoundOf, isNoteOf, DIRECTOR_ROUND_COUNTERS } = require('../state');
 const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 // Task 4.14e: which failures a rework calls again (rate limits, overloads, stalls), the one
 // classifier the nodes' retry policy reads too (graph.js LLM_RETRY).
@@ -1030,7 +1030,8 @@ async function generateOutline(state, config) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Data flow:
-// 1. incrementOutlineRevision keeps the map in _previousOutline and clears outline
+// 1. incrementOutlineRevision keeps the map in _previousOutline, leaves it in outline (a rework
+//    that fails leaves it at the stop, task 4.14e) and opens the rework's record (_outlineRework)
 // 2. reviseOutline reads _previousOutline with the map checks' lines (validationResults)
 //    or the director's note, and the director's standing edits
 // 3. buildRevisionContextDRY formats the context
@@ -1951,8 +1952,8 @@ async function reviseContentBundle(state, config) {
   }
 }
 
-/** The stubs that mark an article's verdict stale (graph.js incrementArticleRevision, lib/api-helpers.js buildRollbackState): no verdict. */
-const STALE_VERDICT_REASONS = new Set(['revision-invalidated', 'rollback-invalidated']);
+/** The stubs that mark an article's verdict stale (state.js STALE_VERDICT_REASONS): no verdict. */
+const STALE_VERDICTS = new Set(Object.values(STALE_VERDICT_REASONS));
 
 /**
  * The article's verdict after its rework gave up (task 4.14e), appended after the stub the
@@ -1969,7 +1970,7 @@ const STALE_VERDICT_REASONS = new Set(['revision-invalidated', 'rollback-invalid
  */
 function verdictAfterFailedRework(history, record) {
   const verdicts = (Array.isArray(history) ? history : [])
-    .filter((entry) => entry && entry.phase === 'article' && !STALE_VERDICT_REASONS.has(entry.reason));
+    .filter((entry) => entry && entry.phase === 'article' && !STALE_VERDICTS.has(entry.reason));
   const verdict = verdicts.length > 0 ? verdicts[verdicts.length - 1] : null;
   const settled = Boolean(verdict) && (verdict.ready === true || verdict.escalatedToHuman === true);
   const why = record.round ? `The director's ${record.round} did not run` : 'The automatic rework did not run';
