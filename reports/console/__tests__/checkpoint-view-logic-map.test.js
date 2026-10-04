@@ -1220,3 +1220,27 @@ describe('4.6e: one helper reads the map the stop showed, for the gate and the c
     expect(body(view, 'mapView', '  ')).toContain('shownMapOf(d.outline)');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14b: the map's last defects (the final review, ruling 2). The map shows the director
+// what will print, and what they do there holds.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('4.14b: going back to the map says what it costs: the map reopens as left, with no model call, and the article goes', () => {
+  test("the rollback panel reads the map's own line, as it reads the meeting's", () => {
+    expect(ViewLogic.rollbackWarningLine('outline')).toBe(ViewLogic.MAP_ROLLBACK_LINE);
+    expect(ViewLogic.MAP_ROLLBACK_LINE).toBe('The map reopens as you left it, with no model call. The article is cleared, and written again once you approve.');
+    expect(ViewLogic.rollbackWarningLine('arc-selection')).toBe(ViewLogic.MEETING_ROLLBACK_LINE);
+    expect(ViewLogic.rollbackWarningLine('article')).toBe('This will clear all data from this point forward.');
+  });
+
+  test('the line holds: the rollback to the map keeps the map, its edits and its mark, and clears the article', () => {
+    const { ROLLBACK_CLEARS } = require('../../lib/workflow/state');
+    ['outline', '_mapBaseline', '_outlineHandEdits', '_mapCheck', 'heroImage'].forEach((kept) => {
+      expect(`${kept}: ${ROLLBACK_CLEARS.outline.includes(kept)}`).toBe(`${kept}: false`);
+    });
+    ['contentBundle', '_articleHandEdits', 'articleApproved', 'assembledHtml'].forEach((cleared) => {
+      expect(`${cleared}: ${ROLLBACK_CLEARS.outline.includes(cleared)}`).toBe(`${cleared}: true`);
+    });
+  });
+});

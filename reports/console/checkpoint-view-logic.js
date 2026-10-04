@@ -1310,9 +1310,10 @@
   /** Why Reweave is not offered, while it is not (the integrator's ruling 5). */
   var REWEAVE_HINT = 'Reweave fits your changes and your note into the weave: change the weave or write a note first.';
 
-  /** What a rollback costs: the general warning, and going back to the meeting (R9). */
+  /** What a rollback costs: the general warning, and going back to the meeting or the map (R9; the map's, task 4.14b). */
   var ROLLBACK_WARNING = 'This will clear all data from this point forward.';
   var MEETING_ROLLBACK_LINE = 'The story meeting reopens as you left it, with no model call; a meeting that holds no weave has one written fresh. The map and the article are cleared, and written again once you approve.';
+  var MAP_ROLLBACK_LINE = 'The map reopens as you left it, with no model call. The article is cleared, and written again once you approve.';
 
   function isPlainObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -2555,9 +2556,15 @@
     return standingNotesView(gateNotes, labels);
   }
 
-  /** What a rollback to `target` costs, for the rollback panel: going back to the meeting costs no model call (R9). */
+  /**
+   * What a rollback to `target` costs, for the rollback panel: going back to the meeting or to
+   * the map reopens it as the director left it, with no model call (R9; the map's line, task
+   * 4.14b); every other point clears from there.
+   */
   function rollbackWarningLine(target) {
-    return target === MEETING_STOP ? MEETING_ROLLBACK_LINE : ROLLBACK_WARNING;
+    if (target === MEETING_STOP) return MEETING_ROLLBACK_LINE;
+    if (target === MAP_STOP) return MAP_ROLLBACK_LINE;
+    return ROLLBACK_WARNING;
   }
 
   // ── The map on screen (phase 4, task 4.9; spec 5.2 and 5.3) ────────────────
@@ -3887,6 +3894,8 @@
     mapEditLineOptions: mapEditLineOptions,
     mapView: mapView,
     mapPhotoUrl: mapPhotoUrl,
+    // Task 4.14b: going back to the map
+    MAP_ROLLBACK_LINE: MAP_ROLLBACK_LINE,
     // Phase 4, task 4.10: the desk's marks, and one rule for the changed lines a stop shows
     REWEAVE_PASS: REWEAVE_PASS,
     changedEditsToShow: changedEditsToShow,

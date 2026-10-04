@@ -8,7 +8,8 @@
 window.Console = window.Console || {};
 
 const { CHECKPOINT_LABELS, CollapsibleSection } = window.Console.utils;
-// What a rollback costs: going back to the story meeting costs no model call (R9; task 4.8).
+// What a rollback costs: going back to the story meeting or the map costs no model call (R9;
+// tasks 4.8 and 4.14b).
 const { rollbackWarningLine } = window.Console.checkpointViewLogic;
 
 function RollbackPanel({ targetCheckpoint, onConfirm, onCancel }) {
@@ -58,8 +59,8 @@ function RollbackPanel({ targetCheckpoint, onConfirm, onCancel }) {
         'Rollback to ' + checkpointLabel
       ),
 
-      // Warning: what this rollback costs. Going back to the story meeting reopens it as
-      // the director left it, with no model call (R9); every other point clears from here.
+      // Warning: what this rollback costs. Going back to the story meeting or the map reopens
+      // it as the director left it, with no model call (R9); every other point clears from here.
       React.createElement('p', { className: 'rollback-modal__warning mt-md' },
         rollbackWarningLine(targetCheckpoint)
       ),

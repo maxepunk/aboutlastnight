@@ -880,10 +880,10 @@ describe('4.8: the standing notes folded under the note box, and the rollback\'s
     expect(meetingStandingNotes([], LABELS)).toEqual({ any: false, title: 'Standing notes (0)', items: [] });
   });
 
-  test('going back to the meeting costs no model call (R9); every other point keeps the general warning', () => {
+  test('going back to the meeting costs no model call (R9); the map has its own line (4.14b), and every other point keeps the general warning', () => {
     expect(rollbackWarningLine('arc-selection')).toBe(ViewLogic.MEETING_ROLLBACK_LINE);
     expect(ViewLogic.MEETING_ROLLBACK_LINE).toMatch(/story meeting reopens as you left it, with no model call/);
-    expect(rollbackWarningLine('outline')).toBe('This will clear all data from this point forward.');
+    expect(rollbackWarningLine('outline')).toBe(ViewLogic.MAP_ROLLBACK_LINE);
     expect(rollbackWarningLine('photos')).toBe('This will clear all data from this point forward.');
   });
 });
