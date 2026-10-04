@@ -19,7 +19,7 @@ const {
   oldThreadRollbackState
 } = require('../old-thread');
 const { CHECKPOINT_ORDER } = require('../../console/session-start-logic');
-const { ReportStateAnnotation, VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS, ROLLBACK_CLEARS } = require('../workflow/state');
+const { ReportStateAnnotation, VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS, ROLLBACK_CLEARS, _testing: { appendSingleReducer } } = require('../workflow/state');
 const { buildRollbackState, buildFreshStartState } = require('../api-helpers');
 const { isWeave } = require('../weave');
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
@@ -204,6 +204,25 @@ describe("4.11 fix round 2: a thread with no weave that holds an evaluation or a
     const meeting = { ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection') };
     expect(`an old thread's meeting: ${leftAfter(meeting)}`).toBe("an old thread's meeting: ");
     expect(oldThreadOf({ ...holdingAll, weave: null, ...meeting }, null)).toBeNull();
+  });
+
+  // A rollback past the meeting appends a stub that marks the article's verdict stale
+  // (lib/api-helpers.js buildRollbackState), whatever the thread holds. The route takes any
+  // point for a thread that is not old, so a new thread whose weave writer failed and was
+  // then rolled back there held the stub beside no weave. The stub is no evaluation, and the
+  // thread stays resumable.
+  it("a rollback's stub is no evaluation: no rollback point writes anything the rule reads into a thread that holds none of it", () => {
+    const beforeTheWeave = { currentPhase: 'error', weave: null, evaluationHistory: [] };
+    VALID_ROLLBACK_POINTS.forEach((point) => {
+      const update = buildRollbackState(point);
+      const after = { ...beforeTheWeave, ...update, evaluationHistory: appendSingleReducer(beforeTheWeave.evaluationHistory, update.evaluationHistory) };
+      expect(`${point}: ${JSON.stringify(oldThreadOf(after, null))}`).toBe(`${point}: null`);
+    });
+    expect(buildRollbackState('photos').evaluationHistory).toEqual([expect.objectContaining({ phase: 'article', source: 'rollback' })]);
+  });
+
+  it("an old thread's evaluation beside a rollback's stub still makes it old", () => {
+    expect(oldThreadOf({ currentPhase: 'error', evaluationHistory: [...ARCS_EVALUATED, ...buildRollbackState('outline').evaluationHistory] }, null)).toEqual(FLAG);
   });
 });
 

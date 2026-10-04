@@ -27,12 +27,13 @@
  * counts spent the fresh weave's check rework.
  *
  * A thread of the new code holds none of them without a weave: the arc writer writes the
- * weave or throws, every evaluation and rework after it runs on the weave, and the fresh
- * start, every rollback that clears the weave and an old thread's rollback to the meeting
- * leave none of them (lib/__tests__/old-thread.test.js holds this). A thread with no weave
- * that holds none of them is resumed, and its resume writes the weave: a new thread before
- * its weave, an old thread rolled back to the meeting before its weave is written, or an
- * old thread that stopped before its arc stage evaluated anything.
+ * weave or throws, every evaluation and rework after it runs on the weave, the fresh start,
+ * every rollback that clears the weave and an old thread's rollback to the meeting leave
+ * none of them, and the stub a rollback writes is no evaluation
+ * (lib/__tests__/old-thread.test.js holds this). A thread with no weave that holds none of
+ * them is resumed, and its resume writes the weave: a new thread before its weave, an old
+ * thread rolled back to the meeting before its weave is written, or an old thread that
+ * stopped before its arc stage evaluated anything.
  *
  * server.js applies it: /approve, /resume and every /rollback past the meeting answer 409
  * with OLD_THREAD_MESSAGE, and GET /checkpoint carries the flag, which the console shows
@@ -71,13 +72,31 @@ const PAST_THE_ARC_WRITER = Object.freeze([
 ]);
 
 /**
- * Whether a channel holds anything. An empty list, a zero and a missing value hold nothing;
- * any other value counts, as the map writer and the article writer each skip on any.
+ * Whether an entry in the evaluations is a rollback's stub (lib/api-helpers.js
+ * buildRollbackState): it marks a verdict stale and is no evaluation. A rollback past the
+ * meeting writes one into any thread, a new thread before its weave included, since the
+ * route takes any point for a thread that is not old.
  *
- * @param {*} value
+ * @param {*} entry
  * @returns {boolean}
  */
-function holds(value) {
+function isRollbackStub(entry) {
+  return Boolean(entry) && entry.source === 'rollback';
+}
+
+/**
+ * Whether the thread holds anything in one of those channels. An empty list, a zero and a
+ * missing value hold nothing, and neither does a rollback's stub; any other value counts, as
+ * the map writer and the article writer each skip on any.
+ *
+ * @param {Object} state
+ * @param {string} channel - one of PAST_THE_ARC_WRITER
+ * @returns {boolean}
+ */
+function holds(state, channel) {
+  const value = channel === 'evaluationHistory' && Array.isArray(state[channel])
+    ? state[channel].filter((entry) => !isRollbackStub(entry))
+    : state[channel];
   return Array.isArray(value) ? value.length > 0 : Boolean(value);
 }
 
@@ -93,7 +112,7 @@ function oldThreadOf(values, pausedAt) {
   if (isWeave(state.weave)) return null;
   const pastTheArcWriter = state.currentPhase === PHASES.COMPLETE
     || CHECKPOINT_ORDER.indexOf(pausedAt) >= MEETING_INDEX
-    || PAST_THE_ARC_WRITER.some((channel) => holds(state[channel]));
+    || PAST_THE_ARC_WRITER.some((channel) => holds(state, channel));
   if (!pastTheArcWriter) return null;
   return { message: OLD_THREAD_MESSAGE, rollbackTo: OLD_THREAD_ROLLBACK, rollbackPoints: [...OLD_THREAD_ROLLBACK_POINTS] };
 }
