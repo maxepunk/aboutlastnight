@@ -77,15 +77,17 @@ describe('4.12a: a line for each pause at a new stop or a new round of one', () 
     expect(new Date(line.at).toISOString()).toBe(line.at);
   });
 
+  // Task 4.12c: the input review has a page now (4.12c's describe below counts it), so the
+  // stops with no page here are the photos stop and the pre-curation stop.
   it('counts the words at the story meeting, the map and the desk, and records none at a stop with no page', () => {
     const map = mapData();
     stopsLog.recordPause(SESSION, { stop: 'outline', state: reworkFixtureState('journalist'), data: map });
     stopsLog.recordPause(SESSION, { stop: 'photos', state: {}, data: { type: 'photos', defaultDir: 'd', found: 3 } });
-    stopsLog.recordPause(SESSION, { stop: 'input-review', state: {}, data: { type: 'input-review' } });
+    stopsLog.recordPause(SESSION, { stop: 'pre-curation', state: {}, data: { type: 'pre-curation' } });
     expect(linesOf().map((line) => [line.stop, line.words])).toEqual([
       ['outline', wordsShown('outline', map)],
       ['photos', null],
-      ['input-review', null]
+      ['pre-curation', null]
     ]);
   });
 
@@ -261,6 +263,32 @@ describe('4.12a fix round 1: a stop\'s round is one rule, stopRoundOf (lib/workf
       });
       expect([lookup(round - 1), lookup(round), lookup(round + 1)]).toEqual([-1, 0, -1]);
     });
+  });
+});
+
+// Task 4.12c (ruling 4 on 4.12a's minors): the readout counts the words at every return, and the
+// input review's and the character-IDs stop's pauses counted none.
+describe('4.12c: the words at the input review and the character-IDs stop', () => {
+  it('counts each over its page, as at the three decision stops', () => {
+    const review = {
+      type: 'input-review',
+      sessionConfig: { accusation: { accused: ['Alex'], charge: 'Sold the company out from under Marcus', verdictKind: 'culprit' } },
+      directorNotes: { whiteboard: { ambiguities: ['A name under the coffee stain'] } },
+      ledger: { clock: { decided: true, evening: false, firstTime: '09:10 AM' }, adjustmentsParsed: true, accounts: [{ name: 'Melanie', total: 75000, tokenCount: 1 }], adjustments: [], mismatches: [], unclassified: [] }
+    };
+    const photos = {
+      type: 'character-ids',
+      photoAnalyses: { analyses: [{ filename: 'hero.jpg', visualContent: 'Alex and Morgan at the bar.', characterDescriptions: [] }] },
+      sessionPhotos: ['/p/hero.jpg'],
+      leftOutPhotos: []
+    };
+    stopsLog.recordPause(SESSION, { stop: 'input-review', state: {}, data: review });
+    stopsLog.recordPause(SESSION, { stop: 'character-ids', state: {}, data: photos });
+    expect(linesOf().map((line) => [line.stop, line.words])).toEqual([
+      ['input-review', wordsShown('input-review', review)],
+      ['character-ids', wordsShown('character-ids', photos)]
+    ]);
+    linesOf().forEach((line) => expect([line.stop, line.words > 0]).toEqual([line.stop, true]));
   });
 });
 

@@ -309,15 +309,17 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
     became: 'The room also weighed whether Vic would replace Marcus.', pass: 2, automatic: true, reason: null
   };
 
+  // Task 4.12c: `keptCount` went with its last reader, the desk's page (lib/stop-pages.js), which
+  // prints `kept` as RevisionDiff does.
   test('nothing: any is false and every list is empty', () => {
-    expect(steeringView(null, null)).toEqual({ any: false, changedEdits: [], keptCount: 0, kept: '', notes: [] });
-    expect(steeringView(null, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, kept: '', notes: [] });
+    expect(steeringView(null, null)).toEqual({ any: false, changedEdits: [], kept: '', notes: [] });
+    expect(steeringView(null, [])).toEqual({ any: false, changedEdits: [], kept: '', notes: [] });
   });
 
   test('each edit a rework changed is one line: its id and section, the director\'s text and what it became, the pass and the reason', () => {
     const v = steeringView({ checked: ['E1', 'E2'], changed: [SEND_BACK_CHANGE] }, []);
     expect(v.any).toBe(true);
-    expect(v.keptCount).toBe(0);
+    expect(v.kept).toBe('');
     expect(v.changedEdits).toEqual([{
       key: 'E2-0',
       id: 'E2',
@@ -393,13 +395,13 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
   });
 
   // 4.10c: and the line the folded record prints, that the edits stand (editsStandLine).
-  test('a report with nothing changed reports the kept count, and that the edits stand', () => {
-    expect(steeringView({ checked: ['E1', 'E2'], changed: [] }, [])).toEqual({ any: true, changedEdits: [], keptCount: 2, kept: 'Both of your edits stand.', notes: [] });
+  test('a report with nothing changed says the edits stand', () => {
+    expect(steeringView({ checked: ['E1', 'E2'], changed: [] }, [])).toEqual({ any: true, changedEdits: [], kept: 'Both of your edits stand.', notes: [] });
   });
 
   test('an empty checked list, or a report from before F1, is treated as no report', () => {
     expect(steeringView({ checked: [], changed: [] }, []).any).toBe(false);
-    expect(steeringView({ checked: ['lede'], changed: ['lede'] }, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, kept: '', notes: [] });
+    expect(steeringView({ checked: ['lede'], changed: ['lede'] }, [])).toEqual({ any: false, changedEdits: [], kept: '', notes: [] });
   });
 
   test('a scope named after a prototype member is rendered raw (M16)', () => {

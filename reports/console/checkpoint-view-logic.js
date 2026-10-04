@@ -704,11 +704,11 @@
    *
    * F1: `changedEdits` holds one line per edit a pass changed this round
    * (changedEditLine), `automatic` marking a change an automatic pass made and
-   * `restored` one code put back (FA), each read from the entry's own flags;
-   * `keptCount` is the edits checked when none changed. `kept` is the line RevisionDiff
-   * prints when no stop shows a line beside the director's edits: that they stand, in the
-   * words the map and the meeting print (editsStandLine; brief 4.10c). `notes` are
-   * standingNoteItems', under `labels`, the console's stop labels. Task 4.10: this is the
+   * `restored` one code put back (FA), each read from the entry's own flags.
+   * `kept` is the line RevisionDiff prints when no stop shows a line beside the director's
+   * edits: that they stand, in the words the map and the meeting print (editsStandLine;
+   * brief 4.10c), which the desk's page in the stops log prints too (task 4.12c). `notes`
+   * are standingNoteItems', under `labels`, the console's stop labels. Task 4.10: this is the
    * whole record of the round, which the desk folds below the article; beside an edit a stop
    * shows only changedEditsToShow's entries.
    */
@@ -721,7 +721,6 @@
       changedEdits: changed.map(function (entry, index) {
         return { key: entry.id + '-' + index, id: entry.id, automatic: entry.automatic === true, restored: entry.restored === true, line: changedEditLine(entry) };
       }),
-      keptCount: report && changed.length === 0 ? report.checked.length : 0,
       kept: editsStandLine(report),
       notes: notes
     };

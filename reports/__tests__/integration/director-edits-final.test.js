@@ -206,7 +206,8 @@ describe('0926262\'s shape: the judge flags the director\'s edits after a send-b
     // The stored article never carries the rework's list, and the report says every edit was kept.
     expect(next.values.contentBundle).not.toHaveProperty(CHANGED_EDITS_KEY);
     expect(data.handEditReport).toEqual({ checked: ['E1', 'E2'], changed: [] });
-    expect(steeringView(data.handEditReport, []).keptCount).toBe(2);
+    // Task 4.12c: the folded record says so in RevisionDiff's words (`kept`; keptCount went).
+    expect(steeringView(data.handEditReport, []).kept).toBe('Both of your edits stand.');
     // The edits still stand for the next round.
     expect(next.values._articleHandEdits.edits.map((e) => e.id)).toEqual(['E1', 'E2']);
   });

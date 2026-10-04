@@ -111,10 +111,12 @@ function deskData(bundle = article(), extra = {}) {
 }
 
 describe('4.12a: the pages the decision stops show (lib/stop-pages.js)', () => {
-  it('pages the story meeting, the map and the desk, and no other stop', () => {
-    expect(PAGE_STOPS).toEqual(['arc-selection', 'outline', 'article']);
-    ['input-review', 'paper-evidence-selection', 'await-roster', 'await-full-context', 'pre-curation',
-      'evidence-and-photos', 'photos', 'character-ids', 'no-such-stop'].forEach((stop) => {
+  // Task 4.12c: the input review and the character-IDs stop have a page too. Every other stop
+  // renders its payload in its component with no view model, so it has none.
+  it('pages the story meeting, the map and the desk, and no stop whose component renders no view model', () => {
+    expect(PAGE_STOPS).toEqual(expect.arrayContaining(['arc-selection', 'outline', 'article']));
+    ['paper-evidence-selection', 'await-roster', 'await-full-context', 'pre-curation',
+      'evidence-and-photos', 'photos', 'no-such-stop'].forEach((stop) => {
       expect([stop, stopPage(stop, {})]).toEqual([stop, null]);
       expect([stop, wordsShown(stop, {})]).toEqual([stop, null]);
     });
@@ -290,5 +292,233 @@ describe('4.12a: the desk\'s page is deskView\'s, with the article as it will pr
       .toEqual(expect.arrayContaining([View.deskView(data, data.contentBundle).folds.factCheck.title]));
     // What folds is not counted: the trace adds nothing to the words shown.
     expect(wordsShown('article', data)).toBe(wordsShown('article', deskData(article(), { lastEvaluation: data.lastEvaluation })));
+  });
+});
+
+// ── Task 4.12c ──────────────────────────────────────────────────────────────
+// The readout counts the words at every return, not only at the three decision stops (ruling 4
+// on 4.12a's minors; spec section 13). So the input review and the character-IDs stop have a
+// page too, built from the view models their components render, and the desk's folded record
+// and money tracker print as the desk prints them.
+
+const fs = require('fs');
+const path = require('path');
+const InputLogic = require('../../console/input-review-logic');
+
+/** console/utils.js's truncate, the cut a character-IDs card shows its texts at, read from the console's source. */
+const consoleTruncate = (() => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'console', 'utils.js'), 'utf8');
+  const fn = src.match(/function truncate\(str, maxLen = 80\) \{[\s\S]*?\n\}/);
+  if (!fn) throw new Error('console/utils.js no longer defines truncate(str, maxLen = 80)');
+  return new Function(`${fn[0]}\nreturn truncate;`)();
+})();
+
+/** The input review's payload: the keys server.js getCheckpointData sends, with the interrupt's. */
+function inputReviewData(extra = {}) {
+  return {
+    type: 'input-review',
+    sessionConfig: {
+      sessionId: '100426',
+      roster: ['Alex', 'Morgan', 'Riley'],
+      rosterPronouns: { Alex: 'he/him', Morgan: 'she/her', Riley: 'they/them' },
+      accusation: {
+        accused: [], charge: 'Accidental overdose', verdictKind: 'overdose',
+        notes: 'Deadlocked between Alex and Morgan, then six votes named an overdose.',
+        votes: [{ option: 'Overdose', count: 6, adopted: true }, { option: 'Alex', count: 3 }]
+      },
+      exposures: [{ tokenId: 'ale003', exposer: 'Quinn', time: '08:10 PM', owner: 'Alex Reeves' }],
+      exposedTokenCount: 1
+    },
+    directorNotes: {
+      rawProse: 'Alex and Morgan argued at the bar. Riley watched the ledger all morning.',
+      quotes: [{ speaker: 'Riley', text: 'I only kept the books', context: 'Riley watched the ledger all morning.', confidence: 'high' }],
+      postInvestigationDevelopments: [{ detail: 'Following the investigation, Riley left town.' }],
+      whiteboard: {
+        ambiguities: ['A name under the coffee stain'],
+        names: ['Alex', 'Morgan'],
+        regions: [{ label: 'SUSPECTS', location: 'left', entries: ['Alex', 'Morgan'] }],
+        connections: [{ from: 'Alex', to: 'Marcus', label: 'partner' }],
+        notes: ['BizAI?'],
+        structureType: 'columns'
+      }
+    },
+    playerFocus: { primaryInvestigation: 'Who sold the company?' },
+    enrichment: { quotes: 1, characterMentions: 0, transactionReferences: 0, fallback: null, warnings: {} },
+    ledger: {
+      clock: { decided: true, evening: true, firstTime: '07:50 PM' },
+      adjustmentsParsed: true,
+      adjustments: [{ kind: 'bonus', time: '07:55 PM', amount: 25000, toAccount: 'Melanie' }],
+      accounts: [{ name: 'Melanie', total: 82500, tokenCount: 1 }],
+      mismatches: [{ account: 'Melanie', computed: 100000, standings: 75000 }],
+      unclassified: []
+    },
+    canonicalCharacters: { Alex: 'Alex Reeves', Morgan: 'Morgan Reed', Riley: 'Riley Torres' },
+    ...extra
+  };
+}
+
+const VISUAL = 'Six players crowd the bar under the red light while Alex leans over the ledger and Morgan points at one line of it.';
+const DESCRIPTION = 'A tall man in a grey suit with a loosened tie, leaning on the bar beside the open ledger and reading it.';
+
+/** The character-IDs stop's payload: the interrupt's analyses and roster, and getCheckpointData's photos and list. */
+function characterIdsData(extra = {}) {
+  return {
+    type: 'character-ids',
+    photoAnalyses: {
+      analyses: [
+        {
+          filename: 'hero.jpg', visualContent: VISUAL, storyRelevance: 'critical', suggestedCaption: 'The ledger at the bar.',
+          characterDescriptions: [{ role: 'CENTRAL', description: DESCRIPTION, physicalMarkers: 'grey suit, loosened tie' }]
+        },
+        { filename: 'p2.jpg', visualContent: 'Two players at the coat check.', characterDescriptions: [{ role: 'SUPPORTING', description: 'A woman in green.' }] }
+      ]
+    },
+    sessionPhotos: ['/photos/hero.jpg', '/photos/p2.jpg'],
+    roster: ['Alex', 'Morgan'],
+    leftOutPhotos: ['p2.jpg'],
+    ...extra
+  };
+}
+
+describe('4.12c: the input review and the character-IDs stop have a page, so the log counts their words', () => {
+  it('pages both, beside the three decision stops', () => {
+    expect(PAGE_STOPS).toEqual(expect.arrayContaining(['input-review', 'character-ids']));
+    [['input-review', inputReviewData()], ['character-ids', characterIdsData()]].forEach(([stop, data]) => {
+      const page = stopPage(stop, data);
+      expect([stop, page && page.stop]).toEqual([stop, stop]);
+      expect(wordsShown(stop, data)).toBe(countOf(page));
+      expect(wordsShown(stop, data)).toBeGreaterThan(0);
+    });
+  });
+
+  it('pages a payload that holds nothing yet without throwing, as a stop reached early shows it', () => {
+    expect(() => stopPage('input-review', { type: 'input-review' })).not.toThrow();
+    expect(() => stopPage('character-ids', { type: 'character-ids' })).not.toThrow();
+  });
+});
+
+describe('4.12c: the input review\'s page is the parse as its view models render it', () => {
+  it('shows the verdict, the ledger and the whiteboard through the view models, in the component\'s order', () => {
+    const data = inputReviewData();
+    const accusation = View.accusationView(data.sessionConfig.accusation);
+    const verdict = View.verdictView(data.sessionConfig.accusation);
+    const votes = View.votesView(data.sessionConfig.accusation);
+    const ledger = InputLogic.ledgerView(data.ledger);
+    const board = View.whiteboardView(data.directorNotes.whiteboard);
+    const page = stopPage('input-review', data);
+    const shown = textsOf(page);
+    expect(inOrder(shown, [verdict.label, accusation.charge, votes.line, accusation.notes, ledger.clockLine, ...ledger.warnings])).toBe('in order');
+    const shownText = shown.join('\n');
+    [board.ambiguities[0], ...board.names, ...board.regions[0].entries, board.regions[0].label, board.connections[0].to, board.notes[0], board.structureType]
+      .forEach((text) => expect([text, shownText.includes(text)]).toEqual([text, true]));
+    expect(shownText.indexOf(board.ambiguities[0])).toBeGreaterThan(shownText.indexOf(ledger.clockLine));
+  });
+
+  it('folds what the component folds: the accounts and adjustments, the exposed memories, the quote bank and the epilogue', () => {
+    const data = inputReviewData();
+    const ledger = InputLogic.ledgerView(data.ledger);
+    const exposures = View.exposuresView(data.sessionConfig.exposures, data.sessionConfig.exposedTokenCount);
+    const quote = InputLogic.quoteView(data.directorNotes.quotes[0]);
+    const epilogue = InputLogic.epilogueItemView(data.directorNotes.postInvestigationDevelopments[0]);
+    const page = stopPage('input-review', data);
+    const folded = textsOf(page, true).join('\n');
+    const shown = textsOf(page).join('\n');
+    [ledger.accounts[0].total, ledger.adjustments[0], exposures.rows[0].exposer, quote.text, epilogue.detail].forEach((text) => {
+      expect([text, folded.includes(text), shown.includes(text)]).toEqual([text, true, false]);
+    });
+    // A folded line is not counted: the quote bank adds nothing to the words shown.
+    const noQuotes = inputReviewData();
+    noQuotes.directorNotes = { ...noQuotes.directorNotes, quotes: [] };
+    expect(wordsShown('input-review', noQuotes)).toBe(wordsShown('input-review', data));
+  });
+
+  it('counts the words the view models give, and the component\'s own wording as labels', () => {
+    const data = inputReviewData();
+    const named = inputReviewData();
+    named.sessionConfig = { ...named.sessionConfig, accusation: { ...named.sessionConfig.accusation, accused: ['Alex'], verdictKind: 'culprit' } };
+    // The accused, when the parse names one, is the parse's text; a verdict that names no one is the component's line.
+    expect(textsOf(stopPage('input-review', named))).toContain('Alex');
+    expect(textsOf(stopPage('input-review', data))).not.toContain('no one (the room named no culprit)');
+    expect(stopPage('input-review', data).lines.some((line) => /no one/.test(line.label))).toBe(true);
+  });
+});
+
+describe('4.12c: the character-IDs stop\'s page is characterIdCards\'', () => {
+  it('shows each card under its photo\'s name, its texts cut where the card cuts them, the rest folded until the card opens', () => {
+    const data = characterIdsData();
+    const cards = View.characterIdCards(data.photoAnalyses.analyses, data.sessionPhotos, data.leftOutPhotos);
+    const page = stopPage('character-ids', data);
+    const titles = page.lines.filter((line) => line.tone === 'title').map((line) => line.label);
+    expect(titles).toEqual(cards.map((card) => card.displayName));
+    const shown = textsOf(page);
+    const folded = textsOf(page, true);
+    expect(VISUAL.length).toBeGreaterThan(100);
+    expect(shown).toContain(consoleTruncate(VISUAL, 100));
+    expect(shown).not.toContain(VISUAL);
+    expect(folded).toContain(VISUAL);
+    expect(shown).toContain(consoleTruncate(DESCRIPTION, 80));
+    expect(folded).toEqual(expect.arrayContaining([DESCRIPTION, 'grey suit, loosened tie', 'The ledger at the bar.']));
+    // A text short enough to show whole shows once, with nothing folded behind it.
+    expect(shown).toContain('Two players at the coat check.');
+    expect(folded).not.toContain('Two players at the coat check.');
+  });
+
+  it('marks a photo the server lists as left out, as its ticked box shows it, and counts no label', () => {
+    const data = characterIdsData();
+    const page = stopPage('character-ids', data);
+    const p2 = page.lines.findIndex((line) => line.tone === 'title' && line.label === 'p2.jpg');
+    const hero = page.lines.findIndex((line) => line.tone === 'title' && line.label === 'hero.jpg');
+    const leftOut = (from, to) => page.lines.slice(from, to).some((line) => /left out/i.test(line.label) && !line.text);
+    expect(leftOut(p2, page.lines.length)).toBe(true);
+    expect(leftOut(hero, p2)).toBe(false);
+    expect(wordsShown('character-ids', data)).toBe(wordsShown('character-ids', characterIdsData({ leftOutPhotos: [] })));
+  });
+});
+
+describe('4.12c: the meeting\'s page shows what ArcSelection.js shows since the director last looked', () => {
+  it('says the director\'s edits stand when no line shows a change to them (meetingView\'s kept), as the component does', () => {
+    const data = meetingData({ handEditReport: { checked: ['E1'], changed: [] } });
+    const view = View.meetingView(data, View.meetingDraftOf(data), '');
+    expect(view.kept).toBe('Your edit stands.');
+    const texts = textsOf(stopPage('arc-selection', data));
+    expect(texts).toContain(view.kept);
+    expect(texts.indexOf(view.kept)).toBeLessThan(texts.indexOf(view.verdict.who));
+  });
+
+  it('heads the edits a rework changed in the component\'s words', () => {
+    const changed = {
+      id: 'E1', scope: 'story', where: 'the story', cut: false, director: 'Riley kept the books.', became: 'Riley kept two sets of books.',
+      pass: 'send-back', automatic: false, reason: 'The note asked for the second ledger.'
+    };
+    const data = meetingData({ handEditReport: { checked: ['E1'], changed: [changed] } });
+    const view = View.meetingView(data, View.meetingDraftOf(data), '');
+    expect(view.changedEdits).toHaveLength(1);
+    const page = stopPage('arc-selection', data);
+    const heading = page.lines.findIndex((line) => line.tone === 'title' && line.label === 'Your edits a rework changed');
+    expect(heading).toBeGreaterThan(-1);
+    expect(page.lines[heading + 1].text).toBe(view.changedEdits[0]);
+  });
+});
+
+describe('4.12c: the desk\'s folded record and money tracker print as the desk prints them', () => {
+  it('prints the folded record\'s line that the edits stand, as RevisionDiff prints it (steeringView\'s kept)', () => {
+    const data = deskData(article(), { handEditReport: { checked: ['E1', 'E2'], changed: [] } });
+    const kept = View.steeringView(data.handEditReport, []).kept;
+    expect(kept).toBe('Both of your edits stand.');
+    const page = stopPage('article', data);
+    expect(textsOf(page, true)).toContain(kept);
+    expect(page.lines.map((line) => `${line.label} ${line.text}`).join('\n')).not.toMatch(/kept all/);
+  });
+
+  it('prints the writer\'s money tracker only while writerTrackerPrints says the page prints it, under the desk\'s heading', () => {
+    const bundle = article();
+    bundle.financialTracker = { entries: [{ description: 'Melanie', amount: '$75,000' }], totalExposed: '$75,000' };
+    const prints = stopPage('article', deskData(bundle, { writerTrackerPrints: true }));
+    expect(prints.lines.filter((line) => line.tone === 'title').map((line) => line.label)).toContain('FINANCIAL TRACKER');
+    expect(textsOf(prints)).toEqual(expect.arrayContaining(['Melanie $75,000', '$75,000']));
+    [false, undefined].forEach((flag) => {
+      const page = stopPage('article', deskData(bundle, { writerTrackerPrints: flag }));
+      expect([flag, page.lines.some((line) => line.label === 'FINANCIAL TRACKER'), textsOf(page).includes('Melanie $75,000')]).toEqual([flag, false, false]);
+    });
   });
 });
