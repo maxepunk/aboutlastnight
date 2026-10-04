@@ -522,7 +522,6 @@ describe('4.8: the meeting before any round', () => {
   const view = meetingView(data, meetingDraftOf(data, undefined));
 
   test('the page\'s sections, in the spec\'s order', () => {
-    expect(view.hasWeave).toBe(true);
     expect(view.order).toEqual(['verdict', 'story', 'fromYourNotes', 'threads', 'connections', 'questions']);
   });
 
@@ -883,16 +882,6 @@ describe('4.8: the standing notes folded under the note box, and the rollback\'s
     expect(ViewLogic.MEETING_ROLLBACK_LINE).toMatch(/story meeting reopens as you left it, with no model call/);
     expect(rollbackWarningLine('outline')).toBe('This will clear all data from this point forward.');
     expect(rollbackWarningLine('photos')).toBe('This will clear all data from this point forward.');
-  });
-});
-
-describe('4.8: a meeting with no weave', () => {
-  test('says so, with no sections to show', () => {
-    const data = payloadOf(stateAt({ weave: null }));
-    const view = meetingView(data, meetingDraftOf(data, undefined));
-    expect(view.hasWeave).toBe(false);
-    expect(view.order).toEqual([]);
-    expect(view.emptyLine).toMatch(/No weave reached the story meeting/);
   });
 });
 

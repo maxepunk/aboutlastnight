@@ -330,18 +330,6 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     }
   };
 
-  if (!view.hasWeave) {
-    return React.createElement('div', { className: 'flex flex-col gap-md' },
-      view.didNotRun && React.createElement('p', { className: 'meeting__did-not-run', role: 'status' }, view.didNotRun),
-      React.createElement('div', { className: 'revision-diff__warning' }, view.emptyLine),
-      React.createElement('button', {
-        className: 'btn btn-danger',
-        onClick: function () { if (onRollback) onRollback('arc-selection'); },
-        'aria-label': 'Go back to the story meeting, which writes the weave fresh'
-      }, 'Back to the story meeting')
-    );
-  }
-
   const roundLines = view.didNotRun || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.marked
     || view.removed.length > 0 || view.otherMarks.length > 0 || view.otherConcerns.length > 0;
 

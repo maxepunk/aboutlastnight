@@ -1372,9 +1372,6 @@
   /** The line beside the story when the weave has no "from your notes" (the director, 2026-10-03, on thin notes). */
   var THIN_NOTES_LINE = "Your notes end without your read of the session, so this story is the writer's proposal.";
 
-  /** What a meeting with no weave says, and what going back to the meeting does then (R2). */
-  var EMPTY_MEETING_LINE = 'No weave reached the story meeting: the arc writer may have failed, or this session is from before the meeting. Going back to the story meeting writes one fresh, about 15 minutes with its fact check.';
-
   /** Why the controls of a line under a writer's repeated id are off, while they are. */
   var REPEATED_ID_HINT = 'The writer gave one id to more than one thread or connection, so the meeting cannot change those lines: a reweave with a note, or a send-back, gives each its own id.';
 
@@ -2269,15 +2266,16 @@
    * director's weave, whose answer the box shows and sets.
    *
    * @param {Object} data - the stop's payload
-   * @param {Object|null} weave - the weave as the director has it (meetingDraftOf, then their changes)
+   * The stop always holds a weave (the integrator, at 4.11's merge): the arc writer writes one
+   * or throws, and only a thread from before the story meeting holds none, which the server
+   * refuses wherever it sits and the console shows the server's message for (oldThreadView).
+   *
+   * @param {Object} weave - the weave as the director has it (meetingDraftOf, then their changes)
    * @param {string} [note] - the meeting's note box (meetingNoteOf, then what they type)
    * @returns {Object}
    */
   function meetingView(data, weave, note) {
     var d = isPlainObject(data) ? data : {};
-    if (!isWeaveValue(weave)) {
-      return { hasWeave: false, order: [], emptyLine: EMPTY_MEETING_LINE, didNotRun: didNotRunLine(d.roundDidNotRun, note) };
-    }
     var shown = meetingWeaveOf(d.weave);
     var stopQuestions = asArray(d.questions).filter(isPlainObject);
     var onPage = linesOnPage(weave, stopQuestions);
@@ -2370,9 +2368,7 @@
       questions: questions.length > 0
     };
     return {
-      hasWeave: true,
       order: MEETING_SECTIONS.filter(function (section) { return !hasOwn(present, section) || present[section]; }),
-      emptyLine: '',
       verdict: meetingVerdictView(d.accusation),
       story: line('story', weave.story),
       question: line('question', weave.question),
@@ -2839,7 +2835,6 @@
     }) || leftItems.some(function (b) { return b.locked; }) || Boolean(topPhoto && topPhoto.locked);
 
     return {
-      hasMap: true,
       settledStory: story,
       storyHint: STORY_HINT,
       round: human > 0

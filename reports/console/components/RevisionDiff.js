@@ -17,8 +17,7 @@ const ViewLogic = window.Console.checkpointViewLogic;
  * Compute shallow diff between two objects.
  * Returns array of { key, status, detail } where status is
  * 'added', 'modified', 'removed', or 'unchanged'.
- * Fix 3.7b: the keys come from ViewLogic.revisionDiffKeys, which skips the writer's
- * questions, as the server's outline diff does.
+ * Fix 3.7b: the keys come from ViewLogic.revisionDiffKeys, every key of either version.
  */
 function shallowDiff(previous, current) {
   const prevKeys = Object.keys(previous || {});

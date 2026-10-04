@@ -571,7 +571,6 @@ describe("4.9: the map's page before any round", () => {
   const view = ViewLogic.mapView(data, opened(data));
 
   test('the settled story at the top, read-only, with the way back to the meeting', () => {
-    expect(view.hasMap).toBe(true);
     expect(view.settledStory).toEqual({ story: data.settledStory.story, question: data.settledStory.question });
     expect(view.storyHint).toBe('The story was settled at the story meeting. To change it, go back to the meeting: it reopens as you left it, with no model call.');
   });

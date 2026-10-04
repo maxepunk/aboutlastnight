@@ -33,7 +33,8 @@
  * (lib/__tests__/old-thread.test.js holds this). A thread with no weave that holds none of
  * them is resumed, and its resume writes the weave: a new thread before its weave, an old
  * thread rolled back to the meeting before its weave is written, or an old thread that
- * stopped before its arc stage evaluated anything.
+ * stopped in its arc writer, before any check rework or evaluation. One that stopped in the
+ * old arc check's rework holds that rework's count, so it is flagged.
  *
  * server.js applies it: /approve, /resume and every /rollback past the meeting answer 409
  * with OLD_THREAD_MESSAGE, and GET /checkpoint carries the flag, which the console shows

@@ -18,10 +18,10 @@ function count(haystack, needle) {
   return haystack.split(needle).length - 1;
 }
 
-// Fix 3.7b (finding 4): RevisionDiff's shallow diff walks ViewLogic.revisionDiffKeys,
-// which skips writerQuestions (pinned in checkpoint-view-logic.test.js), not its own
-// union of every key.
-describe('RevisionDiff skips the questions in its key walk', () => {
+// Fix 3.7b (finding 4): RevisionDiff's shallow diff walks ViewLogic.revisionDiffKeys, not
+// its own union of every key. The writer's questions it once skipped went with the old
+// threads the guard refuses (task 4.11).
+describe('RevisionDiff walks the keys revisionDiffKeys gives', () => {
   const src = read('components/RevisionDiff.js');
 
   it('walks the keys revisionDiffKeys returns', () => {

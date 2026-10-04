@@ -71,11 +71,6 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
     ['arc-grid', 'arc-card', 'arcCardModel', 'defaultArcSelection', 'arcSelectionNote', 'EvalBar', 'RevisionDiff', 'WriterQuestionsPanel', 'narrativeArcs', 'lastEvaluationFrom']
       .forEach((gone) => expect(`${gone}: ${src.includes(gone)}`).toBe(`${gone}: false`));
   });
-
-  it('a meeting with no weave offers the way back to the meeting, which writes one fresh', () => {
-    expect(src).toContain("onRollback('arc-selection')");
-    expect(src).not.toContain("onRollback('evidence-and-photos')");
-  });
 });
 
 // Fix round 1, finding 3: the standing notes are one builder's at every stop, each under its

@@ -368,17 +368,6 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     );
   }
 
-  if (!view.hasMap) {
-    return React.createElement('div', { className: 'map flex flex-col gap-md' },
-      React.createElement('div', { className: 'revision-diff__warning' }, view.emptyLine),
-      React.createElement('button', {
-        className: 'btn btn-secondary',
-        onClick: backToMeeting,
-        'aria-label': 'Go back to the story meeting'
-      }, 'Back to the story meeting')
-    );
-  }
-
   const roundLines = view.round || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.otherConcerns.length > 0;
 
   return React.createElement('div', { className: 'map flex flex-col gap-md' },
