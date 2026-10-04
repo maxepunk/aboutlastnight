@@ -62,9 +62,9 @@ describe('RevisionDiff skips the questions in its key walk', () => {
 // Task 3.11: each stop names itself, so the panel's hint says what an answer does there
 // (checkpoint-view-logic.test.js pins the three hints). Task 4.8: the story meeting shows
 // its questions through its own view, each with its answer box (the describe below), so
-// the arc stop's row went with the arc cards it was placed above.
+// the arc stop's row went with the arc cards it was placed above. Task 4.9: the map holds no
+// questions (brief 4.6), so its row went with the old outline's screen.
 describe.each([
-  ['Outline', 'components/checkpoints/Outline.js', 'outline', /\.\.\.renderOutlineSections\(\)/],
   ['Article', 'components/checkpoints/Article.js', 'article', /React\.createElement\(FactCheckPanel, /]
 ])('the %s stop renders the panel', (_name, rel, stop, output) => {
   const src = read(rel);
@@ -105,5 +105,14 @@ describe('4.8: the story meeting shows its questions through its own view', () =
   it('renders each question of the meeting\'s view with an answer box that sets the answer on its question', () => {
     expect(src).toMatch(/view\.questions\.map\(/);
     expect(count(src, 'ViewLogic.setQuestionAnswer(')).toBe(1);
+  });
+});
+
+// Task 4.9: the map writer asks nothing and the map's stop sends no questions (brief 4.6), so
+// the map renders no questions panel. writerQuestionsView stays for the harness (4.12).
+describe('4.9: the map renders no questions panel', () => {
+  it('reads neither the shared panel nor its view model nor a questions key', () => {
+    const src = read('components/checkpoints/Outline.js');
+    expect(src).not.toMatch(/WriterQuestionsPanel|writerQuestionsView|writerQuestions/);
   });
 });

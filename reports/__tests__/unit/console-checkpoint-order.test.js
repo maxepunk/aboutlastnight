@@ -127,19 +127,19 @@ describe('CHECKPOINT_ORDER', () => {
       expect(at(consumer)).toBeGreaterThan(at('checkpoint-view-logic.js'));
     });
 
-    // RevisionDiff: two load-time destructures of `window.Console.RevisionDiff`.
+    // RevisionDiff: a load-time destructure of `window.Console.RevisionDiff`.
     // It USED to load after ArcSelection.js, so on that one screen the name was
     // undefined and the revision banner, the budget badge and the director's own
     // last feedback could not render at all (R5 F10 observed exactly that, live).
-    // Task 4.8: the story meeting shows its own round lines and reads RevisionDiff no more.
+    // Task 4.8: the story meeting shows its own round lines and reads RevisionDiff no more;
+    // task 4.9: nor does the map.
     [
-      'components/checkpoints/Outline.js',
       'components/checkpoints/Article.js'
     ].forEach((consumer) => {
       expect(at(consumer)).toBeGreaterThan(at('components/RevisionDiff.js'));
     });
 
-    // outline-edit-logic: Outline.js and Article.js alias it at module scope.
+    // outline-edit-logic: the map (Outline.js) and Article.js alias it at module scope.
     expect(at('components/checkpoints/Outline.js')).toBeGreaterThan(at('outline-edit-logic.js'));
     expect(at('components/checkpoints/Article.js')).toBeGreaterThan(at('outline-edit-logic.js'));
   });

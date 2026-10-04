@@ -41,15 +41,15 @@
   <script type="text/babel" src="components/checkpoints/CharacterIds.js"></script>
   <script type="text/babel" src="components/checkpoints/AwaitFullContext.js"></script>
   <script type="text/babel" src="components/checkpoints/EvidenceBundle.js"></script>
-  <!-- RevisionDiff must load BEFORE Outline and Article: both do
+  <!-- RevisionDiff must load BEFORE Article, which does
        `const { RevisionDiff } = window.Console` at load time. It used to sit
        after ArcSelection, so on that screen the name was undefined and the
        revision budget + previous-feedback callout could not render at all. -->
   <script type="text/babel" src="components/RevisionDiff.js"></script>
-  <!-- outline-edit-logic.js must load BEFORE Outline and Article, which alias
+  <!-- outline-edit-logic.js must load BEFORE Outline (the map) and Article, which alias
        window.Console.outlineEditLogic at load time, and before the story meeting
        (ArcSelection) mounts: its version key is computeResetKey, which
-       checkpoint-view-logic.js reads from this module when it runs (task 4.8). -->
+       checkpoint-view-logic.js reads from this module when it runs (tasks 4.8, 4.9). -->
   <script type="text/babel" src="outline-edit-logic.js"></script>
   <!-- The article desk's block operations, checks and change report (task 4.3): Article.js
        reads window.Console.articleDeskLogic at load time. -->

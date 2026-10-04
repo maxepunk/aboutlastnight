@@ -614,64 +614,56 @@ describe('concerns about the director\'s edits (F1)', () => {
   });
 });
 
-describe('review payloads for the outline and article stops (phase 1, brief 1.1)', () => {
-  const { outlineReviewPayload, articleReviewPayload, sendBackButton, noteSlotKey } = require('../checkpoint-view-logic');
+// Task 4.9: the map's payloads are its own (mapPayload, console/__tests__/checkpoint-view-logic-map.test.js),
+// so the outline's review payload went with the old outline's screen; the article stop keeps it.
+describe('review payloads for the article stop (phase 1, brief 1.1)', () => {
+  const { articleReviewPayload, sendBackButton, noteSlotKey } = require('../checkpoint-view-logic');
 
   test('approve with no note sends the bare approval', () => {
-    expect(outlineReviewPayload(null, '', 'approve')).toEqual({ outline: true });
-    expect(outlineReviewPayload(null, '   ', 'approve')).toEqual({ outline: true });
     expect(articleReviewPayload(null, undefined, 'approve')).toEqual({ article: true });
+    expect(articleReviewPayload(null, '   ', 'approve')).toEqual({ article: true });
   });
 
   test('approve carries the note trimmed on its own key, beside the edits', () => {
-    expect(outlineReviewPayload(null, '  Lead with the ledger.  ', 'approve'))
-      .toEqual({ outline: true, outlineNote: 'Lead with the ledger.' });
-    const outlineEdits = { lede: { hook: 'x' } };
-    expect(outlineReviewPayload(outlineEdits, 'Keep the thesis.', 'approve'))
-      .toEqual({ outline: true, outlineEdits, outlineNote: 'Keep the thesis.' });
+    expect(articleReviewPayload(null, '  Lead with the ledger.  ', 'approve'))
+      .toEqual({ article: true, articleNote: 'Lead with the ledger.' });
     const articleEdits = { sections: [] };
     expect(articleReviewPayload(articleEdits, ' Name the account. ', 'approve'))
       .toEqual({ article: true, articleEdits, articleNote: 'Name the account.' });
   });
 
   test('send back carries the note as the feedback and never as a second note key', () => {
-    const o = outlineReviewPayload(null, ' Merge the arcs. ', 'send-back');
-    expect(o).toEqual({ outline: false, outlineFeedback: 'Merge the arcs.' });
-    expect(o.outlineNote).toBeUndefined();
     const a = articleReviewPayload(null, 'Cut the lede.', 'send-back');
     expect(a).toEqual({ article: false, articleFeedback: 'Cut the lede.' });
     expect(a.articleNote).toBeUndefined();
   });
 
   test('send back carries the edits alongside the note', () => {
-    const outlineEdits = { lede: { hook: 'x' } };
-    expect(outlineReviewPayload(outlineEdits, 'Fix the money section.', 'send-back'))
-      .toEqual({ outline: false, outlineFeedback: 'Fix the money section.', outlineEdits });
     const articleEdits = { sections: [] };
     expect(articleReviewPayload(articleEdits, 'Fix the quote.', 'send-back'))
       .toEqual({ article: false, articleFeedback: 'Fix the quote.', articleEdits });
   });
 
   test('a non-object edit is not sent', () => {
-    expect(outlineReviewPayload('not an outline', 'note', 'approve'))
-      .toEqual({ outline: true, outlineNote: 'note' });
+    expect(articleReviewPayload('not a bundle', 'note', 'approve'))
+      .toEqual({ article: true, articleNote: 'note' });
     expect(articleReviewPayload(undefined, 'note', 'approve'))
       .toEqual({ article: true, articleNote: 'note' });
   });
 
   // Review fix round 1: both of these used to fail open. An unknown action fell
-  // through to the approve branch, so a typo shipped the outline; a send back with
-  // a blank note built {outline:false, outlineFeedback:''}, which no server arm
+  // through to the approve branch, so a typo shipped the article; a send back with
+  // a blank note built {article:false, articleFeedback:''}, which no server arm
   // accepts, and the director saw a dead click.
   test('an action that is neither approve nor send back throws', () => {
-    expect(() => outlineReviewPayload(null, 'note', 'reject')).toThrow(/approve.*send-back/);
-    expect(() => outlineReviewPayload(null, 'note', undefined)).toThrow(/approve.*send-back/);
+    expect(() => articleReviewPayload(null, 'note', 'reject')).toThrow(/approve.*send-back/);
+    expect(() => articleReviewPayload(null, 'note', undefined)).toThrow(/approve.*send-back/);
     expect(() => articleReviewPayload(null, 'note', 'Approve')).toThrow(/approve.*send-back/);
   });
 
   test('a send back with a blank note builds nothing', () => {
-    expect(outlineReviewPayload(null, '', 'send-back')).toBeNull();
-    expect(outlineReviewPayload({ lede: {} }, '   ', 'send-back')).toBeNull();
+    expect(articleReviewPayload(null, '', 'send-back')).toBeNull();
+    expect(articleReviewPayload({ sections: [] }, '   ', 'send-back')).toBeNull();
     expect(articleReviewPayload(null, undefined, 'send-back')).toBeNull();
   });
 
@@ -884,8 +876,9 @@ describe('traceView (phase 2, brief 2.7)', () => {
       text: 'What changed: Section "intro", Evidence cards'
     });
     expect(evaluation.changed.labels).toEqual(['Headline']);
-    const outline = traceView([{ pass: 1, trigger: 'evaluation', changedScopes: ['lede', 'closing'] }]).passes[0];
-    expect(outline.changed.text).toBe('What changed: LEDE, CLOSING');
+    // Task 4.9: a map pass's scopes read in words; a section names its slot.
+    const map = traceView([{ pass: 1, trigger: 'check', changedScopes: ['section:closing', 'leftOut', 'topPhoto', 'gapNote', 'weaveChanges'] }]).passes[0];
+    expect(map.changed.text).toBe('What changed: Section "closing", Left out, Top photo, Gap note, Changes to the weave');
   });
 
   test('says so when the rework changed nothing, and when no diff could be made', () => {

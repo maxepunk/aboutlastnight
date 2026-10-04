@@ -1,30 +1,23 @@
 /**
- * outline-edit-logic.js — PURE logic for the Outline checkpoint editors.
+ * outline-edit-logic.js — PURE logic for the map, the outline stop (phase 4).
  *
  * Dual-export: registers on window.Console.outlineEditLogic for the browser
  * (React editors call these as thin wrappers) AND exposes the same surface via
  * module.exports under Node so it can be unit-tested in node-env Jest.
  *
- * INVARIANTS:
- *   - Every build*Payload(formState, originalSection) starts from deepClone(original)
- *     so untouched required/optional/non-editable keys (evidenceCards,
- *     photoPlacement, callbackOpportunities, accusationHandling, ...) are PRESERVED.
- *   - Each builder emits ONLY keys documented in the schema for that section
- *     (every section object is additionalProperties:false). Cross-section stray
- *     keys are removed by explicit delete/omit after the clone. Kills B1/N2.
- *   - Object-arrays are edited one object per row; the WHOLE object is written
- *     back at its index. Object-maps (characterHighlights) are key/value rows.
- *   - Integer fields (paragraphCount) are coerced to int.
- *   - shellAccounts.total accepts number OR string and is NEVER force-coerced.
+ * It holds the rules the map's readers share and the map's editors:
+ *   - the map's client gate, validateMapShape (I): the gate's decisions, held to the
+ *     director-side map schema and to lib/map.js directorMapProblems by tests (brief 4.6;
+ *     task 4.9, ruling 3), so the server refuses nothing the console sends;
+ *   - Everyone and the counts, mapTally (K), which the stop's payload, the map checks
+ *     (lib/map.js) and the map on screen read alike;
+ *   - the map's editors (D, task 4.9; spec 5.3): each line's init, build and merge, and the
+ *     map's moves. Each returns a new map and leaves the one it was given as it was, and what
+ *     the director types is kept as typed;
+ *   - the article's client gate, validateBundleShape (I2), and the reset key both stops use.
  *
  * MUST NOT reference React or window at module-evaluation time except the
  * guarded window.Console write.
- *
- * Phase 4 (brief 4.6): the outline is the story map. Its client gate is
- * validateMapShape (I), held to the director-side map schema (lib/map.js
- * directorMapSchemaFor), whose refusal the server's payload gate gives; Everyone and
- * the counts are mapTally (K). The section builders (D to G) edit the outline written
- * before phase 4, until the map's screen replaces them (4.9).
  */
 (function () {
   'use strict';
@@ -119,333 +112,347 @@
     return String(rc) + ':' + serialized.length + ':' + serialized.slice(0, 64);
   }
 
-  // ── helpers for builders: set-or-omit ─────────────────────────────────────
-  function setOrDeleteArray(obj, key, arr) {
-    if (Array.isArray(arr) && arr.length > 0) { obj[key] = arr; } else { delete obj[key]; }
-  }
-  function setOrDeleteString(obj, key, str) {
-    if (typeof str === 'string' && str.trim().length > 0) { obj[key] = str; } else { delete obj[key]; }
+  // ── (D) THE MAP'S EDITORS (phase 4, task 4.9; spec 5.3) ──────────────────
+  //
+  // The director edits the map at its stop. Each line has an editor: its init (the form the
+  // editor opens on), its build (what the director typed, as typed) and its merge (the line
+  // written into the map as it is now, so a move made while the editor was open stands). The
+  // lines: the headline and the deck, the gap note's line, a section's heading and job, a
+  // beat, the expected length. The map's moves: a beat moved to another section, struck into
+  // left out, brought back into a section the director picks, added with its players, or
+  // taken out again; a photo moved to another section or to the top, or set beside a beat of
+  // its section. Every function returns a new map and leaves the one it was given as it was.
+  // A beat is found by its id, as every edit on the map finds it (lib/hand-edit-diff.js), and
+  // a photo by its place, since a writer can place one twice.
+
+  /** The map's place for its top photo: a copy of lib/hand-edit-diff.js MAP_TOP_PHOTO (a test holds the two equal). */
+  var MAP_TOP_PHOTO = 'topPhoto';
+
+  /** Is `value` a story map: an object with a list of sections? */
+  function isMapValue(value) {
+    return isPlainObject(value) && Array.isArray(value.sections);
   }
 
-  // ── (C) JOURNALIST INITIALIZERS ───────────────────────────────────────────
-  function initLede(lede) {
-    var s = lede || {};
+  /** A copy of the map to change, or a throw naming the operation for anything that is no map. */
+  function editedMap(map, operation) {
+    if (!isMapValue(map)) throw new Error(operation + ': the map editors change a story map, an object with a list of sections');
+    return deepClone(map);
+  }
+
+  function textOrEmpty(value) {
+    return typeof value === 'string' ? value : '';
+  }
+
+  /** A beat's id as every join on the map reads it, trimmed (lib/map.js repeatedBeatIds). */
+  function beatIdOf(beat) {
+    return isPlainObject(beat) && typeof beat.id === 'string' ? beat.id.trim() : '';
+  }
+
+  /** The section of `map` that fills `slot`. */
+  function sectionAt(map, slot, operation) {
+    var section = map.sections.filter(function (s) { return isPlainObject(s) && s.slot === slot; })[0];
+    if (!section) throw new Error(operation + ': the map has no section for the slot ' + String(slot));
+    return section;
+  }
+
+  /** Every beat of `map`: the sections' in order, then left out's, as the edits read them. */
+  function allBeats(map) {
+    var out = [];
+    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section) {
+      if (isPlainObject(section) && Array.isArray(section.beats)) out.push.apply(out, section.beats);
+    });
+    if (Array.isArray(map.leftOut)) out.push.apply(out, map.leftOut);
+    return out;
+  }
+
+  /** Where the beat with `id` sits: its list and index, and its section (null in left out). */
+  function beatAt(map, id, operation) {
+    var wanted = typeof id === 'string' ? id.trim() : '';
+    var sections = map.sections.filter(isPlainObject);
+    for (var s = 0; s < sections.length; s += 1) {
+      var beats = Array.isArray(sections[s].beats) ? sections[s].beats : [];
+      for (var b = 0; b < beats.length; b += 1) {
+        if (wanted && beatIdOf(beats[b]) === wanted) return { section: sections[s], list: beats, index: b };
+      }
+    }
+    var left = Array.isArray(map.leftOut) ? map.leftOut : [];
+    for (var l = 0; l < left.length; l += 1) {
+      if (wanted && beatIdOf(left[l]) === wanted) return { section: null, list: left, index: l };
+    }
+    throw new Error(operation + ': the map holds no beat ' + String(id));
+  }
+
+  /** An id no beat of the map holds: b and one more than the highest b-number, so b10 after b9. */
+  function freshBeatId(map) {
+    var taken = {};
+    var top = 0;
+    allBeats(map).forEach(function (beat) {
+      var id = beatIdOf(beat);
+      if (!id) return;
+      taken[id] = true;
+      var m = /^b(\d+)$/.exec(id);
+      if (m) top = Math.max(top, Number(m[1]));
+    });
+    var n = top + 1;
+    while (taken['b' + n]) n += 1;
+    return 'b' + n;
+  }
+
+  // The headline and the deck.
+
+  function initMapHead(map) {
+    var m = isPlainObject(map) ? map : {};
+    return { headline: textOrEmpty(m.headline), deck: textOrEmpty(m.deck) };
+  }
+
+  function buildMapHead(form) {
+    return { headline: textOrEmpty(form.headline), deck: textOrEmpty(form.deck) };
+  }
+
+  function mergeMapHead(map, head) {
+    var next = editedMap(map, 'mergeMapHead');
+    next.headline = head.headline;
+    next.deck = head.deck;
+    return next;
+  }
+
+  // The gap note's line; the players it raises stay as the writer named them.
+
+  function initGapNote(gapNote) {
+    return { line: isPlainObject(gapNote) ? textOrEmpty(gapNote.line) : '' };
+  }
+
+  function buildGapNote(form, gapNote) {
+    var out = isPlainObject(gapNote) ? deepClone(gapNote) : { line: '', players: [] };
+    out.line = textOrEmpty(form.line);
+    if (!Array.isArray(out.players)) out.players = [];
+    return out;
+  }
+
+  function mergeGapNote(map, gapNote) {
+    var next = editedMap(map, 'mergeGapNote');
+    next.gapNote = gapNote;
+    return next;
+  }
+
+  // A section's heading and job, written onto the section as it is now.
+
+  function initMapSection(section) {
+    var s = isPlainObject(section) ? section : {};
+    return { heading: textOrEmpty(s.heading), job: textOrEmpty(s.job) };
+  }
+
+  function buildMapSection(form) {
+    return { heading: textOrEmpty(form.heading), job: textOrEmpty(form.job) };
+  }
+
+  function mergeMapSection(map, slot, fields) {
+    var next = editedMap(map, 'mergeMapSection');
+    var section = sectionAt(next, slot, 'mergeMapSection');
+    section.heading = fields.heading;
+    section.job = fields.job;
+    return next;
+  }
+
+  // A beat: its material as typed, its kind, the players it shows (a list, typed with commas),
+  // the document it prints as a card and the connection that lands in it. A field left blank
+  // leaves no key, so a beat the director added keeps the shape they gave it.
+
+  function initBeat(beat) {
+    var b = isPlainObject(beat) ? beat : {};
     return {
-      hook: typeof s.hook === 'string' ? s.hook : '',
-      keyTension: typeof s.keyTension === 'string' ? s.keyTension : '',
-      primaryArc: typeof s.primaryArc === 'string' ? s.primaryArc : '',
-      selectedEvidence: Array.isArray(s.selectedEvidence) ? s.selectedEvidence.slice() : []
+      kind: textOrEmpty(b.kind),
+      material: textOrEmpty(b.material),
+      players: joinCsv(b.players),
+      card: textOrEmpty(b.card),
+      connection: textOrEmpty(b.connection)
     };
   }
 
-  // Thesis panel (spec 2026-09-19 §6.1): the three LEDE fields the director
-  // rewrites most. Derived from initLede so the two initializers cannot disagree
-  // about how a missing or non-string field is coerced (review fix 1, finding 6);
-  // selectedEvidence is dropped because the thesis editor does not show it.
-  function initThesis(lede) {
-    var base = initLede(lede);
-    return { hook: base.hook, keyTension: base.keyTension, primaryArc: base.primaryArc };
+  /** An id field: trimmed, or no key at all when blank. */
+  function setOrDeleteId(obj, key, value) {
+    var id = typeof value === 'string' ? value.trim() : '';
+    if (id) obj[key] = id; else delete obj[key];
   }
 
-  function initArc(arc) {
-    var s = arc || {};
-    return {
-      name: typeof s.name === 'string' ? s.name : '',
-      paragraphCount: s.paragraphCount != null ? String(s.paragraphCount) : ''
-    };
+  function buildBeat(form, beat) {
+    var out = isPlainObject(beat) ? deepClone(beat) : {};
+    out.material = textOrEmpty(form.material);
+    if (BEAT_KINDS.indexOf(form.kind) !== -1) out.kind = form.kind; else delete out.kind;
+    var players = splitCsv(form.players);
+    if (players.length > 0 || Array.isArray(out.players)) out.players = players;
+    setOrDeleteId(out, 'card', form.card);
+    setOrDeleteId(out, 'connection', form.connection);
+    return out;
   }
 
-  function initArcInterweaving(interweaving) {
-    var s = (interweaving && typeof interweaving === 'object') ? interweaving : {};
-    return {
-      interleavingPlan: typeof s.interleavingPlan === 'string' ? s.interleavingPlan : '',
-      convergencePoint: typeof s.convergencePoint === 'string' ? s.convergencePoint : ''
-    };
+  /** The beat with `id`, replaced where it sits now: a section or left out. */
+  function mergeBeat(map, id, beat) {
+    var next = editedMap(map, 'mergeBeat');
+    var place = beatAt(next, id, 'mergeBeat');
+    place.list[place.index] = deepClone(beat);
+    return next;
   }
 
-  function initFollowTheMoney(section) {
-    var s = section || {};
-    return {
-      arcConnections: deepClone(Array.isArray(s.arcConnections) ? s.arcConnections : []),
-      shellAccounts: deepClone(Array.isArray(s.shellAccounts) ? s.shellAccounts : [])
-    };
+  // The expected length: the words the article runs to, a whole number.
+
+  function initMapLength(map) {
+    return { expectedLength: isPlainObject(map) && Number.isInteger(map.expectedLength) ? String(map.expectedLength) : '' };
   }
 
-  // Phase 3 (3.2; BU3): thePlayers.buried and whatsMissing.buriedItems left the
-  // outline schema, because whose memory was sold never appears. They are neither
-  // shown nor edited, and an outline written before phase 3 loses them on any edit
-  // (dropRetiredOutlineFields), so its edits still pass the schema.
-  function initThePlayers(section) {
-    var s = section || {};
-    return {
-      arcConnections: deepClone(Array.isArray(s.arcConnections) ? s.arcConnections : []),
-      exposed: Array.isArray(s.exposed) ? s.exposed.slice() : [],
-      characterHighlights: mapToRows(s.characterHighlights)
-    };
+  /** The length typed, as a whole number of words (commas and spaces allowed), or null. */
+  function buildMapLength(form) {
+    var text = typeof form.expectedLength === 'string' ? form.expectedLength.replace(/[,\s]/g, '') : '';
+    return /^\d+$/.test(text) ? Number(text) : null;
   }
 
-  function initWhatsMissing(section) {
-    var s = section || {};
-    return {
-      arcConnections: deepClone(Array.isArray(s.arcConnections) ? s.arcConnections : []),
-      knownUnknowns: Array.isArray(s.knownUnknowns) ? s.knownUnknowns.slice() : [],
-      narrativePurpose: typeof s.narrativePurpose === 'string' ? s.narrativePurpose : ''
-    };
+  function mergeMapLength(map, length) {
+    if (!Number.isInteger(length) || length < 0) throw new Error('mergeMapLength: the expected length is a whole number of words, not ' + String(length));
+    var next = editedMap(map, 'mergeMapLength');
+    next.expectedLength = length;
+    return next;
   }
 
-  /** The fields phase 3 retired from the outline schema, by section (BU3). */
-  var RETIRED_OUTLINE_FIELDS = { thePlayers: ['buried'], whatsMissing: ['buriedItems'] };
+  // The map's moves.
+
+  /** The photos of `section` that sit beside the beat `id`. */
+  function besideBeat(section, id) {
+    return (Array.isArray(section.photos) ? section.photos : []).filter(function (photo) {
+      return isPlainObject(photo) && typeof photo.beat === 'string' && photo.beat.trim() === id;
+    });
+  }
 
   /**
-   * A copy of the outline without the fields phase 3 retired. The editors start
-   * from it, so an outline written before phase 3 can still be edited and pass the
-   * schema; the original is untouched.
+   * A beat moved to the end of the section `toSlot`, from a section or from left out. A photo
+   * beside it goes with it, beside it still, so the photo stays with its moment. The order of
+   * the beats within a section is the article writer's, so the end is as good as any place.
    */
-  function dropRetiredOutlineFields(outline) {
-    var next = deepClone(outline);
-    if (!isPlainObject(next)) return next;
-    Object.keys(RETIRED_OUTLINE_FIELDS).forEach(function (sectionKey) {
-      if (!isPlainObject(next[sectionKey])) return;
-      RETIRED_OUTLINE_FIELDS[sectionKey].forEach(function (field) { delete next[sectionKey][field]; });
-    });
-    return next;
-  }
-
-  function initClosing(section) {
-    var s = section || {};
-    return {
-      arcResolutions: deepClone(Array.isArray(s.arcResolutions) ? s.arcResolutions : []),
-      systemicAngle: typeof s.systemicAngle === 'string' ? s.systemicAngle : '',
-      finalLine: typeof s.finalLine === 'string' ? s.finalLine : ''
-    };
-  }
-
-  // ── (D) JOURNALIST BUILDERS ───────────────────────────────────────────────
-  function buildLedePayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.hook = formState.hook || '';
-    out.keyTension = formState.keyTension || '';
-    out.primaryArc = formState.primaryArc || '';
-    setOrDeleteArray(out, 'selectedEvidence',
-      Array.isArray(formState.selectedEvidence) ? formState.selectedEvidence.filter(nonEmpty) : splitCsv(formState.selectedEvidence));
-    return out;
-  }
-
-  // Thesis panel (spec 2026-09-19 §6.1): three LEDE fields with their own editor.
-  // Delegates to buildLedePayload so the LEDE builder stays the single writer of
-  // that section and selectedEvidence survives untouched.
-  function buildThesisPayload(formState, originalLede) {
-    var base = initLede(originalLede);
-    return buildLedePayload({
-      hook: formState.hook,
-      keyTension: formState.keyTension,
-      primaryArc: formState.primaryArc,
-      selectedEvidence: base.selectedEvidence
-    }, originalLede);
-  }
-
-  function buildArcPayload(formState, originalArc) {
-    var out = deepClone(originalArc) || {};
-    out.name = formState.name || '';
-    var pc = coerceInt(formState.paragraphCount);
-    if (pc !== undefined) { out.paragraphCount = pc; }
-    return out;
-  }
-
-  function buildArcInterweavingPayload(formState, originalInterweaving) {
-    var out = deepClone(originalInterweaving) || {};
-    out.interleavingPlan = formState.interleavingPlan || '';
-    out.convergencePoint = formState.convergencePoint || '';
-    return out;
-  }
-
-  function buildFollowTheMoneyPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.arcConnections = (Array.isArray(formState.arcConnections) ? formState.arcConnections : []).map(function (row) {
-      return { arcName: row.arcName || '', financialAngle: row.financialAngle || '' };
-    });
-    var accounts = (Array.isArray(formState.shellAccounts) ? formState.shellAccounts : []).map(function (row) {
-      var acct = { name: row.name || '', total: coerceTotal(row.total) };
-      if (acct.total === undefined) acct.total = '';
-      // Phase 3 (3.2): an account's inference is optional (outline.schema.json).
-      if (nonEmpty(row.inference)) acct.inference = row.inference;
-      if (nonEmpty(row.relatedArc)) acct.relatedArc = row.relatedArc;
-      return acct;
-    });
-    setOrDeleteArray(out, 'shellAccounts', accounts);
-    return out;
-  }
-
-  function buildThePlayersPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.arcConnections = (Array.isArray(formState.arcConnections) ? formState.arcConnections : []).map(function (row) {
-      return { arcName: row.arcName || '', characterAngle: row.characterAngle || '' };
-    });
-    setOrDeleteArray(out, 'exposed', Array.isArray(formState.exposed) ? formState.exposed.filter(nonEmpty) : splitCsv(formState.exposed));
-    delete out.buried;  // Phase 3 (3.2; BU3): retired from the outline schema
-    delete out.pullQuotes;  // F3/X-5: pullQuotes removed from the outline contract (article phase ignores planned quotes; crystallization flows through inline quote content-blocks)
-    var map = rowsToMap(formState.characterHighlights);
-    if (Object.keys(map).length > 0) { out.characterHighlights = map; } else { delete out.characterHighlights; }
-    return out;
-  }
-
-  function buildWhatsMissingPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.arcConnections = (Array.isArray(formState.arcConnections) ? formState.arcConnections : []).map(function (row) {
-      return { arcName: row.arcName || '', openQuestion: row.openQuestion || '' };
-    });
-    setOrDeleteArray(out, 'knownUnknowns', Array.isArray(formState.knownUnknowns) ? formState.knownUnknowns.filter(nonEmpty) : splitCsv(formState.knownUnknowns));
-    setOrDeleteString(out, 'narrativePurpose', formState.narrativePurpose);
-    delete out.buriedItems;  // Phase 3 (3.2; BU3): retired from the outline schema
-    return out;
-  }
-
-  function buildClosingPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.arcResolutions = (Array.isArray(formState.arcResolutions) ? formState.arcResolutions : []).map(function (row) {
-      return { arcName: row.arcName || '', resolution: row.resolution || '' };
-    });
-    setOrDeleteString(out, 'systemicAngle', formState.systemicAngle);
-    setOrDeleteString(out, 'finalLine', formState.finalLine);
-    return out;
-  }
-
-  // ── (E) DETECTIVE INITIALIZERS ────────────────────────────────────────────
-  function initExecutiveSummary(section) {
-    var s = section || {};
-    return {
-      hook: typeof s.hook === 'string' ? s.hook : '',
-      caseOverview: typeof s.caseOverview === 'string' ? s.caseOverview : '',
-      primaryFindings: Array.isArray(s.primaryFindings) ? s.primaryFindings.slice() : []
-    };
-  }
-
-  function initEvidenceLocker(section) {
-    var s = section || {};
-    return { evidenceGroups: deepClone(Array.isArray(s.evidenceGroups) ? s.evidenceGroups : []) };
-  }
-
-  function initMemoryAnalysis(section) {
-    var s = section || {};
-    return {
-      focus: typeof s.focus === 'string' ? s.focus : '',
-      keyPatterns: Array.isArray(s.keyPatterns) ? s.keyPatterns.slice() : [],
-      significance: typeof s.significance === 'string' ? s.significance : ''
-    };
-  }
-
-  function initSuspectNetwork(section) {
-    var s = section || {};
-    return {
-      keyRelationships: deepClone(Array.isArray(s.keyRelationships) ? s.keyRelationships : []),
-      assessments: deepClone(Array.isArray(s.assessments) ? s.assessments : [])
-    };
-  }
-
-  function initOutstandingQuestions(section) {
-    var s = section || {};
-    return {
-      questions: Array.isArray(s.questions) ? s.questions.slice() : [],
-      investigativeGaps: typeof s.investigativeGaps === 'string' ? s.investigativeGaps : ''
-    };
-  }
-
-  function initFinalAssessment(section) {
-    var s = section || {};
-    return {
-      accusationHandling: typeof s.accusationHandling === 'string' ? s.accusationHandling : '',
-      verdict: typeof s.verdict === 'string' ? s.verdict : '',
-      closingLine: typeof s.closingLine === 'string' ? s.closingLine : ''
-    };
-  }
-
-  // ── (F) DETECTIVE BUILDERS ────────────────────────────────────────────────
-  function buildExecutiveSummaryPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.hook = formState.hook || '';
-    out.caseOverview = formState.caseOverview || '';
-    out.primaryFindings = (Array.isArray(formState.primaryFindings) ? formState.primaryFindings.filter(nonEmpty) : splitCsv(formState.primaryFindings));
-    return out;
-  }
-
-  function buildEvidenceLockerPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.evidenceGroups = (Array.isArray(formState.evidenceGroups) ? formState.evidenceGroups : []).map(function (row) {
-      return {
-        theme: row.theme || '',
-        evidenceIds: Array.isArray(row.evidenceIds) ? row.evidenceIds.filter(nonEmpty) : splitCsv(row.evidenceIds),
-        synthesis: row.synthesis || ''
-      };
-    });
-    return out;
-  }
-
-  function buildMemoryAnalysisPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.focus = formState.focus || '';
-    out.significance = formState.significance || '';
-    setOrDeleteArray(out, 'keyPatterns', Array.isArray(formState.keyPatterns) ? formState.keyPatterns.filter(nonEmpty) : splitCsv(formState.keyPatterns));
-    return out;
-  }
-
-  function buildSuspectNetworkPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.assessments = (Array.isArray(formState.assessments) ? formState.assessments : []).map(function (row) {
-      var a = { name: row.name || '', role: row.role || '' };
-      if (row.suspicionLevel === 'high' || row.suspicionLevel === 'moderate' || row.suspicionLevel === 'low') {
-        a.suspicionLevel = row.suspicionLevel;
+  function moveBeat(map, id, toSlot) {
+    var next = editedMap(map, 'moveBeat');
+    var place = beatAt(next, id, 'moveBeat');
+    var target = sectionAt(next, toSlot, 'moveBeat');
+    if (place.section === target) return map;
+    var beat = place.list.splice(place.index, 1)[0];
+    if (!Array.isArray(target.beats)) target.beats = [];
+    target.beats.push(beat);
+    if (place.section) {
+      var going = besideBeat(place.section, beatIdOf(beat));
+      if (going.length > 0) {
+        place.section.photos = place.section.photos.filter(function (photo) { return going.indexOf(photo) === -1; });
+        if (!Array.isArray(target.photos)) target.photos = [];
+        target.photos.push.apply(target.photos, going);
       }
-      return a;
-    });
-    var rels = (Array.isArray(formState.keyRelationships) ? formState.keyRelationships : []).map(function (row) {
-      return {
-        characters: Array.isArray(row.characters) ? row.characters.filter(nonEmpty) : splitCsv(row.characters),
-        nature: row.nature || ''
-      };
-    });
-    setOrDeleteArray(out, 'keyRelationships', rels);
-    return out;
-  }
-
-  function buildOutstandingQuestionsPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.questions = (Array.isArray(formState.questions) ? formState.questions.filter(nonEmpty) : splitCsv(formState.questions));
-    setOrDeleteString(out, 'investigativeGaps', formState.investigativeGaps);
-    return out;
-  }
-
-  function buildFinalAssessmentPayload(formState, originalSection) {
-    var out = deepClone(originalSection) || {};
-    out.verdict = formState.verdict || '';
-    out.closingLine = formState.closingLine || '';
-    setOrDeleteString(out, 'accusationHandling', formState.accusationHandling);
-    return out;
-  }
-
-  // ── (G) IMMUTABLE MERGE ───────────────────────────────────────────────────
-  function mergeSection(outline, sectionKey, updatedSection) {
-    var next = deepClone(outline) || {};
-    next[sectionKey] = updatedSection;
-    return next;
-  }
-
-  function mergeArc(outline, arcIdx, updatedArc) {
-    var next = deepClone(outline) || {};
-    if (!next.theStory || typeof next.theStory !== 'object') next.theStory = {};
-    if (!Array.isArray(next.theStory.arcs)) next.theStory.arcs = [];
-    next.theStory.arcs = next.theStory.arcs.map(function (arc, i) {
-      return i === arcIdx ? updatedArc : arc;
-    });
-    if (arcIdx >= next.theStory.arcs.length) {
-      next.theStory.arcs = next.theStory.arcs.concat([updatedArc]);
     }
     return next;
   }
 
-  function mergeArcInterweaving(outline, updatedInterweaving) {
-    var next = deepClone(outline) || {};
-    if (!next.theStory || typeof next.theStory !== 'object') next.theStory = {};
-    next.theStory.arcInterweaving = updatedInterweaving;
+  /**
+   * A beat struck: out of its section into the end of left out, whole, so one brought back is
+   * the beat it was. A photo beside it stays placed, by itself in its section with its people,
+   * since no photo is struck on the map and a struck moment is out of the story.
+   */
+  function strikeBeat(map, id) {
+    var next = editedMap(map, 'strikeBeat');
+    var place = beatAt(next, id, 'strikeBeat');
+    if (!place.section) return map;
+    var beat = place.list.splice(place.index, 1)[0];
+    if (!Array.isArray(next.leftOut)) next.leftOut = [];
+    next.leftOut.push(beat);
+    besideBeat(place.section, beatIdOf(beat)).forEach(function (photo) { delete photo.beat; });
+    return next;
+  }
+
+  /** A beat brought back from left out, whole, into the end of the section `toSlot`. */
+  function bringBackBeat(map, id, toSlot) {
+    if (beatAt(editedMap(map, 'bringBackBeat'), id, 'bringBackBeat').section) {
+      throw new Error('bringBackBeat: ' + String(id) + ' is not in left out');
+    }
+    return moveBeat(map, id, toSlot);
+  }
+
+  /**
+   * A beat the director adds to the end of the section `toSlot`: its material as typed and the
+   * players it shows (typed with commas, or a list), under an id no beat holds. The
+   * director-side schema asks a beat added for its id and its material alone. A blank line
+   * adds none.
+   */
+  function addBeat(map, toSlot, material, players) {
+    if (typeof material !== 'string' || !material.trim()) return map;
+    var next = editedMap(map, 'addBeat');
+    var target = sectionAt(next, toSlot, 'addBeat');
+    if (!Array.isArray(target.beats)) target.beats = [];
+    var names = Array.isArray(players)
+      ? players.filter(nonEmpty).map(function (name) { return name.trim(); })
+      : splitCsv(players);
+    target.beats.push({ id: freshBeatId(next), material: material, players: names });
+    return next;
+  }
+
+  /** A beat taken out of the map whole: the screen offers it for a beat the director added at this look. */
+  function removeBeat(map, id) {
+    var next = editedMap(map, 'removeBeat');
+    var place = beatAt(next, id, 'removeBeat');
+    place.list.splice(place.index, 1);
+    return next;
+  }
+
+  /** The photo list of the section `slot`, holding a photo at `index`. */
+  function photosAt(map, slot, index, operation) {
+    var section = sectionAt(map, slot, operation);
+    if (!Array.isArray(section.photos) || !isPlainObject(section.photos[index])) {
+      throw new Error(operation + ': the section ' + String(slot) + ' holds no photo at ' + String(index));
+    }
+    return section.photos;
+  }
+
+  /**
+   * A photo moved from its place (`fromSlot` a section, with the photo's `fromIndex` there, or
+   * MAP_TOP_PHOTO) to the end of the section `toSlot`, or to the top. Every photo stays placed
+   * once (T13): a photo moved to the top trades places with the top photo, which takes its
+   * place, by itself; the top photo moved into a section leaves the map with no top photo. A
+   * photo moved into a section sits there by itself, with its people; the director can set it
+   * beside a beat of that section.
+   */
+  function movePhoto(map, fromSlot, fromIndex, toSlot) {
+    if (fromSlot === toSlot) return map;
+    var next = editedMap(map, 'movePhoto');
+    var filename;
+    var left = null;
+    if (fromSlot === MAP_TOP_PHOTO) {
+      if (!nonEmpty(next.topPhoto)) throw new Error('movePhoto: the map has no top photo');
+      filename = next.topPhoto;
+      delete next.topPhoto;
+    } else {
+      var from = photosAt(next, fromSlot, fromIndex, 'movePhoto');
+      filename = from[fromIndex].filename;
+      from.splice(fromIndex, 1);
+      left = { list: from, index: fromIndex };
+    }
+    if (toSlot === MAP_TOP_PHOTO) {
+      var previous = nonEmpty(next.topPhoto) ? next.topPhoto : null;
+      next.topPhoto = filename;
+      if (previous) left.list.splice(left.index, 0, { filename: previous });
+      return next;
+    }
+    var target = sectionAt(next, toSlot, 'movePhoto');
+    if (!Array.isArray(target.photos)) target.photos = [];
+    target.photos.push({ filename: filename });
+    return next;
+  }
+
+  /** A photo of the section `slot` set beside one of the section's beats, or by itself with `beatId` blank. */
+  function setPhotoBeside(map, slot, index, beatId) {
+    var next = editedMap(map, 'setPhotoBeside');
+    var photo = photosAt(next, slot, index, 'setPhotoBeside')[index];
+    var id = typeof beatId === 'string' ? beatId.trim() : '';
+    if (!id) {
+      delete photo.beat;
+      return next;
+    }
+    var section = sectionAt(next, slot, 'setPhotoBeside');
+    var held = (Array.isArray(section.beats) ? section.beats : []).some(function (beat) { return beatIdOf(beat) === id; });
+    if (!held) throw new Error('setPhotoBeside: the section ' + String(slot) + ' holds no beat ' + id);
+    photo.beat = id;
     return next;
   }
 
@@ -455,8 +462,10 @@
 
   // The map's client gate (phase 4, brief 4.6): the director-side map schema's rules, held
   // equal to it by a test (lib/map.js directorMapSchemaFor; never stricter, and a corpus
-  // the two decide alike). The root keys, a beat's kinds and the headline limits are the
-  // schema's; the slots, when the stop's payload gives them, are the theme's.
+  // the two decide alike), then the gate's rules for a repeat (task 4.9, ruling 3: lib/map.js
+  // directorMapProblems, whose decisions a test holds this to). The root keys, a beat's kinds
+  // and the headline limits are the schema's; the slots, when the stop's payload gives them,
+  // are the theme's.
   var MAP_ROOT_KEYS = ['headline', 'deck', 'topPhoto', 'gapNote', 'sections', 'dropped', 'leftOut', 'expectedLength', 'weaveChanges'];
   var MAP_REQUIRED_KEYS = ['headline', 'deck', 'sections', 'dropped', 'leftOut', 'expectedLength', 'weaveChanges'];
   // A beat's kind, one of the schema's four (lib/map.js MAP_BEAT_KINDS; a test holds the
@@ -537,14 +546,84 @@
   }
 
   /**
-   * The map's client gate: the checks the director-side schema makes, so a map the server
-   * would refuse is caught before the POST, and a map it accepts passes. With `slots` (the
-   * stop's `mapSlots`, as keys or as `{key}`), a section's slot and a dropped slot must be
-   * one of them.
+   * Each beat id of a map with its place and path, in the order the gate reads them
+   * (lib/map.js repeatedBeatIds: the sections' beats, then left out's, each id trimmed).
+   */
+  function beatEntries(map) {
+    var out = [];
+    if (!isPlainObject(map)) return out;
+    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section, s) {
+      if (!isPlainObject(section)) return;
+      (Array.isArray(section.beats) ? section.beats : []).forEach(function (beat, b) {
+        if (beatIdOf(beat)) out.push({ key: beatIdOf(beat), name: beatIdOf(beat), place: section.slot, path: '/sections/' + s + '/beats/' + b });
+      });
+    });
+    (Array.isArray(map.leftOut) ? map.leftOut : []).forEach(function (beat, b) {
+      if (beatIdOf(beat)) out.push({ key: beatIdOf(beat), name: beatIdOf(beat), place: 'leftOut', path: '/leftOut/' + b });
+    });
+    return out;
+  }
+
+  /**
+   * Each photo a map places with its place and path, as mapPhotoPlacements reads them (the
+   * top photo, then each section's), keyed by photoKey, the one join key for a photo.
+   */
+  function photoEntries(map) {
+    var out = [];
+    if (!isPlainObject(map)) return out;
+    if (typeof map.topPhoto === 'string' && map.topPhoto.trim()) {
+      out.push({ key: photoKey(map.topPhoto), name: map.topPhoto, place: MAP_TOP_PHOTO, path: '/topPhoto' });
+    }
+    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section, s) {
+      if (!isPlainObject(section)) return;
+      (Array.isArray(section.photos) ? section.photos : []).forEach(function (photo, p) {
+        if (isPlainObject(photo) && typeof photo.filename === 'string' && photo.filename.trim()) {
+          out.push({ key: photoKey(photo.filename), name: photo.filename, place: section.slot, path: '/sections/' + s + '/photos/' + p });
+        }
+      });
+    });
+    return out;
+  }
+
+  /** The keys more than one entry carries, each once, in the order they first repeat. */
+  function repeatedKeys(entries) {
+    var seen = {};
+    var repeated = [];
+    entries.forEach(function (entry) {
+      if (seen[entry.key] && repeated.indexOf(entry.key) === -1) repeated.push(entry.key);
+      seen[entry.key] = true;
+    });
+    return repeated;
+  }
+
+  /**
+   * The repeats the director's changes made, by the gate's rule for repeats: a key the map
+   * repeats that the map the stop showed does not. Each comes with the entry to name: the
+   * first one in a place where the map shown does not hold the key, else the last.
+   */
+  function directorsRepeats(entries, shownEntries) {
+    var writers = repeatedKeys(shownEntries);
+    return repeatedKeys(entries).filter(function (key) { return writers.indexOf(key) === -1; }).map(function (key) {
+      var mine = entries.filter(function (entry) { return entry.key === key; });
+      var shownPlaces = shownEntries.filter(function (entry) { return entry.key === key; }).map(function (entry) { return entry.place; });
+      return mine.filter(function (entry) { return shownPlaces.indexOf(entry.place) === -1; })[0] || mine[mine.length - 1];
+    });
+  }
+
+  /**
+   * The map's client gate: the decisions the gate makes (lib/map.js directorMapProblems), so a
+   * map the server would refuse is caught before the POST, and a map it accepts passes:
+   * - the director-side schema's checks. With `slots` (the stop's `mapSlots`, as keys or as
+   *   `{key}`), a section's slot and a dropped slot must be one of them;
+   * - a beat id the director's changes repeat: the edits find a beat by its id. A repeat the
+   *   map the stop showed (`shown`) holds is the writer's, which the map checks report;
+   * - a photo the director's changes place more than once (4.6b's rule, the same reading of a
+   *   repeat): each kept photo is placed once (T13).
    *
    * @param {*} map
    * @param {Object} [options]
    * @param {Array} [options.slots]
+   * @param {Object|null} [options.shown] - the map the stop showed; without it every repeat is the director's
    * @returns {{valid: boolean, errors: Array<{path: string, message: string}>}}
    */
   function validateMapShape(map, options) {
@@ -608,19 +687,27 @@
       stringAt(errors, path + '/source', change.source);
       stringAt(errors, path + '/change', change.change);
     });
+    var shown = opts.shown === undefined ? null : opts.shown;
+    directorsRepeats(beatEntries(map), beatEntries(shown)).forEach(function (entry) {
+      errors.push({ path: entry.path, message: 'shares its id with another beat: your changes made this repeat. Give each beat an id of its own.' });
+    });
+    directorsRepeats(photoEntries(map), photoEntries(shown)).forEach(function (entry) {
+      errors.push({ path: entry.path, message: 'places ' + entry.name + ' a second time: your changes made this repeat. Place each photo once.' });
+    });
     return { valid: errors.length === 0, errors: errors };
   }
 
   /**
-   * The outline stop's client gate, by its old name for Outline.js (4.9 rebuilds the
-   * screen): the map's gate. The outline stage's detective branch went with it (R1).
+   * The outline stop's client gate, by its old name: the map's gate. The outline stage's
+   * detective branch went with it (R1).
    *
    * @param {*} outline - the map
    * @param {string} [theme] - unused: every theme's map has one shape
    * @param {Array} [slots] - the stop's mapSlots
+   * @param {Object|null} [shown] - the map the stop showed, whose repeats are the writer's
    */
-  function validateOutlineShape(outline, theme, slots) {
-    return validateMapShape(outline, { slots: slots });
+  function validateOutlineShape(outline, theme, slots, shown) {
+    return validateMapShape(outline, { slots: slots, shown: shown });
   }
 
   // ── (I2) ARTICLE CLIENT GATE (B6) ─────────────────────────────────────────
@@ -706,7 +793,7 @@
   // ── (K) THE MAP: EVERYONE AND THE COUNTS (phase 4, brief 4.6) ──────────────
   //
   // Everyone, the cards and the photos are built by one function from the beats, so the
-  // stop's payload, the console's map as the director edits it (4.9) and the map checks
+  // stop's payload, the map on screen as the director edits it (task 4.9) and the map checks
   // (lib/map.js) count alike. A name in a beat counts for the roster member it names.
 
   /**
@@ -855,42 +942,31 @@
     mapToRows: mapToRows,
     computeResetKey: computeResetKey,
 
-    initLede: initLede,
-    initThesis: initThesis,
-    initArc: initArc,
-    initArcInterweaving: initArcInterweaving,
-    initFollowTheMoney: initFollowTheMoney,
-    initThePlayers: initThePlayers,
-    initWhatsMissing: initWhatsMissing,
-    initClosing: initClosing,
-
-    buildLedePayload: buildLedePayload,
-    buildThesisPayload: buildThesisPayload,
-    buildArcPayload: buildArcPayload,
-    buildArcInterweavingPayload: buildArcInterweavingPayload,
-    buildFollowTheMoneyPayload: buildFollowTheMoneyPayload,
-    buildThePlayersPayload: buildThePlayersPayload,
-    buildWhatsMissingPayload: buildWhatsMissingPayload,
-    buildClosingPayload: buildClosingPayload,
-
-    initExecutiveSummary: initExecutiveSummary,
-    initEvidenceLocker: initEvidenceLocker,
-    initMemoryAnalysis: initMemoryAnalysis,
-    initSuspectNetwork: initSuspectNetwork,
-    initOutstandingQuestions: initOutstandingQuestions,
-    initFinalAssessment: initFinalAssessment,
-
-    buildExecutiveSummaryPayload: buildExecutiveSummaryPayload,
-    buildEvidenceLockerPayload: buildEvidenceLockerPayload,
-    buildMemoryAnalysisPayload: buildMemoryAnalysisPayload,
-    buildSuspectNetworkPayload: buildSuspectNetworkPayload,
-    buildOutstandingQuestionsPayload: buildOutstandingQuestionsPayload,
-    buildFinalAssessmentPayload: buildFinalAssessmentPayload,
-
-    mergeSection: mergeSection,
-    mergeArc: mergeArc,
-    mergeArcInterweaving: mergeArcInterweaving,
-    dropRetiredOutlineFields: dropRetiredOutlineFields,
+    // Task 4.9: the map's editors (init, build, merge) and its moves
+    MAP_TOP_PHOTO: MAP_TOP_PHOTO,
+    initMapHead: initMapHead,
+    buildMapHead: buildMapHead,
+    mergeMapHead: mergeMapHead,
+    initGapNote: initGapNote,
+    buildGapNote: buildGapNote,
+    mergeGapNote: mergeGapNote,
+    initMapSection: initMapSection,
+    buildMapSection: buildMapSection,
+    mergeMapSection: mergeMapSection,
+    initBeat: initBeat,
+    buildBeat: buildBeat,
+    mergeBeat: mergeBeat,
+    initMapLength: initMapLength,
+    buildMapLength: buildMapLength,
+    mergeMapLength: mergeMapLength,
+    freshBeatId: freshBeatId,
+    moveBeat: moveBeat,
+    strikeBeat: strikeBeat,
+    bringBackBeat: bringBackBeat,
+    addBeat: addBeat,
+    removeBeat: removeBeat,
+    movePhoto: movePhoto,
+    setPhotoBeside: setPhotoBeside,
 
     validateOutlineShape: validateOutlineShape,
     validateMapShape: validateMapShape,

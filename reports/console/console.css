@@ -1530,22 +1530,6 @@ textarea.input {
   gap: var(--space-xs);
 }
 
-/* View-mode content for FOLLOW THE MONEY / THE PLAYERS / WHAT'S MISSING, which
-   used to render only item counts. */
-.outline-section__list {
-  list-style: disc;
-  padding-left: var(--space-lg);
-  margin: 0;
-}
-
-.outline-section__list li {
-  margin-bottom: var(--space-xs);
-}
-
-.outline-section__list li p {
-  margin: 0;
-}
-
 /* ── Article Content Blocks ── */
 .article-block {
   margin-bottom: var(--space-sm);
@@ -2077,11 +2061,11 @@ textarea.input {
      the block's own first line, measured live at 19 of 54 rendered blocks of the
      article stop when its pencils sat in that corner.
    - OPT-IN (`--editable-always`): rendered at low opacity, full opacity on
-     hover/focus. Only for hosts whose top-right corner is known to be empty:
-     Outline.js's section wrappers (a short ALL-CAPS `<h4>` at the top-LEFT) and
-     its two THE STORY rows. Those are the ones that must be discoverable,
-     touch-usable and focusable without hover, because the editor layer behind
-     them is the whole point of the gate.
+     hover/focus. Only for hosts whose top-right corner is known to be empty: the
+     map's lines (task 4.9; Outline.js), each with its text at the left and its
+     controls under it. Those are the ones that must be discoverable, touch-usable
+     and focusable without hover, because the editor layer behind them is the
+     whole point of the stop.
 
    The article stop is the director's desk (task 4.3): its pencils sit in the desk's
    rail, a column of its own beside each piece of the article (`.desk-row`, at the end
@@ -2112,28 +2096,24 @@ textarea.input {
   transition: background var(--transition-fast), opacity var(--transition-fast);
 }
 
-/* Reveal on hover, on keyboard focus anywhere in the block, and while that
-   section's editor is open (so the other pencils stay legible as the director
-   moves between sections). */
+/* Reveal on hover and on keyboard focus anywhere in the block. */
 .article-block--editable:hover .article-block__edit-btn,
-.article-block--editable:focus-within .article-block__edit-btn,
-.outline-section--editing .article-block__edit-btn {
+.article-block--editable:focus-within .article-block__edit-btn {
   display: inline-flex;
   opacity: 1;
 }
 
-/* The opt-in always-visible state (outline hosts only — see the block above).
-   `padding-right` reserves the button's gutter so a long section title can never
-   run under it either. */
+/* The opt-in always-visible state (the map's hosts only — see the block above).
+   `padding-right` reserves the button's gutter so a long line can never run under
+   it either. */
 .article-block--editable-always {
   padding-right: 32px;
 }
 
-/* A DESCENDANT selector, not a child one: across the three opt-in host shapes
-   the button sits at three different depths (direct child of the interweaving
-   row, inside `.outline-section__header` on a section wrapper, inside a plain
-   `.flex` row on a THE STORY arc). No opt-in host is ever nested inside another,
-   so there is nothing for the looser selector to leak into. */
+/* A DESCENDANT selector, not a child one: a host may hold its button at any depth,
+   and a child selector misses every button that is not a direct child. No opt-in
+   host is ever nested inside another, so there is nothing for the looser selector
+   to leak into. */
 .article-block--editable-always .article-block__edit-btn {
   display: inline-flex;
   opacity: 0.45;
@@ -2665,26 +2645,6 @@ textarea.input {
 .progress-eventlog__item--error { color: var(--accent-red, #f87171); }
 .progress-eventlog__item--retry { color: var(--accent-amber, #fbbf24); }
 
-/* Thesis panel at the outline gate (spec 2026-09-19 §6.1) */
-.outline-thesis {
-  border-left-color: rgba(212, 168, 83, 0.6);
-  background: rgba(212, 168, 83, 0.06);
-  /* Longhands, never the `padding` shorthand: this host also carries
-     `.article-block--editable-always`, whose `padding-right: 32px` reserves the
-     absolutely-positioned pencil's gutter. A shorthand here has equal specificity
-     and comes later in the file, so it would silently cancel that gutter. */
-  padding-top: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  padding-left: var(--space-md);
-  border-radius: 4px;
-}
-/* EDIT mode drops `.article-block--editable-always` (there is no pencil while the
-   editor is open), so nothing would set a right padding and the fields would run to
-   the panel edge. The normal inset, NOT the 32px pencil gutter, and scoped to the
-   editing class so the read-mode gutter above is untouched (M14). */
-.outline-section--editing.outline-thesis {
-  padding-right: var(--space-md);
-}
 /* Read-only echo of the thesis at the article gate (§6.2) */
 .article-thesis-echo {
   border-left: 2px solid rgba(212, 168, 83, 0.6);
@@ -3061,6 +3021,236 @@ textarea.input {
 }
 
 .meeting__hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── 4.9: the map ──
+   The outline stop's page (Outline.js): about 450 words to read and edit in minutes. Each
+   line keeps its concerns under it. The pencil hosts (.map__head, .map__gap,
+   .map__section-head, .map__beat, .map__length) carry `.article-block--editable-always`,
+   whose `padding-right` reserves the pencil's gutter, so they set their padding with the
+   longhands: a `padding` shorthand here comes later in the file and would cancel it. */
+.map__story,
+.map__section,
+.map__top,
+.map__tally,
+.map__dropped,
+.map__changes,
+.map__round {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-left: var(--space-md);
+  border-left: 2px solid rgba(212, 168, 83, 0.2);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.map__story {
+  border-left-color: rgba(78, 205, 196, 0.5);
+}
+
+.map__story-line {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.map__label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--accent-amber);
+}
+
+.map__head {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+}
+
+.map__section-head {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+}
+
+.map__length {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+}
+
+.map__headline {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--text-primary);
+}
+
+.map__deck {
+  color: var(--text-secondary);
+}
+
+.map__gap {
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  padding-left: var(--space-sm);
+  border-left: 2px solid var(--accent-amber);
+  background: rgba(212, 168, 83, 0.06);
+}
+
+.map__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.map__beat {
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid rgba(212, 168, 83, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+.map__left-out {
+  padding: var(--space-sm);
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid rgba(212, 168, 83, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+/* An open editor takes the host's place, with no pencil: the normal inset on the right. */
+.map__editing {
+  padding-right: var(--space-sm);
+  border: 1px solid var(--accent-amber);
+  border-radius: var(--radius-md);
+}
+
+/* A line under the writer's repeated id: its controls are off. */
+.map__beat--locked,
+.map__photo--locked {
+  opacity: 0.75;
+}
+
+.map__beat-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.map__id,
+.map__kind {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent-cyan);
+}
+
+.map__material {
+  margin: var(--space-xs) 0;
+}
+
+.map__photo {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+
+.map__photo-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.map__thumb {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(212, 168, 83, 0.2);
+  flex-shrink: 0;
+}
+
+/* A photo the console cannot serve shows its filename alone. */
+.map__thumb--missing {
+  display: none;
+}
+
+.map__filename {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.map__controls {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.map__move {
+  height: 26px;
+  padding: 0 var(--space-xs);
+  background: var(--bg-input);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  max-width: 100%;
+}
+
+.map__add {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.map__add-material {
+  flex: 2;
+  min-width: 220px;
+}
+
+.map__add-players {
+  flex: 1;
+  min-width: 160px;
+}
+
+.map__add-open {
+  align-self: flex-start;
+}
+
+.map__unplaced {
+  color: var(--accent-amber);
+}
+
+/* A concern about the director's own line: theirs to decide, never sent back. */
+.map__concern {
+  padding: var(--space-xs) var(--space-sm);
+  border-left: 2px solid var(--accent-amber);
+  color: var(--accent-amber);
+  font-size: 0.8rem;
+}
+
+.map__check {
+  padding: var(--space-xs) var(--space-md);
+  border-left: 2px solid var(--accent-red);
+  background: rgba(231, 76, 60, 0.06);
+  font-size: 0.85rem;
+}
+
+.map__changed {
+  font-size: 0.85rem;
+  color: var(--accent-amber);
+}
+
+.map__hint {
   font-size: 0.75rem;
   color: var(--text-muted);
 }

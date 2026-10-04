@@ -20,6 +20,8 @@ const { decideAttachFallback, shouldApplyAttachPoll, completedResultFrom } = win
 // Where a stop's note sits in `pendingEdits`, beside that stop's edits (brief 1.1), and
 // the story meeting's approve for the fallback below (task 4.8).
 const { noteSlotKey, meetingPayload, meetingWeaveOf } = window.Console.checkpointViewLogic;
+// The map's approve for the fallback below (task 4.9).
+const { mapPayload, mapDraftOf } = window.Console.checkpointViewLogic;
 
 // How long an attached stream may say nothing before the watchdog re-reads
 // /checkpoint, and how often it looks. The server's heartbeat is an SSE COMMENT
@@ -655,7 +657,8 @@ function App() {
                       // M6: if Photos.js fails to register, the fallback must still
                       // post a shape the server accepts at this gate.
                       'photos': { photosPath: state.checkpointData.defaultDir || '' },
-                      'outline': { outline: true },
+                      // Task 4.9: the map's approve, 4.6's payload, with the map as shown.
+                      'outline': mapPayload('approve', mapDraftOf(state.checkpointData, undefined), ''),
                       'article': { article: true }
                     };
                     const payload = payloads[state.checkpointType] || { approved: true };

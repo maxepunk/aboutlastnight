@@ -29,6 +29,11 @@
  *     the meeting reads 4.5's payload (lib/meeting.js meetingCheckpointData) and
  *     sends only 4.5's payloads (meetingPayload).
  *
+ *   mapView (task 4.9)
+ *     the outline stop is the map: the settled weave laid across the sections, read
+ *     and edited line by line in minutes. It reads 4.6's payload (lib/map.js
+ *     mapCheckpointData) and sends only 4.6's payloads (mapPayload).
+ *
  *   accusationView
  *     the block read `reasoning` and `confidence`; the parse emits `charge` and
  *     `notes`, so the whole parsed accusation (votes, motive, alternative
@@ -531,13 +536,13 @@
 
   // ── steeringView (spec 2026-09-19 §4.4, §5.5) ─────────────────────────────
   // The hand-edit report and the standing notes as RevisionDiff renders them.
+  // A scope as a trace or a report names it: the article's (lib/hand-edit-diff.js diffBundle)
+  // and the map's (diffMap, task 4.9); a section's scope is `section:<id or slot>`.
   var SCOPE_LABELS = {
-    lede: 'LEDE', theStory: 'THE STORY', followTheMoney: 'FOLLOW THE MONEY', thePlayers: 'THE PLAYERS',
-    whatsMissing: "WHAT'S MISSING", closing: 'CLOSING',
-    executiveSummary: 'EXECUTIVE SUMMARY', evidenceLocker: 'EVIDENCE LOCKER', memoryAnalysis: 'MEMORY ANALYSIS',
-    suspectNetwork: 'SUSPECT NETWORK', outstandingQuestions: 'OUTSTANDING QUESTIONS', finalAssessment: 'FINAL ASSESSMENT',
     headline: 'Headline', byline: 'Byline', pullQuotes: 'Pull quotes', evidenceCards: 'Evidence cards',
-    financialTracker: 'Financial tracker', photos: 'Photos', heroImage: 'Hero image'
+    financialTracker: 'Financial tracker', photos: 'Photos', heroImage: 'Hero image',
+    deck: 'Deck', topPhoto: 'Top photo', gapNote: 'Gap note', leftOut: 'Left out', dropped: 'Dropped sections',
+    weaveChanges: 'Changes to the weave', expectedLength: 'Expected length'
   };
 
   function scopeLabel(key) {
@@ -589,13 +594,14 @@
    *   because code never takes text out.
    * - A block the director moved that a pass took to another section: where it went, and
    *   whether code put it back; one a pass removed: that code left it out, since only its
-   *   place was the director's edit.
+   *   place was the director's edit. The map (task 4.9) names the element a beat or a photo.
    * - A change a send-back's rework made: the rework's reason, or that it gave none.
    *
    * @param {Object} entry - one of the report's `changed` entries (lib/hand-edit-diff.js reportAfterPass)
    * @param {Object} [options]
    * @param {function(Object): string} [options.place] - the entry's place; by default its id and `where`
    * @param {function(string): string} [options.valueText] - how a value reads; by default as written
+   * @param {function(Object): string} [options.thing] - what a moved element is called; by default a block
    * @returns {string}
    */
   function changedEditLine(entry, options) {
@@ -604,6 +610,7 @@
       ? o.place(entry)
       : entry.id + ', ' + (asString(entry.where) ? entry.where : scopeLabel(entry.scope));
     var valueText = typeof o.valueText === 'function' ? o.valueText : function (text) { return text; };
+    var thing = typeof o.thing === 'function' ? o.thing(entry) : 'block';
     var became = typeof entry.became === 'string' ? valueText(entry.became) : null;
     var director = valueText(asString(entry.director));
     var automatic = entry.automatic === true;
@@ -620,7 +627,7 @@
     if (entry.cut === true) return label + ': the text you cut came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
     if (entry.removed === true) return label + ': a sentence you removed came back' + cameBackAs + ' (' + by + '). ' + (automatic ? STILL_IN_ARTICLE : why);
     if (entry.moved === true) {
-      var moved = became !== null ? 'moved the block you placed here to ' + became : 'removed the block you placed here';
+      var moved = became !== null ? 'moved the ' + thing + ' you placed here to ' + became : 'removed the ' + thing + ' you placed here';
       if (!automatic) return label + ': ' + by + ' ' + moved + '. ' + why;
       if (entry.restored === true) return label + ': ' + by + ' ' + moved + '. It was put back.';
       return label + ': ' + by + ' ' + moved + '. ' + (became !== null ? 'It could not be put back.' : MOVED_BLOCK_LEFT_OUT);
@@ -657,6 +664,19 @@
         var kindWord = hasOwn(NOTE_KIND_WORDS, kind) ? NOTE_KIND_WORDS[kind] : kind + ' note';
         return { key: 'note-' + i, label: stop + ', ' + kindWord + ' ' + (n.round || 1), text: n.text.trim() };
       });
+  }
+
+  /**
+   * The standing notes folded under a stop's note box, at the story meeting and on the map:
+   * standingNoteItems' list, under the console's stop labels (CHECKPOINT_LABELS, passed in).
+   *
+   * @param {Array} gateNotes - data.directorGateNotes
+   * @param {Object} labels - stop type -> label
+   * @returns {{any: boolean, title: string, items: Array<{key: string, label: string, text: string}>}}
+   */
+  function standingNotesView(gateNotes, labels) {
+    var items = standingNoteItems(gateNotes, labels);
+    return { any: items.length > 0, title: 'Standing notes (' + items.length + ')', items: items };
   }
 
   /**
@@ -714,12 +734,12 @@
   }
 
   // ── review payloads (phase 1, brief 1.1) ──────────────────────────────────
-  // One note box at the outline and article stops, sent with whatever the director
-  // presses. Before this the only place to write was behind the Reject button, so a
-  // note the director had ready at an approve had nowhere to go but a paid rework:
-  // last session a structural note existed at 20:35 and reached the writer 52 minutes
-  // later. The key assembly lives here because those keys are the whole contract with
-  // the server's buildResumePayload, and the components have no test harness.
+  // One note box at the article stop, sent with whatever the director presses (the map's
+  // payloads are mapPayload's, task 4.9). Before this the only place to write was behind
+  // the Reject button, so a note the director had ready at an approve had nowhere to go
+  // but a paid rework: last session a structural note existed at 20:35 and reached the
+  // writer 52 minutes later. The key assembly lives here because those keys are the whole
+  // contract with the server's buildResumePayload, and the components have no test harness.
   //
   // On a send back the note IS the feedback and is never also sent on the note key:
   // the server's reject arm already records it as a standing note of kind 'rejection',
@@ -732,7 +752,7 @@
    * payload whose feedback is '' and which no server arm accepts. The components
    * disable the button and return early on a blank note, so null is never sent.
    *
-   * @param {object} keys - the four payload keys for one stop
+   * @param {object} keys - the four payload keys for the stop
    * @param {object|null} edits - the director's edited object, or null
    * @param {string} note - what the director wrote in the stop's note box
    * @param {string} action - 'approve' or 'send-back'
@@ -756,19 +776,14 @@
     return payload;
   }
 
-  var OUTLINE_REVIEW_KEYS = { decision: 'outline', feedback: 'outlineFeedback', note: 'outlineNote', edits: 'outlineEdits' };
   var ARTICLE_REVIEW_KEYS = { decision: 'article', feedback: 'articleFeedback', note: 'articleNote', edits: 'articleEdits' };
-
-  function outlineReviewPayload(edits, note, action) {
-    return reviewPayload(OUTLINE_REVIEW_KEYS, edits, note, action);
-  }
 
   function articleReviewPayload(edits, note, action) {
     return reviewPayload(ARTICLE_REVIEW_KEYS, edits, note, action);
   }
 
   /**
-   * The Send back button at the outline and article stops takes TWO clicks (review
+   * The Send back button at every stop takes TWO clicks (review
    * fix round 1). One box now serves both actions, so Send back sits beside a note
    * the director also fills in for approvals, and one mis-click costs a round and,
    * at the article stop, about nine minutes of Opus. The old two-step reject panel's
@@ -780,7 +795,7 @@
    *
    * @param {boolean} armed - has the director already clicked Send back once
    * @param {string} note - the stop's note box
-   * @param {string} noun - 'outline' or 'article', for the aria-label
+   * @param {string} noun - what is sent back ('weave', 'map' or 'article'), for the aria-label
    */
   function sendBackButton(armed, note, noun) {
     var ready = typeof note === 'string' && !!note.trim();
@@ -1375,29 +1390,48 @@
   }
 
   /**
-   * computeResetKey (console/outline-edit-logic.js), read when it runs: that module loads
-   * after this one in the browser, and the reducer and the meeting call this long after both.
+   * console/outline-edit-logic.js, read when it runs: that module loads after this one in the
+   * browser, and the reducer, the meeting and the map call it long after both. The meeting and
+   * the map key their versions with its computeResetKey, and the map reads its map rules.
    */
-  function resetKeyOf(value, round) {
+  function outlineEditLogic() {
     var editLogic = (typeof window !== 'undefined' && window.Console && window.Console.outlineEditLogic)
       || (typeof require === 'function' ? require('./outline-edit-logic') : null);
     if (!editLogic || typeof editLogic.computeResetKey !== 'function') {
-      throw new Error('checkpoint-view-logic: the story meeting keys its weave with outline-edit-logic.js computeResetKey, which is not loaded');
+      throw new Error('checkpoint-view-logic: the story meeting and the map read console/outline-edit-logic.js, which is not loaded');
     }
-    return editLogic.computeResetKey(value, round);
+    return editLogic;
+  }
+
+  function resetKeyOf(value, round) {
+    return outlineEditLogic().computeResetKey(value, round);
   }
 
   /**
-   * The weave version the meeting shows, keyed the way computeResetKey keys the outline:
-   * the weave as the stop sent it, with the director's rounds and the automatic passes.
+   * The version of what a stop shows, keyed the way computeResetKey keys it: the stop's
+   * output as it sent it (the weave, the map), with the director's rounds and the automatic
+   * passes. A stop's pending slot holds the director's work under it (task 4.9: one rule for
+   * the meeting and the map).
+   *
+   * @param {*} value - the stop's output
+   * @param {Object} data - the stop's payload, for its round counters
+   * @returns {string}
+   */
+  function stopVersion(value, data) {
+    var d = isPlainObject(data) ? data : {};
+    var round = (Number(d.humanRevisionCount) || 0) * 1000 + (Number(d.revisionCount) || 0);
+    return resetKeyOf(value === undefined ? null : value, round);
+  }
+
+  /**
+   * The weave version the meeting shows (stopVersion).
    *
    * @param {Object} data - the stop's payload
    * @returns {string}
    */
   function meetingVersion(data) {
     var d = isPlainObject(data) ? data : {};
-    var round = (Number(d.humanRevisionCount) || 0) * 1000 + (Number(d.revisionCount) || 0);
-    return resetKeyOf(d.weave === undefined ? null : d.weave, round);
+    return stopVersion(d.weave, d);
   }
 
   /** The meeting's pendingEdits slot: the director's weave, under the version it was made on. */
@@ -1427,11 +1461,19 @@
     return slotFits(data, pending) && typeof pendingNote === 'string' ? pendingNote : '';
   }
 
+  /** The version a stop's pending slot is held under, for the stops that keep one: the meeting's and the map's. */
+  function pendingSlotVersionOf(checkpointType) {
+    if (checkpointType === MEETING_STOP) return meetingVersion;
+    if (checkpointType === MAP_STOP) return mapVersion;
+    return null;
+  }
+
   /**
    * The pendingEdits a new checkpoint leaves (state.js CHECKPOINT_RECEIVED). Every stop's
-   * slot is cleared, as it always was, except the meeting's: the director's weave and note
-   * stay while the stop shows the same weave version, so a remount of that version (a
-   * refused send, the attach watchdog's reload) keeps them, and go when a new one arrives.
+   * slot is cleared, as it always was, except the meeting's and the map's (task 4.9): the
+   * director's weave or map and note stay while the stop shows the same version, so a
+   * remount of that version (a refused send, the attach watchdog's reload) keeps them, and
+   * go when a new one arrives.
    *
    * @param {Object} pendingEdits - state.pendingEdits
    * @param {string} checkpointType - the checkpoint that arrived
@@ -1440,10 +1482,12 @@
    */
   function pendingEditsAfterCheckpoint(pendingEdits, checkpointType, data) {
     var kept = {};
-    if (checkpointType !== MEETING_STOP || !isPlainObject(pendingEdits)) return kept;
-    if (!slotFits(data, pendingEdits[MEETING_STOP])) return kept;
-    kept[MEETING_STOP] = pendingEdits[MEETING_STOP];
-    var noteKey = noteSlotKey(MEETING_STOP);
+    var versionOf = pendingSlotVersionOf(checkpointType);
+    if (!versionOf || !isPlainObject(pendingEdits)) return kept;
+    var slot = pendingEdits[checkpointType];
+    if (!isPlainObject(slot) || slot.version !== versionOf(data)) return kept;
+    kept[checkpointType] = slot;
+    var noteKey = noteSlotKey(checkpointType);
     if (hasOwn(pendingEdits, noteKey)) kept[noteKey] = pendingEdits[noteKey];
     return kept;
   }
@@ -2097,6 +2141,35 @@
   }
 
   /**
+   * The concerns about the director's edits by the line of a stop's page they sit beside,
+   * and those none of whose places is on the page, listed apart: one builder for the meeting
+   * and the map (task 4.9). Each concern reads as its finding, past its prefix and ids, since
+   * the line it sits beside names the place.
+   *
+   * @param {Array} concerns - the stop's `concerns`, each `{text, places: [{path}]}`
+   * @param {Set<string>} onPage - the keys of the lines the page shows
+   * @param {function(string): (string|null)} keyOf - the line a place's path sits on
+   * @returns {{byLine: Map<string, string[]>, other: string[]}}
+   */
+  function concernsBesideLines(concerns, onPage, keyOf) {
+    var byLine = new Map();
+    var other = [];
+    asArray(concerns).filter(isPlainObject).forEach(function (concern) {
+      var line = 'Concern: ' + concernFindingOf(concern.text);
+      var keys = asArray(concern.places)
+        .map(function (place) { return keyOf(place && place.path); })
+        .filter(function (key) { return onPage.has(key); });
+      if (keys.length === 0) other.push(line);
+      keys.forEach(function (key) {
+        var list = byLine.get(key) || [];
+        if (list.indexOf(line) === -1) list.push(line);
+        byLine.set(key, list);
+      });
+    });
+    return { byLine: byLine, other: other };
+  }
+
+  /**
    * The concerns and the marks by the line of the page they sit beside (linesOnPage), and
    * the ones no line shows, each listed with its place:
    * - `otherConcerns`: a concern none of whose places is on the page;
@@ -2108,22 +2181,14 @@
    * @param {Set<string>} onPage - the lines the page shows
    */
   function besideLines(data, onPage) {
-    var concerns = new Map();
+    var placed = concernsBesideLines(data.concerns, onPage, lineKeyOf);
     var marks = new Map();
-    var out = { concerns: concerns, marks: marks, otherConcerns: [], removed: [], otherMarks: [], takenOut: new Set() };
+    var out = { concerns: placed.byLine, marks: marks, otherConcerns: placed.other, removed: [], otherMarks: [], takenOut: new Set() };
     var add = function (map, key, line) {
       var list = map.get(key) || [];
       if (list.indexOf(line) === -1) list.push(line);
       map.set(key, list);
     };
-    asArray(data.concerns).filter(isPlainObject).forEach(function (concern) {
-      var line = 'Concern: ' + concernFindingOf(concern.text);
-      var keys = asArray(concern.places)
-        .map(function (place) { return lineKeyOf(place && place.path); })
-        .filter(function (key) { return onPage.has(key); });
-      if (keys.length === 0) out.otherConcerns.push(line);
-      keys.forEach(function (key) { add(concerns, key, line); });
-    });
     var round = isPlainObject(data.marks) ? data.marks : {};
     asArray(round.marks).filter(isPlainObject).forEach(function (mark) {
       var key = lineKeyOf(mark.path);
@@ -2303,22 +2368,522 @@
     };
   }
 
-  /**
-   * The standing notes, folded under the meeting's note box: standingNoteItems', the list
-   * every stop reads, under the console's stop labels (CHECKPOINT_LABELS, passed in).
-   *
-   * @param {Array} gateNotes - data.directorGateNotes
-   * @param {Object} labels - stop type -> label
-   * @returns {{any: boolean, title: string, items: Array<{key: string, label: string, text: string}>}}
-   */
+  /** The standing notes, folded under the meeting's note box: the fold every stop reads (standingNotesView). */
   function meetingStandingNotes(gateNotes, labels) {
-    var items = standingNoteItems(gateNotes, labels);
-    return { any: items.length > 0, title: 'Standing notes (' + items.length + ')', items: items };
+    return standingNotesView(gateNotes, labels);
   }
 
   /** What a rollback to `target` costs, for the rollback panel: going back to the meeting costs no model call (R9). */
   function rollbackWarningLine(target) {
     return target === MEETING_STOP ? MEETING_ROLLBACK_LINE : ROLLBACK_WARNING;
+  }
+
+  // ── The map on screen (phase 4, task 4.9; spec 5.2 and 5.3) ────────────────
+  //
+  // The outline stop is the map: about 450 words the director reads in minutes and edits line
+  // by line. Outline.js renders it from mapView and changes it only through the editors and
+  // moves of console/outline-edit-logic.js; it sends only mapPayload's payloads, 4.6's
+  // `{outline: 'approve' | 'send-back', map, note}` (lib/map.js mapResume), each held first to
+  // mapProblems, the gate's decisions. What the director types is sent as typed. The slots, their
+  // order and their labels are the theme's, which the payload carries (`mapSlots`), so nothing
+  // here names a theme's slots.
+
+  /** The map's stop type: the stop types keep their names (R3). */
+  var MAP_STOP = 'outline';
+
+  /** The map's two actions. A copy of lib/map.js MAP_ACTIONS; a test holds the two equal. */
+  var MAP_ACTIONS = ['approve', 'send-back'];
+
+  /** The source a change to the weave names for the meeting's note: a copy of lib/map.js MEETING_NOTE_SOURCE (a test holds the two equal). */
+  var MAP_NOTE_SOURCE = 'note';
+
+  /** How many cards the article carries (C9): a copy of lib/map.js MAP_CARDS (a test holds the two equal). */
+  var MAP_CARDS = { min: 3, max: 5 };
+
+  /** What the page calls each of a beat's kinds. The keys are lib/map.js MAP_BEAT_KINDS (a test holds them equal). */
+  var BEAT_KIND_LABELS = { scene: 'Scene', receipt: 'Receipt', line: 'Line', figure: 'Figure' };
+
+  /** The line under the settled story: the story is the meeting's, and going back there costs no model call (R9). */
+  var STORY_HINT = 'The story was settled at the story meeting. To change it, go back to the meeting: it reopens as you left it, with no model call.';
+
+  /** What a stop with no map says. */
+  var EMPTY_MAP_LINE = 'This stop holds no story map, so there is nothing to edit here. Go back to the story meeting: approving it there writes the map.';
+
+  /** Why a line's controls are off, while any are: no move or edit can find a line under the writer's repeat. */
+  var MAP_LOCKED_HINT = 'The writer gave one id to more than one beat, or placed a photo twice, so the map cannot move or edit those lines: a send-back gives each its own place.';
+
+  /** The top photo's place as a photo's move control names it, and a photo's place by itself in its section. */
+  var TOP_PHOTO_LABEL = 'The top of the article';
+  var BY_ITSELF_LABEL = 'By itself, with its people';
+
+  /** How much of a beat's material a "beside" choice shows. */
+  var BESIDE_TEXT_LENGTH = 60;
+
+  /** Is `value` a story map: an object with a list of sections (lib/map.js isMapValue)? */
+  function isMapShape(value) {
+    return isPlainObject(value) && Array.isArray(value.sections);
+  }
+
+  /** A beat's id as the map's edits read it: trimmed text, as a thread's is at the meeting. */
+  function beatIdOf(beat) {
+    return weaveIdOf(beat);
+  }
+
+  /** The theme's slots the payload carries (`mapSlots`), each `{key, label}`. */
+  function slotsOf(data) {
+    return asArray(isPlainObject(data) ? data.mapSlots : null)
+      .filter(function (slot) { return isPlainObject(slot) && typeof slot.key === 'string'; })
+      .map(function (slot) { return { key: slot.key, label: asString(slot.label) || slot.key }; });
+  }
+
+  /** A slot's label on the page: the theme's, or the slot's own key for one the theme does not name. */
+  function slotLabelOf(key, slots) {
+    var found = slots.filter(function (slot) { return slot.key === key; })[0];
+    return found ? found.label : (asString(key) || 'a section');
+  }
+
+  /** A slot's words in a place a diff or a report names (`section "theStory"`): its label. */
+  function slotWords(text, slots) {
+    return asString(text)
+      .replace(/dropped slot "([^"]*)"/g, function (_, key) { return 'dropped section ' + slotLabelOf(key, slots); })
+      .replace(/section "([^"]*)"/g, function (_, key) { return slotLabelOf(key, slots); });
+  }
+
+  /** A whole number with its thousands marked: 1,400. */
+  function withCommas(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  /** The text a "beside" choice shows: up to BESIDE_TEXT_LENGTH characters. */
+  function shortText(text) {
+    var t = asString(text).trim();
+    return t.length > BESIDE_TEXT_LENGTH ? t.slice(0, BESIDE_TEXT_LENGTH - 1) + '…' : t;
+  }
+
+  /** The ids, or the keys, a list holds more than once, each once. */
+  function repeatedOf(keys) {
+    var seen = {};
+    var repeated = [];
+    keys.forEach(function (key) {
+      if (!key) return;
+      if (seen[key] && repeated.indexOf(key) === -1) repeated.push(key);
+      seen[key] = true;
+    });
+    return repeated;
+  }
+
+  /** Every beat id of a map, the sections' and left out's. */
+  function mapBeatIds(map) {
+    var beats = [];
+    asArray(map.sections).filter(isPlainObject).forEach(function (section) { beats.push.apply(beats, asArray(section.beats)); });
+    beats.push.apply(beats, asArray(map.leftOut));
+    return beats.map(beatIdOf);
+  }
+
+  /**
+   * The map as the stop showed it, the version the meeting's rule keys (stopVersion): what the
+   * director's map and note are held under in the map's pending slot.
+   *
+   * @param {Object} data - the stop's payload
+   * @returns {string}
+   */
+  function mapVersion(data) {
+    var d = isPlainObject(data) ? data : {};
+    return stopVersion(d.outline, d);
+  }
+
+  /** The map's pendingEdits slot: the director's map, under the version it was made on. */
+  function mapPendingSlot(data, map) {
+    return { version: mapVersion(data), map: map };
+  }
+
+  function mapSlotFits(data, pending) {
+    return isPlainObject(pending) && pending.version === mapVersion(data);
+  }
+
+  /**
+   * The map the screen opens on: the director's, from their pending slot, while the stop shows
+   * the version they made it on; a copy of the stop's map otherwise; null when the stop holds
+   * no map.
+   *
+   * @param {Object} data - the stop's payload
+   * @param {*} pending - the map's pendingEdits slot
+   * @returns {Object|null}
+   */
+  function mapDraftOf(data, pending) {
+    if (mapSlotFits(data, pending) && isMapShape(pending.map)) return cloneJson(pending.map);
+    var d = isPlainObject(data) ? data : {};
+    return isMapShape(d.outline) ? cloneJson(d.outline) : null;
+  }
+
+  /** The map's note box on (re)mount: the director's note, under the same rule as their map. */
+  function mapNoteOf(data, pending, pendingNote) {
+    return mapSlotFits(data, pending) && typeof pendingNote === 'string' ? pendingNote : '';
+  }
+
+  /** A place in the map, as the validator's path names it, in the words the page uses. */
+  function mapPathWords(path, map, slots) {
+    var parts = asString(path).split('/').filter(Boolean);
+    var m = isPlainObject(map) ? map : {};
+    var tail = function (rest) { return rest.length > 0 ? ', ' + rest.join(', ') : ''; };
+    var beatName = function (beat, index) { return beatIdOf(beat) || String(Number(index) + 1); };
+    var heads = {
+      headline: 'the headline', deck: 'the deck', topPhoto: 'the top photo', expectedLength: 'the expected length',
+      gapNote: 'the gap note', weaveChanges: "the map's changes to the weave"
+    };
+    if (parts.length === 0) return 'the map';
+    if (hasOwn(heads, parts[0])) return heads[parts[0]];
+    if (parts[0] === 'dropped') {
+      var dropped = asArray(m.dropped)[Number(parts[1])];
+      return 'the dropped section ' + slotLabelOf(isPlainObject(dropped) ? dropped.slot : '', slots) + tail(parts.slice(2));
+    }
+    if (parts[0] === 'leftOut') return 'left out, beat ' + beatName(asArray(m.leftOut)[Number(parts[1])], parts[1]) + tail(parts.slice(2));
+    if (parts[0] === 'sections') {
+      var section = asArray(m.sections)[Number(parts[1])];
+      var label = isPlainObject(section) ? slotLabelOf(section.slot, slots) : 'a section';
+      if (parts[2] === 'beats') {
+        return label + ', beat ' + beatName(asArray(isPlainObject(section) ? section.beats : null)[Number(parts[3])], parts[3]) + tail(parts.slice(4));
+      }
+      if (parts[2] === 'photos') {
+        var photo = asArray(isPlainObject(section) ? section.photos : null)[Number(parts[3])];
+        return label + ', photo ' + (isPlainObject(photo) && asString(photo.filename) ? photo.filename : String(Number(parts[3]) + 1)) + tail(parts.slice(4));
+      }
+      return label + tail(parts.slice(2));
+    }
+    return asString(path);
+  }
+
+  /**
+   * What the gate would refuse in the map as the director left it, as one line in the words
+   * the page uses, or null for a map it takes (the integrator's ruling 3): the map's client
+   * gate, console/outline-edit-logic.js validateOutlineShape, which decides as lib/map.js
+   * directorMapProblems does (a test holds the decisions equal), given the theme's slots and
+   * the map the stop showed, whose repeats are the writer's.
+   *
+   * @param {*} map - the map as the director left it
+   * @param {Object} data - the stop's payload: the map it showed and the theme's slots
+   * @returns {string|null}
+   */
+  function mapProblems(map, data) {
+    var d = isPlainObject(data) ? data : {};
+    var result = outlineEditLogic().validateOutlineShape(map, null, d.mapSlots, isPlainObject(d.outline) ? d.outline : null);
+    if (result.valid) return null;
+    var slots = slotsOf(d);
+    var text = result.errors.map(function (error) {
+      return mapPathWords(error.path, map, slots) + ' ' + error.message;
+    }).join('; ');
+    return 'The map cannot be sent yet: ' + text + (/[.!?]$/.test(text) ? '' : '.');
+  }
+
+  /**
+   * One of the map's payloads, 4.6's (lib/map.js mapResume): `{outline: 'approve' | 'send-back',
+   * map, note?}`. Both carry a copy of the map as the director left it, edited or not, which
+   * is what the article writer reads next; a send-back carries its note, and builds nothing
+   * without one. The note goes as typed, when it is not blank.
+   *
+   * @param {string} action - 'approve' or 'send-back'
+   * @param {Object} map - the map as the director left it
+   * @param {string} note - the map's note box
+   * @returns {Object|null}
+   */
+  function mapPayload(action, map, note) {
+    if (MAP_ACTIONS.indexOf(action) === -1) {
+      throw new Error('mapPayload: the map takes approve or send-back, not ' + String(action));
+    }
+    if (!isMapShape(map)) return null;
+    var typed = typeof note === 'string' ? note : '';
+    var hasNote = typed.trim().length > 0;
+    if (action === 'send-back' && !hasNote) return null;
+    var payload = { outline: action, map: cloneJson(map) };
+    if (hasNote) payload.note = typed;
+    return payload;
+  }
+
+  /** The map's two buttons: Approve, and Send back on its note in two clicks (sendBackButton). */
+  function mapButtons(note, sendBackArmed) {
+    return {
+      approve: { label: 'Approve', ariaLabel: 'Approve the map as you left it, with your note' },
+      sendBack: sendBackButton(sendBackArmed, note, 'map')
+    };
+  }
+
+  /** The roster the stop's count read: every player it lists, under Everyone or in no beat. */
+  function tallyRosterOf(tally) {
+    var names = [];
+    var add = function (name) { if (typeof name === 'string' && name.trim() && names.indexOf(name) === -1) names.push(name); };
+    asArray(tally.everyone).forEach(function (entry) { asArray(isPlainObject(entry) ? entry.players : null).forEach(add); });
+    asArray(tally.unplaced).forEach(add);
+    return names;
+  }
+
+  /**
+   * Everyone and the counts of the map as the director has it, rebuilt through mapTally
+   * (console/outline-edit-logic.js), the function the stop's payload and the map checks count
+   * with. The roster is the stop's count's own: every roster player is under Everyone or in no
+   * beat there, by the roster name mapTally gives, and a canon full name opens with it, so
+   * matching names alone matches as the server's full roster does. The photos placed of those
+   * kept are the stop's count: the map's moves move a photo and never add or take one out.
+   *
+   * @param {Object} data - the stop's payload, with its `tally`
+   * @param {Object} map - the map as the director has it
+   * @returns {{everyone: Array, unplaced: string[], raised: string[], cards: number, photos: {placed: number, of: number}}}
+   */
+  function mapTallyOf(data, map) {
+    var d = isPlainObject(data) ? data : {};
+    var stop = isPlainObject(d.tally) ? d.tally : {};
+    var rebuilt = outlineEditLogic().mapTally(map, { roster: tallyRosterOf(stop) });
+    var photos = isPlainObject(stop.photos) ? stop.photos : {};
+    return {
+      everyone: rebuilt.everyone,
+      unplaced: rebuilt.unplaced,
+      raised: rebuilt.raised,
+      cards: rebuilt.cards,
+      photos: { placed: Number(photos.placed) || 0, of: Number(photos.of) || 0 }
+    };
+  }
+
+  /**
+   * The line on the map's page a place sits on (a path as lib/hand-edit-diff.js writes it:
+   * `sections[#theStory].beats[#b2].material`, `leftOut[#b4]`, `topPhoto`): `beat:<id>` (in a
+   * section or in left out), `photo:<photoKey>`, `section:<slot>`, `dropped:<slot>`, one of the
+   * map's own lines (`headline`, `deck`, `expectedLength`, `weaveChanges`, `gapNote`,
+   * `topPhoto`), or null for a place no line shows.
+   *
+   * @param {string} path
+   * @returns {string|null}
+   */
+  function mapLineKeyOf(path) {
+    var p = asString(path);
+    var m = /^sections\[#([^\]]*)\]\.beats\[#([^\]]*)\]/.exec(p);
+    if (m) return 'beat:' + m[2];
+    m = /^sections\[#([^\]]*)\]\.photos\[#([^\]]*)\]/.exec(p);
+    if (m) return 'photo:' + outlineEditLogic().photoKey(m[2]);
+    m = /^sections\[#([^\]]*)\]/.exec(p);
+    if (m) return 'section:' + m[1];
+    m = /^leftOut\[#([^\]]*)\]/.exec(p);
+    if (m) return 'beat:' + m[1];
+    m = /^dropped\[#([^\]]*)\]/.exec(p);
+    if (m) return 'dropped:' + m[1];
+    m = /^(headline|deck|expectedLength|weaveChanges|gapNote|topPhoto)(?![A-Za-z])/.exec(p);
+    return m ? m[1] : null;
+  }
+
+  /** The lines the map's page shows, by their keys (mapLineKeyOf). */
+  function mapLinesOnPage(map) {
+    var keys = new Set(['headline', 'deck', 'expectedLength', 'weaveChanges']);
+    var photoKey = outlineEditLogic().photoKey;
+    if (isPlainObject(map.gapNote)) keys.add('gapNote');
+    if (asString(map.topPhoto).trim()) keys.add('topPhoto');
+    asArray(map.sections).filter(isPlainObject).forEach(function (section) {
+      keys.add('section:' + section.slot);
+      asArray(section.photos).filter(isPlainObject).forEach(function (photo) {
+        if (asString(photo.filename).trim()) keys.add('photo:' + photoKey(photo.filename));
+      });
+    });
+    mapBeatIds(map).forEach(function (id) { if (id) keys.add('beat:' + id); });
+    asArray(map.dropped).filter(isPlainObject).forEach(function (entry) { keys.add('dropped:' + entry.slot); });
+    return keys;
+  }
+
+  /**
+   * How the map phrases an edit a rework changed (changedEditLine, every stop's builder): its
+   * place as the report names it, with each slot under its label and no edit id, since the map
+   * shows none; a moved element is a beat or a photo, and a section it went to reads by its
+   * label.
+   *
+   * @param {Array} slots - slotsOf(data)
+   */
+  function mapEditLineOptions(slots) {
+    return {
+      place: function (entry) { return capitalized(slotWords(asString(entry.where) || scopeLabel(entry.scope), slots)); },
+      valueText: function (text) {
+        var m = /^section "([^"]*)"$/.exec(asString(text));
+        return m ? slotLabelOf(m[1], slots) : text;
+      },
+      thing: function (entry) { return /(^|, )photo "/.test(asString(entry.where)) ? 'photo' : 'beat'; }
+    };
+  }
+
+  /** A served copy of a session photo, for the map's thumbnails: the session's photos folder (server.js /sessionphotos). */
+  function mapPhotoUrl(sessionId, filename) {
+    if (!sessionId || !asString(filename)) return '';
+    return '/sessionphotos/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(filename);
+  }
+
+  /**
+   * The map's page (spec 5.2): the stop's payload (4.6's, lib/map.js mapCheckpointData) with the
+   * map as the director has it.
+   * - `settledStory` at the top, read-only, with `storyHint`, the way back to the meeting;
+   * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (one line
+   *   each), `changedEdits` (each edit a rework changed, by changedEditLine with the map's
+   *   places, a send-back's with its reason), `kept`, and `otherConcerns`, the concerns none of
+   *   whose places the page shows;
+   * - `gapNote`, `headline`, `deck` and `topPhoto`;
+   * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
+   *   and photos, each beat and photo with the places it can move to;
+   * - `dropped`, each with its reason; `tally`, the lines of Everyone and the counts, rebuilt
+   *   from the map as edited (mapTallyOf); `leftOut`, folded, each item with the sections it can
+   *   come back to; `weaveChanges`, each with its source;
+   * - every concern beside the line of the edit it is about (concernsBesideLines), and a line
+   *   under a writer's repeated id or photo `locked`, its controls off, with `lockedHint`.
+   *
+   * @param {Object} data - the stop's payload
+   * @param {Object|null} map - the map as the director has it (mapDraftOf, then their changes)
+   * @returns {Object}
+   */
+  function mapView(data, map) {
+    var d = isPlainObject(data) ? data : {};
+    var slots = slotsOf(d);
+    var story = isPlainObject(d.settledStory)
+      ? { story: asString(d.settledStory.story), question: asString(d.settledStory.question) }
+      : null;
+    if (!isMapShape(map)) {
+      return { hasMap: false, emptyLine: EMPTY_MAP_LINE, settledStory: story, storyHint: STORY_HINT };
+    }
+    var editLogic = outlineEditLogic();
+    var shown = isMapShape(d.outline) ? d.outline : null;
+    var shownBeatIds = shown ? mapBeatIds(shown) : [];
+    var lockedBeats = shown ? repeatedOf(shownBeatIds) : [];
+    var lockedPhotos = shown ? repeatedOf(editLogic.mapPhotoPlacements(shown).map(function (p) { return editLogic.photoKey(p.filename); })) : [];
+    var placed = concernsBesideLines(d.concerns, mapLinesOnPage(map), mapLineKeyOf);
+    var at = function (key) { return placed.byLine.get(key) || []; };
+    var sections = asArray(map.sections).filter(isPlainObject);
+    var targets = sections.map(function (s) { return { value: s.slot, label: slotLabelOf(s.slot, slots) }; });
+    var others = function (slot) { return targets.filter(function (t) { return t.value !== slot; }); };
+
+    var beatView = function (beat, index, slot) {
+      var b = isPlainObject(beat) ? beat : {};
+      var id = beatIdOf(b);
+      return {
+        key: (slot === null ? 'leftOut' : slot) + '-beat-' + index,
+        id: id,
+        index: index,
+        kindLabel: hasOwn(BEAT_KIND_LABELS, b.kind) ? BEAT_KIND_LABELS[b.kind] : '',
+        material: asString(b.material),
+        players: stringList(b.players).join(', '),
+        card: asString(b.card).trim(),
+        connection: asString(b.connection).trim(),
+        concerns: id ? at('beat:' + id) : [],
+        added: id !== '' && shownBeatIds.indexOf(id) === -1,
+        locked: id === '' || lockedBeats.indexOf(id) !== -1,
+        moveTargets: slot === null ? targets : others(slot)
+      };
+    };
+
+    var photoView = function (photo, index, section) {
+      var p = isPlainObject(photo) ? photo : {};
+      var filename = asString(p.filename);
+      var key = editLogic.photoKey(filename);
+      var beside = asString(p.beat).trim();
+      var options = [{ value: '', label: BY_ITSELF_LABEL }].concat(asArray(section.beats)
+        .filter(function (b) { return beatIdOf(b) !== ''; })
+        .map(function (b) { return { value: beatIdOf(b), label: 'Beside ' + beatIdOf(b) + ': ' + shortText(b.material) }; }));
+      if (beside && !options.some(function (o) { return o.value === beside; })) {
+        options.push({ value: beside, label: 'Beside ' + beside + ', which is not in this section' });
+      }
+      return {
+        key: section.slot + '-photo-' + index,
+        slot: section.slot,
+        index: index,
+        filename: filename,
+        beat: beside,
+        besideOptions: options,
+        moveTargets: [{ value: editLogic.MAP_TOP_PHOTO, label: TOP_PHOTO_LABEL }].concat(others(section.slot)),
+        concerns: at('photo:' + key),
+        locked: !filename.trim() || lockedPhotos.indexOf(key) !== -1
+      };
+    };
+
+    var topName = asString(map.topPhoto);
+    var topPhoto = topName.trim()
+      ? { filename: topName, concerns: at('topPhoto'), moveTargets: targets, locked: lockedPhotos.indexOf(editLogic.photoKey(topName)) !== -1 }
+      : null;
+
+    var sectionViews = sections.map(function (section, i) {
+      return {
+        key: 'section-' + i,
+        slot: section.slot,
+        label: slotLabelOf(section.slot, slots),
+        heading: asString(section.heading),
+        job: asString(section.job),
+        concerns: at('section:' + section.slot),
+        beats: asArray(section.beats).map(function (beat, j) { return beatView(beat, j, section.slot); }),
+        photos: asArray(section.photos).map(function (photo, j) { return photoView(photo, j, section); })
+      };
+    });
+
+    var leftItems = asArray(map.leftOut).map(function (beat, j) {
+      var view = beatView(beat, j, null);
+      view.targets = targets;
+      return view;
+    });
+
+    var tally = mapTallyOf(d, map);
+    var unplaced = tally.unplaced.filter(function (name) { return tally.raised.indexOf(name) === -1; });
+    var cardsOff = tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max;
+    var length = map.expectedLength;
+    var report = editReportOf(d.handEditReport);
+    var lineOptions = mapEditLineOptions(slots);
+    var human = Number(d.humanRevisionCount) || 0;
+    var feedback = asString(d.previousFeedback).trim();
+    var anyLocked = sectionViews.some(function (s) {
+      return s.beats.some(function (b) { return b.locked; }) || s.photos.some(function (p) { return p.locked; });
+    }) || leftItems.some(function (b) { return b.locked; }) || Boolean(topPhoto && topPhoto.locked);
+
+    return {
+      hasMap: true,
+      emptyLine: '',
+      settledStory: story,
+      storyHint: STORY_HINT,
+      round: human > 0
+        ? { label: roundsBanner(human, d.revisionCount, d.maxRevisions).roundLabel, note: feedback ? 'You sent the map back with: "' + feedback + '"' : '' }
+        : null,
+      checkFailures: asArray(d.checkFailures).filter(isPlainObject)
+        .map(function (failure) { return asString(failure.message).trim(); })
+        .filter(Boolean)
+        .map(function (message) { return 'Check still failing: ' + message; }),
+      changedEdits: report ? report.changed.map(function (entry) { return changedEditLine(entry, lineOptions); }) : [],
+      kept: report && report.changed.length === 0
+        ? (report.checked.length === 1 ? 'The reworks kept your edit.' : 'The reworks kept all ' + report.checked.length + ' of your edits.')
+        : '',
+      otherConcerns: placed.other,
+      gapNote: isPlainObject(map.gapNote)
+        ? { line: asString(map.gapNote.line), players: stringList(map.gapNote.players).join(', '), concerns: at('gapNote') }
+        : null,
+      headline: { text: asString(map.headline), concerns: at('headline') },
+      deck: { text: asString(map.deck), concerns: at('deck') },
+      topPhoto: topPhoto,
+      sections: sectionViews,
+      dropped: asArray(map.dropped).filter(isPlainObject).map(function (entry) {
+        return { key: 'dropped-' + entry.slot, slot: entry.slot, label: slotLabelOf(entry.slot, slots), reason: asString(entry.reason), concerns: at('dropped:' + entry.slot) };
+      }),
+      tally: {
+        everyone: tally.everyone.map(function (entry) { return entry.players.join(', ') + ' (' + slotLabelOf(entry.slot, slots) + ')'; }).join(' · '),
+        unplaced: unplaced.length > 0 ? 'In no beat: ' + unplaced.join(', ') : '',
+        raised: tally.raised.length > 0 ? 'Raised in the gap note: ' + tally.raised.join(', ') : '',
+        cards: 'Cards: ' + tally.cards + (cardsOff ? ', ' + (tally.cards < MAP_CARDS.min ? 'under' : 'over') + ' the ' + MAP_CARDS.min + ' to ' + MAP_CARDS.max + ' the article carries' : ''),
+        photos: 'Photos: ' + tally.photos.placed + ' of ' + tally.photos.of,
+        length: Number.isInteger(length)
+          ? 'Expected length: about ' + withCommas(length) + ' words'
+          : 'Expected length: not set',
+        lengthConcerns: at('expectedLength')
+      },
+      leftOut: {
+        title: 'Left out (' + leftItems.length + ')',
+        open: leftItems.some(function (item) { return item.concerns.length > 0; }),
+        items: leftItems
+      },
+      weaveChanges: asArray(map.weaveChanges).filter(isPlainObject).map(function (change, i) {
+        var source = asString(change.source).trim();
+        return {
+          key: 'change-' + i,
+          source: source === MAP_NOTE_SOURCE ? 'Your note at the meeting' : 'Your change ' + source + ' at the meeting',
+          change: asString(change.change)
+        };
+      }),
+      weaveChangesConcerns: at('weaveChanges'),
+      lockedHint: anyLocked ? MAP_LOCKED_HINT : ''
+    };
   }
 
   // ── RevisionDiff's key walk (fix 3.7b) ──────────────────────────────────────
@@ -2362,10 +2927,12 @@
     approveLabel: approveLabel,
     wordTail: wordTail,
     steeringView: steeringView,
+    changedEditLine: changedEditLine,
+    standingNotesView: standingNotesView,
+    concernsBesideLines: concernsBesideLines,
     editReportOf: editReportOf,
     traceView: traceView,
     roundsBanner: roundsBanner,
-    outlineReviewPayload: outlineReviewPayload,
     articleReviewPayload: articleReviewPayload,
     sendBackButton: sendBackButton,
     noteSlotKey: noteSlotKey,
@@ -2421,6 +2988,26 @@
     meetingView: meetingView,
     meetingStandingNotes: meetingStandingNotes,
     rollbackWarningLine: rollbackWarningLine,
+    // Phase 4, task 4.9: the map on screen
+    MAP_STOP: MAP_STOP,
+    MAP_ACTIONS: MAP_ACTIONS,
+    MAP_NOTE_SOURCE: MAP_NOTE_SOURCE,
+    MAP_CARDS: MAP_CARDS,
+    BEAT_KIND_LABELS: BEAT_KIND_LABELS,
+    stopVersion: stopVersion,
+    mapVersion: mapVersion,
+    mapPendingSlot: mapPendingSlot,
+    mapDraftOf: mapDraftOf,
+    mapNoteOf: mapNoteOf,
+    mapProblems: mapProblems,
+    mapPayload: mapPayload,
+    mapButtons: mapButtons,
+    mapTallyOf: mapTallyOf,
+    mapLineKeyOf: mapLineKeyOf,
+    mapLinesOnPage: mapLinesOnPage,
+    mapEditLineOptions: mapEditLineOptions,
+    mapView: mapView,
+    mapPhotoUrl: mapPhotoUrl,
     // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
     revisionDiffKeys: revisionDiffKeys,
     REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS

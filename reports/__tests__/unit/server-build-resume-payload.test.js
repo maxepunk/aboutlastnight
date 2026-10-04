@@ -1945,3 +1945,84 @@ describe('4.7b: a photo deleted at the desk joins the leave-out list', () => {
     expect(result.stateUpdates.leftOutPhotos).toEqual(['p9.jpg', 'p2.jpg']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.9: the map's payload builders through buildResumePayload (brief 4.9)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The map's screen changes the map through console/outline-edit-logic.js and builds its
+// payloads in console/checkpoint-view-logic.js. Fed through buildResumePayload on a state
+// paused at the map, each is the 4.6 payload the gate takes, and the map it stores is the map
+// the director left, every change in it: what the article writer reads next.
+describe('4.9: the map\'s payload builders through buildResumePayload', () => {
+  const EditLogic = require('../../console/outline-edit-logic');
+  const { mapPayload, mapDraftOf } = require('../../console/checkpoint-view-logic');
+  const { mapCheckpointData } = require('../../lib/map');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const atMap = () => ({
+    outline: mapFixture(), _mapBaseline: mapFixture(), sessionConfig: { roster: ['Alex', 'Morgan', 'Riley', 'Sarah'] }, directorGateNotes: []
+  });
+  /** The stop's payload at a state, which the console's builders read (server.js getCheckpointData's arm). */
+  const dataOf = (state) => mapCheckpointData(state, { keptPhotos: ['hero.jpg', 'p2.jpg'], maxRevisions: 1 });
+  const take = (payload, state = atMap()) => buildResumePayload(payload, state, 'journalist', 'outline');
+  const beatOf = (map, id) => [...map.sections.flatMap((s) => s.beats), ...map.leftOut].find((b) => b.id === id);
+
+  /** A beat struck, one brought back, one added with its player, one moved, a line edited and a photo moved to the top. */
+  function everyChange(state) {
+    let m = mapDraftOf(dataOf(state), undefined);
+    m = EditLogic.strikeBeat(m, 'b4');
+    m = EditLogic.bringBackBeat(m, 'b9', 'closing');
+    m = EditLogic.addBeat(m, 'followTheMoney', 'The bonus at 07:52 PM', 'Riley');
+    m = EditLogic.moveBeat(m, 'b3', 'closing');
+    m = EditLogic.mergeBeat(m, 'b6', EditLogic.buildBeat({ ...EditLogic.initBeat(beatOf(m, 'b6')), material: 'Riley: "I kept the books, and the second ledger"' }, beatOf(m, 'b6')));
+    return EditLogic.movePhoto(m, 'theStory', 0, EditLogic.MAP_TOP_PHOTO);
+  }
+
+  test('approve: the map is stored as the director left it, each change a standing edit, the top photo the hero, the note an approval note', () => {
+    const state = atMap();
+    const left = everyChange(state);
+    const { resume, stateUpdates, error } = take(mapPayload('approve', left, ' Keep the bonus beat. '), state);
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: true });
+    expect(stateUpdates.outline).toEqual(left);
+    expect(stateUpdates.heroImage).toBe('p2.jpg');
+    expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.path, e.from || null])).toEqual([
+      ['sections[#followTheMoney].beats[#b10]', 'none'],
+      ['sections[#closing].beats[#b6].material', null],
+      ['sections[#closing].beats[#b9]', 'leftOut'],
+      ['sections[#closing].beats[#b3]', 'theStory'],
+      ['leftOut[#b4]', 'theStory'],
+      ['topPhoto', 'theStory'],
+      ['sections[#theStory].photos[#hero.jpg]', 'topPhoto']
+    ]);
+    expect(stateUpdates._outlineHandEdits.edits[4].struck).toBe(true);
+    expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'outline', kind: 'approval', text: 'Keep the bonus beat.' })]);
+  });
+
+  test('approve untouched: the map as the stop showed it, with no edit and no note', () => {
+    const state = atMap();
+    const { stateUpdates, error } = take(mapPayload('approve', mapDraftOf(dataOf(state), undefined), ''), state);
+    expect(error).toBeNull();
+    expect(stateUpdates.outline).toEqual(state.outline);
+    expect(stateUpdates._outlineHandEdits).toBeNull();
+    expect(stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  test('a send-back carries its note to the rework and the map as the director left it, and opens a round', () => {
+    const state = atMap();
+    const left = everyChange(state);
+    const { resume, stateUpdates, error } = take(mapPayload('send-back', left, 'Lead with the bonus.'), state);
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: false, feedback: 'Lead with the bonus.' });
+    expect(stateUpdates).toMatchObject({ outline: left, _outlineFeedback: 'Lead with the bonus.', _outlineHandEditReport: null, _outlineTrace: null });
+    expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'outline', kind: 'rejection', text: 'Lead with the bonus.' })]);
+  });
+
+  test('app.js\'s fallback approve, built the same way, is a payload the gate takes', () => {
+    const state = atMap();
+    const { error, resume } = take(mapPayload('approve', mapDraftOf(dataOf(state), undefined), ''), state);
+    expect(error).toBeNull();
+    expect(resume.approved).toBe(true);
+    expect(clone(state.outline)).toEqual(mapFixture());
+  });
+});

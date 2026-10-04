@@ -16,10 +16,10 @@
  * blocks, because `Article.js`'s hosts are full-width per-block containers whose
  * first line reaches the top-right corner.
  *
- * So: the always-visible state is opt-in, Outline opts in at every site, and
- * Article opts in nowhere. The console has no DOM harness (reports/CLAUDE.md), so
- * this is a source contract — which is exactly the right shape for it, since the
- * regression is a class name in the wrong file.
+ * So: the always-visible state is opt-in, the map (Outline.js, task 4.9) opts in at
+ * every pencil host, and Article opts in nowhere. The console has no DOM harness
+ * (reports/CLAUDE.md), so this is a source contract — which is exactly the right shape
+ * for it, since the regression is a class name in the wrong file.
  */
 const fs = require('fs');
 const path = require('path');
@@ -50,14 +50,10 @@ describe('inline edit pencil: default reveal is hover/focus', () => {
     expect(css).toContain(`.${BASE}:focus-within .article-block__edit-btn`);
   });
 
-  it('is revealed while a section editor is open', () => {
-    expect(css).toContain('.outline-section--editing .article-block__edit-btn');
-  });
-
   it('has an opt-in always-visible rule, and it is scoped to the opt-in class or the desk rail', () => {
-    // A DESCENDANT selector: the button sits at three different depths across the
-    // opt-in host shapes (direct child, inside .outline-section__header, inside a
-    // plain .flex row), so a child selector silently misses two of them.
+    // A DESCENDANT selector: a host may hold its button at any depth (a direct child,
+    // or inside a row of the host's own), and a child selector silently misses every
+    // button that is not a direct child.
     expect(css).toContain(`.${ALWAYS} .article-block__edit-btn`);
     expect(css).not.toContain(`.${ALWAYS} > .article-block__edit-btn`);
     // The always-on declaration must never be reachable from the plain host: that
@@ -90,46 +86,39 @@ describe('inline edit pencil: default reveal is hover/focus', () => {
   });
 
   it('no opt-in host cancels that gutter with a padding shorthand', () => {
-    // `.outline-thesis` is an opt-in host AND carries its own padding. A `padding`
-    // shorthand there has equal specificity and comes later in the file, so it
-    // silently resets padding-right to var(--space-md) and the pencil sits over
-    // the header row it was given a gutter to clear.
-    const hostRule = css.slice(css.indexOf('.outline-thesis {'));
-    const body = hostRule.slice(0, hostRule.indexOf('}'));
-    expect(body).not.toMatch(/(^|[^-])padding:/);
-    expect(body).toMatch(/padding-left:/);
+    // Each of the map's pencil hosts (task 4.9) carries its own padding. A `padding`
+    // shorthand there has equal specificity and comes later in the file, so it would
+    // silently reset padding-right and the pencil would sit over the line it was given a
+    // gutter to clear: the hosts use the longhands.
+    ['.map__head {', '.map__gap {', '.map__section-head {', '.map__beat {', '.map__length {'].forEach((selector) => {
+      const hostRule = css.slice(css.indexOf(selector));
+      const body = hostRule.slice(0, hostRule.indexOf('}'));
+      expect(`${selector} ${css.includes(selector)}`).toBe(`${selector} true`);
+      expect(`${selector} ${/(^|[^-])padding:/.test(body)}`).toBe(`${selector} false`);
+    });
   });
 });
 
+// Phase 4, task 4.9: the outline stop is the map. Every line the director edits there is a
+// pencil host in the always-visible mode (the integrator's ruling 6): the headline and the
+// deck, the gap note, each section's heading and job, each beat and the expected length. A
+// host's line sits at its left and its controls under it, so the corner is free.
 describe('Outline.js opts in at every pencil host', () => {
   const src = read('components/checkpoints/Outline.js');
+  const hosts = count(src, "' + ALWAYS");
 
-  it('declares the opt-in pair once and uses it for the section wrapper', () => {
-    expect(src).toContain(`const ALWAYS = '${BASE} ${ALWAYS}';`);
-    expect(src).toContain("const EDITABLE = 'outline-section ' + ALWAYS;");
+  it('declares the opt-in pair once', () => {
+    expect(count(src, `const ALWAYS = '${BASE} ${ALWAYS}';`)).toBe(1);
   });
 
-  it('routes all 14 pencil hosts through it: 12 section wrappers + the 2 THE STORY rows', () => {
-    // The 12 `.outline-section` wrappers.
-    expect(count(src, 'className: EDITABLE')).toBe(12);
-    // The arc row and the arc-interweaving row, which are not section wrappers.
-    expect(count(src, "'outline-section__arc ' + ALWAYS")).toBe(1);
-    expect(count(src, "gap-sm mt-sm ' + ALWAYS")).toBe(1);
+  it('routes every pencil host of the map through it: the head, the gap note, each section, each beat and the length', () => {
+    ["'map__head ' + ALWAYS", "'map__gap ' + ALWAYS", "'map__section-head ' + ALWAYS", "'map__beat ' + ALWAYS", "'map__length ' + ALWAYS"]
+      .forEach((host) => expect(`${host} ${count(src, host)}`).toBe(`${host} 1`));
+    expect(hosts).toBe(5);
   });
 
   it('has one editable host per editBtn call site', () => {
-    const hosts = count(src, 'className: EDITABLE') +
-      count(src, "'outline-section__arc ' + ALWAYS") +
-      count(src, "gap-sm mt-sm ' + ALWAYS");
     expect(count(src, 'editBtn(')).toBe(hosts);
-    expect(hosts).toBe(14);
-  });
-
-  it('renders the thesis panel through the opt-in host and its own editing key (spec 2026-09-19 §6.1)', () => {
-    expect(src).toContain("className: EDITABLE + ' outline-thesis'");
-    expect(src).toContain("setEditingBlock({ type: 'section', key: 'thesis' })");
-    expect(src).toContain("isEditing('section', 'thesis')");
-    expect(src).toContain('EditLogic.buildThesisPayload(');
   });
 
   it('never writes a bare --editable host (which would be hover-only again)', () => {
