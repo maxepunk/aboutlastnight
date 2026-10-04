@@ -23,8 +23,10 @@ describe('e2e-walkthrough photo late-join wiring', () => {
     expect(SRC).toMatch(/function handlePhotos\(/);
   });
 
+  // Task 4.12a: the auto profiles went with their last reader, and the harness's default
+  // approval is defaultApproval.
   it('answers the photos gate in --auto mode from the gate pre-fill, then the default dir', () => {
-    const block = SRC.slice(SRC.indexOf('function getDefaultApprovalForProfile'));
+    const block = SRC.slice(SRC.indexOf('function defaultApproval('));
     const fn = block.slice(0, block.indexOf('\n}\n'));
     expect(fn).toMatch(/case 'photos':/);
     // v2 I4: the folder must be CREATED, not just named. fetchSessionPhotos throws
@@ -72,16 +74,5 @@ describe('the --rollback help list matches VALID_ROLLBACK_POINTS', () => {
 
   it('lists no name that is not a rollback point', () => {
     expect(block).not.toContain('evidence-bundle');
-  });
-});
-
-describe('the smart-defaults profile covers the photos gate', () => {
-  const profile = JSON.parse(fs.readFileSync(
-    path.join(__dirname, '..', '..', '..', 'config', 'auto-profiles', 'smart-defaults.json'), 'utf8'
-  ));
-
-  it('has a photos entry', () => {
-    expect(profile.checkpoints.photos).toBeDefined();
-    expect(profile.checkpoints.photos.strategy).toBe('approve');
   });
 });

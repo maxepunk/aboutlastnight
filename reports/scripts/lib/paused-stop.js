@@ -26,6 +26,13 @@
  * --resume or --rollback stops with that warning instead of starting the session over.
  * The step-mode mismatch prints commands that keep the thread (keepThreadCommands).
  *
+ * Task 4.12a (the integrator's ruling 3): a thread started before the story meeting is
+ * refused with 4.11's message (lib/old-thread.js), and GET /checkpoint carries its flag. A
+ * run that continues a thread reads where it stands before it posts anything, and on the
+ * flag prints the message and the rollback to the meeting and posts nothing else
+ * (oldThreadStop), unless the run is that rollback, or one to a point before it. A refusal
+ * that carries the flag stops the run the same way (oldThreadOfResponse).
+ *
  * Pure: the caller makes the GET.
  */
 
@@ -150,4 +157,60 @@ function openingRequest({ approveType, startsOver, checkpointRead, stateOverride
   };
 }
 
-module.exports = { pausedStopToApprove, openingRequest, startsSessionOver, keepThreadCommands };
+/** Whether a value is the old-thread guard's flag: its message and the rollback it names (lib/old-thread.js oldThreadOf). */
+function isOldThreadFlag(flag) {
+  return Boolean(flag) && typeof flag === 'object' && typeof flag.message === 'string' && typeof flag.rollbackTo === 'string';
+}
+
+/**
+ * What the harness prints for a thread from before the story meeting (ruling 3): the server's
+ * message, and the rollback it names as a command that keeps the thread (a rollback never
+ * starts the session over).
+ *
+ * @param {string} sessionId
+ * @param {{message: string, rollbackTo: string}} flag - the old-thread guard's flag
+ * @returns {{message: string, commands: Array<{label: string, command: string}>}}
+ */
+function oldThreadNotice(sessionId, flag) {
+  return {
+    message: flag.message,
+    commands: [{
+      label: `To roll back to ${flag.rollbackTo}, run:`,
+      command: `node scripts/e2e-walkthrough.js --session ${sessionId} --rollback ${flag.rollbackTo} --step`
+    }]
+  };
+}
+
+/**
+ * Whether a run stops before posting anything because GET /checkpoint flags its thread as from
+ * before the story meeting: it does, unless the run rolls back to a point the flag opens (the
+ * meeting or a point before it), which is the remedy the message names.
+ *
+ * @param {Object} request
+ * @param {string} request.sessionId
+ * @param {{status: number, data?: Object}|undefined} request.checkpointRead - GET /checkpoint's answer
+ * @param {string|null} [request.rollbackTo] - the stop --rollback names
+ * @returns {{message: string, commands: Array}|null} the notice to print, or null to go on
+ */
+function oldThreadStop({ sessionId, checkpointRead, rollbackTo = null }) {
+  const flag = checkpointRead && checkpointRead.status === 200 && checkpointRead.data ? checkpointRead.data.oldThread : null;
+  if (!isOldThreadFlag(flag)) return null;
+  if (rollbackTo && Array.isArray(flag.rollbackPoints) && flag.rollbackPoints.includes(rollbackTo)) return null;
+  return oldThreadNotice(sessionId, flag);
+}
+
+/**
+ * The old-thread guard's flag on a refusal (the 409 /approve, /resume and /rollback answer such
+ * a thread with), or null for any other answer, a session lock's 409 included.
+ *
+ * @param {{status: number, data?: Object}|undefined} response - an apiCall's answer
+ * @returns {Object|null}
+ */
+function oldThreadOfResponse(response) {
+  const flag = response && response.status === 409 && response.data ? response.data.oldThread : null;
+  return isOldThreadFlag(flag) ? flag : null;
+}
+
+module.exports = {
+  pausedStopToApprove, openingRequest, startsSessionOver, keepThreadCommands, oldThreadStop, oldThreadOfResponse, oldThreadNotice
+};

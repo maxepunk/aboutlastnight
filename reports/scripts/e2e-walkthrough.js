@@ -14,17 +14,22 @@
  *   node scripts/e2e-walkthrough.js --verbose         # Show full request/response
  *   node scripts/e2e-walkthrough.js --help            # Show help
  *
- * Checkpoints (10 total):
- *   1. INPUT_REVIEW - Review parsed raw input
- *   2. PAPER_EVIDENCE_SELECTION - Select unlocked paper evidence
- *   3. AWAIT_ROSTER - Provide roster for whiteboard OCR (incremental input)
- *   4. CHARACTER_IDS - Map characters to photos
- *   5. AWAIT_FULL_CONTEXT - Provide accusation/sessionReport/directorNotes
- *   6. PRE_CURATION - Review preprocessed evidence before curation
- *   7. EVIDENCE_AND_PHOTOS - Approve curated evidence bundle
- *   8. ARC_SELECTION - Select narrative arcs to develop
- *   9. OUTLINE - Approve article outline
- *  10. ARTICLE - Approve final article
+ * Stops, in the order a run reaches them:
+ *   paper-evidence-selection - Select unlocked paper evidence
+ *   await-roster             - Provide the roster and its pronouns (incremental input)
+ *   await-full-context       - Provide accusation/sessionReport/directorNotes
+ *   input-review             - Review the parsed input; approve, or send back with corrections
+ *   pre-curation             - Review preprocessed evidence before curation
+ *   evidence-and-photos      - Approve the curated evidence bundle
+ *   arc-selection            - The story meeting: approve, reweave or send back the weave
+ *   photos                   - Give the session's photo folder
+ *   character-ids            - Describe who is in each photo, and leave photos out
+ *   outline                  - The map: approve or send back
+ *   article                  - The desk: approve, or send back with a note
+ *
+ * Task 4.12a: the story meeting, the map and the desk print as the console shows them
+ * (scripts/lib/stop-print.js, from the console's view models), and their payloads, with the
+ * character-IDs stop's, are the console's own (scripts/lib/stop-payloads.js).
  */
 
 require('dotenv').config();
@@ -35,10 +40,16 @@ const http = require('http');
 const https = require('https');
 const { resolveCompletePayload } = require('./lib/sse-complete');
 const { loadPhotoDescriptionsFile, withPhotoDescriptions } = require('./lib/photo-descriptions');
-const { openingRequest, startsSessionOver, keepThreadCommands } = require('./lib/paused-stop');
-// The console's pure read side (dual-export), so the harness reads the stop payloads
-// the way the console does: the phase's last evaluation and the trace (brief 2.7).
+const {
+  openingRequest, startsSessionOver, keepThreadCommands, oldThreadStop, oldThreadOfResponse, oldThreadNotice
+} = require('./lib/paused-stop');
+// The console's pure read side (dual-export): the character-IDs stop's cards, each analysis
+// paired with its photo by filename, as the console pairs them.
 const ViewLogic = require('../console/checkpoint-view-logic');
+// Task 4.12a: the story meeting, the map and the desk as the console shows them, and the
+// payloads its builders make at those stops and at the character-IDs stop.
+const { stopPrint } = require('./lib/stop-print');
+const { stopApproval, STOP_ACTIONS } = require('./lib/stop-payloads');
 
 // Configuration
 const API_BASE = process.env.API_BASE || 'http://localhost:3001';
@@ -52,14 +63,6 @@ const VERBOSE = process.argv.includes('--verbose') || process.argv.includes('-v'
 
 // Session cookie storage for authenticated requests
 let sessionCookie = null;
-
-// Revision tracking - store previous versions for diff display (Phase 6.5)
-const revisionCache = {
-  outline: null,      // Previous outline content
-  article: null,      // Previous article content
-  outlineFeedback: null,  // Feedback that triggered current revision
-  articleFeedback: null   // Feedback that triggered current revision
-};
 
 // Incremental input data - loaded from files, provided at checkpoints
 // Set during loadSessionInput(), accessed by await-roster and await-full-context handlers
@@ -88,11 +91,22 @@ const OVERRIDE_FILE = getArgValue('--override');
 const ROLLBACK_TO = getArgValue('--rollback');
 const APPROVE_TYPE = getArgValue('--approve');  // Approve specific checkpoint type
 const APPROVE_FILE = getArgValue('--approve-file');  // Custom approval payload JSON file
-const PROFILE_NAME = getArgValue('--profile');  // Auto-approval profile name
+// Task 4.12a: the director's action and note at the stop --approve names in step mode (the
+// story meeting, the map or the article), sent through the console's builders.
+const ACTION_ARG = getArgValue('--action');
+const NOTE_ARG = getArgValue('--note');
+const ACTION = ACTION_ARG || 'approve';
+const NOTE = NOTE_ARG || '';
+// The integrator's ruling 1 (task 4.12a): the photos to leave out at the character-IDs stop,
+// sent through the console's builders; without the option no list is sent, which leaves the
+// list as it is.
+const LEAVE_OUT_NAMES = (getArgValue('--leave-out') || '').split(',').map((name) => name.trim()).filter(Boolean);
+const LEAVE_OUT = LEAVE_OUT_NAMES.length > 0 ? LEAVE_OUT_NAMES : null;
 const THEME = getArgValue('--theme') || DEFAULT_THEME;  // Report theme (journalist|detective)
-// The director's {filename: description} map, sent with every character-IDs approval
-// (phase 2 final fix wave). Read once, up front, so a bad file stops the run before
-// any stop is approved.
+// The director's {filename: description} map (phase 2 final fix wave): at the character-IDs
+// stop the approval is the console's Approve with them (task 4.12a), and a payload that
+// carries none gets them added. Read once, up front, so a bad file stops the run before any
+// stop is approved.
 const PHOTO_DESCRIPTIONS_FILE = getArgValue('--photo-descriptions');
 const PHOTO_DESCRIPTIONS = PHOTO_DESCRIPTIONS_FILE ? loadPhotoDescriptionsFile(PHOTO_DESCRIPTIONS_FILE) : null;
 
@@ -517,9 +531,8 @@ ${color('OPTIONS:', 'cyan')}
   --override <file>  Load stateOverrides from JSON file (e.g., playerFocus)
   --rollback <type>  Roll the thread back to <type>, then continue it as --resume
                      would; a rollback never starts the session over
-  --auto             Auto-approve all checkpoints (for CI/testing)
-  --profile <name>   Auto-approval profile (default: smart-defaults)
-                     Available: smart-defaults, testing-fast, testing-full, ci-pipeline
+  --auto             Auto-approve all checkpoints (for CI/testing): each stop as it
+                     stands, and the character-IDs stop as below
   --step             Run one checkpoint, display data, exit (non-interactive)
   --approve <type>   Approve the checkpoint the thread is paused at and advance to
                      the next. A thread paused at <type> is read through
@@ -528,12 +541,28 @@ ${color('OPTIONS:', 'cyan')}
                      --rollback, a thread paused elsewhere or not paused is left
                      as it is: the harness says where it is and stops, and never
                      starts the session over
-  --approve-file <f> Use custom JSON payload for approval (with --approve)
+  --action <a>       With --approve and --step, at the story meeting, the map or
+                     the article: approve (the default), reweave (the story
+                     meeting only) or send-back. Sent through the console's own
+                     payload builders; a send-back needs --note, and a reweave
+                     needs a note or a change, so it takes --note here
+  --note <text>      With --approve and --step: the note sent with the action, as
+                     the stop's note box sends it
+  --approve-file <f> Use custom JSON payload for approval (with --approve), sent
+                     as it is: the way to send a weave, a map or an article you
+                     changed
   --photo-descriptions <f>
-                     JSON file of {"photo filename": "the director's description"},
-                     sent with every character-IDs approval (interactive, --auto
-                     and --approve) as photoDescriptions; an --approve-file that
-                     carries its own photoDescriptions keeps them
+                     JSON file of {"photo filename": "the director's description"}.
+                     At the character-IDs stop the approval is the console's
+                     Approve with them (the parser reads them, and they are kept
+                     as photoDescriptions); without the file it is the console's
+                     Skip. A character-IDs payload that carries no
+                     photoDescriptions, such as an --approve-file's, gets them
+                     added
+  --leave-out <files>
+                     Comma-separated photo filenames to leave out at the
+                     character-IDs stop, sent as the console's leave-out boxes;
+                     without it no list is sent, which leaves the list as it is
   --theme <theme>    Report theme: journalist (default) or detective
   --verbose, -v      Show full request/response JSON
   --help, -h         Show this help message
@@ -556,14 +585,8 @@ ${color('EXAMPLES:', 'cyan')}
   # Rollback and retry with modified focus
   node scripts/e2e-walkthrough.js --session 1221 --rollback arc-selection --override focus.json
 
-  # Auto-approve with default smart-defaults profile (CI mode)
+  # Auto-approve every stop (CI mode)
   node scripts/e2e-walkthrough.js --session 1221 --auto --verbose
-
-  # Auto-approve with testing-fast profile (select first few items)
-  node scripts/e2e-walkthrough.js --session 1221 --auto --profile testing-fast
-
-  # Auto-approve with testing-full profile (select all items)
-  node scripts/e2e-walkthrough.js --session 1221 --auto --profile testing-full
 
   # Detective theme (case report instead of NovaNews article)
   node scripts/e2e-walkthrough.js --session 1221 --theme detective
@@ -575,16 +598,23 @@ ${color('EXAMPLES:', 'cyan')}
   node scripts/e2e-walkthrough.js --session 1225 --approve input-review --step
   # 3. Approve with custom payload (e.g., character mappings):
   node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --approve-file mappings.json --step
+  # 4. Ask the story meeting for a reweave, send the map back, leave a photo out:
+  node scripts/e2e-walkthrough.js --session 1225 --approve arc-selection --action reweave --note "Make the ledger the main thread." --step
+  node scripts/e2e-walkthrough.js --session 1225 --approve outline --action send-back --note "Move the vote earlier." --step
+  node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --leave-out "p3.jpg" --step
 
-${color('CHECKPOINTS:', 'cyan')}
-  At each checkpoint you can:
-  - [A]pprove - Continue with current data
-  - [J]SON    - View raw JSON response
-  - [R]eject  - Reject with feedback for revision (outline/article only)
-  - [H]TML    - View rendered HTML (article only)
-  - [Q]uit    - Exit the walkthrough
-
-  Outline and Article checkpoints show FULL content by default.
+${color('STOPS:', 'cyan')}
+  The story meeting, the map and the desk print as the console shows them, from the
+  console's own view models: what the page folds is marked with ▸, and the desk lists
+  what the console would refuse before an approve. At those three stops you can:
+  - [A]pprove   - Send the weave, the map or the article as the stop shows it
+  - [R]eweave   - The story meeting only: the writer fits your note into the weave
+  - [S]end back - With your note: the writer reworks the weave, the map or the article
+  - [N]ote      - Write the note sent with the next action
+  - [J]SON      - View the weave, the map or the article as JSON
+  - [Q]uit      - Exit the walkthrough
+  To send a weave, a map or an article you changed, use --approve-file.
+  The character-IDs stop offers [A]pprove with a description per photo, or [S]kip.
 
 ${color('NOTES:', 'cyan')}
   - Server must be running at ${API_BASE}
@@ -752,91 +782,27 @@ function loadApprovalFile(filePath) {
 }
 
 // ============================================================================
-// Auto-Approval Profile System (Phase 6.6)
+// Default Approvals
 // ============================================================================
 
-// Cache for loaded profile
-let activeProfile = null;
-
 /**
- * Load an auto-approval profile from config/auto-profiles/
- * @param {string} profileName - Profile name (without .json extension)
- * @returns {Object} Profile configuration or null if not found
- */
-function loadAutoProfile(profileName) {
-  const profilePath = path.join(__dirname, '..', 'config', 'auto-profiles', `${profileName}.json`);
-
-  // DRY: Use loadJsonFile for silent fallback
-  const profile = loadJsonFile(profilePath);
-
-  if (!profile) {
-    // Prevent infinite recursion - if smart-defaults is missing, return null
-    if (profileName === 'smart-defaults') {
-      console.error(color(`  ✗ Critical: smart-defaults profile not found at ${profilePath}`, 'red'));
-      return null;
-    }
-    console.log(color(`  Profile '${profileName}' not found, using smart-defaults`, 'yellow'));
-    return loadAutoProfile('smart-defaults');
-  }
-
-  // Validate profile structure
-  if (!profile.name || !profile.checkpoints) {
-    console.error(color(`  ✗ Invalid profile structure: missing required fields (name, checkpoints)`, 'red'));
-    return null;
-  }
-
-  console.log(color(`  ✓ Loaded profile: ${profile.name} - ${profile.description || ''}`, 'green'));
-  return profile;
-}
-
-/**
- * Apply auto-approval strategy based on profile configuration
+ * The approval the harness sends at a stop when no one types one: in --auto, and in step mode
+ * with --approve and no --approve-file. Task 4.12a: at the story meeting, the map, the desk and
+ * the character-IDs stop it is the console's own payload (scripts/lib/stop-payloads.js), with
+ * the run's action and note (step mode alone takes them) and the photos the run leaves out.
+ *
  * @param {string} checkpointType - Current checkpoint type
- * @param {Object} checkpointData - Data from checkpoint (e.g., narrativeArcs, paperEvidence)
- * @param {Object} profile - Loaded profile configuration
+ * @param {Object} checkpointData - The stop's payload
  * @returns {Object} Approval payload for the API
+ * @throws {Error} when the console would build no payload, such as a send-back with no note,
+ *   or when an option names a photo the character-IDs stop does not show
  */
-function applyAutoApproval(checkpointType, checkpointData, profile) {
-  const config = profile?.checkpoints?.[checkpointType];
-
-  if (!config) {
-    // No profile config for this checkpoint - use default approval
-    console.log(color(`  [${checkpointType}] No profile config, using default`, 'dim'));
-    return getDefaultApprovalForProfile(checkpointType, checkpointData);
+function defaultApproval(checkpointType, checkpointData) {
+  const built = stopApproval(checkpointType, checkpointData, { action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS });
+  if (built) {
+    if (built.refusal) throw new Error(built.refusal);
+    return built.payload;
   }
-
-  console.log(color(`  [${checkpointType}] Strategy: ${config.strategy}`, 'dim'));
-
-  switch (config.strategy) {
-    case 'approve':
-      return getDefaultApprovalForProfile(checkpointType, checkpointData);
-
-    case 'skip':
-      // For character-ids, skip means empty mappings
-      if (checkpointType === 'character-ids') {
-        return { characterIds: {} };
-      }
-      return getDefaultApprovalForProfile(checkpointType, checkpointData);
-
-    case 'select-all':
-      return applySelectAll(checkpointType, checkpointData);
-
-    case 'select-first':
-      return applySelectFirst(checkpointType, checkpointData, config.count || 3);
-
-    case 'smart-select':
-      return applySmartSelect(checkpointType, checkpointData, config);
-
-    default:
-      console.log(color(`  Unknown strategy '${config.strategy}', using default`, 'yellow'));
-      return getDefaultApprovalForProfile(checkpointType, checkpointData);
-  }
-}
-
-/**
- * Get default approval payload (used when no profile or unknown strategy)
- */
-function getDefaultApprovalForProfile(checkpointType, checkpointData) {
   switch (checkpointType) {
     case 'input-review':
       // Auto mode always APPROVES. A reject needs prose corrections, which only a
@@ -848,8 +814,6 @@ function getDefaultApprovalForProfile(checkpointType, checkpointData) {
       // For auto-mode, use roster from sessionConfig if available
       const rosterFromConfig = checkpointData.sessionConfig?.roster || [];
       return { roster: rosterFromConfig };
-    case 'character-ids':
-      return { characterIds: {} };
     case 'await-full-context':
       // For auto-mode, this requires real input - cannot be auto-approved without data
       // Return empty payload to signal this checkpoint needs manual input
@@ -859,9 +823,6 @@ function getDefaultApprovalForProfile(checkpointType, checkpointData) {
       return { preCuration: true };
     case 'evidence-and-photos':
       return { evidenceBundle: true };
-    case 'arc-selection':
-      const arcs = checkpointData.narrativeArcs || [];
-      return { selectedArcs: arcs.slice(0, 3).map(a => a.id || a.title) };
     case 'photos': {
       // v2 M1: PREFER the gate's own pre-fill, exactly as handlePhotos does.
       // Answering defaultDir unconditionally re-analysed data/<id>/photos — the
@@ -882,83 +843,9 @@ function getDefaultApprovalForProfile(checkpointType, checkpointData) {
       }
       return { photosPath: answer };
     }
-    case 'outline':
-      return { outline: true };
-    case 'article':
-      return { article: true };
     default:
       return {};
   }
-}
-
-/**
- * Select all available items
- */
-function applySelectAll(checkpointType, checkpointData) {
-  switch (checkpointType) {
-    case 'paper-evidence-selection':
-      return { selectedPaperEvidence: checkpointData.paperEvidence || [] };
-    case 'arc-selection':
-      const arcs = checkpointData.narrativeArcs || [];
-      return { selectedArcs: arcs.map(a => a.id || a.title) };
-    default:
-      return getDefaultApprovalForProfile(checkpointType, checkpointData);
-  }
-}
-
-/**
- * Select first N items
- */
-function applySelectFirst(checkpointType, checkpointData, count) {
-  switch (checkpointType) {
-    case 'paper-evidence-selection':
-      const evidence = checkpointData.paperEvidence || [];
-      return { selectedPaperEvidence: evidence.slice(0, count) };
-    case 'arc-selection':
-      const arcs = checkpointData.narrativeArcs || [];
-      return { selectedArcs: arcs.slice(0, count).map(a => a.id || a.title) };
-    default:
-      return getDefaultApprovalForProfile(checkpointType, checkpointData);
-  }
-}
-
-/**
- * Smart selection based on preferences and scoring
- */
-function applySmartSelect(checkpointType, checkpointData, config) {
-  if (checkpointType !== 'arc-selection') {
-    return getDefaultApprovalForProfile(checkpointType, checkpointData);
-  }
-
-  const arcs = checkpointData.narrativeArcs || [];
-  const targetCount = config.targetCount || 3;
-  const prefs = config.preferences || {};
-
-  // Score each arc based on preferences
-  const scored = arcs.map(arc => {
-    let score = 0;
-
-    // Evidence strength scoring (with type safety)
-    if (prefs.evidenceStrength && arc.evidenceStrength && typeof arc.evidenceStrength === 'string') {
-      const strengthScore = prefs.evidenceStrength[arc.evidenceStrength.toLowerCase()];
-      if (strengthScore !== undefined) score += strengthScore;
-    }
-
-    // Arc source scoring (with type safety)
-    if (prefs.arcSource && arc.arcSource && typeof arc.arcSource === 'string') {
-      const sourceScore = prefs.arcSource[arc.arcSource.toLowerCase()];
-      if (sourceScore !== undefined) score += sourceScore;
-    }
-
-    return { arc, score };
-  });
-
-  // Sort by score descending and take top N
-  scored.sort((a, b) => b.score - a.score);
-  const selected = scored.slice(0, targetCount).map(s => s.arc.id || s.arc.title);
-
-  console.log(color(`  Smart-selected ${selected.length} arcs based on scoring`, 'dim'));
-  return { selectedArcs: selected };
 }
 
 // ============================================================================
@@ -971,7 +858,6 @@ const SECTION_WIDTH = 65;
 // Display truncation limits (DRY - no magic numbers)
 const DISPLAY_LIMITS = {
   MAX_PREVIEW_ITEMS: 5,        // Max items shown in preview lists
-  MAX_ISSUES_SHOWN: 5,         // Max evaluation issues to display
   ISSUE_TEXT_LENGTH: 70,       // Truncation for issue text
   EVIDENCE_DESC_LENGTH: 80,    // Truncation for evidence descriptions
   VISUAL_CONTENT_LENGTH: 120,  // Truncation for visual content
@@ -982,19 +868,6 @@ const DISPLAY_LIMITS = {
 // ANSI escape codes (DRY - no raw escape sequences)
 const ANSI = {
   CLEAR_LINE: '\r\x1b[K'
-};
-
-// Revision caps - mirrors lib/workflow/state.js REVISION_CAPS
-// Scripts are standalone, so we define local constants matching the lib
-const REVISION_CAPS = {
-  OUTLINE: 3,
-  ARTICLE: 3
-};
-
-// Content types for revision caching - matches CHECKPOINT_TYPES.OUTLINE/ARTICLE
-const CONTENT_TYPES = {
-  OUTLINE: 'outline',
-  ARTICLE: 'article'
 };
 
 // ============================================================================
@@ -1016,14 +889,14 @@ function handleUserQuit(choice) {
  * Handle AUTO_MODE approval (DRY - used by all checkpoint handlers)
  * Returns approval payload if AUTO_MODE, null otherwise
  * @param {string} checkpointType - Checkpoint type name
- * @param {Object} checkpointData - Data to pass to applyAutoApproval
+ * @param {Object} checkpointData - The stop's payload, which defaultApproval reads
  * @param {string} [message] - Optional custom message (default: "Approving {type}...")
  * @returns {Object|null} Approval payload if AUTO_MODE, null otherwise
  */
 function handleAutoApproval(checkpointType, checkpointData, message = null) {
   if (!AUTO_MODE) return null;
 
-  const approval = applyAutoApproval(checkpointType, checkpointData, activeProfile);
+  const approval = defaultApproval(checkpointType, checkpointData);
   const defaultMsg = `[AUTO] Approving ${checkpointType}...`;
   console.log(color(`\n${message || defaultMsg}`, 'yellow'));
   return approval;
@@ -1109,6 +982,8 @@ async function withRetry(fn, options = {}) {
       return await fn();
     } catch (err) {
       if (err.message === 'User quit') throw err;
+      // Task 4.12a: in --auto no one is there to answer, so the error ends the run.
+      if (AUTO_MODE) throw err;
 
       attempts++;
       console.log(color(`\nError: ${err.message}`, 'red'));
@@ -1123,7 +998,7 @@ async function withRetry(fn, options = {}) {
 
       if (choice.toLowerCase() === 's') {
         console.log(color('Using default approval...', 'yellow'));
-        return getDefaultApprovalForProfile(checkpointType, checkpoint);
+        return defaultApproval(checkpointType, checkpoint);
       }
       // 'r' or anything else = retry
       console.log(color('Retrying...', 'cyan'));
@@ -1148,99 +1023,6 @@ function sectionEnd(borderColor = 'yellow') {
 function sectionDivider(title, borderColor = 'yellow') {
   const padded = ` ${title} `.padEnd(SECTION_WIDTH - 2, '─');
   console.log(color(`├─${padded}┤`, borderColor));
-}
-
-/**
- * Display evaluation status (DRY - shared by outline and article handlers)
- * @param {Object} evaluation - Evaluation history entry
- * @param {boolean} isEscalated - Whether this is an escalated checkpoint
- */
-function displayEvaluationStatus(evaluation, isEscalated = false) {
-  if (!evaluation || Object.keys(evaluation).length === 0) return;
-
-  // Brief 2.7: the callers used to pass the whole evaluationHistory ARRAY, so this
-  // never had a score to show. With the phase's real entry, the score is 0-1
-  // (evaluator-nodes.js), not a percentage.
-  const score = typeof evaluation.overallScore === 'number' ? evaluation.overallScore : null;
-  const scoreColor = score === null ? 'yellow' : score >= 0.8 ? 'green' : score >= 0.6 ? 'yellow' : 'red';
-  const readyText = evaluation.ready ? color('[READY]', 'green') : color('[NEEDS WORK]', 'yellow');
-
-  sectionBox(`EVALUATION: Score ${score === null ? 'N/A' : score.toFixed(2)} ${readyText}`, scoreColor);
-
-  // Brief 2.4: the console's phrase for a model's score, from the same pure module
-  const view = ViewLogic.evaluationView(evaluation);
-  if (view && view.calibration) console.log(color(`  ${view.calibration}`, 'dim'));
-
-  if (evaluation.revisionNumber > 0) {
-    console.log(color(`  After automatic pass ${evaluation.revisionNumber} of this round`, 'dim'));
-  }
-
-  if (isEscalated) {
-    console.log(color('  ESCALATED: At revision cap - human decision required', 'yellow'));
-  }
-
-  // Show issues if any
-  if (evaluation.issues?.length > 0) {
-    console.log(color('\n  Issues:', 'bright'));
-    evaluation.issues.slice(0, DISPLAY_LIMITS.MAX_ISSUES_SHOWN).forEach(issue => {
-      const severity = issue.severity || 'info';
-      const severityColor = severity === 'error' ? 'red' : severity === 'warning' ? 'yellow' : 'dim';
-      const issueText = typeof issue === 'string' ? issue : (issue.message || issue.description || JSON.stringify(issue));
-      console.log(`    ${color('•', severityColor)} ${truncate(issueText, DISPLAY_LIMITS.ISSUE_TEXT_LENGTH)}`);
-    });
-    if (evaluation.issues.length > DISPLAY_LIMITS.MAX_ISSUES_SHOWN) {
-      console.log(color(`    ... and ${evaluation.issues.length - DISPLAY_LIMITS.MAX_ISSUES_SHOWN} more issues`, 'dim'));
-    }
-  }
-  sectionEnd(scoreColor);
-}
-
-/**
- * The trace (phase 2, brief 2.7): the automatic reworks that ran this round before
- * the stop, from the SAME view model as the console's panel
- * (console/checkpoint-view-logic.js#traceView). Nothing is shown when none ran.
- * The findings print in full: each is the self-contained sentence the rework was given.
- * The view labels the evaluation's guidance by whether the rework was given it, which the
- * theme decides (final review, reworks[0]), so it reads the theme this run uses.
- *
- * @param {Array|null} trace - checkpoint.trace at the outline or article stop
- */
-function displayTrace(trace) {
-  const view = ViewLogic.traceView(trace, THEME);
-  if (!view.any) return;
-  sectionBox(view.title, 'magenta');
-  view.passes.forEach((pass, i) => {
-    if (i > 0) console.log('');
-    console.log(color(`  ${pass.heading}`, 'bright'));
-    console.log(`  ${pass.triggerLabel}`);
-    [[pass.mustFix, 'red'], [pass.shouldConsider, 'yellow']].forEach(([group, groupColor]) => {
-      if (group.items.length === 0) return;
-      console.log(color(`  ${group.label}:`, groupColor));
-      group.items.forEach(item => console.log(`    ${color('•', groupColor)} ${item}`));
-    });
-    if (pass.noFindings) console.log(color('  No findings were recorded for this pass.', 'dim'));
-    console.log(`  ${pass.changed.text}`);
-    if (pass.guidance) console.log(color(`  ${pass.guidance}`, 'dim'));
-  });
-  sectionEnd('magenta');
-}
-
-/**
- * The writer's questions for the director (phase 3, brief 3.7), from the SAME view
- * model as the console's panel (console/checkpoint-view-logic.js#writerQuestionsView):
- * one line per question, its kind (fix 3.7b) and what it is about first, then the
- * stop's hint (task 3.11). Nothing is shown when there are none.
- *
- * @param {Array|null} questions - checkpoint.writerQuestions at the arc, outline or article stop
- * @param {string} stop - 'arc-selection', 'outline' or 'article'
- */
-function displayWriterQuestions(questions, stop) {
-  const view = ViewLogic.writerQuestionsView(questions, stop);
-  if (!view.any) return;
-  sectionBox(view.title, 'cyan');
-  view.items.forEach(item => console.log(`  ${item.kindLabel ? `[${item.kindLabel}] ` : ''}${color(item.about, 'bright')}: ${item.question}`));
-  console.log(color(`  ${view.hint}`, 'dim'));
-  sectionEnd('cyan');
 }
 
 /**
@@ -1541,224 +1323,6 @@ function showConfirmationPreview(original, edits, fieldDefs = {}) {
 }
 
 // ============================================================================
-// Revision Diff Helpers (Phase 6.5)
-// ============================================================================
-
-/**
- * Compute a shallow diff between two objects
- * @param {Object} previous - Previous version
- * @param {Object} current - Current version
- * @returns {Object} Diff with added, modified, removed, unchanged arrays
- */
-function computeObjectDiff(previous, current) {
-  const diff = {
-    added: [],    // Keys in current but not in previous
-    modified: [], // Keys in both but with different values
-    removed: [],  // Keys in previous but not in current
-    unchanged: [] // Keys in both with same values
-  };
-
-  if (!previous || Object.keys(previous).length === 0) {
-    // No previous version - everything is "added"
-    if (current) {
-      diff.added = Object.keys(current);
-    }
-    return diff;
-  }
-
-  const prevKeys = new Set(Object.keys(previous));
-  const currKeys = new Set(Object.keys(current || {}));
-
-  // Find added keys
-  for (const key of currKeys) {
-    if (!prevKeys.has(key)) {
-      diff.added.push(key);
-    }
-  }
-
-  // Find removed keys
-  for (const key of prevKeys) {
-    if (!currKeys.has(key)) {
-      diff.removed.push(key);
-    }
-  }
-
-  // Find modified and unchanged (with error handling for circular refs)
-  for (const key of prevKeys) {
-    if (currKeys.has(key)) {
-      try {
-        const prevVal = JSON.stringify(previous[key]);
-        const currVal = JSON.stringify(current[key]);
-        if (prevVal !== currVal) {
-          diff.modified.push(key);
-        } else {
-          diff.unchanged.push(key);
-        }
-      } catch (error) {
-        // Handle circular reference or other stringify errors
-        diff.modified.push(key);  // Assume modified if can't compare
-      }
-    }
-  }
-
-  return diff;
-}
-
-/**
- * Describe a change for a specific field
- * @param {string} key - Field name
- * @param {*} prevValue - Previous value
- * @param {*} currValue - Current value
- * @returns {string} Human-readable change description
- */
-function describeChange(key, prevValue, currValue) {
-  // Handle arrays
-  if (Array.isArray(currValue)) {
-    const prevLen = Array.isArray(prevValue) ? prevValue.length : 0;
-    const currLen = currValue.length;
-    const diff = currLen - prevLen;
-    if (diff > 0) return `Added ${diff} item(s) (${prevLen} → ${currLen})`;
-    if (diff < 0) return `Removed ${Math.abs(diff)} item(s) (${prevLen} → ${currLen})`;
-    return 'Items reordered or modified';
-  }
-
-  // Handle objects
-  if (typeof currValue === 'object' && currValue !== null) {
-    const prevKeys = prevValue ? Object.keys(prevValue).length : 0;
-    const currKeys = Object.keys(currValue).length;
-    if (currKeys !== prevKeys) {
-      return `Structure changed (${prevKeys} → ${currKeys} keys)`;
-    }
-    return 'Content modified';
-  }
-
-  // Handle strings - show short before/after
-  if (typeof currValue === 'string' && typeof prevValue === 'string') {
-    const prevShort = truncate(prevValue, 25);
-    const currShort = truncate(currValue, 25);
-    return `"${prevShort}" → "${currShort}"`;
-  }
-
-  // Default
-  return `${truncate(String(prevValue), 20)} → ${truncate(String(currValue), 20)}`;
-}
-
-/**
- * Display revision diff between previous and current versions
- * @param {Object} previous - Previous version
- * @param {Object} current - Current version
- * @param {Object} evaluation - Current evaluation with revisionNumber, feedback
- * @param {string} contentType - CONTENT_TYPES.OUTLINE or CONTENT_TYPES.ARTICLE
- * @param {number} maxRevisions - Maximum revisions allowed (from REVISION_CAPS)
- */
-function displayRevisionDiff(previous, current, evaluation, contentType, maxRevisions) {
-  const revNum = evaluation?.revisionNumber || 0;
-
-  // Only show diff if this is a revision (revNum > 0) and we have previous content
-  if (revNum === 0 || !previous) {
-    return;
-  }
-
-  const budgetColor = revNum >= maxRevisions ? 'red' : revNum >= maxRevisions - 1 ? 'yellow' : 'green';
-  const budgetText = revNum >= maxRevisions
-    ? 'NO REVISIONS REMAINING - Final version'
-    : `${maxRevisions - revNum} revision(s) remaining`;
-
-  sectionBox(`REVISION #${revNum} (of max ${maxRevisions})`, budgetColor);
-
-  // Show previous feedback that triggered this revision
-  const previousFeedback = contentType === CONTENT_TYPES.OUTLINE
-    ? revisionCache.outlineFeedback
-    : revisionCache.articleFeedback;
-
-  if (previousFeedback) {
-    console.log(color('  PREVIOUS FEEDBACK:', 'bright'));
-    const feedbackLines = previousFeedback.split('\n').slice(0, 3);
-    feedbackLines.forEach(line => {
-      console.log(`    "${truncate(line, 60)}"`);
-    });
-    if (previousFeedback.split('\n').length > 3) {
-      console.log(color('    ...', 'dim'));
-    }
-    console.log('');
-  }
-
-  // Compute diff
-  const diff = computeObjectDiff(previous, current);
-
-  // Display changes
-  console.log(color('  CHANGES FROM PREVIOUS VERSION:', 'bright'));
-
-  // ADDED
-  if (diff.added.length > 0) {
-    console.log(color('\n  ADDED:', 'green'));
-    diff.added.forEach(key => {
-      const val = current[key];
-      let desc;
-      if (Array.isArray(val)) {
-        desc = `New array with ${val.length} item(s)`;
-      } else if (typeof val === 'object' && val !== null) {
-        desc = `New section with ${Object.keys(val).length} field(s)`;
-      } else {
-        desc = truncate(String(val), 50);
-      }
-      console.log(`    ${color('+', 'green')} ${key}: ${desc}`);
-    });
-  }
-
-  // MODIFIED
-  if (diff.modified.length > 0) {
-    console.log(color('\n  MODIFIED:', 'yellow'));
-    diff.modified.forEach(key => {
-      const desc = describeChange(key, previous[key], current[key]);
-      console.log(`    ${color('~', 'yellow')} ${key}: ${desc}`);
-    });
-  }
-
-  // REMOVED
-  if (diff.removed.length > 0) {
-    console.log(color('\n  REMOVED:', 'red'));
-    diff.removed.forEach(key => {
-      console.log(`    ${color('-', 'red')} ${key}: Removed`);
-    });
-  }
-
-  // UNCHANGED (summary only)
-  if (diff.unchanged.length > 0) {
-    console.log(color('\n  UNCHANGED:', 'dim'));
-    console.log(color(`    = ${diff.unchanged.join(', ')}`, 'dim'));
-  }
-
-  // Revision budget warning
-  console.log('');
-  console.log(`  ${color('REVISION BUDGET:', 'bright')} ${color(budgetText, budgetColor)}`);
-
-  sectionEnd(budgetColor);
-  console.log('');
-}
-
-/**
- * Store current content for future diff comparison
- * Called after displaying but before user decision
- * @param {string} contentType - CONTENT_TYPES.OUTLINE or CONTENT_TYPES.ARTICLE
- * @param {Object} content - Current content to store
- * @param {string} feedback - Feedback provided (if rejecting)
- */
-function cacheForRevision(contentType, content, feedback = null) {
-  if (contentType === CONTENT_TYPES.OUTLINE) {
-    revisionCache.outline = content ? JSON.parse(JSON.stringify(content)) : null;
-    if (feedback) {
-      revisionCache.outlineFeedback = feedback;
-    }
-  } else if (contentType === CONTENT_TYPES.ARTICLE) {
-    revisionCache.article = content ? JSON.parse(JSON.stringify(content)) : null;
-    if (feedback) {
-      revisionCache.articleFeedback = feedback;
-    }
-  }
-}
-
-// ============================================================================
 // Checkpoint Handlers
 // ============================================================================
 
@@ -1963,14 +1527,29 @@ async function handlePaperEvidenceSelection(checkpoint, currentPhase) {
   return { selectedPaperEvidence: evidence };
 }
 
+/**
+ * The character-IDs stop's cards: each analysis paired with its photo by filename, as the
+ * console pairs them (characterIdCards), each saying whether the server lists it as left out.
+ */
+function characterIdCardsOf(checkpoint) {
+  const analyses = checkpoint.photoAnalyses && Array.isArray(checkpoint.photoAnalyses.analyses) ? checkpoint.photoAnalyses.analyses : [];
+  return ViewLogic.characterIdCards(analyses, checkpoint.sessionPhotos, checkpoint.leftOutPhotos);
+}
+
+/** The character-IDs payload the console would send, built by stopApproval; a refusal stops the run. */
+function characterIdsApprovalFor(checkpoint, photoDescriptions) {
+  const built = stopApproval('character-ids', checkpoint, { leaveOut: LEAVE_OUT, photoDescriptions });
+  if (built.refusal) throw new Error(built.refusal);
+  return built.payload;
+}
+
 async function handleCharacterIds(checkpoint, currentPhase) {
   checkpointHeader('CHARACTER_IDS', currentPhase);
 
-  const photos = checkpoint.sessionPhotos || [];
-  const analyses = checkpoint.photoAnalyses?.analyses || [];  // Nested under .analyses property
+  const cards = characterIdCardsOf(checkpoint);
   const roster = checkpoint.sessionConfig?.roster || [];
 
-  sectionBox(`CHARACTER IDENTIFICATION (${photos.length} photos)`);
+  sectionBox(`CHARACTER IDENTIFICATION (${cards.length} photos)`);
 
   // Show roster for reference
   console.log(color('  Available Characters (Roster):', 'bright'));
@@ -1982,11 +1561,10 @@ async function handleCharacterIds(checkpoint, currentPhase) {
 
   sectionDivider('PHOTO ANALYSES');
 
-  analyses.forEach((analysis, i) => {
-    const photoPath = photos[i] || 'unknown';
-    const photoName = photoPath.split(/[/\\]/).pop();
+  cards.forEach((card, i) => {
+    const analysis = card.analysis;
 
-    console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${photoName}`);
+    console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${card.displayName}${card.leftOut ? color(' [LEFT OUT]', 'yellow') : ''}`);
 
     // Relevance score if available
     if (analysis.relevanceScore !== undefined) {
@@ -2044,39 +1622,28 @@ async function handleCharacterIds(checkpoint, currentPhase) {
 
   sectionEnd();
 
-  // DRY: Use centralized helpers
-  const autoApproval = handleAutoApproval('character-ids', checkpoint, '[AUTO] Skipping character mapping...');
+  if (LEAVE_OUT) console.log(color(`  Leaving out (--leave-out): ${LEAVE_OUT.join(', ')}`, 'yellow'));
+
+  // Task 4.12a: the console's two payloads. With the director's descriptions (--photo-descriptions)
+  // the default is the console's Approve, and without them its Skip.
+  const autoApproval = handleAutoApproval('character-ids', checkpoint, '[AUTO] Character IDs: Approve with your descriptions, or Skip without them...');
   if (autoApproval) return autoApproval;
 
-  const choice = await prompt('\n[A]pprove (skip mapping), [E]nter natural text, [J]SON format, or [Q]uit? ');
+  const choice = await prompt('\n[A]pprove with a description of each photo, [S]kip, or [Q]uit? ');
   handleUserQuit(choice);
 
-  if (choice.toLowerCase() === 'e') {
-    console.log(color('\nDescribe who is in each photo using natural language:', 'cyan'));
-    console.log(color('Example: "Photo 1 shows Marcus in the red shirt and Elena with glasses.', 'dim'));
-    console.log(color('         Photo 2 has David by the window talking to Sarah."', 'dim'));
-    console.log(color('(Empty line to finish)', 'dim'));
-    const naturalText = await promptMultiline('');
-    if (naturalText.trim()) {
-      // Pass as characterIdsRaw - the parseCharacterIds node will convert to structured format
-      return { characterIdsRaw: naturalText.trim() };
+  if (choice.toLowerCase() === 'a') {
+    console.log(color('\nWho is in each photo, and what moment it catches (Enter leaves it blank):', 'cyan'));
+    const descriptions = { ...(PHOTO_DESCRIPTIONS || {}) };
+    for (const card of cards) {
+      if (!card.filename) continue;
+      const typed = await prompt(`  ${card.displayName}: `);
+      if (typed.trim()) descriptions[card.filename] = typed;
     }
-    console.log(color('No input provided, skipping mappings', 'yellow'));
+    return characterIdsApprovalFor(checkpoint, descriptions);
   }
 
-  if (choice.toLowerCase() === 'j') {
-    console.log(color('\nEnter character mappings as JSON:', 'cyan'));
-    console.log(color('Format: { "photo.jpg": { characterMappings: [{descriptionIndex: 0, characterName: "Name"}] } }', 'dim'));
-    const mappingsJson = await promptMultiline('');
-    try {
-      const characterIds = JSON.parse(mappingsJson);
-      return { characterIds };
-    } catch (e) {
-      console.log(color('Invalid JSON, skipping mappings', 'yellow'));
-    }
-  }
-
-  return { characterIds: {} };
+  return characterIdsApprovalFor(checkpoint, null);
 }
 
 async function handlePhotos(checkpoint, currentPhase) {
@@ -2539,595 +2106,81 @@ async function handleEvidenceBundle(checkpoint, currentPhase) {
   return { evidenceBundle: true };
 }
 
-async function handleArcSelection(checkpoint, currentPhase) {
-  checkpointHeader('ARC_SELECTION', currentPhase);
+// ============================================================================
+// The story meeting, the map and the desk (task 4.12a)
+// ============================================================================
 
-  const arcs = checkpoint.narrativeArcs || [];
+/** How the harness heads each of the three decision stops. */
+const STOP_HEADINGS = { 'arc-selection': 'STORY MEETING', outline: 'MAP', article: 'DESK' };
 
-  sectionBox(`NARRATIVE ARCS (${arcs.length} available)`);
-  console.log(color('  Recommended: Select 3-5 arcs for a balanced article', 'dim'));
+/** The colour of each kind of line on a stop's page (lib/stop-pages.js). */
+const TONE_COLORS = {
+  title: 'bright',
+  text: 'reset',
+  note: 'cyan',
+  alert: 'red',
+  concern: 'yellow',
+  mark: 'magenta',
+  struck: 'dim',
+  hint: 'dim'
+};
 
-  arcs.forEach((arc, i) => {
-    const num = String(i + 1).padStart(2, ' ');
+/** What each decision stop's [J]SON shows: the weave, the map or the article. */
+const STOP_OUTPUT_KEYS = { 'arc-selection': 'weave', outline: 'outline', article: 'contentBundle' };
 
-    // Title with strength indicator
-    const strength = arc.evidenceStrength || 'unknown';
-    console.log(`\n  ${color(num + '.', 'cyan')} ${color(arc.title || arc.id || 'Untitled', 'bright')} ${displayConfidence(strength)}`);
-
-    // Arc source and emotional tone
-    const meta = [];
-    if (arc.arcSource) meta.push(`Source: ${arc.arcSource}`);
-    if (arc.emotionalTone) meta.push(`Tone: ${arc.emotionalTone}`);
-    if (meta.length > 0) {
-      console.log(color(`      ${meta.join(' │ ')}`, 'dim'));
-    }
-
-    // Hook (full display)
-    if (arc.hook) {
-      console.log(`      ${color('Hook:', 'bright')} ${arc.hook}`);
-    }
-
-    // Key moments
-    if (arc.keyMoments?.length > 0) {
-      console.log(color('      Key Moments:', 'bright'));
-      arc.keyMoments.slice(0, 3).forEach(moment => {
-        const text = typeof moment === 'string' ? moment : moment.description || JSON.stringify(moment);
-        console.log(`        • ${text.substring(0, 60)}${text.length > 60 ? '...' : ''}`);
-      });
-      if (arc.keyMoments.length > 3) {
-        console.log(color(`        ... and ${arc.keyMoments.length - 3} more`, 'dim'));
-      }
-    }
-
-    // Evidence breakdown
-    if (arc.evidence?.length > 0) {
-      const exposed = arc.evidence.filter(e => e.layer === 'exposed').length;
-      const buried = arc.evidence.filter(e => e.layer === 'buried').length;
-      console.log(`      ${color('Evidence:', 'bright')} ${arc.evidence.length} items (${exposed} exposed, ${buried} buried)`);
-
-      // Show first few evidence IDs
-      const evidenceIds = arc.evidence.slice(0, 3).map(e => e.tokenId || e.id || 'unknown');
-      console.log(color(`        IDs: ${evidenceIds.join(', ')}${arc.evidence.length > 3 ? '...' : ''}`, 'dim'));
-    }
-
-    // Character placements
-    if (arc.characterPlacements && Object.keys(arc.characterPlacements).length > 0) {
-      console.log(color('      Characters:', 'bright'));
-      Object.entries(arc.characterPlacements).forEach(([char, role]) => {
-        console.log(`        ${char}: ${role}`);
-      });
-    }
-
-    // Financial connections
-    if (arc.financialConnections?.length > 0) {
-      console.log(color('      Financial:', 'bright'));
-      arc.financialConnections.slice(0, 2).forEach(conn => {
-        const text = typeof conn === 'string' ? conn : conn.description || JSON.stringify(conn);
-        console.log(`        💰 ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
-      });
-    }
-
-    // Thematic links to other arcs
-    if (arc.thematicLinks?.length > 0) {
-      console.log(color(`      Links: ${arc.thematicLinks.join(', ')}`, 'dim'));
-    }
-
-    // Evaluation score if available
-    if (arc.evaluationHistory?.overallScore !== undefined) {
-      const score = arc.evaluationHistory.overallScore;
-      const scoreColor = score >= 7 ? 'green' : score >= 4 ? 'yellow' : 'red';
-      console.log(`      ${color('Eval Score:', 'bright')} ${color(score + '/10', scoreColor)}`);
-
-      if (arc.evaluationHistory.structuralIssues?.length > 0) {
-        console.log(color('      ⚠️ Issues:', 'yellow'));
-        arc.evaluationHistory.structuralIssues.slice(0, 2).forEach(issue => {
-          console.log(color(`        - ${issue}`, 'yellow'));
-        });
-      }
-    }
+/**
+ * The story meeting, the map or the desk as the console shows it, from the console's own view
+ * models (scripts/lib/stop-print.js): each line coloured by its kind, and what the page folds
+ * dimmed behind its ▸. The desk shows its marks beside their pieces, the marks beside no piece,
+ * the problems the console would refuse before an approve, and no score.
+ */
+function printStop(stop, checkpoint, currentPhase) {
+  checkpointHeader(STOP_HEADINGS[stop] || stop, currentPhase);
+  stopPrint(stop, checkpoint, { theme: THEME }).forEach((line) => {
+    console.log(color(line.text, line.folded ? 'dim' : (TONE_COLORS[line.tone] || 'reset')));
   });
-
-  // Relationship Matrix (if arcs have thematic links)
-  const hasLinks = arcs.some(a => a.thematicLinks?.length > 0 || a.characterPlacements);
-  if (hasLinks && arcs.length > 1) {
-    sectionDivider('RELATIONSHIP MATRIX');
-    console.log(color('  Shared characters and thematic connections:', 'dim'));
-
-    // Build simple character overlap matrix
-    const charToArcs = {};
-    arcs.forEach((arc, i) => {
-      if (arc.characterPlacements) {
-        Object.keys(arc.characterPlacements).forEach(char => {
-          if (!charToArcs[char]) charToArcs[char] = [];
-          charToArcs[char].push(i + 1);
-        });
-      }
-    });
-
-    // Show characters that appear in multiple arcs
-    Object.entries(charToArcs)
-      .filter(([_, arcNums]) => arcNums.length > 1)
-      .forEach(([char, arcNums]) => {
-        console.log(`    ${char}: Arcs ${arcNums.join(', ')}`);
-      });
-
-    // Show thematic links
-    const links = [];
-    arcs.forEach((arc, i) => {
-      if (arc.thematicLinks?.length > 0) {
-        arc.thematicLinks.forEach(link => {
-          links.push(`Arc ${i + 1} ↔ ${link}`);
-        });
-      }
-    });
-    if (links.length > 0) {
-      console.log(color('  Thematic Links:', 'bright'));
-      links.slice(0, DISPLAY_LIMITS.MAX_PREVIEW_ITEMS).forEach(link => console.log(`    ${link}`));
-    }
-  }
-
-  sectionEnd();
-
-  // DRY: Use centralized helpers
-  const autoApproval = handleAutoApproval('arc-selection', { narrativeArcs: arcs });
-  if (autoApproval) {
-    const selectedCount = autoApproval.selectedArcs?.length || 0;
-    console.log(color(`  Selected ${selectedCount} arc(s): ${autoApproval.selectedArcs?.join(', ')}`, 'dim'));
-    return autoApproval;
-  }
-
-  const choice = await prompt('\n[A]pprove (select all), [S]elect specific, or [Q]uit? ');
-  handleUserQuit(choice);
-
-  if (choice.toLowerCase() === 's') {
-    // Use loop instead of recursion for retry safety
-    while (true) {
-      console.log(color('\nEnter arc numbers to include (comma-separated, e.g., 1,2,4):', 'cyan'));
-      const indices = await prompt('Selection: ');
-      const selected = indices.split(',')
-        .map(s => parseInt(s.trim()) - 1)
-        .filter(i => i >= 0 && i < arcs.length)
-        .map(i => arcs[i].id || arcs[i].title);
-
-      if (selected.length > 0) {
-        console.log(color(`\nSelected ${selected.length} arc(s):`, 'green'));
-        selected.forEach(id => {
-          const arc = arcs.find(a => (a.id || a.title) === id);
-          console.log(`  • ${arc?.title || id}`);
-        });
-        return { selectedArcs: selected };
-      }
-      console.log(color('Must select at least one arc. Please try again.', 'red'));
-    }
-  }
-
-  return { selectedArcs: arcs.map(a => a.id || a.title) };
 }
 
-async function handleOutline(checkpoint, currentPhase) {
-  checkpointHeader('OUTLINE', currentPhase);
+/**
+ * The story meeting, the map or the desk, interactively: the page as the console shows it, then
+ * the stop's actions, each payload the console's own (stopApproval). The harness edits nothing;
+ * a weave, a map or an article the director changed goes with --approve-file.
+ */
+async function handleDecisionStop(checkpoint, currentPhase) {
+  const stop = checkpoint.type;
+  printStop(stop, checkpoint, currentPhase);
 
-  const outline = checkpoint.outline || {};
-  // Brief 2.7: evaluationHistory is an ARRAY mixing all three phases, and the server
-  // never sends `escalated`. The phase's last evaluation carries escalatedToHuman.
-  const evaluation = ViewLogic.lastEvaluationFrom(checkpoint, 'outline') || {};
-  const isEscalated = evaluation.escalatedToHuman === true;
-
-  // Display evaluation status (using DRY helper)
-  displayEvaluationStatus(evaluation, isEscalated);
-
-  // The automatic reworks of this round, before this stop (brief 2.7)
-  displayTrace(checkpoint.trace);
-
-  // Display revision diff if this is a revision (Phase 6.5)
-  displayRevisionDiff(revisionCache.outline, outline, evaluation, CONTENT_TYPES.OUTLINE, REVISION_CAPS.OUTLINE);
-
-  // Show FULL outline for review (Commit 8.24)
-  console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
-  console.log(color('                         FULL ARTICLE OUTLINE', 'bright'));
-  console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
-
-  // LEDE Section
-  console.log(color('\n┌─ LEDE ─────────────────────────────────────────────────────────┐', 'yellow'));
-  console.log(color('│ Hook:', 'bright'));
-  console.log(`│   ${outline.lede?.hook || 'N/A'}`);
-  console.log(color('│ Key Tension:', 'bright'));
-  console.log(`│   ${outline.lede?.keyTension || 'N/A'}`);
-  if (outline.lede?.selectedEvidence?.length > 0) {
-    console.log(color('│ Selected Evidence:', 'bright'));
-    outline.lede.selectedEvidence.forEach(e => console.log(`│   - ${e}`));
-  }
-  console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-
-  // THE STORY Section
-  console.log(color('\n┌─ THE STORY ────────────────────────────────────────────────────┐', 'yellow'));
-  if (outline.theStory?.arcs) {
-    outline.theStory.arcs.forEach((arc, i) => {
-      console.log(color(`│\n│ Arc ${i + 1}: ${arc.name || arc.arcId || 'Unnamed'}`, 'cyan'));
-      console.log(`│   Paragraphs: ${arc.paragraphCount || 0}`);
-      if (arc.keyPoints?.length > 0) {
-        console.log(color('│   Key Points:', 'dim'));
-        arc.keyPoints.forEach(p => {
-          const text = typeof p === 'string' ? p : JSON.stringify(p);
-          console.log(`│     • ${text}`);
-        });
-      }
-      if (arc.evidenceCards?.length > 0) {
-        console.log(color('│   Evidence Cards:', 'dim'));
-        arc.evidenceCards.forEach(c => {
-          const id = typeof c === 'string' ? c : (c.evidenceId || c.id || JSON.stringify(c));
-          const purpose = typeof c === 'object' && c.purpose ? ` - ${c.purpose}` : '';
-          console.log(`│     📄 ${id}${purpose}`);
-        });
-      }
-      if (arc.photoPlacement) {
-        const photo = arc.photoPlacement;
-        const filename = typeof photo === 'string' ? photo : (photo.filename || photo.photo || JSON.stringify(photo));
-        const purpose = typeof photo === 'object' && photo.purpose ? ` (${photo.purpose})` : '';
-        console.log(color(`│   Photo: ${filename}${purpose}`, 'dim'));
-      }
-    });
-  }
-  if (outline.theStory?.arcInterweaving) {
-    console.log(color('│\n│ Arc Interweaving:', 'bright'));
-    const interweaving = outline.theStory.arcInterweaving;
-    if (typeof interweaving === 'string') {
-      console.log(`│   ${interweaving}`);
-    } else if (typeof interweaving === 'object') {
-      // Handle object format with interleavingPlan, callbackOpportunities, convergencePoint
-      if (interweaving.interleavingPlan) console.log(`│   Plan: ${interweaving.interleavingPlan}`);
-      if (interweaving.convergencePoint) console.log(`│   Convergence: ${interweaving.convergencePoint}`);
-      if (interweaving.callbackOpportunities?.length > 0) {
-        console.log(color('│   Callbacks:', 'dim'));
-        interweaving.callbackOpportunities.forEach(cb => {
-          const detail = typeof cb === 'string' ? cb : `${cb.plantIn} → ${cb.payoffIn}: ${cb.detail || ''}`;
-          console.log(`│     ↩ ${detail}`);
-        });
-      }
-    }
-  }
-  console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-
-  // FOLLOW THE MONEY Section
-  if (outline.followTheMoney) {
-    console.log(color('\n┌─ FOLLOW THE MONEY ─────────────────────────────────────────────┐', 'yellow'));
-    // Display arcConnections (new schema) or fall back to focus (legacy)
-    if (outline.followTheMoney.arcConnections?.length > 0) {
-      console.log(color('│ Arc Connections:', 'dim'));
-      outline.followTheMoney.arcConnections.forEach(ac => {
-        console.log(`│   🔗 ${ac.arcName}: ${ac.financialAngle || ''}`);
-      });
-    } else if (outline.followTheMoney.focus) {
-      console.log(`│ Focus: ${outline.followTheMoney.focus}`);
-    }
-    if (outline.followTheMoney.shellAccounts?.length > 0) {
-      console.log(color('│ Shell Accounts:', 'dim'));
-      outline.followTheMoney.shellAccounts.forEach(a => {
-        if (typeof a === 'string') {
-          console.log(`│   💰 ${a}`);
-        } else if (typeof a === 'object') {
-          const name = a.name || a.account || a.accountName || 'Unknown';
-          const amount = a.amount || a.total || '';
-          const note = a.note || a.observation || '';
-          console.log(`│   💰 ${name}${amount ? `: ${amount}` : ''}${note ? ` - ${note}` : ''}`);
-        }
-      });
-    }
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  // THE PLAYERS Section
-  if (outline.thePlayers) {
-    console.log(color('\n┌─ THE PLAYERS ──────────────────────────────────────────────────┐', 'yellow'));
-    // Display arcConnections (new schema) or fall back to focus (legacy)
-    if (outline.thePlayers.arcConnections?.length > 0) {
-      console.log(color('│ Arc Connections:', 'dim'));
-      outline.thePlayers.arcConnections.forEach(ac => {
-        console.log(`│   🔗 ${ac.arcName}: ${ac.characterAngle || ''}`);
-      });
-    } else if (outline.thePlayers.focus) {
-      console.log(`│ Focus: ${outline.thePlayers.focus}`);
-    }
-    if (outline.thePlayers.characterHighlights) {
-      console.log(color('│ Character Highlights:', 'dim'));
-      Object.entries(outline.thePlayers.characterHighlights).forEach(([char, highlight]) => {
-        console.log(`│   👤 ${char}: ${highlight}`);
-      });
-    }
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  // WHAT'S MISSING Section
-  if (outline.whatsMissing) {
-    console.log(color('\n┌─ WHAT\'S MISSING ───────────────────────────────────────────────┐', 'yellow'));
-    // Display arcConnections (new schema) or fall back to focus (legacy)
-    if (outline.whatsMissing.arcConnections?.length > 0) {
-      console.log(color('│ Arc Connections:', 'dim'));
-      outline.whatsMissing.arcConnections.forEach(ac => {
-        console.log(`│   🔗 ${ac.arcName}: ${ac.openQuestion || ''}`);
-      });
-    } else if (outline.whatsMissing.focus) {
-      console.log(`│ Focus: ${outline.whatsMissing.focus}`);
-    }
-    if (outline.whatsMissing.buriedItems?.length > 0) {
-      console.log(color('│ Buried Items:', 'dim'));
-      outline.whatsMissing.buriedItems.forEach(b => console.log(`│   🔒 ${b}`));
-    }
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  // CLOSING Section
-  if (outline.closing) {
-    console.log(color('\n┌─ CLOSING ──────────────────────────────────────────────────────┐', 'yellow'));
-    // Display arcResolutions (new schema) or fall back to theme (legacy)
-    if (outline.closing.arcResolutions?.length > 0) {
-      console.log(color('│ Arc Resolutions:', 'dim'));
-      outline.closing.arcResolutions.forEach(ar => {
-        console.log(`│   🎭 ${ar.arcName}: ${ar.resolution || ''}`);
-      });
-    } else if (outline.closing.theme) {
-      console.log(`│ Theme: ${outline.closing.theme}`);
-    }
-    if (outline.closing.systemicAngle) {
-      console.log(`│ Systemic Angle: ${outline.closing.systemicAngle}`);
-    }
-    console.log(`│ Final Line: ${outline.closing.finalLine || 'N/A'}`);
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
-
-  // DRY: Use centralized helpers
-  const autoApproval = handleAutoApproval('outline', checkpoint, '[AUTO] Approving outline...');
+  const autoApproval = handleAutoApproval(stop, checkpoint);
   if (autoApproval) return autoApproval;
 
-  const choice = await prompt('\n[A]pprove, [J]SON (raw), [R]eject with feedback, or [Q]uit? ');
-  handleUserQuit(choice);
-
-  if (choice.toLowerCase() === 'j') {
-    console.log(color('\nRaw JSON Outline:', 'cyan'));
-    prettyPrint(outline);
-    // DRY: Use confirmAction utility
-    await confirmAction('\nApprove this outline?', { throwOnReject: true, rejectMessage: 'User rejected outline' });
-  }
-
-  if (choice.toLowerCase() === 'r') {
-    console.log(color('\nEnter revision feedback:', 'cyan'));
-    const feedback = await promptMultiline('');
-    if (feedback.trim()) {
-      // Cache current outline for diff display on next revision (Phase 6.5)
-      cacheForRevision(CONTENT_TYPES.OUTLINE, outline, feedback.trim());
-      return { outline: false, outlineFeedback: feedback.trim() };
+  const offered = [['a', 'approve', '[A]pprove'], ['r', 'reweave', '[R]eweave'], ['s', 'send-back', '[S]end back']]
+    .filter(([, action]) => STOP_ACTIONS[stop].includes(action));
+  const menu = offered.map(([, , label]) => label).concat(['[N]ote', '[J]SON', '[Q]uit']).join(', ');
+  let note = '';
+  while (true) {
+    const choice = (await prompt(`\n${menu}? `)).toLowerCase();
+    handleUserQuit(choice);
+    if (choice === 'n') {
+      note = await promptMultiline(color('Your note to the writer, sent with the action you choose:', 'cyan'));
+      continue;
     }
-    console.log(color('No feedback provided, approving as-is', 'yellow'));
-  }
-
-  // Cache current outline for potential future revision diff (on re-entry)
-  cacheForRevision(CONTENT_TYPES.OUTLINE, outline);
-  return { outline: true };
-}
-
-async function handleArticle(checkpoint, currentPhase) {
-  checkpointHeader('ARTICLE', currentPhase);
-
-  const contentBundle = checkpoint.contentBundle || {};
-  const html = checkpoint.articleHtml || null;
-  // Brief 2.7: the phase's last evaluation, not the whole history array; `escalated`
-  // was never sent.
-  const evaluation = ViewLogic.lastEvaluationFrom(checkpoint, 'article') || {};
-  const isEscalated = evaluation.escalatedToHuman === true;
-  const metadata = contentBundle.metadata || {};
-
-  // Display evaluation status (using DRY helper)
-  displayEvaluationStatus(evaluation, isEscalated);
-
-  // The automatic reworks of this round, before this stop (brief 2.7)
-  displayTrace(checkpoint.trace);
-
-  // Display revision diff if this is a revision (Phase 6.5)
-  displayRevisionDiff(revisionCache.article, contentBundle, evaluation, CONTENT_TYPES.ARTICLE, REVISION_CAPS.ARTICLE);
-
-  // ═══════════════════════════════════════════════════════════════════════════════
-  // METADATA
-  // ═══════════════════════════════════════════════════════════════════════════════
-  if (Object.keys(metadata).length > 0) {
-    console.log(color('\n  Metadata:', 'dim'));
-    if (metadata.sessionId) console.log(color(`    Session: ${metadata.sessionId}`, 'dim'));
-    if (metadata.theme) console.log(color(`    Theme: ${metadata.theme}`, 'dim'));
-    if (metadata.generatedAt) console.log(color(`    Generated: ${metadata.generatedAt}`, 'dim'));
-    if (metadata.version) console.log(color(`    Version: ${metadata.version}`, 'dim'));
-  }
-
-  // Show FULL article content for review (Commit 8.24)
-  console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
-  console.log(color('                         FULL ARTICLE DRAFT', 'bright'));
-  console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
-
-  // Headline (complete: main, sub/deck, kicker)
-  if (contentBundle.headline) {
-    console.log(color('\n┌─ HEADLINE ─────────────────────────────────────────────────────┐', 'yellow'));
-    if (contentBundle.headline.kicker) {
-      console.log(color(`│ Kicker: ${contentBundle.headline.kicker}`, 'dim'));
+    if (choice === 'j') {
+      prettyPrint(checkpoint[STOP_OUTPUT_KEYS[stop]]);
+      continue;
     }
-    console.log(color('│ Main:', 'bright'));
-    console.log(`│   ${contentBundle.headline.main || 'N/A'}`);
-    if (contentBundle.headline.sub || contentBundle.headline.deck) {
-      console.log(color('│ Deck:', 'dim'));
-      console.log(`│   ${contentBundle.headline.sub || contentBundle.headline.deck}`);
+    const picked = offered.find(([key]) => key === choice);
+    if (!picked) {
+      console.log(color('Choose one of the letters above.', 'yellow'));
+      continue;
     }
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  // Byline (complete: author, title, location, date)
-  if (contentBundle.byline) {
-    const byline = contentBundle.byline;
-    const bylineInfo = [];
-    if (byline.author) bylineInfo.push(byline.author);
-    if (byline.title) bylineInfo.push(byline.title);
-    if (byline.location) bylineInfo.push(byline.location);
-    if (byline.date) bylineInfo.push(byline.date);
-    console.log(color(`\nByline: ${bylineInfo.join(' | ')}`, 'dim'));
-  }
-
-  // Hero Image
-  if (contentBundle.heroImage) {
-    const hero = contentBundle.heroImage;
-    console.log(color('\n┌─ HERO IMAGE ───────────────────────────────────────────────────┐', 'yellow'));
-    console.log(`│ 📷 ${hero.filename || hero.photo || 'No filename'}`);
-    if (hero.caption) console.log(`│ Caption: ${hero.caption}`);
-    if (hero.characters?.length > 0) {
-      console.log(color(`│ Characters: ${hero.characters.join(', ')}`, 'dim'));
+    const action = picked[1];
+    const built = stopApproval(stop, checkpoint, { action, note });
+    if (built.refusal) {
+      console.log(color(built.refusal, 'yellow'));
+      continue;
     }
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
+    return built.payload;
   }
-
-  // Sections - show FULL prose content
-  if (contentBundle.sections?.length > 0) {
-    console.log(color('\n═══════════════════════════════════════════════════════════════', 'magenta'));
-    console.log(color('                         ARTICLE SECTIONS', 'bright'));
-    console.log(color('═══════════════════════════════════════════════════════════════', 'magenta'));
-
-    contentBundle.sections.forEach((section, i) => {
-      console.log(color(`\n┌─ ${section.id?.toUpperCase() || `SECTION ${i + 1}`} ─${'─'.repeat(Math.max(0, 50 - (section.id?.length || 10)))}┐`, 'yellow'));
-      if (section.heading) {
-        console.log(color(`│ ${section.heading}`, 'bright'));
-      }
-      console.log('│');
-
-      // Show all content blocks
-      if (section.content?.length > 0) {
-        section.content.forEach((block, j) => {
-          if (block.type === 'paragraph') {
-            // Wrap long paragraphs for readability
-            const text = block.text || '';
-            const lines = text.match(/.{1,70}(\s|$)/g) || [text];
-            lines.forEach(line => console.log(`│ ${line.trim()}`));
-            console.log('│');
-          } else if (block.type === 'quote') {
-            console.log(color(`│ "${block.text}"`, 'cyan'));
-            if (block.attribution) console.log(color(`│   — ${block.attribution}`, 'dim'));
-            console.log('│');
-          } else if (block.type === 'evidence-reference') {
-            console.log(color(`│ 📄 [Evidence: ${block.evidenceId}] ${block.caption || ''}`, 'green'));
-            console.log('│');
-          } else if (block.type === 'photo') {
-            console.log(color(`│ 📷 [Photo: ${block.filename}] ${block.caption || ''}`, 'blue'));
-            console.log('│');
-          } else if (block.type === 'list') {
-            (block.items || []).forEach(item => console.log(`│   • ${item}`));
-            console.log('│');
-          }
-        });
-      }
-      console.log(color(`└${'─'.repeat(68)}┘`, 'yellow'));
-    });
-  }
-
-  // Pull Quotes
-  if (contentBundle.pullQuotes?.length > 0) {
-    console.log(color('\n┌─ PULL QUOTES ──────────────────────────────────────────────────┐', 'yellow'));
-    contentBundle.pullQuotes.forEach((pq, i) => {
-      const attr = pq.attribution ? ` — ${pq.attribution}` : ' (Nova insight)';
-      console.log(`│ ${i + 1}. "${pq.text}"${attr}`);
-    });
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  // Evidence Cards (sidebar) - complete with owner, significance, placement
-  if (contentBundle.evidenceCards?.length > 0) {
-    console.log(color('\n┌─ EVIDENCE CARDS (Sidebar) ─────────────────────────────────────┐', 'yellow'));
-    contentBundle.evidenceCards.forEach((card, i) => {
-      console.log(color(`│ ${i + 1}. ${card.title || card.evidenceId}`, 'cyan'));
-      if (card.summary) console.log(`│    ${card.summary.substring(0, 55)}${card.summary.length > 55 ? '...' : ''}`);
-      const cardMeta = [];
-      if (card.owner) cardMeta.push(`Owner: ${card.owner}`);
-      if (card.significance) cardMeta.push(`Significance: ${card.significance}`);
-      if (card.placement || card.afterSection) cardMeta.push(`After: ${card.placement || card.afterSection}`);
-      if (cardMeta.length > 0) {
-        console.log(color(`│    ${cardMeta.join(' │ ')}`, 'dim'));
-      }
-    });
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  // Photos (standalone array, not in sections)
-  if (contentBundle.photos?.length > 0) {
-    console.log(color('\n┌─ PHOTOS ───────────────────────────────────────────────────────┐', 'yellow'));
-    contentBundle.photos.forEach((photo, i) => {
-      const filename = photo.filename || photo.photo || `photo-${i + 1}`;
-      console.log(color(`│ ${i + 1}. 📷 ${filename}`, 'cyan'));
-      if (photo.caption) console.log(`│    Caption: ${photo.caption.substring(0, 50)}${photo.caption.length > 50 ? '...' : ''}`);
-      const photoMeta = [];
-      if (photo.characters?.length > 0) photoMeta.push(`Characters: ${photo.characters.join(', ')}`);
-      if (photo.placement || photo.afterSection) photoMeta.push(`After: ${photo.placement || photo.afterSection}`);
-      if (photoMeta.length > 0) {
-        console.log(color(`│    ${photoMeta.join(' │ ')}`, 'dim'));
-      }
-    });
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  // Financial Tracker
-  if (contentBundle.financialTracker?.entries?.length > 0) {
-    console.log(color('\n┌─ FINANCIAL TRACKER ────────────────────────────────────────────┐', 'yellow'));
-    contentBundle.financialTracker.entries.forEach(entry => {
-      console.log(`│ 💰 ${entry.account}: ${entry.amount}`);
-      if (entry.description || entry.note) {
-        console.log(color(`│    ${entry.description || entry.note}`, 'dim'));
-      }
-    });
-    console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-  }
-
-  console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
-
-  // Word count estimate
-  const wordCount = JSON.stringify(contentBundle).split(/\s+/).length;
-  console.log(color(`Estimated word count: ~${wordCount} words`, 'dim'));
-
-  if (html) {
-    console.log(color(`HTML length: ${html.length} characters`, 'dim'));
-  }
-
-  // DRY: Use centralized helpers
-  const autoApproval = handleAutoApproval('article', checkpoint, '[AUTO] Approving article...');
-  if (autoApproval) return autoApproval;
-
-  const choice = await prompt('\n[A]pprove, [H]TML (view rendered), [J]SON (raw), [R]eject with feedback, or [Q]uit? ');
-  handleUserQuit(choice);
-
-  if (choice.toLowerCase() === 'h') {
-    if (html) {
-      console.log(color('\nFull HTML:', 'cyan'));
-      console.log(html);
-    } else {
-      console.log(color('HTML not yet assembled', 'yellow'));
-    }
-    // DRY: Use confirmAction utility
-    await confirmAction('\nApprove this article?', { throwOnReject: true, rejectMessage: 'User rejected article' });
-  }
-
-  if (choice.toLowerCase() === 'j') {
-    console.log(color('\nRaw JSON ContentBundle:', 'cyan'));
-    prettyPrint(contentBundle);
-    // DRY: Use confirmAction utility
-    await confirmAction('\nApprove this article?', { throwOnReject: true, rejectMessage: 'User rejected article' });
-  }
-
-  if (choice.toLowerCase() === 'r') {
-    console.log(color('\nEnter revision feedback:', 'cyan'));
-    const feedback = await promptMultiline('');
-    if (feedback.trim()) {
-      // Cache current article for diff display on next revision (Phase 6.5)
-      cacheForRevision(CONTENT_TYPES.ARTICLE, contentBundle, feedback.trim());
-      return { article: false, articleFeedback: feedback.trim() };
-    }
-    console.log(color('No feedback provided, approving as-is', 'yellow'));
-  }
-
-  // Cache current article for potential future revision diff (on re-entry)
-  cacheForRevision(CONTENT_TYPES.ARTICLE, contentBundle);
-  return { article: true };
 }
 
 // Map approval types to handlers
@@ -3139,10 +2192,10 @@ const checkpointHandlers = {
   'await-full-context': handleAwaitFullContext, // Incremental input (parallel branch architecture)
   'pre-curation': handlePreCuration,           // Phase 4f
   'evidence-and-photos': handleEvidenceBundle,
-  'arc-selection': handleArcSelection,
-  'photos': handlePhotos,                      // Photo late-join: folder collected after arc selection
-  'outline': handleOutline,
-  'article': handleArticle
+  'arc-selection': handleDecisionStop,         // The story meeting (task 4.12a)
+  'photos': handlePhotos,                      // Photo late-join: folder collected after the story meeting
+  'outline': handleDecisionStop,               // The map
+  'article': handleDecisionStop                // The desk
 };
 
 // Display checkpoint data without interactive prompts (for step mode)
@@ -3178,16 +2231,13 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
 
     case 'character-ids':
       checkpointHeader('CHARACTER_IDS', currentPhase);
-      const photos = checkpoint.sessionPhotos || [];
-      // photoAnalyses can be { analyses: [...] } or direct array
-      const analysesData = checkpoint.photoAnalyses?.analyses || checkpoint.photoAnalyses || [];
-      const analyses = Array.isArray(analysesData) ? analysesData : [];
+      // Each analysis with its photo, paired by filename as the console pairs them (task 4.12a).
+      const cards = characterIdCardsOf(checkpoint);
       const roster = checkpoint.sessionConfig?.roster || [];
-      console.log(color(`Photos to identify (${photos.length}):`, 'bright'));
-      analyses.forEach((analysis, i) => {
-        const photoPath = photos[i] || 'unknown';
-        const photoName = photoPath.split(/[/\\]/).pop(); // Get filename only
-        console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${photoName}`);
+      console.log(color(`Photos to identify (${cards.length}):`, 'bright'));
+      cards.forEach((card, i) => {
+        const analysis = card.analysis;
+        console.log(`\n  ${color(`Photo ${i + 1}:`, 'cyan')} ${card.displayName}${card.leftOut ? color(' [LEFT OUT]', 'yellow') : ''}`);
         console.log(`  ${color('Visual:', 'dim')} ${analysis.visualContent?.substring(0, 100)}...`);
         const charDescs = analysis.characterDescriptions || analysis.peopleDescriptions || [];
         console.log(`  ${color('People:', 'dim')} ${charDescs.length} detected`);
@@ -3274,156 +2324,39 @@ function displayCheckpointData(checkpointType, checkpoint, currentPhase) {
       break;
 
     case 'arc-selection':
-      checkpointHeader('ARC_SELECTION', currentPhase);
-      const arcs = checkpoint.narrativeArcs || [];
-      console.log(color(`Available Narrative Arcs (${arcs.length}):`, 'bright'));
-      arcs.forEach((arc, i) => {
-        console.log(`\n  ${color(`${i + 1}. ${arc.title || arc.id}`, 'cyan')}`);
-        if (arc.hook) console.log(`     Hook: ${arc.hook.substring(0, 80)}...`);
-        if (arc.evidence) console.log(color(`     Evidence: ${arc.evidence.length} items`, 'dim'));
-      });
-      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
-      break;
-
     case 'outline':
-      checkpointHeader('OUTLINE', currentPhase);
-      const outline = checkpoint.outline || {};
-
-      // Show FULL outline for step mode (Commit 8.24)
-      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
-      console.log(color('                         FULL ARTICLE OUTLINE', 'bright'));
-      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
-
-      // LEDE
-      console.log(color('\n┌─ LEDE ─────────────────────────────────────────────────────────┐', 'yellow'));
-      console.log(color('│ Hook:', 'bright'));
-      console.log(`│   ${outline.lede?.hook || 'N/A'}`);
-      console.log(color('│ Key Tension:', 'bright'));
-      console.log(`│   ${outline.lede?.keyTension || 'N/A'}`);
-      console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-
-      // THE STORY
-      console.log(color('\n┌─ THE STORY ────────────────────────────────────────────────────┐', 'yellow'));
-      if (outline.theStory?.arcs) {
-        outline.theStory.arcs.forEach((arc, i) => {
-          console.log(color(`│\n│ Arc ${i + 1}: ${arc.name || arc.arcId || 'Unnamed'}`, 'cyan'));
-          console.log(`│   Paragraphs: ${arc.paragraphCount || 0}`);
-          if (arc.keyPoints?.length > 0) {
-            arc.keyPoints.forEach(p => {
-              const text = typeof p === 'string' ? p : JSON.stringify(p);
-              console.log(`│     • ${text}`);
-            });
-          }
-          if (arc.evidenceCards?.length > 0) {
-            arc.evidenceCards.forEach(c => {
-              const id = typeof c === 'string' ? c : (c.evidenceId || c.id || JSON.stringify(c));
-              console.log(`│     📄 ${id}`);
-            });
-          }
-          if (arc.photoPlacement) {
-            const photo = arc.photoPlacement;
-            const filename = typeof photo === 'string' ? photo : (photo.filename || photo.photo || JSON.stringify(photo));
-            console.log(color(`│   Photo: ${filename}`, 'dim'));
-          }
-        });
-      }
-      console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-
-      // Other sections summary
-      if (outline.followTheMoney) {
-        console.log(color(`\n┌─ FOLLOW THE MONEY: ${outline.followTheMoney.focus || 'N/A'}`, 'yellow'));
-        if (outline.followTheMoney.shellAccounts?.length > 0) {
-          outline.followTheMoney.shellAccounts.forEach(a => {
-            if (typeof a === 'string') {
-              console.log(`│   💰 ${a}`);
-            } else {
-              const name = a.name || a.account || a.accountName || 'Unknown';
-              const amount = a.amount || '';
-              console.log(`│   💰 ${name}${amount ? `: ${amount}` : ''}`);
-            }
-          });
-        }
-      }
-      if (outline.thePlayers) {
-        console.log(color(`┌─ THE PLAYERS: ${outline.thePlayers.focus || 'N/A'}`, 'yellow'));
-      }
-      if (outline.whatsMissing) {
-        console.log(color(`┌─ WHAT'S MISSING: ${outline.whatsMissing.focus || 'N/A'}`, 'yellow'));
-      }
-      if (outline.closing) {
-        console.log(color(`┌─ CLOSING: ${outline.closing.theme || 'N/A'}`, 'yellow'));
-      }
-      console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
-      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
-      break;
-
     case 'article':
-      checkpointHeader('ARTICLE', currentPhase);
-      const contentBundle = checkpoint.contentBundle || {};
-      const htmlContent = checkpoint.articleHtml || null;
-
-      // Show FULL article for step mode (Commit 8.24)
-      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
-      console.log(color('                         FULL ARTICLE DRAFT', 'bright'));
-      console.log(color('═══════════════════════════════════════════════════════════════', 'cyan'));
-
-      // Headline
-      if (contentBundle.headline) {
-        console.log(color('\n┌─ HEADLINE ─────────────────────────────────────────────────────┐', 'yellow'));
-        console.log(`│   ${contentBundle.headline.main || 'N/A'}`);
-        if (contentBundle.headline.sub) console.log(`│   ${contentBundle.headline.sub}`);
-        console.log(color('└────────────────────────────────────────────────────────────────┘', 'yellow'));
-      }
-
-      // Sections with full prose
-      if (contentBundle.sections?.length > 0) {
-        console.log(color('\n═══════════════════════════════════════════════════════════════', 'magenta'));
-        contentBundle.sections.forEach((section, i) => {
-          console.log(color(`\n┌─ ${section.id?.toUpperCase() || `SECTION ${i + 1}`} ─${'─'.repeat(Math.max(0, 50 - (section.id?.length || 10)))}┐`, 'yellow'));
-          if (section.heading) console.log(color(`│ ${section.heading}`, 'bright'));
-          if (section.content?.length > 0) {
-            section.content.forEach(block => {
-              if (block.type === 'paragraph') {
-                const text = block.text || '';
-                const lines = text.match(/.{1,70}(\s|$)/g) || [text];
-                lines.forEach(line => console.log(`│ ${line.trim()}`));
-                console.log('│');
-              } else if (block.type === 'quote') {
-                console.log(color(`│ "${block.text}"`, 'cyan'));
-                if (block.attribution) console.log(color(`│   — ${block.attribution}`, 'dim'));
-              } else if (block.type === 'evidence-reference') {
-                console.log(color(`│ 📄 [Evidence: ${block.evidenceId}]`, 'green'));
-              } else if (block.type === 'photo') {
-                console.log(color(`│ 📷 [Photo: ${block.filename}]`, 'blue'));
-              }
-            });
-          }
-          console.log(color(`└${'─'.repeat(68)}┘`, 'yellow'));
-        });
-      }
-
-      // Sidebar components summary
-      if (contentBundle.pullQuotes?.length > 0) {
-        console.log(color(`\nPull Quotes: ${contentBundle.pullQuotes.length}`, 'dim'));
-      }
-      if (contentBundle.evidenceCards?.length > 0) {
-        console.log(color(`Evidence Cards: ${contentBundle.evidenceCards.length}`, 'dim'));
-      }
-      if (contentBundle.financialTracker?.entries?.length > 0) {
-        console.log(color(`Financial Tracker: ${contentBundle.financialTracker.entries.length} entries`, 'dim'));
-      }
-
-      console.log(color('\n═══════════════════════════════════════════════════════════════', 'cyan'));
-      if (htmlContent) {
-        console.log(color(`HTML length: ${htmlContent.length} characters`, 'dim'));
-      }
-      displayWriterQuestions(checkpoint.writerQuestions, checkpointType);
+      printStop(checkpointType, checkpoint, currentPhase);
       break;
 
     default:
       console.log(color(`Unknown checkpoint type: ${checkpointType}`, 'yellow'));
       prettyPrint(checkpoint);
   }
+}
+
+// ============================================================================
+// Threads from before the story meeting (task 4.12a; the integrator's ruling 3)
+// ============================================================================
+
+/** Prints the old-thread guard's message and the rollback to the story meeting. */
+function printOldThreadNotice(notice) {
+  console.error(color(`\n${notice.message}`, 'red'));
+  notice.commands.forEach(({ label, command }) => {
+    console.log(color(label, 'dim'));
+    console.log(color(`  ${command}`, 'cyan'));
+  });
+}
+
+/**
+ * Whether the server refused a request because the thread is from before the story meeting:
+ * when it did, the guard's message and the rollback are printed, and the run posts nothing else.
+ */
+function stoppedOnOldThread(sessionId, response) {
+  const flag = oldThreadOfResponse(response);
+  if (!flag) return false;
+  printOldThreadNotice(oldThreadNotice(sessionId, flag));
+  return true;
 }
 
 // ============================================================================
@@ -3440,10 +2373,12 @@ async function runWalkthrough() {
   console.log(`Theme: ${THEME}`);
   if (VERBOSE) console.log(color('Verbose mode enabled', 'dim'));
 
-  // Load auto-approval profile when in AUTO_MODE
-  if (AUTO_MODE) {
-    const profileName = PROFILE_NAME || 'smart-defaults';
-    activeProfile = loadAutoProfile(profileName);
+  // Task 4.12a: --action and --note are the director's at the one stop --approve names in step
+  // mode, a stop whose payload the console's builders make. Anywhere else they would act at
+  // every stop a run passes, or at a stop that takes no action of its own, so the run stops.
+  if ((ACTION_ARG || NOTE_ARG) && !(APPROVE_TYPE && STEP_MODE && Object.prototype.hasOwnProperty.call(STOP_ACTIONS, APPROVE_TYPE))) {
+    console.error(color('--action and --note go with --approve <stop> and --step, at the story meeting (arc-selection), the map (outline) or the article.', 'red'));
+    return;
   }
 
   console.log('');
@@ -3501,6 +2436,21 @@ async function runWalkthrough() {
 
   console.log(color(`\nSession ID: ${sessionId}`, 'bright'));
 
+  // Task 4c-fix: a rollback continues the thread it names, so only a run on its own input,
+  // without --resume and without --rollback, starts the session over (startsSessionOver).
+  const startsOver = startsSessionOver({ rawSessionInput: inputData.rawSessionInput, resume: RESUME_MODE, rollbackTo: ROLLBACK_TO });
+
+  // Task 4.12a (the integrator's ruling 3): a run that continues a thread reads where it stands
+  // before it posts anything. A thread from before the story meeting gets the server's message
+  // and the rollback to the meeting, and nothing else is posted to it, unless this run is that
+  // rollback or one to a point before the meeting.
+  const firstRead = (APPROVE_TYPE || !startsOver) ? await apiGet(`/api/session/${sessionId}/checkpoint`) : undefined;
+  const oldThread = oldThreadStop({ sessionId, checkpointRead: firstRead, rollbackTo: ROLLBACK_TO });
+  if (oldThread) {
+    printOldThreadNotice(oldThread);
+    return;
+  }
+
   // Handle rollback first if specified
   if (ROLLBACK_TO) {
     console.log(color(`\nRolling back to: ${ROLLBACK_TO}`, 'yellow'));
@@ -3512,6 +2462,7 @@ async function runWalkthrough() {
     // non-blocking (returns {status:'processing'} and emits the result via SSE).
     const { status, data, error } = await apiCall(`/api/session/${sessionId}/rollback`, rollbackBody, 'POST', sessionId);
     if (status !== 200) {
+      if (stoppedOnOldThread(sessionId, { status, data })) return;
       console.error(color(`Rollback failed: ${data?.error || error}`, 'red'));
       return;
     }
@@ -3531,11 +2482,12 @@ async function runWalkthrough() {
   // the harness says where the thread is and stops. Otherwise /start for a new session
   // and /resume for an existing one. Task 4c-fix: a rollback names an existing thread,
   // so after it the harness continues that thread as --resume would, and never posts
-  // /start (scripts/lib/paused-stop.js: startsSessionOver, openingRequest).
+  // /start (scripts/lib/paused-stop.js: startsSessionOver, openingRequest). Task 4.12a: the
+  // read is the first one, unless a rollback has moved the thread since.
   const opening = openingRequest({
     approveType: APPROVE_TYPE,
-    startsOver: startsSessionOver({ rawSessionInput: inputData.rawSessionInput, resume: RESUME_MODE, rollbackTo: ROLLBACK_TO }),
-    checkpointRead: APPROVE_TYPE ? await apiGet(`/api/session/${sessionId}/checkpoint`) : undefined,
+    startsOver,
+    checkpointRead: APPROVE_TYPE ? (ROLLBACK_TO ? await apiGet(`/api/session/${sessionId}/checkpoint`) : firstRead) : undefined,
     stateOverrides: Boolean(stateOverrides)
   });
 
@@ -3584,6 +2536,7 @@ async function runWalkthrough() {
     }
 
     if (status !== 200) {
+      if (stoppedOnOldThread(sessionId, { status, data })) return;
       console.error(color(`Resume failed: ${data?.error || error}`, 'red'));
       return;
     }
@@ -3631,8 +2584,9 @@ async function runWalkthrough() {
       if (currentData.validationResults) {
         console.log(color('\nValidation Results:', 'bright'));
         console.log(`  Passed: ${currentData.validationResults.passed ? color('YES', 'green') : color('NO', 'red')}`);
-        if (currentData.validationResults.issues) {
-          console.log(`  Issues: ${currentData.validationResults.issues.length}`);
+        // Task 4.12a: a verdict's must-fix list is its structuralIssues.
+        if (Array.isArray(currentData.validationResults.structuralIssues)) {
+          console.log(`  Structural issues: ${currentData.validationResults.structuralIssues.length}`);
         }
       }
 
@@ -3672,8 +2626,16 @@ async function runWalkthrough() {
           if (APPROVE_FILE) {
             approvals = loadApprovalFile(APPROVE_FILE);
           } else {
-            // DRY: Use single source of truth for default approvals
-            approvals = getDefaultApprovalForProfile(checkpointType, checkpoint);
+            // DRY: Use single source of truth for default approvals. Task 4.12a: at the story
+            // meeting, the map, the desk and the character-IDs stop it is the console's own
+            // payload, with --action, --note and --leave-out; where the console would build
+            // none (a send-back with no note), the harness says why and posts nothing.
+            try {
+              approvals = defaultApproval(checkpointType, checkpoint);
+            } catch (refusal) {
+              console.error(color(`\n${refusal.message}`, 'red'));
+              break;
+            }
           }
           approvals = withPhotoDescriptions(checkpointType, approvals, PHOTO_DESCRIPTIONS);
           console.log(color(`\n─── Approving ${checkpointType}... ───`, 'dim'));
@@ -3690,6 +2652,7 @@ async function runWalkthrough() {
           }
 
           if (status !== 200) {
+            if (stoppedOnOldThread(sessionId, { status, data })) break;
             console.error(color(`Approval failed: ${data?.error || error}`, 'red'));
             break;
           }
@@ -3744,6 +2707,7 @@ async function runWalkthrough() {
           }
 
           if (status !== 200) {
+            if (stoppedOnOldThread(sessionId, { status, data })) break;
             console.error(color(`Approval failed: ${data?.error || error}`, 'red'));
             break;
           }
@@ -3788,7 +2752,7 @@ async function main() {
 
   console.log('\n' + color('═'.repeat(60), 'magenta'));
   console.log(color('  ALN Director Console - E2E Walkthrough', 'bright'));
-  console.log(color('  Phase 4f (8 checkpoints)', 'dim'));
+  console.log(color('  The story meeting, the map and the desk (phase 4)', 'dim'));
   console.log(color('═'.repeat(60), 'magenta'));
 
   // Only create readline if we need interactive input

@@ -222,7 +222,8 @@ describe('e2e-walkthrough decides how to open its run before any /start or /resu
   const decided = run.slice(run.indexOf('openingRequest({'));
 
   it('requires the decision from scripts/lib/paused-stop.js', () => {
-    expect(SRC).toMatch(/const \{ openingRequest, startsSessionOver, keepThreadCommands \} = require\('\.\/lib\/paused-stop'\);/);
+    // Task 4.12a: the old-thread guard's decisions come from the same module.
+    expect(SRC).toMatch(/const \{\s*openingRequest, startsSessionOver, keepThreadCommands, oldThreadStop, oldThreadOfResponse, oldThreadNotice\s*\} = require\('\.\/lib\/paused-stop'\);/);
   });
 
   // Final review (data-harness-docs[2]): the decision on --override is the opening's, so
@@ -238,13 +239,18 @@ describe('e2e-walkthrough decides how to open its run before any /start or /resu
     expect(SRC).not.toContain('Use --step without --approve');
   });
 
+  // Task 4.12a: a run that continues a thread reads it once before anything is posted
+  // (firstRead, for the old-thread guard); --approve decides from that read, or from a second
+  // read after a rollback, which moves the thread.
   it('reads GET /checkpoint whenever --approve names a stop, with or without --resume', () => {
-    expect(run).toMatch(/checkpointRead: APPROVE_TYPE \? await apiGet\(`\/api\/session\/\$\{sessionId\}\/checkpoint`\) : undefined/);
+    expect(run).toMatch(/checkpointRead: APPROVE_TYPE \? \(ROLLBACK_TO \? await apiGet\(`\/api\/session\/\$\{sessionId\}\/checkpoint`\) : firstRead\) : undefined/);
   });
 
-  // Task 4c-fix: --rollback is part of the decision, so a rollback never starts over.
+  // Task 4c-fix: --rollback is part of the decision, so a rollback never starts over. Task
+  // 4.12a: the decision is made once, before the first read, and the opening reads it.
   it('starts over only on its own input, without --resume and without --rollback', () => {
-    expect(run).toMatch(/startsOver: startsSessionOver\(\{ rawSessionInput: inputData\.rawSessionInput, resume: RESUME_MODE, rollbackTo: ROLLBACK_TO \}\)/);
+    expect(run).toMatch(/const startsOver = startsSessionOver\(\{ rawSessionInput: inputData\.rawSessionInput, resume: RESUME_MODE, rollbackTo: ROLLBACK_TO \}\);/);
+    expect(run.slice(run.indexOf('openingRequest({'))).toMatch(/^openingRequest\(\{\n\s*approveType: APPROVE_TYPE,\n\s*startsOver,/);
   });
 
   it('rolls back before it decides how to open the run, and a failed rollback posts nothing more', () => {
@@ -252,7 +258,8 @@ describe('e2e-walkthrough decides how to open its run before any /start or /resu
     expect(rollback).toBeGreaterThan(-1);
     expect(rollback).toBeLessThan(run.indexOf('openingRequest({'));
     const failed = run.slice(rollback, run.indexOf('openingRequest({'));
-    expect(failed).toMatch(/if \(status !== 200\) \{\n\s*console\.error\(color\(`Rollback failed: [^\n]*\n\s*return;\n\s*\}/);
+    // Task 4.12a: a refusal of an old thread prints its message and the rollback instead.
+    expect(failed).toMatch(/if \(status !== 200\) \{\n\s*if \(stoppedOnOldThread\(sessionId, \{ status, data \}\)\) return;\n\s*console\.error\(color\(`Rollback failed: [^\n]*\n\s*return;\n\s*\}/);
   });
 
   it('reads GET /checkpoint and decides before it posts /start or /resume', () => {
@@ -289,5 +296,81 @@ describe('e2e-walkthrough decides how to open its run before any /start or /resu
   it('prints approve commands an operator can copy: without --resume they reach the paused stop', () => {
     const printed = SRC.match(/--session \$\{sessionId\} --approve \$\{(?:nextCheckpointType|checkpointType)\} --step/g) || [];
     expect(printed).toHaveLength(2);
+  });
+});
+
+/**
+ * Task 4.12a (the integrator's ruling 3): a thread started before the story meeting is refused
+ * with 4.11's message (lib/old-thread.js), and GET /checkpoint carries its flag. The harness
+ * prints that message and the rollback to the meeting, and posts nothing else to such a thread:
+ * it reads where a thread stands before it posts anything to it, and a refusal that carries the
+ * flag stops the run the same way.
+ */
+describe('4.12a: a thread from before the story meeting (ruling 3)', () => {
+  const { oldThreadStop, oldThreadOfResponse, oldThreadNotice } = require('../../../scripts/lib/paused-stop');
+  const MESSAGE = 'This session was started before the story meeting. Roll back to the story meeting to continue.';
+  const FLAG = {
+    message: MESSAGE,
+    rollbackTo: 'arc-selection',
+    rollbackPoints: ['paper-evidence-selection', 'await-roster', 'await-full-context', 'input-review', 'pre-curation', 'evidence-and-photos', 'arc-selection']
+  };
+  const oldRead = () => pausedAt('outline', { oldThread: FLAG, checkpoint: { type: 'outline', oldThread: FLAG } });
+
+  it('prints the server\'s message and the rollback it names, as a command that keeps the thread', () => {
+    expect(oldThreadNotice('092626', FLAG)).toEqual({
+      message: MESSAGE,
+      commands: [{ label: 'To roll back to arc-selection, run:', command: 'node scripts/e2e-walkthrough.js --session 092626 --rollback arc-selection --step' }]
+    });
+    const [{ command }] = oldThreadNotice('092626', FLAG).commands;
+    const flags = command.split(/\s+/);
+    expect(startsSessionOver({ rawSessionInput: {}, resume: flags.includes('--resume'), rollbackTo: flags[flags.indexOf('--rollback') + 1] })).toBe(false);
+  });
+
+  it('stops a run on a thread GET /checkpoint flags, unless the run rolls back to a point the flag opens', () => {
+    expect(oldThreadStop({ sessionId: '092626', checkpointRead: oldRead(), rollbackTo: null })).toEqual(oldThreadNotice('092626', FLAG));
+    expect(oldThreadStop({ sessionId: '092626', checkpointRead: oldRead(), rollbackTo: 'outline' })).toEqual(oldThreadNotice('092626', FLAG));
+    expect(oldThreadStop({ sessionId: '092626', checkpointRead: oldRead(), rollbackTo: 'arc-selection' })).toBeNull();
+    expect(oldThreadStop({ sessionId: '092626', checkpointRead: oldRead(), rollbackTo: 'input-review' })).toBeNull();
+  });
+
+  it.each([
+    ['a thread the guard does not flag', pausedAt('outline', { oldThread: null })],
+    ['no thread', { status: 404, data: { sessionId: '092626', exists: false } }],
+    ['a failed read', { status: 500, error: 'fetch failed' }],
+    ['no read at all', undefined]
+  ])('lets the run go on for %s', (_name, read) => {
+    expect(oldThreadStop({ sessionId: '092626', checkpointRead: read, rollbackTo: null })).toBeNull();
+  });
+
+  it('reads the flag off a refusal: the 409 that carries it, and no other answer', () => {
+    expect(oldThreadOfResponse({ status: 409, data: { sessionId: '092626', error: MESSAGE, oldThread: FLAG } })).toEqual(FLAG);
+    expect(oldThreadOfResponse({ status: 409, data: { sessionId: '092626', error: 'An operation is already in progress for this session.' } })).toBeNull();
+    expect(oldThreadOfResponse({ status: 400, data: { error: 'No valid approval detected in request' } })).toBeNull();
+    expect(oldThreadOfResponse({ status: 200, data: { status: 'processing' } })).toBeNull();
+    expect(oldThreadOfResponse(undefined)).toBeNull();
+  });
+
+  describe('e2e-walkthrough posts nothing to an old thread', () => {
+    const SRC = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'scripts', 'e2e-walkthrough.js'), 'utf8');
+    const run = SRC.slice(SRC.indexOf('async function runWalkthrough('), SRC.indexOf('// Main checkpoint loop'));
+    const body = (signature) => {
+      const block = SRC.slice(SRC.indexOf(signature));
+      return block.slice(0, block.indexOf('\n}\n'));
+    };
+
+    it('reads where a thread it continues stands before it posts anything, and stops on the flag', () => {
+      const read = run.indexOf('apiGet(`/api/session/${sessionId}/checkpoint`)');
+      const stop = run.indexOf('oldThreadStop({');
+      const firstPost = Math.min(...['/rollback', '/start', '/resume'].map((route) => run.indexOf(`/api/session/\${sessionId}${route}`)));
+      expect(read).toBeGreaterThan(-1);
+      expect(stop).toBeGreaterThan(read);
+      expect(stop).toBeLessThan(firstPost);
+      expect(run).toMatch(/const firstRead = \(APPROVE_TYPE \|\| !startsOver\) \? await apiGet\(`\/api\/session\/\$\{sessionId\}\/checkpoint`\) : undefined;/);
+    });
+
+    it('stops on a refusal that carries the flag, after the rollback, the resume and both kinds of approval', () => {
+      expect((SRC.match(/stoppedOnOldThread\(sessionId, \{ status, data \}\)/g) || []).length).toBe(4);
+      expect(body('function stoppedOnOldThread(sessionId, response)')).toMatch(/oldThreadOfResponse\(response\)/);
+    });
   });
 });

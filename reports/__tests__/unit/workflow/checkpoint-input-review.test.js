@@ -185,14 +185,12 @@ describe('the e2e harness speaks the new gate contract', () => {
     expect(src).toContain('{ inputReview: true }');
   });
 
-  it('every --auto profile approves this gate', () => {
-    const dir = path.join(__dirname, '..', '..', '..', 'config', 'auto-profiles');
-    const profiles = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
-    expect(profiles.length).toBeGreaterThan(0);
-    profiles.forEach((f) => {
-      const cfg = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-      expect(cfg.checkpoints['input-review'].strategy).toBe('approve');
-    });
+  // Task 4.12a: the auto profiles went with their last reader; --auto sends the harness's
+  // default approval, which approves this gate.
+  it('--auto approves this gate', () => {
+    const block = src.slice(src.indexOf('function defaultApproval('));
+    const fn = block.slice(0, block.indexOf('\n}\n'));
+    expect(fn).toMatch(/case 'input-review':[\s\S]*?return \{ inputReview: true \};/);
   });
 });
 
