@@ -133,58 +133,66 @@ describe("4.7b: the stamp puts the map's headline, deck and top photo into the f
   });
 });
 
-// Brief 4.7c (4.7b's minor 4): a top photo the director removed on the map (a cut at
-// topPhoto, standingOnMap) is the director's cut of the hero at the article stop, so the
-// report flags a hero that a later automatic pass adds back.
-describe("4.7c: a top photo the director cut on the map is the director's cut of the hero", () => {
+// Brief 4.7d (ruling 1 on the follow-ups' findings): the stamp records no cut of the map's top
+// photo. A cut is carried by its text wherever the page prints it (lib/hand-edit-diff.js), and
+// T13 prints the photo in a section, so a cut of heroImage misfired. The console never cuts the
+// top photo: movePhoto moves it into a section, which leaves the map with no top photo, so the
+// writer is told to print no hero and the stamp prints none. Only a hand-built payload makes a
+// cut, and the stamp records nothing for it.
+describe("4.7d: the stamp records no cut of the map's top photo", () => {
+  const EditLogic = require('../../console/outline-edit-logic');
   /** A photo named the way the director names a session's photos. */
   const CUT = 'aln010126 (1 of 3).jpg';
-  /** The map with its top photo, CUT, removed by the director, and nothing chosen in its place. */
+
+  /** The map as the director left it, `left`, from the writer's `baseline`, at the article stop. */
+  const leftOnMap = (baseline, left) => atArticle({
+    outline: left, _mapBaseline: baseline, _outlineHandEdits: standingOnMap(null, baseline, left), heroImage: left.topPhoto || null
+  });
+
+  /** The map with its top photo, CUT, taken off by a hand-built payload, and `change` applied. */
   const cutMap = (change = () => {}) => {
     const baseline = clone(MAP);
     baseline.topPhoto = CUT;
     const left = clone(baseline);
     delete left.topPhoto;
     change(left);
-    return { outline: left, _mapBaseline: baseline, _outlineHandEdits: standingOnMap(null, baseline, left), heroImage: left.topPhoto || null };
+    return leftOnMap(baseline, left);
   };
 
-  it('the stamp records it as a cut of heroImage: before, the hero it removed; after, none', async () => {
-    const state = atArticle(cutMap());
+  it('a top photo the director moved into a section: no hero is stamped, and no cut is recorded', async () => {
+    const left = EditLogic.movePhoto(clone(MAP), EditLogic.MAP_TOP_PHOTO, 0, 'closing');
+    const state = leftOnMap(clone(MAP), left);
+    // The map records the move, from the top into the closing section.
+    expect(carriedEdits(state._outlineHandEdits, state.outline).map(({ path, from }) => [path, from]))
+      .toEqual([['sections[#closing].photos[#hero.jpg]', EditLogic.MAP_TOP_PHOTO]]);
+
+    // The writer's draft carries a hero of its own: the map's, before the move.
+    const sdk = recordingSdk(WRITERS_DRAFT);
+    const { contentBundle, _articleHandEdits } = await generateContentBundle(state, cfg(sdk));
+    expect(sdk.mock.calls[0][0].prompt).toContain('3. The map has no top photo, so the bundle has no "heroImage".');
+    expect(contentBundle).not.toHaveProperty('heroImage');
+    expect(_articleHandEdits).toBeNull();
+  });
+
+  it('a cut of the top photo, which only a hand-built payload makes, is no edit at the article stop', async () => {
+    const state = cutMap();
     expect(carriedEdits(state._outlineHandEdits, state.outline)).toEqual([
       expect.objectContaining({ path: 'topPhoto', before: { filename: CUT }, after: null })
     ]);
     const { contentBundle, _articleHandEdits } = await firstDraft(state);
     expect(contentBundle).not.toHaveProperty('heroImage');
-    expect(_articleHandEdits.edits).toEqual([
-      expect.objectContaining({ id: 'E1', path: 'heroImage', before: { filename: CUT }, after: null })
-    ]);
-    expect(carriedEdits(_articleHandEdits, contentBundle).map((edit) => edit.id)).toEqual(['E1']);
+    expect(_articleHandEdits).toBeNull();
   });
 
-  it('an automatic pass that brings the hero back is flagged in the report, and left as the pass wrote it', async () => {
-    const state = atArticle(cutMap());
-    const { contentBundle, _articleHandEdits } = await firstDraft(state);
-    const withHero = { ...clone(contentBundle), heroImage: { filename: CUT, caption: 'The room at the start.' } };
-    const update = await reviseContentBundle({
-      ...state, _articleHandEdits, _previousContentBundle: clone(contentBundle), articleRevisionCount: 1
-    }, cfg(recordingSdk(withHero)));
-    expect(update._articleHandEditReport.changed).toEqual([
-      expect.objectContaining({ id: 'E1', cut: true, automatic: true, director: `filename: ${CUT}`, became: CUT, restored: false })
-    ]);
-    expect(update.contentBundle.heroImage.filename).toBe(CUT);
-  });
-
-  it('beside a top photo the director chose in its place: the cut, then the choice', async () => {
-    const { contentBundle, _articleHandEdits } = await firstDraft(atArticle(cutMap((left) => {
+  it('beside a top photo the director chose in its place, the stamp records the choice alone', async () => {
+    const { contentBundle, _articleHandEdits } = await firstDraft(cutMap((left) => {
       left.topPhoto = 'p2.jpg';
       left.sections[1].photos = [];
-    })), { ...clone(WRITERS_DRAFT), heroImage: { filename: 'p2.jpg', caption: 'Alex leans over the ledger.' } });
+    }), { ...clone(WRITERS_DRAFT), heroImage: { filename: 'p2.jpg', caption: 'Alex leans over the ledger.' } });
     expect(contentBundle.heroImage).toEqual({ filename: 'p2.jpg', caption: 'Alex leans over the ledger.' });
     expect(_articleHandEdits.edits.map(({ id, path, before, after }) => [id, path, before, after])).toEqual([
-      ['E1', 'heroImage', { filename: CUT }, null],
-      ['E2', 'heroImage.filename', null, 'p2.jpg']
+      ['E1', 'heroImage.filename', null, 'p2.jpg']
     ]);
-    expect(carriedEdits(_articleHandEdits, contentBundle).map((edit) => edit.id)).toEqual(['E1', 'E2']);
+    expect(carriedEdits(_articleHandEdits, contentBundle).map((edit) => edit.id)).toEqual(['E1']);
   });
 });

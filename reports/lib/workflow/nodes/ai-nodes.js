@@ -1539,18 +1539,16 @@ async function generateContentBundle(state, config) {
  * director edits them at the desk. A line the map writer wrote is stamped and stays the
  * writer's.
  *
- * Brief 4.7c: a top photo the director removed on the map (a cut at its top photo the map
- * carries) is recorded as the director's cut of `heroImage`, `before` the hero it removed and
- * `after` none, ahead of the lines above. A cut is carried while its text is printed nowhere
- * (lib/hand-edit-diff.js), so the round's report flags the hero when a later automatic pass
- * brings it back, and code leaves it where the pass put it, as for any cut. A draft that
- * already prints that photo carries no such cut.
+ * Brief 4.7d: the stamp records no cut. The director takes the top photo off the map by
+ * moving it into a section (the console's movePhoto), which leaves the map with no top photo:
+ * the writer was told to print no hero, the draft prints none, and the desk shows any hero a
+ * later pass adds. A cut of `heroImage` would be carried by its text wherever the page prints
+ * it (lib/hand-edit-diff.js), and T13 prints that photo in its section.
  *
  * @param {Object} bundle - the writer's first draft
  * @param {Object} state - reads the map, the director's edits on it and the leave-out list
  * @returns {{contentBundle: Object, edits: Object|null}} the stamped draft, and the article
- *   stop's standing edits (null when the director wrote none of the three and cut no top
- *   photo)
+ *   stop's standing edits (null when the director wrote none of the three)
  */
 function stampFromMap(bundle, state) {
   const map = articleMapOf(state);
@@ -1568,15 +1566,10 @@ function stampFromMap(bundle, state) {
   }
 
   // The director's lines on the map: the map's standing edits at its headline, its deck
-  // and its top photo that the map as left carries.
-  const onMap = carriedEdits(state._outlineHandEdits, state.outline)
-    .filter((edit) => Array.isArray(edit.at) && edit.at.length === 1);
-  const theirs = new Set(onMap.filter((edit) => !isCut(edit)).map((edit) => edit.at[0].key));
-  // Brief 4.7c: each top photo the director cut, as the edit a send-back from a version
-  // whose hero is that photo to one with no hero records: a cut of heroImage.
-  const cutHeroes = onMap
-    .filter((edit) => isCut(edit) && edit.at[0].key === MAP_TOP_PHOTO && edit.before && typeof edit.before.filename === 'string')
-    .reduce((standing, edit) => standingAfterSendBack(standing, { heroImage: { filename: edit.before.filename } }, {}, 'bundle'), null);
+  // and its top photo that the map as left carries. A cut there is no line to stamp.
+  const theirs = new Set(carriedEdits(state._outlineHandEdits, state.outline)
+    .filter((edit) => !isCut(edit) && Array.isArray(edit.at) && edit.at.length === 1)
+    .map((edit) => edit.at[0].key));
   // The draft with the director's lines taken out: the stamp's diff against it records
   // each of them as the director's, with no writer's text before it.
   const without = { ...stamped, headline: { ...stamped.headline } };
@@ -1586,7 +1579,7 @@ function stampFromMap(bundle, state) {
     const { filename: _chosen, ...rest } = stamped.heroImage;
     without.heroImage = rest;
   }
-  return { contentBundle: stamped, edits: standingAfterSendBack(cutHeroes, without, stamped, 'bundle') };
+  return { contentBundle: stamped, edits: standingAfterSendBack(null, without, stamped, 'bundle') };
 }
 
 /**
