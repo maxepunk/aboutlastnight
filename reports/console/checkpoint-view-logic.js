@@ -515,8 +515,8 @@
    */
   function closedReason(text) {
     var reason = asString(text).trim();
-    if (!reason || /[.!?…]["'”’)\]]*$/.test(reason)) return reason;
-    return reason.replace(/[\s,;:\-–—]+$/, '') + '.';
+    if (!reason || /[.!?\u2026]["'\u201d\u2019)\]]*$/.test(reason)) return reason;
+    return reason.replace(/[\s,;:\-\u2013\u2014]+$/, '') + '.';
   }
 
   /**
