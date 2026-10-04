@@ -82,9 +82,11 @@
  * the edit), which code strikes again by id when a pass brings it back. A connection they
  * struck and then bring back is one edit of the whole connection too (`unstruck: true`;
  * brief 4.5c), carried while it is live. A whole element stays one edit when the director
- * later changes part of it (fix round 1, finding 1). And a reweave is held to them as an
- * automatic pass is (REWEAVE_PASS). The answers are the director's words, kept by their own
- * rule (lib/writer-questions.js carriedWeaveQuestions): no edit.
+ * later changes part of it (fix round 1, finding 1). Each look reads the director's version
+ * against what the meeting showed at the places their standing edits are (withShownEdits),
+ * so a change there is theirs with or without a pass since. And a reweave is held to them as
+ * an automatic pass is (REWEAVE_PASS). The answers are the director's words, kept by their
+ * own rule (lib/writer-questions.js carriedWeaveQuestions): no edit.
  *
  * THE MAP (brief 4.6): the director's edits on the story map go through the same
  * machinery, as the meeting's do. They are made at every approve and send-back, against
@@ -1389,27 +1391,64 @@ function wholeElementAsLeft(edit, shown, left) {
 }
 
 /**
- * The weave the director's changes at a look are read against (brief 4.5c): the writer's
- * last weave, with each connection that a standing strike of the director's struck in the
- * weave the meeting showed struck there too. A strike made at an approve, or in a round
- * whose rework did not run, is in the weave the meeting shows before any pass has kept it
- * in the baseline; read against it, bringing that connection back is the director's change,
- * as it is once a pass has kept the strike.
+ * A weave with one place of an edit as `shown` holds it (review of 4.5c, finding 2): a field
+ * of the weave; a thread or a connection under its id, whole; or one field of one. The place
+ * takes what `shown` holds there, absent included: a whole element `shown` holds and the
+ * weave lacks is added, and one the weave holds and `shown` lacks goes. A place under an id
+ * either weave repeats names no one element, and the weave stays as it is.
+ *
+ * @param {Object} weave
+ * @param {Object} shown
+ * @param {Object[]} steps - the edit's steps (stepsOf)
+ * @returns {Object}
+ */
+function withPlaceAsShown(weave, shown, steps) {
+  const [head, step, field] = steps;
+  if (!head || !('key' in head) || steps.length > 3) return weave;
+  if (steps.length === 1) {
+    const { [head.key]: _old, ...rest } = weave;
+    return shown[head.key] === undefined ? rest : { ...rest, [head.key]: clone(shown[head.key]) };
+  }
+  if (!isElementStep(step) || (field && !('key' in field))) return weave;
+  const id = weaveIdOf(step.match);
+  const there = elementsUnder(shown, head.key, id);
+  const here = elementsUnder(weave, head.key, id);
+  if (!id || there.length > 1 || here.length > 1) return weave;
+  const list = Array.isArray(weave[head.key]) ? [...weave[head.key]] : [];
+  if (!field) {
+    if (there.length === 1 && here.length === 1) list[here[0].index] = clone(there[0].element);
+    else if (there.length === 1) list.push(clone(there[0].element));
+    else if (here.length === 1) list.splice(here[0].index, 1);
+    else return weave;
+    return { ...weave, [head.key]: list };
+  }
+  if (there.length !== 1 || here.length !== 1) return weave;
+  const { [field.key]: _old, ...rest } = list[here[0].index];
+  const value = there[0].element[field.key];
+  list[here[0].index] = value === undefined ? rest : { ...rest, [field.key]: clone(value) };
+  return { ...weave, [head.key]: list };
+}
+
+/**
+ * The weave the director's changes at a look are read against (brief 4.5c; review of 4.5c,
+ * finding 2): the writer's last weave, with what the meeting showed at each place a standing
+ * edit of the director's is carried in the weave it showed. After a pass the two agree at
+ * those places, since code kept each edit in the weave the pass left. With no pass since the
+ * last look (an approve, then back to the meeting; a round whose rework did not run), the
+ * writer's last weave can hold the director's own earlier line where the meeting showed a
+ * later edit of theirs, and read against it, setting that place back to what it holds was
+ * no change: a connection struck again after they brought it back, a role or a field set
+ * again. Read against what the meeting showed, every change the director makes at the place
+ * of a standing edit is theirs, whether or not a pass ran since.
  *
  * @param {Object} baseline - the writer's last weave
  * @param {Object[]} edits - the meeting's standing edits so far
  * @param {Object|null} shown - the weave the meeting showed
  * @returns {Object}
  */
-function withShownStrikes(baseline, edits, shown) {
-  const ids = edits.filter((e) => isStrike(e) && editCarried(shown, e))
-    .map((e) => { const steps = stepsOf(e); return weaveIdOf(steps[1] && steps[1].match); })
-    .filter((id) => id && elementsUnder(baseline, 'connections', id).length === 1);
-  if (ids.length === 0) return baseline;
-  return {
-    ...baseline,
-    connections: baseline.connections.map((c) => (ids.includes(weaveIdOf(c)) && !isStruck(c) ? { ...c, [STRUCK_KEY]: true } : c))
-  };
+function withShownEdits(baseline, edits, shown) {
+  if (!isObj(shown)) return baseline;
+  return edits.filter((e) => editCarried(shown, e)).reduce((weave, e) => withPlaceAsShown(weave, shown, stepsOf(e)), baseline);
 }
 
 /**
@@ -1429,9 +1468,12 @@ function withShownStrikes(baseline, edits, shown) {
  *   given at the stop.
  * The baseline is the weave as the writer's last pass left it, the director's lines a
  * reweave kept among it, so an edit made before a reweave stands as the earlier edit and
- * is never given a second id. A connection the meeting showed struck by a standing strike
- * reads as struck in it (withShownStrikes), so bringing it back is an edit, an un-strike
- * (brief 4.5c), whether or not a pass has kept the strike.
+ * is never given a second id. At each place a standing edit is carried in the weave the
+ * meeting showed, it reads as the meeting showed it (withShownEdits; brief 4.5c and its
+ * review, finding 2), so a change there is the director's whether or not a pass ran since:
+ * bringing back a connection the meeting showed struck is an edit, an un-strike, and so is
+ * striking again one it showed brought back, or setting a role or a field the meeting showed
+ * as their edit back to the writer's.
  *
  * Every edit finds its element by its id, so a difference under an id the weave repeats
  * (weaveEditsBetween's `repeatedId`) can be no edit (fix round 1, finding 3). The meeting's
@@ -1463,7 +1505,7 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
   };
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const leftText = versionText(left);
-  const base = isObj(baseline) ? withShownStrikes(baseline, prior ? prior.edits : [], shown) : left;
+  const base = isObj(baseline) ? withShownEdits(baseline, prior ? prior.edits : [], shown) : left;
   const changes = weaveEditsBetween(base, left).filter((raw) => !covered(raw.at));
   const unfindable = changes.find((raw) => raw.repeatedId);
   if (unfindable) {

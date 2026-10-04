@@ -2564,3 +2564,99 @@ describe('4.5c: the meeting\'s un-strike, and the marks\' questions', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5c fix round 1: a look reads the director's version against what the meeting showed
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Review of 4.5c, finding 2. With no pass since the last look (an approve, then back to the
+// meeting; a round that did not run), the writer's last weave can hold the director's own
+// earlier line where the meeting showed a later edit of theirs. Read against the writer's
+// last weave alone, setting that place back to what it holds was no edit: a connection
+// struck again after it was brought back, or a role or a field set again. The console
+// offered Reweave, the gate refused it as empty, and the change stood unprotected. Every
+// place a standing edit is carried in the weave the meeting showed is now read against what
+// the meeting showed there, as it is after a pass. Invented text.
+describe('4.5c fix round 1: a look reads the director\'s version against what the meeting showed', () => {
+  const { WEAVE } = require('./fixtures/rework-state');
+  const STORY = 'The room voted overdose, and the ledger kept a sale on the books.';
+  const withC2 = (struck) => {
+    const weave = clone(WEAVE);
+    if (struck) weave.connections[1].struck = true;
+    return weave;
+  };
+  const withRole = (role) => {
+    const weave = clone(WEAVE);
+    weave.threads[2].role = role;
+    return weave;
+  };
+  const withStory = (story) => ({ ...clone(WEAVE), story });
+  const edits = (standing) => standing.edits.map((e) => [e.id, e.path, e.before, e.after]);
+  const kinds = (standing) => standing.edits.map((e) => [e.id, e.path, e.struck === true ? 'struck' : (e.unstruck === true ? 'brought back' : '')]);
+
+  it('a strike a round kept, brought back at an approve, then struck again with no round since: the strike is an edit, which the weave carries', () => {
+    const first = D.standingAtMeeting(null, clone(WEAVE), withC2(true));
+    // The round kept the strike: the writer's last weave holds it, and the meeting shows it.
+    const kept = withC2(true);
+    const back = D.standingAtMeeting(first, kept, withC2(false), { shown: kept });
+    expect(kinds(back)).toEqual([['E2', 'connections[#c2]', 'brought back']]);
+    // Back at the meeting with no pass since: it shows the connection live, and the director strikes it.
+    const again = D.standingAtMeeting(back, kept, withC2(true), { shown: withC2(false) });
+    expect(kinds(again)).toEqual([['E3', 'connections[#c2]', 'struck']]);
+    expect(again.issued).toBe(3);
+    expect(D.carriedEdits(again, withC2(true)).map((e) => e.id)).toEqual(['E3']);
+  });
+
+  it('a role a round kept, set back at an approve, then set again with no round since: the role is an edit, read from the role the meeting showed', () => {
+    const first = D.standingAtMeeting(null, clone(WEAVE), withRole('mirrors-it'));
+    const kept = withRole('mirrors-it');
+    const back = D.standingAtMeeting(first, kept, clone(WEAVE), { shown: kept });
+    expect(edits(back)).toEqual([['E2', 'threads[#t3].role', 'mirrors-it', 'complicates-it']]);
+    const again = D.standingAtMeeting(back, kept, withRole('mirrors-it'), { shown: clone(WEAVE) });
+    expect(edits(again)).toEqual([['E3', 'threads[#t3].role', 'complicates-it', 'mirrors-it']]);
+  });
+
+  it('a field the same way: the story set again is the director\'s line, which a reweave that paraphrases it gets back', () => {
+    const first = D.standingAtMeeting(null, clone(WEAVE), withStory(STORY));
+    const kept = withStory(STORY);
+    const back = D.standingAtMeeting(first, kept, clone(WEAVE), { shown: kept });
+    const again = D.standingAtMeeting(back, kept, withStory(STORY), { shown: clone(WEAVE) });
+    expect(edits(again)).toEqual([['E3', 'story', WEAVE.story, STORY]]);
+    const { output, report } = D.settleEdits(null, {
+      edits: D.carriedEdits(again, withStory(STORY)), before: withStory(STORY), after: withStory('A reweave that paraphrased the story.'), pass: D.REWEAVE_PASS
+    });
+    expect(output.story).toBe(STORY);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E3', restored: true })]);
+  });
+
+  it('with no round since an edit, setting its place back to the writer\'s last weave is the director\'s change, the same edit as after a round', () => {
+    const first = D.standingAtMeeting(null, clone(WEAVE), withRole('mirrors-it'));
+    // An approve, then back: the writer's last weave is the writer's, and the meeting shows the re-role.
+    const noRound = D.standingAtMeeting(first, clone(WEAVE), clone(WEAVE), { shown: withRole('mirrors-it') });
+    // A round that kept the re-role: the writer's last weave holds it, and the meeting shows it.
+    const afterRound = D.standingAtMeeting(first, withRole('mirrors-it'), clone(WEAVE));
+    expect(edits(noRound)).toEqual([['E2', 'threads[#t3].role', 'mirrors-it', 'complicates-it']]);
+    expect(edits(noRound)).toEqual(edits(afterRound));
+  });
+
+  it('a thread added at an approve and changed at the next look with no round since stays one added edit, as after a round', () => {
+    const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it' }] };
+    const first = D.standingAtMeeting(null, clone(WEAVE), added);
+    const changed = clone(added);
+    changed.threads[5].role = 'mirrors-it';
+    const noRound = D.standingAtMeeting(first, clone(WEAVE), changed, { shown: added });
+    expect(edits(noRound)).toEqual([['E1', 'threads[#t6]', null, changed.threads[5]]]);
+    expect(noRound.issued).toBe(1);
+  });
+
+  it('places with no standing edit, and an edit the meeting did not show, are read against the writer\'s last weave as before', () => {
+    // A send-back's rework changed the director's re-role: the meeting shows the rework's role, and the edit goes.
+    const first = D.standingAtMeeting(null, clone(WEAVE), withRole('mirrors-it'));
+    const reworked = withRole('grounds-it');
+    expect(edits(D.standingAtMeeting(first, reworked, clone(reworked), { shown: reworked }))).toEqual([]);
+    // A change where no edit stands is one edit against the writer's last weave.
+    const headline = { ...withRole('mirrors-it'), headline: 'The Ledger Kept Talking.' };
+    expect(edits(D.standingAtMeeting(first, clone(WEAVE), headline, { shown: withRole('mirrors-it') })))
+      .toEqual([['E1', 'threads[#t3].role', 'complicates-it', 'mirrors-it'], ['E2', 'headline', WEAVE.headline, 'The Ledger Kept Talking.']]);
+  });
+});

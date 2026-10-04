@@ -1013,3 +1013,60 @@ describe('4.5c: after a round that did not run, the retry line and Approve read 
     expect(ViewLogic.meetingApproveAsk(payloadOf(stateAt()), 'Make the sale the main thread.')).toBeNull();
   });
 });
+
+// Review of 4.5c, finding 2: the console reads the director's changes against the weave the
+// meeting showed, and the gate now reads the place of each standing edit the same way
+// (lib/hand-edit-diff.js withShownEdits), so the gate takes every reweave the console offers,
+// with a round since the last look or without one. With nothing changed, no note and no edit
+// standing, both refuse it. (With an edit standing and nothing changed at this look, the gate
+// takes a reweave, which the console does not offer: 4.5b's rule for an empty reweave beside
+// 4.8's ruling 5.)
+describe('4.5c fix round 1: the gate takes every reweave the console offers, with or without a round since', () => {
+  const { settleEdits, carriedEdits, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
+  const strikeC2 = (w) => setConnectionStruck(w, 1, true);
+  const bringBackC2 = (w) => setConnectionStruck(w, 1, false);
+  const mirrorT3 = (w) => setThreadRole(w, 2, 'mirrors-it');
+  const complicateT3 = (w) => setThreadRole(w, 2, 'complicates-it');
+  const STORY = 'The room voted overdose, and the ledger kept a sale on the books.';
+  const rewriteStory = (w) => setMeetingField(w, 'story', STORY);
+  const writersStory = (w) => setMeetingField(w, 'story', WEAVE.story);
+
+  /** The director acts at the meeting, as the gate takes it: the state after, with no pass since (R9 keeps it so). */
+  function acted(state, action, change) {
+    const data = payloadOf(state);
+    const taken = meetingResume(meetingPayload(action, data, change(meetingDraftOf(data, undefined)), ''), state);
+    expect(taken.error).toBeNull();
+    return { ...state, ...taken.stateUpdates };
+  }
+
+  /** A reweave that runs and keeps every line of the director's: code settles it, and its weave is the writer's last. */
+  function ranRound(state) {
+    const before = weaveLib.weaveForPrompt(state.weave);
+    const { output } = settleEdits(null, { edits: carriedEdits(state._weaveHandEdits, before), before, after: clone(before), pass: REWEAVE_PASS });
+    return {
+      ...state, weave: weaveLib.withFactCheckMark(output, MARK), _weaveBaseline: weaveLib.weaveForPrompt(output),
+      _meetingRound: null, humanArcRevisionCount: state.humanArcRevisionCount + 1
+    };
+  }
+
+  const CASES = [
+    ['bring back a strike a round kept', () => ranRound(acted(stateAt(), 'reweave', strikeC2)), bringBackC2, true],
+    ['bring back a strike made at an approve', () => acted(stateAt(), 'approve', strikeC2), bringBackC2, true],
+    ['strike again a connection brought back at an approve, after a round kept the strike', () => acted(ranRound(acted(stateAt(), 'reweave', strikeC2)), 'approve', bringBackC2), strikeC2, true],
+    ['set again a role set back at an approve, after a round kept it', () => acted(ranRound(acted(stateAt(), 'reweave', mirrorT3)), 'approve', complicateT3), mirrorT3, true],
+    ['rewrite again a story set back at an approve, after a round kept it', () => acted(ranRound(acted(stateAt(), 'reweave', rewriteStory)), 'approve', writersStory), rewriteStory, true],
+    ["set back to the writer's a role re-roled at an approve", () => acted(stateAt(), 'approve', mirrorT3), complicateT3, true],
+    ['leave the weave as the meeting showed it, with no edit standing', () => stateAt(), (w) => w, false],
+    ['only answer a question', () => stateAt(), (w) => setQuestionAnswer(w, 0, 'Sarah ran the bar.'), false]
+  ];
+
+  test.each(CASES)('%s', (_name, build, change, offered) => {
+    const state = build();
+    const data = payloadOf(state);
+    const left = change(meetingDraftOf(data, undefined));
+    expect(meetingButtons(data, left, '', false).reweave.disabled).toBe(!offered);
+    const gate = meetingResume({ meeting: 'reweave', weave: meetingWeaveOf(left) }, state);
+    expect(gate.error === null).toBe(offered);
+    if (!offered) expect(gate.error).toMatch(/carries no change to the weave and no note/);
+  });
+});

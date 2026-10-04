@@ -1663,3 +1663,86 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5c fix round 1, finding 2: a change at the place of a standing edit is the director's
+// whether or not a round ran since
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The review's probes (p4/4.5c-review/restrike-after-unstrike.js, role-back-and-forth.js):
+// a strike a round kept, brought back at an approve, then struck again with no round since,
+// was no edit, so the console offered Reweave and the gate refused it as empty; a role set
+// back and forth the same way did the same. The gate now reads each place a standing edit is
+// carried in the weave the meeting showed as the meeting showed it (lib/hand-edit-diff.js
+// withShownEdits). Invented text.
+describe('4.5c fix round 1: a change at the place of a standing edit is the director\'s whether or not a round ran since', () => {
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { withFactCheckMark, weaveForPrompt } = require('../../lib/weave');
+  const { settleEdits, carriedEdits, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
+  const { meetingCheckpointData } = require('../../lib/meeting');
+  const {
+    meetingDraftOf, meetingPayload, meetingButtons, setThreadRole, setConnectionStruck
+  } = require('../../console/checkpoint-view-logic');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const MARK = { at: 't', ready: true, fixes: 0 };
+  const atMeeting = () => ({
+    weave: withFactCheckMark(clone(WEAVE), MARK), _weaveBaseline: clone(WEAVE), directorGateNotes: [],
+    arcRevisionCount: 0, humanArcRevisionCount: 0
+  });
+  const take = (payload, state) => buildResumePayload(payload, state, 'journalist', 'arc-selection');
+  const dataOf = (state) => meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 });
+
+  /** The director acts at the meeting through the console's builders: the payload, Reweave's offer, and the gate's answer. */
+  function act(state, action, change) {
+    const data = dataOf(state);
+    const left = change(meetingDraftOf(data, undefined));
+    const payload = meetingPayload(action, data, left, '');
+    return { offered: !meetingButtons(data, left, '', false).reweave.disabled, payload, taken: payload ? take(payload, state) : null };
+  }
+
+  /** A reweave that runs and keeps every line of the director's: code settles it, and its weave is the writer's last. */
+  function ranRound(state) {
+    const before = weaveForPrompt(state.weave);
+    const { output } = settleEdits(null, { edits: carriedEdits(state._weaveHandEdits, before), before, after: clone(before), pass: REWEAVE_PASS });
+    return {
+      ...state, weave: withFactCheckMark(output, MARK), _weaveBaseline: weaveForPrompt(output),
+      _meetingRound: null, _arcFeedback: null, humanArcRevisionCount: state.humanArcRevisionCount + 1
+    };
+  }
+
+  it('strike, a reweave that keeps it, bring it back and approve, back at the meeting, strike again: Reweave is offered, the gate takes it, and the strike is an edit', () => {
+    const struck = act(atMeeting(), 'reweave', (w) => setConnectionStruck(w, 1, true));
+    expect(struck.taken.error).toBeNull();
+    const afterRound = ranRound({ ...atMeeting(), ...struck.taken.stateUpdates });
+    const back = act(afterRound, 'approve', (w) => setConnectionStruck(w, 1, false));
+    expect(back.taken.error).toBeNull();
+    expect(back.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.unstruck === true])).toEqual([['E2', 'connections[#c2]', true]]);
+    // Back at the meeting (R9): as the director left it, with no pass since.
+    const again = act({ ...afterRound, ...back.taken.stateUpdates }, 'reweave', (w) => setConnectionStruck(w, 1, true));
+    expect(again.offered).toBe(true);
+    expect(again.taken.error).toBeNull();
+    expect(again.taken.resume).toEqual({ approved: false, round: 'reweave' });
+    expect(again.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.struck === true])).toEqual([['E3', 'connections[#c2]', true]]);
+  });
+
+  it('a role the same way: set, kept by a reweave, set back and approved, then set again with no round since', () => {
+    const reroled = act(atMeeting(), 'reweave', (w) => setThreadRole(w, 2, 'mirrors-it'));
+    const afterRound = ranRound({ ...atMeeting(), ...reroled.taken.stateUpdates });
+    const back = act(afterRound, 'approve', (w) => setThreadRole(w, 2, 'complicates-it'));
+    expect(back.taken.error).toBeNull();
+    const again = act({ ...afterRound, ...back.taken.stateUpdates }, 'reweave', (w) => setThreadRole(w, 2, 'mirrors-it'));
+    expect(again.offered).toBe(true);
+    expect(again.taken.error).toBeNull();
+    expect(again.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.before, e.after]))
+      .toEqual([['E3', 'threads[#t3].role', 'complicates-it', 'mirrors-it']]);
+  });
+
+  it('with no round since an approve, setting the place of an edit back to the writer\'s is a reweave the gate takes, as after a round', () => {
+    const approved = act(atMeeting(), 'approve', (w) => setThreadRole(w, 2, 'mirrors-it'));
+    const back = act({ ...atMeeting(), ...approved.taken.stateUpdates }, 'reweave', (w) => setThreadRole(w, 2, 'complicates-it'));
+    expect(back.offered).toBe(true);
+    expect(back.taken.error).toBeNull();
+    expect(back.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.before, e.after]))
+      .toEqual([['E2', 'threads[#t3].role', 'mirrors-it', 'complicates-it']]);
+  });
+});
