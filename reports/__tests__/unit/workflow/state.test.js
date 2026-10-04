@@ -196,7 +196,9 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 87 state fields (includes revision context + human feedback fields)', () => {
+    // Phase 4 (brief 4.6): the old arc channels went with their last readers (R4), and the
+    // map's baseline and its checks' mark came.
+    it('includes all 86 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -260,15 +262,14 @@ describe('ReportStateAnnotation', () => {
         '_weaveHandEdits',
         '_weaveHandEditReport',
         '_weaveMarks',
-        // Analysis results
-        'narrativeArcs',
-        'selectedArcs',
-        'heroImage',  // Hero image filename for article generation
-        '_arcAnalysisCache',
+        // The hero: the map's top photo (phase 4, brief 4.6)
+        'heroImage',
         // Evaluation (Commit 8.6)
         'evaluationHistory',
-        // Generation outputs
+        // Generation outputs: the map, the writer's last map, the map checks' mark (brief 4.6)
         'outline',
+        '_mapBaseline',
+        '_mapCheck',
         'contentBundle',
         // Final outputs
         'assembledHtml',
@@ -417,16 +418,17 @@ describe('ReportStateAnnotation', () => {
         expect(defaultState.evidenceBundle).toBeNull();
       });
 
-      it('narrativeArcs defaults to empty array', () => {
-        expect(defaultState.narrativeArcs).toEqual([]);
+      // Phase 4 (brief 4.6; R4): the old arc channels went with their last readers.
+      it('the old arc channels are gone', () => {
+        ['narrativeArcs', 'selectedArcs', '_arcAnalysisCache'].forEach((field) => {
+          expect(Object.keys(ReportStateAnnotation.spec)).not.toContain(field);
+          expect(defaultState).not.toHaveProperty(field);
+        });
       });
 
-      it('selectedArcs defaults to empty array', () => {
-        expect(defaultState.selectedArcs).toEqual([]);
-      });
-
-      it('_arcAnalysisCache defaults to null', () => {
-        expect(defaultState._arcAnalysisCache).toBeNull();
+      it("the map's baseline and its checks' mark default to null (brief 4.6)", () => {
+        expect(defaultState._mapBaseline).toBeNull();
+        expect(defaultState._mapCheck).toBeNull();
       });
     });
 
@@ -480,7 +482,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(87);
+      expect(Object.keys(getDefaultState()).length).toBe(86);
     });
 
     it('declares the leave-out list (phase 4, brief 4.2)', () => {
@@ -593,9 +595,10 @@ describe('ReportStateAnnotation', () => {
     });
 
     // Phase 4 (brief 4.6; R5): the arc packages' phase went with the packages, and the
-    // outline evaluation's with the outline judge.
-    it('defines exactly 40 phases (photo late-join: added PHOTOS; brief 4.6: the arc packages and the outline judge went)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(40);
+    // outline evaluation's with the outline judge; the map checks' phase came, at 3.2.
+    it('defines exactly 41 phases (photo late-join: added PHOTOS; brief 4.6: the arc packages and the outline judge went, the map checks came)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(41);
+      expect(PHASES.MAP_CHECKS).toBe('3.2');
     });
 
     it('defines the photos gate phase after arc selection', () => {
@@ -746,28 +749,29 @@ describe('ReportStateAnnotation', () => {
       expect(Object.keys(ROLLBACK_CLEARS).sort()).toEqual(expected.sort());
     });
 
-    it('arc-selection clears arcs and downstream', () => {
+    // Phase 4 (brief 4.6): the map, its baseline and its checks' mark go with it.
+    it('arc-selection clears the map and downstream', () => {
       const fields = ROLLBACK_CLEARS['arc-selection'];
-      expect(fields).toContain('narrativeArcs');
-      expect(fields).toContain('selectedArcs');
+      expect(fields).not.toContain('weave');
       expect(fields).toContain('outline');
+      expect(fields).toContain('_mapBaseline');
+      expect(fields).toContain('_mapCheck');
       expect(fields).toContain('contentBundle');
       expect(fields).toContain('assembledHtml');
     });
 
-    it('outline clears outline and downstream', () => {
+    // Phase 4 (brief 4.6; R9): going back to the map reopens it as the director left it.
+    it('outline keeps the map, its mark, its edits and the hero, and clears the approval and the article', () => {
       const fields = ROLLBACK_CLEARS['outline'];
-      expect(fields).toContain('outline');
-      expect(fields).toContain('contentBundle');
-      // Should NOT include arcs
-      expect(fields).not.toContain('narrativeArcs');
+      ['outline', '_mapBaseline', '_mapCheck', '_outlineHandEdits', 'heroImage', 'weave'].forEach((field) => expect(fields).not.toContain(field));
+      ['outlineApproved', '_outlineFeedback', '_outlineHandEditReport', '_outlineTrace', 'contentBundle', 'articleApproved'].forEach((field) => expect(fields).toContain(field));
     });
 
     it('input-review clears its own gate plus everything downstream of the parse (B2)', () => {
       const fields = ROLLBACK_CLEARS['input-review'];
       expect(fields).toContain('inputReviewApproved');
       expect(fields).toContain('_inputCorrections');
-      expect(fields).toContain('narrativeArcs');
+      expect(fields).toContain('weave');
       expect(fields).toContain('assembledHtml');
       // NOT the parse outputs (loadDirectorNotes rehydrates them from disk on the
       // replay; a reject-with-corrections is what re-parses) and NOT the upstream
@@ -803,11 +807,9 @@ describe('ReportStateAnnotation', () => {
       expect(resets.articleRevisionCount).toBe(0);
     });
 
-    it('outline only resets outline and article counters', () => {
-      const resets = ROLLBACK_COUNTER_RESETS['outline'];
-      expect(resets.outlineRevisionCount).toBe(0);
-      expect(resets.articleRevisionCount).toBe(0);
-      expect(resets.arcRevisionCount).toBeUndefined();
+    // Phase 4 (brief 4.6; R9): the map reopens as the director left it, its counters with it.
+    it("outline resets the article's counters and keeps the map's", () => {
+      expect(ROLLBACK_COUNTER_RESETS['outline']).toEqual({ articleRevisionCount: 0, humanArticleRevisionCount: 0 });
     });
 
     it('article only resets article counter', () => {
@@ -904,7 +906,7 @@ describe('ReportStateAnnotation', () => {
     });
 
     it('generation fields are produced by AI', () => {
-      const generationFields = ['evidenceBundle', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', 'outline', 'contentBundle'];
+      const generationFields = ['evidenceBundle', 'weave', 'outline', '_mapBaseline', '_mapCheck', 'contentBundle'];
       const defaultState = getDefaultState();
 
       generationFields.forEach(field => {

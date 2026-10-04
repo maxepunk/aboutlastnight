@@ -34,7 +34,8 @@ const { PARSED_CHARACTER_IDS_SCHEMA } = require('../../lib/schemas/character-ids
 const { _testing: { ENRICHED_PHOTO_SCHEMA } } = require('../../lib/workflow/nodes/photo-nodes');
 const { createMockImagePromptBuilder } = require('../../lib/image-prompt-builder');
 const { articleWriterInputs, generateContentBundle } = require('../../lib/workflow/nodes/ai-nodes');
-const outlineSchema = require('../../lib/schemas/outline.schema.json');
+// Phase 4 (brief 4.6): the map writer's schema, the theme's map shape.
+const { mapSchemaFor } = require('../../lib/map');
 const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -54,10 +55,30 @@ const ENRICHED = {
   finalCaption: 'Alex and Morgan at the bar', identifiedCharacters: ['Alex', 'Morgan']
 };
 
+/** The <available-photos> section of a map writer's prompt, from the line that opens it. */
+const availablePhotos = (prompt) => prompt.slice(prompt.indexOf('\n<available-photos>'), prompt.indexOf('</available-photos>'));
+
+/**
+ * The map a map writer returns from its prompt (phase 4, brief 4.6): the fixture's map,
+ * with code's pick for the top photo as its top photo and every other photo offered placed
+ * in the story, so the map checks pass and no rework runs.
+ */
+function mapFor(prompt) {
+  const offered = [...availablePhotos(prompt).matchAll(/^\d+\. (\[hero image\] )?([^:\n]+):/gm)]
+    .map((m) => ({ hero: Boolean(m[1]), filename: m[2].trim() }));
+  const map = clone(OUTLINE);
+  const top = offered.find((photo) => photo.hero);
+  if (top) map.topPhoto = top.filename; else delete map.topPhoto;
+  map.sections = map.sections.map((section) => ({ ...section, photos: [] }));
+  map.sections[1].photos = offered.filter((photo) => !photo.hero).map((photo) => ({ filename: photo.filename }));
+  return map;
+}
+
 /**
  * A scripted SDK, routed by the call's schema. It answers the character-ID parse with
- * `parsed`, keeps every outline writer's prompt, and records each call's kind in `calls`
- * ('parse', 'enrich', 'outline', 'evaluation'), so a test counts the parse calls.
+ * `parsed`, keeps every map writer's prompt (answering with mapFor), and records each
+ * call's kind in `calls` ('parse', 'enrich', 'outline', 'evaluation'), so a test counts the
+ * parse calls.
  */
 function scriptedSdk(parsed = PARSED) {
   const outlinePrompts = [];
@@ -71,10 +92,10 @@ function scriptedSdk(parsed = PARSED) {
       calls.push('enrich');
       return clone(ENRICHED);
     }
-    if (options.jsonSchema === outlineSchema) {
+    if (options.jsonSchema === mapSchemaFor('journalist')) {
       calls.push('outline');
       outlinePrompts.push(options.prompt || '');
-      return clone(OUTLINE);
+      return mapFor(options.prompt || '');
     }
     if (/Evaluator/.test(options.systemPrompt || '')) {
       calls.push('evaluation');
@@ -116,8 +137,6 @@ function atCharacterIdsStop() {
   };
 }
 
-/** The <available-photos> section of an outline writer's prompt. */
-const availablePhotos = (prompt) => prompt.slice(prompt.indexOf('<available-photos>'), prompt.indexOf('</available-photos>'));
 
 describe('the leave-out box through the real graph (phase 4, brief 4.2)', () => {
   let dir;
@@ -190,7 +209,7 @@ describe('the leave-out box through the real graph (phase 4, brief 4.2)', () => 
     expect(state1.photoAnalyses.analyses.find((a) => a.filename === 'p3.jpg').excluded).toBe(true);
 
     expect(sdk.outlinePrompts).toHaveLength(1);
-    expect(sdk.outlinePrompts[0]).toContain('\nHERO IMAGE: hero.jpg\n');
+    expect(sdk.outlinePrompts[0]).toContain('1. [hero image] hero.jpg');
     expect(availablePhotos(sdk.outlinePrompts[0])).toContain('p2.jpg');
     expect(sdk.outlinePrompts[0]).not.toContain('p3.jpg');
     expect(state1.heroImage).toBe('hero.jpg');
@@ -216,7 +235,7 @@ describe('the leave-out box through the real graph (phase 4, brief 4.2)', () => 
 
     // p3.jpg names six people and no photo has more names now: it comes back as the hero.
     expect(sdk.outlinePrompts).toHaveLength(2);
-    expect(sdk.outlinePrompts[1]).toContain('\nHERO IMAGE: p3.jpg\n');
+    expect(sdk.outlinePrompts[1]).toContain('1. [hero image] p3.jpg');
     expect(state2.heroImage).toBe('p3.jpg');
     const photos2 = articleWriterInputs(state2);
     expect(photos2[photos2.length - 1].photos.map((p) => p.filename)).toEqual(['p3.jpg', 'hero.jpg', 'p2.jpg']);
@@ -246,7 +265,7 @@ describe('the leave-out box through the real graph (phase 4, brief 4.2)', () => 
       expect(parseCalls(sdk)).toBe(0);
 
       expect(sdk.outlinePrompts).toHaveLength(1);
-      expect(sdk.outlinePrompts[0]).toContain('\nHERO IMAGE: hero.jpg\n');
+      expect(sdk.outlinePrompts[0]).toContain('1. [hero image] hero.jpg');
       expect(availablePhotos(sdk.outlinePrompts[0])).toContain('p2.jpg');
       expect(sdk.outlinePrompts[0]).not.toContain('p3.jpg');
       expect(state.heroImage).toBe('hero.jpg');

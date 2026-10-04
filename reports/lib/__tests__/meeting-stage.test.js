@@ -51,7 +51,7 @@ const STALE = 'T3: "a stale finding from before the round" breaks a rule.';
 function atMeeting(overrides = {}) {
   return {
     ...reworkFixtureState('journalist'),
-    selectedArcs: [],
+    meetingApproved: false,  // brief 4.6: the fixture is past the meeting; this is the meeting
     weave: withFactCheckMark(clone(FIXTURE_WEAVE), { at: 't0', ready: true, fixes: 0 }),
     _weaveBaseline: clone(FIXTURE_WEAVE),
     validationResults: { phase: 'arcs', passed: false, structuralIssues: [STALE], criteriaScores: { evidenceTruth: { score: 0.4, notes: 'stale', fix: 'stale' } } },

@@ -31,6 +31,11 @@ const { createPromptBuilder } = require('../prompt-builder');
 const { _testing: { buildArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
 const { loadModeBlock } = require('../rule-set');
 const { findRemovedPhrases } = require('./fixtures/removed-phrases');
+const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+const { WEAVE } = require('./fixtures/rework-state');
+
+/** The settled weave the map writer reads first (phase 4, brief 4.6). */
+const SETTLED_WEAVE = renderSettledWeave(WEAVE, null);
 
 /**
  * Director notes with prose, so the <INVESTIGATION_OBSERVATIONS> header renders:
@@ -257,9 +262,8 @@ describe('the mode block reaches the arc and outline writers', () => {
   async function systemPrompts(mode) {
     const sessionConfig = { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] };
     const builder = makeBuilder({ theme: 'journalist', sessionConfig });
-    const { systemPrompt: outline } = await builder.buildOutlinePrompt(
-      { narrativeArcs: [] }, [], 'hero.png', [], [], null, {}
-    );
+    // Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave.
+    const { systemPrompt: outline } = await builder.buildOutlinePrompt(SETTLED_WEAVE);
     return {
       'outline generation': outline,
       'outline revision': await buildOutlineRevisionSystemPrompt(builder),
@@ -452,7 +456,7 @@ describe('presence lines outside the article prompt', () => {
       sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
     });
     const { systemPrompt, userPrompt } = await builder.buildOutlinePrompt(
-      { narrativeArcs: [] }, [], 'hero.png', [], [], null, { directorNotes: DIRECTOR_NOTES }
+      SETTLED_WEAVE, [], [], null, { directorNotes: DIRECTOR_NOTES }
     );
     const all = systemPrompt + '\n' + userPrompt;
     expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');

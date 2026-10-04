@@ -2,171 +2,18 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
 /**
  * buildResumePayload Unit Tests
  *
- * Covers outline approval/rejection routing AND schema validation of outlineEdits.
+ * Covers each stop's approval shapes. Phase 4 (brief 4.6): the outline is the story map,
+ * whose payload is {outline: 'approve' | 'send-back', map, note} (the 4.6 describe at the
+ * end); the old outline payload's describes went with it.
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { buildResumePayload } = require('../../server.js');
 
-function validJournalistOutline() {
-  return {
-    lede: {
-      hook: 'A party ends with one guest dead and a room full of liars.',
-      keyTension: 'The room accused the wrong person.',
-      primaryArc: 'The Blackwood embezzlement'
-    },
-    theStory: {
-      arcInterweaving: {
-        interleavingPlan: 'Open on the accusation, braid the money trail through it.',
-        convergencePoint: 'The shell-account ledger names the real culprit.'
-      },
-      arcs: [
-        { name: 'The embezzlement', paragraphCount: 3 }
-      ]
-    },
-    followTheMoney: {
-      arcConnections: [
-        { arcName: 'The embezzlement', financialAngle: 'Funds routed through three shells.' }
-      ]
-    },
-    thePlayers: {
-      arcConnections: [
-        { arcName: 'The embezzlement', characterAngle: 'Sarah controlled the accounts.' }
-      ]
-    },
-    whatsMissing: {
-      arcConnections: [
-        { arcName: 'The embezzlement', openQuestion: 'Who signed the final transfer?' }
-      ]
-    },
-    closing: {
-      arcResolutions: [
-        { arcName: 'The embezzlement', resolution: 'The ledger settles it.' }
-      ]
-    }
-  };
-}
-
-function validDetectiveOutline() {
-  return {
-    executiveSummary: {
-      hook: 'One body, six suspects, a paper trail.',
-      caseOverview: 'Victim found at the Blackwood estate after the party.',
-      primaryFindings: ['Funds were diverted.', 'The accused had no access.']
-    },
-    evidenceLocker: {
-      evidenceGroups: [
-        { theme: 'Financial', evidenceIds: ['rfid-001'], synthesis: 'Transfers cluster on one account.' }
-      ]
-    },
-    suspectNetwork: {
-      assessments: [
-        { name: 'Sarah Blackwood', role: 'CFO', suspicionLevel: 'high' }
-      ]
-    },
-    outstandingQuestions: {
-      questions: ['Who authorized the final transfer?']
-    },
-    finalAssessment: {
-      verdict: 'Evidence points to Sarah, not the accused.',
-      closingLine: 'The ledger never lies; people do.'
-    }
-  };
-}
-
-describe('buildResumePayload — outlineEdits validation', () => {
-  it('applies a structurally-valid journalist outline (no theme arg → defaults journalist)', () => {
-    const edits = validJournalistOutline();
-    const result = buildResumePayload({ outline: true, outlineEdits: edits });
-    expect(result.error).toBeNull();
-    expect(result.resume.approved).toBe(true);
-    expect(result.stateUpdates.outline).toEqual(edits);
-  });
-
-  it('rejects a corrupt journalist outline (B1: arcConnections as a string) and does NOT apply it', () => {
-    const edits = validJournalistOutline();
-    edits.followTheMoney.arcConnections = 'Funds routed through three shells.';
-    const result = buildResumePayload({ outline: true, outlineEdits: edits });
-    expect(result.error).toEqual(expect.stringContaining('failed schema validation (outline)'));
-    expect(result.error).toEqual(expect.stringContaining('/followTheMoney/arcConnections'));
-    expect(result.stateUpdates.outline).toBeUndefined();
-  });
-
-  // Phase 3 (3.2; TH4): the lede's fields are optional now, so B2 is pinned on the type.
-  it('rejects a journalist outline whose lede.primaryArc is not a string (B2)', () => {
-    const edits = validJournalistOutline();
-    edits.lede.primaryArc = 42;
-    const result = buildResumePayload({ outline: true, outlineEdits: edits });
-    expect(result.error).toEqual(expect.stringContaining('failed schema validation (outline)'));
-    expect(result.error).toEqual(expect.stringContaining('primaryArc'));
-    expect(result.stateUpdates.outline).toBeUndefined();
-  });
-
-  it('rejects a journalist outline with a stray root pullQuotes key (B4)', () => {
-    const edits = validJournalistOutline();
-    edits.pullQuotes = [{ type: 'verbatim', text: 'quote' }];
-    const result = buildResumePayload({ outline: true, outlineEdits: edits });
-    expect(result.error).toEqual(expect.stringContaining('failed schema validation (outline)'));
-    expect(result.stateUpdates.outline).toBeUndefined();
-  });
-
-  it('applies a structurally-valid detective outline when theme is detective', () => {
-    const edits = validDetectiveOutline();
-    const result = buildResumePayload({ outline: true, outlineEdits: edits }, {}, 'detective');
-    expect(result.error).toBeNull();
-    expect(result.resume.approved).toBe(true);
-    expect(result.stateUpdates.outline).toEqual(edits);
-  });
-
-  it('reads theme from currentState.theme when no explicit theme arg is passed', () => {
-    const edits = validDetectiveOutline();
-    const result = buildResumePayload({ outline: true, outlineEdits: edits }, { theme: 'detective' });
-    expect(result.error).toBeNull();
-    expect(result.stateUpdates.outline).toEqual(edits);
-  });
-
-  it('rejects a corrupt detective outline (assessments as a string)', () => {
-    const edits = validDetectiveOutline();
-    edits.suspectNetwork.assessments = 'Sarah is the prime suspect.';
-    const result = buildResumePayload({ outline: true, outlineEdits: edits }, {}, 'detective');
-    expect(result.error).toEqual(expect.stringContaining('failed schema validation (detective-outline)'));
-    expect(result.error).toEqual(expect.stringContaining('/suspectNetwork/assessments'));
-    expect(result.stateUpdates.outline).toBeUndefined();
-  });
-});
-
-describe('buildResumePayload — outlineEdits routing (regression, validation active)', () => {
-  it('routes a complete valid outline into stateUpdates.outline when outline:true', () => {
-    const edits = validJournalistOutline();
-    const result = buildResumePayload({ outline: true, outlineEdits: edits });
-    expect(result.error).toBeNull();
-    expect(result.resume.approved).toBe(true);
-    expect(result.stateUpdates.outline).toEqual(edits);
-  });
-
-  // Spec 2026-09-19 §4.1: edits now travel WITH a rejection, so a reject applies a
-  // VALID edited outline (see 'reject WITH hand edits' below). A malformed one is
-  // still refused, and refusing it writes nothing at all -- not even the feedback.
-  it('refuses a malformed outlineEdits on outline:false instead of applying it', () => {
-    const result = buildResumePayload({
-      outline: false,
-      outlineFeedback: 'needs more detail',
-      // Phase 3 (3.2; TH4): a lede with only a hook is a valid outline now, so the
-      // malformed edit is one the schema still refuses.
-      outlineEdits: { lede: { hook: 42 } }
-    });
-    expect(result.error).toMatch(/Edited outline failed schema validation \(outline\)/);
-    expect(result.stateUpdates.outline).toBeUndefined();
-    expect(result.stateUpdates._outlineFeedback).toBeUndefined();
-  });
-
-  it('approves without edits when outlineEdits is omitted', () => {
-    const result = buildResumePayload({ outline: true });
-    expect(result.resume.approved).toBe(true);
-    expect(result.stateUpdates.outline).toBeUndefined();
-  });
-});
+// Phase 4 (brief 4.6): a map the stop showed, which passes the map checks (invented text).
+const { MAP } = require('../../lib/__tests__/fixtures/rework-state');
+const mapFixture = () => JSON.parse(JSON.stringify(MAP));
 
 describe('buildResumePayload — rosterPronouns forwarding (F1 / CR-1 regression)', () => {
   it('forwards approvals.rosterPronouns into BOTH resume and stateUpdates when roster is present', () => {
@@ -412,7 +259,7 @@ describe('buildResumePayload — photosPath is a photos-gate-only approval (C1/I
     // because the photosPath block declined to write.
     const APPROVAL_BY_TYPE = {
       'character-ids': { characterIds: { 'Person in red': 'Sarah' } },
-      outline: { outline: true },
+      outline: { outline: 'approve', map: mapFixture() },  // brief 4.6: the map's approve
       article: { article: true }
     };
     Object.entries(APPROVAL_BY_TYPE).forEach(([type, approval]) => {
@@ -506,108 +353,6 @@ describe('buildResumePayload — whiteboardPhotoPath rides along, never approves
 
 describe('reject WITH hand edits (spec 2026-09-19 §4.1)', () => {
   const bundleFixture = () => JSON.parse(JSON.stringify(require('../fixtures/content-bundles/valid-journalist.json')));
-
-  test('outline: valid edits are written as the current outline with a diff and a null report', () => {
-    const before = validJournalistOutline();
-    const edits = validJournalistOutline();
-    edits.lede.hook = 'A sharper hook.';
-    const { resume, stateUpdates, error } = buildResumePayload(
-      { outline: false, outlineFeedback: 'Tighten the lede', outlineEdits: edits },
-      { outline: before, directorGateNotes: [] }
-    );
-    expect(error).toBeNull();
-    expect(resume).toEqual({ approved: false, feedback: 'Tighten the lede' });
-    expect(stateUpdates.outline).toEqual(edits);
-    expect(stateUpdates._outlineFeedback).toBe('Tighten the lede');
-    // F1: the edits stand by id at their stop (lib/hand-edit-diff.js standingAfterSendBack).
-    expect(stateUpdates._outlineHandEdits).toEqual({
-      kind: 'outline',
-      issued: 1,
-      edits: [{
-        id: 'E1', scope: 'lede', path: 'lede.hook', at: [{ key: 'lede' }, { key: 'hook' }],
-        before: before.lede.hook, after: 'A sharper hook.', removed: [before.lede.hook]
-      }]
-    });
-    expect(stateUpdates._outlineHandEditReport).toBeNull();
-  });
-
-  // Fix 3.2b (finding 5): an outline written before phase 3 still carries
-  // thePlayers.buried and whatsMissing.buriedItems, which the editors drop before
-  // sending (dropRetiredOutlineFields). The diff must not record those two as
-  // removals the director made.
-  test('outline: an outline written before phase 3 diffs without the retired fields', () => {
-    const before = validJournalistOutline();
-    before.thePlayers.buried = ['the silent partner'];
-    before.whatsMissing.buriedItems = ['transfer-009'];
-    const edits = validJournalistOutline();
-    edits.lede.hook = 'A sharper hook.';
-    const { stateUpdates, error } = buildResumePayload(
-      { outline: false, outlineFeedback: 'Tighten the lede', outlineEdits: edits },
-      { outline: before, directorGateNotes: [] }
-    );
-    expect(error).toBeNull();
-    expect(stateUpdates._outlineHandEdits).toEqual({
-      kind: 'outline',
-      issued: 1,
-      edits: [{
-        id: 'E1', scope: 'lede', path: 'lede.hook', at: [{ key: 'lede' }, { key: 'hook' }],
-        before: before.lede.hook, after: 'A sharper hook.', removed: [before.lede.hook]
-      }]
-    });
-    expect(before.thePlayers.buried).toEqual(['the silent partner']);   // the stored outline is not changed
-  });
-
-  test('outline: an outline written before phase 3, sent back unchanged, records no hand edit', () => {
-    const before = validJournalistOutline();
-    before.thePlayers.buried = ['the silent partner'];
-    before.whatsMissing.buriedItems = ['transfer-009'];
-    const { stateUpdates } = buildResumePayload(
-      { outline: false, outlineFeedback: 'Rework the closing', outlineEdits: validJournalistOutline() },
-      { outline: before }
-    );
-    expect(stateUpdates._outlineHandEdits).toBeNull();
-  });
-
-  test('outline: edits identical to the current outline write the outline but a null diff', () => {
-    const before = validJournalistOutline();
-    const { stateUpdates } = buildResumePayload(
-      { outline: false, outlineFeedback: 'Rework the closing', outlineEdits: validJournalistOutline() },
-      { outline: before }
-    );
-    expect(stateUpdates.outline).toEqual(before);
-    expect(stateUpdates._outlineHandEdits).toBeNull();
-  });
-
-  test('outline: invalid edits return the schema error and write nothing', () => {
-    const edits = validJournalistOutline();
-    edits.closing = 'collapsed';                       // a section must be an object (phase 3: slots are optional, not untyped)
-    const { stateUpdates, error } = buildResumePayload(
-      { outline: false, outlineFeedback: 'x', outlineEdits: edits },
-      { outline: validJournalistOutline() }
-    );
-    expect(error).toMatch(/Edited outline failed schema validation \(outline\)/);
-    expect(stateUpdates.outline).toBeUndefined();
-    expect(stateUpdates._outlineHandEdits).toBeUndefined();
-    expect(stateUpdates.directorGateNotes).toBeUndefined();
-  });
-
-  test('outline: a reject WITHOUT edits resets the diff and report to null', () => {
-    const { stateUpdates } = buildResumePayload(
-      { outline: false, outlineFeedback: 'Rework it' },
-      { outline: validJournalistOutline(), _outlineHandEdits: { kind: 'outline', sections: [] }, _outlineHandEditReport: { checked: ['lede'], changed: [] } }
-    );
-    expect(stateUpdates.outline).toBeUndefined();
-    expect(stateUpdates._outlineHandEdits).toBeNull();
-    expect(stateUpdates._outlineHandEditReport).toBeNull();
-  });
-
-  test('outline: detective theme validates against detective-outline', () => {
-    const { error } = buildResumePayload(
-      { outline: false, outlineFeedback: 'x', outlineEdits: validJournalistOutline() },
-      { theme: 'detective', outline: {} }
-    );
-    expect(error).toMatch(/detective-outline/);
-  });
 
   test('article: valid edits are written with a diff scoped to the headline', () => {
     const before = bundleFixture();
@@ -713,14 +458,15 @@ describe('the director\'s edits stand across send-backs (F1)', () => {
     expect(stateUpdates._articleHandEdits.issued).toBe(3);
   });
 
-  test('the outline\'s edits stand the same way', () => {
-    const shown = validJournalistOutline();
-    const edits = validJournalistOutline();
-    edits.closing.arcResolutions[0].resolution = 'The ledger does not settle it.';
-    const first = buildResumePayload({ outline: false, outlineFeedback: 'x', outlineEdits: edits }, { outline: shown });
+  // Phase 4 (brief 4.6): the map's edits stand the same way, against the writer's last map.
+  test('the map\'s edits stand the same way', () => {
+    const shown = mapFixture();
+    const edits = mapFixture();
+    edits.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    const first = buildResumePayload({ outline: 'send-back', note: 'x', map: edits }, { outline: shown, _mapBaseline: shown });
     const standing = first.stateUpdates._outlineHandEdits;
-    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'closing.arcResolutions[0].resolution']]);
-    const second = buildResumePayload({ outline: false, outlineFeedback: 'y' }, { outline: edits, _outlineHandEdits: standing });
+    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#closing].beats[#b6].material']]);
+    const second = buildResumePayload({ outline: 'send-back', note: 'y' }, { outline: edits, _mapBaseline: shown, _outlineHandEdits: standing });
     expect(second.stateUpdates._outlineHandEdits).toEqual(standing);
   });
 
@@ -767,8 +513,9 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
     expect(stateUpdates.directorGateNotes[1].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  // Brief 4.6: the map's send-back.
   test('an outline rejection appends an outline entry, round 1 when no outline notes exist', () => {
-    const { stateUpdates } = buildResumePayload({ outline: false, outlineFeedback: 'Lead with the ledger.' }, { outline: validJournalistOutline(), directorGateNotes: existing });
+    const { stateUpdates } = buildResumePayload({ outline: 'send-back', note: 'Lead with the ledger.' }, { outline: mapFixture(), directorGateNotes: existing });
     expect(stateUpdates.directorGateNotes.map((n) => n.gate)).toEqual(['arc-selection', 'outline']);
     expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'outline', kind: 'rejection', round: 1, text: 'Lead with the ledger.' });
   });
@@ -785,11 +532,12 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
     expect(a.error).toBeNull();
     expect('_outlineGuidance' in a.stateUpdates).toBe(false);
     expect(a.stateUpdates.directorGateNotes).toBeUndefined();
-    const o = buildResumePayload({ outline: true }, { directorGateNotes: existing });
+    const o = buildResumePayload({ outline: 'approve', map: mapFixture() }, { outline: mapFixture(), directorGateNotes: existing });
+    expect(o.error).toBeNull();
     expect(o.stateUpdates.directorGateNotes).toBeUndefined();
     const ar = buildResumePayload({ article: true }, { directorGateNotes: existing });
     expect(ar.stateUpdates.directorGateNotes).toBeUndefined();
-    const blank = buildResumePayload({ outline: true, outlineNote: '   ' }, { directorGateNotes: existing });
+    const blank = buildResumePayload({ outline: 'approve', map: mapFixture(), note: '   ' }, { outline: mapFixture(), directorGateNotes: existing });
     expect(blank.stateUpdates.directorGateNotes).toBeUndefined();
   });
 
@@ -798,7 +546,7 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
   // approval note so the prompt can say it is forward guidance, not something a
   // rework already applied.
   test('an approval WITH a note appends one entry of kind approval, trimmed', () => {
-    const o = buildResumePayload({ outline: true, outlineNote: '  Keep the ledger thread.  ' }, { outline: validJournalistOutline(), directorGateNotes: existing });
+    const o = buildResumePayload({ outline: 'approve', map: mapFixture(), note: '  Keep the ledger thread.  ' }, { outline: mapFixture(), directorGateNotes: existing });
     expect(o.stateUpdates.directorGateNotes).toHaveLength(2);
     expect(o.stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'outline', kind: 'approval', round: 1, text: 'Keep the ledger thread.' });
     expect(o.stateUpdates.directorGateNotes[1].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -807,29 +555,31 @@ describe('directorGateNotes (spec 2026-09-19 §5.2)', () => {
   });
 
   test('an approval note travels with edits, and an invalid edit writes no note at all', () => {
+    const edited = mapFixture();
+    edited.headline = 'The Ledger Kept Talking After the Vote';
     const withEdits = buildResumePayload(
-      { outline: true, outlineEdits: validJournalistOutline(), outlineNote: 'Keep my lede.' },
-      { outline: validJournalistOutline(), directorGateNotes: [] }
+      { outline: 'approve', map: edited, note: 'Keep my headline.' },
+      { outline: mapFixture(), directorGateNotes: [] }
     );
     expect(withEdits.error).toBeNull();
     expect(withEdits.stateUpdates.directorGateNotes).toHaveLength(1);
     const bad = buildResumePayload(
-      { outline: true, outlineEdits: { lede: 'collapsed' }, outlineNote: 'Keep my lede.' },
-      { outline: validJournalistOutline(), directorGateNotes: [] }
+      { outline: 'approve', map: { ...mapFixture(), sections: 'collapsed' }, note: 'Keep my headline.' },
+      { outline: mapFixture(), directorGateNotes: [] }
     );
-    expect(bad.error).toContain('failed schema validation');
+    expect(bad.error).toContain('failed the director-side schema');
     expect(bad.stateUpdates.directorGateNotes).toBeUndefined();
   });
 
   test('round counts per gate AND kind, so an approval 1 and a rejection 1 coexist at one stop', () => {
-    const afterApproval = buildResumePayload({ outline: true, outlineNote: 'Keep the ledger thread.' }, { outline: validJournalistOutline(), directorGateNotes: [] });
+    const afterApproval = buildResumePayload({ outline: 'approve', map: mapFixture(), note: 'Keep the ledger thread.' }, { outline: mapFixture(), directorGateNotes: [] });
     const notes = afterApproval.stateUpdates.directorGateNotes;
-    const afterReject = buildResumePayload({ outline: false, outlineFeedback: 'Lead with the ledger.' }, { outline: validJournalistOutline(), directorGateNotes: notes });
+    const afterReject = buildResumePayload({ outline: 'send-back', note: 'Lead with the ledger.' }, { outline: mapFixture(), directorGateNotes: notes });
     expect(afterReject.stateUpdates.directorGateNotes.map((n) => [n.gate, n.kind, n.round])).toEqual([
       ['outline', 'approval', 1],
       ['outline', 'rejection', 1]
     ]);
-    const afterSecondApproval = buildResumePayload({ outline: true, outlineNote: 'And keep the closing.' }, { outline: validJournalistOutline(), directorGateNotes: afterReject.stateUpdates.directorGateNotes });
+    const afterSecondApproval = buildResumePayload({ outline: 'approve', map: mapFixture(), note: 'And keep the closing.' }, { outline: mapFixture(), directorGateNotes: afterReject.stateUpdates.directorGateNotes });
     expect(afterSecondApproval.stateUpdates.directorGateNotes[2]).toMatchObject({ gate: 'outline', kind: 'approval', round: 2 });
   });
 });
@@ -996,10 +746,11 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
   const bundleFixture = () => JSON.parse(JSON.stringify(require('../fixtures/content-bundles/valid-journalist.json')));
   const PASS = { pass: 1, round: 1, trigger: 'evaluation', findings: {}, before: {}, at: '2026-09-26T10:00:00.000Z' };
 
+  // Brief 4.6: the map's send-back.
   test('an outline send back resets the outline trace and leaves the article trace alone', () => {
     const { stateUpdates, error } = buildResumePayload(
-      { outline: false, outlineFeedback: 'Rework the closing' },
-      { outline: validJournalistOutline(), _outlineTrace: [PASS], _articleTrace: [PASS] }
+      { outline: 'send-back', note: 'Rework the closing' },
+      { outline: mapFixture(), _outlineTrace: [PASS], _articleTrace: [PASS] }
     );
     expect(error).toBeNull();
     expect(stateUpdates).toHaveProperty('_outlineTrace', null);
@@ -1007,11 +758,11 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
   });
 
   test('an outline send back WITH edits resets it too', () => {
-    const edits = validJournalistOutline();
-    edits.lede.hook = 'A sharper hook.';
+    const edits = mapFixture();
+    edits.headline = 'A Sharper Headline for the Vote';
     const { stateUpdates, error } = buildResumePayload(
-      { outline: false, outlineFeedback: 'Tighten the lede', outlineEdits: edits },
-      { outline: validJournalistOutline(), _outlineTrace: [PASS] }
+      { outline: 'send-back', note: 'Tighten the headline', map: edits },
+      { outline: mapFixture(), _outlineTrace: [PASS] }
     );
     expect(error).toBeNull();
     expect(stateUpdates).toHaveProperty('_outlineTrace', null);
@@ -1030,20 +781,20 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
   });
 
   test('an approve leaves both traces alone', () => {
-    const outline = buildResumePayload({ outline: true, outlineNote: 'Keep it.' }, { outline: validJournalistOutline(), _outlineTrace: [PASS] });
+    const outline = buildResumePayload({ outline: 'approve', map: mapFixture(), note: 'Keep it.' }, { outline: mapFixture(), _outlineTrace: [PASS] });
     const article = buildResumePayload({ article: true }, { contentBundle: bundleFixture(), _articleTrace: [PASS] });
     expect(outline.stateUpdates).not.toHaveProperty('_outlineTrace');
     expect(article.stateUpdates).not.toHaveProperty('_articleTrace');
   });
 
   test('an invalid edit sent back writes nothing, the trace reset included', () => {
-    const edits = validJournalistOutline();
-    edits.lede = 'collapsed';  // phase 3 (3.2): an empty lede is valid; a section must still be an object
+    const edits = mapFixture();
+    edits.sections = 'collapsed';  // brief 4.6: the map's sections are a list
     const { stateUpdates, error } = buildResumePayload(
-      { outline: false, outlineFeedback: 'x', outlineEdits: edits },
-      { outline: validJournalistOutline(), _outlineTrace: [PASS] }
+      { outline: 'send-back', note: 'x', map: edits },
+      { outline: mapFixture(), _outlineTrace: [PASS] }
     );
-    expect(error).toMatch(/Edited outline failed schema validation/);
+    expect(error).toMatch(/failed the director-side schema/);
     expect(stateUpdates).not.toHaveProperty('_outlineTrace');
   });
 
@@ -1051,15 +802,16 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
   // takes: the trace is written exactly when that side's hand-edit report is, and
   // always as null. (Approve clears it in the checkpoint node, as it does the
   // hand-edit fields: checkpoint-hand-edit-clears.test.js.)
-  const outlineEdits = () => { const e = validJournalistOutline(); e.lede.hook = 'A sharper hook.'; return e; };
+  // Brief 4.6: the map's payloads.
+  const outlineEdits = () => { const e = mapFixture(); e.headline = 'A Sharper Headline for the Vote'; return e; };
   const articleEdits = () => { const e = bundleFixture(); e.headline.main = 'A different headline'; return e; };
-  const invalidOutline = () => { const e = validJournalistOutline(); e.lede = {}; return e; };
+  const invalidOutline = () => { const e = mapFixture(); e.sections = 'collapsed'; return e; };
   const ACTIONS = [
-    ['outline send back', () => ({ outline: false, outlineFeedback: 'Rework it' })],
-    ['outline send back with edits', () => ({ outline: false, outlineFeedback: 'Rework it', outlineEdits: outlineEdits() })],
-    ['outline send back with an invalid edit', () => ({ outline: false, outlineFeedback: 'x', outlineEdits: invalidOutline() })],
-    ['outline approve', () => ({ outline: true })],
-    ['outline approve with edits and a note', () => ({ outline: true, outlineEdits: outlineEdits(), outlineNote: 'Keep it.' })],
+    ['outline send back', () => ({ outline: 'send-back', note: 'Rework it' })],
+    ['outline send back with edits', () => ({ outline: 'send-back', note: 'Rework it', map: outlineEdits() })],
+    ['outline send back with an invalid edit', () => ({ outline: 'send-back', note: 'x', map: invalidOutline() })],
+    ['outline approve', () => ({ outline: 'approve', map: mapFixture() })],
+    ['outline approve with edits and a note', () => ({ outline: 'approve', map: outlineEdits(), note: 'Keep it.' })],
     ['article send back', () => ({ article: false, articleFeedback: 'Rework it' })],
     ['article send back with edits', () => ({ article: false, articleFeedback: 'Rework it', articleEdits: articleEdits() })],
     ['article approve', () => ({ article: true })],
@@ -1068,7 +820,7 @@ describe('the trace is reset on a send back (phase 2, brief 2.7)', () => {
 
   test.each(ACTIONS)('%s: each trace is written exactly when its side\'s hand-edit report is', (_name, approvals) => {
     const { stateUpdates } = buildResumePayload(approvals(), {
-      outline: validJournalistOutline(), contentBundle: bundleFixture(), _outlineTrace: [PASS], _articleTrace: [PASS]
+      outline: mapFixture(), contentBundle: bundleFixture(), _outlineTrace: [PASS], _articleTrace: [PASS]
     });
     ['outline', 'article'].forEach((s) => {
       expect(`_${s}Trace` in stateUpdates).toBe(`_${s}HandEditReport` in stateUpdates);
@@ -1363,8 +1115,9 @@ describe("4.5b: at the story meeting only the meeting's own action is taken", ()
     ['evidence-and-photos', { evidenceBundle: true, rescuedItems: ['p-rescued'] }],
     ['character-ids', { characterIdsRaw: 'p1.jpg: Alex at the bar' }],
     ['character-ids', { characterIds: { 'p1.jpg': { characters: ['Alex'] } } }],
-    ['outline', { outline: true }],
-    ['outline', { outline: false, outlineFeedback: 'Tighten the map.' }],
+    // The map's own actions since 4.6 (the integrator's merge of 4.5b and 4.6).
+    ['outline', { outline: 'approve', map: mapFixture() }],
+    ['outline', { outline: 'send-back', map: mapFixture(), note: 'Tighten the map.' }],
     ['article', { article: true }],
     ['article', { article: false, articleFeedback: 'Cut the sidebar.' }]
   ];
@@ -1378,7 +1131,9 @@ describe("4.5b: at the story meeting only the meeting's own action is taken", ()
   });
 
   it.each(OTHER_STOPS)("takes the %s stop's %j at that stop, so the list the meeting refuses is each stop's own", (stop, approvals) => {
-    expect(buildResumePayload(approvals, atMeeting(), 'journalist', stop).error).toBeNull();
+    // The map's stop reads the map it showed (4.6), so the state holds one.
+    const state = { ...atMeeting(), outline: mapFixture(), _mapBaseline: mapFixture() };
+    expect(buildResumePayload(approvals, state, 'journalist', stop).error).toBeNull();
   });
 
   it("refuses another stop's key beside the meeting's own action: a reweave never turns into an approval", () => {
@@ -1392,5 +1147,163 @@ describe("4.5b: at the story meeting only the meeting's own action is taken", ()
     const result = buildResumePayload({ meeting: 'reweave', weave: edited() }, atMeeting(), 'journalist', 'arc-selection');
     expect(result.error).toBeNull();
     expect(result.resume).toEqual({ approved: false, round: 'reweave' });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6: the map through buildResumePayload (brief 4.6; lib/map.js mapResume)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.6: the map through buildResumePayload', () => {
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const ROSTER = { roster: ['Alex', 'Morgan', 'Riley', 'Sarah'] };
+  /** The stop as the map writer left it: the map shown is the writer's last map. */
+  const atMap = (extra = {}) => ({ outline: mapFixture(), _mapBaseline: mapFixture(), sessionConfig: ROSTER, directorGateNotes: [], ...extra });
+
+  /**
+   * The director's map: a beat added, a line rewritten, a beat struck, another photo chosen
+   * for the top and the old top photo moved into the story.
+   */
+  function directorsMap() {
+    const map = mapFixture();
+    map.sections[2].beats.push({ id: 'b10', material: 'The bonus at 07:52 PM' });
+    map.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    map.leftOut.push(map.sections[1].beats.splice(2, 1)[0]);
+    map.topPhoto = 'p2.jpg';
+    map.sections[1].photos = [{ filename: 'hero.jpg' }];
+    return map;
+  }
+  const EDITS = [
+    ['E1', 'sections[#followTheMoney].beats[#b10]'],
+    ['E2', 'sections[#closing].beats[#b6].material'],
+    ['E3', 'leftOut[#b4]'],
+    ['E4', 'topPhoto'],
+    ['E5', 'sections[#theStory].photos[#hero.jpg]']
+  ];
+
+  it("approve resumes as an approval, writes the director's map, their edits and the hero, and joins the note as an approval note", () => {
+    const map = directorsMap();
+    const { resume, stateUpdates, error } = buildResumePayload({ outline: 'approve', map, note: ' Keep the bonus beat. ' }, atMap(), 'journalist', 'outline');
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: true });
+    expect(stateUpdates.outline).toEqual(map);
+    expect(stateUpdates.heroImage).toBe('p2.jpg');
+    expect(stateUpdates._outlineHandEdits).toMatchObject({ kind: 'map', issued: 5 });
+    expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.id, e.path])).toEqual(EDITS);
+    expect(stateUpdates._outlineHandEdits.edits[2]).toMatchObject({ from: 'theStory', struck: true });
+    expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'outline', kind: 'approval', round: 1, text: 'Keep the bonus beat.' })]);
+    // The approval is the stop's to set (checkpointOutline), and an approve opens no round.
+    ['outlineApproved', '_outlineFeedback', '_outlineHandEditReport', '_outlineTrace'].forEach((key) => expect(`${key}: ${key in stateUpdates}`).toBe(`${key}: false`));
+  });
+
+  it("a send-back carries its note to the rework, opens a round, and writes the director's map and edits", () => {
+    const map = directorsMap();
+    const state = atMap({ _outlineHandEditReport: { checked: ['E1'], changed: [] }, _outlineTrace: [{ pass: 1 }] });
+    const { resume, stateUpdates, error } = buildResumePayload({ outline: 'send-back', map, note: 'Lead with the bonus.' }, state, 'journalist', 'outline');
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: false, feedback: 'Lead with the bonus.' });
+    expect(stateUpdates).toMatchObject({ outline: map, heroImage: 'p2.jpg', _outlineFeedback: 'Lead with the bonus.', _outlineHandEditReport: null, _outlineTrace: null });
+    expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.id, e.path])).toEqual(EDITS);
+    expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'outline', kind: 'rejection', round: 1, text: 'Lead with the bonus.' })]);
+  });
+
+  it('a send-back without a map keeps the map shown, and the edits that stand on it', () => {
+    const first = buildResumePayload({ outline: 'approve', map: directorsMap() }, atMap(), 'journalist', 'outline');
+    const state = atMap({ outline: first.stateUpdates.outline, _outlineHandEdits: first.stateUpdates._outlineHandEdits });
+    const { stateUpdates, error } = buildResumePayload({ outline: 'send-back', note: 'Tighten the closing.' }, state, 'journalist', 'outline');
+    expect(error).toBeNull();
+    expect(stateUpdates.outline).toEqual(state.outline);
+    expect(stateUpdates.heroImage).toBe('p2.jpg');
+    expect(stateUpdates._outlineHandEdits).toEqual(first.stateUpdates._outlineHandEdits);
+  });
+
+  // The edits stand past approve (checkpointOutline keeps them) and through the rollback to
+  // the map (R9), which keeps the map as the director left it beside the writer's last map:
+  // the next approve diffs against the writer's map, and the edits already standing keep
+  // their ids, so none is counted twice.
+  it("diffs against the writer's last map: edits already standing keep their ids, and a new one takes the next", () => {
+    const first = buildResumePayload({ outline: 'approve', map: directorsMap() }, atMap(), 'journalist', 'outline');
+    const again = directorsMap();
+    again.headline = 'The Bonus the Room Never Saw';
+    const state = atMap({ outline: first.stateUpdates.outline, _outlineHandEdits: first.stateUpdates._outlineHandEdits });
+    const { stateUpdates, error } = buildResumePayload({ outline: 'approve', map: again }, state, 'journalist', 'outline');
+    expect(error).toBeNull();
+    expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.id, e.path])).toEqual([...EDITS, ['E6', 'headline']]);
+    expect(stateUpdates._outlineHandEdits.issued).toBe(6);
+  });
+
+  it('the hero is the top photo the director leaves: none when the map names none', () => {
+    const map = mapFixture();
+    delete map.topPhoto;
+    map.sections[1].photos.push({ filename: 'hero.jpg' });
+    const { stateUpdates, error } = buildResumePayload({ outline: 'approve', map }, atMap(), 'journalist', 'outline');
+    expect(error).toBeNull();
+    expect(stateUpdates.heroImage).toBeNull();
+  });
+
+  it("allows a beat the director added or brought back with only its id and material, and refuses a malformed map with the schema's reason", () => {
+    const added = mapFixture();
+    added.sections[0].beats.push({ id: 'b11', material: 'Alex at the window' });
+    added.leftOut.push({ id: 'b12', material: 'The second envelope' });
+    expect(buildResumePayload({ outline: 'approve', map: added }, atMap(), 'journalist', 'outline').error).toBeNull();
+
+    const cases = [
+      ['a beat with no material', (m) => { delete m.sections[0].beats[0].material; }, /beats\/0 must have required property 'material'/],
+      ['a kind the map has none of', (m) => { m.sections[1].beats[0].kind = 'quote'; }, /kind must be equal to one of the allowed values/],
+      ['a slot the theme has none of', (m) => { m.sections[3].slot = 'epilogue'; }, /slot must be equal to one of the allowed values/],
+      ['a key the map has none of', (m) => { m.lede = { hook: 'x' }; }, /must NOT have additional properties/],
+      ['a headline under its least length', (m) => { m.headline = 'Short'; }, /headline must NOT have fewer than 10 characters/]
+    ];
+    cases.forEach(([name, change, reason]) => {
+      const map = mapFixture();
+      change(map);
+      const result = buildResumePayload({ outline: 'approve', map, note: 'x' }, atMap(), 'journalist', 'outline');
+      expect(`${name}: ${result.error}`).toMatch(reason);
+      expect(`${name}: ${JSON.stringify(result.stateUpdates)}`).toBe(`${name}: {}`);
+    });
+  });
+
+  it("refuses a beat id the director's changes repeat, and lets a repeat the writer made through to the checks", () => {
+    const theirs = mapFixture();
+    theirs.sections[0].beats.push({ id: 'b2', material: 'A second b2' });
+    expect(buildResumePayload({ outline: 'approve', map: theirs }, atMap(), 'journalist', 'outline').error)
+      .toBe('Two beats share the id "b2": the director\'s changes made this repeat. Give each beat an id of its own.');
+    const writers = mapFixture();
+    writers.sections[0].beats.push({ id: 'b2', kind: 'scene', material: 'A second b2', players: [] });
+    const result = buildResumePayload({ outline: 'approve', map: clone(writers) }, atMap({ outline: writers, _mapBaseline: writers }), 'journalist', 'outline');
+    expect(result.error).toBeNull();
+  });
+
+  it('refuses the old outline payload by name, a send-back with no note and an approve with no map, and writes nothing', () => {
+    const refused = [
+      [{ outline: true }, 'The map takes {outline: "approve" | "send-back", map, note} (got outline: true).'],
+      [{ outline: false, outlineFeedback: 'x' }, 'The map takes {outline: "approve" | "send-back", map, note} (outlineFeedback is the old outline\'s).'],
+      [{ outline: 'approve', outlineEdits: mapFixture(), outlineNote: 'x' }, 'The map takes {outline: "approve" | "send-back", map, note} (outlineEdits, outlineNote are the old outline\'s).'],
+      [{ outline: 'send-back', map: mapFixture() }, 'A send-back carries a note: what the writer should change.'],
+      [{ outline: 'send-back', note: '   ' }, 'A send-back carries a note: what the writer should change.'],
+      [{ outline: 'approve' }, 'An approve carries the map as the director left it.'],
+      [{ outline: 'approve', map: mapFixture(), note: 42 }, "The map's note must be text."]
+    ];
+    refused.forEach(([approvals, message]) => {
+      expect(buildResumePayload(approvals, atMap(), 'journalist', 'outline')).toEqual({ resume: {}, stateUpdates: {}, error: message });
+    });
+  });
+
+  it("takes the map's actions only at the map: at another stop an approval would approve that stop (I3)", () => {
+    ['article', 'character-ids'].forEach((type) => {
+      expect(buildResumePayload({ outline: 'approve', map: mapFixture() }, atMap(), 'journalist', type))
+        .toEqual({ resume: {}, stateUpdates: {}, error: `The map's actions are taken at the map (outline), not at ${type}.` });
+    });
+    // At the story meeting 4.5b's guard answers first: the meeting takes only its own action.
+    const atTheMeeting = buildResumePayload({ outline: 'approve', map: mapFixture() }, atMap(), 'journalist', 'arc-selection');
+    expect(atTheMeeting).toMatchObject({ resume: {}, stateUpdates: {} });
+    expect(atTheMeeting.error).toMatch(/^The thread is paused at the story meeting \(arc-selection\), which takes only its own action/);
+  });
+
+  it('refuses a payload for a theme with no map instead of throwing (R1)', () => {
+    const result = buildResumePayload({ outline: 'approve', map: mapFixture() }, atMap({ theme: 'detective' }), undefined, 'outline');
+    expect(result).toEqual({
+      resume: {}, stateUpdates: {},
+      error: 'The "detective" theme has no story map: its config names no map slots (lib/theme-config.js). The detective is parked (R1).'
+    });
   });
 });

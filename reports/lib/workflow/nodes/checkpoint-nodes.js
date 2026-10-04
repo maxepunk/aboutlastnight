@@ -613,13 +613,48 @@ async function checkpointArcSelection(state, config) {
 }
 
 /**
- * Outline Checkpoint
+ * Write the map the director approved to the session folder (phase 4, brief 4.6; R8):
+ * `data/<id>/analysis/map.approved.json`, beside the approved weave, for the readout spec
+ * section 13 describes. The session id is the state's; a failed write is logged and never
+ * costs the director the approval.
  *
- * Pauses for user to approve the article outline.
- * Requires: state.outline (from generateOutline, or reviseOutline after a send-back)
+ * @param {Object} state
+ * @param {Object} config - may carry configurable.dataDir
+ */
+function writeApprovedMap(state, config) {
+  const sessionId = state.sessionId || config?.configurable?.sessionId;
+  if (!sessionId) {
+    console.warn('[checkpointOutline] No sessionId; not writing the approved map');
+    return;
+  }
+  const dataDir = config?.configurable?.dataDir || DEFAULT_DATA_DIR;
+  const analysisDir = path.join(dataDir, String(sessionId), 'analysis');
+  const target = path.join(analysisDir, 'map.approved.json');
+  try {
+    fs.mkdirSync(analysisDir, { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(state.outline ?? null, null, 2), 'utf-8');
+    console.log(`[checkpointOutline] Approved map written to ${target}`);
+  } catch (error) {
+    console.error(`[checkpointOutline] Could not write ${target}: ${error.message}`);
+  }
+}
+
+/**
+ * The map's stop (phase 4, brief 4.6; spec 5.2 and 5.3): the outline stop, where the
+ * director steers the plan in minutes.
  *
- * @param {Object} state - Current state with outline
- * @param {Object} config - Graph config
+ * It shows the map and pauses until the director acts. The payload (server.js
+ * buildResumePayload, lib/map.js mapResume) has already written the map as the director
+ * left it, their standing edits and the hero through the update, which LangGraph applies
+ * before this node re-executes:
+ * - an approve (`{approved: true}`): this node sets the approval, ends the round's report
+ *   and trace, and writes the approved map. The standing edits and their baseline stay:
+ *   they stand past approve, as the meeting's do;
+ * - a send-back (`{approved: false, feedback}`): the route takes the round to the rework.
+ * Skips once the map is approved, so a replay passes through.
+ *
+ * @param {Object} state - Current state with the map
+ * @param {Object} config - Graph config, with configurable.dataDir for the approved map
  * @returns {Object} Partial state update with outlineApproved
  */
 async function checkpointOutline(state, config) {
@@ -630,33 +665,26 @@ async function checkpointOutline(state, config) {
 
   const resumeValue = checkpointInterrupt(
     CHECKPOINT_TYPES.OUTLINE,
-    {
-      outline: state.outline,
-      evaluationHistory: state.evaluationHistory
-    },
+    { outline: state.outline },
     skipCondition
   );
 
-  // Approve (with or without edits — edits applied via Command update before this runs)
   if (resumeValue?.approved === true && !skipCondition) {
-    console.log(`[checkpointOutline] Approved by human`);
+    console.log('[checkpointOutline] The map is approved');
+    writeApprovedMap(state, config);
     return {
       outlineApproved: true,
-      // Spec 2026-09-19 §4.4: the director's hand-edit diff and the rework report belong
-      // to this gate only; the revisers keep them for the whole round (C3), so the gate
-      // is where they end.
-      _outlineHandEdits: null,
+      // The round ends at approve: its report and its trace go (brief 2.7). The director's
+      // standing edits and the writer's last map stay (brief 4.6).
       _outlineHandEditReport: null,
-      // Brief 2.7 (integrator ruling): the trace describes the current round, and
-      // approval ends it. The llm-log keeps every pass for a later readout.
       _outlineTrace: null,
       currentPhase: PHASES.OUTLINE_CHECKPOINT
     };
   }
 
-  // Reject with feedback — routing function sends to revision loop
+  // A send-back: the routing function takes it to the rework loop
   if (resumeValue?.approved === false && resumeValue?.feedback) {
-    console.log(`[checkpointOutline] Rejected by human with feedback`);
+    console.log('[checkpointOutline] The map was sent back with a note');
     return {
       currentPhase: PHASES.OUTLINE_CHECKPOINT
     };

@@ -141,7 +141,55 @@ describe('graph wiring — photo late-join', () => {
 
   test('registers checkpointPhotos as a node', () => {
     expect(Object.keys(builder.nodes)).toContain('checkpointPhotos');
-    // Phase 4 (brief 4.6): the packages node and the outline judge went.
-    expect(Object.keys(builder.nodes)).toHaveLength(43);
+    // Phase 4 (brief 4.6): the packages node and the outline judge went, and the map's
+    // checks came.
+    expect(Object.keys(builder.nodes)).toHaveLength(44);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6: the map checks' route (brief 4.6; R6)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.6: routeMapChecks', () => {
+  const { routeMapChecks } = _testing;
+  const { REVISION_CAPS, PHASES } = require('../../../lib/workflow/state');
+  const FAILED = { mapKey: 'k', passed: false, failures: [{ type: 'player-not-placed', message: 'Jamie is in no beat.' }] };
+
+  test('a passing map goes to the stop', () => {
+    expect(routeMapChecks({ _mapCheck: { mapKey: 'k', passed: true, failures: [] } })).toBe('checkpoint');
+  });
+
+  test('a failed check sends the map back for one rework in the round', () => {
+    expect(REVISION_CAPS.OUTLINE).toBe(1);
+    expect(routeMapChecks({ _mapCheck: FAILED, outlineRevisionCount: 0 })).toBe('revise');
+  });
+
+  test("a check still failing after the round's rework opens the stop, which shows it", () => {
+    expect(routeMapChecks({ _mapCheck: FAILED, outlineRevisionCount: 1 })).toBe('checkpoint');
+  });
+
+  test('an approved map goes on whatever its mark, and so does a map the checks never marked', () => {
+    expect(routeMapChecks({ _mapCheck: FAILED, outlineApproved: true })).toBe('checkpoint');
+    expect(routeMapChecks({})).toBe('checkpoint');
+  });
+
+  test('a rework that failed ends the run', () => {
+    expect(routeMapChecks({ currentPhase: PHASES.ERROR, _mapCheck: FAILED })).toBe('error');
+  });
+
+  // Spec 5.4: no model judge reads the map. The checks follow the writer and each rework,
+  // and route to the stop, to the one rework, or to the error.
+  test('the checks follow the writer and each rework, and no outline judge is in the graph', () => {
+    const { createGraphBuilder } = _testing;
+    const builder = createGraphBuilder();
+    const edges = [...builder.edges];
+    const has = (from, to) => edges.some(([f, t]) => f === from && t === to);
+    expect(has('generateOutline', 'checkMap')).toBe(true);
+    expect(has('reviseOutline', 'checkMap')).toBe(true);
+    expect(has('incrementOutlineRevision', 'reviseOutline')).toBe(true);
+    expect(builder.branches.checkMap.condition.ends).toEqual({
+      checkpoint: 'checkpointOutline', revise: 'incrementOutlineRevision', error: '__end__'
+    });
+    expect(Object.keys(builder.nodes)).not.toContain('evaluateOutline');
   });
 });

@@ -491,8 +491,10 @@ describe('phase 3 (3.2): shape-only schemas', () => {
     expect(offending).toEqual([]);
   });
 
-  it('the outline\'s convergence point is the culmination where the threads meet and the thesis lands (C16)', () => {
-    const point = outlineSchema.properties.theStory.properties.arcInterweaving.properties.convergencePoint;
-    expect(point.description).toMatch(/culmination where the threads meet and the thesis lands/);
+  // Phase 4 (brief 4.6): the map lays the settled weave out; the convergence is the weave's,
+  // and the map's schema holds slots, beats and photos.
+  it("the map's schema holds slots, beats and photos, with no convergence of its own", () => {
+    expect(Object.keys(outlineSchema.properties)).toEqual(['headline', 'deck', 'topPhoto', 'gapNote', 'sections', 'dropped', 'leftOut', 'expectedLength', 'weaveChanges']);
+    expect(JSON.stringify(outlineSchema)).not.toMatch(/convergence/);
   });
 });

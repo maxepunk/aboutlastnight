@@ -331,6 +331,9 @@ const REMOVED_PHRASES = [
 /** Blocks that hold the director's words or the record, whole. */
 const WHOLE_BLOCKS = [
   'RECORD',
+  // Phase 4 (brief 4.6): the settled weave the map writer reads first, the weave's model
+  // output with the director's changes and answers in it.
+  'SETTLED_WEAVE',
   'DIRECTOR_NOTES',
   'DIRECTOR_CORRECTIONS',
   'DIRECTOR_ACCUSATION',

@@ -3,7 +3,7 @@
  *
  * These nodes handle the AI-powered phases of the pipeline:
  * - curateEvidenceBundle: Curate evidence into three-layer structure (1.8)
- * - generateOutline: Generate article outline from selected arcs (3)
+ * - generateOutline: the map writer, the settled weave laid across the sections (3)
  * - generateContentBundle: Generate structured content JSON (4)
  * - reviseContentBundle: Revise content based on validation feedback (4.2)
  *
@@ -31,9 +31,11 @@ const {
   THEME_CONSTRAINTS
 } = require('../../prompt-builder');
 const { carriedEdits, settleEdits, SEND_BACK_PASS, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
-const outlineSchema = require('../../schemas/outline.schema.json');
-const detectiveOutlineSchema = require('../../schemas/detective-outline.schema.json');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
+// Phase 4 (brief 4.6): the map's schema for the theme (its slots), and the hero its top
+// photo names; the settled weave, which the map writer reads first, as its task.
+const { mapSchemaFor, topPhotoOf } = require('../../map');
+const { settledWeaveOf } = require('../../prompt-renderers/settled-weave');
 const {
   safeParseJson,
   getSdkClient,
@@ -689,28 +691,6 @@ async function processRescuedItems(state, config) {
 }
 
 /**
- * The previous stage's advisory findings, for the next writer (brief 1.3).
- *
- * The evaluation's advisory warnings used to die where they were computed: the
- * outline evaluation's two warnings about frontloading never reached the article
- * writer, and the arc evaluation's never reached the outline writer. They travel as
- * suggestions, in their own <SHOULD_CONSIDER> section, never as must-fix items.
- *
- * validationResults is one channel shared by all three phases, so the phase stamp is
- * the guard: a block left behind by another stage is ignored rather than handed to a
- * writer it was not written about.
- *
- * @param {Object} state - Current state
- * @param {string} previousPhase - The phase whose evaluation feeds this writer
- * @returns {string[]} advisoryWarnings, or [] when the stamp does not match
- */
-function advisoriesFromPreviousStage(state, previousPhase) {
-  const results = state.validationResults;
-  if (!results || results.phase !== previousPhase) return [];
-  return Array.isArray(results.advisoryWarnings) ? results.advisoryWarnings : [];
-}
-
-/**
  * SESSION_FACTS for the outline and article writers (RC3 guardrail; phase 2, brief 2.2).
  *
  * One builder for both writers: the two copies this replaced printed only
@@ -872,12 +852,35 @@ function whiteboardFilenameOf(state) {
 }
 
 /**
- * The hero image the outline writer is given: the photo with the most identified
- * characters, else the first non-whiteboard photo; none when the director kept no photo
- * but the whiteboard.
+ * The photos kept for the article, as the map checks and the map's stop count them (phase
+ * 4, brief 4.6; T13): the map's top photo, when it is a session photo the director kept,
+ * then buildAvailablePhotos with that photo as its hero, each photo once. Which photos the
+ * director left out is isPhotoExcluded's one rule, and the whiteboard is never among them.
  *
- * generateOutline selects it and stores it in state.heroImage. The outline reworker
- * reads that (phase 2, 2.3) and selects again only when it is missing.
+ * @param {Object} state
+ * @param {string|null} topPhoto - the map's top photo
+ * @returns {string[]} filenames
+ */
+function keptPhotoFilenames(state, topPhoto) {
+  const whiteboard = whiteboardFilenameOf(state);
+  const isSessionPhoto = Boolean(topPhoto) && (state.sessionPhotos || []).some((photo) => photoKey(photoFilenameOf(photo)) === photoKey(topPhoto));
+  const keptTop = isSessionPhoto && !(whiteboard && photoKey(topPhoto) === photoKey(whiteboard)) && heroPhotoEntry(state, topPhoto) ? [topPhoto] : [];
+  const seen = new Set();
+  return [...keptTop, ...buildAvailablePhotos(state, topPhoto, whiteboard).map((photo) => photo.filename)].filter((filename) => {
+    const key = photoKey(filename);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Code's pick for the top photo: the photo with the most identified characters, else the
+ * first non-whiteboard photo; none when the director kept no photo but the whiteboard.
+ *
+ * Phase 4 (brief 4.6): the map writer and its rework are offered it as the top photo's
+ * starting point, first in their photo list (outlineWriterInputs). The map names the top
+ * photo, and code writes the hero from it (lib/map.js topPhotoOf).
  *
  * The 4b fix batch (T13): it never picks a photo the director excluded (isPhotoExcluded).
  * An excluded photo's analysis still counts its character descriptions, so it could top
@@ -932,54 +935,33 @@ function selectHeroImage(state) {
 }
 
 /**
- * The outline writer's inputs, read from state: buildOutlinePrompt's arguments, in
- * order (phase 2, brief 2.3).
- *
- * One function for the writer and its reworker, so the reworker's prompt is built
- * from exactly what the writer's was. Two of these are computed and never stored,
- * the available photos and the session facts; both are recomputed here from the
- * same state by the writer's own builders (buildAvailablePhotos, buildSessionFacts).
+ * The map writer's inputs, read from state: buildOutlinePrompt's arguments, in order (phase
+ * 2, brief 2.3; phase 4, brief 4.6). One function for the writer and its rework, so the
+ * rework's prompt is built from exactly what the writer's was:
+ * - the settled weave (settledWeaveOf), which the writer reads first, as its task;
+ * - the photos: code's pick for the top photo (selectHeroImage) first, marked as the hero,
+ *   then every other photo the director kept (buildAvailablePhotos), as the article writer's
+ *   PHOTOS list them;
+ * - the money figures and the session facts, which the writers' own builders recompute;
+ * - the options: the standing notes, the director's notes and corrections, the record and
+ *   the photo descriptions.
+ * The arc stage's advisories (<SHOULD_CONSIDER>) and the arc selection's emphasis went with
+ * the arc selection, and the arcs with their channels (R4).
  *
  * @param {Object} state
- * @param {string} heroImage - the writer's hero image
- * @returns {Array} [arcAnalysis, selectedArcs, heroImage, availablePhotos,
- *   shellAccounts, sessionFacts, options]
+ * @returns {Array} [settledWeave, photos, shellAccounts, sessionFacts, options]
  */
-function outlineWriterInputs(state, heroImage) {
-  // Arc metadata for the outline prompt. The cache carries the ANALYSIS
-  // (synthesisNotes, interweavingPlan); the arcs live in their own channel and
-  // were never in the cache, so the old `state._arcAnalysisCache || {...}`
-  // fallback never fired and <arc-metadata> rendered [] in every real session.
-  // `timing`, `architecture` and `interweavingFromPreviousRound` (reviseArcs's note
-  // that it kept the previous plan) are our own bookkeeping and are not the model's
-  // business (<arc-analysis> dumped them verbatim). Phase 3 (3.7): nor are the arc
-  // writer's questions, which are the director's to answer at the arc stop.
-  const { timing, architecture, interweavingFromPreviousRound, writerQuestions, ...cache } = state._arcAnalysisCache || {};
-  const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
-
-  // Build available photos list for outline generation (Commit 8.24)
-  // FIX: Filter out hero to prevent duplicate usage (Commit 8.26)
-  // FIX: Filter out whiteboard — director-layer evidence, not article content
-  // Brief 2.2: filename + identified names; the prompt adds the director's description.
-  const availablePhotos = buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state));
-
+function outlineWriterInputs(state) {
+  const heroImage = selectHeroImage(state);
+  const hero = heroPhotoEntry(state, heroImage);
   return [
-    arcAnalysis,
-    state.selectedArcs || [],
-    heroImage,
-    availablePhotos,  // Available photos
-    state.shellAccounts || [],  // Deterministic shell account data for financial summary
-    // Session facts: one builder for the outline and the article (RC3 guardrail, brief 2.2)
+    settledWeaveOf(state),
+    [...(hero ? [hero] : []), ...buildAvailablePhotos(state, heroImage, whiteboardFilenameOf(state))],
+    state.shellAccounts || [],
     buildSessionFacts(state),
-    // Q2: arc-selection emphasis; spec 2026-09-19 §5.3: the standing gate notes;
-    // brief 1.5: the director's raw notes, which only the article writer used to see;
-    // brief 1.3: the arc evaluation's advisory findings; brief 2.2: the director's
-    // input-review corrections and photo descriptions.
     {
-      directorGuidance: state._outlineGuidance || null,
       gateNotes: state.directorGateNotes || [],
       directorNotes: state.directorNotes || null,
-      shouldConsider: advisoriesFromPreviousStage(state, 'arcs'),
       evidenceBundle: state.evidenceBundle || null,  // brief 2.1: the record view
       directorCorrections: state.inputReviewCorrections || [],
       photoDescriptions: state.photoDescriptions || null
@@ -988,62 +970,59 @@ function outlineWriterInputs(state, heroImage) {
 }
 
 /**
- * Generate article outline from selected arcs
+ * The map writer (phase 4, brief 4.6; spec 5.1 and 5.2): lays the settled weave across the
+ * article's sections in about 450 words. Skips when the thread already holds a map (a
+ * replay).
  *
- * Uses Claude to create structured outline with section placement,
- * evidence cards, photo suggestions, and pull quotes.
+ * It reads the settled weave first, as its task, then what the outline writer read: the
+ * record and the morning timeline, the director's notes and accusation, the photos with the
+ * director's descriptions, the roster with pronouns and its rule files
+ * (outlineWriterInputs). The map it returns is the writer's last map (`_mapBaseline`), which
+ * the director's edits at the stop are made against, and is unchecked (`_mapCheck: null`):
+ * the map checks run on it next. Code writes the hero from the map's top photo (R7), so the
+ * article writer's PHOTOS and the page name the photo the map chose.
  *
- * @param {Object} state - Current state with selectedArcs, evidenceBundle, narrativeArcs
+ * @param {Object} state - Current state: the settled weave, the record, the photos
  * @param {Object} config - Graph config
- * @returns {Object} Partial state update with outline, currentPhase, approval flags
+ * @returns {Object} Partial state update
  */
 async function generateOutline(state, config) {
-  // Skip if already outlined (resume case)
   if (state.outline) {
-    return {
-      currentPhase: PHASES.GENERATE_OUTLINE
-    };
+    return { currentPhase: PHASES.GENERATE_OUTLINE };
   }
 
   const sdk = getSdkClient(config, 'generateOutline');
   const promptBuilder = getPromptBuilder(config, state);
+  const theme = config?.configurable?.theme || state.theme || 'journalist';
+  const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(...outlineWriterInputs(state));
 
-  const heroImage = selectHeroImage(state);
-
-  const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(...outlineWriterInputs(state, heroImage));
-
-  const theme = config?.configurable?.theme || 'journalist';
-  const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
-
-  const outline = await sdk({
+  const map = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
     disableTools: true,
-    jsonSchema: activeOutlineSchema
+    jsonSchema: mapSchemaFor(theme)
   });
 
   return {
-    outline,
-    heroImage,  // Persist resolved hero image for article generation
+    outline: map,
+    _mapBaseline: map,
+    _mapCheck: null,
+    heroImage: topPhotoOf(map),
     currentPhase: PHASES.GENERATE_OUTLINE
   };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// REVISION NODE - Targeted outline fixes with previous output context
+// THE MAP'S REWORK - a check rework or the director's send-back
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// This node handles outline revisions by providing the FULL previous output
-// along with specific feedback from the evaluator. This solves the
-// "whack-a-mole" problem where fixing one issue caused regression of
-// previously-correct output.
-//
 // Data flow:
-// 1. incrementOutlineRevision preserves outline in _previousOutline, clears outline
-// 2. reviseOutline receives _previousOutline + validationResults
-// 3. Uses buildRevisionContextDRY helper (DRY) to format context
-// 4. Makes targeted fixes, returns new outline, clears _previousOutline
+// 1. incrementOutlineRevision keeps the map in _previousOutline and clears outline
+// 2. reviseOutline reads _previousOutline with the map checks' lines (validationResults)
+//    or the director's note, and the director's standing edits
+// 3. buildRevisionContextDRY formats the context
+// 4. The rework returns the whole map; code holds it to the director's edits
 
 /**
  * The list a send-back's rework returns of the director's edits it changed (F1, spec
@@ -1103,29 +1082,32 @@ function takeChangedEdits(result) {
 }
 
 /**
- * Revise outline with previous output context for targeted fixes
+ * The map's rework (phase 4, brief 4.6): one pass on the map, built from the writer's own
+ * sections (buildOutlineRevisionPrompt), with the map's schema for the theme. An automatic
+ * pass runs after a failed map check and fixes what the check's lines name; the director's
+ * send-back takes the note as its task, and may change one of the director's edits only
+ * where the note's structural change means it no longer fits, saying why (the changed-edits
+ * list its schema adds).
  *
- * Called after incrementOutlineRevision when evaluator says outline needs work.
- * Uses the centralized buildRevisionContext helper for DRY formatting.
+ * Every pass but a send-back is held to the director's standing edits: code puts back each
+ * line it changed and strikes again, by id, each beat it brought back (lib/hand-edit-diff.js
+ * settleEdits), and the round's report (`_outlineHandEditReport`) records each change and
+ * each restore. The map a pass leaves is the writer's last map (`_mapBaseline`), unchecked
+ * (`_mapCheck: null`), and its top photo is the hero.
  *
- * Key difference from generateOutline: receives PREVIOUS OUTPUT + FEEDBACK
- * so it can make targeted fixes instead of regenerating from scratch.
- *
- * @param {Object} state - Current state with _previousOutline, validationResults
+ * @param {Object} state - Current state with _previousOutline, validationResults, the note
  * @param {Object} config - Graph config with SDK client
- * @returns {Object} Partial state update with outline, cleared _previousOutline
+ * @returns {Object} Partial state update
  */
 async function reviseOutline(state, config) {
   const revisionCount = state.outlineRevisionCount || 0;
-  console.log(`[reviseOutline] Starting outline revision ${revisionCount}`);
+  console.log(`[reviseOutline] Starting map revision ${revisionCount}`);
   const startTime = Date.now();
 
-  // Get previous outline (preserved by incrementOutlineRevision)
+  // The map the rework starts from (kept by incrementOutlineRevision)
   const previousOutline = state._previousOutline;
   if (!previousOutline) {
-    // CRITICAL: This should never happen in normal flow.
-    // If we're here, incrementOutlineRevision ran with null outline.
-    console.error('[reviseOutline] CRITICAL: No previous outline to revise. This indicates incrementOutlineRevision ran with null outline.');
+    console.error('[reviseOutline] CRITICAL: No previous map to rework. This indicates incrementOutlineRevision ran with no map.');
     return {
       outline: null,
       _previousOutline: null,
@@ -1133,86 +1115,50 @@ async function reviseOutline(state, config) {
       errors: [{
         phase: PHASES.GENERATE_OUTLINE,
         type: 'revision-no-previous-output',
-        message: 'Cannot revise: no previous outline available. Increment node may have run with null outline.',
+        message: 'Cannot revise: no previous map available. Increment node may have run with no map.',
         timestamp: new Date().toISOString()
       }],
       currentPhase: PHASES.ERROR
     };
   }
 
-  // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round.
-  // This node never clears them; the gate does, on approve. F1 (spec 2026-10-02
-  // section 7): the edits the version this pass starts from carries, by id.
-  const handEdits = carriedEdits(state._outlineHandEdits, previousOutline);
-  const sendBack = Boolean(state._outlineFeedback);
-  const theme = config?.configurable?.theme || 'journalist';
-
-  // Build revision context using centralized helper (DRY)
-  const { contextSection, previousOutputSection } = buildRevisionContextDRY({
-    phase: 'outline',
-    revisionCount,
-    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
-    round: (state.humanOutlineRevisionCount || 0) + 1,
-    validationResults: state.validationResults,
-    previousOutput: previousOutline,
-    humanFeedback: state._outlineFeedback || null,
-    handEdits,
-    theme
-  });
-
-  // Get SDK client and prompt builder
   const sdk = getSdkClient(config, 'reviseOutline');
   const promptBuilder = getPromptBuilder(config, state);
-
-  // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN
-  // FEEDBACK; on an evaluator-driven pass the slot is null and nothing is excluded.
-  // The gate narrows the match to THIS stop's rejection note (phase 1 brief 1.1):
-  // an approval note reusing the same sentence must survive.
-  const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback, 'outline');
-
-  const activeOutlineSchema = theme === 'detective' ? detectiveOutlineSchema : outlineSchema;
+  const theme = config?.configurable?.theme || state.theme || 'journalist';
 
   try {
-    // INSIDE the try: buildOutlineRevisionPrompt loads the writer's craft files and
-    // THROWS if any are missing. Outside, that throw escaped as a graph-level
-    // rejection instead of this node's error-contract return, which is what clears
-    // _previousOutline / _outlineFeedback and leaves the run resumable.
-    const revisionPrompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
-    const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder, theme);
+    // INSIDE the try: the builders throw on a missing rule file or a theme with no map, and
+    // this node's error contract is what clears _previousOutline / _outlineFeedback.
+    const call = await mapReworkCall(state, promptBuilder, theme);
 
     // F1: a send-back that carries the director's edits returns the edits it changed,
     // through a schema built from the stored one; the list is taken out before storing.
     const { output: result, reasons } = takeChangedEdits(await sdk({
-      prompt: revisionPrompt,
-      systemPrompt,
+      prompt: call.prompt,
+      systemPrompt: call.systemPrompt,
       model: 'opus',  // Same as generateOutline
-      jsonSchema: sendBack && handEdits.length > 0 ? reworkSchemaWithChangedEdits(activeOutlineSchema) : activeOutlineSchema,
+      jsonSchema: call.jsonSchema,
       disableTools: true,
-      label: `Outline revision ${revisionCount}`
+      label: call.label
     }));
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    const outlineTheme = config?.configurable?.theme || state?.theme || 'journalist';
-    const arcCount = outlineTheme === 'detective'
-      ? result?.evidenceLocker?.evidenceGroups?.length || 0
-      : result?.theStory?.arcs?.length || 0;
-    console.log(`[reviseOutline] Complete: ${arcCount} ${outlineTheme === 'detective' ? 'evidence groups' : 'arcs'} in ${duration}s`);
+    const sections = Array.isArray(result?.sections) ? result.sections : [];
+    const beats = sections.reduce((n, section) => n + (Array.isArray(section?.beats) ? section.beats.length : 0), 0);
+    console.log(`[reviseOutline] Complete: ${sections.length} sections, ${beats} beats in ${duration}s`);
 
-    // Phase 3 (3.7; R5): only the director's note answers a question, so an automatic
-    // pass keeps every previous subject; the rework's question replaces the earlier
-    // ones of its kind and `about` (3.10).
-    const outline = withCarriedWriterQuestions(result || {}, previousOutline, { afterDirectorNote: Boolean(state._outlineFeedback) });
     // FA (spec 2026-10-02 section 7): after an automatic pass, code puts back any of the
-    // director's edits the pass changed, field by field; a send-back's rework is left as
-    // it is, with its reasons. Spec §4.4: verify on EVERY pass. F1: the report adds this
-    // pass's changes and restores to the round's (the server resets it at a send-back);
-    // the edits stay, for the gate to clear on approve.
+    // director's edits the pass changed; a send-back's rework is left as it is, with its
+    // reasons. The report adds this pass's changes and restores to the round's.
     const settled = settleEdits(state._outlineHandEditReport, {
-      edits: handEdits, before: previousOutline, after: outline,
-      pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
+      edits: call.edits, before: call.before, after: result || {},
+      pass: call.sendBack ? SEND_BACK_PASS : revisionCount, reasons
     });
     return {
       outline: settled.output,
+      _mapBaseline: settled.output,
+      _mapCheck: null,
+      heroImage: topPhotoOf(settled.output),
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
       _outlineHandEditReport: settled.report,
@@ -1241,6 +1187,54 @@ async function reviseOutline(state, config) {
 }
 
 /**
+ * The map's rework call, the one place it is built (phase 4, brief 4.6), as the arc rework's
+ * is (arc-specialist-nodes.js arcReworkCall): reviseOutline sends it, and
+ * scripts/render-prompts.js renders it. From the map the rework starts from
+ * (`_previousOutline`), the director's standing edits it carries, the map checks' lines or
+ * the director's note, the round, and the standing notes without the note being acted on.
+ *
+ * @param {Object} state
+ * @param {Object} promptBuilder - the PromptBuilder the writer used
+ * @param {string} [theme] - the session's theme (default: the state's)
+ * @returns {Promise<{prompt: string, systemPrompt: string, jsonSchema: Object, edits: Object[],
+ *   before: Object, sendBack: boolean, label: string}>}
+ */
+async function mapReworkCall(state, promptBuilder, theme = state.theme || 'journalist') {
+  const revisionCount = state.outlineRevisionCount || 0;
+  const before = state._previousOutline;
+  // Spec 2026-09-19 §4.3: the director's edits ride along on EVERY pass of the round. F1:
+  // the edits the version this pass starts from carries, by id.
+  const edits = carriedEdits(state._outlineHandEdits, before);
+  const sendBack = Boolean(state._outlineFeedback);
+  const { contextSection, previousOutputSection } = buildRevisionContextDRY({
+    phase: 'outline',
+    outputName: 'map',
+    revisionCount,
+    // Brief 2.3: a send back's banner names the round it opens, as the stop shows it.
+    round: (state.humanOutlineRevisionCount || 0) + 1,
+    validationResults: state.validationResults,
+    previousOutput: before,
+    humanFeedback: state._outlineFeedback || null,
+    handEdits: edits,
+    theme
+  });
+  // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN FEEDBACK.
+  const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback, 'outline');
+  const prompt = await buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
+  const systemPrompt = await buildOutlineRevisionSystemPrompt(promptBuilder);
+  const mapSchema = mapSchemaFor(theme);
+  return {
+    prompt,
+    systemPrompt,
+    jsonSchema: sendBack && edits.length > 0 ? reworkSchemaWithChangedEdits(mapSchema) : mapSchema,
+    edits,
+    before,
+    sendBack,
+    label: `Map revision ${revisionCount}`
+  };
+}
+
+/**
  * A reworker's system prompt starts with its writer's (phase 2, 2.3). The two
  * rework composers below used to take a theme name, so an old call would now
  * compose a prompt that opens with the word "journalist": fail loud instead.
@@ -1259,123 +1253,62 @@ function assertWriterSystemPrompt(writerSystemPrompt, caller, builder) {
 }
 
 /**
- * The rules the outline reworker's system prompt adds after its writer's: the
- * journalist's (phase 3, brief 3.3; TH7). Its first line names the task the
- * revision context gives the rework; how much of the previous outline the rework
- * keeps is the revision context's to say, from the director's note
- * (buildRevisionContext), so no fixed "preserve" text is here.
+ * The rules the map's rework adds to its writer's system prompt (phase 3, brief 3.3; TH7;
+ * phase 4, brief 4.6): its first line names the task the revision context gives the rework,
+ * and how much of the previous map the rework keeps is the revision context's to say, from
+ * the director's note or the map checks' lines (buildRevisionContext). The detective's
+ * outline rules went with its outline stage (R1).
  */
-const OUTLINE_REVISION_RULES = 'You are reworking the outline you wrote, for the reason the revision context in the prompt gives: the director\'s note when the director sent it back, or what an automatic check or evaluation found.';
+const OUTLINE_REVISION_RULES = 'You are reworking the story map you wrote, for the reason the revision context in the prompt gives: the director\'s note when the director sent it back, or what the map checks found.';
 
 /**
- * The detective's outline rework rules, today's text, parked with its theme (D13).
- */
-const DETECTIVE_OUTLINE_REVISION_RULES = `You are REVISING that outline, not writing it from scratch.
-
-CRITICAL REVISION RULES:
-1. You are IMPROVING an existing outline, not generating from scratch
-2. The previous outline is provided - PRESERVE everything that's working well
-3. Only modify the specific issues identified in the feedback
-4. Maintain the same overall structure and organization
-5. Output complete outline with all required sections
-
-Your goal is TARGETED FIXES that address the evaluator's feedback while preserving all the good work from the previous attempt.
-
-Do NOT:
-- Regenerate the outline from scratch (you lose good content)
-- Change sections that weren't flagged as issues
-- Drop content that was working well
-- Introduce new problems while fixing old ones
-
-DO:
-- Read the previous outline carefully
-- Identify exactly what needs to change
-- Make minimal, surgical fixes
-- Verify your changes address the feedback
-- Return the complete updated outline`;
-
-/**
- * Get system prompt for outline revision: the outline writer's system prompt, then
- * the rework rules (phase 2, 2.3).
- *
- * The writer's system prompt brings the identity line, the reporting-mode block in
- * its place right after it (brief 1.5: a rework is where a remote outline gets
- * "corrected" back into an on-site one), and the section rules and editorial
- * design the reworker used to go without.
+ * The map's rework system prompt: the map writer's system prompt, then the rework rules
+ * (phase 2, 2.3). The writer's brings the identity line, the reporting-mode block right
+ * after it, and the world and the truth rules.
  *
  * @param {string} writerSystemPrompt - PromptBuilder.buildOutlineSystemPrompt()
- * @param {string} [theme='journalist'] - selects the rework rules (outlineRevisionRules)
  * @returns {string}
  */
-function getOutlineRevisionSystemPrompt(writerSystemPrompt, theme = 'journalist') {
+function getOutlineRevisionSystemPrompt(writerSystemPrompt) {
   assertWriterSystemPrompt(writerSystemPrompt, 'getOutlineRevisionSystemPrompt', 'buildOutlineSystemPrompt');
-  return `${writerSystemPrompt}\n\n${outlineRevisionRules(theme)}`;
+  return `${writerSystemPrompt}\n\n${OUTLINE_REVISION_RULES}`;
 }
 
 /**
- * The outline rework rules for a theme: the detective keeps today's (D13).
- *
- * @param {string} [theme='journalist']
- * @returns {string}
- */
-function outlineRevisionRules(theme = 'journalist') {
-  return theme === 'detective' ? DETECTIVE_OUTLINE_REVISION_RULES : OUTLINE_REVISION_RULES;
-}
-
-/**
- * The outline reworker's system prompt, built from its writer's builder.
+ * The map's rework system prompt, built from its writer's builder.
  *
  * @param {Object} promptBuilder - the PromptBuilder the writer used
- * @param {string} [theme='journalist']
  * @returns {Promise<string>}
  */
-async function buildOutlineRevisionSystemPrompt(promptBuilder, theme = 'journalist') {
-  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt(), theme);
+async function buildOutlineRevisionSystemPrompt(promptBuilder) {
+  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt());
 }
 
 /**
- * The hero image a rework was written against: the one generateOutline stored,
- * else the one it would select.
- */
-function reworkHeroImage(state) {
-  return state.heroImage || selectHeroImage(state);
-}
-
-/**
- * Build revision prompt with previous outline and feedback
- *
- * Phase 2 (2.3): the outline writer's user prompt (every section but its
- * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>), built by the writer's own builder from
- * the writer's own inputs, then the revision block, then <DIRECTOR_GUIDANCE> last.
- * The reworker used to see the selected arc ids and three evidence counts; it now
- * sees the record, the arcs, the photos, the director's notes and the writer's
- * rules, and a later change to the writer reaches it without a second copy.
- *
- * The writer's <SHOULD_CONSIDER> is the arc evaluation's advisories, which the
- * outline evaluation has overwritten by the time a rework runs; the revision
- * context carries the outline evaluation's own.
+ * The map's rework prompt (phase 2, 2.3; phase 4, brief 4.6): the map writer's user prompt
+ * (every section but its <DIRECTOR_GUIDANCE>), built by the writer's own builder from the
+ * writer's own inputs, the settled weave first among them, then the revision block, then
+ * <DIRECTOR_GUIDANCE> last. A later change to the writer reaches its rework without a second
+ * copy.
  *
  * @param {Object} state - Current workflow state
  * @param {string} contextSection - Formatted revision context from helper
  * @param {string} previousOutputSection - Formatted previous output from helper
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
- * @param {string} [theme='journalist'] - selects the task (reworkTask)
  * @returns {Promise<string>} Complete revision prompt
- * @throws {Error} when one of the writer's craft files did not load
+ * @throws {Error} when one of the writer's rule files did not load
  */
-async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], theme = 'journalist') {
+async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
   await promptBuilder.requirePhasePrompts('outlineGeneration');
-  const writerSections = await promptBuilder.buildOutlineUserSections(
-    ...outlineWriterInputs(state, reworkHeroImage(state))
-  );
-  const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
+  const writerSections = await promptBuilder.buildOutlineUserSections(...outlineWriterInputs(state));
+  const guidanceSection = buildDirectorGuidanceSection(null, gateNotes);
 
   return `${writerSections}
 
 ---
 
-# Outline Revision Request
+# Map Revision Request
 
 ${contextSection}
 
@@ -1385,16 +1318,16 @@ ${previousOutputSection}
 
 ---
 
-${reworkTask('outline', theme)}${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
+${reworkTask('map')}${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
 }
 
 /**
- * The outline and article reworks' task, the last section before <DIRECTOR_GUIDANCE>.
+ * The map's and the article's reworks' task, the last section before <DIRECTOR_GUIDANCE>.
  *
  * The journalist's (phase 3, brief 3.3; TH7) defers to the revision context for what
  * the rework changes and how far; the detective's keeps today's fixed text (D13).
  *
- * @param {'outline'|'article'} phase
+ * @param {'map'|'article'} phase - what the rework returns
  * @param {string} [theme='journalist']
  * @returns {string}
  */
@@ -1935,11 +1868,11 @@ function createMockPromptBuilder() {
     async requirePhasePrompts() {},
 
     async buildOutlineSystemPrompt() {
-      return 'Mock system prompt for outline generation\n\nMock outline craft rules';
+      return 'Mock system prompt for the map writer\n\nMock map craft rules';
     },
 
-    async buildOutlineUserSections(arcAnalysis, selectedArcs) {
-      return `Generate outline for arcs: ${selectedArcs?.join(', ') || 'none selected'}`;
+    async buildOutlineUserSections(settledWeave) {
+      return `Lay out the map from ${settledWeave ? 'the settled weave' : 'no weave'}`;
     },
 
     async buildArticleSystemPrompt() {
@@ -1950,10 +1883,10 @@ function createMockPromptBuilder() {
       return `Generate article from outline with ${Object.keys(outline || {}).length} sections`;
     },
 
-    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, shellAccounts, sessionFacts) {
+    async buildOutlinePrompt(settledWeave) {
       return {
-        systemPrompt: 'Mock system prompt for outline generation',
-        userPrompt: `Generate outline for arcs: ${selectedArcs?.join(', ') || 'none selected'}`
+        systemPrompt: 'Mock system prompt for the map writer',
+        userPrompt: `Lay out the map from ${settledWeave ? 'the settled weave' : 'no weave'}`
       };
     },
 
@@ -1973,14 +1906,14 @@ module.exports = {
   }),
   processRescuedItems: traceNode(processRescuedItems, 'processRescuedItems'),
   generateOutline: traceNode(generateOutline, 'generateOutline', {
-    stateFields: ['selectedArcs', 'playerFocus']
+    stateFields: ['weave', 'playerFocus']
   }),
   // Revision node - uses previous output context for targeted fixes (DRY)
   reviseOutline: traceNode(reviseOutline, 'reviseOutline', {
     stateFields: ['_previousOutline', 'validationResults']
   }),
   generateContentBundle: traceNode(generateContentBundle, 'generateContentBundle', {
-    stateFields: ['outline', 'selectedArcs']
+    stateFields: ['outline', 'weave']
   }),
   validateContentBundle: traceNode(validateContentBundle, 'validateContentBundle'),
   reviseContentBundle: traceNode(reviseContentBundle, 'reviseContentBundle'),
@@ -1993,15 +1926,16 @@ module.exports = {
   // outline writer's inputs and photo list, and the hero the writer and its
   // reworker used. Phase 3 (3.9): the article writer's inputs, its photos among them.
   // The 4b fix batch: the one rule for a kept photo (the fact check's arguments read
-  // it) and the one hero entry (the outline judge prints it). Task 4c-fix: the
-  // whiteboard's filename, which the fact check's arguments read too.
+  // it) and the one hero entry (the map writer's and the article's photo lists print it).
+  // Task 4c-fix: the whiteboard's filename, which the fact check's arguments read too.
   getPromptBuilder,
   buildSessionFacts,
   buildAvailablePhotos,
   outlineWriterInputs,
   articleWriterInputs,
-  reworkHeroImage,
   isPhotoExcluded,
+  // Brief 4.6: the photos kept for the article, which the map checks and the stop count
+  keptPhotoFilenames,
   heroPhotoEntry,
   whiteboardFilenameOf,
   // Brief 4.5: the send-back's changed-edits list, which the weave's send-back asks for
@@ -2018,12 +1952,13 @@ module.exports = {
     getArticleRevisionSystemPrompt,
     buildOutlineRevisionPrompt,
     buildArticleRevisionPrompt,
+    // Brief 4.6: the map's rework call, which scripts/render-prompts.js renders
+    mapReworkCall,
     // Brief 2.3: each reworker is built from its writer's builders and inputs.
     // scripts/render-prompts.js renders the rework system prompts through these.
     buildOutlineRevisionSystemPrompt,
     buildArticleRevisionSystemPrompt,
     OUTLINE_REVISION_RULES,
-    outlineRevisionRules,
     reworkTask,
     ARTICLE_REVISION_RULES,
     articleRevisionRules,

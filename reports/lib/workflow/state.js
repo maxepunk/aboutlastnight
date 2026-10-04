@@ -21,10 +21,10 @@
  *   - Preprocessed Data: preprocessedEvidence (Commit 8.5)
  *   - Curated Data: evidenceBundle
  *   - The weave (phase 4, brief 4.4): weave, _arcReworkTimeout
- *   - Analysis: narrativeArcs, selectedArcs, heroImage, _arcAnalysisCache (the old arc
- *     channels, which nothing writes since 4.4 and which go with their last readers)
+ *   - The hero: heroImage, the map's top photo (phase 4, brief 4.6)
  *   - Evaluation (8.6): evaluationHistory
- *   - Generation: outline, contentBundle
+ *   - Generation: outline (the story map since phase 4, brief 4.6), _mapBaseline, _mapCheck,
+ *     contentBundle
  *   - Output: assembledHtml, validationResults
  *   - Control: currentPhase, errors
  *   - Revision Counters (8.6, brief 1.4): arcRevisionCount, humanArcRevisionCount,
@@ -597,33 +597,18 @@ const ReportStateAnnotation = Annotation.Root({
   }),
 
   // ═══════════════════════════════════════════════════════
-  // ANALYSIS RESULTS
+  // THE HERO
   // ═══════════════════════════════════════════════════════
 
-  /** Narrative arcs identified by AI analysis */
-  narrativeArcs: Annotation({
-    reducer: replaceReducer,
-    default: () => []
-  }),
-
-  /** User-selected arcs for article generation */
-  selectedArcs: Annotation({
-    reducer: replaceReducer,
-    default: () => []
-  }),
-
   /**
-   * Confirmed hero image filename for article generation
-   * Set by generateOutline, consumed by generateContentBundle
-   * Single source of truth - prevents duplicate hero/inline photos
+   * The hero image's filename: the map's top photo (phase 4, brief 4.6; R7). Code writes it
+   * when the map writer or its rework returns, and again at the map's approve and send-back,
+   * so the article writer's PHOTOS, the judge's photo check and the page name the photo the
+   * map chose. Read by the article writer (ai-nodes.js articleWriterInputs). The arc
+   * channels that sat here (narrativeArcs, selectedArcs, _arcAnalysisCache) went with their
+   * last readers (R4).
    */
   heroImage: Annotation({
-    reducer: replaceReducer,
-    default: () => null
-  }),
-
-  /** Cached arc analysis for outline generation (internal) */
-  _arcAnalysisCache: Annotation({
     reducer: replaceReducer,
     default: () => null
   }),
@@ -646,8 +631,34 @@ const ReportStateAnnotation = Annotation.Root({
   // GENERATION OUTPUTS
   // ═══════════════════════════════════════════════════════
 
-  /** Article outline approved by user */
+  /**
+   * The story map (phase 4, brief 4.6; lib/map.js): the map writer's, a rework's, or the
+   * map as the director left it at the stop. Kept by the rollback to the map (R9).
+   */
   outline: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * The writer's last map (brief 4.6): the map the writer or its last rework returned, the
+   * director's lines code kept among it. The director's edits at every approve and
+   * send-back are made against it (lib/hand-edit-diff.js standingOnMap); it stands past
+   * approve and through the rollback to the map.
+   */
+  _mapBaseline: Annotation({
+    reducer: replaceReducer,
+    default: () => null
+  }),
+
+  /**
+   * The map checks' mark on the map they checked (brief 4.6; map-nodes.js checkMap):
+   * `{mapKey, passed, failures, concerns, checkedAt}`. The writer and every rework return
+   * their map unchecked (null), so the checks run once on each map; a replay and the
+   * rollback to the map keep the mark, so no rework runs again on a map already checked. The
+   * stop shows a failure only while the mark's mapKey names the map in hand.
+   */
+  _mapCheck: Annotation({
     reducer: replaceReducer,
     default: () => null
   }),
@@ -891,8 +902,10 @@ const ReportStateAnnotation = Annotation.Root({
    * The director picks the arcs and then has no say until the outline is already
    * written, where the only lever is reject-and-regenerate. This carries their
    * emphasis into BOTH the outline and the article prompts as the final section.
-   * Set by: /approve (buildResumePayload) alongside selectedArcs.
-   * Consumed by: generateOutline, generateContentBundle, buildArticleRevisionPrompt.
+   * Written by nothing since the story meeting replaced the arc selection (brief 4.5).
+   * Read by the article writer and its rework (generateContentBundle,
+   * buildArticleRevisionPrompt) until their slice removes it (R4, brief 4.7); the map
+   * writer reads it no more (brief 4.6).
    */
   _outlineGuidance: Annotation({
     reducer: replaceReducer,
@@ -910,8 +923,13 @@ const ReportStateAnnotation = Annotation.Root({
    * version the stop showed and the version sent back both carry, then the send-back's
    * own, numbered on from `issued`. Read on EVERY pass of the round by the reworks
    * (<HAND_EDITS>, and the restore after an automatic pass), the judges and the fact
-   * check, each through carriedEdits; no node clears it. checkpointOutline and
-   * checkpointArticle clear it on approve, as do a rollback and a fresh start.
+   * check, each through carriedEdits; no node clears it. checkpointArticle clears it on
+   * approve, as do a rollback and a fresh start.
+   *
+   * Phase 4 (brief 4.6): `_outlineHandEdits` holds the director's edits on the map, made at
+   * every approve and send-back against the writer's last map (`_mapBaseline`;
+   * lib/hand-edit-diff.js standingOnMap, kind 'map'). They stand past approve and through
+   * the rollback to the map (R9), as the meeting's do.
    */
   _outlineHandEdits: Annotation({
     reducer: replaceReducer,
@@ -1066,15 +1084,14 @@ function getDefaultState() {
     _weaveHandEdits: null,
     _weaveHandEditReport: null,
     _weaveMarks: null,
-    // Analysis results
-    narrativeArcs: [],
-    selectedArcs: [],
-    heroImage: null,  // Confirmed hero image filename for article generation
-    _arcAnalysisCache: null,
+    // The hero: the map's top photo (phase 4, brief 4.6)
+    heroImage: null,
     // Evaluation (Commit 8.6)
     evaluationHistory: [],
-    // Generation outputs
+    // Generation outputs: the map, the writer's last map and the checks' mark (brief 4.6)
     outline: null,
+    _mapBaseline: null,
+    _mapCheck: null,
     contentBundle: null,
     // Final outputs
     assembledHtml: null,
@@ -1174,7 +1191,8 @@ const PHASES = {
 
   // Outline sub-phases (Commit 8.6)
   OUTLINE_GENERATION: '3.1',
-  // OUTLINE_EVALUATION ('3.2') went with the outline judge (phase 4, brief 4.6).
+  // The map checks (phase 4, brief 4.6), where the outline judge's 3.2 was.
+  MAP_CHECKS: '3.2',
   OUTLINE_CHECKPOINT: '3.25',       // Checkpoint: user approves outline (Commit 8.26 - SRP separation)
   GENERATE_OUTLINE: '3',            // @deprecated - use sub-phases
 
@@ -1317,18 +1335,19 @@ const ROLLBACK_CLEARS = {
     // Preprocessing and curation
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
-    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     '_outlineGuidance',
     // Spec 2026-09-19 §5.4: the director's gate notes describe outlines/articles that
     // this point regenerates from scratch, and arc notes describe arcs it re-picks.
-    // The four downstream points (photos, character-ids, outline, article) PRUNE
-    // instead — see pruneGateNotes in lib/api-helpers.js.
+    // The five points from the story meeting down (arc-selection, photos, character-ids,
+    // outline, article) PRUNE instead: see pruneGateNotes in lib/api-helpers.js. The
+    // meeting's point and the map's reopen their stop as the director left it (R9).
     'directorGateNotes',
     // Generation
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     // Evaluation history
     'evaluationHistory'
@@ -1358,13 +1377,13 @@ const ROLLBACK_CLEARS = {
     // only the analysis.
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
@@ -1383,13 +1402,13 @@ const ROLLBACK_CLEARS = {
     // roster, and both outputs are keyed to it.
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
@@ -1417,13 +1436,13 @@ const ROLLBACK_CLEARS = {
     // gate must re-open to show (and let the director reject) the NEW parse.
     'inputReviewApproved',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
@@ -1433,13 +1452,13 @@ const ROLLBACK_CLEARS = {
     'preCurationApproved', 'characterData', 'narrativeTensions',
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle', '_evidenceApproved',
-    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
@@ -1451,13 +1470,13 @@ const ROLLBACK_CLEARS = {
   'evidence-and-photos': [
     'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData', 'narrativeTensions',
     'evidenceBundle', '_evidenceApproved',
-    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     '_outlineGuidance',
     'directorGateNotes',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
   ],
@@ -1473,12 +1492,12 @@ const ROLLBACK_CLEARS = {
   // (lib/api-helpers.js STOPS_INVALIDATED_BY).
   'arc-selection': [
     'narrativeTensions',
-    '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    '_arcReworkTimeout', '_arcFeedback',
     'meetingApproved', '_meetingRound', '_weaveHandEditReport', '_weaveMarks',
     // Q2: _outlineGuidance was captured AT this gate until the meeting (brief 4.5), which
     // writes it no more; it is cleared here until its last readers go (4.7).
     '_outlineGuidance',
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
     'evaluationHistory'
@@ -1500,7 +1519,7 @@ const ROLLBACK_CLEARS = {
     'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses',
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'heroImage',
-    'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ],
@@ -1524,16 +1543,22 @@ const ROLLBACK_CLEARS = {
   'character-ids': [
     'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'heroImage',
-    'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
   ],
 
-  // Phase 3.2: Outline
+  // Phase 3.25: the map (phase 4, brief 4.6; R9). Going back to the map reopens it as the
+  // director last left it, with no model call, as going back to the meeting does: the map
+  // stays, with the checks' mark, the director's standing edits and their baseline
+  // (`_mapCheck`, `_outlineHandEdits`, `_mapBaseline`), the hero its top photo names, and the
+  // map's counters (ROLLBACK_COUNTER_RESETS). The approval, the round's note, report and
+  // trace go, so the stop reopens; the article goes, so it is written from the map as left.
+  // evaluationHistory is kept (the meeting's fact check sits in it); the article's verdict
+  // is invalidated (lib/api-helpers.js PHASES_INVALIDATED_BY).
   'outline': [
-    'heroImage', 'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
+    'outlineApproved', '_outlineFeedback', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
-    // Note: evaluationHistory preserved - may contain useful arc evals
   ],
 
   // Phase 4.2: Article
@@ -1594,7 +1619,8 @@ const ROLLBACK_COUNTER_RESETS = {
   // refund an arc revision budget spent upstream (M1).
   'photos': { outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
   'character-ids': { outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
-  'outline': { outlineRevisionCount: 0, humanOutlineRevisionCount: 0, articleRevisionCount: 0, humanArticleRevisionCount: 0 },
+  // Brief 4.6 (R9): the map reopens as the director left it, its round counters with it.
+  'outline': { articleRevisionCount: 0, humanArticleRevisionCount: 0 },
   'article': { articleRevisionCount: 0, humanArticleRevisionCount: 0 }
 };
 
@@ -1630,7 +1656,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 87
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 86
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null
@@ -1663,7 +1689,7 @@ if (require.main === module) {
   // NOTE: APPROVAL_TYPES removed - checkpoint types now in checkpoint-helpers.js
 
   // Test revision caps
-  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 1, OUTLINE: 2, ARTICLE: 2 }
+  console.log('\nRevision caps:', REVISION_CAPS); // Should be { ARCS: 1, OUTLINE: 1, ARTICLE: 2 }
 
   // Test rollback points
   console.log('\nRollback points:', VALID_ROLLBACK_POINTS.length, 'valid'); // Should be 11

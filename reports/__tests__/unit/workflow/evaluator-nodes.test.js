@@ -1845,7 +1845,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
         ready: true, structuralPassed: true, overallScore: 0.9,
         criteriaScores: { evidenceTruth: { score: 0.8 }, moneyTruth: { score: 1 } }, structuralIssues: [], advisoryWarnings: []
       });
-      const result = await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+      const result = await evaluateArcs(stateFor('journalist', { meetingApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
       expect(result.evaluationHistory.ready).toBe(true);
       expect(result.evaluationHistory.structuralIssues).toEqual([]);
     });
@@ -1864,7 +1864,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
           },
           structuralIssues: [], advisoryWarnings: []
         });
-        const result = await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+        const result = await evaluateArcs(stateFor('journalist', { meetingApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
         expect(result.evaluationHistory.ready).toBe(true);
         expect(result.evaluationHistory.structuralIssues).toEqual([]);
         const lines = log.mock.calls.map((call) => call.join(' ')).filter((line) => line.includes('not scored'));
@@ -1880,7 +1880,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
         const scores = Object.fromEntries(Object.entries(getPhaseCriteria('arcs', 'journalist'))
           .filter(([, criterion]) => criterion.truth).map(([key]) => [key, { score: 1 }]));
         const mockClient = judgeWith({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: scores, structuralIssues: [], advisoryWarnings: [] });
-        await evaluateArcs(stateFor('journalist', { selectedArcs: [], evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
+        await evaluateArcs(stateFor('journalist', { meetingApproved: false, evaluationHistory: [] }), { configurable: { sdkClient: mockClient } });
         expect(log.mock.calls.map((call) => call.join(' ')).filter((line) => line.includes('not scored'))).toEqual([]);
       } finally {
         log.mockRestore();
@@ -2121,9 +2121,11 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // Phase 4 (brief 4.4; R1): the detective arcs judge went with the arc stage's
     // detective branch, and its pin with it.
     // Phase 4 (brief 4.6; R1): the detective outline judge went with the outline judge,
-    // and its pin with it.
+    // and its pin with it. Brief 4.6, the map: the fixture's outline is a map, which the
+    // article judge prints under OUTLINE:, and nothing else moves (with the fixture's old
+    // outline the judge sends 6e6ee008..., the hash before).
     const PINNED = {
-      article: '6e6ee008220dffdcd408efa5d463b91ef7b523e4ccca9f1b256e2f52a0943692'
+      article: '010dfb12413aaef2cba89d4dcc3a5ed5134d4900e194c4da52378c00e646c0d5'
     };
     const VERDICT = { ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
     const JUDGES = {
@@ -2553,6 +2555,10 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
 
     it('a stored hero the director excluded is no hero: the writer is told none was chosen, and nothing lists it', async () => {
       const state = markExcluded(withKeptPhoto(), 'hero.jpg');
+      // Phase 4 (brief 4.6): the map names no photo the director left out (its writer is
+      // offered the kept photos alone), so its top photo goes with the exclusion here.
+      const { topPhoto: _excluded, ...map } = state.outline;
+      state.outline = map;
       const inputs = articleWriterInputs(state);
       expect(inputs[1]).toBeNull();
       expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['p2.jpg', 'p9.jpg']);

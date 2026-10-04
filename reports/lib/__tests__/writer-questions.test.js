@@ -25,6 +25,8 @@
  *   coverage is unchanged.
  * - The detective is parked (spec D13): its outline and article schemas, prompts and
  *   checks do not change. Its arc stage went (R1).
+ * - Phase 4 (brief 4.6): the outline is the story map, and the writers' questions left
+ *   its schema. The map's rework carries none; the article's stay until 4.7.
  */
 
 const { SchemaValidator } = require('../schema-validator');
@@ -85,20 +87,15 @@ function sdkReturning(...values) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Phase 4 (brief 4.4): the arc writer's and the arc reworker's schemas went with the
-// weave, whose questions have their own property (weave.test.js). The field stays on the
-// outline and the bundle until 4.6 and 4.7 drop it.
+// weave, whose questions have their own property (weave.test.js). Brief 4.6: the outline's
+// went with the map. The field stays on the bundle until 4.7 drops it.
 describe('the optional writerQuestions field in the four schemas', () => {
-  it('the outline schema, at the top level, and the validator accepts it', () => {
-    expectQuestionsField(outlineSchema, 'outline.schema.json');
-    const validator = new SchemaValidator();
-    const outline = { lede: { hook: 'Marcus died with a sale on his lips.' } };
-    expect(validator.validate('outline', outline).valid).toBe(true);
-    expect(validator.validate('outline', { ...outline, writerQuestions: [Q_SARAH] }).valid).toBe(true);
-    expect(validator.validate('outline', { ...outline, writerQuestions: [{ about: 'Sarah' }] }).valid).toBe(false);
-    // Fix 3.7b: the kind is required, and is one of the three.
-    const { kind, ...noKind } = Q_SARAH;
-    expect(validator.validate('outline', { ...outline, writerQuestions: [noKind] }).valid).toBe(false);
-    expect(validator.validate('outline', { ...outline, writerQuestions: [{ ...Q_SARAH, kind: 'other' }] }).valid).toBe(false);
+  it("the map's schema has none, and the director-side gate refuses the field (brief 4.6)", () => {
+    const { directorMapProblems } = require('../map');
+    expect(outlineSchema.properties).not.toHaveProperty('writerQuestions');
+    expect(directorMapProblems(clone(OUTLINE), { theme: 'journalist' })).toBeNull();
+    expect(directorMapProblems({ ...clone(OUTLINE), writerQuestions: [Q_SARAH] }, { theme: 'journalist' }))
+      .toMatch(/must NOT have additional properties/);
   });
 
   it('the content-bundle schema, at the top level, and the validator accepts it', () => {
@@ -112,7 +109,7 @@ describe('the optional writerQuestions field in the four schemas', () => {
   });
 
   it('the descriptions state the shape and name C15, with no em-dash', () => {
-    for (const schema of [outlineSchema, contentBundleSchema]) {
+    for (const schema of [contentBundleSchema]) {
       const field = schema.properties.writerQuestions;
       expect(field.description).toMatch(/C15/);
       expect(field.items.properties.kind.description).toMatch(/C15/);
@@ -128,7 +125,6 @@ describe('the optional writerQuestions field in the four schemas', () => {
     const { WRITER_QUESTIONS_PROPERTY } = require('../writer-questions');
     const expected = { ...WRITER_QUESTIONS_PROPERTY, items: { ...WRITER_QUESTIONS_PROPERTY.items, additionalProperties: false } };
     for (const [label, schema] of [
-      ['outline.schema.json', outlineSchema],
       ['content-bundle.schema.json', contentBundleSchema],
       ['content-bundle.detective-prompt.json', detectiveBundleCopy]
     ]) {
@@ -299,8 +295,9 @@ describe('an automatic pass replaces each earlier question on the subject the re
   });
 
   // Phase 4 (brief 4.4): the weave's questions carry an id, and the arc rework's
-  // version of a question replaces it by that id (carriedWeaveQuestions).
-  it('the three reworks replace in place on an automatic pass', async () => {
+  // version of a question replaces it by that id (carriedWeaveQuestions). Brief 4.6: the
+  // map's rework has no questions.
+  it('the arc and article reworks replace in place on an automatic pass', async () => {
     const reworded = { ...Q_SARAH, question: 'What did Sarah do at the check-in?' };
     const rewordedInWeave = { ...W_SARAH, question: 'What did Sarah do at the check-in?' };
     const arcState = reworkFixtureState('journalist');
@@ -311,12 +308,6 @@ describe('an automatic pass replaces each earlier question on the subject the re
     expect(arcResult.weave.questions).toEqual([rewordedInWeave, W_FIGURE]);
 
     const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: aiNodes.createMockPromptBuilder(), theme: 'journalist' } });
-    const outlineResult = await aiNodes.reviseOutline(
-      { _previousOutline: { ...clone(OUTLINE), writerQuestions: [Q_SARAH, Q_LEDGER] }, outlineRevisionCount: 1 },
-      cfg(sdkReturning({ ...clone(OUTLINE), writerQuestions: [reworded] }))
-    );
-    expect(outlineResult.outline.writerQuestions).toEqual([reworded, Q_LEDGER]);
-
     const articleResult = await aiNodes.reviseContentBundle(
       { _previousContentBundle: { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_SARAH, Q_LEDGER] }, articleRevisionCount: 1 },
       cfg(sdkReturning({ ...clone(PREVIOUS_BUNDLE), writerQuestions: [reworded] }))
@@ -431,40 +422,16 @@ describe('an arc rework carries forward the questions it did not answer (R5)', (
 // The outline and the article: the rework keeps what it did not answer
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Brief 4.6: the map holds no questions, so the map's rework carries none; the article's
+// rework keeps what it did not answer.
 describe('an outline or article rework carries forward the questions it did not answer (R5)', () => {
   const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: aiNodes.createMockPromptBuilder(), theme: 'journalist' } });
 
-  it('reviseOutline keeps the previous outline\'s questions when the rework returns no field', async () => {
+  it("reviseOutline: the map's rework carries no questions, even from a map stored with them", async () => {
     const previous = { ...clone(OUTLINE), writerQuestions: [Q_SARAH] };
     const result = await aiNodes.reviseOutline({ _previousOutline: previous, outlineRevisionCount: 1 }, cfg(sdkReturning(OUTLINE)));
-    expect(result.outline.writerQuestions).toEqual([Q_SARAH]);
-  });
-
-  it('reviseOutline takes the rework\'s list after the director\'s note, an empty list included', async () => {
-    const previous = { ...clone(OUTLINE), writerQuestions: [Q_SARAH] };
-    const result = await aiNodes.reviseOutline(
-      { _previousOutline: previous, _outlineFeedback: 'Sarah sold at 07:50 AM.', outlineRevisionCount: 1 },
-      cfg(sdkReturning({ ...clone(OUTLINE), writerQuestions: [] }))
-    );
-    expect(result.outline.writerQuestions).toEqual([]);
-  });
-
-  it('reviseOutline on an automatic pass keeps a question its rework left out, beside the rework\'s own', async () => {
-    const previous = { ...clone(OUTLINE), writerQuestions: [Q_SARAH, Q_LEDGER] };
-    const result = await aiNodes.reviseOutline(
-      { _previousOutline: previous, outlineRevisionCount: 1 },
-      cfg(sdkReturning({ ...clone(OUTLINE), writerQuestions: [Q_PRONOUN] }))
-    );
-    expect(result.outline.writerQuestions).toEqual([Q_SARAH, Q_LEDGER, Q_PRONOUN]);
-  });
-
-  it('reviseOutline on an automatic pass keeps every previous question when its rework returns an empty list', async () => {
-    const previous = { ...clone(OUTLINE), writerQuestions: [Q_SARAH, Q_LEDGER] };
-    const result = await aiNodes.reviseOutline(
-      { _previousOutline: previous, outlineRevisionCount: 1 },
-      cfg(sdkReturning({ ...clone(OUTLINE), writerQuestions: [] }))
-    );
-    expect(result.outline.writerQuestions).toEqual([Q_SARAH, Q_LEDGER]);
+    expect(result.outline).toEqual(OUTLINE);
+    expect(result.outline).not.toHaveProperty('writerQuestions');
   });
 
   it('reviseContentBundle keeps the previous article\'s questions when the rework returns no field', async () => {
@@ -510,17 +477,19 @@ describe('the questions never reach a later writer, a judge\'s JSON or the templ
     QUESTION_TEXTS.forEach((q) => expect(text).not.toContain(q));
   };
 
-  it('outlineWriterInputs strips the arc questions from <arc-analysis>', () => {
-    const [arcAnalysis] = aiNodes.outlineWriterInputs(withQuestions(reworkFixtureState('journalist')), 'hero.jpg');
-    expect(arcAnalysis).not.toHaveProperty('writerQuestions');
-    expect(arcAnalysis.interweavingPlan).toBeDefined();
-  });
-
-  it('the outline writer\'s prompt carries none of the arc questions', async () => {
+  // Brief 4.6: the map writer reads the weave's questions in the settled weave alone, each
+  // with the director's answer or "Unanswered.", and no other list of questions.
+  it("the map writer's prompt carries the weave's questions in the settled weave alone", async () => {
     const sdk = sdkReturning(OUTLINE);
     const state = withQuestions(reworkFixtureState('journalist'));
     await aiNodes.generateOutline({ ...state, outline: null }, { configurable: { sdkClient: sdk, theme: 'journalist' } });
-    QUESTION_TEXTS.forEach((q) => expect(sdk.mock.calls[0][0].prompt).not.toContain(q));
+    const { prompt } = sdk.mock.calls[0][0];
+    const weaveQuestion = state.weave.questions[0].question;
+    const settled = prompt.slice(prompt.indexOf('<SETTLED_WEAVE>'), prompt.indexOf('</SETTLED_WEAVE>'));
+    expect(settled).toContain(weaveQuestion);
+    expect(prompt.split(weaveQuestion)).toHaveLength(2);
+    QUESTION_TEXTS.forEach((q) => expect(prompt).not.toContain(q));
+    expect(prompt).not.toContain('writerQuestions');
   });
 
   it('the article writer\'s APPROVED OUTLINE carries none of the outline\'s questions', async () => {

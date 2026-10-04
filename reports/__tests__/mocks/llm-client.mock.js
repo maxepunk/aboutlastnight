@@ -64,16 +64,25 @@ function getDefaultWeave() {
 }
 
 /**
- * Default outline fixture
+ * Default outline fixture: the story map (phase 4, brief 4.6), in its shape. Invented text;
+ * its card names no document of any record, so on a test's own record the map checks may
+ * fail it, and its one rework returns it again.
  */
 function getDefaultOutline() {
   return {
-    lede: { hook: 'Test hook', keyTension: 'Test tension' },
-    theStory: { arcs: [] },
-    followTheMoney: { shellAccounts: [] },
-    thePlayers: { exposed: [], buried: [], pullQuotes: [] },
-    whatsMissing: { gaps: [], unansweredQuestions: [] },
-    closing: { systemicAngle: 'Test angle', accusationHandling: 'Test handling' }
+    headline: 'Test Headline for the Map',
+    deck: 'Test deck for the map.',
+    sections: [
+      {
+        slot: 'lede', heading: '', job: 'Test job: open on the verdict.',
+        beats: [{ id: 'b1', kind: 'scene', material: 'Test beat: the verdict', players: [] }],
+        photos: []
+      }
+    ],
+    dropped: [],
+    leftOut: [],
+    expectedLength: 900,
+    weaveChanges: []
   };
 }
 
@@ -202,8 +211,10 @@ function detectFixtureKey(options) {
   const promptLower = (prompt || '').toLowerCase();
   const systemLower = (systemPrompt || '').toLowerCase();
 
-  // Schema-based matching (most reliable)
+  // Schema-based matching (most reliable). Phase 4 (brief 4.6): the map writer's schema
+  // keeps the outline's id.
   if (jsonSchema?.$id === 'content-bundle') return 'contentBundle';
+  if (jsonSchema?.$id === 'outline') return 'outline';
 
   // Evaluator patterns (must come BEFORE general arc/outline matches)
   // because evaluator prompts contain terms like "narrative arcs".
@@ -256,7 +267,7 @@ function detectFixtureKey(options) {
 
   // Outline generation
   if (promptLower.includes('generate outline') ||
-      systemLower.includes('creating an article outline') ||
+      systemLower.includes('story map') ||
       (promptLower.includes('outline') && !promptLower.includes('from outline'))) {
     return 'outline';
   }

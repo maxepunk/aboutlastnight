@@ -56,9 +56,11 @@ describe('workflow integration', () => {
   afterAll(() => {
     fs.rmSync(path.join(FIXTURES_DATA_DIR, 'test-session', 'output'), { recursive: true, force: true });
     // Brief 4.5: the story meeting's approve writes the approved weave beside the
-    // analysis; the file goes, and its folder with it when nothing else is there.
+    // analysis, and brief 4.6 the map's approve the approved map; the files go, and their
+    // folder with them when nothing else is there.
     const analysis = path.join(FIXTURES_DATA_DIR, 'test-session', 'analysis');
     fs.rmSync(path.join(analysis, 'weave.approved.json'), { force: true });
+    fs.rmSync(path.join(analysis, 'map.approved.json'), { force: true });
     if (fs.existsSync(analysis) && fs.readdirSync(analysis).length === 0) fs.rmdirSync(analysis);
   });
 
@@ -230,9 +232,9 @@ describe('workflow integration', () => {
         },
         preprocessedEvidence: mockPreprocessedEvidence,  // Populated so curation runs (N3: empty now throws)
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
-        // Brief 4.5: the story meeting writes no selection, and the packages node reads one
-        // until 4.6, so a run past the meeting seeds it.
-        selectedArcs: ['mock-arc-1']
+        // Brief 4.6 (ruling 6): a run past the meeting seeds the meeting's approval, where it
+        // seeded the arc selection the packages read (R4, R5).
+        meetingApproved: true
       };
 
       // With mocked checkpointInterrupt, graph should complete
@@ -256,7 +258,7 @@ describe('workflow integration', () => {
           accusation: { accused: ['Blake'] }
         },
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
-        selectedArcs: ['mock-arc-1']  // brief 4.5: read by the packages node until 4.6
+        meetingApproved: true  // brief 4.6 (ruling 6): the meeting's approval, past the meeting
       };
 
       try {
@@ -330,8 +332,7 @@ describe('workflow integration', () => {
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         weave: mockWeave,
-        narrativeArcs: mockArcAnalysis.narrativeArcs,
-        selectedArcs: ['The Money Trail'],
+        meetingApproved: true,  // brief 4.6 (ruling 6): the old arc channels went (R4)
         outline: mockOutline,
         contentBundle: mockContentBundle,
         // Commit 8.6: evaluation history with ready=true
@@ -375,8 +376,7 @@ describe('workflow integration', () => {
         evidenceBundle: mockEvidenceBundle,
         // Arc phase data
         weave: mockWeave,
-        narrativeArcs: mockArcAnalysis.narrativeArcs,
-        selectedArcs: ['The Money Trail'],
+        meetingApproved: true,  // brief 4.6 (ruling 6): the old arc channels went (R4)
         // Generation phase data
         outline: mockOutline,
         contentBundle: mockContentBundle,
@@ -503,8 +503,7 @@ describe('workflow integration', () => {
         evidenceBundle: mockEvidenceBundle,
         // Arc phase data
         weave: mockWeave,
-        narrativeArcs: mockArcAnalysis.narrativeArcs,
-        selectedArcs: ['The Money Trail'],
+        meetingApproved: true,  // brief 4.6 (ruling 6): the old arc channels went (R4)
         // Generation phase data
         outline: mockOutline,
         contentBundle: mockContentBundle,
@@ -570,8 +569,7 @@ describe('workflow integration', () => {
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         weave: mockWeave,
-        narrativeArcs: mockArcAnalysis.narrativeArcs,
-        selectedArcs: ['The Money Trail'],
+        meetingApproved: true,  // brief 4.6 (ruling 6): the old arc channels went (R4)
         outline: mockOutline,
         contentBundle: mockContentBundle,
         evaluationHistory: [
@@ -635,8 +633,7 @@ describe('workflow integration', () => {
         preCurationApproved: true,  // Phase 4f: skip pre-curation checkpoint
         evidenceBundle: mockEvidenceBundle,
         weave: mockWeave,
-        narrativeArcs: mockArcAnalysis.narrativeArcs,
-        selectedArcs: ['The Money Trail'],
+        meetingApproved: true,  // brief 4.6 (ruling 6): the old arc channels went (R4)
         outline: mockOutline,
         contentBundle: mockContentBundle,
         evaluationHistory: [

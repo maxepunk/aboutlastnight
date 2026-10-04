@@ -17,7 +17,7 @@
  */
 
 const path = require('path');
-const { reworkFixtureState } = require('./rework-state');
+const { reworkFixtureState, MAP } = require('./rework-state');
 
 /** One-line stand-ins for the rule set's files (lib/rule-set.js). */
 const STUB_RULES_ROOT = path.join(__dirname, 'rules');
@@ -78,12 +78,16 @@ async function renderAll(req) {
     );
     const tail = { _outlineGuidance: 'PIN GUIDANCE: lead with the money.', directorGateNotes: TAIL_NOTES };
 
-    const outlineSdk = recordingSdk({ lede: {} });
-    await aiNodes.generateOutline(
-      { ...base, ...tail, outline: null, validationResults: { phase: 'arcs', advisoryWarnings: ['PIN ARC ADVISORY'] } },
-      { configurable: { sdkClient: outlineSdk, promptBuilder: builder, theme } }
-    );
-    out[`outline-${theme}`] = `${outlineSdk.calls[0].systemPrompt}\n=====\n${outlineSdk.calls[0].prompt}`;
+    // Phase 4 (brief 4.6): the outline is the story map, the journalist's alone (R1): the
+    // parked detective has no map writer. The arc stage's advisories no longer reach it.
+    if (theme === 'journalist') {
+      const outlineSdk = recordingSdk(MAP);
+      await aiNodes.generateOutline(
+        { ...base, ...tail, outline: null },
+        { configurable: { sdkClient: outlineSdk, promptBuilder: builder, theme } }
+      );
+      out[`outline-${theme}`] = `${outlineSdk.calls[0].systemPrompt}\n=====\n${outlineSdk.calls[0].prompt}`;
+    }
 
     const articleSdk = recordingSdk({ sections: [], evidenceCards: [], metadata: {} });
     await aiNodes.generateContentBundle(

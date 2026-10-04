@@ -212,7 +212,8 @@ describe('the writers leave out the whiteboard photo, whatever names it carries'
     const prompts = [...promptsOf(writer), ...promptsOf(rework)];
     expect(prompts).toHaveLength(2);
     for (const prompt of prompts) {
-      expect(prompt).toContain('HERO IMAGE: hero.jpg');
+      // Phase 4 (brief 4.6): code's pick for the top photo leads the map writer's photos.
+      expect(prompt).toContain('[hero image] hero.jpg');
       expect(prompt).not.toContain('whiteboard.jpg');
     }
   });
@@ -297,11 +298,14 @@ describe('with no kept photo there is no hero', () => {
 
   it('the outline writer is told there is none, and the article writer and judge are given no photo', async () => {
     const state = allExcluded();
-    const outlineSdk = recordingSdk(OUTLINE);
+    // Phase 4 (brief 4.6): the map writer is offered no photo, so its map names no top photo,
+    // and the hero code writes from it is none.
+    const { topPhoto: _none, ...noTopPhoto } = OUTLINE;
+    const outlineSdk = recordingSdk(noTopPhoto);
     const { heroImage } = await generateOutline(state, cfg(outlineSdk));
     expect(heroImage).toBeNull();
     const [outlinePrompt] = promptsOf(outlineSdk);
-    expect(outlinePrompt).toContain('\nHERO IMAGE: none\n');
+    expect(outlinePrompt).not.toMatch(/^\d+\. \[hero image\]/m);
     expect(outlinePrompt).toContain('No session photos available');
 
     const articleState = { ...state, heroImage, outline: OUTLINE };

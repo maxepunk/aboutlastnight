@@ -11,10 +11,12 @@ const { sdkQuery, createProgressLogger } = require('../../llm');
 const { createBatches, processWithConcurrency, pairRepliesWithBatch } = require('../../evidence-preprocessor');
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
 const {
-  carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE
+  carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE,
+  MAP_EDIT_LINES_GUIDE, isMap
 } = require('../../hand-edit-diff');
 const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
 const { WEAVE_CHECKS_SOURCE, MEETING_ROUNDS, weaveForRework } = require('../../weave');
+const { MAP_CHECKS_SOURCE } = require('../../map');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NON-ROSTER PC VALIDATION (Commit 8.xx)
@@ -699,12 +701,16 @@ const MODEL_SCORES_LINE = "The scores below are the evaluating model's own and u
  * Phase 4 (brief 4.4): a code check's lines print under its own label in place of ISSUES
  * TO ADDRESS, each line the defect and its fix, and the automatic scope names the label.
  * The weave checks (lib/weave.js checkWeave, the arc stage's check node) are the first;
- * they replace the arc check, whose roster coverage left the arc stage. A code check
+ * they replace the arc check, whose roster coverage left the arc stage. The map checks
+ * (lib/map.js mapFindings, the map's check node; brief 4.6) are the second. A code check
  * scores nothing, so every scores' line the context prints is a judge's.
  */
 const CODE_CHECKS = {
   [WEAVE_CHECKS_SOURCE]: {
     label: 'WEAVE CHECK FAILURES'
+  },
+  [MAP_CHECKS_SOURCE]: {
+    label: 'MAP CHECK FAILURES'
   }
 };
 
@@ -1094,8 +1100,19 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
   // note needs it, saying why.
   const WEAVE_EDITS_FINAL = 'the text they wrote stays exactly as written, each role they gave stays, each thread they added stays in the weave, and each connection they struck and each removed sentence stay out of it.';
+  // Brief 4.6: the map's edits have their own wording, by the note's presence as the
+  // outline's had: an automatic pass keeps every edit of the director's (code holds it to
+  // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
+  // note needs it, saying why. The wording names beats, photos and the top photo, so it is
+  // the map's when the version the rework starts from is a map.
+  const mapMode = !meetingMode && !parkedDetective && phase === 'outline' && isMap(previousOutput);
+  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each removed sentence stays out, and the top photo they chose stays the top photo.';
   let handEditsRule;
-  if (meetingMode) {
+  if (mapMode) {
+    handEditsRule = humanFeedback
+      ? `Each edit of the director's is final unless the structural change their note asks for means it no longer fits: ${MAP_EDITS_FINAL} List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
+      : `This automatic pass fixes the writer's lines. Each edit of the director's is final: ${MAP_EDITS_FINAL}`;
+  } else if (meetingMode) {
     if (meetingRound === 'send-back') {
       handEditsRule = `Each change of the director's is final unless the structural change their note asks for means it no longer fits: ${WEAVE_EDITS_FINAL} List each change this rework alters, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`;
     } else if (meetingRound === 'reweave') {
@@ -1108,9 +1125,10 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
       ? `An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
       : 'This automatic pass fixes the writer\'s text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out.';
   }
-  const handEditsIntro = meetingMode
-    ? `The director's changes to the weave at the story meeting. ${WEAVE_EDIT_LINES_GUIDE}`
-    : `The director's edits, by id: text the director wrote into the previous version, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE}`;
+  let handEditsIntro;
+  if (meetingMode) handEditsIntro = `The director's changes to the weave at the story meeting. ${WEAVE_EDIT_LINES_GUIDE}`;
+  else if (mapMode) handEditsIntro = `The director's edits on the map, by id. ${MAP_EDIT_LINES_GUIDE}`;
+  else handEditsIntro = `The director's edits, by id: text the director wrote into the previous version, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE}`;
   const handEditsBlock = standingEdits.length > 0
     ? `<HAND_EDITS>
 ${handEditsIntro}

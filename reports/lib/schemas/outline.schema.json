@@ -1,263 +1,137 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "outline",
-  "title": "ArticleOutline",
-  "description": "The outline of a NovaNews article. The six section keys are slots: an outline may leave a slot out, or leave it empty.",
+  "title": "StoryMap",
+  "description": "The story map: the settled weave laid across the article's sections. Each beat names the material it uses; the map writes no prose.",
   "type": "object",
   "additionalProperties": false,
+  "required": ["headline", "deck", "sections", "dropped", "leftOut", "expectedLength", "weaveChanges"],
   "properties": {
-    "lede": {
+    "headline": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 200,
+      "description": "The article's headline"
+    },
+    "deck": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "The deck printed under the headline"
+    },
+    "topPhoto": {
+      "type": "string",
+      "description": "The filename of the photo the article prints at its top, one of the photos offered"
+    },
+    "gapNote": {
       "type": "object",
-      "description": "The lede's plan",
+      "description": "The line at the top of the map, present only when the record cannot carry part of the story, a player cannot be placed, or a link the weave lacks was seen",
       "additionalProperties": false,
+      "required": ["line", "players"],
       "properties": {
-        "hook": {
-          "type": "string",
-          "description": "The lede's opening"
-        },
-        "keyTension": {
-          "type": "string"
-        },
-        "primaryArc": {
-          "type": "string",
-          "description": "The arc the lede opens on"
-        },
-        "selectedEvidence": {
+        "line": { "type": "string", "description": "The gap, in one line" },
+        "players": {
           "type": "array",
-          "description": "Ids of the documents the lede uses",
+          "description": "The roster players the line raises, by name",
           "items": { "type": "string" }
         }
       }
     },
-    "theStory": {
-      "type": "object",
-      "description": "THE STORY's plan, with how the arcs intercut across the article",
-      "additionalProperties": false,
-      "properties": {
-        "arcInterweaving": {
-          "type": "object",
-          "description": "How the arcs intercut across the article, and where they converge",
-          "additionalProperties": false,
-          "properties": {
-            "interleavingPlan": {
-              "type": "string",
-              "description": "How the arcs intercut"
-            },
-            "callbackOpportunities": {
-              "type": "array",
-              "description": "Details planted in one arc that pay off in another",
-              "items": {
-                "type": "object",
-                "required": ["plantIn", "payoffIn", "detail"],
-                "additionalProperties": false,
-                "properties": {
-                  "plantIn": { "type": "string", "description": "Arc where the detail is planted" },
-                  "payoffIn": { "type": "string", "description": "Arc where the detail pays off" },
-                  "detail": { "type": "string", "description": "What is planted and how it pays off" }
-                }
-              }
-            },
-            "convergencePoint": {
-              "type": "string",
-              "description": "The culmination where the threads meet and the thesis lands, and where in the article it falls"
-            }
-          }
-        },
-        "arcs": {
-          "type": "array",
-          "description": "Each arc THE STORY carries, with its plan",
-          "items": {
-            "type": "object",
-            "required": ["name", "paragraphCount"],
-            "additionalProperties": false,
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "Arc identifier/name"
-              },
-              "paragraphCount": {
-                "type": "integer",
-                "description": "Estimated number of paragraphs for this arc"
-              },
-              "evidenceCards": {
-                "type": "array",
-                "description": "Evidence cards to include in this arc",
-                "items": {
-                  "type": "object",
-                  "required": ["tokenId", "placement"],
-                  "additionalProperties": false,
-                  "properties": {
-                    "tokenId": { "type": "string", "description": "Document id" },
-                    "placement": { "type": "string", "description": "Where in the arc the card goes (e.g., 'after para 1')" },
-                    "loopFunction": {
-                      "type": "string",
-                      "enum": ["CLOSER", "OPENER"],
-                      "description": "Optional: the card's role in the arc"
-                    }
-                  }
-                }
-              },
-              "photoPlacement": {
-                "type": ["object", "null"],
-                "description": "Optional photo placement within arc",
-                "additionalProperties": false,
-                "properties": {
-                  "filename": { "type": "string", "description": "Photo filename" },
-                  "afterParagraph": { "type": "integer", "description": "Place photo after this paragraph number" },
-                  "purpose": { "type": "string", "description": "Why the photo sits here" }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "followTheMoney": {
-      "type": "object",
-      "description": "FOLLOW THE MONEY's plan",
-      "additionalProperties": false,
-      "properties": {
-        "arcConnections": {
-          "type": "array",
-          "description": "The arcs this section carries, each with the angle it takes; an arc it does not carry is not listed",
-          "items": {
-            "type": "object",
-            "required": ["arcName", "financialAngle"],
-            "additionalProperties": false,
-            "properties": {
-              "arcName": { "type": "string" },
-              "financialAngle": { "type": "string", "description": "This section's angle on the arc" }
-            }
-          }
-        },
-        "shellAccounts": {
-          "type": "array",
-          "description": "Ledger accounts the section uses",
-          "items": {
-            "type": "object",
-            "required": ["name", "total"],
-            "additionalProperties": false,
-            "properties": {
-              "name": { "type": "string", "description": "Account name" },
-              "total": { "type": ["number", "string"], "description": "The account's total" },
-              "inference": { "type": "string", "description": "What the section infers from the account" },
-              "relatedArc": { "type": "string", "description": "The arc the account bears on" }
-            }
-          }
-        },
-        "photoPlacement": {
-          "type": ["object", "null"],
-          "description": "Optional photo placement",
-          "additionalProperties": false,
-          "properties": {
-            "filename": { "type": "string" },
-            "afterParagraph": { "type": "integer" },
-            "purpose": { "type": "string" }
-          }
-        }
-      }
-    },
-    "thePlayers": {
-      "type": "object",
-      "description": "THE PLAYERS' plan",
-      "additionalProperties": false,
-      "properties": {
-        "arcConnections": {
-          "type": "array",
-          "description": "The arcs this section carries, each with the angle it takes; an arc it does not carry is not listed",
-          "items": {
-            "type": "object",
-            "required": ["arcName", "characterAngle"],
-            "additionalProperties": false,
-            "properties": {
-              "arcName": { "type": "string" },
-              "characterAngle": { "type": "string", "description": "This section's angle on the arc" }
-            }
-          }
-        },
-        "exposed": {
-          "type": "array",
-          "description": "Character names whose memories were exposed",
-          "items": { "type": "string" }
-        },
-        "characterHighlights": {
-          "type": "object",
-          "description": "Character moments to highlight, by character name",
-          "additionalProperties": { "type": "string" }
-        }
-      }
-    },
-    "whatsMissing": {
-      "type": "object",
-      "description": "WHAT'S MISSING's plan",
-      "additionalProperties": false,
-      "properties": {
-        "arcConnections": {
-          "type": "array",
-          "description": "The arcs this section carries, each with the question it raises; an arc it does not carry is not listed",
-          "items": {
-            "type": "object",
-            "required": ["arcName", "openQuestion"],
-            "additionalProperties": false,
-            "properties": {
-              "arcName": { "type": "string" },
-              "openQuestion": { "type": "string", "description": "The open question this section raises about the arc" }
-            }
-          }
-        },
-        "knownUnknowns": {
-          "type": "array",
-          "description": "The open questions the section raises",
-          "items": { "type": "string" }
-        },
-        "narrativePurpose": {
-          "type": "string",
-          "description": "What the section does for the reader"
-        }
-      }
-    },
-    "closing": {
-      "type": "object",
-      "description": "The closing's plan",
-      "additionalProperties": false,
-      "properties": {
-        "arcResolutions": {
-          "type": "array",
-          "description": "The arcs the closing carries, each with where it ends; an arc it does not carry is not listed",
-          "items": {
-            "type": "object",
-            "required": ["arcName", "resolution"],
-            "additionalProperties": false,
-            "properties": {
-              "arcName": { "type": "string" },
-              "resolution": { "type": "string", "description": "Where the arc ends in the closing" }
-            }
-          }
-        },
-        "systemicAngle": {
-          "type": "string"
-        },
-        "accusationHandling": {
-          "type": "string",
-          "description": "How the closing presents the verdict"
-        },
-        "finalLine": {
-          "type": "string",
-          "description": "The closing line of the article"
-        }
-      }
-    },
-    "writerQuestions": {
+    "sections": {
       "type": "array",
-      "description": "Questions for the director (C15), each with its kind, what it is about and the question",
+      "description": "The sections the article uses, in the order it prints them",
       "items": {
         "type": "object",
-        "required": ["kind", "about", "question"],
         "additionalProperties": false,
+        "required": ["slot", "heading", "job", "beats", "photos"],
         "properties": {
-          "kind": { "type": "string", "enum": ["player", "pronoun", "ledger"], "description": "The C15 case the question raises" },
-          "about": { "type": "string", "description": "The player's name, or for a ledger question the entry's time and amount" },
-          "question": { "type": "string" }
+          "slot": { "type": "string", "description": "The slot the section fills" },
+          "heading": { "type": "string", "description": "The heading the article prints over the section; empty for a section that prints none" },
+          "job": { "type": "string", "description": "What the section does to the question, in one sentence" },
+          "beats": {
+            "type": "array",
+            "description": "The section's beats",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "kind", "material", "players"],
+              "properties": {
+                "id": { "type": "string", "description": "The beat's id, its own across the whole map, such as b1" },
+                "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the beat puts on the page" },
+                "material": { "type": "string", "description": "The material the beat uses, named: the id of a document in <RECORD>; the speaker and the line; or the ledger entry" },
+                "players": {
+                  "type": "array",
+                  "description": "The roster players the beat shows, by name",
+                  "items": { "type": "string" }
+                },
+                "card": { "type": "string", "description": "When the beat prints a document as a card: the document's id in <RECORD>" },
+                "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" }
+              }
+            }
+          },
+          "photos": {
+            "type": "array",
+            "description": "The section's photos",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["filename"],
+              "properties": {
+                "filename": { "type": "string", "description": "The photo's filename, as the photos offered give it" },
+                "beat": { "type": "string", "description": "The id of the beat the photo sits beside; left out for a photo that sits with its people" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "dropped": {
+      "type": "array",
+      "description": "Each slot the story does not use",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot", "reason"],
+        "properties": {
+          "slot": { "type": "string", "description": "The slot" },
+          "reason": { "type": "string", "description": "Why the story does not use it, in one line" }
+        }
+      }
+    },
+    "leftOut": {
+      "type": "array",
+      "description": "The material considered and not used, each in a beat's shape",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "material", "players"],
+        "properties": {
+          "id": { "type": "string", "description": "The beat's id, its own across the whole map, such as b1" },
+          "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the beat puts on the page" },
+          "material": { "type": "string", "description": "The material the beat uses, named: the id of a document in <RECORD>; the speaker and the line; or the ledger entry" },
+          "players": {
+            "type": "array",
+            "description": "The roster players the beat shows, by name",
+            "items": { "type": "string" }
+          },
+          "card": { "type": "string", "description": "When the beat prints a document as a card: the document's id in <RECORD>" },
+          "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" }
+        }
+      }
+    },
+    "expectedLength": {
+      "type": "integer",
+      "description": "The writer's estimate of the article's length in words, from what the map holds"
+    },
+    "weaveChanges": {
+      "type": "array",
+      "description": "What the map changed in the weave to fit in each change the director made at the story meeting; empty when the director changed nothing and left no note",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "change"],
+        "properties": {
+          "source": { "type": "string", "description": "The id of the director's change in <SETTLED_WEAVE>, such as E3, or \"note\" for the director's note from the meeting" },
+          "change": { "type": "string", "description": "What the map changed, in one line" }
         }
       }
     }

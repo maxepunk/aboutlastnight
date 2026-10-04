@@ -15,8 +15,10 @@ const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 const preprocessedEvidenceSchema = require('./schemas/preprocessed-evidence.schema.json');
+// Phase 4 (brief 4.6): the story map's shape, every slot a string here (lib/map.js
+// mapSchemaFor gives a theme's map its slots). The detective's outline schema went with
+// its outline stage (R1).
 const outlineSchema = require('./schemas/outline.schema.json');
-const detectiveOutlineSchema = require('./schemas/detective-outline.schema.json');
 
 class SchemaValidator {
   /**
@@ -41,7 +43,6 @@ class SchemaValidator {
     this.registerSchema('content-bundle', contentBundleSchema);
     this.registerSchema('preprocessed-evidence', preprocessedEvidenceSchema);
     this.registerSchema('outline', outlineSchema);
-    this.registerSchema('detective-outline', detectiveOutlineSchema);
   }
 
   /**

@@ -906,7 +906,7 @@ describe("a code check's findings reach an automatic rework (the 4b fix batch)",
   /** The fixture's weave with one receipt the record does not hold, so a check fails. */
   function stateWithBadReceipt() {
     const state = clone(reworkFixtureState('journalist'));
-    state.selectedArcs = []; // the meeting is still open: the checks skip an approved one
+    state.meetingApproved = false; // the meeting is still open: the checks skip an approved one
     state.weave.threads = state.weave.threads.map((t) => (t.id === 't2' ? { ...t, receipt: 'zzz999' } : t));
     return state;
   }
@@ -1150,5 +1150,77 @@ describe("4.5b: the director's note ends on the same line at every stop", () => 
       phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'h' } }, humanFeedback: 'Tighten it.', theme: 'journalist'
     }).contextSection;
     expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\nTighten it.\n\n${END}\n${EVALUATOR}\n`);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6: the map's rework context (brief 4.6)
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.6: the map's rework context", () => {
+  const { MAP, reworkFixtureState } = require('./fixtures/rework-state');
+  const { standingOnMap, MAP_EDIT_LINES_GUIDE } = require('../hand-edit-diff');
+  const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
+  const { reviseOutline } = require('../workflow/nodes/ai-nodes');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each removed sentence stays out, and the top photo they chose stays the top photo.';
+
+  /** The director's map: b6's line rewritten, and b4 struck. */
+  function directorsMap() {
+    const left = clone(MAP);
+    left.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    left.leftOut.push(left.sections[1].beats.splice(2, 1)[0]);
+    return left;
+  }
+  const handEditsBlock = (contextSection) => contextSection.slice(contextSection.indexOf('<HAND_EDITS>'), contextSection.indexOf('</HAND_EDITS>'));
+
+  it("on a send-back, each of the director's edits is final unless the note needs it changed, and the rework lists what it changed", () => {
+    const left = directorsMap();
+    const { contextSection } = buildRevisionContext({
+      phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: left,
+      handEdits: standingOnMap(null, MAP, left), humanFeedback: 'Lead with the envelope.', theme: 'journalist'
+    });
+    expect(contextSection).toContain("REVISION CONTEXT: MAP (the director's send back)");
+    const block = handEditsBlock(contextSection);
+    expect(block).toContain(`The director's edits on the map, by id. ${MAP_EDIT_LINES_GUIDE}`);
+    expect(block).toContain(`Each edit of the director's is final unless the structural change their note asks for means it no longer fits: ${MAP_EDITS_FINAL} List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.`);
+    expect(block).toContain('E1 (section "closing", beat "b6", material): "Riley: "I kept the books, and the second ledger""\n  removed: "Riley: "I only kept the books""');
+    expect(block).toContain('E2 (left out, beat "b4", struck from section "theStory")');
+  });
+
+  it("on an automatic pass, every edit of the director's stays, and no list is asked for", () => {
+    const left = directorsMap();
+    const { contextSection } = buildRevisionContext({
+      phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: left,
+      handEdits: standingOnMap(null, MAP, left), humanFeedback: null, theme: 'journalist'
+    });
+    const block = handEditsBlock(contextSection);
+    expect(block).toContain(`This automatic pass fixes the writer's lines. Each edit of the director's is final: ${MAP_EDITS_FINAL}`);
+    expect(block).not.toContain('changedDirectorEdits');
+  });
+
+  it("the check's rework reads each failed check's line under the checks' own label, and the rework sends it", async () => {
+    const state = reworkFixtureState();
+    const failing = clone(MAP);
+    failing.sections[3].beats[0].players = [];
+    failing.sections[1].beats[1].players = ['Morgan'];
+    const { validationResults } = checkMap({ ...state, outline: failing, _mapCheck: null });
+    expect(validationResults).toMatchObject({ phase: 'outline', source: 'map-checks', passed: false });
+    const [line] = validationResults.structuralIssues;
+    expect(line).toBe("Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out.");
+    const { contextSection } = buildRevisionContext({
+      phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: failing, validationResults, humanFeedback: null, theme: 'journalist'
+    });
+    expect(contextSection).toContain(`MAP CHECK FAILURES:\n  - ${line}`);
+    expect(contextSection).toContain('This rework fixes the must-fix items: the MAP CHECK FAILURES.');
+    expect(contextSection).not.toContain('ISSUES TO ADDRESS');
+    expect(contextSection).not.toMatch(/uncalibrated|evaluating model|scores below/i);
+
+    let sent;
+    await reviseOutline(
+      { ...state, outline: null, _previousOutline: failing, outlineRevisionCount: 1, validationResults },
+      { configurable: { sdkClient: async (options) => { sent = options; return clone(MAP); }, theme: 'journalist' } }
+    );
+    expect(sent.prompt).toContain(`MAP CHECK FAILURES:\n  - ${line}`);
+    expect(sent.label).toBe('Map revision 1');
   });
 });

@@ -1,6 +1,11 @@
 /**
  * outline-edit-logic.js — pure-function unit tests (node-env, no DOM/React).
- * Proves B1–B5, N1–N4, and the client/server validation surface.
+ * Proves B1–B5, N1–N4, and the client validation surface.
+ *
+ * Phase 4 (brief 4.6): the outline is the story map. The old outline's schema checks went
+ * with its schema; the section builders below still edit the outline written before phase 4
+ * until the map's screen replaces them (4.9). The map's client gate is held to the
+ * director-side schema, and Everyone and the counts come from the beats (the 4.6 describes).
  */
 const L = require('../../console/outline-edit-logic.js');
 const { SchemaValidator } = require('../../lib/schema-validator');
@@ -191,12 +196,6 @@ describe('primitives', () => {
     expect(L.rowsToMap(L.mapToRows({ a: '1', b: '2' }))).toEqual({ a: '1', b: '2' });
   });
 
-  it('schemaNameForTheme maps themes', () => {
-    expect(L.schemaNameForTheme('detective')).toBe('detective-outline');
-    expect(L.schemaNameForTheme('journalist')).toBe('outline');
-    expect(L.schemaNameForTheme(undefined)).toBe('outline');
-  });
-
   it('computeResetKey (B5) distinguishes revisions with identical 100-char prefixes', () => {
     const a = validJournalistOutline();
     const b = validJournalistOutline();
@@ -280,6 +279,9 @@ describe('journalist initializers (no loss on load)', () => {
 });
 
 // ── (D) Journalist builders: conformance + preservation ─────────────────────────
+// Phase 4 (brief 4.6): the builders edit the outline written before phase 4, until the map's
+// screen replaces them (4.9). The outline's schema is the map's now, so their output is no
+// longer checked against it.
 describe('journalist builders', () => {
   it('buildLedePayload (B2+N4) keeps primaryArc, omits empty selectedEvidence, no stray keys', () => {
     const orig = validJournalistOutline().lede;
@@ -292,8 +294,6 @@ describe('journalist builders', () => {
     expect(out.hook).toBe('Edited hook.');
     expect(out.selectedEvidence).toBeUndefined();
     expect(Object.keys(out).sort()).toEqual(['hook', 'keyTension', 'primaryArc']);
-    const full = L.mergeSection(validJournalistOutline(), 'lede', out);
-    expect(validate('outline', full).valid).toBe(true);
   });
 
   it('buildArcPayload (N1) coerces paragraphCount to int, preserves evidenceCards+photoPlacement, no keyPoints', () => {
@@ -307,8 +307,6 @@ describe('journalist builders', () => {
     expect(out.evidenceCards).toEqual(origArc.evidenceCards);
     expect(out.photoPlacement).toEqual(origArc.photoPlacement);
     expect(out.keyPoints).toBeUndefined();
-    const full = L.mergeArc(validJournalistOutline(), 0, out);
-    expect(validate('outline', full).valid).toBe(true);
   });
 
   it('buildArcInterweavingPayload (B3) stays an object, preserves callbackOpportunities', () => {
@@ -320,8 +318,6 @@ describe('journalist builders', () => {
     expect(out.interleavingPlan).toContain('braid');
     expect(out.convergencePoint).toBe('Edited convergence.');
     expect(out.callbackOpportunities).toEqual(orig.callbackOpportunities);
-    const full = L.mergeArcInterweaving(validJournalistOutline(), out);
-    expect(validate('outline', full).valid).toBe(true);
   });
 
   it('buildFollowTheMoneyPayload (B1 core) keeps arrays, currency string, null photoPlacement, no strays', () => {
@@ -337,8 +333,6 @@ describe('journalist builders', () => {
     expect(out.focus).toBeUndefined();
     expect(out.characterHighlights).toBeUndefined();
     expect(out.buriedItems).toBeUndefined();
-    const full = L.mergeSection(validJournalistOutline(), 'followTheMoney', out);
-    expect(validate('outline', full).valid).toBe(true);
   });
 
   it('buildThePlayersPayload (B1+B4) keeps map, drops pullQuotes, no strays (X-5)', () => {
@@ -353,8 +347,6 @@ describe('journalist builders', () => {
     expect(out.pullQuotes).toBeUndefined();
     expect(out.shellAccounts).toBeUndefined();
     expect(out.focus).toBeUndefined();
-    const full = L.mergeSection(validJournalistOutline(), 'thePlayers', out);
-    expect(validate('outline', full).valid).toBe(true);
   });
 
   it('buildWhatsMissingPayload edits arcConnections, omits empty narrativePurpose, no strays', () => {
@@ -369,8 +361,6 @@ describe('journalist builders', () => {
     expect(out.buriedItems).toBeUndefined();
     expect(out.shellAccounts).toBeUndefined();
     expect(out.characterHighlights).toBeUndefined();
-    const full = L.mergeSection(validJournalistOutline(), 'whatsMissing', out);
-    expect(validate('outline', full).valid).toBe(true);
   });
 
   it('buildClosingPayload (B-closing) keeps arcResolutions array, preserves accusationHandling', () => {
@@ -381,8 +371,6 @@ describe('journalist builders', () => {
     expect(Array.isArray(out.arcResolutions)).toBe(true);
     expect(out.arcResolutions[0].resolution).toBe('Edited resolution.');
     expect(out.accusationHandling).toBe(orig.accusationHandling);
-    const full = L.mergeSection(validJournalistOutline(), 'closing', out);
-    expect(validate('outline', full).valid).toBe(true);
   });
 });
 
@@ -419,14 +407,12 @@ describe('preservation invariant', () => {
 
 // ── (E/F) Detective builders ────────────────────────────────────────────────────
 describe('detective builders', () => {
-  it('buildExecutiveSummaryPayload validates', () => {
+  it('buildExecutiveSummaryPayload keeps primaryFindings a list', () => {
     const orig = validDetectiveOutline().executiveSummary;
     const state = L.initExecutiveSummary(orig);
     state.hook = 'Edited hook.';
     const out = L.buildExecutiveSummaryPayload(state, orig);
     expect(Array.isArray(out.primaryFindings)).toBe(true);
-    const full = L.mergeSection(validDetectiveOutline(), 'executiveSummary', out);
-    expect(validate('detective-outline', full).valid).toBe(true);
   });
 
   it('buildEvidenceLockerPayload keeps evidenceIds as string[]', () => {
@@ -435,22 +421,15 @@ describe('detective builders', () => {
     state.evidenceGroups = L.setRowList(state.evidenceGroups, 0, 'evidenceIds', 'a,b,c');
     const out = L.buildEvidenceLockerPayload(state, orig);
     expect(out.evidenceGroups[0].evidenceIds).toEqual(['a', 'b', 'c']);
-    const full = L.mergeSection(validDetectiveOutline(), 'evidenceLocker', out);
-    expect(validate('detective-outline', full).valid).toBe(true);
   });
 
-  it('buildMemoryAnalysisPayload omits empty keyPatterns; outline without memoryAnalysis still valid', () => {
+  it('buildMemoryAnalysisPayload omits empty keyPatterns', () => {
     const orig = validDetectiveOutline().memoryAnalysis;
     const state = L.initMemoryAnalysis(orig);
     state.keyPatterns = [];
     const out = L.buildMemoryAnalysisPayload(state, orig);
     expect(out.keyPatterns).toBeUndefined();
     expect(out.focus).toBe(orig.focus);
-    const full = L.mergeSection(validDetectiveOutline(), 'memoryAnalysis', out);
-    expect(validate('detective-outline', full).valid).toBe(true);
-    const noMem = validDetectiveOutline();
-    delete noMem.memoryAnalysis;
-    expect(validate('detective-outline', noMem).valid).toBe(true);
   });
 
   it('buildSuspectNetworkPayload drops invalid suspicionLevel, omits empty keyRelationships', () => {
@@ -460,8 +439,6 @@ describe('detective builders', () => {
     const out = L.buildSuspectNetworkPayload(state, orig);
     expect(out.assessments[0].suspicionLevel).toBeUndefined();
     expect(out.assessments[0].name).toBe('Sarah Blackwood');
-    const full = L.mergeSection(validDetectiveOutline(), 'suspectNetwork', out);
-    expect(validate('detective-outline', full).valid).toBe(true);
   });
 
   it('buildOutstandingQuestionsPayload keeps questions string[], omits empty gaps', () => {
@@ -471,8 +448,6 @@ describe('detective builders', () => {
     const out = L.buildOutstandingQuestionsPayload(state, orig);
     expect(Array.isArray(out.questions)).toBe(true);
     expect(out.investigativeGaps).toBeUndefined();
-    const full = L.mergeSection(validDetectiveOutline(), 'outstandingQuestions', out);
-    expect(validate('detective-outline', full).valid).toBe(true);
   });
 
   it('buildFinalAssessmentPayload omits empty accusationHandling', () => {
@@ -482,8 +457,6 @@ describe('detective builders', () => {
     const out = L.buildFinalAssessmentPayload(state, orig);
     expect(out.accusationHandling).toBeUndefined();
     expect(out.verdict).toBe(orig.verdict);
-    const full = L.mergeSection(validDetectiveOutline(), 'finalAssessment', out);
-    expect(validate('detective-outline', full).valid).toBe(true);
   });
 });
 
@@ -518,131 +491,6 @@ describe('merge fns', () => {
     const next = L.mergeArcInterweaving(orig, { interleavingPlan: 'p', convergencePoint: 'c' });
     expect(next.theStory.arcInterweaving).toEqual({ interleavingPlan: 'p', convergencePoint: 'c' });
     expect(next.theStory.arcs).toEqual(orig.theStory.arcs);
-  });
-});
-
-// ── (H) validateOutline (server-side surface, injected validator) ───────────────
-describe('validateOutline (B7 server-side surface)', () => {
-  it('accepts a valid journalist outline', () => {
-    const r = L.validateOutline(validJournalistOutline(), 'journalist', validate);
-    expect(r.valid).toBe(true);
-    expect(r.message).toBe('');
-    expect(r.schemaName).toBe('outline');
-  });
-
-  it('rejects arcConnections collapsed to a string (B1) with path in message', () => {
-    const o = validJournalistOutline();
-    o.followTheMoney.arcConnections = 'collapsed';
-    const r = L.validateOutline(o, 'journalist', validate);
-    expect(r.valid).toBe(false);
-    expect(r.message).toContain('/followTheMoney/arcConnections');
-  });
-
-  it('uses the detective schema name for detective theme', () => {
-    const o = validDetectiveOutline();
-    o.executiveSummary.primaryFindings = 'not an array';
-    const r = L.validateOutline(o, 'detective', validate);
-    expect(r.valid).toBe(false);
-    expect(r.schemaName).toBe('detective-outline');
-  });
-
-  it('calls the injected validateFn with the resolved schema name', () => {
-    const spy = jest.fn(function () { return { valid: true, errors: null }; });
-    L.validateOutline(validJournalistOutline(), 'detective', spy);
-    expect(spy).toHaveBeenCalledWith('detective-outline', expect.any(Object));
-  });
-
-  it('lazy-requires SchemaValidator when no validateFn is injected (node path)', () => {
-    const o = validJournalistOutline();
-    o.followTheMoney.arcConnections = 'collapsed';
-    const r = L.validateOutline(o, 'journalist');
-    expect(r.valid).toBe(false);
-  });
-});
-
-// ── (I) validateOutlineShape (client gate) ──────────────────────────────────────
-describe('validateOutlineShape (client gate)', () => {
-  it('accepts a complete valid journalist outline', () => {
-    expect(L.validateOutlineShape(validJournalistOutline(), 'journalist').valid).toBe(true);
-  });
-
-  it('rejects arcConnections collapsed to a string (B1)', () => {
-    const o = validJournalistOutline();
-    o.followTheMoney.arcConnections = 'collapsed';
-    const r = L.validateOutlineShape(o, 'journalist');
-    expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.path === '/followTheMoney/arcConnections')).toBe(true);
-  });
-
-  // Phase 3 (3.2; TH4): the lede's fields are optional now, so B2 is pinned on the type.
-  it('rejects a lede.primaryArc that is not a string (B2)', () => {
-    const o = validJournalistOutline();
-    o.lede.primaryArc = 42;
-    const r = L.validateOutlineShape(o, 'journalist');
-    expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.path === '/lede/primaryArc')).toBe(true);
-  });
-
-  it('rejects arcInterweaving flattened to a string (B3)', () => {
-    const o = validJournalistOutline();
-    o.theStory.arcInterweaving = 'flattened';
-    const r = L.validateOutlineShape(o, 'journalist');
-    expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.path === '/theStory/arcInterweaving')).toBe(true);
-  });
-
-  it('rejects a stray top-level pullQuotes key (B4)', () => {
-    const o = validJournalistOutline();
-    o.pullQuotes = [];
-    const r = L.validateOutlineShape(o, 'journalist');
-    expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.path === '/pullQuotes')).toBe(true);
-  });
-
-  it('rejects arcResolutions collapsed to a string (B-closing)', () => {
-    const o = validJournalistOutline();
-    o.closing.arcResolutions = 'collapsed';
-    const r = L.validateOutlineShape(o, 'journalist');
-    expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.path === '/closing/arcResolutions')).toBe(true);
-  });
-
-  it('accepts a complete valid detective outline', () => {
-    expect(L.validateOutlineShape(validDetectiveOutline(), 'detective').valid).toBe(true);
-  });
-
-  it('rejects detective assessments collapsed to a string', () => {
-    const o = validDetectiveOutline();
-    o.suspectNetwork.assessments = 'collapsed';
-    const r = L.validateOutlineShape(o, 'detective');
-    expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.path === '/suspectNetwork/assessments')).toBe(true);
-  });
-});
-
-// ── Capstone: full round-trip conformance ───────────────────────────────────────
-describe('capstone conformance', () => {
-  it('journalist: init→build every section, merge all, validate', () => {
-    let o = validJournalistOutline();
-    o = L.mergeSection(o, 'lede', L.buildLedePayload(L.initLede(o.lede), o.lede));
-    o = L.mergeArcInterweaving(o, L.buildArcInterweavingPayload(L.initArcInterweaving(o.theStory.arcInterweaving), o.theStory.arcInterweaving));
-    o = L.mergeArc(o, 0, L.buildArcPayload(L.initArc(o.theStory.arcs[0]), o.theStory.arcs[0]));
-    o = L.mergeSection(o, 'followTheMoney', L.buildFollowTheMoneyPayload(L.initFollowTheMoney(o.followTheMoney), o.followTheMoney));
-    o = L.mergeSection(o, 'thePlayers', L.buildThePlayersPayload(L.initThePlayers(o.thePlayers), o.thePlayers));
-    o = L.mergeSection(o, 'whatsMissing', L.buildWhatsMissingPayload(L.initWhatsMissing(o.whatsMissing), o.whatsMissing));
-    o = L.mergeSection(o, 'closing', L.buildClosingPayload(L.initClosing(o.closing), o.closing));
-    expect(validate('outline', o).valid).toBe(true);
-  });
-
-  it('detective: init→build every section, merge all, validate', () => {
-    let o = validDetectiveOutline();
-    o = L.mergeSection(o, 'executiveSummary', L.buildExecutiveSummaryPayload(L.initExecutiveSummary(o.executiveSummary), o.executiveSummary));
-    o = L.mergeSection(o, 'evidenceLocker', L.buildEvidenceLockerPayload(L.initEvidenceLocker(o.evidenceLocker), o.evidenceLocker));
-    o = L.mergeSection(o, 'memoryAnalysis', L.buildMemoryAnalysisPayload(L.initMemoryAnalysis(o.memoryAnalysis), o.memoryAnalysis));
-    o = L.mergeSection(o, 'suspectNetwork', L.buildSuspectNetworkPayload(L.initSuspectNetwork(o.suspectNetwork), o.suspectNetwork));
-    o = L.mergeSection(o, 'outstandingQuestions', L.buildOutstandingQuestionsPayload(L.initOutstandingQuestions(o.outstandingQuestions), o.outstandingQuestions));
-    o = L.mergeSection(o, 'finalAssessment', L.buildFinalAssessmentPayload(L.initFinalAssessment(o.finalAssessment), o.finalAssessment));
-    expect(validate('detective-outline', o).valid).toBe(true);
   });
 });
 
@@ -803,115 +651,15 @@ describe('thesis editor logic (spec 2026-09-19 §6.1)', () => {
     const out = L.buildThesisPayload({ hook: 'h', keyTension: 't', primaryArc: 'a' }, { hook: 'x', keyTension: 'y', primaryArc: 'z' });
     expect(out).toEqual({ hook: 'h', keyTension: 't', primaryArc: 'a' });
   });
-
-  test('the result passes the journalist outline schema inside a valid outline', () => {
-    const outline = validJournalistOutline();
-    outline.lede = L.buildThesisPayload({ hook: 'h', keyTension: 't', primaryArc: 'a' }, outline.lede);
-    expect(validate('outline', outline).valid).toBe(true);
-  });
 });
 
 // ── Phase 3 (3.2): the outline form as TH4 ruled ──────────────────────────────
 //
-// The six keys stay as slots for tooling, and a slot may be left out or left empty;
-// a section's arc connections list the arcs it carries, not every arc; the
-// convergence point stays, optional; an account's inference is optional; and
-// thePlayers.buried and whatsMissing.buriedItems go (BU3: whose memory was sold
-// never appears). The client gate follows the schema and is never stricter.
+// thePlayers.buried and whatsMissing.buriedItems went (BU3: whose memory was sold never
+// appears), and the editors drop them from an outline written before phase 3. Phase 4
+// (brief 4.6): the outline's schema is the map's, so the old schema's cases went with it.
 describe('phase 3 (3.2): the outline form (TH4)', () => {
-  const ARCS = ['The embezzlement', 'The envelope', 'The vote'];
-  function outlineWithSomeArcs() {
-    return validJournalistOutline();
-  }
-
-  /** Outlines the schema now accepts, each a case a writer or the director can produce. */
-  const ACCEPTED = {
-    'every slot left out': () => ({}),
-    'a slot left out': () => { const o = outlineWithSomeArcs(); delete o.whatsMissing; delete o.followTheMoney; return o; },
-    'a slot left empty': () => ({ ...outlineWithSomeArcs(), thePlayers: {}, closing: {} }),
-    'a section listing one arc of three': () => {
-      const o = outlineWithSomeArcs();
-      o.theStory.arcs = ARCS.map((name) => ({ name, paragraphCount: 2 }));
-      o.followTheMoney.arcConnections = [{ arcName: ARCS[2], financialAngle: 'The vote, seen through the money.' }];
-      o.thePlayers.arcConnections = [];
-      return o;
-    },
-    'no convergence point': () => { const o = outlineWithSomeArcs(); delete o.theStory.arcInterweaving.convergencePoint; return o; },
-    'an account with no inference': () => { const o = outlineWithSomeArcs(); delete o.followTheMoney.shellAccounts[0].inference; return o; },
-    'a lede with no primary arc': () => { const o = outlineWithSomeArcs(); delete o.lede.primaryArc; return o; },
-    'empty strings where the editors write them': () => {
-      const o = outlineWithSomeArcs();
-      o.lede.keyTension = '';
-      o.theStory.arcInterweaving.convergencePoint = '';
-      o.followTheMoney.arcConnections = [{ arcName: '', financialAngle: '' }];
-      return o;
-    },
-    // Fix 3.2b (finding 1): a card's loopFunction is optional, and a photo's purpose is
-    // the writer's own words, not one of the retired photo-pacing labels.
-    'a card with no loopFunction': () => {
-      const o = outlineWithSomeArcs();
-      o.theStory.arcs[0].evidenceCards = [{ tokenId: 'rfid-001', placement: 'after para 1' }];
-      return o;
-    },
-    "a photo placement whose purpose is the writer's own words": () => {
-      const o = outlineWithSomeArcs();
-      o.theStory.arcs[0].photoPlacement = { filename: 'whiteboard.jpg', afterParagraph: 2, purpose: 'The room at the vote.' };
-      return o;
-    }
-  };
-
-  it("a STORY card's loopFunction and a photo's purpose describe shape only (fix 3.2b, finding 1)", () => {
-    const outlineSchema = require('../../lib/schemas/outline.schema.json');
-    const arc = outlineSchema.properties.theStory.properties.arcs.items.properties;
-    const card = arc.evidenceCards.items;
-    expect(card.required).toEqual(['tokenId', 'placement']);
-    expect(card.properties.loopFunction.description).not.toMatch(/proves|hinted|raises|question/i);
-    expect(arc.photoPlacement.properties.purpose).toEqual({ type: 'string', description: 'Why the photo sits here' });
-  });
-
-  it.each(Object.keys(ACCEPTED))('the schema accepts %s', (name) => {
-    const r = validate('outline', ACCEPTED[name]());
-    expect(`${name}: ${r.valid}: ${JSON.stringify(r.errors || [])}`).toBe(`${name}: true: []`);
-  });
-
-  it.each(Object.keys(ACCEPTED))('the client gate accepts %s: never stricter than the schema', (name) => {
-    const r = L.validateOutlineShape(ACCEPTED[name](), 'journalist');
-    expect(`${name}: ${r.valid}: ${JSON.stringify(r.errors)}`).toBe(`${name}: true: []`);
-  });
-
-  it('never stricter: every outline the schema accepts, the client gate accepts', () => {
-    const corpus = [
-      ...Object.values(ACCEPTED).map((make) => make()),
-      validJournalistOutline(),
-      { lede: {} }, { theStory: {} }, { theStory: { arcs: [] } }, { closing: { arcResolutions: [] } },
-      { followTheMoney: { shellAccounts: [{ name: 'X', total: 1 }] } },
-      { thePlayers: { characterHighlights: {} } }
-    ];
-    corpus.forEach((o, i) => {
-      if (validate('outline', o).valid) {
-        expect(`${i}: ${JSON.stringify(L.validateOutlineShape(o, 'journalist').errors)}`).toBe(`${i}: []`);
-      }
-    });
-  });
-
-  it("the client gate still rejects what the schema rejects: a section that is not an object, a collapsed array, a stray key", () => {
-    [
-      { ...outlineWithSomeArcs(), closing: 'collapsed' },
-      { ...outlineWithSomeArcs(), followTheMoney: { arcConnections: 'collapsed' } },
-      { ...outlineWithSomeArcs(), pullQuotes: [] }
-    ].forEach((o) => {
-      expect(validate('outline', o).valid).toBe(false);
-      expect(L.validateOutlineShape(o, 'journalist').valid).toBe(false);
-    });
-  });
-
-  it('thePlayers.buried and whatsMissing.buriedItems are gone from the schema (BU3)', () => {
-    expect(validate('outline', { thePlayers: {}, whatsMissing: {} }).valid).toBe(true);
-    expect(validate('outline', { thePlayers: { buried: ['Morgan'] } }).valid).toBe(false);
-    expect(validate('outline', { whatsMissing: { buriedItems: ['tx-1'] } }).valid).toBe(false);
-  });
-
-  it('the editors drop them from an outline written before phase 3, so an edit never fails the schema', () => {
+  it('the editors drop them from an outline written before phase 3', () => {
     const old = validJournalistOutline();
     old.thePlayers.buried = ['the silent partner'];
     old.whatsMissing.buriedItems = ['transfer-009'];
@@ -926,7 +674,6 @@ describe('phase 3 (3.2): the outline form (TH4)', () => {
     expect(cleaned.thePlayers.buried).toBeUndefined();
     expect(cleaned.whatsMissing.buriedItems).toBeUndefined();
     expect(old.thePlayers.buried).toEqual(['the silent partner']);
-    expect(validate('outline', cleaned).valid).toBe(true);
     expect(L.dropRetiredOutlineFields({ lede: { hook: 'h' } })).toEqual({ lede: { hook: 'h' } });
   });
 
@@ -935,57 +682,6 @@ describe('phase 3 (3.2): the outline form (TH4)', () => {
     const state = L.initFollowTheMoney(section);
     state.shellAccounts[0].inference = '';
     expect(L.buildFollowTheMoneyPayload(state, section).shellAccounts[0]).toEqual({ name: 'Ember', total: 5 });
-  });
-});
-
-// Phase 3, brief 3.7 (spec C15): the outline writer's questions for the director ride
-// at the outline's top level as `writerQuestions`. The client gate accepts the field
-// as the schema does, never stricter, and still rejects what the schema rejects.
-describe('phase 3 (3.7): the writers\' questions in an outline', () => {
-  const Q = { kind: 'player', about: 'Sarah', question: 'The record holds nothing about Sarah: what did Sarah do?' };
-
-  it('the schema and the client gate accept an outline with writerQuestions', () => {
-    const o = { ...validJournalistOutline(), writerQuestions: [Q] };
-    expect(validate('outline', o).valid).toBe(true);
-    const r = L.validateOutlineShape(o, 'journalist');
-    expect(`${r.valid}: ${JSON.stringify(r.errors)}`).toBe('true: []');
-  });
-
-  it('the client gate\'s kinds are the schema\'s (lib/writer-questions.js)', () => {
-    const { WRITER_QUESTION_KINDS } = require('../../lib/writer-questions');
-    expect(L.WRITER_QUESTION_KINDS).toEqual([...WRITER_QUESTION_KINDS]);
-  });
-
-  it('the client gate accepts each of the three kinds', () => {
-    for (const kind of ['player', 'pronoun', 'ledger']) {
-      const o = { ...validJournalistOutline(), writerQuestions: [{ ...Q, kind }] };
-      expect(`${kind}: ${validate('outline', o).valid} ${L.validateOutlineShape(o, 'journalist').valid}`).toBe(`${kind}: true true`);
-    }
-  });
-
-  it('the client gate accepts an empty list', () => {
-    expect(L.validateOutlineShape({ ...validJournalistOutline(), writerQuestions: [] }, 'journalist').valid).toBe(true);
-  });
-
-  it.each([
-    ['a string in place of the list', 'Sarah?', '/writerQuestions'],
-    ['an entry with no question', [{ kind: 'player', about: 'Sarah' }], '/writerQuestions/0/question'],
-    ['an entry that is not an object', ['Sarah?'], '/writerQuestions/0'],
-    // Fix 3.7b (finding 1): the kind is required, one of the schema's three.
-    ['an entry with no kind', [{ about: 'Sarah', question: 'Where?' }], '/writerQuestions/0/kind'],
-    ['an entry with an unknown kind', [{ kind: 'other', about: 'Sarah', question: 'Where?' }], '/writerQuestions/0/kind']
-  ])('both reject %s', (_name, value, errorPath) => {
-    const o = { ...validJournalistOutline(), writerQuestions: value };
-    expect(validate('outline', o).valid).toBe(false);
-    const r = L.validateOutlineShape(o, 'journalist');
-    expect(r.valid).toBe(false);
-    expect(r.errors.map((e) => e.path)).toContain(errorPath);
-  });
-
-  it('the detective gate is unchanged: the field is not a detective outline key', () => {
-    const r = L.validateOutlineShape({ ...validDetectiveOutline(), writerQuestions: [Q] }, 'detective');
-    expect(r.valid).toBe(false);
-    expect(r.errors.some((e) => e.path === '/writerQuestions')).toBe(true);
   });
 });
 
@@ -1042,5 +738,95 @@ describe('4.6: Everyone and the counts, one function from the beats (mapTally)',
     expect(L.rosterMemberOf(' KAI LUNE ', ROSTER)).toBe('Kai');
     expect(L.rosterMemberOf('Blake', ROSTER)).toBe(null);
     expect(L.rosterMemberOf('Ellison', ROSTER)).toBe(null);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6: the map's client gate follows the director-side schema (validateMapShape)
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.6: the map's client gate, held to the director-side schema", () => {
+  const Ajv = require('ajv');
+  const { MAP } = require('../../lib/__tests__/fixtures/rework-state');
+  const { directorMapSchemaFor, MAP_BEAT_KINDS } = require('../../lib/map');
+  const { mapSlotsOf } = require('../../lib/theme-config');
+  const { HEADLINE_LIMITS } = require('../../console/article-desk-logic');
+  const schema = directorMapSchemaFor('journalist');
+  const schemaAccepts = new Ajv({ allErrors: true, strict: true }).compile(schema);
+  const slots = mapSlotsOf('journalist');
+  const map = () => JSON.parse(JSON.stringify(MAP));
+  const edited = (change) => { const m = map(); change(m); return m; };
+
+  /** Maps a writer or the director can leave, then maps the schema refuses. */
+  const ACCEPTED = {
+    'the fixture map': map,
+    'a beat the director added, with only its id and its material': () => edited((m) => { m.sections[0].beats.push({ id: 'b11', material: 'Alex at the window' }); }),
+    'a beat the director brought back, with only its id and its material': () => edited((m) => { m.leftOut.push({ id: 'b12', material: 'The second envelope' }); }),
+    'a gap note raising a player': () => edited((m) => { m.gapNote = { line: 'The record holds nothing Sarah did.', players: ['Sarah'] }; }),
+    'no top photo': () => edited((m) => { delete m.topPhoto; }),
+    'no sections, nothing dropped, nothing left out': () => edited((m) => { m.sections = []; m.dropped = []; m.leftOut = []; }),
+    'a headline at its longest, counted in code points': () => edited((m) => { m.headline = `${'x'.repeat(HEADLINE_LIMITS.main.max - 1)}\u{1F600}`; }),
+    'a headline at its shortest, counted in code points': () => edited((m) => { m.headline = '\u{1F600}'.repeat(HEADLINE_LIMITS.main.min); }),
+    'a deck at its longest': () => edited((m) => { m.deck = 'd'.repeat(HEADLINE_LIMITS.deck.max); }),
+    'a weave change with its source': () => edited((m) => { m.weaveChanges = [{ source: 'E2', change: 'The envelope lands in the lede.' }]; })
+  };
+  const REFUSED = {
+    'no headline': () => edited((m) => { delete m.headline; }),
+    'a headline one under its shortest': () => edited((m) => { m.headline = 'x'.repeat(HEADLINE_LIMITS.main.min - 1); }),
+    'a headline one over its longest': () => edited((m) => { m.headline = 'x'.repeat(HEADLINE_LIMITS.main.max + 1); }),
+    'a deck one over its longest': () => edited((m) => { m.deck = 'd'.repeat(HEADLINE_LIMITS.deck.max + 1); }),
+    "the old outline's lede": () => edited((m) => { m.lede = { hook: 'h' }; }),
+    "the writers' questions, which left the outline": () => edited((m) => { m.writerQuestions = []; }),
+    'pull quotes': () => edited((m) => { m.pullQuotes = []; }),
+    'sections collapsed to a string': () => edited((m) => { m.sections = 'collapsed'; }),
+    'a section with no job': () => edited((m) => { delete m.sections[0].job; }),
+    'a slot the theme has none of': () => edited((m) => { m.sections[0].slot = 'epilogue'; }),
+    'a dropped slot the theme has none of': () => edited((m) => { m.dropped[0].slot = 'epilogue'; }),
+    'a beat with no material': () => edited((m) => { delete m.sections[1].beats[0].material; }),
+    'a beat with no id': () => edited((m) => { delete m.leftOut[0].id; }),
+    'a kind the map has none of': () => edited((m) => { m.sections[1].beats[0].kind = 'quote'; }),
+    'a key a beat has none of': () => edited((m) => { m.sections[1].beats[0].excerpt = 'x'; }),
+    'players that are not a list': () => edited((m) => { m.sections[0].beats[0].players = 'Alex'; }),
+    'a photo with no filename': () => edited((m) => { m.sections[1].photos = [{ beat: 'b2' }]; }),
+    'a length that is not a whole number': () => edited((m) => { m.expectedLength = 1200.5; }),
+    'a weave change with no source': () => edited((m) => { m.weaveChanges = [{ change: 'x' }]; }),
+    'a gap note with no players': () => edited((m) => { m.gapNote = { line: 'x' }; }),
+    'a list in place of the map': () => []
+  };
+
+  it.each(Object.keys(ACCEPTED))('takes %s, as the schema does: never stricter', (name) => {
+    const m = ACCEPTED[name]();
+    expect(`${name}: ${schemaAccepts(m)}`).toBe(`${name}: true`);
+    const r = L.validateMapShape(m, { slots });
+    expect(`${name}: ${r.valid}: ${JSON.stringify(r.errors)}`).toBe(`${name}: true: []`);
+  });
+
+  it.each(Object.keys(REFUSED))('refuses %s, as the schema does', (name) => {
+    const m = REFUSED[name]();
+    expect(`${name}: ${schemaAccepts(m)}`).toBe(`${name}: false`);
+    expect(`${name}: ${L.validateMapShape(m, { slots }).valid}`).toBe(`${name}: false`);
+  });
+
+  it('says where each fault is', () => {
+    const r = L.validateMapShape(edited((m) => { m.sections[1].beats[0].kind = 'quote'; m.dropped[0].slot = 'epilogue'; }), { slots });
+    expect(r.errors.map((e) => e.path)).toEqual(['/sections/1/beats/0/kind', '/dropped/0/slot']);
+  });
+
+  it("checks a slot against the stop's slots, given as keys or as the payload's entries, and takes any slot without them", () => {
+    const m = REFUSED['a slot the theme has none of']();
+    expect(L.validateMapShape(m, { slots: slots.map((slot) => slot.key) }).valid).toBe(false);
+    expect(L.validateMapShape(m).valid).toBe(true);
+  });
+
+  it("validateOutlineShape, the stop's old name, is the map's gate", () => {
+    const m = REFUSED['a slot the theme has none of']();
+    expect(L.validateOutlineShape(m, 'journalist', slots)).toEqual(L.validateMapShape(m, { slots }));
+    expect(L.validateOutlineShape(map(), 'journalist', slots)).toEqual({ valid: true, errors: [] });
+  });
+
+  it("its root keys and a beat's kinds are the schema's", () => {
+    expect([...L.MAP_ROOT_KEYS].sort()).toEqual(Object.keys(schema.properties).sort());
+    expect(L.BEAT_KINDS).toEqual([...MAP_BEAT_KINDS]);
+    expect(L.BEAT_KINDS).toEqual(schema.properties.sections.items.properties.beats.items.properties.kind.enum);
+    expect(L.BEAT_KINDS).toEqual(schema.properties.leftOut.items.properties.kind.enum);
   });
 });

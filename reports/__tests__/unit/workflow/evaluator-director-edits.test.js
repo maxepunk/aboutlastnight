@@ -279,7 +279,7 @@ describe('the verdict guard (F1)', () => {
     const article = await evaluateArticle(articleState('journalist', { _articleHandEdits: null }), cfg(judging(verdict({ structuralIssues: [issue] }))));
     expect(article.evaluationHistory.structuralIssues).toEqual([issue]);
     expect(article.evaluationHistory.ready).toBe(false);
-    const arcs = await evaluateArcs({ ...reworkFixtureState('journalist'), selectedArcs: [], evaluationHistory: [] }, cfg(judging(verdict({ structuralIssues: [issue] }))));
+    const arcs = await evaluateArcs({ ...reworkFixtureState('journalist'), meetingApproved: false, evaluationHistory: [] }, cfg(judging(verdict({ structuralIssues: [issue] }))));
     expect(arcs.evaluationHistory.structuralIssues).toEqual([issue]);
   });
 

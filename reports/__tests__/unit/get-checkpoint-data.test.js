@@ -47,9 +47,12 @@ describe('getCheckpointData — lastEvaluation (H6)', () => {
     expect(data.lastEvaluation.overallScore).toBe(0.65);
   });
 
-  it('gives the outline gate the outline evaluation', async () => {
+  // Brief 4.6 (spec 5.4): the outline judge left the graph, and the map's stop sends no
+  // evaluation; its checks are code's (checkFailures, the 4.6 describe below).
+  it('the map stop sends no evaluation', async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: HISTORY });
-    expect(data.lastEvaluation.overallScore).toBe(0.7);
+    expect('lastEvaluation' in data).toBe(false);
+    expect('evaluationHistory' in data).toBe(false);
   });
 
   it('is null when this phase has never been evaluated', async () => {
@@ -58,12 +61,12 @@ describe('getCheckpointData — lastEvaluation (H6)', () => {
   });
 
   it('is null when there is no history at all', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {});
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { contentBundle: null });
     expect(data.lastEvaluation).toBeNull();
   });
 
   it('keeps the raw evaluationHistory for backward compatibility', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: HISTORY });
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: HISTORY, contentBundle: null });
     expect(data.evaluationHistory).toEqual(HISTORY);
   });
 });
@@ -441,10 +444,11 @@ describe('trace (phase 2, brief 2.7)', () => {
   });
 });
 
-// Phase 3, brief 3.7 (spec C15): each of the three stops sends the current output's
-// questions for the director as `writerQuestions`, a key no interrupt payload uses.
-// The arcs keep theirs in the arc cache; the outline and the article carry theirs at
-// their top level. An entry without both strings is not a question and is not sent.
+// Phase 3, brief 3.7 (spec C15): each stop sends the current output's questions for the
+// director, a key no interrupt payload uses. An entry without both strings is not a
+// question and is not sent. Brief 4.5: the story meeting sends the weave's as `questions`.
+// Brief 4.6: the writers' questions left the outline's schema, so the map's stop sends
+// none, and the article carries its own at its top level as `writerQuestions`.
 describe('writerQuestions (phase 3, brief 3.7)', () => {
   const { buildCompleteCheckpointData } = require('../../server.js');
   const Q1 = { about: 'Sarah', question: 'The record holds nothing about Sarah: where was Sarah?' };
@@ -461,11 +465,11 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
     expect(data).not.toHaveProperty('writerQuestions');
   });
 
-  it('the outline stop sends the outline\'s questions', async () => {
+  it('the map stop sends no questions: they left the outline with the map (brief 4.6)', async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
-      evaluationHistory: [], outline: { lede: { hook: 'h' }, writerQuestions: [Q2] }
+      evaluationHistory: [], outline: { headline: 'h', writerQuestions: [Q2] }
     });
-    expect(data.writerQuestions).toEqual([Q2]);
+    expect('writerQuestions' in data).toBe(false);
   });
 
   it('the article stop sends the article\'s questions', async () => {
@@ -477,30 +481,30 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
 
   it('is an empty list at each stop when the output has none, or there is no output yet', async () => {
     const arcs = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, { weave: null });
-    const outline = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { evaluationHistory: [], outline: null });
     const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: VALID_BUNDLE() });
-    expect([arcs.questions, outline.writerQuestions, article.writerQuestions]).toEqual([[], [], []]);
+    const noBundle = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { evaluationHistory: [], contentBundle: null });
+    expect([arcs.questions, article.writerQuestions, noBundle.writerQuestions]).toEqual([[], [], []]);
   });
 
   it('sends only entries with both an about and a question', async () => {
-    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, {
-      evaluationHistory: [], outline: { writerQuestions: [Q1, { about: 'Alex' }, { about: '  ', question: 'x' }, 'loose', null] }
+    const data = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, {
+      evaluationHistory: [], contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q1, { about: 'Alex' }, { about: '  ', question: 'x' }, 'loose', null] }
     });
     expect(data.writerQuestions).toEqual([Q1]);
   });
 
   it('survives the merge with the interrupt payload', async () => {
-    const state = { evaluationHistory: [], outline: { writerQuestions: [Q1] } };
-    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline, evaluationHistory: [] }, state);
+    const state = { evaluationHistory: [], contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q1] } };
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARTICLE, contentBundle: state.contentBundle }, state);
     expect(merged.writerQuestions).toEqual([Q1]);
   });
 
   // Fix 3.7b (finding 5): a rollback to a stop clears that stop's questions with its
   // output, through the field each stop reads them from (ROLLBACK_CLEARS clears the
-  // outline and contentBundle), and keeps the questions of the stops before it, whose
-  // output it keeps. Brief 4.5 (R9): a rollback to the story meeting keeps the weave, so
-  // the meeting reopens with its questions and their answers; the evidence stop above it
-  // writes the weave again.
+  // contentBundle), and keeps the questions of the stops before it, whose output it keeps.
+  // Brief 4.5 (R9): a rollback to the story meeting keeps the weave, so the meeting reopens
+  // with its questions and their answers; the evidence stop above it writes the weave again.
+  // Brief 4.6: the map holds no questions; a rollback to it clears the article's.
   describe('a rollback clears a stop\'s questions with its output', () => {
     const { buildRollbackState } = require('../../lib/api-helpers');
     const Q3 = { kind: 'ledger', about: 'The 10:14 AM sale of $50,000', question: 'Is this a second entry for one sale?' };
@@ -508,24 +512,22 @@ describe('writerQuestions (phase 3, brief 3.7)', () => {
     const withQuestions = () => ({
       evaluationHistory: [],
       weave: { threads: [], questions: [W1] },
-      outline: { lede: { hook: 'h' }, writerQuestions: [Q2] },
       contentBundle: { ...VALID_BUNDLE(), writerQuestions: [Q3] }
     });
     const questionsAtEachStop = async (state) => ({
       'arc-selection': (await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state)).questions,
-      outline: (await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state)).writerQuestions,
       article: (await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, state)).writerQuestions
     });
 
     it('every stop shows its questions before the rollback', async () => {
-      expect(await questionsAtEachStop(withQuestions())).toEqual({ 'arc-selection': [W1], outline: [Q2], article: [Q3] });
+      expect(await questionsAtEachStop(withQuestions())).toEqual({ 'arc-selection': [W1], article: [Q3] });
     });
 
     it.each([
-      ['evidence-and-photos', { 'arc-selection': [], outline: [], article: [] }],
-      ['arc-selection', { 'arc-selection': [W1], outline: [], article: [] }],
-      ['outline', { 'arc-selection': [W1], outline: [], article: [] }],
-      ['article', { 'arc-selection': [W1], outline: [Q2], article: [] }]
+      ['evidence-and-photos', { 'arc-selection': [], article: [] }],
+      ['arc-selection', { 'arc-selection': [W1], article: [] }],
+      ['outline', { 'arc-selection': [W1], article: [] }],
+      ['article', { 'arc-selection': [W1], article: [] }]
     ])('a rollback to %s', async (point, expected) => {
       const state = { ...withQuestions(), ...buildRollbackState(point) };
       expect(await questionsAtEachStop(state)).toEqual(expected);
@@ -655,5 +657,111 @@ describe('4.5: /api/session/:id/arcs serves the weave', () => {
     expect(arcs.check({ weave: WEAVE })).toBe(true);
     expect(arcs.check({ narrativeArcs: [{ id: 'old' }] })).toBe(false);
     expect(arcs.fields({})).toEqual({ weave: null });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6: what the map's stop sends (brief 4.6; lib/map.js mapCheckpointData)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.6: the map\'s payload at the outline stop', () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const { MAP, WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { mapKey } = require('../../lib/map');
+  const { mapSlotsOf } = require('../../lib/theme-config');
+  const { standingOnMap } = require('../../lib/hand-edit-diff');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const CONCERN = "Director's edit E1: the map prints 2 cards; a map prints 3 to 5.";
+
+  /**
+   * The stop after the director struck b4 and sent the map back: the map in hand is theirs,
+   * its check still fails, and the concern is about their strike. Jamie is on the roster and
+   * in no beat; p3.jpg is kept and placed nowhere; the whiteboard is never a kept photo.
+   */
+  function atMap() {
+    const left = clone(MAP);
+    left.leftOut.push(left.sections[1].beats.splice(2, 1)[0]);
+    return {
+      theme: 'journalist',
+      outline: left,
+      _mapBaseline: clone(MAP),
+      _outlineHandEdits: standingOnMap(null, MAP, left),
+      _mapCheck: { mapKey: mapKey(left), passed: false, failures: [{ type: 'card-count', message: 'The map prints 2 cards.' }], concerns: [CONCERN] },
+      weave: clone(WEAVE),
+      sessionConfig: { roster: ['Alex', 'Morgan', 'Riley', 'Sarah', 'Jamie'] },
+      sessionPhotos: ['/s/hero.jpg', '/s/p2.jpg', '/s/p3.jpg', '/s/whiteboard.jpg'],
+      whiteboardPhotoPath: '/s/whiteboard.jpg',
+      _outlineFeedback: 'Strike the paternity card.',
+      _outlineHandEditReport: { checked: ['E1'], changed: [] },
+      directorGateNotes: [{ gate: 'outline', kind: 'rejection', round: 1, text: 'Strike the paternity card.', at: 't' }],
+      outlineRevisionCount: 1,
+      humanOutlineRevisionCount: 1,
+      evaluationHistory: [{ phase: 'outline', ready: true, overallScore: 1 }]
+    };
+  }
+
+  it("sends the map's keys, and no evaluation, no questions and no thesis", async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
+    expect(Object.keys(data).sort()).toEqual([
+      'checkFailures', 'concerns', 'directorGateNotes', 'handEditReport', 'humanRevisionCount', 'mapSlots',
+      'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'settledStory', 'tally', 'trace'
+    ]);
+  });
+
+  it("carries the map, the theme's slots, the settled story, the round's note, the notes and the counters", async () => {
+    const state = atMap();
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
+    expect(data.outline).toEqual(state.outline);
+    expect(data.mapSlots).toEqual(mapSlotsOf('journalist'));
+    expect(data.mapSlots.map((slot) => slot.key)).toEqual(['lede', 'theStory', 'followTheMoney', 'thePlayers', 'whatsMissing', 'closing']);
+    expect(data.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+    expect(data).toMatchObject({
+      previousFeedback: 'Strike the paternity card.', revisionCount: 1, humanRevisionCount: 1, maxRevisions: REVISION_CAPS.OUTLINE,
+      handEditReport: { checked: ['E1'], changed: [] }, directorGateNotes: state.directorGateNotes, trace: []
+    });
+  });
+
+  it("builds Everyone and the counts from the beats' players: each player under the first section that shows them", async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
+    expect(data.tally).toEqual({
+      everyone: [
+        { slot: 'lede', heading: '', players: ['Alex', 'Morgan'] },
+        { slot: 'theStory', heading: 'The Story', players: ['Riley'] }
+      ],
+      unplaced: ['Sarah', 'Jamie'],
+      raised: [],
+      cards: 2,
+      photos: { placed: 2, of: 3 }
+    });
+  });
+
+  it('counts a player the gap note raises, and the photos the director left out of the article as not kept', async () => {
+    const state = atMap();
+    state.outline.gapNote = { line: 'The record holds nothing Jamie did.', players: ['Jamie'] };
+    state.characterIdMappings = { 'p3.jpg': { exclude: true } };
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
+    expect(data.tally.raised).toEqual(['Jamie']);
+    expect(data.tally.photos).toEqual({ placed: 2, of: 2 });
+  });
+
+  it('shows a check still failing on the map in hand, and the concern beside the line of the edit it is about', async () => {
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
+    expect(data.checkFailures).toEqual([{ type: 'card-count', message: 'The map prints 2 cards.' }]);
+    expect(data.concerns).toEqual([{ text: CONCERN, editIds: ['E1'], places: [expect.objectContaining({ id: 'E1', path: 'leftOut[#b4]' })] }]);
+  });
+
+  it('shows no check run on another map: the mark survives the rollback to the map (R9), for the map it checked', async () => {
+    const state = atMap();
+    state._mapCheck.mapKey = 'another-map';
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
+    expect(data.checkFailures).toEqual([]);
+    expect(data.concerns).toEqual([]);
+  });
+
+  it('survives the merge with the interrupt payload', async () => {
+    const state = atMap();
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline }, state);
+    expect(merged.type).toBe(CHECKPOINT_TYPES.OUTLINE);
+    expect(merged.tally.unplaced).toEqual(['Sarah', 'Jamie']);
+    expect(merged.checkFailures).toHaveLength(1);
   });
 });

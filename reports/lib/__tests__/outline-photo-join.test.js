@@ -15,6 +15,9 @@
  * the director identified in it (identifiedCharacters); Haiku's pre-identification
  * descriptions no longer reach the outline writer, which reads the director's own
  * description of the photo instead (joined by filename in the prompt builder).
+ *
+ * Phase 4 (brief 4.6): the outline writer is the map writer, whose photo list is code's
+ * pick for the top photo first (marked `hero: true`), then the others the director kept.
  */
 
 jest.mock('../observability', () => ({
@@ -33,9 +36,10 @@ function makeCapturingConfig() {
   const captured = {};
   const promptBuilder = {
     theme: { loadPhasePrompts: async () => ({}), validate: async () => ({ valid: true, missing: [] }) },
-    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos) {
-      captured.heroImage = heroImage;
-      captured.availablePhotos = availablePhotos;
+    async buildOutlinePrompt(settledWeave, photos) {
+      const hero = photos.find((photo) => photo.hero);
+      captured.heroImage = hero ? hero.filename : null;
+      captured.availablePhotos = photos.filter((photo) => !photo.hero);
       return { systemPrompt: 's', userPrompt: 'u' };
     }
   };

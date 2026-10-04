@@ -228,13 +228,25 @@ const REPO = path.join(__dirname, '..', '..');
  *   <SHOULD_CONSIDER>, the outline evaluation's advisories, goes with it, and nothing else
  *   moves. article-journalist 27631 -> 27446, article-detective 28610 -> 28425; the
  *   outline and arc pins do not move.
+ * - Phase 4 (brief 4.6), the map: the outline writer is the map writer. Its system prompt's
+ *   identity line names the story map; its user prompt opens on the settled weave
+ *   (<SETTLED_WEAVE>, settled-weave.js) and the map's task, then the theme's slots, the
+ *   director's notes, every kept photo with code's pick for the top photo marked first,
+ *   the record, the money, SESSION_FACTS, the roster, the map's <SCHEMA> with the theme's
+ *   slots, and the craft files without craft-questions. Gone with the arcs (R4): SELECTED
+ *   ARCS, HERO IMAGE, <arc-metadata> and <arc-analysis>; with the arc selection: the arc
+ *   stage's <SHOULD_CONSIDER> and the arc-stop guidance. outline-journalist 20492 -> 18299.
+ *   outline-detective goes: the outline stage's detective branch went with R1, so the
+ *   detective renders no map writer. The article pins move only because the fixture's
+ *   outline is now a map, which the article writer prints whole under APPROVED OUTLINE
+ *   (article-journalist 27446 -> 28708, article-detective 28425 -> 29687); the article
+ *   writer is 4.7's. arcs-journalist does not move.
  */
 const PINNED = {
-  'outline-journalist': ['8618f4b21202eb6cd23df199649b30f5e272db817fcb261fb820b74203adf263', 20492],
-  'article-journalist': ['33d2f7f5f488a6aef4f600186b7a9c5d6608f6c6571e345a6c814234ba42b60d', 27446],
+  'outline-journalist': ['c03d677e9e3a6b1be5f3ed36f5a818dc56d2ec0c98e1f49aedc465864dfbeddc', 18299],
+  'article-journalist': ['b712378e34a076d1b5ba8e1f7000c8e942c2059aad5307f907cde828cb3cac18', 28708],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892],
-  'outline-detective': ['0521b490325112f9d3f8db05979b53f936a809b21719557ad28e76323e672017', 8471],
-  'article-detective': ['5dd7c181f9a0aa6110f2bfee6bd5129bdee0edf0d587cd18275b2424bc6ee7dc', 28425]
+  'article-detective': ['10c1f23e9ecf6ab47e2eb4444e2a9fe5753eefb805ecac55f3a9d22a98665ad1', 29687]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

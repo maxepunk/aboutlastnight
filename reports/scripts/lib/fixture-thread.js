@@ -24,7 +24,7 @@ function isProductionDb(dbPath) {
  * Plant cases into a checkpoint's channel values, returning a new object.
  *
  * A key sets one channel, or a nested field with a dotted path
- * (`_arcAnalysisCache.writerQuestions`), creating the objects on the way. A key that
+ * (`weave.headline`), creating the objects on the way. A key that
  * starts with `+` appends its value to the array there (`+evaluationHistory`); an
  * array value appends each item. Every other value replaces what was there.
  *

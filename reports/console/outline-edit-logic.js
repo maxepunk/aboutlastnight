@@ -18,8 +18,13 @@
  *   - shellAccounts.total accepts number OR string and is NEVER force-coerced.
  *
  * MUST NOT reference React or window at module-evaluation time except the
- * guarded window.Console write. SchemaValidator is lazy-required only inside
- * validateOutline and only when no validateFn is injected.
+ * guarded window.Console write.
+ *
+ * Phase 4 (brief 4.6): the outline is the story map. Its client gate is
+ * validateMapShape (I), held to the director-side map schema (lib/map.js
+ * directorMapSchemaFor), whose refusal the server's payload gate gives; Everyone and
+ * the counts are mapTally (K). The section builders (D to G) edit the outline written
+ * before phase 4, until the map's screen replaces them (4.9).
  */
 (function () {
   'use strict';
@@ -105,11 +110,7 @@
     });
   }
 
-  // ── (B) THEME + RESET-KEY HELPERS ─────────────────────────────────────────
-  function schemaNameForTheme(theme) {
-    return theme === 'detective' ? 'detective-outline' : 'outline';
-  }
-
+  // ── (B) RESET-KEY HELPER ──────────────────────────────────────────────────
   function computeResetKey(obj, revisionCount) {
     var rc = (typeof revisionCount === 'number' && !Number.isNaN(revisionCount)) ? revisionCount : 0;
     var serialized;
@@ -448,223 +449,178 @@
     return next;
   }
 
-  // ── (H) SERVER-SIDE VALIDATION (Ajv-backed; injectable) ───────────────────
-  function validateOutline(outline, theme, validateFn) {
-    var schemaName = schemaNameForTheme(theme);
-    var doValidate = validateFn;
-
-    if (typeof doValidate !== 'function') {
-      if (typeof require === 'function') {
-        try {
-          var mod = require('../lib/schema-validator');
-          var validatorInstance = new mod.SchemaValidator();
-          doValidate = function (name, data) { return validatorInstance.validate(name, data); };
-        } catch (e) {
-          return {
-            valid: false,
-            errors: [{ path: '/', message: 'validator unavailable: ' + e.message }],
-            schemaName: schemaName,
-            message: 'Outline validator unavailable: ' + e.message
-          };
-        }
-      } else {
-        return {
-          valid: false,
-          errors: [{ path: '/', message: 'no validator available in this environment' }],
-          schemaName: schemaName,
-          message: 'No outline validator available in this environment'
-        };
-      }
-    }
-
-    var result = doValidate(schemaName, outline);
-    var errors = result.errors || [];
-    var message = result.valid
-      ? ''
-      : 'Edited outline failed schema validation (' + schemaName + '): ' +
-        errors.map(function (e) { return (e.path || '/') + ' ' + e.message; }).join('; ');
-
-    return { valid: !!result.valid, errors: errors, schemaName: schemaName, message: message };
-  }
-
   // ── (I) CLIENT-SIDE STRUCTURAL VALIDATION (dependency-free fast-fail gate) ──
   function isPlainObject(val) { return val !== null && typeof val === 'object' && !Array.isArray(val); }
   function isNonEmptyString(val) { return typeof val === 'string' && val.trim().length > 0; }
 
-  var JOURNALIST_ARC_FIELDS = {
-    followTheMoney: { key: 'arcConnections', subFields: ['arcName', 'financialAngle'] },
-    thePlayers: { key: 'arcConnections', subFields: ['arcName', 'characterAngle'] },
-    whatsMissing: { key: 'arcConnections', subFields: ['arcName', 'openQuestion'] },
-    closing: { key: 'arcResolutions', subFields: ['arcName', 'resolution'] }
-  };
-  var JOURNALIST_ROOT_KEYS = ['lede', 'theStory', 'followTheMoney', 'thePlayers', 'whatsMissing', 'closing'];
-  // Phase 3 (3.7): the outline writer's questions for the director, a list beside the
-  // six slots (outline.schema.json), never a section.
-  var JOURNALIST_QUESTIONS_KEY = 'writerQuestions';
-  // Fix 3.7b: a question's kind, one of the schema's three (lib/writer-questions.js
-  // WRITER_QUESTION_KINDS; a test holds the two lists equal).
-  var WRITER_QUESTION_KINDS = ['player', 'pronoun', 'ledger'];
-  var DETECTIVE_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'memoryAnalysis', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
-  var DETECTIVE_REQUIRED_ROOT_KEYS = ['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'];
+  // The map's client gate (phase 4, brief 4.6): the director-side map schema's rules, held
+  // equal to it by a test (lib/map.js directorMapSchemaFor; never stricter, and a corpus
+  // the two decide alike). The root keys, a beat's kinds and the headline limits are the
+  // schema's; the slots, when the stop's payload gives them, are the theme's.
+  var MAP_ROOT_KEYS = ['headline', 'deck', 'topPhoto', 'gapNote', 'sections', 'dropped', 'leftOut', 'expectedLength', 'weaveChanges'];
+  var MAP_REQUIRED_KEYS = ['headline', 'deck', 'sections', 'dropped', 'leftOut', 'expectedLength', 'weaveChanges'];
+  // A beat's kind, one of the schema's four (lib/map.js MAP_BEAT_KINDS; a test holds the
+  // two lists equal).
+  var BEAT_KINDS = ['scene', 'receipt', 'line', 'figure'];
+  var SECTION_KEYS = ['slot', 'heading', 'job', 'beats', 'photos'];
+  var BEAT_KEYS = ['id', 'kind', 'material', 'players', 'card', 'connection'];
+  // A beat the director added or brought back needs only these (R12).
+  var BEAT_REQUIRED_KEYS = ['id', 'material'];
+  var PHOTO_KEYS = ['filename', 'beat'];
 
   /**
-   * An array of objects, each with every listed field a string. `allowEmpty`
-   * accepts '' as the schema does (the journalist outline since phase 3); the
-   * detective's gate keeps requiring non-empty text.
+   * The headline and deck limits: the content bundle's, one constant
+   * (console/article-desk-logic.js HEADLINE_LIMITS), which the map's schema states too.
+   * Read when a map is checked, since article-desk-logic.js loads after this module.
    */
-  function validateObjectArray(errors, path, value, subFields, allowEmpty) {
-    if (!Array.isArray(value)) {
-      errors.push({ path: path, message: 'must be an array of objects (was ' + (value === null ? 'null' : typeof value) + ')' });
-      return;
+  function headlineLimits() {
+    if (typeof window !== 'undefined' && window.Console && window.Console.articleDeskLogic) {
+      return window.Console.articleDeskLogic.HEADLINE_LIMITS;
     }
+    if (typeof module !== 'undefined' && module.exports && typeof require === 'function') {
+      return require('./article-desk-logic').HEADLINE_LIMITS;
+    }
+    return null;
+  }
+
+  /** A text's length as the schema counts it, in code points. */
+  function codePoints(text) {
+    return Array.from(text).length;
+  }
+
+  function onlyKeys(errors, path, value, allowed) {
+    Object.keys(value).forEach(function (k) {
+      if (allowed.indexOf(k) === -1) errors.push({ path: path + '/' + k, message: 'is not an allowed key' });
+    });
+  }
+
+  function requiredKeys(errors, path, value, required) {
+    required.forEach(function (k) {
+      if (value[k] === undefined) errors.push({ path: path, message: "must have required property '" + k + "'" });
+    });
+  }
+
+  function stringAt(errors, path, value) {
+    if (value !== undefined && typeof value !== 'string') errors.push({ path: path, message: 'must be a string' });
+  }
+
+  function stringList(errors, path, value) {
+    if (value === undefined) return;
+    if (!Array.isArray(value)) { errors.push({ path: path, message: 'must be an array of strings' }); return; }
+    value.forEach(function (item, i) {
+      if (typeof item !== 'string') errors.push({ path: path + '/' + i, message: 'must be a string' });
+    });
+  }
+
+  function objectList(errors, path, value, each) {
+    if (value === undefined) return;
+    if (!Array.isArray(value)) { errors.push({ path: path, message: 'must be an array' }); return; }
     value.forEach(function (item, i) {
       if (!isPlainObject(item)) { errors.push({ path: path + '/' + i, message: 'must be an object' }); return; }
-      subFields.forEach(function (f) {
-        var ok = allowEmpty ? typeof item[f] === 'string' : isNonEmptyString(item[f]);
-        if (!ok) {
-          errors.push({ path: path + '/' + i + '/' + f, message: "must have required string '" + f + "'" });
-        }
-      });
+      each(item, path + '/' + i);
     });
   }
 
-  /**
-   * Each question's `kind` is one of WRITER_QUESTION_KINDS, as the schema requires
-   * (fix 3.7b). A list or an entry of the wrong type is validateObjectArray's to report.
-   */
-  function validateQuestionKinds(errors, path, questions) {
-    if (!Array.isArray(questions)) return;
-    questions.forEach(function (q, i) {
-      if (isPlainObject(q) && WRITER_QUESTION_KINDS.indexOf(q.kind) === -1) {
-        errors.push({ path: path + '/' + i + '/kind', message: "must have 'kind', one of " + WRITER_QUESTION_KINDS.join(', ') });
-      }
-    });
+  function slotAt(errors, path, value, slots) {
+    if (typeof value !== 'string') { errors.push({ path: path, message: 'must be a string' }); return; }
+    if (slots && slots.indexOf(value) === -1) errors.push({ path: path, message: 'must be one of the slots: ' + slots.join(', ') });
+  }
+
+  function validateBeat(errors, beat, path) {
+    onlyKeys(errors, path, beat, BEAT_KEYS);
+    requiredKeys(errors, path, beat, BEAT_REQUIRED_KEYS);
+    ['id', 'material', 'card', 'connection'].forEach(function (k) { stringAt(errors, path + '/' + k, beat[k]); });
+    if (beat.kind !== undefined && BEAT_KINDS.indexOf(beat.kind) === -1) {
+      errors.push({ path: path + '/kind', message: 'must be one of ' + BEAT_KINDS.join(', ') });
+    }
+    stringList(errors, path + '/players', beat.players);
   }
 
   /**
-   * The journalist outline's client gate. Phase 3 (3.2; TH4): it follows
-   * outline.schema.json and is never stricter. The six section keys are optional
-   * slots, a slot may be empty, a section lists only the arcs it carries, and the
-   * lede's fields and the convergence point are optional. So this checks that each
-   * key is allowed, that each slot present is an object, and that each field
-   * present has the schema's type. A required string may be empty, as the schema
-   * allows; the editors write '' for a cleared field.
+   * The map's client gate: the checks the director-side schema makes, so a map the server
+   * would refuse is caught before the POST, and a map it accepts passes. With `slots` (the
+   * stop's `mapSlots`, as keys or as `{key}`), a section's slot and a dropped slot must be
+   * one of them.
    *
-   * Phase 3 (3.7): `writerQuestions`, the outline writer's questions for the director,
-   * is allowed beside the six slots: a list of objects, each with a `kind` (player,
-   * pronoun or ledger; fix 3.7b), a string `about` and a string `question`, as the
-   * schema has it.
+   * @param {*} map
+   * @param {Object} [options]
+   * @param {Array} [options.slots]
+   * @returns {{valid: boolean, errors: Array<{path: string, message: string}>}}
    */
-  function validateJournalistOutlineShape(outline, errors) {
-    Object.keys(outline).forEach(function (k) {
-      if (JOURNALIST_ROOT_KEYS.indexOf(k) === -1 && k !== JOURNALIST_QUESTIONS_KEY) {
-        errors.push({ path: '/' + k, message: 'is not an allowed top-level outline key' });
-      }
-    });
-    if (outline[JOURNALIST_QUESTIONS_KEY] !== undefined) {
-      validateObjectArray(errors, '/' + JOURNALIST_QUESTIONS_KEY, outline[JOURNALIST_QUESTIONS_KEY], ['about', 'question'], true);
-      validateQuestionKinds(errors, '/' + JOURNALIST_QUESTIONS_KEY, outline[JOURNALIST_QUESTIONS_KEY]);
-    }
-    JOURNALIST_ROOT_KEYS.forEach(function (k) {
-      if (outline[k] !== undefined && !isPlainObject(outline[k])) {
-        errors.push({ path: '/' + k, message: 'must be an object' });
-      }
-    });
-    function stringIfPresent(obj, path, f) {
-      if (obj[f] !== undefined && typeof obj[f] !== 'string') {
-        errors.push({ path: path + '/' + f, message: "must be a string '" + f + "'" });
-      }
-    }
-    if (isPlainObject(outline.lede)) {
-      ['hook', 'keyTension', 'primaryArc'].forEach(function (f) { stringIfPresent(outline.lede, '/lede', f); });
-    }
-    if (isPlainObject(outline.theStory)) {
-      var ai = outline.theStory.arcInterweaving;
-      if (ai !== undefined) {
-        if (!isPlainObject(ai)) {
-          errors.push({ path: '/theStory/arcInterweaving', message: 'must be an object (interleavingPlan + convergencePoint)' });
-        } else {
-          ['interleavingPlan', 'convergencePoint'].forEach(function (f) { stringIfPresent(ai, '/theStory/arcInterweaving', f); });
-        }
-      }
-      var arcs = outline.theStory.arcs;
-      if (arcs !== undefined && !Array.isArray(arcs)) {
-        errors.push({ path: '/theStory/arcs', message: 'must be an array' });
-      } else if (Array.isArray(arcs)) {
-        arcs.forEach(function (arc, i) {
-          if (!isPlainObject(arc)) { errors.push({ path: '/theStory/arcs/' + i, message: 'must be an object' }); return; }
-          if (typeof arc.name !== 'string') {
-            errors.push({ path: '/theStory/arcs/' + i + '/name', message: "must have required string 'name'" });
-          }
-          if (!Number.isInteger(arc.paragraphCount)) {
-            errors.push({ path: '/theStory/arcs/' + i + '/paragraphCount', message: 'must have required integer paragraphCount' });
-          }
-        });
-      }
-    }
-    Object.keys(JOURNALIST_ARC_FIELDS).forEach(function (sectionKey) {
-      var spec = JOURNALIST_ARC_FIELDS[sectionKey];
-      var section = outline[sectionKey];
-      if (!isPlainObject(section) || section[spec.key] === undefined) return;
-      validateObjectArray(errors, '/' + sectionKey + '/' + spec.key, section[spec.key], spec.subFields, true);
-    });
-    if (isPlainObject(outline.thePlayers) && outline.thePlayers.characterHighlights != null && !isPlainObject(outline.thePlayers.characterHighlights)) {
-      errors.push({ path: '/thePlayers/characterHighlights', message: 'must be an object map of string values' });
-    }
-  }
-
-  function validateDetectiveOutlineShape(outline, errors) {
-    Object.keys(outline).forEach(function (k) {
-      if (DETECTIVE_ROOT_KEYS.indexOf(k) === -1) {
-        errors.push({ path: '/' + k, message: 'is not an allowed top-level outline key' });
-      }
-    });
-    DETECTIVE_REQUIRED_ROOT_KEYS.forEach(function (k) {
-      if (!isPlainObject(outline[k])) { errors.push({ path: '/' + k, message: 'is required and must be an object' }); }
-    });
-    if (isPlainObject(outline.executiveSummary)) {
-      ['hook', 'caseOverview'].forEach(function (f) {
-        if (!isNonEmptyString(outline.executiveSummary[f])) {
-          errors.push({ path: '/executiveSummary/' + f, message: "must have required string '" + f + "'" });
-        }
-      });
-      if (!Array.isArray(outline.executiveSummary.primaryFindings)) {
-        errors.push({ path: '/executiveSummary/primaryFindings', message: 'must be an array of strings' });
-      }
-    }
-    if (isPlainObject(outline.evidenceLocker)) {
-      validateObjectArray(errors, '/evidenceLocker/evidenceGroups', outline.evidenceLocker.evidenceGroups, ['theme', 'synthesis']);
-      if (Array.isArray(outline.evidenceLocker.evidenceGroups)) {
-        outline.evidenceLocker.evidenceGroups.forEach(function (g, i) {
-          if (isPlainObject(g) && !Array.isArray(g.evidenceIds)) {
-            errors.push({ path: '/evidenceLocker/evidenceGroups/' + i + '/evidenceIds', message: 'must be an array of strings' });
-          }
-        });
-      }
-    }
-    if (isPlainObject(outline.suspectNetwork)) {
-      validateObjectArray(errors, '/suspectNetwork/assessments', outline.suspectNetwork.assessments, ['name', 'role']);
-    }
-    if (isPlainObject(outline.outstandingQuestions) && !Array.isArray(outline.outstandingQuestions.questions)) {
-      errors.push({ path: '/outstandingQuestions/questions', message: 'must be an array of strings' });
-    }
-    if (isPlainObject(outline.finalAssessment)) {
-      ['verdict', 'closingLine'].forEach(function (f) {
-        if (!isNonEmptyString(outline.finalAssessment[f])) {
-          errors.push({ path: '/finalAssessment/' + f, message: "must have required string '" + f + "'" });
-        }
-      });
-    }
-  }
-
-  function validateOutlineShape(outline, theme) {
+  function validateMapShape(map, options) {
+    if (!isPlainObject(map)) return { valid: false, errors: [{ path: '/', message: 'the map must be an object' }] };
+    var opts = options || {};
+    var slots = Array.isArray(opts.slots)
+      ? opts.slots.map(function (slot) { return isPlainObject(slot) ? slot.key : slot; }).filter(function (k) { return typeof k === 'string'; })
+      : null;
     var errors = [];
-    if (!isPlainObject(outline)) {
-      return { valid: false, errors: [{ path: '/', message: 'outline must be an object' }] };
+    onlyKeys(errors, '', map, MAP_ROOT_KEYS);
+    requiredKeys(errors, '/', map, MAP_REQUIRED_KEYS);
+
+    var limits = headlineLimits();
+    if (map.headline !== undefined) {
+      if (typeof map.headline !== 'string') errors.push({ path: '/headline', message: 'must be a string' });
+      else if (limits && (codePoints(map.headline) < limits.main.min || codePoints(map.headline) > limits.main.max)) {
+        errors.push({ path: '/headline', message: 'must be ' + limits.main.min + ' to ' + limits.main.max + ' characters' });
+      }
     }
-    if (theme === 'detective') { validateDetectiveOutlineShape(outline, errors); }
-    else { validateJournalistOutlineShape(outline, errors); }
+    if (map.deck !== undefined) {
+      if (typeof map.deck !== 'string') errors.push({ path: '/deck', message: 'must be a string' });
+      else if (limits && codePoints(map.deck) > limits.deck.max) errors.push({ path: '/deck', message: 'must be at most ' + limits.deck.max + ' characters' });
+    }
+    stringAt(errors, '/topPhoto', map.topPhoto);
+    if (map.gapNote !== undefined) {
+      if (!isPlainObject(map.gapNote)) errors.push({ path: '/gapNote', message: 'must be an object' });
+      else {
+        onlyKeys(errors, '/gapNote', map.gapNote, ['line', 'players']);
+        requiredKeys(errors, '/gapNote', map.gapNote, ['line', 'players']);
+        stringAt(errors, '/gapNote/line', map.gapNote.line);
+        stringList(errors, '/gapNote/players', map.gapNote.players);
+      }
+    }
+    objectList(errors, '/sections', map.sections, function (section, path) {
+      onlyKeys(errors, path, section, SECTION_KEYS);
+      requiredKeys(errors, path, section, SECTION_KEYS);
+      if (section.slot !== undefined) slotAt(errors, path + '/slot', section.slot, slots);
+      stringAt(errors, path + '/heading', section.heading);
+      stringAt(errors, path + '/job', section.job);
+      objectList(errors, path + '/beats', section.beats, function (beat, beatPath) { validateBeat(errors, beat, beatPath); });
+      objectList(errors, path + '/photos', section.photos, function (photo, photoPath) {
+        onlyKeys(errors, photoPath, photo, PHOTO_KEYS);
+        requiredKeys(errors, photoPath, photo, ['filename']);
+        stringAt(errors, photoPath + '/filename', photo.filename);
+        stringAt(errors, photoPath + '/beat', photo.beat);
+      });
+    });
+    objectList(errors, '/dropped', map.dropped, function (dropped, path) {
+      onlyKeys(errors, path, dropped, ['slot', 'reason']);
+      requiredKeys(errors, path, dropped, ['slot', 'reason']);
+      if (dropped.slot !== undefined) slotAt(errors, path + '/slot', dropped.slot, slots);
+      stringAt(errors, path + '/reason', dropped.reason);
+    });
+    objectList(errors, '/leftOut', map.leftOut, function (beat, path) { validateBeat(errors, beat, path); });
+    if (map.expectedLength !== undefined && !Number.isInteger(map.expectedLength)) {
+      errors.push({ path: '/expectedLength', message: 'must be an integer' });
+    }
+    objectList(errors, '/weaveChanges', map.weaveChanges, function (change, path) {
+      onlyKeys(errors, path, change, ['source', 'change']);
+      requiredKeys(errors, path, change, ['source', 'change']);
+      stringAt(errors, path + '/source', change.source);
+      stringAt(errors, path + '/change', change.change);
+    });
     return { valid: errors.length === 0, errors: errors };
+  }
+
+  /**
+   * The outline stop's client gate, by its old name for Outline.js (4.9 rebuilds the
+   * screen): the map's gate. The outline stage's detective branch went with it (R1).
+   *
+   * @param {*} outline - the map
+   * @param {string} [theme] - unused: every theme's map has one shape
+   * @param {Array} [slots] - the stop's mapSlots
+   */
+  function validateOutlineShape(outline, theme, slots) {
+    return validateMapShape(outline, { slots: slots });
   }
 
   // ── (I2) ARTICLE CLIENT GATE (B6) ─────────────────────────────────────────
@@ -885,7 +841,6 @@
     nonEmpty: nonEmpty,
     rowsToMap: rowsToMap,
     mapToRows: mapToRows,
-    schemaNameForTheme: schemaNameForTheme,
     computeResetKey: computeResetKey,
 
     initLede: initLede,
@@ -925,16 +880,17 @@
     mergeArcInterweaving: mergeArcInterweaving,
     dropRetiredOutlineFields: dropRetiredOutlineFields,
 
-    validateOutline: validateOutline,
     validateOutlineShape: validateOutlineShape,
+    validateMapShape: validateMapShape,
     validateBundleShape: validateBundleShape,
     CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES,
+    MAP_ROOT_KEYS: MAP_ROOT_KEYS,
+    BEAT_KINDS: BEAT_KINDS,
 
     // Phase 4 (brief 4.6): Everyone and the counts, one function from the beats
     rosterMemberOf: rosterMemberOf,
     mapPhotoPlacements: mapPhotoPlacements,
-    mapTally: mapTally,
-    WRITER_QUESTION_KINDS: WRITER_QUESTION_KINDS
+    mapTally: mapTally
   };
 
   if (typeof window !== 'undefined') {

@@ -28,14 +28,8 @@ const PHASE_REQUIREMENTS = {
       'photo-enrichment'
     ]
   },
+  // Phase 4 (brief 4.6; R1): the detective's outline phase went with its outline writer.
   detective: {
-    outlineGeneration: [
-      'section-rules',
-      'editorial-design',
-      'narrative-structure',
-      // 'formatting' removed - describes ContentBundle format, not Outline format (Fix 7.3)
-      'evidence-boundaries'
-    ],
     articleGeneration: [
       'character-voice',
       'writing-principles',

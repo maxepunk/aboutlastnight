@@ -1,5 +1,6 @@
 /**
- * A session state that reaches every section of the three writers (phase 2, 2.3).
+ * A session state that reaches every section of the three writers (phase 2, 2.3), past
+ * the story meeting (phase 4): the weave, the meeting approved, and the map.
  *
  * Used by reworker-writer-parity.test.js (each reworker carries its writer's
  * sections) and writer-prompts-pinned.test.js (the writers' prompts are byte for
@@ -22,17 +23,53 @@ const DOCUMENT_TEXT = {
   'p-rescued': PAPER_LETTER
 };
 
-const OUTLINE = {
-  lede: { hook: 'Marcus died with a sale on his lips.', keyTension: 'The room voted overdose.', primaryArc: 'arc-sale' },
-  theStory: {
-    arcInterweaving: { interleavingPlan: 'Cut between the sale and the envelope.', callbackOpportunities: [], convergencePoint: 'The vote' },
-    arcs: [{ name: 'arc-sale', paragraphCount: 3, evidenceCards: [{ tokenId: 'ale003', placement: 'after para 1', loopFunction: 'CLOSER' }], photoPlacement: null }]
-  },
-  followTheMoney: { arcConnections: [], shellAccounts: [{ name: 'Melanie', total: 75000, inference: 'A quiet sale', relatedArc: 'arc-sale' }], photoPlacement: null },
-  thePlayers: { arcConnections: [], exposed: ['Alex'], buried: ['Morgan'] },
-  whatsMissing: { arcConnections: [], knownUnknowns: ['Who took the envelope?'], narrativePurpose: 'Pull forward' },
-  closing: { arcResolutions: [], systemicAngle: 'Markets for memory', accusationHandling: 'Say what the room said' }
+/**
+ * The map writer's story map (phase 4, brief 4.6) for this fixture's weave and record: every
+ * roster player in a beat, three cards from the record, both kept photos placed (the hero at
+ * the top), both connections landed, and no change to the weave, so every map check passes.
+ * Invented text. Exported as OUTLINE too: the map is the outline stop's output.
+ */
+const MAP = {
+  headline: 'The Room Voted Overdose. The Ledger Kept Talking.',
+  deck: 'Marcus bragged about a sale the night he died, and the room settled on an accidental overdose.',
+  topPhoto: 'hero.jpg',
+  sections: [
+    {
+      slot: 'lede', heading: '', job: 'Open on the vote and ask who gained from the sale.',
+      beats: [
+        { id: 'b1', kind: 'scene', material: 'The deadlock between Alex and Morgan, then six votes for an overdose', players: ['Alex', 'Morgan'], connection: 'c1' }
+      ],
+      photos: []
+    },
+    {
+      slot: 'theStory', heading: 'The Story', job: 'How the sale and the envelope sat under the vote.',
+      beats: [
+        { id: 'b2', kind: 'receipt', material: 'ale003', players: ['Alex'], card: 'ale003', connection: 'c2' },
+        { id: 'b3', kind: 'receipt', material: 'mor001', players: ['Morgan', 'Riley'], card: 'mor001' },
+        { id: 'b4', kind: 'receipt', material: 'p-dna', players: ['Sarah'], card: 'p-dna' }
+      ],
+      photos: [{ filename: 'p2.jpg', beat: 'b2' }]
+    },
+    {
+      slot: 'followTheMoney', heading: 'Follow the Money', job: 'What the sale paid, and to whom.',
+      beats: [{ id: 'b5', kind: 'figure', material: 'Melanie, $75,000 at 07:50 PM', players: [] }],
+      photos: []
+    },
+    {
+      slot: 'closing', heading: '', job: 'Who still gains from the sale.',
+      beats: [{ id: 'b6', kind: 'line', material: 'Riley: "I only kept the books"', players: ['Riley'] }],
+      photos: []
+    }
+  ],
+  dropped: [
+    { slot: 'thePlayers', reason: 'Every player appears above.' },
+    { slot: 'whatsMissing', reason: "Its question is the closing's." }
+  ],
+  leftOut: [{ id: 'b9', kind: 'receipt', material: 'p-rescued', players: [] }],
+  expectedLength: 1200,
+  weaveChanges: []
 };
+const OUTLINE = MAP;
 
 /**
  * The arc writer's weave (phase 4, brief 4.4), for this fixture's record: each receipt
@@ -119,24 +156,6 @@ function reworkFixtureState(theme = 'journalist') {
     }
   };
 
-  const narrativeArcs = [
-    {
-      id: 'arc-sale', title: 'The Sale', summary: 'Marcus sold BizAI the night he died.', arcSource: 'accusation',
-      keyEvidence: ['ale003', 'p-dna'], characterPlacements: { Alex: 'witness', Sarah: 'heir' },
-      evidenceStrength: 'moderate', caveats: ['One memory only'], unansweredQuestions: ['Who bought it?'],
-      emotionalHook: 'Worth it', playerEmphasis: 'high', storyRelevance: 'critical',
-      analysisNotes: { financial: 'Melanie received $75,000', behavioral: 'Alex went quiet', victimization: 'Sarah' },
-      interweaving: { sharedCharacters: ['Alex'], bridgeOpportunities: [], callbackSeeds: ['Worth it'], convergenceRole: 'motive' }
-    },
-    {
-      id: 'arc-envelope', title: 'The Envelope', summary: 'Morgan paid Riley at the bar.', arcSource: 'observation',
-      keyEvidence: ['mor001', 'p-rescued'], characterPlacements: { Morgan: 'payer', Riley: 'payee' },
-      evidenceStrength: 'weak', caveats: [], unansweredQuestions: ['What was in it?'],
-      emotionalHook: 'Not here', playerEmphasis: 'medium', storyRelevance: 'supporting',
-      analysisNotes: { financial: '', behavioral: 'Riley hid it', victimization: '' }
-    }
-  ];
-
   return {
     sessionId: '010126',
     theme,
@@ -171,19 +190,10 @@ function reworkFixtureState(theme = 'journalist') {
     },
     inputReviewCorrections: ['The quote at the bar was Morgan to Alex, not Alex to Morgan.'],
     evidenceBundle,
-    // Phase 4 (brief 4.4): the weave beside the old arcs, which stay until their last
-    // readers go (4.6, delete-last).
+    // Phase 4 (brief 4.4): the weave. Brief 4.6: the old arc channels went with their last
+    // readers (R4), and the story meeting is approved: this is a state past the meeting.
     weave: JSON.parse(JSON.stringify(WEAVE)),
-    narrativeArcs,
-    selectedArcs: ['arc-sale', 'arc-envelope'],
-    _arcAnalysisCache: {
-      synthesizedAt: '2026-01-01T00:00:00.000Z',
-      synthesisNotes: 'The room settled on overdose; the record points at the sale.',
-      interweavingPlan: { suggestedOrder: ['arc-sale', 'arc-envelope'], convergencePoint: 'The vote', keyCallbacks: [] },
-      arcCount: 2,
-      architecture: 'split-call',
-      timing: { total: '1s' }
-    },
+    meetingApproved: true,
     narrativeTensions: {
       tensions: [{ type: 'public-vs-private', narrativeNote: 'Riley said they only kept the books, and an account in their circle took money.' }]
     },
@@ -197,8 +207,9 @@ function reworkFixtureState(theme = 'journalist') {
     },
     photoDescriptions: { 'p2.jpg': 'Alex leans over the ledger and points at a line.' },
     shellAccounts: [{ name: 'Melanie', total: 75000, tokenCount: 1 }],
-    outline: OUTLINE
+    outline: JSON.parse(JSON.stringify(MAP)),
+    _mapBaseline: JSON.parse(JSON.stringify(MAP))
   };
 }
 
-module.exports = { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE, WEAVE };
+module.exports = { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, MAP, PREVIOUS_BUNDLE, WEAVE };

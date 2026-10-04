@@ -23,7 +23,6 @@ Read these first. They are the rules for everything you plan; this file adds onl
 .claude/skills/journalist-report/references/rules/craft-judgement.md
 .claude/skills/journalist-report/references/rules/craft-telling.md
 .claude/skills/journalist-report/references/rules/craft-cards.md
-.claude/skills/journalist-report/references/rules/craft-questions.md
 .claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, as the record's reportingMode says)
 ```
 

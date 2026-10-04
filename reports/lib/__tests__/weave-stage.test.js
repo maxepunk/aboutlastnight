@@ -41,7 +41,8 @@ function recordingSdk(answer) {
  * later stages').
  */
 function weaveState(overrides = {}) {
-  return { ...reworkFixtureState('journalist'), selectedArcs: [], ...overrides };
+  // Brief 4.6: the fixture is past the meeting; the weave stage runs before its approval.
+  return { ...reworkFixtureState('journalist'), meetingApproved: false, ...overrides };
 }
 
 /** A fact-check verdict with one breach in thread t2. */

@@ -96,7 +96,8 @@ describe('the weave through the real graph (phase 4, brief 4.4)', () => {
         sdkClient: sdk, promptBuilder: mocks.createMockPromptBuilder(), dataDir: dir
       }
     };
-    const { selectedArcs: _approval, ...state } = reworkFixtureState('journalist');
+    // Brief 4.6: the fixture is past the meeting; the weave stage runs before its approval.
+    const { meetingApproved: _approval, ...state } = reworkFixtureState('journalist');
     await graph.updateState(thread, { ...state, weave, evaluationHistory: [] }, 'analyzeArcs');
     await graph.invoke(null, { ...thread, recursionLimit: RECURSION_LIMIT, durability: 'sync' });
     return { graph, thread, snapshot: await graph.getState(thread) };

@@ -17,13 +17,13 @@
 const { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const {
   generateOutline, reviseOutline, generateContentBundle, reviseContentBundle,
-  _testing: { outlineRevisionRules, articleRevisionRules }
+  _testing: { OUTLINE_REVISION_RULES, articleRevisionRules }
 } = require('../workflow/nodes/ai-nodes');
 const {
   reviseArcs,
   _testing: { generateWeave, arcRevisionRules }
 } = require('../workflow/nodes/arc-specialist-nodes');
-const { diffOutline, diffBundle } = require('../hand-edit-diff');
+const { standingOnMap, diffBundle } = require('../hand-edit-diff');
 const { PromptBuilder } = require('../prompt-builder');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -70,10 +70,13 @@ function expectWriterSectionsFirst(writer, rework, revisionHeading) {
   expect(rework.slice(writer.length).replace(/^\n+/, '').startsWith(`---\n\n${revisionHeading}`)).toBe(true);
 }
 
-/** One <RECORD>, one <DIRECTOR_GUIDANCE>, and the guidance last. */
+/**
+ * One <RECORD>, one <DIRECTOR_GUIDANCE>, and the guidance last. Each section is counted by
+ * the line that opens it: the map's task names <DIRECTOR_GUIDANCE> in prose (brief 4.6).
+ */
 function expectOneRecordAndGuidanceLast(rework) {
   expect(count(rework, '\n<RECORD>\n')).toBe(1);
-  expect(count(rework, '<DIRECTOR_GUIDANCE>')).toBe(1);
+  expect(rework.match(/^<DIRECTOR_GUIDANCE>$/gm)).toHaveLength(1);
   expect(rework.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
 }
 
@@ -83,8 +86,11 @@ beforeAll(() => {
 });
 afterAll(() => jest.restoreAllMocks());
 
-describe.each(['journalist', 'detective'])('%s outline stop', (theme) => {
-  const EDITED = (() => { const o = clone(OUTLINE); o.lede.hook = 'Hand-edited hook.'; return o; })();
+// Phase 4 (brief 4.6): the outline is the story map, and the map writer is the journalist's
+// alone (R1: the outline stage's detective branches went).
+describe('journalist map stop', () => {
+  const theme = 'journalist';
+  const EDITED = (() => { const m = clone(OUTLINE); m.headline = 'The Headline the Director Wrote'; return m; })();
   const NOTE = 'Open on the vote, not the sale.';
 
   async function writerAndRework(reworkOverrides) {
@@ -99,66 +105,59 @@ describe.each(['journalist', 'detective'])('%s outline stop', (theme) => {
   const SEND_BACK = {
     _previousOutline: EDITED,
     _outlineFeedback: NOTE,
-    _outlineHandEdits: diffOutline(OUTLINE, EDITED),
+    _outlineHandEdits: standingOnMap(null, OUTLINE, EDITED),
     humanOutlineRevisionCount: 1,
     outlineRevisionCount: 0,
     directorGateNotes: notesFor('outline', NOTE),
-    _outlineGuidance: 'Lead with the money.',
     validationResults: { phase: 'outline', passed: true, structuralIssues: [], advisoryWarnings: [] }
   };
 
   it('the reworker carries every section of its writer, then the revision block, then <DIRECTOR_GUIDANCE> last', async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
-    expectWriterSectionsFirst(writer.user, rework.user, '# Outline Revision Request\n');
+    expectWriterSectionsFirst(writer.user, rework.user, '# Map Revision Request\n');
     expectOneRecordAndGuidanceLast(rework.user);
 
-    // The record: every document in full.
+    // The settled weave first, as the writer's task; the record: every document in full.
+    expect(rework.user.startsWith('<SETTLED_WEAVE>\n')).toBe(true);
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user.slice(0, writer.user.length)).toContain(text));
 
     // The revision block, in phase 1's order, after the writer's sections.
     const at = (s) => rework.user.indexOf(s);
     expect(at('HUMAN FEEDBACK (HIGHEST PRIORITY):')).toBeGreaterThan(writer.user.length);
     expect(at('<HAND_EDITS>')).toBeGreaterThan(at('HUMAN FEEDBACK'));
-    expect(at('PREVIOUS OUTLINE OUTPUT')).toBeGreaterThan(at('</HAND_EDITS>'));
+    expect(at('PREVIOUS MAP OUTPUT')).toBeGreaterThan(at('</HAND_EDITS>'));
     expect(at('## YOUR TASK')).toBeGreaterThan(at('END PREVIOUS OUTPUT'));
-    expect(at('<DIRECTOR_GUIDANCE>')).toBeGreaterThan(at('## YOUR TASK'));
-    expect(rework.user).toContain('Hand-edited hook.');
+    expect(at('\n<DIRECTOR_GUIDANCE>\n')).toBeGreaterThan(at('## YOUR TASK'));
+    expect(rework.user).toContain('The Headline the Director Wrote');
   });
 
   it("the reworker's system prompt is its writer's, then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
-    // Phase 3 (3.3): the rework rules are the theme's; the detective keeps today's.
-    expect(rework.system).toBe(`${writer.system}\n\n${outlineRevisionRules(theme)}`);
-    // Phase 3 (3.2): the journalist's system prompt carries the world and the truth
-    // rules; the detective is parked and keeps its craft files there.
-    if (theme === 'journalist') {
-      expect(writer.system).toContain('<world>');
-      expect(writer.system).toContain('<truth-rules>');
-    } else {
-      expect(writer.system).toContain('<section-rules>');
-      expect(writer.system).toContain('<editorial-design>');
-    }
+    expect(rework.system).toBe(`${writer.system}\n\n${OUTLINE_REVISION_RULES}`);
+    // Phase 3 (3.2): the journalist's system prompt carries the world and the truth rules.
+    expect(writer.system).toContain('<world>');
+    expect(writer.system).toContain('<truth-rules>');
   });
 
   it("the guidance keeps phase 1's note filtering: every note but the one being acted on", async () => {
     const { rework } = await writerAndRework(SEND_BACK);
-    const guidance = rework.user.slice(rework.user.indexOf('<DIRECTOR_GUIDANCE>'));
-    expect(guidance).toContain('Lead with the money.');
+    const guidance = rework.user.slice(rework.user.indexOf('\n<DIRECTOR_GUIDANCE>\n'));
     expect(guidance).toContain('- [arc-selection, approval 1] Keep Riley in view.');
     expect(guidance).not.toContain(NOTE);
   });
 
-  it("a send back's banner names the director's round; an automated pass's names the pass", async () => {
+  it("a send back's banner names the director's round; the check's rework names the pass and the checks' lines", async () => {
     const sendBack = (await writerAndRework(SEND_BACK)).rework.user;
-    expect(sendBack).toContain("REVISION CONTEXT: OUTLINE (round 2: the director's send back)");
+    expect(sendBack).toContain("REVISION CONTEXT: MAP (round 2: the director's send back)");
     expect(sendBack).not.toContain('automated pass 0');
 
     const { writer, rework } = await writerAndRework({
       _previousOutline: OUTLINE, outlineRevisionCount: 1, humanOutlineRevisionCount: 1,
-      validationResults: { phase: 'outline', passed: false, structuralIssues: ['The lede names no one.'] }
+      validationResults: { phase: 'outline', source: 'map-checks', passed: false, structuralIssues: ['Players in no beat: Sarah.'] }
     });
-    expect(rework.user).toContain('REVISION CONTEXT: OUTLINE (automated pass 1)');
-    expectWriterSectionsFirst(writer.user, rework.user, '# Outline Revision Request\n');
+    expect(rework.user).toContain('REVISION CONTEXT: MAP (automated pass 1)');
+    expect(rework.user).toContain('MAP CHECK FAILURES:\n  - Players in no beat: Sarah.');
+    expectWriterSectionsFirst(writer.user, rework.user, '# Map Revision Request\n');
   });
 });
 
@@ -363,14 +362,14 @@ describe('a later change to a writer reaches its reworker (by construction)', ()
   });
 });
 
-describe('the outline reworker recomputes what its writer computed and never stored', () => {
+describe("the map's rework recomputes what its writer computed and never stored", () => {
   it('the available photos and the session facts come from state, as the writer built them', async () => {
     const state = reworkFixtureState('journalist');
     const reworkSdk = recordingSdk(OUTLINE);
-    // No heroImage in state: the reworker selects it the way the writer does.
+    // Brief 4.6: the rework offers code's pick for the top photo first, as the writer does.
     await reviseOutline({ ...state, outline: null, _previousOutline: OUTLINE, outlineRevisionCount: 1 }, cfg(reworkSdk, 'journalist'));
     const { user } = call(reworkSdk);
-    expect(user).toContain('HERO IMAGE: hero.jpg');
+    expect(user).toContain('1. [hero image] hero.jpg');
     expect(user).toContain("p2.jpg: Alex\n   The director's description, word for word: Alex leans over the ledger and points at a line.");
     expect(user).not.toContain('whiteboard.jpg:');
     expect(user).toContain('INVESTIGATION ROSTER (4 players):');

@@ -49,8 +49,19 @@
  * opens with one of the file's markers in REQUIRED_MARKERS below; a file in that table
  * that is not rendered fails too. A tree that lacks a builder fails (exit 2, naming it).
  *
+ * Phase 4 (brief 4.6): the outline is the story map. outline-generation.txt is the map
+ * writer, and outline-revision.txt and outline-check-rework.txt its rework as reviseOutline
+ * sends it (mapReworkCall): the director's send-back with the fixed note, and the automatic
+ * pass after the map checks, with the checks' lines. When the thread holds no map, the
+ * fixed map of scripts/lib/fixed-map.js is planted, as the fixed story meeting is:
+ * invented text, with a struck beat and a moved photo as the director's standing edits. A
+ * thread whose map carries no edits gets the fixed edit on its headline. The outline
+ * judge's render went with the outline judge, and the outline's <SHOULD_CONSIDER> with the
+ * arc selection.
+ *
  * --theme overrides the thread's theme for every render, so the detective prompts
- * can be rendered from a journalist thread and diffed against a baseline.
+ * can be rendered from a journalist thread and diffed against a baseline. The parked
+ * detective has no map, so its map renders fail, naming the theme (R1).
  *
  * --sections is a report for the integrator, not a check: for each .txt file present in both
  * directories, the file is split into its top-level sections (an XML-style tag that
@@ -66,6 +77,7 @@ const fs = require('fs');
 const { compareSections, renderProblems } = require('./lib/prompt-sections');
 const { JUDGE_PHASES, requireExports, loadCallModules, renderJudge } = require('./lib/render-calls');
 const { fixedWeave, fixedBaseline } = require('./lib/fixed-weave');
+const { fixedMap, fixedMapBaseline } = require('./lib/fixed-map');
 
 /**
  * The markers each render must carry: for each, a line that opens with it. Each is
@@ -76,8 +88,9 @@ const { fixedWeave, fixedBaseline } = require('./lib/fixed-weave');
  * for nothing.
  */
 const REQUIRED_MARKERS = {
-  'outline-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
-  'outline-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'outline-generation.txt': ['<SETTLED_WEAVE>', '<RECORD>', '<DIRECTOR_GUIDANCE>'],
+  'outline-revision.txt': ['<SETTLED_WEAVE>', '<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
+  'outline-check-rework.txt': ['<SETTLED_WEAVE>', '<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'article-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
   'article-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
   'arc-generation.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>'],
@@ -110,6 +123,8 @@ const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-genera
  * since brief 4.5 the reworker's automatic pass, reweave and send-back.
  */
 const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt', 'arc-reweave.txt', 'arc-send-back.txt'];
+/** Rendered as well, but not compared (phase 4, brief 4.6): the map's automatic rework. */
+const MAP_FILES = ['outline-check-rework.txt'];
 /**
  * Rendered as well, but not compared (phase 3, 3.0): the judges, by phase. Phase 4
  * (brief 4.6): judge-outline.txt went with the outline judge.
@@ -122,8 +137,6 @@ const FIXED_NOTES = [
   { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'RENDER-DIFF NOTE A', at: '2026-09-19T00:00:00.000Z' },
   { gate: 'outline', kind: 'rejection', round: 1, text: 'RENDER-DIFF NOTE B', at: '2026-09-19T00:00:01.000Z' }
 ];
-/** The previous stage's advisories, so the diff shows <SHOULD_CONSIDER> and where it sits. */
-const FIXED_ADVISORIES = ['RENDER-DIFF ADVISORY A', 'RENDER-DIFF ADVISORY B'];
 
 if (args.compare) {
   // `--compare <dirA> <dirB>`: parseArgs swallows dirA as the flag's value, so dirB is
@@ -188,9 +201,13 @@ async function render() {
   const req = (p) => require(path.join(repo, p));
   const { createPromptBuilder } = req('lib/prompt-builder.js');
   const { buildRevisionContext } = req('lib/workflow/nodes/node-helpers.js');
-  const { _testing: { buildOutlineRevisionPrompt, buildArticleRevisionPrompt, getOutlineRevisionSystemPrompt, getArticleRevisionSystemPrompt,
-    buildOutlineRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
-    buildSessionFacts, buildAvailablePhotos, articleWriterInputs } } = req('lib/workflow/nodes/ai-nodes.js');
+  const { _testing: aiTesting } = req('lib/workflow/nodes/ai-nodes.js');
+  const { buildArticleRevisionPrompt, getArticleRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
+    buildSessionFacts, articleWriterInputs } = aiTesting;
+  // Phase 4 (brief 4.6): the map writer's inputs and its rework call, as the nodes build them.
+  requireExports('ai-nodes.js _testing', aiTesting, ['outlineWriterInputs', 'mapReworkCall']);
+  const mapNodes = req('lib/workflow/nodes/map-nodes.js');
+  requireExports('map-nodes.js _testing', mapNodes._testing, ['checkMap']);
   const arcModule = req('lib/workflow/nodes/arc-specialist-nodes.js');
   const { _testing: arcNodes } = arcModule;
   requireExports('arc-specialist-nodes.js _testing', arcNodes, ['weaveSystemPrompt', 'buildWeavePrompt', 'arcReworkCall']);
@@ -215,7 +232,7 @@ async function render() {
   // check to read: the writer's weave as the baseline, the director's version, and their
   // changes as the standing edits. A thread whose weave carries no edits of the director's
   // gets the fixed edit on its story.
-  requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits']);
+  requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits', 'isMap', 'standingOnMap']);
   if (!weaveModule.isWeave(state.weave)) {
     state.weave = fixedWeave();
     state._weaveBaseline = fixedBaseline();
@@ -228,6 +245,22 @@ async function render() {
       state.weave = { ...state.weave, story: `${state.weave.story || ''} [RENDER-DIFF EDIT]` };
     }
     state._weaveHandEdits = diffMod.standingAtMeeting(null, baseline, weaveModule.weaveForPrompt(state.weave));
+  }
+  // Brief 4.6: a thread from before the map holds none, so the fixed map is planted, with the
+  // director's struck beat and moved photo as the standing edits. A thread whose map carries
+  // no edits of the director's gets the fixed edit on its headline.
+  if (!diffMod.isMap(state.outline)) {
+    state.outline = fixedMap();
+    state._mapBaseline = fixedMapBaseline();
+    state._outlineHandEdits = diffMod.standingOnMap(null, state._mapBaseline, state.outline);
+    console.log('the thread holds no map: planted the fixed map (scripts/lib/fixed-map.js)');
+  }
+  if (diffMod.carriedEdits(state._outlineHandEdits, state.outline).length === 0) {
+    const baseline = diffMod.isMap(state._mapBaseline) ? state._mapBaseline : JSON.parse(JSON.stringify(state.outline));
+    if (JSON.stringify(baseline) === JSON.stringify(state.outline)) {
+      state.outline = { ...state.outline, headline: `${state.outline.headline || ''} [RENDER-DIFF EDIT]` };
+    }
+    state._outlineHandEdits = diffMod.standingOnMap(null, baseline, state.outline);
   }
   const theme = state.theme || 'journalist';
   const promptBuilder = createPromptBuilder({
@@ -247,28 +280,12 @@ async function render() {
     accusation: (state.sessionConfig && state.sessionConfig.accusation && state.sessionConfig.accusation.accused || []).join(' and ') || 'Unknown',
     playerCount: roster.length
   } : null);
-  const nameOf = (p) => typeof p === 'string' ? p.split(/[/\\]/).pop() : p && p.filename;
-  const whiteboard = state.whiteboardPhotoPath ? nameOf(state.whiteboardPhotoPath) : null;
   const heroImage = state.heroImage || null;
-  // Joined by filename, as generateOutline does since brief 1.6 (the old index
-  // join read the wrong analysis for every photo after the filtered hero).
-  const analysisByName = new Map(((state.photoAnalyses && state.photoAnalyses.analyses) || [])
-    .filter((a) => a && a.filename)
-    .map((a) => [String(a.filename).split(/[/\\]/).pop().toLowerCase(), a]));
-  const availablePhotos = buildAvailablePhotos ? await buildAvailablePhotos(state, heroImage, whiteboard) : (state.sessionPhotos || [])
-    .filter((p) => nameOf(p) !== heroImage && (!whiteboard || nameOf(p) !== whiteboard))
-    .map((p, i) => {
-      const a = analysisByName.get(String(nameOf(p) || `photo-${i}.jpg`).toLowerCase()) || {};
-      return { filename: nameOf(p) || `photo-${i}.jpg`, fullPath: p,
-        characters: (a.characterDescriptions || []).map((c) => typeof c === 'string' ? c : c.description), visualContent: a.visualContent || '' };
-    });
   // Brief 2.2: the director's own words the writers now read (ignored by an older tree).
   const directorWords = {
     directorCorrections: state.inputReviewCorrections || [],
     photoDescriptions: state.photoDescriptions || null
   };
-  const { timing, architecture, ...cache } = state._arcAnalysisCache || {};
-  const arcAnalysis = { ...cache, narrativeArcs: state.narrativeArcs || [] };
   const guidance = state._outlineGuidance || null;
 
   // Every render is written, then checked (brief 3.0); the run fails after all are written.
@@ -280,29 +297,21 @@ async function render() {
     problems.push(...renderProblems(name, systemPrompt, userPrompt, REQUIRED_MARKERS[name]));
   };
 
-  // 1. outline generation
-  const og = await promptBuilder.buildOutlinePrompt(arcAnalysis, state.selectedArcs || [], heroImage, availablePhotos,
-    state.shellAccounts || [], sessionFacts,
-    { directorGuidance: guidance, gateNotes: FIXED_NOTES, directorNotes: state.directorNotes || null, shouldConsider: FIXED_ADVISORIES,
-      evidenceBundle: state.evidenceBundle || null, ...directorWords });
+  // 1. the map writer, from its own inputs (outlineWriterInputs), with the fixed notes
+  const mapState = { ...state, directorGateNotes: FIXED_NOTES };
+  const og = await promptBuilder.buildOutlinePrompt(...await aiTesting.outlineWriterInputs(mapState));
   write(FILES[0], og.systemPrompt, og.userPrompt);
 
-  // 2. outline revision (fixed hand edit: lede.hook)
-  const outline = state.outline || {};
-  const editedOutline = JSON.parse(JSON.stringify(outline));
-  if (editedOutline.lede) editedOutline.lede.hook = String(editedOutline.lede.hook || '') + ' [RENDER-DIFF EDIT]';
-  const outlineDiff = diffMod ? await diffMod.diffOutline(outline, editedOutline) : null;
-  // Every rework builder takes the theme as reviseOutline, reviseContentBundle and
-  // reviseArcs pass it (phase 3 fix 3.2b); an older tree ignores the extra argument.
-  const orc = await buildRevisionContext({ phase: 'outline', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
-    previousOutput: editedOutline, humanFeedback: FIXED_FEEDBACK, handEdits: outlineDiff, theme });
-  const orPrompt = await buildOutlineRevisionPrompt({ ...state, _outlineGuidance: guidance }, orc.contextSection, orc.previousOutputSection, promptBuilder, FIXED_NOTES, theme);
-  // Brief 2.3: a tree whose reworker is built from its writer composes the rework
-  // system prompt from the writer's; an older tree took the theme.
-  const orSystem = buildOutlineRevisionSystemPrompt
-    ? await buildOutlineRevisionSystemPrompt(promptBuilder, theme)
-    : await getOutlineRevisionSystemPrompt(theme, state.sessionConfig || {});
-  write(FILES[1], orSystem, orPrompt);
+  // 2. the map's rework as reviseOutline sends it (mapReworkCall), from the map in hand with
+  // the director's standing edits: the director's send-back with the fixed note, round
+  // FIXED_ROUND; then the automatic pass after the map checks, with the checks' lines, as
+  // the check node writes them on the map.
+  const rework = { ...mapState, _previousOutline: state.outline, outline: null, humanOutlineRevisionCount: FIXED_ROUND - 1 };
+  const sendBack = await aiTesting.mapReworkCall({ ...rework, _outlineFeedback: FIXED_FEEDBACK, outlineRevisionCount: 0 }, promptBuilder, theme);
+  write(FILES[1], sendBack.systemPrompt, sendBack.prompt);
+  const { validationResults: mapChecks } = mapNodes._testing.checkMap({ ...state, _mapCheck: null, outlineApproved: false, currentPhase: null });
+  const checkPass = await aiTesting.mapReworkCall({ ...rework, _outlineFeedback: null, outlineRevisionCount: 1, validationResults: mapChecks }, promptBuilder, theme);
+  write(MAP_FILES[0], checkPass.systemPrompt, checkPass.prompt);
 
   // 3. article generation
   // Phase 3 (3.9): the article writer's photos, as its node builds them
@@ -312,7 +321,7 @@ async function render() {
   const articleInputs = articleWriterInputs ? await articleWriterInputs(state) : null;
   const articlePhotos = articleInputs ? (articleInputs[articleInputs.length - 1] || {}).photos : undefined;
   const articleHero = articleInputs ? (articleInputs[1] || null) : heroImage;
-  const ag = await promptBuilder.buildArticlePrompt(outline, articleHero, state.shellAccounts || [],
+  const ag = await promptBuilder.buildArticlePrompt(state.outline || {}, articleHero, state.shellAccounts || [],
     sessionFacts, state.directorNotes || null, state.narrativeTensions || null,
     { directorGuidance: guidance, gateNotes: FIXED_NOTES,
       evidenceBundle: state.evidenceBundle || null, ...directorWords, ...(articlePhotos && { photos: articlePhotos }) });

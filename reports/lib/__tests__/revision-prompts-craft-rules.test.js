@@ -36,6 +36,8 @@ const {
 } = require('../workflow/nodes/arc-specialist-nodes');
 
 const { createPromptBuilder } = require('../prompt-builder');
+// Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave.
+const { WEAVE } = require('./fixtures/rework-state');
 
 describe('revision system prompts are theme-aware', () => {
   it('journalist keeps Nova as the reviser', async () => {
@@ -53,10 +55,10 @@ describe('revision system prompts are theme-aware', () => {
     expect(system).not.toContain('Nova');
   });
 
-  it('detective outline revision gets the case-report framing', async () => {
-    const system = await buildOutlineRevisionSystemPrompt(createPromptBuilder({ theme: 'detective' }));
-    expect(system).toContain('case report');
-    expect(system).not.toContain('NovaNews');
+  // Phase 4 (brief 4.6; R1): the outline stage's detective branch went, its rework with it.
+  it('the detective has no map rework: its system prompt fails loud', async () => {
+    await expect(buildOutlineRevisionSystemPrompt(createPromptBuilder({ theme: 'detective' })))
+      .rejects.toThrow('The "detective" theme has no story map');
   });
 
   it('defaults to journalist when no theme is given', () => {
@@ -101,15 +103,14 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
   });
 
   // Phase 4 (brief 4.4): the arc stage's detective branch went, with its numbered list.
-  it('both lists stay consecutively numbered after the removal (the detective\'s; the journalist\'s have none since phase 3)', () => {
-    const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
+  // Brief 4.6 (R1): so did the outline's, with its outline stage.
+  it('the journalist\'s outline and arc rework rules carry no numbered list since phase 3', () => {
     const numbered = (text) => text
       .split('\n')
       .map((line) => line.match(/^(\d+)\. /))
       .filter(Boolean)
       .map((match) => Number(match[1]));
 
-    expect(numbered(outlineRevisionRules('detective'))).toEqual([1, 2, 3, 4, 5]);
     expect(numbered(OUTLINE_REVISION_RULES)).toEqual([]);
     expect(numbered(ARC_REVISION_RULES.automatic)).toEqual([]);
   });
@@ -135,11 +136,12 @@ describe("revision user prompts: the writer's sections, then the revision block"
     expect(prompt).not.toContain('## OUTPUT SCHEMA');
   });
 
+  // Brief 4.6: the map's rework opens with the map writer's sections, built from the settled weave.
   it("outline revision opens with the writer's sections and keeps the context before the previous output", async () => {
     const prompt = await buildOutlineRevisionPrompt(
-      { selectedArcs: ['arc-a'] }, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
+      { weave: WEAVE }, 'CONTEXT-HERE', 'PREVIOUS-HERE', promptBuilder
     );
-    expect(prompt.startsWith('Generate outline for arcs: arc-a')).toBe(true);
+    expect(prompt.startsWith('Lay out the map from the settled weave')).toBe(true);
     expect(prompt.indexOf('PREVIOUS-HERE')).toBeGreaterThan(prompt.indexOf('CONTEXT-HERE'));
     expect(prompt).not.toContain('<RULES>');
     expect(prompt).not.toContain('SESSION CONTEXT');
@@ -226,12 +228,17 @@ describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoad
   const { PromptBuilder } = require('../prompt-builder');
   const { createThemeLoader, PHASE_REQUIREMENTS } = require('../theme-loader');
 
-  ['journalist', 'detective'].forEach((theme) => {
-    it(`${theme}: both writers' craft files load`, async () => {
-      const builder = createPromptBuilder({ theme });
-      await expect(builder.requirePhasePrompts('outlineGeneration')).resolves.toBeUndefined();
-      await expect(builder.requirePhasePrompts('articleGeneration')).resolves.toBeUndefined();
-    });
+  it("journalist: both writers' craft files load", async () => {
+    const builder = createPromptBuilder({ theme: 'journalist' });
+    await expect(builder.requirePhasePrompts('outlineGeneration')).resolves.toBeUndefined();
+    await expect(builder.requirePhasePrompts('articleGeneration')).resolves.toBeUndefined();
+  });
+
+  // Brief 4.6 (R1): the detective's outline phase went with its outline writer.
+  it("detective: the article writer's craft files load, and there is no outline phase", async () => {
+    const builder = createPromptBuilder({ theme: 'detective' });
+    await expect(builder.requirePhasePrompts('articleGeneration')).resolves.toBeUndefined();
+    await expect(builder.requirePhasePrompts('outlineGeneration')).rejects.toThrow(/Unknown phase: outlineGeneration for theme "detective"/);
   });
 
   it('has no revision phase to check any more', () => {
@@ -244,10 +251,8 @@ describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoad
       createThemeLoader({ theme: 'detective', customPath: '/definitely/not/a/skill' }),
       'detective'
     );
-    await expect(builder.requirePhasePrompts('outlineGeneration'))
-      .rejects.toThrow(/Missing outlineGeneration prompts for theme "detective": section-rules, editorial-design/);
     await expect(builder.requirePhasePrompts('articleGeneration'))
-      .rejects.toThrow(/Missing articleGeneration prompts/);
+      .rejects.toThrow(/Missing articleGeneration prompts for theme "detective"/);
   });
 
   // Phase 3 (3.2): the journalist's writers read the rule set, so its check is the
@@ -361,7 +366,7 @@ describe('a prompt build that throws becomes the node error contract, for the ju
 
   it.each([
     // Phase 4 (brief 4.6): the outline judge left the graph.
-    ['arcs', evaluateArcs, (s) => ({ ...s, selectedArcs: [] })],
+    ['arcs', evaluateArcs, (s) => ({ ...s, meetingApproved: false })],
     ['article', evaluateArticle, (s) => ({ ...s, contentBundle: PREVIOUS_BUNDLE, articleApproved: false, articleRevisionCount: REVISION_CAPS.ARTICLE })]
   ])('the %s judge returns the error contract', async (phase, evaluate, shape) => {
     jest.spyOn(PromptBuilder.prototype, '_rosterSection').mockImplementation(() => { throw new Error('roster section exploded'); });
@@ -404,7 +409,6 @@ describe('a prompt build that throws becomes the node error contract, for the ju
  */
 describe('the rework rules (phase 3, 3.3)', () => {
   const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
-  const { _testing: { outlineRevisionRules } } = require('../workflow/nodes/ai-nodes');
   const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
   const promptBuilder = createMockPromptBuilder();
   const ARC_STATE = {
@@ -429,7 +433,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
       'arc rules (send back)': arcRevisionRules('send-back'),
       'arc rules (reweave)': arcRevisionRules('reweave'),
       'arc rules (automated)': arcRevisionRules(null),
-      'outline rules': outlineRevisionRules('journalist'),
+      'outline rules': OUTLINE_REVISION_RULES,
       'article rules': articleRevisionRules('journalist')
     };
     // Brief 4.5: the weave's rework, at each of its kinds, by the story meeting's round mark.
@@ -449,8 +453,8 @@ describe('the rework rules (phase 3, 3.3)', () => {
       const outline = contextFor('outline', humanFeedback);
       const article = contextFor('article', humanFeedback);
       texts[`outline task (${kind})`] = after(
-        await buildOutlineRevisionPrompt({ selectedArcs: [] }, outline.contextSection, outline.previousOutputSection, promptBuilder),
-        '# Outline Revision Request'
+        await buildOutlineRevisionPrompt({ weave: WEAVE }, outline.contextSection, outline.previousOutputSection, promptBuilder),
+        '# Map Revision Request'
       );
       texts[`article task (${kind})`] = after(
         await buildArticleRevisionPrompt({}, article.contextSection, article.previousOutputSection, promptBuilder),
@@ -471,8 +475,9 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(firstLine(arcRevisionRules('reweave'))).toMatch(/asked for a reweave, and the revision context lists the changes/);
     expect(firstLine(arcRevisionRules(null))).toMatch(/reworking the weave/);
     expect(firstLine(arcRevisionRules(null))).toMatch(/automatic check or fact check/);
-    expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/reworking the outline/);
-    expect(firstLine(outlineRevisionRules('journalist'))).toMatch(/revision context/);
+    // Brief 4.6: the map's rework.
+    expect(firstLine(OUTLINE_REVISION_RULES)).toMatch(/reworking the story map/);
+    expect(firstLine(OUTLINE_REVISION_RULES)).toMatch(/revision context/);
     // The article rework's first line is its own (3.10, fix round 1). It was the
     // theme's revision framing (3.2's string), which named the automatic task "the
     // evaluation's findings": every finding the context lists, the SHOULD CONSIDER items
@@ -503,7 +508,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
       'arc rules (send back)': arcRevisionRules('send-back'),
       'arc rules (reweave)': arcRevisionRules('reweave'),
       'arc rules (automatic)': arcRevisionRules(null),
-      'outline rules': outlineRevisionRules('journalist'),
+      'outline rules': OUTLINE_REVISION_RULES,
       'article rules': articleRevisionRules('journalist')
     };
     Object.entries(rules).forEach(([name, text]) => {
@@ -541,12 +546,9 @@ describe('the rework rules (phase 3, 3.3)', () => {
   });
 
   // Phase 4 (brief 4.4; R1): the arc stage's detective rules went with its detective
-  // branch; the outline's and the article's stay until their slices.
+  // branch, and the outline's with its outline stage (brief 4.6); the article's stay.
   it('the detective keeps its rework rules and tasks (D13)', async () => {
-    expect(outlineRevisionRules('detective')).toContain('1. You are IMPROVING an existing outline, not generating from scratch');
     expect(articleRevisionRules('detective')).toContain('WHAT TO PRESERVE:');
-    const outline = await buildOutlineRevisionPrompt({ selectedArcs: [] }, 'c', 'p', promptBuilder, [], 'detective');
-    expect(outline).toContain('Remember: You are IMPROVING, not regenerating.');
     const article = await buildArticleRevisionPrompt({}, 'c', 'p', promptBuilder, [], 'detective');
     expect(article).toContain("4. PRESERVE everything that's working well");
   });

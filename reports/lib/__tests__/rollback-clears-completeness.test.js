@@ -223,9 +223,12 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
   describe('steering channels (spec 2026-09-19 §4.5, §5.4)', () => {
     const points = Object.keys(ROLLBACK_CLEARS);
 
-    test.each(points)('%s clears the hand-edit diff and report exactly where it clears the feedback slot', (point) => {
+    // Phase 4 (brief 4.6; R9): the director's edits on the map stand past approve and through
+    // the rollback to the map, so they go exactly where the map goes; the round's report goes
+    // with the feedback slot, as the article's do.
+    test.each(points)('%s clears the hand-edit diff and report exactly where it clears the feedback slot (the map\'s edits, where it clears the map)', (point) => {
       const list = ROLLBACK_CLEARS[point];
-      expect(list.includes('_outlineHandEdits')).toBe(list.includes('_outlineFeedback'));
+      expect(list.includes('_outlineHandEdits')).toBe(list.includes('outline'));
       expect(list.includes('_outlineHandEditReport')).toBe(list.includes('_outlineFeedback'));
       expect(list.includes('_articleHandEdits')).toBe(list.includes('_articleFeedback'));
       expect(list.includes('_articleHandEditReport')).toBe(list.includes('_articleFeedback'));
@@ -309,7 +312,8 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
       const list = ROLLBACK_CLEARS[point];
       expect(list.includes('_outlineTrace')).toBe(list.includes('_outlineFeedback'));
       expect(list.includes('_articleTrace')).toBe(list.includes('_articleFeedback'));
-      expect(list.includes('_outlineTrace')).toBe(list.includes('_outlineHandEdits'));
+      // Phase 4 (brief 4.6; R9): the map's edits stand at the map's own point, its trace goes.
+      expect(list.includes('_outlineTrace')).toBe(list.includes('_outlineHandEditReport'));
       expect(list.includes('_articleTrace')).toBe(list.includes('_articleHandEdits'));
     });
 
@@ -361,5 +365,42 @@ describe("the story meeting's channels (brief 4.5)", () => {
 
   test('none of the six is exempt', () => {
     [...THE_DIRECTORS_WEAVE.filter((f) => f !== 'weave'), ...THE_ROUND].forEach((field) => expect(ROLLBACK_CLEARS_EXEMPT.has(field)).toBe(false));
+  });
+});
+
+// Brief 4.6 (R9): going back to the map reopens it as the director left it, as going back to
+// the meeting does. The map, its checks' mark, its baseline, the standing edits and the hero
+// its top photo names survive the map's point and the article's, and go only with the stages
+// that write the map again; the approval, the round's note, its report and its trace go
+// wherever the map reopens.
+describe("4.6: the map's channels (brief 4.6)", () => {
+  const points = Object.keys(ROLLBACK_CLEARS);
+  const KEPT_FROM_THE_MAP = ['outline', 'article'];
+  const WRITE_THE_MAP_AGAIN = points.filter((point) => !KEPT_FROM_THE_MAP.includes(point));
+  const THE_DIRECTORS_MAP = ['outline', '_mapBaseline', '_mapCheck', '_outlineHandEdits', 'heroImage'];
+  const THE_ROUND = ['outlineApproved', '_outlineFeedback', '_outlineHandEditReport', '_outlineTrace'];
+
+  test('the stages that write the map again are every point upstream of it', () => {
+    expect(WRITE_THE_MAP_AGAIN.sort()).toEqual([
+      'arc-selection', 'await-full-context', 'await-roster', 'character-ids', 'evidence-and-photos',
+      'input-review', 'paper-evidence-selection', 'photos', 'pre-curation'
+    ]);
+  });
+
+  test.each(WRITE_THE_MAP_AGAIN)('%s writes the map again, so it clears the map, its mark, its baseline, the edits, the hero and the round', (point) => {
+    [...THE_DIRECTORS_MAP, ...THE_ROUND].forEach((field) => expect([point, field, ROLLBACK_CLEARS[point].includes(field)]).toEqual([point, field, true]));
+  });
+
+  test.each(KEPT_FROM_THE_MAP)('%s keeps the map as the director left it, its mark, its baseline, the standing edits and the hero', (point) => {
+    THE_DIRECTORS_MAP.forEach((field) => expect([point, field, ROLLBACK_CLEARS[point].includes(field)]).toEqual([point, field, false]));
+  });
+
+  test("the map's own point reopens it: the approval, the note, the report and the trace go; the article's point keeps the approval", () => {
+    THE_ROUND.forEach((field) => expect(ROLLBACK_CLEARS.outline).toContain(field));
+    THE_ROUND.forEach((field) => expect(ROLLBACK_CLEARS.article).not.toContain(field));
+  });
+
+  test("none of the map's channels is exempt", () => {
+    [...THE_DIRECTORS_MAP, ...THE_ROUND].forEach((field) => expect(ROLLBACK_CLEARS_EXEMPT.has(field)).toBe(false));
   });
 });

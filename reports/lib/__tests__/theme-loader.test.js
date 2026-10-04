@@ -178,12 +178,9 @@ describe('ThemeLoader', () => {
   describe('loadPhasePrompts', () => {
     const detectiveLoader = () => new ThemeLoader(testSkillPath, 'detective');
 
-    it('should load all prompts for the detective outlineGeneration phase', async () => {
-      fs.readFile.mockResolvedValue('content');
-
-      const result = await detectiveLoader().loadPhasePrompts('outlineGeneration');
-
-      expect(Object.keys(result)).toEqual(PHASE_REQUIREMENTS.detective.outlineGeneration);
+    // Phase 4 (brief 4.6; R1): the detective's outline phase went with its outline writer.
+    it('has no detective outlineGeneration phase', async () => {
+      await expect(detectiveLoader().loadPhasePrompts('outlineGeneration')).rejects.toThrow(/Unknown phase: outlineGeneration/);
     });
 
     it('should load all prompts for the detective articleGeneration phase', async () => {
@@ -372,9 +369,9 @@ describe('ThemeLoader', () => {
 
     it('should return a copy (not the original)', () => {
       const reqs = ThemeLoader.getPhaseRequirements('detective');
-      reqs.outlineGeneration.push('modified');
+      reqs.articleGeneration.push('modified');
 
-      expect(PHASE_REQUIREMENTS.detective.outlineGeneration).not.toContain('modified');
+      expect(PHASE_REQUIREMENTS.detective.articleGeneration).not.toContain('modified');
     });
   });
 
@@ -449,7 +446,8 @@ describe('ThemeLoader', () => {
       expect(PHASE_REQUIREMENTS).toBeDefined();
       expect(PHASE_REQUIREMENTS.journalist.imageAnalysis).toBeDefined();
       expect(PHASE_REQUIREMENTS.journalist.outlineGeneration).toBeUndefined();
-      expect(PHASE_REQUIREMENTS.detective.outlineGeneration).toBeDefined();
+      // Phase 4 (brief 4.6; R1): the detective's outline phase went with its outline writer.
+      expect(PHASE_REQUIREMENTS.detective.outlineGeneration).toBeUndefined();
       expect(PHASE_REQUIREMENTS.detective.articleGeneration).toBeDefined();
     });
 
@@ -458,7 +456,6 @@ describe('ThemeLoader', () => {
       // had no craft rules at all. Since phase 2 (2.3) each reworker is built from
       // its writer's prompt, so it carries the writer's whole rule set instead.
       expect(PHASE_REQUIREMENTS.detective.revision).toBeUndefined();
-      expect(PHASE_REQUIREMENTS.detective.outlineGeneration).toContain('section-rules');
       expect(PHASE_REQUIREMENTS.detective.articleGeneration).toEqual(expect.arrayContaining([
         'character-voice',
         'evidence-boundaries',

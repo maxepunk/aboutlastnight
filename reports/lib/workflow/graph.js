@@ -5,7 +5,7 @@
  * Uses native LangGraph interrupt() for human checkpoints with DEDICATED
  * checkpoint nodes (SRP - separate data from checkpoints).
  *
- * Graph Flow (43 nodes - Commit 8.26: SRP checkpoint separation):
+ * Graph Flow (44 nodes - Commit 8.26: SRP checkpoint separation):
  *
  * PHASE 0: Input Parsing (reached from checkpointAwaitContext, not from START)
  * 0.1 parseRawInput → checkpointInputReview [interrupt: input-review]
@@ -43,10 +43,11 @@
  * (The chain's PHASE numbers — 1.4/1.42/1.43/1.65/1.66/1.665/1.67 — are historical;
  *  they predate the move and are display-only strings.)
  *
- * PHASE 3: Outline Generation
- * → generateOutline → checkpointOutline [interrupt: outline] → [send-back loop]
- * No model judge reads the outline (phase 4, brief 4.6; spec 5.4): the outline judge
- * left the graph.
+ * PHASE 3: The map (phase 4, brief 4.6)
+ * → generateOutline (the map writer) → checkMap (the map checks)
+ * → checkpointOutline [interrupt: outline, the map's stop]
+ * → [rework loop: one check rework per round; a send-back is the director's round]
+ * No model judge reads the map (spec 5.4): the outline judge left the graph.
  *
  * PHASE 4: Article Generation
  * → generateContentBundle → evaluateArticle
@@ -115,6 +116,35 @@ function routeArcEvaluation(state) {
     return 'revise';
   }
   return 'checkpoint';
+}
+
+/**
+ * Route after the map checks (phase 4, brief 4.6; R6): a failed check sends the map back
+ * for one automatic rework in the round, under the check's lines. Everything else goes to
+ * the map's stop: a passing map, a check still failing after its rework (the stop shows
+ * it), and an approved map. A rework that failed ends the run in an error.
+ *
+ * On a replay the checks skip a map they already marked, so the route reads that map's
+ * mark and the round's count: a map whose rework ran is at the cap and goes to the stop,
+ * and no rework runs on it again.
+ *
+ * @param {Object} state - Current graph state with _mapCheck
+ * @returns {string} 'checkpoint', 'revise' or 'error'
+ */
+function routeMapChecks(state) {
+  if (state.currentPhase === PHASES.ERROR) {
+    return 'error';
+  }
+  const check = state._mapCheck;
+  if (state.outlineApproved === true || !check || check.passed !== false) {
+    return 'checkpoint';
+  }
+  if ((state.outlineRevisionCount || 0) >= REVISION_CAPS.OUTLINE) {
+    console.log('[routeMapChecks] A map check still fails after the round\'s rework: the stop shows it');
+    return 'checkpoint';
+  }
+  console.log(`[routeMapChecks] A map check failed (${(check.failures || []).map(f => f.type).join(', ')}): one rework`);
+  return 'revise';
 }
 
 /**
@@ -325,7 +355,7 @@ function automatedRevisionSource(state, phase) {
  * @param {Object|null} before - the outline or bundle the rework starts from
  * @param {number} pass - the automated pass number in this round (1-based)
  * @param {number} round - the round number (1-based, as the stop's banner shows it)
- * @param {string} source - automatedRevisionSource's answer
+ * @param {string} source - automatedRevisionSource's answer, or 'check' for the map checks
  * @returns {Array} the full trace, for the REPLACE channel
  */
 function traceWithPass(state, phase, trace, before, pass, round, source) {
@@ -335,7 +365,7 @@ function traceWithPass(state, phase, trace, before, pass, round, source) {
   const entry = {
     pass,
     round,
-    trigger: source === 'fact-check' ? 'check' : 'evaluation',
+    trigger: source === 'fact-check' || source === 'check' ? 'check' : 'evaluation',
     findings: {
       structuralIssues: list(own?.structuralIssues),
       advisoryWarnings: list(own?.advisoryWarnings),
@@ -368,7 +398,8 @@ function traceWithPass(state, phase, trace, before, pass, round, source) {
  * rework is not an automatic pass and writes nothing there.
  *
  * Phase 4 (brief 4.6): no evaluation stub. The outline judge left the graph, so no
- * evaluation of the outline can be skipped on a stale verdict.
+ * evaluation of the outline can be skipped on a stale verdict. Every automatic pass on the
+ * map is the map checks' rework, so the trace marks it `check`.
  */
 async function incrementOutlineRevision(state) {
   const isHumanDriven = !!state._outlineFeedback;
@@ -376,7 +407,7 @@ async function incrementOutlineRevision(state) {
   const newHumanCount = isHumanDriven
     ? (state.humanOutlineRevisionCount || 0) + 1
     : (state.humanOutlineRevisionCount || 0);
-  const source = isHumanDriven ? 'human' : automatedRevisionSource(state, 'outline');
+  const source = isHumanDriven ? 'human' : 'check';
 
   console.log(`[incrementOutlineRevision] automatedPass=${newCount}, round=${newHumanCount + 1}, source=${source}`);
 
@@ -538,12 +569,14 @@ function createGraphBuilder() {
   builder.addNode('reviseArcs', nodes.reviseArcs, LLM_RETRY);
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 3: Outline Generation
+  // ADD NODES - Phase 3: The map (phase 4, brief 4.6)
   // ═══════════════════════════════════════════════════════
 
+  // The map writer: the settled weave laid across the sections
   builder.addNode('generateOutline', nodes.generateOutline, LLM_RETRY);
-  // Phase 4 (brief 4.6; spec 5.4): no model judge reads the outline; evaluateOutline left
-  // the graph.
+  // The map checks: programmatic, no model call (lib/map.js mapFindings). No model judge
+  // reads the map (spec 5.4); evaluateOutline left the graph.
+  builder.addNode('checkMap', nodes.checkMap);
 
   // Outline checkpoint - interrupt() here (Commit 8.26: SRP separation)
   builder.addNode('checkpointOutline', nodes.checkpointOutline);
@@ -696,22 +729,30 @@ function createGraphBuilder() {
   builder.addEdge('finalizePhotoAnalyses', 'generateOutline');
 
   // ═══════════════════════════════════════════════════════
-  // ADD EDGES - Phase 3: Outline Generation
-  // Phase 4 (brief 4.6): the outline goes straight to its stop; the outline judge left.
+  // ADD EDGES - Phase 3: The map (phase 4, brief 4.6)
   // ═══════════════════════════════════════════════════════
 
-  builder.addEdge('generateOutline', 'checkpointOutline');
+  // The map writer → the map checks → [conditional routing]
+  builder.addEdge('generateOutline', 'checkMap');
 
-  // Checkpoint → conditional: approve forwards, reject enters revision loop
+  // After the checks: a failed check sends the map back for the round's one rework; a
+  // passing map, a check still failing after its rework and an approved map go to the
+  // stop; a rework that failed ends the run.
+  builder.addConditionalEdges('checkMap', routeMapChecks, {
+    checkpoint: 'checkpointOutline',
+    revise: 'incrementOutlineRevision',
+    error: END
+  });
+
+  // Checkpoint → conditional: approve forwards, a send-back enters the rework loop
   builder.addConditionalEdges('checkpointOutline', routeAfterOutlineCheckpoint, {
     forward: 'generateContentBundle',
     revise: 'incrementOutlineRevision'
   });
 
-  // Send-back loop: increment → revise → the stop again (NOT back to generateOutline)
-  // reviseOutline receives previous output + feedback for TARGETED fixes
+  // Rework loop: increment → rework → the checks (never back to the map writer)
   builder.addEdge('incrementOutlineRevision', 'reviseOutline');
-  builder.addEdge('reviseOutline', 'checkpointOutline');
+  builder.addEdge('reviseOutline', 'checkMap');
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 4: Article Generation
@@ -817,6 +858,7 @@ module.exports = {
     // Routing functions - evaluation-based (evaluation/schema logic)
     routeArcValidation,
     routeArcEvaluation,
+    routeMapChecks,
     routeArticleEvaluation,
     routeSchemaValidation,
     // Routing functions - checkpoint-based (human approval routing)

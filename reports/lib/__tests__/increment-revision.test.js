@@ -142,7 +142,9 @@ describe('the trace entry (phase 2, brief 2.7)', () => {
     feedback: 'Put Zia in the LEDE.'
   };
 
-  test('an outline pass the evaluation triggered records its number, round, findings and the version before it', async () => {
+  // Phase 4 (brief 4.6): every automatic pass on the map is the map checks' rework, so the
+  // trace marks it a check.
+  test('an outline pass records its number, round, findings, the version before it, and the check that triggered it', async () => {
     const outline = { lede: { hook: 'Before the pass' } };
     const state = { outline, outlineRevisionCount: 0, humanOutlineRevisionCount: 0, validationResults: OUTLINE_VERDICT, evaluationHistory: [{ phase: 'outline', ready: false }] };
     const result = await incrementOutlineRevision(state);
@@ -151,7 +153,7 @@ describe('the trace entry (phase 2, brief 2.7)', () => {
     expect(entry).toEqual({
       pass: 1,
       round: 1,
-      trigger: 'evaluation',
+      trigger: 'check',
       findings: {
         structuralIssues: ['The LEDE names no roster member.'],
         advisoryWarnings: ['The closing repeats the hook.'],

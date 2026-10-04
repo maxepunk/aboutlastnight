@@ -43,10 +43,11 @@ const { leftOutPhotosOf, listAfterStopChoices } = require('./lib/photo-leave-out
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // Brief 4.5: the story meeting's payloads and what its stop sends.
 const { meetingResume, meetingCheckpointData } = require('./lib/meeting');
+// Phase 4 (brief 4.6): the map's payloads and what its stop shows; the photos kept for the
+// article, which Everyone and the counts read.
+const { mapResume, mapCheckpointData } = require('./lib/map');
+const { keptPhotoFilenames } = require('./lib/workflow/nodes/ai-nodes');
 const { isWeave } = require('./lib/weave');
-// The outline editors' own list of the fields phase 3 retired (BU3), so the server
-// diffs a hand edit against the outline the director edited (fix 3.2b).
-const { dropRetiredOutlineFields } = require('./console/outline-edit-logic');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
@@ -414,23 +415,18 @@ async function getCheckpointData(checkpointType, state) {
                 maxRevisions: REVISION_CAPS.ARCS
             });
         case CHECKPOINT_TYPES.OUTLINE:
+            // Brief 4.6: the map (lib/map.js mapCheckpointData): the map, the theme's slots,
+            // the settled story, Everyone and the counts, a check still failing on the map in
+            // hand, the concerns beside their lines, the edits a send-back changed, the
+            // standing notes, the round's note and counters. No judge reads the map and the
+            // map writer asks nothing, so the stop sends no evaluation and no questions.
+            // Brief 2.7: the automatic passes of this round, with what each changed.
             return {
-                outline: state.outline,
-                lastEvaluation: lastEvaluationFor(state.evaluationHistory, 'outline'),
-                evaluationHistory: state.evaluationHistory,
-                revisionCount: state.outlineRevisionCount || 0,
-                humanRevisionCount: state.humanOutlineRevisionCount || 0,
-                maxRevisions: REVISION_CAPS.OUTLINE,
-                previousFeedback: state._outlineFeedback || null,
-                // F1: each of the director's edits a pass of this round changed, with the
-                // director's text, what it became, the pass and the reason (one report
-                // shape, lib/hand-edit-diff.js reportAfterPass; one written before F1 is none).
-                handEditReport: handEditReportOf(state._outlineHandEditReport),
-                directorGateNotes: state.directorGateNotes || [],
-                // Brief 2.7: the automatic passes of this round, with what each changed.
-                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1),
-                // Brief 3.7: the outline writer's questions for the director (C15)
-                writerQuestions: writerQuestionsOf(state.outline?.writerQuestions)
+                ...mapCheckpointData(state, {
+                    keptPhotos: keptPhotoFilenames(state, state.outline && state.outline.topPhoto),
+                    maxRevisions: REVISION_CAPS.OUTLINE
+                }),
+                trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1)
             };
         case CHECKPOINT_TYPES.ARTICLE:
             return {
@@ -781,57 +777,24 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         };
     }
 
-    // Outline: approve, approve-with-edits, or reject-with-feedback
-    if (approvals.outline === true) {
+    // The map (phase 4, brief 4.6): `{outline: 'approve' | 'send-back', map, note}`.
+    // lib/map.js mapResume holds the map to the director-side schema, refusing a malformed
+    // one with its reason, and writes the director's version, their standing edits against
+    // the writer's last map and the hero, its top photo; a send-back is the director's round,
+    // with its note. The note joins the standing notes: an approval note on an approve, a
+    // rejection note on a send-back. Taken only at the map's own stop (I3). The old outline
+    // payload (`outline: true | false`, outlineEdits, outlineFeedback, outlineNote) is refused
+    // by name.
+    if (approvals.outline !== undefined || ['outlineEdits', 'outlineFeedback', 'outlineNote'].some((key) => approvals[key] !== undefined)) {
+        if (checkpointType !== null && checkpointType !== CHECKPOINT_TYPES.OUTLINE) {
+            return { resume: {}, stateUpdates: {}, error: `The map's actions are taken at the map (outline), not at ${checkpointType}.` };
+        }
+        const map = mapResume(approvals, currentState, { theme, ...sendBackRecordOptions(currentState) });
+        if (map.error) return { resume: {}, stateUpdates: {}, error: map.error };
         validApprovalDetected = true;
-        resume.approved = true;
-        if (approvals.outlineEdits && typeof approvals.outlineEdits === 'object') {
-            const schemaName = theme === 'detective' ? 'detective-outline' : 'outline';
-            error = validateEdits(schemaName, approvals.outlineEdits, 'outline');
-            if (error) return { resume, stateUpdates, error };
-            stateUpdates.outline = approvals.outlineEdits;
-        }
-        // Phase 1 brief 1.1: the stop's note box is sent with the approve too. It
-        // becomes a standing note of kind 'approval' — forward guidance for every
-        // later writer, not something a rework already applied. AFTER the edit
-        // validation, so an invalid edit writes nothing at all. Blank appends nothing.
-        if (typeof approvals.outlineNote === 'string' && approvals.outlineNote.trim()) {
-            appendGateNote(stateUpdates, currentState, 'outline', approvals.outlineNote.trim(), 'approval');
-        }
-    } else if (approvals.outline === false && typeof approvals.outlineFeedback === 'string' && approvals.outlineFeedback.trim()) {
-        // Spec 2026-09-19 §4.1: hand edits may travel with the note. Validate FIRST so
-        // an invalid edit writes nothing at all.
-        const hasEdits = approvals.outlineEdits && typeof approvals.outlineEdits === 'object';
-        if (hasEdits) {
-            const schemaName = theme === 'detective' ? 'detective-outline' : 'outline';
-            error = validateEdits(schemaName, approvals.outlineEdits, 'outline');
-            if (error) return { resume, stateUpdates, error };
-        }
-        validApprovalDetected = true;
-        resume.approved = false;
-        resume.feedback = approvals.outlineFeedback.trim();
-        stateUpdates._outlineFeedback = resume.feedback;
-        appendGateNote(stateUpdates, currentState, 'outline', resume.feedback, 'rejection');
-        // F1 (spec 2026-10-02 section 7): the director's edits stand at this stop across
-        // every send-back, by id. An earlier edit stands while the version the stop
-        // showed (and the one sent back) carries its text, a cut while its text stays
-        // out; this send-back's diff joins them with the next ids. The survival check
-        // replaces the reset that kept a stale path from reaching the rework (steering
-        // spec C3). An outline written before phase 3 still holds thePlayers.buried and
-        // whatsMissing.buriedItems, which the editors drop before sending: the diff
-        // starts from the outline without them, so it records no removal the director
-        // never made (fix 3.2b, finding 5).
-        const shownOutline = dropRetiredOutlineFields(currentState.outline);
-        stateUpdates._outlineHandEdits = standingAfterSendBack(currentState._outlineHandEdits, shownOutline,
-            hasEdits ? approvals.outlineEdits : shownOutline, 'outline', sendBackRecordOptions(currentState));
-        // The report holds one round: a send back opens a new one.
-        stateUpdates._outlineHandEditReport = null;
-        // Brief 2.7: a send back opens a new round, and the trace shows only the
-        // current round's automatic passes.
-        stateUpdates._outlineTrace = null;
-        if (hasEdits) {
-            stateUpdates.outline = approvals.outlineEdits;   // incrementOutlineRevision hands it to the reviser
-        }
+        Object.assign(resume, map.resume);
+        Object.assign(stateUpdates, map.stateUpdates);
+        if (map.note) appendGateNote(stateUpdates, currentState, 'outline', map.note.text, map.note.kind);
     }
 
     // Article: approve, approve-with-edits, or reject-with-feedback
@@ -1271,7 +1234,8 @@ app.get('/api/session/:id', requireAuth, async (req, res) => {
                 paperEvidence: state.paperEvidence?.length || 0,
                 sessionPhotos: state.sessionPhotos?.length || 0,
                 photoAnalyses: state.photoAnalyses?.length || 0,
-                narrativeArcs: state.narrativeArcs?.length || 0
+                // Brief 4.6: the weave's threads, where the old arc channels' count was (R4)
+                threads: state.weave?.threads?.length || 0
             },
             errors: state.errors || []
         });
@@ -1451,8 +1415,8 @@ const RESOURCE_ENDPOINTS = [
     { path: 'arcs', minPhase: 2.3,
       fields: state => ({ weave: state.weave || null }),
       check: state => isWeave(state.weave) },
-    // Phase 4 (brief 4.6): the outline judge stamped 3.2; with it gone, the stop opens
-    // after the outline writer's 3.1.
+    // Phase 4 (brief 4.6): the map, once the map writer has returned it (3.1; its checks
+    // stamp 3.2).
     { path: 'outline', minPhase: 3.1,
       fields: state => ({ outline: state.outline || null }),
       check: state => !!state.outline },

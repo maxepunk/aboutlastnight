@@ -252,18 +252,37 @@ describe('ai-nodes', () => {
       }
     };
 
-    it('returns outline in state update', async () => {
-      const state = {
-        selectedArcs: ['The Money Trail', 'The Audit Cover-up'],
-        evidenceBundle: mockEvidenceBundle,
-        narrativeArcs: mockArcAnalysis.narrativeArcs
-      };
+    // Brief 4.6: the outline is the story map. Code keeps the writer's map as its baseline
+    // (the director's edits diff against it), clears the checks' mark so the map checks run
+    // on it, and writes its top photo as the hero.
+    it("returns the map, keeps it as the writer's last map, and writes its top photo as the hero", async () => {
+      const state = { evidenceBundle: mockEvidenceBundle };
 
       const result = await generateOutline(state, config);
 
-      expect(result.outline).toBeDefined();
-      expect(result.outline.lede).toBeDefined();
-      expect(result.outline.theStory).toBeDefined();
+      expect(result.outline).toEqual(mockOutline);
+      expect(result._mapBaseline).toEqual(mockOutline);
+      expect(result._mapCheck).toBeNull();
+      expect(result.heroImage).toBe('evidence-board.png');
+    });
+
+    it('writes no hero when the map names no top photo', async () => {
+      const { topPhoto: _none, ...noTop } = mockOutline;
+      const result = await generateOutline({}, { configurable: { sdkClient: createMockSdkClient({ outline: noTop }), promptBuilder: mockBuilder } });
+      expect(result.heroImage).toBeNull();
+    });
+
+    it('the detective has no map writer: it fails loud, before any call (R1)', async () => {
+      mockClient.clearCalls();
+      await expect(generateOutline({ theme: 'detective' }, config)).rejects.toThrow('The "detective" theme has no story map');
+      expect(mockClient.getCalls()).toHaveLength(0);
+    });
+
+    it("skips on a replay when the thread holds a map", async () => {
+      mockClient.clearCalls();
+      const result = await generateOutline({ outline: mockOutline }, config);
+      expect(result).toEqual({ currentPhase: PHASES.GENERATE_OUTLINE });
+      expect(mockClient.getCalls()).toHaveLength(0);
     });
 
     it('sets currentPhase to GENERATE_OUTLINE', async () => {
@@ -581,14 +600,18 @@ describe('ai-nodes', () => {
       configurable: { sdkClient: createMockSdkClient(result), promptBuilder: builder }
     });
 
-    it('hands the arc evaluation advisories to the outline writer', async () => {
+    // Phase 4 (brief 4.6): the map writer reads the settled weave as its task, and the arc
+    // stage's <SHOULD_CONSIDER> goes.
+    it('hands the map writer no advisories: the arc stage\'s SHOULD_CONSIDER goes', async () => {
       const builder = spyBuilder();
       await generateOutline(
         { validationResults: { phase: 'arcs', passed: true, advisoryWarnings: ['Two arcs share a document'] } },
         configFor(builder, { outline: mockOutline })
       );
-      expect(builder.buildOutlinePrompt.mock.calls[0][6].shouldConsider)
-        .toEqual(['Two arcs share a document']);
+      const args = builder.buildOutlinePrompt.mock.calls[0];
+      expect(args).toHaveLength(5);
+      expect(args[4]).not.toHaveProperty('shouldConsider');
+      expect(JSON.stringify(args)).not.toContain('Two arcs share a document');
     });
 
     // Phase 4 (brief 4.6): the outline judge left the graph, and the advisories it handed
@@ -600,21 +623,6 @@ describe('ai-nodes', () => {
         configFor(builder, { contentBundle: mockContentBundle })
       );
       expect(builder.buildArticlePrompt.mock.calls[0][6]).not.toHaveProperty('shouldConsider');
-    });
-
-    it('ignores a block stamped for another phase', async () => {
-      const builder = spyBuilder();
-      await generateOutline(
-        { validationResults: { phase: 'outline', passed: true, advisoryWarnings: ['The lede frontloads the verdict'] } },
-        configFor(builder, { outline: mockOutline })
-      );
-      expect(builder.buildOutlinePrompt.mock.calls[0][6].shouldConsider).toEqual([]);
-    });
-
-    it('passes an empty list when no evaluation has run', async () => {
-      const builder = spyBuilder();
-      await generateOutline({}, configFor(builder, { outline: mockOutline }));
-      expect(builder.buildOutlinePrompt.mock.calls[0][6].shouldConsider).toEqual([]);
     });
   });
 

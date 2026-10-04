@@ -454,8 +454,8 @@ async function generateWeave(state, config) {
  * Skips when the thread already holds a weave (a replay). Fails loud (N7): a failed call
  * throws, so the node's retry policy retries a transient failure and a persistent one
  * surfaces against the clean pre-node snapshot for the director's resume. The old arc
- * channels (narrativeArcs, _arcAnalysisCache) are no longer written; they go with their
- * last readers.
+ * channels (narrativeArcs, _arcAnalysisCache) are no longer written; they went with their
+ * last readers (brief 4.6).
  *
  * @param {Object} state - Current state: the evidence bundle, the room's conclusions,
  *   the director's notes, the roster

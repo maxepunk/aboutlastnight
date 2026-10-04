@@ -268,14 +268,15 @@ describe('generators pass options.gateNotes', () => {
     const sdk = sdkReturning(OUTLINE);
     const directorNotes = { rawProse: 'Blake worked the room all morning.' };
     const evidenceBundle = { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } };
-    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.', directorNotes, evidenceBundle }, cfg(sdk, builder));
-    const options = builder.buildOutlinePrompt.mock.calls[0][6];
+    await generateOutline({ directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.', directorNotes, evidenceBundle }, cfg(sdk, builder));
+    const options = builder.buildOutlinePrompt.mock.calls[0][4];
     // brief 1.5 added directorNotes: the outline writer reads the director's own
     // account of the morning, which until now only the article writer saw;
-    // brief 1.3 added shouldConsider: the arc evaluation's advisories;
     // brief 2.1 added evidenceBundle: the record view renders from it;
     // brief 2.2 added the director's input-review corrections and photo descriptions.
-    expect(options).toEqual({ directorGuidance: 'Lead with the money.', gateNotes: NOTES, directorNotes, shouldConsider: [], evidenceBundle, directorCorrections: [], photoDescriptions: null });
+    // Phase 4 (brief 4.6): the map writer takes neither the arc selection's emphasis (the
+    // meeting's note is a standing note) nor the arc stage's advisories (shouldConsider).
+    expect(options).toEqual({ gateNotes: NOTES, directorNotes, evidenceBundle, directorCorrections: [], photoDescriptions: null });
   });
 
   it('generateContentBundle passes every note as options.gateNotes', async () => {
@@ -292,8 +293,8 @@ describe('generators pass options.gateNotes', () => {
   it('with no notes the generators pass an empty list (prompt unchanged)', async () => {
     const builder = createMockPromptBuilder();
     builder.buildOutlinePrompt = jest.fn(builder.buildOutlinePrompt);
-    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [] }, cfg(sdkReturning(OUTLINE), builder));
-    expect(builder.buildOutlinePrompt.mock.calls[0][6]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null, shouldConsider: [], evidenceBundle: null, directorCorrections: [], photoDescriptions: null });
+    await generateOutline({}, cfg(sdkReturning(OUTLINE), builder));
+    expect(builder.buildOutlinePrompt.mock.calls[0][4]).toEqual({ gateNotes: [], directorNotes: null, evidenceBundle: null, directorCorrections: [], photoDescriptions: null });
   });
 });
 

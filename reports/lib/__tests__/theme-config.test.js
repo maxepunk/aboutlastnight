@@ -10,7 +10,6 @@ const {
   getThemeNPCs,
   getThemeConfig,
   isValidTheme,
-  getOutlineRules,
   getArticleRules,
   getCanonicalName,
   getThemeCharacters,
@@ -86,15 +85,11 @@ describe('theme-config', () => {
     });
   });
 
-  describe('getOutlineRules', () => {
-    it('returns no outline rules for the journalist theme (fix 3.2b)', () => {
-      expect(getOutlineRules('journalist')).toEqual({});
-    });
-
-    it('should return empty object for unknown theme', () => {
-      const rules = getOutlineRules('unknown');
-      expect(rules).toEqual({});
-    });
+  // Phase 4 (brief 4.6; R1): the outline rules went with the outline stage, the parked
+  // detective's with its outline branch; no code read them.
+  it('the outline rules are gone, for every theme', () => {
+    expect(require('../theme-config').getOutlineRules).toBeUndefined();
+    Object.values(THEME_CONFIGS).forEach((config) => expect(config).not.toHaveProperty('outlineRules'));
   });
 
   describe('F9: dead bannedPatterns config removed', () => {
@@ -135,14 +130,7 @@ describe('theme-config', () => {
       const config = getThemeConfig('detective');
       expect(config).not.toBeNull();
       expect(config.npcs).toBeDefined();
-      expect(config.outlineRules).toBeDefined();
-    });
-
-    it('detective outlineRules has correct required sections', () => {
-      const rules = getOutlineRules('detective');
-      expect(rules.requiredSections).toEqual(
-        expect.arrayContaining(['executiveSummary', 'evidenceLocker', 'suspectNetwork', 'outstandingQuestions', 'finalAssessment'])
-      );
+      expect(config.display).toBeDefined();
     });
 
     it('detective does not include Nova as NPC', () => {
@@ -284,7 +272,6 @@ describe('theme-config', () => {
       expect(typeof getThemeNPCs).toBe('function');
       expect(typeof getThemeConfig).toBe('function');
       expect(typeof isValidTheme).toBe('function');
-      expect(typeof getOutlineRules).toBe('function');
     });
 
     it('should export THEME_CONFIGS', () => {
@@ -319,7 +306,7 @@ describe("4.6: the map's slots are the theme's", () => {
     ]);
   });
 
-  it('a theme with no map files, such as the parked detective, has no slots; the list is a copy', () => {
+  it('a theme with no map in its config, such as the parked detective, has no slots; the list is a copy', () => {
     expect(mapSlotsOf('detective')).toEqual([]);
     expect(mapSlotsOf('unknown')).toEqual([]);
     mapSlotsOf('journalist').pop();

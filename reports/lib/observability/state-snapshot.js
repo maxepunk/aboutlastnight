@@ -32,7 +32,8 @@ function extractStateSnapshot(state, additionalFields = []) {
     rosterSize: state.sessionConfig?.roster?.length || 0,
     tokenCount: state.memoryTokens?.length || 0,
     paperEvidenceCount: state.paperEvidence?.length || 0,
-    arcCount: state.narrativeArcs?.length || 0,
+    // Phase 4 (brief 4.6; R4): the weave's threads, where the old arc channel's count was
+    threadCount: state.weave?.threads?.length || 0,
     errorCount: state.errors?.length || 0
   };
 

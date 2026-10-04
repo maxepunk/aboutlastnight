@@ -22,8 +22,13 @@
  * - `weaveChanges`: `{source, change}` for each change the map made to the weave to fit
  *   in one the director made at the meeting, its source a meeting edit's id or "note".
  *
- * This module holds the rules every reader of a map shares, each one function: the code
- * checks (mapFindings), the map's version stamp (mapKey) and the roster the checks read.
+ * This module holds the rules every reader of a map shares, each one function:
+ * - THE SCHEMAS: the writer's (mapSchemaFor, the map's shape with the theme's slots) and the
+ *   director-side one derived from it (directorMapSchemaFor, R12), which allows a beat the
+ *   director added or brought back and is never sent to the SDK;
+ * - THE CHECKS (mapFindings), the map's version stamp (mapKey) and the roster they read;
+ * - THE STOP: its payloads (mapResume, which server.js buildResumePayload calls) and what it
+ *   shows (mapCheckpointData).
  * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks,
  * the stop and the console share.
  *
@@ -33,8 +38,14 @@
 'use strict';
 
 const crypto = require('crypto');
+const Ajv = require('ajv');
+const outlineSchema = require('./schemas/outline.schema.json');
+const { mapSlotsOf } = require('./theme-config');
 const { mapTally, mapPhotoPlacements, rosterMemberOf } = require('../console/outline-edit-logic');
-const { mapEditAddress, mapPhotoKey, isCut, isStrike, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE } = require('./hand-edit-diff');
+const {
+  mapEditAddress, mapPhotoKey, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
+  handEditReportOf, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE
+} = require('./hand-edit-diff');
 
 /** A beat's kind: what it puts on the page (C2). */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
@@ -47,6 +58,9 @@ const MAP_CHECKS_SOURCE = 'map-checks';
 
 /** The source a change to the weave names when the director's note at the meeting asked for it. */
 const MEETING_NOTE_SOURCE = 'note';
+
+/** The story meeting's stop type (R3), the gate its notes carry. */
+const MEETING_GATE = 'arc-selection';
 
 /** A field as text: the string trimmed, or '' for anything else. */
 function textOf(value) {
@@ -302,8 +316,9 @@ function mapFindings(map, inputs = {}) {
   }
   if (cards.length < MAP_CARDS.min || cards.length > MAP_CARDS.max) {
     const ids = editsOnCards(entries);
-    if (ids.length > 0) concern('card-count', ids, `The map carries ${cards.length} cards; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`);
-    else fail('card-count', `The map carries ${cards.length} cards. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
+    const carries = `The map carries ${cards.length} card${cards.length === 1 ? '' : 's'}`;
+    if (ids.length > 0) concern('card-count', ids, `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`);
+    else fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
   }
 
   // Every live connection of the settled weave lands in a beat.
@@ -339,12 +354,272 @@ function mapFindings(map, inputs = {}) {
   return { failures, concerns };
 }
 
+
+// ─── the map's schemas (brief 4.6; R12) ──────────────────────────────────────
+
+/** Each theme's built schemas, made once, so the SDK guardrail's memo and ajv compile once. */
+const writerSchemas = new Map();
+const directorSchemas = new Map();
+const directorValidators = new Map();
+
+/**
+ * The map writer's schema for a theme: the map's shape (lib/schemas/outline.schema.json)
+ * with the theme's slots (lib/theme-config.js mapSlotsOf) as the only slots a section or a
+ * dropped slot may name. The writer, its rework and the prompt's <SCHEMA> read it.
+ *
+ * @param {string} theme
+ * @returns {Object}
+ * @throws {Error} for a theme with no map slots, such as the parked detective (R1)
+ */
+function mapSchemaFor(theme) {
+  if (!writerSchemas.has(theme)) {
+    const slots = mapSlotsOf(theme).map((slot) => slot.key);
+    if (slots.length === 0) {
+      throw new Error(`The "${theme}" theme has no story map: its config names no map slots (lib/theme-config.js). The detective is parked (R1).`);
+    }
+    const schema = structuredClone(outlineSchema);
+    schema.properties.sections.items.properties.slot.enum = slots;
+    schema.properties.dropped.items.properties.slot.enum = slots;
+    writerSchemas.set(theme, schema);
+  }
+  return writerSchemas.get(theme);
+}
+
+/**
+ * The map as the director leaves it (R12): the writer's schema for the theme, derived in
+ * code, with a beat the director added or brought back allowed whole: a beat needs only its
+ * id and its material, in a section and in leftOut. The payload gate validates against it
+ * and the console's validator is held to it (console/outline-edit-logic.js
+ * validateMapShape); it is never sent to the SDK, so no model writes to it.
+ *
+ * @param {string} theme
+ * @returns {Object}
+ */
+function directorMapSchemaFor(theme) {
+  if (!directorSchemas.has(theme)) {
+    const schema = structuredClone(mapSchemaFor(theme));
+    [schema.properties.sections.items.properties.beats.items, schema.properties.leftOut.items]
+      .forEach((beat) => { beat.required = ['id', 'material']; });
+    directorSchemas.set(theme, schema);
+  }
+  return directorSchemas.get(theme);
+}
+
+/** The beats' ids that more than one beat of a map carries, each once. */
+function repeatedBeatIds(map) {
+  const seen = new Set();
+  const repeated = [];
+  if (!map || typeof map !== 'object') return repeated;
+  [...objectsOf(map.sections).flatMap((section) => objectsOf(section.beats)), ...objectsOf(map.leftOut)].forEach((beat) => {
+    const id = textOf(typeof beat.id === 'string' ? beat.id : '');
+    if (!id) return;
+    if (seen.has(id) && !repeated.includes(id)) repeated.push(id);
+    seen.add(id);
+  });
+  return repeated;
+}
+
+/**
+ * What the director-side schema finds wrong with a map, as one refusal that says where, or
+ * null for a map it accepts. Past the schema, every beat has an id of its own: the edits
+ * find a beat by its id. A repeat the map the stop showed holds is the writer's, which the
+ * map checks report and a rework fixes; one it does not hold is the director's, refused.
+ *
+ * @param {*} map - the map as the director left it
+ * @param {Object} options
+ * @param {string} options.theme
+ * @param {Object|null} [options.shown] - the map the stop showed
+ * @returns {string|null}
+ */
+function directorMapProblems(map, { theme, shown = null } = {}) {
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return 'The map must be an object: the map as the director left it.';
+  if (!directorValidators.has(theme)) {
+    directorValidators.set(theme, new Ajv({ allErrors: true, strict: true }).compile(directorMapSchemaFor(theme)));
+  }
+  const validate = directorValidators.get(theme);
+  if (!validate(map)) {
+    const errors = (validate.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
+    return `The map as the director left it failed the director-side schema: ${errors}`;
+  }
+  const writers = new Set(repeatedBeatIds(shown));
+  const theirs = repeatedBeatIds(map).filter((id) => !writers.has(id));
+  if (theirs.length > 0) {
+    return `Two beats share the id ${listOf(theirs.map((id) => `"${id}"`))}: the director's changes made ${theirs.length > 1 ? 'these repeats' : 'this repeat'}. Give each beat an id of its own.`;
+  }
+  return null;
+}
+
+/** The map's top photo, or null: the photo the article prints as its hero. */
+function topPhotoOf(map) {
+  return map && typeof map === 'object' && typeof map.topPhoto === 'string' && map.topPhoto.trim() ? map.topPhoto : null;
+}
+
+// ─── the stop (brief 4.6) ─────────────────────────────────────────────────────
+
+/** The map's two actions. */
+const MAP_ACTIONS = Object.freeze(['approve', 'send-back']);
+
+/** The outline stop's old payload keys, refused by name. */
+const RETIRED_OUTLINE_KEYS = Object.freeze(['outlineEdits', 'outlineFeedback', 'outlineNote']);
+
+/**
+ * One of the map's payloads, as the stop's resume and the state it writes (brief 4.6):
+ * `{outline: 'approve' | 'send-back', map, note}`.
+ * - Approve carries the map as the director left it, and an optional note, which joins the
+ *   standing notes as an approval note.
+ * - A send-back carries a note, the round's (`_outlineFeedback`), which joins them as a
+ *   rejection note, and the map when the director edited it; it opens a new round, so the
+ *   report and the trace start over.
+ *
+ * Both write the director's version, validated against the director-side schema, the
+ * standing edits against the writer's last map (`_mapBaseline`, or the map the stop showed
+ * when the thread holds none; lib/hand-edit-diff.js standingOnMap), and the hero, the map's
+ * top photo. The approval itself is the stop's to set (checkpoint-nodes.js
+ * checkpointOutline). The old outline payload is refused by name, and so is a payload for a
+ * theme with no map (the parked detective, R1).
+ *
+ * @param {Object} approvals - the request body
+ * @param {Object} currentState - the thread's state at the stop
+ * @param {Object} options
+ * @param {string} options.theme
+ * @param {string[]} [options.names] - the roster's names, which a cut or a rewrite records
+ * @returns {{resume: Object, stateUpdates: Object, note: {text: string, kind: string}|null, error: string|null}}
+ */
+function mapResume(approvals, currentState = {}, { theme, names } = {}) {
+  const refuse = (error) => ({ resume: {}, stateUpdates: {}, note: null, error });
+  const body = approvals || {};
+  if (mapSlotsOf(theme).length === 0) {
+    return refuse(`The "${theme}" theme has no story map: its config names no map slots (lib/theme-config.js). The detective is parked (R1).`);
+  }
+  const retired = RETIRED_OUTLINE_KEYS.filter((key) => body[key] !== undefined);
+  if (retired.length > 0 || !MAP_ACTIONS.includes(body.outline)) {
+    const named = retired.length > 0 ? ` (${retired.join(', ')} ${retired.length > 1 ? 'are' : 'is'} the old outline's)` : ` (got outline: ${JSON.stringify(body.outline)})`;
+    return refuse(`The map takes {outline: "approve" | "send-back", map, note}${named}.`);
+  }
+  if (body.note !== undefined && body.note !== null && typeof body.note !== 'string') return refuse("The map's note must be text.");
+  const note = typeof body.note === 'string' ? body.note.trim() : '';
+  if (body.outline === 'send-back' && !note) return refuse('A send-back carries a note: what the writer should change.');
+  if (body.outline === 'approve' && (body.map === undefined || body.map === null)) return refuse('An approve carries the map as the director left it.');
+  const shown = currentState.outline || null;
+  const left = body.map === undefined || body.map === null ? shown : body.map;
+  const problems = directorMapProblems(left, { theme, shown });
+  if (problems) return refuse(problems);
+
+  const baseline = isMap(currentState._mapBaseline) ? currentState._mapBaseline : shown;
+  const stateUpdates = {
+    outline: left,
+    _outlineHandEdits: standingOnMap(currentState._outlineHandEdits, baseline, left, { names }),
+    heroImage: topPhotoOf(left)
+  };
+  if (body.outline === 'approve') {
+    return { resume: { approved: true }, stateUpdates, note: note ? { text: note, kind: 'approval' } : null, error: null };
+  }
+  Object.assign(stateUpdates, { _outlineFeedback: note, _outlineHandEditReport: null, _outlineTrace: null });
+  return { resume: { approved: false, feedback: note }, stateUpdates, note: { text: note, kind: 'rejection' }, error: null };
+}
+
+/**
+ * A map check still failing on the map in hand: the checks' last result survives the
+ * rollback to the map (R9), so its failures show only when its mapKey names the map the
+ * stop shows.
+ *
+ * @param {Object} state
+ * @returns {Array<{type: string, message: string}>}
+ */
+function mapCheckFailures(state) {
+  const check = state && state._mapCheck;
+  if (!check || check.passed !== false || !isMapValue(state.outline) || check.mapKey !== mapKey(state.outline)) return [];
+  return Array.isArray(check.failures) ? check.failures : [];
+}
+
+/**
+ * The concerns about the director's own changes on the map (R11): the map checks' on the map
+ * in hand, as mapCheckFailures reads them, each with the edits it is about and their places,
+ * so the stop shows it beside the line. A concern about an edit the map no longer carries is
+ * not shown.
+ *
+ * @param {Object} state
+ * @returns {Array<{text: string, editIds: string[], places: Array<{id: string, path: string, where: string}>}>}
+ */
+function mapConcerns(state) {
+  if (!state || !isMapValue(state.outline)) return [];
+  const check = state._mapCheck;
+  const edits = new Map(carriedEdits(state._outlineHandEdits, state.outline).map((edit) => [edit.id, edit]));
+  return (check && check.mapKey === mapKey(state.outline) && Array.isArray(check.concerns) ? check.concerns : [])
+    .filter((text) => typeof text === 'string')
+    .map((text) => {
+      const editIds = concernEditIds(text).filter((id) => edits.has(id));
+      return { text, editIds, places: editIds.map((id) => ({ id, path: edits.get(id).path, where: editWhere(edits.get(id)) })) };
+    })
+    .filter((concern) => concern.editIds.length > 0);
+}
+
+/** The ids of the director's changes at the story meeting that the weave carries. */
+function meetingEditIdsOf(state) {
+  const weave = state && state.weave;
+  return carriedEdits(state && state._weaveHandEdits, weave).map((edit) => edit.id);
+}
+
+/** Did the director leave a note when approving the story meeting (an approval note at arc-selection)? */
+function meetingNoteOf(state) {
+  return (state && Array.isArray(state.directorGateNotes) ? state.directorGateNotes : [])
+    .some((note) => note && note.gate === MEETING_GATE && note.kind === 'approval' && textOf(note.text));
+}
+
+/** The story the director settled at the meeting, as the map's stop prints it: the story and its question. */
+function settledStoryOf(weave) {
+  if (!weave || typeof weave !== 'object') return null;
+  return { story: textOf(weave.story), question: textOf(weave.question) };
+}
+
+/**
+ * The payload the map's stop sends (brief 4.6; server.js getCheckpointData adds the trace):
+ * the map; the theme's slots, for the screen; the settled story, which the map cannot
+ * change; Everyone and the counts (mapTally); a check still failing on the map in hand; the
+ * concerns beside their lines; the edits a send-back changed (the report); the standing
+ * notes; the round's note and its counters.
+ *
+ * @param {Object} state
+ * @param {Object} options
+ * @param {string[]} options.keptPhotos - the photos kept for the article
+ * @param {number} options.maxRevisions - the automated budget of a round
+ * @returns {Object}
+ */
+function mapCheckpointData(state, { keptPhotos = [], maxRevisions } = {}) {
+  const s = state || {};
+  return {
+    outline: s.outline || null,
+    mapSlots: mapSlotsOf(s.theme || 'journalist'),
+    settledStory: settledStoryOf(s.weave),
+    tally: mapTally(s.outline, { roster: mapRosterOf(s.sessionConfig, s.canonicalCharacters), keptPhotos }),
+    checkFailures: mapCheckFailures(s),
+    concerns: mapConcerns(s),
+    handEditReport: handEditReportOf(s._outlineHandEditReport),
+    directorGateNotes: s.directorGateNotes || [],
+    previousFeedback: s._outlineFeedback || null,
+    revisionCount: s.outlineRevisionCount || 0,
+    humanRevisionCount: s.humanOutlineRevisionCount || 0,
+    maxRevisions
+  };
+}
+
 module.exports = {
   MAP_BEAT_KINDS,
   MAP_CARDS,
   MAP_CHECKS_SOURCE,
   MEETING_NOTE_SOURCE,
+  MAP_ACTIONS,
   mapKey,
   mapRosterOf,
-  mapFindings
+  mapFindings,
+  mapSchemaFor,
+  directorMapSchemaFor,
+  directorMapProblems,
+  topPhotoOf,
+  mapResume,
+  mapCheckFailures,
+  mapConcerns,
+  meetingEditIdsOf,
+  meetingNoteOf,
+  mapCheckpointData
 };

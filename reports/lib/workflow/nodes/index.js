@@ -12,6 +12,7 @@
  * - Arc Specialist Nodes: the weave: the arc writer, its checks and its rework (phase 4, brief 4.4)
  * - Evaluator Nodes: Per-phase quality evaluation (arcs, outline, article) - Commit 8.6
  * - AI Nodes: Claude-powered processing (curateEvidenceBundle, generateOutline, etc.)
+ * - Map Nodes: the map checks (checkMap) - phase 4, brief 4.6
  * - Template Nodes: HTML assembly (assembleHtml)
  *
  * Each category is in a separate file following Single Responsibility Principle.
@@ -29,6 +30,7 @@ const aiNodes = require('./ai-nodes');
 const characterDataNodes = require('./character-data-nodes');
 const contradictionNodes = require('./contradiction-nodes');
 const templateNodes = require('./template-nodes');
+const mapNodes = require('./map-nodes');
 const nodeHelpers = require('./node-helpers');
 
 // Re-export all node functions
@@ -94,8 +96,10 @@ module.exports = {
   // AI nodes (from ai-nodes.js)
   curateEvidenceBundle: aiNodes.curateEvidenceBundle,
   processRescuedItems: aiNodes.processRescuedItems,  // Commit 8.10+: Handle human-rescued paper evidence
-  generateOutline: aiNodes.generateOutline,
-  reviseOutline: aiNodes.reviseOutline,  // Revision node with previous output context (DRY)
+  generateOutline: aiNodes.generateOutline,  // the map writer (phase 4, brief 4.6)
+  reviseOutline: aiNodes.reviseOutline,  // the map's rework
+  // The map checks (from map-nodes.js; phase 4, brief 4.6)
+  checkMap: mapNodes.checkMap,
   generateContentBundle: aiNodes.generateContentBundle,
   validateContentBundle: aiNodes.validateContentBundle,
   reviseContentBundle: aiNodes.reviseContentBundle,
@@ -117,6 +121,7 @@ module.exports = {
     // NOTE: validation removed in Commit 8.23
     // NOTE: supervisor removed in interrupt() migration - generation-supervisor.js was deprecated
     ai: aiNodes._testing,
+    map: mapNodes._testing,
     characterData: characterDataNodes._testing,
     contradictions: contradictionNodes._testing,
     template: templateNodes._testing,

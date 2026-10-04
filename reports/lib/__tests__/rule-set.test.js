@@ -59,24 +59,24 @@ const CRAFT_ITEMS = {
 };
 
 /**
- * Spec section 8, item by item: the arc writer reads neither the voice (C12), the
- * telling (C4) nor the cards (C9); the outline writer reads all but the voice.
- *
- * Phase 4 (brief 4.4): the arc stage follows the phase 4 spec's section 11. The
- * interweaving call is gone, and the story meeting's fact check reads no craft file.
+ * The phase 4 spec's section 11 (who reads what; it was the rule-set spec's section 8),
+ * item by item: the arc writer reads neither the voice (C12), the telling (C4) nor the
+ * cards (C9); the map writer reads neither the voice nor the questions (C15), since it
+ * asks nothing (brief 4.6). The interweaving call is gone, and the story meeting's fact
+ * check reads no craft file (brief 4.4).
  */
-const SPEC_SECTION_8 = {
+const SPEC_SECTION_11 = {
   arc: ALL_CRAFT.filter((id) => !['C4', 'C9', 'C12'].includes(id)),
-  outline: ALL_CRAFT.filter((id) => id !== 'C12'),
+  outline: ALL_CRAFT.filter((id) => !['C12', 'C15'].includes(id)),
   article: ALL_CRAFT
 };
-SPEC_SECTION_8['judge-arc'] = [];
-SPEC_SECTION_8['judge-article'] = SPEC_SECTION_8.article;
+SPEC_SECTION_11['judge-arc'] = [];
+SPEC_SECTION_11['judge-article'] = SPEC_SECTION_11.article;
 
-/** The brief's map (spec section 8; the read's section C): each call's craft files, in order. */
+/** The brief's map (the phase 4 spec's section 11; the read's section C): each call's craft files, in order. */
 const BRIEF_MAP = {
   arc: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'],
-  outline: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'],
+  outline: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-telling', 'craft-cards'],
   article: [
     'craft-story', 'craft-form', 'craft-material', 'craft-voice',
     'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
@@ -126,11 +126,11 @@ describe('the loader', () => {
     expect(craft).toBe(BRIEF_MAP[call].map((name) => `<${name}>\nSTUB ${name}\n</${name}>`).join('\n\n'));
   });
 
-  it.each(Object.keys(SPEC_SECTION_8))('%s: the real files give exactly the craft items spec section 8 lists, each once', (call) => {
+  it.each(Object.keys(SPEC_SECTION_11))('%s: the real files give exactly the craft items spec section 11 lists, each once', (call) => {
     const { core, craft } = loadRuleSet(call);
     // An item is counted by its heading; a body may point at an item another file states.
     const crafted = itemIds(craft).filter((id) => id.startsWith('C'));
-    expect(crafted.sort()).toEqual([...SPEC_SECTION_8[call]].sort());
+    expect(crafted.sort()).toEqual([...SPEC_SECTION_11[call]].sort());
     // The core states no craft item: every call reads all of the world and the truth rules.
     expect(itemIds(core).filter((id) => id.startsWith('C'))).toEqual([]);
   });
@@ -555,21 +555,15 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     const { PHASE_REQUIREMENTS } = require('../theme-loader');
     const { _testing: arcs } = require('../workflow/nodes/arc-specialist-nodes');
     const { _testing: judges } = require('../workflow/nodes/evaluator-nodes');
+    const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
     const MODEL = 'MODEL-OUTPUT-SENTINEL';
 
     const state = reworkFixtureState('journalist');
-    state.narrativeArcs[0] = { ...state.narrativeArcs[0], summary: `${MODEL} summary`, caveats: [`${MODEL} caveat`] };
-    // Phase 4 (brief 4.4): the weave the arc reworker and the fact check print back
+    // Phase 4 (brief 4.4): the weave the arc reworker and the fact check print back, and
+    // (brief 4.6) the map writer prints first as the settled weave. The old arcs went (R4).
     state.weave = { ...state.weave, story: `${MODEL} story` };
-    state._arcAnalysisCache = {
-      ...state._arcAnalysisCache,
-      synthesisNotes: `${MODEL} synthesis`,
-      interweavingPlan: { ...state._arcAnalysisCache.interweavingPlan, convergencePoint: `${MODEL} plan` },
-      // Fix 3.7b: the arc writer's questions, which the arc reworker and the arc judge
-      // print back under their own labels
-      writerQuestions: [{ kind: 'player', about: `${MODEL} about`, question: `${MODEL} question` }]
-    };
-    state.outline = { ...state.outline, lede: { ...state.outline.lede, hook: `${MODEL} hook` } };
+    // Brief 4.6: the map, which the article writer prints back
+    state.outline = { ...state.outline, headline: `${MODEL} headline of the map` };
     state.contentBundle = { headline: { main: `${MODEL} headline` }, sections: [] };
     state.playerFocus = {
       ...state.playerFocus, whiteboardContext: { ...state.playerFocus.whiteboardContext, notes: [`${MODEL} whiteboard`] }
@@ -584,9 +578,8 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
       phase: 'arcs', outputName: 'weave', revisionCount: 0, validationResults: null, previousOutput: state.weave, humanFeedback: NOTE, round: 1
     });
     const renders = {
-      'outline writer': join(await builder.buildOutlinePrompt(
-        { narrativeArcs: state.narrativeArcs, ...state._arcAnalysisCache }, state.selectedArcs, 'hero.jpg',
-        [], state.shellAccounts, null, { evidenceBundle: state.evidenceBundle }
+      'map writer': join(await builder.buildOutlinePrompt(
+        settledWeaveOf(state), [], state.shellAccounts, null, { evidenceBundle: state.evidenceBundle }
       )),
       'article writer': join(await builder.buildArticlePrompt(
         state.outline, 'hero.jpg', state.shellAccounts, null, state.directorNotes, null,

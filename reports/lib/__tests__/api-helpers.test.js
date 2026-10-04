@@ -167,7 +167,8 @@ describe('buildRollbackState re-pause correctness', () => {
     const state = buildRollbackState('await-roster');
     expect(state).toHaveProperty('whiteboardAnalysis', null);
     expect(state).toHaveProperty('evidenceBundle', null);
-    expect(state).toHaveProperty('selectedArcs', null);
+    // Phase 4 (brief 4.6): the map, where the old arc selection was (R4).
+    expect(state).toHaveProperty('outline', null);
   });
 
   test('a photos rollback clears the five photo inputs as a unit (C3)', () => {

@@ -46,17 +46,17 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
 
   // Phase 4 (brief 4.4): the arc writer writes the weave in one call, and the arc stage
   // is the journalist's alone (R1); the interweaving call went. Brief 4.6: the outline
-  // judge went.
+  // judge went, and the map writer is the journalist's alone too (R1).
   it('the arc writer, the outline and article writers and the article judge carry the sales on the clock', async () => {
     if (theme === 'journalist') {
       const arcSdk = recordingSdk(() => oldShapeState(theme).weave);
       await analyzeArcsPlayerFocusGuided({ ...oldShapeState(theme), weave: null }, cfg(arcSdk, theme));
       expect(promptOf(arcSdk, 0)).toContain(SALE_LINE);
-    }
 
-    const outlineSdk = recordingSdk(() => OUTLINE);
-    await generateOutline({ ...oldShapeState(theme), outline: null }, cfg(outlineSdk, theme));
-    expect(promptOf(outlineSdk)).toContain(SALE_LINE);
+      const outlineSdk = recordingSdk(() => OUTLINE);
+      await generateOutline({ ...oldShapeState(theme), outline: null }, cfg(outlineSdk, theme));
+      expect(promptOf(outlineSdk)).toContain(SALE_LINE);
+    }
 
     const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
     await generateContentBundle({ ...oldShapeState(theme), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
@@ -89,9 +89,11 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     const LINK_LINE = '[account: Melanie | amount: $75,000 | time: 07:50 AM]';
 
     const arcSdk = recordingSdk(() => withLink().weave);
-    if (theme === 'journalist') await analyzeArcsPlayerFocusGuided({ ...withLink(), weave: null }, cfg(arcSdk, theme));
     const outlineSdk = recordingSdk(() => OUTLINE);
-    await generateOutline({ ...withLink(), outline: null }, cfg(outlineSdk, theme));
+    if (theme === 'journalist') {
+      await analyzeArcsPlayerFocusGuided({ ...withLink(), weave: null }, cfg(arcSdk, theme));
+      await generateOutline({ ...withLink(), outline: null }, cfg(outlineSdk, theme));
+    }
     const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
     await generateContentBundle({ ...withLink(), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
@@ -103,8 +105,7 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     }, cfg(articleJudge, theme));
 
     const prompts = {
-      ...(theme === 'journalist' && { arcWriter: promptOf(arcSdk, 0) }),
-      outlineWriter: promptOf(outlineSdk),
+      ...(theme === 'journalist' && { arcWriter: promptOf(arcSdk, 0), outlineWriter: promptOf(outlineSdk) }),
       articleWriter: promptOf(articleSdk),
       articleJudge: promptOf(articleJudge)
     };

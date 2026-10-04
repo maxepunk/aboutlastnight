@@ -35,8 +35,7 @@ const checkpointInterrupt = jest.fn((type, data, skipCondition) => {
   if (type === 'outline' || type === 'article') {
     return { approved: true };
   }
-  // The story meeting (brief 4.5) resumes as the director's approval. A graph test that
-  // runs past it seeds selectedArcs for the packages node until 4.6.
+  // The story meeting (brief 4.5) resumes as the director's approval.
   if (type === 'arc-selection') {
     return { approved: true };
   }

@@ -165,13 +165,10 @@ describe('the outline writer', () => {
   });
 });
 
-// Phase 4 (brief 4.4): the detective's arc writer and interweaving call went (R1).
+// Phase 4 (brief 4.4): the detective's arc writer and interweaving call went (R1). Brief
+// 4.6: so did its outline writer; the detective has no map.
 describe("the detective's prompts keep their text (D13)", () => {
-  it('its outline writer does not print the section', async () => {
-    const { system, user } = await outlineCall('detective');
-    for (const [name, text] of [['outline writer', `${system}\n${user}`]]) {
-      expect(`${name}: ${text.includes('CANONICAL CHARACTER ROSTER')}`).toBe(`${name}: false`);
-      expect(`${name}: ${text.includes('NAMES AND PRONOUNS') || text.includes('Names and Pronouns')}`).toBe(`${name}: false`);
-    }
+  it('it has no outline writer to print the section (R1)', async () => {
+    await expect(outlineCall('detective')).rejects.toThrow('The "detective" theme has no story map');
   });
 });

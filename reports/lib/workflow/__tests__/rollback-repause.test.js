@@ -36,7 +36,7 @@ describe('ROLL-1 await-roster re-pause', () => {
     photoAnalyses: { analyses: [] },
     whiteboardPhotoPath: '/tmp/wb.jpg',
     evidenceBundle: { exposed: {} },
-    selectedArcs: ['arc-1']
+    meetingApproved: true  // brief 4.6: the meeting's approval, where the arc selection was (R4)
   };
 
   test('before rollback: checkpointAwaitRoster SKIPS (roster present)', () => {

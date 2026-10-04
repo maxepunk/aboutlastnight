@@ -1,6 +1,10 @@
 /**
  * The hand-edit diff and its report must not survive the gate they belong to
  * (spec 2026-09-19 §4.4). The revisers deliberately do not clear them (C3).
+ *
+ * Phase 4 (brief 4.6): the map's standing edits are the exception, as the meeting's are
+ * (4.5): they and the writer's last map stand past approve, through the article rollback and
+ * R9's rollback to the map. The map's approve ends the round's report and trace.
  */
 jest.mock('../../../lib/workflow/checkpoint-helpers',
   () => require('../../mocks/checkpoint-helpers.mock'));
@@ -10,9 +14,11 @@ const { _testing: { checkpointOutline, checkpointArticle } } = require('../../..
 const DIFF = { kind: 'outline', sections: [{ key: 'lede', changes: [{ path: 'lede.hook', before: 'a', after: 'b' }] }] };
 const REPORT = { checked: ['lede'], changed: [] };
 
-test('outline approve returns null for both steering fields', async () => {
-  const result = await checkpointOutline({ outline: {}, evaluationHistory: [], _outlineHandEdits: DIFF, _outlineHandEditReport: REPORT }, {});
-  expect(result).toMatchObject({ outlineApproved: true, _outlineHandEdits: null, _outlineHandEditReport: null });
+test("the map's approve ends the round's report and keeps the standing edits and the writer's last map", async () => {
+  const result = await checkpointOutline({ outline: {}, _mapBaseline: {}, evaluationHistory: [], _outlineHandEdits: DIFF, _outlineHandEditReport: REPORT }, {});
+  expect(result).toMatchObject({ outlineApproved: true, _outlineHandEditReport: null });
+  expect(result).not.toHaveProperty('_outlineHandEdits');
+  expect(result).not.toHaveProperty('_mapBaseline');
 });
 
 test('article approve returns null for both steering fields', async () => {
@@ -53,11 +59,14 @@ describe('the trace is cleared on approve, exactly where the hand-edit fields ar
     ['skip (already approved)', () => {}, true]
   ];
 
-  test.each(BRANCHES)('outline %s: the trace is written exactly when the hand-edit fields are', async (_name, arrange, approved) => {
+  // Brief 4.6: the map's standing edits stand past approve, so the map's trace follows its
+  // report, which the approve ends.
+  test.each(BRANCHES)('outline %s: the trace is written exactly when the hand-edit report is', async (_name, arrange, approved) => {
     arrange();
-    const result = await checkpointOutline({ outline: {}, evaluationHistory: [], outlineApproved: approved, _outlineTrace: TRACE, _outlineHandEdits: DIFF }, {});
-    expect('_outlineTrace' in result).toBe('_outlineHandEdits' in result);
+    const result = await checkpointOutline({ outline: {}, evaluationHistory: [], outlineApproved: approved, _outlineTrace: TRACE, _outlineHandEdits: DIFF, _outlineHandEditReport: REPORT }, {});
+    expect('_outlineTrace' in result).toBe('_outlineHandEditReport' in result);
     if ('_outlineTrace' in result) expect(result._outlineTrace).toBeNull();
+    expect(result).not.toHaveProperty('_outlineHandEdits');
   });
 
   test.each(BRANCHES)('article %s: the trace is written exactly when the hand-edit fields are', async (_name, arrange, approved) => {

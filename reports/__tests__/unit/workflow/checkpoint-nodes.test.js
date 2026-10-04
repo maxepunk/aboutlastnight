@@ -318,3 +318,58 @@ describe('checkpointCharacterIds: the leave-out choices', () => {
     expect(out).not.toHaveProperty('leftOutPhotos');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6: checkpointOutline, the map's stop (brief 4.6; R8)
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.6: checkpointOutline, the map's stop", () => {
+  const { _testing: { checkpointOutline } } = require('../../../lib/workflow/nodes/checkpoint-nodes');
+  const { MAP } = require('../../../lib/__tests__/fixtures/rework-state');
+  const STANDING = { kind: 'map', issued: 1, edits: [{ id: 'E1', scope: 'map', path: 'headline', at: [{ key: 'headline' }], before: 'a', after: 'b' }] };
+  let dataDir;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-map-'));
+  });
+  afterEach(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+  const approvedMap = (sessionId) => path.join(dataDir, sessionId, 'analysis', 'map.approved.json');
+
+  it('shows the map, and skips once the map is approved', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ approved: true });
+    await checkpointOutline({ sessionId: '100326', outline: MAP }, { configurable: { dataDir } });
+    expect(checkpointInterrupt.mock.calls[0][0]).toBe('outline');
+    expect(checkpointInterrupt.mock.calls[0][1]).toEqual({ outline: MAP });
+    expect(checkpointInterrupt.mock.calls[0][2]).toBeNull();
+
+    jest.clearAllMocks();
+    const replay = await checkpointOutline({ sessionId: '100326', outline: MAP, outlineApproved: true }, { configurable: { dataDir } });
+    expect(checkpointInterrupt.mock.calls[0][2]).toBe(true);
+    expect(replay).not.toHaveProperty('outlineApproved');
+  });
+
+  it("an approve sets the approval, ends the round's report and trace, keeps the standing edits and writes map.approved.json", async () => {
+    checkpointInterrupt.mockReturnValueOnce({ approved: true });
+    const out = await checkpointOutline(
+      { sessionId: '100326', outline: MAP, _mapBaseline: MAP, _outlineHandEdits: STANDING, _outlineHandEditReport: { checked: ['E1'], changed: [] }, _outlineTrace: [{ pass: 1 }] },
+      { configurable: { dataDir } }
+    );
+    expect(out).toMatchObject({ outlineApproved: true, _outlineHandEditReport: null, _outlineTrace: null });
+    expect(out).not.toHaveProperty('_outlineHandEdits');
+    expect(out).not.toHaveProperty('_mapBaseline');
+    expect(JSON.parse(fs.readFileSync(approvedMap('100326'), 'utf-8'))).toEqual(MAP);
+  });
+
+  it('writes nothing on a replay of an approved map, or without a session id', async () => {
+    await checkpointOutline({ sessionId: '100326', outline: MAP, outlineApproved: true }, { configurable: { dataDir } });
+    checkpointInterrupt.mockReturnValueOnce({ approved: true });
+    await checkpointOutline({ outline: MAP }, { configurable: { dataDir } });
+    expect(fs.readdirSync(dataDir)).toEqual([]);
+  });
+
+  it('a send-back approves nothing and writes nothing: the route takes it to the rework', async () => {
+    checkpointInterrupt.mockReturnValueOnce({ approved: false, feedback: 'Lead with the vote.' });
+    const out = await checkpointOutline({ sessionId: '100326', outline: MAP }, { configurable: { dataDir } });
+    expect(out).not.toHaveProperty('outlineApproved');
+    expect(fs.readdirSync(dataDir)).toEqual([]);
+  });
+});

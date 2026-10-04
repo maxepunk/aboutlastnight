@@ -180,6 +180,9 @@ describe('the map checks (spec 5.4)', () => {
       expect(mapFindings(two, inputs()).failures.map((f) => [f.type, f.message])).toEqual([
         ['card-count', expect.stringMatching(/^The map carries 2 cards\. /)]
       ]);
+      const one = clone(two);
+      delete one.sections[1].beats[2].card;
+      expect(mapFindings(one, inputs()).failures.map((f) => f.message)).toEqual([expect.stringMatching(/^The map carries 1 card\. /)]);
       const six = writers();
       six.sections[0].beats[0].card = 'ROW004';
       six.sections[0].beats[1].card = 'row004';
@@ -240,5 +243,83 @@ describe('the map checks (spec 5.4)', () => {
 
   it('a value that is no map is one failure', () => {
     expect(mapFindings(null, inputs()).failures.map((f) => f.type)).toEqual(['no-map']);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6: the map's schemas, the writer's and the director-side one (R12)
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.6: the map's schemas", () => {
+  const Ajv = require('ajv');
+  const outlineSchema = require('../schemas/outline.schema.json');
+  const contentBundleSchema = require('../schemas/content-bundle.schema.json');
+  const { HEADLINE_LIMITS } = require('../../console/article-desk-logic');
+  const { mapSlotsOf } = require('../theme-config');
+  const { mapSchemaFor, directorMapSchemaFor, directorMapProblems } = require('../map');
+  const { MAP } = require('./fixtures/rework-state');
+
+  it("the headline and the deck state the content bundle's limits, one constant (HEADLINE_LIMITS)", () => {
+    const { headline, deck } = outlineSchema.properties;
+    expect([headline.minLength, headline.maxLength, deck.maxLength])
+      .toEqual([HEADLINE_LIMITS.main.min, HEADLINE_LIMITS.main.max, HEADLINE_LIMITS.deck.max]);
+    const bundle = contentBundleSchema.properties.headline.properties;
+    expect([bundle.main.minLength, bundle.main.maxLength, bundle.deck.maxLength])
+      .toEqual([headline.minLength, headline.maxLength, deck.maxLength]);
+  });
+
+  it("a section's slot and a dropped slot are the theme's, in its order, and the stored schema names no theme", () => {
+    const schema = mapSchemaFor('journalist');
+    const keys = mapSlotsOf('journalist').map((slot) => slot.key);
+    expect(schema.properties.sections.items.properties.slot.enum).toEqual(keys);
+    expect(schema.properties.dropped.items.properties.slot.enum).toEqual(keys);
+    expect(outlineSchema.properties.sections.items.properties.slot).not.toHaveProperty('enum');
+    expect(outlineSchema.properties.dropped.items.properties.slot).not.toHaveProperty('enum');
+    // Built once per theme, so the SDK guardrail's memo and ajv compile it once.
+    expect(mapSchemaFor('journalist')).toBe(schema);
+  });
+
+  it("a beat's kinds are MAP_BEAT_KINDS, and a left-out item has the beat's shape, so one brought back is whole", () => {
+    const beat = outlineSchema.properties.sections.items.properties.beats.items;
+    expect(beat.properties.kind.enum).toEqual([...MAP_BEAT_KINDS]);
+    expect(outlineSchema.properties.leftOut.items).toEqual(beat);
+  });
+
+  it('the writer\'s schema holds no format keyword, no $ref and no questions', () => {
+    const text = JSON.stringify(mapSchemaFor('journalist'));
+    expect(text).not.toMatch(/"format"/);
+    expect(text).not.toContain('$ref');
+    expect(text).not.toContain('writerQuestions');
+  });
+
+  it("the director-side schema is the writer's, derived in code, with a beat needing only its id and its material", () => {
+    const writer = mapSchemaFor('journalist');
+    const director = directorMapSchemaFor('journalist');
+    expect(writer.properties.sections.items.properties.beats.items.required).toEqual(['id', 'kind', 'material', 'players']);
+    expect(director.properties.sections.items.properties.beats.items.required).toEqual(['id', 'material']);
+    expect(director.properties.leftOut.items.required).toEqual(['id', 'material']);
+    const withoutBeatRules = (schema) => {
+      const copy = clone(schema);
+      delete copy.properties.sections.items.properties.beats.items.required;
+      delete copy.properties.leftOut.items.required;
+      return copy;
+    };
+    expect(withoutBeatRules(director)).toEqual(withoutBeatRules(writer));
+    expect(directorMapSchemaFor('journalist')).toBe(director);
+  });
+
+  it("a map the writer's schema takes, the director's takes; a beat the director added with only its id and material, only the director's", () => {
+    const writerTakes = new Ajv({ allErrors: true, strict: true }).compile(mapSchemaFor('journalist'));
+    expect(writerTakes(clone(MAP))).toBe(true);
+    expect(directorMapProblems(clone(MAP), { theme: 'journalist' })).toBeNull();
+    const added = clone(MAP);
+    added.sections[0].beats.push({ id: 'b11', material: 'Alex at the window' });
+    expect(writerTakes(added)).toBe(false);
+    expect(directorMapProblems(added, { theme: 'journalist' })).toBeNull();
+  });
+
+  it('a theme with no map slots has no map: the parked detective (R1)', () => {
+    expect(mapSlotsOf('detective')).toEqual([]);
+    expect(() => mapSchemaFor('detective')).toThrow('The "detective" theme has no story map');
+    expect(() => directorMapSchemaFor('detective')).toThrow('The "detective" theme has no story map');
   });
 });

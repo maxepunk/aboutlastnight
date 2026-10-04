@@ -387,7 +387,7 @@ module.exports = {
   buildParseCorrectionsBlock,
   renderDirectorCorrectionsBlock,
   renderWhiteboardConnections,
-  photoKey,  // the outline judge pairs each photo with its analysis by this key (brief 2.4)
+  photoKey,  // the one join key for a photo: the leave-out box, the kept photos the map checks count (brief 4.6)
   photoDescriptionFor,
   renderPhotoEntry,
   renderPhotoListEntry

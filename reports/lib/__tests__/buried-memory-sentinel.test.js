@@ -158,7 +158,7 @@ describe('the arc stage: no prompt carries the buried memory, so none reaches th
   it('the fact check', async () => {
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 1, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
     const sdk = recordingSdk(verdict);
-    await evaluateArcs({ ...sentinelState(), selectedArcs: [], evaluationHistory: [] }, cfg(sdk));
+    await evaluateArcs({ ...sentinelState(), meetingApproved: false, evaluationHistory: [] }, cfg(sdk));
     const prompts = promptsOf(sdk);
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
@@ -167,22 +167,27 @@ describe('the arc stage: no prompt carries the buried memory, so none reaches th
   });
 });
 
-describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge prompt carries the buried memory', (theme) => {
-  it('the outline writer and its reworker', async () => {
-    const state = sentinelState(theme);
+// Phase 4 (brief 4.6): the outline writer is the map writer, the journalist's alone (R1:
+// the outline stage's detective branches went). It reads the settled weave first.
+describe('journalist: the map writer and its rework carry no buried memory', () => {
+  it('the map writer and its rework', async () => {
+    const state = sentinelState('journalist');
     const writer = recordingSdk(() => OUTLINE);
-    const { heroImage } = await generateOutline({ ...state, outline: null }, cfg(writer, theme));
+    const { heroImage } = await generateOutline({ ...state, outline: null }, cfg(writer, 'journalist'));
     const rework = recordingSdk(() => OUTLINE);
-    await reviseOutline({ ...state, heroImage, outline: null, _previousOutline: OUTLINE, outlineRevisionCount: 1 }, cfg(rework, theme));
-    for (const prompt of [...promptsOf(writer), ...promptsOf(rework)]) {
-      // The detective writers carry no director-notes block at all.
-      expect(prompt.includes('<TRANSACTION_LINKS>')).toBe(theme === 'journalist');
-      // Both themes read the record view, so both get the morning timeline (3.5).
+    await reviseOutline({ ...state, heroImage, outline: null, _previousOutline: OUTLINE, outlineRevisionCount: 1 }, cfg(rework, 'journalist'));
+    const prompts = [...promptsOf(writer), ...promptsOf(rework)];
+    expect(prompts).toHaveLength(2);
+    for (const prompt of prompts) {
+      expect(prompt).toContain('<SETTLED_WEAVE>');
+      expect(prompt).toContain('<TRANSACTION_LINKS>');
       expect(prompt).toContain('<morning-timeline>');
       expect(leaksIn(prompt)).toEqual([]);
     }
   });
+});
 
+describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge prompt carries the buried memory', (theme) => {
   it('the article writer and its reworker', async () => {
     const state = { ...sentinelState(theme), heroImage: 'hero.jpg' };
     const writer = recordingSdk(() => PREVIOUS_BUNDLE);

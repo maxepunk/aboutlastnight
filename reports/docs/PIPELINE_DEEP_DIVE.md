@@ -188,14 +188,14 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 │              PHASE 2: ARC ANALYSIS (Player-Focus-Guided)                    │
 │  Player conclusions (accusation + whiteboard) drive arc generation          │
 │  Architecture: Split-call (core arcs + enrichment) - See Section 10         │
-│  OUTPUT: narrativeArcs (3-5 arcs with arcSource, evidenceStrength)          │
+│  OUTPUT: weave (threads, connections, questions), settled at the meeting    │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│              PHASE 3: OUTLINE GENERATION (Opus)                             │
-│  Article structure: lede, theStory, followTheMoney, thePlayers, closing     │
-│  Arcs weave THROUGH sections (not isolated chapters)                        │
+│              PHASE 3: THE MAP (Opus writer, code checks)                    │
+│  The settled weave laid across the theme's slots, in about 450 words        │
+│  Beats name their material; the article writer writes the prose             │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -383,31 +383,32 @@ SECTION 6: CRAFT GUIDANCE (the rule set's craft files for the arc writer: story,
 
 The photo branch joins at the outline writer. Phase 2.4, the arc evidence packages (`buildArcEvidencePackages`), went in phase 4 (brief 4.6; R5): every writer reads the record whole, and the fact check's card sources come from it alone.
 
-### Phase 3: Outline Generation
+### Phase 3: The Map
 
-**Node**: `generateOutline` (in `lib/workflow/nodes/ai-nodes.js`)
+**Nodes**: `generateOutline` (the map writer, `lib/workflow/nodes/ai-nodes.js`), `checkMap` (`lib/workflow/nodes/map-nodes.js`), `checkpointOutline`, and the rework `incrementOutlineRevision` + `reviseOutline` (phase 4, brief 4.6; spec 5.1 to 5.4).
 
-**Article Structure** (`lib/schemas/outline.schema.json`; since phase 3 every key is an optional slot, and the thesis decides which sections exist, C2):
+**The map's shape** (`lib/schemas/outline.schema.json`; the theme's slots filled in by `lib/map.js` `mapSchemaFor`):
 
 ```javascript
 {
-  lede: { hook, keyTension, primaryArc, selectedEvidence },
-  theStory: { arcs, arcInterweaving },
-  followTheMoney: { shellAccounts, arcConnections, photoPlacement },
-  thePlayers: { exposed, characterHighlights, arcConnections },
-  whatsMissing: { knownUnknowns, narrativePurpose, arcConnections },
-  closing: { systemicAngle, accusationHandling, arcResolutions, finalLine },
-  writerQuestions: [...]   // the outline writer's questions for the director (C15); never printed
+  headline, deck,                 // within the content bundle's limits (HEADLINE_LIMITS)
+  topPhoto,                       // the photo the article prints as its hero
+  gapNote: { line, players },     // only when the record cannot carry part of the story
+  sections: [{ slot, heading, job,
+    beats: [{ id, kind, material, players, card?, connection? }],   // kind: scene | receipt | line | figure
+    photos: [{ filename, beat? }] }],
+  dropped: [{ slot, reason }],
+  leftOut: [/* beats considered and not used */],
+  expectedLength,                 // the writer's estimate
+  weaveChanges: [{ source, change }]   // what the map changed to fit a meeting edit (its id) or the meeting's note ("note")
 }
 ```
 
-**The rules**: the outline writer reads every craft file but `craft-voice.md` (`loadRuleSet('outline')`). How the sections carry one story is the form in `craft-form.md` (C2 first); how the threads intercut and converge is C16 in `craft-story.md`.
+**The writer** reads the settled weave first, as its task (`settledWeaveOf`), then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline')`), and the standing notes last. Code writes `heroImage` from the map's top photo.
 
-**Inputs** beside the arcs and the record: FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns (since 3.10) and the photos: the hero, then every other photo but the whiteboard and, since the 4b fix batch, the ones the director excluded. The outline places what its photo slots hold, one per arc and one in FOLLOW THE MONEY, and the article places the rest (T13).
+**The checks** (`lib/map.js` `mapFindings`), free and in code: every roster player in a beat or raised in the gap note, every kept photo placed once, three to five cards from the record, every live connection of the settled weave landed in a beat, and each weave change named by its source. A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLINE` is 1); a check still failing after it opens the stop, which shows it. A failure the director caused is a concern on their edit, never a rework. No model judge reads the map.
 
-**Momentum criteria** (Commit 8.24): the outline judge's advisory `loopArchitecture`, `arcInterweaving`, `visualMomentum` and `convergence` score C16, C4 and C9; see [Evaluation & Revision Architecture](#evaluation--revision-architecture).
-
-**Checkpoint**: `outline` (3.2) - Approve structure, photo placements
+**Checkpoint**: `outline` (3.25) - The map: the director edits its beats, its photos and its top photo, and approves or sends it back. The approved map is saved as `data/<id>/analysis/map.approved.json`.
 
 ### Phase 4: Article Generation
 
@@ -552,19 +553,16 @@ ${content.trim()}
 - `rosterCoverage`: Every player in at least one arc, or, since phase 3 (3.7), named in a question of kind `player` to the director (journalist)
 - `evidenceIdValidity`: All keyEvidence IDs exist
 - `accusationArcPresent`: arcSource="accusation" exists
-- `requiredSections`: journalist, each printed section earns its place (C2); detective, all five sections present (executiveSummary, evidenceLocker, suspectNetwork, outstandingQuestions, finalAssessment)
 - `voiceConsistency`: Nova's first person; "we" as T8 allows it (C12, T8)
 - `antiPatterns`: only C4's em-dash house rule and T14's production words (length is the fact check's advisory and a craft finding)
 - `reporterMode`: T8 as the session's mode block states it (journalist): it fails on Nova voting, joining the room's accusation or exposing a memory and, remote, on a claim to have seen or heard the room or the absence stated more than once
-- `arcSectionFlow` / `arcThreading`: every section an essential part of one narrative (C2)
-- `visualDistributionPlan` (outline): the photos spread through the article
-- Truth criteria (journalist, phase 3): one per group of truth rules (`TRUTH_GROUPS` in `evaluator-nodes.js`), no weight; one scored below `STRUCTURAL_PASS_SCORE` (0.8) sends the output back. `moneyTruth` (T5) asks whether the money runs from the buyer, and reads the timeline and, at the outline and article judges, the writers' FINANCIAL_SUMMARY; the article's `photosTruth` (T13) checks every photo the director kept
+- `arcThreading`: every section an essential part of one narrative (C2)
+- Truth criteria (journalist, phase 3): one per group of truth rules (`TRUTH_GROUPS` in `evaluator-nodes.js`), no weight; one scored below `STRUCTURAL_PASS_SCORE` (0.8) sends the output back. `moneyTruth` (T5) asks whether the money runs from the buyer, and reads the timeline and, at the article judge, the writers' FINANCIAL_SUMMARY; the article's `photosTruth` (T13) checks every photo the director kept
 
 **ADVISORY** (warnings only, don't block):
 - `coherence`: journalist, facts that cannot both be true (no craft item since round 7 rewrote C3), never arcs that pull against the verdict; detective, a consistent story without contradictions
 - `evidenceConfidenceBalance`: Not all speculative
 - `sectionBalance`: an article of about 1,500 words (C4)
-- `convergence` (outline): one convergence near the end, where the thesis lands (C16)
 - `emotionalResonance`: Delivers promised experience
 - Craft findings (journalist): an editor's note for the director, naming its craft item, never a blocker (R22)
 

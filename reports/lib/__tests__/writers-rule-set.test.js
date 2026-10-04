@@ -22,7 +22,7 @@ const { ThemeLoader } = require('../theme-loader');
 const {
   generateOutline, reviseOutline, generateContentBundle, reviseContentBundle
 } = require('../workflow/nodes/ai-nodes');
-const { diffOutline, diffBundle } = require('../hand-edit-diff');
+const { standingOnMap, diffBundle } = require('../hand-edit-diff');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const count = (haystack, needle) => haystack.split(needle).length - 1;
@@ -91,12 +91,13 @@ async function renderJournalistCalls(mode) {
   const outlineSdk = recordingSdk(OUTLINE);
   const { heroImage } = await generateOutline({ ...state, outline: null }, cfg(outlineSdk));
 
+  // Phase 4 (brief 4.6): the outline is the story map; the director's edit is its headline.
   const editedOutline = clone(OUTLINE);
-  editedOutline.lede.hook = 'Hand-edited hook.';
+  editedOutline.headline = 'The Headline the Director Wrote';
   const outlineReworkSdk = recordingSdk(editedOutline);
   await reviseOutline({
     ...state, heroImage, outline: null, _previousOutline: editedOutline,
-    _outlineFeedback: 'Open on the vote.', _outlineHandEdits: diffOutline(OUTLINE, editedOutline),
+    _outlineFeedback: 'Open on the vote.', _outlineHandEdits: standingOnMap(null, OUTLINE, editedOutline),
     humanOutlineRevisionCount: 1, outlineRevisionCount: 0,
     validationResults: { phase: 'outline', passed: true, structuralIssues: [], advisoryWarnings: [] }
   }, cfg(outlineReworkSdk));
@@ -160,7 +161,9 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
     expect(renders[name].systemPrompt).not.toContain('<craft-');
     expect(user.indexOf(craft)).toBeGreaterThan(user.indexOf('</RECORD>'));
     expect(user.indexOf(craft)).toBeGreaterThan(user.indexOf('</SESSION_FACTS>'));
-    expect(user.indexOf(craft)).toBeLessThan(user.indexOf('<DIRECTOR_GUIDANCE>'));
+    // The section is the one that opens on its own line: the map's task names the tag in
+    // prose (brief 4.6).
+    expect(user.indexOf(craft)).toBeLessThan(user.search(/^<DIRECTOR_GUIDANCE>$/m));
     expect(user.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
     expect(count(user, '\n<RECORD>\n')).toBe(1);
   });
@@ -176,9 +179,11 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
     // The writer's user sections end where its tail opens: <SHOULD_CONSIDER> when it has
     // one, else <DIRECTOR_GUIDANCE> (phase 4, brief 4.6: the article writer reads no
     // <SHOULD_CONSIDER> since the outline judge left).
+    // Each tail is found by the line that opens it: the map's task names <DIRECTOR_GUIDANCE>
+    // in prose.
     const writerUser = (name) => {
       const { prompt } = renders[name];
-      const tails = ['<SHOULD_CONSIDER>', '<DIRECTOR_GUIDANCE>'].map((tag) => prompt.indexOf(tag)).filter((i) => i >= 0);
+      const tails = [/^<SHOULD_CONSIDER>$/m, /^<DIRECTOR_GUIDANCE>$/m].map((tag) => prompt.search(tag)).filter((i) => i >= 0);
       return prompt.slice(0, Math.min(...tails));
     };
     expect(renders['outline reworker'].systemPrompt.startsWith(`${renders['outline writer'].systemPrompt}\n\n`)).toBe(true);

@@ -31,15 +31,12 @@ describe('outline contract — pullQuotes removed post-F3 (X-5)', () => {
       })
     };
     const builder = new PromptBuilder(mockThemeLoader, 'journalist');
-    const { userPrompt } = await builder.buildOutlinePrompt(
-      { narrativeArcs: [{ id: 'arc-1', title: 'The Money' }] },
-      ['The Money'],
-      null
-    );
+    // Phase 4 (brief 4.6): the outline is the story map, laid out from the settled weave.
+    const { userPrompt } = await builder.buildOutlinePrompt('<SETTLED_WEAVE>\nSTORY: The Money\n</SETTLED_WEAVE>', [], [], null, {});
     expect(userPrompt).not.toContain('"pullQuotes"');
   });
 
-  it('outline schema no longer defines a thePlayers.pullQuotes property', () => {
-    expect(outlineSchema.properties.thePlayers.properties).not.toHaveProperty('pullQuotes');
+  it('the map schema defines no pullQuotes anywhere', () => {
+    expect(JSON.stringify(outlineSchema)).not.toContain('pullQuotes');
   });
 });

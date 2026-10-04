@@ -119,7 +119,8 @@ describe('the retired journalist craft files', () => {
 });
 
 describe("the detective's phase lists still resolve (it is parked, spec D13)", () => {
-  it.each(['outlineGeneration', 'articleGeneration'])('%s: every file loads, none empty', async (phase) => {
+  // Phase 4 (brief 4.6; R1): the detective's outline phase went with its outline writer.
+  it.each(['articleGeneration'])('%s: every file loads, none empty', async (phase) => {
     const names = PHASE_REQUIREMENTS.detective[phase];
     expect(names.length).toBeGreaterThan(0);
     const prompts = await createThemeLoader({ theme: 'detective' }).loadPhasePrompts(phase);
@@ -153,7 +154,8 @@ describe('requirePhasePrompts: the reworkers\' guard', () => {
     }
   });
 
-  it.each(['outlineGeneration', 'articleGeneration'])('detective %s: passes on its files, and fails loud naming an empty one', async (phase) => {
+  // Phase 4 (brief 4.6; R1): the detective's outline phase went with its outline writer.
+  it.each(['articleGeneration'])('detective %s: passes on its files, and fails loud naming an empty one', async (phase) => {
     await expect(createPromptBuilder({ theme: 'detective' }).requirePhasePrompts(phase)).resolves.toBeUndefined();
     const names = PHASE_REQUIREMENTS.detective[phase];
     const loader = { loadPhasePrompts: async () => Object.fromEntries(names.map((n, i) => [n, i === 0 ? '' : 'text'])) };

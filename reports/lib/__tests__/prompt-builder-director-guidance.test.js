@@ -28,34 +28,28 @@ function makeBuilder(theme = 'journalist', sessionConfig = {}) {
 
 const GUIDANCE = 'Lead with the money, not the vote.';
 
+// Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave
+// first. The arc selection's emphasis went with the arc selection (brief 4.5): the
+// director's note from the story meeting is a standing note, and the map writer's
+// <DIRECTOR_GUIDANCE> carries the standing notes. The detective has no map writer (R1).
+const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+const { WEAVE } = require('./fixtures/rework-state');
+const SETTLED_WEAVE = renderSettledWeave(WEAVE, null);
+
 describe('buildOutlinePrompt — <DIRECTOR_GUIDANCE>', () => {
-  it('appends the guidance as the LAST section of the user prompt', async () => {
-    const { userPrompt } = await makeBuilder().buildOutlinePrompt(
-      { narrativeArcs: [{ id: 'a1', title: 'The money' }] },
-      ['The money'], 'hero.png', [], [], null,
-      { directorGuidance: GUIDANCE }
-    );
-    expect(userPrompt).toContain('<DIRECTOR_GUIDANCE>');
+  const MEETING_NOTE = { gate: 'arc-selection', kind: 'approval', round: 1, text: GUIDANCE, at: '2026-10-03T09:00:00.000Z' };
+
+  it("appends the standing notes, the meeting's note among them, as the LAST section of the user prompt", async () => {
+    const { userPrompt } = await makeBuilder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, { gateNotes: [MEETING_NOTE] });
+    expect(userPrompt).toMatch(/^<DIRECTOR_GUIDANCE>$/m);
     expect(userPrompt).toContain(GUIDANCE);
     expect(userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
-    // The whole point of putting it last: it wins where it conflicts.
-    expect(userPrompt).toMatch(/outranks the craft rules/i);
   });
 
-  it('omits the section entirely when there is no guidance', async () => {
-    const { userPrompt } = await makeBuilder().buildOutlinePrompt(
-      { narrativeArcs: [] }, [], 'hero.png', [], [], null
-    );
-    expect(userPrompt).not.toContain('DIRECTOR_GUIDANCE');
-  });
-
-  it('works for the detective theme too', async () => {
-    const { userPrompt } = await makeBuilder('detective').buildOutlinePrompt(
-      { narrativeArcs: [{ id: 'a1', title: 'The money' }] },
-      ['The money'], 'hero.png', [], [], null,
-      { directorGuidance: GUIDANCE }
-    );
-    expect(userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
+  it('omits the section entirely when there is no note, and reads no arc-selection emphasis', async () => {
+    const { userPrompt } = await makeBuilder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, { directorGuidance: GUIDANCE });
+    expect(userPrompt).not.toMatch(/^<DIRECTOR_GUIDANCE>$/m);
+    expect(userPrompt).not.toContain(GUIDANCE);
   });
 });
 
@@ -282,7 +276,7 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
   });
 
   it('buildOutlinePrompt and buildArticlePrompt read options.gateNotes and still end with the section', async () => {
-    const o = await makeBuilder().buildOutlinePrompt({ narrativeArcs: [] }, [], 'hero.png', [], [], null, { directorGuidance: null, gateNotes: NOTES });
+    const o = await makeBuilder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, { gateNotes: NOTES });
     expect(o.userPrompt).toContain('- [outline, rejection 1] Lead with the ledger.');
     expect(o.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
     const a = await makeBuilder().buildArticlePrompt({ lede: { hook: 'x' } }, 'hero.png', [], null, null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });

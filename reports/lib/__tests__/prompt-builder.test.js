@@ -4,6 +4,13 @@
 
 const { PromptBuilder, createPromptBuilder } = require('../prompt-builder');
 const { ThemeLoader, PHASE_REQUIREMENTS } = require('../theme-loader');
+// Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave
+// first, as its task (lib/prompt-renderers/settled-weave.js).
+const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+const { WEAVE: FIXTURE_WEAVE } = require('./fixtures/rework-state');
+const SETTLED_WEAVE = renderSettledWeave(FIXTURE_WEAVE, null);
+/** The director's note from the story meeting: a standing note, so <DIRECTOR_GUIDANCE> prints. */
+const MEETING_NOTES = [{ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Lead with the money.', at: '2026-10-03T09:00:00.000Z' }];
 
 // Mock ThemeLoader
 jest.mock('../theme-loader', () => {
@@ -48,15 +55,10 @@ describe('PromptBuilder', () => {
     });
   });
 
+  // Phase 4 (brief 4.6): the outline writer is the map writer. It reads the settled weave
+  // first, as its task; the selected arcs and the hero line went with the arc selection,
+  // and the detective's outline with R1.
   describe('buildOutlinePrompt', () => {
-    const mockArcAnalysis = {
-      narrativeArcs: [
-        { name: 'The Money Trail', playerEmphasis: 'HIGH' },
-        { name: 'Lab Secrets', playerEmphasis: 'MEDIUM' }
-      ]
-    };
-    const selectedArcs = ['The Money Trail', 'Lab Secrets'];
-    const heroImage = 'hero.png';
     beforeEach(() => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'section-rules': 'Lede must hook...',
@@ -68,9 +70,7 @@ describe('PromptBuilder', () => {
     });
 
     it('should return system and user prompts', async () => {
-      const result = await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage
-      );
+      const result = await builder.buildOutlinePrompt(SETTLED_WEAVE);
 
       expect(result).toHaveProperty('systemPrompt');
       expect(result).toHaveProperty('userPrompt');
@@ -79,68 +79,77 @@ describe('PromptBuilder', () => {
     // Phase 3 (3.2): the journalist outline writer reads the rule set, never the
     // retired craft files.
     it('loads no craft file: the journalist reads the rule set', async () => {
-      await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage
-      );
+      await builder.buildOutlinePrompt(SETTLED_WEAVE);
 
       expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
     });
 
     it('should carry the world and the truth rules in the system prompt', async () => {
-      const { systemPrompt } = await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage
-      );
+      const { systemPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE);
 
       expect(systemPrompt).toContain('<world>');
       expect(systemPrompt).toContain('<truth-rules>');
       expect(systemPrompt).not.toContain('Lede must hook');
     });
 
-    it('should include numbered selected arcs in user prompt', async () => {
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage
-      );
+    it("reads the settled weave first, as its task, then the task and the theme's slots", async () => {
+      const { userPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE);
 
-      expect(userPrompt).toContain('1. The Money Trail');
-      expect(userPrompt).toContain('2. Lab Secrets');
+      expect(userPrompt.startsWith(`${SETTLED_WEAVE}\n`)).toBe(true);
+      expect(userPrompt.indexOf("Lay the settled weave above across the article's sections"))
+        .toBeGreaterThan(userPrompt.indexOf('</SETTLED_WEAVE>'));
+      const slots = userPrompt.slice(userPrompt.indexOf('<SLOTS>'), userPrompt.indexOf('</SLOTS>'));
+      expect(slots).toContain('- lede: no heading');
+      expect(slots).toContain('- theStory: The Story');
+      expect(slots).toContain('- closing: no heading');
+      expect(userPrompt).not.toContain('SELECTED ARCS');
+      expect(userPrompt).not.toContain('<arc-metadata>');
     });
 
-    it('should include hero image in user prompt', async () => {
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage
-      );
-
-      expect(userPrompt).toContain('HERO IMAGE: hero.png');
+    it('refuses to lay out a map without a settled weave: the story meeting settles it', async () => {
+      await expect(builder.buildOutlinePrompt('')).rejects.toThrow('The map writer reads the settled weave first');
     });
 
-    // Phase 3 (3.2; M27): the outline's shape is outline.schema.json's alone; the
-    // prompt no longer restates it in its own words. Fix 3.2b (finding 10): the
-    // prompt embeds that one schema under <SCHEMA>, as the article writer embeds the
-    // content-bundle schema, a backstop for the SDK channel (#277). It sits after
-    // the data and before the craft files.
-    it('embeds outline.schema.json under a <SCHEMA> tag, and restates the shape nowhere else', async () => {
-      const outlineSchema = require('../schemas/outline.schema.json');
+    it("lists code's pick for the top photo first, marked, then every other photo the director kept", async () => {
+      const photos = [
+        { filename: 'hero.png', identifiedCharacters: ['Alex'], hero: true },
+        { filename: 'p2.png', identifiedCharacters: [] }
+      ];
+      const { userPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE, photos);
+
+      const list = userPrompt.slice(userPrompt.indexOf('<available-photos>'), userPrompt.indexOf('</available-photos>'));
+      expect(list).toContain('1. [hero image] hero.png: Alex');
+      expect(list).toContain('2. p2.png: Unknown');
+      expect(userPrompt).not.toContain('HERO IMAGE:');
+    });
+
+    // Phase 3 (3.2; M27): the outline's shape is its schema's alone; the prompt no longer
+    // restates it in its own words. Fix 3.2b (finding 10): the prompt embeds that one
+    // schema under <SCHEMA>, as the article writer embeds the content-bundle schema, a
+    // backstop for the SDK channel (#277). It sits after the data and before the craft
+    // files. Phase 4 (brief 4.6): the schema is the theme's map schema, the map's shape
+    // with the theme's slots.
+    it("embeds the theme's map schema under a <SCHEMA> tag, and restates the shape nowhere else", async () => {
+      const { mapSchemaFor } = require('../map');
       const { userPrompt } = await builder.buildOutlinePrompt(
-        mockArcAnalysis, selectedArcs, heroImage, [], [],
-        { roster: ['Alex Reeves'], accusation: 'Alex', playerCount: 1 }
+        SETTLED_WEAVE, [], [], { roster: ['Alex Reeves'], accusation: 'Alex', playerCount: 1 }
       );
 
-      const printed = JSON.stringify(outlineSchema, null, 2);
+      const printed = JSON.stringify(mapSchemaFor('journalist'), null, 2);
       expect(userPrompt.split(printed).length - 1).toBe(1);
       const schemaBlock = userPrompt.slice(userPrompt.indexOf('\n<SCHEMA>\n'), userPrompt.indexOf('\n</SCHEMA>\n'));
       expect(schemaBlock).toContain(printed);
       expect(userPrompt.indexOf('\n<SCHEMA>\n')).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
-      expect(userPrompt.indexOf('\n</SCHEMA>\n')).toBeLessThan(userPrompt.indexOf('<craft-'));
+      // The craft files open on their own lines; the map's task names their tags in prose.
+      expect(userPrompt.indexOf('\n</SCHEMA>\n')).toBeLessThan(userPrompt.indexOf('\n<craft-'));
       const outsideSchema = userPrompt.replace(/<SCHEMA>[\s\S]*?<\/SCHEMA>/g, '');
       expect(outsideSchema).not.toContain('Return JSON with the following structure');
       expect(outsideSchema).not.toContain('"followTheMoney": {');
     });
 
-    it('the detective outline prompt embeds no <SCHEMA> (D13)', async () => {
+    it('the detective has no map writer: its outline prompt fails loud (R1)', async () => {
       const detective = new PromptBuilder(mockThemeLoader, 'detective', {});
-      const { userPrompt } = await detective.buildOutlinePrompt(mockArcAnalysis, selectedArcs, heroImage);
-      expect(userPrompt).not.toContain('<SCHEMA>');
-      expect(userPrompt).toContain('Return JSON with the following structure');
+      await expect(detective.buildOutlinePrompt(SETTLED_WEAVE)).rejects.toThrow('The "detective" theme has no story map');
     });
   });
 
@@ -354,14 +363,6 @@ describe('PromptBuilder', () => {
       });
     });
 
-    it('buildOutlinePrompt uses detective framing', async () => {
-      const { systemPrompt } = await detectiveBuilder.buildOutlinePrompt(
-        { narrativeArcs: [] }, ['Arc 1'], 'hero.png'
-      );
-      expect(systemPrompt).not.toContain('NovaNews');
-      expect(systemPrompt).toContain('Detective Anondono');
-    });
-
     it('buildArticlePrompt uses detective voice, not Nova', async () => {
       const { systemPrompt } = await detectiveBuilder.buildArticlePrompt(
         {}, null
@@ -538,24 +539,6 @@ describe('PromptBuilder', () => {
   // Phase 3 (3.2): the journalist's writers read the rule set, which carries no
   // template variable; the parked detective's craft files still do.
   describe('prompt variable resolution in build methods', () => {
-    it('buildOutlinePrompt should resolve variables in loaded prompts', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'section-rules': 'Written by {{JOURNALIST_FIRST_NAME}} for NovaNews.',
-        'editorial-design': 'Design text',
-        'narrative-structure': 'Structure text',
-        'formatting': 'Formatting text',
-        'evidence-boundaries': 'Boundaries text'
-      });
-
-      const builder = new PromptBuilder(mockThemeLoader, 'detective', { journalistFirstName: 'Athena' });
-
-      const { systemPrompt } = await builder.buildOutlinePrompt(
-        { narrativeArcs: [] }, ['Arc 1'], 'hero.png'
-      );
-      expect(systemPrompt).toContain('Written by Athena for NovaNews.');
-      expect(systemPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
-    });
-
     it('buildArticlePrompt should resolve variables in loaded prompts', async () => {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '{{JOURNALIST_FIRST_NAME}} Nova reporting.',
@@ -585,7 +568,7 @@ describe('PromptBuilder', () => {
     const stagesFor = async (reportingMode, which) => {
       const b = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode });
       return which === 'outline'
-        ? b.buildOutlinePrompt({ narrativeArcs: [] }, ['Arc 1'], 'hero.png')
+        ? b.buildOutlinePrompt(SETTLED_WEAVE)
         : b.buildArticlePrompt({ sections: [] }, 'hero.jpg');
     };
 
@@ -661,9 +644,7 @@ describe('PromptBuilder', () => {
         { name: 'Sarah', total: 350000, tokenCount: 1 }
       ];
 
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        { narrativeArcs: [] }, [], 'hero.jpg', [], shellAccounts
-      );
+      const { userPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE, [], shellAccounts);
 
       expect(userPrompt).toContain('FINANCIAL_SUMMARY');
       expect(userPrompt).toContain('Cayman');
@@ -679,9 +660,7 @@ describe('PromptBuilder', () => {
       });
 
       const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        { narrativeArcs: [] }, [], 'hero.jpg', [], []
-      );
+      const { userPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE, [], []);
 
       expect(userPrompt).not.toContain('FINANCIAL_SUMMARY');
     });
@@ -739,9 +718,7 @@ describe('PromptBuilder', () => {
         { name: 'EmptyAccount', total: 0, tokenCount: 0 }
       ];
 
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        { narrativeArcs: [] }, [], 'hero.jpg', [], shellAccounts
-      );
+      const { userPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE, [], shellAccounts);
 
       expect(userPrompt).toContain('Cayman');
       expect(userPrompt).not.toContain('EmptyAccount');
@@ -760,9 +737,7 @@ describe('PromptBuilder', () => {
         { name: 'Sarah', total: 350000, tokenCount: 1 }
       ];
 
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        { narrativeArcs: [] }, [], 'hero.jpg', [], shellAccounts
-      );
+      const { userPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE, [], shellAccounts);
 
       expect(userPrompt).toContain('$1,805,000');
     });
@@ -881,6 +856,10 @@ describe('PromptBuilder', () => {
    * The outline evaluation's two warnings about frontloading were computed, logged
    * and then dropped; the article writer never saw them. They are suggestions, so
    * they travel as their own section and never as a must-fix.
+   *
+   * Phase 4 (brief 4.6): neither writer prints one now. The arc stage's went with the arc
+   * selection (the map writer reads the settled weave), and the outline judge's with the
+   * judge.
    */
   describe('SHOULD_CONSIDER (advisories carried forward from the previous stage)', () => {
     const ADVISORIES = ['The lede frontloads the verdict', 'Two arcs rest on the same document'];
@@ -894,14 +873,10 @@ describe('PromptBuilder', () => {
       });
     });
 
-    it('renders the advisories in the outline prompt, with the preamble', async () => {
-      const { userPrompt } = await builder.buildOutlinePrompt(
-        {}, [], 'hero.png', [], [], null, { shouldConsider: ADVISORIES }
-      );
-      expect(userPrompt).toContain('<SHOULD_CONSIDER>');
-      expect(userPrompt).toContain('- The lede frontloads the verdict');
-      expect(userPrompt).toContain('- Two arcs rest on the same document');
-      expect(userPrompt).toContain('They are not requirements.');
+    it("prints none in the map writer's prompt", async () => {
+      const { userPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE, [], [], null, { shouldConsider: ADVISORIES });
+      expect(userPrompt).not.toContain('SHOULD_CONSIDER');
+      expect(userPrompt).not.toContain('- The lede frontloads the verdict');
     });
 
     // Phase 4 (brief 4.6): the outline judge, whose advisories these were, left the graph.
@@ -915,26 +890,16 @@ describe('PromptBuilder', () => {
 
     it('keeps <DIRECTOR_GUIDANCE> the last section of both prompts', async () => {
       const outline = await builder.buildOutlinePrompt(
-        {}, [], 'hero.png', [], [], null,
-        { shouldConsider: ADVISORIES, directorGuidance: 'Lead with the money.' }
+        SETTLED_WEAVE, [], [], null, { shouldConsider: ADVISORIES, gateNotes: MEETING_NOTES }
       );
       const article = await builder.buildArticlePrompt(
         {}, null, [], null, null, null,
         { shouldConsider: ADVISORIES, directorGuidance: 'Lead with the money.' }
       );
-      expect(outline.userPrompt).toContain('<SHOULD_CONSIDER>');
-      expect(outline.userPrompt.indexOf('<SHOULD_CONSIDER>'))
-        .toBeLessThan(outline.userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
       for (const { userPrompt } of [outline, article]) {
+        expect(userPrompt).not.toContain('SHOULD_CONSIDER');
         expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
       }
-    });
-
-    it('omits the section when the previous stage raised nothing', async () => {
-      const outline = await builder.buildOutlinePrompt({}, [], 'hero.png', [], [], null, {});
-      const article = await builder.buildArticlePrompt({}, null, [], null, null, null, { shouldConsider: [] });
-      expect(outline.userPrompt).not.toContain('SHOULD_CONSIDER');
-      expect(article.userPrompt).not.toContain('SHOULD_CONSIDER');
     });
   });
 
@@ -1131,8 +1096,8 @@ describe('PromptBuilder', () => {
  * <INVESTIGATION_OBSERVATIONS> reached the ARTICLE prompt only, so the planner
  * that decides what each section does, and which arc carries it, never read the
  * director's own account of the morning. Same section, same renderer, placed
- * with the data and BEFORE the arc metadata — <DIRECTOR_GUIDANCE> keeps the last
- * word.
+ * with the data — <DIRECTOR_GUIDANCE> keeps the last word. Phase 4 (brief 4.6): the
+ * planner is the map writer, and the notes follow its task and slots.
  */
 describe('buildOutlinePrompt — the director\'s raw notes', () => {
   const { PromptBuilder } = require('../prompt-builder');
@@ -1163,10 +1128,7 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     return new PromptBuilder(themeLoader, 'journalist', { reportingMode: 'remote' });
   }
 
-  const render = (options) => builder().buildOutlinePrompt(
-    { narrativeArcs: [{ id: 'arc-1', title: 'The Money Trail' }] },
-    ['arc-1'], 'hero.png', [], [], null, options
-  );
+  const render = (options) => builder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, options);
 
   it('renders the section when the director wrote notes', async () => {
     const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES });
@@ -1179,14 +1141,11 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
     expect(userPrompt).toContain('- Sarah was named interim CEO after the investigation.');
   });
 
-  it('places it before the arc metadata, and leaves the guidance last', async () => {
-    const { userPrompt } = await render({
-      directorNotes: DIRECTOR_NOTES,
-      directorGuidance: 'Lead with the money.'
-    });
-    expect(userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>')).toBeGreaterThan(-1);
-    expect(userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>'))
-      .toBeLessThan(userPrompt.indexOf('<arc-metadata>'));
+  it('places it after the task and the slots, before the photos, and leaves the guidance last', async () => {
+    const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES, gateNotes: MEETING_NOTES });
+    expect(userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>')).toBeGreaterThan(userPrompt.indexOf('</SLOTS>'));
+    // The section opens on its own line; the map's task names the tag in prose.
+    expect(userPrompt.indexOf('</INVESTIGATION_OBSERVATIONS>')).toBeLessThan(userPrompt.indexOf('\n<available-photos>\n'));
     expect(userPrompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 
@@ -1203,11 +1162,12 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
   });
 
   // Phase 3 (3.2): the <TEMPORAL_DISCIPLINE> block went (the world and T7 state the
-  // stages); its third-person rule for the outline is the task's first line.
-  it('the outline writer plans in the third person, with no first-person marker (integrator ruling, phase 1)', async () => {
+  // stages). Phase 4 (brief 4.6): the outline's third-person line went with its task; the
+  // map writes no prose, and names each beat's material (C2).
+  it('the map writes no prose, and the prompt carries no first-person marker (integrator ruling, phase 1)', async () => {
     const { userPrompt } = await render({ directorNotes: null });
-    const task = userPrompt.split('\n')[0];
-    expect(task).toContain('third person');
+    const task = userPrompt.slice(userPrompt.indexOf('</SETTLED_WEAVE>'), userPrompt.indexOf('<SLOTS>'));
+    expect(task).toContain('writes no prose');
     expect(userPrompt).not.toContain('"I watched"');
     expect(userPrompt).not.toContain('Nova was there');
   });
@@ -1271,8 +1231,9 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
   }
   const options = { evidenceBundle, directorGuidance: 'Lead with the money.' };
   const shellAccounts = [{ name: 'Melanie', total: 75000, tokenCount: 1 }];
+  // Phase 4 (brief 4.6): the map writer's standing notes carry the director's last word.
   const outlineFor = (theme) => builderFor(theme).buildOutlinePrompt(
-    { narrativeArcs: [{ id: 'arc-1', title: 'The Money Trail' }] }, ['arc-1', 'arc-2'], 'hero.png', [], shellAccounts, null, options
+    SETTLED_WEAVE, [], shellAccounts, null, { evidenceBundle, gateNotes: MEETING_NOTES }
   );
   const articleFor = (theme) => builderFor(theme).buildArticlePrompt(
     { lede: {} }, 'hero.png', shellAccounts, null, null, null, options
@@ -1309,13 +1270,6 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt).not.toMatch(/with their \*\*fullContent\*\*/);
     // FINANCIAL_SUMMARY (account totals) stays beside the view's transactions (R2).
     expect(userPrompt).toContain('<FINANCIAL_SUMMARY>');
-  });
-
-  it('the detective outline holds the same view, uncapped, with no per-arc lists', async () => {
-    const { userPrompt } = await outlineFor('detective');
-    expectOneRecord(userPrompt);
-    expect(userPrompt).not.toContain('<evidence-context>');
-    expect(userPrompt).not.toMatch(/Content: "/);
   });
 
   it('the journalist article holds the view once, inside <DATA_CONTEXT>, with no arc packages', async () => {
@@ -1449,7 +1403,7 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
   }
 
   const outline = (facts, options = {}, theme) => builder(theme).buildOutlinePrompt(
-    { narrativeArcs: [] }, ['arc-1'], 'hero.jpg',
+    SETTLED_WEAVE,
     [{ filename: 'aln092026 (7 of 9).jpg', fullPath: 'p/aln092026 (7 of 9).jpg', identifiedCharacters: ['Alex', 'Sam'] },
      { filename: 'aln092026 (2 of 9).jpg', fullPath: 'p/aln092026 (2 of 9).jpg', identifiedCharacters: [] }], [], facts, options
   );
@@ -1483,12 +1437,6 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
       const { userPrompt } = await article(facts);
       expect(userPrompt).toContain('ACCUSATION: Vic and Sam\nCHARGE: Murder');
       expect(userPrompt).not.toContain('<DIRECTOR_ACCUSATION>');
-    });
-
-    it("the detective outline's SESSION_FACTS uses the same verdict lines", async () => {
-      const { userPrompt } = await outline(OVERDOSE_FACTS, {}, 'detective');
-      expect(userPrompt).toContain('CHARGE: Accidental overdose');
-      expect(userPrompt).toContain(RAW_ACCUSATION);
     });
   });
 
@@ -1609,8 +1557,7 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
   });
   const journalist = (sessionConfig = SESSION) => new PromptBuilder(throwingLoader(), 'journalist', sessionConfig, CANONICAL, null);
   const outlineOf = (b) => b.buildOutlinePrompt(
-    { narrativeArcs: [{ id: 'arc-a', title: 'A' }] }, ['arc-a'], 'hero.jpg', [], ACCOUNTS, FACTS,
-    { directorNotes: NOTES_NO_EPILOGUE, directorGuidance: 'Lead with the money.' }
+    SETTLED_WEAVE, [], ACCOUNTS, FACTS, { directorNotes: NOTES_NO_EPILOGUE, gateNotes: MEETING_NOTES }
   );
   const articleOf = (b, notes = NOTES_NO_EPILOGUE) => b.buildArticlePrompt(
     { lede: { hook: 'h' } }, 'hero.jpg', ACCOUNTS, FACTS, notes, null, { directorGuidance: 'Lead with the money.' }
@@ -1625,7 +1572,9 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       expect(userPrompt.split(craft).length - 1).toBe(1);
       expect(userPrompt).not.toContain('<craft-voice>');
       expect(userPrompt.indexOf(craft)).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
-      expect(userPrompt.indexOf(craft)).toBeLessThan(userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
+      // Phase 4 (brief 4.6): the map's task names <DIRECTOR_GUIDANCE> in prose, so the
+      // section is the last one.
+      expect(userPrompt.indexOf(craft)).toBeLessThan(userPrompt.lastIndexOf('<DIRECTOR_GUIDANCE>'));
     });
 
     it('the article writer: the world and the truth rules in its system prompt, every craft file in its user prompt', async () => {
@@ -1740,13 +1689,6 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       expect(facts).toContain('Blake was in the room too, making deals, and acts and speaks there as the record shows.');
       expect(facts).not.toMatch(/for NeurAI|NeurAI/);
     });
-
-    it('the detective keeps its own lines', async () => {
-      const detective = new PromptBuilder({ loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() }, 'detective', SESSION, CANONICAL, null);
-      const { userPrompt } = await detective.buildOutlinePrompt({ narrativeArcs: [] }, [], 'hero.jpg', [], [], FACTS, {});
-      expect(userPrompt).toContain('ONLY the 2 characters listed above were present at the investigation.');
-      expect(userPrompt).toContain('Use exactly 2 when referencing how many subjects were involved.');
-    });
   });
 
   describe('FINANCIAL_SUMMARY counts sales from the code-computed figures', () => {
@@ -1762,25 +1704,13 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     });
 
     // Phase 3 (3.9; spec section 7, R12): "a reading" is retired as the word for Nova's
-    // inference, and the outline writer prints this description in its <SCHEMA>.
-    it("the outline writer's <SCHEMA> describes an account's inference by what it holds, not as a reading", async () => {
+    // inference. Phase 4 (brief 4.6): the map holds no account inference; its <SCHEMA>
+    // calls nothing a reading.
+    it("the map writer's <SCHEMA> calls nothing a reading", async () => {
       const { userPrompt } = await outlineOf(journalist());
       const schema = between(userPrompt, '<SCHEMA>', '</SCHEMA>');
-      expect(schema).toContain('"description": "What the section infers from the account"');
+      expect(schema).toContain('"title": "StoryMap"');
       expect(schema).not.toMatch(/\breading\b/i);
-    });
-  });
-
-  // The 4b fix batch (spec section 7, R12; 3.10's forOtherOwners): "reading" is retired
-  // as the rules' noun for an inference, the arcs' included. An arc is one thread of the
-  // story, which the arc writer found (C16).
-  describe("the outline writer's <arc-metadata> line", () => {
-    it('says what an arc is without calling it a reading', async () => {
-      const { userPrompt } = await outlineOf(journalist());
-      const metadata = between(userPrompt, '<arc-metadata>', '</arc-metadata>');
-      const line = metadata.split('\n').find((l) => l.startsWith('Each arc above is'));
-      expect(line).toMatch(/^Each arc above is one thread of the story, as the arc writer found it\. Its arcSource says where the thread came from: /);
-      expect(line).not.toMatch(/\breading\b/i);
     });
   });
 

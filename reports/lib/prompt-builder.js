@@ -12,9 +12,10 @@ const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
 const { renderSessionFactsVerdict, renderPhotoListEntry } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
-// The journalist outline writer embeds this file as its <SCHEMA> (fix 3.2b), the one
-// the SDK channel enforces (ai-nodes.js), as the article writer embeds the schema above.
-const outlineSchema = require('./schemas/outline.schema.json');
+// Phase 4 (brief 4.6): the map writer embeds the map's schema for its theme as its
+// <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
+// writer embeds the schema above; its slots are the theme's.
+const { mapSchemaFor } = require('./map');
 // The detective is parked (spec D13) and its prompt keeps today's text, the <SCHEMA>
 // it embeds included. Phase 3 (3.2) cut the schema's descriptions down to shape only,
 // so the detective prints this copy of the schema as it was before that cut. It is
@@ -27,9 +28,23 @@ const outlineSchema = require('./schemas/outline.schema.json');
 const detectivePromptSchema = require('./schemas/content-bundle.detective-prompt.json');
 const { withoutWriterQuestions, schemaWithoutWriterQuestions } = require('./writer-questions');
 const DETECTIVE_PRINTED_SCHEMA = (({ $schema, ...rest }) => ({ $schema, $id: 'content-bundle', ...rest }))(schemaWithoutWriterQuestions(detectivePromptSchema));
-const { getThemeNPCEntries } = require('./theme-config');
+const { getThemeNPCEntries, mapSlotsOf } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
+
+/**
+ * The map writer's task (phase 4, brief 4.6), right after the settled weave: lay the weave
+ * across the sections. It names what goes where in the map and points at the rule items
+ * that say how (spec 5.1 and 5.2; the approved read's section D), stating none of them.
+ */
+const MAP_TASK = `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map runs to about 450 words and writes no prose.
+- The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the standing note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or "note".
+- Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out, each beat naming its material. Drop each slot the story does not use, with its reason.
+- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.
+- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
+- A part of the story the record cannot carry, a player you cannot place, or a link you see that the weave lacks goes in gapNote, the one line at the top, as C7 (\`<craft-material>\`) and C16 set out.
+- Set expectedLength from what the map holds, as C4 (\`<craft-telling>\`) sets out.
+Code builds Everyone from each beat's players, and checks the players, the photos, the cards and the connections. A player named among gapNote's players counts as raised.`;
 
 /** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */
 const PRONOUN_NOT_GIVEN = 'pronoun not given';
@@ -249,26 +264,6 @@ const SHOULD_CONSIDER_PREAMBLE =
   'serve the piece. They are not requirements.';
 
 /**
- * Build the <SHOULD_CONSIDER> section: the previous stage's advisory findings.
- *
- * Placed immediately before <DIRECTOR_GUIDANCE>, which stays last — the director's
- * own words outrank an evaluation's suggestions.
- *
- * @param {Array<string>} [advisories] - advisoryWarnings from the previous stage
- * @returns {string} XML section, or '' when there is nothing to consider
- */
-function buildShouldConsiderSection(advisories = []) {
-  const list = Array.isArray(advisories)
-    ? advisories.filter(a => typeof a === 'string' && a.trim())
-    : [];
-  if (list.length === 0) return '';
-  return labelPromptSection(
-    'SHOULD_CONSIDER',
-    `${SHOULD_CONSIDER_PREAMBLE}\n\n${list.map(a => `- ${a.trim()}`).join('\n')}`
-  );
-}
-
-/**
  * Build the <DIRECTOR_GUIDANCE> section (Q2 decision + spec 2026-09-19 §5.3).
  *
  * Standalone so the revision nodes can append it without going through a
@@ -370,16 +365,16 @@ function buildReportingModeBlock(sessionConfig, theme) {
 
 /**
  * The roster with pronouns under its heading, without the character context: the
- * section the arc writer, the interweaving call and the outline writer print (phase 3,
- * 3.10; T9), each player with the pronoun the roster stop gave and the NPCs' canon
- * lines, as the article writer's system prompt and the judges print them
- * (generateRosterSection). None of the three reads the character data with it: the arc
- * writer prints its own character context, and the other two read none.
+ * section the arc writer (the weave) and the map writer print, with their reworks (phase
+ * 3, 3.10; T9; phase 4), each player with the pronoun the roster stop gave and the NPCs'
+ * canon lines, as the article writer's system prompt and the judges print them
+ * (generateRosterSection). Neither reads the character data with it: the arc writer
+ * prints its own character context, and the map writer reads none.
  *
  * The 4b fix batch (3.10 review minor 5): one builder, heading included. The section
  * was built at two sites with two constructions, and the outline printed it bare while
- * the arc writer and the interweaving call each gave it a heading of their own.
- * Journalist only: the detective's prompts print no such section (D13).
+ * the arc writer gave it a heading of its own. Journalist only: the detective's prompts
+ * print no such section (D13).
  *
  * @param {Object|null} sessionConfig - its roster and rosterPronouns
  * @param {Object|null} canonicalCharacters - first name -> full name
@@ -425,11 +420,10 @@ function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
  */
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
-    outlineGeneration: 'You are creating an article outline for a NovaNews investigative piece.',
+    outlineGeneration: 'You are laying out the story map of a NovaNews investigative article.',
     articleGeneration: 'You are Nova, writing a NovaNews investigative article in the first person.'
   },
   detective: {
-    outlineGeneration: 'You are planning the structure of Detective Anondono\'s case report. Each section answers a DIFFERENT QUESTION about the same underlying facts.',
     articleGeneration: `You are a cynical, seasoned Detective in a near-future noir setting. You are writing an official Case Report.
 
 TONE: Professional, analytical, with a distinct noir flair. Economical with words. Every sentence earns its place.
@@ -578,21 +572,6 @@ ${notes}
   }
 
   /**
-   * Build the <SHOULD_CONSIDER> section (brief 1.3).
-   *
-   * Appended to the outline and article user prompts immediately BEFORE
-   * <DIRECTOR_GUIDANCE>: near the end, where the writer will still weigh it, but
-   * never ahead of the director's own words.
-   *
-   * @param {Array<string>} [advisories] - advisoryWarnings from the previous stage
-   * @returns {string} XML section, or '' when there is nothing to consider
-   */
-  _buildShouldConsider(advisories = []) {
-    const section = buildShouldConsiderSection(advisories);
-    return section ? '\n' + section : '';
-  }
-
-  /**
    * The FINANCIAL_SUMMARY section: the ledger's accounts with code-computed figures.
    * Returns '' when no account has a positive total. Journalist only.
    *
@@ -698,299 +677,109 @@ Only the ${n} players above were at the investigation. Every other character exc
   }
 
   /**
-   * Build outline generation prompt
-   * Phase 3: Generate article outline from selected arcs
-   *
-   * Phase 2 (2.3): the writer's prompt is its system prompt
+   * The map writer's prompt (phase 4, brief 4.6; spec 5.1): its system prompt
    * (buildOutlineSystemPrompt), its user sections (buildOutlineUserSections), then
-   * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>. The outline reworker is built from the
-   * same two builders (ai-nodes.js buildOutlineRevisionPrompt), so whatever this
-   * writer is given reaches its reworker without a second copy.
+   * <DIRECTOR_GUIDANCE> last, with the standing notes. The map's rework is built from the
+   * same two builders (ai-nodes.js buildOutlineRevisionPrompt), so whatever this writer is
+   * given reaches its rework without a second copy.
    *
-   * @param {Object} arcAnalysis - Arc analysis results
-   * @param {string[]} selectedArcs - User-selected arc names
-   * @param {string} heroImage - Confirmed hero image filename
-   * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
+   * @param {string} settledWeave - the settled weave (prompt-renderers/settled-weave.js)
+   * @param {Array} photos - code's pick for the top photo first, marked as the hero, then
+   *   every other photo the director kept (ai-nodes.js outlineWriterInputs)
    * @param {Array} shellAccounts - Deterministic shell account data
    * @param {Object|null} sessionFacts - Roster and verdict (ai-nodes.js buildSessionFacts)
-   * @param {Object} options - { directorGuidance, gateNotes, directorNotes, shouldConsider,
-   *   evidenceBundle, directorCorrections, photoDescriptions }
+   * @param {Object} options - { gateNotes, directorNotes, evidenceBundle,
+   *   directorCorrections, photoDescriptions }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], shellAccounts = [], sessionFacts = null, options = {}) {
+  async buildOutlinePrompt(settledWeave, photos = [], shellAccounts = [], sessionFacts = null, options = {}) {
     const systemPrompt = await this.buildOutlineSystemPrompt();
-    let userPrompt = await this.buildOutlineUserSections(
-      arcAnalysis, selectedArcs, heroImage, availablePhotos, shellAccounts, sessionFacts, options
-    );
+    let userPrompt = await this.buildOutlineUserSections(settledWeave, photos, shellAccounts, sessionFacts, options);
 
-    // Brief 1.3: the previous stage's advisory findings, second to last.
-    userPrompt += this._buildShouldConsider(options.shouldConsider || []);
-
-    // Q2: the director's arc-selection emphasis, LAST so it outranks the rules above.
-    // Since spec 2026-09-19 §5.3 the same section also carries the standing gate notes
-    // (every rejection note still in state), as a second paragraph inside the same tag.
-    userPrompt += this._buildDirectorGuidance(options.directorGuidance, options.gateNotes || []);
+    // The standing notes, LAST, so they outrank the rules above (Q2; spec 2026-09-19 §5.3):
+    // the director's note from the story meeting is among them.
+    userPrompt += this._buildDirectorGuidance(null, options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
   }
 
   /**
-   * The outline writer's system prompt, shared with the outline reworker (2.3).
+   * The map writer's system prompt, shared with its rework (2.3): the identity line, the
+   * mode block right after it (brief 1.5), then the world and the truth rules, the stable
+   * frame every writer reads first (phase 3, 3.2; the integrator's placement ruling). Its
+   * craft files go last in the user prompt.
    *
    * @returns {Promise<string>}
+   * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
+   *   parked detective (R1): the outline stage's detective branch went with the old stage
    */
   async buildOutlineSystemPrompt() {
-    // The mode block sits where the article's does: right after the identity line,
-    // ahead of every rule (brief 1.5). The outline planner used to be told nothing
-    // about where the reporter was, and planned presence beats for a reporter who
-    // was never in the room.
-    //
-    // Phase 3 (3.2): the journalist's system prompt then carries the world and the
-    // truth rules, the stable frame every writer and judge reads first (the
-    // integrator's placement ruling); its craft files go last in the user prompt.
-    // The detective is parked (spec D13) and keeps its craft files here.
-    if (this.themeName === 'journalist') {
-      return `${THEME_SYSTEM_PROMPTS.journalist.outlineGeneration}
+    mapSchemaFor(this.themeName);
+    return `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
 
 ${this._buildReportingModeBlock()}
 
 ${loadRuleSet('outline').core}`;
-    }
-
-    const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
-    return `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
-
-${this._buildReportingModeBlock()}
-${labelPromptSection('section-rules', prompts['section-rules'])}
-${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
   }
 
   /**
-   * The outline writer's user prompt up to, not including, <SHOULD_CONSIDER> and
-   * <DIRECTOR_GUIDANCE>: the data, the rules and the JSON structure. Shared with the
-   * outline reworker (2.3), which follows it with its revision block and then its own
-   * <DIRECTOR_GUIDANCE>. Takes buildOutlinePrompt's arguments; the tail's options
-   * (shouldConsider, directorGuidance, gateNotes) are not read here.
+   * The map writer's user prompt up to, not including, <DIRECTOR_GUIDANCE> (phase 4, brief
+   * 4.6). Shared with the map's rework, which follows it with its revision block and then
+   * its own <DIRECTOR_GUIDANCE>.
+   *
+   * The settled weave comes first, as the writer's task (spec 5.1), then the task itself and
+   * the theme's slots, then what the outline writer read: the director's notes, the photos
+   * with the director's descriptions, the record with its morning timeline, the money, the
+   * session facts with the director's accusation, the roster with pronouns (phase 3, 3.10;
+   * T9), the map's <SCHEMA> (fix 3.2b) and the craft files last (the integrator's placement
+   * ruling). The arcs, the arc analysis and the selected arcs went with their channels (R4),
+   * and the arc stage's <SHOULD_CONSIDER> with the arc selection.
    *
    * @returns {Promise<string>}
+   * @throws {Error} with no settled weave: the map lays out the weave the meeting settled
    */
-  async buildOutlineUserSections(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], shellAccounts = [], sessionFacts = null, options = {}) {
-    // <arc-metadata> below renders every arc, trimmed to the fields the outline
-    // needs. <arc-analysis> then dumped the SAME arcs again, untrimmed, so every
-    // arc title, summary and evidence list was serialized twice in one prompt.
-    // Strip them: the analysis (synthesisNotes, interweavingPlan) is what
-    // <arc-analysis> is for.
-    const { narrativeArcs: _arcsRenderedInMetadata, ...arcAnalysisOnly } = arcAnalysis || {};
-
-    // Commit 8.15: Extract arc-specific fields for outline guidance
-    const arcsWithMetadata = (arcAnalysis.narrativeArcs || []).map(arc => ({
-      id: arc.id,
-      title: arc.title,
-      arcSource: arc.arcSource,  // accusation | whiteboard | observation | discovered
-      evidenceStrength: arc.evidenceStrength,  // strong | moderate | weak | speculative
-      caveats: arc.caveats || [],  // Complications to acknowledge
-      unansweredQuestions: arc.unansweredQuestions || [],  // Gaps for narrative tension
-      analysisNotes: arc.analysisNotes || {}  // Financial/behavioral/victimization insights
-    }));
-
+  async buildOutlineUserSections(settledWeave, photos = [], shellAccounts = [], sessionFacts = null, options = {}) {
+    if (typeof settledWeave !== 'string' || !settledWeave.trim()) {
+      throw new Error('The map writer reads the settled weave first, and this thread holds no weave: the story meeting settles it. Go back to the story meeting.');
+    }
+    const slots = mapSlotsOf(this.themeName);
     const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections, options.evidenceBundle);
-
-    // Brief 2.1: every usable document in full, once, ahead of the per-arc lists that
-    // name them by id. The planner used to read the text of at most five documents
-    // per arc, and on 092026 never saw 12 of the 37 the article writer later used.
+    // Brief 2.1: every usable document in full, once, with the morning timeline.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
+    const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
+    const photoList = Array.isArray(photos) ? photos : [];
 
-    let userPrompt;
+    return `${settledWeave}
 
-    if (this.themeName === 'detective') {
-      const prompts = await this._loadResolvedPhasePrompts('outlineGeneration');
-      userPrompt = `Generate a case report outline using these selected narrative threads.
+${MAP_TASK}
 
-SELECTED THREADS (in order of significance):
-${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
-
-<arc-metadata>
-${JSON.stringify(arcsWithMetadata, null, 2)}
-
-USING THREAD METADATA IN THE OUTLINE:
-
-1. **arcSource** determines framing:
-   - "accusation": The suspects concluded this. Frame as "The group accused..."
-   - "whiteboard": Investigation thread explored by subjects. Frame as lead.
-   - "observation": Observed behavioral pattern. Frame as investigative finding.
-   - "discovered": Evidence pattern subjects missed. Frame as detective's insight.
-
-2. **evidenceStrength** determines confidence:
-   - "strong": State findings with authority
-   - "moderate": Use "evidence suggests", "indicators point to"
-   - "weak": Use "warrants further investigation", "inconclusive"
-   - "speculative": Use "subjects believed..." with noted uncertainty
-
-3. **caveats** become investigative complications
-   - Each caveat is a gap in the evidence chain
-
-4. **unansweredQuestions** feed OUTSTANDING QUESTIONS section
-   - These represent genuine investigative gaps
-</arc-metadata>
-
-${recordSection}
-
-<arc-analysis>
-${JSON.stringify(arcAnalysisOnly, null, 2)}
-
-${labelPromptSection('section-rules', prompts['section-rules'])}
-${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
-</arc-analysis>
-
-<section-guidance>
-CRITICAL: This is a CASE REPORT, not a narrative article. Each section answers a DIFFERENT QUESTION:
-
-- EXECUTIVE SUMMARY: What happened? (Hook + factual overview + top findings)
-- EVIDENCE LOCKER: What does the evidence show? (Thematically grouped, synthesized—NOT listed)
-- MEMORY ANALYSIS (optional): What do the memory extraction patterns reveal?
-- SUSPECT NETWORK: Who are the key players and how do they connect?
-- OUTSTANDING QUESTIONS: What remains unknown?
-- FINAL ASSESSMENT: What is the detective's conclusion?
-
-SECTION DIFFERENTIATION is critical. If a fact appears in one section, it should NOT repeat in another.
-The report should feel BESPOKE to this specific case—reference unique details, not generic observations.
-
-TARGET LENGTH: ~750 words total. Be economical. Every sentence earns its place.
-</section-guidance>
-${sessionFacts ? `
-<SESSION_FACTS>
-INVESTIGATION ROSTER (${sessionFacts.playerCount} subjects):
-${sessionFacts.roster.join('\n')}
-
-${renderSessionFactsVerdict(sessionFacts)}
-
-ONLY the ${sessionFacts.playerCount} characters listed above were present at the investigation.
-Use exactly ${sessionFacts.playerCount} when referencing how many subjects were involved.
-</SESSION_FACTS>` : ''}
-Return JSON with the following structure:
-{
-  "executiveSummary": {
-    "hook": "Opening line establishing case tension",
-    "caseOverview": "Brief factual summary of the case",
-    "primaryFindings": ["Top finding 1", "Top finding 2", "Top finding 3"]
-  },
-  "evidenceLocker": {
-    "evidenceGroups": [
-      {
-        "theme": "Thematic grouping (e.g., 'Financial Irregularities')",
-        "evidenceIds": ["evidence-id-1", "evidence-id-2"],
-        "synthesis": "What this group reveals together"
-      }
-    ]
-  },
-  "memoryAnalysis": {
-    "focus": "What memory extraction patterns reveal",
-    "keyPatterns": ["Notable pattern 1"],
-    "significance": "Why these patterns matter"
-  },
-  "suspectNetwork": {
-    "keyRelationships": [
-      {"characters": ["Name1", "Name2"], "nature": "Relationship description"}
-    ],
-    "assessments": [
-      {"name": "Character", "role": "Their role in events", "suspicionLevel": "high|moderate|low"}
-    ]
-  },
-  "outstandingQuestions": {
-    "questions": ["Unanswered question 1", "Unanswered question 2"],
-    "investigativeGaps": "Summary of what remains unknown"
-  },
-  "finalAssessment": {
-    "accusationHandling": "How the group's accusation relates to evidence",
-    "verdict": "Detective's overall assessment",
-    "closingLine": "Final noir closing line"
-  }
-}`;
-    } else {
-      // Journalist (NovaNews article) outline prompt.
-      //
-      // The director's observations sit with the data and BEFORE the arc metadata
-      // (brief 1.5). They are not guidance and must not compete with it:
-      // <DIRECTOR_GUIDANCE> is appended last, and keeps the last word. Journalist
-      // only, as in the article prompt: the detective report has no such section,
-      // and an outline must not plan on material its writer never sees.
-      //
-      // Phase 3 (3.2): the data, then the craft files last (the integrator's
-      // placement ruling; the world and the truth rules are in the system prompt).
-      // Gone, because the rule set states each once or contradicted it: the arc
-      // metadata's framing rules ("state conclusions confidently", a discovered arc
-      // "framed as revelation"), <arc-interweaving> and <arc-section-flow> (every arc
-      // in every section, the convergence in THE STORY), <visual-rules> and
-      // <visual-principles> (pull quotes, a fixed section table, photos as pacing),
-      // <TEMPORAL_DISCIPLINE> (the world and T7), the old agency rule, and the JSON
-      // shape restated in the prompt's own words (M27). The shape comes from
-      // outline.schema.json alone: the SDK channel enforces it, and since fix 3.2b
-      // (finding 10) the prompt embeds the same file as <SCHEMA>, after the data and
-      // before the craft files, a backstop for the channel (SDK #277) as the article
-      // writer's <SCHEMA> is.
-      //
-      // The 4b fix batch (spec section 7, R12): <arc-metadata> says what an arc is in
-      // C16's words, one thread of the story the arc writer found. It called an arc "the
-      // arc writer's reading", and "reading" is retired as the rules' noun for an inference.
-      //
-      // Phase 3 (3.10; T9): after SESSION_FACTS, the roster with pronouns, the section
-      // the article writer's system prompt and the judges print, so each player's
-      // pronoun reaches this writer once: at the gate it planned from first names alone.
-      // The section is built without the character data, so it adds the roster and the
-      // NPCs' canon lines and none of the character context the article writer reads
-      // beside them. The 4b fix batch: built by rosterWithPronounsSection, under the
-      // heading the arc writer and the interweaving call print it with.
-      //
-      // Task 4c-fix (T13): when the director kept no photo but the whiteboard there is no
-      // hero (ai-nodes.js selectHeroImage), and HERO IMAGE says none, as the article
-      // writer's line does.
-      //
-      // Task 4c-fix (4b-fix review minor 4): <available-photos> builds each entry with
-      // renderPhotoListEntry, the builder the outline judge lists the same photos with.
-      // The list never holds the hero, so no entry carries the hero mark.
-      const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
-      userPrompt = `Plan the outline of the article from these selected arcs. Write the plan in the third person: the article writer gives it Nova's voice.
-
-SELECTED ARCS:
-${selectedArcs.map((arc, i) => `${i + 1}. ${arc}`).join('\n')}
-
-HERO IMAGE: ${heroImage || 'none'}
+<SLOTS>
+The article's slots, in their usual order, each with the heading the map starts from:
+${slots.map((slot) => `- ${slot.key}: ${slot.heading ? slot.heading : 'no heading'}`).join('\n')}
+</SLOTS>
 ${observationsSection ? `\n${observationsSection}\n` : ''}
-<arc-metadata>
-${JSON.stringify(arcsWithMetadata, null, 2)}
-
-Each arc above is one thread of the story, as the arc writer found it. Its arcSource says where the thread came from: "accusation" (the verdict), "whiteboard" (a theory the room worked through), "observation" (the director's notes) or "discovered" (a pattern in the record the room did not take up, which C3 governs). Its evidenceStrength, caveats and unansweredQuestions say how far the record carries it; T1 says how each claim is written.
-</arc-metadata>
-
 <available-photos>
 
-${availablePhotos.length > 0 ? availablePhotos.map((p, i) => renderPhotoListEntry(p, i, options.photoDescriptions)).join('\n\n') : 'No session photos available'}
+${photoList.length > 0 ? photoList.map((p, i) => renderPhotoListEntry(p, i, options.photoDescriptions)).join('\n\n') : 'No session photos available'}
 
-A photo placement names its photo by the exact filename above.
+A photo is placed by its exact filename above.
 </available-photos>
 
 ${recordSection}
-
-<arc-analysis>
-${JSON.stringify(arcAnalysisOnly, null, 2)}
-</arc-analysis>
 ${this._buildFinancialSummary(shellAccounts)}
 ${this._sessionFactsSection(sessionFacts)}
 
 ${rosterSection}
 
 <SCHEMA>
-The outline is JSON in this shape: field names, types, enum values and required fields.
+The map is JSON in this shape: field names, types, enum values and required fields.
 
 \`\`\`json
-${JSON.stringify(outlineSchema, null, 2)}
+${JSON.stringify(mapSchemaFor(this.themeName), null, 2)}
 \`\`\`
 </SCHEMA>
 
 ${loadRuleSet('outline').craft}`;
-    }
-
-    return userPrompt;
   }
 
   /**
@@ -1416,11 +1205,10 @@ module.exports = {
   PromptBuilder,
   createPromptBuilder,
   generateRosterSection,
-  // The roster with pronouns, without the character context, for the arc writer, the
-  // interweaving call and the outline writer (the 4b fix batch)
+  // The roster with pronouns, without the character context, for the arc writer and the
+  // map writer (the 4b fix batch; phase 4)
   rosterWithPronounsSection,
   buildDirectorGuidanceSection,
-  buildShouldConsiderSection,
   // Shared with buildRevisionContext (node-helpers.js), which introduces the detective
   // rework's advisory list with it; a journalist rework's list has its own line,
   // REWORK_SHOULD_CONSIDER_LINE (phase 3, 3.10).

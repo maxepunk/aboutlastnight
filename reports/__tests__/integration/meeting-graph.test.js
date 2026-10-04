@@ -127,7 +127,8 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
   /** The thread as the arc writer leaves it, run to the story meeting's stop. */
   async function toMeeting(sdk, values = {}) {
     const { graph, thread } = threadFor(sdk);
-    const { selectedArcs: _old, ...state } = reworkFixtureState('journalist');
+    // Brief 4.6: the fixture is past the meeting; the meeting opens without its approval.
+    const { meetingApproved: _approved, ...state } = reworkFixtureState('journalist');
     const weave = writersWeave();
     await graph.updateState(thread, { ...state, sessionId: '100326', weave, _weaveBaseline: weave, evaluationHistory: [], ...values }, 'analyzeArcs');
     await run(graph, thread, null);
@@ -266,7 +267,8 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     const { graph, thread } = threadFor(sdk);
     // A thread from before the story meeting: arcs selected, no weave, paused before the
     // character-IDs stop.
-    const { weave: _none, ...old } = reworkFixtureState('journalist');
+    // Brief 4.6: nor its approval, which came with the meeting.
+    const { weave: _none, meetingApproved: _approved, ...old } = reworkFixtureState('journalist');
     await graph.updateState(thread, { ...old, sessionId: '100326', evaluationHistory: [{ phase: 'arcs', ready: true }], characterIdMappings: null }, 'detectWhiteboard');
     await expect(run(graph, thread, null)).rejects.toThrow(/Reached with no weave: this thread was started before the story meeting existed\. Roll back to the story meeting \(arc-selection\)/);
     expect(sdk.calls).toEqual([]);
