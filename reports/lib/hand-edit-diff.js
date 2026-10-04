@@ -2512,18 +2512,21 @@ function sameKind(a, b) {
   return typeof a === typeof b;
 }
 
+/** The collections whose elements an id names whatever their other fields (task 4.5d): the sidebar cards and the weave's. */
+const NAMED_COLLECTIONS = ['evidenceCards', ...Object.keys(WEAVE_ELEMENTS)];
+
 /**
  * The name an element of a collection goes by whatever its other fields (task 4.5d), or
- * null: a sidebar card's tokenId, and a thread's, a connection's or a question's id (lib/
- * weave.js weaveIdOf). A section's blocks pair by the desk's naming rule, which pairs a
- * photo, a card or a reference by its name alone (pairSectionBlocks); every other element
- * is found by its text or its place.
+ * null: in a collection an id names (NAMED_COLLECTIONS), what identityOf finds the element
+ * by, a sidebar card's tokenId or a thread's, a connection's or a question's id, as
+ * pairElements pairs it, so one rule names an element (task 4.5e). A section's blocks pair
+ * by the desk's naming rule, which pairs a photo, a card or a reference by its name alone
+ * (pairSectionBlocks); any other element goes by what finds it, then by its place.
  */
 function nameOf(collection, element) {
-  if (!isObj(element)) return null;
-  if (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, collection)) return weaveIdOf(element) || null;
-  if (collection === 'evidenceCards') return element.tokenId != null && String(element.tokenId).trim() ? String(element.tokenId).trim() : null;
-  return null;
+  if (!NAMED_COLLECTIONS.includes(collection)) return null;
+  const identity = identityOf(collection, element);
+  return identity ? canon(identity) : null;
 }
 
 /**
@@ -3005,6 +3008,8 @@ module.exports = {
     MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
     stayingInSection, pathOf,
     // Brief 4.5c: the weave's fields and elements, which the console copies (a test holds them equal)
-    WEAVE_FIELDS, WEAVE_ELEMENTS
+    WEAVE_FIELDS, WEAVE_ELEMENTS,
+    // Task 4.5e: one rule names an element (a test holds nameOf to identityOf)
+    nameOf, identityOf
   }
 };

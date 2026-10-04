@@ -2826,3 +2826,61 @@ describe('4.5d: two photos or two cards swapped are two moves, each keeping its 
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5e: the director's edits, second follow-ups
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The integrator's ruling 4 on run 5's follow-ups (progress.md, 2026-10-04), from the review
+// of 4.5d (scratch 4.5d-review/stale-after.js, rename-probe.js and sidebar-probe.js):
+// - a connection the director brought back goes back as the meeting last showed it: a later
+//   look refreshes its words, so a pass that drops it after a round reworded a false link in
+//   it never undoes that fix;
+// - the restore never puts back a photo the article cannot print, so an automatic pass that
+//   fixed an invalid photo the director captioned keeps its fix, and the report says so;
+// - one rule names an element: nameOf derives from identityOf;
+// - a sidebar card's field goes back on its own card, beside the card a pass put at its index.
+// Invented text.
+
+describe('4.5e: one rule names an element', () => {
+  const { nameOf, identityOf, canon } = D._testing;
+  /** Elements of a collection, named by `key`: a name twice (once padded), another, a number, the number as text, an empty name and none. */
+  const corpus = (key) => [{ [key]: 'x1' }, { [key]: ' x1 ' }, { [key]: 'x2' }, { [key]: 3 }, { [key]: '3' }, { [key]: '' }, { other: 'no name' }];
+  const alike = (collection, a, b) => {
+    const [x, y] = [identityOf(collection, a), identityOf(collection, b)];
+    return x !== null && y !== null && canon(x) === canon(y);
+  };
+
+  it.each([
+    ['evidenceCards', 'tokenId'], ['threads', 'id'], ['connections', 'id'], ['questions', 'id']
+  ])('%s: an element has a name exactly when identityOf finds it by one, and two share a name exactly when identityOf finds them alike', (collection, key) => {
+    const elements = corpus(key);
+    elements.forEach((a) => {
+      expect([a, nameOf(collection, a) !== null]).toEqual([a, identityOf(collection, a) !== null]);
+      elements.forEach((b) => {
+        expect([a, b, nameOf(collection, a) !== null && nameOf(collection, a) === nameOf(collection, b)]).toEqual([a, b, alike(collection, a, b)]);
+      });
+    });
+  });
+
+  it("names nothing in another collection: a section, a section's block and a pull quote go by their own rules", () => {
+    expect(nameOf('sections', { id: 's' })).toBeNull();
+    expect(nameOf('content', { type: 'photo', filename: 'a.jpg' })).toBeNull();
+    expect(nameOf('pullQuotes', { text: 'A line from the room.' })).toBeNull();
+  });
+});
+
+describe("4.5e: a sidebar card's field goes back on its own card", () => {
+  const card = (tokenId, headline) => ({ tokenId, headline, summary: `What ${tokenId} holds, in one line.`, significance: 'supporting' });
+  const bundle = (cards) => ({ metadata: { sessionId: '0926262' }, headline: { main: 'The Room Voted Five to Four' }, sections: [], evidenceCards: cards.map(clone) });
+
+  it("a pass that puts another card at its index: the director's headline goes back on its own card, beside the other", () => {
+    const sentBack = bundle([card('jes002', 'Jess gave him up, in her own words'), card('vic001', 'The replacement plan')]);
+    const standing = D.standingAfterSendBack(null, bundle([card('jes002', 'Jess lets him go'), card('vic001', 'The replacement plan')]), sentBack, 'bundle');
+    expect(standing.edits.map((e) => e.path)).toEqual(['evidenceCards[#jes002].headline']);
+    const after = bundle([card('kai003', 'Kai at the safe'), card('vic001', 'The replacement plan')]);
+    const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1 });
+    expect(output.evidenceCards).toEqual([sentBack.evidenceCards[0], after.evidenceCards[0], after.evidenceCards[1]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', where: 'sidebar card jes002, headline', became: null, restored: true })]);
+  });
+});
