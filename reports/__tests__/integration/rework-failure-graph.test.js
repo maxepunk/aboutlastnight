@@ -32,7 +32,9 @@ const { getCheckpointData, buildResumePayload } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 const { PHASES } = require('../../lib/workflow/state');
 const { StructuredOutputExtractionError } = require('../../lib/llm/structured-output-extractor');
-const { articleReviewPayload } = require('../../console/checkpoint-view-logic');
+const {
+  articleReviewPayload, mapPayload, mapPendingSlot, mapDraftOf, mapNoteOf, pendingEditsAfterCheckpoint, noteSlotKey
+} = require('../../console/checkpoint-view-logic');
 const { reworkFixtureState, MAP, DOCUMENT_TEXT } = require('../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -88,12 +90,15 @@ function writersDraft() {
  * A scripted SDK. The map writer answers by the map's schema (`writersMap`, the fixture's map
  * by default) and the article writer by the bundle's; the map's and the article's reworks by
  * their labels, through `mapRework` and `articleRework`, which may throw; every other call (the
- * article judge) gives `judges` in turn, then the last of them. Every call is recorded by name.
+ * article judge) gives `judges` in turn, then the last of them. Every call is recorded by name,
+ * and its prompt at the same place in `prompts`.
  */
 function scriptedSdk({ writersMap = MAP, mapRework, articleRework, judges = [CLEAN] } = {}) {
   const calls = [];
+  const prompts = [];
   let judged = 0;
   const sdk = async (options) => {
+    prompts.push(options.prompt || '');
     const label = options.label || '';
     const schemaId = options.jsonSchema && options.jsonSchema.$id;
     if (/^Map revision/.test(label)) {
@@ -118,11 +123,21 @@ function scriptedSdk({ writersMap = MAP, mapRework, articleRework, judges = [CLE
     return clone(verdict);
   };
   sdk.calls = calls;
+  sdk.prompts = prompts;
   return sdk;
 }
 
 /** How many times the calls since `from` name `who`. */
 const callsOf = (sdk, from, who) => sdk.calls.slice(from).filter((call) => call === who).length;
+
+/** The prompt of the last call named `who`. */
+const promptOf = (sdk, who) => sdk.prompts[sdk.calls.lastIndexOf(who)] || '';
+
+/** The standing notes the last call named `who` read: its <DIRECTOR_GUIDANCE>, or '' when it had none. */
+function guidanceOf(sdk, who) {
+  const match = /<DIRECTOR_GUIDANCE>([\s\S]*?)<\/DIRECTOR_GUIDANCE>/.exec(promptOf(sdk, who));
+  return match ? match[1] : '';
+}
 
 describe('4.14e: a failed rework keeps the version it started from, at the map and the desk', () => {
   let dir;
@@ -380,6 +395,91 @@ describe('4.14e: a failed rework keeps the version it started from, at the map a
       expect(retried.data.lastEvaluation).toMatchObject({ escalatedToHuman: true, structuralIssues: BREACH.structuralIssues });
       expect(retried.data.trace).toEqual([]);
       expect(retried.data.roundDidNotRun).toBeNull();
+    });
+  });
+
+  // Fix round 1, finding 1 (the reviewer's probes note-after-unrun.js and
+  // desk-note-after-unrun.js): the send-back filed its note as a rejection note, which every
+  // later writer reads as applied by the rework at its stop. A round that did not run withdraws
+  // it, and the director's next action files it again or leaves it out, as at the story meeting.
+  describe('fix round 1: the note of a send-back that did not run', () => {
+    it('the map: a note-only send-back that did not run lists no standing note, and Approve with the note in the box files it once, as an approval note, which the article writer reads once', async () => {
+      const sdk = scriptedSdk({ mapRework: (options) => { throw badSchema(options.label); } });
+      const { graph, thread } = await toMap(sdk);
+      const shown = await stopOf(graph, thread);
+
+      const reopened = await act(graph, thread, mapPayload('send-back', clone(shown.data.outline), MAP_NOTE));
+
+      expect(reopened.type).toBe(CHECKPOINT_TYPES.OUTLINE);
+      expect(reopened.data.roundDidNotRun).toEqual({ round: 'send-back', at: expect.any(String), note: MAP_NOTE });
+      expect(reopened.values.directorGateNotes).toEqual([]);
+      expect(reopened.data.directorGateNotes).toEqual([]);
+      // The console reopens the map with the note in its box (the slot the map's send() saved).
+      const pending = { outline: mapPendingSlot(shown.data, clone(shown.data.outline)), [noteSlotKey('outline')]: MAP_NOTE };
+      const kept = pendingEditsAfterCheckpoint(pending, 'outline', reopened.data);
+      const box = mapNoteOf(reopened.data, kept.outline, kept[noteSlotKey('outline')]);
+      expect(box).toBe(MAP_NOTE);
+
+      const atDesk = await act(graph, thread, mapPayload('approve', mapDraftOf(reopened.data, kept.outline), box));
+
+      expect(atDesk.type).toBe(CHECKPOINT_TYPES.ARTICLE);
+      expect(atDesk.values.directorGateNotes).toEqual([
+        expect.objectContaining({ gate: 'outline', kind: 'approval', round: 1, stopRound: 1, text: MAP_NOTE })
+      ]);
+      const guidance = guidanceOf(sdk, 'article writer');
+      expect(guidance).toContain(`- [outline, approval 1] ${MAP_NOTE}`);
+      expect(guidance.split(MAP_NOTE)).toHaveLength(2);
+    });
+
+    it("the map: a retry with the same words files the note once, as the rejection note of the round that runs, and the rework reads it as the director's note", async () => {
+      const fixed = clone(MAP);
+      fixed.deck = 'The rework tightened the money section.';
+      const sdk = scriptedSdk({ mapRework: (options, calls) => {
+        if (calls.filter((c) => /^Map revision/.test(c)).length === 1) throw badSchema(options.label);
+        return fixed;
+      } });
+      const { graph, thread } = await toMap(sdk);
+      const shown = await stopOf(graph, thread);
+      const reopened = await act(graph, thread, mapPayload('send-back', clone(shown.data.outline), MAP_NOTE));
+      expect(reopened.data.roundDidNotRun).toEqual({ round: 'send-back', at: expect.any(String), note: MAP_NOTE });
+
+      const next = await act(graph, thread, mapPayload('send-back', clone(reopened.data.outline), MAP_NOTE));
+
+      expect(next.type).toBe(CHECKPOINT_TYPES.OUTLINE);
+      expect(next.values.outline.deck).toBe(fixed.deck);
+      expect(next.data.roundDidNotRun).toBeNull();
+      expect(next.data.humanRevisionCount).toBe(1);
+      expect(next.values.directorGateNotes).toEqual([
+        expect.objectContaining({ gate: 'outline', kind: 'rejection', round: 1, stopRound: 1, text: MAP_NOTE })
+      ]);
+      // The round's line reads the note that opened it (roundNoteOf).
+      expect(next.data.previousFeedback).toBe(MAP_NOTE);
+      expect(promptOf(sdk, 'Map revision 0')).toContain(MAP_NOTE);
+      expect(guidanceOf(sdk, 'Map revision 0')).not.toContain(MAP_NOTE);
+    });
+
+    it('the desk: a send-back that did not run, then one with another note that runs: the running rework reads only the second note', async () => {
+      const second = 'Cut the closing to two lines.';
+      let reworks = 0;
+      const sdk = scriptedSdk({ articleRework: (options) => {
+        reworks += 1;
+        if (reworks === 1) throw badSchema(options.label);
+        return writersDraft();
+      } });
+      const { graph, thread, atDesk } = await toDesk(sdk);
+      const reopened = await act(graph, thread, articleReviewPayload(directorsDesk(atDesk.values.contentBundle), DESK_NOTE, 'send-back'));
+      expect(reopened.data.roundDidNotRun).toEqual({ round: 'send-back', at: expect.any(String), note: DESK_NOTE });
+      expect(reopened.data.directorGateNotes).toEqual([]);
+
+      const next = await act(graph, thread, articleReviewPayload(clone(reopened.values.contentBundle), second, 'send-back'));
+
+      expect(next.type).toBe(CHECKPOINT_TYPES.ARTICLE);
+      expect(next.data.humanRevisionCount).toBe(1);
+      expect(next.values.directorGateNotes).toEqual([
+        expect.objectContaining({ gate: 'article', kind: 'rejection', round: 1, stopRound: 1, text: second })
+      ]);
+      expect(promptOf(sdk, 'Article revision 0')).toContain(second);
+      expect(promptOf(sdk, 'Article revision 0')).not.toContain(DESK_NOTE);
     });
   });
 });

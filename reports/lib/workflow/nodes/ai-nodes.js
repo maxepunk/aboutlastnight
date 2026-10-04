@@ -21,7 +21,7 @@
  * See ARCHITECTURE_DECISIONS.md for design rationale.
  */
 
-const { PHASES, REWORK_STATUS, reworkOpened, stopRoundOf } = require('../state');
+const { PHASES, REWORK_STATUS, reworkOpened, stopRoundOf, isNoteOf, DIRECTOR_ROUND_COUNTERS } = require('../state');
 const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 // Task 4.14e: which failures a rework calls again (rate limits, overloads, stalls), the one
 // classifier the nodes' retry policy reads too (graph.js LLM_RETRY).
@@ -1104,8 +1104,9 @@ function takeChangedEdits(result) {
 //   rework's record, and the route after the rework runs it again (graph.js
 //   routeAfterMapRework, routeAfterArticleRework), spending no automated budget;
 // - a rework that gives up on the director's round leaves the director's version, gives the
-//   round's counts back and empties its slot, and the stop reopens saying the round did not
-//   run, with its note (lib/workflow/state.js roundDidNotRunAt);
+//   round's counts back, empties its slot and withdraws the round's note from the director's
+//   notes, and the stop reopens saying the round did not run, with its note
+//   (lib/workflow/state.js roundDidNotRunAt);
 // - an automatic pass that gives up ends the run in an error, as the meeting's does, with the
 //   version it started from kept, so Retry and going back reopen the stop with no call. Its
 //   trace entry goes: the pass never returned, so it changed nothing.
@@ -1174,10 +1175,53 @@ function withoutPass(trace, pass, round) {
 }
 
 /**
+ * The director's notes without the note of their round that did not run, or null when no note
+ * is the round's (task 4.14e, fix round 1). The send-back filed its note as a rejection note
+ * (server.js appendGateNote). Every later writer reads a rejection note as applied by the rework
+ * at its stop, and no rework applied this one. So the stop gives the note back instead: the note
+ * box holds it, or the did-not-run line quotes it. The director's next action files it again or
+ * leaves it out, with the outcomes of the story meeting's next action (server.js
+ * withdrawUnrunRoundNote, which withdraws the meeting's note at that action): a send-back with
+ * it files it as a rejection note, an approve with it as an approval note, and any other action
+ * leaves it out. The round's note is the rejection note at the stop with the round's text, filed
+ * in the round the given-back counts reopen (isNoteOf), as lib/meeting.js unrunRoundNoteIndex
+ * finds the meeting's. A note stored before notes recorded their round is never it.
+ *
+ * @param {Array|null} notes - directorGateNotes
+ * @param {string} stop - the stop the round ran at ('outline' or 'article')
+ * @param {string|null} note - the round's note (the rework's record)
+ * @param {number} round - the stop's round the note was filed in (stopRoundOf)
+ * @returns {Array|null}
+ */
+function withoutRoundNote(notes, stop, note, round) {
+  const text = typeof note === 'string' ? note.trim() : '';
+  if (!text || !Array.isArray(notes)) return null;
+  const at = notes.findIndex((n) => isNoteOf(n, stop, 'rejection', round) && typeof n.text === 'string' && n.text.trim() === text);
+  return at === -1 ? null : notes.filter((n, i) => i !== at && n && typeof n === 'object');
+}
+
+/**
+ * What a director's round that did not run gives back (task 4.14e): the counts its rework
+ * started from (countsGivenBack), and the director's notes without the round's note
+ * (withoutRoundNote), which the stop gives back to the director instead.
+ *
+ * @param {string} stop - 'outline' or 'article' (CHECKPOINT_TYPES)
+ * @param {Object} record - the rework's record, given up
+ * @param {Object} state - the rework's state
+ * @returns {Object} partial state
+ */
+function roundGivenBack(stop, record, state) {
+  const counts = countsGivenBack(record, state, DIRECTOR_ROUND_COUNTERS[stop]);
+  const notes = withoutRoundNote(state.directorGateNotes, stop, record.note, stopRoundOf(stop, { ...state, ...counts }));
+  return notes ? { ...counts, directorGateNotes: notes } : counts;
+}
+
+/**
  * What the map's rework leaves when a call fails (task 4.14e): the call again, the director's
- * round given up with their map, or an automatic pass given up with the run's error. The map it
- * started from (`_previousOutline`) is the director's on their round, and the stop's `outline`
- * all along, which the increment left in place.
+ * round given up with their map, its counts and its note given back (roundGivenBack), or an
+ * automatic pass given up with the run's error. The map it started from (`_previousOutline`) is
+ * the director's on their round, and the stop's `outline` all along, which the increment left
+ * in place.
  *
  * @param {Object} state - the rework's state
  * @param {Object} previousOutline - the map the rework started from
@@ -1196,7 +1240,7 @@ function mapReworkFailed(state, previousOutline, error) {
     return {
       ...kept,
       _outlineFeedback: null,
-      ...countsGivenBack(record, state, 'humanOutlineRevisionCount'),
+      ...roundGivenBack(CHECKPOINT_TYPES.OUTLINE, record, state),
       currentPhase: PHASES.OUTLINE_GENERATION
     };
   }
@@ -1939,8 +1983,9 @@ function verdictAfterFailedRework(history, record) {
 
 /**
  * What the article's rework leaves when a call fails (task 4.14e), as mapReworkFailed leaves the
- * map's: the call again, the director's round given up with their desk, or an automatic pass
- * given up with the run's error. Either give-up states the article's verdict again
+ * map's: the call again, the director's round given up with their desk, its counts and its note
+ * given back (roundGivenBack), or an automatic pass given up with the run's error. Either
+ * give-up states the article's verdict again
  * (verdictAfterFailedRework), so no judge reads the article the stop keeps.
  *
  * @param {Object} state - the rework's state
@@ -1965,7 +2010,7 @@ function articleReworkFailed(state, previousContentBundle, error) {
     return {
       ...kept,
       _articleFeedback: null,
-      ...countsGivenBack(record, state, 'humanArticleRevisionCount'),
+      ...roundGivenBack(CHECKPOINT_TYPES.ARTICLE, record, state),
       currentPhase: PHASES.GENERATE_CONTENT
     };
   }

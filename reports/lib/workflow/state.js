@@ -883,7 +883,8 @@ const ReportStateAnnotation = Annotation.Root({
    * on a transient error is counted (`failures`, `at`, `error`) and run again
    * (REWORK_STATUS.RETRYING), up to ai-nodes.js REWORK_CALLS calls in all; a rework that fails
    * on anything else, or on its last call, gives up (REWORK_STATUS.DID_NOT_RUN). The map it
-   * started from stays the stop's, and the director's round gives its counts back. A rework
+   * started from stays the stop's, and the director's round gives its counts back and
+   * withdraws its note from the director's notes (ai-nodes.js roundGivenBack). A rework
    * that completes clears it. The map's stop reads a round that did not run from it
    * (roundDidNotRunAt), and the map checks' route opens the stop on it. Cleared wherever
    * `_outlineFeedback` is.
@@ -981,7 +982,9 @@ const ReportStateAnnotation = Annotation.Root({
    * [outline, approval 1] and [outline, rejection 1] coexist. REPLACE reducer on purpose:
    * the server appends by writing the full array (it holds current state and the
    * session lock), and a rollback into the outline/article region writes the
-   * SURVIVORS after pruning — something an append channel cannot express (C1).
+   * SURVIVORS after pruning — something an append channel cannot express (C1). A map or
+   * article rework that gives up on the director's send-back writes it without that
+   * round's note, which no rework acted on (task 4.14e; ai-nodes.js withoutRoundNote).
    * Points at or above arc-selection clear it through ROLLBACK_CLEARS (null); every
    * reader uses `|| []`. Not `directorNotes`, which holds the session observations.
    */
@@ -1705,8 +1708,9 @@ function noteKindOf(note) {
  * Whether `note` is one of the director's notes of `kind` filed at `gate`, and, given `stopRound`,
  * in that round of the stop (the round server.js appendGateNote records). The one rule for
  * finding a note (review of 4.12e): server.js appendGateNote (a note filed twice, and the count of
- * a kind), lib/meeting.js unrunRoundNoteIndex (the note of a round that did not run) and
- * roundNoteOf (the note that opened a round) read it.
+ * a kind), lib/meeting.js unrunRoundNoteIndex (the note of a round that did not run),
+ * ai-nodes.js withoutRoundNote (the note of a map or desk round that did not run, task 4.14e)
+ * and roundNoteOf (the note that opened a round) read it.
  *
  * @param {Object} note
  * @param {string} gate - the stop the note was filed at
@@ -1757,7 +1761,8 @@ function reworkOpened(note, countsBefore) {
  * The director's round at the map or the desk that did not run, or null (task 4.14e; the final
  * review's ruling 5), shaped as the story meeting's is (lib/meeting.js roundDidNotRunOf): the
  * round's rework gave up, the stop kept the director's version and gave the round's counts back,
- * and the round's note comes with it, for the director to send again. An automatic pass that
+ * and the round's note comes with it, for the director to send again, withdrawn from their notes
+ * until they do (ai-nodes.js roundGivenBack). An automatic pass that
  * gave up runs inside the stop's round, so it is no round of the director's that did not run.
  * The map's and the desk's payloads send it (lib/map.js mapCheckpointData, server.js
  * getCheckpointData), and the console's line reads it (checkpoint-view-logic.js

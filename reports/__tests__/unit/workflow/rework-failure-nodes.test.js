@@ -187,3 +187,86 @@ describe('4.14e: the article\'s rework that fails', () => {
     expect(result.contentBundle.headline.main).toBe("The director's headline");
   });
 });
+
+// Fix round 1, finding 1: the send-back filed its note as a rejection note (server.js
+// appendGateNote), which every later writer reads as applied by the rework at its stop. A round
+// that did not run withdraws that note, and only it: the stop gives the note back, and the
+// director's next action files it again or leaves it out, as at the story meeting.
+describe('4.14e fix round 1: a round that did not run withdraws its note', () => {
+  const note = (gate, kind, stopRound, text = NOTE) => ({ gate, kind, round: 1, stopRound, text, at: 't' });
+  const MEETING_APPROVAL = note('arc-selection', 'approval', 1, 'Keep the envelope at the centre.');
+
+  describe('the map', () => {
+    // The send-back from round 3: two rounds ran, so its note was filed in round 3.
+    const ROUND_NOTE = { ...note('outline', 'rejection', 3), round: 3 };
+    // Each differs from the round's note in one of what finds it: its round, its kind, its stop.
+    const OTHERS = [MEETING_APPROVAL, note('outline', 'rejection', 2), note('outline', 'approval', 3), note('article', 'rejection', 3)];
+    const NOTES = [OTHERS[0], OTHERS[1], ROUND_NOTE, OTHERS[2], OTHERS[3]];
+    const sendBack = (notes) => ({
+      theme: 'journalist',
+      outline: DIRECTORS_MAP, _previousOutline: DIRECTORS_MAP, _outlineFeedback: NOTE,
+      outlineRevisionCount: 0, humanOutlineRevisionCount: 3, directorGateNotes: notes,
+      _outlineRework: opened(true, { outlineRevisionCount: 1, humanOutlineRevisionCount: 2 })
+    });
+
+    it("withdraws the round's note when the round gives up, and keeps every other note", async () => {
+      const result = await reviseOutline(sendBack(NOTES), cfg(throwing(badSchema())));
+      expect(result.humanOutlineRevisionCount).toBe(2);
+      expect(result.directorGateNotes).toEqual(OTHERS);
+    });
+
+    it('a rework with no record finds the note in the round its increment counted', async () => {
+      const { _outlineRework: _record, ...state } = sendBack(NOTES);
+      const result = await reviseOutline(state, cfg(throwing(badSchema())));
+      expect(result.directorGateNotes).toEqual(OTHERS);
+    });
+
+    it('leaves the notes alone while the call is retried', async () => {
+      const result = await reviseOutline(sendBack(NOTES), cfg(throwing(stall())));
+      expect(result._outlineRework.status).toBe('retrying');
+      expect(result).not.toHaveProperty('directorGateNotes');
+    });
+
+    it('writes no notes when none of them is the round\'s, as a note stored before notes recorded their round never is', async () => {
+      const { stopRound: _round, ...unrounded } = ROUND_NOTE;
+      const result = await reviseOutline(sendBack([MEETING_APPROVAL, unrounded]), cfg(throwing(badSchema())));
+      expect(result._outlineRework.status).toBe('did-not-run');
+      expect(result).not.toHaveProperty('directorGateNotes');
+    });
+
+    it('an automatic pass that gives up withdraws no note', async () => {
+      const state = {
+        ...sendBack(NOTES), _outlineFeedback: null, outlineRevisionCount: 1, humanOutlineRevisionCount: 2,
+        _outlineRework: opened(false, { outlineRevisionCount: 0, humanOutlineRevisionCount: 2 })
+      };
+      const result = await reviseOutline(state, cfg(throwing(badSchema())));
+      expect(result.currentPhase).toBe(PHASES.ERROR);
+      expect(result).not.toHaveProperty('directorGateNotes');
+    });
+  });
+
+  describe('the desk', () => {
+    // The send-back from round 1: its note was filed in round 1.
+    const ROUND_NOTE = note('article', 'rejection', 1);
+    const OTHERS = [MEETING_APPROVAL, note('outline', 'rejection', 1)];
+    const sendBack = () => ({
+      theme: 'journalist',
+      contentBundle: DIRECTORS_DESK, _previousContentBundle: DIRECTORS_DESK, _articleFeedback: NOTE,
+      articleRevisionCount: 0, humanArticleRevisionCount: 1, directorGateNotes: [OTHERS[0], ROUND_NOTE, OTHERS[1]],
+      evaluationHistory: [{ phase: 'article', ready: true, structuralIssues: [], advisoryWarnings: [], timestamp: 't1' }],
+      _articleRework: opened(true, { articleRevisionCount: 2, humanArticleRevisionCount: 0 })
+    });
+
+    it("withdraws the round's note when the round gives up, and keeps every other note", async () => {
+      const result = await reviseContentBundle(sendBack(), cfg(throwing(badSchema())));
+      expect(result.humanArticleRevisionCount).toBe(0);
+      expect(result.directorGateNotes).toEqual(OTHERS);
+    });
+
+    it('leaves the notes alone while the call is retried', async () => {
+      const result = await reviseContentBundle(sendBack(), cfg(throwing(stall())));
+      expect(result._articleRework.status).toBe('retrying');
+      expect(result).not.toHaveProperty('directorGateNotes');
+    });
+  });
+});
