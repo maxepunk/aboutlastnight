@@ -266,3 +266,60 @@ describe("4.7c: the headline and the deck hold the director's words", () => {
     expect(block(user, 'GENERATION_INSTRUCTION')).toContain(ITEM_4);
   });
 });
+
+// Brief 4.7d (ruling 2 on the follow-ups' findings): a section's heading and a photo's place
+// hold the director's desk edits as the headline does. The rework carries the task and the
+// instruction word for word, ahead of <HAND_EDITS>, so each line gives the director's version
+// first and the map's otherwise.
+describe("4.7d: a heading and a photo's place the director set at the desk hold through the rework", () => {
+  const { standingAfterSendBack } = require('../hand-edit-diff');
+  const DESK_HEADING = 'The Director Set This Heading at the Desk';
+  /** The task's line on each section's heading, worded as its headline line is. */
+  const HEADING_LINE = "- each section's heading: the director's own where the director has edited one, otherwise the map's, as written;";
+  /** The task's line on each photo's place: the director's where they moved it, the map's otherwise. */
+  const PHOTO_LINE = "- each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;";
+  /** The instruction's heading line: the task decides the heading. */
+  const INSTRUCTION_HEADING = '   - "heading": the section\'s heading, as the task above gives it. A section whose heading is empty or cut takes no "heading" and prints untitled.';
+
+  /**
+   * A send-back rework: at the desk the director set THE STORY's heading and moved its photo,
+   * p2.jpg, into the closing section.
+   */
+  async function sendBackPrompt() {
+    const shown = clone(PREVIOUS_BUNDLE);
+    shown.sections[0].content.splice(1, 0, { type: 'photo', filename: 'p2.jpg', caption: 'Alex leans over the ledger.' });
+    shown.sections.push({ id: 'closing', type: 'conclusion', content: [{ type: 'paragraph', text: 'Riley left town.' }] });
+    const sentBack = clone(shown);
+    sentBack.sections[0].heading = DESK_HEADING;
+    sentBack.sections[1].content.push(sentBack.sections[0].content.splice(1, 1)[0]);
+    const sdk = recordingSdk(sentBack);
+    await reviseContentBundle(articleState({
+      _previousContentBundle: sentBack, articleRevisionCount: 0, humanArticleRevisionCount: 1,
+      _articleFeedback: 'Tighten the closing.',
+      _articleHandEdits: standingAfterSendBack(null, shown, sentBack, 'bundle')
+    }), cfg(sdk));
+    return sdk.mock.calls[0][0].prompt;
+  }
+
+  it("a send-back rework with a desk heading and a desk photo move asks for neither the map's heading nor the map's placement over them", async () => {
+    const prompt = await sendBackPrompt();
+    const edits = block(prompt, 'HAND_EDITS');
+    expect(edits).toContain(`E1 (section "the-story", heading): "${DESK_HEADING}"`);
+    expect(edits).toContain('E2 (section "closing", photo p2.jpg, moved from section "the-story")');
+
+    const lines = prompt.split('\n');
+    expect(lines.filter((line) => line.startsWith("- each section's heading:"))).toEqual([HEADING_LINE]);
+    expect(lines.filter((line) => line.startsWith("- each photo's place:"))).toEqual([PHOTO_LINE]);
+    expect(lines.filter((line) => line.startsWith('   - "heading":'))).toEqual([INSTRUCTION_HEADING]);
+    // No line asks for the map's heading or the map's placement alone.
+    expect(prompt).not.toMatch(/each under its heading|the map's heading|each photo where the map places it/);
+  });
+
+  it('the writer reads the same lines, and the section line leaves the heading to its own', async () => {
+    const { user } = await writerPrompt(articleState());
+    expect(user).toContain(`\n${HEADING_LINE}\n`);
+    expect(user).toContain(`\n${PHOTO_LINE}\n`);
+    expect(block(user, 'GENERATION_INSTRUCTION')).toContain(`\n${INSTRUCTION_HEADING}\n`);
+    expect(user).toContain("\n- the map's sections in its order, each with its beats as C2 (`<craft-form>`) sets them out;");
+  });
+});

@@ -275,10 +275,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   meeting is a rejection (render-writers.js TAIL_NOTES), so both clauses go: the 138
  *   characters of MAP_TASK_NOTE_CHANGE and MAP_TASK_NOTE_SOURCE (outline-journalist 18299 ->
  *   18161). The article and arc pins do not move.
+ * - Phase 4 (brief 4.7d), a section's heading and a photo's place hold the director's desk
+ *   edits as the headline does: the task's section line leaves the heading to a line of its
+ *   own, which names the director's heading first and the map's otherwise (-19, +113); the
+ *   photo line names the director's place first, where they moved the photo, and the map's
+ *   otherwise (+60); and the instruction's heading line defers to the task (the same length).
+ *   A rework carries all three word for word (article-journalist 30862 -> 31016). The outline
+ *   and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['1cecd0c98a0d14cf6cbec182113f5835288f30f6e1597b6e5f26497279636a34', 18161],
-  'article-journalist': ['6c344a66edfde7744866352b0241a3ea5d3a67c0b1b75c97c1b9d5ee8b4524f7', 30862],
+  'article-journalist': ['f630e1de1d7123ce166584559147ede4ab45c5655b2e081aaeb9b93db2faa158', 31016],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
 

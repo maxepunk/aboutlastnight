@@ -441,17 +441,21 @@ const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s sto
  * after the settled weave and the map: the reading order, then what the writer writes from
  * the map. It points at the rule items that say how (C16, C2, C4) and restates none of them.
  *
- * Brief 4.7c: the article rework carries this task word for word, so each line holds beside
- * the director's edits at the desk. The headline and the deck are the director's own where
- * they edited one, which the rework's <HAND_EDITS> lists (the stamp records a line they wrote
- * on the map the same way), and the map's otherwise. The instruction's headline line defers
- * to this one and gives the kicker no owner, so a kicker the director edited at the desk
- * stands on <HAND_EDITS> alone.
+ * The article rework carries this task word for word, ahead of its <HAND_EDITS>, which lists
+ * the director's edits at the desk (spec section 7). So the lines on a section's heading, a
+ * photo's place, and the headline and deck give the director's version first and the map's
+ * otherwise (briefs 4.7c and 4.7d): the heading, headline or deck where the director edited
+ * one, and the place where the director moved the photo. The stamp records a headline or deck
+ * the director wrote on the map, or a top photo they chose there, as their edit the same way.
+ * The instruction's heading and headline lines defer to this task, and the headline line gives
+ * the kicker no owner, so a kicker the director edited at the desk stands on <HAND_EDITS>
+ * alone. The top photo is the map's: the desk edits only its caption.
  */
 const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
 - every beat in the map's sections, and no other; the beats under leftOut stay out of the article, the director's strikes among them;
-- the map's sections in its order, each under its heading, with its beats as C2 (\`<craft-form>\`) sets them out; the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
-- each photo where the map places it, beside its beat, and the map's top photo at the top of the article;
+- the map's sections in its order, each with its beats as C2 (\`<craft-form>\`) sets them out; the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
+- each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
+- each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;
 - the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;
 - about the map's expected length, as C4 (\`<craft-telling>\`) sets out.`;
 
@@ -842,9 +846,10 @@ ${this._rosterSection()}`;
    * (ARTICLE_TASK), then what the writer read before: the data, the roster and verdict, the
    * generation instruction with its schema, and the craft files last (phase 3, 3.2: the
    * integrator's placement ruling; the world and the truth rules are in the system
-   * prompt). The instruction takes the sections, their ids and headings, the headline, the
-   * deck and the top photo from the map, so it names none of the theme's slots. The HERO
-   * IMAGE line went: the map's top photo is the hero, and the instruction names it.
+   * prompt). The instruction takes the sections, their ids and the top photo from the map,
+   * and the headings, the headline and the deck as the task gives them (ARTICLE_TASK), so it
+   * names none of the theme's slots. The HERO IMAGE line went: the map's top photo is the
+   * hero, and the instruction names it.
    *
    * Gone, because the rule set states each once or contradicted it: the temporal
    * context key (M11: no document carries the field) and <TEMPORAL_DISCIPLINE> (the
@@ -932,7 +937,7 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
 1. "sections": the article's sections, one for each section of the map, in the map's order. Each has:
    - "id": the slot of the map's section it writes, as the map gives it.
    - "type": one of "narrative", "evidence-highlight", "investigation-notes" or "conclusion".
-   - "heading": the map's heading for the section, as written. A section whose heading on the map is empty takes no "heading" and prints untitled.
+   - "heading": the section's heading, as the task above gives it. A section whose heading is empty or cut takes no "heading" and prints untitled.
    - "content": an array of blocks, each one of these:
      * {"type": "paragraph", "text": "..."}
      * {"type": "quote", "text": "...", "attribution": "..."}: "attribution" is the speaker.
