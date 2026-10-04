@@ -1861,3 +1861,87 @@ describe('4.5c fix round 1: a round that did not run leaves its note to the dire
       .toEqual([['outline', 'approval', EARLIER.text], ['arc-selection', 'rejection', NOTE]]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.7b (spec section 8; the integrator's ruling 1): a photo the director deletes at the
+// desk joins the leave-out list, through 4.2's function (lib/photo-leave-out.js
+// leavePhotosOut), at the approve or send-back that carries the delete. The desk sends the
+// bundle on it with every approve and send-back, so a deleted photo is a photo block of the
+// stored bundle whose filename appears nowhere in the desk's bundle.
+describe('4.7b: a photo deleted at the desk joins the leave-out list', () => {
+  const Desk = require('../../console/article-desk-logic');
+  const { articleReviewPayload } = require('../../console/checkpoint-view-logic');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const P1 = { type: 'photo', filename: 'p1.jpg', caption: 'The six in the huddle.' };
+  const P2 = { type: 'photo', filename: 'p2.jpg', caption: 'Alex at the ledger.' };
+  const mapping = (exclude) => ({ characterMappings: [], additionalCharacters: [], corrections: {}, exclude });
+  let dataDir;
+
+  /** The writer's draft as the stop stores it: two photos in the intro. */
+  const stored = () => {
+    const b = clone(require('../fixtures/content-bundles/valid-journalist.json'));
+    b.metadata.sessionId = '0926262';
+    b.sections[0].content.push(clone(P1), clone(P2));
+    return b;
+  };
+  const atStop = (bundle, extra = {}) => ({
+    sessionId: '0926262',
+    contentBundle: bundle,
+    photoAnalyses: { analyses: [{ filename: 'p1.jpg' }, { filename: 'p2.jpg' }] },
+    characterIdMappings: { 'p1.jpg': mapping(false), 'p2.jpg': mapping(false) },
+    leftOutPhotos: [],
+    ...extra
+  });
+  const review = (payload, state = atStop(stored())) => buildResumePayload(payload, state, 'journalist', 'article', { dataDir });
+  /** The desk with the intro's second photo (p2.jpg) deleted. */
+  const withoutP2 = () => Desk.deleteBlock(stored(), 0, 3);
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-desk-delete-'));
+    fs.mkdirSync(path.join(dataDir, '0926262', 'photos'), { recursive: true });
+    ['p1.jpg', 'p2.jpg'].forEach((f) => fs.writeFileSync(path.join(dataDir, '0926262', 'photos', f), 'jpeg'));
+  });
+  afterEach(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+
+  test("a send-back that deletes a photo leaves it out: on the list, and excluded in the photo's mapping", () => {
+    const result = review(articleReviewPayload(withoutP2(), 'Tighten the intro.', 'send-back'));
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates.leftOutPhotos).toEqual(['p2.jpg']);
+    expect(result.stateUpdates.characterIdMappings['p2.jpg'].exclude).toBe(true);
+    expect(result.stateUpdates.characterIdMappings['p1.jpg'].exclude).toBe(false);
+    // The delete is also the director's cut at the stop, as every desk delete is.
+    expect(result.stateUpdates._articleHandEdits.edits.map((e) => [e.path, e.before])).toEqual([['sections[#intro].content[-]', P2]]);
+  });
+
+  test('an approve that deletes a photo leaves it out too', () => {
+    const result = review(articleReviewPayload(withoutP2(), '', 'approve'));
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates.leftOutPhotos).toEqual(['p2.jpg']);
+    expect(result.stateUpdates.characterIdMappings['p2.jpg'].exclude).toBe(true);
+  });
+
+  test('a photo still on the desk is no delete: moved to another section, or made the hero', () => {
+    const moved = Desk.moveToSection(stored(), { section: 0, block: 3 }, 3);
+    expect(review(articleReviewPayload(moved, 'Move it back.', 'send-back')).stateUpdates).not.toHaveProperty('leftOutPhotos');
+    const hero = withoutP2();
+    hero.heroImage = { filename: 'p2.jpg', caption: 'Alex at the ledger.' };
+    const result = review(articleReviewPayload(hero, '', 'approve'));
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates).not.toHaveProperty('leftOutPhotos');
+  });
+
+  test('an approve or send-back with no desk bundle, or a refused one, leaves nothing out', () => {
+    expect(review({ article: true }).stateUpdates).not.toHaveProperty('leftOutPhotos');
+    expect(review({ article: false, articleFeedback: 'Tighten it.' }).stateUpdates).not.toHaveProperty('leftOutPhotos');
+    const broken = withoutP2();
+    delete broken.headline;
+    const refused = review(articleReviewPayload(broken, 'Tighten it.', 'send-back'));
+    expect(refused.error).toContain('failed schema validation (content-bundle)');
+    expect(refused.stateUpdates).not.toHaveProperty('leftOutPhotos');
+  });
+
+  test('the list keeps the photos left out before, each once', () => {
+    const result = review(articleReviewPayload(withoutP2(), 'Tighten the intro.', 'send-back'), atStop(stored(), { leftOutPhotos: ['p9.jpg'] }));
+    expect(result.stateUpdates.leftOutPhotos).toEqual(['p9.jpg', 'p2.jpg']);
+  });
+});

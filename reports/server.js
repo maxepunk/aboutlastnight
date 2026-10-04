@@ -37,8 +37,10 @@ const { rosterNames } = require('./lib/content-bundle-fact-check');
 // FA (requirement 12): the printed photos the session's folder lacks, which the article
 // approve checks by publish's own rule.
 const { missingPrintedPhotos } = require('./lib/publish-photos');
-// Brief 4.2: the leave-out box, the list the character-IDs stop's boxes write.
-const { leftOutPhotosOf, listAfterStopChoices, isPlainObject } = require('./lib/photo-leave-out');
+// Brief 4.2: the leave-out box, the list the character-IDs stop's boxes write. Brief 4.7b:
+// a photo the director deletes at the desk joins it, through the one function that adds to it.
+const { leftOutPhotosOf, listAfterStopChoices, isPlainObject, leavePhotosOut } = require('./lib/photo-leave-out');
+const { photoKey } = require('./lib/prompt-renderers/director-words-renderer');
 // Brief 4.5: the story meeting's payloads and what its stop sends.
 const { meetingResume, meetingCheckpointData, unrunRoundNoteIndex } = require('./lib/meeting');
 // Phase 4 (brief 4.6): the map's payloads and what its stop shows; the photos kept for the
@@ -253,6 +255,56 @@ function outlineThesisOf(state) {
     const lede = state.outline && state.outline.lede;
     if (!lede || typeof lede !== 'object') return null;
     return { hook: lede.hook || '', keyTension: lede.keyTension || '', primaryArc: lede.primaryArc || '' };
+}
+
+/**
+ * The photos the director deleted at the desk (brief 4.7b; the integrator's ruling 1): each
+ * photo block of the bundle the stop showed whose filename appears nowhere in the bundle
+ * the desk sent. A photo the director moved to another section, or made the hero, is
+ * still on the desk. Filenames match by photoKey, the one join key; each photo once, in
+ * the order the stop showed them.
+ *
+ * @param {Object|null} shown - the bundle the stop showed (state.contentBundle)
+ * @param {Object} desk - the bundle the desk sent (approvals.articleEdits)
+ * @returns {string[]} the deleted photos' filenames
+ */
+function deskDeletedPhotos(shown, desk) {
+    const onDesk = new Set();
+    const collect = (value) => {
+        if (Array.isArray(value)) { value.forEach(collect); return; }
+        if (!value || typeof value !== 'object') return;
+        if (typeof value.filename === 'string' && value.filename.trim()) onDesk.add(photoKey(value.filename));
+        Object.values(value).forEach(collect);
+    };
+    collect(desk);
+    const deleted = [];
+    const seen = new Set();
+    ((shown && Array.isArray(shown.sections)) ? shown.sections : []).forEach((section) => {
+        ((section && Array.isArray(section.content)) ? section.content : []).forEach((block) => {
+            if (!block || block.type !== 'photo' || typeof block.filename !== 'string' || !block.filename.trim()) return;
+            const key = photoKey(block.filename);
+            if (onDesk.has(key) || seen.has(key)) return;
+            seen.add(key);
+            deleted.push(block.filename);
+        });
+    });
+    return deleted;
+}
+
+/**
+ * The state update that leaves out each photo the director deleted at the desk (brief
+ * 4.7b): the leave-out list and each photo's mapping, through 4.2's function, so after the
+ * approve or send-back that carries the delete the photo stays out of every writer's
+ * PHOTOS, the judge's photo check and publish (isPhotoExcluded). An empty object when the
+ * desk deleted none.
+ *
+ * @param {Object} currentState - the state at the article stop
+ * @param {Object} desk - the bundle the desk sent
+ * @returns {Object} the channels to update
+ */
+function leaveDeskDeletesOut(currentState, desk) {
+    const deleted = deskDeletedPhotos(currentState.contentBundle, desk);
+    return deleted.length > 0 ? leavePhotosOut(currentState, deleted) : {};
 }
 
 /**
@@ -884,6 +936,8 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         if (photoRefusal) return { resume: {}, stateUpdates: {}, error: photoRefusal };
         if (approvals.articleEdits && typeof approvals.articleEdits === 'object') {
             stateUpdates.contentBundle = approvals.articleEdits;
+            // Brief 4.7b: a photo the director deleted at the desk joins the leave-out list.
+            Object.assign(stateUpdates, leaveDeskDeletesOut(currentState, approvals.articleEdits));
         }
         // Phase 1 brief 1.1: as at the outline stop — the note box is sent with the
         // approve, and stands as an 'approval' note for any writer a later rollback
@@ -909,6 +963,9 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         stateUpdates._articleTrace = null;   // brief 2.7: a new round starts an empty trace
         if (hasEdits) {
             stateUpdates.contentBundle = approvals.articleEdits;   // incrementArticleRevision hands it to the reviser
+            // Brief 4.7b: a photo the director deleted at the desk joins the leave-out list, so
+            // the rework's PHOTOS, the judge's photo check and publish leave it out.
+            Object.assign(stateUpdates, leaveDeskDeletesOut(currentState, approvals.articleEdits));
         }
     }
 
