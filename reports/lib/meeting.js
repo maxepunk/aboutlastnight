@@ -6,12 +6,15 @@
  *   derived in code from the writer's (lib/sdk-client/subagents.js WEAVE_SCHEMA). It adds
  *   what no writer writes, the director's `answer` on a question and `struck: true` on a
  *   connection they struck, and, as the writer's does, lets a thread the director added or
- *   re-roled have no receipt and no reason. The payload gate validates against it, and the
- *   console's validator is held to it; it is never sent to the SDK, so no model writes an
- *   answer or a strike.
- * - THE PAYLOADS (meetingResume, which server.js buildResumePayload calls): approve
- *   carries the weave as the director left it and an optional note; a reweave the same; a
- *   send-back a note, and the weave when the director edited it. Each writes the
+ *   re-roled have no receipt and no reason. The payload gate validates against it. The
+ *   console's validator, 4.8's work and not yet built, is to apply the same rules. It is
+ *   never sent to the SDK, and code strips both keys from what a writer or a rework returns
+ *   (arc-specialist-nodes.js weaveFromOutput), so no model writes an answer or a strike.
+ * - THE PAYLOADS (meetingResume, which server.js buildResumePayload calls, and only while
+ *   the thread is paused at the meeting does it take the meeting's arm alone): approve
+ *   carries the weave as the director left it and an optional note; a reweave the same,
+ *   and it carries a change to the weave or a note, since answers alone are nothing to fit
+ *   in; a send-back a note, and the weave when the director edited it. Each writes the
  *   director's version (with the fact check's mark of the weave the meeting showed) and
  *   the standing edits against the writer's last weave (lib/hand-edit-diff.js
  *   standingAtMeeting). A reweave and a send-back are the director's round, marked
@@ -65,6 +68,18 @@ function listOf(words) {
   return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words.join('');
 }
 
+/** How many elements of a list carry the id, read as every join at the meeting reads one (weaveIdOf). */
+function idCount(elements, id) {
+  return (Array.isArray(elements) ? elements : []).filter((element) => weaveIdOf(element) === id).length;
+}
+
+/**
+ * The refusal for a reweave with nothing to fit in (brief 4.5b; spec 4.4): a reweave fits
+ * the director's changes and note into the weave, and the answers travel as they are to
+ * every later writer, so answers alone are no change to fit in.
+ */
+const EMPTY_REWEAVE = "A reweave fits the director's changes and note into the weave, and this one carries no change to the weave and no note. The answers travel as they are to every later writer: approve to send the weave on with them, or change the weave or write a note, then reweave.";
+
 /**
  * What the director-side schema finds wrong with a weave, as one refusal that says where,
  * or null for a weave it accepts. Past the schema, every thread, connection and question
@@ -72,13 +87,19 @@ function listOf(words) {
  * element by its id, which a schema cannot hold an array of objects to. A repeat is read
  * by the rule the checks and the diff read (lib/weave.js repeatedIds; fix round 1,
  * finding 3), so "t6" and "t6 " are one id here as there. The refusal names who made the
- * repeat (fix round 1, finding 2):
- * - a repeat the weave the meeting showed does not hold is the director's: refused;
- * - a repeat it holds is the writer's, a defect the checks report and a rework fixes. It
- *   passes while the director leaves the elements under it as the meeting showed them, so
- *   every action works, a reweave and a send-back among them, and the meeting offers no id
- *   editing. A change under it is refused, since no edit could find the element changed
- *   by its id (lib/hand-edit-diff.js weaveEditsBetween flags it `repeatedId`).
+ * repeat, read from each id's count in the weave the meeting showed and in the director's
+ * version (brief 4.5b), and offers only a remedy that works in its case:
+ * - an id the director's version holds more often than the weave the meeting showed is the
+ *   director's repeat: refused, naming the director. Keeping the ids the meeting showed
+ *   and giving each element they added an id of its own clears it, a third "t2" added over
+ *   the writer's two included;
+ * - a repeat the weave the meeting showed holds as often is the writer's, which the checks
+ *   report as the writer's failure and a rework fixes. It passes while the director leaves
+ *   the elements under it as the meeting showed them, so every action works, and the
+ *   meeting offers no id editing. A change under it is refused, since no edit could find
+ *   the element changed by its id (lib/hand-edit-diff.js weaveEditsBetween flags it
+ *   `repeatedId`); a send-back, or a reweave with a note, has the rework clear the repeat
+ *   (a reweave with nothing else in it is refused as empty).
  * With no weave shown to tell them apart, every repeat counts as the director's.
  *
  * @param {*} weave - the weave as the director left it, without its code-owned keys
@@ -95,19 +116,18 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
     return `The weave as the director left it failed the director-side schema: ${errors}`;
   }
   const shownWeave = isWeave(shown) ? shown : null;
-  const theirs = ID_COLLECTIONS.flatMap((collection) => {
-    const writers = new Set(shownWeave ? repeatedIds(shownWeave[collection]) : []);
-    return repeatedIds(weave[collection]).filter((id) => !writers.has(id)).map((id) => `two ${collection} share the id "${id}"`);
-  });
+  const theirs = ID_COLLECTIONS.flatMap((collection) => repeatedIds(weave[collection])
+    .filter((id) => idCount(weave[collection], id) > idCount(shownWeave && shownWeave[collection], id))
+    .map((id) => `two ${collection} share the id "${id}"`));
   if (theirs.length > 0) {
     const text = theirs.join('; ');
-    return `${text.charAt(0).toUpperCase()}${text.slice(1)}: the director's changes made ${theirs.length > 1 ? 'these repeats' : 'this repeat'}. Give each an id of its own.`;
+    return `${text.charAt(0).toUpperCase()}${text.slice(1)}: the director's changes made ${theirs.length > 1 ? 'these repeats' : 'this repeat'}. Keep the ids the meeting showed, and give each one the director added an id of its own.`;
   }
   const touched = new Set((shownWeave ? weaveEditsBetween(shownWeave, weave) : [])
     .filter((change) => change.repeatedId)
     .map((change) => `two ${change.scope} the id "${weaveIdOf(change.at[1].match)}"`));
   if (touched.size === 0) return null;
-  return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and reweave or send back: the rework gives each an id of its own.`;
+  return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.`;
 }
 
 /**
@@ -118,6 +138,9 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
  * - `{meeting: 'reweave', weave, note?}` and `{meeting: 'send-back', note, weave?}`: the
  *   director's round, marked `_meetingRound`; the note is the round's (`_arcFeedback`) and
  *   joins the standing notes as a rejection note, the kind a rework at its stop acts on.
+ *   A reweave that carries no edit and no note is refused (brief 4.5b, EMPTY_REWEAVE): its
+ *   rework would be told to keep every line, and a second fact check would follow, with
+ *   nothing to show.
  *
  * Every action writes the director's version as the weave (so a rework that times out
  * keeps it) and the standing edits against the writer's last weave (`_weaveBaseline`, or
@@ -155,9 +178,12 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
 
   const mark = factCheckMarkOf(currentState.weave);
   const baseline = isWeave(currentState._weaveBaseline) ? currentState._weaveBaseline : shown;
+  const handEdits = standingAtMeeting(currentState._weaveHandEdits, baseline, left, { names, shown });
+  // The edits the reweave's <HAND_EDITS> would list: with none and no note, it has nothing to fit in.
+  if (action === 'reweave' && !note && carriedEdits(handEdits, left).length === 0) return refuse(EMPTY_REWEAVE);
   const stateUpdates = {
     weave: mark ? withFactCheckMark(left, mark) : left,
-    _weaveHandEdits: standingAtMeeting(currentState._weaveHandEdits, baseline, left, { names, shown })
+    _weaveHandEdits: handEdits
   };
   if (action === 'approve') {
     return { resume: { approved: true }, stateUpdates, note: note ? { text: note, kind: 'approval' } : null, error: null };

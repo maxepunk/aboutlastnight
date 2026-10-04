@@ -90,7 +90,9 @@ describe("the director-side schema (R12)", () => {
     doubled.threads.push({ id: 't3', claim: 'A thread the director added under a taken id.', role: 'grounds-it' });
     doubled.connections.push({ ...clone(FIXTURE_WEAVE.connections[0]) });
     doubled.questions.push({ ...clone(FIXTURE_WEAVE.questions[0]) });
-    const theirs = 'Two threads share the id "t3"; two connections share the id "c1"; two questions share the id "q1": the director\'s changes made these repeats. Give each an id of its own.';
+    // 4.5b: the remedy keeps the ids the meeting showed, so it works when the director's
+    // element sits under an id the writer's elements hold too.
+    const theirs = 'Two threads share the id "t3"; two connections share the id "c1"; two questions share the id "q1": the director\'s changes made these repeats. Keep the ids the meeting showed, and give each one the director added an id of its own.';
     expect(directorWeaveProblems(doubled, { shown: clone(FIXTURE_WEAVE) })).toBe(theirs);
     // With no weave shown to tell them apart, every repeat counts as the director's.
     expect(directorWeaveProblems(doubled)).toBe(theirs);
@@ -124,7 +126,9 @@ describe('a repeated id the writer made (fix round 1, finding 2)', () => {
 
   it.each([
     ['an approve', { meeting: 'approve', weave: writersRepeat() }],
-    ['a reweave', { meeting: 'reweave', weave: writersRepeat() }],
+    // 4.5b: a reweave that carries no edit and no note is refused as empty, so this one
+    // carries the note that asks for the fix.
+    ['a reweave that carries a note', { meeting: 'reweave', weave: writersRepeat(), note: 'Give the two money threads ids of their own.' }],
     ['a send-back that carries only a note', { meeting: 'send-back', note: 'Give the two money threads ids of their own.' }]
   ])('lets %s through while the director leaves those threads as the meeting showed them', (_name, approvals) => {
     const result = meetingResume(approvals, atRepeat());
@@ -145,7 +149,9 @@ describe('a repeated id the writer made (fix round 1, finding 2)', () => {
     const left = writersRepeat();
     left.threads[left.threads.length - 1].role = 'mirrors-it';
     const { error, stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atRepeat());
-    expect(error).toBe('The writer gave two threads the id "t2", so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and reweave or send back: the rework gives each an id of its own.');
+    // 4.5b: the remedy names only what works: a reweave with no other change and no note is
+    // refused as empty, so the reweave carries a note.
+    expect(error).toBe('The writer gave two threads the id "t2", so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.');
     expect(stateUpdates).toEqual({});
   });
 
@@ -153,7 +159,7 @@ describe('a repeated id the writer made (fix round 1, finding 2)', () => {
     const left = writersRepeat();
     left.threads.push({ id: 't3', claim: 'A thread the director put under a taken id.', role: 'grounds-it' });
     expect(meetingResume({ meeting: 'approve', weave: left }, atRepeat()).error)
-      .toBe('Two threads share the id "t3": the director\'s changes made this repeat. Give each an id of its own.');
+      .toBe('Two threads share the id "t3": the director\'s changes made this repeat. Keep the ids the meeting showed, and give each one the director added an id of its own.');
   });
 });
 
@@ -295,5 +301,82 @@ describe('what the stop shows (brief 4.5)', () => {
 
   it('the checks stamp the source the meeting reads', () => {
     expect(WEAVE_CHECKS_SOURCE).toBe('weave-checks');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5b: who made a repeat, and the empty reweave
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Each id's count in the weave the meeting showed against its count in the director's
+// version says who made a repeat: an id that occurs more often in the director's version is
+// the director's repeat. Read by whether the shown weave repeated the id at all, a third t2
+// the director added over the writer's two read as the writer's repeat (4.5 re-review).
+describe("4.5b: who made a repeat, read from each id's count", () => {
+  const writersRepeat = () => {
+    const weave = clone(FIXTURE_WEAVE);
+    weave.threads.push({ id: 't2', claim: 'A second thread the fix put under a taken id.', role: 'grounds-it', receipt: 'ledger' });
+    return weave;
+  };
+  const atRepeat = () => atMeeting({ weave: withFactCheckMark(writersRepeat(), { at: 't', ready: true, fixes: 1 }), _weaveBaseline: writersRepeat() });
+  const DIRECTORS = 'Two threads share the id "t2": the director\'s changes made this repeat. Keep the ids the meeting showed, and give each one the director added an id of its own.';
+
+  it("a third t2 the director added over the writer's two is the director's repeat, and the refusal names the director", () => {
+    const left = writersRepeat();
+    left.threads.push({ id: 't2', claim: 'A third thread the director put under t2.', role: 'grounds-it' });
+    expect(directorWeaveProblems(left, { shown: writersRepeat() })).toBe(DIRECTORS);
+    const { error, stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atRepeat());
+    expect(error).toBe(DIRECTORS);
+    expect(stateUpdates).toEqual({});
+  });
+
+  it("its remedy works: the director's thread under an id of its own goes through, the writer's two left as the meeting showed them", () => {
+    const left = writersRepeat();
+    left.threads.push({ id: 't7', claim: 'A third thread the director put under an id of its own.', role: 'grounds-it' });
+    expect(directorWeaveProblems(left, { shown: writersRepeat() })).toBeNull();
+    const { error, stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atRepeat());
+    expect(error).toBeNull();
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t7]']);
+  });
+
+  it("the writer's two, left as the meeting showed them, are no repeat of the director's", () => {
+    expect(directorWeaveProblems(writersRepeat(), { shown: writersRepeat() })).toBeNull();
+  });
+});
+
+// Spec 4.4: a reweave fits the director's changes and note into the weave, and the answers
+// travel as they are to every later writer. A reweave that carries neither spent a rework
+// told to keep every line word for word, then a second fact check: about ten minutes with
+// nothing to show.
+describe('4.5b: an empty reweave is refused, with its reason', () => {
+  const EMPTY = "A reweave fits the director's changes and note into the weave, and this one carries no change to the weave and no note. The answers travel as they are to every later writer: approve to send the weave on with them, or change the weave or write a note, then reweave.";
+  const answered = () => ({ ...clone(FIXTURE_WEAVE), questions: FIXTURE_WEAVE.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar all morning.' })) });
+
+  it.each([
+    ['the weave as the meeting showed it', { meeting: 'reweave', weave: clone(FIXTURE_WEAVE) }],
+    ['answers alone', { meeting: 'reweave', weave: answered() }],
+    ['answers alone and a blank note', { meeting: 'reweave', weave: answered(), note: '   ' }]
+  ])('refuses %s, and writes nothing', (_name, approvals) => {
+    const result = meetingResume(approvals, atMeeting());
+    expect(result.error).toBe(EMPTY);
+    expect(result.stateUpdates).toEqual({});
+    expect(result.resume).toEqual({});
+  });
+
+  it('takes a reweave that carries a note, or a change to the weave', () => {
+    expect(meetingResume({ meeting: 'reweave', weave: answered(), note: 'Join the ledger thread to the vote.' }, atMeeting()).error).toBeNull();
+    expect(meetingResume({ meeting: 'reweave', weave: leftByDirector() }, atMeeting()).error).toBeNull();
+  });
+
+  it("takes a reweave whose earlier changes still stand: the meeting reopened on the director's version, which they want fitted in", () => {
+    const left = leftByDirector();
+    const reopened = atMeeting({ weave: withFactCheckMark(left, { at: 't', ready: true, fixes: 0 }), _weaveHandEdits: standingAtMeeting(null, FIXTURE_WEAVE, left) });
+    const result = meetingResume({ meeting: 'reweave', weave: leftByDirector() }, reopened);
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates._weaveHandEdits.edits).toHaveLength(3);
+  });
+
+  it('leaves an approve that carries no change as it was: the answers go on with it', () => {
+    expect(meetingResume({ meeting: 'approve', weave: answered() }, atMeeting()).error).toBeNull();
   });
 });
