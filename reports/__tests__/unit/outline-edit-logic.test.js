@@ -739,6 +739,17 @@ describe('4.6: Everyone and the counts, one function from the beats (mapTally)',
     expect(L.rosterMemberOf('Blake', ROSTER)).toBe(null);
     expect(L.rosterMemberOf('Ellison', ROSTER)).toBe(null);
   });
+
+  // Fix round 1, finding 2: the console cannot require the server's photo join key, so it
+  // keeps a copy, held equal here.
+  it("the console's photo key is the server's photoKey, the one join key for a photo", () => {
+    const { photoKey } = require('../../lib/prompt-renderers/director-words-renderer');
+    const corpus = [
+      'p2.jpg', 'P2.JPG', ' p2.jpg', 'p2.jpg ', 'photos/P2.jpg', 'C:\\photos\\p2.JPG', 'a/b\\c.jpg', 'p2.jpg\n',
+      '', null, undefined, 0, 7
+    ];
+    corpus.forEach((filename) => expect([filename, L.photoKey(filename)]).toEqual([filename, photoKey(filename)]));
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

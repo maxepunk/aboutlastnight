@@ -734,9 +734,21 @@
     return null;
   }
 
-  /** A photo's filename as every join reads it: the basename, lower case. */
-  function photoKeyOf(filename) {
-    return String(filename == null ? '' : filename).split(/[/\\]/).pop().trim().toLowerCase();
+  /**
+   * A photo's filename as every join reads it: the basename, lower case. The console's copy
+   * of the server's one join key (lib/prompt-renderers/director-words-renderer.js photoKey),
+   * which it cannot require; a test holds the two equal (brief 4.6, fix round 1).
+   */
+  function photoKey(filename) {
+    return String(filename || '').split(/[/\\]/).pop().toLowerCase();
+  }
+
+  /**
+   * The id of the document a beat prints as a card, trimmed, or '' for a beat that is no
+   * card: the one rule for which beats are cards, for the counts and the map checks.
+   */
+  function beatCardOf(beat) {
+    return isPlainObject(beat) && typeof beat.card === 'string' ? beat.card.trim() : '';
   }
 
   /**
@@ -788,7 +800,7 @@
       var players = [];
       (Array.isArray(section.beats) ? section.beats : []).forEach(function (beat) {
         if (!isPlainObject(beat)) return;
-        if (typeof beat.card === 'string' && beat.card.trim()) cards += 1;
+        if (beatCardOf(beat)) cards += 1;
         (Array.isArray(beat.players) ? beat.players : []).forEach(function (name) {
           var member = rosterMemberOf(name, roster);
           if (member && !seen[member]) {
@@ -812,10 +824,10 @@
       var member = rosterMemberOf(name, roster);
       if (member && raised.indexOf(member) === -1) raised.push(member);
     });
-    var keptKeys = kept.map(photoKeyOf);
+    var keptKeys = kept.map(photoKey);
     var placed = [];
     mapPhotoPlacements(map).forEach(function (placement) {
-      var key = photoKeyOf(placement.filename);
+      var key = photoKey(placement.filename);
       if (keptKeys.indexOf(key) !== -1 && placed.indexOf(key) === -1) placed.push(key);
     });
     return {
@@ -889,6 +901,8 @@
 
     // Phase 4 (brief 4.6): Everyone and the counts, one function from the beats
     rosterMemberOf: rosterMemberOf,
+    photoKey: photoKey,
+    beatCardOf: beatCardOf,
     mapPhotoPlacements: mapPhotoPlacements,
     mapTally: mapTally
   };

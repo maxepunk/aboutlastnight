@@ -387,7 +387,9 @@ module.exports = {
   buildParseCorrectionsBlock,
   renderDirectorCorrectionsBlock,
   renderWhiteboardConnections,
-  photoKey,  // the one join key for a photo: the leave-out box, the kept photos the map checks count (brief 4.6)
+  // The one join key for a photo: the leave-out box, the hero, the kept photos, and the map's
+  // edits and checks (brief 4.6). console/outline-edit-logic.js holds a copy a test keeps equal.
+  photoKey,
   photoDescriptionFor,
   renderPhotoEntry,
   renderPhotoListEntry

@@ -2,10 +2,11 @@
  * lib/hand-edit-diff.js — PURE: the director's edits at a stop (spec 2026-09-19 §4.2;
  * F1 and FA, the director's edits are final, spec 2026-10-02 section 7).
  *
- * Depends only on lib/grounding.js, console/article-desk-logic.js, lib/weave.js and
- * lib/writer-questions.js (all pure). Never throws: any non-object input yields an empty
- * diff, no edits or no report. The one refusal is standingAtMeeting's, on a change under an
- * id the weave repeats, which the meeting's gate refuses first (fix round 1, finding 3).
+ * Depends only on lib/grounding.js, console/article-desk-logic.js, lib/weave.js,
+ * lib/writer-questions.js and lib/prompt-renderers/director-words-renderer.js's photoKey
+ * (all pure). Never throws: any non-object input yields an empty diff, no edits or no
+ * report. The one refusal is standingAtMeeting's, on a change under an id the weave
+ * repeats, which the meeting's gate refuses first (fix round 1, finding 3).
  *
  * THE DIFF (diffOutline, diffBundle) records what changed between two versions, by
  * scope, for the trace (server.js traceForStop) and as the first step of the edits.
@@ -84,16 +85,17 @@
  * THE MAP (brief 4.6): the director's edits on the story map go through the same
  * machinery, as the meeting's do. They are made at every approve and send-back, against
  * the writer's last map (standingOnMap), and stand past approve. Each beat is found by its
- * id and each photo by its filename, wherever it sits (mapEditsBetween): a field the
- * director rewrote is one edit, carried while the beat holds it wherever a pass moved it;
- * a beat or a photo they moved to another section, struck into leftOut, brought back from
- * leftOut or added is one edit of its place, carried while it sits there and nowhere else,
- * and the top photo they chose is the photo they moved to the top. After an automatic pass
- * code puts back each line the pass changed, strikes again by id a struck beat that came
- * back (a copy the pass left in a section included), takes out a copy the pass put beside
- * a beat or photo the director placed, and puts back a beat they added, a beat they struck
- * and a photo they placed that the pass removed; a beat they only moved between sections,
- * which a pass removed, stays out, as a moved block does at the desk (settleEdits).
+ * id and each photo by its filename's join key (photoKey), wherever it sits
+ * (mapEditsBetween): a field the director rewrote is one edit, carried while the beat holds
+ * it wherever a pass moved it; a beat or a photo they moved to another section, struck into
+ * leftOut, brought back from leftOut or added is one edit of its place, carried while it
+ * sits there and nowhere else, and the top photo they chose is the photo they moved to the
+ * top. After an automatic pass code puts back each line the pass changed, strikes again by
+ * id a struck beat that came back (a copy the pass left in a section included), takes out a
+ * copy the pass put beside a beat or photo the director placed, and puts back a beat they
+ * added, a beat they struck and a photo they placed that the pass removed; a beat they only
+ * moved between sections, which a pass removed, stays out, as a moved block does at the
+ * desk (settleEdits).
  */
 'use strict';
 
@@ -108,6 +110,9 @@ const {
   isWeave, isStruck, STRUCK_KEY, weaveIdOf, repeatedIds, occurrenceKeys, WEAVE_PRINTED_FIELDS, printedWeaveFields
 } = require('./weave');
 const { WEAVE_ANSWER_KEY } = require('./writer-questions');
+// The one join key for a photo, its basename in lower case: the map's edits find a photo by
+// it, as the map checks, the kept photos and the leave-out box do (brief 4.6, fix round 1).
+const { photoKey } = require('./prompt-renderers/director-words-renderer');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
 // which do not name metadata, voice_self_check or _revisionHistory.
@@ -1860,11 +1865,6 @@ function mapIdText(value) {
   return value === undefined || value === null ? '' : String(value).trim();
 }
 
-/** A photo's filename as every join reads it: the basename, lower case. */
-function photoKeyOf(filename) {
-  return String(filename === undefined || filename === null ? '' : filename).split(/[/\\]/).pop().trim().toLowerCase();
-}
-
 /** The map's text, part by part: the lines the stop prints. A left-out beat is not in the story. */
 function mapParts(map) {
   const objects = (list) => (Array.isArray(list) ? list.filter(isObj) : []);
@@ -1904,13 +1904,13 @@ function mapElements(map, kind) {
     return out;
   }
   if (typeof map.topPhoto === 'string' && map.topPhoto.trim()) {
-    out.push({ key: photoKeyOf(map.topPhoto), container: MAP_TOP_PHOTO, index: 0, element: { filename: map.topPhoto } });
+    out.push({ key: photoKey(map.topPhoto), container: MAP_TOP_PHOTO, index: 0, element: { filename: map.topPhoto } });
   }
   sections.forEach((section, sectionIndex) => {
     if (!isObj(section)) return;
     (Array.isArray(section.photos) ? section.photos : []).forEach((photo, index) => {
       if (isObj(photo) && typeof photo.filename === 'string' && photo.filename.trim()) {
-        out.push({ key: photoKeyOf(photo.filename), container: mapIdText(section.slot), sectionIndex, index, element: photo });
+        out.push({ key: photoKey(photo.filename), container: mapIdText(section.slot), sectionIndex, index, element: photo });
       }
     });
   });
@@ -1919,7 +1919,7 @@ function mapElements(map, kind) {
 
 /** The key a beat's or a photo's identity is found by. */
 function mapIdentityKey(kind, identity) {
-  return kind === 'beat' ? mapIdText(identity.id) : photoKeyOf(identity.filename);
+  return kind === 'beat' ? mapIdText(identity.id) : photoKey(identity.filename);
 }
 
 /** The places of one beat or photo on the map. */
@@ -2179,14 +2179,14 @@ function mapRestoresWhenGone(edit) {
 /** Take every place of a beat or photo off `map` (changed in place). */
 function removeMapPlaces(map, kind, identity) {
   const key = mapIdentityKey(kind, identity);
-  const keep = (element) => !(isObj(element) && (kind === 'beat' ? mapIdText(element.id) : photoKeyOf(element.filename)) === key);
+  const keep = (element) => !(isObj(element) && (kind === 'beat' ? mapIdText(element.id) : photoKey(element.filename)) === key);
   (Array.isArray(map.sections) ? map.sections : []).forEach((section) => {
     if (!isObj(section)) return;
     const list = kind === 'beat' ? 'beats' : 'photos';
     if (Array.isArray(section[list])) section[list] = section[list].filter(keep);
   });
   if (kind === 'beat' && Array.isArray(map.leftOut)) map.leftOut = map.leftOut.filter(keep);
-  if (kind === 'photo' && typeof map.topPhoto === 'string' && photoKeyOf(map.topPhoto) === key) delete map.topPhoto;
+  if (kind === 'photo' && typeof map.topPhoto === 'string' && photoKey(map.topPhoto) === key) delete map.topPhoto;
 }
 
 /** Put a beat or photo into its place on `map` (changed in place); false when the map has no such section. */
@@ -2734,7 +2734,7 @@ module.exports = {
   REWEAVE_PASS, WEAVE_EDIT_LINES_GUIDE, weaveEditsBetween, standingAtMeeting, weaveDirectorsShare, weaveMarks, editWhere,
   // Brief 4.6: the map's edits
   MAP_SCOPE, MAP_NONE, MAP_LEFT_OUT, MAP_TOP_PHOTO, MAP_EDIT_LINES_GUIDE, isMap, mapEditsBetween, standingOnMap,
-  mapEditAddress: mapAddressOf, mapPhotoKey: photoKeyOf, isCut, isMove, isStrike,
+  mapEditAddress: mapAddressOf, isCut, isMove, isStrike,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,

@@ -30,7 +30,9 @@
  * - THE STOP: its payloads (mapResume, which server.js buildResumePayload calls) and what it
  *   shows (mapCheckpointData).
  * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks,
- * the stop and the console share.
+ * the stop and the console share, with its rule for a beat's card (beatCardOf). A photo is
+ * read by its filename's one join key (lib/prompt-renderers/director-words-renderer.js
+ * photoKey), as the map's edits and the kept photos read it.
  *
  * Generic: slots, beats and photos. The theme's config names the slots, so nothing here
  * names a theme.
@@ -41,9 +43,10 @@ const crypto = require('crypto');
 const Ajv = require('ajv');
 const outlineSchema = require('./schemas/outline.schema.json');
 const { mapSlotsOf } = require('./theme-config');
-const { mapTally, mapPhotoPlacements, rosterMemberOf } = require('../console/outline-edit-logic');
+const { mapTally, mapPhotoPlacements, rosterMemberOf, beatCardOf } = require('../console/outline-edit-logic');
+const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
-  mapEditAddress, mapPhotoKey, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
+  mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
   handEditReportOf, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE
 } = require('./hand-edit-diff');
 
@@ -161,15 +164,10 @@ function editsRemovingPlayer(edits, member, roster) {
 
 /** The ids of the director's edits on a photo: a placement of it, or a cut of one. */
 function editsOnPhoto(entries, filename) {
-  const key = mapPhotoKey(filename);
+  const key = photoKey(filename);
   return entries
-    .filter(({ address }) => address && address.kind === 'photo' && address.fieldSteps.length === 0 && mapPhotoKey(address.identity.filename) === key)
+    .filter(({ address }) => address && address.kind === 'photo' && address.fieldSteps.length === 0 && photoKey(address.identity.filename) === key)
     .map(({ edit }) => edit.id);
-}
-
-/** A beat's card, or '' for a beat that is no card. */
-function cardOf(value) {
-  return value && typeof value === 'object' ? textOf(value.card) : '';
 }
 
 /**
@@ -181,9 +179,9 @@ function editsOnCards(entries, beatId = null) {
     if (!address || address.kind !== 'beat') return false;
     if (beatId !== null && String(address.identity.id).trim() !== beatId) return false;
     if (address.fieldSteps.length > 0) return address.fieldSteps[0].key === 'card';
-    if (isCut(edit)) return Boolean(cardOf(edit.before));
+    if (isCut(edit)) return Boolean(beatCardOf(edit.before));
     const bringsIn = edit.from === MAP_NONE || edit.from === MAP_LEFT_OUT;
-    return Boolean(cardOf(edit.after)) && (bringsIn || address.container === MAP_LEFT_OUT);
+    return Boolean(beatCardOf(edit.after)) && (bringsIn || address.container === MAP_LEFT_OUT);
   }).map(({ edit }) => edit.id);
 }
 
@@ -276,10 +274,10 @@ function mapFindings(map, inputs = {}) {
   }
 
   // Every kept photo is placed once, and only kept photos are placed (T13).
-  const keptKeys = kept.map(mapPhotoKey);
+  const keptKeys = kept.map(photoKey);
   const placements = mapPhotoPlacements(map);
   const placedCount = new Map();
-  placements.forEach(({ filename }) => placedCount.set(mapPhotoKey(filename), (placedCount.get(mapPhotoKey(filename)) || 0) + 1));
+  placements.forEach(({ filename }) => placedCount.set(photoKey(filename), (placedCount.get(photoKey(filename)) || 0) + 1));
   const split = (type, filenames, writersLine, directorsFinding) => {
     const theirs = [];
     filenames.forEach((filename) => {
@@ -289,23 +287,23 @@ function mapFindings(map, inputs = {}) {
     });
     if (theirs.length > 0) fail(type, writersLine(theirs));
   };
-  const nameOfKey = (key) => (kept.find((f) => mapPhotoKey(f) === key) || placements.find((p) => mapPhotoKey(p.filename) === key).filename);
-  split('photo-not-placed', kept.filter((filename) => !placedCount.has(mapPhotoKey(filename))),
+  const nameOfKey = (key) => (kept.find((f) => photoKey(f) === key) || placements.find((p) => photoKey(p.filename) === key).filename);
+  split('photo-not-placed', kept.filter((filename) => !placedCount.has(photoKey(filename))),
     (list) => `Photos placed nowhere: ${list.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people, as C2 (\`<craft-form>\`) sets out.`,
     (filename) => `${filename} is placed nowhere.`);
   split('photo-placed-twice', [...placedCount].filter(([key, n]) => n > 1 && keptKeys.includes(key)).map(([key]) => nameOfKey(key)),
     (list) => `Photos placed more than once: ${list.join(', ')}. Place each photo once.`,
     (filename) => `${filename} is placed more than once.`);
-  split('photo-not-offered', [...new Set(placements.map((p) => mapPhotoKey(p.filename)))].filter((key) => !keptKeys.includes(key)).map(nameOfKey),
+  split('photo-not-offered', [...new Set(placements.map((p) => photoKey(p.filename)))].filter((key) => !keptKeys.includes(key)).map(nameOfKey),
     (list) => `Photos placed that are not among the photos offered: ${list.join(', ')}. Place only the photos offered: ${kept.join(', ') || 'none'}.`,
     (filename) => `${filename} is not among the photos kept for the article.`);
 
-  // Each card names a document in the record, and the cards number three to five (C9).
+  // Each card names a document in the record, and the cards, as the tally counts them,
+  // number three to five (C9).
   const known = new Set([...(inputs.recordIds || [])].filter((id) => typeof id === 'string').map((id) => id.trim().toLowerCase()));
-  const cards = sectionBeats(map).filter(({ beat }) => cardOf(beat));
   const unknown = [];
-  cards.forEach(({ beat }) => {
-    const card = cardOf(beat);
+  sectionBeats(map).filter(({ beat }) => beatCardOf(beat)).forEach(({ beat }) => {
+    const card = beatCardOf(beat);
     if (known.has(card.toLowerCase())) return;
     const ids = editsOnCards(entries, textOf(String(beat.id)));
     if (ids.length > 0) concern('card-not-in-record', ids, `The card ${card} names no document in the record.`);
@@ -314,9 +312,9 @@ function mapFindings(map, inputs = {}) {
   if (unknown.length > 0) {
     fail('card-not-in-record', `Cards naming no document in <RECORD>: ${unknown.join(', ')}. A card names the id of a document in <RECORD>: ${[...(inputs.recordIds || [])].join(', ')}.`);
   }
-  if (cards.length < MAP_CARDS.min || cards.length > MAP_CARDS.max) {
+  if (tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max) {
     const ids = editsOnCards(entries);
-    const carries = `The map carries ${cards.length} card${cards.length === 1 ? '' : 's'}`;
+    const carries = `The map carries ${tally.cards} card${tally.cards === 1 ? '' : 's'}`;
     if (ids.length > 0) concern('card-count', ids, `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`);
     else fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
   }

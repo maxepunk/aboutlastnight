@@ -284,6 +284,48 @@ describe('the map checks (spec 5.4)', () => {
       expect(mapFindings(output, inputs({ edits: carriedEdits(standing, output) }))).toEqual({ failures: [], concerns: [] });
     });
   });
+
+  // Fix round 1, finding 2: the checks, Everyone and the counts, and the director's edits
+  // read a photo by one join key (lib/prompt-renderers/director-words-renderer.js photoKey),
+  // and the check's card count is the tally's.
+  describe('fix round 1: one photo key and one card count', () => {
+    const { mapTally } = require('../../console/outline-edit-logic');
+    const { photoKey } = require('../prompt-renderers/director-words-renderer');
+
+    it('a filename with a space before it is not the photo: the checks, the tally and the edits agree', () => {
+      expect(photoKey(' cards.jpg')).not.toBe(photoKey('cards.jpg'));
+      const padded = writers();
+      padded.sections[1].photos[1] = { filename: ' cards.jpg' };
+      const { failures } = mapFindings(padded, inputs());
+      expect(failures.map((f) => [f.type, f.message])).toEqual([
+        ['photo-not-placed', expect.stringMatching(/^Photos placed nowhere: cards\.jpg\. /)],
+        ['photo-not-offered', expect.stringMatching(/^Photos placed that are not among the photos offered:  cards\.jpg\. /)]
+      ]);
+      expect(mapTally(padded, { roster: ROSTER, keptPhotos: inputs().keptPhotos }).photos).toEqual({ placed: 2, of: 3 });
+
+      const moved = writers();
+      moved.sections[0].photos.push(moved.sections[1].photos.pop());
+      const edits = carriedEdits(standingOnMap(null, writers(), moved), moved);
+      expect(edits.map((e) => e.path)).toEqual(['sections[#lede].photos[#cards.jpg]']);
+      const paddedMove = clone(moved);
+      paddedMove.sections[0].photos[0] = { filename: ' cards.jpg' };
+      expect(carriedEdits(edits, paddedMove)).toEqual([]);
+    });
+
+    it("the check's card count is the tally's: a blank card is no card in either", () => {
+      const blank = writers();
+      delete blank.sections[1].beats[3].card;
+      blank.sections[0].beats[0].card = '  ';
+      const four = writers();
+      four.sections[0].beats[1].card = 'row004';
+      [writers(), blank, four].forEach((map) => {
+        const { cards } = mapTally(map, { roster: ROSTER, keptPhotos: inputs().keptPhotos });
+        const lines = mapFindings(map, inputs()).failures.filter((f) => f.type === 'card-count').map((f) => f.message);
+        expect(lines).toEqual(cards >= 3 && cards <= 5 ? [] : [expect.stringContaining(`The map carries ${cards} cards.`)]);
+      });
+      expect(mapTally(blank, { roster: ROSTER }).cards).toBe(2);
+    });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
