@@ -1343,3 +1343,58 @@ describe("4.5d: the meeting's edits-are-final line names a connection the direct
       .toContain(`Each change of the director's is final unless the structural change their note asks for means it no longer fits: ${FINAL.replace("Each change of the director's is final: ", '')} List each change this rework alters, removes or brings back in changedDirectorEdits, with its id and one sentence on why.`);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14b: a director's round on the map reads no check failures from before it (the final
+// review, ruling 2), as the meeting's does (arc-specialist-nodes.js arcReworkCall). The
+// failures were found on the map the stop showed; the director's version may have fixed them,
+// and the checks run again on the rework's map.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.14b: a director's round on the map reads no check failures from before it", () => {
+  const { MAP, reworkFixtureState } = require('./fixtures/rework-state');
+  const { standingOnMap } = require('../hand-edit-diff');
+  const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
+  const { reviseOutline } = require('../workflow/nodes/ai-nodes');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const NOTE = 'Move the money figure into the closing.';
+
+  /** The map the stop opened on, Riley in no beat, and the checks' result on it, still in hand. */
+  function openedWithFailure() {
+    const failing = clone(MAP);
+    failing.sections[1].beats[1].players = ['Morgan'];
+    failing.sections[3].beats[0].players = [];
+    const { validationResults } = checkMap({ ...reworkFixtureState(), outline: failing, _mapCheck: null });
+    expect(validationResults).toMatchObject({ phase: 'outline', source: 'map-checks', passed: false });
+    return { failing, validationResults };
+  }
+
+  /** The prompt reviseOutline sends from a state over the fixture's. */
+  async function promptSent(overrides) {
+    let sent;
+    await reviseOutline(
+      { ...reworkFixtureState(), outline: null, ...overrides },
+      { configurable: { sdkClient: async (options) => { sent = options; return clone(overrides._previousOutline); }, theme: 'journalist' } }
+    );
+    return sent.prompt;
+  }
+
+  it("the director places Riley and sends the map back: the rework reads the note and the edits, and no check failure", async () => {
+    const { failing, validationResults } = openedWithFailure();
+    const left = clone(failing);
+    left.sections[3].beats[0].players = ['Riley'];
+    const prompt = await promptSent({
+      _previousOutline: left, _outlineHandEdits: standingOnMap(null, failing, left), _outlineFeedback: NOTE,
+      outlineRevisionCount: 0, humanOutlineRevisionCount: 1, validationResults
+    });
+    expect(prompt).not.toContain('MAP CHECK FAILURES');
+    expect(prompt).not.toContain('Players in no beat');
+    expect(prompt).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\n${NOTE}`);
+    expect(prompt).toContain('E1 (section "closing", beat "b6", players): "Riley"');
+  });
+
+  it('the automatic pass after a failed check still reads its lines', async () => {
+    const { failing, validationResults } = openedWithFailure();
+    const prompt = await promptSent({ _previousOutline: failing, _outlineFeedback: null, outlineRevisionCount: 1, validationResults });
+    expect(prompt).toContain("MAP CHECK FAILURES:\n  - Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players");
+  });
+});

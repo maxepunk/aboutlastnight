@@ -1364,6 +1364,9 @@ async function reviseOutline(state, config) {
  * scripts/render-prompts.js renders it. From the map the rework starts from
  * (`_previousOutline`), the director's standing edits it carries, the map checks' lines or
  * the director's note, the round, and the standing notes without the note being acted on.
+ * A director's round, the send-back, reads no check failure from before the round, as the
+ * meeting's does (task 4.14b): those lines were found on the map the stop showed, the
+ * director's version may have fixed them, and the checks run again on the rework's map.
  *
  * @param {Object} state
  * @param {Object} promptBuilder - the PromptBuilder the writer used
@@ -1385,7 +1388,7 @@ async function mapReworkCall(state, promptBuilder, theme = state.theme || 'journ
     // Brief 2.3: a send back's banner names the round it opens, as the stop shows it (task
     // 4.12c: the stop's round, the one rule).
     round: stopRoundOf(CHECKPOINT_TYPES.OUTLINE, state),
-    validationResults: state.validationResults,
+    validationResults: sendBack ? null : state.validationResults,
     previousOutput: before,
     humanFeedback: state._outlineFeedback || null,
     handEdits: edits
