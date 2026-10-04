@@ -1520,3 +1520,29 @@ describe('4.10d: one line per removed element at the meeting, its pass in passWo
     expect(view.kept).toBe('Both of your edits stand.');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10d: rule ids never reach the director (the integrator's ruling 1 on 4.6e's and 4.10c's
+// minors). A concern at the meeting printed "Concern: T1: …", read past its prefix and ids
+// alone (concernFindingOf). It reads past its rule ids too, as the desk's marks do since 4.10c
+// (judgeMarkText), through the builder the map reads as well (concernsBesideLines).
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.10d: the meeting's concerns read past their rule ids", () => {
+  test("the fact check's concern beside the line of the edit it is about, one listed apart, and the map's", () => {
+    const typed = clone(WEAVE);
+    typed.threads.push({ id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it' });
+    const concern = 'Director\'s edit E1: T1, T4: "Riley kept a second ledger" states as fact what no document shows.';
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(typed, { ...MARK, concerns: [concern] }),
+      _weaveHandEdits: standingAtMeeting(null, WEAVE, typed)
+    }));
+    expect(data.concerns.map((c) => [c.text, c.places.map((p) => p.path)])).toEqual([[concern, ['threads[#t6]']]]);
+    const view = meetingView(data, meetingDraftOf(data, undefined));
+    expect(view.threads.find((t) => t.id === 't6').concerns).toEqual(['Concern: "Riley kept a second ledger" states as fact what no document shows.']);
+    const apart = { ...data, concerns: [{ text: 'Director\'s edit E9: T6: the thread names who turned the memory in.', editIds: ['E9'], places: [{ id: 'E9', path: 'threads[#index-3]', where: 'thread 4' }] }] };
+    expect(meetingView(apart, meetingDraftOf(apart, undefined)).otherConcerns).toEqual(['Concern: The thread names who turned the memory in.']);
+    // The map's concerns go through the same builder.
+    const placed = ViewLogic.concernsBesideLines([{ text: 'Director\'s edit E2: T5: the figure is not the ledger\'s.', places: [{ path: 'headline' }] }], new Set(['headline']), (path) => path);
+    expect([...placed.byLine]).toEqual([['headline', ['Concern: The figure is not the ledger\'s.']]]);
+  });
+});

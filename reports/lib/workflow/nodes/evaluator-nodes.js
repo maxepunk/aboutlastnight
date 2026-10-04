@@ -194,9 +194,12 @@ const ARTICLE_DIRECTOR_WORDS = `(${DIRECTOR_WORDS_SOURCES.slice(0, -1).map((sour
 /** The materials the four sources print under, in the order directorWords holds them. */
 const DIRECTOR_WORDS_MATERIAL = Object.freeze(DIRECTOR_WORDS_SOURCES.map((source) => source.material));
 
+// Brief 4.10d: each group's `about` is what it checks, in plain words, which a failed
+// criterion's line says when the judge gave it no notes (truthIssueLines).
 const TRUTH_GROUPS = [
   {
     key: 'evidenceTruth',
+    about: 'how the claims are written against their evidence',
     rules: ['T1', 'T3', 'T4', 'T6'],
     reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers'] : ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL]),
     // Phase 3 (3.9): T4 as round 7 words it (R21). Brief 4.7d (T1, T6): at the article, a
@@ -207,6 +210,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'moneyTruth',
+    about: 'the money',
     rules: ['T5'],
     // Phase 3 (3.9; the integrator's ruling): the article judge reads the
     // FINANCIAL_SUMMARY its writer copies, so a correct code-made total is never taken
@@ -227,6 +231,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'verdictTruth',
+    about: 'how the verdict is told',
     rules: ['T2'],
     reads: (phase) => (phase === 'arcs' ? ['verdict', 'notes'] : ['verdict', 'notes', 'answers', 'map', 'directorEdits']),
     // Phase 4 (brief 4.4; T2 as rewritten): the map places the theories the room debated,
@@ -247,6 +252,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'stagesTruth',
+    about: 'the timeline',
     rules: ['T7'],
     reads: () => ['record', 'modeBlock', 'epilogue', 'timeline'],
     // Phase 3 (3.9): T7's point on Nova's intent (R21).
@@ -254,6 +260,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'novaPositionTruth',
+    about: "the reporter's role",
     rules: ['T8'],
     reads: () => ['modeBlock'],
     // Phase 3 (3.9): T8's first sentence as round 7 words it (R21).
@@ -261,6 +268,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'playersTruth',
+    about: "the players' pronouns or how the players are judged",
     rules: ['T9', 'T11'],
     // Brief 4.7a (T9 as rewritten): at the article, a pronoun the director's own words give
     // counts as the answer, and a player with none is written by name. Brief 4.7c: the
@@ -270,6 +278,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'wordsTruth',
+    about: 'the quoted words',
     rules: ['T12'],
     // Only the article prints a card's text; the weave names a receipt by id. Brief 4.7c:
     // at the article, a line the director's words hold is quoted from them, any of the four.
@@ -280,6 +289,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'photosTruth',
+    about: 'the photos or their captions',
     rules: ['T13'],
     phases: ['article'],
     // The article judge reads the photos its writer was given (renderArticleJudgePhotos):
@@ -290,6 +300,7 @@ const TRUTH_GROUPS = [
   },
   {
     key: 'fictionTruth',
+    about: 'keeping the fiction whole',
     rules: ['T14'],
     phases: ['article'],
     reads: () => ['truthRules'],
@@ -392,8 +403,23 @@ function unscoredTruthCriteria(evaluation, criteria) {
 }
 
 /**
+ * What a failed truth criterion's line says when the judge gave it no notes and no fix (brief
+ * 4.10d): a plain sentence naming what failed by what the criterion checks (its group's
+ * `about`), never its key. The director reads it at the desk past its rule ids, and the
+ * rework reads it as must-fix.
+ *
+ * @param {string} key - the criterion's key
+ * @returns {string}
+ */
+function unexplainedTruthFault(key) {
+  const group = TRUTH_GROUPS.find((g) => g.key === key);
+  return group ? `The judge found a fault in ${group.about} and gave no detail.` : 'The judge found a fault and gave no detail.';
+}
+
+/**
  * One structural issue for each failed truth criterion the judge wrote no issue for
- * under any of its rule ids: the rule ids, then the criterion's notes and fix.
+ * under any of its rule ids: the rule ids, then the criterion's notes and fix, or, with
+ * neither, a plain sentence saying what failed (unexplainedTruthFault).
  *
  * @param {Array} failed - failedTruthCriteria
  * @param {string[]} written - the judge's own structuralIssues
@@ -405,7 +431,7 @@ function truthIssueLines(failed, written) {
     .filter(({ rules }) => !rules.some(rule => writtenIds.has(rule)))
     .map(({ key, rules, notes, fix }) => {
       const text = [notes, fix].filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()).join(' ');
-      return `${rules.join(', ')}: ${text || `the ${key} criterion failed.`}`;
+      return `${rules.join(', ')}: ${text || unexplainedTruthFault(key)}`;
     });
 }
 

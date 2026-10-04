@@ -596,3 +596,52 @@ describe("4.5f: a finding filed under a moved block's id is the writer's must-fi
     expect(result.evaluationHistory.ready).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10d: rule ids and criterion keys never reach the director (the integrator's ruling 1 on
+// 4.6e's and 4.10c's minors). A truth criterion the judge scored below the bar with no issue
+// under its rule ids, and no notes or fix, read "T5: the moneyTruth criterion failed.", which
+// the desk shows past its rule ids as "The moneyTruth criterion failed.". It says in a plain
+// sentence what failed, by the criterion's subject, after its rule ids, which the guard and the
+// rework still read.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10d: a failed truth criterion with no notes says what failed, by its subject', () => {
+  const { _testing: { guardDirectorEdits, getPhaseCriteria } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+  /** A verdict whose one failed criterion carries no notes and no fix, and no issue under its rule ids. */
+  const failedBare = (key) => ({
+    ready: false, structuralPassed: false, overallScore: 0.2, criteriaScores: { [key]: { score: 0.2 } }, structuralIssues: [], advisoryWarnings: []
+  });
+  /** What the director reads, and the rework reads after the rule ids, for each truth criterion. */
+  const SUBJECTS = {
+    evidenceTruth: 'how the claims are written against their evidence',
+    moneyTruth: 'the money',
+    verdictTruth: 'how the verdict is told',
+    stagesTruth: 'the timeline',
+    novaPositionTruth: "the reporter's role",
+    playersTruth: "the players' pronouns or how the players are judged",
+    wordsTruth: 'the quoted words',
+    photosTruth: 'the photos or their captions',
+    fictionTruth: 'keeping the fiction whole'
+  };
+
+  it.each(['arcs', 'article'])('every %s truth criterion: its rule ids, then a plain sentence naming its subject, never its key', (phase) => {
+    const criteria = getPhaseCriteria(phase);
+    for (const [key, { rules }] of Object.entries(criteria)) {
+      const { kept, ready } = guardDirectorEdits({ evaluation: failedBare(key), criteria, edits: [], output: null });
+      expect([key, kept]).toEqual([key, [`${rules.join(', ')}: The judge found a fault in ${SUBJECTS[key]} and gave no detail.`]]);
+      expect([key, ready]).toEqual([key, false]);
+    }
+  });
+
+  it("with the director's edits standing, the article's rework reads the sentence as must-fix", async () => {
+    const result = await evaluateArticle(articleState(), cfg(judging(failedBare('moneyTruth'))));
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toEqual(['T5: The judge found a fault in the money and gave no detail.']);
+  });
+
+  it("a criterion's notes or fix, when it has them, are the line as before", () => {
+    const criteria = getPhaseCriteria('article');
+    const evaluation = { ...failedBare('moneyTruth'), criteriaScores: { moneyTruth: { score: 0.2, notes: 'The bonus runs to the wrong account.', fix: 'Pay it to the seller.' } } };
+    expect(guardDirectorEdits({ evaluation, criteria, edits: [], output: null }).kept).toEqual(['T5: The bonus runs to the wrong account. Pay it to the seller.']);
+  });
+});

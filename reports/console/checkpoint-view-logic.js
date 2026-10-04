@@ -2131,7 +2131,8 @@
    * The concerns about the director's edits by the line of a stop's page they sit beside,
    * and those none of whose places is on the page, listed apart: one builder for the meeting
    * and the map (task 4.9). Each concern reads as its finding, past its prefix and ids, since
-   * the line it sits beside names the place.
+   * the line it sits beside names the place, and past its leading rule ids, as the desk's marks
+   * read (judgeMarkText; brief 4.10d), since the director reads the line, not the rule.
    *
    * @param {Array} concerns - the stop's `concerns`, each `{text, places: [{path}]}`
    * @param {Set<string>} onPage - the keys of the lines the page shows
@@ -2142,7 +2143,7 @@
     var byLine = new Map();
     var other = [];
     asArray(concerns).filter(isPlainObject).forEach(function (concern) {
-      var line = 'Concern: ' + concernFindingOf(concern.text);
+      var line = 'Concern: ' + judgeMarkText(concern.text);
       var keys = asArray(concern.places)
         .map(function (place) { return keyOf(place && place.path); })
         .filter(function (key) { return onPage.has(key); });
