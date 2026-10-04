@@ -24,7 +24,7 @@
  * - the stops log (lib/stops-log.js) records the words the director reads at each return to a
  *   stop, counted over it (wordsShown).
  *
- * A line is `{tone, text, label, folded, beside?, piece?}`:
+ * A line is `{tone, text, label, folded, beside?, piece?, region?}`:
  * - `text` is the view models' own text: a claim, a beat's material, a paragraph, a mark;
  * - `label` names the line: an id, a piece of the desk, or the page's own heading for the line
  *   ("Receipt", "Job"). A title, and a line the page shows by its name alone (a photo, a heading
