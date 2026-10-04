@@ -101,10 +101,11 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
   // last sentence (the director's own words give a pronoun, else the player's name).
   // Brief 4.7c: a question that names where the director's words come from names the four
   // sources the fact check reads as the director's words (buildFactCheckArgs' directorWords).
+  // Brief 4.7d: evidenceTruth's T6 clause reads an exposer from the director's words too.
   it('each truth question is worded as section B of the rule-text read gives it', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
-      evidenceTruth: "Is every claim in the article written as its evidence allows, the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) included as record (T1); with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?",
+      evidenceTruth: "Is every claim in the article written as its evidence allows, the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) included as record (T1); with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's words name (T6)?",
       moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the morning as FINANCIAL_SUMMARY gives it; a balance the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
       verdictTruth: "Is the verdict in the article told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?",
       stagesTruth: "In the article, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
@@ -345,5 +346,91 @@ describe('4.7a: a theory struck from the map stays out, through the judge', () =
     expect(result.evaluationHistory.ready).toBe(false);
     expect(result.evaluationHistory.structuralIssues).toEqual([issue]);
     expect(result.validationResults.structuralIssues).toContain(issue);
+  });
+});
+
+// Brief 4.7d (ruling 2 on the follow-ups' findings, minor 2): a correction at the input review
+// or an answer at the story meeting that names who turned a memory in is the director's words
+// (T1), as the notes are, so the article's T6 clause reads an exposer from all four sources.
+// The weave's question keeps its wording.
+describe("4.7d: an exposer named in any of the director's words is record (T1, T6)", () => {
+  const { ARTICLE_DIRECTOR_WORDS, directorWords, buildFactCheckArgs } = evalTesting;
+  /** The fixture's question about Sarah, answered: no other text of the director's names an exposer. */
+  const ANSWER = 'Sarah turned in the envelope memory to Nova at 10:40.';
+  const answeredState = () => {
+    const state = articleState();
+    state.weave.questions[0].answer = ANSWER;
+    return state;
+  };
+
+  it("an exposer named only in an answer at the story meeting is read among the director's words", () => {
+    const state = answeredState();
+    const { evidenceTruth } = getPhaseCriteria('article', 'journalist');
+    // The T6 clause reads an exposer from the director's words, which the question names by
+    // their four sources.
+    expect(evidenceTruth.description.endsWith("and with no exposer named that neither the evidence log nor the director's words name (T6)?")).toBe(true);
+    expect(evidenceTruth.description).toContain(`the director's words ${ARTICLE_DIRECTOR_WORDS} included as record (T1);`);
+    expect(evidenceTruth.reads).toContain('answers');
+    // The answer prints under its material, and it is the only text of the director's that
+    // names an exposer; the fact check reads it with the rest.
+    const prompt = userFor(state);
+    expect(prompt.slice(prompt.indexOf(TRUTH_MATERIAL.answers), prompt.indexOf('</DIRECTOR_ANSWERS>'))).toContain(ANSWER);
+    expect(directorWords(state).filter((text) => /turned in/i.test(text))).toEqual([ANSWER]);
+    expect(buildFactCheckArgs(state).directorText).toContain(ANSWER);
+  });
+
+  it("the weave's T6 clause keeps its wording", () => {
+    expect(getPhaseCriteria('arcs', 'journalist').evidenceTruth.description)
+      .toContain("and with no exposer named that neither the evidence log nor the director's notes name (T6)?");
+  });
+});
+
+// Brief 4.7d (ruling 2, minor 4): the director's words are one list. The article's truth
+// questions name them (ARTICLE_DIRECTOR_WORDS), the judge reads them under their materials
+// (DIRECTOR_WORDS_MATERIAL), and the fact check and the verdict guard read their texts
+// (directorWords). All three are built from DIRECTOR_WORDS_SOURCES, so they name the same
+// sources in one order.
+describe("4.7d: the director's words are one list", () => {
+  const { ARTICLE_DIRECTOR_WORDS, DIRECTOR_WORDS_MATERIAL, DIRECTOR_WORDS_SOURCES, directorWords } = evalTesting;
+  /** One distinct text per source, by the material it prints under. */
+  const PLANTED = {
+    notes: 'PLANTED NOTES: Morgan paced the bar before the vote.',
+    corrections: 'PLANTED CORRECTION: Riley kept the books, not Morgan.',
+    verdict: 'PLANTED ACCUSATION: six votes for an accidental overdose.',
+    answers: 'PLANTED ANSWER: Sarah ran the bar all morning.'
+  };
+  const plantedState = () => {
+    const state = articleState();
+    state.directorNotes = { ...state.directorNotes, rawProse: PLANTED.notes };
+    state.inputReviewCorrections = [PLANTED.corrections];
+    state.sessionConfig = { ...state.sessionConfig, accusationRaw: PLANTED.verdict };
+    state.weave.questions[0].answer = PLANTED.answers;
+    return state;
+  };
+
+  it('one source per material, in one order: the notes, the corrections, the accusation, the answers', () => {
+    expect(DIRECTOR_WORDS_SOURCES.map((source) => source.material)).toEqual(['notes', 'corrections', 'verdict', 'answers']);
+    expect(DIRECTOR_WORDS_MATERIAL).toEqual(DIRECTOR_WORDS_SOURCES.map((source) => source.material));
+  });
+
+  it('ARTICLE_DIRECTOR_WORDS names each source by its label, in that order', () => {
+    const at = DIRECTOR_WORDS_SOURCES.map((source) => ARTICLE_DIRECTOR_WORDS.indexOf(source.label));
+    expect(at.filter((index) => index < 0)).toEqual([]);
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+    expect(ARTICLE_DIRECTOR_WORDS).toBe('(the notes, the input-review corrections, the accusation and the answers at the story meeting)');
+  });
+
+  it('directorWords returns each planted text, in the order DIRECTOR_WORDS_MATERIAL names its source', () => {
+    expect(directorWords(plantedState())).toEqual(DIRECTOR_WORDS_MATERIAL.map((material) => PLANTED[material]));
+  });
+
+  it("the article judge's prompt prints each planted text under its material", () => {
+    const prompt = userFor(plantedState());
+    const placed = DIRECTOR_WORDS_MATERIAL.map((material) => {
+      const open = TRUTH_MATERIAL[material];
+      const inner = prompt.slice(prompt.indexOf(open), prompt.indexOf(open.replace('<', '</')));
+      return `${material}: ${inner.includes(PLANTED[material])}`;
+    });
+    expect(placed).toEqual(DIRECTOR_WORDS_MATERIAL.map((material) => `${material}: true`));
   });
 });

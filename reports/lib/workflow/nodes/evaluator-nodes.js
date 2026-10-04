@@ -170,20 +170,39 @@ const TRUTH_MATERIAL = Object.freeze({
 // names the four sources the fact check reads as the director's words (buildFactCheckArgs'
 // directorWords): ARTICLE_DIRECTOR_WORDS, printed under DIRECTOR_WORDS_MATERIAL, which such a
 // question reads. The weave's questions keep their wording.
+//
+// Brief 4.7d: the four are one list, DIRECTOR_WORDS_SOURCES, which builds all three: the
+// questions' name for them, the materials the judge reads them under, and the texts the fact
+// check and the verdict guard read (directorWords), so all three hold one order.
 
-/** The director's words as the fact check reads them, as an article truth question names them. */
-const ARTICLE_DIRECTOR_WORDS = '(the notes, the input-review corrections, the accusation and the answers at the story meeting)';
+/**
+ * The director's words (T1), source by source, in one order: its `label` as an article truth
+ * question names it, the `material` the article judge reads it under (TRUTH_MATERIAL), and its
+ * `texts` in state, each word for word.
+ */
+const DIRECTOR_WORDS_SOURCES = Object.freeze([
+  { label: 'the notes', material: 'notes', texts: (state) => [state.directorNotes && state.directorNotes.rawProse] },
+  { label: 'the input-review corrections', material: 'corrections', texts: (state) => (Array.isArray(state.inputReviewCorrections) ? state.inputReviewCorrections : []) },
+  { label: 'the accusation', material: 'verdict', texts: (state) => [directorAccusationText(state)] },
+  { label: 'the answers at the story meeting', material: 'answers', texts: (state) => meetingAnswers(state) }
+].map(Object.freeze));
+
+/** The director's words as an article truth question names them: each source's label, in order. */
+const ARTICLE_DIRECTOR_WORDS = `(${DIRECTOR_WORDS_SOURCES.slice(0, -1).map((source) => source.label).join(', ')} and ${DIRECTOR_WORDS_SOURCES[DIRECTOR_WORDS_SOURCES.length - 1].label})`;
 
 /** The materials the four sources print under, in the order directorWords holds them. */
-const DIRECTOR_WORDS_MATERIAL = Object.freeze(['notes', 'corrections', 'verdict', 'answers']);
+const DIRECTOR_WORDS_MATERIAL = Object.freeze(DIRECTOR_WORDS_SOURCES.map((source) => source.material));
 
 const TRUTH_GROUPS = [
   {
     key: 'evidenceTruth',
     rules: ['T1', 'T3', 'T4', 'T6'],
     reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers'] : ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL]),
-    // Phase 3 (3.9): T4 as round 7 words it (R21).
-    describe: (s, phase) => `Is every claim in ${s} written as its evidence allows, ${phase === 'arcs' ? "the director's answers at the story meeting included as record, as the notes are (T1)," : `the director's words ${ARTICLE_DIRECTOR_WORDS} included as record (T1);`} with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
+    // Phase 3 (3.9): T4 as round 7 words it (R21). Brief 4.7d (T1, T6): at the article, a
+    // correction or an answer that names who turned a memory in is the director's words as
+    // the notes are, so the T6 clause reads an exposer from the four sources its T1 clause
+    // names. The weave's question keeps its wording.
+    describe: (s, phase) => `Is every claim in ${s} written as its evidence allows, ${phase === 'arcs' ? "the director's answers at the story meeting included as record, as the notes are (T1)," : `the director's words ${ARTICLE_DIRECTOR_WORDS} included as record (T1);`} with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor ${phase === 'arcs' ? "the director's notes" : "the director's words"} name (T6)?`
   },
   {
     key: 'moneyTruth',
@@ -649,20 +668,17 @@ function meetingAnswers(state) {
 
 /**
  * The director's words: the notes, the input-review corrections, the accusation and, since
- * brief 4.7a, the answers at the story meeting (T1). The fact check's pronoun check reads
- * them (buildFactCheckArgs), and the verdict guard reads them as record (recordTexts).
+ * brief 4.7a, the answers at the story meeting (T1), each source's texts in the order
+ * DIRECTOR_WORDS_SOURCES gives them (brief 4.7d). The fact check's pronoun check reads them
+ * (buildFactCheckArgs), and the verdict guard reads them as record (recordTexts).
  *
  * @param {Object} state
  * @returns {string[]}
  */
 function directorWords(state) {
-  const notes = state.directorNotes || {};
-  return [
-    notes.rawProse,
-    ...(Array.isArray(state.inputReviewCorrections) ? state.inputReviewCorrections : []),
-    directorAccusationText(state),
-    ...meetingAnswers(state)
-  ].filter(text => typeof text === 'string' && text.trim());
+  return DIRECTOR_WORDS_SOURCES
+    .flatMap((source) => source.texts(state))
+    .filter(text => typeof text === 'string' && text.trim());
 }
 
 /**
@@ -2014,6 +2030,11 @@ module.exports = {
     getPhaseCriteria,
     truthCriteria,
     TRUTH_MATERIAL,
+    // Brief 4.7d: the director's words, one list, and what it builds.
+    DIRECTOR_WORDS_SOURCES,
+    ARTICLE_DIRECTOR_WORDS,
+    DIRECTOR_WORDS_MATERIAL,
+    directorWords,
     printedBundle,
     buildFactCheckArgs,
     // F1: the director's edits at the judges (scripts/lib/render-calls.js repeats judgedEdits)
