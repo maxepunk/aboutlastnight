@@ -1255,3 +1255,23 @@ describe('4.10b: one line per edit at the meeting', () => {
     expect(view.changedEdits).toEqual([]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10c: a caption left out with a photo the article cannot print reads as such at the meeting
+// too (ruling 6 on 4.5e's findings): every stop phrases its report through one line
+// (changedEditLine). Only the desk's passes are given the photos, so this entry is built by hand.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10c: a caption left out with a photo the article cannot print reads as such at the meeting too', () => {
+  test("the line every stop phrases its report with says the pass took out a photo the article cannot print, so the director's text on it was not put back", () => {
+    const entry = {
+      id: 'E1', scope: 'section:s', where: 'section "s", photo not-ours.jpg, caption', cut: false, removed: false, moved: false,
+      director: 'Six people huddle at the bar.', became: null, pass: 1, automatic: true, reason: null, restored: false, unprintable: true
+    };
+    const data = { ...payloadOf(stateAt()), handEditReport: { checked: ['E1'], changed: [entry] } };
+    const view = meetingView(data, meetingDraftOf(data, undefined));
+    expect(view.changedEdits).toEqual([
+      'Section "s", photo not-ours.jpg, caption: automatic pass 1 took out the photo, which the article cannot print, so your "Six people huddle at the bar." was not put back.'
+    ]);
+    expect(view.kept).toBe('');
+  });
+});

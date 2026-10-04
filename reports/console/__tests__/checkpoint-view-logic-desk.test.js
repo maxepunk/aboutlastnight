@@ -860,3 +860,65 @@ describe('4.10c: a finding stored before the fact check wrote lines reads as its
     expect(deskMarksAt(marks, block(1, 2)).map((m) => [m.tone, m.text])).toEqual([['concern', handEditDiff.concernFinding(cardFinding.message)]]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10c: a caption the director wrote on a photo the article cannot print reads as such (ruling 6
+// on 4.5e's findings), and the folded record says the director's edits stand, as the map and the
+// meeting do.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('4.10c: a caption the director wrote on a photo the article cannot print reads as such', () => {
+  const CAPTION = 'Mel bent over the ledger, late in the evening.';
+  const LINE = `photo nope.jpg, caption: automatic pass 1 took out the photo, which the article cannot print, so your "${CAPTION}" was not put back.`;
+  /** The director captions the photo the session does not hold and sends back; an automatic pass fixes the photo. */
+  const settled = (fix) => {
+    const writers = article();
+    const directors = clone(writers);
+    directors.sections[1].content[3].caption = CAPTION;
+    const edits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    const pass = clone(directors);
+    fix(pass.sections[1].content);
+    return settleEdits(null, { edits, before: directors, after: pass, pass: 1, photos: ['huddle.jpg', 'theory.jpg'] });
+  };
+
+  test('an automatic pass took the photo out: code left the caption out with it, and the line says why, beside no block and in the folded record', () => {
+    const { output, report } = settled((content) => content.splice(3, 1));
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: false, unprintable: true })]);
+    const d = payloadFor(output, { handEditReport: report });
+    expect(deskMarks(d, d.contentBundle).apart.filter((m) => m.tone === 'changed').map((m) => m.text)).toEqual([`The Story: Eight Minutes, ${LINE}`]);
+    expect(ViewLogic.steeringView(report, []).changedEdits.map((e) => e.line)).toEqual([`E1, section "theStory", ${LINE}`]);
+  });
+
+  test('an automatic pass put a photo the session holds in its place, with the words of the caption: the same line, which never says the words are gone', () => {
+    const { output, report } = settled((content) => { content[3].filename = 'theory.jpg'; });
+    expect(output.sections[1].content[3]).toEqual(photo('theory.jpg', CAPTION));
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: false, unprintable: true })]);
+    const d = payloadFor(output, { handEditReport: report });
+    expect(deskMarks(d, d.contentBundle).apart.filter((m) => m.tone === 'changed').map((m) => m.text)).toEqual([`The Story: Eight Minutes, ${LINE}`]);
+  });
+});
+
+describe('4.10c: the folded record says the edits stand, as the map and the meeting do', () => {
+  const writers = article();
+  const directors = clone(writers);
+  directors.sections[3].content[0].text = 'Whether the verdict costs Alex anything is still open.';
+  const edits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+
+  test("a round whose change code put back: the record lists the restore and says the edit stands, in editsStandLine's words", () => {
+    const pass = clone(directors);
+    pass.sections[3].content[0].text = 'The verdict may cost Alex nothing.';
+    const { report } = settleEdits(null, { edits, before: directors, after: pass, pass: 1 });
+    const record = ViewLogic.steeringView(report, []);
+    expect(record.changedEdits.map((e) => e.restored)).toEqual([true]);
+    expect(record.kept).toBe('Your edit stands.');
+    expect(record.kept).toBe(ViewLogic.editsStandLine(report));
+  });
+
+  test('a round that changed none of two edits, or of three; a change still to show, and no report, say nothing of the kind', () => {
+    expect(ViewLogic.steeringView({ checked: ['E1', 'E2'], changed: [] }, []).kept).toBe('Both of your edits stand.');
+    expect(ViewLogic.steeringView({ checked: ['E1', 'E2', 'E3'], changed: [] }, []).kept).toBe('All 3 of your edits stand.');
+    const sendBack = { id: 'E1', scope: 'section:closing', where: 'section "closing", paragraph', cut: false, removed: false, moved: false, director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false, reason: null, restored: false };
+    expect(ViewLogic.steeringView({ checked: ['E1'], changed: [sendBack] }, []).kept).toBe('');
+    expect(ViewLogic.steeringView(null, []).kept).toBe('');
+  });
+});

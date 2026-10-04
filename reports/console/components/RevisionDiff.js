@@ -3,7 +3,8 @@
  * The round's record at the article stop, folded below the article (task 4.10; the map
  * prints its own round, task 4.9): the round banner, the note it was sent back with, every
  * change a pass made to the director's edits (code's restores among them, which no mark
- * shows beside the edit), the standing notes, and the shallow diff.
+ * shows beside the edit), the line that says the edits stand when no mark shows any (brief
+ * 4.10c), the standing notes, and the shallow diff.
  * Exports to window.Console.RevisionDiff
  */
 
@@ -135,7 +136,8 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
     // that red treatment (then the cap warning, now the arc timeout banner) read as
     // a failure (M15).
     // The amber lives on the `--changed` modifier so the muted "kept" line below,
-    // which shares the base class, stays a plain line of text.
+    // which shares the base class, stays a plain line of text. Brief 4.10c: that line says
+    // the director's edits stand, in the words the map and the meeting print (steering.kept).
     steering.changedEdits.length > 0 && React.createElement('ul', {
       className: 'revision-diff__notes-list', role: 'status', 'aria-label': 'Your edits a rework changed'
     },
@@ -146,9 +148,9 @@ function RevisionDiff({ previous, current, revisionCount, maxRevisions, previous
         }, edit.line);
       })
     ),
-    steering.keptCount > 0 && React.createElement('div', {
+    steering.kept && React.createElement('div', {
       className: 'text-xs text-muted revision-diff__hand-edits revision-diff__hand-edits--kept', role: 'status'
-    }, 'The rework kept all ' + steering.keptCount + ' of your edit' + (steering.keptCount === 1 ? '' : 's') + '.'),
+    }, steering.kept),
 
     // Standing notes the writer will see (§5.5)
     steering.notes.length > 0 && React.createElement('div', { className: 'revision-diff__feedback revision-diff__notes' },

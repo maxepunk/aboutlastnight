@@ -499,6 +499,23 @@
   var PUT_BACK_OUT_OF_ORDER = 'It was put back in its section, but not in the order you left it: move it again if the order matters.';
 
   /**
+   * Which pass made a report entry's change, in a line's words, and the reason a send-back's
+   * rework gave: `held` for a pass held to the director's edits (an automatic pass or a reweave),
+   * whose changes code puts back. changedEditLine reads it, and so does the meeting's line for a
+   * field edit on an element a round took out (takenOutWithEditLine).
+   */
+  function passWords(entry) {
+    var automatic = entry.automatic === true;
+    var reweave = entry.pass === REWEAVE_PASS;
+    var reason = asString(entry.reason).trim();
+    return {
+      held: automatic || reweave,
+      by: automatic ? 'automatic pass ' + entry.pass : (reweave ? 'your reweave' : 'the rework of your send-back'),
+      why: reason ? 'Why: ' + reason : 'No reason given.'
+    };
+  }
+
+  /**
    * One line for an edit a pass changed (F1, FA): its place (by default its id and field,
    * since FA; an entry from before FA names its scope), what happened to the director's
    * text, which pass did it, and what followed. Who made a change is the entry's own
@@ -512,6 +529,8 @@
    *   after an automatic pass or a reweave, whether code struck it again.
    * - A field or element an automatic pass changed: code put it back (`restored`), and
    *   the line says so; an entry from before FA says the pass should have kept it.
+   * - One on a photo the article cannot print (`unprintable`, task 4.5e), such as a caption the
+   *   director wrote under it: code left it out, and the line says why (brief 4.10c).
    * - A cut, or a sentence a rewrite removed, that came back: it is still in the output,
    *   because code never takes text out.
    * - A block the director moved that a pass took to another section: where it went, and
@@ -537,13 +556,11 @@
     var thing = typeof o.thing === 'function' ? o.thing(entry) : 'block';
     var became = typeof entry.became === 'string' ? valueText(entry.became) : null;
     var director = valueText(asString(entry.director));
-    var automatic = entry.automatic === true;
-    var reweave = entry.pass === REWEAVE_PASS;
     // A pass held to the director's edits: code puts back what it changed.
-    var held = automatic || reweave;
-    var by = automatic ? 'automatic pass ' + entry.pass : (reweave ? 'your reweave' : 'the rework of your send-back');
-    var reason = asString(entry.reason).trim();
-    var why = reason ? 'Why: ' + reason : 'No reason given.';
+    var pass = passWords(entry);
+    var held = pass.held;
+    var by = pass.by;
+    var why = pass.why;
     var cameBackAs = became !== null ? ' as "' + became + '"' : '';
     if (entry.struck === true) {
       var struck = label + ': ' + by + (became !== null ? ' brought it back.' : ' took it out.');
@@ -559,6 +576,11 @@
       if (entry.restored === true) return label + ': ' + by + ' ' + moved + '. ' + (entry.inOrder === false ? PUT_BACK_OUT_OF_ORDER : 'It was put back.');
       return label + ': ' + by + ' ' + moved + '. ' + (became !== null ? 'It could not be put back.' : MOVED_BLOCK_LEFT_OUT);
     }
+    // Brief 4.10c: an edit on a photo the article cannot print (`unprintable`, task 4.5e), such as a
+    // caption the director wrote under it. The pass's output holds no photo of that name, and code
+    // never puts such a photo back, so an automatic pass that fixed it keeps its fix. The line says
+    // so and claims nothing more: a pass that renamed the photo may have kept the caption's words.
+    if (entry.unprintable === true) return label + ': ' + by + ' took out the photo, which the article cannot print, so your "' + director + '" was not put back.';
     if (held && entry.restored === true) {
       return label + ': ' + by + (became !== null ? ' changed your "' + director + '" to "' + became + '"' : ' removed your "' + director + '"') + '. Your text was put back.';
     }
@@ -593,7 +615,8 @@
    * The line a stop shows when it checked the director's edits and shows no changed line
    * (brief 4.10b): the edits stand, whether the round's passes kept them or code put them back.
    * '' when the stop shows a changed line (changedEditsToShow), or checked no edit. One line for
-   * the map (mapView) and the story meeting (meetingView).
+   * the map (mapView), the story meeting (meetingView) and the desk's folded record of the round
+   * (steeringView, which RevisionDiff prints; brief 4.10c).
    *
    * @param {*} report - a stop's handEditReport
    * @returns {string}
@@ -651,10 +674,12 @@
    * F1: `changedEdits` holds one line per edit a pass changed this round
    * (changedEditLine), `automatic` marking a change an automatic pass made and
    * `restored` one code put back (FA), each read from the entry's own flags;
-   * `keptCount` is the edits checked when none changed. `notes` are standingNoteItems',
-   * under `labels`, the console's stop labels. Task 4.10: this is the whole record of the
-   * round, which the desk folds below the article; beside an edit a stop shows only
-   * changedEditsToShow's entries.
+   * `keptCount` is the edits checked when none changed. `kept` is the line RevisionDiff
+   * prints when no stop shows a line beside the director's edits: that they stand, in the
+   * words the map and the meeting print (editsStandLine; brief 4.10c). `notes` are
+   * standingNoteItems', under `labels`, the console's stop labels. Task 4.10: this is the
+   * whole record of the round, which the desk folds below the article; beside an edit a stop
+   * shows only changedEditsToShow's entries.
    */
   function steeringView(handEditReport, gateNotes, labels) {
     var report = editReportOf(handEditReport);
@@ -666,6 +691,7 @@
         return { key: entry.id + '-' + index, id: entry.id, automatic: entry.automatic === true, restored: entry.restored === true, line: changedEditLine(entry) };
       }),
       keptCount: report && changed.length === 0 ? report.checked.length : 0,
+      kept: editsStandLine(report),
       notes: notes
     };
   }

@@ -120,3 +120,15 @@ describe("4.10: the desk's styles", () => {
     ['.eval-bar', '.writer-questions', '.article-thesis-echo'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
   });
 });
+
+// 4.10c: the round's record folded below the article says the director's edits stand in the
+// words the map and the meeting print (steeringView's `kept`, which is editsStandLine), so
+// RevisionDiff composes no line of its own about them.
+describe("4.10c: the folded record says the edits stand, in steeringView's words", () => {
+  const src = read('components/RevisionDiff.js');
+
+  it("prints steeringView's `kept`, and no wording of its own about the edits a rework kept", () => {
+    expect(src).toContain('steering.kept && React.createElement(');
+    expect(src).not.toMatch(/kept all|keptCount/);
+  });
+});

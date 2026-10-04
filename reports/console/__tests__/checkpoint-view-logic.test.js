@@ -310,8 +310,8 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
   };
 
   test('nothing: any is false and every list is empty', () => {
-    expect(steeringView(null, null)).toEqual({ any: false, changedEdits: [], keptCount: 0, notes: [] });
-    expect(steeringView(null, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, notes: [] });
+    expect(steeringView(null, null)).toEqual({ any: false, changedEdits: [], keptCount: 0, kept: '', notes: [] });
+    expect(steeringView(null, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, kept: '', notes: [] });
   });
 
   test('each edit a rework changed is one line: its id and section, the director\'s text and what it became, the pass and the reason', () => {
@@ -392,13 +392,14 @@ describe('steeringView (spec 2026-09-19 §4.4, §5.5; F1)', () => {
     expect(line.automatic).toBe(false);
   });
 
-  test('a report with nothing changed reports the kept count', () => {
-    expect(steeringView({ checked: ['E1', 'E2'], changed: [] }, [])).toEqual({ any: true, changedEdits: [], keptCount: 2, notes: [] });
+  // 4.10c: and the line the folded record prints, that the edits stand (editsStandLine).
+  test('a report with nothing changed reports the kept count, and that the edits stand', () => {
+    expect(steeringView({ checked: ['E1', 'E2'], changed: [] }, [])).toEqual({ any: true, changedEdits: [], keptCount: 2, kept: 'Both of your edits stand.', notes: [] });
   });
 
   test('an empty checked list, or a report from before F1, is treated as no report', () => {
     expect(steeringView({ checked: [], changed: [] }, []).any).toBe(false);
-    expect(steeringView({ checked: ['lede'], changed: ['lede'] }, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, notes: [] });
+    expect(steeringView({ checked: ['lede'], changed: ['lede'] }, [])).toEqual({ any: false, changedEdits: [], keptCount: 0, kept: '', notes: [] });
   });
 
   test('a scope named after a prototype member is rendered raw (M16)', () => {
