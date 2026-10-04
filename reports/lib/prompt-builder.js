@@ -15,8 +15,9 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map writer embeds the map's schema for its theme as its
 // <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
 // writer embeds the schema above; its slots are the theme's. Brief 4.6c: its task points
-// at the meeting's note by the rule the map checks read the note by (meetingNoteOf).
-const { mapSchemaFor, topPhotoOf, meetingNoteOf } = require('./map');
+// at the meeting's note by the rule the map checks read the note by (meetingNoteOf). Brief
+// 4.6e: with the schema's one pointer at that note (MEETING_NOTE_POINTER).
+const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER } = require('./map');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
@@ -35,9 +36,10 @@ const MAP_TASK_TOP_PHOTO = "- Choose the top photo. The photo marked [hero image
 /**
  * The map task's pointers at the director's note from the story meeting (brief 4.6c): the
  * changes it asks for, and "note" as a change's source. They print only when the prompt's
- * standing notes hold that note.
+ * standing notes hold that note. Where the prompt holds it is the schema's pointer too, one
+ * constant (lib/map.js MEETING_NOTE_POINTER; brief 4.6e).
  */
-const MAP_TASK_NOTE_CHANGE = ", and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>)";
+const MAP_TASK_NOTE_CHANGE = `, and each change the director's note from the meeting asks for (${MEETING_NOTE_POINTER})`;
 const MAP_TASK_NOTE_SOURCE = ', or "note"';
 
 /**

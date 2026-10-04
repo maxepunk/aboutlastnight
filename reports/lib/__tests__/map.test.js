@@ -916,11 +916,47 @@ describe('4.6d: the schema says what "note" means', () => {
 
   it("a change's source is a meeting edit's id, or \"note\" for the meeting's approval note when the prompt holds it", () => {
     const SOURCE = 'The id of the director\'s change in <SETTLED_WEAVE>, such as E3, or "note" for a change the director\'s note from the meeting asks for, when the prompt holds that note: the approval note marked arc-selection in <DIRECTOR_GUIDANCE>';
-    expect(outlineSchema.properties.weaveChanges.items.properties.source.description).toBe(SOURCE);
+    // Task 4.6e: the stored schema holds the line up to where the note is; mapSchemaFor fills
+    // in that pointer from its one constant (MEETING_NOTE_POINTER).
+    expect(outlineSchema.properties.weaveChanges.items.properties.source.description).toBe(SOURCE.slice(0, SOURCE.indexOf(': the approval note')));
     // The map writer's schema, which <SCHEMA> prints and the SDK enforces, carries it as written.
     expect(mapSchemaFor('journalist').properties.weaveChanges.items.properties.source.description).toBe(SOURCE);
     expect(SOURCE).toContain(`"${MEETING_NOTE_SOURCE}"`);
     // Every theme's map prompt prints it: it names no theme, and carries no em-dash.
     expect(SOURCE).not.toMatch(/Nova|journalist|detective|\u2014/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6e: the meeting note's pointer has one source
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The integrator's ruling 1 on 4.6d's minors (minor 4). Where the prompt holds the director's
+// approval note from the meeting is one constant, MEETING_NOTE_POINTER: the map writer's task
+// prints it, and mapSchemaFor fills it into the schema's line for a change's source.
+describe("4.6e: the meeting note's pointer has one source", () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { mapSchemaFor, MEETING_NOTE_POINTER } = require('../map');
+  const outlineSchema = require('../schemas/outline.schema.json');
+  const { PromptBuilder } = require('../prompt-builder');
+  const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+  const { WEAVE } = require('./fixtures/rework-state');
+  const note = (kind, gate = 'arc-selection') => ({ gate, kind, round: 1, text: 'Lead with the money.', at: '2026-10-04T09:00:00.000Z' });
+
+  it("the pointer at the approval note is one constant, which the map writer's task prints and mapSchemaFor fills in", async () => {
+    expect(MEETING_NOTE_POINTER).toBe('the approval note marked arc-selection in <DIRECTOR_GUIDANCE>');
+    const stored = outlineSchema.properties.weaveChanges.items.properties.source.description;
+    expect(stored).not.toContain('<DIRECTOR_GUIDANCE>');
+    expect(mapSchemaFor('journalist').properties.weaveChanges.items.properties.source.description).toBe(`${stored}: ${MEETING_NOTE_POINTER}`);
+    const builder = new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
+    const { userPrompt } = await builder.buildOutlinePrompt(renderSettledWeave(WEAVE, null), [], [], null, { gateNotes: [note('approval')] });
+    expect(userPrompt).toContain(`and each change the director's note from the meeting asks for (${MEETING_NOTE_POINTER}).`);
+    // Written once, in lib/map.js, from the meeting's stop type; the task's clause reads it.
+    const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    expect(read('map.js')).toContain('`the approval note marked ${MEETING_GATE} in <DIRECTOR_GUIDANCE>`');
+    const clause = read('prompt-builder.js').split('\n').find((line) => line.startsWith('const MAP_TASK_NOTE_CHANGE ='));
+    expect(clause).toContain('${MEETING_NOTE_POINTER}');
+    expect(clause).not.toContain('<DIRECTOR_GUIDANCE>');
   });
 });

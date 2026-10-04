@@ -68,6 +68,15 @@ const MEETING_NOTE_SOURCE = 'note';
 /** The story meeting's stop type (R3), the gate its notes carry. */
 const MEETING_GATE = 'arc-selection';
 
+/**
+ * Where a map prompt holds the note meetingNoteOf finds, the director's approval note at the
+ * story meeting: <DIRECTOR_GUIDANCE> marks each standing note with its stop and its kind, as
+ * "[arc-selection, approval 1]" (prompt-builder.js formatGateNotes). The map writer's task
+ * (prompt-builder.js MAP_TASK_NOTE_CHANGE) and the schema's line for a change's source
+ * (mapSchemaFor) both point at the note with this one text (brief 4.6e).
+ */
+const MEETING_NOTE_POINTER = `the approval note marked ${MEETING_GATE} in <DIRECTOR_GUIDANCE>`;
+
 /** A field as text: the string trimmed, or '' for anything else. */
 function textOf(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -480,7 +489,9 @@ const directorValidators = new Map();
 /**
  * The map writer's schema for a theme: the map's shape (lib/schemas/outline.schema.json)
  * with the theme's slots (lib/theme-config.js mapSlotsOf) as the only slots a section or a
- * dropped slot may name. The writer, its rework and the prompt's <SCHEMA> read it.
+ * dropped slot may name. The writer, its rework and the prompt's <SCHEMA> read it. The line
+ * for a change's source ends on where the prompt holds the meeting's approval note
+ * (MEETING_NOTE_POINTER), the pointer the map writer's task prints too (brief 4.6e).
  *
  * @param {string} theme
  * @returns {Object}
@@ -495,6 +506,8 @@ function mapSchemaFor(theme) {
     const schema = structuredClone(outlineSchema);
     schema.properties.sections.items.properties.slot.enum = slots;
     schema.properties.dropped.items.properties.slot.enum = slots;
+    const source = schema.properties.weaveChanges.items.properties.source;
+    source.description = `${source.description}: ${MEETING_NOTE_POINTER}`;
     writerSchemas.set(theme, schema);
   }
   return writerSchemas.get(theme);
@@ -732,6 +745,7 @@ module.exports = {
   MAP_CARDS,
   MAP_CHECKS_SOURCE,
   MEETING_NOTE_SOURCE,
+  MEETING_NOTE_POINTER,
   MAP_ACTIONS,
   mapKey,
   mapRosterOf,

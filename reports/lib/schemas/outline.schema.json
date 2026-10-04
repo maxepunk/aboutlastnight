@@ -130,7 +130,7 @@
         "additionalProperties": false,
         "required": ["source", "change"],
         "properties": {
-          "source": { "type": "string", "description": "The id of the director's change in <SETTLED_WEAVE>, such as E3, or \"note\" for a change the director's note from the meeting asks for, when the prompt holds that note: the approval note marked arc-selection in <DIRECTOR_GUIDANCE>" },
+          "source": { "type": "string", "description": "The id of the director's change in <SETTLED_WEAVE>, such as E3, or \"note\" for a change the director's note from the meeting asks for, when the prompt holds that note" },
           "change": { "type": "string", "description": "What the map changed, in one line" }
         }
       }
