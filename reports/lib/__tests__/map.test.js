@@ -675,3 +675,33 @@ describe("4.6b: the gate refuses a photo the director's changes place more than 
     expect(gate(left)).toBeNull();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6b fix round 1: the gate and the checks read a repeat by one rule
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The gate lets a repeat the map the stop showed holds through to the checks, so the two
+// must find the same repeats: one function decides which beat ids a map repeats, and one
+// which photos it places more than once. Each lists its repeats in the map's order.
+describe('4.6b fix round 1: the gate and the checks read a repeat by one rule', () => {
+  const { directorMapProblems } = require('../map');
+  const gate = (left) => directorMapProblems(left, { theme: 'journalist', shown: writers() });
+
+  it("two beat ids repeated are named in the map's order by both: the gate refuses them as the director's, the check fails them as the writer's", () => {
+    const map = writers();
+    map.sections[0].beats.push({ id: 'b4', kind: 'scene', material: 'A second beat under b4', players: [] });
+    map.leftOut.push({ id: 'b2', kind: 'scene', material: 'A second beat under b2', players: [] });
+    expect(gate(map)).toBe("Two beats share the id \"b2\" and \"b4\": the director's changes made these repeats. Give each beat an id of its own.");
+    expect(mapFindings(map, inputs()).failures.filter((f) => f.type === 'duplicate-beat-id').map((f) => f.message))
+      .toEqual([expect.stringMatching(/^Beats sharing an id: b2 and b4\. /)]);
+  });
+
+  it("photos placed more than once, at the top and in any case of their names, are the same photos in the same order to both", () => {
+    const map = writers();
+    map.topPhoto = 'Cards.jpg';
+    map.sections[0].photos.push({ filename: 'THEORY.JPG' });
+    expect(gate(map)).toBe("\"Cards.jpg\" and \"THEORY.JPG\" are placed more than once: the director's changes made these repeats. Place each photo once: as the top photo, or in one section.");
+    expect(mapFindings(map, inputs()).failures.filter((f) => f.type === 'photo-placed-twice').map((f) => f.message))
+      .toEqual([expect.stringMatching(/^Photos placed more than once: cards\.jpg, theory\.jpg\. /)]);
+  });
+});

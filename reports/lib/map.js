@@ -128,6 +128,55 @@ function sectionBeats(map) {
   return objectsOf(map.sections).flatMap((section) => objectsOf(section.beats).map((beat) => ({ beat, slot: textOf(section.slot) })));
 }
 
+/**
+ * The beat ids that more than one beat of a map carries, in the sections and in leftOut,
+ * each once, in the order of its first beat. An id is read as the map's edits find a beat
+ * by it: its text, trimmed. The checks (duplicate-beat-id) and the gate
+ * (directorMapProblems) both read it.
+ *
+ * @param {*} map
+ * @returns {string[]}
+ */
+function repeatedBeatIds(map) {
+  if (!map || typeof map !== 'object') return [];
+  const counts = new Map();
+  [...objectsOf(map.sections).flatMap((section) => objectsOf(section.beats)), ...objectsOf(map.leftOut)].forEach((beat) => {
+    const id = textOf(String(beat.id === undefined || beat.id === null ? '' : beat.id));
+    if (id) counts.set(id, (counts.get(id) || 0) + 1);
+  });
+  return [...counts].filter(([, n]) => n > 1).map(([id]) => id);
+}
+
+/**
+ * Each photo a map places, the top photo and the sections' photos, found by the one join
+ * key (photoKey), in the order of its first place: the name its first place gives it and
+ * how many places it has.
+ *
+ * @param {*} map
+ * @returns {Map<string, {filename: string, count: number}>} photoKey -> the photo
+ */
+function placedPhotos(map) {
+  const placed = new Map();
+  mapPhotoPlacements(map).forEach(({ filename }) => {
+    const key = photoKey(filename);
+    const first = placed.get(key);
+    placed.set(key, first ? { filename: first.filename, count: first.count + 1 } : { filename, count: 1 });
+  });
+  return placed;
+}
+
+/**
+ * The photos a map places more than once (placedPhotos), each once, under the name its
+ * first place gives it, in the map's order. The checks (photo-placed-twice) and the gate
+ * (directorMapProblems) both read it.
+ *
+ * @param {*} map
+ * @returns {Map<string, string>} photoKey -> filename
+ */
+function repeatedPhotos(map) {
+  return new Map([...placedPhotos(map)].filter(([, photo]) => photo.count > 1).map(([key, photo]) => [key, photo.filename]));
+}
+
 /** The director's edits on the map's beats and photos, each with what it is about. */
 function addressed(edits) {
   return (Array.isArray(edits) ? edits : [])
@@ -314,12 +363,7 @@ function mapFindings(map, inputs = {}) {
   const concern = (type, editIds, finding) => concerns.push({ type, editIds: [...new Set(editIds)], finding });
 
   // Every beat has an id of its own (the edits find a beat by its id).
-  const counts = new Map();
-  [...objectsOf(map.sections).flatMap((section) => objectsOf(section.beats)), ...objectsOf(map.leftOut)].forEach((beat) => {
-    const id = textOf(String(beat.id === undefined || beat.id === null ? '' : beat.id));
-    if (id) counts.set(id, (counts.get(id) || 0) + 1);
-  });
-  const repeated = [...counts].filter(([, n]) => n > 1).map(([id]) => id);
+  const repeated = repeatedBeatIds(map);
   if (repeated.length > 0) {
     const added = entries.filter(({ edit, address }) => address && address.kind === 'beat' && address.fieldSteps.length === 0
       && edit.from === MAP_NONE && repeated.includes(String(address.identity.id).trim()));
@@ -344,9 +388,7 @@ function mapFindings(map, inputs = {}) {
 
   // Every kept photo is placed once, and only kept photos are placed (T13).
   const keptKeys = kept.map(photoKey);
-  const placements = mapPhotoPlacements(map);
-  const placedCount = new Map();
-  placements.forEach(({ filename }) => placedCount.set(photoKey(filename), (placedCount.get(photoKey(filename)) || 0) + 1));
+  const placed = placedPhotos(map);
   const split = (type, filenames, writersLine, directorsFinding) => {
     const theirs = [];
     filenames.forEach((filename) => {
@@ -356,14 +398,14 @@ function mapFindings(map, inputs = {}) {
     });
     if (theirs.length > 0) fail(type, writersLine(theirs));
   };
-  const nameOfKey = (key) => (kept.find((f) => photoKey(f) === key) || placements.find((p) => photoKey(p.filename) === key).filename);
-  split('photo-not-placed', kept.filter((filename) => !placedCount.has(photoKey(filename))),
+  const nameOfKey = (key) => (kept.find((f) => photoKey(f) === key) || placed.get(key).filename);
+  split('photo-not-placed', kept.filter((filename) => !placed.has(photoKey(filename))),
     (list) => `Photos placed nowhere: ${list.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people, as C2 (\`<craft-form>\`) sets out.`,
     (filename) => `${filename} is placed nowhere.`);
-  split('photo-placed-twice', [...placedCount].filter(([key, n]) => n > 1 && keptKeys.includes(key)).map(([key]) => nameOfKey(key)),
+  split('photo-placed-twice', [...repeatedPhotos(map).keys()].filter((key) => keptKeys.includes(key)).map(nameOfKey),
     (list) => `Photos placed more than once: ${list.join(', ')}. Place each photo once.`,
     (filename) => `${filename} is placed more than once.`);
-  split('photo-not-offered', [...new Set(placements.map((p) => photoKey(p.filename)))].filter((key) => !keptKeys.includes(key)).map(nameOfKey),
+  split('photo-not-offered', [...placed.keys()].filter((key) => !keptKeys.includes(key)).map(nameOfKey),
     (list) => `Photos placed that are not among the photos offered: ${list.join(', ')}. Place only the photos offered: ${kept.join(', ') || 'none'}.`,
     (filename) => `${filename} is not among the photos kept for the article.`);
 
@@ -472,40 +514,6 @@ function directorMapSchemaFor(theme) {
   return directorSchemas.get(theme);
 }
 
-/** The beats' ids that more than one beat of a map carries, each once. */
-function repeatedBeatIds(map) {
-  const seen = new Set();
-  const repeated = [];
-  if (!map || typeof map !== 'object') return repeated;
-  [...objectsOf(map.sections).flatMap((section) => objectsOf(section.beats)), ...objectsOf(map.leftOut)].forEach((beat) => {
-    const id = textOf(typeof beat.id === 'string' ? beat.id : '');
-    if (!id) return;
-    if (seen.has(id) && !repeated.includes(id)) repeated.push(id);
-    seen.add(id);
-  });
-  return repeated;
-}
-
-/**
- * The photos a map places more than once, the top photo and the sections' photos read by
- * the one join key (photoKey): each once, under the name its first place gives it, in the
- * map's order.
- *
- * @param {*} map
- * @returns {Map<string, string>} photoKey -> filename
- */
-function repeatedPhotos(map) {
-  const placements = mapPhotoPlacements(map);
-  const counts = new Map();
-  placements.forEach(({ filename }) => counts.set(photoKey(filename), (counts.get(photoKey(filename)) || 0) + 1));
-  const repeated = new Map();
-  placements.forEach(({ filename }) => {
-    const key = photoKey(filename);
-    if (counts.get(key) > 1 && !repeated.has(key)) repeated.set(key, filename);
-  });
-  return repeated;
-}
-
 /**
  * What the director-side schema finds wrong with a map, as one refusal that says where, or
  * null for a map it accepts. Past the schema, every beat has an id of its own, since the
@@ -513,7 +521,8 @@ function repeatedPhotos(map) {
  * the director's changes place twice is a copy no edit carries: the check would file it as
  * the writer's, and an automatic pass could undo the director's choice unrestored. For
  * both, a repeat the map the stop showed holds is the writer's, which the map checks report
- * and a rework fixes; one it does not hold is the director's, refused.
+ * and a rework fixes; one it does not hold is the director's, refused. The gate and the
+ * checks find repeats by the same rules (repeatedBeatIds, repeatedPhotos).
  *
  * @param {*} map - the map as the director left it
  * @param {Object} options
