@@ -604,3 +604,45 @@ describe('4.5 fix round 1: one reading of an id, one rule for a repeated id (fin
     expect(check(doubled).map((f) => f.message)).toEqual([expect.stringMatching(/threads share the id "t2"/)]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5b: the weave's follow-ups (brief 4.5b)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// R11 exempts the thread the director added, not the writer's duplicate of its id. Filed
+// as a concern on the director's edit, the writer's repeat sent no rework, and the
+// director's next change to their own thread was refused (4.5 review, minor 6). The
+// failure's line tells the rework which thread keeps the id: the director's edits find
+// their thread by it.
+describe("4.5b: a writer's repeat is the writer's failure", () => {
+  const { weaveFindings } = require('../weave');
+  const share = (parts = {}) => ({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, ...parts });
+  const findings = (weave, directorsShare) => weaveFindings(weave, { recordIds: RECORD_IDS, directorWords: DIRECTOR_WORDS, directorsShare });
+  const ADDED = { id: 't7', claim: 'The guest list was rewritten that morning.', role: 'grounds-it' };
+  const WRITERS_T7 = { id: 't7', claim: 'A thread the writer put under t7.', role: 'grounds-it', receipt: 'ledger' };
+
+  it("a repeat under the id of a thread the director added is a failure, not a concern, and says which thread keeps the id", () => {
+    const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, clone(ADDED), clone(WRITERS_T7)] };
+    const { failures, concerns } = findings(weave, share({ addedThreads: { t7: 'E1' } }));
+    expect(failures).toEqual([{
+      type: 'duplicate-id',
+      message: 'Two threads share the id "t7", and one of them is the thread the director added (E1 in <HAND_EDITS>). Keep "t7" on the director\'s thread, since their edits find it by its id, and give the other thread an id of its own; make each connection and the stronger main thread name the thread they mean.'
+    }]);
+    expect(concerns).toEqual([]);
+  });
+
+  it("a repeat under the id of a thread the director re-roled or rewrote names each of their edits there", () => {
+    const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[2], claim: 'A second t3 the writer wrote.' }] };
+    const { failures, concerns } = findings(weave, share({ reroledThreads: { t3: 'E2' }, threadFields: { 't3.claim': 'E4' } }));
+    expect(failures.map((f) => f.message)).toEqual([expect.stringMatching(/^Two threads share the id "t3", and one of them is the thread the director changed \(E2 and E4 in <HAND_EDITS>\)\. Keep "t3" on the director's thread/)]);
+    expect(concerns).toEqual([]);
+  });
+
+  it('a repeat no edit of the director\'s is under keeps its line', () => {
+    const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[1] }] };
+    expect(findings(weave, share({ addedThreads: { t7: 'E1' } })).failures).toEqual([{
+      type: 'duplicate-id',
+      message: 'Two threads share the id "t2". Give each thread an id of its own, and make each connection and the stronger main thread name the thread they mean.'
+    }]);
+  });
+});

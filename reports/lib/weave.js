@@ -347,7 +347,9 @@ function quotedWords(text) {
  *   document in the record, in any case, or the ledger (`receipt-not-in-record`);
  * - each left-out thread has its reason (`left-out-without-reason`);
  * - every thread, connection and question has an id of its own (`duplicate-id`), a repeat
- *   read by repeatedIds, the rule the meeting's gate and the diff read too;
+ *   read by repeatedIds, the rule the meeting's gate and the diff read too. A repeat is
+ *   the writer's failure, under the id of a thread the director added or changed too,
+ *   and then its line says the director's thread keeps the id (brief 4.5b);
  * - the room's verdict is one of the threads: a thread marked `verdict: true`, in a role
  *   other than left out (`no-verdict-thread`);
  * - every live connection joins two threads the weave holds (`connection-joins-unknown-thread`);
@@ -360,7 +362,7 @@ function quotedWords(text) {
  * re-roled may have no receipt and no reason, a field they rewrote is not checked against
  * the notes, and their words add no length. A failure their change causes is a concern
  * on their edit, beside its line: a receipt they typed that names no document, the verdict
- * thread they left out, a thread they added under an id another thread holds.
+ * thread they left out.
  *
  * Player coverage is not checked here: the map places every player (spec 4.5).
  *
@@ -403,10 +405,24 @@ function weaveFindings(weave, { recordIds = [], directorWords = [], directorsSha
       fail('left-out-without-reason', `Thread ${name(thread)} is left out with no reason. Give the one line on why the story does not need it.`);
     }
   });
+  // A repeated thread id is the writer's failure (brief 4.5b). The director's share holds
+  // one thread under an id, since the meeting's gate refuses a repeat the director's changes
+  // make (lib/meeting.js directorWeaveProblems), so every repeat holds a thread of the
+  // writer's: R11 exempts the director's thread, never the writer's duplicate of its id.
+  // When one of the threads is the director's, the line says which thread keeps the id.
   repeatedIds(threads).forEach((id) => {
-    const added = editOf(share.addedThreads, id);
-    if (added) concern('duplicate-id', [added], `Two threads share the id "${id}".`);
-    else fail('duplicate-id', `Two threads share the id "${id}". Give each thread an id of its own, and make each connection and the stronger main thread name the thread they mean.`);
+    const directorsEdits = [...new Set([
+      editOf(share.addedThreads, id), editOf(share.reroledThreads, id),
+      ...Object.keys(share.threadFields).filter((place) => place.startsWith(`${id}.`)).map((place) => share.threadFields[place])
+    ].filter(Boolean))];
+    const nameTheThread = 'make each connection and the stronger main thread name the thread they mean.';
+    if (directorsEdits.length === 0) {
+      fail('duplicate-id', `Two threads share the id "${id}". Give each thread an id of its own, and ${nameTheThread}`);
+      return;
+    }
+    const whose = editOf(share.addedThreads, id) ? 'the thread the director added' : 'the thread the director changed';
+    const edits = directorsEdits.length > 1 ? `${directorsEdits.slice(0, -1).join(', ')} and ${directorsEdits[directorsEdits.length - 1]}` : directorsEdits[0];
+    fail('duplicate-id', `Two threads share the id "${id}", and one of them is ${whose} (${edits} in <HAND_EDITS>). Keep "${id}" on the director's thread, since their edits find it by its id, and give the other thread an id of its own; ${nameTheThread}`);
   });
 
   const verdictThreads = threads.filter(thread => thread.verdict === true);

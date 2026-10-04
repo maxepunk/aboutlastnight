@@ -437,3 +437,43 @@ describe("4.5b: the director's keys stay the director's (R12)", () => {
     expect(JSON.stringify(update.weave)).not.toContain(MODEL_ANSWER);
   });
 });
+
+// R11 exempts the thread the director added, not the writer's duplicate of its id: the
+// duplicate is the writer's failure, a check rework fixes it, and the meeting opens with no
+// repeat to refuse the director's next change on (4.5 review, minor 6 and re-review minor a).
+describe("4.5b: a writer's repeat under the id of a thread the director added", () => {
+  const { routeArcValidation } = graphTesting;
+  const WRITERS_T6 = { id: 't6', claim: 'Riley kept the receipts for every burial.', role: 'grounds-it', receipt: 'ledger' };
+
+  it("is a failure, a check rework fixes it, and the repeat is gone with the director's thread intact", async () => {
+    // The director adds t6 and reweaves; the reweave puts a thread of its own under t6.
+    const state = await roundState('reweave');
+    const directorsT6 = leftByDirector().threads.find((t) => t.id === 't6');
+    const rework = reworkOf((weave) => { weave.threads.push(clone(WRITERS_T6)); });
+    const rewoven = { ...state, ...(await reviseArcs(state, cfg(recordingSdk(rework)))) };
+    expect(rewoven.weave.threads.filter((t) => t.id === 't6')).toEqual([directorsT6, WRITERS_T6]);
+
+    const checked = { ...rewoven, ...validateArcStructure(rewoven, {}) };
+    expect(checked._arcValidation.failures.map((f) => f.type)).toEqual(['duplicate-id']);
+    expect(checked._arcValidation.failures[0].message).toMatch(/^Two threads share the id "t6", and one of them is the thread the director added \(E3 in <HAND_EDITS>\)\. Keep "t6" on the director's thread/);
+    expect(checked._arcValidation.concerns).toEqual([]);
+    expect(routeArcValidation(checked)).toBe('revise');
+
+    // The check rework reads the failure and the director's thread, and renames its own.
+    const pass = { ...checked, ...(await incrementArcRevision(checked)) };
+    const sdk = recordingSdk(() => {
+      const weave = weaveForPrompt(clone(pass.weave));
+      weave.connections = weave.connections.filter((c) => !c.struck);
+      weave.threads = weave.threads.map((t) => (t.claim === WRITERS_T6.claim ? { ...t, id: 't7' } : t));
+      return weave;
+    });
+    const fixed = { ...pass, ...(await reviseArcs(pass, cfg(sdk))) };
+    expect(sdk.calls[0].prompt).toContain(`WEAVE CHECK FAILURES:\n  - ${checked._arcValidation.failures[0].message}`);
+    expect(sdk.calls[0].prompt).toMatch(/E3 \(thread "t6", added\)/);
+
+    const rechecked = validateArcStructure(fixed, {});
+    expect(rechecked._arcValidation.failures).toEqual([]);
+    expect(fixed.weave.threads.filter((t) => t.id === 't6')).toEqual([directorsT6]);
+    expect(fixed.weave.threads.find((t) => t.id === 't7')).toEqual({ ...WRITERS_T6, id: 't7' });
+  });
+});
