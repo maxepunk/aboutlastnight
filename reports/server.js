@@ -21,7 +21,8 @@ const {
   REVISION_CAPS,
   stopRoundOf,
   roundNoteOf,
-  isNoteOf
+  isNoteOf,
+  roundDidNotRunAt
 } = require('./lib/workflow/state');
 const {
   CHECKPOINT_TYPES,
@@ -506,6 +507,9 @@ async function getCheckpointData(checkpointType, state) {
                 // director's notes as the map's is (roundNoteOf), since the rework clears
                 // _articleFeedback before the stop opens.
                 previousFeedback: roundNoteOf(CHECKPOINT_TYPES.ARTICLE, state),
+                // Task 4.14e: a send-back whose rework did not run, with its note, as the map's
+                // payload and the story meeting's carry it (lib/workflow/state.js roundDidNotRunAt).
+                roundDidNotRun: roundDidNotRunAt(CHECKPOINT_TYPES.ARTICLE, state),
                 handEditReport: handEditReportOf(state._articleHandEditReport),   // F1, as at the outline stop
                 directorGateNotes: state.directorGateNotes || [],
                 // Brief 4.7b: the story the director settled at the meeting, as the map's stop

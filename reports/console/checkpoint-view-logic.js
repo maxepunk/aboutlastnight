@@ -3614,6 +3614,37 @@
     };
   }
 
+  // ── A send-back that did not run, at the map and the desk (task 4.14e) ───────
+
+  /** The stops that send back what the line names: the map and the article. */
+  var SENT_BACK_NOUNS = ['map', 'article'];
+
+  /**
+   * The one line for a send-back at the map or the desk whose rework did not run (task 4.14e;
+   * the final review's ruling 5; data.roundDidNotRun, lib/workflow/state.js roundDidNotRunAt):
+   * the stop is as the director left it, and the line says how to retry with what the note box
+   * holds, as the story meeting's line does (didNotRunLine): a note the box holds is sent again as
+   * it is; one it does not hold is given back word for word. Outline.js and Article.js show it,
+   * and the harness's pages print it (lib/stop-pages.js).
+   *
+   * @param {Object|null} round - data.roundDidNotRun
+   * @param {string} note - the stop's note box
+   * @param {string} noun - what the stop sends back: 'map' or 'article'
+   * @returns {string}
+   * @throws {Error} for any other noun
+   */
+  function reworkDidNotRunLine(round, note, noun) {
+    if (SENT_BACK_NOUNS.indexOf(noun) === -1) {
+      throw new Error('reworkDidNotRunLine: the line names the map or article a send-back carries, not ' + String(noun));
+    }
+    if (!isPlainObject(round)) return '';
+    var line = 'Your send-back did not run: the writer failed, and the ' + noun + ' is as you left it.';
+    var written = asString(round.note).trim();
+    if (!written) return line + ' To retry, write a note and send the ' + noun + ' back.';
+    if (holdsRoundNote(round, note)) return line + ' Your note is in the box: send the ' + noun + ' back again to retry.';
+    return line + ' To retry, write your note in the box again and send the ' + noun + ' back. Your note was: "' + written + '"';
+  }
+
   // ── A thread from before the story meeting (phase 4, task 4.11; R2) ─────────
 
   /**
@@ -3773,6 +3804,8 @@
     locatingPassages: locatingPassages,
     headingsOf: headingsOf,
     findingSectionId: findingSectionId,
+    // Task 4.14e: a send-back at the map or the desk whose rework did not run
+    reworkDidNotRunLine: reworkDidNotRunLine,
     // Phase 4, task 4.11: a thread from before the story meeting
     oldThreadView: oldThreadView,
     // Fix 3.7b: RevisionDiff's key walk

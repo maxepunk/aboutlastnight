@@ -676,10 +676,11 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
     // Brief 4.6c: the documents by id (evidenceIndex), and the roster and the kept photos
     // the count reads, so the page names each document and rebuilds the count as edited.
-    // Brief 4.6d: the count is the page's alone, so the payload sends no tally.
+    // Brief 4.6d: the count is the page's alone, so the payload sends no tally. Task 4.14e: a
+    // send-back whose rework did not run (roundDidNotRun).
     expect(Object.keys(data).sort()).toEqual([
       'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
-      'mapSlots', 'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'settledStory', 'trace'
+      'mapSlots', 'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'roundDidNotRun', 'settledStory', 'trace'
     ]);
   });
 
@@ -968,5 +969,35 @@ describe('4.12e: at round 2 or later the map and the desk carry the note they we
       expect([name, (await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, map)).previousFeedback]).toEqual([name, null]);
       expect([name, (await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, desk)).previousFeedback]).toEqual([name, null]);
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14e: a send-back whose rework did not run (the final review's ruling 5). The map's and
+// the desk's payloads say so, shaped as the story meeting's is ({round, at, note}), from the
+// stop's rework record (lib/workflow/state.js roundDidNotRunAt).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14e: the map and the desk say a send-back did not run', () => {
+  const { MAP } = require('../../lib/__tests__/fixtures/rework-state');
+  const GAVE_UP = {
+    round: 'send-back', note: 'Tighten the money section.', countsBefore: {}, failures: 3,
+    at: '2026-10-04T10:00:00.000Z', error: 'SDK timeout after 900s', status: 'did-not-run'
+  };
+  const SAID = { round: 'send-back', at: '2026-10-04T10:00:00.000Z', note: 'Tighten the money section.' };
+
+  it('the map\'s payload carries the round that did not run, and null when every round ran', async () => {
+    const map = { theme: 'journalist', outline: JSON.parse(JSON.stringify(MAP)), evaluationHistory: [] };
+    expect((await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { ...map, _outlineRework: GAVE_UP })).roundDidNotRun).toEqual(SAID);
+    expect((await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, map)).roundDidNotRun).toBeNull();
+    // An automatic pass that gave up runs inside the stop's round: no round of the director's did not run.
+    expect((await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, { ...map, _outlineRework: { ...GAVE_UP, round: null, note: null } })).roundDidNotRun).toBeNull();
+  });
+
+  it('the desk\'s payload carries the round that did not run, and null when every round ran', async () => {
+    const desk = { evaluationHistory: [], contentBundle: null };
+    expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { ...desk, _articleRework: GAVE_UP })).roundDidNotRun).toEqual(SAID);
+    expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, desk)).roundDidNotRun).toBeNull();
+    // Each stop reads its own record.
+    expect((await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, { ...desk, _outlineRework: GAVE_UP })).roundDidNotRun).toBeNull();
   });
 });

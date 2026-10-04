@@ -1245,6 +1245,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   // The count on the button is the fact check's structural issues alone (approveLabel).
   var approve = ViewLogic.approveLabel(desk.folds.factCheck.summary, hasEdits);
   const sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'article');
+  // Task 4.14e: a send-back whose rework did not run, read by what the note box holds.
+  const didNotRun = ViewLogic.reworkDidNotRunLine(data && data.roundDidNotRun, feedbackText, 'article');
 
   var currentSections = deskBundleNow.sections || [];
   var currentEvidenceCards = deskBundleNow.evidenceCards || [];
@@ -1358,6 +1360,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
 
     // Inline validation error (B6: shown when Approve or Send back is blocked)
     editError && React.createElement('p', { className: 'validation-error desk-error', role: 'alert' }, editError),
+
+    // Task 4.14e: a send-back whose rework did not run, above the note box it is retried from.
+    didNotRun && React.createElement('p', { className: 'desk__did-not-run', role: 'status' }, didNotRun),
 
     // The stop's ONE note box (phase 1, brief 1.1), always on screen and above the
     // actions, because it is sent with whichever action the director takes. It used

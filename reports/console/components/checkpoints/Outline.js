@@ -2,9 +2,9 @@
  * The map (phase 4, task 4.9; spec 5.2 and 5.3): the outline stop, where the director reads
  * the story map in minutes and edits any line. The page, in order:
  * - the settled story, read-only, with the way back to the story meeting;
- * - what happened since the director last looked: the round and its note, a check still
- *   failing, the edits a rework changed (a send-back's with its reasons), the concerns no
- *   line shows;
+ * - what happened since the director last looked: a send-back whose rework did not run (task
+ *   4.14e), the round and its note, a check still failing, the edits a rework changed (a
+ *   send-back's with its reasons), the concerns no line shows;
  * - the gap note; the headline, the deck and the top photo;
  * - the sections in the map's order, under the theme's slot labels, each with its job, beats
  *   and photos: every line editable, move and strike controls on each beat, move controls on
@@ -166,6 +166,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   const standing = ViewLogic.standingNotesView(data && data.directorGateNotes, CHECKPOINT_LABELS);
   // Brief 2.7: what the automatic rework of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace, theme);
+  // Task 4.14e: a send-back whose rework did not run, read by what the note box holds.
+  const didNotRun = ViewLogic.reworkDidNotRunLine(data && data.roundDidNotRun, note, 'map');
 
   /** Every change: on screen, and in the map's pending slot under the version it was made on. */
   function keep(nextDraft, nextNote) {
@@ -368,7 +370,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     );
   }
 
-  const roundLines = view.round || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.otherConcerns.length > 0;
+  const roundLines = didNotRun || view.round || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.otherConcerns.length > 0;
 
   return React.createElement('div', { className: 'map flex flex-col gap-md' },
 
@@ -389,6 +391,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
 
     // What happened since the director last looked.
     roundLines && React.createElement('section', { className: 'map__round', 'aria-label': 'Since you last looked' },
+      didNotRun && React.createElement('p', { className: 'map__did-not-run', role: 'status' }, didNotRun),
       view.round && React.createElement('p', { className: 'text-sm' },
         React.createElement('strong', null, view.round.label), view.round.note ? '. ' + view.round.note : ''),
       view.checkFailures.map(function (text, i) {

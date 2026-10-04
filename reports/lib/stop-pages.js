@@ -580,8 +580,12 @@ function mapPage(data, theme) {
   }
   page.hint(view.storyHint);
 
-  if (view.round || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.otherConcerns.length > 0) {
+  // Task 4.14e: a send-back whose rework did not run, as Outline.js shows it; the harness has no
+  // note box, so the line gives the note back.
+  const didNotRun = View.reworkDidNotRunLine(data.roundDidNotRun, '', 'map');
+  if (didNotRun || view.round || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.otherConcerns.length > 0) {
     page.inRegion(R.round, () => {
+      page.note(didNotRun);
       if (view.round) {
         page.tag(view.round.label, 'note');
         page.note(view.round.note);
@@ -758,6 +762,10 @@ function deskPage(data, theme) {
     page.title(`${H.problems} (${problems.length})`);
     problems.forEach((problem) => page.alert(problem.message));
   }
+
+  // Task 4.14e: a send-back whose rework did not run, where Article.js shows it, above the note
+  // box; the harness has no note box, so the line gives the note back.
+  page.note(View.reworkDidNotRunLine(data.roundDidNotRun, '', 'article'));
 
   if (view.apart.any) {
     page.title(view.apart.title);

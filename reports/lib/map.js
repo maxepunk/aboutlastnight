@@ -47,7 +47,7 @@ const crypto = require('crypto');
 const Ajv = require('ajv');
 const outlineSchema = require('./schemas/outline.schema.json');
 const { mapSlotsOf } = require('./theme-config');
-const { roundNoteOf } = require('./workflow/state');
+const { roundNoteOf, roundDidNotRunAt } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const { mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue, shownMapOf } = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
@@ -715,7 +715,8 @@ function settledStoryOf(weave) {
  * in hand; the concerns beside their lines; the edits a send-back changed (the report); the
  * standing notes; the round's counters and its note, the one the director sent the map back with,
  * read from the director's notes (lib/workflow/state.js roundNoteOf; task 4.12e), since the rework
- * clears `_outlineFeedback` before the stop opens.
+ * clears `_outlineFeedback` before the stop opens; and a send-back whose rework did not run, with
+ * its note (lib/workflow/state.js roundDidNotRunAt; task 4.14e).
  *
  * @param {Object} state
  * @param {Object} options
@@ -741,7 +742,8 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
     previousFeedback: roundNoteOf(CHECKPOINT_TYPES.OUTLINE, s),
     revisionCount: s.outlineRevisionCount || 0,
     humanRevisionCount: s.humanOutlineRevisionCount || 0,
-    maxRevisions
+    maxRevisions,
+    roundDidNotRun: roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, s)
   };
 }
 

@@ -2905,7 +2905,9 @@ textarea.input {
 }
 
 .meeting__check,
-.meeting__did-not-run {
+.meeting__did-not-run,
+.map__did-not-run,
+.desk__did-not-run {
   padding: var(--space-xs) var(--space-md);
   border-left: 2px solid var(--accent-red);
   background: rgba(231, 76, 60, 0.06);
