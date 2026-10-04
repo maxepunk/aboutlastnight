@@ -917,6 +917,19 @@ describe("4.6c: Everyone and the counts read mapTally's own inputs, which the pa
   });
 });
 
+describe('4.6c: a beat taken out leaves no photo beside it', () => {
+  test('add a beat, set a photo beside it, take the beat out: the photo stands by itself, with its people', () => {
+    const map = opened();
+    const added = EditLogic.addBeat(map, 'theStory', 'Alex at the window', 'Alex');
+    const beside = EditLogic.setPhotoBeside(added, 'theStory', 0, 'b10');
+    expect(beside.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b10' }]);
+    const out = EditLogic.removeBeat(beside, 'b10');
+    expect(out.sections[1].photos).toEqual([{ filename: 'p2.jpg' }]);
+    expect(beatPlaces(out)).toEqual(beatPlaces(map));
+    expect(beside.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b10' }]);
+  });
+});
+
 describe('4.6c: the map is read by one rule wherever a map is read', () => {
   test("a section's editor opens on the section the editors and moves find by its slot", () => {
     const map = opened();

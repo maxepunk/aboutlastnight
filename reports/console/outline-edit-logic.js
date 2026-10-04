@@ -347,11 +347,16 @@
     return next;
   }
 
-  /** A beat taken out of the map whole: the screen offers it for a beat the director added at this look. */
+  /**
+   * A beat taken out of the map whole: the screen offers it for a beat the director added at
+   * this look. A photo beside it stays in its section, by itself with its people, as one
+   * beside a struck beat does (task 4.6c).
+   */
   function removeBeat(map, id) {
     var next = editedMap(map, 'removeBeat');
     var place = beatAt(next, id, 'removeBeat');
-    place.list.splice(place.index, 1);
+    var beat = place.list.splice(place.index, 1)[0];
+    if (place.section) besideBeat(place.section, beatIdOf(beat)).forEach(function (photo) { delete photo.beat; });
     return next;
   }
 
