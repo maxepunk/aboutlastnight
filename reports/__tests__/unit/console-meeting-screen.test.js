@@ -19,7 +19,8 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
   const src = read('components/checkpoints/ArcSelection.js');
 
   it('renders the page from meetingView, section by section in the view\'s order', () => {
-    expect(count(src, 'ViewLogic.meetingView(data, draft)')).toBe(1);
+    // 4.5c: the view reads the note box too, for the retry line.
+    expect(count(src, 'ViewLogic.meetingView(data, draft, note)')).toBe(1);
     expect(src).toMatch(/view\.order\.map\(/);
   });
 
@@ -39,7 +40,9 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
   // not run, which only the stop's payload carries.
   it('hands the buttons and the payloads the stop\'s payload, not the weave alone', () => {
     expect(src).toContain('ViewLogic.meetingButtons(data, draft, note, sendBackArmed)');
-    expect(src).toContain('ViewLogic.meetingPayload(action, data, draft, note)');
+    // 4.5c: the note sent is the box's, or none when Approve's question cleared it.
+    expect(src).toContain('ViewLogic.meetingPayload(action, data, draft, sentNote)');
+    expect(src).toContain("const sentNote = typeof typed === 'string' ? typed : note;");
   });
 
   // Fix round 1, finding 2: a mark whose line the round took out is listed under the line's
@@ -92,9 +95,10 @@ describe('4.8 fix round 1: the meeting and RevisionDiff list the standing notes 
 });
 
 describe('4.8: every console string that names the arc stop or its cost says "story meeting" and R9\'s cost', () => {
+  // 4.5c (review 4.8, minor 7): RollbackPanel.js is not listed: it never named the arc stage,
+  // so its row passed before 4.8 too. Its change is pinned by the rollbackWarningLine test below.
   const FILES = [
     'components/checkpoints/Photos.js',
-    'components/RollbackPanel.js',
     'components/checkpoints/InputReview.js',
     'components/checkpoints/AwaitRoster.js',
     'components/checkpoints/EvidenceBundle.js',
@@ -154,5 +158,21 @@ describe('4.8: the meeting\'s styles', () => {
     expect(css).toContain('/* ── 4.8: the story meeting ──');
     ['.meeting__section', '.meeting__thread', '.meeting__connection--struck', '.meeting__concern', '.meeting__mark', '.meeting__thin-notes']
       .forEach((rule) => expect(`${rule}: ${meeting.includes(rule)}`).toBe(`${rule}: true`));
+  });
+});
+
+// 4.5c: after a round that did not run, the retry line reads by what the note box holds, and
+// a note restored into the box is not sent with Approve until the director says so.
+describe('4.5c: the meeting reads its note box for the retry line, and Approve asks before it sends a restored note', () => {
+  const src = read('components/checkpoints/ArcSelection.js');
+
+  it('hands meetingView the note box', () => {
+    expect(count(src, 'ViewLogic.meetingView(data, draft, note)')).toBe(1);
+  });
+
+  it('asks through meetingApproveAsk before Approve sends a restored note, and each answer approves: with the note kept, or with the box cleared', () => {
+    expect(count(src, 'ViewLogic.meetingApproveAsk(data, note)')).toBe(1);
+    ['approveAsk.question', 'approveAsk.keep.label', 'approveAsk.clear.label'].forEach((field) => expect(src).toContain(field));
+    expect(src).toContain("send('approve', '')");
   });
 });

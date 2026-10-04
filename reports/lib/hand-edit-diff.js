@@ -2932,6 +2932,8 @@ module.exports = {
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
-    stayingInSection, pathOf
+    stayingInSection, pathOf,
+    // Brief 4.5c: the weave's fields and elements, which the console copies (a test holds them equal)
+    WEAVE_FIELDS, WEAVE_ELEMENTS
   }
 };

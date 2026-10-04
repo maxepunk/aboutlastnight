@@ -900,6 +900,14 @@ describe('4.8: a meeting with no weave', () => {
 // 4.5c: the meeting's follow-ups on the screen
 // ═══════════════════════════════════════════════════════════════════════════
 
+describe("4.5c: the console's copies of the weave's fields and elements are the server's", () => {
+  test('WEAVE_TEXT_FIELDS and ELEMENT_WORDS are lib/hand-edit-diff.js WEAVE_FIELDS and WEAVE_ELEMENTS', () => {
+    const { _testing } = require('../../lib/hand-edit-diff');
+    expect(ViewLogic.WEAVE_TEXT_FIELDS).toEqual([..._testing.WEAVE_FIELDS]);
+    expect(ViewLogic.ELEMENT_WORDS).toEqual(_testing.WEAVE_ELEMENTS);
+  });
+});
+
 // The ledger's ruling on 4.5b's minor 5: bringing back a connection the director struck is
 // their change, at the gate (lib/hand-edit-diff.js weaveEditsBetween) and so on the screen.
 describe('4.5c: bringing back a struck connection is a change on screen, as at the gate', () => {
@@ -926,5 +934,82 @@ describe('4.5c: bringing back a struck connection is a change on screen, as at t
       const gate = directorWeaveProblems(weaveLib.weaveForPrompt(left), { shown: weaveLib.weaveForPrompt(shown) });
       expect({ gateAccepts: gate === null, consoleAccepts: meetingWeaveProblems(left, shown) === null }).toEqual({ gateAccepts: accepts, consoleAccepts: accepts });
     });
+  });
+});
+
+describe('4.5c: after a round that did not run, the retry line and Approve read what the note box holds', () => {
+  const NOTE_KEY = ViewLogic.noteSlotKey('arc-selection');
+  const LINE = 'the writer timed out, and the weave is as you left it.';
+
+  /**
+   * A director's round whose rework times out, as the console lives it: send() saves the draft
+   * and the note in the meeting's pending slot before the post; the gate takes the round;
+   * incrementArcRevision zeroes the automatic count and reviseArcs' timeout gives the round
+   * back; CHECKPOINT_RECEIVED keeps the slot while the stop shows the same weave version
+   * (pendingEditsAfterCheckpoint); and the meeting reopens on meetingDraftOf and meetingNoteOf.
+   */
+  function reopened(action, note, { change, before = stateAt() } = {}) {
+    const data0 = payloadOf(before);
+    const draft0 = change ? change(meetingDraftOf(data0, undefined)) : meetingDraftOf(data0, undefined);
+    const pending = { 'arc-selection': meetingPendingSlot(data0, draft0), [NOTE_KEY]: note };
+    const taken = meetingResume(meetingPayload(action, data0, draft0, note), before);
+    expect(taken.error).toBeNull();
+    const after = {
+      ...before, ...taken.stateUpdates, arcRevisionCount: 0, humanArcRevisionCount: before.humanArcRevisionCount,
+      _meetingRound: null, _arcFeedback: null,
+      _arcReworkTimeout: { consecutive: 1, attempt: 0, round: action, note: taken.stateUpdates._arcFeedback, at: '2026-10-03T22:00:00.000Z' }
+    };
+    const data = payloadOf(after);
+    const kept = pendingEditsAfterCheckpoint(pending, 'arc-selection', data);
+    return { after, data, draft: meetingDraftOf(data, kept['arc-selection']), box: meetingNoteOf(data, kept['arc-selection'], kept[NOTE_KEY]) };
+  }
+
+  test('a reweave whose note the reopened box holds: the line says to reweave again, and Reweave is on', () => {
+    const { data, draft, box } = reopened('reweave', 'Make the sale the main thread.');
+    expect(box).toBe('Make the sale the main thread.');
+    expect(meetingView(data, draft, box).didNotRun).toBe(`Your reweave did not run: ${LINE} Your note is in the box: reweave again to retry.`);
+    expect(meetingButtons(data, draft, box, false).reweave.disabled).toBe(false);
+  });
+
+  test('a send-back whose note the reopened box holds: the line says to send the weave back again', () => {
+    const { data, draft, box } = reopened('send-back', 'Rethink the money thread.');
+    expect(box).toBe('Rethink the money thread.');
+    expect(meetingView(data, draft, box).didNotRun).toBe(`Your send-back did not run: ${LINE} Your note is in the box: send the weave back again to retry.`);
+  });
+
+  test('a box the reopened meeting left empty: the line gives the note back and asks for it again', () => {
+    // The round carried a change, so the meeting reopened on a new weave version.
+    const changed = reopened('reweave', 'Make the sale the main thread.', { change: (w) => setThreadRole(w, 2, 'mirrors-it') });
+    expect(changed.box).toBe('');
+    expect(meetingView(changed.data, changed.draft, changed.box).didNotRun)
+      .toBe(`Your reweave did not run: ${LINE} To retry, write your note in the box again and reweave. Your note was: "Make the sale the main thread."`);
+    // An automatic pass before the round moves the version too.
+    const counted = reopened('send-back', 'Rethink the money thread.', { before: stateAt({ arcRevisionCount: 1 }) });
+    expect(counted.box).toBe('');
+    expect(meetingView(counted.data, counted.draft, counted.box).didNotRun)
+      .toBe(`Your send-back did not run: ${LINE} To retry, write your note in the box again and send the weave back. Your note was: "Rethink the money thread."`);
+  });
+
+  test('the note restored into the box goes with the round it was written for: Approve asks to keep it, as an approval note, or to clear it', () => {
+    const { after, data, draft, box } = reopened('reweave', 'Make the sale the main thread.');
+    expect(ViewLogic.meetingApproveAsk(data, box)).toEqual({
+      question: 'The note in the box was written for your reweave, which did not run. Approve with it as an approval note, which every later writer reads, or clear it?',
+      keep: { label: 'Keep it and approve', ariaLabel: 'Approve the weave, with the note in the box as an approval note' },
+      clear: { label: 'Clear it and approve', ariaLabel: 'Clear the note box, then approve the weave' }
+    });
+    // Each answer approves, with a payload the gate takes: the note as an approval note, or none.
+    const kept = meetingResume(meetingPayload('approve', data, draft, box), after);
+    expect(kept.error).toBeNull();
+    expect(kept.note).toEqual({ text: 'Make the sale the main thread.', kind: 'approval' });
+    const cleared = meetingResume(meetingPayload('approve', data, draft, ''), after);
+    expect(cleared.error).toBeNull();
+    expect(cleared.note).toBeNull();
+    // A send-back's note is asked about by its round.
+    const sentBack = reopened('send-back', 'Rethink the money thread.');
+    expect(ViewLogic.meetingApproveAsk(sentBack.data, sentBack.box).question).toMatch(/^The note in the box was written for your send-back, which did not run\./);
+    // A note typed at this look, an empty box, and a meeting with no round that did not run ask nothing.
+    expect(ViewLogic.meetingApproveAsk(data, 'Keep the heir thread out.')).toBeNull();
+    expect(ViewLogic.meetingApproveAsk(data, '')).toBeNull();
+    expect(ViewLogic.meetingApproveAsk(payloadOf(stateAt()), 'Make the sale the main thread.')).toBeNull();
   });
 });

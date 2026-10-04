@@ -1278,7 +1278,11 @@
   var STRUCK_KEY = 'struck';
   var WEAVE_ANSWER_KEY = 'answer';
 
-  /** The weave's text fields, read one place each as lib/hand-edit-diff.js weaveEditsBetween reads them. */
+  /**
+   * The weave's text fields, read one place each as lib/hand-edit-diff.js weaveEditsBetween
+   * reads them: a copy of its WEAVE_FIELDS, which the browser cannot import; a test holds
+   * the two equal (task 4.5c).
+   */
   var WEAVE_TEXT_FIELDS = ['story', 'question', 'headline', 'fromYourNotes', 'convergence'];
 
   /** The fields the director edits in place (spec 4.4). */
@@ -1696,7 +1700,11 @@
     return null;
   }
 
-  /** The word for one element of each of the weave's collections: a refusal's word, and a line's key on the page. */
+  /**
+   * The word for one element of each of the weave's collections: a refusal's word, and a
+   * line's key on the page. A copy of lib/hand-edit-diff.js WEAVE_ELEMENTS; a test holds the
+   * two equal (task 4.5c).
+   */
   var ELEMENT_WORDS = { threads: 'thread', connections: 'connection', questions: 'question' };
 
   /**
@@ -2007,20 +2015,57 @@
   }
 
   /**
-   * The one line for a round whose rework timed out (lib/meeting.js roundDidNotRunOf), which
-   * says how to retry with what the buttons offer: a reweave with no note left its changes in
-   * the weave, so Reweave retries it as it stands (isUnfittedReweave); a round that carried a
-   * note takes it again from the box, so the line gives it back word for word.
+   * Whether the note box holds the note a round that did not run carried (lib/meeting.js
+   * roundDidNotRunOf), as typed for that round: restored there with the meeting's pending
+   * slot, or typed again (task 4.5c).
    */
-  function didNotRunLine(round) {
+  function holdsRoundNote(round, note) {
+    var written = isPlainObject(round) ? asString(round.note).trim() : '';
+    return written !== '' && asString(note).trim() === written;
+  }
+
+  /**
+   * The one line for a round whose rework timed out (lib/meeting.js roundDidNotRunOf), which
+   * says how to retry with what the buttons and the note box offer: a reweave with no note
+   * left its changes in the weave, so Reweave retries it as it stands (isUnfittedReweave); a
+   * round whose note the box holds is sent again as it is, with the action it was typed for
+   * (task 4.5c); a round whose note the box does not hold takes it again from the box, so
+   * the line gives it back word for word.
+   *
+   * @param {Object|null} round - data.roundDidNotRun
+   * @param {string} [note] - the meeting's note box
+   */
+  function didNotRunLine(round, note) {
     if (!isPlainObject(round)) return '';
     var kind = round.round === 'send-back' ? 'send-back' : 'reweave';
     var line = 'Your ' + kind + ' did not run: the writer timed out, and the weave is as you left it.';
     if (isUnfittedReweave(round)) return line + ' Reweave again to retry.';
     var action = kind === 'reweave' ? 'reweave' : 'send the weave back';
-    var note = asString(round.note).trim();
-    if (!note) return line + ' To retry, write a note and ' + action + '.';
-    return line + ' To retry, write your note in the box again and ' + action + '. Your note was: "' + note + '"';
+    var written = asString(round.note).trim();
+    if (!written) return line + ' To retry, write a note and ' + action + '.';
+    if (holdsRoundNote(round, note)) return line + ' Your note is in the box: ' + action + ' again to retry.';
+    return line + ' To retry, write your note in the box again and ' + action + '. Your note was: "' + written + '"';
+  }
+
+  /**
+   * What Approve asks before it sends the note box, when the box holds the note of a round
+   * that did not run (holdsRoundNote; task 4.5c): that note was typed for the round, so the
+   * page asks whether to keep it, as an approval note, or to clear it, and either answer
+   * approves. Null when Approve sends the box as it is.
+   *
+   * @param {Object} data - the stop's payload: a round that did not run
+   * @param {string} note - the meeting's note box
+   * @returns {{question: string, keep: {label: string, ariaLabel: string}, clear: {label: string, ariaLabel: string}}|null}
+   */
+  function meetingApproveAsk(data, note) {
+    var round = isPlainObject(data) ? data.roundDidNotRun : null;
+    if (!holdsRoundNote(round, note)) return null;
+    var kind = round.round === 'send-back' ? 'send-back' : 'reweave';
+    return {
+      question: 'The note in the box was written for your ' + kind + ', which did not run. Approve with it as an approval note, which every later writer reads, or clear it?',
+      keep: { label: 'Keep it and approve', ariaLabel: 'Approve the weave, with the note in the box as an approval note' },
+      clear: { label: 'Clear it and approve', ariaLabel: 'Clear the note box, then approve the weave' }
+    };
   }
 
   /**
@@ -2115,20 +2160,22 @@
    * - `thinNotes`: the one line beside the story when the weave has no "from your notes",
    *   unless the round took it out: then the director's notes held a read the rework
    *   dropped, and the mark of it is listed instead;
-   * - the round's lines: `didNotRun`, `checkFailures` (one line each), `changedEdits` (the
-   *   send-back's, with their reasons), `marked` and the marks no line shows (`removed`,
-   *   `otherMarks`), and the concerns no line shows (`otherConcerns`).
+   * - the round's lines: `didNotRun` (by what the note box holds; task 4.5c),
+   *   `checkFailures` (one line each), `changedEdits` (the send-back's, with their reasons),
+   *   `marked` and the marks no line shows (`removed`, `otherMarks`), and the concerns no
+   *   line shows (`otherConcerns`).
    * The questions are the stop's (`data.questions`), each paired with its place in the
    * director's weave, whose answer the box shows and sets.
    *
    * @param {Object} data - the stop's payload
    * @param {Object|null} weave - the weave as the director has it (meetingDraftOf, then their changes)
+   * @param {string} [note] - the meeting's note box (meetingNoteOf, then what they type)
    * @returns {Object}
    */
-  function meetingView(data, weave) {
+  function meetingView(data, weave, note) {
     var d = isPlainObject(data) ? data : {};
     if (!isWeaveValue(weave)) {
-      return { hasWeave: false, order: [], emptyLine: EMPTY_MEETING_LINE, didNotRun: didNotRunLine(d.roundDidNotRun) };
+      return { hasWeave: false, order: [], emptyLine: EMPTY_MEETING_LINE, didNotRun: didNotRunLine(d.roundDidNotRun, note) };
     }
     var shown = meetingWeaveOf(d.weave);
     var stopQuestions = asArray(d.questions).filter(isPlainObject);
@@ -2248,7 +2295,7 @@
           .filter(function (entry) { return entry.pass === SEND_BACK_PASS; })
           .map(function (entry) { return changedEditLine(entry, MEETING_EDIT_LINE); })
         : [],
-      didNotRun: didNotRunLine(d.roundDidNotRun),
+      didNotRun: didNotRunLine(d.roundDidNotRun, note),
       marked: markedLine(d.marks),
       removed: beside.removed,
       otherMarks: beside.otherMarks,
@@ -2363,6 +2410,11 @@
     meetingWeaveProblems: meetingWeaveProblems,
     meetingPayload: meetingPayload,
     meetingButtons: meetingButtons,
+    // Task 4.5c: Approve's question for a note restored after a round that did not run, and
+    // the console's copies of the server's weave fields and elements (held equal by a test)
+    meetingApproveAsk: meetingApproveAsk,
+    WEAVE_TEXT_FIELDS: WEAVE_TEXT_FIELDS,
+    ELEMENT_WORDS: ELEMENT_WORDS,
     meetingVerdictView: meetingVerdictView,
     receiptView: receiptView,
     concernFindingOf: concernFindingOf,

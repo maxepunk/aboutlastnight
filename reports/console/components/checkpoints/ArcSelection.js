@@ -18,6 +18,8 @@
  * The director's weave and note go to the meeting's pendingEdits slot on every change,
  * under the weave's version (meetingPendingSlot), so they survive a remount of that
  * version and clear when a new one arrives (pendingEditsAfterCheckpoint, in state.js).
+ * A note restored into the box after a round that did not run goes with Approve only once
+ * the director says so (meetingApproveAsk, task 4.5c).
  * Exports to window.Console.checkpoints.ArcSelection
  */
 
@@ -36,6 +38,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   // Send back takes two clicks, as at the map and the desk: this flag says the first one
   // happened, and ViewLogic.sendBackButton decides what it means on screen.
   const [sendBackArmed, setSendBackArmed] = React.useState(false);
+  // Task 4.5c: Approve has asked about a note restored into the box (meetingApproveAsk).
+  const [askingApprove, setAskingApprove] = React.useState(false);
   const [error, setError] = React.useState('');
 
   // A new weave version opens the meeting on it; the same version keeps what the
@@ -45,12 +49,18 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     setNote(ViewLogic.meetingNoteOf(data, pendingEdits, pendingNote));
     setNewClaim('');
     setSendBackArmed(false);
+    setAskingApprove(false);
     setError('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
   const shown = data && data.weave;
-  const view = ViewLogic.meetingView(data, draft);
+  // The page reads the note box too: after a round that did not run, its line says how to
+  // retry by what the box holds.
+  const view = ViewLogic.meetingView(data, draft, note);
+  // A note the box holds from a round that did not run was typed for that round: Approve
+  // asks whether to keep it, as an approval note, or to clear it.
+  const approveAsk = ViewLogic.meetingApproveAsk(data, note);
   // Each line's heading, the name a mark is listed under when the round took its line out.
   const LABELS = ViewLogic.MEETING_LINE_LABELS;
   // The buttons and the payloads read the stop's payload: the weave it showed, and a round
@@ -73,7 +83,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   function removeThread(index) { keep(ViewLogic.removeMeetingThread(draft, index), note); }
   function strike(index, struck) { keep(ViewLogic.setConnectionStruck(draft, index, struck), note); }
   function answer(index, text) { keep(ViewLogic.setQuestionAnswer(draft, index, text), note); }
-  function editNote(text) { keep(draft, text); setSendBackArmed(false); }
+  function editNote(text) { keep(draft, text); setSendBackArmed(false); setAskingApprove(false); }
 
   function addThread() {
     const next = ViewLogic.addMeetingThread(draft, newClaim, newRole);
@@ -83,25 +93,39 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   }
 
   /**
-   * One of the three actions. The weave is held to the gate's decisions first, so a refusal
+   * One of the three actions, with the note box, or with `typed` when Approve's question
+   * cleared it (task 4.5c). The weave is held to the gate's decisions first, so a refusal
    * is shown here rather than posted; the weave and note are saved before the post, so a
    * refusal from the server, which remounts this screen, gives them back.
    */
-  function send(action) {
+  function send(action, typed) {
+    const sentNote = typeof typed === 'string' ? typed : note;
     const problem = ViewLogic.meetingWeaveProblems(draft, shown);
     if (problem) {
       setError(problem);
       setSendBackArmed(false);
+      setAskingApprove(false);
       return;
     }
-    const payload = ViewLogic.meetingPayload(action, data, draft, note);
+    const payload = ViewLogic.meetingPayload(action, data, draft, sentNote);
     if (!payload) return;
-    keep(draft, note);
+    keep(draft, sentNote);
     if (action === 'approve') onApprove(payload);
     else onReject(payload);
   }
 
+  /** Approve: straight away, or, with a restored note in the box, once the director answers approveAsk. */
+  function handleApproveClick() {
+    setSendBackArmed(false);
+    if (approveAsk) {
+      setAskingApprove(true);
+      return;
+    }
+    send('approve');
+  }
+
   function handleSendBackClick() {
+    setAskingApprove(false);
     if (buttons.sendBack.disabled) return;
     if (!sendBackArmed) {
       setSendBackArmed(true);
@@ -376,17 +400,37 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
 
     error && React.createElement('p', { className: 'validation-error', role: 'alert' }, error),
 
+    // Task 4.5c: Approve's question about a note restored after a round that did not run;
+    // each answer approves, with the note kept as an approval note or with the box cleared.
+    askingApprove && approveAsk && React.createElement('div', { className: 'meeting__did-not-run flex flex-col gap-sm', role: 'status' },
+      React.createElement('p', null, approveAsk.question),
+      React.createElement('div', { className: 'flex gap-sm' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'btn btn-primary btn-sm',
+          onClick: function () { setAskingApprove(false); send('approve'); },
+          'aria-label': approveAsk.keep.ariaLabel
+        }, approveAsk.keep.label),
+        React.createElement('button', {
+          type: 'button',
+          className: 'btn btn-secondary btn-sm',
+          onClick: function () { setAskingApprove(false); send('approve', ''); },
+          'aria-label': approveAsk.clear.ariaLabel
+        }, approveAsk.clear.label)
+      )
+    ),
+
     React.createElement('div', { className: 'action-modes mt-md' },
       React.createElement('button', {
         className: 'action-modes__btn action-modes__btn--active btn btn-primary',
-        onClick: function () { setSendBackArmed(false); send('approve'); },
+        onClick: handleApproveClick,
         'aria-label': buttons.approve.ariaLabel
       }, buttons.approve.label),
       React.createElement('button', {
         className: 'action-modes__btn btn btn-secondary',
         disabled: buttons.reweave.disabled,
         title: buttons.reweave.hint || undefined,
-        onClick: function () { setSendBackArmed(false); send('reweave'); },
+        onClick: function () { setSendBackArmed(false); setAskingApprove(false); send('reweave'); },
         'aria-label': buttons.reweave.ariaLabel
       }, buttons.reweave.label),
       React.createElement('button', {
