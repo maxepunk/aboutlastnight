@@ -278,17 +278,19 @@ describe('ai-nodes', () => {
       expect(mockClient.getCalls()).toHaveLength(0);
     });
 
-    it("skips on a replay when the thread holds a map", async () => {
+    // Brief 4.6b: the map writer stamps its own phase, OUTLINE_GENERATION (3.1), the one the
+    // map's resource endpoint reads (server.js RESOURCE_ENDPOINTS), on a replay too.
+    it("skips on a replay when the thread holds a map, stamping the map writer's phase", async () => {
       mockClient.clearCalls();
       const result = await generateOutline({ outline: mockOutline }, config);
-      expect(result).toEqual({ currentPhase: PHASES.GENERATE_OUTLINE });
+      expect(result).toEqual({ currentPhase: PHASES.OUTLINE_GENERATION });
       expect(mockClient.getCalls()).toHaveLength(0);
     });
 
-    it('sets currentPhase to GENERATE_OUTLINE', async () => {
+    it('sets currentPhase to OUTLINE_GENERATION', async () => {
       const result = await generateOutline({}, config);
 
-      expect(result.currentPhase).toBe(PHASES.GENERATE_OUTLINE);
+      expect(result.currentPhase).toBe(PHASES.OUTLINE_GENERATION);
     });
 
     // NOTE: approvalType test removed in interrupt() migration

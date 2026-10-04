@@ -1415,9 +1415,10 @@ const RESOURCE_ENDPOINTS = [
     { path: 'arcs', minPhase: 2.3,
       fields: state => ({ weave: state.weave || null }),
       check: state => isWeave(state.weave) },
-    // Phase 4 (brief 4.6): the map, once the map writer has returned it (3.1; its checks
-    // stamp 3.2).
-    { path: 'outline', minPhase: 3.1,
+    // Phase 4 (brief 4.6): the map, once the map writer has returned it. The writer and its
+    // rework stamp OUTLINE_GENERATION and the map checks MAP_CHECKS, on a replay too (brief
+    // 4.6b), so the map reads as available at its stop on every path to it.
+    { path: 'outline', minPhase: parseFloat(PHASES.OUTLINE_GENERATION),
       fields: state => ({ outline: state.outline || null }),
       check: state => !!state.outline },
     { path: 'article', minPhase: 4.2,

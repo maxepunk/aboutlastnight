@@ -982,13 +982,16 @@ function outlineWriterInputs(state) {
  * the map checks run on it next. Code writes the hero from the map's top photo (R7), so the
  * article writer's PHOTOS and the page name the photo the map chose.
  *
+ * It stamps the map writer's phase, OUTLINE_GENERATION, on a replay too (brief 4.6b): the
+ * map's resource endpoint (server.js RESOURCE_ENDPOINTS) reads the map as available from it.
+ *
  * @param {Object} state - Current state: the settled weave, the record, the photos
  * @param {Object} config - Graph config
  * @returns {Object} Partial state update
  */
 async function generateOutline(state, config) {
   if (state.outline) {
-    return { currentPhase: PHASES.GENERATE_OUTLINE };
+    return { currentPhase: PHASES.OUTLINE_GENERATION };
   }
 
   const sdk = getSdkClient(config, 'generateOutline');
@@ -1009,7 +1012,7 @@ async function generateOutline(state, config) {
     _mapBaseline: map,
     _mapCheck: null,
     heroImage: topPhotoOf(map),
-    currentPhase: PHASES.GENERATE_OUTLINE
+    currentPhase: PHASES.OUTLINE_GENERATION
   };
 }
 
@@ -1093,7 +1096,8 @@ function takeChangedEdits(result) {
  * line it changed and strikes again, by id, each beat it brought back (lib/hand-edit-diff.js
  * settleEdits), and the round's report (`_outlineHandEditReport`) records each change and
  * each restore. The map a pass leaves is the writer's last map (`_mapBaseline`), unchecked
- * (`_mapCheck: null`), and its top photo is the hero.
+ * (`_mapCheck: null`), and its top photo is the hero. It stamps the map writer's phase,
+ * OUTLINE_GENERATION, as the writer does (brief 4.6b).
  *
  * @param {Object} state - Current state with _previousOutline, validationResults, the note
  * @param {Object} config - Graph config with SDK client
@@ -1162,7 +1166,7 @@ async function reviseOutline(state, config) {
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
       _outlineHandEditReport: settled.report,
-      currentPhase: PHASES.GENERATE_OUTLINE
+      currentPhase: PHASES.OUTLINE_GENERATION
     };
 
   } catch (error) {

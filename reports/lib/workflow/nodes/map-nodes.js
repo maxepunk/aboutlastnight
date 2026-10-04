@@ -15,7 +15,9 @@
  *
  * The writer and every rework return their map unchecked (`_mapCheck: null`), so the checks
  * run once on each map. On a replay, and after going back to the map (R9), the map in hand
- * is marked, so the checks skip and no rework runs again on it.
+ * is marked, so the checks skip and no rework runs again on it. That skip stamps the checks'
+ * phase, as their run does (brief 4.6b), so the stop opens at one phase on every path and
+ * the map's resource endpoint (server.js RESOURCE_ENDPOINTS) reads the map as available.
  */
 'use strict';
 
@@ -48,7 +50,7 @@ function mapCheckInputsOf(state, map) {
 
 /**
  * The map checks' node. Skips a run that ended in an error, an approved map, and a map the
- * checks already marked.
+ * checks already marked; that last skip stamps the checks' phase, as their run does.
  *
  * @param {Object} state
  * @returns {Object} partial state: the mark, validationResults and the phase
@@ -61,7 +63,7 @@ function checkMap(state) {
   }
   if (state._mapCheck) {
     console.log('[checkMap] Skipping: the map in hand is marked as checked');
-    return {};
+    return { currentPhase: PHASES.MAP_CHECKS };
   }
   const map = state.outline;
   const { failures, concerns } = mapFindings(map, mapCheckInputsOf(state, map));
