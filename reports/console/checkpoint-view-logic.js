@@ -3368,10 +3368,23 @@
   }
 
   /**
+   * The key of the section a report entry is about whole (brief 4.10e), such as a section the
+   * director put in whole that code put back without a photo the article cannot print: its scope
+   * names the section, and its place names the section and nothing in it, as lib/hand-edit-diff.js
+   * editWhere names a whole section. Null for any other entry.
+   */
+  function wholeSectionKey(entry) {
+    var m = /^section:(.*)$/.exec(asString(entry.scope));
+    if (!m || entry.moved === true || entry.cut === true || entry.removed === true) return null;
+    return asString(entry.where) === 'section "' + m[1] + '"' ? m[1] : null;
+  }
+
+  /**
    * Where an edit a round changed sits: beside the piece that prints what the director's text
-   * became, or, for a block a pass moved, the block itself, the entry's section first; possibly
-   * resolved when only the article as the stop opened it printed that; beside no piece when the
-   * pass took it out.
+   * became, or, for a block a pass moved, the block itself, the entry's section first; for an
+   * entry about a whole section, whose text no one piece prints, on that section's heading (brief
+   * 4.10e); possibly resolved when only the article as the stop opened it printed that; beside no
+   * piece when the pass took it out.
    */
   function changedPlace(entry, ctx) {
     var prefer = scopePieces(entry.scope);
@@ -3385,6 +3398,10 @@
       target = typeof entry.became === 'string' ? entry.became : '';
     }
     if (!collapsedText(target)) return null;
+    var whole = wholeSectionKey(entry);
+    if (whole !== null) {
+      return locate(ctx, function (piece) { return piece.anchor.kind === 'heading' && piece.sectionKey === whole; }, null);
+    }
     var name = namedIn(target);
     return locate(ctx, function (piece) {
       return holdsText(piece, target) || (name !== null && isPlainObject(piece.block) && piece.block[name.field] === name.value);
@@ -3466,7 +3483,8 @@
    * - the judge's concerns about the director's edits, each beside the line it quotes (`concern`),
    *   read past its prefix, its ids and its leading rule ids (judgeMarkText);
    * - the edits a round changed that a stop shows (changedEditsToShow), each beside what the
-   *   director's text became (`changed`), with the rework's reason for a send-back's.
+   *   director's text became (`changed`), an entry about a whole section on its heading (brief
+   *   4.10e), with the rework's reason for a send-back's.
    * The judge's score, its notes on the writing and every other advisory of its are not marks.
    *
    * @param {Object} data - the article stop's payload: `contentBundle` (the article as the stop

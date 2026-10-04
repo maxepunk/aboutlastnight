@@ -978,7 +978,8 @@ describe('4.5g: each stop says what happened to a photo the article cannot print
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', where: 'section "aftermath"', restored: true, unprintable: true })]);
     expect(changedEditsToShow(report)).toEqual(report.changed);
     const LINE = 'automatic pass 1 took out a photo you placed here, which the article cannot print. The rest of your edit stands: place a photo the article can print here if it should have one.';
-    expect(changedMarks(output, report)).toEqual({ apart: [`Aftermath: ${LINE}`], at: [] });
+    // Brief 4.10e: the mark sits on the section's heading (4.5g's minor 4), where it sat apart.
+    expect(changedMarks(output, report)).toEqual({ apart: [], at: [`Aftermath: ${LINE}`] });
     const record = ViewLogic.steeringView(report, []);
     expect(record.changedEdits.map((e) => e.line)).toEqual([`E1, section "aftermath": ${LINE}`]);
     expect(record.kept).toBe('');
@@ -1034,5 +1035,60 @@ describe('4.10e: the folded trace reads past its rule ids', () => {
       ]
     });
     expect(pass.shouldConsider.items).toEqual(trace[0].findings.advisoryWarnings);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10e: a section code put back without its photo is marked at the section (the integrator's
+// ruling 1 on the fifth wave's findings, 4.5g's minor 4). The mark for a section the director put
+// in whole that code put back without a photo the article cannot print (4.5g's form (ii)) sat
+// apart, because no piece of the desk prints a whole section's text. The mark for an entry about
+// a whole section sits on that section's heading, where the line's "here" is.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('4.10e: a section code put back without its photo is marked at its heading', () => {
+  const KEPT = ['huddle.jpg', 'theory.jpg'];
+  const AFTERMATH = 'The morning after, the account was still open.';
+  const LINE = 'automatic pass 1 took out a photo you placed here, which the article cannot print. The rest of your edit stands: place a photo the article can print here if it should have one.';
+  const HEADING = { kind: 'heading', section: 4 };
+  /** The fixture with a section the director added whole, holding a photo the session never took. */
+  const withAftermath = () => {
+    const directors = article();
+    directors.sections.push({ id: 'aftermath', type: 'narrative', heading: 'Aftermath', content: [paragraph(AFTERMATH), photo('lost.jpg', 'Six people at the bar.')] });
+    return directors;
+  };
+  const editsOf = (directors) => carriedEdits(standingAfterSendBack(null, article(), directors, 'bundle'), directors);
+  /** The changed marks as [where the mark sits, its tone, where it says it is, its text]. */
+  const changedMarks = (marks) => [
+    ...Object.keys(marks.at).flatMap((key) => marks.at[key].map((m) => [key, m.tone, m.where, m.text])),
+    ...marks.apart.map((m) => ['apart', m.tone, m.where, m.text])
+  ].filter(([, tone]) => tone === 'changed');
+
+  test("the mark sits on the section's heading and names it as its place; none sits apart", () => {
+    const directors = withAftermath();
+    const after = clone(directors);
+    after.sections[4].content.splice(1, 1);
+    const { output, report } = settleEdits(null, { edits: editsOf(directors), before: directors, after, pass: 1, photos: KEPT });
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', where: 'section "aftermath"', restored: true, unprintable: true })]);
+    const d = payloadFor(output, { handEditReport: report });
+    const marks = deskMarks(d, d.contentBundle);
+    expect(changedMarks(marks)).toEqual([[deskAnchorKey(HEADING), 'changed', 'Aftermath, heading', `Aftermath: ${LINE}`]]);
+    expect(deskMarksAt(marks, HEADING).map((m) => m.tone)).toEqual(['changed']);
+  });
+
+  test("a send-back's rework that changed the section sits on its heading; one that took the section out sits beside no piece", () => {
+    const directors = withAftermath();
+    const reason = [{ id: 'E1', reason: 'The note asked the aftermath to open on the account.' }];
+    const changed = clone(directors);
+    changed.sections[4].content[0].text = 'The account was still open the morning after.';
+    const changedReport = reportAfterPass(null, { edits: editsOf(directors), before: directors, after: changed, pass: SEND_BACK_PASS, reasons: reason });
+    const atHeading = payloadFor(changed, { handEditReport: changedReport });
+    expect(changedMarks(deskMarks(atHeading, atHeading.contentBundle)).map(([key, , where]) => [key, where])).toEqual([[deskAnchorKey(HEADING), 'Aftermath, heading']]);
+
+    const gone = clone(directors);
+    gone.sections.splice(4, 1);
+    const goneReport = reportAfterPass(null, { edits: editsOf(directors), before: directors, after: gone, pass: SEND_BACK_PASS, reasons: reason });
+    const apart = payloadFor(gone, { handEditReport: goneReport });
+    expect(changedMarks(deskMarks(apart, apart.contentBundle)).map(([key, , where]) => [key, where])).toEqual([['apart', '']]);
   });
 });
