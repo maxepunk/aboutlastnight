@@ -669,9 +669,11 @@ describe('4.6: the map\'s payload at the outline stop', () => {
 
   it("sends the map's keys, and no evaluation, no questions and no thesis", async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
+    // Brief 4.6c: the documents by id (evidenceIndex), and the roster and the kept photos
+    // the count reads, so the page names each document and rebuilds the count as edited.
     expect(Object.keys(data).sort()).toEqual([
-      'checkFailures', 'concerns', 'directorGateNotes', 'handEditReport', 'humanRevisionCount', 'mapSlots',
-      'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'settledStory', 'tally', 'trace'
+      'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
+      'mapSlots', 'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'settledStory', 'tally', 'trace'
     ]);
   });
 
@@ -759,5 +761,52 @@ describe('4.7b: the settled story at the article stop', () => {
     const state = atArticle();
     const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARTICLE, contentBundle: null }, state);
     expect(merged.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6c: the map's payload names its documents, and carries what its count reads
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The map's page names each card's and each beat's document through the stop's
+// evidenceIndex, as the story meeting names each receipt's, and rebuilds Everyone and the
+// counts with mapTally's own inputs: the roster with the canon's full names and the photos
+// kept for the article.
+describe("4.6c: the map's payload carries the documents by id, the roster and the kept photos", () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const { reworkFixtureState } = require('../../lib/__tests__/fixtures/rework-state');
+  const { mapTally } = require('../../console/outline-edit-logic');
+
+  it("names each exposed document by the server's id rule, the index the story meeting's payload carries", async () => {
+    const state = reworkFixtureState('journalist');
+    const map = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
+    const meeting = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state);
+    expect(map.evidenceIndex).toEqual(meeting.evidenceIndex);
+    // The names console/__tests__/checkpoint-view-logic-map.test.js's INDEX gives the page.
+    expect(Object.entries(map.evidenceIndex).map(([id, doc]) => [id, doc.name, doc.owner, doc.type])).toEqual([
+      ['ale003', 'ALE003 - The sale', 'Alex Reeves', 'memory'],
+      ['mor001', 'MOR001 - The envelope', 'Morgan Reed', 'memory'],
+      ['p-dna', 'DNA test', 'Sarah Blackwood', 'paper'],
+      ['p-rescued', 'Rescued letter', '', 'paper']
+    ]);
+  });
+
+  it('carries the roster with its full names and the photos kept for the article, the inputs its count read', async () => {
+    const state = reworkFixtureState('journalist');
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
+    expect(data.roster).toEqual([
+      { name: 'Alex', fullName: 'Alex Reeves' }, { name: 'Morgan', fullName: 'Morgan Reed' },
+      { name: 'Sarah', fullName: 'Sarah Blackwood' }, { name: 'Riley', fullName: 'Riley Torres' }
+    ]);
+    expect(data.keptPhotos).toEqual(['hero.jpg', 'p2.jpg']);
+    expect(data.tally).toEqual(mapTally(state.outline, { roster: data.roster, keptPhotos: data.keptPhotos }));
+  });
+
+  it('survives the merge with the interrupt payload', async () => {
+    const state = reworkFixtureState('journalist');
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline }, state);
+    expect(Object.keys(merged.evidenceIndex)).toHaveLength(4);
+    expect(merged.roster).toHaveLength(4);
+    expect(merged.keptPhotos).toEqual(['hero.jpg', 'p2.jpg']);
   });
 });

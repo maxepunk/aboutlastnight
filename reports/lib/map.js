@@ -691,23 +691,32 @@ function settledStoryOf(weave) {
 /**
  * The payload the map's stop sends (brief 4.6; server.js getCheckpointData adds the trace):
  * the map; the theme's slots, for the screen; the settled story, which the map cannot
- * change; Everyone and the counts (mapTally); a check still failing on the map in hand; the
- * concerns beside their lines; the edits a send-back changed (the report); the standing
- * notes; the round's note and its counters.
+ * change; each exposed document by the id a card or a beat's material names (`evidenceIndex`,
+ * which the page names them by, as the story meeting names each receipt's; brief 4.6c);
+ * Everyone and the counts (mapTally), with the roster and the kept photos they read, so the
+ * console rebuilds them on the same inputs as the director edits (checkpoint-view-logic.js
+ * mapTallyOf); a check still failing on the map in hand; the concerns beside their lines;
+ * the edits a send-back changed (the report); the standing notes; the round's note and its
+ * counters.
  *
  * @param {Object} state
  * @param {Object} options
  * @param {string[]} options.keptPhotos - the photos kept for the article
+ * @param {Object} options.evidenceIndex - each exposed document, by its id (server.js buildEvidenceIndex)
  * @param {number} options.maxRevisions - the automated budget of a round
  * @returns {Object}
  */
-function mapCheckpointData(state, { keptPhotos = [], maxRevisions } = {}) {
+function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevisions } = {}) {
   const s = state || {};
+  const roster = mapRosterOf(s.sessionConfig, s.canonicalCharacters);
   return {
     outline: s.outline || null,
     mapSlots: mapSlotsOf(s.theme || 'journalist'),
     settledStory: settledStoryOf(s.weave),
-    tally: mapTally(s.outline, { roster: mapRosterOf(s.sessionConfig, s.canonicalCharacters), keptPhotos }),
+    evidenceIndex,
+    roster,
+    keptPhotos,
+    tally: mapTally(s.outline, { roster, keptPhotos }),
     checkFailures: mapCheckFailures(s),
     concerns: mapConcerns(s),
     handEditReport: handEditReportOf(s._outlineHandEditReport),

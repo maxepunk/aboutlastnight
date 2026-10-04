@@ -824,6 +824,99 @@ describe('4.9: the builders the map shares with the meeting and the desk', () =>
 // on 4.9's minors and hand-offs)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * The fixture's documents as server.js buildEvidenceIndex keys them for the map's payload
+ * (__tests__/unit/get-checkpoint-data.test.js holds the server's index to these names).
+ */
+const INDEX = (() => {
+  const { DOCUMENT_TEXT } = require('../../lib/__tests__/fixtures/rework-state');
+  return {
+    ale003: { name: 'ALE003 - The sale', owner: 'Alex Reeves', type: 'memory', firstLine: DOCUMENT_TEXT.ale003 },
+    mor001: { name: 'MOR001 - The envelope', owner: 'Morgan Reed', type: 'memory', firstLine: DOCUMENT_TEXT.mor001 },
+    'p-dna': { name: 'DNA test', owner: 'Sarah Blackwood', type: 'paper', firstLine: DOCUMENT_TEXT['p-dna'] },
+    'p-rescued': { name: 'Rescued letter', owner: '', type: 'paper', firstLine: DOCUMENT_TEXT['p-rescued'] }
+  };
+})();
+
+describe("4.6c: the map names each card's and each material's document in words, through receiptView", () => {
+  const state = stateAt();
+  const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, 'hero.jpg'), evidenceIndex: INDEX, maxRevisions: 1 });
+
+  test('a card and a material that name a document read as its name and owner; a material that names none prints as written', () => {
+    const map = opened(data);
+    map.sections[2].beats.push({ id: 'b7', kind: 'figure', material: 'ledger', players: [] });
+    map.sections[3].beats[0].card = 'zzz999';
+    const view = ViewLogic.mapView(data, map);
+    expect(view.sections.flatMap((s) => s.beats).map((b) => [b.id, b.materialText, b.cardText])).toEqual([
+      ['b1', 'The deadlock between Alex and Morgan, then six votes for an overdose', ''],
+      ['b2', 'ALE003 - The sale (Alex Reeves)', 'ALE003 - The sale (Alex Reeves)'],
+      ['b3', 'MOR001 - The envelope (Morgan Reed)', 'MOR001 - The envelope (Morgan Reed)'],
+      ['b4', 'DNA test (Sarah Blackwood)', 'DNA test (Sarah Blackwood)'],
+      ['b5', 'Melanie, $75,000 at 07:50 PM', ''],
+      ['b7', 'ledger', ''],
+      ['b6', 'Riley: "I only kept the books"', 'zzz999']
+    ]);
+    expect(view.leftOut.items[0]).toMatchObject({ id: 'b9', material: 'p-rescued', materialText: 'Rescued letter', cardText: '' });
+    // The ids stay on the view for the editors, which edit what the map holds.
+    expect(view.sections[1].beats[0]).toMatchObject({ material: 'ale003', card: 'ale003' });
+  });
+
+  test("a photo's place beside a beat names the beat's material as the beat does", () => {
+    const view = ViewLogic.mapView(data, opened(data));
+    expect(view.sections[1].photos[0].besideOptions.map((o) => o.label)).toEqual([
+      'By itself, with its people',
+      'Beside b2: ALE003 - The sale (Alex Reeves)',
+      'Beside b3: MOR001 - The envelope (Morgan Reed)',
+      'Beside b4: DNA test (Sarah Blackwood)'
+    ]);
+  });
+});
+
+describe("4.6c: Everyone and the counts read mapTally's own inputs, which the payload carries", () => {
+  test('the payload carries the roster with its full names and the photos kept for the article', () => {
+    const state = stateAt();
+    const data = payloadOf(state);
+    expect(data.roster).toEqual(mapRosterOf(state.sessionConfig, state.canonicalCharacters));
+    expect(data.keptPhotos).toEqual(['hero.jpg', 'p2.jpg']);
+  });
+
+  test('"In no beat" lists the players in roster order after an edit', () => {
+    const data = payloadOf(stateAt());
+    let map = EditLogic.strikeBeat(opened(data), 'b3');
+    map = EditLogic.strikeBeat(map, 'b4');
+    map = EditLogic.strikeBeat(map, 'b6');
+    expect(stateAt().sessionConfig.roster).toEqual(['Alex', 'Morgan', 'Sarah', 'Riley']);
+    expect(ViewLogic.mapTallyOf(data, map).unplaced).toEqual(['Sarah', 'Riley']);
+    expect(ViewLogic.mapView(data, map).tally.unplaced).toBe('In no beat: Sarah, Riley');
+  });
+
+  test("a beat that names a player by a full name not opening with the first name places them, as the stop's count does", () => {
+    const base = stateAt();
+    const named = clone(MAP);
+    named.sections[2].beats[0].players = ['Cassandra Vale'];
+    const data = payloadOf(stateAt({
+      sessionConfig: { ...base.sessionConfig, roster: [...base.sessionConfig.roster, 'Cass'] },
+      canonicalCharacters: { ...base.canonicalCharacters, Cass: 'Cassandra Vale' },
+      outline: named,
+      _mapBaseline: clone(named)
+    }));
+    expect(data.tally.unplaced).toEqual([]);
+    expect(ViewLogic.mapTallyOf(data, opened(data))).toEqual(data.tally);
+  });
+
+  test('a roster player whose name every object carries counts as any other, on the page and in the checks', () => {
+    const roster = [{ name: 'constructor', fullName: null }, { name: 'toString', fullName: null }, { name: 'Alex', fullName: 'Alex Reeves' }];
+    const map = { sections: [{ slot: 'lede', heading: '', job: 'Open.', beats: [{ id: 'b1', kind: 'scene', material: 'x', players: ['constructor'] }], photos: [] }], leftOut: [] };
+    expect(EditLogic.mapTally(map, { roster })).toMatchObject({
+      everyone: [{ slot: 'lede', heading: '', players: ['constructor'] }],
+      unplaced: ['toString', 'Alex']
+    });
+    const { failures } = require('../../lib/map').mapFindings(map, { roster });
+    expect(failures.filter((f) => f.type === 'player-not-placed').map((f) => f.message))
+      .toEqual([expect.stringMatching(/^Players in no beat: toString, Alex\. /)]);
+  });
+});
+
 describe('4.6c: the map is read by one rule wherever a map is read', () => {
   test("a section's editor opens on the section the editors and moves find by its slot", () => {
     const map = opened();

@@ -462,10 +462,13 @@ async function getCheckpointData(checkpointType, state) {
             // hand, the concerns beside their lines, the edits a send-back changed, the
             // standing notes, the round's note and counters. No judge reads the map and the
             // map writer asks nothing, so the stop sends no evaluation and no questions.
+            // Brief 4.6c: evidenceIndex names each card's and each beat's document, as at the
+            // meeting, and the roster and the kept photos the counts read go with them.
             // Brief 2.7: the automatic passes of this round, with what each changed.
             return {
                 ...mapCheckpointData(state, {
                     keptPhotos: keptPhotoFilenames(state, state.outline && state.outline.topPhoto),
+                    evidenceIndex: buildEvidenceIndex(state.evidenceBundle),
                     maxRevisions: REVISION_CAPS.OUTLINE
                 }),
                 trace: traceForStop(state._outlineTrace, state.outline, diffOutline, (state.humanOutlineRevisionCount || 0) + 1)

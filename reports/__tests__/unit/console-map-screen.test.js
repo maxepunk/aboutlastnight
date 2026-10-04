@@ -134,12 +134,19 @@ describe('4.9: the map\'s styles', () => {
   });
 });
 
-// Brief 4.6c: Outline.js finds a section as the editors and moves find it.
-describe('4.6c: Outline.js reads the map through the edit logic', () => {
+// Brief 4.6c: Outline.js finds a section as the editors and moves find it, and prints each
+// beat's material and card as the view names them (through the stop's evidenceIndex).
+describe('4.6c: Outline.js reads the map through the edit logic and names its documents through the view', () => {
   const src = read('components/checkpoints/Outline.js');
 
   it("opens a section's editor on the section the edit logic finds by its slot, and keeps no finder of its own", () => {
     expect(count(src, 'EditLogic.sectionWithSlot(draft, section.slot)')).toBe(1);
     expect(src).not.toMatch(/function sectionOf\(|\.sections\.filter\(/);
+  });
+
+  it("prints each beat's material and card as the view names them", () => {
+    expect(count(src, 'beat.materialText')).toBe(2);
+    expect(count(src, "'Card: ' + beat.cardText")).toBe(1);
+    expect(src).not.toMatch(/beat\.material\b(?!Text)|'Card: ' \+ beat\.card\b(?!Text)/);
   });
 });

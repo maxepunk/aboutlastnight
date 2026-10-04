@@ -2582,39 +2582,21 @@
     };
   }
 
-  /** The roster the stop's count read: every player it lists, under Everyone or in no beat. */
-  function tallyRosterOf(tally) {
-    var names = [];
-    var add = function (name) { if (typeof name === 'string' && name.trim() && names.indexOf(name) === -1) names.push(name); };
-    asArray(tally.everyone).forEach(function (entry) { asArray(isPlainObject(entry) ? entry.players : null).forEach(add); });
-    asArray(tally.unplaced).forEach(add);
-    return names;
-  }
-
   /**
    * Everyone and the counts of the map as the director has it, rebuilt through mapTally
    * (console/outline-edit-logic.js), the function the stop's payload and the map checks count
-   * with. The roster is the stop's count's own: every roster player is under Everyone or in no
-   * beat there, by the roster name mapTally gives, and a canon full name opens with it, so
-   * matching names alone matches as the server's full roster does. The photos placed of those
-   * kept are the stop's count: the map's moves move a photo and never add or take one out.
+   * with, on the inputs the stop's count read (task 4.6c): the session's roster with the
+   * canon's full names (`roster`, lib/map.js mapRosterOf) and the photos kept for the article
+   * (`keptPhotos`). So "In no beat" lists the players in roster order whatever the director
+   * moved, and a beat that names a player by a full name places them as on the server.
    *
-   * @param {Object} data - the stop's payload, with its `tally`
+   * @param {Object} data - the stop's payload, with its `roster` and `keptPhotos`
    * @param {Object} map - the map as the director has it
    * @returns {{everyone: Array, unplaced: string[], raised: string[], cards: number, photos: {placed: number, of: number}}}
    */
   function mapTallyOf(data, map) {
     var d = isPlainObject(data) ? data : {};
-    var stop = isPlainObject(d.tally) ? d.tally : {};
-    var rebuilt = outlineEditLogic().mapTally(map, { roster: tallyRosterOf(stop) });
-    var photos = isPlainObject(stop.photos) ? stop.photos : {};
-    return {
-      everyone: rebuilt.everyone,
-      unplaced: rebuilt.unplaced,
-      raised: rebuilt.raised,
-      cards: rebuilt.cards,
-      photos: { placed: Number(photos.placed) || 0, of: Number(photos.of) || 0 }
-    };
+    return outlineEditLogic().mapTally(map, { roster: asArray(d.roster), keptPhotos: asArray(d.keptPhotos) });
   }
 
   /**
@@ -2683,6 +2665,21 @@
   }
 
   /**
+   * A beat's material or card as the map's page prints it (task 4.6c): the document it names,
+   * by its name and owner, found through the stop's evidenceIndex as the story meeting finds a
+   * receipt's (receiptView); or the text as written when it names no document the index holds,
+   * such as a speaker and the line, or a ledger entry.
+   *
+   * @param {*} text - a beat's material, or its card
+   * @param {Object} evidenceIndex - data.evidenceIndex
+   * @returns {string}
+   */
+  function mapDocumentText(text, evidenceIndex) {
+    var named = receiptView(text, evidenceIndex);
+    return named && named.known && !named.ledger ? named.label : asString(text);
+  }
+
+  /**
    * The map's page (spec 5.2): the stop's payload (4.6's, lib/map.js mapCheckpointData) with the
    * map as the director has it.
    * - `settledStory` at the top, read-only, with `storyHint`, the way back to the meeting;
@@ -2692,7 +2689,9 @@
    *   whose places the page shows;
    * - `gapNote`, `headline`, `deck` and `topPhoto`;
    * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
-   *   and photos, each beat and photo with the places it can move to;
+   *   and photos, each beat and photo with the places it can move to, and each beat's material
+   *   and card as the page prints them (`materialText`, `cardText`: the document named, through
+   *   the payload's evidenceIndex; mapDocumentText);
    * - `dropped`, each with its reason; `tally`, the lines of Everyone and the counts, rebuilt
    *   from the map as edited (mapTallyOf); `leftOut`, folded, each item with the sections it can
    *   come back to; `weaveChanges`, each with its source;
@@ -2726,14 +2725,17 @@
     var beatView = function (beat, index, slot) {
       var b = isPlainObject(beat) ? beat : {};
       var id = editLogic.beatIdOf(b);
+      var card = editLogic.beatCardOf(b);
       return {
         key: (slot === null ? 'leftOut' : slot) + '-beat-' + index,
         id: id,
         index: index,
         kindLabel: hasOwn(BEAT_KIND_LABELS, b.kind) ? BEAT_KIND_LABELS[b.kind] : '',
         material: asString(b.material),
+        materialText: mapDocumentText(b.material, d.evidenceIndex),
         players: stringList(b.players).join(', '),
-        card: editLogic.beatCardOf(b),
+        card: card,
+        cardText: mapDocumentText(card, d.evidenceIndex),
         connection: asString(b.connection).trim(),
         concerns: id ? at('beat:' + id) : [],
         added: id !== '' && shownBeatIds.indexOf(id) === -1,
@@ -2749,7 +2751,7 @@
       var beside = asString(p.beat).trim();
       var options = [{ value: '', label: BY_ITSELF_LABEL }].concat(asArray(section.beats)
         .filter(function (b) { return editLogic.beatIdOf(b) !== ''; })
-        .map(function (b) { return { value: editLogic.beatIdOf(b), label: 'Beside ' + editLogic.beatIdOf(b) + ': ' + shortText(b.material) }; }));
+        .map(function (b) { return { value: editLogic.beatIdOf(b), label: 'Beside ' + editLogic.beatIdOf(b) + ': ' + shortText(mapDocumentText(b.material, d.evidenceIndex)) }; }));
       if (beside && !options.some(function (o) { return o.value === beside; })) {
         options.push({ value: beside, label: 'Beside ' + beside + ', which is not in this section' });
       }

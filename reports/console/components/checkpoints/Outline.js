@@ -265,15 +265,17 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     });
   }
 
+  // A beat's material and card print as the view names them: the document by its name and
+  // owner, or the text as written (task 4.6c).
   function beatBody(beat) {
     return React.createElement(React.Fragment, null,
       React.createElement('div', { className: 'map__beat-head' },
         React.createElement('span', { className: 'map__id' }, beat.id),
         beat.kindLabel && React.createElement('span', { className: 'map__kind' }, beat.kindLabel),
-        beat.card && React.createElement(Badge, { label: 'Card: ' + beat.card, color: 'var(--accent-amber)' }),
+        beat.card && React.createElement(Badge, { label: 'Card: ' + beat.cardText, color: 'var(--accent-amber)' }),
         beat.connection && React.createElement(Badge, { label: 'Connection ' + beat.connection + ' lands here', color: 'var(--accent-cyan)' })
       ),
-      React.createElement('p', { className: 'map__material' }, beat.material),
+      React.createElement('p', { className: 'map__material' }, beat.materialText),
       beat.players && React.createElement('p', { className: 'text-xs text-muted' }, 'Shows: ' + beat.players),
       concernsOf(beat.concerns)
     );
@@ -300,7 +302,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               onClick: function () { change(EditLogic.removeBeat(draft, beat.id)); },
-              'aria-label': 'Take out the beat you added: ' + beat.material
+              'aria-label': 'Take out the beat you added: ' + beat.materialText
             }, 'Take out')
           : React.createElement('button', {
               type: 'button',

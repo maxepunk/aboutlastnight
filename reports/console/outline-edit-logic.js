@@ -867,9 +867,10 @@
   /**
    * Everyone and the counts (spec 5.2): where each roster player appears, each under the
    * first section whose beat shows them; the roster players in no section's beat
-   * (`unplaced`) and those the gap note raises (`raised`); the cards in the sections; and
-   * how many of the photos kept for the article the map places, the top photo included.
-   * A left-out beat places no one and carries no card.
+   * (`unplaced`), in roster order, and those the gap note raises (`raised`); the cards in the
+   * sections; and how many of the photos kept for the article the map places, the top photo
+   * included. A left-out beat places no one and carries no card. A roster name counts
+   * whatever it is, one every object carries (constructor) included (task 4.6c).
    *
    * @param {*} map
    * @param {Object} [options]
@@ -883,7 +884,7 @@
     var roster = Array.isArray(opts.roster) ? opts.roster : [];
     var kept = Array.isArray(opts.keptPhotos) ? opts.keptPhotos : [];
     var everyone = [];
-    var seen = {};
+    var seen = new Set();
     var cards = 0;
     (isPlainObject(map) && Array.isArray(map.sections) ? map.sections : []).forEach(function (section) {
       if (!isPlainObject(section)) return;
@@ -893,8 +894,8 @@
         if (beatCardOf(beat)) cards += 1;
         (Array.isArray(beat.players) ? beat.players : []).forEach(function (name) {
           var member = rosterMemberOf(name, roster);
-          if (member && !seen[member]) {
-            seen[member] = true;
+          if (member && !seen.has(member)) {
+            seen.add(member);
             players.push(member);
           }
         });
@@ -922,7 +923,7 @@
     });
     return {
       everyone: everyone,
-      unplaced: names.filter(function (name) { return !seen[name]; }),
+      unplaced: names.filter(function (name) { return !seen.has(name); }),
       raised: raised,
       cards: cards,
       photos: { placed: placed.length, of: kept.length }
