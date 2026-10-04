@@ -517,7 +517,7 @@ ${content.trim()}
 - **DRY enforcement**: Single source of truth prevents rule drift
 
 **Cross-Reference System**:
-- In prompt text: an item by its id and the tag of the file that states it, as the arc writer's SECTION 5 does: `as C16 (<craft-story>) sets them out`
+- In prompt text: an item by its id and the tag of the file that states it, as the weave writer's task (SECTION 3, `WEAVE_TASK`) does: `C16 (<craft-story>) sets out the threads`
 - In markdown docs: `` C16 (`<craft-story>`) `` (backtick-wrapped)
 
 ---
@@ -531,7 +531,7 @@ Since phase 4 the judges have one contract (briefs 4.4, 4.7a and 4.7c; spec 4.5 
 - **The truth criteria** (`TRUTH_GROUPS` in `evaluator-nodes.js`), one per group of truth rules, each structural, with no weight: `evidenceTruth` (T1, T3, T4, T6), `moneyTruth` (T5), `verdictTruth` (T2), `stagesTruth` (T7), `novaPositionTruth` (T8), `playersTruth` (T9, T11), `wordsTruth` (T12), and at the article `photosTruth` (T13) and `fictionTruth` (T14). Each asks only what its judge can check against its own prompts, so a group is worded per judge.
 - **The verdict** (`TRUTH_ONLY_EVALUATION_JSON_SCHEMA` and `truthOnlyOutputFormat`, held to the contract by `truthOnlyVerdict`): a score for each criterion; the structural issues, each opening with its rule ids and quoting the text at fault beside the record it contradicts; a criterion's `fix` only when it scores below `STRUCTURAL_PASS_SCORE` (0.8); and `revisionGuidance` only as the steps that fix the structural issues. `overallScore` is the lowest truth-criterion score. `advisoryWarnings` holds only a concern about one of the director's edits, under `DIRECTOR_EDIT_PREFIX`.
 - **Ready** when no structural issue remains and no truth criterion scored below `STRUCTURAL_PASS_SCORE`, whatever the judge's own `structuralPassed`. A finding located in the director's text is a concern beside its line, never a must-fix (the verdict guard, `guardDirectorEdits`: the director's edits are final).
-- **The code checks** are the rest of the gate, free: the weave checks before the fact check, the map checks in place of a judge (no model judge reads the map), and the article's fact check before the article judge, whose structural failure under the budget skips the judge's call. The fact check's advisory checks (an em-dash, a production word, a gendered pronoun for Nova, the length, the head count, the NPCs' pronouns) never block: at the desk each is a mark beside its paragraph.
+- **The code checks** are the rest of the gate, free: the weave checks before the fact check, the map checks in place of a judge (no model judge reads the map), and the article's fact check before the article judge, whose structural failure under the budget skips the judge's call. The fact check's advisory checks (`FACT_CHECK_ADVISORY_ONLY`: an em-dash, a production word, a gendered pronoun for Nova, the length, the head count, the NPCs' pronouns, a leaked prompt example, and the absence stated more than once) never block: at the desk each is a mark beside its paragraph.
 - **No score shows.** No stop shows a model score since task 4.10, and no note on the writing reaches a stop or a rework.
 
 `evaluatePhase` skips a phase whose most recent evaluation is ready or escalated to the director (`escalatedToHuman`), so a replay from START reaches an escalated stop without paying for a new evaluation; the story meeting's fact check skips by its mark on the weave instead (`_factCheck`).

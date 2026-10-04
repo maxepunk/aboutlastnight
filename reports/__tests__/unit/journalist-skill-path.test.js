@@ -114,7 +114,9 @@ describe('the stages (phase 4)', () => {
     expect(kinds).toEqual([[...CONNECTION_KINDS], [...WEAVE_QUESTION_KINDS]]);
     const keys = new Set([...block.matchAll(/"([A-Za-z]+)":/g)].map((m) => m[1]));
     const items = (prop) => Object.keys(WEAVE_SCHEMA.properties[prop].items.properties);
-    [...Object.keys(WEAVE_SCHEMA.properties), ...items('threads'), ...items('connections'), ...items('questions'), WEAVE_ANSWER_KEY, 'struck']
+    // The integrator, on the review of 4.12b: the stronger main thread's own fields too.
+    const own = (prop) => Object.keys(WEAVE_SCHEMA.properties[prop].properties);
+    [...Object.keys(WEAVE_SCHEMA.properties), ...items('threads'), ...items('connections'), ...items('questions'), ...own('strongerMainThread'), WEAVE_ANSWER_KEY, 'struck']
       .forEach((key) => expect(`${key}: ${keys.has(key)}`).toBe(`${key}: true`));
   });
 

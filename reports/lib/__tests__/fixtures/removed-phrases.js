@@ -450,7 +450,16 @@ const REMOVED_PHRASES = [
   'An edit is the final word on its text, so the text the director wrote',
 
   // Phase 4, 4.10d: a truth criterion's fallback line names its subject, never its key.
-  /\b[a-z]+Truth criterion failed\b/
+  /\b[a-z]+Truth criterion failed\b/,
+
+  // Phase 4, 4.12b: the standalone path's agents follow the stages (the weave, the map) and
+  // the rule set's calls; the validator, like the article judge, reads no craft file.
+  'examines each through the three lenses and proposes the thesis',
+  'plan how they intercut and converge',
+  "Plans the telling of the session's article from the arcs the director selected",
+  "Build on the selected arcs and the director's stop notes",
+  'Every craft finding, C1 to C19',
+  "the should-consider list is the editor's notes for the director"
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
