@@ -1793,3 +1793,256 @@ describe('4.5b: the diff pairs the elements under an id as lib/weave.js occurren
     expect(pairs).toEqual(placePairs(before, after));
   });
 });
+
+describe('4.6: the map\'s edits', () => {
+  /** The writer's map as the stop showed it. Invented text. */
+  const writers = () => ({
+    headline: 'Ellis Reeve Pointed the Room at Rowan',
+    deck: 'Money moved into an account named for a player in the last two minutes of selling.',
+    topPhoto: 'huddle.jpg',
+    sections: [
+      {
+        slot: 'lede', heading: '', job: 'Open on the vote and ask what it will cost.',
+        beats: [
+          { id: 'b1', kind: 'scene', material: 'The scoreboard goes up on the screen', players: ['Ellis', 'Rowan'] },
+          { id: 'b2', kind: 'line', material: 'Rowan: "Someone is framing me"', players: ['Rowan'], connection: 'c1' }
+        ],
+        photos: []
+      },
+      {
+        slot: 'theStory', heading: 'The Story', job: 'How the room built its case.',
+        beats: [
+          { id: 'b3', kind: 'receipt', material: 'row001, the fight in the hall', players: ['Sloane'], card: 'row001' },
+          { id: 'b4', kind: 'scene', material: 'The first vote, six to four', players: ['Mira', 'Vale'] }
+        ],
+        photos: [{ filename: 'theory.jpg', beat: 'b4' }, { filename: 'cards.jpg' }]
+      }
+    ],
+    dropped: [{ slot: 'thePlayers', reason: 'Everyone appears above.' }],
+    leftOut: [{ id: 'b9', kind: 'scene', material: 'Kai at the coat check', players: ['Kai'] }],
+    expectedLength: 1200,
+    weaveChanges: []
+  });
+  const pathsOf = (changes) => changes.map((c) => D._testing.pathOf(c.at));
+  const ADDED = { id: 'b10', kind: 'line', material: 'Kai: "I took every coat that morning"', players: ['Kai'] };
+
+  describe('mapEditsBetween: one change per place, each beat by its id and each photo by its filename', () => {
+    it("a beat's material rewritten is one field edit, wherever the beat sits", () => {
+      const left = writers();
+      left.sections[1].beats[1].material = 'The two rounds, six to four and five to four';
+      const changes = D.mapEditsBetween(writers(), left);
+      expect(pathsOf(changes)).toEqual(['sections[#theStory].beats[#b4].material']);
+      expect(changes[0]).toMatchObject({ scope: 'map', before: 'The first vote, six to four', after: 'The two rounds, six to four and five to four' });
+    });
+
+    it('a beat moved to another section is one move, from the section it left', () => {
+      const left = writers();
+      left.sections[0].beats.push(left.sections[1].beats.pop());
+      const changes = D.mapEditsBetween(writers(), left);
+      expect(pathsOf(changes)).toEqual(['sections[#lede].beats[#b4]']);
+      expect(changes[0]).toMatchObject({ before: null, after: writers().sections[1].beats[1], from: 'theStory' });
+      expect(changes[0]).not.toHaveProperty('struck');
+    });
+
+    it('a struck beat is a move into leftOut, marked struck; a beat brought back is a move from leftOut', () => {
+      const struck = writers();
+      struck.leftOut.push(struck.sections[0].beats.pop());
+      expect(D.mapEditsBetween(writers(), struck)).toEqual([
+        expect.objectContaining({ at: [{ key: 'leftOut' }, { index: 1, match: { id: 'b2' } }], from: 'lede', struck: true })
+      ]);
+      const back = writers();
+      back.sections[1].beats.push(back.leftOut.pop());
+      expect(D.mapEditsBetween(writers(), back)).toEqual([
+        expect.objectContaining({ at: [{ key: 'sections' }, { index: 1, match: { slot: 'theStory' } }, { key: 'beats' }, { index: 2, match: { id: 'b9' } }], from: 'leftOut' })
+      ]);
+    });
+
+    it('a beat the director added is placed from none, whole; a beat moved and rewritten is a move and a field edit at its new place', () => {
+      const added = writers();
+      added.sections[1].beats.push({ ...ADDED });
+      expect(D.mapEditsBetween(writers(), added)).toEqual([
+        expect.objectContaining({ before: null, after: ADDED, from: 'none' })
+      ]);
+      const both = writers();
+      const moved = both.sections[1].beats.pop();
+      both.sections[0].beats.push({ ...moved, material: 'The vote that named Ellis' });
+      expect(pathsOf(D.mapEditsBetween(writers(), both))).toEqual(['sections[#lede].beats[#b4]', 'sections[#lede].beats[#b4].material']);
+    });
+
+    it('a photo moved to another section is one move; the top photo the director chose moves the new one up and the old one down', () => {
+      const moved = writers();
+      moved.sections[0].photos.push(moved.sections[1].photos.pop());
+      const [photo] = D.mapEditsBetween(writers(), moved);
+      expect(D._testing.pathOf(photo.at)).toBe('sections[#lede].photos[#cards.jpg]');
+      expect(photo).toMatchObject({ from: 'theStory', after: { filename: 'cards.jpg' } });
+      const swapped = writers();
+      swapped.topPhoto = 'cards.jpg';
+      swapped.sections[1].photos[1] = { filename: 'huddle.jpg' };
+      const changes = D.mapEditsBetween(writers(), swapped);
+      expect(changes.map((c) => [D._testing.pathOf(c.at), c.from])).toEqual([
+        ['topPhoto', 'theStory'],
+        ['sections[#theStory].photos[#huddle.jpg]', 'topPhoto']
+      ]);
+    });
+
+    it("the headline, a section's job and a dropped slot's reason are field edits; a section's beat order is no change", () => {
+      const left = writers();
+      left.headline = 'Ellis Reeve Pointed the Room at Rowan. It Named Him.';
+      left.sections[1].job = 'How the room built its case, and lost it.';
+      left.dropped[0].reason = 'The players appear in the story.';
+      left.sections[1].beats.reverse();
+      expect(pathsOf(D.mapEditsBetween(writers(), left))).toEqual(['headline', 'dropped[#thePlayers].reason', 'sections[#theStory].job']);
+    });
+  });
+
+  describe('standingOnMap: the edits stand past approve, against the writer\'s last map', () => {
+    const directors = () => {
+      const map = writers();
+      map.headline = 'The Room Named Ellis Reeve Instead';
+      map.leftOut.push(map.sections[0].beats.pop());
+      map.sections[1].beats.push({ ...ADDED });
+      return map;
+    };
+
+    it('gives each change an id, and records what a rewrite removed', () => {
+      const standing = D.standingOnMap(null, writers(), directors());
+      expect(standing.kind).toBe('map');
+      expect(standing.edits.map((e) => [e.id, e.path])).toEqual([
+        ['E1', 'headline'], ['E2', 'sections[#theStory].beats[#b10]'], ['E3', 'leftOut[#b2]']
+      ]);
+      expect(standing.edits[0].removed).toEqual([writers().headline]);
+      expect(standing.edits[2]).toMatchObject({ struck: true, from: 'lede' });
+    });
+
+    it('a later approve of the same map gives no new id; a change undone drops its edit and a new one takes the next id', () => {
+      const first = D.standingOnMap(null, writers(), directors());
+      expect(D.standingOnMap(first, writers(), directors())).toEqual(first);
+      const later = directors();
+      later.headline = writers().headline;
+      later.deck = 'The account was named for a player who never sold a thing.';
+      const second = D.standingOnMap(first, writers(), later);
+      expect(second.edits.map((e) => [e.id, e.path])).toEqual([
+        ['E2', 'sections[#theStory].beats[#b10]'], ['E3', 'leftOut[#b2]'], ['E4', 'deck']
+      ]);
+    });
+
+    it('a field edit stands where the beat sits now, and is not given a second id when the director moves the beat', () => {
+      const rewritten = writers();
+      rewritten.sections[1].beats[1].material = 'The two rounds, six to four and five to four';
+      const first = D.standingOnMap(null, writers(), rewritten);
+      const moved = clone(rewritten);
+      moved.sections[0].beats.push(moved.sections[1].beats.pop());
+      const second = D.standingOnMap(first, writers(), moved);
+      expect(second.edits.map((e) => [e.id, e.path])).toEqual([
+        ['E1', 'sections[#lede].beats[#b4].material'], ['E2', 'sections[#lede].beats[#b4]']
+      ]);
+    });
+  });
+
+  describe('settleEdits on the map: an automatic pass is held to the edits', () => {
+    const directors = () => {
+      const map = writers();
+      map.sections[1].beats[1].material = 'The two rounds, six to four and five to four';
+      map.leftOut.push(map.sections[0].beats.pop());
+      map.sections[0].photos.push(map.sections[1].photos.pop());
+      map.sections[1].beats.push({ ...ADDED });
+      return map;
+    };
+    const editsOf = (map) => D.carriedEdits(D.standingOnMap(null, writers(), map), map);
+
+    it("puts back a rewritten line by the beat's id, strikes again a struck beat the pass brought back, moves back a moved photo and restores an added beat, each recorded", () => {
+      const before = directors();
+      const edits = editsOf(before);
+      expect(edits.map((e) => e.path)).toEqual([
+        'sections[#theStory].beats[#b4].material', 'sections[#theStory].beats[#b10]', 'leftOut[#b2]', 'sections[#lede].photos[#cards.jpg]'
+      ]);
+      const pass = clone(before);
+      pass.sections[1].beats[1].material = 'The first vote';                  // the director's line rewritten
+      pass.sections[0].beats.push(pass.leftOut.pop());                        // the struck beat brought back
+      pass.sections[1].photos.push(pass.sections[0].photos.pop());            // the moved photo moved back
+      pass.sections[1].beats = pass.sections[1].beats.filter((b) => b.id !== 'b10');   // the added beat removed
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+      expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(edits.map((e) => e.id));
+      expect(settled.output.sections[0].beats.map((b) => b.id)).toEqual(['b1']);
+      expect(settled.output.leftOut.map((b) => b.id)).toEqual(['b9', 'b2']);
+      expect(settled.output.sections[0].photos).toEqual([{ filename: 'cards.jpg' }]);
+      expect(settled.output.sections[1].photos).toEqual([{ filename: 'theory.jpg', beat: 'b4' }]);
+      expect(settled.output.sections[1].beats.find((b) => b.id === 'b10')).toEqual(ADDED);
+      expect(settled.report.changed.map((c) => [c.id, c.restored, c.moved])).toEqual([
+        ['E1', true, false], ['E2', true, true], ['E3', true, true], ['E4', true, true]
+      ]);
+      expect(settled.report.changed[2]).toMatchObject({ struck: true, where: 'left out, beat "b2", struck from section "lede"', became: 'section "lede"' });
+    });
+
+    it('a field edit is put back on the beat where the pass moved it, printed once', () => {
+      const before = directors();
+      const edits = editsOf(before);
+      const pass = clone(before);
+      const b4 = pass.sections[1].beats.splice(1, 1)[0];
+      pass.sections[0].beats.push({ ...b4, material: 'The first vote' });
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+      const all = settled.output.sections.flatMap((s) => s.beats).filter((b) => b.id === 'b4');
+      expect(all).toEqual([{ ...b4, material: 'The two rounds, six to four and five to four' }]);
+    });
+
+    it('the top photo the director chose is put back', () => {
+      const chosen = writers();
+      chosen.topPhoto = 'cards.jpg';
+      chosen.sections[1].photos[1] = { filename: 'huddle.jpg' };
+      const edits = editsOf(chosen);
+      const pass = clone(chosen);
+      pass.topPhoto = 'huddle.jpg';
+      pass.sections[1].photos[1] = { filename: 'cards.jpg' };
+      const settled = D.settleEdits(null, { edits, before: chosen, after: pass, pass: 1 });
+      expect(settled.output.topPhoto).toBe('cards.jpg');
+      expect(settled.output.sections[1].photos.map((p) => p.filename)).toEqual(['theory.jpg', 'huddle.jpg']);
+      expect(D.carriedEdits(edits, settled.output)).toHaveLength(2);
+    });
+
+    it('a beat the director moved between sections, which the pass removed, stays out and is reported', () => {
+      const moved = writers();
+      moved.sections[0].beats.push(moved.sections[1].beats.pop());
+      const edits = editsOf(moved);
+      const pass = clone(moved);
+      pass.sections[0].beats.pop();
+      const settled = D.settleEdits(null, { edits, before: moved, after: pass, pass: 1 });
+      expect(settled.output).toEqual(pass);
+      expect(settled.report.changed).toEqual([
+        expect.objectContaining({ id: 'E1', moved: true, became: null, restored: false, where: 'section "lede", beat "b4", moved from section "theStory"' })
+      ]);
+    });
+
+    it("a send-back's rework is left as it is", () => {
+      const before = directors();
+      const edits = editsOf(before);
+      const pass = clone(before);
+      pass.sections[0].beats.push(pass.leftOut.pop());
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: D.SEND_BACK_PASS });
+      expect(settled.output).toEqual(pass);
+      expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E3', false]]);
+    });
+  });
+
+  describe('reading the map\'s edits', () => {
+    it("formatEditLines names each edit by its id and place; a moved or struck beat by its id alone, its text the writer's", () => {
+      const map = writers();
+      map.headline = 'The Room Named Ellis Reeve Instead';
+      map.leftOut.push(map.sections[0].beats.pop());
+      map.sections[1].beats.push({ ...ADDED });
+      expect(D.formatEditLines(D.standingOnMap(null, writers(), map).edits)).toBe([
+        'E1 (headline): "The Room Named Ellis Reeve Instead"',
+        '  removed: "Ellis Reeve Pointed the Room at Rowan"',
+        'E2 (section "theStory", beat "b10", added): id "b10"; kind "line"; material "Kai: "I took every coat that morning""; players "Kai"',
+        'E3 (left out, beat "b2", struck from section "lede")'
+      ].join('\n'));
+      expect(D.MAP_EDIT_LINES_GUIDE).toMatch(/struck/);
+    });
+
+    it("diffOutline gives the map's changes by scope", () => {
+      const left = writers();
+      left.deck = 'A new deck for the map.';
+      left.sections[0].beats.push(left.sections[1].beats.pop());
+      expect(D.scopeKeys(D.diffOutline(writers(), left))).toEqual(['deck', 'section:lede']);
+    });
+  });
+});

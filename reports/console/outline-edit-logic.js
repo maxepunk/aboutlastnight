@@ -747,6 +747,130 @@
     return { valid: errors.length === 0, errors: errors };
   }
 
+  // ── (K) THE MAP: EVERYONE AND THE COUNTS (phase 4, brief 4.6) ──────────────
+  //
+  // Everyone, the cards and the photos are built by one function from the beats, so the
+  // stop's payload, the console's map as the director edits it (4.9) and the map checks
+  // (lib/map.js) count alike. A name in a beat counts for the roster member it names.
+
+  /**
+   * The roster member a name names, by the member's roster name: the first name, the full
+   * name, or a name whose first word is the first name, each in any case; null for a name
+   * that is no roster member's, such as an NPC or a character off the roster.
+   *
+   * @param {*} name - a name as a beat or the gap note gives it
+   * @param {Array<string|{name: string, fullName?: string|null}>} roster
+   * @returns {string|null}
+   */
+  function rosterMemberOf(name, roster) {
+    var wanted = typeof name === 'string' ? name.trim().toLowerCase() : '';
+    if (!wanted) return null;
+    var firstWord = wanted.split(/\s+/)[0];
+    var list = Array.isArray(roster) ? roster : [];
+    for (var i = 0; i < list.length; i += 1) {
+      var entry = list[i];
+      var first = isPlainObject(entry) ? entry.name : entry;
+      if (typeof first !== 'string' || !first.trim()) continue;
+      var own = first.trim().toLowerCase();
+      var full = isPlainObject(entry) && typeof entry.fullName === 'string' ? entry.fullName.trim().toLowerCase() : '';
+      if (wanted === own || firstWord === own || (full && wanted === full)) return first.trim();
+    }
+    return null;
+  }
+
+  /** A photo's filename as every join reads it: the basename, lower case. */
+  function photoKeyOf(filename) {
+    return String(filename == null ? '' : filename).split(/[/\\]/).pop().trim().toLowerCase();
+  }
+
+  /**
+   * Where the map places each photo, in order: the top photo first (`at: 'topPhoto'`),
+   * then each section's photos (`at`: the section's slot). A photo placed twice is listed
+   * twice.
+   *
+   * @param {*} map
+   * @returns {Array<{filename: string, at: string}>}
+   */
+  function mapPhotoPlacements(map) {
+    var out = [];
+    if (!isPlainObject(map)) return out;
+    if (typeof map.topPhoto === 'string' && map.topPhoto.trim()) out.push({ filename: map.topPhoto, at: 'topPhoto' });
+    (Array.isArray(map.sections) ? map.sections : []).forEach(function (section) {
+      if (!isPlainObject(section)) return;
+      (Array.isArray(section.photos) ? section.photos : []).forEach(function (photo) {
+        if (isPlainObject(photo) && typeof photo.filename === 'string' && photo.filename.trim()) {
+          out.push({ filename: photo.filename, at: section.slot });
+        }
+      });
+    });
+    return out;
+  }
+
+  /**
+   * Everyone and the counts (spec 5.2): where each roster player appears, each under the
+   * first section whose beat shows them; the roster players in no section's beat
+   * (`unplaced`) and those the gap note raises (`raised`); the cards in the sections; and
+   * how many of the photos kept for the article the map places, the top photo included.
+   * A left-out beat places no one and carries no card.
+   *
+   * @param {*} map
+   * @param {Object} [options]
+   * @param {Array} [options.roster] - rosterMemberOf's roster
+   * @param {string[]} [options.keptPhotos] - the filenames of the photos kept for the article
+   * @returns {{everyone: Array<{slot: string, heading: string, players: string[]}>,
+   *   unplaced: string[], raised: string[], cards: number, photos: {placed: number, of: number}}}
+   */
+  function mapTally(map, options) {
+    var opts = options || {};
+    var roster = Array.isArray(opts.roster) ? opts.roster : [];
+    var kept = Array.isArray(opts.keptPhotos) ? opts.keptPhotos : [];
+    var everyone = [];
+    var seen = {};
+    var cards = 0;
+    (isPlainObject(map) && Array.isArray(map.sections) ? map.sections : []).forEach(function (section) {
+      if (!isPlainObject(section)) return;
+      var players = [];
+      (Array.isArray(section.beats) ? section.beats : []).forEach(function (beat) {
+        if (!isPlainObject(beat)) return;
+        if (typeof beat.card === 'string' && beat.card.trim()) cards += 1;
+        (Array.isArray(beat.players) ? beat.players : []).forEach(function (name) {
+          var member = rosterMemberOf(name, roster);
+          if (member && !seen[member]) {
+            seen[member] = true;
+            players.push(member);
+          }
+        });
+      });
+      if (players.length > 0) {
+        everyone.push({ slot: section.slot, heading: typeof section.heading === 'string' ? section.heading : '', players: players });
+      }
+    });
+    var names = [];
+    roster.forEach(function (entry) {
+      var first = isPlainObject(entry) ? entry.name : entry;
+      if (typeof first === 'string' && first.trim() && names.indexOf(first.trim()) === -1) names.push(first.trim());
+    });
+    var raised = [];
+    var gapPlayers = isPlainObject(map) && isPlainObject(map.gapNote) && Array.isArray(map.gapNote.players) ? map.gapNote.players : [];
+    gapPlayers.forEach(function (name) {
+      var member = rosterMemberOf(name, roster);
+      if (member && raised.indexOf(member) === -1) raised.push(member);
+    });
+    var keptKeys = kept.map(photoKeyOf);
+    var placed = [];
+    mapPhotoPlacements(map).forEach(function (placement) {
+      var key = photoKeyOf(placement.filename);
+      if (keptKeys.indexOf(key) !== -1 && placed.indexOf(key) === -1) placed.push(key);
+    });
+    return {
+      everyone: everyone,
+      unplaced: names.filter(function (name) { return !seen[name]; }),
+      raised: raised,
+      cards: cards,
+      photos: { placed: placed.length, of: kept.length }
+    };
+  }
+
   // ── (J) PUBLIC SURFACE ────────────────────────────────────────────────────
   var api = {
     deepClone: deepClone,
@@ -805,6 +929,11 @@
     validateOutlineShape: validateOutlineShape,
     validateBundleShape: validateBundleShape,
     CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES,
+
+    // Phase 4 (brief 4.6): Everyone and the counts, one function from the beats
+    rosterMemberOf: rosterMemberOf,
+    mapPhotoPlacements: mapPhotoPlacements,
+    mapTally: mapTally,
     WRITER_QUESTION_KINDS: WRITER_QUESTION_KINDS
   };
 

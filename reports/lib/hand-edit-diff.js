@@ -80,6 +80,18 @@
  * a reweave is held to them as an automatic pass is (REWEAVE_PASS). The answers are the
  * director's words, kept by their own rule (lib/writer-questions.js carriedWeaveQuestions):
  * no edit.
+ *
+ * THE MAP (brief 4.6): the director's edits on the story map go through the same
+ * machinery, as the meeting's do. They are made at every approve and send-back, against
+ * the writer's last map (standingOnMap), and stand past approve. Each beat is found by its
+ * id and each photo by its filename, wherever it sits (mapEditsBetween): a field the
+ * director rewrote is one edit, carried while the beat holds it wherever a pass moved it;
+ * a beat or a photo they moved to another section, struck into leftOut, brought back from
+ * leftOut or added is one edit of its place, and the top photo they chose is the photo they
+ * moved to the top. After an automatic pass code puts back each line the pass changed,
+ * strikes again by id a struck beat that came back, and puts back a beat they added, a beat
+ * they struck and a photo they placed that the pass removed; a beat they only moved between
+ * sections, which a pass removed, stays out, as a moved block does at the desk (settleEdits).
  */
 'use strict';
 
@@ -208,7 +220,12 @@ const ELEMENT_KEYS = {
   // The weave's collections (brief 4.5): each element names itself by its id.
   threads: 'id',
   connections: 'id',
-  questions: 'id'
+  questions: 'id',
+  // The map's (brief 4.6): a beat by its id, in a section or left out, and a dropped
+  // slot by its slot. A map's section names itself by its slot (identityOf).
+  beats: 'id',
+  leftOut: 'id',
+  dropped: 'slot'
 };
 
 /** The weave's text fields, each one place (brief 4.5): the weave's own printed fields (lib/weave.js WEAVE_PRINTED_FIELDS; brief 4.5b). */
@@ -265,6 +282,7 @@ function diffFields(before, after, prefix) {
 
 function diffOutline(before, after) {
   if (!isObj(before) || !isObj(after)) return { kind: 'outline', sections: [] };
+  if (isMap(before) && isMap(after)) return diffMap(before, after);
   const sections = [];
   for (const key of unionKeys(before, after)) {
     if (OUTLINE_IGNORED_KEYS.includes(key)) continue;
@@ -520,6 +538,7 @@ function weaveParts(weave) {
 function printedParts(obj) {
   if (!isObj(obj)) return [];
   if (isWeave(obj)) return weaveParts(obj);
+  if (isMap(obj)) return mapParts(obj);
   if (!Array.isArray(obj.sections)) return stringLeaves(obj).map((text) => ({ text, cardContent: false }));
   const tracker = isObj(obj.financialTracker) ? obj.financialTracker : null;
   return [
@@ -624,6 +643,7 @@ function blockIdentity(block) {
 function identityOf(collection, element) {
   if (!isObj(element)) return null;
   if (collection === 'content') return blockIdentity(element);
+  if (collection === 'sections' && element.id == null && mapIdText(element.slot)) return { slot: element.slot };
   const key = ELEMENT_KEYS[collection];
   if (key) return (element[key] != null && String(element[key]).trim()) ? { [key]: element[key] } : null;
   if (collection === 'pullQuotes') return typeof element.text === 'string' ? { text: element.text } : null;
@@ -719,16 +739,33 @@ function pathOf(steps) {
   steps.forEach((step, i) => {
     if ('key' in step) { out += (i === 0 ? '' : '.') + step.key; return; }
     const collection = collectionAt(steps, i);
-    const byId = collection === 'sections' || (collection === 'evidenceCards' && i === 1)
+    const mapField = mapPathField(steps, i);
+    const byId = mapField !== null || collection === 'sections' || (collection === 'evidenceCards' && i === 1)
       || (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, collection) && i === 1);
     if (byId) {
-      const field = ELEMENT_KEYS[collection];
+      const field = mapField || ELEMENT_KEYS[collection];
       out += `[#${step.match && step.match[field] != null ? step.match[field] : `index-${step.index}`}]`;
     } else {
       out += `[${Number.isInteger(step.index) ? step.index : '-'}]`;
     }
   });
   return out;
+}
+
+/**
+ * The field that names an element of the map in a path (brief 4.6): a section by its slot,
+ * a beat by its id, a section's photo by its filename, a dropped slot by its slot; null
+ * for any other element.
+ */
+function mapPathField(steps, i) {
+  const match = steps[i].match;
+  if (!isObj(match)) return null;
+  const collection = collectionAt(steps, i);
+  if (collection === 'sections' && match.id == null && match.slot !== undefined) return 'slot';
+  if ((collection === 'beats' && i === 3) || (collection === 'leftOut' && i === 1)) return 'id';
+  if (collection === 'photos' && i === 3) return 'filename';
+  if (collection === 'dropped' && i === 1) return 'slot';
+  return null;
 }
 
 /** The last key of a list of steps. */
@@ -869,6 +906,8 @@ function cutPieces(edit) {
 
 /** The first part of `obj` that holds one of a cut's pieces, as its text, or null. */
 function cutReturnedIn(obj, edit) {
+  const address = mapAddressOf(edit);
+  if (address) return mapCutReturned(obj, edit, address);
   const pieces = cutPieces(edit).filter((piece) => fold(piece));
   if (pieces.length === 0) return null;
   const text = versionText(obj);
@@ -971,6 +1010,8 @@ function directorsOrderCanHold(content, edit) {
 /** Does `obj` still carry this edit (see the module header)? */
 function editCarried(obj, edit) {
   if (!isObj(obj) || !isEdit(edit)) return false;
+  const address = mapAddressOf(edit);
+  if (address) return mapEditCarried(obj, edit, address);
   if (isCut(edit)) return cutReturnedIn(obj, edit) === null;
   if (stepsOf(edit).length === 0) return false;
   if (isMove(edit)) {
@@ -1458,6 +1499,7 @@ function stepWords(steps) {
  * `theStory, arcs "The case", photoPlacement, purpose`, then `cut` or `moved from ...`.
  */
 function editWhere(edit) {
+  if (isObj(edit) && edit.scope === MAP_SCOPE) return mapEditWhere(edit);
   const steps = stepsOf(edit);
   const value = isCut(edit) ? edit.before : edit.after;
   const parts = [];
@@ -1538,6 +1580,9 @@ function strikeLine(edit) {
  */
 function formatEditLines(edits) {
   return (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).map((e) => {
+    // Brief 4.6: a beat or a photo the director moved or struck on the map, by its id and
+    // place; its own text is the writer's.
+    if (e.scope === MAP_SCOPE && isMove(e)) return e.from === MAP_NONE ? `${e.id} (${editWhere(e)}): ${valueLine(e.after)}` : `${e.id} (${editWhere(e)})`;
     if (isMove(e)) return moveLine(e);
     if (isStrike(e)) return strikeLine(e);
     return [
@@ -1775,6 +1820,536 @@ function editLocator(bundle, edits) {
   };
 }
 
+// ─── the map (brief 4.6) ──────────────────────────────────────────────────────
+
+/** The map's list of the beats the story does not use: a struck beat joins it. */
+const MAP_LEFT_OUT = 'leftOut';
+
+/** The map's place for the photo the article prints at its top. */
+const MAP_TOP_PHOTO = 'topPhoto';
+
+/** Where a beat or a photo the director put on the map came from: no place on it. */
+const MAP_NONE = 'none';
+
+/** The scope of every edit on the map. */
+const MAP_SCOPE = 'map';
+
+/**
+ * How to read the map's edit lines (formatEditLines), for the map's reworks'
+ * <HAND_EDITS> block (brief 4.6).
+ */
+const MAP_EDIT_LINES_GUIDE = "Each line is one change of the director's on the map, by its id and place: a line they rewrote, with their text; a beat they added (added, with its fields); a beat or a photo they moved (moved, or brought back from left out), whose own text is still the writer's; a beat they struck (struck, now in leftOut), which is out of the story; and the top photo they chose. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+
+/**
+ * Is this a story map (brief 4.6): sections with beats, or a left-out list, and no
+ * section of content blocks (a content bundle) or thread (a weave)?
+ *
+ * @param {*} obj
+ * @returns {boolean}
+ */
+function isMap(obj) {
+  if (!isObj(obj) || !Array.isArray(obj.sections) || isWeave(obj)) return false;
+  if (obj.sections.some((s) => isObj(s) && Array.isArray(s.content))) return false;
+  return Array.isArray(obj.leftOut) || obj.sections.some((s) => isObj(s) && (s.slot !== undefined || Array.isArray(s.beats)));
+}
+
+/** An id or a slot as every join on the map reads it: the text trimmed, or ''. */
+function mapIdText(value) {
+  return value === undefined || value === null ? '' : String(value).trim();
+}
+
+/** A photo's filename as every join reads it: the basename, lower case. */
+function photoKeyOf(filename) {
+  return String(filename === undefined || filename === null ? '' : filename).split(/[/\\]/).pop().trim().toLowerCase();
+}
+
+/** The map's text, part by part: the lines the stop prints. A left-out beat is not in the story. */
+function mapParts(map) {
+  const objects = (list) => (Array.isArray(list) ? list.filter(isObj) : []);
+  return [
+    map.headline,
+    map.deck,
+    isObj(map.gapNote) ? map.gapNote.line : null,
+    ...objects(map.sections).flatMap((section) => [section.heading, section.job, ...objects(section.beats).map((beat) => beat.material)]),
+    ...objects(map.dropped).map((slot) => slot.reason),
+    ...objects(map.weaveChanges).map((change) => change.change)
+  ].filter((text) => typeof text === 'string' && text.trim()).map((text) => ({ text, cardContent: false }));
+}
+
+/**
+ * Every place a beat (by its id) or a photo (by its filename, in any case) sits on the
+ * map: `{key, container, sectionIndex?, index, element}`, the container a section's slot,
+ * MAP_LEFT_OUT or MAP_TOP_PHOTO. The top photo is first among a photo's places.
+ *
+ * @param {Object} map
+ * @param {'beat'|'photo'} kind
+ * @returns {Object[]}
+ */
+function mapElements(map, kind) {
+  const out = [];
+  if (!isObj(map)) return out;
+  const sections = Array.isArray(map.sections) ? map.sections : [];
+  if (kind === 'beat') {
+    sections.forEach((section, sectionIndex) => {
+      if (!isObj(section)) return;
+      (Array.isArray(section.beats) ? section.beats : []).forEach((beat, index) => {
+        if (isObj(beat) && mapIdText(beat.id)) out.push({ key: mapIdText(beat.id), container: mapIdText(section.slot), sectionIndex, index, element: beat });
+      });
+    });
+    (Array.isArray(map.leftOut) ? map.leftOut : []).forEach((beat, index) => {
+      if (isObj(beat) && mapIdText(beat.id)) out.push({ key: mapIdText(beat.id), container: MAP_LEFT_OUT, index, element: beat });
+    });
+    return out;
+  }
+  if (typeof map.topPhoto === 'string' && map.topPhoto.trim()) {
+    out.push({ key: photoKeyOf(map.topPhoto), container: MAP_TOP_PHOTO, index: 0, element: { filename: map.topPhoto } });
+  }
+  sections.forEach((section, sectionIndex) => {
+    if (!isObj(section)) return;
+    (Array.isArray(section.photos) ? section.photos : []).forEach((photo, index) => {
+      if (isObj(photo) && typeof photo.filename === 'string' && photo.filename.trim()) {
+        out.push({ key: photoKeyOf(photo.filename), container: mapIdText(section.slot), sectionIndex, index, element: photo });
+      }
+    });
+  });
+  return out;
+}
+
+/** The key a beat's or a photo's identity is found by. */
+function mapIdentityKey(kind, identity) {
+  return kind === 'beat' ? mapIdText(identity.id) : photoKeyOf(identity.filename);
+}
+
+/** The places of one beat or photo on the map. */
+function mapPlaces(map, kind, identity) {
+  const key = mapIdentityKey(kind, identity);
+  return key ? mapElements(map, kind).filter((place) => place.key === key) : [];
+}
+
+/** The steps to a place on the map. */
+function mapPlaceSteps(kind, place) {
+  if (place.container === MAP_TOP_PHOTO) return [{ key: MAP_TOP_PHOTO }];
+  if (place.container === MAP_LEFT_OUT) return [{ key: MAP_LEFT_OUT }, { index: place.index, match: { id: place.element.id } }];
+  const section = { index: Number.isInteger(place.sectionIndex) ? place.sectionIndex : null, match: { slot: place.container } };
+  return kind === 'beat'
+    ? [{ key: 'sections' }, section, { key: 'beats' }, { index: place.index, match: { id: place.element.id } }]
+    : [{ key: 'sections' }, section, { key: 'photos' }, { index: place.index, match: { filename: place.element.filename } }];
+}
+
+/**
+ * What an edit on the map is about when it is a beat or a photo (brief 4.6): `{kind,
+ * container, identity, fieldSteps, index}`, where `container` is the place the edit puts
+ * it (a section's slot, MAP_LEFT_OUT or MAP_TOP_PHOTO) and `fieldSteps` the steps to a
+ * field of it, none for the beat or the photo whole. Null for any other edit.
+ *
+ * @param {Object} edit
+ * @returns {Object|null}
+ */
+function mapAddressOf(edit) {
+  if (!isObj(edit) || edit.scope !== MAP_SCOPE) return null;
+  const steps = stepsOf(edit);
+  const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
+  if (head === MAP_TOP_PHOTO && steps.length === 1) {
+    const value = isCut(edit) ? edit.before : edit.after;
+    return isObj(value) && typeof value.filename === 'string'
+      ? { kind: 'photo', container: MAP_TOP_PHOTO, identity: { filename: value.filename }, fieldSteps: [], index: 0 }
+      : null;
+  }
+  if (head === MAP_LEFT_OUT && isElementStep(steps[1]) && isObj(steps[1].match) && mapIdText(steps[1].match.id)) {
+    return { kind: 'beat', container: MAP_LEFT_OUT, identity: { id: steps[1].match.id }, fieldSteps: steps.slice(2), index: steps[1].index };
+  }
+  if (head === 'sections' && isElementStep(steps[1]) && isObj(steps[1].match) && steps[1].match.slot !== undefined
+    && steps[2] && 'key' in steps[2] && isElementStep(steps[3]) && isObj(steps[3].match)) {
+    const container = mapIdText(steps[1].match.slot);
+    if (steps[2].key === 'beats' && mapIdText(steps[3].match.id)) {
+      return { kind: 'beat', container, identity: { id: steps[3].match.id }, fieldSteps: steps.slice(4), index: steps[3].index };
+    }
+    if (steps[2].key === 'photos' && typeof steps[3].match.filename === 'string') {
+      return { kind: 'photo', container, identity: { filename: steps[3].match.filename }, fieldSteps: steps.slice(4), index: steps[3].index };
+    }
+  }
+  return null;
+}
+
+/**
+ * The changes between two versions of a beat's or a photo's places, one per place: each
+ * beat found by its id and each photo by its filename wherever it sits. One that sits in
+ * another place is a move (`from` the place it left; into leftOut, `struck`); one the
+ * older version holds nowhere is placed `from` MAP_NONE, whole; one the newer holds
+ * nowhere is a cut. Its fields, changed where both versions hold it, are one change each
+ * at its newer place. A beat's order within its section is the article writer's, and no
+ * change.
+ */
+function mapElementEdits(before, after, kind) {
+  const was = mapElements(before, kind);
+  const now = mapElements(after, kind);
+  const firstOf = (places) => {
+    const map = new Map();
+    places.forEach((place) => { if (!map.has(place.key)) map.set(place.key, place); });
+    return map;
+  };
+  const wasBy = firstOf(was);
+  const nowBy = firstOf(now);
+  const out = [];
+  now.forEach((place) => {
+    if (nowBy.get(place.key) !== place) return;
+    const at = mapPlaceSteps(kind, place);
+    const prior = wasBy.get(place.key);
+    if (!prior) {
+      out.push({ at, before: null, after: place.element, from: MAP_NONE });
+      return;
+    }
+    if (prior.container !== place.container) {
+      out.push({ at, before: null, after: place.element, from: prior.container, ...(kind === 'beat' && place.container === MAP_LEFT_OUT ? { struck: true } : {}) });
+    }
+    if (prior.container !== MAP_TOP_PHOTO && place.container !== MAP_TOP_PHOTO) out.push(...valueEdits(prior.element, place.element, at));
+  });
+  was.forEach((place) => {
+    if (wasBy.get(place.key) !== place || nowBy.has(place.key)) return;
+    out.push({ at: mapPlaceSteps(kind, { ...place, index: null }), before: place.element, after: null });
+  });
+  return out;
+}
+
+/**
+ * The changes between two versions of a map, one per place (brief 4.6): the headline, the
+ * deck and the expected length; the gap note field by field; the changes to the weave as
+ * one list; each dropped slot; each section's heading and job, the section found by its
+ * slot (a section one version lacks is added or cut whole, without its beats and photos);
+ * then the beats and the photos (mapElementEdits). Every change has the scope MAP_SCOPE.
+ *
+ * @param {Object} before
+ * @param {Object} after
+ * @returns {Array<{scope: string, at: Object[], before: *, after: *, from?: string, struck?: true}>}
+ */
+function mapEditsBetween(before, after) {
+  if (!isObj(before) || !isObj(after)) return [];
+  const out = [];
+  const push = (change) => out.push({
+    scope: MAP_SCOPE, ...change,
+    before: change.before === undefined ? null : change.before,
+    after: change.after === undefined ? null : change.after
+  });
+  ['headline', 'deck', 'expectedLength'].forEach((field) => {
+    if (!same(before[field], after[field])) push({ at: [{ key: field }], before: before[field], after: after[field] });
+  });
+  valueEdits(before.gapNote, after.gapNote, [{ key: 'gapNote' }]).forEach(push);
+  if (!same(before.weaveChanges, after.weaveChanges)) push({ at: [{ key: 'weaveChanges' }], before: before.weaveChanges, after: after.weaveChanges });
+  valueEdits(before.dropped, after.dropped, [{ key: 'dropped' }]).forEach(push);
+
+  const sectionsOf = (map) => (Array.isArray(map.sections) ? map.sections : [])
+    .map((section, index) => ({ section, index }))
+    .filter(({ section }) => isObj(section) && mapIdText(section.slot));
+  const own = (section) => pick(section, ['slot', 'heading', 'job']);
+  const prior = new Map(sectionsOf(before).map((entry) => [mapIdText(entry.section.slot), entry]));
+  const current = new Set();
+  sectionsOf(after).forEach(({ section, index }) => {
+    const slot = mapIdText(section.slot);
+    current.add(slot);
+    const step = { index, match: { slot: section.slot } };
+    const was = prior.get(slot);
+    if (!was) {
+      push({ at: [{ key: 'sections' }, step], before: null, after: own(section) });
+      return;
+    }
+    ['heading', 'job'].forEach((field) => {
+      if (!same(was.section[field], section[field])) push({ at: [{ key: 'sections' }, step, { key: field }], before: was.section[field], after: section[field] });
+    });
+  });
+  prior.forEach(({ section }, slot) => {
+    if (!current.has(slot)) push({ at: [{ key: 'sections' }, { index: null, match: { slot: section.slot } }], before: own(section), after: null });
+  });
+
+  mapElementEdits(before, after, 'beat').forEach(push);
+  mapElementEdits(before, after, 'photo').forEach(push);
+  return out;
+}
+
+/** The diff's group a change on the map belongs to: its head field, a section by its slot. */
+function mapScopeOf(at) {
+  const head = at[0] && 'key' in at[0] ? at[0].key : '';
+  if (head === 'sections' && isElementStep(at[1]) && isObj(at[1].match) && at[1].match.slot !== undefined) return `section:${mapIdText(at[1].match.slot)}`;
+  return head;
+}
+
+/** Two maps diffed by scope, for the trace (diffOutline). */
+function diffMap(before, after) {
+  const grouped = new Map();
+  mapEditsBetween(before, after).forEach((change) => {
+    const key = mapScopeOf(change.at);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({ path: pathOf(change.at), before: change.before, after: change.after, ...(change.from ? { from: change.from } : {}) });
+  });
+  return { kind: 'outline', sections: [...grouped].map(([key, changes]) => ({ key, changes })) };
+}
+
+/** A beat or photo in the story: in a section, or the top photo; a left-out beat is not. */
+function inStory(place) {
+  return place.container !== MAP_LEFT_OUT;
+}
+
+/**
+ * Where a cut beat or photo, or a field of one the director removed, came back in `obj`:
+ * the text it came back as, or null. Found by its id or filename: a beat in leftOut is
+ * not back in the story.
+ */
+function mapCutReturned(obj, edit, address) {
+  const places = mapPlaces(obj, address.kind, address.identity).filter(inStory);
+  if (address.fieldSteps.length === 0) {
+    if (places.length === 0) return null;
+    const element = places[0].element;
+    return editValueText(address.kind === 'beat' ? element.material : element.filename) || editValueText(element);
+  }
+  for (const place of places) {
+    const value = valueAtSteps(place.element, address.fieldSteps);
+    if (value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())) return editValueText(value);
+  }
+  return null;
+}
+
+/**
+ * Does `obj` still carry an edit on the map's beats or photos (brief 4.6)? A cut, while
+ * what it cut is back nowhere in the story; a field, while the beat or photo, wherever it
+ * sits, holds the director's value; a move, while the beat or photo sits in the place the
+ * director gave it, whatever its fields (its text is the writer's); a beat the director
+ * added, while it sits there with the fields they gave it.
+ */
+function mapEditCarried(obj, edit, address) {
+  if (isCut(edit)) return mapCutReturned(obj, edit, address) === null;
+  const places = mapPlaces(obj, address.kind, address.identity);
+  if (address.fieldSteps.length > 0) return places.some((place) => matchesAfter(valueAtSteps(place.element, address.fieldSteps), edit.after));
+  const inPlace = places.filter((place) => place.container === address.container);
+  if (!edit.from || (edit.from === MAP_NONE && address.container !== MAP_TOP_PHOTO)) return inPlace.some((place) => matchesAfter(place.element, edit.after));
+  return inPlace.length > 0;
+}
+
+/** What a move on the map met in a pass's output: kept, moved (to `section`, a place) or gone. */
+function mapMoveOutcome(edit, address, after) {
+  if (mapEditCarried(after, edit, address)) return { outcome: 'kept' };
+  const places = mapPlaces(after, address.kind, address.identity);
+  const now = places.find((place) => place.container === address.container) || places[0];
+  return now ? { outcome: 'moved', section: now.container } : { outcome: 'gone' };
+}
+
+/** A place on the map in words: `section "lede"`, `left out`, `the top photo`. */
+function mapContainerWords(container) {
+  if (container === MAP_TOP_PHOTO) return 'the top photo';
+  if (container === MAP_LEFT_OUT) return 'left out';
+  if (container === MAP_NONE) return 'nowhere';
+  return `section "${container}"`;
+}
+
+/** What an edit on the map's beats or photos became in a pass's output, or null when it is gone. */
+function mapBecame(edit, address, after) {
+  if (isCut(edit)) return mapCutReturned(after, edit, address);
+  const places = mapPlaces(after, address.kind, address.identity);
+  if (address.fieldSteps.length > 0) {
+    if (places.length === 0) return null;
+    const value = valueAtSteps(places[0].element, address.fieldSteps);
+    return value === undefined || value === null ? null : editValueText(value);
+  }
+  const pinned = places.find((place) => place.container === address.container);
+  if (pinned) return editValueText(pinned.element);
+  return places.length > 0 ? mapContainerWords(places[0].container) : null;
+}
+
+/**
+ * Should code put back a beat or a photo a pass removed from the map? A beat the director
+ * added, a beat they struck (it goes back into leftOut) and a photo they placed: yes. A beat
+ * they only moved between sections stays out, as a block the director moved at the desk
+ * does: only its place was theirs, and its removal can be the fix of a fault in the writer's
+ * text.
+ */
+function mapRestoresWhenGone(edit) {
+  const address = mapAddressOf(edit);
+  return Boolean(address) && address.fieldSteps.length === 0 && !isCut(edit)
+    && (edit.from === MAP_NONE || address.container === MAP_LEFT_OUT || address.kind === 'photo');
+}
+
+/** Take every place of a beat or photo off `map` (changed in place). */
+function removeMapPlaces(map, kind, identity) {
+  const key = mapIdentityKey(kind, identity);
+  const keep = (element) => !(isObj(element) && (kind === 'beat' ? mapIdText(element.id) : photoKeyOf(element.filename)) === key);
+  (Array.isArray(map.sections) ? map.sections : []).forEach((section) => {
+    if (!isObj(section)) return;
+    const list = kind === 'beat' ? 'beats' : 'photos';
+    if (Array.isArray(section[list])) section[list] = section[list].filter(keep);
+  });
+  if (kind === 'beat' && Array.isArray(map.leftOut)) map.leftOut = map.leftOut.filter(keep);
+  if (kind === 'photo' && typeof map.topPhoto === 'string' && photoKeyOf(map.topPhoto) === key) delete map.topPhoto;
+}
+
+/** Put a beat or photo into its place on `map` (changed in place); false when the map has no such section. */
+function insertIntoMap(map, kind, container, index, element) {
+  if (container === MAP_TOP_PHOTO) {
+    map.topPhoto = element.filename;
+    return true;
+  }
+  let list;
+  if (container === MAP_LEFT_OUT) {
+    if (!Array.isArray(map.leftOut)) map.leftOut = [];
+    list = map.leftOut;
+  } else {
+    const section = (Array.isArray(map.sections) ? map.sections : []).find((s) => isObj(s) && mapIdText(s.slot) === container);
+    if (!section) return false;
+    const key = kind === 'beat' ? 'beats' : 'photos';
+    if (!Array.isArray(section[key])) section[key] = [];
+    list = section[key];
+  }
+  list.splice(Number.isInteger(index) ? Math.min(index, list.length) : list.length, 0, element);
+  return true;
+}
+
+/** Write `value` at a field's steps of an element (changed in place); null or undefined takes the field out. */
+function writeAtSteps(element, steps, value) {
+  let cur = element;
+  for (let i = 0; i < steps.length - 1; i++) {
+    const key = steps[i].key;
+    if (!isObj(cur[key])) cur[key] = {};
+    cur = cur[key];
+  }
+  const last = steps[steps.length - 1].key;
+  if (value === null || value === undefined) delete cur[last];
+  else cur[last] = isObj(cur[last]) && isObj(value) ? { ...cur[last], ...clone(value) } : clone(value);
+}
+
+/**
+ * Put one of the director's edits on the map's beats or photos back into `out`, the pass's
+ * output (changed in place). A field goes back on the beat or photo wherever it sits now,
+ * or, when the pass removed it, with the beat or photo where it sat in `before`. A move
+ * takes the beat or photo out of every other place and puts it back where the director put
+ * it, as the pass left it; one the director added goes back as they wrote it, and one the
+ * pass removed comes back only as mapRestoresWhenGone says. So it prints once. A cut is never
+ * put back.
+ *
+ * @returns {boolean} whether anything was written
+ */
+function restoreMapEdit(edit, address, before, out) {
+  if (isCut(edit)) return false;
+  if (address.fieldSteps.length > 0) {
+    const places = mapPlaces(out, address.kind, address.identity);
+    if (places.length > 0) {
+      writeAtSteps(places[0].element, address.fieldSteps, edit.after);
+      return true;
+    }
+    const was = mapPlaces(before, address.kind, address.identity)[0];
+    if (!was) return false;
+    const element = clone(was.element);
+    writeAtSteps(element, address.fieldSteps, edit.after);
+    return insertIntoMap(out, address.kind, was.container, was.index, element);
+  }
+  const places = mapPlaces(out, address.kind, address.identity);
+  let element;
+  if (edit.from === MAP_NONE) element = clone(edit.after);
+  else if (places.length > 0) element = clone((places.find((place) => place.container === address.container) || places[0]).element);
+  else if (mapRestoresWhenGone(edit)) element = clone(edit.after);
+  else return false;
+  const placeable = address.container === MAP_TOP_PHOTO || address.container === MAP_LEFT_OUT
+    || (Array.isArray(out.sections) && out.sections.some((s) => isObj(s) && mapIdText(s.slot) === address.container));
+  if (!placeable) return false;
+  removeMapPlaces(out, address.kind, address.identity);
+  return insertIntoMap(out, address.kind, address.container, address.index, address.container === MAP_TOP_PHOTO ? { filename: element.filename } : element);
+}
+
+/**
+ * The key an edit on the map covers (standingOnMap): a beat's or photo's field by the
+ * beat's id or the photo's filename and the field, its place by the same, so a field edit
+ * the director made before moving the beat still covers the field; any other edit by its
+ * place.
+ */
+function mapCoverKey(edit) {
+  const address = mapAddressOf(edit);
+  if (!address) return pathOf(stepsOf(edit));
+  const who = `${address.kind}:${mapIdentityKey(address.kind, address.identity)}`;
+  return address.fieldSteps.length > 0 ? `${who}.${address.fieldSteps.map((step) => step.key).join('.')}` : `${who}:place`;
+}
+
+/** A field edit on a beat or photo, its steps re-anchored to where it sits now in `map`. */
+function reanchoredMapEdit(edit, map) {
+  const address = mapAddressOf(edit);
+  if (!address || address.fieldSteps.length === 0) return edit;
+  const now = mapPlaces(map, address.kind, address.identity)[0];
+  if (!now || now.container === address.container) return edit;
+  const at = [...mapPlaceSteps(address.kind, now), ...address.fieldSteps];
+  return { ...edit, at, path: pathOf(at) };
+}
+
+/**
+ * The director's edits on the map after an approve or a send-back (brief 4.6), as the
+ * meeting's are (standingAtMeeting): they stand past approve, so both actions make them,
+ * against the writer's last map (`baseline`, state._mapBaseline).
+ * - Each earlier edit the director's version still carries stands, with its id; a field
+ *   edit is re-anchored to where its beat or photo sits now. One it no longer carries (the
+ *   director undid it, or a send-back's rework changed it) goes.
+ * - Each change between the baseline and the director's version that no standing edit
+ *   covers (mapCoverKey) joins them, numbered on from every id given at the stop.
+ *
+ * @param {*} previous - the map's standing edits so far (state._outlineHandEdits)
+ * @param {Object|null} baseline - the writer's last map
+ * @param {Object} left - the map as the director left it
+ * @param {Object} [options]
+ * @param {string[]} [options.names] - the roster's names, as standingAfterSendBack takes them
+ * @returns {{kind: 'map', issued: number, edits: Object[]}|null}
+ */
+function standingOnMap(previous, baseline, left, { names } = {}) {
+  const prior = standingEditsOf(previous);
+  const issued = prior ? prior.issued : 0;
+  const kept = prior
+    ? prior.edits.filter((edit) => editCarried(left, edit)).map((edit) => stillRemoved(reanchoredMapEdit(edit, left), [left]))
+    : [];
+  const covered = new Set(kept.map(mapCoverKey));
+  const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
+  const leftText = versionText(left);
+  const changes = mapEditsBetween(isObj(baseline) ? baseline : left, left).filter((raw) => !covered.has(mapCoverKey(raw)));
+  const added = changes.map((raw, i) => completeEdit({ id: `E${issued + 1 + i}`, ...raw }, leftText, roster));
+  if (kept.length === 0 && added.length === 0 && issued === 0) return null;
+  return { kind: 'map', issued: issued + added.length, edits: [...kept, ...added] };
+}
+
+/** How a move on the map reads: added, struck, brought back or moved, from where. */
+function mapMoveWords(edit, address) {
+  if (edit.from === MAP_NONE) return 'added';
+  if (address && address.container === MAP_LEFT_OUT) return `struck from ${mapContainerWords(edit.from)}`;
+  if (edit.from === MAP_LEFT_OUT) return 'brought back from left out';
+  return `moved from ${mapContainerWords(edit.from)}`;
+}
+
+/**
+ * Where an edit on the map sits, as its line and the report name it: `section "lede", beat
+ * "b4", material`, `left out, beat "b2", struck from section "lede"`, `the top photo, photo
+ * "a.jpg", moved from section "theStory"`, `headline`, `gap note, line`, `dropped slot
+ * "thePlayers", reason`.
+ */
+function mapEditWhere(edit) {
+  const steps = stepsOf(edit);
+  const address = mapAddressOf(edit);
+  const parts = [];
+  if (address) {
+    if (address.container === MAP_TOP_PHOTO) parts.push('the top photo', `photo "${address.identity.filename}"`);
+    else if (address.container === MAP_LEFT_OUT) parts.push('left out', `beat "${mapIdText(address.identity.id)}"`);
+    else parts.push(`section "${address.container}"`, address.kind === 'beat' ? `beat "${mapIdText(address.identity.id)}"` : `photo "${address.identity.filename}"`);
+    parts.push(...address.fieldSteps.filter((step) => 'key' in step).map((step) => step.key));
+  } else {
+    const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
+    if (head === 'sections' && isElementStep(steps[1])) {
+      const slot = isObj(steps[1].match) && steps[1].match.slot !== undefined ? steps[1].match.slot : `index-${steps[1].index}`;
+      parts.push(`section "${slot}"`, ...stepWords(steps.slice(2)));
+      if (steps.length === 2 && (edit.before === null || edit.before === undefined) && !isCut(edit)) parts.push('added');
+    } else if (head === 'dropped' && isElementStep(steps[1])) {
+      parts.push(`dropped slot ${elementLabel(steps[1])}`, ...stepWords(steps.slice(2)));
+    } else if (head === 'gapNote') {
+      parts.push('gap note', ...stepWords(steps.slice(1)));
+    } else if (head) {
+      parts.push(head, ...stepWords(steps.slice(1)));
+    } else {
+      parts.push(edit.path);
+    }
+  }
+  if (isCut(edit)) parts.push('cut');
+  else if (isMove(edit)) parts.push(mapMoveWords(edit, address));
+  return parts.filter(Boolean).join(', ');
+}
+
 // ─── putting back what a pass changed (FA, requirement 8) ─────────────────────
 
 /** Two elements of one collection of the same kind: blocks of one type, or values of one type. */
@@ -1851,6 +2426,8 @@ function rewrittenInPlace(link, afterContent) {
  * @returns {{outcome: 'kept'|'reordered'|'moved'|'gone', section?: string}}
  */
 function moveOutcome(edit, before, after) {
+  const address = mapAddressOf(edit);
+  if (address) return mapMoveOutcome(edit, address, after);
   if (editCarried(after, edit)) return { outcome: 'kept' };
   const sections = isObj(after) && Array.isArray(after.sections) ? after.sections : [];
   const elsewhere = sectionHoldingIdentity(after, moveIdentity(edit));
@@ -1871,6 +2448,8 @@ function moveOutcome(edit, before, after) {
  */
 function becameOf(edit, before, after) {
   if (!isObj(after)) return null;
+  const address = mapAddressOf(edit);
+  if (address) return mapBecame(edit, address, after);
   if (isCut(edit)) return cutReturnedIn(after, edit);
   if (isMove(edit)) {
     const { outcome, section } = moveOutcome(edit, before, after);
@@ -1961,6 +2540,8 @@ function restoreMove(edit, out) {
  */
 function restoreEdit(edit, before, out) {
   if (isCut(edit) || !isObj(out)) return false;
+  const address = mapAddressOf(edit);
+  if (address) return restoreMapEdit(edit, address, before, out);
   if (isMove(edit)) return restoreMove(edit, out);
   const place = placeCarrying(before, edit);
   if (!place) return false;
@@ -2095,7 +2676,10 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
   if (pass !== SEND_BACK_PASS && isObj(after)) {
     const outcome = (e) => moveOutcome(e, before, after).outcome;
     const changed = carried.filter((e) => !isCut(e) && (isMove(e) ? outcome(e) !== 'kept' : !editCarried(after, e)));
-    const moves = changed.filter((e) => isMove(e) && (outcome(e) === 'moved' || outcome(e) === 'reordered'));
+    // Brief 4.6: a beat the director added or struck, or a photo they placed, comes back
+    // on the map when a pass removed it (mapRestoresWhenGone).
+    const moves = changed.filter((e) => isMove(e)
+      && (outcome(e) === 'moved' || outcome(e) === 'reordered' || (outcome(e) === 'gone' && mapRestoresWhenGone(e))));
     const fields = changed.filter((e) => !isMove(e));
     if (moves.length + fields.length > 0) {
       output = clone(after);
@@ -2133,6 +2717,9 @@ module.exports = {
   reportAfterPass, settleEdits, handEditReportOf, sectionKey, namesPerson,
   // Brief 4.5: the meeting's edits
   REWEAVE_PASS, WEAVE_EDIT_LINES_GUIDE, weaveEditsBetween, standingAtMeeting, weaveDirectorsShare, weaveMarks, editWhere,
+  // Brief 4.6: the map's edits
+  MAP_SCOPE, MAP_NONE, MAP_LEFT_OUT, MAP_TOP_PHOTO, MAP_EDIT_LINES_GUIDE, isMap, mapEditsBetween, standingOnMap,
+  mapEditAddress: mapAddressOf, mapPhotoKey: photoKeyOf, isCut, isMove, isStrike,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,

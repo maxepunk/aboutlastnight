@@ -304,3 +304,25 @@ describe('theme-config', () => {
     });
   });
 });
+
+describe("4.6: the map's slots are the theme's", () => {
+  const { mapSlotsOf } = require('../theme-config');
+
+  it('the journalist has six slots, in their usual order, each with its label and its default heading', () => {
+    expect(mapSlotsOf('journalist')).toEqual([
+      { key: 'lede', label: 'Lede', heading: '' },
+      { key: 'theStory', label: 'The Story', heading: 'The Story' },
+      { key: 'followTheMoney', label: 'Follow the Money', heading: 'Follow the Money' },
+      { key: 'thePlayers', label: 'The Players', heading: 'The Players' },
+      { key: 'whatsMissing', label: "What's Missing", heading: "What's Missing" },
+      { key: 'closing', label: 'Closing', heading: '' }
+    ]);
+  });
+
+  it('a theme with no map files, such as the parked detective, has no slots; the list is a copy', () => {
+    expect(mapSlotsOf('detective')).toEqual([]);
+    expect(mapSlotsOf('unknown')).toEqual([]);
+    mapSlotsOf('journalist').pop();
+    expect(mapSlotsOf('journalist')).toHaveLength(6);
+  });
+});

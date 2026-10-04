@@ -11,6 +11,9 @@
  *   the journalist's went in phase 3)
  * - display: constants for the printed page, including printsHero, whether the theme's
  *   layout prints the bundle's hero (read through printedHero)
+ * - map: the story map's slots (phase 4, brief 4.6), each with its key, its label on
+ *   the screen and its default heading, in their usual order (read through mapSlotsOf).
+ *   The map writer lays the settled weave across them; a theme without them has no map
  *
  * To add a new theme:
  * 1. Add entry to THEME_CONFIGS with theme name as key
@@ -51,6 +54,24 @@ const THEME_CONFIGS = {
     // Article content rules: REMOVED (F9/CR-5). The bannedPatterns/getArticleRules
     // config had zero runtime consumers. Since phase 3 the writers read the rule set
     // (lib/rule-set.js), and the evaluator holds the checks.
+
+    // The story map's slots (phase 4, brief 4.6; spec 5.2): the article's house
+    // sections, in their usual order, each with its label for the screen and the heading
+    // the map starts from. The map uses a slot, gives it its own heading, or drops it
+    // with a reason (C2), and orders the slots it uses. The lede and the closing print no
+    // heading (C14: the closing is untitled). The schema's slot names, the writer's list
+    // and the stop's payload all come from here, so a theme brings its own slots in its
+    // config and no code names them.
+    map: {
+      slots: [
+        { key: 'lede', label: 'Lede', heading: '' },
+        { key: 'theStory', label: 'The Story', heading: 'The Story' },
+        { key: 'followTheMoney', label: 'Follow the Money', heading: 'Follow the Money' },
+        { key: 'thePlayers', label: 'The Players', heading: 'The Players' },
+        { key: 'whatsMissing', label: "What's Missing", heading: "What's Missing" },
+        { key: 'closing', label: 'Closing', heading: '' }
+      ]
+    },
 
     // canonicalCharacters REMOVED — now derived from Notion Character database
     // via extractCanonicalCharacters() in node-helpers.js at fetch time.
@@ -205,6 +226,19 @@ function printedHero(bundle, theme) {
 }
 
 /**
+ * The story map's slots for a theme (phase 4, brief 4.6), in their usual order, each
+ * `{key, label, heading}`: a copy, so no caller changes the config. A theme with no map
+ * in its config, such as the parked detective (R1), has none.
+ *
+ * @param {string} theme - Theme name
+ * @returns {Array<{key: string, label: string, heading: string}>}
+ */
+function mapSlotsOf(theme) {
+  const slots = Object.prototype.hasOwnProperty.call(THEME_CONFIGS, theme) ? THEME_CONFIGS[theme].map?.slots : null;
+  return Array.isArray(slots) ? slots.map((slot) => ({ ...slot })) : [];
+}
+
+/**
  * Get outline rules for a theme (Commit 8.19)
  * @param {string} theme - Theme name
  * @returns {Object} Outline rules, or an empty object for a theme with none (the
@@ -251,6 +285,7 @@ module.exports = {
   getThemeConfig,
   isValidTheme,
   getOutlineRules,
+  mapSlotsOf,
   getCanonicalName,
   getThemeCharacters,
   printedHero

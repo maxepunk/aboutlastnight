@@ -988,3 +988,59 @@ describe('phase 3 (3.7): the writers\' questions in an outline', () => {
     expect(r.errors.some((e) => e.path === '/writerQuestions')).toBe(true);
   });
 });
+
+describe('4.6: Everyone and the counts, one function from the beats (mapTally)', () => {
+  const ROSTER = [
+    { name: 'Ellis', fullName: 'Ellis Reeve' }, { name: 'Rowan', fullName: 'Rowan Vale' },
+    { name: 'Sloane', fullName: 'Sloane Hart' }, { name: 'Mira', fullName: 'Mira Fenn' }, { name: 'Kai', fullName: 'Kai Lune' }
+  ];
+  const map = () => ({
+    topPhoto: 'huddle.jpg',
+    gapNote: { line: 'The record holds nothing Kai did.', players: ['kai'] },
+    sections: [
+      { slot: 'lede', heading: '', job: 'Open.', beats: [{ id: 'b1', kind: 'scene', material: 'The scoreboard', players: ['Ellis Reeve', 'Rowan'] }], photos: [] },
+      {
+        slot: 'theStory', heading: 'The Story', job: 'The case.',
+        beats: [
+          { id: 'b2', kind: 'receipt', material: 'row001', players: ['Rowan', 'Sloane'], card: 'row001' },
+          { id: 'b3', kind: 'line', material: 'Blake: "Pay up"', players: ['Blake'] }
+        ],
+        photos: [{ filename: 'theory.jpg', beat: 'b2' }, { filename: 'theory.jpg' }]
+      }
+    ],
+    leftOut: [{ id: 'b9', kind: 'scene', material: 'Mira at the bar', players: ['Mira'], card: 'row002' }]
+  });
+
+  it('lists each roster player under the first section whose beat shows them, the players in no beat, those the gap note raises, the cards and the photos placed of those kept', () => {
+    expect(L.mapTally(map(), { roster: ROSTER, keptPhotos: ['huddle.jpg', 'Theory.JPG', 'cards.jpg'] })).toEqual({
+      everyone: [
+        { slot: 'lede', heading: '', players: ['Ellis', 'Rowan'] },
+        { slot: 'theStory', heading: 'The Story', players: ['Sloane'] }
+      ],
+      unplaced: ['Mira', 'Kai'],
+      raised: ['Kai'],
+      cards: 1,
+      photos: { placed: 2, of: 3 }
+    });
+  });
+
+  it('reads a map with no sections, and no roster, as empty', () => {
+    expect(L.mapTally({}, {})).toEqual({ everyone: [], unplaced: [], raised: [], cards: 0, photos: { placed: 0, of: 0 } });
+  });
+
+  it("mapPhotoPlacements lists the top photo first, then each section's photos in order", () => {
+    expect(L.mapPhotoPlacements(map())).toEqual([
+      { filename: 'huddle.jpg', at: 'topPhoto' },
+      { filename: 'theory.jpg', at: 'theStory' },
+      { filename: 'theory.jpg', at: 'theStory' }
+    ]);
+  });
+
+  it('rosterMemberOf reads a first name, a full name and either in any case, and nothing else', () => {
+    expect(L.rosterMemberOf('ellis', ROSTER)).toBe('Ellis');
+    expect(L.rosterMemberOf('Rowan Vale', ROSTER)).toBe('Rowan');
+    expect(L.rosterMemberOf(' KAI LUNE ', ROSTER)).toBe('Kai');
+    expect(L.rosterMemberOf('Blake', ROSTER)).toBe(null);
+    expect(L.rosterMemberOf('Ellison', ROSTER)).toBe(null);
+  });
+});
