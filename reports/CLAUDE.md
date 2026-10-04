@@ -413,11 +413,13 @@ The pipeline supports multiple report themes via `state.theme`. Each theme produ
 - `.claude/skills/{theme}-report/assets/` — CSS variables, layout, components, JS per theme
 - `lib/workflow/nodes/evaluator-nodes.js` — Theme-aware quality criteria and NPC lists
 
-**Adding a new theme (4 steps):**
-1. Add config entry to `THEME_CONFIGS` in `lib/theme-config.js` (NPCs, rules, characters, and `display.printsHero`, which `printedHero` throws without)
-2. Give it its rules. The journalist's writers and judges read the rule set (`references/rules/`, through `lib/rule-set.js`; spec section 8 writes it so either theme could read it, and it moves to a shared folder when a second theme does), and its `references/prompts/` keeps only the three image calls' files. The 11 prompt files `ALL_PROMPTS.detective` lists (`lib/theme-loader.js`, from `.claude/skills/detective-report/references/prompts/`) are the parked detective's own
-3. Create templates in `templates/{theme}/` (layouts + partials) and assets in `.claude/skills/{theme}-report/assets/`
-4. Add theme framing to `PromptBuilder` methods in `lib/prompt-builder.js`
+**Adding a new theme.** The weave writer, the map writer, the article writer, their reworks and the two judges read their rules, their mode block and their identity line from the theme's files, through the theme they hold (phase 4: the integrator's ruling R14 and brief 4.13), so a theme brings these as files. Its files hold:
+1. **Its config entry** in `THEME_CONFIGS` (`lib/theme-config.js`): its NPCs, `display.printsHero` (which `printedHero` throws without), its map slots (`map.slots`, without which it has no story map), and `rules` and `identities` (below).
+2. **Its rules folder**, the folder `rules` names, relative to `reports/`: `world.md`, `truth-rules.md`, the eight craft files `RULE_SET_CALLS` names (`lib/rule-set.js`), and the two mode files, `mode-on-site.md` and `mode-remote.md`. Every call reads it through `loadRuleSet(call, {theme})` and `loadModeBlock(mode, {theme})`; a theme with no folder, or a missing or empty file a call reads, throws, naming the theme, the folder or the file. The journalist's is `.claude/skills/journalist-report/references/rules/`.
+3. **Its identity lines**, `identities` in its config: one line for each call `IDENTITY_CALLS` lists (`arc` is the weave writer, `outline` the map writer, `judge-arc` the story meeting's fact check, and each writer has a `-rework`), read through `identityLineOf(theme, call)`. The theme names its narrator, its publication and its form of output there, and no identity line sits in code (a source scan in `lib/__tests__/theme-rules.test.js` holds it). A writer's or a judge's line is a whole sentence. A rework's line opens its rework rules, and code completes it with the rework's task (`": the director sent it back, ..."`, `", for the reason ..."`), so it is a clause that ends where that task begins.
+4. **Its templates** in `templates/{theme}/` (layouts and partials), its assets in `.claude/skills/{theme}-report/assets/`, and its image calls' prompt files in `.claude/skills/{theme}-report/references/prompts/`, which `ALL_PROMPTS` and `PHASE_REQUIREMENTS` (`lib/theme-loader.js`) list by theme.
+
+The parked detective (R1) keeps its config and the 11 prompt files `ALL_PROMPTS.detective` lists as the worked example of a second theme. It names no rules folder and no identity line, so every call of the new stages fails loud for it, naming the theme, and `/start` refuses it.
 
 ### Prompt Architecture
 
