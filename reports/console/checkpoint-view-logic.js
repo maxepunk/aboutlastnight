@@ -2478,7 +2478,7 @@
   function mapProblems(map, data) {
     var d = isPlainObject(data) ? data : {};
     var editLogic = outlineEditLogic();
-    var result = editLogic.validateOutlineShape(map, null, d.mapSlots, editLogic.isMapValue(d.outline) ? d.outline : null);
+    var result = editLogic.validateOutlineShape(map, null, d.mapSlots, d.outline);
     if (result.valid) return null;
     var slots = slotsOf(d);
     var text = result.errors.map(function (error) {

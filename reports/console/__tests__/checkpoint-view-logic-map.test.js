@@ -340,6 +340,10 @@ const DECISION_CASES = [
   ['the director repeats a beat id', false, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'b3', material: 'x' }); return [m, clone(MAP)]; }],
   ['the director repeats a beat id in left out, read trimmed', false, () => { const m = clone(MAP); m.leftOut.push({ id: ' b1 ', material: 'x' }); return [m, clone(MAP)]; }],
   ["a repeat with no map shown, read as the director's", false, () => [writersRepeat(), null]],
+  // Task 4.6e: a shown value that is no map is no map shown, though its left out holds the
+  // repeat, where the map shown's repeats would read it as the writer's.
+  ["a repeat in a shown value with no list of sections, read as the director's", false, () => { const m = clone(MAP); m.leftOut.push(clone(MAP.leftOut[0])); return [m, { leftOut: clone(m.leftOut) }]; }],
+  ["a repeat in a shown value whose sections are no list, read as the director's", false, () => { const m = clone(MAP); m.leftOut.push(clone(MAP.leftOut[0])); return [m, { sections: {}, leftOut: clone(m.leftOut) }]; }],
   ['a headline one under its shortest', false, () => { const m = clone(MAP); m.headline = 'Too short'; return [m, clone(MAP)]; }],
   ['a deck one over its longest', false, () => { const m = clone(MAP); m.deck = 'd'.repeat(301); return [m, clone(MAP)]; }],
   ['a slot the theme has none of', false, () => { const m = clone(MAP); m.sections[3].slot = 'epilogue'; return [m, clone(MAP)]; }],
@@ -1162,5 +1166,46 @@ describe("4.10b: the map lists a restore out of the director's order, and says w
     expect(viewWith({ checked: ['E1', 'E2', 'E3'], changed: [] }).kept).toBe('All 3 of your edits stand.');
     const sendBack = entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", material', director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false });
     expect(viewWith({ checked: ['E1', 'E2'], changed: [sendBack] }).kept).toBe('');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6e: one helper reads the map the stop showed, for the gate and the console (the
+// integrator's ruling 1 on 4.6d's minors, minor 1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A value that is no map is no map shown, so every repeat in the director's map is theirs.
+// The console's validator (validateMapShape) and the gate (lib/map.js directorMapProblems)
+// both read the map shown through one helper, shownMapOf, so mapProblems hands the validator
+// the map shown as the payload holds it. DECISION_CASES holds the decisions equal on a shown
+// value that is no map.
+describe('4.6e: one helper reads the map the stop showed, for the gate and the console', () => {
+  const fs = require('fs');
+  const path = require('path');
+
+  test('a map is the map shown, and any other value is none', () => {
+    const map = clone(MAP);
+    expect(EditLogic.shownMapOf(map)).toBe(map);
+    [null, undefined, [], 'a map', { leftOut: clone(MAP.leftOut) }, { sections: {}, leftOut: clone(MAP.leftOut) }]
+      .forEach((value) => expect(EditLogic.shownMapOf(value)).toBeNull());
+  });
+
+  test("both validators read the map shown through it, and mapProblems passes the payload's map as it is", () => {
+    const read = (file) => fs.readFileSync(path.join(__dirname, '..', '..', file), 'utf8');
+    /** A function's body, from its declaration to the brace that closes it at its own indent. */
+    const body = (src, name, indent) => {
+      const start = src.indexOf(`function ${name}(`);
+      return start === -1 ? '' : src.slice(start, src.indexOf(`\n${indent}}\n`, start));
+    };
+    const editLogic = read('console/outline-edit-logic.js');
+    const map = read('lib/map.js');
+    const view = read('console/checkpoint-view-logic.js');
+    expect(body(editLogic, 'shownMapOf', '  ')).toContain('isMapValue(');
+    expect(body(editLogic, 'validateMapShape', '  ')).toContain('shownMapOf(opts.shown)');
+    expect(body(map, 'directorMapProblems', '')).toContain('shownMapOf(shown)');
+    expect(map).toMatch(/\bshownMapOf\b[^;]*= require\('\.\.\/console\/outline-edit-logic'\)/);
+    // The ternary each caller wrote goes: the helper is the one place the rule is written.
+    expect(`directorMapProblems: ${body(map, 'directorMapProblems', '').includes('isMapValue(')}`).toBe('directorMapProblems: false');
+    expect(`mapProblems: ${body(view, 'mapProblems', '  ').includes('isMapValue(')}`).toBe('mapProblems: false');
   });
 });

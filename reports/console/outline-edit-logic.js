@@ -550,11 +550,12 @@
    * - a photo the director's changes place more than once (4.6b's rule, the same reading of a
    *   repeat): each kept photo is placed once (T13).
    * mapRepeats reads both maps' repeats: the rule by which the map on screen locks the writer's.
+   * The map shown is read as the gate reads it (shownMapOf; task 4.6e).
    *
    * @param {*} map
    * @param {Object} [options]
    * @param {Array} [options.slots]
-   * @param {Object|null} [options.shown] - the map the stop showed; without it every repeat is the director's
+   * @param {*} [options.shown] - the map the stop showed; without it, or with a value that is no map, every repeat is the director's
    * @returns {{valid: boolean, errors: Array<{path: string, message: string}>}}
    */
   function validateMapShape(map, options) {
@@ -618,7 +619,7 @@
       stringAt(errors, path + '/source', change.source);
       stringAt(errors, path + '/change', change.change);
     });
-    var shown = opts.shown === undefined ? null : opts.shown;
+    var shown = shownMapOf(opts.shown);
     var repeats = mapRepeats(map);
     var writers = mapRepeats(shown);
     directorsRepeats(repeats.beatIds, writers.beatIds, mapBeatPlacements(map), mapBeatPlacements(shown), beatPlacementKey)
@@ -740,6 +741,19 @@
   /** Is `value` a story map: an object with a list of sections? */
   function isMapValue(value) {
     return isPlainObject(value) && Array.isArray(value.sections);
+  }
+
+  /**
+   * The map the stop showed, as the client gate (validateMapShape) and the server's
+   * (lib/map.js directorMapProblems) both read it: the value when it is a map (isMapValue),
+   * else null. A value that is no map is no map shown, so every repeat in the director's map
+   * is theirs (task 4.6e).
+   *
+   * @param {*} shown
+   * @returns {Object|null}
+   */
+  function shownMapOf(shown) {
+    return isMapValue(shown) ? shown : null;
   }
 
   /**
@@ -1001,7 +1015,9 @@
     isMapValue: isMapValue,
     beatIdOf: beatIdOf,
     mapBeatPlacements: mapBeatPlacements,
-    mapRepeats: mapRepeats
+    mapRepeats: mapRepeats,
+    // Task 4.6e: the map the stop showed, as the client gate and the server's read it
+    shownMapOf: shownMapOf
   };
 
   if (typeof window !== 'undefined') {

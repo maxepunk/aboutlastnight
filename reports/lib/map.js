@@ -32,8 +32,9 @@
  * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks and
  * the console share, with its rule for a beat's card (beatCardOf) and for a repeat
  * (mapRepeats, which the gate and the checks read through repeatedBeatIds and
- * repeatedPhotos; task 4.6c). What is a map is its rule too (isMapValue), by which the gate
- * reads the map the stop showed as the console does (task 4.6d). A photo is
+ * repeatedPhotos; task 4.6c). What is a map is its rule too (isMapValue), and the map the
+ * stop showed is read by one helper on it (shownMapOf), which the gate and the console's
+ * validator both call (tasks 4.6d and 4.6e). A photo is
  * read by its filename's one join key (lib/prompt-renderers/director-words-renderer.js
  * photoKey), as the map's edits and the kept photos read it.
  *
@@ -46,7 +47,7 @@ const crypto = require('crypto');
 const Ajv = require('ajv');
 const outlineSchema = require('./schemas/outline.schema.json');
 const { mapSlotsOf } = require('./theme-config');
-const { mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue } = require('../console/outline-edit-logic');
+const { mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue, shownMapOf } = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
   mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
@@ -543,9 +544,9 @@ function directorMapSchemaFor(theme) {
  * and a rework fixes; one it does not hold is the director's, refused. The gate and the
  * checks find repeats by the same rules (repeatedBeatIds, repeatedPhotos), which build on
  * the console's mapRepeats, the rule its validator and the map on screen read (task 4.6c).
- * The gate reads the map the stop showed as the console's refusal and the map on screen do
- * (isMapValue): a value that is no map is no map shown, so every repeat is the director's
- * (task 4.6d).
+ * The gate reads the map the stop showed through the helper the console's validator calls
+ * (shownMapOf): a value that is no map is no map shown, so every repeat is the director's
+ * (tasks 4.6d and 4.6e).
  *
  * @param {*} map - the map as the director left it
  * @param {Object} options
@@ -563,7 +564,7 @@ function directorMapProblems(map, { theme, shown = null } = {}) {
     const errors = (validate.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
     return `The map as the director left it failed the director-side schema: ${errors}`;
   }
-  const shownMap = isMapValue(shown) ? shown : null;
+  const shownMap = shownMapOf(shown);
   const writers = new Set(repeatedBeatIds(shownMap));
   const theirs = repeatedBeatIds(map).filter((id) => !writers.has(id));
   if (theirs.length > 0) {
