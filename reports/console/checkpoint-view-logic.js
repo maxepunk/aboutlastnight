@@ -2729,9 +2729,12 @@
    *   under a repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its
    *   controls off, with `lockedHint`.
    *
-   * The stop always holds a map: a thread whose stop holds none is from before the story
-   * meeting, and app.js shows the server's message in place of the stop (oldThreadView;
-   * task 4.11).
+   * The stop always holds a map (task 4.11): the map writer, its rework and the director's
+   * gate each leave one, and only a thread from before the story meeting holds an outline
+   * that is no map. The server refuses such a thread wherever it sits, paused, complete or
+   * stopped on an error (lib/old-thread.js; fix round 1), so no replay carries its outline
+   * past a fresh meeting to this stop; paused here, it gets the server's message in place
+   * of the stop (app.js, oldThreadView).
    *
    * @param {Object} data - the stop's payload
    * @param {Object} map - the map as the director has it (mapDraftOf, then their changes)
