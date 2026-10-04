@@ -5,7 +5,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
  *
  * A thread is seeded where the photo branch reaches the character-IDs stop
  * (`updateState(..., 'detectWhiteboard')`), and the real stop, payload builders, parse,
- * finalize, packages, outline writer and evaluator run until the outline stop. The model
+ * finalize, map writer and map checks run until the map's stop (the outline stop). The model
  * calls go to a scripted mock routed by schema; the checkpointer is a SqliteSaver on a
  * temp file, as the server runs on, so an undeclared channel would show here: LangGraph
  * drops a write to a key that is not an Annotation.
@@ -40,11 +40,6 @@ const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('../../lib/__te
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
-const PASSING_EVALUATION = {
-  ready: true, structuralPassed: true, overallScore: 0.9,
-  criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], revisionGuidance: '', confidence: 'high'
-};
-
 // The parse of the director's text names hero.jpg only: p2.jpg and p3.jpg get their
 // mappings from the explicit mark.
 const PARSED = {
@@ -77,8 +72,9 @@ function mapFor(prompt) {
 /**
  * A scripted SDK, routed by the call's schema. It answers the character-ID parse with
  * `parsed`, keeps every map writer's prompt (answering with mapFor), and records each
- * call's kind in `calls` ('parse', 'enrich', 'outline', 'evaluation'), so a test counts the
- * parse calls.
+ * call's kind in `calls` ('parse', 'enrich', 'outline'), so a test counts the parse calls.
+ * Brief 4.7c: the outline judge's route went with the judge (brief 4.6; spec 5.4); no
+ * model judge reads the map.
  */
 function scriptedSdk(parsed = PARSED) {
   const outlinePrompts = [];
@@ -96,10 +92,6 @@ function scriptedSdk(parsed = PARSED) {
       calls.push('outline');
       outlinePrompts.push(options.prompt || '');
       return mapFor(options.prompt || '');
-    }
-    if (/Evaluator/.test(options.systemPrompt || '')) {
-      calls.push('evaluation');
-      return clone(PASSING_EVALUATION);
     }
     throw new Error(`scriptedSdk: unexpected call ${(options.systemPrompt || '').slice(0, 60)}`);
   };

@@ -84,7 +84,6 @@ const sent = (sdk) => sdk.mock.calls[0][0];
 async function renderJournalistCalls(mode) {
   const state = reworkFixtureState('journalist');
   state.sessionConfig = { ...state.sessionConfig, reportingMode: mode };
-  state._outlineGuidance = 'Lead with the money.';
   state.directorGateNotes = [{ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Keep Riley in view.', at: 't1' }];
   state.validationResults = { phase: 'arcs', passed: true, structuralIssues: [], advisoryWarnings: ['An arc advisory.'] };
 

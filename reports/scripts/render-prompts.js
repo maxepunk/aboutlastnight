@@ -14,8 +14,8 @@
  *
  * Transient inputs are faked deterministically: the "previous" output is the persisted
  * outline/bundle, feedback is a fixed string, revisionCount is 1, a fixed hand-edit
- * (one edited field) and two fixed gate notes are supplied. On a tree without
- * lib/hand-edit-diff.js (main) the hand-edit diff is simply absent.
+ * (one edited field) and two fixed gate notes are supplied. A tree without
+ * lib/hand-edit-diff.js fails, naming it, as a tree that lacks any builder does.
  *
  * Phase 2 (2.3): the arc writer and the arc reworker are rendered too,
  * as arc-generation.txt and arc-revision.txt, for the plain prompt diff; --compare
@@ -212,11 +212,12 @@ async function render() {
   const { createPromptBuilder } = req('lib/prompt-builder.js');
   const { buildRevisionContext } = req('lib/workflow/nodes/node-helpers.js');
   const { _testing: aiTesting } = req('lib/workflow/nodes/ai-nodes.js');
-  const { buildArticleRevisionPrompt, getArticleRevisionSystemPrompt, buildArticleRevisionSystemPrompt,
-    articleWriterInputs } = aiTesting;
+  const { buildArticleRevisionPrompt, buildArticleRevisionSystemPrompt, articleWriterInputs } = aiTesting;
   // Phase 4 (brief 4.6): the map writer's inputs and its rework call, as the nodes build them.
-  // Brief 4.7b: the article writer's inputs, which the article renders are built from.
-  requireExports('ai-nodes.js _testing', aiTesting, ['outlineWriterInputs', 'mapReworkCall', 'articleWriterInputs']);
+  // Brief 4.7b: the article writer's inputs, which the article renders are built from. Brief
+  // 4.7c: the article rework's two builders, which its render calls as reviseContentBundle does.
+  requireExports('ai-nodes.js _testing', aiTesting, ['outlineWriterInputs', 'mapReworkCall', 'articleWriterInputs',
+    'buildArticleRevisionPrompt', 'buildArticleRevisionSystemPrompt']);
   const mapNodes = req('lib/workflow/nodes/map-nodes.js');
   requireExports('map-nodes.js _testing', mapNodes._testing, ['checkMap']);
   const arcModule = req('lib/workflow/nodes/arc-specialist-nodes.js');
@@ -243,7 +244,7 @@ async function render() {
   // check to read: the writer's weave as the baseline, the director's version, and their
   // changes as the standing edits. A thread whose weave carries no edits of the director's
   // gets the fixed edit on its story.
-  requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits', 'isMap', 'standingOnMap']);
+  requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits', 'isMap', 'standingOnMap', 'diffBundle']);
   if (!weaveModule.isWeave(state.weave)) {
     state.weave = fixedWeave();
     state._weaveBaseline = fixedBaseline();
@@ -312,19 +313,18 @@ async function render() {
   const ag = await promptBuilder.buildArticlePrompt(...await articleWriterInputs({ ...state, directorGateNotes: FIXED_NOTES }));
   write(FILES[2], ag.systemPrompt, ag.userPrompt);
 
-  // 4. article revision (fixed hand edit: headline.main)
+  // 4. article revision (fixed hand edit: headline.main), as reviseContentBundle builds it:
+  // the director's send-back with the fixed note, round FIXED_ROUND. Brief 4.7c: each
+  // builder takes the arguments it reads, no theme among them.
   const bundle = state.contentBundle || {};
   const editedBundle = JSON.parse(JSON.stringify(bundle));
   if (editedBundle.headline) editedBundle.headline.main = String(editedBundle.headline.main || '') + ' [RENDER-DIFF EDIT]';
-  const bundleDiff = diffMod ? await diffMod.diffBundle(bundle, editedBundle) : null;
   const arc = await buildRevisionContext({ phase: 'article', revisionCount: 1, round: FIXED_ROUND, validationResults: state.validationResults || null,
-    previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: bundleDiff, theme });
+    previousOutput: editedBundle, humanFeedback: FIXED_FEEDBACK, handEdits: await diffMod.diffBundle(bundle, editedBundle) });
   // Brief 4.7b: the rework is its writer's sections (the settled weave and the map first),
   // then the revision block, then the fixed notes.
-  const arPrompt = await buildArticleRevisionPrompt(state, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES, theme);
-  const arSystem = buildArticleRevisionSystemPrompt
-    ? await buildArticleRevisionSystemPrompt(promptBuilder, theme)
-    : await getArticleRevisionSystemPrompt(theme, state.sessionConfig || {});
+  const arPrompt = await buildArticleRevisionPrompt(state, arc.contextSection, arc.previousOutputSection, promptBuilder, FIXED_NOTES);
+  const arSystem = await buildArticleRevisionSystemPrompt(promptBuilder);
   write(FILES[3], arSystem, arPrompt);
 
   // 5. the arc writer (the weave), then 6-8. the arc rework as reviseArcs sends it

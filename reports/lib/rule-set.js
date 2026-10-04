@@ -21,10 +21,12 @@
  * builder that calls it stays synchronous. The cache lives for the process: a
  * changed rule file reaches the prompts on the next server start.
  *
- * Journalist only. Since phase 4 the detective is parked at start (R1), so the arc
- * stage's calls read this folder for every session; the outline and article callers
- * still branch on the theme before calling here. A theme's own rules folder, read
- * through the theme, is the phase 4 integrator's ruling R14.
+ * Journalist only. Since phase 4 the detective is parked at start (R1), and no caller
+ * branches on the theme before reading here: the arc stage's calls and both judges read
+ * this folder for every session; the map's and the article's writers read it after their
+ * builders refuse a theme with no story map (lib/map.js mapSchemaFor); and their reworks'
+ * check reads it first (prompt-builder.js requirePhasePrompts; brief 4.7c). A theme's own
+ * rules folder, read through the theme, is the phase 4 integrator's ruling R14.
  */
 
 const fs = require('fs');

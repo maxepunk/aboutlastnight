@@ -218,12 +218,10 @@ function detectFixtureKey(options) {
 
   // Evaluator patterns (must come BEFORE general arc/outline matches)
   // because evaluator prompts contain terms like "narrative arcs".
-  // Phase 4 (brief 4.4): the arc stage's judge is the weave's fact check.
+  // Phase 4 (brief 4.4): the arc stage's judge is the weave's fact check. Brief 4.7c: the
+  // outline judge's route went, with the judge itself (brief 4.6; spec 5.4).
   if (systemLower.includes('weave fact check')) {
     return 'weaveFactCheck';
-  }
-  if (systemLower.includes('outline evaluator') || systemLower.includes('outline evaluation')) {
-    return 'outlineEvaluation';
   }
   // Phase 4 (brief 4.7a): the article judge, by its identity line.
   if (systemLower.includes('article judge')) {
@@ -335,13 +333,6 @@ function createMockSdkClient(fixtures = {}, options = {}) {
       advisoryWarnings: [],
       confidence: 'high',
       criteriaScores: { evidenceTruth: { score: 1, type: 'structural' }, verdictTruth: { score: 1, type: 'structural' } }
-    },
-    outlineEvaluation: {
-      ready: true,
-      overallScore: 0.80,
-      issues: [],
-      confidence: 'high',
-      criteriaScores: { arcCoverage: 1.0, sectionBalance: 0.8, flowLogic: 0.8 }
     },
     // Phase 4 (brief 4.7a): the article judge scores the truth criteria alone too, and
     // finds no breach by default.
