@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 /**
  * scripts/render-prompts.js — render the pipeline's prompts from a thread's PERSISTED
- * state, with NO model calls (spec 2026-09-19 §7.3), or compare two renders.
+ * state, with NO model calls (spec 2026-09-19 §7.3), or report how two renders' sections
+ * differ.
  *
  *   node scripts/render-prompts.js --session 0919269 --db <copy.sqlite> --out <dir> [--repo <path>] [--theme <journalist|detective>]
- *   node scripts/render-prompts.js --compare <dirA> <dirB>
  *   node scripts/render-prompts.js --sections <dirA> <dirB>
  *
- * --repo points at the tree whose lib/ renders (default: this repo). Run once with the
- * `main` worktree and once with the branch, then --compare: the only permitted
- * differences are the <HAND_EDITS> block and the standing-notes paragraph inside
- * <DIRECTOR_GUIDANCE>. Anything else fails (exit 1).
+ * --repo points at the tree whose lib/ renders (default: this repo), so two trees can
+ * render one thread and --sections compare them. Phase 4 (task 4.11): --compare, which
+ * held the four outline and article renders to main's byte for byte bar the <HAND_EDITS>
+ * block and the standing notes, is retired, since every phase 4 call differs from main's
+ * by design; it exits 2, naming --sections.
  *
  * Transient inputs are faked deterministically: the "previous" output is the persisted
  * outline/bundle, feedback is a fixed string, revisionCount is 1, a fixed hand-edit
@@ -18,8 +19,7 @@
  * lib/hand-edit-diff.js fails, naming it, as a tree that lacks any builder does.
  *
  * Phase 2 (2.3): the arc writer and the arc reworker are rendered too,
- * as arc-generation.txt and arc-revision.txt, for the plain prompt diff; --compare
- * reads only the four files above.
+ * as arc-generation.txt and arc-revision.txt.
  *
  * Phase 3 (brief 3.0): every call the phase rewires is rendered:
  *   outline-generation.txt, outline-revision.txt, article-generation.txt,
@@ -91,11 +91,13 @@ const { fixedMap, fixedMapBaseline } = require('./lib/fixed-map');
 
 /**
  * The markers each render must carry: for each, a line that opens with it. Each is
- * one that every render of that call carries at bad9781, for both themes, on 092026
- * and 092626, whatever the session's data: every call prints the record view, and
- * the six writer renders print the fixed gate notes inside <DIRECTOR_GUIDANCE>. A
- * render without one is missing its frame, and an absence scan over it would pass
- * for nothing.
+ * one that every render of that call carries, whatever the session's data: every call
+ * prints the record view; the writers and their reworks print the fixed gate notes
+ * inside <DIRECTOR_GUIDANCE>, and the map and article ones the settled weave; each
+ * judge prints the blocks its call reads (task 4.11), the meeting's fact check the weave
+ * it judges under WEAVE:, and the article judge the settled weave, the map under MAP:
+ * (brief 4.7a) and the article under CONTENT BUNDLE:. A render without one is missing
+ * its frame, and an absence scan over it would pass for nothing.
  */
 const REQUIRED_MARKERS = {
   'outline-generation.txt': ['<SETTLED_WEAVE>', '<RECORD>', '<DIRECTOR_GUIDANCE>'],
@@ -107,8 +109,8 @@ const REQUIRED_MARKERS = {
   'arc-revision.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'arc-reweave.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
   'arc-send-back.txt': ['<RECORD>', '<DIRECTOR_GUIDANCE>', '<HAND_EDITS>'],
-  'judge-arc.txt': ['<RECORD>'],
-  'judge-article.txt': ['<RECORD>']
+  'judge-arc.txt': ['WEAVE:', '<RECORD>'],
+  'judge-article.txt': ['<SETTLED_WEAVE>', 'MAP:', 'CONTENT BUNDLE:', '<RECORD>']
 };
 
 const THEMES = ['journalist', 'detective'];
@@ -127,17 +129,18 @@ const args = parseArgs(process.argv.slice(2));
 /** The one database this script must never open, whichever tree renders (M3). */
 const PRODUCTION_DB = path.resolve(path.join(__dirname, '..', 'data', 'checkpoints.sqlite'));
 
+/** The map writer and its send-back rework, the article writer and its rework. */
 const FILES = ['outline-generation.txt', 'outline-revision.txt', 'article-generation.txt', 'article-revision.txt'];
 /**
- * Rendered as well, but not compared (phase 2, 2.3): the arc writer and its reworker,
- * since brief 4.5 the reworker's automatic pass, reweave and send-back.
+ * The arc writer and its reworker (phase 2, 2.3), since brief 4.5 the reworker's
+ * automatic pass, reweave and send-back.
  */
 const ARC_FILES = ['arc-generation.txt', 'arc-revision.txt', 'arc-reweave.txt', 'arc-send-back.txt'];
-/** Rendered as well, but not compared (phase 4, brief 4.6): the map's automatic rework. */
+/** The map's automatic rework (phase 4, brief 4.6). */
 const MAP_FILES = ['outline-check-rework.txt'];
 /**
- * Rendered as well, but not compared (phase 3, 3.0): the judges, by phase. Phase 4
- * (brief 4.6): judge-outline.txt went with the outline judge.
+ * The judges, by phase (phase 3, 3.0). Phase 4 (brief 4.6): judge-outline.txt went with
+ * the outline judge.
  */
 const JUDGE_FILES = { arcs: 'judge-arc.txt', article: 'judge-article.txt' };
 const FIXED_FEEDBACK = 'RENDER-DIFF FIXED FEEDBACK: tighten the second section.';
@@ -148,26 +151,29 @@ const FIXED_NOTES = [
   { gate: 'outline', kind: 'rejection', round: 1, text: 'RENDER-DIFF NOTE B', at: '2026-09-19T00:00:01.000Z' }
 ];
 
-if (args.compare) {
-  // `--compare <dirA> <dirB>`: parseArgs swallows dirA as the flag's value, so dirB is
-  // the only positional. `<dirA> <dirB> --compare` puts both in `_`. Accept either.
-  const [dirA, dirB] = typeof args.compare === 'string' ? [args.compare, args._[0]] : [args._[0], args._[1]];
-  if (!dirA || !dirB) { console.error('usage: render-prompts.js --compare <dirA> <dirB>'); process.exit(2); }
-  compare(dirA, dirB);
-} else if (args.sections) {
-  // Same argument shapes as --compare.
-  const [dirA, dirB] = typeof args.sections === 'string' ? [args.sections, args._[0]] : [args._[0], args._[1]];
-  if (!dirA || !dirB || ![dirA, dirB].every((d) => fs.existsSync(d) && fs.statSync(d).isDirectory())) {
-    console.error('usage: render-prompts.js --sections <dirA> <dirB> (two existing directories)');
+// Run as a command; required (by its test), it only exports the marker table.
+if (require.main === module) {
+  if (args.compare) {
+    // Task 4.11: retired. It held a render to main's byte for byte, and every phase 4
+    // call differs from main's by design.
+    console.error('--compare is retired: every phase 4 call differs from main\'s by design. Use --sections <dirA> <dirB> for the section report.');
     process.exit(2);
+  } else if (args.sections) {
+    // `--sections <dirA> <dirB>`: parseArgs swallows dirA as the flag's value, so dirB is
+    // the only positional. `<dirA> <dirB> --sections` puts both in `_`. Accept either.
+    const [dirA, dirB] = typeof args.sections === 'string' ? [args.sections, args._[0]] : [args._[0], args._[1]];
+    if (!dirA || !dirB || ![dirA, dirB].every((d) => fs.existsSync(d) && fs.statSync(d).isDirectory())) {
+      console.error('usage: render-prompts.js --sections <dirA> <dirB> (two existing directories)');
+      process.exit(2);
+    }
+    sections(dirA, dirB);
+  } else {
+    if (args.theme !== undefined && !THEMES.includes(args.theme)) {
+      console.error(`usage: --theme takes one of ${THEMES.join(', ')}`);
+      process.exit(2);
+    }
+    render().catch((e) => { console.error(e); process.exit(2); });
   }
-  sections(dirA, dirB);
-} else {
-  if (args.theme !== undefined && !THEMES.includes(args.theme)) {
-    console.error(`usage: --theme takes one of ${THEMES.join(', ')}`);
-    process.exit(2);
-  }
-  render().catch((e) => { console.error(e); process.exit(2); });
 }
 
 /**
@@ -330,11 +336,10 @@ async function render() {
   // 5. the arc writer (the weave), then 6-8. the arc rework as reviseArcs sends it
   // (arcReworkCall; briefs 4.4 and 4.5): its automatic pass after the weave checks, the
   // director's reweave with no note, and the director's send-back with the fixed note,
-  // each round's banner reading round FIXED_ROUND. Rendered for the plain prompt diff
-  // only; --compare reads FILES. The fixed notes stand in for the director's, and the
-  // weave the thread holds (or the fixed one planted above) is the version each rework
-  // starts from, with the director's standing edits; the checks run on it as the check
-  // node runs them, with the meeting still open.
+  // each round's banner reading round FIXED_ROUND. The fixed notes stand in for the
+  // director's, and the weave the thread holds (or the fixed one planted above) is the
+  // version each rework starts from, with the director's standing edits; the checks run
+  // on it as the check node runs them, with the meeting still open.
   const arcState = { ...state, directorGateNotes: FIXED_NOTES };
   write(ARC_FILES[0], await arcNodes.weaveSystemPrompt(state.sessionConfig || {}, theme), await arcNodes.buildWeavePrompt(arcState));
   const { validationResults: weaveChecks } = await arcModule.validateArcStructure({ ...state, meetingApproved: false }, {});
@@ -371,34 +376,6 @@ async function render() {
 }
 
 /**
- * Strip the three permitted additions from a rendered prompt. Nothing else: a
- * byte-identity guard that normalises is not one, and the blank-run collapse this
- * used to end with could absorb a real difference (M5). Each removal consumes its
- * own adjacent newlines, so equality stays exact without normalising.
- */
-function stripPermitted(text) {
-  let t = text.replace(/<HAND_EDITS>[\s\S]*?<\/HAND_EDITS>\n*/g, '');
-  // Anchored on the first two words only: brief 1.1 reworded the preamble.
-  t = t.replace(/\n*Standing notes[\s\S]*?(?=\n<\/DIRECTOR_GUIDANCE>)/g, '');
-  t = t.replace(/\n*<DIRECTOR_GUIDANCE>\n<\/DIRECTOR_GUIDANCE>/g, '');
-  return t.trim();
-}
-
-function compare(dirA, dirB) {
-  let failed = false;
-  for (const f of FILES) {
-    const a = stripPermitted(fs.readFileSync(path.join(dirA, f), 'utf8'));
-    const b = stripPermitted(fs.readFileSync(path.join(dirB, f), 'utf8'));
-    if (a === b) { console.log(`OK    ${f}`); continue; }
-    failed = true;
-    const la = a.split('\n'), lb = b.split('\n');
-    let i = 0; while (i < la.length && i < lb.length && la[i] === lb[i]) i++;
-    console.log(`DIFF  ${f} — first difference at line ${i + 1}:\n  A: ${JSON.stringify(la[i] || '')}\n  B: ${JSON.stringify(lb[i] || '')}`);
-  }
-  process.exit(failed ? 1 : 0);
-}
-
-/**
  * `--sections <dirA> <dirB>`: the section report (brief 3.0). For each .txt file in
  * both directories, every top-level section with its status and its size in A and B.
  * The pass and fail rules are the integrator's, so this always exits 0.
@@ -424,3 +401,6 @@ function sections(dirA, dirB) {
   }
   process.exit(0);
 }
+
+// Exported for its test (__tests__/unit/scripts/render-prompts.test.js); run, it renders.
+module.exports = { REQUIRED_MARKERS };
