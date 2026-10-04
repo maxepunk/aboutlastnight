@@ -441,11 +441,12 @@ describe('text the director removed in a rewrite (FA)', () => {
     after.sections[1].content.push(paragraph(DROPPED));   // an automatic pass added it back
     const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(standing(), before), before, after, pass: 1 });
     expect(output.sections[1].content[3]).toEqual(paragraph(DROPPED));
+    // 4.14c: the entry carries the sentences it reports, which a later pass's version is read by.
     expect(report).toEqual({
       checked: ['E1'],
       changed: [{
         id: 'E1', scope: 'section:whats-missing', where: 'section "whats-missing", paragraph', cut: false, removed: true, moved: false,
-        director: DROPPED, became: DROPPED, pass: 1, automatic: true, reason: null, restored: false
+        director: DROPPED, became: DROPPED, pass: 1, automatic: true, reason: null, restored: false, pieces: [DROPPED]
       }]
     });
   });
@@ -858,11 +859,13 @@ describe('a cut that partly came back (F1, fix round 1)', () => {
     const standing = D.standingAfterSendBack(null, writers(), directors, 'bundle');
     const after = withParagraph(directors, 'Others thought Phil had done it.');
     const report = D.reportAfterPass(null, { edits: D.carriedEdits(standing, directors), before: directors, after, pass: 1 });
+    // 4.14c: the entry carries the cut's pieces, which a later pass's version is read by.
     expect(report).toEqual({
       checked: ['E1'],
       changed: [{
         id: 'E1', scope: 'section:story', where: 'section "story", paragraph, cut', cut: true, removed: false, moved: false,
-        director: OPEN_QUESTIONS, became: 'Others thought Phil had done it.', pass: 1, automatic: true, reason: null, restored: false
+        director: OPEN_QUESTIONS, became: 'Others thought Phil had done it.', pass: 1, automatic: true, reason: null, restored: false,
+        pieces: standing.edits[0].pieces
       }]
     });
   });
@@ -1227,11 +1230,13 @@ describe('reportAfterPass (F1): what each pass did to the director\'s edits', ()
     back.sections[1].content.splice(1, 0, paragraph(CUT_THEORY));
     const two = D.reportAfterPass(one, pass(sendBackOutput(), back, { pass: 1 }));
     expect(two.checked).toEqual(['E1', 'E2']);
+    // 4.14c: the entry carries the cut's pieces, which a later pass's version is read by.
     expect(two.changed).toEqual([
       one.changed[0],
       {
         id: 'E1', scope: 'section:the-story', where: 'section "the-story", paragraph, cut', cut: true, removed: false, moved: false,
-        director: CUT_THEORY, became: CUT_THEORY, pass: 1, automatic: true, reason: null, restored: false
+        director: CUT_THEORY, became: CUT_THEORY, pass: 1, automatic: true, reason: null, restored: false,
+        pieces: ['The room also weighed whether Vic would replace Marcus, not kill him']
       }
     ]);
   });
@@ -3600,5 +3605,65 @@ describe('4.14c: a Key Evidence entry the director deleted or moved stands throu
       ['E2', 'evidenceCards[#a001]', { follows: { tokenId: 'c001' }, precedes: null }]
     ]);
     expect(D.carriedEdits(second, withSidebar(VIC, B, C, A)).map((e) => e.id)).toEqual(['E1', 'E2']);
+  });
+});
+
+// Desk 3: a cut that came back in automatic pass 1 and left in pass 2 still showed the line
+// asking the director to cut text the article no longer held. Each "came back" entry of the
+// article's report is read against the version stored after each pass, the last of which is the
+// version stored at the stop: it stays while that version holds the text, with where it is now.
+describe('4.14c: a "came back" entry is read against the version stored at the stop', () => {
+  const CARD = {
+    type: 'evidence-card', tokenId: 'ale003', headline: 'The brag',
+    content: 'Marcus raises a glass to the sale and says it was worth every cent. Alex keeps quiet at the end of the bar.',
+    owner: 'Alex Reeves', significance: 'critical'
+  };
+  const FIRST = paragraph('Marcus bragged about the sale the night he died.');
+  const LAST = paragraph('Riley says they only kept the books.');
+  const OTHER = paragraph('The room voted on the overdose before noon.');
+  const bundleOf = (...content) => ({
+    headline: { main: 'The Room Voted Overdose Anyway', deck: 'A deck.' },
+    sections: [{ id: 'the-story', type: 'narrative', heading: 'The Story', content: content.map(clone) }]
+  });
+  const shown = bundleOf(FIRST, CARD, LAST);
+  /** The desk: the card cut, and the article sent back. */
+  const desk = bundleOf(FIRST, LAST);
+  const standing = D.standingAfterSendBack(null, shown, desk, 'bundle');
+  /** The round: the send-back's rework keeps the desk, then each automatic pass in turn. */
+  const round = (...versions) => {
+    let { report } = D.settleEdits(null, { edits: D.carriedEdits(standing, desk), before: desk, after: desk, pass: D.SEND_BACK_PASS });
+    let stored = desk;
+    versions.forEach((after, i) => {
+      const settled = D.settleEdits(report, { edits: D.carriedEdits(standing, stored), before: stored, after, pass: i + 1 });
+      report = settled.report;
+      stored = settled.output;
+    });
+    return { report, stored };
+  };
+
+  test('a cut that came back in one pass and left in the next has no entry at the stop', () => {
+    const one = round(bundleOf(FIRST, CARD, LAST));
+    expect(one.report.changed).toEqual([expect.objectContaining({ id: 'E1', cut: true, pass: 1, became: CARD.content })]);
+    const two = round(bundleOf(FIRST, CARD, LAST), bundleOf(FIRST, LAST));
+    expect(two.report).toEqual({ checked: ['E1'], changed: [] });
+  });
+
+  test('a cut that came back and stayed keeps its entry, from the pass that brought it back, with where it is now', () => {
+    const elsewhere = { ...CARD, content: `${CARD.content} The bartender saw it.` };
+    const { report } = round(bundleOf(FIRST, CARD, LAST), bundleOf(OTHER, FIRST, LAST, elsewhere));
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', cut: true, pass: 1, became: elsewhere.content })]);
+  });
+
+  test('a sentence a rewrite removed that came back and left again has no entry at the stop', () => {
+    const FULL = paragraph('The vote went to the overdose. Nobody asked who held the account that morning.');
+    const KEPT = paragraph('The vote went to the overdose.');
+    const removedStanding = D.standingAfterSendBack(null, bundleOf(FULL, LAST), bundleOf(KEPT, LAST), 'bundle');
+    const settle = (previous, before, after, pass) =>
+      D.settleEdits(previous, { edits: D.carriedEdits(removedStanding, before), before, after, pass });
+    const back = bundleOf(KEPT, LAST, paragraph('Nobody asked who held the account that morning.'));
+    const one = settle(null, bundleOf(KEPT, LAST), back, 1);
+    expect(one.report.changed).toEqual([expect.objectContaining({ id: 'E1', removed: true, pass: 1 })]);
+    const two = settle(one.report, one.output, bundleOf(KEPT, LAST), 2);
+    expect(two.report).toEqual({ checked: ['E1'], changed: [] });
   });
 });

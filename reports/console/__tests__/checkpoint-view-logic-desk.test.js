@@ -1108,6 +1108,21 @@ describe('4.14c: the desk says what each pass did, and only what still holds', (
     ];
   };
 
+  test("a cut that came back in one pass and left in the next shows no line, and the record says the edit stands", () => {
+    const writers = article();
+    const cut = clone(writers);
+    cut.sections[1].content.splice(4, 1);   // STORY_3 cut at the desk
+    const edits = carriedEdits(standingAfterSendBack(null, writers, cut, 'bundle'), cut);
+    const back = clone(cut);
+    back.sections[2].content.push(paragraph(STORY_3));
+    const one = settleEdits(null, { edits, before: cut, after: back, pass: 1 });
+    expect(changedEditsToShow(one.report)).toHaveLength(1);
+    const two = settleEdits(one.report, { edits: carriedEdits(standingAfterSendBack(null, writers, cut, 'bundle'), one.output), before: one.output, after: clone(cut), pass: 2 });
+    const d = payloadFor(two.output, { handEditReport: two.report });
+    expect(changedAt(d)).toEqual([]);
+    expect(ViewLogic.steeringView(two.report, []).kept).toBe('Your edit stands.');
+  });
+
   test('a Key Evidence entry a rework moved: a send-back\'s move sits beside the entry with its reason, and an automatic pass\'s, which code put back, folds below', () => {
     const entry = (tokenId, headline) => ({ tokenId, headline, summary: `${headline}, in the record.`, significance: 'supporting' });
     const withSidebar = (...ids) => {

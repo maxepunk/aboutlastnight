@@ -1022,7 +1022,11 @@ function cutReturnedIn(obj, edit) {
   if (address) return mapCutReturned(obj, edit, address);
   const pieces = cutPieces(edit).filter((piece) => fold(piece));
   if (pieces.length === 0) return null;
-  const text = versionText(obj);
+  return pieceBackIn(versionText(obj), pieces);
+}
+
+/** The text of the first part of a version's text (versionText) that holds one of `pieces`, in their order, or null. */
+function pieceBackIn(text, pieces) {
   for (const piece of pieces) {
     const part = partHolding(text, piece);
     if (part) return part.text.trim();
@@ -1037,8 +1041,12 @@ function removedHeld(text, sentence) { return sentencesOf(sentence).every((core)
 function removedReturnedIn(obj, edit) {
   const removed = Array.isArray(edit.removed) ? edit.removed.filter((s) => typeof s === 'string') : [];
   if (removed.length === 0 || !isObj(obj)) return null;
-  const text = versionText(obj);
-  const back = removed.filter((sentence) => removedHeld(text, sentence));
+  return sentencesBackIn(versionText(obj), removed);
+}
+
+/** Of `sentences`, the ones a version's text (versionText) holds, and where the first of them is, or null for none. */
+function sentencesBackIn(text, sentences) {
+  const back = sentences.filter((sentence) => removedHeld(text, sentence));
   if (back.length === 0) return null;
   const part = partHolding(text, sentencesOf(back[0])[0]);
   return { sentences: back, leaf: part ? part.text.trim() : '' };
@@ -3218,6 +3226,62 @@ function backInSection(edit, after, stored) {
 }
 
 /**
+ * Is this a content bundle, the article: sections of blocks, and neither a weave nor a map? Its
+ * report's "came back" entries carry the pieces they are read by (task 4.14c).
+ */
+function isBundle(obj) {
+  return isObj(obj) && Array.isArray(obj.sections) && !isWeave(obj) && !isMap(obj);
+}
+
+/**
+ * The pieces a "came back" entry of the article's report is read by (task 4.14c): a cut's
+ * pieces (cutPieces), or the removed sentences that came back. None for the meeting's and the
+ * map's entries, which this rule does not read.
+ */
+function returnedPieces(stored, pieces) {
+  return isBundle(stored) ? { pieces: pieces.filter((piece) => typeof piece === 'string') } : {};
+}
+
+/**
+ * The round's report with each "came back" entry of the article read against `stored`, the
+ * version stored after the round's latest pass, and so, after the last, the version stored at
+ * the stop (task 4.14c). A cut or a removed sentence that came back stays while `stored` holds
+ * it, with `became` where it is now, and goes once a later pass took it out again, so the stop
+ * never asks the director to cut text the article no longer holds. An entry is read by the
+ * pieces it carries (returnedPieces); one written before 4.14c carries none and stays as it is.
+ * The report itself when no entry changed, and any other version's report as it is.
+ *
+ * @param {*} report - the round's report so far
+ * @param {*} stored - the version stored after the latest pass
+ * @returns {*}
+ */
+function cameBackStillIn(report, stored) {
+  const read = handEditReportOf(report);
+  if (!read || !isBundle(stored)) return report;
+  let text = null;
+  let changedAny = false;
+  const changed = [];
+  read.changed.forEach((entry) => {
+    const pieces = (entry.cut === true || entry.removed === true) && Array.isArray(entry.pieces)
+      ? entry.pieces.filter((piece) => typeof piece === 'string' && fold(piece))
+      : null;
+    if (!pieces) { changed.push(entry); return; }
+    if (text === null) text = versionText(stored);
+    let now = null;
+    if (entry.cut === true) {
+      const became = pieceBackIn(text, pieces);
+      if (became !== null) now = { ...entry, became };
+    } else {
+      const back = sentencesBackIn(text, pieces);
+      if (back) now = { ...entry, pieces: back.sentences, director: back.sentences.join(' '), became: back.leaf };
+    }
+    if (now === null || !same(now, entry)) changedAny = true;
+    if (now !== null) changed.push(same(now, entry) ? entry : now);
+  });
+  return changedAny ? { ...read, changed } : report;
+}
+
+/**
  * The stop's report after one more pass of the round. For each edit the pass started
  * from:
  * - a field or element the pass changed: the director's text, as the restore writes it
@@ -3234,7 +3298,9 @@ function backInSection(edit, after, stored) {
  *   holds the director's order (task 4.3c: a field edit's restore can put it back where
  *   no place keeps that order);
  * - a cut whose text came back, or a rewrite's removed sentence that came back, flagged
- *   (`cut`, `removed`), with the text where it came back: code never takes it out;
+ *   (`cut`, `removed`), with the text where it came back: code never takes it out; in the
+ *   article's report each carries the `pieces` it is read by, and stays only while the version
+ *   stored after the round's latest pass holds them (cameBackStillIn; task 4.14c);
  * - each with the pass (SEND_BACK_PASS, REWEAVE_PASS or the automatic pass's number),
  *   whether an automatic pass made it, and the rework's reason (null: none given);
  * - a connection the director struck that a pass brought back (brief 4.5) is marked
@@ -3257,8 +3323,10 @@ function backInSection(edit, after, stored) {
  */
 function reportAfterPass(previous, { edits = [], before = null, after = null, pass, reasons = [], restored = [], unprintable = [], stored = after } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
-  if (carried.length === 0) return previous || null;
-  const prior = handEditReportOf(previous) || { checked: [], changed: [] };
+  // Task 4.14c: what came back in an earlier pass is read against this pass's version first.
+  const current = cameBackStillIn(previous, stored);
+  if (carried.length === 0) return current || null;
+  const prior = handEditReportOf(current) || { checked: [], changed: [] };
   const why = new Map((Array.isArray(reasons) ? reasons : [])
     .filter((r) => isObj(r) && typeof r.id === 'string' && typeof r.reason === 'string' && r.reason.trim())
     .map((r) => [r.id.trim(), r.reason.trim()]));
@@ -3274,7 +3342,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   carried.forEach((e) => {
     if (isCut(e)) {
       const back = cutReturnedIn(stored, e);
-      if (back !== null) changed.push(entry(e, { cut: true, director: editValueText(e.before), became: back }));
+      if (back !== null) changed.push(entry(e, { cut: true, director: editValueText(e.before), became: back, ...returnedPieces(stored, cutPieces(e)) }));
       return;
     }
     if (isMove(e)) {
@@ -3294,7 +3362,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       }));
     }
     const back = removedReturnedIn(stored, e);
-    if (back) changed.push(entry(e, { removed: true, director: back.sentences.join(' '), became: back.leaf }));
+    if (back) changed.push(entry(e, { removed: true, director: back.sentences.join(' '), became: back.leaf, ...returnedPieces(stored, back.sentences) }));
   });
   return {
     checked: [...prior.checked, ...carried.map((e) => e.id).filter((id) => !prior.checked.includes(id))],
@@ -3354,7 +3422,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  */
 function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [], photos, whiteboard = null } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
-  if (carried.length === 0) return { output: after, report: previous || null, narrowed: [] };
+  // Task 4.14c: a pass that carries no edit, such as one after a cut came back, still has the
+  // round's earlier "came back" entries read against what it returned.
+  if (carried.length === 0) return { output: after, report: cameBackStillIn(previous, after) || null, narrowed: [] };
   let output = after;
   const restored = [];
   const unprintable = [];
