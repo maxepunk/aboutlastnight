@@ -1181,3 +1181,47 @@ describe('4.14c: the desk says what each pass did, and only what still holds', (
     ]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Task 4.14f (the integrator's ruling 1 on run 8's last tasks): a Key Evidence entry the director
+// deleted stays deleted. Any entry of its tokenId a pass puts back, in any words, is the entry:
+// after an automatic pass code took it out again, and the round's record says so, as the map does
+// for a struck beat that comes back; after a send-back it stays, and its line sits beside it with
+// the rework's reason. Every report here is lib/hand-edit-diff.js settleEdits'.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14f: the desk says what came of a deleted Key Evidence entry', () => {
+  const changedAt = (d) => {
+    const marks = deskMarks(d, d.contentBundle);
+    return [
+      ...Object.keys(marks.at).sort().flatMap((key) => marks.at[key].filter((m) => m.tone === 'changed').map((m) => [key, m.text])),
+      ...marks.apart.filter((m) => m.tone === 'changed').map((m) => ['apart', m.text])
+    ];
+  };
+  /** The desk: the director deleted the Key Evidence entry and kept the card inline. */
+  const deleted = () => ({ ...article(), evidenceCards: [] });
+  const edits = () => carriedEdits(standingAfterSendBack(null, article(), deleted(), 'bundle'), deleted());
+  /** The pass's output: the entry back under its tokenId, in new words. */
+  const putBack = () => ({
+    ...deleted(),
+    evidenceCards: [{ tokenId: 'vic001', headline: 'The chair was promised', summary: 'Vic expected the company once Marcus was gone.', significance: 'critical' }]
+  });
+
+  test("after an automatic pass the entry is out again: no mark beside any piece, and the round's record says the pass put it back and code took it out", () => {
+    const { output, report } = settleEdits(null, { edits: edits(), before: deleted(), after: putBack(), pass: 1 });
+    expect(output.evidenceCards).toEqual([]);
+    expect(changedAt(payloadFor(output, { handEditReport: report }))).toEqual([]);
+    const record = ViewLogic.steeringView(report, []);
+    expect(record.changedEdits.map((e) => e.line)).toEqual(['E1, sidebar card vic001, cut: automatic pass 1 put back the entry you deleted. It was taken out again.']);
+    expect(record.kept).toBe('Your edit stands.');
+  });
+
+  test('after a send-back it stays, and its line sits beside it under Key Evidence, with the reason', () => {
+    const after = putBack();
+    const { output, report } = settleEdits(null, {
+      edits: edits(), before: deleted(), after, pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asks for every inline card in Key Evidence.' }]
+    });
+    expect(output).toBe(after);
+    expect(changedAt(payloadFor(output, { handEditReport: report }))).toEqual([[deskAnchorKey({ kind: 'sidebar', index: 0 }),
+      'Sidebar card vic001, cut: the rework of your send-back put back the entry you deleted. Why: The note asks for every inline card in Key Evidence.']]);
+  });
+});

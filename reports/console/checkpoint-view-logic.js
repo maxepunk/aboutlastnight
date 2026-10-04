@@ -587,6 +587,9 @@
    *   entry whose photo still prints carries no `unprintable` and reads as any other change.
    * - A cut, or a sentence a rewrite removed, that came back: it is still in the output,
    *   because code never takes text out.
+   * - A Key Evidence entry the director deleted that a pass put back under its tokenId, in any
+   *   words (the entry's `tokenId`, task 4.14f): after an automatic pass, that code took it out
+   *   again, as the map says of a struck beat struck again; after a send-back, the rework's reason.
    * - A block the director moved that a pass took to another section: where it went, and
    *   whether code put it back, in the director's order or not (task 4.3c, `inOrder`); one a
    *   pass removed: that code left it out, since only its place was the director's edit. The
@@ -626,6 +629,11 @@
       if (!held) return struck + ' ' + why;
       if (became === null) return struck;
       return struck + (entry.restored === true ? ' It was struck again.' : ' It could not be struck again.');
+    }
+    if (entry.cut === true && asString(entry.tokenId)) {
+      var putBack = label + ': ' + by + ' put back the ' + thing + ' you deleted.';
+      if (!held) return putBack + ' ' + why;
+      return putBack + (entry.restored === true ? ' It was taken out again.' : ' It could not be taken out again.');
     }
     if (entry.cut === true) return label + ': the text you cut came back' + cameBackAs + ' (' + by + '). ' + (held ? stillInLine(o.stillIn) : why);
     if (entry.removed === true) return label + ': a sentence you removed came back' + cameBackAs + ' (' + by + '). ' + (held ? stillInLine(o.stillIn) : why);

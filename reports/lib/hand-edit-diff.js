@@ -48,7 +48,8 @@
  * - A sidebar entry, which the page prints under Key Evidence (task 4.14c): one the director
  *   deleted is a cut, and one they moved is a move whose `from` is the sidebar and whose
  *   `between` names the entries it follows and precedes by their tokenIds, by the same
- *   naming rule (diffSidebar); a field they changed on it is an edit of its own.
+ *   naming rule (diffSidebar); a field they changed on it is an edit of its own. An entry has
+ *   an id, its tokenId, so the delete is read by it (deletedEntryOf; task 4.14f).
  * - Given the roster's names, a cut or a removal records `names` (FA, requirement 9):
  *   the names its text held that the director's version no longer named.
  * Ids (E1, E2, ...) are stable within a stop. The edits stand across every send-back
@@ -61,8 +62,10 @@
  * the director put it in, whatever its other fields (fix round 1, finding 1), and a move
  * within the section while it also sits after the block it follows and before the block
  * it precedes, each where the section still holds it (task 4.3); a sidebar entry's move,
- * the same way within the sidebar (moveContainer; task 4.14c). A cut is
- * carried while none of its pieces is back. Text is read from the fields the page prints
+ * the same way within the sidebar (moveContainer; task 4.14c). A cut is carried while none
+ * of its pieces is back, and a Key Evidence entry the director deleted while the sidebar
+ * holds no entry of its tokenId, in any words (task 4.14f), which code takes out again after
+ * an automatic pass (settleEdits). Text is read from the fields the page prints
  * (printedParts; known item 6), and a piece under six words is back only as a whole
  * sentence (known item 4). An element the director put in whole that code put back without
  * a photo the article cannot print stands without it from then on (standingAfterPass; task
@@ -1016,10 +1019,45 @@ function cutPieces(edit) {
   return Array.isArray(edit.pieces) ? edit.pieces.filter((piece) => typeof piece === 'string') : cutSentences(edit);
 }
 
-/** The first part of `obj` that holds one of a cut's pieces, as its text, or null. */
+/**
+ * What finds a Key Evidence entry the director deleted (task 4.14f): `{tokenId}` for a cut of a
+ * whole sidebar entry that its tokenId names, else null. An entry has an id (NAMED_COLLECTIONS),
+ * so the plan's rule for an element with one applies (R11): it is back whenever the sidebar holds
+ * an entry of its tokenId again, in any words (sidebarEntryBack), and its words printed anywhere
+ * else are not the entry. Code takes it out again after an automatic pass (takeOutDeletedEntry),
+ * and a send-back's rework that put it back keeps it, with the rework's reason. An entry with no
+ * tokenId keeps the rule for cut text, by its pieces, and so does an inline card (a known item).
+ *
+ * @param {Object} edit
+ * @returns {{tokenId: string}|null}
+ */
+function deletedEntryOf(edit) {
+  if (!isObj(edit) || !isCut(edit) || !onSidebar(edit)) return null;
+  const steps = stepsOf(edit);
+  if (steps.length !== 2 || !isElementStep(steps[1]) || sidebarName(steps[1].match) === null) return null;
+  return { tokenId: steps[1].match.tokenId };
+}
+
+/**
+ * The first entry of `obj`'s sidebar that `identity` finds, as text: its printed fields by name
+ * (`tokenId: mor001; headline: ...`, editValueText), by which the desk finds the entry
+ * (console/checkpoint-view-logic.js changedPlace). Null when the sidebar holds none (task 4.14f).
+ */
+function sidebarEntryBack(obj, identity) {
+  const entries = isObj(obj) && Array.isArray(obj[SIDEBAR]) ? obj[SIDEBAR] : [];
+  const found = entries.find((card) => isObj(card) && matchesAfter(card, identity));
+  return found ? editValueText(pick(found, PRINTED_FIELDS.sidebarCard)) : null;
+}
+
+/**
+ * The first part of `obj` that holds one of a cut's pieces, as its text, or null; for a Key
+ * Evidence entry the director deleted, the entry of its tokenId (deletedEntryOf; task 4.14f).
+ */
 function cutReturnedIn(obj, edit) {
   const address = mapAddressOf(edit);
   if (address) return mapCutReturned(obj, edit, address);
+  const deletedEntry = deletedEntryOf(edit);
+  if (deletedEntry) return sidebarEntryBack(obj, deletedEntry);
   const pieces = cutPieces(edit).filter((piece) => fold(piece));
   if (pieces.length === 0) return null;
   return pieceBackIn(versionText(obj), pieces);
@@ -3261,6 +3299,24 @@ function takeOutPassCopies(out, before, identity, keptIndex) {
 }
 
 /**
+ * Take every entry of a deleted Key Evidence entry's tokenId out of `out`'s sidebar (changed in
+ * place; task 4.14f): the pass put the entry back, in whatever words, and the director's delete
+ * is final (R11). The whole entry goes, as the director deleted it.
+ *
+ * @param {Object} edit - a Key Evidence entry the director deleted (deletedEntryOf)
+ * @param {Object} out - the pass's output, changed in place
+ * @returns {boolean} whether anything was taken out
+ */
+function takeOutDeletedEntry(edit, out) {
+  const identity = deletedEntryOf(edit);
+  if (!identity || !isObj(out) || !Array.isArray(out[SIDEBAR])) return false;
+  const kept = out[SIDEBAR].filter((card) => !(isObj(card) && matchesAfter(card, identity)));
+  if (kept.length === out[SIDEBAR].length) return false;
+  out[SIDEBAR] = kept;
+  return true;
+}
+
+/**
  * A photo's filename as a photo reference is matched: its basename, exactly. The one rule:
  * the restore reads it here, and the fact check imports it (task 4.5f).
  */
@@ -3437,12 +3493,14 @@ function blocksOf(collection, element) {
  * it, into the director's section, losing the copy the pass left in another section (task
  * 4.5g). A connection the director brought back goes back as `before` holds it, since its
  * words are the writer's (restoredValue; task 4.5f). A moved block goes back into the
- * director's section as the pass left it (restoreMove). A cut is never put back. A block
- * named by its words, which the pass reworded while it moved the blocks around it, goes on
- * the pass's version of it (passVersionOf; task 4.14c): the pass's copy of it where nothing
- * pairs it, or where only its place pairs it with a block holding fewer of its words, such as
- * a paragraph the pass inserted right before its copy, which stays the writer's (fix round
- * 1). Where code cannot tell which block is the pass's version, it goes back where it sat.
+ * director's section as the pass left it (restoreMove). A cut is never put back, and a Key
+ * Evidence entry the director deleted that the pass put back is taken out again
+ * (takeOutDeletedEntry; task 4.14f). A block named by its words, which the pass reworded
+ * while it moved the blocks around it, goes on the pass's version of it (passVersionOf; task
+ * 4.14c): the pass's copy of it where nothing pairs it, or where only its place pairs it with
+ * a block holding fewer of its words, such as a paragraph the pass inserted right before its
+ * copy, which stays the writer's (fix round 1). Where code cannot tell which block is the
+ * pass's version, it goes back where it sat.
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
@@ -3452,7 +3510,8 @@ function blocksOf(collection, element) {
  * @returns {boolean} whether anything was written
  */
 function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
-  if (isCut(edit) || !isObj(out)) return false;
+  if (!isObj(out)) return false;
+  if (isCut(edit)) return takeOutDeletedEntry(edit, out);
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
   if (isMove(edit)) return restoreMove(edit, before, out);
@@ -3632,6 +3691,9 @@ function returnedPieces(stored, pieces) {
  * it, with `became` where it is now, and goes once a later pass took it out again, so the stop
  * never asks the director to cut text the article no longer holds. An entry is read by the
  * pieces it carries (returnedPieces); one written before 4.14c carries none and stays as it is.
+ * A Key Evidence entry the director deleted that a send-back's rework put back is read by the
+ * tokenId it carries, as its edit is (deletedEntryOf): it stays while `stored`'s sidebar holds an
+ * entry of that tokenId, and one code took out again (`restored`) stays as it is (task 4.14f).
  * The report itself when no entry changed, and any other version's report as it is.
  *
  * @param {*} report - the round's report so far
@@ -3645,16 +3707,21 @@ function cameBackStillIn(report, stored) {
   let changedAny = false;
   const changed = [];
   read.changed.forEach((entry) => {
-    const pieces = (entry.cut === true || entry.removed === true) && Array.isArray(entry.pieces)
+    const entryBack = entry.cut === true && typeof entry.tokenId === 'string' && entry.restored !== true;
+    const pieces = !entryBack && (entry.cut === true || entry.removed === true) && Array.isArray(entry.pieces)
       ? entry.pieces.filter((piece) => typeof piece === 'string' && fold(piece))
       : null;
-    if (!pieces) { changed.push(entry); return; }
-    if (text === null) text = versionText(stored);
+    if (!entryBack && !pieces) { changed.push(entry); return; }
     let now = null;
-    if (entry.cut === true) {
+    if (entryBack) {
+      const became = sidebarEntryBack(stored, { tokenId: entry.tokenId });
+      if (became !== null) now = { ...entry, became };
+    } else if (entry.cut === true) {
+      if (text === null) text = versionText(stored);
       const became = pieceBackIn(text, pieces);
       if (became !== null) now = { ...entry, became };
     } else {
+      if (text === null) text = versionText(stored);
       const back = sentencesBackIn(text, pieces);
       if (back) now = { ...entry, pieces: back.sentences, director: back.sentences.join(' '), became: back.leaf };
     }
@@ -3684,6 +3751,11 @@ function cameBackStillIn(report, stored) {
  *   (`cut`, `removed`), with the text where it came back: code never takes it out; in the
  *   article's report each carries the `pieces` it is read by, and stays only while the version
  *   stored after the round's latest pass holds them (cameBackStillIn; task 4.14c);
+ * - a Key Evidence entry the director deleted that the pass put back under its tokenId, in any
+ *   words (deletedEntryOf; task 4.14f): `cut`, with `became` the entry as the pass put it back,
+ *   the `tokenId` it is read by, and whether code took it out again (`restored`), which only an
+ *   automatic pass has it do; after a send-back it stays while the sidebar holds an entry of that
+ *   tokenId (cameBackStillIn);
  * - beside `restored`, `maybeCopies` on a block the director wrote that code put back where it
  *   sat, finding no version of it in the pass's output that it could tell was the pass's
  *   (passVersionOf): the texts of the blocks the pass wrote that may be its version of the
@@ -3728,6 +3800,14 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   const changed = [];
   carried.forEach((e) => {
     if (isCut(e)) {
+      // Task 4.14f: a Key Evidence entry the director deleted, as the pass returned it, whether or
+      // not code took it out again after the pass.
+      const deletedEntry = deletedEntryOf(e);
+      if (deletedEntry) {
+        const back = cutReturnedIn(after, e);
+        if (back !== null) changed.push(entry(e, { cut: true, director: editValueText(e.before), became: back, restored: putBack.has(e.id), tokenId: deletedEntry.tokenId }));
+        return;
+      }
       const back = cutReturnedIn(stored, e);
       if (back !== null) changed.push(entry(e, { cut: true, director: editValueText(e.before), became: back, ...returnedPieces(stored, cutPieces(e)) }));
       return;
@@ -3765,7 +3845,10 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
 /**
  * One pass, settled (FA, requirement 8): after an automatic pass, code puts back each
  * standing edit the pass changed, field by field, so the stored output carries it; a cut
- * or removed sentence that came back stays, flagged in the report. A block the director
+ * or removed sentence that came back stays, flagged in the report. A Key Evidence entry the
+ * director deleted that the pass put back under its tokenId, in any words, goes again
+ * (takeOutDeletedEntry; task 4.14f), before every other restore, so the moves read the sidebar
+ * as the director left it; the report records each such restore. A block the director
  * moved goes back into the director's section as the pass left it, and a block moved
  * within its section back into the director's order there (task 4.3), before the field
  * edits that find it there; one the pass removed stays out, since only its place was the
@@ -3823,20 +3906,27 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
   const narrowed = [];
   if (pass !== SEND_BACK_PASS && isObj(after)) {
     const outcome = (e) => moveOutcome(e, before, after).outcome;
-    const changed = carried.filter((e) => !isCut(e) && (isMove(e) ? outcome(e) !== 'kept' : !editCarried(after, e)));
+    // Task 4.14f: of the cuts, only a Key Evidence entry the director deleted, which the pass put back.
+    const changed = carried.filter((e) => (isCut(e)
+      ? deletedEntryOf(e) !== null && !editCarried(after, e)
+      : (isMove(e) ? outcome(e) !== 'kept' : !editCarried(after, e))));
+    const deletedEntries = changed.filter(isCut);
     // Brief 4.6: a beat the director added or struck, or a photo they placed, comes back
     // on the map when a pass removed it (mapRestoresWhenGone).
     const moves = changed.filter((e) => isMove(e)
       && (outcome(e) === 'moved' || outcome(e) === 'reordered' || (outcome(e) === 'gone' && mapRestoresWhenGone(e))));
-    const fields = changed.filter((e) => !isMove(e));
+    const fields = changed.filter((e) => !isMove(e) && !isCut(e));
     // Task 4.14b, fix round 1: a section the pass put back under a slot the director dropped.
     const droppedSlots = isMap(after) ? droppedSlotsOf(carried) : [];
     const sectionBack = droppedSlots.some((slot) => after.sections.some((section) => isObj(section) && section.slot === slot));
-    if (moves.length + fields.length > 0 || sectionBack) {
+    if (deletedEntries.length + moves.length + fields.length > 0 || sectionBack) {
       output = clone(after);
       // Task 4.5g: the restore leaves out only a photo the article cannot print that the
       // version the pass returned prints nowhere: `after`, not the output the restores change.
       const leavesOut = leftOutOfRestore(after, photos, whiteboard);
+      // Task 4.14f: the entries the director deleted go out before the moves, so a move within
+      // the sidebar reads it as the director left it.
+      deletedEntries.forEach((e) => restoreEdit(e, before, output, leavesOut));
       // The moves first, so a field edit on a moved block finds the block where the
       // director put it. A move whose section the pass removed waits for the field edits,
       // one of which may put that section back whole, block included.

@@ -3511,9 +3511,10 @@ describe('4.14b fix round 1: an automatic pass is held to a section the director
 // Desk 1 (ruled major): C9 puts every inline card in the sidebar too, so a card the director
 // deleted at the desk still printed under Key Evidence. Each entry is now deleted and moved
 // there, and the change is the director's edit, which diffBundle reads like any other: a delete
-// is a cut, which stands while none of its pieces is back; a move is the entry's place in the
-// sidebar alone, which stands while it keeps the director's order, and which code puts back
-// after an automatic pass as it puts back a block moved within its section.
+// is a cut, which stands while the sidebar holds no entry of its tokenId (task 4.14f; it read the
+// cut's pieces before); a move is the entry's place in the sidebar alone, which stands while it
+// keeps the director's order, and which code puts back after an automatic pass as it puts back a
+// block moved within its section.
 describe('4.14c: a Key Evidence entry the director deleted or moved stands through every pass', () => {
   const entry = (tokenId, headline, summary) => ({ tokenId, headline, summary, significance: 'supporting' });
   const JES = entry('jes002', 'You can have him', 'Jess gives up the man and keeps the baby.');
@@ -3582,11 +3583,16 @@ describe('4.14c: a Key Evidence entry the director deleted or moved stands throu
     })]);
   });
 
-  test('an entry the director deleted that a pass brings back is flagged and stays: code never takes text out', () => {
+  // Task 4.14f (the integrator's ruling 1 on run 8's last tasks): an entry is back by its tokenId,
+  // and after an automatic pass code takes it out again and records the restore; this test pinned
+  // the flag-only rule it replaced.
+  test('an entry the director deleted that an automatic pass brings back is taken out again, and the report records the restore', () => {
     const { output, report } = settle(withSidebar(VIC, JES, MOR, DNA));
-    expect(sidebarOf(output)).toEqual(['vic001', 'jes002', 'mor001', 'p-dna']);
+    expect(sidebarOf(output)).toEqual(['vic001', 'jes002', 'p-dna']);
     expect(report.changed).toEqual([expect.objectContaining({
-      id: 'E1', where: 'sidebar card mor001, cut', cut: true, became: 'The envelope at the bar', restored: false, automatic: true
+      id: 'E1', where: 'sidebar card mor001, cut', cut: true, tokenId: 'mor001',
+      became: 'tokenId: mor001; headline: The envelope at the bar; summary: Morgan pays Riley out of sight of the room.; significance: supporting',
+      restored: true, automatic: true
     })]);
   });
 
@@ -3975,5 +3981,111 @@ describe('4.14c: a "came back" entry is read against the version stored at the s
     expect(one.report.changed).toEqual([expect.objectContaining({ id: 'E1', removed: true, pass: 1 })]);
     const two = settle(one.report, one.output, bundleOf(KEPT, LAST), 2);
     expect(two.report).toEqual({ checked: ['E1'], changed: [] });
+  });
+});
+
+// ─── Task 4.14f: a deleted Key Evidence entry stays deleted ───────────────────
+
+// The review of 4.14c (the integrator's ruling 1 on run 8's last tasks): a deleted sidebar entry
+// counted as back only when one of its pieces came back word for word, and its pieces leave out
+// every sentence the director's version still prints, so with the inline card kept its headline
+// was no piece. A pass that put an entry of its tokenId back in new words read as no change: it
+// printed under Key Evidence again, the stop listed nothing, and a send-back's reason for it was
+// dropped. A sidebar entry has an id, its tokenId (NAMED_COLLECTIONS), so the plan's rule for an
+// element with an id applies (R11): it is back whenever the sidebar again holds an entry of its
+// tokenId, in any words; after an automatic pass code takes it out again and records the restore,
+// and after a send-back it stays, listed with the rework's reason. Inline cards keep the
+// flag-only rule (a known item).
+describe('4.14f: a deleted Key Evidence entry stays deleted', () => {
+  const entry = (tokenId, headline, summary) => ({ tokenId, headline, summary, significance: 'supporting' });
+  const JES = entry('jes002', 'You can have him', 'Jess gives up the man and keeps the baby.');
+  const MOR = entry('mor001', 'The envelope at the bar', 'Morgan pays Riley out of sight of the room.');
+  /** MOR as a pass puts it back in new words. */
+  const REWORDED = { ...MOR, headline: 'Cash at the bar', summary: 'Riley takes cash from Morgan at the bar.' };
+  const CARD = {
+    type: 'evidence-card', tokenId: 'mor001', headline: 'The envelope at the bar',
+    content: 'You hand Riley the envelope under the bar and nobody sees it.', significance: 'critical'
+  };
+  /** The article, with MOR's card inline in THE STORY or not, and the sidebar's entries. */
+  const bundleOf = (inline, ...sidebar) => ({
+    headline: { main: 'The Room Voted Overdose Anyway', deck: 'A deck.' },
+    sections: [{
+      id: 'the-story', type: 'narrative', heading: 'The Story',
+      content: [paragraph('Marcus bragged about the sale the night he died.'), ...(inline ? [clone(CARD)] : [])]
+    }],
+    evidenceCards: sidebar.map(clone)
+  });
+  const sidebarOf = (bundle) => bundle.evidenceCards.map((c) => c.tokenId);
+  /** An entry as the report gives it: its printed fields. */
+  const asText = (e) => `tokenId: ${e.tokenId}; headline: ${e.headline}; summary: ${e.summary}; significance: ${e.significance}`;
+  const REASON = 'The note asks for every inline card in Key Evidence.';
+
+  describe.each([
+    ['the inline card kept', true, 'E1'],
+    ['the inline card deleted too', false, 'E2']
+  ])('MOR deleted from the sidebar, %s', (_, inlineKept, id) => {
+    // The stop showed MOR's card inline and in the sidebar, and the director deleted the entry.
+    const shown = bundleOf(true, JES, MOR);
+    const desk = bundleOf(inlineKept, JES);
+    const standing = D.standingAfterSendBack(null, shown, desk, 'bundle');
+    const settle = (after, pass, reasons = []) =>
+      D.settleEdits(null, { edits: D.carriedEdits(standing, desk), before: desk, after, pass, reasons });
+
+    test('the delete is a cut of the entry, back whenever the sidebar holds an entry of its tokenId, in any words', () => {
+      expect(standing.edits.map((e) => [e.id, e.path])).toEqual(inlineKept
+        ? [['E1', 'evidenceCards[#mor001]']]
+        : [['E1', 'sections[#the-story].content[-]'], ['E2', 'evidenceCards[#mor001]']]);
+      const carriedIds = (bundle) => D.carriedEdits(standing, bundle).map((e) => e.id);
+      expect(carriedIds(desk)).toContain(id);
+      expect(carriedIds(bundleOf(inlineKept, JES, MOR))).not.toContain(id);
+      expect(carriedIds(bundleOf(inlineKept, REWORDED, JES))).not.toContain(id);
+      // Its words printed anywhere but under its tokenId in the sidebar are not the entry.
+      const echoed = bundleOf(inlineKept, JES);
+      echoed.sections[0].content.push(paragraph(MOR.summary));
+      expect(carriedIds(echoed)).toContain(id);
+    });
+
+    test('a reworded re-add after an automatic pass: the entry is out again, and the report records the restore', () => {
+      const { output, report } = settle(bundleOf(inlineKept, JES, REWORDED), 1);
+      expect(sidebarOf(output)).toEqual(['jes002']);
+      expect(output.sections).toEqual(desk.sections);
+      expect(report).toEqual({
+        checked: standing.edits.map((e) => e.id),
+        changed: [{
+          id, scope: 'evidenceCards', where: 'sidebar card mor001, cut', cut: true, removed: false, moved: false,
+          director: asText(MOR), became: asText(REWORDED), pass: 1, automatic: true, reason: null, restored: true, tokenId: 'mor001'
+        }]
+      });
+      expect(D.carriedEdits(standing, output).map((e) => e.id)).toEqual(standing.edits.map((e) => e.id));
+    });
+
+    test("so is one in its old words, and every entry of its tokenId: the inline card's text came back only in what code took out, so it has no line", () => {
+      const { output, report } = settle(bundleOf(inlineKept, MOR, JES, REWORDED), 2);
+      expect(sidebarOf(output)).toEqual(['jes002']);
+      expect(report.changed).toEqual([expect.objectContaining({ id, became: asText(MOR), pass: 2, restored: true, tokenId: 'mor001' })]);
+    });
+
+    test('the same from a send-back: the entry stays, listed with the reason', () => {
+      const after = bundleOf(inlineKept, JES, REWORDED);
+      const { output, report } = settle(after, D.SEND_BACK_PASS, [{ id, reason: REASON }]);
+      expect(output).toBe(after);
+      expect(report.changed).toEqual([{
+        id, scope: 'evidenceCards', where: 'sidebar card mor001, cut', cut: true, removed: false, moved: false,
+        director: asText(MOR), became: asText(REWORDED), pass: D.SEND_BACK_PASS, automatic: false, reason: REASON, restored: false, tokenId: 'mor001'
+      }]);
+    });
+
+    test("the send-back's line stays while the sidebar holds an entry of its tokenId, read again after each later pass, and goes once a pass took it out", () => {
+      const sent = settle(bundleOf(inlineKept, JES, REWORDED), D.SEND_BACK_PASS, [{ id, reason: REASON }]);
+      const pass = (previous, before, after, n) =>
+        D.settleEdits(previous, { edits: D.carriedEdits(standing, before), before, after, pass: n });
+      // The send-back's rework put the entry back, so it is the writer's: a later pass may reword it.
+      const AGAIN = { ...REWORDED, summary: 'Riley pockets the cash.' };
+      const one = pass(sent.report, sent.output, bundleOf(inlineKept, JES, AGAIN), 1);
+      expect(sidebarOf(one.output)).toEqual(['jes002', 'mor001']);
+      expect(one.report.changed).toEqual([expect.objectContaining({ id, pass: D.SEND_BACK_PASS, reason: REASON, became: asText(AGAIN), restored: false })]);
+      const two = pass(one.report, one.output, bundleOf(inlineKept, JES), 2);
+      expect(two.report.changed).toEqual([]);
+    });
   });
 });
