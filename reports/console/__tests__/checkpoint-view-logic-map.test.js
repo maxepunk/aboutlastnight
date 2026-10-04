@@ -818,3 +818,75 @@ describe('4.9: the builders the map shares with the meeting and the desk', () =>
     ].forEach(([path, key]) => expect([path, ViewLogic.mapLineKeyOf(path)]).toEqual([path, key]));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6c: the map's follow-ups (the integrator's ruling 3 on the follow-ups, and ruling 4
+// on 4.9's minors and hand-offs)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('4.6c: the map is read by one rule wherever a map is read', () => {
+  test("a section's editor opens on the section the editors and moves find by its slot", () => {
+    const map = opened();
+    expect(EditLogic.sectionWithSlot(map, 'theStory')).toBe(map.sections[1]);
+    expect(EditLogic.sectionWithSlot(map, 'thePlayers')).toBeNull();
+    expect(EditLogic.sectionWithSlot({ lede: {} }, 'lede')).toBeNull();
+    expect(EditLogic.sectionWithSlot(null, 'lede')).toBeNull();
+  });
+
+  test('a shown value that is no map is no map shown, to the refusal as to the page', () => {
+    const left = clone(MAP);
+    left.sections[1].photos.push({ filename: 'hero.jpg' });
+    const notAMap = { topPhoto: 'hero.jpg' };
+    const noMapShown = ViewLogic.mapProblems(left, { outline: null, mapSlots: SLOTS });
+    expect(noMapShown).toBe('The map cannot be sent yet: the top photo places hero.jpg a second time: your changes made this repeat. Place each photo once.');
+    expect(ViewLogic.mapProblems(left, { outline: notAMap, mapSlots: SLOTS })).toBe(noMapShown);
+    expect(ViewLogic.mapView({ outline: notAMap, mapSlots: SLOTS }, left).sections[1].beats.map((b) => b.added)).toEqual([true, true, true]);
+  });
+});
+
+/** Names every object carries, as a beat id and as a photo's filename. */
+const PROTOTYPE_NAMES = ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'];
+
+/** The fixture's map with a beat and a photo under each prototype name, each placed `times` times. */
+function prototypeNamed(times) {
+  const map = clone(MAP);
+  PROTOTYPE_NAMES.forEach((name) => {
+    for (let n = 0; n < times; n += 1) {
+      const section = map.sections[n % 2 === 0 ? 2 : 3];
+      section.beats.push({ id: name, kind: 'scene', material: `A beat under ${name}`, players: [] });
+      section.photos.push({ filename: name });
+    }
+  });
+  return map;
+}
+
+describe('4.6c: the gate, the checks and the console find one set of repeats, under names every object carries', () => {
+  const kept = ['hero.jpg', 'p2.jpg', ...PROTOTYPE_NAMES];
+  const checksFind = (map) => {
+    const { failures } = require('../../lib/map').mapFindings(map, { keptPhotos: kept, recordIds: ['ale003', 'mor001', 'p-dna'] });
+    return failures.filter((f) => f.type === 'duplicate-beat-id' || f.type === 'photo-placed-twice').map((f) => f.message.split('. ')[0]);
+  };
+
+  test("the writer's repeats, left as shown: the gate and the console take them, the checks list each, and mapRepeats finds the same", () => {
+    const [left, shown] = [prototypeNamed(2), prototypeNamed(2)];
+    expect({ gate: gateTakes(left, shown), console: consoleTakes(left, shown) }).toEqual({ gate: true, console: true });
+    expect(EditLogic.mapRepeats(left)).toEqual({ beatIds: PROTOTYPE_NAMES, photoKeys: PROTOTYPE_NAMES.map((name) => name.toLowerCase()) });
+    expect(checksFind(left)).toEqual([
+      'Beats sharing an id: constructor, toString, __proto__, hasOwnProperty and valueOf',
+      'Photos placed more than once: constructor, toString, __proto__, hasOwnProperty, valueOf'
+    ]);
+  });
+
+  test("the same repeats made by the director's changes: the gate and the console refuse them", () => {
+    const [left, shown] = [prototypeNamed(2), prototypeNamed(1)];
+    expect({ gate: gateTakes(left, shown), console: consoleTakes(left, shown) }).toEqual({ gate: false, console: false });
+    expect(directorMapProblems(left, { theme: 'journalist', shown })).toMatch(/^Two beats share the id "constructor", "toString", "__proto__", "hasOwnProperty" and "valueOf"/);
+  });
+
+  test('each name placed once: the gate and the console take the map, and the checks find no repeat', () => {
+    const [left, shown] = [prototypeNamed(1), clone(MAP)];
+    expect({ gate: gateTakes(left, shown), console: consoleTakes(left, shown) }).toEqual({ gate: true, console: true });
+    expect(EditLogic.mapRepeats(left)).toEqual({ beatIds: [], photoKeys: [] });
+    expect(checksFind(left)).toEqual([]);
+  });
+});

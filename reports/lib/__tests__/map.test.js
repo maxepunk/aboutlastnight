@@ -841,3 +841,30 @@ describe("4.6c: a card count is the director's only for the edits that changed i
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6c: the gate and the checks find a repeat by the console's rule
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The gate (directorMapProblems) and the checks (mapFindings) read a repeat through the
+// console's mapRepeats (console/outline-edit-logic.js), the rule the map on screen locks a
+// line by and the client gate takes the writer's repeats by, so the four read one rule.
+describe('4.6c: the gate and the checks find a repeat by mapRepeats, the rule the console reads', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'map.js'), 'utf8');
+  /** A function's body in lib/map.js, from its declaration to its closing brace. */
+  const body = (name) => {
+    const start = src.indexOf(`function ${name}(`);
+    return start === -1 ? '' : src.slice(start, src.indexOf('\n}\n', start));
+  };
+
+  it('repeatedBeatIds and repeatedPhotos build on mapRepeats, and lib/map.js counts no repeat itself', () => {
+    expect(src).toMatch(/\bmapRepeats\b[^;]*= require\('\.\.\/console\/outline-edit-logic'\)/);
+    ['repeatedBeatIds', 'repeatedPhotos'].forEach((name) => {
+      expect(`${name}: ${body(name).includes('mapRepeats(')}`).toBe(`${name}: true`);
+      expect(`${name}: ${/count/i.test(body(name))}`).toBe(`${name}: false`);
+    });
+    expect(`placedPhotos: ${/count/i.test(body('placedPhotos'))}`).toBe('placedPhotos: false');
+  });
+});

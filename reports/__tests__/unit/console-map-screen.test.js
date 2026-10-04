@@ -133,3 +133,13 @@ describe('4.9: the map\'s styles', () => {
     ['.outline-thesis', '.outline-section__list', '.outline-section--editing'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
   });
 });
+
+// Brief 4.6c: Outline.js finds a section as the editors and moves find it.
+describe('4.6c: Outline.js reads the map through the edit logic', () => {
+  const src = read('components/checkpoints/Outline.js');
+
+  it("opens a section's editor on the section the edit logic finds by its slot, and keeps no finder of its own", () => {
+    expect(count(src, 'EditLogic.sectionWithSlot(draft, section.slot)')).toBe(1);
+    expect(src).not.toMatch(/function sectionOf\(|\.sections\.filter\(/);
+  });
+});

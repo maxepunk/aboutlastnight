@@ -194,8 +194,6 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   function editNote(text) { keep(draft, text); setSendBackArmed(false); }
   function backToMeeting() { if (onRollback) onRollback('arc-selection'); }
 
-  function sectionOf(slot) { return draft.sections.filter(function (s) { return s && s.slot === slot; })[0]; }
-
   function movePhotoTo(fromSlot, fromIndex, toSlot) {
     change(EditLogic.movePhoto(draft, fromSlot, fromIndex, toSlot));
   }
@@ -456,7 +454,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         isEditing('section', section.slot)
           ? React.createElement('div', { className: 'map__section-head map__editing' },
               React.createElement(SectionEditor, {
-                section: sectionOf(section.slot),
+                section: EditLogic.sectionWithSlot(draft, section.slot),
                 onSave: function (fields) { save(EditLogic.mergeMapSection(draft, section.slot, fields)); },
                 onCancel: cancel
               }))

@@ -80,9 +80,23 @@
     return typeof value === 'string' ? value : '';
   }
 
-  /** The section of `map` that fills `slot`. */
+  /**
+   * The section of the map that fills `slot`, as the editors and the moves find it: the first
+   * section with that slot. The section a section's editor opens on (task 4.6c). Null for
+   * anything that is no map, and for a slot no section fills.
+   *
+   * @param {*} map
+   * @param {string} slot
+   * @returns {Object|null}
+   */
+  function sectionWithSlot(map, slot) {
+    if (!isMapValue(map)) return null;
+    return map.sections.filter(function (s) { return isPlainObject(s) && s.slot === slot; })[0] || null;
+  }
+
+  /** The section of `map` that fills `slot` (sectionWithSlot), or a throw naming the operation. */
   function sectionAt(map, slot, operation) {
-    var section = map.sections.filter(function (s) { return isPlainObject(s) && s.slot === slot; })[0];
+    var section = sectionWithSlot(map, slot);
     if (!section) throw new Error(operation + ': the map has no section for the slot ' + String(slot));
     return section;
   }
@@ -926,6 +940,8 @@
     // Task 4.9: the map's editors (init, build, merge) and its moves
     MAP_TOP_PHOTO: MAP_TOP_PHOTO,
     beatWithId: beatWithId,
+    // Task 4.6c: the section a section's editor opens on, as the editors and moves find it
+    sectionWithSlot: sectionWithSlot,
     initMapHead: initMapHead,
     buildMapHead: buildMapHead,
     mergeMapHead: mergeMapHead,

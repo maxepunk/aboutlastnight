@@ -30,7 +30,9 @@
  * - THE STOP: its payloads (mapResume, which server.js buildResumePayload calls) and what it
  *   shows (mapCheckpointData).
  * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks,
- * the stop and the console share, with its rule for a beat's card (beatCardOf). A photo is
+ * the stop and the console share, with its rule for a beat's card (beatCardOf) and for a
+ * repeat (mapRepeats, which the gate and the checks read through repeatedBeatIds and
+ * repeatedPhotos; task 4.6c). A photo is
  * read by its filename's one join key (lib/prompt-renderers/director-words-renderer.js
  * photoKey), as the map's edits and the kept photos read it.
  *
@@ -43,7 +45,7 @@ const crypto = require('crypto');
 const Ajv = require('ajv');
 const outlineSchema = require('./schemas/outline.schema.json');
 const { mapSlotsOf } = require('./theme-config');
-const { mapTally, mapPhotoPlacements, rosterMemberOf, beatCardOf } = require('../console/outline-edit-logic');
+const { mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf } = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
   mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
@@ -130,51 +132,47 @@ function sectionBeats(map) {
 
 /**
  * The beat ids that more than one beat of a map carries, in the sections and in leftOut,
- * each once, in the order of its first beat. An id is read as the map's edits find a beat
- * by it: its text, trimmed. The checks (duplicate-beat-id) and the gate
- * (directorMapProblems) both read it.
+ * each once, in the order of its first beat: the repeats console/outline-edit-logic.js
+ * mapRepeats finds, the one rule for a repeat (task 4.6c), which the console's validator and
+ * the map on screen read too. An id is read as the map's edits find a beat by it (beatIdOf):
+ * its text, trimmed. The checks (duplicate-beat-id) and the gate (directorMapProblems) both
+ * read it.
  *
  * @param {*} map
  * @returns {string[]}
  */
 function repeatedBeatIds(map) {
-  if (!map || typeof map !== 'object') return [];
-  const counts = new Map();
-  [...objectsOf(map.sections).flatMap((section) => objectsOf(section.beats)), ...objectsOf(map.leftOut)].forEach((beat) => {
-    const id = textOf(String(beat.id === undefined || beat.id === null ? '' : beat.id));
-    if (id) counts.set(id, (counts.get(id) || 0) + 1);
-  });
-  return [...counts].filter(([, n]) => n > 1).map(([id]) => id);
+  return mapRepeats(map).beatIds;
 }
 
 /**
  * Each photo a map places, the top photo and the sections' photos, found by the one join
- * key (photoKey), in the order of its first place: the name its first place gives it and
- * how many places it has.
+ * key (photoKey), in the order of its first place, under the name its first place gives it.
  *
  * @param {*} map
- * @returns {Map<string, {filename: string, count: number}>} photoKey -> the photo
+ * @returns {Map<string, string>} photoKey -> filename
  */
 function placedPhotos(map) {
   const placed = new Map();
   mapPhotoPlacements(map).forEach(({ filename }) => {
     const key = photoKey(filename);
-    const first = placed.get(key);
-    placed.set(key, first ? { filename: first.filename, count: first.count + 1 } : { filename, count: 1 });
+    if (!placed.has(key)) placed.set(key, filename);
   });
   return placed;
 }
 
 /**
- * The photos a map places more than once (placedPhotos), each once, under the name its
- * first place gives it, in the map's order. The checks (photo-placed-twice) and the gate
+ * The photos a map places more than once, each once, under the name its first place gives
+ * it, in the map's order: the repeats console/outline-edit-logic.js mapRepeats finds, the
+ * one rule for a repeat (task 4.6c). The checks (photo-placed-twice) and the gate
  * (directorMapProblems) both read it.
  *
  * @param {*} map
  * @returns {Map<string, string>} photoKey -> filename
  */
 function repeatedPhotos(map) {
-  return new Map([...placedPhotos(map)].filter(([, photo]) => photo.count > 1).map(([key, photo]) => [key, photo.filename]));
+  const placed = placedPhotos(map);
+  return new Map(mapRepeats(map).photoKeys.map((key) => [key, placed.get(key)]));
 }
 
 /** The director's edits on the map's beats and photos, each with what it is about. */
@@ -410,7 +408,7 @@ function mapFindings(map, inputs = {}) {
     });
     if (theirs.length > 0) fail(type, writersLine(theirs));
   };
-  const nameOfKey = (key) => (kept.find((f) => photoKey(f) === key) || placed.get(key).filename);
+  const nameOfKey = (key) => (kept.find((f) => photoKey(f) === key) || placed.get(key));
   split('photo-not-placed', kept.filter((filename) => !placed.has(photoKey(filename))),
     (list) => `Photos placed nowhere: ${list.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people, as C2 (\`<craft-form>\`) sets out.`,
     (filename) => `${filename} is placed nowhere.`);
@@ -534,7 +532,8 @@ function directorMapSchemaFor(theme) {
  * the writer's, and an automatic pass could undo the director's choice unrestored. For
  * both, a repeat the map the stop showed holds is the writer's, which the map checks report
  * and a rework fixes; one it does not hold is the director's, refused. The gate and the
- * checks find repeats by the same rules (repeatedBeatIds, repeatedPhotos).
+ * checks find repeats by the same rules (repeatedBeatIds, repeatedPhotos), which build on
+ * the console's mapRepeats, the rule its validator and the map on screen read (task 4.6c).
  *
  * @param {*} map - the map as the director left it
  * @param {Object} options

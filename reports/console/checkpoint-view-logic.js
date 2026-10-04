@@ -2531,7 +2531,8 @@
    * the page uses, or null for a map it takes (the integrator's ruling 3): the map's client
    * gate, console/outline-edit-logic.js validateOutlineShape, which decides as lib/map.js
    * directorMapProblems does (a test holds the decisions equal), given the theme's slots and
-   * the map the stop showed, whose repeats are the writer's.
+   * the map the stop showed, whose repeats are the writer's. The map shown is read as mapView
+   * reads it (isMapValue), so a value that is no map is no map shown (task 4.6c).
    *
    * @param {*} map - the map as the director left it
    * @param {Object} data - the stop's payload: the map it showed and the theme's slots
@@ -2539,7 +2540,8 @@
    */
   function mapProblems(map, data) {
     var d = isPlainObject(data) ? data : {};
-    var result = outlineEditLogic().validateOutlineShape(map, null, d.mapSlots, isPlainObject(d.outline) ? d.outline : null);
+    var editLogic = outlineEditLogic();
+    var result = editLogic.validateOutlineShape(map, null, d.mapSlots, editLogic.isMapValue(d.outline) ? d.outline : null);
     if (result.valid) return null;
     var slots = slotsOf(d);
     var text = result.errors.map(function (error) {
