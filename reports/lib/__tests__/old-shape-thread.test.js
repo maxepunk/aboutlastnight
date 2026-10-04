@@ -46,7 +46,8 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
 
   // Phase 4 (brief 4.4): the arc writer writes the weave in one call, and the arc stage
   // is the journalist's alone (R1); the interweaving call went. Brief 4.6: the outline
-  // judge went, and the map writer is the journalist's alone too (R1).
+  // judge went, and the map writer is the journalist's alone too (R1). Brief 4.7b: so is
+  // the article writer (R1).
   it('the arc writer, the outline and article writers and the article judge carry the sales on the clock', async () => {
     if (theme === 'journalist') {
       const arcSdk = recordingSdk(() => oldShapeState(theme).weave);
@@ -56,11 +57,11 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
       const outlineSdk = recordingSdk(() => OUTLINE);
       await generateOutline({ ...oldShapeState(theme), outline: null }, cfg(outlineSdk, theme));
       expect(promptOf(outlineSdk)).toContain(SALE_LINE);
-    }
 
-    const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
-    await generateContentBundle({ ...oldShapeState(theme), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
-    expect(promptOf(articleSdk)).toContain(SALE_LINE);
+      const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
+      await generateContentBundle({ ...oldShapeState(theme), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
+      expect(promptOf(articleSdk)).toContain(SALE_LINE);
+    }
 
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
     const articleJudge = recordingSdk(verdict);
@@ -90,12 +91,12 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
 
     const arcSdk = recordingSdk(() => withLink().weave);
     const outlineSdk = recordingSdk(() => OUTLINE);
+    const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
     if (theme === 'journalist') {
       await analyzeArcsPlayerFocusGuided({ ...withLink(), weave: null }, cfg(arcSdk, theme));
       await generateOutline({ ...withLink(), outline: null }, cfg(outlineSdk, theme));
+      await generateContentBundle({ ...withLink(), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
     }
-    const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
-    await generateContentBundle({ ...withLink(), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
     // Phase 4 (brief 4.6): the article judge, in place of the outline judge that went.
     const articleJudge = recordingSdk(verdict);
@@ -105,12 +106,11 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     }, cfg(articleJudge, theme));
 
     const prompts = {
-      ...(theme === 'journalist' && { arcWriter: promptOf(arcSdk, 0), outlineWriter: promptOf(outlineSdk) }),
-      articleWriter: promptOf(articleSdk),
+      ...(theme === 'journalist' && { arcWriter: promptOf(arcSdk, 0), outlineWriter: promptOf(outlineSdk), articleWriter: promptOf(articleSdk) }),
       articleJudge: promptOf(articleJudge)
     };
     const withLinks = Object.entries(prompts).filter(([, prompt]) => prompt.includes('<TRANSACTION_LINKS>'));
-    // The detective writers print no director-notes block of their own.
+    // The detective has no writer past the parse (R1).
     expect(withLinks.map(([name]) => name)).toEqual(theme === 'journalist'
       ? ['arcWriter', 'outlineWriter', 'articleWriter', 'articleJudge']
       : ['articleJudge']);

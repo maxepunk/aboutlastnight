@@ -17,7 +17,7 @@
 const { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const {
   generateOutline, reviseOutline, generateContentBundle, reviseContentBundle,
-  _testing: { OUTLINE_REVISION_RULES, articleRevisionRules }
+  _testing: { OUTLINE_REVISION_RULES, ARTICLE_REVISION_RULES }
 } = require('../workflow/nodes/ai-nodes');
 const {
   reviseArcs,
@@ -161,7 +161,10 @@ describe('journalist map stop', () => {
   });
 });
 
-describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
+// Phase 4 (brief 4.7b; R1): the article writer is the journalist's alone: the article
+// stage's detective branch went with the old stages.
+describe('journalist article stop', () => {
+  const theme = 'journalist';
   const EDITED = (() => { const b = clone(PREVIOUS_BUNDLE); b.headline.main = 'Hand-edited headline'; return b; })();
   const NOTE = 'Put the test before the sale.';
 
@@ -191,14 +194,9 @@ describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
     expectOneRecordAndGuidanceLast(rework.user);
 
     // The writer's rules and schema replace the reworker's own smaller copies.
-    // Phase 3 (3.2): the journalist's rules are its craft files, once; the detective's
-    // are its <RULES> block.
-    if (theme === 'journalist') {
-      expect(count(rework.user, '<RULES>')).toBe(0);
-      expect(count(rework.user, '<craft-voice>')).toBe(1);
-    } else {
-      expect(count(rework.user, '<RULES>')).toBe(1);
-    }
+    // Phase 3 (3.2): the journalist's rules are its craft files, once.
+    expect(count(rework.user, '<RULES>')).toBe(0);
+    expect(count(rework.user, '<craft-voice>')).toBe(1);
     expect(count(rework.user, '<SCHEMA>')).toBe(1);
     expect(rework.user).not.toContain('## OUTPUT SCHEMA');
     expect(rework.user).toContain('APPROVED OUTLINE:');
@@ -224,12 +222,12 @@ describe.each(['journalist', 'detective'])('%s article stop', (theme) => {
     cardIds.forEach((id) => expect(writerPart).toContain(DOCUMENT_TEXT[id]));
   });
 
-  it("the reworker's system prompt is its writer's (roster with pronouns, constraints, boundaries), then the rework rules", async () => {
+  it("the reworker's system prompt is its writer's (the roster with pronouns, the world and the truth rules), then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
-    expect(rework.system).toBe(`${writer.system}\n\n${articleRevisionRules(theme)}`);
+    expect(rework.system).toBe(`${writer.system}\n\n${ARTICLE_REVISION_RULES}`);
     expect(writer.system).toContain('CANONICAL CHARACTER ROSTER');
     expect(writer.system).toContain('Morgan → Morgan Reed');
-    expect(writer.system).toContain(theme === 'journalist' ? '<truth-rules>' : '<evidence-boundaries>');
+    expect(writer.system).toContain('<truth-rules>');
   });
 
   it("the guidance keeps phase 1's note filtering", async () => {

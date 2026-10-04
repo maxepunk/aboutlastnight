@@ -2389,9 +2389,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
         expect(prompt).not.toContain('hero.jpg');
         expect(prompt).not.toContain('[hero image]');
       }
-      // The detective is parked (spec D13): its writer keeps the hero it was given.
-      const detective = markExcluded(stateFor('detective', { heroImage: 'hero.jpg' }), 'hero.jpg');
-      expect(articleWriterInputs(detective)[1]).toBe('hero.jpg');
+      // Phase 4 (brief 4.7b; R1): the parked detective's stored hero went with its article
+      // writer.
     });
   });
 });

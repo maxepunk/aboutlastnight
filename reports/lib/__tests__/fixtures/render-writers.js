@@ -89,13 +89,17 @@ async function renderAll(req) {
       out[`outline-${theme}`] = `${outlineSdk.calls[0].systemPrompt}\n=====\n${outlineSdk.calls[0].prompt}`;
     }
 
-    const articleSdk = recordingSdk({ sections: [], evidenceCards: [], metadata: {} });
-    await aiNodes.generateContentBundle(
-      // Phase 4 (brief 4.6): no outline evaluation's advisories reach the article writer.
-      { ...base, ...tail, heroImage: 'hero.jpg', contentBundle: null },
-      { configurable: { sdkClient: articleSdk, promptBuilder: builder, theme } }
-    );
-    out[`article-${theme}`] = `${articleSdk.calls[0].systemPrompt}\n=====\n${articleSdk.calls[0].prompt}`;
+    // Phase 4 (brief 4.7b; R1): the article writer writes from the map, the journalist's
+    // alone: the parked detective has no article writer.
+    if (theme === 'journalist') {
+      const articleSdk = recordingSdk({ sections: [], evidenceCards: [], metadata: {} });
+      await aiNodes.generateContentBundle(
+        // Phase 4 (brief 4.6): no outline evaluation's advisories reach the article writer.
+        { ...base, ...tail, heroImage: 'hero.jpg', contentBundle: null },
+        { configurable: { sdkClient: articleSdk, promptBuilder: builder, theme } }
+      );
+      out[`article-${theme}`] = `${articleSdk.calls[0].systemPrompt}\n=====\n${articleSdk.calls[0].prompt}`;
+    }
 
     // The arc writer, with arcRevisionCount > 0 and standing notes, so its tail is
     // pinned too. Since phase 3 (3.3) the journalist's tail is the notes alone. Phase 4

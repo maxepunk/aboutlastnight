@@ -187,17 +187,10 @@ describe('article prompt, on-site session', () => {
   });
 });
 
+// Phase 4 (brief 4.7b; R1): the template variables went with the parked detective's
+// craft files, the last prompt files a writer loaded; the rendered prompt still carries
+// none unresolved.
 describe('REPORTING_MODE substitution', () => {
-  it('resolves from sessionConfig.reportingMode', () => {
-    const builder = createPromptBuilder({ theme: 'journalist', sessionConfig: { reportingMode: 'remote' } });
-    expect(builder.resolvePromptVariables('mode: {{REPORTING_MODE}}')).toBe('mode: remote');
-  });
-
-  it('defaults to on-site when the session config carries no mode', () => {
-    const builder = createPromptBuilder({ theme: 'journalist', sessionConfig: {} });
-    expect(builder.resolvePromptVariables('mode: {{REPORTING_MODE}}')).toBe('mode: on-site');
-  });
-
   it('leaves no unresolved {{REPORTING_MODE}} in the rendered prompt', async () => {
     const { all } = await renderArticlePrompt('remote');
     expect(all).not.toContain('{{REPORTING_MODE}}');

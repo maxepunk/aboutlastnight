@@ -187,21 +187,25 @@ describe('journalist: the map writer and its rework carry no buried memory', () 
   });
 });
 
-describe.each(['journalist', 'detective'])('%s: no writer, reworker or judge prompt carries the buried memory', (theme) => {
+// Phase 4 (brief 4.7b): the article writer is the journalist's alone (R1: the article
+// stage's detective branches went).
+describe('journalist: the article writer and its rework carry no buried memory', () => {
   it('the article writer and its reworker', async () => {
+    const theme = 'journalist';
     const state = { ...sentinelState(theme), heroImage: 'hero.jpg' };
     const writer = recordingSdk(() => PREVIOUS_BUNDLE);
     await generateContentBundle({ ...state, contentBundle: null }, cfg(writer, theme));
     const rework = recordingSdk(() => PREVIOUS_BUNDLE);
     await reviseContentBundle({ ...state, contentBundle: null, _previousContentBundle: PREVIOUS_BUNDLE, articleRevisionCount: 1 }, cfg(rework, theme));
     for (const prompt of [...promptsOf(writer), ...promptsOf(rework)]) {
-      // The detective writers carry no director-notes block at all.
-      expect(prompt.includes('<TRANSACTION_LINKS>')).toBe(theme === 'journalist');
+      expect(prompt).toContain('<TRANSACTION_LINKS>');
       expect(prompt).toContain('<morning-timeline>');
       expect(leaksIn(prompt)).toEqual([]);
     }
   });
+});
 
+describe.each(['journalist', 'detective'])('%s: no judge prompt carries the buried memory', (theme) => {
   // Phase 4 (brief 4.6): the outline judge went; the article judge stays.
   it('the article judge', async () => {
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });

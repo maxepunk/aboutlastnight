@@ -208,26 +208,6 @@ function withoutWriterQuestions(output) {
   return rest;
 }
 
-const schemasWithout = new WeakMap();
-
-/**
- * A schema with its top-level writerQuestions property taken out: what the parked
- * detective is sent and printed (spec D13). A deep copy, kept per schema object, so
- * the SDK wrapper's per-object memo sees one object per schema.
- *
- * @param {Object} schema
- * @returns {Object}
- */
-function schemaWithoutWriterQuestions(schema) {
-  if (!schema || typeof schema !== 'object' || !schema.properties || !(WRITER_QUESTIONS_KEY in schema.properties)) return schema;
-  if (!schemasWithout.has(schema)) {
-    const copy = JSON.parse(JSON.stringify(schema));
-    delete copy.properties[WRITER_QUESTIONS_KEY];
-    schemasWithout.set(schema, copy);
-  }
-  return schemasWithout.get(schema);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // THE WEAVE'S QUESTIONS (phase 4, brief 4.4; C15)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -493,7 +473,6 @@ module.exports = {
   carriedWriterQuestions,
   withCarriedWriterQuestions,
   withoutWriterQuestions,
-  schemaWithoutWriterQuestions,
   // Phase 4 (brief 4.4): the weave's questions; brief 4.5: their answers
   WEAVE_QUESTIONS_KEY,
   WEAVE_QUESTION_KINDS,

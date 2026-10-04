@@ -16,18 +16,7 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // <SCHEMA> (fix 3.2b), the one the SDK channel enforces (ai-nodes.js), as the article
 // writer embeds the schema above; its slots are the theme's.
 const { mapSchemaFor } = require('./map');
-// The detective is parked (spec D13) and its prompt keeps today's text, the <SCHEMA>
-// it embeds included. Phase 3 (3.2) cut the schema's descriptions down to shape only,
-// so the detective prints this copy of the schema as it was before that cut. It is
-// printed, never validated against: the schema above is the one every check uses.
-// lib/__tests__/content-bundle-detective-copy.test.js holds the copy to the live
-// schema's shape. The copy carries no $id, so it can never be registered as the live
-// schema (fix 3.2b); the printed text puts back the id line it printed before (D13).
-// Phase 3 (3.7): the copy carries the live schema's writerQuestions, to keep its
-// shape, and the detective's print leaves it out, so its <SCHEMA> stays as it was.
-const detectivePromptSchema = require('./schemas/content-bundle.detective-prompt.json');
-const { withoutWriterQuestions, schemaWithoutWriterQuestions } = require('./writer-questions');
-const DETECTIVE_PRINTED_SCHEMA = (({ $schema, ...rest }) => ({ $schema, $id: 'content-bundle', ...rest }))(schemaWithoutWriterQuestions(detectivePromptSchema));
+const { withoutWriterQuestions } = require('./writer-questions');
 const { getThemeNPCEntries, mapSlotsOf } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
@@ -190,14 +179,14 @@ ${npcLines.join('\n')}`;
  * Wrap prompt content in one XML tag named after it.
  *
  * Uses XML tags for consistency with Claude's training and token efficiency. It wraps
- * the sections both themes add by name (<SHOULD_CONSIDER>, <DIRECTOR_GUIDANCE>) and the
- * parked detective's prompt files, each under its file name (spec D13). The
- * journalist's rule files come wrapped from lib/rule-set.js, and a journalist prompt
- * points at a rule by its id and its file's tag, as in "C16 (<craft-story>)".
+ * the section the writers add by name, <DIRECTOR_GUIDANCE>. The parked detective's
+ * prompt files, each wrapped under its file name, went with its writers (R1; phase 4,
+ * briefs 4.6 and 4.7b). The journalist's rule files come wrapped from lib/rule-set.js,
+ * and a journalist prompt points at a rule by its id and its file's tag, as in "C16
+ * (<craft-story>)".
  *
- * @param {string} filename - the tag: a section's name (e.g. 'DIRECTOR_GUIDANCE') or a
- *   detective prompt file's name
- * @param {string} content - the section's or the file's content
+ * @param {string} filename - the tag: a section's name (e.g. 'DIRECTOR_GUIDANCE')
+ * @param {string} content - the section's content
  * @returns {string} XML-wrapped content, or '' when the content is empty
  */
 function labelPromptSection(filename, content) {
@@ -427,71 +416,16 @@ function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
 }
 
 /**
- * Theme-specific system prompt framing.
- *
- * Phase 3 (3.2): the journalist's identity lines say who is writing and nothing
- * more: the world, the truth rules and the craft guidance (lib/rule-set.js) carry
- * the rest. The journalist has no revision line: the article rework's first line is
- * its rework rules' own (ai-nodes.js ARTICLE_REVISION_RULES, since 3.10's fix round
- * 1), and the string that held the old one went in the 4b fix batch. The detective is
- * parked (spec D13) and keeps its lines, its revision line among them. The
- * 'validation' lines went with the dead validation builder.
+ * Each writer's identity line, by theme and phase: who is writing, and nothing more. The
+ * world, the truth rules and the craft guidance (lib/rule-set.js) carry the rest (phase
+ * 3, 3.2). A rework's first line is its rework rules' own (ai-nodes.js). The parked
+ * detective's lines went with its writers (R1): its outline writer's in phase 4 brief
+ * 4.6, its article writer's and its revision line in brief 4.7b.
  */
 const THEME_SYSTEM_PROMPTS = {
   journalist: {
     outlineGeneration: 'You are laying out the story map of a NovaNews investigative article.',
     articleGeneration: 'You are Nova, writing a NovaNews investigative article in the first person.'
-  },
-  detective: {
-    articleGeneration: `You are a cynical, seasoned Detective in a near-future noir setting. You are writing an official Case Report.
-
-TONE: Professional, analytical, with a distinct noir flair. Economical with words. Every sentence earns its place.
-FORMAT: HTML (body content only, NO <html>, <head>, or <body> tags).`,
-    revision: 'You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only. Keep the third-person investigative case-report voice.'
-  }
-};
-
-/**
- * Theme-specific hard constraints and voice guidance.
- *
- * Phase 3 (3.2): the journalist's hard constraints, voice checkpoint and voice
- * question are gone. Each restated a rule the rule set now states once (C4's house
- * style, T14's words, C10's "name who acted") or reversed one ("no buried memories,
- * no bonus, no counted memories" against T5; "participatory and implicated" and a
- * Nova the story "happened to" against T8 and C12). The voice is craft-voice, which
- * the article writer and its reworker carry in the user prompt. revisionVoice stays
- * as an empty slot because articleRevisionRules (ai-nodes.js, 3.3's) still prints it.
- */
-const THEME_CONSTRAINTS = {
-  journalist: {
-    revisionVoice: ''
-  },
-  detective: {
-    hardConstraints: `CRITICAL WRITING PRINCIPLES:
-- SYNTHESIZE evidence into thematic groups—do NOT list every item individually
-- Tell the STORY of what happened—do NOT catalog facts
-- Each report must feel BESPOKE to this specific case—reference unique details
-- Avoid repetition—each fact appears ONCE in the most impactful location
-- TARGET LENGTH: 750 words (+-50 words acceptable)
-
-FACTUAL ACCURACY (CRITICAL - NEVER VIOLATE):
-- Only state facts EXPLICITLY supported by the evidence provided
-- Do NOT infer group memberships, relationships, or details unless directly stated
-- If evidence is ambiguous or incomplete, acknowledge uncertainty
-
-EVIDENCE REFERENCING (CRITICAL):
-- Call them "memory extractions", "recovered memories", or "scanned memories"
-- NEVER use "Memory Token", token codes, database names, RFID codes, or item IDs
-- NEVER reference "character sheets" as sources—present as background knowledge
-- NO inventing last names - use ONLY canonical names from the roster above`,
-    voiceCheckpoint: 'Before generating, internalize Detective Anondono\'s voice:',
-    voiceQuestion: 'Ask yourself: "Am I writing a professional case report that synthesizes evidence, or am I just listing facts?"\nThe answer must be synthesis. Every section answers a different question about the same underlying facts.',
-    revisionVoice: `DETECTIVE VOICE:
-- Third-person investigative: "The investigation revealed..." not "I saw..."
-- Professional noir: world-weary but precise, economical with words
-- In-world always: never reference game mechanics
-- Section differentiation: each section answers a DIFFERENT question
-- Name formatting: ALL names in <strong> tags, evidence in <em> tags`
   }
 };
 
@@ -682,20 +616,6 @@ Only the ${n} players above were at the investigation. Every other character exc
   }
 
   /**
-   * A phase's craft files, with their template variables (e.g.
-   * {{JOURNALIST_FIRST_NAME}}) resolved.
-   *
-   * @param {string} phase - a PHASE_REQUIREMENTS key
-   * @returns {Promise<Object>} prompt name -> resolved text
-   */
-  async _loadResolvedPhasePrompts(phase) {
-    const rawPrompts = await this.theme.loadPhasePrompts(phase);
-    return Object.fromEntries(
-      Object.entries(rawPrompts).map(([k, v]) => [k, this.resolvePromptVariables(v)])
-    );
-  }
-
-  /**
    * The map writer's prompt (phase 4, brief 4.6; spec 5.1): its system prompt
    * (buildOutlineSystemPrompt), its user sections (buildOutlineUserSections), then
    * <DIRECTOR_GUIDANCE> last, with the standing notes. The map's rework is built from the
@@ -845,39 +765,24 @@ ${loadRuleSet('outline').craft}`;
 
   /**
    * The article writer's system prompt, shared with the article reworker (2.3): the
-   * identity, the mode block, and then, for the journalist, the world, the truth
-   * rules and the roster with pronouns (phase 3, 3.2: the integrator's placement
-   * ruling). The journalist's hard constraints and evidence-boundaries file are gone:
-   * the rule set states what they said that holds. The roster prints here alone
-   * (M20: the user prompt's <RULES> carried a second copy). The detective is parked
-   * and keeps its constraints and craft file.
+   * identity, the mode block, the world, the truth rules and the roster with pronouns
+   * (phase 3, 3.2: the integrator's placement ruling). The roster prints here alone (M20:
+   * the user prompt's <RULES> carried a second copy).
    *
    * @returns {Promise<string>}
+   * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
+   *   parked detective (R1): the article writer writes from the map, and the article
+   *   stage's detective branch went with the old stages (phase 4, brief 4.7b)
    */
   async buildArticleSystemPrompt() {
-    if (this.themeName === 'journalist') {
-      return `${THEME_SYSTEM_PROMPTS.journalist.articleGeneration}
+    mapSchemaFor(this.themeName);
+    return `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
 
 ${this._buildReportingModeBlock()}
 
 ${loadRuleSet('article').core}
 
 ${this._rosterSection()}`;
-    }
-
-    const prompts = await this._loadResolvedPhasePrompts('articleGeneration');
-
-    // System prompt: Identity and hard constraints (kept short for salience)
-    // Roster in system prompt for higher salience (prevents name hallucination)
-    const constraints = THEME_CONSTRAINTS[this.themeName];
-    return `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
-
-${this._buildReportingModeBlock()}
-
-${this._rosterSection()}
-
-${constraints.hardConstraints}
-${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
   }
 
   /**
@@ -888,137 +793,16 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
    * (shouldConsider, directorGuidance, gateNotes) are not read here.
    *
    * @returns {Promise<string>}
+   * @throws {Error} for a theme with no story map, such as the parked detective (R1)
    */
   async buildArticleUserSections(outline, heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+    mapSchemaFor(this.themeName);
     // Brief 2.1: the record, once, in the data part. Phase 4 (brief 4.6; R5): the arc
     // packages that named each arc's documents went; the record is whole.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
-
-    if (this.themeName === 'journalist') {
-      return this._journalistArticleUserSections(
-        outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
-      );
-    }
-
-    // The detective is parked (spec D13): everything below is its text as it was, less
-    // the arc packages, which went for every theme (phase 4, brief 4.6; R5).
-    const prompts = await this._loadResolvedPhasePrompts('articleGeneration');
-    const constraints = THEME_CONSTRAINTS[this.themeName];
-
-    // User prompt: Data first, then template, then RULES LAST (recency bias)
-    let userPrompt;
-
-    if (this.themeName === 'detective') {
-      userPrompt = `<DATA_CONTEXT>
-APPROVED OUTLINE:
-${JSON.stringify(outline, null, 2)}
-
-HERO IMAGE:
-Filename: ${heroImage || 'Use first available photo from outline'}
-- Emit "heroImage" as an OBJECT: { "filename": "<exact filename>", "caption": "...", "characters": [...] }
-- Do NOT emit "heroImage" as a bare filename string — the schema requires an object.
-- Do NOT include this filename in the "photos" array
-
-${recordSection}
-</DATA_CONTEXT>
-
-<RULES>
-${labelPromptSection('section-rules', prompts['section-rules'])}
-${labelPromptSection('narrative-structure', prompts['narrative-structure'])}
-${labelPromptSection('formatting', prompts['formatting'])}
-${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}
-
-${this._rosterSection()}
-</RULES>
-
-<SECTION_GUIDANCE>
-CRITICAL: This is a CASE REPORT. Each section answers a DIFFERENT QUESTION about the same underlying facts.
-
-- EXECUTIVE SUMMARY: What happened? (Hook + factual overview + top findings)
-- EVIDENCE LOCKER: What does the evidence show? (Thematically grouped, synthesized — NOT listed individually)
-- MEMORY ANALYSIS (optional): What do the memory extraction patterns reveal?
-- SUSPECT NETWORK: Who are the key players and how do they connect?
-- OUTSTANDING QUESTIONS: What remains unknown or unresolved?
-- FINAL ASSESSMENT: What is the detective's conclusion?
-
-SECTION DIFFERENTIATION is critical. If a fact appears in one section, it should NOT repeat in another.
-The report should feel BESPOKE to this specific case — reference unique details, not generic observations.
-</SECTION_GUIDANCE>
-
-<ANTI_PATTERNS>
-${labelPromptSection('anti-patterns', prompts['anti-patterns'])}
-</ANTI_PATTERNS>
-
-<VOICE_CHECKPOINT>
-${constraints.voiceCheckpoint}
-${labelPromptSection('character-voice', prompts['character-voice'])}
-${labelPromptSection('writing-principles', prompts['writing-principles'])}
-${constraints.voiceQuestion}
-</VOICE_CHECKPOINT>
-
-<GENERATION_INSTRUCTION>
-Generate structured case report content as JSON matching the ContentBundle schema.
-
-STRUCTURE:
-1. "sections" - Array of report sections, each with:
-   - "id": Section identifier (executive-summary, evidence-locker, memory-analysis, suspect-network, outstanding-questions, final-assessment)
-   - "type": Section type for styling (case-summary, evidence-highlight, narrative, investigation-notes, conclusion)
-   - "heading": Section heading
-   - "content": Array of content blocks:
-     * {"type": "paragraph", "text": "..."} - Prose text
-     * {"type": "quote", "text": "...", "attribution": "..."} - Inline quotes
-     * {"type": "evidence-reference", "tokenId": "xxx", "caption": "..."} - Evidence reference
-     * {"type": "list", "items": [...], "ordered": false} - Lists
-
-2. "headline" - Report headline with:
-   - "main": Case report title
-   - "kicker": Optional subtitle
-   - "deck": Brief summary line
-
-3. "byline" - Author information:
-   - "author": "Detective Anondono"
-   - "title": "Lead Investigator"
-
-4. "photos" - Session photos with placement:
-   - "filename": EXACT filename from available photos (do NOT include hero image here)
-   - "caption": Caption text
-   - "characters": Array of character names visible
-   - "placement": "inline" or "sidebar"
-   - "afterSection": Section ID after which photo appears
-
-5. "heroImage" - Featured image (OBJECT, not string):
-   - "filename": EXACT filename of the hero image (matches HERO IMAGE above)
-   - "caption": Hero image caption
-   - "characters": Array of character names visible in the image
-
-6. "metadata" - Required top-level metadata object:
-   - "sessionId": session identifier (will be overwritten by state value)
-   - "theme": "detective"
-   - "generatedAt": ISO 8601 timestamp
-
-7. "voice_self_check" - Self-assessment:
-   - Is the tone professional and analytical with noir flair?
-   - Does each section answer a DIFFERENT question?
-   - Are names in <strong> tags, evidence in <em> tags?
-   - Is the report ~750 words?
-   - Are facts synthesized (not cataloged)?
-   - No game mechanics language?
-
-Do NOT include pullQuotes, evidenceCards, or financialTracker — these are journalist-specific components.
-
-TARGET LENGTH: ~750 words (+-50 words acceptable). Be economical. Every sentence earns its place.
-
-<SCHEMA>
-Authoritative output shape for the ContentBundle. The SDK's outputFormat enforcement is known to fail silently for nested schemas (see anthropics/claude-agent-sdk-typescript#277) — when that happens, this schema is the only contract you have. Match it exactly: respect every enum, every required field, and the additionalProperties:false constraint at every level. Do not invent fields. Note: the schema permits pullQuotes/evidenceCards/financialTracker as optional properties, but the detective theme excludes them per the rule above; if anything else contradicts the schema, the schema wins.
-
-\`\`\`json
-${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
-\`\`\`
-</SCHEMA>
-</GENERATION_INSTRUCTION>`;
-    }
-
-    return userPrompt;
+    return this._journalistArticleUserSections(
+      outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
+    );
   }
 
   /**
@@ -1039,8 +823,7 @@ ${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
    *
    * The instruction asks only for the fields the article prints. The schema keeps
    * the rest as optional (HY1, the integrator's ruling): the article stop's sidebar
-   * editor writes a sidebar entry's owner, and the parked detective asks for photos
-   * and voice_self_check. The money tracker prints itself from the ledger (M2). An
+   * editor writes a sidebar entry's owner. The money tracker prints itself from the ledger (M2). An
    * evidence reference is described as the template prints it, a caption naming a
    * document (M1).
    *
@@ -1183,26 +966,6 @@ ${loadRuleSet('article').craft}`;
   getPhaseRequirements(phase) {
     return (PHASE_REQUIREMENTS[this.themeName] || {})[phase] || [];
   }
-
-  /**
-   * Resolve template variables in prompt text using sessionConfig values
-   * Variables use {{VARIABLE_NAME}} format (matching existing prompt conventions)
-   *
-   * @param {string} text - Prompt text with template variables
-   * @returns {string} Text with variables resolved
-   */
-  resolvePromptVariables(text) {
-    if (!text) return '';
-
-    const variables = {
-      JOURNALIST_FIRST_NAME: this.sessionConfig.journalistFirstName || DEFAULT_JOURNALIST_FIRST_NAME,
-      REPORTING_MODE: this.sessionConfig.reportingMode || 'on-site'
-    };
-
-    return text.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
-      return variables[varName] !== undefined ? variables[varName] : match;
-    });
-  }
 }
 
 /**
@@ -1240,10 +1003,7 @@ module.exports = {
   // Consumed by the system prompts assembled outside PromptBuilder (the two arc
   // calls, and through the arc writer's the two arc rework branches), so the
   // block's wording has one home.
-  withReportingModeBlock,
-  // Theme framing, consumed by the article rework rules in ai-nodes.js
-  THEME_SYSTEM_PROMPTS,
-  THEME_CONSTRAINTS
+  withReportingModeBlock
 };
 
 // Self-test when run directly

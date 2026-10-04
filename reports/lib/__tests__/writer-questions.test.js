@@ -32,7 +32,6 @@
 const { SchemaValidator } = require('../schema-validator');
 const outlineSchema = require('../schemas/outline.schema.json');
 const contentBundleSchema = require('../schemas/content-bundle.schema.json');
-const detectiveBundleCopy = require('../schemas/content-bundle.detective-prompt.json');
 const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
 const aiNodes = require('../workflow/nodes/ai-nodes');
 const { _testing: { buildEvaluationUserPrompt } } = require('../workflow/nodes/evaluator-nodes');
@@ -119,45 +118,18 @@ describe('the optional writerQuestions field in the four schemas', () => {
   });
 
   // Fix 3.7b (finding 3): one wording for the field. The arc schemas use the JS
-  // constant itself; the three JSON files repeat it, with the `additionalProperties:
-  // false` those files put on every object, so a wording change must touch all four.
+  // constant itself; the JSON files repeat it, with the `additionalProperties:
+  // false` those files put on every object, so a wording change must touch them all.
+  // Phase 4 (brief 4.7b; R1): the detective's frozen copy of the content-bundle schema
+  // went with the detective's article writer, the one call that printed it.
   it('one wording: each JSON schema defines the field exactly as WRITER_QUESTIONS_PROPERTY', () => {
     const { WRITER_QUESTIONS_PROPERTY } = require('../writer-questions');
     const expected = { ...WRITER_QUESTIONS_PROPERTY, items: { ...WRITER_QUESTIONS_PROPERTY.items, additionalProperties: false } };
     for (const [label, schema] of [
-      ['content-bundle.schema.json', contentBundleSchema],
-      ['content-bundle.detective-prompt.json', detectiveBundleCopy]
+      ['content-bundle.schema.json', contentBundleSchema]
     ]) {
       expect({ label, field: schema.properties.writerQuestions }).toEqual({ label, field: expected });
     }
-  });
-
-  it('the detective\'s frozen copy of the content-bundle schema keeps the live shape', () => {
-    expect(detectiveBundleCopy.properties.writerQuestions).toEqual(
-      expect.objectContaining({ type: 'array' })
-    );
-  });
-});
-
-describe('the detective\'s calls do not ask for the field (spec D13)', () => {
-  it.each([
-    ['generateContentBundle', (state, cfg) => aiNodes.generateContentBundle({ ...state, contentBundle: null }, cfg)],
-    ['reviseContentBundle', (state, cfg) => aiNodes.reviseContentBundle({ ...state, _previousContentBundle: clone(PREVIOUS_BUNDLE), articleRevisionCount: 1 }, cfg)]
-  ])('%s sends the detective a content-bundle schema without the field', async (_name, run) => {
-    for (const theme of ['journalist', 'detective']) {
-      const state = reworkFixtureState(theme);
-      const sdk = sdkReturning(PREVIOUS_BUNDLE);
-      await run(state, { configurable: { sdkClient: sdk, theme } });
-      const schema = sdk.mock.calls[0][0].jsonSchema;
-      expect(`${theme}: ${Boolean(schema.properties.writerQuestions)}`).toBe(`${theme}: ${theme === 'journalist'}`);
-    }
-  });
-
-  it('the detective\'s printed <SCHEMA> leaves the field out', async () => {
-    const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };
-    const { userPrompt } = await new PromptBuilder(themeLoader, 'detective', {})
-      .buildArticlePrompt({}, null, [], null, null, null, {});
-    expect(userPrompt).not.toContain('writerQuestions');
   });
 });
 

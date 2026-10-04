@@ -25,8 +25,7 @@ const {
     buildOutlineRevisionPrompt,
     buildArticleRevisionPrompt,
     OUTLINE_REVISION_RULES,
-    ARTICLE_REVISION_RULES,
-    articleRevisionRules
+    ARTICLE_REVISION_RULES
   },
   createMockPromptBuilder
 } = require('../workflow/nodes/ai-nodes');
@@ -39,20 +38,11 @@ const { createPromptBuilder } = require('../prompt-builder');
 // Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave.
 const { WEAVE } = require('./fixtures/rework-state');
 
-describe('revision system prompts are theme-aware', () => {
+describe('revision system prompts', () => {
   it('journalist keeps Nova as the reviser', async () => {
-    expect(articleRevisionRules('journalist')).toContain('Nova');
+    expect(ARTICLE_REVISION_RULES).toContain('Nova');
     const outline = await buildOutlineRevisionSystemPrompt(createPromptBuilder({ theme: 'journalist' }));
     expect(outline).toContain('NovaNews');
-  });
-
-  it('detective gets the detective voice, not Nova', async () => {
-    const rules = articleRevisionRules('detective');
-    expect(rules).toContain('third-person');
-    expect(rules).not.toContain('Nova');
-    const system = await buildArticleRevisionSystemPrompt(createPromptBuilder({ theme: 'detective' }), 'detective');
-    expect(system).toContain('third-person');
-    expect(system).not.toContain('Nova');
   });
 
   // Phase 4 (brief 4.6; R1): the outline stage's detective branch went, its rework with it.
@@ -61,8 +51,10 @@ describe('revision system prompts are theme-aware', () => {
       .rejects.toThrow('The "detective" theme has no story map');
   });
 
-  it('defaults to journalist when no theme is given', () => {
-    expect(articleRevisionRules()).toContain('Nova');
+  // Phase 4 (brief 4.7b; R1): the article stage's detective branch went, its rework with it.
+  it('the detective has no article rework: its system prompt fails loud', async () => {
+    await expect(buildArticleRevisionSystemPrompt(createPromptBuilder({ theme: 'detective' })))
+      .rejects.toThrow('The "detective" theme has no story map');
   });
 
   it("the rework composers take the writer's system prompt and fail loud on a theme name", () => {
@@ -71,7 +63,7 @@ describe('revision system prompts are theme-aware', () => {
     expect(() => getOutlineRevisionSystemPrompt('journalist')).toThrow(/writer's system prompt/);
     expect(() => getArticleRevisionSystemPrompt('detective')).toThrow(/writer's system prompt/);
     expect(getOutlineRevisionSystemPrompt('W1\nW2')).toBe(`W1\nW2\n\n${OUTLINE_REVISION_RULES}`);
-    expect(getArticleRevisionSystemPrompt('W1\nW2', 'detective')).toBe(`W1\nW2\n\n${articleRevisionRules('detective')}`);
+    expect(getArticleRevisionSystemPrompt('W1\nW2')).toBe(`W1\nW2\n\n${ARTICLE_REVISION_RULES}`);
   });
 });
 
@@ -90,16 +82,14 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
     expect(getArcRevisionSystemPrompt(null)).not.toContain('80%');
   });
 
-  it('the article rework rules carry the rule in no wording, either theme', () => {
+  it('the article rework rules carry the rule in no wording', () => {
     // Integrator ruling after wave 1: the same rule lived here as "High-scoring
     // criteria (0.8+) should be left unchanged", on the reworker that turned the
-    // director's rethink into a relabel on 091826.
-    for (const theme of ['journalist', 'detective']) {
-      const text = articleRevisionRules(theme);
-      expect(text).not.toContain('80%');
-      expect(text).not.toContain('0.8+');
-      expect(text).not.toContain('score well');
-    }
+    // director's rethink into a relabel on 091826. Phase 4 (brief 4.7b; R1): the
+    // detective's rules went with its article stage.
+    expect(ARTICLE_REVISION_RULES).not.toContain('80%');
+    expect(ARTICLE_REVISION_RULES).not.toContain('0.8+');
+    expect(ARTICLE_REVISION_RULES).not.toContain('score well');
   });
 
   // Phase 4 (brief 4.4): the arc stage's detective branch went, with its numbered list.
@@ -434,7 +424,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
       'arc rules (reweave)': arcRevisionRules('reweave'),
       'arc rules (automated)': arcRevisionRules(null),
       'outline rules': OUTLINE_REVISION_RULES,
-      'article rules': articleRevisionRules('journalist')
+      'article rules': ARTICLE_REVISION_RULES
     };
     // Brief 4.5: the weave's rework, at each of its kinds, by the story meeting's round mark.
     [[null, null], ['reweave', null], ['reweave', 'Join the ledger thread to the vote.'], ['send-back', 'Rethink it from scratch.']]
@@ -483,11 +473,12 @@ describe('the rework rules (phase 3, 3.3)', () => {
     // evaluation's findings": every finding the context lists, the SHOULD CONSIDER items
     // and the suggestions among them. R23 makes that task the must-fix items, and the
     // revision context's WHAT THIS REWORK DOES states it once, so the line points there.
-    expect(articleRevisionRules('journalist').startsWith(`${ARTICLE_REVISION_RULES}\n`)).toBe(true);
     // 3.3's finding 4 (fix 3.2b): that line, the first of the rework rules, right
     // after the writer's system prompt, names the task the revision context gives.
-    const articleLine = firstLine(articleRevisionRules('journalist'));
-    expect(articleLine).toBe(ARTICLE_REVISION_RULES);
+    // Phase 4 (brief 4.7b; R1): it is the whole of the rules, the empty voice slot that
+    // followed it going with the detective's voice.
+    const articleLine = ARTICLE_REVISION_RULES;
+    expect(articleLine.split('\n')).toHaveLength(1);
     expect(articleLine).toMatch(/reworking your article/);
     expect(articleLine).toMatch(/REVISION CONTEXT/);
     expect(articleLine).toMatch(/the director's note on a send back/);
@@ -495,7 +486,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(articleLine).toMatch(/under WHAT THIS REWORK DOES/);
     expect(articleLine).not.toMatch(/findings/);
     expect(articleLine).not.toMatch(/voice issues|you identified/);
-    expect(getArticleRevisionSystemPrompt('W1\nW2', 'journalist').split('\n')[3]).toBe(articleLine);
+    expect(getArticleRevisionSystemPrompt('W1\nW2').split('\n')[3]).toBe(articleLine);
   });
 
   // 3.10, fix round 1 (R23): an automatic rework fixes the must-fix items, and the
@@ -509,7 +500,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
       'arc rules (reweave)': arcRevisionRules('reweave'),
       'arc rules (automatic)': arcRevisionRules(null),
       'outline rules': OUTLINE_REVISION_RULES,
-      'article rules': articleRevisionRules('journalist')
+      'article rules': ARTICLE_REVISION_RULES
     };
     Object.entries(rules).forEach(([name, text]) => {
       expect(`${name}: ${(text.match(/[^.\n]*\bfindings?\b[^.\n]*/i) || [''])[0]}`).toBe(`${name}: `);
@@ -518,7 +509,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
   });
 
   it('the article rework rules give no advisory criterion as a defect to fix', () => {
-    const rules = articleRevisionRules('journalist');
+    const rules = ARTICLE_REVISION_RULES;
     expect(rules).not.toContain('WHAT TO FIX');
     expect(rules).not.toMatch(/Low-scoring criteria/i);
     expect(rules).not.toMatch(/anti-patterns flagged/i);
@@ -543,13 +534,5 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(whole.match(/rethink/gi)).toHaveLength(2);
     expect(whole.match(/a note that asks for a rethink gets a rethink/g)).toHaveLength(1);
     expect(user.indexOf('rethink')).toBeGreaterThan(user.indexOf('WHAT THIS REWORK DOES'));
-  });
-
-  // Phase 4 (brief 4.4; R1): the arc stage's detective rules went with its detective
-  // branch, and the outline's with its outline stage (brief 4.6); the article's stay.
-  it('the detective keeps its rework rules and tasks (D13)', async () => {
-    expect(articleRevisionRules('detective')).toContain('WHAT TO PRESERVE:');
-    const article = await buildArticleRevisionPrompt({}, 'c', 'p', promptBuilder, [], 'detective');
-    expect(article).toContain("4. PRESERVE everything that's working well");
   });
 });

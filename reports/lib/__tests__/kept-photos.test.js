@@ -171,7 +171,8 @@ describe('after a rollback to character-ids excludes an enriched photo', () => {
     }
   });
 
-  it.each(['journalist', 'detective'])('the %s article writer and its reworker name it nowhere either', async (theme) => {
+  // Phase 4 (brief 4.7b; R1): the article writer is the journalist's alone.
+  it.each(['journalist'])('the %s article writer and its reworker name it nowhere either', async (theme) => {
     const state = { ...(await afterRollbackToCharacterIds(theme)), heroImage: 'hero.jpg', outline: OUTLINE };
     const writer = recordingSdk(PREVIOUS_BUNDLE);
     await generateContentBundle({ ...state, contentBundle: null }, cfg(writer, theme));

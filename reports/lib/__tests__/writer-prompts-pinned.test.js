@@ -247,12 +247,14 @@ const REPO = path.join(__dirname, '..', '..');
  *   same length, so outline-journalist moves by hash alone (18299). Its line on the top
  *   photo prints only when a photo is marked [hero image]; the fixture's hero is marked, so
  *   the line stays. No other pin moves.
+ * - Phase 4 (brief 4.7b; R1): article-detective goes. The article stage's detective branch
+ *   went with the old stages it wrote from, so the detective renders no article writer, as
+ *   it renders no map writer or arc writer. The journalist pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['62c525f1cbdd8d026f481a24ac11e75766f0307c6d036594f713157042861790', 18299],
   'article-journalist': ['b712378e34a076d1b5ba8e1f7000c8e942c2059aad5307f907cde828cb3cac18', 28708],
-  'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892],
-  'article-detective': ['10c1f23e9ecf6ab47e2eb4444e2a9fe5753eefb805ecac55f3a9d22a98665ad1', 29687]
+  'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

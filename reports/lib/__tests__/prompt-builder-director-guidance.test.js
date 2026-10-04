@@ -70,14 +70,7 @@ describe('buildArticlePrompt — <DIRECTOR_GUIDANCE>', () => {
     );
     expect(userPrompt).not.toContain('DIRECTOR_GUIDANCE');
   });
-
-  it('works for the detective theme too', async () => {
-    const { userPrompt } = await makeBuilder('detective').buildArticlePrompt(
-      { executiveSummary: { hook: 'x' } }, 'hero.png', [], null, null, null,
-      { directorGuidance: GUIDANCE }
-    );
-    expect(userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
-  });
+  // Phase 4 (brief 4.7b; R1): the detective's article writer went with the old stages.
 });
 
 describe('_outlineGuidance state channel', () => {
@@ -112,12 +105,10 @@ describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
   //
   // Phase 3 (3.1): the journalist's block is the rule set's mode file (T8's mode
   // part). "You did not vote" left the block: it is T8's mode-independent part, in
-  // the truth rules every writer reads from wave 2 on. The detective keeps the old
-  // block, so REMOTE below is the detective's.
+  // the truth rules every writer reads from wave 2 on.
   const { loadModeBlock } = require('../rule-set');
   const JOURNALIST_REMOTE = loadModeBlock('remote');
   const JOURNALIST_ONSITE = loadModeBlock('on-site');
-  const REMOTE = 'You were not in the room';
 
   it('remote: carries the remote block and not the on-site one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
@@ -148,12 +139,8 @@ describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
     expect(systemPrompt).not.toContain('We decided');
     expect(systemPrompt).not.toContain('you ARE the detective');
   });
-
-  it('states the mode for the detective theme too', async () => {
-    const { systemPrompt } = await makeBuilder('detective', { reportingMode: 'remote' })
-      .buildArticlePrompt({ executiveSummary: {} }, null, [], null, null, null);
-    expect(systemPrompt).toContain(REMOTE);
-  });
+  // Phase 4 (brief 4.7b; R1): the detective's article writer, the last writer to carry the
+  // detective's remote block, went with the old stages.
 });
 
 describe('the evaluator scores reporter mode (BASELINE §4 class 6)', () => {

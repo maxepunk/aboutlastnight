@@ -346,218 +346,17 @@ describe('PromptBuilder', () => {
     });
   });
 
-  describe('detective theme prompts', () => {
-    let detectiveBuilder;
-
-    beforeEach(() => {
-      detectiveBuilder = new PromptBuilder(mockThemeLoader, 'detective');
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': 'Detective Anondono voice...',
-        'writing-principles': 'Synthesize evidence...',
-        'evidence-boundaries': 'Factual accuracy...',
-        'section-rules': 'Evidence Locker...',
-        'narrative-structure': 'Closure for players...',
-        'formatting': 'Strong tags for names...',
-        'anti-patterns': 'Section differentiation...',
-        'editorial-design': 'Single column...',
-      });
-    });
-
-    it('buildArticlePrompt uses detective voice, not Nova', async () => {
-      const { systemPrompt } = await detectiveBuilder.buildArticlePrompt(
-        {}, null
-      );
-      expect(systemPrompt).not.toContain('You are Nova');
-      expect(systemPrompt).not.toContain('Hunter S. Thompson');
-      expect(systemPrompt).toContain('Detective');
-    });
-
-    it('detective article prompt includes detective constraints', async () => {
-      const { systemPrompt } = await detectiveBuilder.buildArticlePrompt(
-        {}, null
-      );
-      expect(systemPrompt).toContain('SYNTHESIZE');
-      expect(systemPrompt).toContain('750 words');
-      expect(systemPrompt).not.toContain('em-dashes');
-    });
-
-    describe('buildArticlePrompt detective user prompt', () => {
-      const mockOutline = { executiveSummary: { hook: 'Case opened...' } };
-
-      it('detective user prompt does NOT include journalist sections', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        // The embedded <SCHEMA> (SDK#277 workaround) contains the full schema for both
-        // themes — including the financialTracker description which mentions "FOLLOW THE
-        // MONEY". So substring checks for those names hit the schema text. Strip the
-        // schema block before the negative-presence assertions.
-        const promptWithoutSchema = userPrompt.replace(/<SCHEMA>[\s\S]*?<\/SCHEMA>/g, '');
-        // These are journalist-specific structural concepts that must not appear in
-        // detective prompt instructions.
-        expect(promptWithoutSchema).not.toContain('FOLLOW THE MONEY');
-        expect(promptWithoutSchema).not.toContain('THE PLAYERS');
-        expect(promptWithoutSchema).not.toContain('VISUAL_DISTRIBUTION');
-        expect(promptWithoutSchema).not.toContain('ARC_FLOW');
-        // Detective branch must explicitly exclude journalist-only output fields.
-        expect(userPrompt).toContain('Do NOT include pullQuotes, evidenceCards, or financialTracker');
-        // Journalist-specific GENERATION_INSTRUCTION patterns must be absent.
-        expect(promptWithoutSchema).not.toContain('pullQuotes" - Featured quotes for sidebar');
-        expect(promptWithoutSchema).not.toContain('financialTracker" - Shell-account LEDGER');
-      });
-
-      it('detective user prompt includes detective section IDs', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('executive-summary');
-        expect(userPrompt).toContain('evidence-locker');
-        expect(userPrompt).toContain('suspect-network');
-        expect(userPrompt).toContain('final-assessment');
-      });
-
-      it('detective user prompt includes SECTION_GUIDANCE', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('SECTION_GUIDANCE');
-        expect(userPrompt).toContain('EXECUTIVE SUMMARY');
-        expect(userPrompt).toContain('EVIDENCE LOCKER');
-        expect(userPrompt).toContain('OUTSTANDING QUESTIONS');
-        expect(userPrompt).toContain('FINAL ASSESSMENT');
-      });
-
-      it('detective user prompt includes DATA_CONTEXT with outline and evidence', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('DATA_CONTEXT');
-        expect(userPrompt).toContain('Case opened');
-      });
-
-      it('detective user prompt includes voice checkpoint with detective constraints', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('VOICE_CHECKPOINT');
-        expect(userPrompt).toContain('Detective Anondono');
-      });
-
-      it('detective user prompt references Detective Anondono as author', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('Detective Anondono');
-        expect(userPrompt).toContain('Lead Investigator');
-      });
-
-      it('detective user prompt explicitly excludes pullQuotes, evidenceCards, financialTracker', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('Do NOT include pullQuotes');
-        expect(userPrompt).toContain('evidenceCards');
-        expect(userPrompt).toContain('financialTracker');
-      });
-
-      it('detective user prompt specifies ~750 word target', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('750 words');
-      });
-
-      it('detective user prompt includes ANTI_PATTERNS', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('ANTI_PATTERNS');
-        expect(userPrompt).toContain('Section differentiation');
-      });
-
-      it('detective user prompt includes RULES section with prompt references', async () => {
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null
-        );
-        expect(userPrompt).toContain('RULES');
-        expect(userPrompt).toContain('Evidence Locker');   // section-rules
-        expect(userPrompt).toContain('Closure for players'); // narrative-structure
-      });
-
-      // Brief 2.1: each document's text is in <RECORD>, once. Phase 4 (brief 4.6; R5):
-      // the arc packages that named an arc's documents went, for the detective too.
-      it('detective user prompt carries the record, each document once, and no arc packages', async () => {
-        const evidenceBundle = {
-          exposed: { tokens: [{ id: 'tok1', fullContent: 'Money moved...', rawData: { tokenId: 'tok1', name: 'TOK1', fullDescription: 'Money moved...', owners: ['Alex Reeves'] } }], paperEvidence: [] },
-          buried: { transactions: [] }
-        };
-        const { userPrompt } = await detectiveBuilder.buildArticlePrompt(
-          mockOutline, null, [], null, null, null, { evidenceBundle }
-        );
-        expect(userPrompt).not.toContain('ARC EVIDENCE PACKAGES');
-        expect(userPrompt).not.toContain('QUOTABLE EXCERPTS');
-        expect(userPrompt).toContain('<document id="tok1" kind="memory" name="TOK1" owner="Alex Reeves" layer="exposed">');
-        expect(userPrompt.split('Money moved').length - 1).toBe(1);
-      });
-    });
-  });
-
-  describe('resolvePromptVariables', () => {
-    it('should replace {{JOURNALIST_FIRST_NAME}} with sessionConfig value', () => {
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Cassandra' });
-      const input = 'Nova (first name configurable via {{JOURNALIST_FIRST_NAME}}) is the journalist.';
-      const result = builder.resolvePromptVariables(input);
-      expect(result).toBe('Nova (first name configurable via Cassandra) is the journalist.');
-    });
-
-    it('should replace {{REPORTING_MODE}} with sessionConfig value', () => {
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { reportingMode: 'remote' });
-      const result = builder.resolvePromptVariables('Mode: {{REPORTING_MODE}}');
-      expect(result).toBe('Mode: remote');
-    });
-
-    it('should use defaults when sessionConfig values are missing', () => {
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
-      const result = builder.resolvePromptVariables('{{JOURNALIST_FIRST_NAME}} Nova');
-      expect(result).toBe('Cassandra Nova');
-    });
-
-    it('should handle null/empty input gracefully', () => {
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
-      expect(builder.resolvePromptVariables('')).toBe('');
-      expect(builder.resolvePromptVariables(null)).toBe('');
-      expect(builder.resolvePromptVariables(undefined)).toBe('');
-    });
-
-    it('should leave unknown variables untouched', () => {
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {});
-      const result = builder.resolvePromptVariables('Hello {{UNKNOWN_VAR}}');
-      expect(result).toBe('Hello {{UNKNOWN_VAR}}');
-    });
-  });
-
-  // Phase 3 (3.2): the journalist's writers read the rule set, which carries no
-  // template variable; the parked detective's craft files still do.
-  describe('prompt variable resolution in build methods', () => {
-    it('buildArticlePrompt should resolve variables in loaded prompts', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': '{{JOURNALIST_FIRST_NAME}} Nova reporting.',
-        'writing-principles': 'Principles text',
-        'evidence-boundaries': 'Boundaries text',
-        'section-rules': 'Rules text',
-        'narrative-structure': 'Structure text',
-        'formatting': 'Formatting text',
-        'anti-patterns': 'Anti-patterns text',
-        'editorial-design': 'Design text'
-      });
-
-      const builder = new PromptBuilder(mockThemeLoader, 'detective', { journalistFirstName: 'Athena' });
-
-      const { userPrompt } = await builder.buildArticlePrompt(
-        { lede: { hook: 'Hook' } }
-      );
-      expect(userPrompt).toContain('Athena Nova reporting.');
-      expect(userPrompt).not.toContain('{{JOURNALIST_FIRST_NAME}}');
+  // Phase 4 (brief 4.7b; R1): the detective's article writer went with the old stages it
+  // wrote from, its craft files' loading and their template variables with it: the parked
+  // detective has no story map to write an article from. Its skill folder, templates and
+  // theme config stay, the worked example of a second theme.
+  describe('the parked detective (R1)', () => {
+    it('has no article writer: its article prompts fail loud, naming the theme, and load no craft file', async () => {
+      const detective = new PromptBuilder(mockThemeLoader, 'detective', {});
+      await expect(detective.buildArticleSystemPrompt()).rejects.toThrow('The "detective" theme has no story map');
+      await expect(detective.buildArticleUserSections({ sections: [] })).rejects.toThrow('The "detective" theme has no story map');
+      await expect(detective.buildArticlePrompt({ sections: [] })).rejects.toThrow('The "detective" theme has no story map');
+      expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
     });
   });
 
@@ -1288,13 +1087,6 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(userPrompt).not.toContain('from arcEvidencePackages.evidenceItems[].fullContent');
   });
 
-  it('the detective article holds the same view inside <DATA_CONTEXT>', async () => {
-    const { userPrompt } = await articleFor('detective');
-    expectOneRecord(userPrompt);
-    expect(userPrompt.indexOf('<RECORD>')).toBeLessThan(userPrompt.indexOf('</DATA_CONTEXT>'));
-    expect(userPrompt.indexOf('</DATA_CONTEXT>')).toBeLessThan(userPrompt.indexOf('<RULES>'));
-  });
-
   // Phase 3 (3.2; T4): the tensions print as the director's sentences that name Blake
   // or the Valet. A note from before 3.6 that read an account's name as its holder
   // prints nothing, and an old blake-proximity note prints its observations, not its
@@ -1526,7 +1318,7 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
  */
 describe('phase 3 (3.2): the journalist writers read the rule set', () => {
   const { loadRuleSet } = require('../rule-set');
-  const { generateRosterSection, THEME_SYSTEM_PROMPTS } = require('../prompt-builder');
+  const { generateRosterSection } = require('../prompt-builder');
   const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
 
   const CANONICAL = { Alex: 'Alex Reeves', Riley: 'Riley Torres', Jamie: 'Jamie Park', Marcus: 'Marcus Blackwood', Blake: 'Blake' };
@@ -1714,17 +1506,6 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     });
   });
 
-  // The 4b fix batch (3.10 re-review): the journalist's revision framing was 3.2's first
-  // line of the article rework. Since 3.10's fix round 1 that line is the rework rules'
-  // own (ai-nodes.js ARTICLE_REVISION_RULES), and nothing read the string, which still
-  // held the old wording ("the evaluation's findings on an automatic pass"). It is gone,
-  // so nothing can wire it back; the detective keeps its framing (D13).
-  describe('the article rework framing (TH7)', () => {
-    it('the journalist has none of its own (the article rework rules carry the first line); the detective keeps its framing', () => {
-      expect(THEME_SYSTEM_PROMPTS.journalist).not.toHaveProperty('revision');
-      expect(THEME_SYSTEM_PROMPTS.detective.revision).toBe('You are revising Detective Anondono\'s case report to fix structural or factual issues. Make TARGETED fixes only. Keep the third-person investigative case-report voice.');
-    });
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

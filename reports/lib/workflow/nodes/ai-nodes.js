@@ -26,9 +26,7 @@ const { SchemaValidator } = require('../../schema-validator');
 const {
   createPromptBuilder,
   buildDirectorGuidanceSection,
-  filterGateNotes,
-  THEME_SYSTEM_PROMPTS,
-  THEME_CONSTRAINTS
+  filterGateNotes
 } = require('../../prompt-builder');
 const { carriedEdits, settleEdits, SEND_BACK_PASS, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
@@ -57,7 +55,7 @@ const { photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { photoMappingOf } = require('../../photo-leave-out');
 // Phase 3 (3.7): the writers' questions for the director (C15), kept through a rework
 // (R5) and out of every later prompt.
-const { withCarriedWriterQuestions, schemaWithoutWriterQuestions } = require('../../writer-questions');
+const { withCarriedWriterQuestions } = require('../../writer-questions');
 
 /**
  * Get PromptBuilder from config or create default
@@ -1333,30 +1331,19 @@ ${reworkTask('map')}${guidanceSection ? `\n\n${guidanceSection}` : ''}`;
 /**
  * The map's and the article's reworks' task, the last section before <DIRECTOR_GUIDANCE>.
  *
- * The journalist's (phase 3, brief 3.3; TH7) defers to the revision context for what
- * the rework changes and how far; the detective's keeps today's fixed text (D13).
+ * It defers to the revision context for what the rework changes and how far (phase 3,
+ * brief 3.3; TH7). The detective's fixed text went with its article rework (phase 4,
+ * brief 4.7b; R1), as its outline rework's had (brief 4.6).
  *
  * @param {'map'|'article'} phase - what the rework returns
- * @param {string} [theme='journalist']
  * @returns {string}
  */
-function reworkTask(phase, theme = 'journalist') {
+function reworkTask(phase) {
   const PHASE = phase.toUpperCase();
-  if (theme !== 'detective') {
-    return `## YOUR TASK
+  return `## YOUR TASK
 
 1. Rework the PREVIOUS ${PHASE} OUTPUT as the revision context above directs.
 2. Return the whole ${phase} in the same JSON format.`;
-  }
-  return `## YOUR TASK
-
-1. Review the PREVIOUS ${PHASE} OUTPUT above
-2. Review the ISSUES TO ADDRESS in the revision context
-3. Make TARGETED FIXES to address those specific issues
-4. PRESERVE everything that's working well
-5. Return the complete updated ${phase} in the same JSON format
-
-Remember: You are IMPROVING, not regenerating. The previous work was valuable - preserve what's good while fixing what's broken.`;
 }
 
 /**
@@ -1374,20 +1361,20 @@ Remember: You are IMPROVING, not regenerating. The previous work was valuable - 
  * PHOTOS is built from this same list (evaluator-nodes.js renderArticleJudgePhotos).
  *
  * T13 (3.9 fix round 1): an excluded photo never appears. A stored hero the director
- * excluded is no hero: the writer is told none was chosen. The detective is parked
- * (spec D13) and keeps its stored hero. The 4b fix batch: which photos the director
- * excluded is the one rule's (isPhotoExcluded, which buildAvailablePhotos and the hero
- * entry read too); this list used to read the analysis's mark alone.
+ * excluded is no hero: the writer is told none was chosen. The 4b fix batch: which
+ * photos the director excluded is the one rule's (isPhotoExcluded, which
+ * buildAvailablePhotos and the hero entry read too); this list used to read the
+ * analysis's mark alone.
  *
  * Phase 4 (brief 4.6; R5): no arc packages; the article writer reads the record whole.
+ * Brief 4.7b (R1): the parked detective's stored hero went with its article writer.
  *
  * @param {Object} state
  * @returns {Array} [outline, heroImage, shellAccounts, sessionFacts, directorNotes,
  *   narrativeTensions, options]
  */
 function articleWriterInputs(state) {
-  const parked = (state.theme || 'journalist') !== 'journalist';
-  const heroImage = state.heroImage && isPhotoExcluded(state, state.heroImage) && !parked ? null : state.heroImage;
+  const heroImage = state.heroImage && isPhotoExcluded(state, state.heroImage) ? null : state.heroImage;
   const hero = heroPhotoEntry(state, heroImage);
   const photos = [
     ...(hero ? [hero] : []),
@@ -1439,21 +1426,13 @@ async function generateContentBundle(state, config) {
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(...articleWriterInputs(state));
 
-  // Get JSON schema for structured output. Phase 3 (3.7): the detective's leaves out
-  // the writer's questions (D13).
-  const writerSchema = config?.configurable?.contentBundleSchema ||
-    require('../../schemas/content-bundle.schema.json');
-  const contentBundleSchema = (config?.configurable?.theme || state.theme) === 'detective'
-    ? schemaWithoutWriterQuestions(writerSchema)
-    : writerSchema;
-
   // SDK returns parsed object directly when jsonSchema is provided
   // Commit 8.23: disableTools prevents tool use during pure generation
   const generatedContent = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'opus',
-    jsonSchema: contentBundleSchema,
+    jsonSchema: config?.configurable?.contentBundleSchema || contentBundleSchema,
     disableTools: true
   });
 
@@ -1622,19 +1601,18 @@ async function reviseContentBundle(state, config) {
     // THROWS if any are missing. Outside, that throw escaped as a graph-level
     // rejection instead of this node's error-contract return, which is what clears
     // _previousContentBundle / _articleFeedback and leaves the run resumable.
-    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes, theme);
-    const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder, theme);
+    const revisionPrompt = await buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes);
+    const systemPrompt = await buildArticleRevisionSystemPrompt(promptBuilder);
 
-    // Use full schema (Fix 3); the detective's leaves out the writer's questions (3.7, D13)
-    const writerSchema = theme === 'detective' ? schemaWithoutWriterQuestions(contentBundleSchema) : contentBundleSchema;
-    // F1: a send-back that carries the director's edits returns the edits it changed,
-    // through a schema built from the stored one; the list is taken out before storing.
+    // The full schema (Fix 3). F1: a send-back that carries the director's edits returns
+    // the edits it changed, through a schema built from the stored one; the list is taken
+    // out before storing.
     const { output: revised, reasons } = takeChangedEdits(await sdk({
       prompt: revisionPrompt,
       systemPrompt,
       model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
       disableTools: true,
-      jsonSchema: sendBack && handEdits.length > 0 ? reworkSchemaWithChangedEdits(writerSchema) : writerSchema,
+      jsonSchema: sendBack && handEdits.length > 0 ? reworkSchemaWithChangedEdits(contentBundleSchema) : contentBundleSchema,
       label: `Article revision ${revisionCount}`
     }));
 
@@ -1697,10 +1675,13 @@ async function reviseContentBundle(state, config) {
 }
 
 /**
- * The journalist article rework's first line, the first of the rules its system
- * prompt adds after its writer's (phase 3; TH7). It names the task the revision
- * context gives the rework and points at WHAT THIS REWORK DOES, the one section of
- * that context that states the task (R23), so it states no scope of its own.
+ * The article rework's rules, which its system prompt adds after its writer's (phase 3,
+ * brief 3.3; TH7): one line that names the task the revision context gives the rework
+ * and points at WHAT THIS REWORK DOES, the one section of that context that states the
+ * task (R23), so it states no scope of its own. The fixed "preserve" lists and the
+ * "WHAT TO FIX" list, which made every low-scoring criterion and every flagged
+ * anti-pattern a defect though most criteria are advisory, are gone: the revision
+ * context says what the rework changes (buildRevisionContext).
  *
  * Phase 3 (3.10, fix round 1): the line used to be the theme's revision framing
  * (THEME_SYSTEM_PROMPTS.journalist.revision, 3.2's string), which named the automatic
@@ -1708,55 +1689,12 @@ async function reviseContentBundle(state, config) {
  * CONSIDER items and the suggestions among them. At the gate an automatic article
  * rework changed 20 of 27 paragraphs to fix one pronoun. The 4b fix batch removed that
  * string, which nothing read.
+ *
+ * Phase 4 (brief 4.7b; R1): the theme's revision voice that followed the line, an empty
+ * slot for the journalist, went with the detective's article rework, whose framing,
+ * voice and fixed rules were the slot's one use.
  */
 const ARTICLE_REVISION_RULES = "You are Nova, reworking your article after the director's note on a send back, or after an automatic check or evaluation. The task is the one the REVISION CONTEXT in the user prompt gives, under WHAT THIS REWORK DOES.";
-
-/**
- * The rules the article reworker's system prompt adds after its writer's: the
- * rework's first line, the theme's revision voice, and the rework rules.
- *
- * The journalist's (phase 3, brief 3.3; TH7): the first line (ARTICLE_REVISION_RULES
- * since 3.10's fix round 1, the theme's revision framing before it) names the task,
- * and the voice follows it. The fixed "preserve" lists and the "WHAT TO FIX" list,
- * which made every low-scoring criterion and every flagged anti-pattern a defect
- * though most criteria are advisory, are gone: the revision context says what the
- * rework changes (buildRevisionContext). The detective keeps today's rules, its
- * framing first (D13).
- *
- * @param {string} [theme]
- * @returns {string}
- */
-function articleRevisionRules(theme = 'journalist') {
-  const framing = THEME_SYSTEM_PROMPTS[theme] || THEME_SYSTEM_PROMPTS.journalist;
-  const constraints = THEME_CONSTRAINTS[theme] || THEME_CONSTRAINTS.journalist;
-  if (theme !== 'detective') {
-    return `${ARTICLE_REVISION_RULES}
-
-${constraints.revisionVoice}`;
-  }
-  return `${framing.revision || framing.articleGeneration}
-
-${constraints.revisionVoice}
-
-CRITICAL REVISION RULES:
-1. You are IMPROVING an existing article, not generating from scratch
-2. The previous output represents significant work - PRESERVE what's good
-3. Focus ONLY on the specific issues listed in the revision context
-4. Low-scoring criteria need targeted fixes
-
-WHAT TO PRESERVE:
-- Article structure and flow that's working
-- Narrative arcs that are properly developed
-- Evidence integration that's accurate
-- Voice elements that are working
-
-WHAT TO FIX:
-- Only the specific issues mentioned in the feedback
-- Low-scoring criteria in the evaluation
-- Any anti-patterns flagged by the evaluator
-
-Return the complete revised article in the same JSON format.`;
-}
 
 /**
  * Get system prompt for article revision: the article writer's system prompt, then
@@ -1764,29 +1702,28 @@ Return the complete revised article in the same JSON format.`;
  *
  * The writer's system prompt brings the identity, the reporting-mode block in its
  * place (phase 1: a remote session's rework must not be the one writer left able
- * to put the reporter back in the room), the roster with pronouns, the hard
- * constraints and the evidence boundaries, none of which the reworker had.
+ * to put the reporter back in the room), the world, the truth rules and the roster
+ * with pronouns.
  *
  * @param {string} writerSystemPrompt - PromptBuilder.buildArticleSystemPrompt()
- * @param {string} [theme] - selects the revision framing and voice
  * @returns {string}
  */
-function getArticleRevisionSystemPrompt(writerSystemPrompt, theme = 'journalist') {
+function getArticleRevisionSystemPrompt(writerSystemPrompt) {
   assertWriterSystemPrompt(writerSystemPrompt, 'getArticleRevisionSystemPrompt', 'buildArticleSystemPrompt');
   return `${writerSystemPrompt}
 
-${articleRevisionRules(theme)}`;
+${ARTICLE_REVISION_RULES}`;
 }
 
 /**
  * The article reworker's system prompt, built from its writer's builder.
  *
  * @param {Object} promptBuilder - the PromptBuilder the writer used
- * @param {string} [theme]
  * @returns {Promise<string>}
+ * @throws {Error} for a theme with no story map, such as the parked detective (R1)
  */
-async function buildArticleRevisionSystemPrompt(promptBuilder, theme = 'journalist') {
-  return getArticleRevisionSystemPrompt(await promptBuilder.buildArticleSystemPrompt(), theme);
+async function buildArticleRevisionSystemPrompt(promptBuilder) {
+  return getArticleRevisionSystemPrompt(await promptBuilder.buildArticleSystemPrompt());
 }
 
 /**
@@ -1809,11 +1746,10 @@ async function buildArticleRevisionSystemPrompt(promptBuilder, theme = 'journali
  * @param {string} previousOutputSection - Formatted previous output
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @param {Array} [gateNotes] - Standing director notes, already filtered (spec §5.3)
- * @param {string} [theme='journalist'] - selects the task (reworkTask)
  * @returns {Promise<string>} Complete revision prompt
  * @throws {Error} when one of the writer's craft files did not load
  */
-async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = [], theme = 'journalist') {
+async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
   await promptBuilder.requirePhasePrompts('articleGeneration');
   const writerSections = await promptBuilder.buildArticleUserSections(...articleWriterInputs(state));
   const guidanceSection = buildDirectorGuidanceSection(state._outlineGuidance, gateNotes);
@@ -1833,7 +1769,7 @@ ${previousOutputSection}
 
 ---
 
-${reworkTask('article', theme)}${guidanceSection ? `
+${reworkTask('article')}${guidanceSection ? `
 
 ${guidanceSection}` : ''}`;
 }
@@ -1970,7 +1906,6 @@ module.exports = {
     OUTLINE_REVISION_RULES,
     reworkTask,
     ARTICLE_REVISION_RULES,
-    articleRevisionRules,
     outlineWriterInputs,
     articleWriterInputs,
     selectHeroImage,
