@@ -127,12 +127,12 @@ describe('CHECKPOINT_ORDER', () => {
       expect(at(consumer)).toBeGreaterThan(at('checkpoint-view-logic.js'));
     });
 
-    // RevisionDiff: three load-time destructures of `window.Console.RevisionDiff`.
+    // RevisionDiff: two load-time destructures of `window.Console.RevisionDiff`.
     // It USED to load after ArcSelection.js, so on that one screen the name was
     // undefined and the revision banner, the budget badge and the director's own
     // last feedback could not render at all (R5 F10 observed exactly that, live).
+    // Task 4.8: the story meeting shows its own round lines and reads RevisionDiff no more.
     [
-      'components/checkpoints/ArcSelection.js',
       'components/checkpoints/Outline.js',
       'components/checkpoints/Article.js'
     ].forEach((consumer) => {
@@ -197,5 +197,43 @@ describe('CHECKPOINT_ORDER', () => {
     CHECKPOINT_ORDER.forEach((type) => {
       expect(utilsSrc).toContain(`'${type}':`);
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.8: the story meeting's labels and load order (brief 4.8; R3)
+// ═══════════════════════════════════════════════════════════════════════════
+// The stop types keep their names; the console's labels become "Story meeting", "Map"
+// and "Article" (the plan's global constraint, R3).
+describe('4.8: the stop labels and the meeting\'s load order', () => {
+  const utilsSrc = fs.readFileSync(path.join(CONSOLE_DIR, 'utils.js'), 'utf8');
+  const labelsBlock = utilsSrc.slice(utilsSrc.indexOf('const CHECKPOINT_LABELS = {'), utilsSrc.indexOf('};', utilsSrc.indexOf('const CHECKPOINT_LABELS = {')));
+
+  it('labels the arc stop "Story meeting", the outline stop "Map" and the article stop "Article"', () => {
+    expect(labelsBlock).toContain("'arc-selection': 'Story meeting',");
+    expect(labelsBlock).toContain("'outline': 'Map',");
+    expect(labelsBlock).toContain("'article': 'Article'");
+    expect(labelsBlock).not.toMatch(/Arc Selection|'Outline'/);
+  });
+
+  it('the meeting and the rollback panel read the view logic at load, after it; the version key\'s module loads before the meeting', () => {
+    const html = fs.readFileSync(path.join(CONSOLE_DIR, 'index.html'), 'utf8');
+    const at = (src) => html.indexOf(`src="${src}"`);
+    const read = (rel) => fs.readFileSync(path.join(CONSOLE_DIR, rel), 'utf8');
+    expect(read('components/checkpoints/ArcSelection.js')).toMatch(/^const ViewLogic = window\.Console\.checkpointViewLogic;$/m);
+    // The rollback panel says what going back to the meeting costs (R9) through the view logic.
+    expect(read('components/RollbackPanel.js')).toMatch(/^const \{ rollbackWarningLine \} = window\.Console\.checkpointViewLogic;$/m);
+    expect(at('components/checkpoints/ArcSelection.js')).toBeGreaterThan(at('checkpoint-view-logic.js'));
+    expect(at('components/RollbackPanel.js')).toBeGreaterThan(at('checkpoint-view-logic.js'));
+    // meetingVersion keys the weave with computeResetKey, which the view logic reads from
+    // outline-edit-logic.js when it runs: that module is loaded before the meeting mounts.
+    expect(at('components/checkpoints/ArcSelection.js')).toBeGreaterThan(at('outline-edit-logic.js'));
+  });
+
+  it('CHECKPOINT_RECEIVED keeps the meeting\'s slot through the view logic, and clears every other slot as before', () => {
+    const stateSrc = fs.readFileSync(path.join(CONSOLE_DIR, 'state.js'), 'utf8');
+    const received = stateSrc.slice(stateSrc.indexOf('case ACTIONS.CHECKPOINT_RECEIVED:'), stateSrc.indexOf('case ACTIONS.PROCESSING_START:'));
+    expect(received).toMatch(/pendingEdits: window\.Console\.checkpointViewLogic\.pendingEditsAfterCheckpoint\(state\.pendingEdits, action\.checkpointType, action\.data \|\| \{\}\)/);
+    expect(received).not.toMatch(/pendingEdits: \{\}/);
   });
 });

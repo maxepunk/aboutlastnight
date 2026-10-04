@@ -60,9 +60,10 @@ describe('RevisionDiff skips the questions in its key walk', () => {
 });
 
 // Task 3.11: each stop names itself, so the panel's hint says what an answer does there
-// (checkpoint-view-logic.test.js pins the three hints).
+// (checkpoint-view-logic.test.js pins the three hints). Task 4.8: the story meeting shows
+// its questions through its own view, each with its answer box (the describe below), so
+// the arc stop's row went with the arc cards it was placed above.
 describe.each([
-  ['ArcSelection', 'components/checkpoints/ArcSelection.js', 'arc-selection', /React\.createElement\('div', \{ className: 'arc-grid' \}/],
   ['Outline', 'components/checkpoints/Outline.js', 'outline', /\.\.\.renderOutlineSections\(\)/],
   ['Article', 'components/checkpoints/Article.js', 'article', /React\.createElement\(FactCheckPanel, /]
 ])('the %s stop renders the panel', (_name, rel, stop, output) => {
@@ -86,5 +87,23 @@ describe.each([
     expect(panelAt).toBeLessThan(outputAt);
     const evalAt = src.indexOf('React.createElement(EvalBar, { view: evaluation })');
     expect(panelAt).toBeGreaterThan(evalAt);
+  });
+});
+
+// Task 4.8: the story meeting asks its questions through its own view (meetingView's
+// questions, each with its answer box), never through the shared panel, whose hint tells
+// the director to answer in the note.
+describe('4.8: the story meeting shows its questions through its own view', () => {
+  const src = read('components/checkpoints/ArcSelection.js');
+
+  it('reads neither the shared panel nor its view model', () => {
+    expect(src).not.toMatch(/WriterQuestionsPanel/);
+    expect(src).not.toMatch(/writerQuestionsView/);
+    expect(src).not.toMatch(/data\.writerQuestions/);
+  });
+
+  it('renders each question of the meeting\'s view with an answer box that sets the answer on its question', () => {
+    expect(src).toMatch(/view\.questions\.map\(/);
+    expect(count(src, 'ViewLogic.setQuestionAnswer(')).toBe(1);
   });
 });

@@ -1,7 +1,9 @@
 /**
  * The director's words at the stops (phase 2, brief 2.2): the pure view logic
- * behind the input review's verdict and exposures, the character-IDs payload and
- * its photo pairing, and the arc stop's note across a remount.
+ * behind the input review's verdict and exposures, and the character-IDs payload and
+ * its photo pairing. (The arc stop's note across a remount went with the arc stop:
+ * the story meeting keeps its note with its weave, pinned in
+ * checkpoint-view-logic-meeting.test.js; task 4.8.)
  *
  * The console has no DOM harness; the components are thin consumers of these.
  */
@@ -11,8 +13,7 @@ const {
   characterIdCards,
   characterIdsPayload,
   characterIdLeaveOutTicks,
-  characterIdsSkipPayload,
-  arcNoteInitial
+  characterIdsSkipPayload
 } = require('../checkpoint-view-logic');
 
 describe('verdictView', () => {
@@ -169,18 +170,6 @@ describe('the leave-out box (brief 4.2)', () => {
     expect(characterIdsSkipPayload(cards, { 'aln (7 of 9).jpg': true }))
       .toEqual({ characterIds: {}, leftOutPhotos: ['aln (7 of 9).jpg'] });
     expect(characterIdsSkipPayload(cards, {})).toEqual({ characterIds: {}, leftOutPhotos: [] });
-  });
-});
-
-describe('arcNoteInitial: the arc stop keeps its note across a remount', () => {
-  it('restores the note the director typed before the remount', () => {
-    expect(arcNoteInitial('Keep the vote arc.', 'Last send-back note.')).toBe('Keep the vote arc.');
-  });
-
-  it('falls back to the send-back pre-fill in a new round (the slot is cleared)', () => {
-    expect(arcNoteInitial(undefined, 'Last send-back note.')).toBe('Last send-back note.');
-    expect(arcNoteInitial('', 'Last send-back note.')).toBe('Last send-back note.');
-    expect(arcNoteInitial(undefined, undefined)).toBe('');
   });
 });
 

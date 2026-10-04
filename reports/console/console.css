@@ -1386,181 +1386,6 @@ textarea.input {
   gap: var(--space-sm);
 }
 
-/* ── Arc Cards Grid ── */
-.arc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-md);
-}
-
-.arc-card {
-  background: rgba(10, 14, 22, 0.5);
-  border: 1px solid rgba(212, 168, 83, 0.1);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  min-width: 0;
-  overflow: hidden;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-.arc-card:hover {
-  border-color: rgba(212, 168, 83, 0.25);
-}
-
-.arc-card--selected {
-  border-color: rgba(78, 205, 196, 0.4);
-  background: rgba(78, 205, 196, 0.03);
-}
-
-.arc-card__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.arc-card__title {
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-  letter-spacing: 0.04em;
-  color: var(--text-primary);
-  flex: 1;
-  min-width: 0;
-}
-
-.arc-card__meta {
-  display: flex;
-  gap: var(--space-md);
-  flex-wrap: wrap;
-}
-
-.arc-card__hook {
-  border-left: 2px solid rgba(212, 168, 83, 0.2);
-  padding-left: var(--space-sm);
-  font-style: italic;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-.arc-card__section {
-  padding-top: var(--space-xs);
-  min-width: 0;
-}
-
-.arc-card__moments {
-  list-style: disc;
-  padding-left: var(--space-lg);
-  margin: 0;
-}
-
-.arc-card__moments li {
-  margin-bottom: 2px;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-/* Brief 1.2: under the name of a document an arc cites, its id and its first
-   line, so the director can see what the arc actually rests on. */
-.arc-card__document-line {
-  display: block;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-/* A caveat is the reason an arc might not survive the article; it reads amber,
-   not as ordinary secondary text. */
-.arc-card__caveat {
-  color: var(--accent-amber);
-}
-
-/* H15: the selection has left the 3-5 band the outline prompt is written for. */
-.arc-selection__note {
-  padding: var(--space-xs) var(--space-md);
-  border-left: 2px solid var(--accent-amber);
-  background: rgba(212, 168, 83, 0.08);
-  color: var(--accent-amber);
-  font-size: 0.8rem;
-}
-
-/* ── Arc Evaluation Score Bar ── */
-.arc-card__eval {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.arc-card__score-bar {
-  flex: 1;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-  overflow: hidden;
-  min-width: 60px;
-}
-
-.arc-card__score-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width var(--transition-normal);
-}
-
-.arc-card__score-fill--high {
-  background: var(--accent-green);
-}
-
-.arc-card__score-fill--medium {
-  background: var(--accent-amber);
-}
-
-.arc-card__score-fill--low {
-  background: var(--accent-red);
-}
-
-/* ── Character Placement Tags ── */
-.character-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px var(--space-sm);
-  background: rgba(78, 205, 196, 0.08);
-  max-width: 100%;
-  overflow-wrap: break-word;
-  word-break: break-word;
-  border: 1px solid rgba(78, 205, 196, 0.2);
-  border-radius: 12px;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  white-space: normal;
-}
-
-/* H26: .character-tag is an inline-flex box with word-break:break-word, which the
-   name span inherited as a licence to shrink to its narrowest word. Measured on the
-   arc cards: the span for "Vic" was 9 px wide and 54 px tall — the primary editorial
-   decision screen rendered every character name as a vertical letter stack, which is
-   what pushed the director toward the all-selected default. */
-.character-tag__name {
-  color: var(--accent-cyan);
-  font-weight: 600;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.character-tag__role {
-  color: var(--text-muted);
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
-.character-tag__role::before {
-  content: ':';
-  margin: 0 2px;
-}
-
 /* ── Revision Diff ── */
 .revision-diff {
   background: rgba(10, 14, 22, 0.5);
@@ -2641,10 +2466,6 @@ textarea.input {
     grid-template-columns: 1fr;
   }
 
-  .arc-grid {
-    grid-template-columns: 1fr;
-  }
-
   .summary-stats {
     flex-wrap: wrap;
   }
@@ -3078,4 +2899,168 @@ textarea.input {
    amount (templates/journalist/partials/sidebar/financial-tracker.hbs), so two columns. */
 .desk-tracker-row {
   grid-template-columns: 2fr 1fr;
+}
+
+/* ── 4.8: the story meeting ──
+   The arc stop's page (ArcSelection.js): about 400 words to read and settle in minutes.
+   Each line keeps its concerns and its marks under it, so the director reads them where
+   they apply; the round's lines sit above the verdict. */
+.meeting__section {
+  padding-left: var(--space-md);
+  border-left: 2px solid rgba(212, 168, 83, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.meeting__label {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  color: var(--accent-amber);
+}
+
+.meeting__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.meeting__input,
+.meeting__answer {
+  min-height: 0;
+  font-size: 0.95rem;
+}
+
+.meeting__verdict {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.meeting__quote {
+  margin: 0;
+  padding-left: var(--space-sm);
+  border-left: 2px solid rgba(78, 205, 196, 0.4);
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+/* The thin-notes line beside the story: the story is the writer's proposal. */
+.meeting__thin-notes {
+  padding: var(--space-xs) var(--space-md);
+  border-left: 2px solid var(--accent-amber);
+  background: rgba(212, 168, 83, 0.08);
+  color: var(--accent-amber);
+  font-size: 0.8rem;
+}
+
+.meeting__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.meeting__thread,
+.meeting__connection,
+.meeting__question {
+  padding: var(--space-sm);
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px solid rgba(212, 168, 83, 0.1);
+  border-radius: var(--radius-sm);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.meeting__thread--left-out {
+  opacity: 0.7;
+}
+
+/* A connection the director struck stays on the page, struck through. */
+.meeting__connection--struck .meeting__detail {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.meeting__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.meeting__id,
+.meeting__kind {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent-cyan);
+}
+
+.meeting__kind {
+  margin-right: var(--space-xs);
+}
+
+.meeting__role {
+  height: 26px;
+  padding: 0 var(--space-xs);
+  background: var(--bg-input);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.meeting__add {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.meeting__add-claim {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* A concern about the director's own line: theirs to decide, never sent back. */
+.meeting__concern {
+  padding: var(--space-xs) var(--space-sm);
+  border-left: 2px solid var(--accent-amber);
+  color: var(--accent-amber);
+  font-size: 0.8rem;
+}
+
+/* What the round's passes changed from the weave the director left. */
+.meeting__mark {
+  padding: var(--space-xs) var(--space-sm);
+  border-left: 2px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-size: 0.8rem;
+}
+
+.meeting__round {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.meeting__check,
+.meeting__did-not-run {
+  padding: var(--space-xs) var(--space-md);
+  border-left: 2px solid var(--accent-red);
+  background: rgba(231, 76, 60, 0.06);
+  font-size: 0.85rem;
+}
+
+.meeting__changed {
+  font-size: 0.85rem;
+  color: var(--accent-amber);
+}
+
+.meeting__hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }

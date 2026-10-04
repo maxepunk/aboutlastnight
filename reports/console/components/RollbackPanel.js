@@ -8,6 +8,8 @@
 window.Console = window.Console || {};
 
 const { CHECKPOINT_LABELS, CollapsibleSection } = window.Console.utils;
+// What a rollback costs: going back to the story meeting costs no model call (R9; task 4.8).
+const { rollbackWarningLine } = window.Console.checkpointViewLogic;
 
 function RollbackPanel({ targetCheckpoint, onConfirm, onCancel }) {
   const [overridesText, setOverridesText] = React.useState('');
@@ -56,9 +58,10 @@ function RollbackPanel({ targetCheckpoint, onConfirm, onCancel }) {
         'Rollback to ' + checkpointLabel
       ),
 
-      // Warning
+      // Warning: what this rollback costs. Going back to the story meeting reopens it as
+      // the director left it, with no model call (R9); every other point clears from here.
       React.createElement('p', { className: 'rollback-modal__warning mt-md' },
-        'This will clear all data from this point forward.'
+        rollbackWarningLine(targetCheckpoint)
       ),
 
       // v2 M4: a `photos` rollback re-runs Haiku on every photo (5+ minutes for

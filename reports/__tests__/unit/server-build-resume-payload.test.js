@@ -1307,3 +1307,87 @@ describe('4.6: the map through buildResumePayload', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.8: the meeting's payload builders through buildResumePayload (brief 4.8)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The meeting's screen builds its payloads in console/checkpoint-view-logic.js. Fed through
+// buildResumePayload on a state paused at the meeting, each is the 4.5 payload the gate
+// takes: what the director typed reaches the stored weave as typed.
+describe('4.8: the meeting\'s payload builders through buildResumePayload', () => {
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { withFactCheckMark } = require('../../lib/weave');
+  const {
+    meetingWeaveOf, meetingPayload, setMeetingField, setThreadRole, addMeetingThread, setConnectionStruck, setQuestionAnswer
+  } = require('../../console/checkpoint-view-logic');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const MARK = { at: 't', ready: true, fixes: 0 };
+  const atMeeting = () => ({
+    weave: withFactCheckMark(clone(WEAVE), MARK),
+    _weaveBaseline: clone(WEAVE),
+    directorGateNotes: []
+  });
+  const take = (payload, state = atMeeting()) => buildResumePayload(payload, state, 'journalist', 'arc-selection');
+
+  /** A role changed, a thread added, a connection struck, a question answered and the story edited, each as typed. */
+  const changed = (shown) => {
+    let w = meetingWeaveOf(shown);
+    w = setMeetingField(w, 'story', 'The room named an overdose; the ledger names a sale. ');
+    w = setThreadRole(w, 2, 'mirrors-it');
+    w = addMeetingThread(w, 'Riley kept a second ledger.', 'grounds-it');
+    w = setConnectionStruck(w, 1, true);
+    w = setQuestionAnswer(w, 0, ' Sarah ran the bar all morning.');
+    return w;
+  };
+
+  test('approve: the director\'s weave is stored as typed, each change is an edit, and the note joins as an approval note', () => {
+    const state = atMeeting();
+    const { resume, stateUpdates, error } = take(meetingPayload('approve', state.weave, changed(state.weave), 'Lead with the vote.'), state);
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: true });
+    expect(stateUpdates.weave.story).toBe('The room named an overdose; the ledger names a sale. ');
+    expect(stateUpdates.weave.questions[0].answer).toBe(' Sarah ran the bar all morning.');
+    expect(stateUpdates.weave.connections[1].struck).toBe(true);
+    expect(stateUpdates.weave._factCheck).toEqual(MARK);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['story', 'threads[#t3].role', 'threads[#t6]', 'connections[#c2]']);
+    expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'arc-selection', kind: 'approval', text: 'Lead with the vote.' })]);
+  });
+
+  test('approve untouched: the weave as the meeting showed it, with no edit', () => {
+    const state = atMeeting();
+    const { stateUpdates, error } = take(meetingPayload('approve', state.weave, meetingWeaveOf(state.weave), ''), state);
+    expect(error).toBeNull();
+    expect(stateUpdates._weaveHandEdits).toBeNull();
+    expect(stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  test('a reweave with a change and no note is the director\'s round, marked', () => {
+    const state = atMeeting();
+    const payload = meetingPayload('reweave', state.weave, setThreadRole(meetingWeaveOf(state.weave), 4, 'grounds-it'), '');
+    const { resume, stateUpdates, error } = take(payload, state);
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: false, round: 'reweave' });
+    expect(stateUpdates._meetingRound).toBe('reweave');
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t5].role']);
+  });
+
+  test('a send-back with only a note leaves the weave as shown; one with an answer stores the answer', () => {
+    const state = atMeeting();
+    const plain = take(meetingPayload('send-back', state.weave, meetingWeaveOf(state.weave), 'Rethink the money thread.'), state);
+    expect(plain.error).toBeNull();
+    expect(plain.resume).toEqual({ approved: false, round: 'send-back', feedback: 'Rethink the money thread.' });
+    expect(plain.stateUpdates.weave).toEqual(state.weave);
+
+    const answered = take(meetingPayload('send-back', state.weave, setQuestionAnswer(meetingWeaveOf(state.weave), 0, 'Sarah ran the bar.'), 'Rethink it.'), atMeeting());
+    expect(answered.error).toBeNull();
+    expect(answered.stateUpdates.weave.questions[0].answer).toBe('Sarah ran the bar.');
+  });
+
+  test('app.js\'s fallback approve, built the same way, is the payload the gate takes', () => {
+    const state = atMeeting();
+    const { error, resume } = take(meetingPayload('approve', state.weave, meetingWeaveOf(state.weave), ''), state);
+    expect(error).toBeNull();
+    expect(resume.approved).toBe(true);
+  });
+});

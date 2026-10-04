@@ -10,10 +10,6 @@
  *   lastEvaluationFrom  - R5 F4: evaluationHistory is an ARRAY of per-phase
  *                         records; all three eval bars read `.overallScore` off
  *                         the array and rendered nothing, for every session.
- *   arcCardModel        - R5 F4/R4 H7: the arc cards read keyMoments /
- *                         financialConnections / thematicLinks / hook, none of
- *                         which the arc schema emits (keyEvidence, caveats,
- *                         unansweredQuestions, emotionalHook do).
  *   accusationView      - R5 F7: the accusation block read `reasoning` and
  *                         `confidence`; the parse emits `charge` and `notes`, so
  *                         the 400-character motive/vote record was never shown.
@@ -28,7 +24,6 @@
 const {
   lastEvaluationFrom,
   evaluationView,
-  arcCardModel,
   accusationView,
   whiteboardView,
   factCheckSummary
@@ -160,94 +155,6 @@ describe('the uncalibrated label (phase 2, brief 2.4)', () => {
     const evalBar = src.slice(src.indexOf('function EvalBar'), src.indexOf('function TracePanel'));
     expect(evalBar).toContain('view.calibration');
     expect(evalBar).not.toMatch(/uncalibrated/i);
-  });
-});
-
-describe('arcCardModel', () => {
-  it('maps the current arc schema field names', () => {
-    const arc = {
-      title: 'T',
-      summary: 'S',
-      keyEvidence: ['e1'],
-      emotionalHook: 'H',
-      caveats: ['c'],
-      unansweredQuestions: ['q'],
-      arcSource: 'player-focus',
-      evidenceStrength: 'strong',
-      characterPlacements: [{ character: 'Vic', role: 'central' }]
-    };
-    expect(arcCardModel(arc)).toEqual({
-      title: 'T',
-      summary: 'S',
-      keyEvidence: [{ id: 'e1', name: '', owner: '', type: '', firstLine: '', label: 'e1' }],
-      hook: 'H',
-      caveats: ['c'],
-      unansweredQuestions: ['q'],
-      source: 'player-focus',
-      strength: 'strong',
-      characters: [{ name: 'Vic', role: 'central' }]
-    });
-  });
-
-  it('reads characterPlacements in its real shape: an object map of name -> role', () => {
-    const model = arcCardModel({
-      characterPlacements: { Vic: 'central', Alex: 'witness' }
-    });
-    expect(model.characters).toEqual([
-      { name: 'Vic', role: 'central' },
-      { name: 'Alex', role: 'witness' }
-    ]);
-  });
-
-  it('tolerates the old field names hook and keyMoments', () => {
-    const model = arcCardModel({ hook: 'old hook', keyMoments: ['a moment'] });
-    expect(model.hook).toBe('old hook');
-    expect(model.keyEvidence).toEqual([
-      { id: 'a moment', name: '', owner: '', type: '', firstLine: '', label: 'a moment' }
-    ]);
-  });
-
-  it('falls back to the id when the stop sent no index for that document', () => {
-    const model = arcCardModel({ keyEvidence: [{ id: 'mor004', owner: 'Vic' }, 'zia002'] });
-    expect(model.keyEvidence).toEqual([
-      { id: 'mor004', name: '', owner: 'Vic', type: '', firstLine: '', label: 'mor004 (Vic)' },
-      { id: 'zia002', name: '', owner: '', type: '', firstLine: '', label: 'zia002' }
-    ]);
-  });
-
-  // Brief 1.2: the director judged arcs by ids like 85620c6f-befd-4799-a877.
-  // evidenceIndex is the arc stop's payload map from that id to the document.
-  it('names the document and its owner when the stop sent an evidenceIndex', () => {
-    const index = {
-      mor004: { name: "Victor's ledger page", owner: 'Vic', type: 'paper', firstLine: 'Page three, entries for the week of the party.' },
-      zia002: { name: 'The hallway memory', owner: 'Zia', type: 'memory', firstLine: 'You are standing by the stairs when...' }
-    };
-    const model = arcCardModel({ keyEvidence: ['mor004', { id: 'zia002' }] }, index);
-    expect(model.keyEvidence).toEqual([
-      { id: 'mor004', name: "Victor's ledger page", owner: 'Vic', type: 'paper', firstLine: 'Page three, entries for the week of the party.', label: "Victor's ledger page (Vic)" },
-      { id: 'zia002', name: 'The hallway memory', owner: 'Zia', type: 'memory', firstLine: 'You are standing by the stairs when...', label: 'The hallway memory (Zia)' }
-    ]);
-  });
-
-  it('keeps the id as the label for an id the index does not hold', () => {
-    const model = arcCardModel({ keyEvidence: ['ghost001'] }, { mor004: { name: 'X', owner: 'Vic' } });
-    expect(model.keyEvidence).toEqual([
-      { id: 'ghost001', name: '', owner: '', type: '', firstLine: '', label: 'ghost001' }
-    ]);
-  });
-
-  it('defaults every field for an empty or missing arc', () => {
-    expect(arcCardModel(null)).toEqual({
-      title: '',
-      summary: '',
-      keyEvidence: [],
-      hook: '',
-      caveats: [],
-      unansweredQuestions: [],
-      source: '',
-      strength: '',
-      characters: []
-    });
   });
 });
 
@@ -407,48 +314,6 @@ describe('factCheckSummary', () => {
 
   it('returns an empty summary for a null fact-check (no fact-check on this payload)', () => {
     expect(factCheckSummary(null)).toEqual({ structural: 0, advisory: 0, total: 0, groups: [] });
-  });
-});
-
-// ── Arc selection defaults (4.4) ────────────────────────────────────────────
-//
-// R5 F8 companion: every arc arrived pre-selected, which (with unreadable cards)
-// pushed the director to accept all 5 — and 5+ arcs routinely forces an outline
-// revision. The default now follows the evidence, and the count is called out
-// when it leaves the 3-5 band the outline prompt is written for.
-describe('defaultArcSelection', () => {
-  const { defaultArcSelection, arcSelectionNote } = require('../checkpoint-view-logic');
-
-  const arc = (id, strength) => ({ id, title: 'T ' + id, evidenceStrength: strength });
-
-  it('pre-selects the strong arcs, capped at 5', () => {
-    const arcs = [
-      arc('a', 'strong'), arc('b', 'moderate'), arc('c', 'strong'),
-      arc('d', 'strong'), arc('e', 'strong'), arc('f', 'strong'), arc('g', 'strong')
-    ];
-    expect(defaultArcSelection(arcs)).toEqual(['a', 'c', 'd', 'e', 'f']);
-  });
-
-  it('falls back to the first three when no arc is strong', () => {
-    const arcs = [arc('a', 'moderate'), arc('b', 'weak'), arc('c', 'speculative'), arc('d', 'weak')];
-    expect(defaultArcSelection(arcs)).toEqual(['a', 'b', 'c']);
-  });
-
-  it('identifies an arc by title when it has no id (the component keys the same way)', () => {
-    expect(defaultArcSelection([{ title: 'Only', evidenceStrength: 'strong' }])).toEqual(['Only']);
-  });
-
-  it('returns nothing for no arcs', () => {
-    expect(defaultArcSelection([])).toEqual([]);
-    expect(defaultArcSelection(null)).toEqual([]);
-  });
-
-  it('notes a count outside the 3-5 band and stays silent inside it', () => {
-    expect(arcSelectionNote(3)).toBeNull();
-    expect(arcSelectionNote(5)).toBeNull();
-    expect(arcSelectionNote(6)).toMatch(/More than 5 arcs usually forces an outline revision/);
-    expect(arcSelectionNote(2)).toMatch(/Fewer than 3/);
-    expect(arcSelectionNote(0)).toMatch(/Fewer than 3/);
   });
 });
 
@@ -882,51 +747,6 @@ describe('roundsBanner', () => {
     const view = roundsBanner(undefined, null, 2);
     expect(view.roundLabel).toBe('Round 1');
     expect(view.automatedLabel).toBe('Automated passes this round: 0 of 2');
-  });
-});
-
-describe('the arc stop review (phase 1, brief 1.2)', () => {
-  const { arcReviewPayload, arcNotePrefill } = require('../checkpoint-view-logic');
-
-  test('approve carries the selection, and the note on the outlineGuidance key', () => {
-    expect(arcReviewPayload(['a', 'b'], '', 'approve')).toEqual({ selectedArcs: ['a', 'b'] });
-    expect(arcReviewPayload(['a'], '   ', 'approve')).toEqual({ selectedArcs: ['a'] });
-    expect(arcReviewPayload(['a'], '  Lead with the vote.  ', 'approve'))
-      .toEqual({ selectedArcs: ['a'], outlineGuidance: 'Lead with the vote.' });
-  });
-
-  test('send back carries the note as arcFeedback, never as guidance', () => {
-    const payload = arcReviewPayload(['a'], ' Drop the succession thread. ', 'send-back');
-    expect(payload).toEqual({ selectedArcs: false, arcFeedback: 'Drop the succession thread.' });
-    expect(payload.outlineGuidance).toBeUndefined();
-  });
-
-  test('a send back with a blank note builds nothing, and an unknown action throws', () => {
-    expect(arcReviewPayload(['a'], '', 'send-back')).toBeNull();
-    expect(arcReviewPayload(['a'], '   ', 'send-back')).toBeNull();
-    expect(() => arcReviewPayload(['a'], 'note', 'reject')).toThrow(/approve.*send-back/);
-    expect(() => arcReviewPayload(['a'], 'note', undefined)).toThrow(/approve.*send-back/);
-  });
-
-  test('the next round pre-fills the box from the last arc-stop send-back note', () => {
-    const notes = [
-      { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'First try.' },
-      { gate: 'outline', kind: 'rejection', round: 1, text: 'Not this stop.' },
-      { gate: 'arc-selection', kind: 'rejection', round: 2, text: '  Drop the succession thread.  ' }
-    ];
-    expect(arcNotePrefill(notes)).toBe('Drop the succession thread.');
-  });
-
-  test('an approval note is not a pre-fill, and neither is nothing at all', () => {
-    expect(arcNotePrefill([{ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Approved with a note.' }])).toBe('');
-    expect(arcNotePrefill([{ gate: 'outline', kind: 'rejection', round: 1, text: 'x' }])).toBe('');
-    expect(arcNotePrefill([])).toBe('');
-    expect(arcNotePrefill(null)).toBe('');
-    expect(arcNotePrefill([null, { gate: 'arc-selection', text: '   ' }])).toBe('');
-  });
-
-  test('a note with no kind is a send-back note, as the channel has always read it', () => {
-    expect(arcNotePrefill([{ gate: 'arc-selection', text: 'Older note.' }])).toBe('Older note.');
   });
 });
 

@@ -275,6 +275,8 @@ function editBtn(onClick) {
 // must load BEFORE utils.js in index.html — the read happens at load time.
 const CHECKPOINT_ORDER = window.Console.sessionStartLogic.CHECKPOINT_ORDER;
 
+// R3: the stop types keep their names, and the console calls the arc stop the story
+// meeting and the outline stop the map (phase 4, task 4.8).
 const CHECKPOINT_LABELS = {
   'paper-evidence-selection': 'Paper Evidence',
   'await-roster': 'Roster',
@@ -282,10 +284,10 @@ const CHECKPOINT_LABELS = {
   'input-review': 'Input Review',
   'pre-curation': 'Pre-Curation',
   'evidence-and-photos': 'Evidence Bundle',
-  'arc-selection': 'Arc Selection',
+  'arc-selection': 'Story meeting',
   'photos': 'Photos (optional)',
   'character-ids': 'Character IDs',
-  'outline': 'Outline',
+  'outline': 'Map',
   'article': 'Article'
 };
 

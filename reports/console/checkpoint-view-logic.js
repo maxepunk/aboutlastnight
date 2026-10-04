@@ -1,6 +1,7 @@
 /**
  * checkpoint-view-logic.js — PURE read-side logic for the four intervention
- * checkpoint screens (arc-selection, outline, article, input-review).
+ * checkpoint screens (the story meeting at arc-selection, outline, article,
+ * input-review).
  *
  * Dual-export: registers on window.Console.checkpointViewLogic for the browser
  * AND exposes the same surface via module.exports under Node so it can be
@@ -22,11 +23,11 @@
  *     now sends `lastEvaluation` pre-selected per phase; the array fallback is
  *     kept for a payload captured before Task 3.
  *
- *   arcCardModel
- *     the cards read keyMoments / financialConnections / thematicLinks / hook;
- *     the arc schema emits keyEvidence / caveats / unansweredQuestions /
- *     emotionalHook, and characterPlacements is an OBJECT MAP of name -> role
- *     (CODE-REVIEW H7).
+ *   meetingView (task 4.8)
+ *     the arc stop is the story meeting: one weave, read and settled in minutes.
+ *     The arc cards it replaced read the arc schema's fields (CODE-REVIEW H7);
+ *     the meeting reads 4.5's payload (lib/meeting.js meetingCheckpointData) and
+ *     sends only 4.5's payloads (meetingPayload).
  *
  *   accusationView
  *     the block read `reasoning` and `confidence`; the parse emits `charge` and
@@ -183,40 +184,31 @@
     };
   }
 
-  // ── Arc cards ─────────────────────────────────────────────────────────────
+  // ── Documents by name (brief 1.2) ─────────────────────────────────────────
 
   /**
-   * One evidence reference as the card renders it (brief 1.2).
+   * One document as the stop names it (brief 1.2; task 4.8: a thread's receipt at the
+   * story meeting, through receiptView).
    *
-   * keyEvidence is a plain array of ids in the current schema, but the arc
-   * evidence packages carry `{id, owner}` objects, so both shapes resolve to an
-   * id. `evidenceIndex` is the arc stop's payload map from that id to the
-   * document behind it (`server.js#buildEvidenceIndex`); without it the director
-   * is judging an arc by `85620c6f-befd-4799-a877-8fc25c040d8e`, which is what
-   * happened last session. An id the index does not hold still renders: the
-   * label falls back to the id, so a stale or hand-built payload shows something
-   * rather than a blank badge.
+   * `evidenceIndex` is the stop's payload map from a document's id to the document
+   * (`server.js#buildEvidenceIndex`); without it the director judged the arcs by
+   * `85620c6f-befd-4799-a877-8fc25c040d8e`, which is what happened in a session
+   * before brief 1.2. An id the index does not hold still renders: the label falls
+   * back to the id, so a stale or hand-built payload shows something rather than a
+   * blank.
    *
-   * @param {string|object} entry
+   * @param {string} id - the document's id, as the index keys it
    * @param {object} index - evidenceIndex from the checkpoint payload
    * @returns {{id: string, name: string, owner: string, type: string,
    *            firstLine: string, label: string}|null}
    */
-  function evidenceEntry(entry, index) {
-    var id = '';
-    var entryOwner = '';
-    if (typeof entry === 'string') {
-      id = entry;
-    } else if (entry && typeof entry === 'object') {
-      id = asString(entry.id) || asString(entry.tokenId) || asString(entry.description) || '';
-      entryOwner = asString(entry.owner);
-    }
-    if (!id) return null;
+  function evidenceEntry(id, index) {
+    if (typeof id !== 'string' || !id) return null;
     var known = (index && typeof index === 'object' && index[id]) || {};
     // The index falls back to the id when a document has no name of its own, and
     // repeating it as a name would claim more than the record holds.
     var name = asString(known.name) === id ? '' : asString(known.name);
-    var owner = asString(known.owner) || entryOwner;
+    var owner = asString(known.owner);
     return {
       id: id,
       name: name,
@@ -224,61 +216,6 @@
       type: asString(known.type),
       firstLine: asString(known.firstLine),
       label: (name || id) + (owner ? ' (' + owner + ')' : '')
-    };
-  }
-
-  /**
-   * characterPlacements normalised to a list.
-   *
-   * The arc schema emits an object map (`{ "Vic": "central" }`) and the
-   * validator rebuilds it as one; an array of `{character|name, role}` is
-   * accepted too so an older or hand-built payload still renders.
-   */
-  function placementList(placements) {
-    if (Array.isArray(placements)) {
-      return placements
-        .map(function (p) {
-          if (!p || typeof p !== 'object') return null;
-          var name = asString(p.name) || asString(p.character);
-          if (!name) return null;
-          return { name: name, role: asString(p.role) };
-        })
-        .filter(Boolean);
-    }
-    if (!placements || typeof placements !== 'object') return [];
-    return Object.keys(placements).map(function (name) {
-      var role = placements[name];
-      return { name: name, role: typeof role === 'string' ? role : (role == null ? '' : String(role)) };
-    });
-  }
-
-  /**
-   * Display model for one arc card.
-   *
-   * @param {object|null} arc
-   * @param {object} [evidenceIndex] - the stop's id -> document map
-   * @returns {{title: string, summary: string, hook: string,
-   *            keyEvidence: Array<{id: string, name: string, owner: string, type: string,
-   *                                firstLine: string, label: string}>,
-   *            caveats: string[], unansweredQuestions: string[], source: string,
-   *            strength: string, characters: Array<{name: string, role: string}>}}
-   */
-  function arcCardModel(arc, evidenceIndex) {
-    var a = arc || {};
-    var evidence = Array.isArray(a.keyEvidence) ? a.keyEvidence : a.keyMoments;
-    return {
-      title: asString(a.title),
-      summary: asString(a.summary),
-      keyEvidence: asArray(evidence)
-        .map(function (entry) { return evidenceEntry(entry, evidenceIndex); })
-        .filter(Boolean),
-      // `emotionalHook` is the schema field; `hook` is what the cards used to read.
-      hook: asString(a.emotionalHook) || asString(a.hook),
-      caveats: stringList(a.caveats),
-      unansweredQuestions: stringList(a.unansweredQuestions),
-      source: asString(a.arcSource),
-      strength: asString(a.evidenceStrength),
-      characters: placementList(a.characterPlacements)
     };
   }
 
@@ -311,53 +248,6 @@
       tail: collapsed.length > limit ? collapsed.slice(-limit) : collapsed,
       truncated: collapsed.length > limit
     };
-  }
-
-  // ── Arc selection defaults ────────────────────────────────────────────────
-
-  /** How many arcs the outline prompt is written for. */
-  var MIN_ARCS = 3;
-  var MAX_ARCS = 5;
-
-  /**
-   * Which arcs to pre-select.
-   *
-   * Every arc arrived checked, which — with the cards unreadable (R5 F8) —
-   * pushed the director to approve all five, and five-plus arcs routinely costs
-   * an outline revision. Follow the evidence instead: the strong arcs, capped at
-   * MAX_ARCS; with none strong, the first MIN_ARCS, so the screen still opens
-   * with a workable selection rather than an empty one.
-   *
-   * The id convention matches the component's (`arc.id || arc.title`), which is
-   * also what the approve payload sends as `selectedArcs`.
-   *
-   * @param {Array|null} arcs
-   * @returns {string[]}
-   */
-  function defaultArcSelection(arcs) {
-    var list = asArray(arcs);
-    var idOf = function (arc) { return (arc && (arc.id || arc.title)) || ''; };
-    var strong = list
-      .filter(function (arc) { return arc && arc.evidenceStrength === 'strong'; })
-      .slice(0, MAX_ARCS);
-    var chosen = strong.length > 0 ? strong : list.slice(0, MIN_ARCS);
-    return chosen.map(idOf).filter(function (id) { return id.length > 0; });
-  }
-
-  /**
-   * The inline note for a selection outside the 3-5 band, or null inside it.
-   *
-   * @param {number} count
-   * @returns {string|null}
-   */
-  function arcSelectionNote(count) {
-    if (count > MAX_ARCS) {
-      return 'More than 5 arcs usually forces an outline revision. Consider dropping the weakest.';
-    }
-    if (count < MIN_ARCS) {
-      return 'Fewer than 3 arcs gives the outline too little to braid; the article tends to read thin.';
-    }
-    return null;
   }
 
   // ── Input review ──────────────────────────────────────────────────────────
@@ -862,63 +752,7 @@
     };
   }
 
-  // ── the arc stop's review (phase 1, brief 1.2) ────────────────────────────
-
-  /**
-   * The arc stop sends the same one box with either action, but on different keys,
-   * so it cannot share `reviewPayload`: an approve carries the SELECTION and the
-   * note as `outlineGuidance` (its own channel, `_outlineGuidance`, which reaches
-   * the outline and article prompts), while a send back carries
-   * `selectedArcs: false` and the note as `arcFeedback`, which the server also
-   * records as a standing note of kind 'rejection'. Sending the note on both keys
-   * at once would file the same sentence twice, and a guidance recorded on a send
-   * back would outlive the arcs it was written about
-   * (`server-build-resume-payload.test.js`: guidance is not recorded on an arc
-   * rejection).
-   *
-   * @param {string[]} selectedArcIds - the ids the director has ticked
-   * @param {string} note - the stop's note box
-   * @param {string} action - 'approve' or 'send-back'
-   * @returns {object|null} the payload, or null for a send back with no note
-   */
-  function arcReviewPayload(selectedArcIds, note, action) {
-    if (action !== 'approve' && action !== 'send-back') {
-      throw new Error("arcReviewPayload: action must be 'approve' or 'send-back', got " + String(action));
-    }
-    var text = typeof note === 'string' ? note.trim() : '';
-    if (action === 'send-back') {
-      if (!text) return null;
-      return { selectedArcs: false, arcFeedback: text };
-    }
-    var payload = { selectedArcs: asArray(selectedArcIds) };
-    if (text) payload.outlineGuidance = text;
-    return payload;
-  }
-
-  /**
-   * What the arc stop's note box holds when a rework comes back.
-   *
-   * A note sent with a send back drove that rework and then stands, but the box
-   * itself came back empty, so the director had to retype the same sentence to
-   * carry it forward as guidance on the approve. The latest arc-stop note of kind
-   * 'rejection' is that sentence. An approval note is already standing guidance
-   * and is not offered again.
-   *
-   * @param {Array} gateNotes - data.directorGateNotes
-   * @returns {string}
-   */
-  function arcNotePrefill(gateNotes) {
-    var notes = asArray(gateNotes);
-    for (var i = notes.length - 1; i >= 0; i -= 1) {
-      var n = notes[i];
-      if (!n || typeof n !== 'object') continue;
-      if (n.gate !== 'arc-selection') continue;
-      if ((asString(n.kind) || 'rejection') !== 'rejection') continue;
-      var text = asString(n.text).trim();
-      if (text) return text;
-    }
-    return '';
-  }
+  // ── Where a stop's note waits (phase 1, brief 1.1) ────────────────────────
 
   /**
    * Where a stop's note lives in `pendingEdits`, beside that stop's edits, so a
@@ -1175,22 +1009,6 @@
     return { characterIds: {}, leftOutPhotos: leftOutFilenames(cards, ticks) };
   }
 
-  /**
-   * What the arc stop's note box holds when it (re)mounts.
-   *
-   * The note the director typed before a remount (kept in the note slot of
-   * `pendingEdits`, as the outline and article stops keep theirs) wins over the
-   * pre-fill from the last send-back note. A new round clears the slot, so the
-   * pre-fill returns then.
-   *
-   * @param {string|undefined} pendingNote
-   * @param {string} prefill - arcNotePrefill(...)
-   * @returns {string}
-   */
-  function arcNoteInitial(pendingNote, prefill) {
-    return typeof pendingNote === 'string' && pendingNote ? pendingNote : asString(prefill);
-  }
-
   // ── The trace (phase 2, brief 2.7) ────────────────────────────────────────
   // What the automatic reworks did before the director arrived at the outline or
   // article stop. Nothing from before an automatic pass used to reach a stop: the
@@ -1378,6 +1196,948 @@
     };
   }
 
+  // ── The story meeting (phase 4, task 4.8; spec 4.3 and 4.4) ────────────────
+  //
+  // The arc stop is the story meeting: a page of about 400 words that the director reads
+  // and settles in minutes. ArcSelection.js renders it from meetingView and changes the
+  // weave only through the operations below; it sends only meetingPayload's payloads,
+  // 4.5's `{meeting: 'approve' | 'reweave' | 'send-back', weave, note}` (lib/meeting.js
+  // meetingResume), each held first to meetingWeaveProblems, the gate's decisions. What
+  // the director types is sent as typed.
+
+  /** The meeting's stop type: the stop types keep their names (R3). */
+  var MEETING_STOP = 'arc-selection';
+
+  /** The meeting's three actions. A copy of lib/meeting.js MEETING_ACTIONS; a test holds the two equal. */
+  var MEETING_ACTIONS = ['approve', 'reweave', 'send-back'];
+
+  /**
+   * Each role a thread can take, in the meeting's order, with the word the role picker
+   * shows. The keys are lib/weave.js WEAVE_ROLES (a test holds them equal).
+   */
+  var WEAVE_ROLE_LABELS = {
+    'main-thread': 'Main thread',
+    'grounds-it': 'Grounds it',
+    'complicates-it': 'Complicates it',
+    'mirrors-it': 'Mirrors it',
+    'carries-it-forward': 'Carries it forward',
+    'left-out': 'Left out'
+  };
+
+  /** What two threads share at a connection. The keys are lib/weave.js CONNECTION_KINDS (a test holds them equal). */
+  var CONNECTION_KIND_LABELS = { person: 'A shared person', moment: 'A moment', document: 'A document', line: 'A line' };
+
+  /**
+   * Copies of lib/weave.js LEDGER_RECEIPT and STRUCK_KEY and of lib/writer-questions.js
+   * WEAVE_ANSWER_KEY, which the browser cannot import; a test holds each equal.
+   */
+  var LEDGER_RECEIPT = 'ledger';
+  var STRUCK_KEY = 'struck';
+  var WEAVE_ANSWER_KEY = 'answer';
+
+  /** The weave's text fields, read one place each as lib/hand-edit-diff.js weaveEditsBetween reads them. */
+  var WEAVE_TEXT_FIELDS = ['story', 'question', 'headline', 'fromYourNotes', 'convergence'];
+
+  /** The fields the director edits in place (spec 4.4). */
+  var MEETING_EDITABLE_FIELDS = ['story', 'question', 'headline', 'convergence'];
+
+  /**
+   * The weave as the director leaves it, as the gate's director-side schema holds it
+   * (lib/meeting.js DIRECTOR_WEAVE_SCHEMA, which the browser cannot import): each
+   * property's type ('string', 'boolean', 'strings' for a list of text, an enum's values,
+   * or a list's or an object's own shape) and the names required. A test builds this
+   * shape from DIRECTOR_WEAVE_SCHEMA and holds the two equal.
+   */
+  var DIRECTOR_WEAVE_SHAPE = {
+    required: ['story', 'question', 'headline', 'threads', 'connections', 'convergence', 'questions'],
+    fields: {
+      story: 'string',
+      question: 'string',
+      headline: 'string',
+      fromYourNotes: 'string',
+      threads: { list: {
+        required: ['id', 'claim', 'role'],
+        fields: { id: 'string', claim: 'string', role: Object.keys(WEAVE_ROLE_LABELS), receipt: 'string', reason: 'string', verdict: 'boolean' }
+      } },
+      connections: { list: {
+        required: ['id', 'kind', 'joins', 'detail'],
+        fields: { id: 'string', kind: Object.keys(CONNECTION_KIND_LABELS), joins: 'strings', detail: 'string', struck: 'boolean' }
+      } },
+      convergence: 'string',
+      strongerMainThread: { object: { required: ['thread', 'reason'], fields: { thread: 'string', reason: 'string' } } },
+      questions: { list: {
+        required: ['id', 'kind', 'about', 'question', 'changes'],
+        fields: { id: 'string', kind: Object.keys(WRITER_QUESTION_KIND_LABELS), about: 'string', question: 'string', changes: 'string', answer: 'string' }
+      } }
+    }
+  };
+
+  /** The line beside the story when the weave has no "from your notes" (the director, 2026-10-03, on thin notes). */
+  var THIN_NOTES_LINE = "Your notes end without your read of the session, so this story is the writer's proposal.";
+
+  /** What a meeting with no weave says, and what going back to the meeting does then (R2). */
+  var EMPTY_MEETING_LINE = 'No weave reached the story meeting: the arc writer may have failed, or this session is from before the meeting. Going back to the story meeting writes one fresh, about 15 minutes with its fact check.';
+
+  /** Why the controls of a line under a writer's repeated id are off, while they are. */
+  var REPEATED_ID_HINT = 'The writer gave one id to more than one thread or connection, so the meeting cannot change those lines: a reweave with a note, or a send-back, gives each its own id.';
+
+  /** Why Reweave is not offered, while it is not (the integrator's ruling 5). */
+  var REWEAVE_HINT = 'Reweave fits your changes and your note into the weave: change the weave or write a note first.';
+
+  /** What a rollback costs: the general warning, and going back to the meeting (R9). */
+  var ROLLBACK_WARNING = 'This will clear all data from this point forward.';
+  var MEETING_ROLLBACK_LINE = 'The story meeting reopens as you left it, with no model call; a meeting that holds no weave has one written fresh. The map and the article are cleared, and written again once you approve.';
+
+  function isPlainObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function hasOwn(object, key) {
+    return Object.prototype.hasOwnProperty.call(object, key);
+  }
+
+  function cloneJson(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  }
+
+  function capitalized(text) {
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  }
+
+  /** Whether a value is a weave: an object with a list of threads (lib/weave.js isWeave). */
+  function isWeaveValue(value) {
+    return isPlainObject(value) && Array.isArray(value.threads);
+  }
+
+  /** An object without its code-owned keys, those that open with an underscore (lib/weave.js weaveForPrompt). */
+  function withoutCodeOwned(object) {
+    var out = {};
+    Object.keys(object).forEach(function (key) { if (key.charAt(0) !== '_') out[key] = object[key]; });
+    return out;
+  }
+
+  /**
+   * The weave the meeting edits: a copy of the stop's weave without its code-owned keys
+   * (the fact check's mark), or null when the stop holds no weave.
+   *
+   * @param {*} weave - data.weave
+   * @returns {Object|null}
+   */
+  function meetingWeaveOf(weave) {
+    return isWeaveValue(weave) ? cloneJson(withoutCodeOwned(weave)) : null;
+  }
+
+  /**
+   * computeResetKey (console/outline-edit-logic.js), read when it runs: that module loads
+   * after this one in the browser, and the reducer and the meeting call this long after both.
+   */
+  function resetKeyOf(value, round) {
+    var editLogic = (typeof window !== 'undefined' && window.Console && window.Console.outlineEditLogic)
+      || (typeof require === 'function' ? require('./outline-edit-logic') : null);
+    if (!editLogic || typeof editLogic.computeResetKey !== 'function') {
+      throw new Error('checkpoint-view-logic: the story meeting keys its weave with outline-edit-logic.js computeResetKey, which is not loaded');
+    }
+    return editLogic.computeResetKey(value, round);
+  }
+
+  /**
+   * The weave version the meeting shows, keyed the way computeResetKey keys the outline:
+   * the weave as the stop sent it, with the director's rounds and the automatic passes.
+   *
+   * @param {Object} data - the stop's payload
+   * @returns {string}
+   */
+  function meetingVersion(data) {
+    var d = isPlainObject(data) ? data : {};
+    var round = (Number(d.humanRevisionCount) || 0) * 1000 + (Number(d.revisionCount) || 0);
+    return resetKeyOf(d.weave === undefined ? null : d.weave, round);
+  }
+
+  /** The meeting's pendingEdits slot: the director's weave, under the version it was made on. */
+  function meetingPendingSlot(data, weave) {
+    return { version: meetingVersion(data), weave: weave };
+  }
+
+  function slotFits(data, pending) {
+    return isPlainObject(pending) && pending.version === meetingVersion(data);
+  }
+
+  /**
+   * The weave the meeting opens on: the director's, from their pending slot, while the
+   * stop shows the version they made it on; the stop's weave otherwise.
+   *
+   * @param {Object} data - the stop's payload
+   * @param {*} pending - the meeting's pendingEdits slot
+   * @returns {Object|null}
+   */
+  function meetingDraftOf(data, pending) {
+    if (slotFits(data, pending) && isWeaveValue(pending.weave)) return cloneJson(pending.weave);
+    return meetingWeaveOf(isPlainObject(data) ? data.weave : null);
+  }
+
+  /** The meeting's note box on (re)mount: the director's note, under the same rule as their weave. */
+  function meetingNoteOf(data, pending, pendingNote) {
+    return slotFits(data, pending) && typeof pendingNote === 'string' ? pendingNote : '';
+  }
+
+  /**
+   * The pendingEdits a new checkpoint leaves (state.js CHECKPOINT_RECEIVED). Every stop's
+   * slot is cleared, as it always was, except the meeting's: the director's weave and note
+   * stay while the stop shows the same weave version, so a remount of that version (a
+   * refused send, the attach watchdog's reload) keeps them, and go when a new one arrives.
+   *
+   * @param {Object} pendingEdits - state.pendingEdits
+   * @param {string} checkpointType - the checkpoint that arrived
+   * @param {Object} data - its payload
+   * @returns {Object}
+   */
+  function pendingEditsAfterCheckpoint(pendingEdits, checkpointType, data) {
+    var kept = {};
+    if (checkpointType !== MEETING_STOP || !isPlainObject(pendingEdits)) return kept;
+    if (!slotFits(data, pendingEdits[MEETING_STOP])) return kept;
+    kept[MEETING_STOP] = pendingEdits[MEETING_STOP];
+    var noteKey = noteSlotKey(MEETING_STOP);
+    if (hasOwn(pendingEdits, noteKey)) kept[noteKey] = pendingEdits[noteKey];
+    return kept;
+  }
+
+  // The director's changes. Each returns a new weave and leaves the one it was given as it was.
+
+  function editedWeave(weave, operation) {
+    if (!isWeaveValue(weave)) throw new Error(operation + ': the meeting changes a weave, an object with a list of threads');
+    return cloneJson(weave);
+  }
+
+  function elementAt(list, index, operation, what) {
+    if (!Array.isArray(list) || !isPlainObject(list[index])) throw new Error(operation + ': the weave holds no ' + what + ' at ' + index);
+    return list[index];
+  }
+
+  function checkedRole(role, operation) {
+    if (!hasOwn(WEAVE_ROLE_LABELS, role)) {
+      throw new Error(operation + ': a thread takes one of the meeting\'s roles (' + Object.keys(WEAVE_ROLE_LABELS).join(', ') + '), not ' + String(role));
+    }
+    return role;
+  }
+
+  /** The story, the question, the headline or the convergence, as typed. */
+  function setMeetingField(weave, field, text) {
+    if (MEETING_EDITABLE_FIELDS.indexOf(field) === -1) {
+      throw new Error('setMeetingField: the meeting edits the story, question, headline or convergence in place, not ' + String(field));
+    }
+    var next = editedWeave(weave, 'setMeetingField');
+    next[field] = typeof text === 'string' ? text : '';
+    return next;
+  }
+
+  /** A thread's role, from the list. */
+  function setThreadRole(weave, index, role) {
+    checkedRole(role, 'setThreadRole');
+    var next = editedWeave(weave, 'setThreadRole');
+    elementAt(next.threads, index, 'setThreadRole', 'thread').role = role;
+    return next;
+  }
+
+  /** The first `t<n>` no thread holds, counting on from the threads there are. */
+  function freshThreadId(threads) {
+    var taken = new Set(threads.map(weaveIdOf));
+    var n = threads.length + 1;
+    while (taken.has('t' + n)) n += 1;
+    return 't' + n;
+  }
+
+  /**
+   * A thread the writer missed, in one line, with a role: under an id of its own, with no
+   * receipt and no reason, which the director-side schema allows. A blank line adds none.
+   */
+  function addMeetingThread(weave, claim, role) {
+    checkedRole(role, 'addMeetingThread');
+    if (typeof claim !== 'string' || !claim.trim()) return weave;
+    var next = editedWeave(weave, 'addMeetingThread');
+    next.threads.push({ id: freshThreadId(next.threads), claim: claim, role: role });
+    return next;
+  }
+
+  /** A thread taken out again: the meeting offers it only for a thread added at this look. */
+  function removeMeetingThread(weave, index) {
+    var next = editedWeave(weave, 'removeMeetingThread');
+    elementAt(next.threads, index, 'removeMeetingThread', 'thread');
+    next.threads.splice(index, 1);
+    return next;
+  }
+
+  /** A connection struck (`struck: true`), or unstruck: the key comes off, and the writer's connection is back as it was. */
+  function setConnectionStruck(weave, index, struck) {
+    var next = editedWeave(weave, 'setConnectionStruck');
+    var connection = elementAt(next.connections, index, 'setConnectionStruck', 'connection');
+    if (struck) connection[STRUCK_KEY] = true;
+    else delete connection[STRUCK_KEY];
+    return next;
+  }
+
+  /** The director's answer to a question, as typed; a blank box is no answer. */
+  function setQuestionAnswer(weave, index, text) {
+    var next = editedWeave(weave, 'setQuestionAnswer');
+    var question = elementAt(next.questions, index, 'setQuestionAnswer', 'question');
+    if (typeof text === 'string' && text.trim()) question[WEAVE_ANSWER_KEY] = text;
+    else delete question[WEAVE_ANSWER_KEY];
+    return next;
+  }
+
+  // How the gate reads two weaves (lib/weave.js and lib/hand-edit-diff.js), for a browser
+  // that cannot import them. Tests hold the decisions equal.
+
+  /** An element's id as every join at the meeting reads it, trimmed (lib/weave.js weaveIdOf). */
+  function weaveIdOf(element) {
+    return element && typeof element === 'object' && typeof element.id === 'string' ? element.id.trim() : '';
+  }
+
+  /** The ids more than one element of a list carries, each once (lib/weave.js repeatedIds). */
+  function repeatedIdsOf(elements) {
+    var seen = new Set();
+    var repeated = [];
+    asArray(elements).forEach(function (element) {
+      var id = weaveIdOf(element);
+      if (!id) return;
+      if (seen.has(id) && repeated.indexOf(id) === -1) repeated.push(id);
+      seen.add(id);
+    });
+    return repeated;
+  }
+
+  /** How many elements of a list carry each id. */
+  function idCounts(elements) {
+    var counts = new Map();
+    asArray(elements).forEach(function (element) {
+      var id = weaveIdOf(element);
+      if (id) counts.set(id, (counts.get(id) || 0) + 1);
+    });
+    return counts;
+  }
+
+  /** A value with every object's keys sorted and every string trimmed (lib/hand-edit-diff.js sortKeys). */
+  function sortedTrimmed(value) {
+    if (Array.isArray(value)) return value.map(sortedTrimmed);
+    if (isPlainObject(value)) {
+      var out = {};
+      Object.keys(value).sort().forEach(function (key) { out[key] = sortedTrimmed(value[key]); });
+      return out;
+    }
+    return typeof value === 'string' ? value.trim() : value;
+  }
+
+  /** Trimmed canonical equality (lib/hand-edit-diff.js same). */
+  function sameValue(a, b) {
+    if (typeof a === 'string' && typeof b === 'string') return a.trim() === b.trim();
+    var canon = function (v) { return v === undefined ? 'undefined' : JSON.stringify(sortedTrimmed(v)); };
+    return canon(a) === canon(b);
+  }
+
+  /** A collection's elements under their id and occurrence, so the elements under a repeated id pair in order. */
+  function elementsById(list) {
+    var out = { list: [], map: new Map(), repeated: new Set(repeatedIdsOf(list)) };
+    var seen = new Map();
+    asArray(list).forEach(function (element) {
+      var id = weaveIdOf(element);
+      if (!id) return;
+      var occurrence = seen.get(id) || 0;
+      seen.set(id, occurrence + 1);
+      var key = occurrence + ':' + id;
+      out.map.set(key, element);
+      out.list.push({ id: id, key: key, element: element });
+    });
+    return out;
+  }
+
+  function withoutKey(object, key) {
+    var out = {};
+    Object.keys(object).forEach(function (k) { if (k !== key) out[k] = object[k]; });
+    return out;
+  }
+
+  function unionKeys(a, b) {
+    var keys = Object.keys(a || {});
+    Object.keys(b || {}).forEach(function (key) { if (keys.indexOf(key) === -1) keys.push(key); });
+    return keys;
+  }
+
+  function isStruckConnection(connection) {
+    return Boolean(connection && typeof connection === 'object' && connection[STRUCK_KEY] === true);
+  }
+
+  /**
+   * The changes between two weaves, one per place, as lib/hand-edit-diff.js
+   * weaveEditsBetween finds them (a test holds the two equal): each text field and the
+   * stronger main thread whole; each thread and connection found by its id, field by
+   * field, added whole or taken out whole; a connection struck as one change of the whole,
+   * one unstruck as none. The questions are not read: an answer is the director's words,
+   * no edit. Each change under an id either weave repeats carries `repeatedId`, since no
+   * edit can find its element by the id.
+   *
+   * @param {*} before
+   * @param {*} after
+   * @returns {Array<{scope: string, id: (string|null), field: (string|null), repeatedId: boolean, struck: boolean}>}
+   */
+  function meetingWeaveChanges(before, after) {
+    if (!isPlainObject(before) || !isPlainObject(after)) return [];
+    var out = [];
+    var change = function (scope, id, field, repeatedId, struck) {
+      out.push({ scope: scope, id: id, field: field, repeatedId: repeatedId, struck: struck });
+    };
+    WEAVE_TEXT_FIELDS.concat(['strongerMainThread']).forEach(function (field) {
+      if (!sameValue(before[field], after[field])) change(field, null, null, false, false);
+    });
+    ['threads', 'connections'].forEach(function (collection) {
+      var b = elementsById(before[collection]);
+      var a = elementsById(after[collection]);
+      var repeated = function (id) { return b.repeated.has(id) || a.repeated.has(id); };
+      a.list.forEach(function (entry) {
+        var prior = b.map.get(entry.key);
+        if (!prior) {
+          change(collection, entry.id, null, repeated(entry.id), false);
+          return;
+        }
+        if (collection === 'connections' && isStruckConnection(entry.element) && !isStruckConnection(prior)) {
+          change(collection, entry.id, null, repeated(entry.id), true);
+          return;
+        }
+        var p = collection === 'connections' ? withoutKey(prior, STRUCK_KEY) : prior;
+        var e = collection === 'connections' ? withoutKey(entry.element, STRUCK_KEY) : entry.element;
+        unionKeys(p, e).forEach(function (field) {
+          if (!sameValue(p[field], e[field])) change(collection, entry.id, field, repeated(entry.id), false);
+        });
+      });
+      b.list.forEach(function (entry) {
+        if (!a.map.has(entry.key)) change(collection, entry.id, null, repeated(entry.id), false);
+      });
+    });
+    return out;
+  }
+
+  /** What a value lacks against its shape's type, or null. */
+  function typeProblem(value, type, at) {
+    if (type === 'string') return typeof value === 'string' ? null : at + ' must be text';
+    if (type === 'boolean') return typeof value === 'boolean' ? null : at + ' must be true or false';
+    if (type === 'strings') {
+      if (!Array.isArray(value)) return at + ' must be a list';
+      for (var i = 0; i < value.length; i += 1) {
+        if (typeof value[i] !== 'string') return at + '[' + i + '] must be text';
+      }
+      return null;
+    }
+    if (Array.isArray(type)) return typeof value === 'string' && type.indexOf(value) !== -1 ? null : at + ' must be one of ' + type.join(', ');
+    if (type.list) {
+      if (!Array.isArray(value)) return at + ' must be a list';
+      for (var j = 0; j < value.length; j += 1) {
+        var inList = shapeProblem(value[j], type.list, at + '[' + j + ']');
+        if (inList) return inList;
+      }
+      return null;
+    }
+    return shapeProblem(value, type.object, at);
+  }
+
+  /** What an object lacks against a shape of DIRECTOR_WEAVE_SHAPE, or null. */
+  function shapeProblem(value, shape, at) {
+    if (!isPlainObject(value)) return (at || 'the weave') + ' must be an object';
+    var prefix = at ? at + '.' : '';
+    for (var i = 0; i < shape.required.length; i += 1) {
+      if (value[shape.required[i]] === undefined) return prefix + shape.required[i] + ' is missing';
+    }
+    var keys = Object.keys(shape.fields);
+    for (var k = 0; k < keys.length; k += 1) {
+      if (value[keys[k]] === undefined) continue;
+      var problem = typeProblem(value[keys[k]], shape.fields[keys[k]], prefix + keys[k]);
+      if (problem) return problem;
+    }
+    return null;
+  }
+
+  /** The word for one element of each of the weave's collections: a refusal's word, and a line's key on the page. */
+  var ELEMENT_WORDS = { threads: 'thread', connections: 'connection', questions: 'question' };
+
+  /**
+   * What the gate would refuse in the weave as the director left it, as one reason, or
+   * null for a weave it takes (the integrator's ruling 4; lib/meeting.js
+   * directorWeaveProblems, whose decisions a test holds this to):
+   * - the director-side schema (DIRECTOR_WEAVE_SHAPE);
+   * - an id the director's version carries more often than the weave the meeting showed:
+   *   the director's repeat;
+   * - a change under an id the writer repeated: no edit could find its element by the id.
+   *   A writer's repeat passes while the director leaves the elements under it as shown.
+   * Both weaves are read without their code-owned keys, as the gate reads them.
+   *
+   * @param {*} weave - the weave as the director left it
+   * @param {*} shown - the weave the meeting showed (data.weave)
+   * @returns {string|null}
+   */
+  function meetingWeaveProblems(weave, shown) {
+    var left = isPlainObject(weave) ? withoutCodeOwned(weave) : null;
+    if (!left) return 'The weave as you left it must be an object, with its threads.';
+    var malformed = shapeProblem(left, DIRECTOR_WEAVE_SHAPE, '');
+    if (malformed) return 'The weave as you left it is malformed: ' + malformed + '.';
+    var shownWeave = isWeaveValue(shown) ? withoutCodeOwned(shown) : null;
+    var repeats = [];
+    ['threads', 'connections', 'questions'].forEach(function (collection) {
+      var theirs = shownWeave ? idCounts(shownWeave[collection]) : new Map();
+      idCounts(left[collection]).forEach(function (n, id) {
+        if (n >= 2 && n > (theirs.get(id) || 0)) repeats.push(collection + ' share the id "' + id + '"');
+      });
+    });
+    if (repeats.length > 0) {
+      return 'Two ' + repeats.join('; two ') + ': your changes made ' + (repeats.length > 1 ? 'these repeats' : 'this repeat') + '. Give each its own id.';
+    }
+    var touched = shownWeave ? meetingWeaveChanges(shownWeave, left).filter(function (c) { return c.repeatedId; }) : [];
+    if (touched.length > 0) {
+      return 'The writer gave more than one ' + ELEMENT_WORDS[touched[0].scope] + ' the id "' + touched[0].id + '", so the meeting cannot tell which of them you changed. Put them back as the meeting showed them: a reweave with a note, or a send-back, gives each its own id.';
+    }
+    return null;
+  }
+
+  /** Whether the director changed the weave a reweave fits in: anything but an answer (ruling 5). */
+  function hasWeaveChanges(shown, weave) {
+    return isPlainObject(shown) && isPlainObject(weave) && meetingWeaveChanges(withoutCodeOwned(shown), withoutCodeOwned(weave)).length > 0;
+  }
+
+  /** Whether the director's version differs from the weave shown in anything, as typed, answers included. */
+  function weaveDiffers(shown, weave) {
+    var exact = function (v) { return JSON.stringify(sortKeysOnly(v)); };
+    return exact(isPlainObject(shown) ? withoutCodeOwned(shown) : shown) !== exact(weave);
+  }
+
+  function sortKeysOnly(value) {
+    if (Array.isArray(value)) return value.map(sortKeysOnly);
+    if (isPlainObject(value)) {
+      var out = {};
+      Object.keys(value).sort().forEach(function (key) { out[key] = sortKeysOnly(value[key]); });
+      return out;
+    }
+    return value === undefined ? null : value;
+  }
+
+  /**
+   * One of the meeting's payloads, 4.5's (lib/meeting.js meetingResume):
+   * - approve: `{meeting: 'approve', weave, note?}`;
+   * - reweave: `{meeting: 'reweave', weave, note?}`, offered only on a change or a note
+   *   (ruling 5): null when there is neither, answers alone being no change;
+   * - send-back: `{meeting: 'send-back', note, weave?}`, null without a note; the weave
+   *   rides along when the director changed it in anything, answers included.
+   * The weave goes without its code-owned keys, and the note as typed, when it is not blank.
+   *
+   * @param {string} action - 'approve', 'reweave' or 'send-back'
+   * @param {*} shown - the weave the meeting showed (data.weave)
+   * @param {Object} weave - the weave as the director left it
+   * @param {string} note - the meeting's note box
+   * @returns {Object|null}
+   */
+  function meetingPayload(action, shown, weave, note) {
+    if (MEETING_ACTIONS.indexOf(action) === -1) {
+      throw new Error('meetingPayload: the story meeting takes approve, reweave or send-back, not ' + String(action));
+    }
+    var typed = typeof note === 'string' ? note : '';
+    var hasNote = typed.trim().length > 0;
+    var left = isPlainObject(weave) ? withoutCodeOwned(weave) : null;
+    if (action === 'send-back') {
+      if (!hasNote) return null;
+      var back = { meeting: 'send-back', note: typed };
+      if (left && weaveDiffers(shown, left)) back.weave = left;
+      return back;
+    }
+    if (action === 'reweave' && !hasNote && !hasWeaveChanges(shown, left)) return null;
+    var payload = { meeting: action, weave: left };
+    if (hasNote) payload.note = typed;
+    return payload;
+  }
+
+  /**
+   * The meeting's three buttons: Approve; Reweave, offered while the director has changed
+   * the weave or written a note, and only then (ruling 5); Send back, on its note, in two
+   * clicks (sendBackButton).
+   */
+  function meetingButtons(shown, weave, note, sendBackArmed) {
+    var hasNote = typeof note === 'string' && note.trim().length > 0;
+    var canReweave = hasNote || hasWeaveChanges(shown, weave);
+    return {
+      approve: { label: 'Approve', ariaLabel: 'Approve the weave as you left it, with your note' },
+      reweave: {
+        label: 'Reweave',
+        disabled: !canReweave,
+        ariaLabel: 'Reweave: the writer fits your changes and your note into the weave, and the meeting reopens',
+        hint: canReweave ? '' : REWEAVE_HINT
+      },
+      sendBack: sendBackButton(sendBackArmed, note, 'weave')
+    };
+  }
+
+  /**
+   * The verdict, printed by code from the parse (spec 4.3): who the room named, or what it
+   * decided when it named no one; the charge; a split final vote.
+   *
+   * @param {Object|null} accusation - data.accusation
+   * @returns {{parsed: boolean, who: string, charge: string, vote: string}}
+   */
+  function meetingVerdictView(accusation) {
+    var parsed = accusationView(accusation);
+    var verdict = verdictView(accusation);
+    var votes = votesView(accusation);
+    var who = parsed.accused
+      || (verdict.noCulprit ? 'No one: ' + verdict.label : '')
+      || (verdict.blamesNoCharacter ? 'No character: ' + verdict.label : '');
+    return { parsed: who !== '', who: who, charge: parsed.charge, vote: votes.split ? votes.line : '' };
+  }
+
+  /**
+   * A thread's receipt, named through the stop's evidenceIndex: the document and its owner,
+   * found in any case as the weave checks find a receipt, or the ledger. A receipt the index
+   * does not hold shows as its id.
+   *
+   * @param {*} receipt
+   * @param {Object} evidenceIndex - data.evidenceIndex
+   * @returns {{id: string, label: string, ledger: boolean, known: boolean, firstLine: string}|null}
+   */
+  function receiptView(receipt, evidenceIndex) {
+    var id = asString(receipt).trim();
+    if (!id) return null;
+    if (id.toLowerCase() === LEDGER_RECEIPT) return { id: id, label: 'the ledger', ledger: true, known: true, firstLine: '' };
+    var index = isPlainObject(evidenceIndex) ? evidenceIndex : {};
+    var key = hasOwn(index, id) ? id : null;
+    if (key === null) {
+      var lower = id.toLowerCase();
+      key = Object.keys(index).filter(function (k) { return k.toLowerCase() === lower; })[0] || null;
+    }
+    if (key === null) return { id: id, label: id, ledger: false, known: false, firstLine: '' };
+    var entry = evidenceEntry(key, index);
+    return { id: id, label: entry.label, ledger: false, known: true, firstLine: entry.firstLine };
+  }
+
+  /** The ids after the prefix of a concern ("E1, E3: "), as lib/hand-edit-diff.js CONCERN_IDS reads them. */
+  var CONCERN_IDS = /^((?:E\d+)(?:\s*,\s*E\d+)*)\s*:\s*/;
+
+  /**
+   * What a concern about the director's edit says after its prefix and ids (lib/hand-edit-diff.js
+   * concernFinding; a test holds the two equal): the line beside the edit names the place, so
+   * the ids are not shown. Any other text is shown as it is.
+   */
+  function concernFindingOf(text) {
+    var finding = asString(text);
+    if (finding.indexOf(DIRECTOR_EDIT_PREFIX) !== 0) return finding;
+    var m = CONCERN_IDS.exec(finding.slice(DIRECTOR_EDIT_PREFIX.length));
+    return m ? finding.slice(DIRECTOR_EDIT_PREFIX.length + m[0].length) : finding;
+  }
+
+  /** The weave's fields that each have a line on the page. */
+  var LINE_FIELDS = ['story', 'question', 'headline', 'fromYourNotes', 'convergence', 'strongerMainThread'];
+
+  /**
+   * The line on the page a place in the weave sits on (a path as lib/hand-edit-diff.js
+   * writes it: `story`, `threads[#t3].role`, `connections[#c2]`): `story`, `thread:t3`,
+   * `connection:c2`, `question:q1`, or null for a place no line shows.
+   */
+  function lineKeyOf(path) {
+    var m = /^([A-Za-z]+)(?:\[#([^\]]*)\])?/.exec(asString(path));
+    if (!m) return null;
+    if (m[2] === undefined) return LINE_FIELDS.indexOf(m[1]) !== -1 ? m[1] : null;
+    if (!hasOwn(ELEMENT_WORDS, m[1]) || /^index-\d+$/.test(m[2])) return null;
+    return ELEMENT_WORDS[m[1]] + ':' + m[2];
+  }
+
+  /** Whether a path names a whole thread, connection or question. */
+  function isElementPath(path) {
+    return /^(threads|connections|questions)\[#[^\]]*\]$/.test(asString(path));
+  }
+
+  /** The field a path ends on inside an element (`role` in `threads[#t3].role`), or ''. */
+  function elementFieldOf(path) {
+    var m = /^[A-Za-z]+\[#[^\]]*\]\.([A-Za-z]+)/.exec(asString(path));
+    return m ? m[1] : '';
+  }
+
+  /** A role's value as the role picker names it; any other text as it is. */
+  function roleWord(text) {
+    var t = asString(text);
+    return hasOwn(WEAVE_ROLE_LABELS, t) ? WEAVE_ROLE_LABELS[t] : t;
+  }
+
+  /** A mark's place, as the round's lines name it (its `where`, without the diff's ", cut"). */
+  function markPlace(mark) {
+    return capitalized(asString(mark.where).replace(/, cut$/, ''));
+  }
+
+  /** The line beside a line of the page that the round's passes changed. */
+  function markLine(mark) {
+    var field = elementFieldOf(mark.path);
+    var which = field ? ' (' + field + ')' : '';
+    var before = asString(mark.before);
+    if (!before) return isElementPath(mark.path) ? 'New this round.' : 'Added this round' + which + '.';
+    if (!asString(mark.after)) return 'Emptied this round' + which + '. Before: "' + roleWord(before) + '"';
+    return 'Changed this round' + which + '. Before: "' + roleWord(before) + '"';
+  }
+
+  /** The line for an element the round's passes took out, which no line of the page shows. */
+  function removedLine(mark) {
+    return markPlace(mark) + ': taken out this round. Before: "' + asString(mark.before) + '"';
+  }
+
+  /** The banner over the marks after a round. */
+  function markedLine(marks) {
+    if (!isPlainObject(marks)) return '';
+    var round = marks.round === 'send-back' ? 'send-back' : 'reweave';
+    return 'After your ' + round + ', ' + (asArray(marks.marks).length > 0
+      ? 'each line the writer changed from the weave you left is marked.'
+      : 'the writer changed no line of the weave you left.');
+  }
+
+  /**
+   * One edit of the director's that the rework of their send-back changed, with its reason
+   * (the hand-edit report's entries of SEND_BACK_PASS; lib/hand-edit-diff.js reportAfterPass).
+   */
+  function meetingEditLine(entry) {
+    var where = capitalized(asString(entry.where) || asString(entry.scope));
+    var reason = asString(entry.reason).trim();
+    var why = reason ? ' Why: ' + reason : ' No reason given.';
+    var became = typeof entry.became === 'string' ? roleWord(entry.became) : null;
+    var by = 'the rework of your send-back';
+    if (entry.struck === true) return where + ': ' + by + (became !== null ? ' brought it back.' : ' took it out.') + why;
+    if (entry.cut === true || entry.removed === true) {
+      return where + ': ' + (entry.cut === true ? 'the text you cut' : 'a sentence you took out') + ' came back'
+        + (became !== null ? ' in "' + became + '"' : '') + ' (' + by + ').' + why;
+    }
+    var director = roleWord(entry.director);
+    if (became === null) return where + ': ' + by + ' took out your "' + director + '".' + why;
+    return where + ': your "' + director + '" became "' + became + '" (' + by + ').' + why;
+  }
+
+  /** The one line for a round whose rework timed out (lib/meeting.js roundDidNotRunOf). */
+  function didNotRunLine(round) {
+    if (!isPlainObject(round)) return '';
+    var kind = round.round === 'send-back' ? 'send-back' : 'reweave';
+    var line = 'Your ' + kind + ' did not run: the writer timed out, and the weave is as you left it.'
+      + (kind === 'reweave' ? ' Reweave again to retry.' : '');
+    var note = asString(round.note).trim();
+    return note ? line + ' Your note was: "' + note + '"' : line;
+  }
+
+  /**
+   * The concerns and the marks by the line of the page they sit beside, and the ones no
+   * line shows: a concern whose place is not on the page, an element the round took out,
+   * a mark whose place is not on the page.
+   */
+  function besideLines(data) {
+    var concerns = new Map();
+    var marks = new Map();
+    var out = { concerns: concerns, marks: marks, otherConcerns: [], removed: [], otherMarks: [] };
+    var add = function (map, key, line) {
+      var list = map.get(key) || [];
+      if (list.indexOf(line) === -1) list.push(line);
+      map.set(key, list);
+    };
+    asArray(data.concerns).filter(isPlainObject).forEach(function (concern) {
+      var line = 'Concern: ' + concernFindingOf(concern.text);
+      var keys = asArray(concern.places).map(function (place) { return lineKeyOf(place && place.path); }).filter(Boolean);
+      if (keys.length === 0) out.otherConcerns.push(line);
+      keys.forEach(function (key) { add(concerns, key, line); });
+    });
+    var round = isPlainObject(data.marks) ? data.marks : {};
+    asArray(round.marks).filter(isPlainObject).forEach(function (mark) {
+      if (isElementPath(mark.path) && !asString(mark.after)) {
+        out.removed.push(removedLine(mark));
+        return;
+      }
+      var key = lineKeyOf(mark.path);
+      if (key) add(marks, key, markLine(mark));
+      else out.otherMarks.push(markPlace(mark) + ': ' + markLine(mark));
+    });
+    return out;
+  }
+
+  function sameQuestion(a, b) {
+    return isPlainObject(a) && ['id', 'kind', 'about', 'question', 'changes'].every(function (field) {
+      return asString(a[field]).trim() === asString(b[field]).trim();
+    });
+  }
+
+  /** The meeting's sections, in the spec's order (4.3). */
+  var MEETING_SECTIONS = ['verdict', 'story', 'fromYourNotes', 'threads', 'connections', 'strongerMainThread', 'questions'];
+
+  /**
+   * The story meeting's page (spec 4.3): the stop's payload (4.5's, lib/meeting.js
+   * meetingCheckpointData) with the director's weave as they have it.
+   * - `order`: the sections to show, in the spec's order: the verdict; the story, the
+   *   question and the working headline; "from your notes"; the threads; the connections
+   *   and the convergence; the stronger main thread; the questions. A section with nothing
+   *   in it is left out.
+   * - each line carries the concerns about the director's edit on it, and the marks of
+   *   what the round's passes changed on it;
+   * - `thinNotes`: the one line beside the story when the weave has no "from your notes";
+   * - the round's lines: `didNotRun`, `checkFailures` (one line each), `changedEdits` (the
+   *   send-back's, with their reasons), `marked` and the marks no line shows (`removed`,
+   *   `otherMarks`), and the concerns no line shows (`otherConcerns`).
+   * The questions are the stop's (`data.questions`), each paired with its place in the
+   * director's weave, whose answer the box shows and sets.
+   *
+   * @param {Object} data - the stop's payload
+   * @param {Object|null} weave - the weave as the director has it (meetingDraftOf, then their changes)
+   * @returns {Object}
+   */
+  function meetingView(data, weave) {
+    var d = isPlainObject(data) ? data : {};
+    if (!isWeaveValue(weave)) {
+      return { hasWeave: false, order: [], emptyLine: EMPTY_MEETING_LINE, didNotRun: didNotRunLine(d.roundDidNotRun) };
+    }
+    var shown = meetingWeaveOf(d.weave);
+    var beside = besideLines(d);
+    var at = function (key) {
+      return { concerns: beside.concerns.get(key) || [], marks: beside.marks.get(key) || [] };
+    };
+    var line = function (key, text) {
+      var b = at(key);
+      return { text: asString(text), concerns: b.concerns, marks: b.marks };
+    };
+    var shownThreads = shown ? asArray(shown.threads) : [];
+    var threadRepeats = new Set(repeatedIdsOf(shownThreads));
+    var connectionRepeats = new Set(repeatedIdsOf(shown ? shown.connections : []));
+    var threads = asArray(weave.threads).map(function (element, index) {
+      var thread = isPlainObject(element) ? element : {};
+      var id = weaveIdOf(thread);
+      var role = asString(thread.role);
+      var b = id ? at('thread:' + id) : { concerns: [], marks: [] };
+      return {
+        key: 'thread-' + index,
+        index: index,
+        id: id,
+        claim: asString(thread.claim),
+        role: role,
+        roleLabel: roleWord(role),
+        receipt: receiptView(thread.receipt, d.evidenceIndex),
+        reason: asString(thread.reason),
+        verdict: thread.verdict === true,
+        added: index >= shownThreads.length,
+        repeatedId: id !== '' && threadRepeats.has(id),
+        concerns: b.concerns,
+        marks: b.marks
+      };
+    });
+    var connections = asArray(weave.connections).map(function (element, index) {
+      var connection = isPlainObject(element) ? element : {};
+      var id = weaveIdOf(connection);
+      var kind = asString(connection.kind);
+      var b = id ? at('connection:' + id) : { concerns: [], marks: [] };
+      return {
+        key: 'connection-' + index,
+        index: index,
+        id: id,
+        kind: kind,
+        kindLabel: hasOwn(CONNECTION_KIND_LABELS, kind) ? CONNECTION_KIND_LABELS[kind] : kind,
+        detail: asString(connection.detail),
+        joins: asArray(connection.joins).map(function (joined) { return String(joined); }).join(' and '),
+        struck: isStruckConnection(connection),
+        repeatedId: id !== '' && connectionRepeats.has(id),
+        concerns: b.concerns,
+        marks: b.marks
+      };
+    });
+    var stronger = isPlainObject(weave.strongerMainThread) ? weave.strongerMainThread : null;
+    var strongerView = null;
+    if (stronger) {
+      var strongerId = asString(stronger.thread).trim();
+      var named = asArray(weave.threads).filter(function (t) { return weaveIdOf(t) === strongerId; })[0];
+      var sb = at('strongerMainThread');
+      strongerView = { thread: strongerId, claim: named ? asString(named.claim) : '', reason: asString(stronger.reason), concerns: sb.concerns, marks: sb.marks };
+    }
+    var draftQuestions = asArray(weave.questions);
+    var cursor = 0;
+    var questions = asArray(d.questions).filter(isPlainObject).map(function (q, n) {
+      var index = -1;
+      for (var i = cursor; i < draftQuestions.length; i += 1) {
+        if (sameQuestion(draftQuestions[i], q)) { index = i; break; }
+      }
+      if (index !== -1) cursor = index + 1;
+      var id = asString(q.id).trim();
+      var kind = asString(q.kind);
+      return {
+        key: 'question-' + n,
+        index: index,
+        id: id,
+        kind: kind,
+        kindLabel: hasOwn(WRITER_QUESTION_KIND_LABELS, kind) ? WRITER_QUESTION_KIND_LABELS[kind] : '',
+        about: asString(q.about),
+        question: asString(q.question),
+        changes: asString(q.changes),
+        answer: asString((index !== -1 ? draftQuestions[index] : q)[WEAVE_ANSWER_KEY]),
+        marks: id ? at('question:' + id).marks : []
+      };
+    });
+    var fromYourNotes = asString(weave.fromYourNotes).trim() ? line('fromYourNotes', weave.fromYourNotes) : null;
+    var present = {
+      fromYourNotes: fromYourNotes !== null,
+      strongerMainThread: strongerView !== null,
+      questions: questions.length > 0
+    };
+    var report = editReportOf(d.handEditReport);
+    return {
+      hasWeave: true,
+      order: MEETING_SECTIONS.filter(function (section) { return !hasOwn(present, section) || present[section]; }),
+      emptyLine: '',
+      verdict: meetingVerdictView(d.accusation),
+      story: line('story', weave.story),
+      question: line('question', weave.question),
+      headline: line('headline', weave.headline),
+      thinNotes: fromYourNotes ? '' : THIN_NOTES_LINE,
+      fromYourNotes: fromYourNotes,
+      threads: threads,
+      roles: Object.keys(WEAVE_ROLE_LABELS).map(function (value) { return { value: value, label: WEAVE_ROLE_LABELS[value] }; }),
+      connections: connections,
+      convergence: line('convergence', weave.convergence),
+      strongerMainThread: strongerView,
+      questions: questions,
+      repeatedIdHint: threads.some(function (t) { return t.repeatedId; }) || connections.some(function (c) { return c.repeatedId; }) ? REPEATED_ID_HINT : '',
+      checkFailures: asArray(d.checkFailures).filter(isPlainObject)
+        .map(function (failure) { return asString(failure.message).trim(); })
+        .filter(Boolean)
+        .map(function (message) { return 'Check still failing: ' + message; }),
+      changedEdits: report
+        ? report.changed.filter(function (entry) { return entry.pass === SEND_BACK_PASS; }).map(meetingEditLine)
+        : [],
+      didNotRun: didNotRunLine(d.roundDidNotRun),
+      marked: markedLine(d.marks),
+      removed: beside.removed,
+      otherMarks: beside.otherMarks,
+      otherConcerns: beside.otherConcerns
+    };
+  }
+
+  /** How the note box's standing notes name a note's kind. */
+  var NOTE_KIND_WORDS = { approval: 'approval note', rejection: 'rework note' };
+
+  /**
+   * The standing notes, folded under the meeting's note box: each under its stop's label
+   * (the console's CHECKPOINT_LABELS, passed in), its kind and its round.
+   *
+   * @param {Array} gateNotes - data.directorGateNotes
+   * @param {Object} labels - stop type -> label
+   * @returns {{any: boolean, title: string, items: Array<{key: string, label: string, text: string}>}}
+   */
+  function meetingStandingNotes(gateNotes, labels) {
+    var names = isPlainObject(labels) ? labels : {};
+    var items = asArray(gateNotes)
+      .filter(function (n) { return isPlainObject(n) && typeof n.text === 'string' && n.text.trim(); })
+      .map(function (n, i) {
+        var kind = asString(n.kind) || 'rejection';
+        return {
+          key: 'note-' + i,
+          label: (hasOwn(names, n.gate) ? names[n.gate] : asString(n.gate)) + ', '
+            + (hasOwn(NOTE_KIND_WORDS, kind) ? NOTE_KIND_WORDS[kind] : kind + ' note') + ' ' + (n.round || 1),
+          text: n.text.trim()
+        };
+      });
+    return { any: items.length > 0, title: 'Standing notes (' + items.length + ')', items: items };
+  }
+
+  /** What a rollback to `target` costs, for the rollback panel: going back to the meeting costs no model call (R9). */
+  function rollbackWarningLine(target) {
+    return target === MEETING_STOP ? MEETING_ROLLBACK_LINE : ROLLBACK_WARNING;
+  }
+
   // ── RevisionDiff's key walk (fix 3.7b) ──────────────────────────────────────
 
   /**
@@ -1412,9 +2172,6 @@
     DIRECTOR_EDIT_PREFIX: DIRECTOR_EDIT_PREFIX,
     SEND_BACK_PASS: SEND_BACK_PASS,
     DIRECTOR_EDIT_CONCERNS_LABEL: DIRECTOR_EDIT_CONCERNS_LABEL,
-    arcCardModel: arcCardModel,
-    defaultArcSelection: defaultArcSelection,
-    arcSelectionNote: arcSelectionNote,
     accusationView: accusationView,
     whiteboardView: whiteboardView,
     factCheckSummary: factCheckSummary,
@@ -1428,8 +2185,6 @@
     outlineReviewPayload: outlineReviewPayload,
     articleReviewPayload: articleReviewPayload,
     sendBackButton: sendBackButton,
-    arcReviewPayload: arcReviewPayload,
-    arcNotePrefill: arcNotePrefill,
     noteSlotKey: noteSlotKey,
     // Phase 2, brief 2.2: the director's words
     verdictView: verdictView,
@@ -1441,10 +2196,42 @@
     // Phase 4, brief 4.2: the leave-out box at the character-IDs stop
     characterIdLeaveOutTicks: characterIdLeaveOutTicks,
     characterIdsSkipPayload: characterIdsSkipPayload,
-    arcNoteInitial: arcNoteInitial,
     // Phase 3, brief 3.7: the writer's questions at the arc, outline and article stops
     writerQuestionsView: writerQuestionsView,
     WRITER_QUESTION_KIND_LABELS: WRITER_QUESTION_KIND_LABELS,
+    // Phase 4, task 4.8: the story meeting on screen
+    MEETING_STOP: MEETING_STOP,
+    MEETING_ACTIONS: MEETING_ACTIONS,
+    WEAVE_ROLE_LABELS: WEAVE_ROLE_LABELS,
+    CONNECTION_KIND_LABELS: CONNECTION_KIND_LABELS,
+    LEDGER_RECEIPT: LEDGER_RECEIPT,
+    STRUCK_KEY: STRUCK_KEY,
+    WEAVE_ANSWER_KEY: WEAVE_ANSWER_KEY,
+    DIRECTOR_WEAVE_SHAPE: DIRECTOR_WEAVE_SHAPE,
+    THIN_NOTES_LINE: THIN_NOTES_LINE,
+    MEETING_ROLLBACK_LINE: MEETING_ROLLBACK_LINE,
+    meetingWeaveOf: meetingWeaveOf,
+    meetingVersion: meetingVersion,
+    meetingPendingSlot: meetingPendingSlot,
+    meetingDraftOf: meetingDraftOf,
+    meetingNoteOf: meetingNoteOf,
+    pendingEditsAfterCheckpoint: pendingEditsAfterCheckpoint,
+    setMeetingField: setMeetingField,
+    setThreadRole: setThreadRole,
+    addMeetingThread: addMeetingThread,
+    removeMeetingThread: removeMeetingThread,
+    setConnectionStruck: setConnectionStruck,
+    setQuestionAnswer: setQuestionAnswer,
+    meetingWeaveChanges: meetingWeaveChanges,
+    meetingWeaveProblems: meetingWeaveProblems,
+    meetingPayload: meetingPayload,
+    meetingButtons: meetingButtons,
+    meetingVerdictView: meetingVerdictView,
+    receiptView: receiptView,
+    concernFindingOf: concernFindingOf,
+    meetingView: meetingView,
+    meetingStandingNotes: meetingStandingNotes,
+    rollbackWarningLine: rollbackWarningLine,
     // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
     revisionDiffKeys: revisionDiffKeys,
     REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS

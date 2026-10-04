@@ -17,8 +17,9 @@ const { formatLlmErrorMessage, formatFailureMessage, failureRollbackTarget } = w
 // Attach watchdog decision + report links (pure, node-tested in
 // console/__tests__/session-start-logic.test.js).
 const { decideAttachFallback, shouldApplyAttachPoll, completedResultFrom } = window.Console.sessionStartLogic;
-// Where a stop's note sits in `pendingEdits`, beside that stop's edits (brief 1.1).
-const { noteSlotKey } = window.Console.checkpointViewLogic;
+// Where a stop's note sits in `pendingEdits`, beside that stop's edits (brief 1.1), and
+// the story meeting's approve for the fallback below (task 4.8).
+const { noteSlotKey, meetingPayload, meetingWeaveOf } = window.Console.checkpointViewLogic;
 
 // How long an attached stream may say nothing before the watchdog re-reads
 // /checkpoint, and how often it looks. The server's heartbeat is an SSE COMMENT
@@ -649,7 +650,8 @@ function App() {
                       'paper-evidence-selection': { selectedPaperEvidence: state.checkpointData.paperEvidence || [] },
                       'pre-curation': { preCuration: true },
                       'evidence-and-photos': { evidenceBundle: true },
-                      'arc-selection': { selectedArcs: (state.checkpointData.narrativeArcs || []).map(a => a.id || a.title) },
+                      // Task 4.8: the story meeting's approve, 4.5's payload, with the weave as shown.
+                      'arc-selection': meetingPayload('approve', state.checkpointData.weave, meetingWeaveOf(state.checkpointData.weave), ''),
                       // M6: if Photos.js fails to register, the fallback must still
                       // post a shape the server accepts at this gate.
                       'photos': { photosPath: state.checkpointData.defaultDir || '' },

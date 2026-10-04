@@ -146,9 +146,11 @@ function reducer(state, action) {
         // complete session), and was already latent after WORKFLOW_COMPLETE.
         completedResult: null,
         completedStepper: false,
-        // Clear all checkpoint edit slots when a new checkpoint arrives
-        // (deliberate substitute for a dedicated RESET_PENDING_EDITS action)
-        pendingEdits: {}
+        // Clear all checkpoint edit slots when a new checkpoint arrives (deliberate
+        // substitute for a dedicated RESET_PENDING_EDITS action), except the story
+        // meeting's: the director's weave and note stay while the same weave version
+        // is shown, so a remount keeps them (task 4.8; checkpoint-view-logic.js).
+        pendingEdits: window.Console.checkpointViewLogic.pendingEditsAfterCheckpoint(state.pendingEdits, action.checkpointType, action.data || {})
       };
 
     case ACTIONS.PROCESSING_START:
