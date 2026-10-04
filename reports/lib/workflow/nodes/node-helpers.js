@@ -1197,14 +1197,17 @@ WHAT THIS REWORK DOES:
 
 ${scope}`;
 
-  // The note's own block. At the story meeting a director's round reads no finding, so the
-  // line about the evaluator's issues stays out there (brief 4.5).
+  // The note's own block. Its NOTE line follows the director's note at every stop: it is
+  // where the director's words end, as the removed-phrase scan reads them
+  // (lib/__tests__/fixtures/removed-phrases.js instructionText; brief 4.5b). At the story
+  // meeting a director's round reads no finding, so only the line about the evaluator's
+  // issues stays out there (brief 4.5).
   const noteBlock = humanFeedback
     ? `HUMAN FEEDBACK (HIGHEST PRIORITY):
 ${humanFeedback}
-${meetingMode ? '' : `
+
 NOTE: The human reviewer has explicitly requested these changes.
-Address human feedback FIRST, then address any remaining evaluator issues.
+${meetingMode ? '' : `Address human feedback FIRST, then address any remaining evaluator issues.
 `}`
     : '';
 

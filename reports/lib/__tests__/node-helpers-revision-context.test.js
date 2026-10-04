@@ -1118,3 +1118,37 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     ['EVALUATION SUMMARY', 'Confidence', 'Ready:', 'CRITERIA SCORES', 'no criteria scores'].forEach((gone) => expect(`${gone}: ${text.includes(gone)}`).toBe(`${gone}: false`));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5b: the director's note has one end marker at every stop
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// At the story meeting the note block keeps the line after the director's note, "NOTE: The
+// human reviewer has explicitly requested these changes.", and leaves out only the sentence
+// about the evaluator's issues, which a director's round never reads (4.5). The line is
+// where the director's words end: the removed-phrase scan (lib/__tests__/fixtures/
+// removed-phrases.js instructionText) reads it so, and could not read the meeting's
+// send-back render without it.
+describe("4.5b: the director's note ends on the same line at every stop", () => {
+  const { WEAVE } = require('./fixtures/rework-state');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const END = 'NOTE: The human reviewer has explicitly requested these changes.';
+  const EVALUATOR = 'Address human feedback FIRST, then address any remaining evaluator issues.';
+  const meeting = (meetingRound) => buildRevisionContext({
+    phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
+    previousOutput: clone(WEAVE), handEdits: null, humanFeedback: 'Rethink the money thread.', meetingRound, theme: 'journalist'
+  }).contextSection;
+
+  it.each(['send-back', 'reweave'])("at the story meeting, a %s's note is followed by the end line, with a blank line after it, and nothing about the evaluator", (round) => {
+    const text = meeting(round);
+    expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\nRethink the money thread.\n\n${END}\n\n`);
+    expect(text).not.toContain(EVALUATOR);
+  });
+
+  it('the outline and the article keep both lines, as before', () => {
+    const text = buildRevisionContext({
+      phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'h' } }, humanFeedback: 'Tighten it.', theme: 'journalist'
+    }).contextSection;
+    expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\nTighten it.\n\n${END}\n${EVALUATOR}\n`);
+  });
+});

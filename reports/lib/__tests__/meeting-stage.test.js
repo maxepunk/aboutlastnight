@@ -477,3 +477,35 @@ describe("4.5b: a writer's repeat under the id of a thread the director added", 
     expect(fixed.weave.threads.find((t) => t.id === 't7')).toEqual({ ...WRITERS_T6, id: 't7' });
   });
 });
+
+// The removed-phrase scan (lib/__tests__/fixtures/removed-phrases.js) reads the arc rework's
+// three renders as scripts/render-prompts.js writes them, through arcReworkCall: it finds
+// where the director's note ends by the note block's end line, which the meeting's renders
+// lost in 4.5 (gate 2).
+describe("4.5b: the removed-phrase scan reads the arc rework's three renders", () => {
+  const { arcReworkCall } = arcNodes._testing;
+  const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
+  const { standingAtMeeting } = require('../hand-edit-diff');
+
+  /** An automatic pass after the director's changes: a check's line to fix, the director's edits standing. */
+  const automatic = async () => {
+    const left = leftByDirector();
+    return atMeeting({
+      weave: left, _weaveHandEdits: standingAtMeeting(null, clone(FIXTURE_WEAVE), left), arcRevisionCount: 1,
+      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" gives the receipt "zzz", which names no document in <RECORD>.'] }
+    });
+  };
+
+  it.each([
+    ['the automatic pass', automatic],
+    ['the reweave', () => roundState('reweave', 'Join the ledger thread to the vote.')],
+    ['the send-back', () => roundState('send-back', 'Rethink the money thread.')]
+  ])('%s: the scan reads it, and finds no retired wording and no em-dash', async (_name, stateOf) => {
+    const call = arcReworkCall(await stateOf());
+    const render = `${call.systemPrompt}\n=====\n${call.prompt}`;
+    expect(render).toContain('<HAND_EDITS>');
+    const text = instructionText(render);
+    expect(findRemovedPhrases(text).map(String)).toEqual([]);
+    expect(text).not.toMatch(/[–—]/);
+  });
+});
