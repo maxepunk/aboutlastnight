@@ -705,3 +705,139 @@ describe('4.6b fix round 1: the gate and the checks read a repeat by one rule', 
       .toEqual([expect.stringMatching(/^Photos placed more than once: cards\.jpg, theory\.jpg\. /)]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6c: a card count is the director's only for the edits that changed it
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A concern on the card count names an edit on a beat's place only when it took the beat
+// into the sections or out of them, and an edit on its card only when it added the card or
+// cleared it (the integrator's ruling 3 on the follow-ups). A beat moved between sections
+// still counts where it did, so its move changed nothing the count reads.
+describe("4.6c: a card count is the director's only for the edits that changed it", () => {
+  /** The director's standing edits on `left`, made against the writer's `base`. */
+  const editsAgainst = (base, left) => carriedEdits(standingOnMap(null, base, left), left);
+  const cardCount = (findings) => ({
+    failures: findings.failures.filter((f) => f.type === 'card-count').map((f) => f.message),
+    concerns: findings.concerns.filter((c) => c.type === 'card-count')
+  });
+  /** The writer's map with five cards: b1 and b2 carry one too, and b4 none. */
+  const fiveCards = () => {
+    const map = writers();
+    map.sections[0].beats[0].card = 'row004';
+    map.sections[0].beats[1].card = 'row001';
+    return map;
+  };
+  /** The writer's map with six cards, one over the count: b4 carries one too. */
+  const sixCards = () => {
+    const map = fiveCards();
+    map.sections[1].beats[1].card = 'row003';
+    return map;
+  };
+  /** The writer's map with two cards, one under the count: b6 carries none. */
+  const twoCards = () => {
+    const map = writers();
+    delete map.sections[1].beats[3].card;
+    return map;
+  };
+  /** A base map whose leftOut beat b9 is a card beat. */
+  const withLeftOutCard = (baseOf) => () => {
+    const map = baseOf();
+    map.leftOut[0].card = 'row004';
+    return map;
+  };
+
+  it.each([
+    ['moved to another section and given a card', fiveCards, 'b4', (beat) => { beat.card = 'row004'; }, 6],
+    ['moved to another section with its card cleared', writers, 'b5', (beat) => { delete beat.card; }, 2]
+  ])('a beat %s: the concern names the card edit, and not the move', (_name, baseOf, id, onCard, cards) => {
+    const base = baseOf();
+    const left = clone(base);
+    const story = left.sections[1];
+    const beat = story.beats.splice(story.beats.findIndex((b) => b.id === id), 1)[0];
+    onCard(beat);
+    left.sections[0].beats.push(beat);
+    const edits = editsAgainst(base, left);
+    expect(edits.map((e) => [e.id, e.path, e.from || ''])).toEqual([
+      ['E1', `sections[#lede].beats[#${id}]`, 'theStory'],
+      ['E2', `sections[#lede].beats[#${id}].card`, '']
+    ]);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [],
+      concerns: [{ type: 'card-count', editIds: ['E2'], finding: `The map carries ${cards} cards; the article carries 3 to 5.` }]
+    });
+  });
+
+  it('a beat brought back from left out and given a card: the concern names both, the bring-back and the card', () => {
+    const base = fiveCards();
+    const left = clone(base);
+    const beat = left.leftOut.splice(0, 1)[0];
+    beat.card = 'row004';
+    left.sections[1].beats.push(beat);
+    const edits = editsAgainst(base, left);
+    expect(edits.map((e) => [e.id, e.path, e.from || ''])).toEqual([
+      ['E1', 'sections[#theStory].beats[#b9]', 'leftOut'],
+      ['E2', 'sections[#theStory].beats[#b9].card', '']
+    ]);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [],
+      concerns: [{ type: 'card-count', editIds: ['E1', 'E2'], finding: 'The map carries 6 cards; the article carries 3 to 5.' }]
+    });
+  });
+
+  // The integrator's ruling 3, minor 6: a beat in leftOut counts no card, so no edit there
+  // moves the count, and a count that fails is the writer's. Each row's base fails the way
+  // its edit would push the count if leftOut counted: an added card over, a cleared one under.
+  it.each([
+    ['a card added to a beat in leftOut', sixCards, (map) => { map.leftOut[0].card = 'row004'; }, [['leftOut[#b9].card', '']], 6],
+    ['a card cleared from a beat in leftOut', withLeftOutCard(twoCards), (map) => { delete map.leftOut[0].card; }, [['leftOut[#b9].card', '']], 2],
+    ['a card beat added straight into leftOut', sixCards,
+      (map) => { map.leftOut.push({ id: 'b10', material: 'row004, the receipt', card: 'row004' }); }, [['leftOut[#b10]', 'none']], 6],
+    ['a beat brought back with its card cleared', withLeftOutCard(twoCards),
+      (map) => { const beat = map.leftOut.splice(0, 1)[0]; delete beat.card; map.sections[1].beats.push(beat); },
+      [['sections[#theStory].beats[#b9]', 'leftOut'], ['sections[#theStory].beats[#b9].card', '']], 2]
+  ])("%s: the count is the writer's, a failure, and no concern", (_name, baseOf, change, paths, cards) => {
+    const base = baseOf();
+    const left = clone(base);
+    change(left);
+    const edits = editsAgainst(base, left);
+    expect(edits.map((e) => [e.path, e.from || ''])).toEqual(paths);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(new RegExp(`^The map carries ${cards} cards\\. Mark 3 to 5 beats as cards`))],
+      concerns: []
+    });
+  });
+
+  // The card check's attribution (editsOnCards) reads only the edits its one caller can meet:
+  // a card in a section, so the director gave it, or added or brought back its beat.
+  it('a card in a section that names no document is a concern on the edit that put it there: the card given, or the beat added or brought back with it', () => {
+    const cards = (findings) => ({
+      failures: findings.failures.filter((f) => f.type === 'card-not-in-record').map((f) => f.message),
+      concerns: findings.concerns.filter((c) => c.type === 'card-not-in-record').map((c) => [c.editIds, c.finding])
+    });
+    const given = writers();
+    given.sections[1].beats[1].card = 'zzz001';
+    expect(cards(mapFindings(given, inputs({ edits: directorsEdits(given) })))).toEqual({
+      failures: [], concerns: [[['E1'], 'The card zzz001 names no document in the record.']]
+    });
+    const added = writers();
+    added.sections[0].beats.push({ id: 'b10', material: 'zzz002, a receipt', card: 'zzz002' });
+    expect(cards(mapFindings(added, inputs({ edits: directorsEdits(added) })))).toEqual({
+      failures: [], concerns: [[['E1'], 'The card zzz002 names no document in the record.']]
+    });
+    const base = writers();
+    base.leftOut[0].card = 'zzz003';
+    const back = clone(base);
+    back.sections[1].beats.push(back.leftOut.splice(0, 1)[0]);
+    expect(cards(mapFindings(back, inputs({ edits: editsAgainst(base, back) })))).toEqual({
+      failures: [], concerns: [[['E1'], 'The card zzz003 names no document in the record.']]
+    });
+    const moved = writers();
+    moved.sections[1].beats[0].card = 'zzz004';
+    const away = clone(moved);
+    away.sections[0].beats.push(away.sections[1].beats.splice(0, 1)[0]);
+    expect(cards(mapFindings(away, inputs({ edits: editsAgainst(moved, away) })))).toEqual({
+      failures: [expect.stringMatching(/^Cards naming no document in <RECORD>: zzz004 \(beat b3\)\. /)], concerns: []
+    });
+  });
+});

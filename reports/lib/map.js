@@ -220,28 +220,30 @@ function editsOnPhoto(entries, filename) {
 }
 
 /**
- * The ids of the director's edits on one beat's card, for a card that names no document in
- * the record: a card they gave the beat, and the beat they cut, struck, added or brought
- * back with its card.
+ * The ids of the director's edits on one beat's card, for a card in a section that names no
+ * document in the record: a card they gave the beat, and the beat they added or brought back
+ * with its card.
  */
 function editsOnCards(entries, beatId) {
   return entries.filter(({ edit, address }) => {
     if (!address || address.kind !== 'beat' || String(address.identity.id).trim() !== beatId) return false;
     if (address.fieldSteps.length > 0) return address.fieldSteps[0].key === 'card';
-    if (isCut(edit)) return Boolean(beatCardOf(edit.before));
-    const bringsIn = edit.from === MAP_NONE || edit.from === MAP_LEFT_OUT;
-    return Boolean(beatCardOf(edit.after)) && (bringsIn || address.container === MAP_LEFT_OUT);
+    return (edit.from === MAP_NONE || edit.from === MAP_LEFT_OUT) && Boolean(beatCardOf(edit.after));
   }).map(({ edit }) => edit.id);
 }
 
 /**
- * How the director's edits moved the card count the card check reads (mapTally; brief
- * 4.6b): one change for each beat their edits touch that is a card beat in a section on one
- * side only, read where it sat, with its card, before their edits and where it sits now.
- * `delta` is +1 for a card beat they added or brought back and a card they gave a beat, and
- * -1 for a card beat they struck or cut and a card they cleared; `editIds` are their edits
- * on that beat. An edit that changes which document a card prints, or moves a card beat
- * between sections, moves no count.
+ * How the director's edits moved the card count the card check reads (mapTally; briefs
+ * 4.6b and 4.6c): one change for each beat their edits touch that is a card beat in a
+ * section on one side only, read where it sat, with its card, before their edits and where
+ * it sits now. `delta` is +1 for a card beat they added or brought back and a card they gave
+ * a beat, and -1 for a card beat they struck or cut and a card they cleared. `editIds` are
+ * the edits that made the change: the edit on the beat's place only when it took the beat
+ * into the sections or out of them, and the edit on its card only when it added the card or
+ * cleared it. So a beat moved between sections and given a card is a change of the card edit
+ * alone, and one brought back from leftOut and given a card a change of both. An edit that
+ * changes which document a card prints, or moves a card beat between sections, moves no
+ * count.
  *
  * @param {Array<{edit: Object, address: Object|null}>} entries - the edits with what each is about (addressed)
  * @returns {Array<{delta: number, editIds: string[]}>}
@@ -256,22 +258,32 @@ function cardCountChanges(entries) {
     beats.set(id, { ...beats.get(id), [onCard ? 'card' : 'place']: { edit, address } });
   });
   const inSections = (container) => container !== MAP_LEFT_OUT && container !== MAP_NONE;
-  const cardOf = (value) => beatCardOf({ card: value });
+  const cardOf = (value) => Boolean(beatCardOf({ card: value }));
   const changes = [];
   beats.forEach(({ place, card }) => {
-    let was;
-    let now;
+    // Whether the beat sat in a section and carried a card before the edits, and does now.
+    let wasIn;
+    let nowIn;
+    let wasCard;
+    let nowCard;
     if (place && isCut(place.edit)) {
-      was = inSections(place.address.container) && Boolean(beatCardOf(place.edit.before));
-      now = false;
+      // A cut takes the beat off the map whole: its place is what changed.
+      wasIn = inSections(place.address.container);
+      nowIn = false;
+      wasCard = Boolean(beatCardOf(place.edit.before));
+      nowCard = wasCard;
     } else {
       const sits = (place || card).address.container;
-      const sat = place && place.edit.from ? place.edit.from : sits;
-      const nowCard = card ? cardOf(card.edit.after) : beatCardOf(place.edit.after);
-      now = inSections(sits) && Boolean(nowCard);
-      was = inSections(sat) && Boolean(card ? cardOf(card.edit.before) : nowCard);
+      nowIn = inSections(sits);
+      wasIn = inSections(place && place.edit.from ? place.edit.from : sits);
+      nowCard = card ? cardOf(card.edit.after) : Boolean(beatCardOf(place.edit.after));
+      wasCard = card ? cardOf(card.edit.before) : nowCard;
     }
-    if (was !== now) changes.push({ delta: now ? 1 : -1, editIds: [place, card].filter(Boolean).map(({ edit }) => edit.id) });
+    const was = wasIn && wasCard;
+    const now = nowIn && nowCard;
+    if (was === now) return;
+    const made = [place && wasIn !== nowIn ? place : null, card && wasCard !== nowCard ? card : null];
+    changes.push({ delta: now ? 1 : -1, editIds: made.filter(Boolean).map(({ edit }) => edit.id) });
   });
   return changes;
 }
