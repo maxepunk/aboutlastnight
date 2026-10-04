@@ -1394,13 +1394,15 @@ describe('4.3b: a move within a section, across the director\'s rounds and an au
     // The caption's restore puts the photo back where it sat, and the copy in "t" goes.
     expect(photosOf(output)).toEqual([['s', RECAPTIONED.caption]]);
     expect(order(output)).toBe('BPAC');
-    // No place keeps A before B, so the move is reported not put back and the caption put
-    // back, and no sentence of the writer's caption comes back from a second copy.
+    // Task 4.3c: the move's entry says what the stored version holds: the photo back in the
+    // director's section, and, since no place keeps A before B, out of their order there.
+    // The caption is put back, and no sentence of the writer's caption comes back from a
+    // second copy.
     expect(report.changed).toEqual([
-      expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: false }),
+      expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: true, inOrder: false }),
       expect.objectContaining({ id: 'E2', moved: false, removed: false, restored: true })
     ]);
-    // The stored version carries exactly the edits the report says were put back.
+    // Out of the director's order, the stored version does not carry the move.
     expect(D.carriedEdits(edits, output).map((e) => e.id)).toEqual(['E2']);
   });
 
@@ -2133,6 +2135,153 @@ describe('4.6: the map\'s edits', () => {
       expect(storyIds(settled.output)).not.toContain('b2');
       expect(settled.output.leftOut[1]).toEqual({ ...b2, material: line });
       expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.3c: what code restores prints once, and the report says where it is
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A field edit's restore puts back a block an automatic pass removed from its section,
+// where it sat. When the pass had moved the block to another section, the pass's copy
+// stayed there, so the page printed the photo twice, with two captions (scratch
+// fieldonly.js). And when a field restore put back a block the director had moved within
+// its section, the move's entry still said the block went to the other section and could
+// not be put back, while the stored version held it in the director's section
+// (duplicate2.js).
+describe('4.3c: a restored block prints once, and the report says where it is', () => {
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const C = paragraph('Charlie paragraph closes the section with a long first line.');
+  const T = paragraph('Tango paragraph sits alone in the second section of the article.');
+  const P = { type: 'photo', filename: 'whiteboard.jpg', caption: 'Mel lays out the theory at the whiteboard.' };
+  const P2 = { ...P, caption: 'Six people around the whiteboard, late.' };
+  /** An article whose section "s" holds `s` and whose section "t" holds `t`. */
+  const article = (s, t = [T]) => ({
+    metadata: { sessionId: '0926262' },
+    headline: { main: 'The Room Voted Five to Four' },
+    sections: [
+      { id: 's', type: 'narrative', content: s.map(clone) },
+      { id: 't', type: 'narrative', content: t.map(clone) }
+    ]
+  });
+  /** A section's blocks as letters: P for the photo, else each block's first letter. */
+  const letters = (output, i) => output.sections[i].content.map((b) => (b.type === 'photo' ? 'P' : (b.text || b.headline)[0])).join('');
+  /** Each photo the version prints, as [section id, caption]. */
+  const photosOf = (output) => output.sections.flatMap((s) => s.content.filter((b) => b.type === 'photo').map((b) => [s.id, b.caption]));
+  const settle = (standing, sentBack, after) => D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1 });
+
+  describe('a restore that puts a block back takes out the copy a pass left in another section', () => {
+    test('a caption edit, then a pass that moves the photo with the writer\'s caption: one photo, with the director\'s caption, and a report that matches the stored version', () => {
+      const sentBack = article([A, P2, B, C]);
+      const standing = D.standingAfterSendBack(null, article([A, P, B, C]), sentBack, 'bundle');
+      expect(standing.edits.map((e) => e.path)).toEqual(['sections[#s].content[1].caption']);
+      const { output, report } = settle(standing, sentBack, article([A, B, C], [T, P]));
+
+      expect(photosOf(output)).toEqual([['s', P2.caption]]);
+      expect([letters(output, 0), letters(output, 1)]).toEqual(['APBC', 'T']);
+      // The report says the caption was put back, and says nothing of the writer's caption
+      // coming back, which the stored version no longer prints.
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', removed: false, restored: true })]);
+      expect(JSON.stringify(output)).not.toContain(P.caption);
+      expect(D.carriedEdits(standing, output).map((e) => e.id)).toEqual(['E1']);
+    });
+
+    test('a copy the version the pass started from held in another section stays', () => {
+      // The writer cited one card in both sections, and the director kept both, rewriting
+      // the headline of the one in "s". A pass takes that one out.
+      const card = (headline) => ({ type: 'evidence-card', tokenId: 'jes002', headline, content: 'You can have him.' });
+      const shown = article([A, card('You can have him'), B], [T, card('You can have him')]);
+      const sentBack = article([A, card('Jess gave him up'), B], [T, card('You can have him')]);
+      const standing = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+      expect(standing.edits.map((e) => e.path)).toEqual(['sections[#s].content[1].headline']);
+      const { output, report } = settle(standing, sentBack, article([A, B], [T, card('You can have him')]));
+
+      expect(output.sections.map((s) => s.content.filter((b) => b.type === 'evidence-card').map((b) => b.headline)))
+        .toEqual([['Jess gave him up'], ['You can have him']]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+    });
+
+    test('a section put back whole takes out the copy a pass left elsewhere of each of its blocks', () => {
+      // The director rewrote the closing's paragraph. A pass drops the closing and moves its
+      // photo, recaptioned, into "the-story".
+      const shown = articleAtStop();
+      shown.sections[2].content.push(clone(P));
+      const sentBack = directorsVersion();
+      sentBack.sections[2].content.push(clone(P));
+      const standing = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+      expect(standing.edits.map((e) => e.path)).toEqual(['sections[#the-story].content[-]', 'sections[#closing].content[0].text']);
+      const after = clone(sentBack);
+      after.sections.splice(2, 1);
+      after.sections[1].content.push({ ...P, caption: 'The theory, drawn up.' });
+      const { output, report } = settle(standing, sentBack, after);
+
+      expect(output.sections.map((s) => s.id)).toEqual(['lede', 'the-story', 'closing']);
+      expect(output.sections[2].content).toEqual([paragraph(CLOSING_EDIT), P]);
+      expect(photosOf(output)).toEqual([['closing', P.caption]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E2', restored: true })]);
+    });
+  });
+
+  describe('a move\'s entry says where the stored version holds the block', () => {
+    /** Round 1 moves the photo between A and B; round 2 recaptions it there. */
+    const recaptioned = () => {
+      const roundOne = D.standingAfterSendBack(null, article([P, A, B, C]), article([A, P, B, C]), 'bundle');
+      return D.standingAfterSendBack(roundOne, article([A, P, B, C]), article([A, P2, B, C]), 'bundle');
+    };
+    /**
+     * Whether each move's entry agrees with the stored version: `restored` while the stored
+     * version holds the block in the director's section, and `inOrder` beside it, whether
+     * that is in the director's order, which is what carries the move.
+     */
+    const agrees = (standing, output, report) => report.changed.filter((c) => c.moved).every((c) => {
+      const edit = standing.edits.find((e) => e.id === c.id);
+      const inSection = output.sections.find((s) => s.id === edit.from).content.some((b) => b.filename === edit.after.filename);
+      const carried = D.carriedEdits([edit], output).length === 1;
+      return c.restored === inSection && (!c.restored || c.inOrder === carried);
+    });
+
+    test('a field restore puts the photo back after a pass took it to another section and swapped its neighbours: back in the director\'s section, out of their order', () => {
+      const sentBack = article([A, P2, B, C]);
+      const standing = recaptioned();
+      const { output, report } = settle(standing, sentBack, article([B, A, C], [T, P]));
+      expect([letters(output, 0), letters(output, 1)]).toEqual(['BPAC', 'T']);
+      expect(photosOf(output)).toEqual([['s', P2.caption]]);
+      expect(report.changed).toEqual([
+        expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: true, inOrder: false }),
+        expect.objectContaining({ id: 'E2', restored: true })
+      ]);
+      expect(D.carriedEdits(standing, output).map((e) => e.id)).toEqual(['E2']);
+      expect(agrees(standing, output, report)).toBe(true);
+    });
+
+    test('the same pass with the neighbours left in order: back in the director\'s place, in their order', () => {
+      const sentBack = article([A, P2, B, C]);
+      const standing = recaptioned();
+      const { output, report } = settle(standing, sentBack, article([A, B, C], [T, P]));
+      expect(letters(output, 0)).toBe('APBC');
+      expect(report.changed[0]).toEqual(expect.objectContaining({ id: 'E1', moved: true, restored: true, inOrder: true }));
+      expect(D.carriedEdits(standing, output).map((e) => e.id)).toEqual(['E1', 'E2']);
+      expect(agrees(standing, output, report)).toBe(true);
+    });
+
+    test('a pass that removes the photo and swaps its neighbours: the field restore puts it back, and the entry says so', () => {
+      const sentBack = article([A, P2, B, C]);
+      const standing = recaptioned();
+      const { output, report } = settle(standing, sentBack, article([B, A, C]));
+      expect([letters(output, 0), letters(output, 1)]).toEqual(['BPAC', 'T']);
+      expect(report.changed[0]).toEqual(expect.objectContaining({ id: 'E1', moved: true, became: null, restored: true, inOrder: false }));
+      expect(agrees(standing, output, report)).toBe(true);
+    });
+
+    test('a photo the pass left in the director\'s section out of order is not back: it never left, and code did not move it', () => {
+      const director = article([A, P, B, C]);
+      const standing = D.standingAfterSendBack(null, article([P, A, B, C]), director, 'bundle');
+      const { output, report } = settle(standing, director, article([B, P, A, C], [T, P]));
+      expect([letters(output, 0), letters(output, 1)]).toEqual(['BPAC', 'T']);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: 'another place in section "s"', restored: false })]);
+      expect(report.changed[0]).not.toHaveProperty('inOrder');
     });
   });
 });

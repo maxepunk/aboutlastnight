@@ -64,8 +64,9 @@
  * kept their order in that send-back, re-anchored to its neighbours there (reanchoredMove).
  * Code puts such a block back only into the director's order: when a pass also swapped the
  * blocks it sat between, no place keeps that order, so code leaves the block where the pass,
- * or a restore of one of its fields, put it, printed once, and the report says it was not
- * put back (directorsOrderCanHold, restoreMove).
+ * or a restore of one of its fields, put it, printed once (directorsOrderCanHold,
+ * restoreMove). The report says where that is: not put back, or, where a field's restore put
+ * it back in the director's section, back there and out of their order (task 4.3c).
  *
  * Equality is trimmed canonical JSON: keys sorted, every string trimmed. Matching an
  * object value is a subset match: every key the director's value carries is present
@@ -2540,11 +2541,50 @@ function restoreMove(edit, out) {
 }
 
 /**
+ * Take out of `out` (changed in place) each copy of `block` a pass left in another section,
+ * once a restore has put the block back in the section at `keptIndex` (task 4.3c), so the
+ * page prints it once. A copy is a block of its identity (blockIdentity). In each other
+ * section, the copies beyond as many as the version the pass started from held there are the
+ * pass's, and a copy that version held there unchanged stays, so a copy the director kept is
+ * never taken out.
+ */
+function takeOutPassCopies(out, before, block, keptIndex) {
+  const identity = blockIdentity(block);
+  if (!isObj(identity)) return;
+  const isCopy = (b) => matchesAfter(b, identity);
+  const was = isObj(before) && Array.isArray(before.sections) ? before.sections : [];
+  (Array.isArray(out.sections) ? out.sections : []).forEach((section, i) => {
+    if (i === keptIndex || !isObj(section) || !Array.isArray(section.content)) return;
+    const key = sectionKey(section, i);
+    const then = was.find((s, j) => sectionKey(s, j) === key);
+    const held = (isObj(then) && Array.isArray(then.content) ? then.content : []).filter(isCopy);
+    const copies = section.content.filter(isCopy);
+    const unmatched = [...held];
+    const passCopies = copies.filter((b) => {
+      const k = unmatched.findIndex((h) => same(h, b));
+      if (k === -1) return true;
+      unmatched.splice(k, 1);
+      return false;
+    });
+    passCopies.slice(0, Math.max(0, copies.length - held.length))
+      .forEach((b) => section.content.splice(section.content.indexOf(b), 1));
+  });
+}
+
+/** The blocks an element of `collection` puts back: the block itself, or a section's blocks. */
+function blocksOf(collection, element) {
+  if (collection === 'content') return [element];
+  return collection === 'sections' && isObj(element) && Array.isArray(element.content) ? element.content : [];
+}
+
+/**
  * Put one of the director's edits back into `out`, the pass's output (changed in place):
  * follow the edit's element from where it sat in `before`, the version the pass started
  * from, into `out`, and write the director's value at its field. An element the pass
- * removed goes back where it sat, as it was in `before`. A moved block goes back into the
- * director's section as the pass left it (restoreMove). A cut is never put back.
+ * removed goes back where it sat, as it was in `before`, and each block that puts back, the
+ * block itself or a section's blocks, loses the copy a pass left in another section
+ * (takeOutPassCopies; task 4.3c). A moved block goes back into the director's section as
+ * the pass left it (restoreMove). A cut is never put back.
  *
  * @returns {boolean} whether anything was written
  */
@@ -2556,6 +2596,11 @@ function restoreEdit(edit, before, out) {
   const place = placeCarrying(before, edit);
   if (!place) return false;
   let cur = out;
+  // The index of the article's section the steps have reached in `out` (task 4.3c).
+  let section = -1;
+  const printOnce = (blocks, at) => {
+    if (at !== -1) blocks.forEach((block) => takeOutPassCopies(out, before, block, at));
+  };
   for (let i = 0; i < place.chain.length; i++) {
     const link = place.chain[i];
     const last = i === place.chain.length - 1;
@@ -2566,6 +2611,7 @@ function restoreEdit(edit, before, out) {
       }
       if (!isObj(cur[link.key]) && !Array.isArray(cur[link.key])) {
         cur[link.key] = clone(link.holder[link.key]);
+        if (link.key === 'content' && Array.isArray(cur.content)) printOnce(cur.content, section);
         return true;
       }
       cur = cur[link.key];
@@ -2573,22 +2619,40 @@ function restoreEdit(edit, before, out) {
     }
     if (!Array.isArray(cur)) return false;
     const partner = partnerIndex(link.collection, link.holder, cur, link.index);
+    const inSections = link.collection === 'sections' && cur === out.sections;
+    const putBack = (element) => {
+      const at = Math.min(link.index, cur.length);
+      cur.splice(at, 0, element);
+      printOnce(blocksOf(link.collection, element), inSections ? at : section);
+    };
     if (last) {
       const element = clone(edit.after);
       if (partner !== -1 && sameKind(cur[partner], element)) {
         cur[partner] = isObj(cur[partner]) && isObj(element) ? { ...cur[partner], ...element } : element;
       } else {
-        cur.splice(Math.min(link.index, cur.length), 0, element);
+        putBack(element);
       }
       return true;
     }
     if (partner === -1) {
-      cur.splice(Math.min(link.index, cur.length), 0, clone(link.holder[link.index]));
+      putBack(clone(link.holder[link.index]));
       return true;
     }
+    if (inSections) section = partner;
     cur = cur[partner];
   }
   return false;
+}
+
+/**
+ * Did code put a block the director moved within its section back in that section, which
+ * the pass's version held nowhere there (task 4.3c)? A field edit's restore puts the block
+ * back where it sat, which need not be in the director's order: where the pass swapped the
+ * blocks it sat between, no place is. The report says the block is back, and whether it
+ * holds that order.
+ */
+function backInSection(edit, after, stored) {
+  return isMoveWithin(edit) && movedBlockPlaces(after, edit).length === 0 && movedBlockPlaces(stored, edit).length > 0;
 }
 
 /**
@@ -2599,6 +2663,9 @@ function restoreEdit(edit, before, out) {
  * - a block the director moved that the pass took to another section (`moved`, `became`
  *   that section) or removed (`became` null), and whether the block is back in the
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
+ *   for a block moved within its section that is back there, `inOrder` says whether it
+ *   holds the director's order (task 4.3c: a field edit's restore can put it back where
+ *   no place keeps that order);
  * - a cut whose text came back, or a rewrite's removed sentence that came back, flagged
  *   (`cut`, `removed`), with the text where it came back: code never takes it out;
  * - each with the pass (SEND_BACK_PASS, REWEAVE_PASS or the automatic pass's number),
@@ -2642,7 +2709,11 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     }
     if (isMove(e)) {
       if (moveOutcome(e, before, after).outcome !== 'kept') {
-        changed.push(entry(e, { moved: true, director: editValueText(e.after), became: becameOf(e, before, after), restored: putBack.has(e.id) }));
+        const back = putBack.has(e.id);
+        changed.push(entry(e, {
+          moved: true, director: editValueText(e.after), became: becameOf(e, before, after), restored: back,
+          ...(back && isMoveWithin(e) && { inOrder: editCarried(stored, e) })
+        }));
       }
       return;
     }
@@ -2668,7 +2739,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * within its section back into the director's order there (task 4.3), before the field
  * edits that find it there; one the pass removed stays out, since only its place was the
  * director's and its removal can be the fix of a fault in the writer's text (fix round 1,
- * findings 1 and 2). A send-back's rework is left as it is: the director's note may
+ * findings 1 and 2). A block a field edit's restore puts back prints once, without the copy
+ * the pass left in another section, and the move's entry says the block is back (task
+ * 4.3c). A send-back's rework is left as it is: the director's note may
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed, and strikes
  * again, by id, each connection the director struck that it brought back. The report
@@ -2704,7 +2777,7 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // field the director wrote; that field goes back on the copy kept.
       carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
         .forEach((e) => restoreEdit(e, before, output));
-      changed.forEach((e) => { if (editCarried(output, e)) restored.push(e.id); });
+      changed.forEach((e) => { if (editCarried(output, e) || backInSection(e, after, output)) restored.push(e.id); });
     }
   }
   return { output, report: reportAfterPass(previous, { edits: carried, before, after, pass, reasons, restored, stored: output }) };
