@@ -3,7 +3,8 @@
  * The judges' prompts, built from a thread's state as their nodes build them, with no
  * model call (brief 3.0, fix round 1). Phase 4 (brief 4.4): the arc stage's judge is the
  * story meeting's fact check, and the interweaving call went. Brief 4.6: the outline
- * judge went with the map.
+ * judge went with the map. Brief 4.7a: the article judge scores the truth criteria alone,
+ * and reads the settled weave and the map as the director left it.
  *
  * render-prompts.js writes judge-*.txt through these functions. The nodes keep their
  * argument lists inline (createEvaluator's criteria, fact check and director's edits),
@@ -59,6 +60,11 @@ function loadCallModules(req) {
  * F1 (before phase 4): the article judge's user prompt takes the director's edits the
  * judged output carries, through the evaluator's own judgedEdits. An older tree exports
  * none, and its builder ignores the option.
+ *
+ * Phase 4 (brief 4.7a): the article judge reads the settled weave and the map as the
+ * director left it from the state (render-prompts.js plants the fixed ones when a thread
+ * holds none), and its fact check takes the players the map places and the director's
+ * answers through buildFactCheckArgs, so the argument lists here are unchanged.
  * @param {string} phase - one of JUDGE_PHASES
  * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
  */

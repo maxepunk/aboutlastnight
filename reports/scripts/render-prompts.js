@@ -59,6 +59,10 @@
  * judge's render went with the outline judge, and the outline's <SHOULD_CONSIDER> with the
  * arc selection.
  *
+ * Phase 4 (brief 4.7a): judge-article.txt is the article judge on the truth criteria
+ * alone, rendered after the weave and the map are planted, so it reads the settled weave
+ * and the map as the director left it, the planted ones on a thread that holds none.
+ *
  * --theme overrides the thread's theme for every render, so the detective prompts
  * can be rendered from a journalist thread and diffed against a baseline. The parked
  * detective has no map, so its map renders fail, naming the theme (R1).
@@ -363,6 +367,8 @@ async function render() {
 
   // 7-8. the judges, from the thread's state; the arcs judge is the story meeting's fact
   // check on the weave, and the article judge's fact check is run on the stored bundle.
+  // Brief 4.7a: the article judge reads the settled weave and the map, planted above when
+  // the thread holds none.
   for (const phase of JUDGE_PHASES) {
     const judge = await renderJudge(calls, state, phase);
     write(JUDGE_FILES[phase], judge.systemPrompt, judge.userPrompt);

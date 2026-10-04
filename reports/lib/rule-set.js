@@ -46,11 +46,11 @@ const CORE_FILES = ['world', 'truth-rules'];
  * eight. A reworker passes its writer's call.
  *
  * Phase 4: the lists follow the phase 4 spec's section 11 (who reads what; it was the
- * rule-set spec's section 8). The interweaving call is gone, and the story meeting's fact
- * check reads the world, the truth rules and the mode block alone: it writes no notes on
- * the writing, so it reads no craft file (brief 4.4). The map writer asks nothing, so it
- * reads no craft-questions, and the outline judge went with the map (brief 4.6). The
- * article judge keeps its writer's list until its own slice moves it.
+ * rule-set spec's section 8). The interweaving call is gone, and the judges read the
+ * world, the truth rules and the mode block alone: they write no notes on the writing, so
+ * they read no craft file (the story meeting's fact check, brief 4.4; the article judge,
+ * brief 4.7a). The map writer asks nothing, so it reads no craft-questions, and the
+ * outline judge went with the map (brief 4.6).
  */
 const ARC_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'];
 const OUTLINE_CRAFT = [
@@ -67,7 +67,7 @@ const RULE_SET_CALLS = Object.freeze({
   outline: OUTLINE_CRAFT,
   article: ARTICLE_CRAFT,
   'judge-arc': [],
-  'judge-article': ARTICLE_CRAFT
+  'judge-article': []
 });
 
 const MODE_FILES = Object.freeze({ 'on-site': 'mode-on-site', remote: 'mode-remote' });

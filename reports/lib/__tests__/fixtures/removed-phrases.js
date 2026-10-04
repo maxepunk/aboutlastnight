@@ -413,9 +413,10 @@ const MODEL_OUTPUT_LABELS = new Set([
   '<arc-analysis>',
   // the judges (phase 4, brief 4.4: the story meeting's fact check reads the weave; the
   // interweaving call, and the arc reworker's and the arc judge's old labels, went;
-  // brief 4.6: the outline judge's labels went with it)
+  // brief 4.6: the outline judge's labels went with it; brief 4.7a: the article judge
+  // reads the map under MAP:, where it read OUTLINE:)
   'WEAVE:',
-  'OUTLINE:',
+  'MAP:',
   'CONTENT BUNDLE:'
 ]);
 
@@ -547,7 +548,8 @@ function stripTensionSentences(text) {
  * - a model's output the prompt carries as data: the previous version a rework shows,
  *   the JSON after each MODEL_OUTPUT_LABELS line (the approved outline, the arcs and the
  *   rest of the arc analysis, the plans, the content bundle, the weave the fact check
- *   reads; phase 4, brief 4.4), and the whiteboard reading's values. (The outline judge's
+ *   reads; phase 4, brief 4.4; the map the article judge reads, brief 4.7a), and the
+ *   whiteboard reading's values. (The outline judge's
  *   photo analyses, stripped since the 3.6b fix batch, went with the outline judge:
  *   phase 4, brief 4.6.)
  *

@@ -341,13 +341,15 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
           .toEqual([theme, phase, truthOnly, !truthOnly]);
       }
     }
-    // Today the weave's fact check is the one truth-only judge, for every theme.
-    expect(truthOnlyJudges).toEqual(['journalist arcs', 'detective arcs']);
+    // Brief 4.7a: the article judge scores the truth criteria alone too, so both judges are
+    // truth-only, for every theme.
+    expect(truthOnlyJudges).toEqual(['journalist arcs', 'journalist article', 'detective arcs', 'detective article']);
     expect(isTruthOnly({})).toBe(false);
   });
 
-  // Phase 4 (brief 4.6): the article judge, since the outline judge left the graph.
-  it('the fact check is sent the truth-only schema, which differs from the shared one in those two fields alone; the article judge keeps the shared one', async () => {
+  // Phase 4 (brief 4.6): the article judge, since the outline judge left the graph. Brief
+  // 4.7a: the article judge is truth-only too, and is sent the same schema.
+  it('the fact check is sent the truth-only schema, which differs from the shared one in those two fields alone; so is the article judge', async () => {
     const sdk = recordingSdk(CLEAN);
     await evaluateArcs(weaveState(), { configurable: { sdkClient: sdk } });
     const schema = sdk.calls[0].jsonSchema;
@@ -365,7 +367,7 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
     const article = recordingSdk({ ...CLEAN, overallScore: 0.9 });
     // At the cap the article judge runs whatever the fact check found.
     await evaluateArticle(weaveState({ contentBundle: {}, articleApproved: false, evaluationHistory: [], articleRevisionCount: REVISION_CAPS.ARTICLE }), { configurable: { sdkClient: article } });
-    expect(article.calls[0].jsonSchema).toBe(EVALUATION_JSON_SCHEMA);
+    expect(article.calls[0].jsonSchema).toBe(TRUTH_ONLY_EVALUATION_JSON_SCHEMA);
   });
 
   it("a note on the writing reaches neither the meeting nor the fix, and a breach's fix stays a fix", async () => {

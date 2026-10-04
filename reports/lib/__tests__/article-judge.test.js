@@ -1,0 +1,296 @@
+/**
+ * Brief 4.7a: the article judge (phase 4; spec 6.2 and 11).
+ *
+ * The article judge fixes errors of fact before the director reads the article, and never
+ * touches the director's lines. It scores the truth criteria alone, by the truth-only
+ * rules the story meeting's fact check reads, and reads the world, the truth rules and the
+ * mode block with no craft file. Its truth questions follow section B of the rule-text
+ * read (T1, T2, T5, T9 as rewritten), and it reads the settled weave and the map as the
+ * director left it, with the director's answers at the story meeting as record.
+ *
+ * The fact check's half of the brief (each finding with its place, the roster check
+ * against the map, the director's answers among the director's words) is in
+ * content-bundle-fact-check.test.js, under its 4.7a describes.
+ *
+ * getSdkClient returns config.configurable.sdkClient as-is, so a jest.fn is the judge.
+ */
+const { evaluateArticle, _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
+const {
+  getPhaseCriteria, buildEvaluationSystemPrompt, buildEvaluationUserPrompt,
+  isTruthOnly, TRUTH_ONLY_EVALUATION_RULES, TRUTH_ONLY_EVALUATION_JSON_SCHEMA, TRUTH_MATERIAL
+} = evalTesting;
+const { loadRuleSet, loadModeBlock, RULE_SET_CALLS } = require('../rule-set');
+const { standingOnMap } = require('../hand-edit-diff');
+const { settledWeaveOf, renderDirectorAnswers } = require('../prompt-renderers/settled-weave');
+const { REVISION_CAPS } = require('../workflow/state');
+const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('./fixtures/rework-state');
+
+const clone = (v) => JSON.parse(JSON.stringify(v));
+const count = (text, part) => text.split(part).length - 1;
+
+beforeAll(() => {
+  jest.spyOn(console, 'log').mockImplementation(() => {});
+  jest.spyOn(console, 'warn').mockImplementation(() => {});
+  jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+afterAll(() => jest.restoreAllMocks());
+
+/** The fixture's state at the article stop: the weave, the map and the writer's article. */
+const articleState = (theme = 'journalist', extra = {}) => ({
+  ...reworkFixtureState(theme), contentBundle: clone(PREVIOUS_BUNDLE), articleApproved: false, evaluationHistory: [], ...extra
+});
+/** At the cap the judge runs whatever the code fact check found. */
+const atCap = (state) => ({ ...state, articleRevisionCount: REVISION_CAPS.ARTICLE });
+const systemFor = (state) => buildEvaluationSystemPrompt('article', getPhaseCriteria('article', state.theme), state.theme, { sessionConfig: state.sessionConfig });
+const userFor = (state) => buildEvaluationUserPrompt('article', state, { factCheck: null });
+const judging = (verdict) => jest.fn(async () => clone(verdict));
+const cfg = (sdk) => ({ configurable: { sdkClient: sdk, theme: 'journalist' } });
+const CLEAN = { ready: true, structuralPassed: true, overallScore: 1, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
+
+/** The nine truth groups the article scores, with the rules each names. */
+const ARTICLE_TRUTH = {
+  evidenceTruth: ['T1', 'T3', 'T4', 'T6'],
+  moneyTruth: ['T5'],
+  verdictTruth: ['T2'],
+  stagesTruth: ['T7'],
+  novaPositionTruth: ['T8'],
+  playersTruth: ['T9', 'T11'],
+  wordsTruth: ['T12'],
+  photosTruth: ['T13'],
+  fictionTruth: ['T14']
+};
+
+/**
+ * The map as the director left it, with a debated theory the director struck: b7, the
+ * room's theory about Morgan, moved from THE STORY into leftOut. Invented text.
+ */
+const THEORY = 'The room weighed whether Morgan would replace Marcus, not kill him';
+function struckTheoryState(extra = {}) {
+  const baseline = clone(MAP);
+  baseline.sections[1].beats.push({ id: 'b7', kind: 'line', material: THEORY, players: ['Morgan'] });
+  const left = clone(baseline);
+  const [struck] = left.sections[1].beats.splice(3, 1);
+  left.leftOut.push(struck);
+  return articleState('journalist', {
+    outline: left, _mapBaseline: baseline, _outlineHandEdits: standingOnMap(null, baseline, left), ...extra
+  });
+}
+
+/** The map the judge's user prompt prints, parsed back out of it. */
+function mapIn(prompt) {
+  const start = prompt.indexOf('{', prompt.indexOf(TRUTH_MATERIAL.map));
+  return JSON.parse(prompt.slice(start, prompt.indexOf('\n}\n', start) + 2));
+}
+
+describe('4.7a: the article judge scores the truth criteria alone', () => {
+  it('its criteria are the nine truth criteria, each structural with its rules and no weight, one set for every theme (R1)', () => {
+    for (const theme of ['journalist', 'detective']) {
+      const criteria = getPhaseCriteria('article', theme);
+      expect(Object.keys(criteria)).toEqual(Object.keys(ARTICLE_TRUTH));
+      for (const [key, criterion] of Object.entries(criteria)) {
+        expect([key, criterion.truth, criterion.type, criterion.weight, criterion.rules]).toEqual([key, true, 'structural', undefined, ARTICLE_TRUTH[key]]);
+      }
+      expect(isTruthOnly(criteria)).toBe(true);
+    }
+    expect(getPhaseCriteria('article', 'detective')).toEqual(getPhaseCriteria('article', 'journalist'));
+  });
+
+  // Section B of the rule-text read: T1's second point (the answers count like the notes),
+  // T2's fourth sentence (the map places the debated theories; a struck one stays out), T5's
+  // last sentence (a figure raised at the meeting with no answer stays out of print), T9's
+  // last sentence (the director's own words give a pronoun, else the player's name).
+  it('each truth question is worded as section B of the rule-text read gives it', () => {
+    const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.description]));
+    expect(descriptions).toEqual({
+      evidenceTruth: "Is every claim in the article written as its evidence allows, the director's answers at the story meeting included as record, as the notes are (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?",
+      moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the morning as FINANCIAL_SUMMARY gives it; a balance the director's notes record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
+      verdictTruth: "Is the verdict in the article told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?",
+      stagesTruth: "In the article, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
+      novaPositionTruth: "In the article, is Nova the uninterested third party, reporting on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and witnesses only what this session's mode block allows (T8)?",
+      playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes or an answer at the story meeting), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
+      wordsTruth: "Is every quoted line in the article word for word from the record or the director's notes and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?",
+      photosTruth: "Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director's description wherever PHOTOS gives one (T13)?",
+      fictionTruth: "Does every line of the article that reaches print speak the fiction's own words, with no production word in it (T14)?"
+    });
+  });
+
+  it('the answers from the story meeting join the reads of evidenceTruth, moneyTruth, playersTruth and verdictTruth (T1)', () => {
+    const reads = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.reads]));
+    expect(reads).toEqual({
+      evidenceTruth: ['record', 'timeline', 'notes', 'answers'],
+      moneyTruth: ['timeline', 'financialSummary', 'notes', 'answers', 'weave'],
+      verdictTruth: ['verdict', 'notes', 'answers', 'map'],
+      stagesTruth: ['record', 'modeBlock', 'epilogue', 'timeline'],
+      novaPositionTruth: ['modeBlock'],
+      playersTruth: ['roster', 'notes', 'answers'],
+      wordsTruth: ['record', 'notes', 'printedCards'],
+      photosTruth: ['photos', 'whiteboard', 'printedCaptions'],
+      fictionTruth: ['truthRules']
+    });
+  });
+
+  it('its system prompt: the identity, the mode block, the world and the truth rules, the truth criteria and the truth-only rules, and nothing on the writing', () => {
+    const state = articleState();
+    const system = systemFor(state);
+    expect(system.split('\n')[0]).toBe('You are the ARTICLE judge for an investigative article about one session of the game: you check the article the article writer wrote, before the director reads it.');
+    expect(system.startsWith(`${system.split('\n')[0]}\n\n${loadModeBlock('remote')}\n\n`)).toBe(true);
+    expect(count(system, loadRuleSet('judge-article').core)).toBe(1);
+    expect(system).toContain('Your task is to find each breach of the truth rules in the article.');
+    for (const [key, rules] of Object.entries(ARTICLE_TRUTH)) expect(system).toContain(`- ${key} (${rules.join(', ')}; must pass): `);
+    expect(system).toContain(TRUTH_ONLY_EVALUATION_RULES);
+    expect(system).toContain('"notes": "the breach: the sentence at fault, its section, and the record it contradicts"');
+    // The weighted criteria, the craft findings and the old frame went (spec 6.2).
+    ['STRUCTURAL CRITERIA', 'ADVISORY CRITERIA', 'CRAFT FINDINGS', 'IMMUTABLE INPUTS', 'selectedArcs', 'COMPELLING GIFT',
+      'weighted average', 'voiceConsistency', 'reporterMode', 'arcThreading', 'emotionalResonance', 'Human always makes final decision',
+      'MUST be actionable', '"type": "structural" | "advisory"']
+      .forEach((gone) => expect(`${gone}: ${system.includes(gone)}`).toBe(`${gone}: false`));
+  });
+
+  // Spec section 11: the article judge reads the world, the truth rules and the mode block.
+  it('reads no craft file: RULE_SET_CALLS[\'judge-article\'] is the core alone (spec section 11)', () => {
+    expect(RULE_SET_CALLS['judge-article']).toEqual([]);
+    expect(loadRuleSet('judge-article').craft).toBe('');
+    const state = articleState();
+    expect(`${systemFor(state)}\n${userFor(state)}`).not.toMatch(/^<craft-[a-z]+>$/m);
+  });
+
+  it('createEvaluator sends it the truth-only schema, and holds its verdict to the truth-only contract', async () => {
+    const verdict = {
+      ...CLEAN,
+      criteriaScores: {
+        evidenceTruth: { score: 1, type: 'advisory' },
+        // A criterion the judge was not given: a note on the writing.
+        pacing: { score: 0.3, type: 'advisory', notes: 'The story starts slowly.', fix: 'Tighten the lede.' }
+      },
+      advisoryWarnings: ['C10: the lede runs long.']
+    };
+    const sdk = judging(verdict);
+    const result = await evaluateArticle(atCap(articleState()), cfg(sdk));
+    expect(sdk.mock.calls[0][0].jsonSchema).toBe(TRUTH_ONLY_EVALUATION_JSON_SCHEMA);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([]);
+    expect(result.validationResults.criteriaScores).toEqual({ evidenceTruth: { score: 1, type: 'structural' } });
+    expect(result.validationResults.advisoryWarnings.filter((w) => w.startsWith('C10'))).toEqual([]);
+    expect(result.evaluationHistory.ready).toBe(true);
+  });
+
+  it('at the cap, the escalation lists the breaches and the concerns about the director\'s edits, and no note on the writing', async () => {
+    const breach = 'T12: "Marcus bragged." is in no document. Quote the memory.';
+    const sdk = judging({
+      ...CLEAN, ready: false, structuralPassed: false, overallScore: 0.3,
+      criteriaScores: { wordsTruth: { score: 0.3, notes: 'A line no document holds.', fix: 'Quote the memory.' } },
+      structuralIssues: [breach], advisoryWarnings: ['C10: the lede runs long.']
+    });
+    const result = await evaluateArticle(atCap(articleState()), cfg(sdk));
+    expect(result.evaluationHistory.escalatedToHuman).toBe(true);
+    expect(result.evaluationHistory.escalationReason).toContain(breach);
+    expect(result.evaluationHistory.escalationReason).not.toContain('the lede runs long');
+  });
+});
+
+describe('4.7a: what the article judge reads', () => {
+  it('the settled weave and the map as the director left it, after the photos and before the article; the director\'s answers after the notes', () => {
+    const state = articleState();
+    state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
+    const prompt = userFor(state);
+    const at = (s) => prompt.indexOf(s);
+    const settled = settledWeaveOf(state);
+    const answers = renderDirectorAnswers(state.weave.questions);
+    expect(count(prompt, settled)).toBe(1);
+    expect(count(prompt, answers)).toBe(1);
+    expect(at(answers)).toBeGreaterThan(at('</DIRECTOR_NOTES>'));
+    expect(at(answers)).toBeLessThan(at('<RECORD>'));
+    expect(at(settled)).toBeGreaterThan(at('\nPHOTOS ('));
+    expect(at(TRUTH_MATERIAL.map)).toBeGreaterThan(at(settled));
+    expect(at('CONTENT BUNDLE:')).toBeGreaterThan(at(TRUTH_MATERIAL.map));
+    expect(mapIn(prompt)).toEqual(state.outline);
+    expect(prompt).toContain('\nThe map below is the one the article writer wrote from, as the director left it: the beats in its sections are what the article tells, and leftOut holds what it leaves out, each beat the director struck among them.\nMAP:\n{');
+    expect(prompt.startsWith('Check this article against the record and the director\'s words:')).toBe(true);
+    expect(prompt.trim().endsWith('Is the article free of truth-rule breaches?')).toBe(true);
+    expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: remote (the mode block in your instructions says what Nova could witness; stagesTruth and novaPositionTruth score the article against it)');
+    expect(prompt).not.toContain('\nOUTLINE:');
+    expect(prompt).not.toContain('THE CRAFT GUIDANCE');
+  });
+
+  it('every material a truth criterion reads is printed in the judge\'s prompts', () => {
+    const state = articleState();
+    state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
+    // An article that prints a captioned photo, as photosTruth reads its captions.
+    state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
+    const prompts = `${systemFor(state)}\n${userFor(state)}`;
+    const missing = Object.entries(getPhaseCriteria('article', 'journalist'))
+      .flatMap(([key, c]) => c.reads.filter((m) => !prompts.includes(TRUTH_MATERIAL[m])).map((m) => `${key} reads ${m}`));
+    expect(missing).toEqual([]);
+  });
+
+  // T5 (section B): a figure raised as a question at the story meeting prints as the
+  // director's answer gives it, and with no answer it stays out of print.
+  it('moneyTruth: an answered figure as the director\'s answer gives it, an unanswered one out of print (T5)', () => {
+    const answered = {
+      id: 'q2', kind: 'figure', about: 'the Melanie account',
+      question: 'The room heard Melanie held "more than double" any other account; the ledger has $75,000 alone. Print it as the room\'s exaggeration?',
+      changes: 'The money section\'s key line.', answer: 'Print it as what the room said, beside the ledger\'s figure.'
+    };
+    const unanswered = {
+      id: 'q3', kind: 'figure', about: 'the 07:50 PM sale',
+      question: 'The ledger logs a $75,000 sale at 07:50 PM, before the market opened. A slip in the log?',
+      changes: 'Whether the sale prints.'
+    };
+    const state = articleState();
+    state.weave.questions.push(answered, unanswered);
+    const prompt = userFor(state);
+    const answers = prompt.slice(prompt.indexOf('<DIRECTOR_ANSWERS>'), prompt.indexOf('</DIRECTOR_ANSWERS>'));
+    const settled = prompt.slice(prompt.indexOf('<SETTLED_WEAVE>'), prompt.indexOf('</SETTLED_WEAVE>'));
+    // The answered figure: the director's words in both, word for word.
+    expect(answers).toContain(`The director's answer, word for word: "${answered.answer}"`);
+    expect(settled).toContain(`The director's answer, word for word: "${answered.answer}"`);
+    // The unanswered figure: only the settled weave, marked unanswered.
+    expect(answers).not.toContain(unanswered.question);
+    expect(settled).toContain(`- q3 (a figure; about: the 07:50 PM sale): ${unanswered.question} Its answer changes: ${unanswered.changes}\n  Unanswered.`);
+    const { description } = getPhaseCriteria('article', 'journalist').moneyTruth;
+    expect(description).toContain("a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).");
+  });
+
+  it('a breach on an unanswered figure the article printed holds the article for its rework', async () => {
+    const issue = 'T5: "a $75,000 sale at 07:50 PM" prints a figure the story meeting left unanswered. Cut the figure.';
+    const sdk = judging({
+      ...CLEAN, ready: true, structuralPassed: true, overallScore: 0.4,
+      criteriaScores: { moneyTruth: { score: 0.4, notes: 'An unanswered figure is in print.', fix: 'Cut the figure.' } },
+      structuralIssues: [issue]
+    });
+    const result = await evaluateArticle(atCap(articleState()), cfg(sdk));
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toContain(issue);
+  });
+});
+
+// Review focus 7: a debated theory the director strikes from the map stays out of the
+// article, and neither the writer nor the judge brings it back. T2 as rewritten: the
+// article reports every theory the map carries; a theory the director strikes stays out.
+describe('4.7a: a theory struck from the map stays out, through the judge', () => {
+  it('the judge reads the struck theory in the map\'s leftOut, and its question keeps leftOut out of print', async () => {
+    const sdk = judging(CLEAN);
+    await evaluateArticle(atCap(struckTheoryState()), cfg(sdk));
+    const { systemPrompt, prompt } = sdk.mock.calls[0][0];
+    const map = mapIn(prompt);
+    expect(map.sections.flatMap((s) => s.beats).map((b) => b.id)).not.toContain('b7');
+    expect(map.leftOut.find((b) => b.id === 'b7')).toEqual({ id: 'b7', kind: 'line', material: THEORY, players: ['Morgan'] });
+    expect(systemPrompt).toContain("- verdictTruth (T2; must pass): Is the verdict in the article told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?");
+    // The question that asked for every theory the room debated, whatever the map said, is gone.
+    expect(systemPrompt).not.toContain('with the alternative theories the room debated reported');
+  });
+
+  it('a breach for a struck theory the article printed holds the article for its rework', async () => {
+    const state = struckTheoryState();
+    state.contentBundle.sections[0].content.push({ type: 'paragraph', text: `${THEORY}, and the vote went the other way.` });
+    const issue = `T2: "${THEORY}" reports a theory the map leaves out. Cut it.`;
+    const sdk = judging({
+      ...CLEAN, ready: false, structuralPassed: false, overallScore: 0.3,
+      criteriaScores: { verdictTruth: { score: 0.3, notes: 'A struck theory is reported.', fix: 'Cut it.' } },
+      structuralIssues: [issue]
+    });
+    const result = await evaluateArticle(atCap(state), cfg(sdk));
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.evaluationHistory.structuralIssues).toEqual([issue]);
+    expect(result.validationResults.structuralIssues).toContain(issue);
+  });
+});

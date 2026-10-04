@@ -46,7 +46,8 @@ function scriptedSdk({ revised, evaluations }) {
       reworkPrompts[label] = options.prompt || '';
       return JSON.parse(JSON.stringify(revised));
     }
-    if (/Evaluator/.test(options.systemPrompt || '')) {
+    // Brief 4.7a: the article judge, by its identity line.
+    if (/ARTICLE judge/.test(options.systemPrompt || '')) {
       const answer = evaluations[Math.min(evaluationIndex, evaluations.length - 1)];
       evaluationIndex += 1;
       return JSON.parse(JSON.stringify(answer));

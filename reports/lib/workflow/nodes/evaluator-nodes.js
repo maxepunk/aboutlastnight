@@ -3,7 +3,8 @@
  *
  * Handles the evaluation sub-phases (2.3, 4.2) of the pipeline:
  * - evaluateArcs: the story meeting's fact check on the weave (phase 4, brief 4.4)
- * - evaluateArticle: Check voice consistency, anti-patterns, evidence integration
+ * - evaluateArticle: the article judge, which checks the article against the truth rules
+ *   before the director reads it, after the code fact check (phase 4, brief 4.7a; spec 6.2)
  *
  * Phase 4 (brief 4.6; spec 5.4): no model judge reads the map. The outline judge left
  * the graph; the map's code checks (map-nodes.js) take its place.
@@ -68,7 +69,8 @@ const { withoutWriterQuestions, weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY }
 // the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
 // (no struck connection, no answer), and the director's answers, which it reads as record.
 const { isWeave, weaveForPrompt, weaveForJudge, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
-const { renderDirectorAnswers } = require('../../prompt-renderers/settled-weave');
+// Brief 4.7a: the article judge reads the settled weave as every later writer does.
+const { renderDirectorAnswers, settledWeaveOf } = require('../../prompt-renderers/settled-weave');
 // Brief 4.7a: the players the map places, for the fact check's roster check: Everyone's one
 // function (console/outline-edit-logic.js mapTally) over the map's roster (lib/map.js).
 const { mapTally } = require('../../../console/outline-edit-logic');
@@ -88,9 +90,9 @@ const {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Each phase resolves its criteria through getPhaseCriteria(phase, theme): the weave's
-// fact check scores the truth criteria alone (phase 4, brief 4.4); the article judge adds
-// its weighted criteria (getArticleCriteria). The detective's arc criteria went with its
-// arc stage (ruling R1), and the outline judge with the map (brief 4.6).
+// fact check (phase 4, brief 4.4) and the article judge (brief 4.7a; spec 6.2) score the
+// truth criteria alone, one set for every theme. The detective's arc and article criteria
+// went with their old stages (ruling R1), and the outline judge with the map (brief 4.6).
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TRUTH CRITERIA (phase 3, 3.4; spec section 4 and R2)
@@ -98,10 +100,10 @@ const {
 //
 // A truth-rule breach is a definite error with the draft, so it goes back for an
 // automatic rework: flagging it to the director would only hand the director the
-// same fix. One structural criterion per group of rules, journalist only. They carry
-// no weight: the weighted criteria make the score, and a truth criterion decides
-// readiness alone (createEvaluator holds a failed one to not-ready, whatever the
-// judge's own structuralPassed says).
+// same fix. One structural criterion per group of rules. They carry no weight: since
+// phase 4 (briefs 4.4 and 4.7a) they are each judge's whole evaluation, and a truth
+// criterion decides readiness alone (createEvaluator holds a failed one to not-ready,
+// whatever the judge's own structuralPassed says).
 //
 // So each criterion asks only what its judge can check against its own prompts, and
 // only what the judged output can hold (3.4 fix round 1): a clause the judge cannot
@@ -122,9 +124,16 @@ const {
 const TRUTH_SUBJECTS = { arcs: 'the weave', article: 'the article' };
 
 /**
+ * The label line the article judge prints the map under (brief 4.7a), as it prints the
+ * article under CONTENT BUNDLE: a line of its own, with the map's JSON after it.
+ */
+const JUDGE_MAP_LABEL = 'MAP:';
+
+/**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
- * it under. The first twelve are the judge's inputs; the last two are the judged output's
- * own text, which only the article holds (the weave places neither cards nor photos).
+ * it under. The first fourteen are the judge's inputs; the last two are the judged
+ * output's own text, which only the article holds (the weave places neither cards nor
+ * photos).
  */
 const TRUTH_MATERIAL = Object.freeze({
   record: '<RECORD>',                       // the exposed documents (renderRecordView)
@@ -132,6 +141,8 @@ const TRUTH_MATERIAL = Object.freeze({
   financialSummary: '<FINANCIAL_SUMMARY>',  // the account totals the article writer copies (3.9)
   notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
   answers: '<DIRECTOR_ANSWERS>',            // the director's answers at the story meeting (renderDirectorAnswers; brief 4.5)
+  weave: '<SETTLED_WEAVE>',                 // the weave as the director settled it, every question with its answer or none (settledWeaveOf; brief 4.7a)
+  map: `\n${JUDGE_MAP_LABEL}\n`,           // the map as the director left it, its struck beats in leftOut (brief 4.7a)
   epilogue: '<EPILOGUE>',                   // Nova's day, from the director's notes
   verdict: '<DIRECTOR_ACCUSATION>',         // the room's verdict, in the director's words
   roster: 'CANONICAL CHARACTER ROSTER:',    // each player with the roster's pronoun
@@ -148,13 +159,19 @@ const TRUTH_MATERIAL = Object.freeze({
 // the notes are. The three questions an answer can settle read them: the evidence (an
 // answer says what a player did), the money (an answer says what a ledger line was) and
 // the pronouns (an answer gives a pronoun the roster lacks).
+//
+// Brief 4.7a (section B of the rule-text read): the article judge reads them too, and its
+// questions follow T1, T2, T5 and T9 as rewritten: the evidence, the money, the verdict
+// and the pronouns read the answers; the money reads the settled weave, which lists the
+// questions left unanswered; the verdict reads the map, whose leftOut holds each theory the
+// director struck.
 const TRUTH_GROUPS = [
   {
     key: 'evidenceTruth',
     rules: ['T1', 'T3', 'T4', 'T6'],
-    reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers'] : ['record', 'timeline', 'notes']),
+    reads: () => ['record', 'timeline', 'notes', 'answers'],
     // Phase 3 (3.9): T4 as round 7 words it (R21).
-    describe: (s, phase) => `Is every claim in ${s} written as its evidence allows${phase === 'arcs' ? ", the director's answers at the story meeting included as record, as the notes are" : ''} (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
+    describe: (s) => `Is every claim in ${s} written as its evidence allows, the director's answers at the story meeting included as record, as the notes are (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
   },
   {
     key: 'moneyTruth',
@@ -169,18 +186,24 @@ const TRUTH_GROUPS = [
     // balances said or shown in the room before then (092026's read-out of the balances,
     // 092626's "$4 million in the RW account"), so a judge reads such a line as that
     // moment's figure (T1) and never "corrects" it to a closing total.
-    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers'] : ['timeline', 'financialSummary', 'notes']),
-    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1)." : "and a balance the director's notes record as said or shown in the room as that moment's figure (T1)."}`
+    //
+    // Brief 4.7a (T5 as rewritten): a figure raised as a question at the story meeting
+    // prints as the director's answer gives it, and stays out of print while the question
+    // has no answer; the settled weave lists each question with its answer or none.
+    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers'] : ['timeline', 'financialSummary', 'notes', 'answers', 'weave']),
+    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1)." : "a balance the director's notes record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5)."}`
   },
   {
     key: 'verdictTruth',
     rules: ['T2'],
-    reads: () => ['verdict', 'notes'],
+    reads: (phase) => (phase === 'arcs' ? ['verdict', 'notes'] : ['verdict', 'notes', 'answers', 'map']),
     // Phase 4 (brief 4.4; T2 as rewritten): the map places the theories the room debated,
-    // so the weave's question asks for the verdict as the official story alone.
+    // so the weave's question asks for the verdict as the official story alone. Brief 4.7a:
+    // the article reports every theory the map, as the director left it, carries, and a
+    // theory in its leftOut, where the director's strikes go, stays out of print.
     describe: (s, phase) => (phase === 'arcs'
       ? `Is the verdict in ${s} told as the room's official story, ungraded against any hidden answer (T2)? The theories the room debated are the map's to place, so the weave keeps T2 whether it names them or not.`
-      : `Is the verdict in ${s} told as the room's official story, with the alternative theories the room debated reported, and left ungraded against any hidden answer (T2)?`)
+      : `Is the verdict in ${s} told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?`)
   },
   {
     key: 'stagesTruth',
@@ -199,8 +222,11 @@ const TRUTH_GROUPS = [
   {
     key: 'playersTruth',
     rules: ['T9', 'T11'],
-    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers'] : ['roster']),
-    describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives${phase === 'arcs' ? ", or, where the roster gives none, the pronoun the director's answer at the story meeting gives" : ''} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
+    // Brief 4.7a (T9 as rewritten): at the article, a pronoun the director's own words give
+    // counts as the answer, the notes as well as an answer at the meeting, and a player with
+    // neither is written by name.
+    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers'] : ['roster', 'notes', 'answers']),
+    describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's answer at the story meeting gives" : "the pronoun the director's own words give (the notes or an answer at the story meeting), or else the player's name in place of a pronoun"} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
   },
   {
     key: 'wordsTruth',
@@ -264,122 +290,31 @@ function getArcCriteria() {
 }
 
 /**
- * Get theme-aware article evaluation criteria
- * @param {string} theme - 'journalist' or 'detective'
- * @returns {Object} Article quality criteria
+ * The article judge's criteria (phase 4, brief 4.7a; spec 6.2): the truth criteria, worded
+ * for the article, and nothing else. The judge fixes errors of fact before the director
+ * reads the article; its weighted criteria, its craft findings and its notes on the writing
+ * went. One set for every theme: the detective's article criteria went with its old stages
+ * (ruling R1).
+ *
+ * @returns {Object} the truth criteria
  */
-function getArticleCriteria(theme = 'journalist') {
-  if (theme === 'detective') {
-    return {
-      voiceConsistency: {
-        description: 'Does report maintain third-person investigative detective voice (professional, analytical)?',
-        weight: 0.20,
-        type: 'structural'
-      },
-      antiPatterns: {
-        description: 'Are anti-patterns avoided? (token terminology, game mechanics, character sheet references; the in-world phrase "memory token" is allowed)',
-        weight: 0.15,
-        type: 'structural'
-      },
-      visualDistribution: {
-        description: 'Are visual components distributed for compelling narrative flow (not clustered)? Goal is a compelling GIFT for players, not quota compliance.',
-        weight: 0.10,
-        type: 'advisory'
-      },
-      arcThreading: {
-        description: 'Does each section answer a DIFFERENT QUESTION about the same underlying facts? Sections should be analytically distinct, not repetitive.',
-        weight: 0.10,
-        type: 'structural'
-      },
-      evidenceIntegration: {
-        description: 'Is evidence woven in naturally?',
-        weight: 0.15,
-        type: 'advisory'
-      },
-      characterPlacement: {
-        description: 'Are all roster members mentioned?',
-        weight: 0.15,
-        type: 'advisory'
-      },
-      emotionalResonance: {
-        description: 'Does article deliver the promised experience?',
-        weight: 0.15,
-        type: 'advisory'
-      }
-    };
-  }
-
-  // Journalist. Phase 3 (3.4): each criterion names the rule or craft item it scores
-  // and keeps its type and weight; the truth criteria follow. Phase 3 (3.9; R2, R22): a
-  // structural criterion holds to the plan's wording, with no craft clause of its own.
-  return {
-    // STRUCTURAL CRITERIA - Block if failed (weight sum: 0.55)
-    voiceConsistency: {
-      description: 'Does Nova write in the first person throughout (C12), with "we" only as T8 and the mode block allow it?',
-      weight: 0.20,
-      type: 'structural'
-    },
-    // Phase 3 (3.9; R4; final review judges-factcheck[2]): C4's em-dash house rule and
-    // T14's production words only. It read the whole of C4 into a must-fix slot and
-    // docked the gate's article for its length, which R4 makes an advisory flag.
-    antiPatterns: {
-      description: 'Does Nova\'s own prose keep C4\'s house rule, with no em-dash, and does every printed line speak the fiction\'s own words, with no production word (T14)? "Memory token" is the fiction\'s own word. C4\'s length and its other craft are craft findings, outside this criterion.',
-      weight: 0.15,
-      type: 'structural'
-    },
-    // BASELINE §4 class 6: both remote sessions of the last five were written as
-    // on-site, and there was no criterion for it at all. Phase 2 (2.6): a remote
-    // article that announced its absence five times was praised for it. Phase 3
-    // (3.4): exposed memories reach Nova by turn-in, never as tips (spec T6, T8).
-    // Phase 3 (3.9): the remote mode block and T8 of round 7 (R13, R21): the room's
-    // events are told as scenes, attributed where it matters, not each one sourced.
-    reporterMode: {
-      description: 'Does the article keep T8 as this session\'s mode block states it? It fails on Nova voting, joining the room\'s accusation or exposing a memory; and, in a remote session, on a claim to have seen or heard the room, or on the absence stated more than once. Remotely, the room\'s events are told as scenes, with attribution where it matters: a line someone was overheard saying, a claim about a person. Exposed memories reach Nova by turn-in, anonymous unless the evidence log or the director\'s notes name who turned one in.',
-      weight: 0.10,
-      type: 'structural'
-    },
-    visualDistribution: {
-      description: 'Do the cards and photos spread through the article, each where it serves the flow (C9, C4)?',
-      weight: 0.05,
-      type: 'advisory'
-    },
-    arcThreading: {
-      description: 'Is every section an essential part of one narrative, carrying the threads forward from its own angle, with nothing front-loaded into THE STORY (C2)? Not every arc appears in every section.',
-      weight: 0.10,
-      type: 'structural'
-    },
-    // ADVISORY CRITERIA - Warn but don't block (weight sum: 0.45)
-    evidenceIntegration: {
-      description: 'Is each card the receipt for a claim the thesis rests on, set in the prose that makes the claim (C9)?',
-      weight: 0.15,
-      type: 'advisory'
-    },
-    characterPlacement: {
-      description: 'Does every roster player appear through something the record shows they did (C7)?',
-      weight: 0.15,
-      type: 'advisory'
-    },
-    emotionalResonance: {
-      description: 'Does the article keep the promise <world> opens with: the players see themselves, catch what they missed, and see how their choices shaped the official story?',
-      weight: 0.10,
-      type: 'advisory'
-    },
-    ...truthCriteria('article')
-  };
+function getArticleCriteria() {
+  return truthCriteria('article');
 }
 
 /**
  * One phase's criteria for a theme: the one place a judge's criteria are resolved
- * (createEvaluator, and scripts/lib/render-calls.js for the renders).
+ * (createEvaluator, and scripts/lib/render-calls.js for the renders). Since phase 4 both
+ * judges score the truth criteria alone, one set for every theme (ruling R1).
  *
  * @param {'arcs'|'article'} phase
- * @param {string} [theme='journalist']
+ * @param {string} [theme='journalist'] - the session's theme, which no judge's criteria vary by since R1
  * @returns {Object}
  */
 function getPhaseCriteria(phase, theme = 'journalist') {
   switch (phase) {
     case 'arcs': return getArcCriteria();
-    case 'article': return getArticleCriteria(theme);
+    case 'article': return getArticleCriteria();
     default: throw new Error(`No quality criteria defined for phase: ${phase}`);
   }
 }
@@ -645,7 +580,8 @@ function forTheRework(warning) {
  * criterion, so the truth criteria are the whole evaluation. Its schema
  * (TRUTH_ONLY_EVALUATION_JSON_SCHEMA) and its verdict (truthOnlyVerdict) follow from its
  * criteria, and a test holds its prompt's OUTPUT FORMAT (truthOnlyOutputFormat) to the same
- * rule, so the article judge takes on all three when its criteria shrink to the truth groups.
+ * rule. Both judges are truth-only since the article judge's criteria shrank to the truth
+ * groups (brief 4.7a).
  *
  * @param {Object} criteria
  * @returns {boolean}
@@ -893,8 +829,8 @@ const TRUTH_ONLY_ADVISORY_WARNINGS = "only a concern about one of the director's
  * The structured-output schema a truth-only judge is sent (phase 4, brief 4.4, fix round
  * 1): the judges' schema with no criterion `type`, since each truth criterion's type is
  * its definition's (truthOnlyVerdict sets it), and advisoryWarnings kept for the concerns
- * about the director's edits. Every other field is EVALUATION_JSON_SCHEMA's. The weave's
- * fact check is the first; the article judge moves onto it with its truth-only criteria.
+ * about the director's edits. Every other field is EVALUATION_JSON_SCHEMA's. Both judges
+ * are sent it: the weave's fact check (brief 4.4) and the article judge (brief 4.7a).
  */
 const TRUTH_ONLY_EVALUATION_JSON_SCHEMA = (() => {
   const schema = structuredClone(EVALUATION_JSON_SCHEMA);
@@ -952,9 +888,8 @@ function outputFormat(notes, { truthOnly = false } = {}) {
 /**
  * A truth-only judge's OUTPUT FORMAT (phase 4, brief 4.4, fix round 1), as
  * TRUTH_ONLY_EVALUATION_JSON_SCHEMA states it: the judges' shape with no criterion type,
- * and advisoryWarnings kept for a concern about one of the director's edits. The weave's
- * fact check prints it after TRUTH_ONLY_EVALUATION_RULES; the article judge prints it
- * when it moves onto those rules.
+ * and advisoryWarnings kept for a concern about one of the director's edits. Both judges
+ * print it after TRUTH_ONLY_EVALUATION_RULES (briefs 4.4 and 4.7a).
  *
  * @param {string} notes - what a criterion's notes hold, for this judge
  * @returns {string}
@@ -963,116 +898,54 @@ function truthOnlyOutputFormat(notes) {
   return outputFormat(notes, { truthOnly: true });
 }
 
-/** The weighted criteria of one type, one line each with its percentage. */
-function weightedCriteriaList(criteria, wanted) {
-  return Object.entries(criteria)
-    .filter(([_, { type, truth }]) => !truth && (wanted === 'structural' ? type === 'structural' : (type === 'advisory' || !type)))
-    .map(([key, { description, weight }]) =>
-      `- ${key} (${Math.round(weight * 100)}%): ${description}`)
-    .join('\n');
-}
-
 /**
  * Build system prompt for evaluation
  *
- * Phase 3 (3.4): the journalist judges read the rule set (journalistEvaluationSystemPrompt);
- * the detective's article judge is unchanged (detectiveEvaluationSystemPrompt, spec D13).
- * Phase 4 (brief 4.4): the weave's fact check is one prompt for every theme, since the
- * detective's arc judge went with its arc stage (ruling R1); the outline judge went with
- * the map, for both themes (brief 4.6).
+ * Phase 3 (3.4): the judges read the rule set (journalistEvaluationSystemPrompt). Phase 4:
+ * each judge is one prompt for every theme, since the detective's judges went with its old
+ * stages (ruling R1): the weave's fact check (brief 4.4) and the article judge (brief
+ * 4.7a). The outline judge went with the map (brief 4.6).
  *
  * @param {string} phase - Phase name (arcs, article)
  * @param {Object} criteria - Quality criteria for phase
- * @param {string} theme - Theme name ('journalist' or 'detective')
+ * @param {string} [theme='journalist'] - the session's theme, which no judge's prompt varies by since R1
  * @param {Object} [options]
- * @param {Object|null} [options.sessionConfig] - journalist: its reportingMode picks the mode block
+ * @param {Object|null} [options.sessionConfig] - its reportingMode picks the mode block
  * @returns {string} System prompt
  */
 function buildEvaluationSystemPrompt(phase, criteria, theme = 'journalist', { sessionConfig = null } = {}) {
-  if (theme === 'detective' && phase !== 'arcs') return detectiveEvaluationSystemPrompt(phase, criteria);
   return journalistEvaluationSystemPrompt(phase, criteria, sessionConfig);
 }
 
-/**
- * The detective's article judge's system prompt, as it was before phase 3 (parked, spec
- * D13; __tests__/unit/workflow/evaluator-nodes.test.js pins it by hash). Its arc judge
- * went with its arc stage (phase 4, brief 4.4; ruling R1), and its outline judge with the
- * map (brief 4.6; R1).
- *
- * @param {string} phase
- * @param {Object} criteria
- * @returns {string}
- */
-function detectiveEvaluationSystemPrompt(phase, criteria) {
-  // Commit 8.15: Separate structural vs advisory criteria in prompt
-  const structuralCriteria = weightedCriteriaList(criteria, 'structural');
-  const advisoryCriteria = weightedCriteriaList(criteria, 'advisory');
-  const criteriaSections = `${boxedHeading('STRUCTURAL CRITERIA (MUST PASS - these block if failed)')}
-${structuralCriteria}
-
-${boxedHeading('ADVISORY CRITERIA (Warn but don\'t block - these are quality guidance)')}
-${advisoryCriteria}
-
-EVALUATION RULES:
-1. Score each criterion as: pass (1.0), partial (0.5), fail (0.0)
-2. STRUCTURAL criteria MUST score >= ${STRUCTURAL_PASS_SCORE} to pass (these are hard requirements)
-3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
-4. Content is READY if ALL structural criteria pass
-5. Content is NOT READY only if a STRUCTURAL criterion fails`;
-
-  if (phase === 'article') {
-    return `You are the ARTICLE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
-
-Your task is to evaluate if the article content is ready for human review.
-
-${boxedHeading('IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)')}
-The following inputs were approved in earlier phases and CANNOT be modified:
-- outline: The article structure is approved
-- selectedArcs: The narrative arcs are locked
-- evidenceBundle: The evidence is curated and final
-
-Your feedback should focus on how the ARTICLE EXECUTES the outline, not changing the outline.
-
-${boxedHeading('EVALUATION GOAL: COMPELLING GIFT FOR PLAYERS')}
-The article should feel like a real investigative piece that celebrates the players' gameplay experience.
-Visual distribution serves narrative flow, NOT quota compliance.
-A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.
-
-${criteriaSections}
-
-CRITICAL CHECKS:
-- voiceConsistency: Report MUST use third-person investigative voice ("The investigation revealed", "Evidence indicates")
-- antiPatterns: Report MUST NOT contain the bare system label "token" (the in-world phrase "memory token" is ALLOWED and correct), "Act 1/2/3", game terminology, "character sheet"
-
-CRITICAL: Your feedback MUST be actionable. Include:
-- SPECIFIC lines with voice issues
-- SPECIFIC anti-patterns found with line locations
-- CONCRETE fixes (not "improve voice" but "change 'I discovered' to 'The investigation revealed'")
-
-
-${outputFormat('specific explanation with line references')}
-
-Remember: You determine READINESS for human review, not approval. Human always makes final decision.
-STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
-  }
-
-  // Fallback for any unknown phase (shouldn't happen)
-  throw new Error(`Unknown evaluation phase: ${phase}`);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// THE JOURNALIST JUDGES' RULES (phase 3, 3.4)
+// THE JUDGES' RULES (phase 3, 3.4; phase 4, briefs 4.4 and 4.7a)
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Placement ruling (plan, "Rulings"): the world, the truth rules and the mode block go
-// in the system prompt, the stable frame, read first; the judge's craft reference goes
-// in the user prompt, after the material it judges (buildEvaluationUserPrompt).
+// in the system prompt, the stable frame, read first. Since phase 4 no judge reads a craft
+// file (spec section 11): neither writes notes on the writing.
 
-/** The rule-set call each journalist judge reads (lib/rule-set.js): its writer's list. */
+/** The rule-set call each judge reads (lib/rule-set.js): the world and the truth rules alone (spec section 11). */
 const JUDGE_RULE_CALLS = { arcs: 'judge-arc', article: 'judge-article' };
 
 /** The writer whose output each judge judges, as the prompts name it. */
 const JUDGED_WRITERS = { arcs: 'arc writer', article: 'article writer' };
+
+/**
+ * Each judge's identity line, which opens its system prompt; the session's mode block
+ * follows it. Brief 4.7a (spec 6.2): the article judge checks the article against the
+ * truth rules before the director reads it.
+ */
+const JUDGE_IDENTITIES = {
+  arcs: 'You are the WEAVE fact check for an investigative article about one session of the game: you check the weave the arc writer wrote, before the director reads it at the story meeting.',
+  article: 'You are the ARTICLE judge for an investigative article about one session of the game: you check the article the article writer wrote, before the director reads it.'
+};
+
+/** What a truth criterion's notes hold, per judge, as its OUTPUT FORMAT asks for them. */
+const BREACH_NOTES = {
+  arcs: 'the breach: the text at fault, the thread it is in, and the record it contradicts',
+  article: 'the breach: the sentence at fault, its section, and the record it contradicts'
+};
 
 /**
  * How a truth finding quotes the text at fault, per judge. A breach in the weave names
@@ -1086,22 +959,14 @@ const TRUTH_FINDING_QUOTE = {
 /**
  * The scoring rules a truth-only judge reads (phase 4, brief 4.4): its truth criteria
  * are the whole evaluation, with no weighted average and no advisory criteria, and
- * overallScore comes from the truth criteria. The weave's fact check reads them now; the
- * article judge moves onto them in its own slice. Its output contract follows them
+ * overallScore comes from the truth criteria. Both judges read them: the weave's fact
+ * check (brief 4.4) and the article judge (brief 4.7a). Its output contract follows them
  * (truthOnlyOutputFormat), and code holds its verdict to that contract (truthOnlyVerdict).
  */
 const TRUTH_ONLY_EVALUATION_RULES = `EVALUATION RULES:
 1. The truth criteria above are the whole evaluation: each finding is a breach of a truth rule.
 2. Score each truth criterion from 0.0 to 1.0. The output is READY, with structuralPassed true, when every truth criterion scores ${STRUCTURAL_PASS_SCORE} or more.
 3. overallScore is the lowest truth-criterion score.`;
-
-/** The journalist judges' scoring rules (M30: they say how the score is made). */
-const JOURNALIST_EVALUATION_RULES = `EVALUATION RULES:
-1. Score each criterion from 0.0 to 1.0.
-2. STRUCTURAL criteria MUST score >= ${STRUCTURAL_PASS_SCORE} to pass (these are hard requirements); a truth criterion with any breach fails.
-3. ADVISORY criteria are guidance only - low scores are warnings, not blockers
-4. Content is READY if ALL structural criteria pass, the truth criteria among them
-5. overallScore is the weighted average of the weighted criteria's scores, by the percentages above. The truth criteria carry no percentage: they decide readiness alone.`;
 
 /**
  * The truth criteria and how to write a breach, or '' when the criteria carry none.
@@ -1126,29 +991,18 @@ T3: "<the text at fault>" states what a buried memory said; the record holds onl
 }
 
 /**
- * Where a craft finding goes: should-consider, naming its item.
+ * A judge's system prompt: the identity line, the session's mode block, the world and the
+ * truth rules (loadRuleSet), then its task, its truth criteria, the truth-only scoring rules
+ * and the truth-only OUTPUT FORMAT.
  *
- * Phase 3 (3.9; R22): a craft finding is an editor's note for the director, never a
- * blocker and never the rework's task. Nothing in code holds a draft on an advisory,
- * a truth-labelled one included (R22): only a truth criterion below the bar holds it
- * (failedTruthCriteria).
- */
-function craftFindingsSection(phase) {
-  return `${boxedHeading('CRAFT FINDINGS (should-consider)')}
-The evaluation prompt ends with the craft guidance the ${JUDGED_WRITERS[phase]} followed, as your reference for craft. A craft finding that no criterion above scores goes in advisoryWarnings and opens with its item's id, such as C10: an editor's note for the director, never a blocker.`;
-}
-
-/**
- * A journalist judge's system prompt: the identity line, the session's mode block, the
- * world and the truth rules (loadRuleSet), then the judge's own instructions.
- *
- * The 4b fix batch (3.9 review minor 4): each judge's "MUST be actionable" block asks
- * for concrete fixes for the criteria scored below the bar and the structural issues,
- * the two places the OUTPUT FORMAT asks for them; it used to ask for them in general.
- * Judge text writes the bar as STRUCTURAL_PASS_SCORE, the detective's included.
+ * Phase 4: each judge scores the truth criteria alone and reads no craft file (spec
+ * section 11): the weave's fact check (brief 4.4; spec 4.5) and the article judge (brief
+ * 4.7a; spec 6.2). The article judge's weighted criteria, its craft findings, its "MUST be
+ * actionable" block and its frame (the immutable inputs, the compelling gift) went with its
+ * notes on the writing.
  *
  * @param {'arcs'|'article'} phase
- * @param {Object} criteria - getPhaseCriteria(phase, 'journalist'), or any criteria to render
+ * @param {Object} criteria - getPhaseCriteria(phase), or any criteria to render
  * @param {Object|null} sessionConfig - its reportingMode picks the mode block
  * @returns {string}
  */
@@ -1156,67 +1010,17 @@ function journalistEvaluationSystemPrompt(phase, criteria, sessionConfig) {
   const call = JUDGE_RULE_CALLS[phase];
   if (!call) throw new Error(`Unknown evaluation phase: ${phase}`);
   const { core } = loadRuleSet(call);
-  const writer = JUDGED_WRITERS[phase];
   const judged = TRUTH_SUBJECTS[phase];
-  const frame = `The rules above are the ones the ${writer} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.`;
-  // The article judge: the truth criteria, then the weighted criteria, the craft findings
-  // and the weighted scoring rules.
-  const judging = () => `${truthCriteriaSection(phase, criteria)}${boxedHeading('STRUCTURAL CRITERIA (MUST PASS - these block if failed)')}
-${weightedCriteriaList(criteria, 'structural')}
-
-${boxedHeading('ADVISORY CRITERIA (Warn but don\'t block - these are quality guidance)')}
-${weightedCriteriaList(criteria, 'advisory')}
-
-${craftFindingsSection(phase)}
-
-${JOURNALIST_EVALUATION_RULES}`;
-
-  let prompt;
-  if (phase === 'arcs') {
-    // Phase 4 (brief 4.4; spec 4.5): the weave's fact check scores the truth criteria
-    // alone, by the truth-only rules, and reads no craft file (RULE_SET_CALLS['judge-arc']).
-    // Its weighted criteria, its craft findings and the arc lists (roster coverage, NPCs
-    // in placements, source labels) went with the arcs.
-    prompt = `You are the WEAVE fact check for an investigative article about one session of the game: you check the weave the arc writer wrote, before the director reads it at the story meeting.
+  const frame = `The rules above are the ones the ${JUDGED_WRITERS[phase]} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.`;
+  const prompt = `${JUDGE_IDENTITIES[phase]}
 
 ${core}
 
-Your task is to find each breach of the truth rules in the weave. ${frame}
+Your task is to find each breach of the truth rules in ${judged}. ${frame}
 
 ${truthCriteriaSection(phase, criteria)}${TRUTH_ONLY_EVALUATION_RULES}
 
-${truthOnlyOutputFormat('the breach: the text at fault, the thread it is in, and the record it contradicts')}`;
-  } else {
-    prompt = `You are the ARTICLE Evaluator for an investigative article about "About Last Night" - a crime thriller game.
-
-${core}
-
-Your task is to evaluate if the article content is ready for human review. ${frame}
-
-${boxedHeading('IMMUTABLE INPUTS (DO NOT suggest changes to these - they are fixed upstream)')}
-The following inputs were approved in earlier phases and CANNOT be modified:
-- outline: The article structure is approved
-- selectedArcs: The narrative arcs are locked
-- evidenceBundle: The evidence is curated and final
-
-Your feedback should focus on how the ARTICLE EXECUTES the outline, not changing the outline.
-
-${boxedHeading('EVALUATION GOAL: COMPELLING GIFT FOR PLAYERS')}
-The article should feel like a real investigative piece that celebrates the players' gameplay experience.
-Visual distribution serves narrative flow, NOT quota compliance.
-
-${judging()}
-
-CRITICAL: Your feedback MUST be actionable. Include:
-- SPECIFIC lines with voice issues
-- SPECIFIC anti-patterns found with line locations
-- CONCRETE fixes for each criterion scored below ${STRUCTURAL_PASS_SCORE} and each structural issue (not "improve voice" but "change 'The investigation revealed' to 'I discovered'")
-
-${outputFormat('specific explanation with line references')}
-
-Remember: You determine READINESS for human review, not approval. Human always makes final decision.
-STRUCTURAL issues block. ADVISORY issues are warnings for human consideration.`;
-  }
+${truthOnlyOutputFormat(BREACH_NOTES[phase])}`;
 
   // The mode block goes right after the identity line, where every writer has it.
   return withReportingModeBlock(prompt, sessionConfig, 'journalist');
@@ -1385,15 +1189,14 @@ ${advisory.text}`;
 
 /**
  * The director's edits in the judged output (F1; spec 2026-10-02 section 7), for the
- * article judge of both themes, right after the output it judges: each by
+ * article judge, right after the output it judges: each by
  * id, with its place and the director's text, or for a cut the text removed; under a
  * rewrite, each sentence it removed (FA). EDIT_LINES_GUIDE says how to read the lines,
  * in the same words the reworks' <HAND_EDITS> block uses. The text
  * is the director's own and record, so the judge scores the writer's text, and a
  * disagreement with an edit goes in advisoryWarnings under DIRECTOR_EDIT_PREFIX and the
- * edit's id, where the verdict guard and the console find it. The rule is about the
- * director's authority, not craft, so the parked detective reads it too (the
- * integrator's ruling), with a criterion of its own in the example. '' with no edits.
+ * edit's id, where the verdict guard and the console find it. '' with no edits. The
+ * detective's own example went with its article judge (brief 4.7a; ruling R1).
  *
  * The weave's fact check (brief 4.5; R11) reads the director's changes at the story
  * meeting the same way, right after the weave, in the meeting's own words
@@ -1402,10 +1205,9 @@ ${advisory.text}`;
  *
  * @param {Object[]|undefined} edits - judgedEdits
  * @param {'arcs'|'article'} phase
- * @param {string} theme
  * @returns {string}
  */
-function renderJudgeDirectorEdits(edits, phase, theme) {
+function renderJudgeDirectorEdits(edits, phase) {
   const list = Array.isArray(edits) ? edits : [];
   if (list.length === 0) return '';
   if (phase === 'arcs') {
@@ -1415,25 +1217,11 @@ The lines below are the director's changes to the weave above. ${WEAVE_EDIT_LINE
 ${formatEditLines(list)}`;
   }
   const output = 'the content bundle above';
-  const example = `${DIRECTOR_EDIT_PREFIX}E1: ${theme === 'detective' ? 'evidenceIntegration' : 'T1'}: <the concern>`;
+  const example = `${DIRECTOR_EDIT_PREFIX}E1: T1: <the concern>`;
   return `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
 Each edit below is text the director wrote into ${output}, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE} An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, or would bring back a cut or a removed sentence, write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${example}.
 
 ${formatEditLines(list)}`;
-}
-
-/**
- * A journalist judge's craft reference: its writer's craft files (loadRuleSet), for
- * the user prompt after the material it judges (the placement ruling). A craft finding
- * is should-consider; the system prompt says where it goes.
- *
- * @param {'arcs'|'article'} phase
- * @returns {string}
- */
-function renderJudgeCraft(phase) {
-  const { craft } = loadRuleSet(JUDGE_RULE_CALLS[phase]);
-  return `THE CRAFT GUIDANCE the ${JUDGED_WRITERS[phase]} followed, your reference for craft findings:
-${craft}`;
 }
 
 /**
@@ -1516,18 +1304,31 @@ function printedWriterTracker(tracker, shellAccounts) {
 }
 
 /**
+ * The article's truth criteria that score it against the session's mode block, by name,
+ * for the user prompt's mode line (brief 4.7a): read from the criteria, so the line names
+ * what the criteria read.
+ *
+ * @returns {string} such as "stagesTruth and novaPositionTruth"
+ */
+function modeBlockReaders() {
+  const names = Object.entries(truthCriteria('article')).filter(([, c]) => c.reads.includes('modeBlock')).map(([key]) => key);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+}
+
+/**
  * Build user prompt with content to evaluate
  *
- * Phase 3 (3.4), journalist only: each judge's craft reference follows the material it
- * judges; the arc judge reads the record view's morning timeline in place of a buried
- * list of its own; the article judge reads only the bundle's printed fields, and its
- * mode line points at the mode block its system prompt carries. The detective's user
- * prompts are unchanged.
+ * Phase 3 (3.4): the arc judge reads the record view's morning timeline in place of a
+ * buried list of its own; the article judge reads only the bundle's printed fields, and
+ * its mode line points at the mode block its system prompt carries.
  *
- * Phase 3 (3.9), journalist only: the article judge reads its writer's FINANCIAL_SUMMARY
- * right after the record (renderJudgeFinancialSummary), and its PHOTOS is every photo
- * its writer was given (renderArticleJudgePhotos). Phase 4 (brief 4.6): the outline judge
- * went with the map.
+ * Phase 3 (3.9): the article judge reads its writer's FINANCIAL_SUMMARY right after the
+ * record (renderJudgeFinancialSummary), and its PHOTOS is every photo its writer was given
+ * (renderArticleJudgePhotos). Phase 4 (brief 4.6): the outline judge went with the map.
+ *
+ * Phase 4 (brief 4.7a): the article judge is one prompt for every theme (R1). It reads
+ * the settled weave and the map as the director left it, and the director's answers at
+ * the story meeting after the notes, and no craft file.
  *
  * @param {string} phase - Phase name
  * @param {Object} state - Current state with content
@@ -1542,8 +1343,7 @@ function printedWriterTracker(tracker, shellAccounts) {
  * @returns {string} User prompt
  */
 function buildEvaluationUserPrompt(phase, state, options = {}) {
-  const journalist = (state.theme || 'journalist') !== 'detective';
-  const directorEditsSection = renderJudgeDirectorEdits(options.directorEdits, phase, state.theme || 'journalist');
+  const directorEditsSection = renderJudgeDirectorEdits(options.directorEdits, phase);
   const afterJudged = directorEditsSection ? `${directorEditsSection}\n\n` : '';
   switch (phase) {
     case 'arcs': {
@@ -1575,66 +1375,40 @@ Is the weave free of truth-rule breaches?`;
     }
 
     case 'article': {
-      // BASELINE §4 class 6: the evaluator could not score reporter mode because
-      // it was never told which mode the session ran in.
+      // Brief 4.7a (spec 6.2; R1): one judge for every theme, checking the article against
+      // the truth rules. It reads, in order: the session's mode, named once (the mode block
+      // in its system prompt states T8 for it); the roster, the verdict and the director's
+      // notes as its writer reads them, with the director's answers at the story meeting
+      // after the notes (T1); the record with its timeline, and the money figures the writer
+      // copied; the photos the writer was given; the writer's task, the settled weave and the
+      // map as the director left it, whose leftOut holds each theory the director struck
+      // (T2); the article as the page prints it, with the director's edits right after it;
+      // and the code fact check's result. It reads no craft file (spec section 11).
       const reportingMode = state.sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
+      const articleMoney = renderJudgeFinancialSummary(state);
+      const answers = renderDirectorAnswers(state.weave && state.weave.questions);
+      const settledWeave = settledWeaveOf(state);
+      return `Check this article against the record and the director's words:
 
-      if (journalist) {
-        // Phase 3 (3.4): the mode block in the system prompt states T8 for this mode
-        // (exposed memories reach Nova by turn-in; since 3.9, remote, the room's events
-        // are told as scenes), and reporterMode scores it; this line names the mode, once.
-        // Phase 3 (3.9): the account totals the article writer copied, after the record.
-        const articleMoney = renderJudgeFinancialSummary(state);
-        return `Evaluate this article content:
+REPORTING MODE FOR THIS SESSION: ${reportingMode} (the mode block in your instructions says what Nova could witness; ${modeBlockReaders()} score the article against it)
 
-REPORTING MODE FOR THIS SESSION: ${reportingMode} (the mode block in your instructions says what Nova could witness; reporterMode scores it)
-
-${renderJudgeSessionContext(state)}
+${renderJudgeSessionContext(state)}${answers ? `\n\n${answers}` : ''}
 
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}${articleMoney ? `\n\n${articleMoney}` : ''}
 
 ${renderArticleJudgePhotos(state)}
 
+${settledWeave ? `${settledWeave}\n\n` : ''}The map below is the one the article writer wrote from, as the director left it: the beats in its sections are what the article tells, and leftOut holds what it leaves out, each beat the director struck among them.
+${JUDGE_MAP_LABEL}
+${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
+
 The content bundle below holds only the fields the published page prints.
 CONTENT BUNDLE:
 ${JSON.stringify(printedBundle(state.contentBundle, state.shellAccounts), null, 2)}
 
-${afterJudged}OUTLINE:
-${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
+${afterJudged}${renderJudgeFactCheck(options.factCheck || null)}
 
-${renderJudgeFactCheck(options.factCheck || null)}
-
-${renderJudgeCraft('article')}
-
-Is this article ready for human review?`;
-      }
-
-      const modeRule = reportingMode === 'remote'
-        ? 'The reporter was NOT in the room. Every exposure, observation and the verdict reached them as tips from people who were there, and must be written and attributed that way. A first-person claim to have been present is a STRUCTURAL failure. The attribution shows the absence, so the article states it at most once: stating it more than once ("I was not there.", "I was not in that room.") is a reporterMode defect, not a sign of voice.'
-        : 'The reporter watched the investigation from inside the room and spoke to people there, but was NOT at the party; the party reaches them only through exposed memories.';
-
-      // Brief 2.4: the roster, the verdict, the notes and the record, each built by the
-      // function the article writer's prompt uses (renderJudgeSessionContext), and the
-      // fact check's result for this bundle.
-      return `Evaluate this article content:
-
-REPORTING MODE FOR THIS SESSION: ${reportingMode}
-${modeRule}
-In BOTH modes the reporter never votes and owns no exposed memory. "I voted", "my vote" and "one of them was mine" are STRUCTURAL failures either way.
-
-${renderJudgeSessionContext(state)}
-
-${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
-
-CONTENT BUNDLE:
-${JSON.stringify(withoutWriterQuestions(state.contentBundle || {}), null, 2)}
-
-${afterJudged}OUTLINE:
-${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
-
-${renderJudgeFactCheck(options.factCheck || null)}
-
-Is this article ready for human review?`;
+Is the article free of truth-rule breaches?`;
     }
 
     default:
@@ -1721,12 +1495,13 @@ function createEvaluator(phase, options = {}) {
    * @returns {Object} Partial state update
    */
   return async function evaluatePhase(state, config) {
-    // Resolve criteria: every phase's are theme-aware (phase 3, 3.4: the journalist's
-    // carry the truth criteria; the detective's are unchanged).
+    // Resolve criteria (getPhaseCriteria): since phase 4 each judge scores the truth
+    // criteria alone, one set for every theme (ruling R1).
     const theme = state.theme || 'journalist';
     const criteria = getPhaseCriteria(phase, theme);
     // Phase 4 (brief 4.4, fix round 1): a judge whose criteria are all truth criteria gets
-    // the truth-only schema and verdict (the weave's fact check; the article judge in 4.7).
+    // the truth-only schema and verdict: the weave's fact check, and since brief 4.7a the
+    // article judge.
     const truthOnly = isTruthOnly(criteria);
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
@@ -2061,9 +1836,13 @@ function createEvaluator(phase, options = {}) {
         // B4: `evaluation.issues` is not part of the structural/advisory schema, so
         // this read produced "unspecified issues" on every real escalation. Use the
         // two lists the evaluator actually fills.
+        //
+        // Brief 4.7a: the advisories as the verdict leaves them (guard.advisories), so a
+        // truth-only judge's escalation carries its concerns about the director's edits and
+        // no note on the writing (spec 6.3: none reaches the desk).
         const issuesText = formatIssuesForMessage([
           ...judgeStructuralIssues,
-          ...(evaluation.advisoryWarnings || []),
+          ...guard.advisories,
           ...(Array.isArray(evaluation.issues) ? evaluation.issues : [])
         ]);
 

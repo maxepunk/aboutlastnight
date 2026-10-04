@@ -81,11 +81,13 @@ const cfg = (sdk, theme = 'journalist') => ({ configurable: { sdkClient: sdk, th
 const judging = (verdict) => jest.fn(async () => clone(verdict));
 
 describe('the judges read the director\'s edits (F1)', () => {
+  // Brief 4.7a: one article judge for every theme (R1); the map it reads sits before the
+  // article, so the edits come between the article and the fact check's result.
   it.each(['journalist', 'detective'])('%s article judge: lists each standing edit by id, section and the director\'s text, after the bundle', (theme) => {
     const prompt = buildEvaluationUserPrompt('article', articleState(theme), { factCheck: null, directorEdits: buildFactCheckArgs(articleState(theme)).directorEdits });
     const at = (s) => prompt.indexOf(s);
     expect(at("THE DIRECTOR'S EDITS (record: the director's own text")).toBeGreaterThan(at('CONTENT BUNDLE:'));
-    expect(at("THE DIRECTOR'S EDITS")).toBeLessThan(at('\nOUTLINE:'));
+    expect(at("THE DIRECTOR'S EDITS")).toBeLessThan(at('THE FACT CHECK ON THIS BUNDLE'));
     expect(prompt).toContain(`E1 (section "the-story", paragraph, cut): "${THEORY}"`);
     expect(prompt).toContain(`E2 (section "closing", paragraph): "${CLOSING}"\n  removed: "Whether the verdict costs Alex anything is still open."`);
     expect(prompt).toContain('A removed: line under an edit is a sentence the director took out of that text when rewriting it.');
@@ -195,16 +197,11 @@ describe('the verdict guard (F1)', () => {
   });
 
   // FA, requirement 5 and known item 1: director-located findings release the output only
-  // when no structural criterion failed outside them.
-  it('a structural criterion that failed on the writer\'s text holds the output beside a moved issue', async () => {
-    const result = await evaluateArticle(articleState(), cfg(judging(verdict({
-      criteriaScores: { arcThreading: { score: 0.4, type: 'structural', notes: 'The money thread drops out after THE STORY.', fix: 'Thread the money through the closing.' } },
-      structuralIssues: [CLOSING_ISSUE]
-    }))));
-    expect(result.evaluationHistory.ready).toBe(false);
-    expect(result.validationResults.structuralIssues).toEqual([]);
-    expect(result.validationResults.criteriaScores.arcThreading.fix).toBe('Thread the money through the closing.');
-  });
+  // when no structural criterion failed outside them. Brief 4.7a: the article judge's
+  // structural criteria are its truth criteria alone, so a criterion that failed on the
+  // writer's text beside a moved issue is the failed truth criterion pinned above ("a
+  // failed truth criterion no concern covers holds the output"); its weighted-criterion
+  // case went with the weighted criteria.
 
   // Final review, finding 6: a judge that files its concern correctly and still sets
   // structuralPassed false must not send the output to automatic passes with nothing to fix.
@@ -220,14 +217,15 @@ describe('the verdict guard (F1)', () => {
   });
 
   // FA, requirement 6: a judge's advisory that quotes the director's text is a concern,
-  // never SHOULD CONSIDER for the rework.
+  // never SHOULD CONSIDER for the rework. Brief 4.7a: the article judge is truth-only, so a
+  // note on the writing (the C10 line) reaches neither the stop nor the rework.
   it('an advisory that quotes the director\'s text is a concern for the stop and never reaches the rework', async () => {
-    const advisory = `C14: "${CLOSING}" ends on a line the room never said.`;
+    const advisory = `T12: "${CLOSING}" ends on a line the room never said.`;
     const result = await evaluateArticle(articleState(), cfg(judging(verdict({
       ready: true, structuralPassed: true, overallScore: 0.9, advisoryWarnings: [advisory, 'C10: the lede runs long.']
     }))));
-    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: ${advisory}`, 'C10: the lede runs long.']);
-    expect(result.validationResults.advisoryWarnings).toEqual(['C10: the lede runs long.']);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: ${advisory}`]);
+    expect(result.validationResults.advisoryWarnings).toEqual([]);
   });
 
   it('a failed truth criterion the judge wrote no issue for moves when its notes quote only the director\'s text', async () => {
@@ -265,13 +263,14 @@ describe('the verdict guard (F1)', () => {
     expect(result.evaluationHistory.advisoryWarnings).toEqual([filed]);
   });
 
+  // Brief 4.7a: the truth-only article judge keeps its concerns and no note on the writing.
   it('a concern reaches the stop but not the rework: validationResults leaves it out', async () => {
     const concern = `${DIRECTOR_EDIT_PREFIX}E2: T1: a motive stated as fact.`;
     const result = await evaluateArticle(articleState(), cfg(judging(verdict({
       ready: true, structuralPassed: true, overallScore: 0.9, advisoryWarnings: [concern, 'C10: the lede runs long.']
     }))));
-    expect(result.evaluationHistory.advisoryWarnings).toEqual([concern, 'C10: the lede runs long.']);
-    expect(result.validationResults.advisoryWarnings).toEqual(['C10: the lede runs long.']);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([concern]);
+    expect(result.validationResults.advisoryWarnings).toEqual([]);
   });
 
   it('with no standing edits nothing moves (the arc judge has none)', async () => {
@@ -352,34 +351,8 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     expect(part).not.toContain('The closing');
   });
 
-  it('detective, a mixed verdict: no criterion\'s notes or the judge\'s guidance about the director\'s line reach the automatic pass', async () => {
-    const state = articleState('detective');
-    const result = await evaluateArticle(state, cfg(judging(verdict({
-      criteriaScores: {
-        antiPatterns: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" names a game mechanic.`, fix: `Rewrite "${CLOSING}" in the case file's words.` },
-        voiceConsistency: { score: 0.9, type: 'structural', notes: `The closing "${CLOSING}" keeps the third person.` },
-        evidenceIntegration: { score: 0.6, type: 'advisory', notes: 'The cards cluster in one section.', fix: 'Spread them.' }
-      },
-      structuralIssues: [`The closing "${CLOSING}" names a game mechanic.`, `"${WRITER_LINE}" is not in the record. Cut the line.`],
-      revisionGuidance: 'Step 1: rewrite the closing. Step 2: cut the Riley line.'
-    })), 'detective'));
-    expect(result.evaluationHistory.ready).toBe(false);
-    expect(result.validationResults.criteriaScores).toEqual({
-      antiPatterns: { score: 0.5, type: 'structural' },
-      voiceConsistency: { score: 0.9, type: 'structural' },
-      evidenceIntegration: { score: 0.6, type: 'advisory', notes: 'The cards cluster in one section.', fix: 'Spread them.' }
-    });
-    expect(result.validationResults.revisionGuidance).toBe('');
-    // The judge's issue already says what antiPatterns says about the same edit: one concern.
-    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E2: The closing "${CLOSING}" names a game mechanic.`]);
-
-    const part = evaluationPart(result.validationResults, state, 'detective');
-    expect(part).toContain(`"${WRITER_LINE}" is not in the record. Cut the line.`);
-    expect(part).toContain('fix: Spread them.');
-    expect(part).toContain('EVALUATOR FEEDBACK:\n(no specific feedback provided)');
-    expect(part).not.toContain(CLOSING);
-    expect(part).not.toContain('rewrite the closing');
-  });
+  // Brief 4.7a (R1): the detective's mixed verdict, on its weighted criteria, went with its
+  // article judge; the journalist's mixed verdict above is the one article judge's.
 
   it('a truth criterion the judge wrote up as a concern is not restated as a must-fix, and the output is ready', async () => {
     const concern = `${DIRECTOR_EDIT_PREFIX}E2: T1: "${CLOSING}" states Alex's motive as fact.`;
@@ -415,22 +388,26 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     expect(result.validationResults.criteriaScores.wordsTruth.fix).toBe('Cut the line.');
   });
 
+  // Brief 4.7a: on a truth criterion, the article judge's criteria being the truth criteria
+  // alone; the concern is labelled by the criterion's rule ids.
   it('a criterion whose notes quote only the director\'s text joins the concerns, and alone it does not hold the output', async () => {
     const result = await evaluateArticle(articleState(), cfg(judging(verdict({
-      criteriaScores: { antiPatterns: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" breaks the house rule.`, fix: 'Rewrite it without the dash.' } }
+      criteriaScores: { fictionTruth: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" names the game's machinery.`, fix: 'Rewrite it in the fiction\'s words.' } }
     }))));
     expect(result.evaluationHistory.ready).toBe(true);
     expect(result.evaluationHistory.advisoryWarnings).toEqual([
-      `${DIRECTOR_EDIT_PREFIX}E2: antiPatterns: The closing "${CLOSING}" breaks the house rule. Rewrite it without the dash.`
+      `${DIRECTOR_EDIT_PREFIX}E2: T14: The closing "${CLOSING}" names the game's machinery. Rewrite it in the fiction's words.`
     ]);
-    expect(result.validationResults.criteriaScores).toEqual({ antiPatterns: { score: 0.5, type: 'structural' } });
+    expect(result.validationResults.criteriaScores).toEqual({ fictionTruth: { score: 0.5, type: 'structural' } });
     expect(result.validationResults.advisoryWarnings).toEqual([]);
   });
 
+  // Brief 4.7a: on two truth criteria, the article judge's criteria being the truth criteria
+  // alone.
   it('with no standing edits the rework reads the judge\'s criteria and guidance as they came', async () => {
     const criteriaScores = {
       evidenceTruth: { score: 0.3, type: 'structural', notes: 'The closing states a motive as fact.', fix: 'Attribute it.' },
-      antiPatterns: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" breaks the house rule.`, fix: 'Rewrite it.' }
+      fictionTruth: { score: 0.5, type: 'structural', notes: `The closing "${CLOSING}" names the game's machinery.`, fix: 'Rewrite it.' }
     };
     const guidance = 'Step 1: rewrite the closing.';
     const result = await evaluateArticle(articleState('journalist', { _articleHandEdits: null }), cfg(judging(verdict({
@@ -439,7 +416,10 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     expect(result.validationResults.criteriaScores).toEqual(criteriaScores);
     expect(result.validationResults.revisionGuidance).toBe(guidance);
     expect(result.validationResults.feedback).toBe(guidance);
-    expect(result.validationResults.structuralIssues).toEqual([CLOSING_ISSUE]);
+    // The failed T14 criterion, under which the judge wrote no issue, adds its must-fix line.
+    expect(result.validationResults.structuralIssues).toEqual([
+      CLOSING_ISSUE, `T14: The closing "${CLOSING}" names the game's machinery. Rewrite it.`
+    ]);
     expect(result.evaluationHistory.ready).toBe(false);
   });
 
@@ -477,7 +457,7 @@ describe('a paragraph the director only moved is the writer\'s at the judge (FA,
   it.each(['journalist', 'detective'])('%s judge: the move is listed by its place and the words the block begins with', (theme) => {
     const state = movedState(theme);
     const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: buildFactCheckArgs(state).directorEdits });
-    const section = prompt.slice(prompt.indexOf("THE DIRECTOR'S EDITS"), prompt.indexOf('\nOUTLINE:'));
+    const section = prompt.slice(prompt.indexOf("THE DIRECTOR'S EDITS"), prompt.indexOf('THE FACT CHECK ON THIS BUNDLE'));
     expect(section).toContain('E1 (section "closing", paragraph, moved from section "the-story"): begins "Riley watched the ledger all morning and said…"');
     expect(section).toContain('A line marked moved names a block the director moved to that place without changing it: the place is the director\'s, and the block\'s text is still the writer\'s.');
     expect(section).not.toContain(WRITER_LINE);

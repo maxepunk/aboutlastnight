@@ -72,7 +72,8 @@ function scriptedSdk({ reworks, evaluations }) {
       reworkIndex += 1;
       return clone(answer);
     }
-    if (/Evaluator|WEAVE fact check/.test(options.systemPrompt || '')) {
+    // Brief 4.7a: the article judge and the weave's fact check, by their identity lines.
+    if (/ARTICLE judge|WEAVE fact check/.test(options.systemPrompt || '')) {
       const answer = evaluations[Math.min(evaluationIndex, evaluations.length - 1)];
       evaluationIndex += 1;
       return clone(answer);

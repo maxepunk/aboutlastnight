@@ -225,7 +225,8 @@ function detectFixtureKey(options) {
   if (systemLower.includes('outline evaluator') || systemLower.includes('outline evaluation')) {
     return 'outlineEvaluation';
   }
-  if (systemLower.includes('article evaluator') || systemLower.includes('article evaluation')) {
+  // Phase 4 (brief 4.7a): the article judge, by its identity line.
+  if (systemLower.includes('article judge')) {
     return 'articleEvaluation';
   }
 
@@ -342,12 +343,17 @@ function createMockSdkClient(fixtures = {}, options = {}) {
       confidence: 'high',
       criteriaScores: { arcCoverage: 1.0, sectionBalance: 0.8, flowLogic: 0.8 }
     },
+    // Phase 4 (brief 4.7a): the article judge scores the truth criteria alone too, and
+    // finds no breach by default.
     articleEvaluation: {
       ready: true,
-      overallScore: 0.82,
+      structuralPassed: true,
+      overallScore: 1,
       issues: [],
+      structuralIssues: [],
+      advisoryWarnings: [],
       confidence: 'high',
-      criteriaScores: { voiceConsistency: 0.9, antiPatterns: 0.8, evidenceIntegration: 0.8 }
+      criteriaScores: { evidenceTruth: { score: 1 }, wordsTruth: { score: 1 } }
     },
 
     // Specialist fixtures

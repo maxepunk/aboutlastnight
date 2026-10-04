@@ -62,8 +62,8 @@ const CRAFT_ITEMS = {
  * The phase 4 spec's section 11 (who reads what; it was the rule-set spec's section 8),
  * item by item: the arc writer reads neither the voice (C12), the telling (C4) nor the
  * cards (C9); the map writer reads neither the voice nor the questions (C15), since it
- * asks nothing (brief 4.6). The interweaving call is gone, and the story meeting's fact
- * check reads no craft file (brief 4.4).
+ * asks nothing (brief 4.6). The interweaving call is gone, and neither judge reads a craft
+ * file: the story meeting's fact check (brief 4.4) and the article judge (brief 4.7a).
  */
 const SPEC_SECTION_11 = {
   arc: ALL_CRAFT.filter((id) => !['C4', 'C9', 'C12'].includes(id)),
@@ -71,7 +71,7 @@ const SPEC_SECTION_11 = {
   article: ALL_CRAFT
 };
 SPEC_SECTION_11['judge-arc'] = [];
-SPEC_SECTION_11['judge-article'] = SPEC_SECTION_11.article;
+SPEC_SECTION_11['judge-article'] = [];
 
 /** The brief's map (the phase 4 spec's section 11; the read's section C): each call's craft files, in order. */
 const BRIEF_MAP = {
@@ -83,7 +83,7 @@ const BRIEF_MAP = {
   ]
 };
 BRIEF_MAP['judge-arc'] = [];
-BRIEF_MAP['judge-article'] = BRIEF_MAP.article;
+BRIEF_MAP['judge-article'] = [];
 
 /** The line buildRevisionContext (node-helpers.js) prints after the director's send-back note. */
 const SEND_BACK_NOTE_LINE = 'NOTE: The human reviewer has explicitly requested these changes.';

@@ -161,23 +161,16 @@ describe('the evaluator scores reporter mode (BASELINE §4 class 6)', () => {
     _testing: { getArticleCriteria, buildEvaluationUserPrompt }
   } = require('../workflow/nodes/evaluator-nodes');
 
-  it('journalist article criteria include reporterMode as STRUCTURAL', () => {
-    const criteria = getArticleCriteria('journalist');
-    expect(criteria.reporterMode).toBeDefined();
-    expect(criteria.reporterMode.type).toBe('structural');
-    expect(criteria.reporterMode.weight).toBe(0.10);
-  });
-
-  it('detective has no reporterMode criterion', () => {
-    expect(getArticleCriteria('detective').reporterMode).toBeUndefined();
-  });
-
-  it('both themes’ weights still sum to 1', () => {
-    ['journalist', 'detective'].forEach((theme) => {
-      // Phase 3 (3.4): the journalist's truth criteria carry no weight; they decide readiness.
-      const total = Object.values(getArticleCriteria(theme)).filter((c) => !c.truth).reduce((sum, c) => sum + c.weight, 0);
-      expect(total).toBeCloseTo(1.0, 5);
-    });
+  // Brief 4.7a: the article judge scores the truth criteria alone, and the reporting mode
+  // with them: T8 (novaPositionTruth) and T7 (stagesTruth) read the session's mode block,
+  // each structural. The weighted reporterMode criterion went with the weighted criteria,
+  // and the detective's article criteria with its old stages (R1).
+  it('the article judge scores the reporting mode through its structural truth criteria, which read the mode block', () => {
+    const criteria = getArticleCriteria();
+    expect(criteria.reporterMode).toBeUndefined();
+    for (const key of ['novaPositionTruth', 'stagesTruth']) {
+      expect([key, criteria[key].type, criteria[key].truth, criteria[key].reads.includes('modeBlock')]).toEqual([key, 'structural', true, true]);
+    }
   });
 
   it('the evaluation user prompt states the session mode', () => {
