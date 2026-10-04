@@ -5,6 +5,9 @@
  * so the harness shows what the console shows and the stops log counts. A title prints as its
  * heading; any other line as its label and its text; a concern or a mark that sits beside a line,
  * one step further in; what the page folds, behind a ▸. The harness colours each line by its tone.
+ * Where the part of the screen a line sits in changes, the print breaks with a rule that names
+ * nothing (task 4.12e), so a part its component names only as an aria-label groups apart from the
+ * heading printed before it, as the screen groups it.
  *
  * The input review's and the character-IDs stop's screens also show blocks their components
  * render straight from the payload, with no view model, which the page leaves out (task 4.12c,
@@ -167,16 +170,32 @@ const BESIDE_PAGE = {
   'character-ids': characterIdsLines
 };
 
+/**
+ * The line the print puts where a line's part of the screen differs from the line before it (task
+ * 4.12e). The map's round, its headline, deck and top photo, and its counts are parts Outline.js
+ * names only as an aria-label (lib/stop-pages.js PAGE_REGIONS, a line's `region`), and the screen
+ * prints no heading over them, so the break names nothing. Without it each ran into the group of
+ * the heading printed before it. A heading starts a group of its own, so a heading needs none.
+ */
+const BREAK = Object.freeze({ tone: 'break', text: '', label: '', folded: false, beside: false });
+
+/** The lines with a break wherever a line that is no heading sits in another part of the screen than the line before it. */
+function withBreaks(lines) {
+  return lines.flatMap((line, i) => (i > 0 && line.tone !== 'title' && line.region !== lines[i - 1].region ? [BREAK, line] : [line]));
+}
+
 /** One page line as step mode prints it. */
 function printedText(line) {
   const fold = line.folded ? '▸ ' : '';
+  if (line.tone === 'break') return '──';
   if (line.tone === 'title') return `${fold}── ${line.label} ──`;
   const body = line.label && line.text ? `${line.label}: ${line.text}` : (line.label || line.text);
   return `${line.beside ? '    ' : '  '}${fold}${body}`;
 }
 
 /**
- * The lines step mode prints for a stop, or null for a stop with no page.
+ * The lines step mode prints for a stop, or null for a stop with no page: the page's lines with
+ * the blocks printed beside them, and a break (tone `break`) where the part of the screen changes.
  *
  * @param {string} stop - the stop type
  * @param {Object} data - the stop's payload, as the server sends it
@@ -190,7 +209,7 @@ function stopPrint(stop, data, options) {
   const payload = isPlainObject(data) ? data : {};
   const theme = (options && options.theme) || 'journalist';
   const lines = Object.prototype.hasOwnProperty.call(BESIDE_PAGE, stop) ? BESIDE_PAGE[stop](payload, page.lines, theme) : page.lines;
-  return lines.map((line) => ({ text: printedText(line), tone: line.tone, folded: line.folded, beside: Boolean(line.beside) }));
+  return withBreaks(lines).map((line) => ({ text: printedText(line), tone: line.tone, folded: line.folded, beside: Boolean(line.beside) }));
 }
 
 module.exports = { BESIDE_HEADINGS, stopPrint };

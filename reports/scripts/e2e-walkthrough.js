@@ -1930,7 +1930,10 @@ const STOP_HEADINGS = {
   'input-review': 'INPUT REVIEW', 'arc-selection': 'STORY MEETING', 'character-ids': 'CHARACTER IDS', outline: 'MAP', article: 'DESK'
 };
 
-/** The colour of each kind of line on a stop's page (lib/stop-pages.js). */
+/**
+ * The colour of each kind of line on a stop's page (lib/stop-pages.js), and of the break the print
+ * puts where the part of the screen changes (scripts/lib/stop-print.js; task 4.12e).
+ */
 const TONE_COLORS = {
   title: 'bright',
   text: 'reset',
@@ -1939,7 +1942,8 @@ const TONE_COLORS = {
   concern: 'yellow',
   mark: 'magenta',
   struck: 'dim',
-  hint: 'dim'
+  hint: 'dim',
+  break: 'dim'
 };
 
 /** What each decision stop's [J]SON shows: the weave, the map or the article. */

@@ -467,3 +467,65 @@ describe('4.12d: the harness prints the input review\'s panel and notes as the s
     expect(receipt).toBeLessThan(titleAt(printed, 'Quote Bank (1)'));
   });
 });
+
+// Task 4.12e (the ruling on 4.12d's minor 1): the map's round, its headline, deck and top photo,
+// and its counts are parts of the screen Outline.js names only as an aria-label (lib/stop-pages.js
+// PAGE_REGIONS). The print names them nowhere, so each ran into the group of the heading printed
+// before it: the round under "The settled story", the counts under the last section or "Dropped".
+// Where a printed line's part of the screen differs from the line before it, the print now breaks
+// with a rule that names nothing. A heading starts a group of its own, so a heading needs none.
+describe('4.12e: the print breaks where the part of the screen changes, and names no part', () => {
+  const { stopPage, PAGE_REGIONS } = require('../../../lib/stop-pages');
+  const BREAK = { text: '──', tone: 'break', folded: false, beside: false };
+  /** The map in the round after a send-back: its round line shows, with the note. */
+  const mapInRound2 = () => ({ ...mapData(), humanRevisionCount: 1, previousFeedback: 'Move the vote earlier.' });
+  /** The story meeting after a round that left the director's edit standing: its round's line shows, first on the page. */
+  const meetingAfterARound = () => ({ ...meetingData(), handEditReport: { checked: ['E1'], changed: [] } });
+
+  it("breaks before the map's round, before its headline, deck and top photo, and before its counts, so none falls under the heading before it", () => {
+    const data = mapInRound2();
+    const view = View.mapView(data, View.mapDraftOf(data));
+    const printed = stopPrint('outline', data);
+    const at = (text) => printed.findIndex((line) => line.text.trim() === text);
+    const parts = [view.round.label, `Headline: ${view.headline.text}`, `Everyone: ${view.tally.everyone}`];
+    parts.forEach((first) => {
+      const i = at(first);
+      expect([first, i > 0 && printed[i - 1]]).toEqual([first, BREAK]);
+    });
+    // Each part runs to the next break or heading: the round holds its label and the note.
+    const round = at(view.round.label);
+    expect(printed.slice(round, at(`Headline: ${view.headline.text}`) - 1).map((line) => line.text.trim()))
+      .toEqual([view.round.label, view.round.note]);
+  });
+
+  it("breaks exactly where a line's part of the screen differs from the line before it, unless the line is a heading", () => {
+    [['outline', mapInRound2()], ['outline', mapData()], ['arc-selection', meetingAfterARound()]].forEach(([stop, data]) => {
+      const page = stopPage(stop, data).lines;
+      const expected = [];
+      page.forEach((line, i) => {
+        if (i > 0 && line.region !== page[i - 1].region && line.tone !== 'title') expected.push('break');
+        expected.push(line.tone);
+      });
+      expect([stop, stopPrint(stop, data).map((line) => line.tone)]).toEqual([stop, expected]);
+    });
+  });
+
+  it('prints no break on a page whose lines name no part of the screen, and no printed line names a part', () => {
+    const review = {
+      type: 'input-review',
+      sessionConfig: { roster: ['Alex'], accusation: { accused: ['Alex'], charge: 'Sold the company', verdictKind: 'culprit' } },
+      directorNotes: { rawProse: 'Alex argued at the bar.', whiteboard: { names: ['Alex'] } },
+      enrichment: { quotes: 0, characterMentions: 0, transactionReferences: 0, fallback: null, warnings: {} }
+    };
+    expect(stopPrint('input-review', review).filter((line) => line.tone === 'break')).toEqual([]);
+    const names = Object.values(PAGE_REGIONS).flatMap((regions) => Object.values(regions));
+    [['outline', mapInRound2()], ['arc-selection', meetingAfterARound()]].forEach(([stop, data]) => {
+      const printed = stopPrint(stop, data).map((line) => line.text);
+      names.forEach((name) => expect([stop, name, printed.some((text) => text.includes(name))]).toEqual([stop, name, false]));
+    });
+  });
+
+  it('colours a break as the harness colours what it dims', () => {
+    expect(SRC).toMatch(/const TONE_COLORS = \{[^}]*\bbreak: 'dim'/);
+  });
+});
