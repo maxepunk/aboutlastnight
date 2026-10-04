@@ -475,3 +475,57 @@ describe('a paragraph the director only moved is the writer\'s at the judge (FA,
     expect(result.validationResults.revisionGuidance).toBe('Step 1: cut the Riley line.');
   });
 });
+
+// Task 4.5e (the integrator's ruling 4 on run 5's follow-ups; scratch 4.5d-review/guard-probe.js):
+// the judge may file a finding under the prefix and the id of a block the director only moved,
+// quoting the block's text, which is the writer's. The guard moved such a finding to the
+// concerns as it was, so the article read ready and no fix ran. A move owns no text, so the
+// guard reads a finding filed under such edits alone by its quotes: a quote of the writer's
+// text is the writer's must-fix, and a quote of the director's text a concern under the id of
+// the edit it quotes, however the judge filed it.
+describe("4.5e: a finding filed under a moved block's id is read by its quotes", () => {
+  const WRITER_FINDING = `T12: "${WRITER_LINE}" is not in the record. Cut the line.`;
+  const REWRITTEN = 'Alex and Morgan argued at the bar, and Sarah kept the count for the whole room.';
+  /** The writer's article with WRITER_LINE moved, unchanged, from THE STORY to the closing, and, with `rewrite`, the story's first paragraph rewritten. */
+  const movedArticle = ({ rewrite = false } = {}) => {
+    const a = writersArticle();
+    const [line] = a.sections[0].content.splice(2, 1);
+    a.sections[1].content.push(line);
+    if (rewrite) a.sections[0].content[0] = paragraph(REWRITTEN);
+    return a;
+  };
+  const movedState = (options) => articleState('journalist', {
+    contentBundle: movedArticle(options),
+    _articleHandEdits: standingAfterSendBack(null, writersArticle(), movedArticle(options), 'bundle')
+  });
+  const judged = (filed) => judging({
+    ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [],
+    revisionGuidance: '', confidence: 'high', ...filed
+  });
+
+  it.each([
+    ['a structural issue', (finding) => ({ structuralIssues: [finding] })],
+    ['an advisory', (finding) => ({ advisoryWarnings: [finding] })]
+  ])("filed as %s, quoting the moved paragraph, it is the writer's must-fix", async (_name, filed) => {
+    const state = movedState();
+    expect(state._articleHandEdits.edits.map((e) => [e.id, Boolean(e.from)])).toEqual([['E1', true]]);
+    const result = await evaluateArticle(state, cfg(judged(filed(`${DIRECTOR_EDIT_PREFIX}E1: ${WRITER_FINDING}`))));
+    expect(result.evaluationHistory.structuralIssues).toEqual([WRITER_FINDING]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([]);
+    expect(result.evaluationHistory.ready).toBe(false);
+    expect(result.validationResults.structuralIssues).toEqual([WRITER_FINDING]);
+  });
+
+  it("filed under the move's id, a finding that quotes the director's own text is a concern under the id of the edit it quotes", async () => {
+    const state = movedState({ rewrite: true });
+    expect(state._articleHandEdits.edits.map((e) => [e.id, e.path, Boolean(e.from)])).toEqual([
+      ['E1', 'sections[#the-story].content[0].text', false],
+      ['E2', 'sections[#closing].content[1]', true]
+    ]);
+    const finding = `T1: "${REWRITTEN}" puts Sarah at the count, which no document records.`;
+    const result = await evaluateArticle(state, cfg(judged({ structuralIssues: [`${DIRECTOR_EDIT_PREFIX}E2: ${finding}`] })));
+    expect(result.evaluationHistory.structuralIssues).toEqual([]);
+    expect(result.evaluationHistory.advisoryWarnings).toEqual([`${DIRECTOR_EDIT_PREFIX}E1: ${finding}`]);
+    expect(result.evaluationHistory.ready).toBe(true);
+  });
+});

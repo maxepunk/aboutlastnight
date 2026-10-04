@@ -898,6 +898,15 @@ function isStrike(edit) { return Boolean(edit && edit.struck === true) && !isCut
  */
 function isUnstrike(edit) { return Boolean(edit && edit.unstruck === true) && !isCut(edit); }
 
+/**
+ * An edit of a place alone, which owns no text (task 4.5e): a block the director moved
+ * (isMove) or a connection they brought back (isUnstrike). The place is theirs, and the text
+ * there is the writer's (fix round 1, finding 2; task 4.5d). The one rule for which edits own
+ * no text: writerParts and locatingTexts read it, and the verdict guard reads a finding filed
+ * under such edits alone by its quotes (evaluator-nodes.js guardDirectorEdits).
+ */
+function ownsNoText(edit) { return isMove(edit) || isUnstrike(edit); }
+
 function editNumber(id) {
   const m = /^E(\d+)$/.exec(String(id));
   return m ? Number(m[1]) : 0;
@@ -1770,11 +1779,11 @@ function formatEditLines(edits) {
 /**
  * The text `output` prints outside the edits it carries (each edit's own text taken out
  * once), part by part. A moved block's text stays the writer's, and so do the words of a
- * connection the director brought back (task 4.5d).
+ * connection the director brought back (task 4.5d): neither edit owns text (ownsNoText).
  */
 function writerParts(output, edits) {
   const owned = new Map();
-  edits.filter((e) => !isCut(e) && !isMove(e) && !isUnstrike(e)).forEach((e) => valueTexts(e, e.after).forEach((leaf) => {
+  edits.filter((e) => !isCut(e) && !ownsNoText(e)).forEach((e) => valueTexts(e, e.after).forEach((leaf) => {
     const key = fold(leaf);
     owned.set(key, (owned.get(key) || 0) + 1);
   }));
@@ -1789,12 +1798,12 @@ function writerParts(output, edits) {
 
 /**
  * The text an edit locates a quote against: its own text, the text it cut, and the
- * sentences it removed. A move has none: its block's text is the writer's. Nor has an
- * un-strike: the words of the connection the director brought back are the writer's, so a
+ * sentences it removed. An edit that owns no text has none (ownsNoText): a move's block text
+ * is the writer's, and so are the words of the connection an un-strike brought back, so a
  * finding that quotes them is the writer's must-fix (task 4.5d).
  */
 function locatingTexts(edit) {
-  if (isMove(edit) || isUnstrike(edit)) return [];
+  if (ownsNoText(edit)) return [];
   return [
     ...valueTexts(edit, isCut(edit) ? edit.before : edit.after),
     ...(Array.isArray(edit.removed) ? edit.removed.filter((s) => typeof s === 'string') : [])
@@ -3030,6 +3039,8 @@ module.exports = {
   // Brief 4.6: the map's edits
   MAP_SCOPE, MAP_NONE, MAP_LEFT_OUT, MAP_TOP_PHOTO, MAP_EDIT_LINES_GUIDE, isMap, mapEditsBetween, standingOnMap,
   mapEditAddress: mapAddressOf, isCut, isMove, isStrike,
+  // Task 4.5e: an edit of a place alone, which the verdict guard reads
+  ownsNoText,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,

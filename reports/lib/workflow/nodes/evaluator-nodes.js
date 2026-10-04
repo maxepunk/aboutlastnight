@@ -81,7 +81,7 @@ const { writerTrackerPrints } = require('../../template-assembler');
 // them to advisoryWarnings under the one prefix.
 const {
   carriedEdits, formatEditLines, locateQuotedText, directorEditConcern, concernEditIds, concernFinding, DIRECTOR_EDIT_PREFIX,
-  EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE, PRINTED_FIELDS, isMap
+  EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE, PRINTED_FIELDS, isMap, ownsNoText
 } = require('../../hand-edit-diff');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -476,9 +476,16 @@ function opensWithName(finding, key) {
  * - A structural issue that quotes the director's text moves to the concerns, under the
  *   prefix and the edits' ids, whatever else it quotes (FA, requirement 1): in such an
  *   issue a quote of the writer's text is usually where the problem sits or where a fix
- *   would go. A finding the judge filed under the prefix and a standing id moves as it is.
+ *   would go. A finding the judge filed under the prefix and a standing edit that owns text
+ *   moves as it is.
  * - A judge's advisory that quotes the director's text is a concern in its place, never a
  *   suggestion for the rework (FA, requirement 6).
+ * - A finding the judge filed under the prefix and edits that own no text alone (lib/
+ *   hand-edit-diff.js ownsNoText: a block the director moved at the desk, a connection they
+ *   brought back at the meeting) is read by its quotes, as one with no prefix is (task
+ *   4.5e): a place holds only the writer's text. A quote of the director's text makes it a
+ *   concern under the edits it quotes; otherwise it is the writer's must-fix, whichever list
+ *   the judge filed it in.
  * - A criterion whose notes or fix quote the director's text keeps them from the rework
  *   (final review, finding 1), and one that failed joins the concerns unless a concern
  *   already covers it: one under its rule ids or its name or, for a criterion with no
@@ -527,25 +534,45 @@ function guardDirectorEdits({ evaluation, criteria, edits, output, record = [] }
     };
   }
 
-  const standing = new Set(edits.map((edit) => edit.id));
-  const aboutStanding = (text) => concernEditIds(text).some((id) => standing.has(id));
+  const standing = new Map(edits.map((edit) => [edit.id, edit]));
   const quotedEdits = (text) => locateQuotedText(text, edits, output, { record }).editIds;
+  /**
+   * A finding the judge filed under the prefix and a standing edit (task 4.5e): `{concern:
+   * true}` when an edit it names owns text, so it is a concern as it is; `{finding}`, its text
+   * after the ids, when the edits it names own none (ownsNoText), so it is read by its quotes;
+   * null when it names no standing edit.
+   */
+  const filed = (text) => {
+    const named = concernEditIds(text).filter((id) => standing.has(id)).map((id) => standing.get(id));
+    if (named.length === 0) return null;
+    return named.every(ownsNoText) ? { finding: concernFinding(text) } : { concern: true };
+  };
 
   const kept = [];
   const moved = [];
   issues.forEach((issue) => {
-    if (aboutStanding(issue)) {
+    const prefixed = filed(issue);
+    if (prefixed && prefixed.concern) {
       moved.push(issue);
       return;
     }
-    const ids = quotedEdits(issue);
-    if (ids.length > 0) moved.push(directorEditConcern(ids, issue));
-    else kept.push(issue);
+    const finding = prefixed ? prefixed.finding : issue;
+    const ids = quotedEdits(finding);
+    if (ids.length > 0) moved.push(directorEditConcern(ids, finding));
+    else kept.push(finding);
   });
-  const advisoriesOut = advisories.map((advisory) => {
-    if (aboutStanding(advisory)) return advisory;
-    const ids = quotedEdits(advisory);
-    return ids.length > 0 ? directorEditConcern(ids, advisory) : advisory;
+  const advisoriesOut = [];
+  advisories.forEach((advisory) => {
+    const prefixed = filed(advisory);
+    if (prefixed && prefixed.concern) {
+      advisoriesOut.push(advisory);
+      return;
+    }
+    const finding = prefixed ? prefixed.finding : advisory;
+    const ids = quotedEdits(finding);
+    if (ids.length > 0) advisoriesOut.push(directorEditConcern(ids, finding));
+    else if (prefixed) kept.push(finding);
+    else advisoriesOut.push(advisory);
   });
 
   const scores = judged.criteriaScores && typeof judged.criteriaScores === 'object' ? judged.criteriaScores : {};

@@ -582,3 +582,50 @@ describe('4.5d: a connection the director brought back, through the meeting\'s n
     expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('revise');
   });
 });
+
+// The integrator's ruling 4 on run 5's follow-ups (progress.md, 2026-10-04; scratch
+// 4.5d-review/guard-probe.js): the fact check may file a finding under the prefix and the id
+// of a connection the director brought back, quoting the connection's words, which are the
+// writer's (task 4.5d). The guard moved such a finding to the concerns as it was, so the
+// weave read ready and no fix ran. An un-strike owns no text, so the guard reads a finding
+// filed under such edits alone by its quotes, and a quote of the writer's words is the
+// writer's must-fix, however the judge filed it. Invented text.
+describe("4.5e: a finding filed under a brought-back connection's id is read by its quotes", () => {
+  const { standingAtMeeting } = require('../hand-edit-diff');
+  const C2 = FIXTURE_WEAVE.connections[1];
+  const FINDING = `T1: "${C2.detail}" states a cause the record does not show.`;
+
+  /**
+   * After a round that kept the director's strike of c2 (E1), the director brings c2 back (E2)
+   * and reweaves, and the reweave keeps it: the weave the fact check judges.
+   */
+  async function rewoven() {
+    const struck = clone(FIXTURE_WEAVE);
+    struck.connections[1].struck = true;
+    const kept = atMeeting({
+      weave: withFactCheckMark(struck, { at: 't0', ready: true, fixes: 0 }), _weaveBaseline: weaveForPrompt(clone(struck)),
+      _weaveHandEdits: standingAtMeeting(null, clone(FIXTURE_WEAVE), struck)
+    });
+    const { stateUpdates, error } = meetingResume({ meeting: 'reweave', weave: clone(FIXTURE_WEAVE) }, kept);
+    expect(error).toBeNull();
+    const round = { ...kept, ...stateUpdates, _meetingRound: 'reweave' };
+    const state = { ...round, ...(await incrementArcRevision(round)) };
+    return { ...state, ...(await reviseArcs(state, cfg(recordingSdk(weaveForPrompt(clone(FIXTURE_WEAVE)))))) };
+  }
+
+  it.each([
+    ['a structural issue', (finding) => ({ structuralIssues: [finding] })],
+    ['an advisory', (finding) => ({ advisoryWarnings: [finding] })]
+  ])("filed as %s, quoting the connection's words, it is the writer's must-fix, and the one automatic fix runs on it", async (_name, filed) => {
+    const round = await rewoven();
+    expect(carriedEdits(round._weaveHandEdits, weaveForPrompt(round.weave)).map((e) => [e.id, e.unstruck === true])).toEqual([['E2', true]]);
+    const update = await evaluateArcs(round, cfg(recordingSdk({
+      ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high',
+      ...filed(`${DIRECTOR_EDIT_PREFIX}E2: ${FINDING}`)
+    })));
+    expect(update.validationResults.structuralIssues).toEqual([FINDING]);
+    expect(update.weave._factCheck).toMatchObject({ ready: false, fixes: 0 });
+    expect(update.weave._factCheck.concerns || []).toEqual([]);
+    expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('revise');
+  });
+});
