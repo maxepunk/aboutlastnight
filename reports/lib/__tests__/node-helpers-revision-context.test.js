@@ -322,15 +322,16 @@ describe('evaluator → reviser wiring (the write side)', () => {
 
   it('the evaluator jsonSchema describes criteriaScores objects and string issue lists', () => {
     // The schema was `criteriaScores: {type:'object'}` with untyped arrays, so the
-    // model was free to emit whatever shape; nothing downstream could read it.
-    const schema = _testing.EVALUATION_JSON_SCHEMA;
+    // model was free to emit whatever shape; nothing downstream could read it. Brief 4.7c:
+    // the judges' one schema is the truth-only contract's, whose criteria carry no type
+    // (each takes its definition's).
+    const schema = _testing.TRUTH_ONLY_EVALUATION_JSON_SCHEMA;
     expect(schema.properties.criteriaScores.additionalProperties).toEqual(
       expect.objectContaining({
         type: 'object',
         required: ['score'],
         properties: expect.objectContaining({
           score: { type: 'number' },
-          type: expect.objectContaining({ type: 'string' }),
           notes: expect.objectContaining({ type: 'string' }),
           fix: expect.objectContaining({ type: 'string' })
         })

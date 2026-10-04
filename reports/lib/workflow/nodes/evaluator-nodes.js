@@ -131,7 +131,7 @@ const JUDGE_MAP_LABEL = 'MAP:';
 
 /**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
- * it under. The first fourteen are the judge's inputs; the last two are the judged
+ * it under. The first fifteen are the judge's inputs; the last two are the judged
  * output's own text, which only the article holds (the weave places neither cards nor
  * photos).
  */
@@ -140,6 +140,7 @@ const TRUTH_MATERIAL = Object.freeze({
   timeline: '<morning-timeline>',           // the ledger and the evidence log, on the morning clock
   financialSummary: '<FINANCIAL_SUMMARY>',  // the account totals the article writer copies (3.9)
   notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
+  corrections: '<DIRECTOR_CORRECTIONS>',    // the director's input-review corrections, after the notes (brief 4.7c)
   answers: '<DIRECTOR_ANSWERS>',            // the director's answers at the story meeting (renderDirectorAnswers; brief 4.5)
   weave: '<SETTLED_WEAVE>',                 // the weave as the director settled it, every question with its answer or none (settledWeaveOf; brief 4.7a)
   map: `\n${JUDGE_MAP_LABEL}\n`,           // the map as the director left it, its struck beats in leftOut (brief 4.7a)
@@ -165,13 +166,25 @@ const TRUTH_MATERIAL = Object.freeze({
 // and the pronouns read the answers; the money reads the settled weave, which lists the
 // questions left unanswered; the verdict reads the map, whose leftOut holds each theory the
 // director struck.
+//
+// Brief 4.7c (T1, T9): an article question that names where the director's words come from
+// names the four sources the fact check reads as the director's words (buildFactCheckArgs'
+// directorWords): ARTICLE_DIRECTOR_WORDS, printed under DIRECTOR_WORDS_MATERIAL, which such a
+// question reads. The weave's questions keep their wording.
+
+/** The director's words as the fact check reads them, as an article truth question names them. */
+const ARTICLE_DIRECTOR_WORDS = '(the notes, the input-review corrections, the accusation and the answers at the story meeting)';
+
+/** The materials the four sources print under, in the order directorWords holds them. */
+const DIRECTOR_WORDS_MATERIAL = Object.freeze(['notes', 'corrections', 'verdict', 'answers']);
+
 const TRUTH_GROUPS = [
   {
     key: 'evidenceTruth',
     rules: ['T1', 'T3', 'T4', 'T6'],
-    reads: () => ['record', 'timeline', 'notes', 'answers'],
+    reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers'] : ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL]),
     // Phase 3 (3.9): T4 as round 7 words it (R21).
-    describe: (s) => `Is every claim in ${s} written as its evidence allows, the director's answers at the story meeting included as record, as the notes are (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
+    describe: (s, phase) => `Is every claim in ${s} written as its evidence allows, ${phase === 'arcs' ? "the director's answers at the story meeting included as record, as the notes are (T1)," : `the director's words ${ARTICLE_DIRECTOR_WORDS} included as record (T1);`} with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?`
   },
   {
     key: 'moneyTruth',
@@ -190,8 +203,8 @@ const TRUTH_GROUPS = [
     // Brief 4.7a (T5 as rewritten): a figure raised as a question at the story meeting
     // prints as the director's answer gives it, and stays out of print while the question
     // has no answer; the settled weave lists each question with its answer or none.
-    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers'] : ['timeline', 'financialSummary', 'notes', 'answers', 'weave']),
-    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1)." : "a balance the director's notes record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5)."}`
+    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers'] : ['timeline', 'financialSummary', ...DIRECTOR_WORDS_MATERIAL, 'weave']),
+    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1)." : `a balance the director's words ${ARTICLE_DIRECTOR_WORDS} record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).`}`
   },
   {
     key: 'verdictTruth',
@@ -223,18 +236,19 @@ const TRUTH_GROUPS = [
     key: 'playersTruth',
     rules: ['T9', 'T11'],
     // Brief 4.7a (T9 as rewritten): at the article, a pronoun the director's own words give
-    // counts as the answer, the notes as well as an answer at the meeting, and a player with
-    // neither is written by name.
-    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers'] : ['roster', 'notes', 'answers']),
-    describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's answer at the story meeting gives" : "the pronoun the director's own words give (the notes or an answer at the story meeting), or else the player's name in place of a pronoun"} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
+    // counts as the answer, and a player with none is written by name. Brief 4.7c: the
+    // director's words are the four sources the fact check's pronoun check reads.
+    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers'] : ['roster', ...DIRECTOR_WORDS_MATERIAL]),
+    describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's answer at the story meeting gives" : `the pronoun the director's own words give ${ARTICLE_DIRECTOR_WORDS}, or else the player's name in place of a pronoun`} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
   },
   {
     key: 'wordsTruth',
     rules: ['T12'],
-    // Only the article prints a card's text; the weave names a receipt by id.
-    reads: (phase) => (phase === 'article' ? ['record', 'notes', 'printedCards'] : ['record', 'notes']),
+    // Only the article prints a card's text; the weave names a receipt by id. Brief 4.7c:
+    // at the article, a line the director's words hold is quoted from them, any of the four.
+    reads: (phase) => (phase === 'article' ? ['record', ...DIRECTOR_WORDS_MATERIAL, 'printedCards'] : ['record', 'notes']),
     describe: (s, phase) => (phase === 'article'
-      ? 'Is every quoted line in the article word for word from the record or the director\'s notes and in its real speaker\'s mouth, and does every card copy the record with no id or timestamp in its text (T12)?'
+      ? `Is every quoted line in the article word for word from the record or the director's words ${ARTICLE_DIRECTOR_WORDS} and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?`
       : `Is every quoted line in ${s} word for word from the record or the director's notes, and in its real speaker's mouth (T12)?`)
   },
   {
@@ -576,25 +590,12 @@ function forTheRework(warning) {
 }
 
 /**
- * Whether a judge is truth-only (phase 4, brief 4.4): every criterion it scores is a truth
- * criterion, so the truth criteria are the whole evaluation. Its schema
- * (TRUTH_ONLY_EVALUATION_JSON_SCHEMA) and its verdict (truthOnlyVerdict) follow from its
- * criteria, and a test holds its prompt's OUTPUT FORMAT (truthOnlyOutputFormat) to the same
- * rule. Both judges are truth-only since the article judge's criteria shrank to the truth
- * groups (brief 4.7a).
- *
- * @param {Object} criteria
- * @returns {boolean}
- */
-function isTruthOnly(criteria) {
-  const list = Object.values(criteria || {});
-  return list.length > 0 && list.every((criterion) => Boolean(criterion && criterion.truth));
-}
-
-/**
  * A truth-only judge's verdict, held to its contract after the verdict guard (phase 4,
  * brief 4.4, fix round 1): spec 4.5 lets no notes on the writing reach the meeting, and an
- * automatic pass reads only must-fix work. Each criterion the judge was given keeps its
+ * automatic pass reads only must-fix work. Both judges are truth-only since the article
+ * judge's criteria shrank to the truth groups (brief 4.7a), so this is every judge's
+ * verdict: the seam that chose between it and a weighted one went with the weighted
+ * contract (brief 4.7c). Each criterion the judge was given keeps its
  * definition's type, so a breach's fix never reaches the rework as a suggestion; a
  * criterion it was not given goes; and its advisories are only its concerns about the
  * director's edits (DIRECTOR_EDIT_PREFIX, as the guard leaves them), which the stop shows
@@ -608,7 +609,7 @@ function isTruthOnly(criteria) {
  * the verdict leaves out, holds nothing, so no fix runs with nothing to fix.
  *
  * @param {Object} guard - guardDirectorEdits' result
- * @param {Object} criteria - the judge's criteria, every one a truth criterion (isTruthOnly)
+ * @param {Object} criteria - the judge's criteria, every one a truth criterion (truthCriteria)
  * @returns {Object} the guard's result with its `advisories` and `criteriaScores` held to the
  *   contract, its `ready` read from the contract, and `outsideContract`: the criteria and
  *   advisories it left out, for the log
@@ -760,24 +761,38 @@ function buildFactCheckArgs(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Structured-output schema for every phase evaluator (Commit 8.21 shape).
- *
- * PROMPT-REVIEW B4: `criteriaScores: {type:'object'}` and bare `{type:'array'}`
- * issue lists left the emitted shape entirely up to the model, and nothing
- * downstream could read it — buildRevisionContext rendered the per-criterion
- * objects as `[object Object]`. The per-criterion shape (and the string-ness of
- * the two issue lists) is now part of the contract, so the notes/fix the prompt
- * asks for actually survive into the revision prompt.
- *
- * NOTE: no `format` keyword anywhere (SDK #277 — see reports/CLAUDE.md).
- *
- * Phase 3 (3.9; final review judges-factcheck[1], the integrator's ruling): the judge
- * writes a criterion's `fix` only below the bar, and `revisionGuidance` holds only the
- * steps that fix the structural issues. Every passing criterion used to carry a fix and
- * the guidance optional steps, and the automatic reworks acted on them. Shared by both
- * themes, as outputFormat is.
+ * What a truth-only judge writes in advisoryWarnings (phase 4, brief 4.4, fix round 1):
+ * only its concerns about the director's edits, which the guard and the stop read under
+ * DIRECTOR_EDIT_PREFIX (renderJudgeDirectorEdits says how to write one). Its truth
+ * criteria are the whole evaluation, so it has no suggestion to give: spec 4.5 lets no
+ * notes on the writing reach the meeting. One wording, for the schema and the OUTPUT FORMAT.
  */
-const EVALUATION_JSON_SCHEMA = {
+const TRUTH_ONLY_ADVISORY_WARNINGS = "only a concern about one of the director's edits; empty when there is none";
+
+/**
+ * The structured-output schema the judges are sent: the truth-only contract (phase 4, brief
+ * 4.4, fix round 1), which both judges read, the weave's fact check (brief 4.4) and the
+ * article judge (brief 4.7a). Its OUTPUT FORMAT (truthOnlyOutputFormat) restates it in the
+ * prompt, and code holds the verdict to it (truthOnlyVerdict).
+ *
+ * PROMPT-REVIEW B4: `criteriaScores: {type:'object'}` and bare `{type:'array'}` issue lists
+ * left the emitted shape entirely up to the model, and nothing downstream could read it:
+ * buildRevisionContext rendered the per-criterion objects as `[object Object]`. The
+ * per-criterion shape and the string-ness of the two issue lists are part of the contract,
+ * so the notes and fix the prompt asks for survive into the revision prompt.
+ *
+ * Phase 3 (3.9; final review judges-factcheck[1], the integrator's ruling): the judge writes
+ * a criterion's `fix` only below the bar, and `revisionGuidance` holds only the steps that
+ * fix the structural issues.
+ *
+ * A criterion carries no `type`: each truth criterion's type is its definition's
+ * (truthOnlyVerdict sets it). advisoryWarnings holds only the concerns about the director's
+ * edits. The weighted schema this was derived from, with a criterion type and advisories as
+ * suggestions, went with its last caller (brief 4.7c). The contract holds no `issues` array.
+ *
+ * NOTE: no `format` keyword anywhere (SDK #277; see reports/CLAUDE.md).
+ */
+const TRUTH_ONLY_EVALUATION_JSON_SCHEMA = {
   type: 'object',
   properties: {
     ready: { type: 'boolean' },
@@ -791,7 +806,6 @@ const EVALUATION_JSON_SCHEMA = {
         required: ['score'],
         properties: {
           score: { type: 'number' },
-          type: { type: 'string', description: 'structural or advisory' },
           notes: { type: 'string', description: 'Specific explanation naming the characters, IDs or sections at fault' },
           fix: { type: 'string', description: `Only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}` }
         }
@@ -805,7 +819,7 @@ const EVALUATION_JSON_SCHEMA = {
     advisoryWarnings: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Suggestions, not blockers, one self-contained sentence each'
+      description: TRUTH_ONLY_ADVISORY_WARNINGS
     },
     revisionGuidance: {
       type: 'string',
@@ -815,29 +829,6 @@ const EVALUATION_JSON_SCHEMA = {
   },
   required: ['ready', 'overallScore', 'structuralPassed']
 };
-
-/**
- * What a truth-only judge writes in advisoryWarnings (phase 4, brief 4.4, fix round 1):
- * only its concerns about the director's edits, which the guard and the stop read under
- * DIRECTOR_EDIT_PREFIX (renderJudgeDirectorEdits says how to write one). Its truth
- * criteria are the whole evaluation, so it has no suggestion to give: spec 4.5 lets no
- * notes on the writing reach the meeting. One wording, for the schema and the OUTPUT FORMAT.
- */
-const TRUTH_ONLY_ADVISORY_WARNINGS = "only a concern about one of the director's edits; empty when there is none";
-
-/**
- * The structured-output schema a truth-only judge is sent (phase 4, brief 4.4, fix round
- * 1): the judges' schema with no criterion `type`, since each truth criterion's type is
- * its definition's (truthOnlyVerdict sets it), and advisoryWarnings kept for the concerns
- * about the director's edits. Every other field is EVALUATION_JSON_SCHEMA's. Both judges
- * are sent it: the weave's fact check (brief 4.4) and the article judge (brief 4.7a).
- */
-const TRUTH_ONLY_EVALUATION_JSON_SCHEMA = (() => {
-  const schema = structuredClone(EVALUATION_JSON_SCHEMA);
-  delete schema.properties.criteriaScores.additionalProperties.properties.type;
-  schema.properties.advisoryWarnings.description = TRUTH_ONLY_ADVISORY_WARNINGS;
-  return schema;
-})();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
@@ -853,19 +844,19 @@ function boxedHeading(title) {
 }
 
 /**
- * The judges' JSON shape, restated in the prompt (the schema itself is EVALUATION_JSON_SCHEMA).
+ * The judges' OUTPUT FORMAT (phase 4, brief 4.4, fix round 1): the truth-only contract as
+ * TRUTH_ONLY_EVALUATION_JSON_SCHEMA states it, restated in the prompt. A criterion carries
+ * no type, and advisoryWarnings is kept for a concern about one of the director's edits.
+ * Both judges print it after TRUTH_ONLY_EVALUATION_RULES (briefs 4.4 and 4.7a).
  *
- * Phase 3 (3.9): the must-fix work only, as the schema asks it. Shared by both themes,
- * so the parked detective's judges change with it (the integrator's ruling; a named
- * detective hunk).
+ * Phase 3 (3.9): the must-fix work only, as the schema asks it. Brief 4.7c: the weighted
+ * format it was built from, with a type line and advisories as suggestions, went with its
+ * last caller; this is the judges' one format.
  *
  * @param {string} notes - what a criterion's notes hold, for this judge
- * @param {Object} [options]
- * @param {boolean} [options.truthOnly] - a truth-only judge's contract (truthOnlyOutputFormat)
+ * @returns {string}
  */
-function outputFormat(notes, { truthOnly = false } = {}) {
-  const typeLine = truthOnly ? '' : '\n      "type": "structural" | "advisory",';
-  const advisories = truthOnly ? TRUTH_ONLY_ADVISORY_WARNINGS : 'issues that are suggestions, not blockers';
+function truthOnlyOutputFormat(notes) {
   return `OUTPUT FORMAT (JSON):
 {
   "ready": boolean,
@@ -873,29 +864,16 @@ function outputFormat(notes, { truthOnly = false } = {}) {
   "structuralPassed": boolean,
   "criteriaScores": {
     "criterionName": {
-      "score": number,${typeLine}
+      "score": number,
       "notes": "${notes}",
       "fix": "only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}"
     }
   },
   "structuralIssues": [ "issues that MUST be fixed" ],
-  "advisoryWarnings": [ "${advisories}" ],
+  "advisoryWarnings": [ "${TRUTH_ONLY_ADVISORY_WARNINGS}" ],
   "revisionGuidance": "one step per structural issue, each the fix for that issue (Step 1: ..., Step 2: ...); empty when there is none",
   "confidence": "high" | "medium" | "low"
 }`;
-}
-
-/**
- * A truth-only judge's OUTPUT FORMAT (phase 4, brief 4.4, fix round 1), as
- * TRUTH_ONLY_EVALUATION_JSON_SCHEMA states it: the judges' shape with no criterion type,
- * and advisoryWarnings kept for a concern about one of the director's edits. Both judges
- * print it after TRUTH_ONLY_EVALUATION_RULES (briefs 4.4 and 4.7a).
- *
- * @param {string} notes - what a criterion's notes hold, for this judge
- * @returns {string}
- */
-function truthOnlyOutputFormat(notes) {
-  return outputFormat(notes, { truthOnly: true });
 }
 
 /**
@@ -1496,13 +1474,11 @@ function createEvaluator(phase, options = {}) {
    */
   return async function evaluatePhase(state, config) {
     // Resolve criteria (getPhaseCriteria): since phase 4 each judge scores the truth
-    // criteria alone, one set for every theme (ruling R1).
+    // criteria alone, one set for every theme (ruling R1), and reads the truth-only
+    // contract, its schema and its verdict (brief 4.4, fix round 1; the article judge since
+    // brief 4.7a). Brief 4.7c: the weighted contract and the seam that chose it went.
     const theme = state.theme || 'journalist';
     const criteria = getPhaseCriteria(phase, theme);
-    // Phase 4 (brief 4.4, fix round 1): a judge whose criteria are all truth criteria gets
-    // the truth-only schema and verdict: the weave's fact check, and since brief 4.7a the
-    // article judge.
-    const truthOnly = isTruthOnly(criteria);
     const phaseConstant = getPhaseConstant(phase);
     const revisionCountField = getRevisionCountField(phase);
     const revisionCap = getRevisionCap(phase);
@@ -1651,7 +1627,6 @@ function createEvaluator(phase, options = {}) {
       // Brief 2.4: the article judge reads the fact check's result for THIS bundle
       // (computed above), never the state's _articleFactCheck from the previous one.
       const prompt = buildEvaluationUserPrompt(phase, state, { factCheck, directorEdits });
-      const jsonSchema = truthOnly ? TRUTH_ONLY_EVALUATION_JSON_SCHEMA : EVALUATION_JSON_SCHEMA;
 
       // SDK returns parsed object directly when jsonSchema is provided
       // Commit 8.23: disableTools prevents evaluator from using Grep/Read during evaluation
@@ -1659,14 +1634,13 @@ function createEvaluator(phase, options = {}) {
         systemPrompt,
         prompt,
         model,
-        jsonSchema,
+        jsonSchema: TRUTH_ONLY_EVALUATION_JSON_SCHEMA,
         disableTools: true
       });
 
-      // Commit 8.21: All phases use structuralPassed to determine readiness
-      // Advisory issues become warnings, not blockers
-      // Backward compat: if structuralPassed not provided, fall back to ready field
-      // (guardDirectorEdits reads it).
+      // Brief 4.7c: readiness is the contract's (truthOnlyVerdict below): no structural issue
+      // kept and no truth criterion holding. The judge's own structuralPassed and score,
+      // which the weighted branch read, decide nothing.
       //
       // Phase 3 (3.4, R2): a truth-rule breach goes back automatically. A truth
       // criterion the judge scored below the structural bar holds the output to
@@ -1688,11 +1662,18 @@ function createEvaluator(phase, options = {}) {
         output: judgedOutput(phase, state),
         record: directorEdits.length > 0 ? recordTexts(state) : []
       });
-      // Phase 4 (brief 4.4, fix round 1): a truth-only judge's verdict is held to its
-      // contract, so a note on the writing reaches neither the stop nor an automatic pass.
-      const guard = truthOnly ? truthOnlyVerdict(guarded, criteria) : guarded;
-      if (truthOnly && guard.outsideContract.length > 0) {
-        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Outside the truth-only contract, left out: ${JSON.stringify(guard.outsideContract)}`);
+      // Phase 4 (brief 4.4, fix round 1): the verdict is held to the truth-only contract,
+      // so a note on the writing reaches neither the stop nor an automatic pass. Brief 4.7c:
+      // an `issues` array lies outside the contract too (its schema and its OUTPUT FORMAT
+      // hold none), so it is logged with the rest and read nowhere: not in the history
+      // entry, not in validationResults, not in the escalation reason.
+      const guard = truthOnlyVerdict(guarded, criteria);
+      const outsideContract = [
+        ...guard.outsideContract,
+        ...(Array.isArray(evaluation.issues) && evaluation.issues.length > 0 ? [{ issues: evaluation.issues }] : [])
+      ];
+      if (outsideContract.length > 0) {
+        console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] Outside the truth-only contract, left out: ${JSON.stringify(outsideContract)}`);
       }
       const judgeStructuralIssues = guard.kept;
       const isReady = guard.ready;
@@ -1721,7 +1702,9 @@ function createEvaluator(phase, options = {}) {
         // quotes the director's text is a concern in its own place (guard.advisories).
         structuralIssues: judgeStructuralIssues,
         advisoryWarnings: [...guard.advisories, ...guard.moved, ...guard.concerns],
-        issues: evaluation.issues || judgeStructuralIssues,  // Backward compat
+        // The structural issues again, under the key the e2e harness's evaluation box reads.
+        // Brief 4.7c: never the judge's own `issues` array, which lies outside its contract.
+        issues: judgeStructuralIssues,
         confidence: evaluation.confidence || 'medium',
         revisionNumber: currentRevisions
       };
@@ -1762,7 +1745,6 @@ function createEvaluator(phase, options = {}) {
           ...guard.advisories,
           ...((factCheck && factCheck.advisoryWarnings) || [])
         ].filter(forTheRework),
-        issues: evaluation.issues,
         // F1, fix round 1: the judge's criteria and guidance as the guard leaves them for
         // the rework, with no notes, fix or guidance step located in the director's text.
         criteriaScores: guard.criteriaScores,
@@ -1790,9 +1772,6 @@ function createEvaluator(phase, options = {}) {
       }
       if (evaluation.advisoryWarnings && evaluation.advisoryWarnings.length > 0) {
         console.log(`  - Advisory warnings: ${JSON.stringify(evaluation.advisoryWarnings)}`);
-      }
-      if (evaluation.issues && evaluation.issues.length > 0 && !evaluation.structuralIssues) {
-        console.log(`  - issues: ${JSON.stringify(evaluation.issues)}`);
       }
 
       // Phase 4 (brief 4.4; R6): the weave's fact check marks the weave it judged, with
@@ -1833,17 +1812,16 @@ function createEvaluator(phase, options = {}) {
       if (currentRevisions >= revisionCap) {
         console.log(`[evaluate${phase.charAt(0).toUpperCase() + phase.slice(1)}] At revision cap - escalating to human (score: ${evaluation.overallScore})`);
 
-        // B4: `evaluation.issues` is not part of the structural/advisory schema, so
-        // this read produced "unspecified issues" on every real escalation. Use the
-        // two lists the evaluator actually fills.
+        // B4: `evaluation.issues` is not part of the contract, so reading it produced
+        // "unspecified issues" on every real escalation. Use the two lists the verdict fills.
         //
-        // Brief 4.7a: the advisories as the verdict leaves them (guard.advisories), so a
-        // truth-only judge's escalation carries its concerns about the director's edits and
-        // no note on the writing (spec 6.3: none reaches the desk).
+        // Brief 4.7a: the advisories as the verdict leaves them (guard.advisories), so the
+        // escalation carries the judge's concerns about the director's edits and no note on
+        // the writing (spec 6.3: none reaches the desk). Brief 4.7c: and never an `issues`
+        // array a verdict carries outside its contract.
         const issuesText = formatIssuesForMessage([
           ...judgeStructuralIssues,
-          ...guard.advisories,
-          ...(Array.isArray(evaluation.issues) ? evaluation.issues : [])
+          ...guard.advisories
         ]);
 
         // At the cap the human gets the WHOLE picture: the Opus findings plus the
@@ -2024,15 +2002,13 @@ module.exports = {
 
   // Export for testing
   _testing: {
-    EVALUATION_JSON_SCHEMA,
     // Phase 4 (brief 4.4): the scoring rules a truth-only judge reads, and its contract
-    // (fix round 1): the OUTPUT FORMAT, the schema and the verdict held to them
+    // (fix round 1): the OUTPUT FORMAT, the schema and the verdict held to them. Brief
+    // 4.7c: the judges' one contract; the weighted one and the seam that chose it went.
     TRUTH_ONLY_EVALUATION_RULES,
     TRUTH_ONLY_ADVISORY_WARNINGS,
     TRUTH_ONLY_EVALUATION_JSON_SCHEMA,
-    outputFormat,
     truthOnlyOutputFormat,
-    isTruthOnly,
     truthOnlyVerdict,
     getArcCriteria,
     getArticleCriteria,

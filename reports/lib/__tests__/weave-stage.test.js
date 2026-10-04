@@ -304,13 +304,13 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
 // director's edits, the channel the fact check after a director's round needs (4.5). Code
 // holds the verdict to that contract, so a judge that writes outside it changes neither
 // what the meeting shows nor what the fix reads.
+//
+// Brief 4.7c: both judges are truth-only since 4.7a, so the truth-only contract is the
+// judges' one contract. The weighted schema, the weighted OUTPUT FORMAT and the isTruthOnly
+// seam that chose between them went, with the tests that compared the two contracts.
 describe('the fact check writes to the truth-only contract (fix round 1)', () => {
-  const {
-    outputFormat, truthOnlyOutputFormat, TRUTH_ONLY_ADVISORY_WARNINGS, EVALUATION_JSON_SCHEMA,
-    TRUTH_ONLY_EVALUATION_JSON_SCHEMA, isTruthOnly
-  } = evalTesting;
+  const { truthOnlyOutputFormat, TRUTH_ONLY_ADVISORY_WARNINGS, TRUTH_ONLY_EVALUATION_JSON_SCHEMA } = evalTesting;
   const NOTES = 'the breach: the text at fault, the thread it is in, and the record it contradicts';
-  const SHARED_TYPE_LINE = '      "type": "structural" | "advisory",';
   const systemFor = (phase, theme = 'journalist') => buildEvaluationSystemPrompt(
     phase, getPhaseCriteria(phase, theme), theme, { sessionConfig: weaveState().sessionConfig }
   );
@@ -323,46 +323,63 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
     expect(format).toContain(`  "advisoryWarnings": [ "${TRUTH_ONLY_ADVISORY_WARNINGS}" ],`);
     expect(format).not.toContain('"type"');
     expect(format).not.toMatch(/suggestion|blocker/i);
-    // Every other line is the judges' shared contract.
-    const own = format.split('\n');
-    expect(outputFormat(NOTES).split('\n').filter((line) => !own.includes(line)))
-      .toEqual([SHARED_TYPE_LINE, '  "advisoryWarnings": [ "issues that are suggestions, not blockers" ],']);
   });
 
-  it('a judge is truth-only exactly when its criteria are all truth criteria, and its prompt carries the truth-only contract exactly then', () => {
-    const truthOnlyJudges = [];
+  it('both judges, for every theme, score the truth criteria alone and carry the truth-only OUTPUT FORMAT', () => {
     // Phase 4 (brief 4.6): the outline judge left the graph.
     for (const theme of ['journalist', 'detective']) {
       for (const phase of ['arcs', 'article']) {
-        const truthOnly = isTruthOnly(getPhaseCriteria(phase, theme));
-        if (truthOnly) truthOnlyJudges.push(`${theme} ${phase}`);
+        expect([theme, phase, Object.values(getPhaseCriteria(phase, theme)).every((criterion) => criterion.truth === true)]).toEqual([theme, phase, true]);
         const format = formatOf(systemFor(phase, theme));
-        expect([theme, phase, format.includes(TRUTH_ONLY_ADVISORY_WARNINGS), format.includes(SHARED_TYPE_LINE)])
-          .toEqual([theme, phase, truthOnly, !truthOnly]);
+        expect([theme, phase, format.includes(TRUTH_ONLY_ADVISORY_WARNINGS), format.includes('"type"')]).toEqual([theme, phase, true, false]);
       }
     }
-    // Brief 4.7a: the article judge scores the truth criteria alone too, so both judges are
-    // truth-only, for every theme.
-    expect(truthOnlyJudges).toEqual(['journalist arcs', 'journalist article', 'detective arcs', 'detective article']);
-    expect(isTruthOnly({})).toBe(false);
+  });
+
+  // Brief 4.7c: the weighted contract went (the schema with a criterion type, the OUTPUT
+  // FORMAT with a type line and "suggestions, not blockers", and isTruthOnly).
+  it('the weighted contract went: no weighted schema, no weighted OUTPUT FORMAT, no seam to choose between them', () => {
+    ['EVALUATION_JSON_SCHEMA', 'outputFormat', 'isTruthOnly'].forEach((name) => expect(`${name}: ${name in evalTesting}`).toBe(`${name}: false`));
+    for (const phase of ['arcs', 'article']) {
+      const system = systemFor(phase);
+      expect([phase, /structural or advisory|suggestions, not blockers|"structural" \| "advisory"/.test(system)]).toEqual([phase, false]);
+    }
   });
 
   // Phase 4 (brief 4.6): the article judge, since the outline judge left the graph. Brief
-  // 4.7a: the article judge is truth-only too, and is sent the same schema.
-  it('the fact check is sent the truth-only schema, which differs from the shared one in those two fields alone; so is the article judge', async () => {
+  // 4.7a: the article judge is truth-only too, and is sent the same schema. Brief 4.7c: the
+  // schema is pinned whole, as 4.4's fix round built it.
+  it('the fact check and the article judge are sent the truth-only schema, pinned whole', async () => {
     const sdk = recordingSdk(CLEAN);
     await evaluateArcs(weaveState(), { configurable: { sdkClient: sdk } });
     const schema = sdk.calls[0].jsonSchema;
     expect(schema).toBe(TRUTH_ONLY_EVALUATION_JSON_SCHEMA);
-    expect(Object.keys(schema.properties.criteriaScores.additionalProperties.properties)).toEqual(['score', 'notes', 'fix']);
-    expect(schema.properties.advisoryWarnings).toEqual({ type: 'array', items: { type: 'string' }, description: TRUTH_ONLY_ADVISORY_WARNINGS });
-    const { criteriaScores: ownScores, advisoryWarnings: ownAdvisories, ...ownRest } = schema.properties;
-    const { criteriaScores: sharedScores, advisoryWarnings: sharedAdvisories, ...sharedRest } = EVALUATION_JSON_SCHEMA.properties;
-    expect(ownRest).toEqual(sharedRest);
-    const { type: sharedType, ...sharedCriterion } = sharedScores.additionalProperties.properties;
-    expect(sharedType).toEqual({ type: 'string', description: 'structural or advisory' });
-    expect(ownScores.additionalProperties.properties).toEqual(sharedCriterion);
-    expect(schema.required).toEqual(EVALUATION_JSON_SCHEMA.required);
+    expect(schema).toEqual({
+      type: 'object',
+      properties: {
+        ready: { type: 'boolean' },
+        overallScore: { type: 'number' },
+        structuralPassed: { type: 'boolean' },
+        criteriaScores: {
+          type: 'object',
+          description: 'One entry per criterion, keyed by criterion name.',
+          additionalProperties: {
+            type: 'object',
+            required: ['score'],
+            properties: {
+              score: { type: 'number' },
+              notes: { type: 'string', description: 'Specific explanation naming the characters, IDs or sections at fault' },
+              fix: { type: 'string', description: `Only for a score below ${STRUCTURAL_PASS_SCORE}: the one concrete action that brings this criterion up to ${STRUCTURAL_PASS_SCORE}` }
+            }
+          }
+        },
+        structuralIssues: { type: 'array', items: { type: 'string' }, description: 'Issues that MUST be fixed, one self-contained sentence each' },
+        advisoryWarnings: { type: 'array', items: { type: 'string' }, description: TRUTH_ONLY_ADVISORY_WARNINGS },
+        revisionGuidance: { type: 'string', description: 'One step per structural issue, each the fix for that issue; empty when there is none' },
+        confidence: { type: 'string' }
+      },
+      required: ['ready', 'overallScore', 'structuralPassed']
+    });
 
     const article = recordingSdk({ ...CLEAN, overallScore: 0.9 });
     // At the cap the article judge runs whatever the fact check found.

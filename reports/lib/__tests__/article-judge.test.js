@@ -17,10 +17,11 @@
 const { evaluateArticle, _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
 const {
   getPhaseCriteria, buildEvaluationSystemPrompt, buildEvaluationUserPrompt,
-  isTruthOnly, TRUTH_ONLY_EVALUATION_RULES, TRUTH_ONLY_EVALUATION_JSON_SCHEMA, TRUTH_MATERIAL
+  TRUTH_ONLY_EVALUATION_RULES, TRUTH_ONLY_EVALUATION_JSON_SCHEMA, TRUTH_MATERIAL
 } = evalTesting;
 const { loadRuleSet, loadModeBlock, RULE_SET_CALLS } = require('../rule-set');
-const { standingOnMap } = require('../hand-edit-diff');
+const { standingOnMap, standingAfterSendBack, DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
+const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
 const { settledWeaveOf, renderDirectorAnswers } = require('../prompt-renderers/settled-weave');
 const { REVISION_CAPS } = require('../workflow/state');
 const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('./fixtures/rework-state');
@@ -90,7 +91,6 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
       for (const [key, criterion] of Object.entries(criteria)) {
         expect([key, criterion.truth, criterion.type, criterion.weight, criterion.rules]).toEqual([key, true, 'structural', undefined, ARTICLE_TRUTH[key]]);
       }
-      expect(isTruthOnly(criteria)).toBe(true);
     }
     expect(getPhaseCriteria('article', 'detective')).toEqual(getPhaseCriteria('article', 'journalist'));
   });
@@ -99,31 +99,34 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
   // T2's fourth sentence (the map places the debated theories; a struck one stays out), T5's
   // last sentence (a figure raised at the meeting with no answer stays out of print), T9's
   // last sentence (the director's own words give a pronoun, else the player's name).
+  // Brief 4.7c: a question that names where the director's words come from names the four
+  // sources the fact check reads as the director's words (buildFactCheckArgs' directorWords).
   it('each truth question is worded as section B of the rule-text read gives it', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
-      evidenceTruth: "Is every claim in the article written as its evidence allows, the director's answers at the story meeting included as record, as the notes are (T1), with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?",
-      moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the morning as FINANCIAL_SUMMARY gives it; a balance the director's notes record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
+      evidenceTruth: "Is every claim in the article written as its evidence allows, the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) included as record (T1); with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's notes name (T6)?",
+      moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the morning as FINANCIAL_SUMMARY gives it; a balance the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
       verdictTruth: "Is the verdict in the article told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)?",
       stagesTruth: "In the article, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
       novaPositionTruth: "In the article, is Nova the uninterested third party, reporting on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and witnesses only what this session's mode block allows (T8)?",
-      playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes or an answer at the story meeting), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
-      wordsTruth: "Is every quoted line in the article word for word from the record or the director's notes and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?",
+      playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes, the input-review corrections, the accusation and the answers at the story meeting), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
+      wordsTruth: "Is every quoted line in the article word for word from the record or the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?",
       photosTruth: "Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director's description wherever PHOTOS gives one (T13)?",
       fictionTruth: "Does every line of the article that reaches print speak the fiction's own words, with no production word in it (T14)?"
     });
   });
 
+  // Brief 4.7c: a question that names the director's words reads all four sources.
   it('the answers from the story meeting join the reads of evidenceTruth, moneyTruth, playersTruth and verdictTruth (T1)', () => {
     const reads = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.reads]));
     expect(reads).toEqual({
-      evidenceTruth: ['record', 'timeline', 'notes', 'answers'],
-      moneyTruth: ['timeline', 'financialSummary', 'notes', 'answers', 'weave'],
+      evidenceTruth: ['record', 'timeline', 'notes', 'corrections', 'verdict', 'answers'],
+      moneyTruth: ['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'weave'],
       verdictTruth: ['verdict', 'notes', 'answers', 'map'],
       stagesTruth: ['record', 'modeBlock', 'epilogue', 'timeline'],
       novaPositionTruth: ['modeBlock'],
-      playersTruth: ['roster', 'notes', 'answers'],
-      wordsTruth: ['record', 'notes', 'printedCards'],
+      playersTruth: ['roster', 'notes', 'corrections', 'verdict', 'answers'],
+      wordsTruth: ['record', 'notes', 'corrections', 'verdict', 'answers', 'printedCards'],
       photosTruth: ['photos', 'whiteboard', 'printedCaptions'],
       fictionTruth: ['truthRules']
     });
@@ -173,17 +176,67 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
     expect(result.evaluationHistory.ready).toBe(true);
   });
 
+  // Brief 4.7c (4.7a's minor 3): the state carries a standing edit of the director's, and
+  // the judge files a concern about it, so the test reads the concern in the escalation.
   it('at the cap, the escalation lists the breaches and the concerns about the director\'s edits, and no note on the writing', async () => {
+    const DIRECTORS = 'The director wrote this whole sentence about the vote.';
+    const writers = clone(PREVIOUS_BUNDLE);
+    const directors = clone(PREVIOUS_BUNDLE);
+    directors.sections[0].content.push({ type: 'paragraph', text: DIRECTORS });
+    const concern = `${DIRECTOR_EDIT_PREFIX}E1: T1: "${DIRECTORS}" says more than the notes.`;
     const breach = 'T12: "Marcus bragged." is in no document. Quote the memory.';
     const sdk = judging({
       ...CLEAN, ready: false, structuralPassed: false, overallScore: 0.3,
       criteriaScores: { wordsTruth: { score: 0.3, notes: 'A line no document holds.', fix: 'Quote the memory.' } },
-      structuralIssues: [breach], advisoryWarnings: ['C10: the lede runs long.']
+      structuralIssues: [breach], advisoryWarnings: [concern, 'C10: the lede runs long.']
     });
-    const result = await evaluateArticle(atCap(articleState()), cfg(sdk));
+    const state = atCap(articleState('journalist', {
+      contentBundle: directors, _articleHandEdits: standingAfterSendBack(null, writers, directors, 'bundle')
+    }));
+    const result = await evaluateArticle(state, cfg(sdk));
     expect(result.evaluationHistory.escalatedToHuman).toBe(true);
     expect(result.evaluationHistory.escalationReason).toContain(breach);
+    expect(result.evaluationHistory.escalationReason).toContain(concern);
     expect(result.evaluationHistory.escalationReason).not.toContain('the lede runs long');
+  });
+});
+
+// Brief 4.7c (4.7a's minor 1): a truth-only judge's verdict is its contract
+// (TRUTH_ONLY_EVALUATION_JSON_SCHEMA, its OUTPUT FORMAT), which holds no `issues` array. A
+// verdict that carries one anyway is read for its contract alone: the array reaches neither
+// the rework's validationResults, nor the history entry, nor the escalation reason.
+describe("4.7c: the judge's verdict carries only its contract", () => {
+  const OUTSIDE = 'ISSUES-FIELD: the pacing drags in the middle.';
+  const breach = 'T12: "Marcus bragged." is in no document. Quote the memory.';
+  const verdict = {
+    ...CLEAN, ready: false, structuralPassed: false, overallScore: 0.3,
+    criteriaScores: { wordsTruth: { score: 0.3, notes: 'A line no document holds.', fix: 'Quote the memory.' } },
+    structuralIssues: [breach], issues: [OUTSIDE]
+  };
+
+  it('an issues array reaches neither validationResults, nor the history entry, nor the escalation reason', async () => {
+    const result = await evaluateArticle(atCap(articleState()), cfg(judging(verdict)));
+    expect(result.evaluationHistory.escalatedToHuman).toBe(true);
+    expect(JSON.stringify(result.validationResults)).not.toContain(OUTSIDE);
+    expect(JSON.stringify(result.evaluationHistory)).not.toContain(OUTSIDE);
+    expect(result.evaluationHistory.escalationReason).toContain(breach);
+    expect(result.evaluationHistory.escalationReason).not.toContain(OUTSIDE);
+  });
+
+  it('the rework reads the breach as its must-fix item, never the array in its place', async () => {
+    const result = await evaluateArticle(atCap(articleState()), cfg(judging(verdict)));
+    const { contextSection } = buildRevisionContext({
+      phase: 'article', revisionCount: 1, validationResults: result.validationResults, previousOutput: clone(PREVIOUS_BUNDLE)
+    });
+    expect(contextSection).toContain(`ISSUES TO ADDRESS:\n  - ${breach}`);
+    expect(contextSection).not.toContain(OUTSIDE);
+  });
+
+  it('a ready verdict that carries one leaves it out of the history entry and validationResults too', async () => {
+    const result = await evaluateArticle(atCap(articleState()), cfg(judging({ ...CLEAN, issues: [OUTSIDE] })));
+    expect(result.evaluationHistory.ready).toBe(true);
+    expect(JSON.stringify(result.evaluationHistory)).not.toContain(OUTSIDE);
+    expect(JSON.stringify(result.validationResults)).not.toContain(OUTSIDE);
   });
 });
 

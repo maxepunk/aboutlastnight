@@ -711,17 +711,22 @@ describe('evaluator-nodes', () => {
       expect(result.evaluationHistory.confidence).toBe('medium');
     });
 
-    it('includes issues when present', async () => {
+    // Brief 4.7c: an `issues` array lies outside the judge's contract, so the history entry's
+    // `issues` are its structural issues, never the array.
+    it('lists the structural issues as issues, never an issues array outside the contract', async () => {
+      const breach = 'T3: "Morgan sold the BizAI memory" in thread t2 states what a buried memory held. Report the sale.';
       const mockClient = jest.fn().mockResolvedValue({
         ready: false,
         overallScore: 0.6,
+        structuralIssues: [breach],
         issues: ['Issue 1', 'Issue 2']
       });
       const config = { configurable: { sdkClient: mockClient } };
 
       const result = await evaluateArcs(weaveState(), config);
 
-      expect(result.evaluationHistory.issues).toEqual(['Issue 1', 'Issue 2']);
+      expect(result.evaluationHistory.issues).toEqual([breach]);
+      expect(result.validationResults).not.toHaveProperty('issues');
     });
 
     it('defaults issues to empty array', async () => {
@@ -2012,7 +2017,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
 describe('the judges and the money line (phase 3, 3.9)', () => {
   const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
   const { renderPhotoEntry } = require('../../../lib/prompt-renderers/director-words-renderer');
-  const { _testing: { getPhaseCriteria, EVALUATION_JSON_SCHEMA } } = require('../../../lib/workflow/nodes/evaluator-nodes');
+  const { _testing: { getPhaseCriteria, TRUTH_ONLY_EVALUATION_JSON_SCHEMA } } = require('../../../lib/workflow/nodes/evaluator-nodes');
   const {
     generateContentBundle, reviseContentBundle, getPromptBuilder,
     _testing: { articleWriterInputs, buildAvailablePhotos }
@@ -2071,10 +2076,11 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes', 'answers']);
       expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
       // Brief 4.7a (T1, T5): the article judge reads the answers, and the settled weave,
-      // which lists the questions left unanswered.
+      // which lists the questions left unanswered. Brief 4.7c: the director's words whole,
+      // the input-review corrections and the accusation beside the notes and the answers.
       for (const phase of ['article']) {
         const { reads } = getPhaseCriteria(phase, 'journalist').moneyTruth;
-        expect(reads).toEqual(['timeline', 'financialSummary', 'notes', 'answers', 'weave']);
+        expect(reads).toEqual(['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'weave']);
       }
     });
 
@@ -2085,10 +2091,11 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     // each source by what it gives, so a judge never "corrects" a player's line to a
     // closing total (T1).
     // Brief 4.7a (T5 as rewritten): at the article, a figure raised as a question at the
-    // story meeting follows the balance said in the room.
+    // story meeting follows the balance said in the room. Brief 4.7c: at the article, the
+    // balance is the one the director's words record, each of the four sources named.
     it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the room', () => {
       const LEDGER = 'Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;';
-      const IN_THE_ROOM = "a balance the director's notes record as said or shown in the room as that moment's figure (T1);";
+      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) record as said or shown in the room as that moment's figure (T1);";
       for (const phase of ['article']) {
         const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
         expect(description).toContain(LEDGER);
@@ -2172,14 +2179,14 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
   });
 
   // Final review judges-factcheck[1]: every passing criterion carried a fix and the
-  // guidance carried optional steps, and the reworks acted on them. The contract is
-  // shared by both themes, so the detective's judges change with it (the ruling).
+  // guidance carried optional steps, and the reworks acted on them. Since phase 4 both
+  // judges read one contract, the truth-only one, for every theme (R1; brief 4.7c).
   describe('the judge\'s output contract asks for the must-fix work only (both themes)', () => {
     it('the schema asks for a criterion\'s fix only below the bar, and guidance only for the structural issues', () => {
-      const { fix } = EVALUATION_JSON_SCHEMA.properties.criteriaScores.additionalProperties.properties;
+      const { fix } = TRUTH_ONLY_EVALUATION_JSON_SCHEMA.properties.criteriaScores.additionalProperties.properties;
       expect(fix.description).toContain('Only for a score below 0.8');
       expect(fix.description).not.toContain('raise this score');
-      const { revisionGuidance } = EVALUATION_JSON_SCHEMA.properties;
+      const { revisionGuidance } = TRUTH_ONLY_EVALUATION_JSON_SCHEMA.properties;
       expect(revisionGuidance.type).toBe('string');
       expect(revisionGuidance.description).toContain('One step per structural issue');
     });
