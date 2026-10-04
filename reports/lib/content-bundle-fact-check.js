@@ -219,10 +219,11 @@ const LEAKED_PROMPT_EXAMPLES = [
  * PRESENCE applies only to `remote`, where every exposure and the verdict
  * reached the reporter as a tip from someone who was there.
  *
- * Brief 4.10d: each phrase matches whole words wherever the check reads it (wholePhrase,
- * and printedExcerpt's `words`), so "Remi voted" holds no "i voted".
+ * Brief 4.10d: each phrase matches whole words wherever the check reads it (wholePhrase),
+ * so "Remi voted" holds no "i voted". Brief 4.10e: so "my vote" holds no plural, and
+ * "my votes" is a phrase of its own.
  */
-const NEVER_VOTES = ['i voted', 'my vote', 'one of them was mine'];
+const NEVER_VOTES = ['i voted', 'my vote', 'my votes', 'one of them was mine'];
 // First-person presence claims only. 'from inside the room' was tempting and
 // wrong: "the tip came from inside the room" is exactly how a remote reporter
 // SHOULD attribute, and flagging it would burn a revision on correct prose.
@@ -391,15 +392,41 @@ function gendersOf(pronouns) {
 }
 
 /**
+ * The quoted spans the narrator checks never read, in the order they are taken out: double
+ * quotes, straight or curly (each curly one read as a straight one), then curly single quotes.
+ * One rule for stripQuotedSpans and maskQuotedSpans (brief 4.10e).
+ */
+const QUOTED_SPANS = [/"[^"\n]*"/g, /‘[^\n]*?’(?![A-Za-z])/g];
+
+/** A text with each of its quoted spans (QUOTED_SPANS) replaced, as String#replace takes `replacement`. */
+function replaceQuotedSpans(text, replacement) {
+  return QUOTED_SPANS.reduce(
+    (out, span) => out.replace(span, replacement),
+    String(text == null ? '' : text).replace(/[“”]/g, '"')
+  );
+}
+
+/**
  * Text with its quoted spans taken out: double quotes, straight or curly, and curly
  * single quotes. A span the narrator quotes is someone else's words, which the
  * narrator checks never judge.
  */
 function stripQuotedSpans(text) {
-  return String(text == null ? '' : text)
-    .replace(/[“”]/g, '"')
-    .replace(/"[^"\n]*"/g, ' ')
-    .replace(/‘[^\n]*?’(?![A-Za-z])/g, ' ');
+  return replaceQuotedSpans(text, ' ');
+}
+
+/** What maskQuotedSpans puts in place of each character of a quoted span: neither a word character nor a space. */
+const QUOTED_SPAN_MASK = '\u0000';
+
+/**
+ * Text with each quoted span stripQuotedSpans takes out masked character for character
+ * (QUOTED_SPAN_MASK), so every other character keeps its place (brief 4.10e). The reporter-mode
+ * check reads the narrator's own words in it: no phrase is read inside a quoted span, and none
+ * across one, since a mask is no space between two words; and a finding's excerpt is sliced from
+ * the printed text where its match sits.
+ */
+function maskQuotedSpans(text) {
+  return replaceQuotedSpans(text, (span) => QUOTED_SPAN_MASK.repeat(span.length));
 }
 
 /**
@@ -485,7 +512,8 @@ const PRINTED_GAP = '(?:\\s|"[^"\\n]*"|“[^”\\n]*”|‘[^\\n]*?’(?![A-Za-z
  * with its runs of whitespace as one space, where a space may stand for quoted spans, a
  * quotation mark for any quotation mark, a hyphen for a dash and three full stops for an
  * ellipsis. With `words` (brief 4.10d), the hit starts and ends on a word boundary wherever
- * it starts or ends with a word character, as wholePhrase reads a reporter-mode phrase.
+ * it starts or ends with a word character, as findAbsenceStatements reads a statement (brief
+ * 4.10e: the absence excerpt).
  *
  * @param {string} target
  * @param {{words?: boolean}} [options]
@@ -526,25 +554,42 @@ function printedExcerpt(printed, wanted, { words = false } = {}) {
 }
 
 /**
- * A reporter-mode phrase as a pattern on folded text (normalize's), matching whole words only
- * (brief 4.10d). The phrases matched as plain substrings, so "remi voted" held "i voted", and
- * so did a paragraph ending "kai" before one opening "voted". ALN's names end in "i" often
- * (Remi, Kai, Dani), and each false structural failure spends a paid rework.
+ * A reporter-mode phrase as a pattern: whole words only (brief 4.10d), with whitespace alone
+ * between them (brief 4.10e). The phrases matched as plain substrings, so "remi voted" held
+ * "i voted", and so did a paragraph ending "kai" before one opening "voted". ALN's names end in
+ * "i" often (Remi, Kai, Dani), and each false structural failure spends a paid rework. One
+ * reading everywhere: the check reads the narrator's prose with its quoted spans masked
+ * (maskQuotedSpans) and folded (normalize), and a finding's excerpt is read on the printed text
+ * with its quoted spans masked, so a quoted span never sits between the words of a hit.
  *
  * @param {string} phrase - one of NEVER_VOTES or PRESENCE_CLAIMS
+ * @param {string} [flags] - the pattern's flags: none on folded text, 'i' or 'gi' on printed text
  * @returns {RegExp}
  */
-function wholePhrase(phrase) {
-  return new RegExp(`\\b${escapeRegExp(phrase)}\\b`);
+function wholePhrase(phrase, flags = '') {
+  return new RegExp(`\\b${phrase.split(' ').map(escapeRegExp).join('\\s+')}\\b`, flags);
+}
+
+/**
+ * The printed text of a reporter-mode phrase in one narrator piece (brief 4.10e): its first match
+ * as the check reads the phrase (wholePhrase), outside the piece's quoted spans (maskQuotedSpans),
+ * as the page prints it. The phrase itself when the piece does not hold it.
+ *
+ * @param {string} printed - the piece as the page prints it
+ * @param {string} phrase - the phrase as the check reads it
+ * @returns {string}
+ */
+function phraseExcerpt(printed, phrase) {
+  const match = wholePhrase(phrase, 'i').exec(maskQuotedSpans(printed));
+  return match ? printed.slice(match.index, match.index + match[0].length) : phrase;
 }
 
 /**
  * The printed text of a reporter-mode phrase that no one piece holds (brief 4.10d): the first
- * match, on word boundaries as printedExcerpt reads a hit, that starts in one piece and ends in
- * the next, the pieces with text taken in order. A quoted span can stand for a space in a
- * match, so a match inside one piece is passed over: the excerpt sits where the two pieces
- * meet. The check's own phrase when no two adjacent pieces hold it, as when it runs across
- * three.
+ * match, read as the check reads the phrase (wholePhrase, outside the quoted spans: brief
+ * 4.10e), that starts in one piece and ends in the next, the pieces with text taken in order,
+ * so the excerpt sits where the two pieces meet. The check's own phrase when no two adjacent
+ * pieces hold it, as when it runs across three.
  *
  * @param {string[]} pieces - the narrator's pieces as the page prints them (narratorSegments)
  * @param {string} phrase - the phrase as the check reads it
@@ -552,13 +597,14 @@ function wholePhrase(phrase) {
  */
 function acrossExcerpt(pieces, phrase) {
   const printed = pieces.filter((text) => typeof text === 'string' && text.trim() !== '');
-  const pattern = new RegExp(printedPattern(phrase, { words: true }), 'gi');
+  const pattern = wholePhrase(phrase, 'gi');
   for (let i = 0; i + 1 < printed.length; i += 1) {
     const meet = printed[i].length;
     const joined = `${printed[i]}\n${printed[i + 1]}`;
+    const words = maskQuotedSpans(joined);
     pattern.lastIndex = 0;
-    for (let match = pattern.exec(joined); match; match = pattern.exec(joined)) {
-      if (match.index < meet && match.index + match[0].length > meet) return match[0];
+    for (let match = pattern.exec(words); match; match = pattern.exec(words)) {
+      if (match.index < meet && match.index + match[0].length > meet) return joined.slice(match.index, match.index + match[0].length);
       pattern.lastIndex = match.index + 1;
     }
   }
@@ -910,7 +956,9 @@ function visibleText(contentBundle, theme) {
  * So the two scans read different text, deliberately: coverage stays generous,
  * reporter mode stays narrow. Narrow here is also the lenient direction — the
  * phrases are narrator claims, and a claim the narrator does not make in their own
- * prose is not a persona breach.
+ * prose is not a persona breach. Since brief 4.10e reporter mode reads these pieces
+ * with their quoted spans masked (maskQuotedSpans), so a player's line quoted inside
+ * a paragraph is no claim of the narrator's either.
  *
  * @param {Object} contentBundle
  * @returns {string}
@@ -1395,16 +1443,20 @@ function factCheckContentBundle({
 
   // ── 4. Reporter mode (BASELINE class 6) ──────────────────────────────────
   // NARRATOR text only (I2a): a player quote, an evidence card or a caption may
-  // legitimately say "I voted" — the reporter's own prose may not.
+  // legitimately say "I voted" — the reporter's own prose may not. Brief 4.10e: the
+  // narrator's own words, each piece read with its quoted spans masked (maskQuotedSpans),
+  // so a player's line quoted inside a paragraph, 'Kai told me, "I voted for Mel."', is the
+  // player's too.
   const mode = reportingMode === 'remote' ? 'remote' : 'on-site';
-  const normProse = normalize(narratorText(bundle));
+  const pieces = narratorSegments(bundle);
+  const normProse = normalize(pieces.map(segment => maskQuotedSpans(segment.text)).join('\n'));
   const violations = [];
   // F1: the director's edit each narrator piece is (a paragraph's text the director
   // wrote, or a headline field the director set), or none. A phrase is the director's
   // when every piece that holds it is one of theirs; in the writer's prose, or across two
   // pieces, it is the writer's.
-  const segmentEdits = narratorSegments(bundle).map(segment => ({
-    text: normalize(segment.text),
+  const segmentEdits = pieces.map(segment => ({
+    text: normalize(maskQuotedSpans(segment.text)),
     editId: segment.field ? edits.field(segment.field) : edits.blockField(segment.sectionKey, segment.block, 'text'),
     place: segment.place,
     original: segment.text
@@ -1427,6 +1479,10 @@ function factCheckContentBundle({
    * Brief 4.10d: the phrase matches whole words in the prose, in each piece and in the text a
    * finding quotes, and a phrase with no one place is quoted from where two adjacent pieces
    * meet in it (acrossExcerpt).
+   *
+   * Brief 4.10e: a finding quotes the narrator's own words, as the check reads them: whitespace
+   * alone between the phrase's words, outside the piece's quoted spans (phraseExcerpt, and
+   * acrossExcerpt across two pieces).
    */
   const reporterHit = (phrase, message, lineOf) => {
     const holding = segmentEdits.filter(segment => wholePhrase(phrase).test(segment.text));
@@ -1440,7 +1496,7 @@ function factCheckContentBundle({
     }
     const marks = holding
       .filter(segment => directors || !segment.editId)
-      .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase, { words: true }), editId: directors ? segment.editId : null }));
+      .map(segment => ({ place: segment.place, excerpt: phraseExcerpt(segment.original, phrase), editId: directors ? segment.editId : null }));
     (marks.length > 0 ? marks : [{ place: null, excerpt: acrossExcerpt(segmentEdits.map(segment => segment.original), phrase), editId: null }])
       .forEach(({ place, excerpt, editId }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt,
         editId ? concerns.get(editId) : message, lineOf(place ? quoted(excerpt) : `${quoted(excerpt)} (across two pieces)`), editId));
@@ -1504,10 +1560,11 @@ function factCheckContentBundle({
             `everywhere else, show where each fact came from by attributing it to the people who told you.`);
       advisoryWarnings.push(message);
       // Brief 4.7a: a statement sits inside one narrator piece (the joined text keeps each
-      // piece on its own line), so each is found in its piece.
+      // piece on its own line), so each is found in its piece. Brief 4.10e: on whole words, as
+      // the count reads it, so beside "Kai wasn't there" it quotes the narrator's statement.
       for (const segment of narratorSegments(bundle)) {
         for (const statement of findAbsenceStatements(segment.text)) {
-          const shown = printedExcerpt(segment.text, statement);
+          const shown = printedExcerpt(segment.text, statement, { words: true });
           found('repeatedAbsence', 'advisory', segment.place, shown, message,
             `${quoted(shown)} is one of ${absences.length} places the article says the reporter was not in the room; once, early, is enough.`);
         }

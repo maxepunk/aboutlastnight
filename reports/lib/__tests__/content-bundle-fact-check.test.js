@@ -2501,3 +2501,79 @@ describe('4.10d: the reporter-mode phrases match words, not letters', () => {
     expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation \(remote\): "i was in the room"\. /)]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Brief 4.10e: a quoted line is no reporter-mode breach (the integrator's ruling 2 on the fifth
+// wave's findings: 4.10d's minors 1, 4, 5 and 6). The check read the narrator's prose with its
+// quoted spans left in, so a player's line the article quotes inside a paragraph, 'Kai told me,
+// "I voted for Mel."', failed the article and spent a paid automatic rework, which might strip a
+// correct quote. It reads the narrator's own words now, the prose with its quoted spans taken
+// out, as phase 3's narrator checks do. A finding's excerpt follows that reading, in a piece or
+// across two: whitespace alone between its words, never a quoted span, and never a quoted line's
+// words (scratch p4/4.10d-review/probe-factcheck.js, probes A and B). "My votes" joins the
+// phrases, since whole words no longer catch the plural, and the absence excerpt is read on whole
+// words, as its count is (probe E). Each message, its prefix and its status stay as they were.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.10e: the reporter-mode check reads the narrator\'s own words', () => {
+  const para = (text) => ({ type: 'paragraph', text });
+  /** Each reporter-mode finding as [its place, its excerpt, its line]. */
+  const reporterFindings = (result) => result.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line]);
+  const VOTES = ' makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.';
+
+  it("a player's line quoted in a paragraph, in straight and curly quotation marks: no finding", () => {
+    [
+      ['on-site', storyWith(para('Kai told me, "I voted for Mel."'))],
+      ['on-site', storyWith(para('Kai said: “I voted for Mel.”'))],
+      ['on-site', storyWith(para('Kai said, ‘My vote was always Mel’s.’ The room moved on.'))],
+      ['on-site', { headline: { main: 'The Vote', deck: 'Kai said, “I voted for Mel,” and the room agreed.' }, ...storyWith(para('The count came at noon.')) }],
+      ['remote', storyWith(para('Remi told me, "I was in the room when it turned."'))]
+    ].forEach(([reportingMode, contentBundle]) => {
+      const result = factCheckContentBundle(baseArgs({ reportingMode, contentBundle }));
+      expect([contentBundle, reporterFindings(result), result.structuralIssues, result.reporterMode.violations]).toEqual([contentBundle, [], [], []]);
+    });
+  });
+
+  it("the narrator's own \"I voted\" beside a quoted one: a finding, its excerpt the narrator's words as printed", () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(para('Kai told me, "i VOTED for Mel," and then I voted too.'))
+    }));
+    expect(reporterFindings(result)).toEqual([[{ section: 'the-story', paragraph: 1 }, 'I voted', `"I voted"${VOTES}`]]);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\. /)]);
+    expect(result.reporterMode.violations).toEqual(['i voted']);
+  });
+
+  it('a quoted span between two words is no space: the excerpt is where the words meet with whitespace alone, in a piece or across two', () => {
+    const inPiece = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('He said I "never" voted that way, but I voted.')) }));
+    expect(reporterFindings(inPiece)).toEqual([[{ section: 'the-story', paragraph: 1 }, 'I voted', `"I voted"${VOTES}`]]);
+    // Probes A and B: a junction where a quoted span stands between the words comes before the
+    // junction that holds the phrase.
+    [
+      ['Asked who broke the tie, he said I "never"', 'voted that way. The vote came and I', 'voted again.'],
+      ['The last word was mine, and I', '"finally" voted. Later I', 'voted again.']
+    ].forEach((texts) => {
+      const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(...texts.map(para)) }));
+      expect([texts, reporterFindings(result)]).toEqual([texts, [[null, 'I voted', `"I voted" (across two pieces)${VOTES}`]]]);
+    });
+    // A quoted word between the two words of a phrase leaves no phrase to find.
+    const between = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('Then I "finally" voted for lunch.')) }));
+    expect([reporterFindings(between), between.structuralIssues]).toEqual([[], []]);
+  });
+
+  it('"my votes" is one of the phrases', () => {
+    const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('Both of my votes went to Mel.')) }));
+    expect(reporterFindings(result)).toEqual([[{ section: 'the-story', paragraph: 1 }, 'my votes', `"my votes"${VOTES}`]]);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "my votes"\. Nova reports on the room/)]);
+    expect(result.reporterMode.violations).toEqual(['my votes']);
+  });
+
+  it("the absence excerpt is read on words: beside \"Kai wasn't there\" it quotes the narrator's statement", () => {
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote',
+      contentBundle: storyWith(para("Kai wasn't there at noon, and I wasn't there either."), para('I was not in the room.'))
+    }));
+    expect(result.findings.filter((f) => f.kind === 'repeatedAbsence').map((f) => [f.place, f.excerpt, f.line])).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, "I wasn't there", '"I wasn\'t there" is one of 2 places the article says the reporter was not in the room; once, early, is enough.'],
+      [{ section: 'the-story', paragraph: 2 }, 'I was not in the room', '"I was not in the room" is one of 2 places the article says the reporter was not in the room; once, early, is enough.']
+    ]);
+  });
+});
