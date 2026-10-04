@@ -606,7 +606,8 @@ describe('4.12d: the input review\'s page counts what the ruling counts', () => 
     [
       stringify(unread),
       `Alex, ${stringify({ name: 'Riley?' })}`,
-      `"SUSPECTS" (left): Alex, ${stringify({ name: 'Mel', crossedOut: true })}`,
+      // Task 4.12e: the region's heading in the component's quotation marks.
+      `“SUSPECTS” (left): Alex, ${stringify({ name: 'Mel', crossedOut: true })}`,
       stringify({ note: 'BizAI?' })
     ].forEach((text) => expect([text, texts.includes(text)]).toEqual([text, true]));
     expect(stringify(unread)).toContain('\n  "where": "top left"');

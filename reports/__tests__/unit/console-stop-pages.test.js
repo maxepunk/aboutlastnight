@@ -212,3 +212,70 @@ describe('4.12d: the input review\'s notes receipt reads as InputReview.js rende
     });
   });
 });
+
+// Task 4.12e (the ruling on 4.12d's minor 3): the page printed a whiteboard region's heading in
+// straight quotation marks, "SUSPECTS", where InputReview.js prints “SUSPECTS”, and nothing held the
+// page's whiteboard text to the screen. It is held here on InputReview.js run with a React that
+// builds a tree: each of the whiteboard's lines, as the page prints it and as the screen renders it.
+describe('4.12e: the input review\'s whiteboard reads as InputReview.js renders it', () => {
+  const WHITEBOARD = {
+    ambiguities: ['A name under the coffee stain', { text: 'Riley?', where: 'top left' }],
+    names: ['Alex', { name: 'Riley?' }],
+    regions: [
+      { label: 'SUSPECTS', location: 'left', entries: ['Alex', { name: 'Mel', crossedOut: true }] },
+      { entries: ['BizAI'] }
+    ],
+    connections: [{ from: 'Alex', to: 'Marcus', label: 'partner' }, { from: 'Riley' }],
+    notes: ['BizAI?', { note: 'Who paid?' }],
+    structureType: 'columns'
+  };
+  const data = (whiteboard) => ({ type: 'input-review', directorNotes: { whiteboard } });
+
+  /** The whiteboard's lines on the screen: the section its heading opens, each list's items and its paragraphs. */
+  const screenBoard = (whiteboard) => {
+    const { InputReview } = loadInputReview();
+    const screen = InputReview({ data: data(whiteboard), onApprove() {}, onReject() {}, theme: 'journalist' });
+    const [section] = elementsOf(screen, (element) => element.type === 'div'
+      && element.children.some((child) => child && child.type === 'h4' && textOf(child) === PAGE_HEADINGS['input-review'].whiteboard));
+    const keyed = (prefix) => elementsOf(section, (element) => typeof element.props.key === 'string' && element.props.key.startsWith(prefix));
+    return {
+      ambiguities: keyed('amb-').map(textOf),
+      names: keyed('wbn-').map((badge) => badge.props.label).join(', '),
+      regions: keyed('wbg-').map(textOf),
+      connections: keyed('wbc-').map(textOf),
+      notes: keyed('wbt-').map(textOf),
+      paragraphs: elementsOf(section, (element) => element.type === 'p').map(textOf)
+    };
+  };
+
+  /** The whiteboard's lines on the page, from its heading to the next: each as the screen shows it. */
+  const pageBoard = (whiteboard) => {
+    const lines = stopPage('input-review', data(whiteboard)).lines;
+    const after = lines.slice(lines.findIndex((line) => line.tone === 'title' && line.label === PAGE_HEADINGS['input-review'].whiteboard) + 1);
+    const next = after.findIndex((line) => line.tone === 'title');
+    const board = next === -1 ? after : after.slice(0, next);
+    const texts = (label) => board.filter((line) => line.label === label).map((line) => line.text);
+    return {
+      ambiguities: texts('Ambiguity the parser flagged'),
+      names: texts('Names on the board').join(''),
+      regions: texts('Region'),
+      connections: texts('Connection drawn'),
+      notes: texts('Note'),
+      // The structure prints under its label, as the screen's paragraph does; the empty board's line is the page's label alone.
+      paragraphs: board.filter((line) => line.label === 'Structure' || !line.text).map((line) => (line.text ? `${line.label}: ${line.text}` : line.label))
+    };
+  };
+
+  it('prints each region under the heading the players wrote, in the component\'s quotation marks, and each other line as the screen shows it', () => {
+    const screen = screenBoard(WHITEBOARD);
+    expect(screen.regions[0]).toMatch(/^“SUSPECTS” \(left\): Alex, \{/);
+    expect(screen.regions[1]).toBe('no heading: BizAI');
+    expect(pageBoard(WHITEBOARD)).toEqual(screen);
+  });
+
+  it('says the board holds nothing in the screen\'s words', () => {
+    const screen = screenBoard({});
+    expect(screen.paragraphs).toHaveLength(1);
+    expect(pageBoard({})).toEqual(screen);
+  });
+});

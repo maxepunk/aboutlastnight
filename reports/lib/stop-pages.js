@@ -338,14 +338,18 @@ function addEpilogue(page, developments) {
   });
 }
 
-/** The whiteboard, open: what the parser could not read first, then the names, regions, connections and notes. */
+/**
+ * The whiteboard, open: what the parser could not read first, then the names, regions, connections
+ * and notes, each in InputReview.js's words and quotation marks (task 4.12e:
+ * __tests__/unit/console-stop-pages.test.js holds them to the component rendered).
+ */
 function addWhiteboard(page, whiteboardValue) {
   const board = View.whiteboardView(whiteboardValue);
   page.title(PAGE_HEADINGS[INPUT_REVIEW].whiteboard);
   board.ambiguities.forEach((item) => page.text(entryText(item), 'Ambiguity the parser flagged'));
   page.text(board.names.map(entryText).join(', '), 'Names on the board');
   board.regions.forEach((region) => {
-    const heading = region.label ? `"${region.label}"` : 'no heading';
+    const heading = region.label ? `“${region.label}”` : 'no heading';
     page.text(`${heading}${region.location ? ` (${region.location})` : ''}: ${region.entries.map(entryText).join(', ')}`, 'Region');
   });
   board.connections.forEach((connection) => {
@@ -356,7 +360,7 @@ function addWhiteboard(page, whiteboardValue) {
   page.text(board.structureType, 'Structure');
   const empty = [board.ambiguities, board.names, board.regions, board.connections, board.notes].every((list) => list.length === 0);
   if (empty) {
-    page.tag("No whiteboard analysis reached this checkpoint. The players' own conclusions feed the story meeting, so its weave will be written from the accusation and the director notes alone.", 'note');
+    page.tag('No whiteboard analysis reached this checkpoint. The players’ own conclusions feed the story meeting, so its weave will be written from the accusation and the director notes alone.', 'note');
   }
 }
 
