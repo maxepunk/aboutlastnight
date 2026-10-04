@@ -3014,7 +3014,11 @@
   /** The fewest words a quoted passage needs to locate anything (lib/hand-edit-diff.js MIN_LOCATING_WORDS; a test holds the two equal). */
   var MIN_QUOTE_WORDS = 3;
 
-  /** How many words a text holds: each run that opens on a letter or a digit, through its letters, digits, apostrophes and hyphens. */
+  /**
+   * How many words a text holds, as lib/hand-edit-diff.js wordsIn counts them in English text
+   * (isLetterOrDigit): each run that opens on a letter or a digit, through its letters, digits,
+   * apostrophes and hyphens.
+   */
   function wordsIn(text) {
     var t = asString(text);
     var n = 0;
@@ -3038,9 +3042,10 @@
 
   /**
    * The passages that can locate a finding, as lib/hand-edit-diff.js locateQuotedText reads
-   * them: each passage it quotes, split at an elision, of MIN_QUOTE_WORDS words or more, and
-   * none that is one of the article's section headings, which a finding quotes to say where
-   * the problem is.
+   * them: each passage it quotes, split at an elision (ELISION), of MIN_QUOTE_WORDS words or
+   * more (wordsIn), and none that is one of the article's section headings (headingsOf), which
+   * a finding quotes to say where the problem is. A test holds the two equal on a corpus of
+   * findings, through locateQuotedText.
    *
    * @param {string} text - a finding
    * @param {Set<string>} headings - the article's section headings, folded
@@ -3086,7 +3091,11 @@
     return '';
   }
 
-  /** A section's id as a finding's place names it: its id trimmed, or null for a section with none (lib/content-bundle-fact-check.js sectionIdOf). */
+  /**
+   * A section's id as a finding's place names it: its id trimmed, or null for a section with
+   * none (lib/content-bundle-fact-check.js sectionIdOf; a test holds it to the fact check's
+   * findings).
+   */
   function findingSectionId(section) {
     return isPlainObject(section) && typeof section.id === 'string' && section.id.trim() ? section.id.trim() : null;
   }
@@ -3318,7 +3327,7 @@
     };
   }
 
-  /** The article's section headings, folded as a quote is looked for. */
+  /** The article's section headings, folded as a quote is looked for (lib/hand-edit-diff.js sectionHeadings). */
   function headingsOf(bundle) {
     var out = new Set();
     sectionsIn(bundle).forEach(function (section) {
@@ -3630,10 +3639,15 @@
     deskMarksAt: deskMarksAt,
     deskEcho: deskEcho,
     deskView: deskView,
-    // The console's copies of the server's quote rules (lib/grounding.js, lib/hand-edit-diff.js; held equal by a test)
+    // The console's copies of the server's rules for where a finding sits, each held equal by a
+    // test: lib/grounding.js's reading of a quote, the passages lib/hand-edit-diff.js
+    // locateQuotedText locates by, and lib/content-bundle-fact-check.js sectionIdOf
     quotedPassagesOf: quotedPassagesOf,
     groundingText: groundingText,
     MIN_QUOTE_WORDS: MIN_QUOTE_WORDS,
+    locatingPassages: locatingPassages,
+    headingsOf: headingsOf,
+    findingSectionId: findingSectionId,
     // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
     revisionDiffKeys: revisionDiffKeys,
     REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS

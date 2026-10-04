@@ -657,7 +657,7 @@ The map's editors (`Outline.js`, task 4.9) are **thin wrappers**: each seeds `us
   - a headline, kicker or deck finding beside the headline while the field is as the stop opened it or holds the excerpt;
   - a card or a photo by its id or filename (the integrator's ruling 4): beside it, wherever it sits, while it is unchanged, and possibly resolved once the director changed or deleted it; its excerpt decides nothing;
   - the length on the heading of each section it counts;
-  - a judge's issue or concern by a passage it quotes, read as the server's guard reads one (`quotedPassagesOf` and `groundingText`, copies of `lib/grounding.js`'s that a test holds equal; three words or more, never a heading);
+  - a judge's issue or concern by a passage it quotes, read as the server's guard reads one (`locatingPassages`: split at an elision, three words or more, never a heading; a test holds it to `lib/hand-edit-diff.js` `locateQuotedText` on a corpus of findings, and `quotedPassagesOf` and `groundingText` to `lib/grounding.js`'s);
   - a changed edit beside what the director's text became, its section first.
 
   A mark whose text only the article as the stop opened it held folds below as possibly resolved, and one with no piece at all is apart. The marks follow the bundle on the desk: each move, edit or delete moves them.

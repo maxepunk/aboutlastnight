@@ -447,6 +447,120 @@ describe("4.10: a judge's issue left unresolved at the cap is anchored by the se
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// The desk's copies of the server's rules, which the browser cannot import
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("4.10: the desk's copies of the server's rules are held to the server's", () => {
+  const { locateQuotedText, _testing: { MIN_LOCATING_WORDS } } = handEditDiff;
+
+  test('a quoted passage locates with as few words as lib/hand-edit-diff.js MIN_LOCATING_WORDS', () => {
+    expect(ViewLogic.MIN_QUOTE_WORDS).toBe(MIN_LOCATING_WORDS);
+  });
+
+  /** An article that prints its section ids and headings and nothing else. */
+  const HEADED = {
+    sections: [
+      { id: 'theStory', heading: 'The Story: Eight Minutes', content: [] },
+      { id: 'followTheMoney', heading: 'Follow the Money', content: [] },
+      { id: 'closing', heading: 'Money—and Where It Went', content: [] }
+    ]
+  };
+
+  /** Findings that quote the page: each elision form, the word count's edges, single and curly quotes, and the headings. */
+  const FINDINGS = [
+    'T5: "eleven sales landed ... in the last two minutes" contradicts the ledger.',
+    'T1: "the vote was close…and Alex lost it" has no source.',
+    'T6: "Vic held the chair [...] until the money moved" names no one.',
+    'T6: "Alex sold early [ … ] then sold again" is not in the ledger.',
+    'T2: "... the room named Alex" and "the room named Alex ..." quote the verdict.',
+    'T5: "four dots here....and more words here" runs on.',
+    'T1: "one two ... three four five ... six" is mostly short.',
+    'T5: "rock-and-roll forever" and "self—made man" hold two words each.',
+    'T9: "Vic\'s chair stayed" and "don\'t stop" quote the page.',
+    'T5: "1,500 words" and "$4.5M moved" count their digits.',
+    'T1: "Alex – then Mel" stands alone.',
+    'T1: “Café au lait” and “thirteen sales landed in one account” are in curly quotes.',
+    "T1: 'the money moved ... before the vote' and the players' 'own account here'",
+    "T1: it's 'nested \"double\" quotes' here",
+    'T1: in "The Story: Eight Minutes", the claim has no source.',
+    'T5: in "follow the money" the sums disagree.',
+    'T5: under "Money-and where it went" the figure is wrong.',
+    'T5: "Follow the Money ... and then the vote" runs two passages together.',
+    'T5: the moneyTruth criterion failed.'
+  ];
+
+  /** A text as the guard and the desk both look for a quote in it: grounding's reading, in lower case. */
+  const folded = (text) => ViewLogic.groundingText(text).toLowerCase();
+
+  /** Does the desk read one of `passages` in `text`? */
+  const deskReadsIn = (passages, text) => passages.some((p) => folded(text).includes(folded(p)));
+
+  /**
+   * Does the server's guard read a passage of `finding` in `text`? locateQuotedText locates an
+   * edit whose text is `text` exactly when a passage the guard reads is in that text.
+   */
+  const guardReadsIn = (finding, text) => {
+    const edit = { id: 'E1', scope: 'headline', path: 'headline.main', at: [{ key: 'headline' }, { key: 'main' }], before: 'An old headline.', after: text };
+    return locateQuotedText(finding, [edit], HEADED).editIds.length === 1;
+  };
+
+  /**
+   * The texts both are asked about: every run of whole words of each passage the finding
+   * quotes, and each passage the desk reads, whole and less its first or its last character.
+   */
+  const candidatesOf = (finding, passages) => {
+    const runs = quotedPassages(finding).flatMap((quoted) => {
+      const words = quoted.split(' ');
+      return words.flatMap((_, from) => words.slice(from).map((__, n) => words.slice(from, from + n + 1).join(' ')));
+    });
+    return [...new Set([...runs, ...passages.flatMap((p) => [p, p.slice(1), p.slice(0, -1)])])];
+  };
+
+  test("the passages that locate a finding are lib/hand-edit-diff.js locateQuotedText's: split at an elision, three words or more, never a heading", () => {
+    const headings = ViewLogic.headingsOf(HEADED);
+    const disagreements = [];
+    const answers = new Set();
+    FINDINGS.forEach((finding) => {
+      const passages = ViewLogic.locatingPassages(finding, headings);
+      candidatesOf(finding, passages).forEach((text) => {
+        const guard = guardReadsIn(finding, text);
+        answers.add(guard);
+        if (guard !== deskReadsIn(passages, text)) disagreements.push({ finding, text, guard });
+      });
+    });
+    expect(disagreements).toEqual([]);
+    // The corpus asks about texts the guard reads a passage in, and texts it reads none in.
+    expect([...answers].sort()).toEqual([false, true]);
+    // The article prints only its ids and headings: a heading the finding quotes is where the problem is, and locates nothing.
+    expect(FINDINGS.filter((finding) => locateQuotedText(finding, [], HEADED).writer)).toEqual([]);
+  });
+
+  test("a finding names its section by the section's id as the desk reads it: trimmed, and none for a blank, missing or non-string id (lib/content-bundle-fact-check.js sectionIdOf)", () => {
+    const sections = [
+      { id: 'lede', content: [paragraph('The lede—under a plain id.')] },
+      { id: '  theStory  ', heading: 'The Story', content: [paragraph('The story—under an id with spaces round it.'), card('nope1', 'No document', 'Nothing.'), photo('nope1.jpg', 'Nobody.')] },
+      { id: '\tfollowTheMoney\n', heading: 'Follow the Money', content: [paragraph('The money—under an id with a tab and a newline.')] },
+      { id: '   ', heading: 'Blank', content: [paragraph('A blank id—spaces only.'), card('nope3', 'No document', 'Nothing.'), photo('nope3.jpg', 'Nobody.')] },
+      { heading: 'Without', content: [paragraph('No id—at all.')] },
+      { id: 7, heading: 'A number', content: [paragraph('A number—for an id.')] }
+    ];
+    /** Does a section hold the block a finding is about: its card, its photo, or the paragraph that prints its excerpt? */
+    const holds = (section, { place, excerpt }) => section.content.some((b) => (
+      typeof place.tokenId === 'string' ? b.tokenId === place.tokenId
+        : typeof place.filename === 'string' ? b.filename === place.filename
+          : b.type === 'paragraph' && b.text.includes(excerpt)));
+    const named = factCheckOf({ ...article(), sections }).findings
+      .filter((f) => f.place && Object.prototype.hasOwnProperty.call(f.place, 'section'))
+      .map((f) => ({ section: sections.findIndex((s) => holds(s, f)), kind: f.kind, id: f.place.section }));
+    expect(named.map((n) => n.id)).toEqual(named.map((n) => ViewLogic.findingSectionId(sections[n.section])));
+    expect(Object.fromEntries(named.map((n) => [n.section, n.id]))).toEqual({ 0: 'lede', 1: 'theStory', 2: 'followTheMoney', 3: null, 4: null, 5: null });
+    // A paragraph's, a card's and a photo's place, in the padded section and in the blank one.
+    const kindsIn = (s) => named.filter((n) => n.section === s).map((n) => n.kind).sort();
+    expect([kindsIn(1), kindsIn(3)]).toEqual([['cardFidelity', 'emDash', 'photoReferences'], ['cardFidelity', 'emDash', 'photoReferences']]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // No score at the article stop, the echo, and the folds
 // ═══════════════════════════════════════════════════════════════════════════
 
