@@ -459,7 +459,12 @@ const REMOVED_PHRASES = [
   "Plans the telling of the session's article from the arcs the director selected",
   "Build on the selected arcs and the director's stop notes",
   'Every craft finding, C1 to C19',
-  "the should-consider list is the editor's notes for the director"
+  "the should-consider list is the editor's notes for the director",
+
+  // Phase 4, 4.14a: the meeting's changes have an id form of their own (M) wherever a later
+  // stage's prompt shows them, so no prompt holds two edits under one id.
+  'such as E3, or',
+  "[the director's change E"
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
