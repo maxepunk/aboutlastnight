@@ -2801,8 +2801,8 @@ function takeOutPassCopies(out, before, identity, keptIndex) {
 }
 
 /**
- * A photo's filename as the fact check matches a photo reference: its basename, exactly
- * (content-bundle-fact-check.js, which requires this module, so a test holds the two alike).
+ * A photo's filename as a photo reference is matched: its basename, exactly. The one rule:
+ * the restore reads it here, and the fact check imports it (task 4.5f).
  */
 function photoBasename(filename) {
   return String(filename == null ? '' : filename).split(/[/\\]/).filter(Boolean).pop() || '';
@@ -3115,6 +3115,8 @@ module.exports = {
   mapEditAddress: mapAddressOf, isCut, isMove, isStrike,
   // Task 4.5e: an edit of a place alone, which the verdict guard reads
   ownsNoText,
+  // Task 4.5f: a photo's name as a photo reference is matched, which the fact check imports
+  photoBasename,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,

@@ -2935,8 +2935,8 @@ describe('4.5e: the restore never puts back a photo the article cannot print', (
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
   });
 
-  // The fact check requires this module, so the restore keeps its own copy of how a photo
-  // reference is matched (photoBasename), held to the fact check here.
+  // The fact check imports photoBasename (task 4.5f), so the two read a photo's name by one
+  // rule; this holds the restore's rule for the kept photos to the fact check's.
   it('given the kept photos, the restore refuses exactly the photos the fact check reads as invalid references', () => {
     const { factCheckContentBundle } = require('../content-bundle-fact-check');
     const { printableBlock } = D._testing;

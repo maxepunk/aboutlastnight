@@ -33,8 +33,10 @@
 const { DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 // F1 and FA (spec 2026-10-02 section 7): which printed field is one of the director's
 // edits, the one prefix a concern about an edit opens with, the one rule for a section's
-// key (known item 7) and the one roster-name test.
-const { editLocator, directorEditConcern, sectionKey, namesPerson } = require('./hand-edit-diff');
+// key (known item 7) and the one roster-name test. Task 4.5f: a photo reference's name by
+// the rule the restore reads too (photoBasename), so the restore leaves out exactly the
+// photos this check reads as invalid.
+const { editLocator, directorEditConcern, sectionKey, namesPerson, photoBasename: basename } = require('./hand-edit-diff');
 // FA (requirement 12): the photos the page prints, the one rule the publish step and the
 // article approve read too (lib/publish-photos.js keeps the function's meaning).
 const { printedPhotos } = require('./publish-photos');
@@ -683,11 +685,6 @@ const HEAD_COUNT_PATTERNS = [
   new RegExp(`\\b${HEAD_COUNT_NUMBER}\\s+(?:people|players)\\s+(?:were|gathered)\\s+${HEAD_COUNT_PLACE}\\b(?!\\s+(?:when|as|while|before|after)\\b)`, 'gi'),
   new RegExp(`\\b${HEAD_COUNT_NUMBER}\\s+(?:people|players)\\s+(?:sat|stood)\\s+${HEAD_COUNT_PLACE}\\b(?=\\s*(?:[.;!?]|$))`, 'gi')
 ];
-
-/** Basename of a path, tolerating both separators. */
-function basename(p) {
-  return String(p == null ? '' : p).split(/[/\\]/).filter(Boolean).pop() || '';
-}
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
