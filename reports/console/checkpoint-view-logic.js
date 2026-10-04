@@ -680,7 +680,9 @@
    * minors): each change a send-back's rework made, which comes with its reason, and each
    * change any other pass made that code did not put back: a cut or a removed sentence that
    * came back, a moved element a pass removed, a struck connection that could not be struck
-   * again. An entry code put back asks nothing of the director, so no stop shows it beside the
+   * again. A block code put back in its section out of the director's order (`inOrder` false,
+   * task 4.3c) is shown too (brief 4.10b): its line asks the director to move it again. Any
+   * other entry code put back asks nothing of the director, so no stop shows it beside the
    * edit; at the desk it stays in the folded record of the round (RevisionDiff, steeringView).
    * One rule for the story meeting (meetingView), the map (mapView) and the desk (deskMarks).
    *
@@ -690,7 +692,26 @@
   function changedEditsToShow(report) {
     var read = editReportOf(report);
     if (!read) return [];
-    return read.changed.filter(function (entry) { return entry.pass === SEND_BACK_PASS || entry.restored !== true; });
+    return read.changed.filter(function (entry) {
+      return entry.pass === SEND_BACK_PASS || entry.restored !== true || entry.inOrder === false;
+    });
+  }
+
+  /**
+   * The line a stop shows when it checked the director's edits and shows no changed line
+   * (brief 4.10b): the edits stand, whether the round's passes kept them or code put them back.
+   * '' when the stop shows a changed line (changedEditsToShow), or checked no edit. One line for
+   * the map (mapView) and the story meeting (meetingView).
+   *
+   * @param {*} report - a stop's handEditReport
+   * @returns {string}
+   */
+  function editsStandLine(report) {
+    var read = editReportOf(report);
+    if (!read || changedEditsToShow(read).length > 0) return '';
+    var n = read.checked.length;
+    if (n === 1) return 'Your edit stands.';
+    return (n === 2 ? 'Both' : 'All ' + n) + ' of your edits stand.';
   }
 
   /** How the standing notes name a note's kind (directorGateNotes' `kind`). */
@@ -2260,8 +2281,9 @@
    * - the round's lines: `didNotRun` (by what the note box holds; task 4.5c),
    *   `checkFailures` (one line each), `changedEdits` (the edits a round changed that a stop
    *   shows, changedEditsToShow: a send-back's with their reasons, and what no pass put back;
-   *   task 4.10), `marked` and the marks no line shows (`removed`, `otherMarks`), and the
-   *   concerns no line shows (`otherConcerns`).
+   *   task 4.10), `kept`, the line that says the director's edits stand when none of theirs is
+   *   shown (editsStandLine; brief 4.10b), `marked` and the marks no line shows (`removed`,
+   *   `otherMarks`), and the concerns no line shows (`otherConcerns`).
    * The questions are the stop's (`data.questions`), each paired with its place in the
    * director's weave, whose answer the box shows and sets.
    *
@@ -2387,6 +2409,7 @@
         .filter(Boolean)
         .map(function (message) { return 'Check still failing: ' + message; }),
       changedEdits: changedEditsToShow(d.handEditReport).map(function (entry) { return changedEditLine(entry, MEETING_EDIT_LINE); }),
+      kept: editsStandLine(d.handEditReport),
       didNotRun: didNotRunLine(d.roundDidNotRun, note),
       marked: markedLine(d.marks),
       removed: beside.removed,
@@ -2711,8 +2734,9 @@
    * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (one line
    *   each), `changedEdits` (each edit a rework changed that a stop shows, changedEditsToShow,
    *   by changedEditLine with the map's places: a send-back's with its reason, and what no pass
-   *   put back; task 4.10), `kept`, and `otherConcerns`, the concerns none of whose places the
-   *   page shows;
+   *   put back; task 4.10), `kept`, the line that says the director's edits stand when none of
+   *   theirs is listed (editsStandLine; brief 4.10b), and `otherConcerns`, the concerns none of
+   *   whose places the page shows;
    * - `gapNote`, `headline`, `deck` and `topPhoto`;
    * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
    *   and photos, each beat and photo with the places it can move to, and each beat's material
@@ -2826,7 +2850,6 @@
     var unplaced = tally.unplaced.filter(function (name) { return tally.raised.indexOf(name) === -1; });
     var cardsOff = tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max;
     var length = map.expectedLength;
-    var report = editReportOf(d.handEditReport);
     var lineOptions = mapEditLineOptions(slots);
     var human = Number(d.humanRevisionCount) || 0;
     var feedback = asString(d.previousFeedback).trim();
@@ -2845,9 +2868,7 @@
         .filter(Boolean)
         .map(function (message) { return 'Check still failing: ' + message; }),
       changedEdits: changedEditsToShow(d.handEditReport).map(function (entry) { return changedEditLine(entry, lineOptions); }),
-      kept: report && report.changed.length === 0
-        ? (report.checked.length === 1 ? 'The reworks kept your edit.' : 'The reworks kept all ' + report.checked.length + ' of your edits.')
-        : '',
+      kept: editsStandLine(d.handEditReport),
       otherConcerns: placed.other,
       gapNote: isPlainObject(map.gapNote)
         ? { line: asString(map.gapNote.line), players: stringList(map.gapNote.players).join(', '), concerns: at('gapNote') }
@@ -3686,8 +3707,9 @@
     // Phase 4, task 4.10: the desk's marks, and one rule for the changed lines a stop shows
     REWEAVE_PASS: REWEAVE_PASS,
     changedEditsToShow: changedEditsToShow,
-    // Brief 4.10b: where a finding's line names a card's document (a copy of
-    // lib/content-bundle-fact-check.js DOCUMENT_SLOT, held equal by a test)
+    // Brief 4.10b: the line that says the director's edits stand, and where a finding's line names
+    // a card's document (a copy of lib/content-bundle-fact-check.js DOCUMENT_SLOT, held equal by a test)
+    editsStandLine: editsStandLine,
     DOCUMENT_SLOT: DOCUMENT_SLOT,
     deskAnchorKey: deskAnchorKey,
     deskMarks: deskMarks,

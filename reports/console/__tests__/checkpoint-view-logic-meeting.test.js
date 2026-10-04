@@ -1134,3 +1134,43 @@ describe('4.10: the meeting shows the changes no pass put back, and a send-back\
     expect(linesFor(changed)).toHaveLength(2);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10b: the stops' lines, follow-ups (the integrator's ruling 1 on 4.10's minors and
+// hand-offs). When the stop checked the director's edits and shows no changed line, the
+// meeting says the edits stand, as the map does. And when the round marks a line and a
+// changed-edit line names the same edit, the meeting shows one line: the edit's, where the
+// round's mark would sit.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.10b: the meeting says when the director's edits stand", () => {
+  const { settleEdits, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
+  const viewOf = (data) => meetingView(data, meetingDraftOf(data, undefined));
+
+  test("a reweave whose change to the director's line code put back: the edits stand, and no changed line shows", () => {
+    const left = directorsVersion();
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const reworked = clone(left);
+    reworked.story = 'The reweave told the story its own way.';
+    const { output, report } = settleEdits(null, { edits: edits.edits, before: left, after: reworked, pass: REWEAVE_PASS });
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', pass: REWEAVE_PASS, restored: true })]);
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(output, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
+      _weaveMarks: { round: 'reweave', from: left }, humanArcRevisionCount: 1
+    }));
+    const view = viewOf(data);
+    expect(view.changedEdits).toEqual([]);
+    expect(view.kept).toBe('All 4 of your edits stand.');
+  });
+
+  test('one edit, two, and a round that changed none of them', () => {
+    const withReport = (report) => viewOf({ ...payloadOf(stateAt()), handEditReport: report });
+    expect(withReport({ checked: ['E1'], changed: [] }).kept).toBe('Your edit stands.');
+    expect(withReport({ checked: ['E1', 'E2'], changed: [] }).kept).toBe('Both of your edits stand.');
+  });
+
+  test('a changed line to show, or no edit checked, and the meeting says nothing of the kind', () => {
+    const sendBack = { id: 'E1', scope: 'story', where: 'story', cut: false, removed: false, moved: false, director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false, reason: null, restored: false };
+    expect(viewOf({ ...payloadOf(stateAt()), handEditReport: { checked: ['E1', 'E2'], changed: [sendBack] } }).kept).toBe('');
+    expect(viewOf(payloadOf(stateAt())).kept).toBe('');
+  });
+});

@@ -729,6 +729,44 @@ describe("4.10b: each mark says what is wrong in the article and where, in the d
   });
 });
 
+describe("4.10b: a block code put back out of the director's order sits beside its edit", () => {
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const C = paragraph('Charlie paragraph closes the section with a long first line.');
+  const T = paragraph('Tango paragraph sits alone in the second section of the article.');
+  const P = photo('theory.jpg', 'Mel lays out the theory at the whiteboard.');
+  const P2 = { ...P, caption: 'Six people around the whiteboard, late.' };
+  /** An article whose section "s" (The Sale) holds `s` and whose section "t" (The Vote) holds `t`. */
+  const twoSections = (s, t = [T]) => ({
+    headline: { main: 'The Room Voted Five to Four' },
+    sections: [
+      { id: 's', type: 'narrative', heading: 'The Sale', content: s.map(clone) },
+      { id: 't', type: 'narrative', heading: 'The Vote', content: t.map(clone) }
+    ],
+    evidenceCards: []
+  });
+
+  test("the director moved a photo within its section, then recaptioned it; a pass took it away and swapped its neighbours; code put it back out of the director's order", () => {
+    const roundOne = standingAfterSendBack(null, twoSections([P, A, B, C]), twoSections([A, P, B, C]), 'bundle');
+    const sentBack = twoSections([A, P2, B, C]);
+    const roundTwo = standingAfterSendBack(roundOne, twoSections([A, P, B, C]), sentBack, 'bundle');
+    const { output, report } = settleEdits(null, { edits: carriedEdits(roundTwo, sentBack), before: sentBack, after: twoSections([B, A, C], [T, P]), pass: 1 });
+    expect(report.changed).toEqual([
+      expect.objectContaining({ id: 'E1', moved: true, restored: true, inOrder: false }),
+      expect.objectContaining({ id: 'E2', restored: true })
+    ]);
+    // Its line asks the director to act, so it is shown; the caption code put back asks nothing.
+    expect(changedEditsToShow(report).map((e) => e.id)).toEqual(['E1']);
+    const d = payloadFor(output, { handEditReport: report });
+    const at = output.sections[0].content.findIndex((b) => b.type === 'photo');
+    expect(deskMarksAt(deskMarks(d, d.contentBundle), block(0, at)).filter((m) => m.tone === 'changed').map((m) => m.text)).toEqual([
+      'The Sale, photo theory.jpg, moved within the section: automatic pass 1 moved the block you placed here to The Vote. It was put back in its section, but not in the order you left it: move it again if the order matters.'
+    ]);
+    // Put back in the director's order, it asks nothing.
+    expect(changedEditsToShow({ ...report, changed: report.changed.map((e) => ({ ...e, inOrder: true })) })).toEqual([]);
+  });
+});
+
 describe('4.10b: a mark found by its words sits beside a block of the kind its line names', () => {
   const quote = (text) => ({ type: 'quote', text, attribution: 'Mel' });
 

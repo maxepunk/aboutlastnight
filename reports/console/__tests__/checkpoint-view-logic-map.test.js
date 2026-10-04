@@ -732,7 +732,8 @@ describe('4.9: after a send-back and an automatic pass', () => {
 
   test('a round whose passes kept every edit says so', () => {
     const d = payloadOf(stateAt({ _outlineHandEditReport: { checked: ['E1', 'E2'], changed: [] } }));
-    expect(ViewLogic.mapView(d, opened(d)).kept).toBe('The reworks kept all 2 of your edits.');
+    // 4.10b: the line says the edits stand, which holds too when code put a change back.
+    expect(ViewLogic.mapView(d, opened(d)).kept).toBe('Both of your edits stand.');
   });
 });
 
@@ -1111,5 +1112,55 @@ describe('4.6d: one helper frees the photos beside a beat, for the strike and th
     expect(src.split('{ delete photo.beat; })').length - 1).toBe(1);
     expect(body('freePhotosBeside')).toContain('{ delete photo.beat; })');
     ['strikeBeat', 'removeBeat'].forEach((name) => expect(`${name}: ${body(name).includes('freePhotosBeside(')}`).toBe(`${name}: true`));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10b: the stops' lines, follow-ups (the integrator's ruling 1 on 4.10's minors and
+// hand-offs). An entry code put back out of the director's order asks the director to act,
+// so the map lists it, as every stop shows it (changedEditsToShow). And when the map checked
+// the director's edits and lists no changed line, it says the edits stand: a round in which
+// code put back every change says so too.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.10b: the map lists a restore out of the director's order, and says when the edits stand", () => {
+  const entry = (fields) => ({ cut: false, removed: false, moved: false, reason: null, restored: false, ...fields });
+  const viewWith = (report) => {
+    const d = { ...payloadOf(stateAt()), handEditReport: report };
+    return ViewLogic.mapView(d, opened(d));
+  };
+
+  test("a photo code put back out of the director's order is listed, with the line that asks the director to move it", () => {
+    const outOfOrder = entry({
+      id: 'E1', scope: 'map', where: 'section "closing", photo "p2.jpg", moved from section "theStory"', moved: true,
+      director: 'filename: p2.jpg', became: 'section "theStory"', pass: 1, automatic: true, restored: true, inOrder: false
+    });
+    const view = viewWith({ checked: ['E1'], changed: [outOfOrder] });
+    expect(view.changedEdits).toEqual([
+      'Closing, photo "p2.jpg", moved from The Story: automatic pass 1 moved the photo you placed here to The Story. It was put back in its section, but not in the order you left it: move it again if the order matters.'
+    ]);
+    expect(view.kept).toBe('');
+    // Put back in the director's order, it asks nothing, and the edit stands.
+    const inOrder = viewWith({ checked: ['E1'], changed: [{ ...outOfOrder, inOrder: true }] });
+    expect([inOrder.changedEdits, inOrder.kept]).toEqual([[], 'Your edit stands.']);
+  });
+
+  test("an automatic pass whose changes code put back: the map lists no changed line, and says the director's edits stand", () => {
+    const struck = EditLogic.strikeBeat(EditLogic.moveBeat(clone(MAP), 'b3', 'closing'), 'b4');
+    const edits = standingOnMap(null, clone(MAP), struck).edits;
+    const pass = clone(struck);
+    pass.sections[1].beats.push(pass.leftOut.pop());
+    pass.sections[1].beats.push(pass.sections[3].beats.pop());
+    const { report } = settleEdits(null, { edits, before: struck, after: pass, pass: 1 });
+    expect(report.changed.map((c) => c.restored)).toEqual([true, true]);
+    const d = payloadOf(stateAt({ outline: struck, _outlineHandEditReport: report }));
+    const view = ViewLogic.mapView(d, opened(d));
+    expect(view.changedEdits).toEqual([]);
+    expect(view.kept).toBe('Both of your edits stand.');
+  });
+
+  test('three edits, and a send-back entry to show', () => {
+    expect(viewWith({ checked: ['E1', 'E2', 'E3'], changed: [] }).kept).toBe('All 3 of your edits stand.');
+    const sendBack = entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", material', director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false });
+    expect(viewWith({ checked: ['E1', 'E2'], changed: [sendBack] }).kept).toBe('');
   });
 });

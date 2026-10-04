@@ -330,13 +330,14 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     }
   };
 
-  const roundLines = view.didNotRun || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.marked
+  const roundLines = view.didNotRun || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.marked
     || view.removed.length > 0 || view.otherMarks.length > 0 || view.otherConcerns.length > 0;
 
   return React.createElement('div', { className: 'meeting flex flex-col gap-md' },
 
-    // What happened since the director last looked: a round that did not run, a check
-    // still failing, the edits a send-back changed, the marks' banner, and anything no line shows.
+    // What happened since the director last looked: a round that did not run, a check still
+    // failing, the edits a send-back changed or that the director's edits stand, the marks'
+    // banner, and anything no line shows.
     roundLines && React.createElement('section', { className: 'meeting__round', 'aria-label': 'Since you last looked' },
       view.didNotRun && React.createElement('p', { className: 'meeting__did-not-run', role: 'status' }, view.didNotRun),
       view.checkFailures.map(function (text, i) {
@@ -348,6 +349,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
           view.changedEdits.map(function (text, i) { return React.createElement('li', { key: 'changed-' + i, className: 'meeting__changed' }, text); })
         )
       ),
+      view.kept && React.createElement('p', { className: 'text-xs text-muted' }, view.kept),
       view.marked && React.createElement('p', { className: 'meeting__mark' }, view.marked),
       view.removed.concat(view.otherMarks).map(function (text, i) {
         return React.createElement('p', { key: 'elsewhere-' + i, className: 'meeting__mark' }, text);
