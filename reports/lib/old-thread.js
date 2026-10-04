@@ -8,17 +8,31 @@
  * refuses it, and tells the director to roll back to the story meeting, which keeps the
  * parse, the curation and the photos and writes the weave fresh.
  *
- * A thread is old when it holds no weave and has reached the story meeting: it is paused at
- * the meeting's stop or a later one in the console's CHECKPOINT_ORDER, it is complete, or it
- * holds an outline or an article, which only a stage after the meeting writes. The last
- * covers a thread at no stop (fix round 1, finding 1): one that stopped on an error, or
- * whose run was killed, after the old stages wrote its outline. A resume replayed it from
- * START, and once its fresh meeting was approved the map writer skipped on the old outline
- * (it skips on any outline), so the map's stop opened on it. A thread of the new code
- * reaches none of those without a weave: the arc writer writes it before the meeting
- * opens, and every rollback or fresh start that clears it clears the outline and the
- * article too. A thread at no stop that holds neither (a run in flight, or one that stopped
- * before the outline writer) is left alone: its resume writes the weave and the map fresh.
+ * A thread is old when it holds no weave and the old stages took it past the arc writer: it
+ * is paused at the meeting's stop or a later one in the console's CHECKPOINT_ORDER, it is
+ * complete, or it holds what only a stage past the arc writer writes (PAST_THE_ARC_WRITER):
+ * an evaluation, a rework's count, an outline or an article. The last covers a thread at no
+ * stop, one that stopped on an error or whose run was killed (fix rounds 1 and 2), wherever
+ * the old stages left it:
+ * - the old arc stage evaluated its arcs before the arc stop opened, so a thread stopped
+ *   anywhere past that stop, from the photo branch on, holds an evaluation;
+ * - every rework counted itself before it ran, so a thread that stopped in one holds its
+ *   count, the old outline rework's included, though that rework emptied the outline first
+ *   and its catch left it empty;
+ * - a thread that stopped after the old outline or article was written holds it, and the
+ *   map writer and the article writer each skip on any.
+ * A resume replayed such a thread from START into a fresh meeting and then ran the new
+ * stages on the old stages' work: the map's stop opened on the old outline, or on a fresh
+ * map with the old outline stage's note, edits, trace and counts, and the old arc stage's
+ * counts spent the fresh weave's check rework.
+ *
+ * A thread of the new code holds none of them without a weave: the arc writer writes the
+ * weave or throws, every evaluation and rework after it runs on the weave, and the fresh
+ * start, every rollback that clears the weave and an old thread's rollback to the meeting
+ * leave none of them (lib/__tests__/old-thread.test.js holds this). A thread with no weave
+ * that holds none of them is resumed, and its resume writes the weave: a new thread before
+ * its weave, an old thread rolled back to the meeting before its weave is written, or an
+ * old thread that stopped before its arc stage evaluated anything.
  *
  * server.js applies it: /approve, /resume and every /rollback past the meeting answer 409
  * with OLD_THREAD_MESSAGE, and GET /checkpoint carries the flag, which the console shows
@@ -43,15 +57,28 @@ const MEETING_INDEX = CHECKPOINT_ORDER.indexOf(OLD_THREAD_ROLLBACK);
 const OLD_THREAD_ROLLBACK_POINTS = Object.freeze(CHECKPOINT_ORDER.slice(0, MEETING_INDEX + 1));
 
 /**
- * Whether the thread holds what only a stage after the story meeting writes: an outline (the
- * map's channel) or an article. Read as the map writer and the article writer read them, who
- * skip on any value.
+ * The channels only a stage past the arc writer fills: the evaluations, the six rework
+ * counts, the outline (the map's channel) and the article. The header says why each old
+ * thread past the arc writer holds one, and why a thread of the new code holds none without
+ * a weave.
+ */
+const PAST_THE_ARC_WRITER = Object.freeze([
+  'evaluationHistory',
+  'arcRevisionCount', 'humanArcRevisionCount',
+  'outlineRevisionCount', 'humanOutlineRevisionCount',
+  'articleRevisionCount', 'humanArticleRevisionCount',
+  'outline', 'contentBundle'
+]);
+
+/**
+ * Whether a channel holds anything. An empty list, a zero and a missing value hold nothing;
+ * any other value counts, as the map writer and the article writer each skip on any.
  *
- * @param {Object} state
+ * @param {*} value
  * @returns {boolean}
  */
-function holdsOutputPastTheMeeting(state) {
-  return Boolean(state.outline) || Boolean(state.contentBundle);
+function holds(value) {
+  return Array.isArray(value) ? value.length > 0 : Boolean(value);
 }
 
 /**
@@ -64,10 +91,10 @@ function holdsOutputPastTheMeeting(state) {
 function oldThreadOf(values, pausedAt) {
   const state = values || {};
   if (isWeave(state.weave)) return null;
-  const reachedTheMeeting = state.currentPhase === PHASES.COMPLETE
+  const pastTheArcWriter = state.currentPhase === PHASES.COMPLETE
     || CHECKPOINT_ORDER.indexOf(pausedAt) >= MEETING_INDEX
-    || holdsOutputPastTheMeeting(state);
-  if (!reachedTheMeeting) return null;
+    || PAST_THE_ARC_WRITER.some((channel) => holds(state[channel]));
+  if (!pastTheArcWriter) return null;
   return { message: OLD_THREAD_MESSAGE, rollbackTo: OLD_THREAD_ROLLBACK, rollbackPoints: [...OLD_THREAD_ROLLBACK_POINTS] };
 }
 
@@ -88,7 +115,9 @@ function oldThreadRefusal(sessionId, oldThread) {
  * keeps its round counters on a rollback (R9: it reopens as the director left it), but an
  * old thread left no meeting: its arc counters are the old arc stage's, which would spend
  * the fresh weave's check rework and number its first round past one. So they start over,
- * as every point before the meeting already starts them (ROLLBACK_COUNTER_RESETS).
+ * as every point before the meeting already starts them (ROLLBACK_COUNTER_RESETS). With
+ * them the thread holds nothing past the arc writer until the weave is written, so a weave
+ * writer that fails leaves it resumable.
  *
  * @param {string} rollbackTo
  * @returns {Object}
@@ -101,6 +130,7 @@ module.exports = {
   OLD_THREAD_MESSAGE,
   OLD_THREAD_ROLLBACK,
   OLD_THREAD_ROLLBACK_POINTS,
+  PAST_THE_ARC_WRITER,
   oldThreadOf,
   oldThreadRefusal,
   oldThreadRollbackState

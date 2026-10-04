@@ -1,23 +1,27 @@
 /**
  * Threads from before the story meeting (phase 4, task 4.11; R2).
  *
- * A thread started before phase 4 holds no weave. Once it has reached the story meeting's
- * stop, or anything after it, the new stages would replay it on the old shapes, so the
- * server refuses it and tells the director to roll back to the story meeting, which keeps
- * the parse, the curation and the photos and writes the weave fresh. The rule is
- * lib/old-thread.js's, by the weave (ruling 1), and by the thread's stop in the console's
- * CHECKPOINT_ORDER, its completion, or the outline or article it holds (fix round 1).
+ * A thread started before phase 4 holds no weave. Once the old stages have taken it past
+ * the arc writer, the new stages would replay it on the old shapes, so the server refuses
+ * it and tells the director to roll back to the story meeting, which keeps the parse, the
+ * curation and the photos and writes the weave fresh. The rule is lib/old-thread.js's, by
+ * the weave (ruling 1), and by the thread's stop in the console's CHECKPOINT_ORDER, its
+ * completion, or what it holds that only a stage past the arc writer writes: an
+ * evaluation, a rework's count, an outline or an article (fix rounds 1 and 2).
  */
 const {
   OLD_THREAD_MESSAGE,
   OLD_THREAD_ROLLBACK,
   OLD_THREAD_ROLLBACK_POINTS,
+  PAST_THE_ARC_WRITER,
   oldThreadOf,
   oldThreadRefusal,
   oldThreadRollbackState
 } = require('../old-thread');
 const { CHECKPOINT_ORDER } = require('../../console/session-start-logic');
-const { VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS, ROLLBACK_CLEARS, FRESH_START_CLEARS } = require('../workflow/state');
+const { ReportStateAnnotation, VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS, ROLLBACK_CLEARS } = require('../workflow/state');
+const { buildRollbackState, buildFreshStartState } = require('../api-helpers');
+const { isWeave } = require('../weave');
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 
 const WEAVE = reworkFixtureState('journalist').weave;
@@ -66,10 +70,11 @@ describe('4.11: which thread is old (R2; ruling 1)', () => {
     expect(oldThreadOf({ currentPhase: '1.8' }, stop)).toBeNull();
   });
 
-  it('a thread at no stop that holds no outline and no article is not: a run in flight, or one that stopped before the outline writer, whose resume writes the weave and the map fresh', () => {
+  it('a thread at no stop that holds nothing past the arc writer is not: a new thread before its weave, in flight or stopped in the arc writer, whose resume writes the weave', () => {
     expect(oldThreadOf({ currentPhase: '2.1' }, null)).toBeNull();
     expect(oldThreadOf({ currentPhase: 'error' }, null)).toBeNull();
     expect(oldThreadOf({ currentPhase: 'error', outline: null, contentBundle: null }, null)).toBeNull();
+    expect(oldThreadOf({ currentPhase: 'error', evaluationHistory: [], arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: null }, null)).toBeNull();
   });
 
   it('a value that is no weave counts as none, as the arc writer reads it', () => {
@@ -120,14 +125,85 @@ describe('4.11 fix round 1: a thread that holds an outline or an article with no
   it('a new thread that stopped on an error past the meeting holds a weave, and is not', () => {
     expect(oldThreadOf({ currentPhase: 'error', weave: WEAVE, outline: MAP, contentBundle: PREVIOUS_BUNDLE, articleApproved: true }, null)).toBeNull();
   });
+});
 
-  it("the rule's premise: every rollback point and the fresh start that clear the weave clear the outline and the article too, so a new thread never holds either without one", () => {
-    const clearsWeave = Object.entries(ROLLBACK_CLEARS).filter(([, fields]) => fields.includes('weave'));
-    expect(clearsWeave.map(([point]) => point).sort()).toEqual(MEETING_AND_BEFORE.filter((point) => point !== 'arc-selection').sort());
-    clearsWeave.forEach(([point, fields]) => {
-      expect(`${point}: ${['outline', 'contentBundle'].filter((field) => !fields.includes(field))}`).toBe(`${point}: `);
+// Fix round 2, finding 1: an outline or an article is not all an old thread past the arc
+// writer holds. The old outline rework emptied the outline before it ran, and its catch left
+// it empty, so a thread that stopped in that rework, on an error or killed, held neither and
+// was resumed: past a fresh meeting, the map's stop opened with the old stage's note, edits,
+// report, trace and counts, and a killed one's note turned the map check's rework into the
+// director's send-back. A thread that stopped in the photo branch or in the old outline
+// writer held neither as well, and its resume carried the old arc stage's counts into the
+// fresh weave's round. Each of them holds an evaluation or a rework's count: the old arc
+// stage evaluated its arcs before the arc stop opened, and every rework counts itself before
+// it runs. A thread of the new code holds neither without a weave.
+describe("4.11 fix round 2: a thread with no weave that holds an evaluation or a rework's count is old, at no stop too", () => {
+  const FLAG = { message: MESSAGE, rollbackTo: 'arc-selection', rollbackPoints: MEETING_AND_BEFORE };
+  const COUNTS = ['arcRevisionCount', 'humanArcRevisionCount', 'outlineRevisionCount', 'humanOutlineRevisionCount', 'articleRevisionCount', 'humanArticleRevisionCount'];
+  /** What the old arc stage left: the evaluation it ran before the arc stop opened. */
+  const ARCS_EVALUATED = [{ phase: 'arcs', ready: true }];
+  /** The old outline stage's leftovers. Invented text. */
+  const OLD_TRACE = [{ pass: 1, round: 1, trigger: 'evaluation', findings: { structuralIssues: ['T8: an old outline issue'] }, before: OLD_OUTLINE }];
+  const OLD_EDITS = { kind: 'outline', issued: 1, edits: [{ id: 'E1', path: 'closing.theme', before: 'An older close.', after: "The director's close." }] };
+
+  it.each([
+    ['stopped on an error in the old outline rework, whose catch left the outline and its copy empty', {
+      currentPhase: 'error', outline: null, _previousOutline: null, _outlineFeedback: null, contentBundle: null,
+      outlineRevisionCount: 1, _outlineTrace: OLD_TRACE, _outlineHandEdits: OLD_EDITS,
+      evaluationHistory: [...ARCS_EVALUATED, { phase: 'outline', ready: false }]
+    }],
+    ['was killed in the old outline send-back rework, the outline set aside for it', {
+      currentPhase: '3.2', outline: null, _previousOutline: OLD_OUTLINE, _outlineFeedback: 'Cut the second arc.', _outlineHandEdits: OLD_EDITS,
+      humanOutlineRevisionCount: 1, evaluationHistory: ARCS_EVALUATED
+    }],
+    ['stopped in the photo branch, after the arc stop', { currentPhase: 'error', evaluationHistory: ARCS_EVALUATED }],
+    ['stopped in the old outline writer', { currentPhase: '3', evaluationHistory: ARCS_EVALUATED, arcRevisionCount: 2 }],
+    ['stopped in the old arc rework, before anything was evaluated', { currentPhase: 'error', arcRevisionCount: 1 }]
+  ])('a thread at no stop that %s is old', (_case, values) => {
+    expect(oldThreadOf(values, null)).toEqual(FLAG);
+  });
+
+  it.each(COUNTS)('%s above zero alone makes it old', (count) => {
+    expect(oldThreadOf({ currentPhase: 'error', [count]: 1 }, null)).toEqual(FLAG);
+  });
+
+  it('one evaluation alone makes it old, whatever its verdict', () => {
+    expect(oldThreadOf({ currentPhase: 'error', evaluationHistory: [{ phase: 'arcs', ready: false }] }, null)).toEqual(FLAG);
+  });
+
+  it('a new thread with a weave that holds every one of them is not', () => {
+    const values = { currentPhase: 'error', weave: WEAVE, evaluationHistory: ARCS_EVALUATED, outline: MAP, contentBundle: PREVIOUS_BUNDLE };
+    COUNTS.forEach((count) => { values[count] = 1; });
+    expect(oldThreadOf(values, null)).toBeNull();
+  });
+
+  it('reads the evaluations, the six counts, the outline and the article, each a channel of the state', () => {
+    expect([...PAST_THE_ARC_WRITER].sort()).toEqual(['contentBundle', 'evaluationHistory', 'outline', ...COUNTS].sort());
+    PAST_THE_ARC_WRITER.forEach((channel) => expect(ReportStateAnnotation.spec).toHaveProperty(channel));
+  });
+
+  it("the rule's premise: the fresh start, every rollback that clears the weave and an old thread's rollback to the meeting leave none of them, so a thread of the new code never holds one without a weave", () => {
+    const clearsWeave = Object.keys(ROLLBACK_CLEARS).filter((point) => ROLLBACK_CLEARS[point].includes('weave'));
+    expect([...clearsWeave].sort()).toEqual(MEETING_AND_BEFORE.filter((point) => point !== 'arc-selection').sort());
+    // A thread that holds every one of them, and what each clear leaves of them.
+    const holdingAll = { currentPhase: '4.25', weave: WEAVE, evaluationHistory: ARCS_EVALUATED, outline: MAP, contentBundle: PREVIOUS_BUNDLE };
+    COUNTS.forEach((count) => { holdingAll[count] = 2; });
+    const leftAfter = (update) => {
+      const after = { ...holdingAll, ...update };
+      return PAST_THE_ARC_WRITER.filter((channel) => (Array.isArray(after[channel]) ? after[channel].length > 0 : Boolean(after[channel])));
+    };
+    clearsWeave.forEach((point) => {
+      const update = buildRollbackState(point);
+      expect(isWeave({ ...holdingAll, ...update }.weave)).toBe(false);
+      expect(`${point}: ${leftAfter(update)}`).toBe(`${point}: `);
+      expect(oldThreadOf({ ...holdingAll, ...update }, null)).toBeNull();
     });
-    expect(FRESH_START_CLEARS).toEqual(expect.arrayContaining(['weave', 'outline', 'contentBundle']));
+    expect(`fresh start: ${leftAfter(buildFreshStartState())}`).toBe('fresh start: ');
+    // An old thread's rollback to the meeting writes the weave fresh: until the weave writer
+    // succeeds, the thread holds none of them, so a failure there leaves it resumable.
+    const meeting = { ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection') };
+    expect(`an old thread's meeting: ${leftAfter(meeting)}`).toBe("an old thread's meeting: ");
+    expect(oldThreadOf({ ...holdingAll, weave: null, ...meeting }, null)).toBeNull();
   });
 });
 

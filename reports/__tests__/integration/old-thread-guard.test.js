@@ -4,11 +4,13 @@
  *
  * A thread started before phase 4 holds no weave. Paused at the story meeting's stop or
  * any stop after it (the photos, the character IDs, the map, the article), complete, or at
- * no stop holding an outline or an article (fix round 1), it is refused on /approve,
+ * no stop holding what only a stage past the arc writer writes (an outline or an article,
+ * fix round 1; an evaluation or a rework's count, fix round 2), it is refused on /approve,
  * /resume and every /rollback past the meeting, with one message, and GET /checkpoint
  * flags it, so the console shows the message and the rollback before any stop renders. A
  * rollback to the meeting, or to a point before it, proceeds. A thread with a weave, a
- * thread paused before the meeting, and one at no stop that holds neither are not touched.
+ * thread paused before the meeting, and one at no stop that holds nothing past the arc
+ * writer are not touched.
  *
  * Boots the actual `app` exported by server.js, as session-id-and-resume-guard does, with
  * the LangGraph module mocked: a refusal returns before any invoke, so `invoke` not being
@@ -257,15 +259,82 @@ describe('4.11 fix round 1: an old thread at no stop that holds an outline or an
     expect(res.body).toMatchObject({ interrupted: false, checkpointType: null, checkpoint: null, currentPhase: 'error' });
     expect(res.body.oldThread).toEqual(FLAG);
   });
+});
 
-  it('a thread at no stop that holds neither is resumed: its replay writes the weave and the map fresh', async () => {
-    mockGraph = atNoStop(oldValues({ currentPhase: 'error', outline: null }));
-    expect((await send('GET', '/api/session/092626/checkpoint')).body.oldThread).toBeNull();
-    const res = await send('POST', '/api/session/092626/resume', {});
+// Fix round 2, finding 1: the old outline rework emptied the outline before it ran, and its
+// catch left it empty, so a thread that stopped in that rework held no outline and no
+// article. Its resume carried the old stage's note, edits, report, trace and counts to the
+// new map's stop, and a thread that stopped in the photo branch carried the old arc stage's
+// counts into the fresh weave's round. Each holds an evaluation or a rework's count, and is
+// refused with the rest.
+describe("4.11 fix round 2: an old thread at no stop that holds an evaluation or a rework's count is refused", () => {
+  /** As the old outline rework's catch left a thread: the outline and its copy empty, the old stage's leftovers kept. */
+  const erroredInOutlineRework = () => oldValues({
+    currentPhase: 'error', outline: null, _previousOutline: null, _outlineFeedback: null,
+    outlineRevisionCount: 1, humanOutlineRevisionCount: 1,
+    _outlineTrace: [{ pass: 1, round: 2, trigger: 'evaluation', findings: { structuralIssues: ['T8: an old outline issue'] }, before: OLD_OUTLINE }],
+    _outlineHandEdits: { kind: 'outline', issued: 1, edits: [{ id: 'E1', path: 'closing.theme', before: 'An older close.', after: "The director's close." }] },
+    _outlineHandEditReport: { checked: ['E1'], changed: [] },
+    directorGateNotes: [{ gate: 'outline', kind: 'rejection', round: 1, text: 'Cut the second arc.', at: 'then' }],
+    evaluationHistory: [{ phase: 'arcs', ready: true }, { phase: 'outline', ready: false }]
+  });
+  /** Killed in the old outline send-back rework: the outline set aside for it, the note not yet read. */
+  const killedInOutlineRework = () => oldValues({
+    currentPhase: '3.2', outline: null, _previousOutline: OLD_OUTLINE, _outlineFeedback: 'Cut the second arc.',
+    outlineRevisionCount: 0, humanOutlineRevisionCount: 1, evaluationHistory: [{ phase: 'arcs', ready: true }]
+  });
+  /** Stopped in the photo branch, after the arc stop: the old arc stage's evaluation, no rework counted, no outline yet. */
+  const stoppedInPhotoBranch = () => oldValues({
+    currentPhase: 'error', outline: null, arcRevisionCount: 0, humanArcRevisionCount: 0, evaluationHistory: [{ phase: 'arcs', ready: true }]
+  });
+
+  it.each([
+    ['stopped on an error in the old outline rework', erroredInOutlineRework, { outline: true }],
+    ['stopped in the photo branch', stoppedInPhotoBranch, { photosPath: 'D:/shoots/0926' }]
+  ])('/approve answers 409 with the message; nothing runs: %s', async (_case, values, body) => {
+    mockGraph = atNoStop(values());
+    expectRefused(await send('POST', '/api/session/092626/approve', body));
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['stopped on an error in the old outline rework', erroredInOutlineRework, null],
+    ['killed in the old outline send-back rework', killedInOutlineRework, 'reviseOutline'],
+    ['stopped in the photo branch', stoppedInPhotoBranch, null]
+  ])('/resume answers 409, with force too: %s', async (_case, values, pending) => {
+    mockGraph = atNoStop(values(), pending);
+    expectRefused(await send('POST', '/api/session/092626/resume', {}));
+    expectRefused(await send('POST', '/api/session/092626/resume', { force: true }));
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it.each(PAST_THE_MEETING)('/rollback to %s answers 409', async (target) => {
+    mockGraph = atNoStop(erroredInOutlineRework());
+    expectRefused(await send('POST', '/api/session/092626/rollback', { rollbackTo: target }));
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+  });
+
+  it("/rollback to the story meeting proceeds, and clears what the old outline stage left: its note, edits, report, trace, counts and evaluations", async () => {
+    mockGraph = atNoStop(erroredInOutlineRework());
+    const res = await send('POST', '/api/session/092626/rollback', { rollbackTo: 'arc-selection' });
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('processing');
     await flushBackground();
-    expect(mockGraph.invoke).toHaveBeenCalledTimes(1);
+    expect(mockGraph.invoke.mock.calls[0][0]).toMatchObject({
+      outline: null, _outlineFeedback: null, _outlineHandEdits: null, _outlineHandEditReport: null, _outlineTrace: null,
+      outlineRevisionCount: 0, humanOutlineRevisionCount: 0, arcRevisionCount: 0, humanArcRevisionCount: 0,
+      evaluationHistory: [], directorGateNotes: []
+    });
+  });
+
+  it.each([
+    ['stopped on an error in the old outline rework', erroredInOutlineRework],
+    ['stopped in the photo branch', stoppedInPhotoBranch]
+  ])('GET /checkpoint flags it, with no checkpoint: %s', async (_case, values) => {
+    mockGraph = atNoStop(values());
+    const res = await send('GET', '/api/session/092626/checkpoint');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ interrupted: false, checkpointType: null, checkpoint: null });
+    expect(res.body.oldThread).toEqual(FLAG);
   });
 });
 
@@ -295,6 +364,16 @@ describe('4.11: the guard leaves every other thread alone', () => {
     mockGraph = pausedAt('article', oldValues({ weave: WEAVE }));
     const res = await send('POST', '/api/session/092626/rollback', { rollbackTo: 'outline' });
     expect(res.status).toBe(200);
+    await flushBackground();
+    expect(mockGraph.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('a thread at no stop that holds nothing past the arc writer is resumed: a new thread whose weave writer stopped on an error', async () => {
+    mockGraph = atNoStop({ currentPhase: '2.1', theme: 'journalist', weave: null, outline: null, evaluationHistory: [], arcRevisionCount: 0, humanArcRevisionCount: 0 }, 'analyzeArcs');
+    expect((await send('GET', '/api/session/092626/checkpoint')).body.oldThread).toBeNull();
+    const res = await send('POST', '/api/session/092626/resume', {});
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('processing');
     await flushBackground();
     expect(mockGraph.invoke).toHaveBeenCalledTimes(1);
   });
