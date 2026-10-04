@@ -107,18 +107,21 @@ describe('renderSettledWeave: the weave as the director left it (brief 4.5)', ()
     expect(text).toContain(`- q3 (a pronoun; about: Sloane): ${WRITERS.questions[2].question} Its answer changes: ${WRITERS.questions[2].changes}\n  The director's answer, word for word: "she/her"`);
   });
 
-  it("marks each change the director made at the meeting by its edit's id; a strike leaves no line to mark", () => {
+  // Brief 4.14a: by its id in the meeting's own form, M and the edit's number (E1 is M1), so
+  // no later prompt holds a meeting change and a later stop's edit under one id.
+  it("marks each change the director made at the meeting by its id in the meeting's own form; a strike leaves no line to mark", () => {
     const text = settled();
-    expect(text).toContain(`STORY: ${directors().story} [the director's change E1]`);
-    expect(text.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/\[the director's change E2: the role\]$/);
-    expect(text.split('\n').find((line) => line.startsWith('- t7'))).toMatch(/\[the director's change E3: a thread they added\]$/);
-    expect(text).not.toContain('E4');
+    expect(text).toContain(`STORY: ${directors().story} [the director's change M1]`);
+    expect(text.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/\[the director's change M2: the role\]$/);
+    expect(text.split('\n').find((line) => line.startsWith('- t7'))).toMatch(/\[the director's change M3: a thread they added\]$/);
+    expect(text).not.toContain('M4');
+    expect(text).not.toMatch(/\bE\d+\b/);
     expect(text.split('\n').find((line) => line.startsWith('QUESTION:'))).not.toMatch(/\[the director's change/);
   });
 
   it('marks nothing when the director changed nothing', () => {
     const text = renderSettledWeave(clone(WRITERS), []);
-    expect(text).not.toMatch(/\[the director's changes? E\d/);
+    expect(text).not.toMatch(/\[the director's changes? [EM]\d/);
     expect(text).toContain('- c2, a moment, joining t1 and t2: The scoreboard brought the money into the vote.');
   });
 
@@ -259,11 +262,12 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
       expect(lines[lines.findIndex((line) => line.startsWith(`- q-${kind} `)) + 1]).toMatch(/^ {2}The director's answer, word for word: "/);
       expect(lines[lines.findIndex((line) => line.startsWith(`- q-${kind}-open `)) + 1]).toBe('  Unanswered.');
     });
+    // Brief 4.14a: each change by its id in the meeting's own form (M and the edit's number).
     ['STORY', 'QUESTION', 'WORKING HEADLINE', "FROM THE DIRECTOR'S NOTES", 'CONVERGENCE'].forEach((field) => {
-      expect(lines.find((line) => line.startsWith(`${field}: `))).toMatch(/ \[the director's change E\d+\]$/);
+      expect(lines.find((line) => line.startsWith(`${field}: `))).toMatch(/ \[the director's change M\d+\]$/);
     });
-    expect(lines.find((line) => line.startsWith('- t7 '))).toMatch(/ \[the director's change E\d+: a thread they added\]$/);
-    expect(lines.find((line) => line.startsWith('- t8 '))).toMatch(/ \[the director's changes E\d+: the (role|claim); E\d+: the (role|claim)\]$/);
+    expect(lines.find((line) => line.startsWith('- t7 '))).toMatch(/ \[the director's change M\d+: a thread they added\]$/);
+    expect(lines.find((line) => line.startsWith('- t8 '))).toMatch(/ \[the director's changes M\d+: the (role|claim); M\d+: the (role|claim)\]$/);
   });
 
   it("carries nothing on the removed-phrase list and no dash: the planted data is clean, so what the scan reads is the labels'", () => {
@@ -278,6 +282,8 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
 // 4.14a: the meeting's last defects (the final review, ruling 1)
 // ═══════════════════════════════════════════════════════════════════════════
 describe('4.14a: the settled weave tells the story the director settled', () => {
+  const { meetingChangeId } = require('../prompt-renderers/settled-weave');
+
   // Meeting 2: a connection that joins a left-out thread is out of the story, as a struck one is.
   it('leaves out a connection that joins a thread the director left out, and prints it again when the thread comes back', () => {
     const left = clone(WRITERS);
@@ -286,9 +292,17 @@ describe('4.14a: the settled weave tells the story the director settled', () => 
     const out = renderSettledWeave(left, carriedEdits(standingAtMeeting(null, WRITERS, left), left));
     expect(out).not.toContain(WRITERS.connections[0].detail);
     expect(out).toContain('- c2, a moment, joining t1 and t2: The scoreboard brought the money into the vote.');
-    expect(out.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/^- t3 \(left out\): .*\[the director's changes E1: the role; E2: the reason\]$/);
+    expect(out.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/^- t3 \(left out\): .*\[the director's changes M1: the role; M2: the reason\]$/);
     const back = clone(left);
     back.threads[2].role = 'mirrors-it';
     expect(renderSettledWeave(back, [])).toContain('- c1, a shared person, joining t1 and t3: Sloane turned the room against Rowan.');
+  });
+
+  // Meeting 3: the meeting's changes have an id form of their own wherever a prompt shows them.
+  it("names a meeting change M and the edit's number, and refuses an id that is no meeting edit's", () => {
+    expect(meetingChangeId('E1')).toBe('M1');
+    expect(meetingChangeId('E12')).toBe('M12');
+    expect(() => meetingChangeId('M1')).toThrow(/E and a number/);
+    expect(() => meetingChangeId(undefined)).toThrow(/E and a number/);
   });
 });

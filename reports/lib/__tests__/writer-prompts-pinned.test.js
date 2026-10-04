@@ -311,9 +311,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   lines give them precedence without restating it. Each line's restated clauses become "the
  *   director's edits first, as HAND_EDITS gives them" (the beats line -51, the words line -83;
  *   article-journalist 31306 -> 31172). The outline and arc pins do not move.
+ * - Phase 4 (brief 4.14a), the meeting's changes have an id form of their own wherever a later
+ *   prompt shows them, M and the edit's number, so no prompt holds a meeting change and a map's
+ *   or a desk's edit under one id: the map's schema gives "such as M3" as a change's source
+ *   where it gave "such as E3" (lib/schemas/outline.schema.json, weaveChanges[].source). The map
+ *   writer prints the schema in <SCHEMA>, so outline-journalist moves by hash alone (18299;
+ *   reverting the one id gives back the previous hash). The fixture's weave carries no change of
+ *   the director's and no connection to a left-out thread, so its settled weave prints as before,
+ *   and the article and arc pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['cd1098a0c9d73955db806c230fd650825ad546d21f69ade988abc98266d0d5d6', 18299],
+  'outline-journalist': ['c7543c361999e35f67d4e800d806ea6ad39b79b3a486ad0071ec8119cb185307', 18299],
   'article-journalist': ['2b440b4d69685f2c792341dc7950781d3bc0c8405dd7acb6830236bd58e9cb17', 31172],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };

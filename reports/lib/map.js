@@ -20,7 +20,8 @@
  * - `leftOut`: the beats considered and not used, in the beat's shape;
  * - `expectedLength`: the writer's estimate of the article's length, in words;
  * - `weaveChanges`: `{source, change}` for each change the map made to the weave to fit
- *   in one the director made at the meeting, its source a meeting edit's id or "note".
+ *   in one the director made at the meeting, its source a meeting change's id in the
+ *   meeting's own form, as the settled weave marks it (M3; brief 4.14a), or "note".
  *
  * This module holds the rules every reader of a map shares, each one function:
  * - THE SCHEMAS: the writer's (mapSchemaFor, the map's shape with the theme's slots) and the
@@ -55,6 +56,10 @@ const {
   mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
   handEditReportOf, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE
 } = require('./hand-edit-diff');
+// Brief 4.14a: a meeting change by its id in the meeting's own form, and by its place as the
+// meeting names the line.
+const { meetingChangeId } = require('./prompt-renderers/settled-weave');
+const { meetingChangePlace } = require('./meeting');
 
 /** A beat's kind: what it puts on the page (C2). */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
@@ -343,9 +348,10 @@ function editsRemovingConnection(entries, connection) {
  *   three to five (`card-count`; C9);
  * - every connection the settled weave keeps lands in a section's beat
  *   (`connection-not-landed`);
- * - each change to the weave names a meeting edit's id or the meeting's approval note
- *   (`weave-change-source`), and there is none when the director changed nothing and left no
- *   approval note at the meeting (`weave-change-unasked`; brief 4.6e).
+ * - each change to the weave names a meeting change's id, in the meeting's own form (M3;
+ *   brief 4.14a), or the meeting's approval note (`weave-change-source`), and there is none
+ *   when the director changed nothing and left no approval note at the meeting
+ *   (`weave-change-unasked`; brief 4.6e).
  *
  * A failure the director caused is a concern on their edit, beside its line, never a
  * rework (R11): a beat they struck or cut that held the only place of a player or a
@@ -362,7 +368,8 @@ function editsRemovingConnection(entries, connection) {
  * @param {Iterable<string>} inputs.recordIds - the ids a document in the record answers to
  * @param {string[]} inputs.connections - the ids of the connections the settled weave keeps
  *   (lib/weave.js storyConnections: none struck, and none that joins a left-out thread)
- * @param {string[]} inputs.meetingEdits - the ids of the director's edits at the meeting
+ * @param {string[]} inputs.meetingEdits - the ids of the director's changes at the meeting, in
+ *   the meeting's own form (meetingEditIdsOf)
  * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
  * @returns {{failures: Array<{type: string, message: string}>,
@@ -687,10 +694,28 @@ function mapConcerns(state) {
     .filter((concern) => concern.editIds.length > 0);
 }
 
-/** The ids of the director's changes at the story meeting that the weave carries. */
-function meetingEditIdsOf(state) {
+/**
+ * The director's changes at the story meeting that the weave carries, in the meeting's order,
+ * each `{id, place}` (brief 4.14a): its id in the meeting's own form, M and the edit's number,
+ * as the settled weave marks it (lib/prompt-renderers/settled-weave.js meetingChangeId), and
+ * where it sits as the meeting names the line (lib/meeting.js meetingChangePlace), such as
+ * `the role of "Morgan paid Riley at the bar"`.
+ *
+ * @param {Object} state
+ * @returns {Array<{id: string, place: string}>}
+ */
+function meetingChangesOf(state) {
   const weave = state && state.weave;
-  return carriedEdits(state && state._weaveHandEdits, weave).map((edit) => edit.id);
+  return carriedEdits(state && state._weaveHandEdits, weave)
+    .map((edit) => ({ id: meetingChangeId(edit.id), place: meetingChangePlace(edit, weave) }));
+}
+
+/**
+ * The ids of the director's changes at the story meeting that the weave carries, in the
+ * meeting's own form (meetingChangesOf): the sources a change to the weave may name.
+ */
+function meetingEditIdsOf(state) {
+  return meetingChangesOf(state).map((change) => change.id);
 }
 
 /** Did the director leave a note when approving the story meeting (an approval note at arc-selection)? */
@@ -718,6 +743,9 @@ function settledStoryOf(weave) {
  * read from the director's notes (lib/workflow/state.js roundNoteOf; task 4.12e), since the rework
  * clears `_outlineFeedback` before the stop opens; and a send-back whose rework did not run, with
  * its note (lib/workflow/state.js roundDidNotRunAt; task 4.14e).
+ * `meetingChanges` (brief 4.14a) lists each change
+ * of the director's at the story meeting that the weave carries, `{id, place}` (meetingChangesOf),
+ * so the page names a map change's source by its place, as the meeting names the line.
  *
  * @param {Object} state
  * @param {Object} options
@@ -744,7 +772,8 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
     revisionCount: s.outlineRevisionCount || 0,
     humanRevisionCount: s.humanOutlineRevisionCount || 0,
     maxRevisions,
-    roundDidNotRun: roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, s)
+    roundDidNotRun: roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, s),
+    meetingChanges: meetingChangesOf(s)
   };
 }
 
@@ -765,6 +794,7 @@ module.exports = {
   mapResume,
   mapCheckFailures,
   mapConcerns,
+  meetingChangesOf,
   meetingEditIdsOf,
   meetingNoteOf,
   settledStoryOf,

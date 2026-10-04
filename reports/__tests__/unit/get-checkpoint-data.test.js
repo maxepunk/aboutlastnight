@@ -677,10 +677,12 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     // Brief 4.6c: the documents by id (evidenceIndex), and the roster and the kept photos
     // the count reads, so the page names each document and rebuilds the count as edited.
     // Brief 4.6d: the count is the page's alone, so the payload sends no tally. Task 4.14e: a
-    // send-back whose rework did not run (roundDidNotRun).
+    // send-back whose rework did not run (roundDidNotRun). Brief 4.14a: the meeting's changes the
+    // weave carries, each by its id and its place.
     expect(Object.keys(data).sort()).toEqual([
       'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
-      'mapSlots', 'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'roundDidNotRun', 'settledStory', 'trace'
+      'mapSlots', 'maxRevisions', 'meetingChanges', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'roundDidNotRun',
+      'settledStory', 'trace'
     ]);
   });
 

@@ -213,8 +213,9 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     expect(saved.threads.find((t) => t.id === 't6')).toEqual(ADDED);
 
     const settled = settledWeaveOf(photos.values);
-    expect(settled).toMatch(/- t3 \(mirrors it\): .*\[the director's change E\d+: the role\]/);
-    expect(settled).toMatch(/- t6 \(grounds it\): Riley kept a second ledger in the back room\. \[the director's change E\d+: a thread they added\]/);
+    // Brief 4.14a: each change in the meeting's own form, M and its number.
+    expect(settled).toMatch(/- t3 \(mirrors it\): .*\[the director's change M\d+: the role\]/);
+    expect(settled).toMatch(/- t6 \(grounds it\): Riley kept a second ledger in the back room\. \[the director's change M\d+: a thread they added\]/);
     expect(settled).not.toContain('The night of the sale is the night the result came back.');
     expect(settled).toContain(`The director's answer, word for word: "${ANSWER}"`);
     expect(settled).toContain('The verdict closes the night; the sale and the second ledger keep it open.');

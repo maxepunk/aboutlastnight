@@ -206,7 +206,8 @@ describe('a thread the director added, changed after a reweave kept it (fix roun
     const share = weaveDirectorsShare(carriedEdits(second._weaveHandEdits, weaveForPrompt(second.weave)));
     expect(Object.keys(share.addedThreads)).toEqual(['t6']);
     expect(validateArcStructure(second, {})._arcValidation.failures).toEqual([]);
-    expect(settledWeaveOf(second)).toMatch(/- t6 \([^)]*\): .*\[the director's change E\d+: a thread they added\]/);
+    // Brief 4.14a: the settled weave names a meeting change in the meeting's own form, M and its number.
+    expect(settledWeaveOf(second)).toMatch(/- t6 \([^)]*\): .*\[the director's change M\d+: a thread they added\]/);
   });
 });
 

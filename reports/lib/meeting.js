@@ -272,6 +272,68 @@ function roundDidNotRunOf(state) {
   return { round: timeout.round, at: timeout.at || null, note: typeof timeout.note === 'string' ? timeout.note : null };
 }
 
+/**
+ * How the meeting names the line of a change to one of the weave's fields, for a later stop
+ * that names the change to the director (meetingChangePlace): the line as the meeting's page
+ * heads it, in a phrase.
+ */
+const MEETING_FIELD_PLACES = Object.freeze({
+  story: 'the story',
+  question: 'the question it carries',
+  headline: 'the working headline',
+  fromYourNotes: 'the words from your notes',
+  convergence: 'where they converge',
+  strongerMainThread: 'the stronger main thread'
+});
+
+/** How the meeting names a change to one field of a thread, given the thread's claim, quoted. */
+const THREAD_FIELD_PLACES = Object.freeze({
+  role: (claim) => `the role of ${claim}`,
+  claim: (claim) => `the claim ${claim}`,
+  receipt: (claim) => `the receipt of ${claim}`,
+  reason: (claim) => `the reason ${claim} is left out`,
+  verdict: (claim) => `whether ${claim} carries the room's verdict`
+});
+
+/** A line of the weave quoted in a place: its words in quotation marks, without the full stop it ends on. */
+function quotedLine(text) {
+  return `"${(typeof text === 'string' ? text.trim() : '').replace(/\.$/, '')}"`;
+}
+
+/**
+ * Where one of the director's changes at the meeting sits, as the meeting names the line
+ * (brief 4.14a): a field of the weave by its line ("the story"), a thread by its claim and a
+ * connection by its words, as the meeting's page shows them ("the role of "Morgan paid Riley
+ * at the bar""), never by an edit id, which the meeting never shows. A later stop that names a
+ * meeting change to the director reads it (the map's page, through lib/map.js
+ * meetingChangesOf). The element's words are read from `weave` under the edit's id, or from the
+ * edit itself for an element the weave no longer holds.
+ *
+ * @param {Object} edit - one of the meeting's standing edits
+ * @param {Object|null} weave - the weave as the director settled it
+ * @returns {string}
+ */
+function meetingChangePlace(edit, weave) {
+  const steps = edit && Array.isArray(edit.at) ? edit.at : [];
+  const head = steps[0] && typeof steps[0].key === 'string' ? steps[0].key : '';
+  if (steps.length === 1) return MEETING_FIELD_PLACES[head] || `the ${head}`;
+  const id = steps[1] && steps[1].match ? weaveIdOf(steps[1].match) : '';
+  const field = steps[2] && typeof steps[2].key === 'string' ? steps[2].key : '';
+  const held = (isWeave(weave) && Array.isArray(weave[head]) ? weave[head] : []).find((element) => weaveIdOf(element) === id);
+  const element = held || (edit.after && typeof edit.after === 'object' ? edit.after : edit.before) || {};
+  const gone = edit.after === null || edit.after === undefined;
+  if (head === 'threads') {
+    const claim = element.claim ? quotedLine(element.claim) : `thread ${id}`;
+    if (field) return (THREAD_FIELD_PLACES[field] || ((c) => `the ${field} of ${c}`))(claim);
+    return gone ? `the thread you took out, ${claim}` : `the thread you added, ${claim}`;
+  }
+  const detail = element.detail ? quotedLine(element.detail) : `connection ${id}`;
+  if (field) return field === 'detail' ? `the connection ${detail}` : `the ${field} of the connection ${detail}`;
+  if (edit.struck === true) return `the connection you struck, ${detail}`;
+  if (edit.unstruck === true) return `the connection you brought back, ${detail}`;
+  return gone ? `the connection you took out, ${detail}` : `the connection you added, ${detail}`;
+}
+
 /** The story meeting's stop, as the director's notes name it (server.js appendGateNote). */
 const MEETING_GATE = 'arc-selection';
 
@@ -344,5 +406,7 @@ module.exports = {
   meetingMarksOf,
   roundDidNotRunOf,
   unrunRoundNoteIndex,
-  meetingCheckpointData
+  meetingCheckpointData,
+  // Brief 4.14a: where a meeting change sits, as the meeting names the line
+  meetingChangePlace
 };

@@ -915,7 +915,9 @@ describe('4.6d: the schema says what "note" means', () => {
   const outlineSchema = require('../schemas/outline.schema.json');
 
   it("a change's source is a meeting edit's id, or \"note\" for the meeting's approval note when the prompt holds it", () => {
-    const SOURCE = 'The id of the director\'s change in <SETTLED_WEAVE>, such as E3, or "note" for a change the director\'s note from the meeting asks for, when the prompt holds that note: the approval note marked arc-selection in <DIRECTOR_GUIDANCE>';
+    // Brief 4.14a: the example id is in the meeting's own form, as <SETTLED_WEAVE> marks a
+    // change (M3, where it read E3).
+    const SOURCE = 'The id of the director\'s change in <SETTLED_WEAVE>, such as M3, or "note" for a change the director\'s note from the meeting asks for, when the prompt holds that note: the approval note marked arc-selection in <DIRECTOR_GUIDANCE>';
     // Task 4.6e: the stored schema holds the line up to where the note is; mapSchemaFor fills
     // in that pointer from its one constant (MEETING_NOTE_POINTER).
     expect(outlineSchema.properties.weaveChanges.items.properties.source.description).toBe(SOURCE.slice(0, SOURCE.indexOf(': the approval note')));
@@ -996,10 +998,14 @@ describe('4.6e: "no note" means no approval note, and the note\'s pointer has on
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // Meeting 2: a connection that joins a thread the director left out goes out of the story with
-// it, so the map check no longer demands it land.
+// it, so the map check no longer demands it land. Meeting 3: the meeting's changes have an id
+// form of their own wherever a prompt shows them, M and the edit's number, so the map rework's
+// prompt never holds a meeting change and one of the map's own edits under one id; a change's
+// source names a meeting change in that form, and the map's stop sends each with its place.
 describe('4.14a: the map reads the meeting as the director settled it', () => {
   const { reworkFixtureState, WEAVE: FIXTURE_WEAVE, MAP } = require('./fixtures/rework-state');
   const { _testing: { mapCheckInputsOf } } = require('../workflow/nodes/map-nodes');
+  const { meetingEditIdsOf, mapCheckpointData } = require('../map');
   const { standingAtMeeting } = require('../hand-edit-diff');
 
   /** The state at the map after the director approved the meeting with `change` made to the writer's weave. */
@@ -1016,6 +1022,13 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
       _outlineHandEdits: null
     };
   }
+  /** The director's four changes: the story, t3's role, a thread added, c2 struck. */
+  const fourChanges = (w) => {
+    w.story = 'The room called it an overdose, and the envelope says the money moved first.';
+    w.threads[2].role = 'mirrors-it';
+    w.threads.push({ id: 't6', claim: 'Riley kept a second ledger in the back room.', role: 'grounds-it' });
+    w.connections[1].struck = true;
+  };
   /** The fixture's map with t3's material kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
   const keepsT3Out = () => {
     const map = clone(MAP);
@@ -1033,5 +1046,49 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     const back = approvedWith((w) => { w.threads[2].role = 'mirrors-it'; });
     expect(mapCheckInputsOf(back, map).connections).toEqual(['c1', 'c2']);
     expect(typesOf(mapFindings(map, mapCheckInputsOf(back, map)).failures)).toEqual(['connection-not-landed']);
+  });
+
+  it("a change's source names a meeting change in the meeting's own form, and the map check reads it", () => {
+    const state = approvedWith(fourChanges);
+    expect(meetingEditIdsOf(state)).toEqual(['M1', 'M2', 'M3', 'M4']);
+    const named = (source) => ({ ...clone(MAP), weaveChanges: [{ source, change: 'The envelope now closes the story.' }] });
+    expect(mapFindings(named('M2'), mapCheckInputsOf(state, named('M2'))).failures).toEqual([]);
+    const { failures } = mapFindings(named('E2'), mapCheckInputsOf(state, named('E2')));
+    expect(failures).toEqual([{
+      type: 'weave-change-source',
+      message: 'Changes to the weave name sources the meeting does not hold: "E2". Name each change\'s source: M1, M2, M3 and M4.'
+    }]);
+  });
+
+  it("the map's stop sends each meeting change the weave carries, in the meeting's order, by its id and its place as the meeting names the line", () => {
+    const state = approvedWith(fourChanges);
+    const data = mapCheckpointData(state, { keptPhotos: ['hero.jpg', 'p2.jpg'], evidenceIndex: {}, maxRevisions: 1 });
+    expect(data.meetingChanges).toEqual([
+      { id: 'M1', place: 'the story' },
+      { id: 'M2', place: 'the role of "Morgan paid Riley at the bar, out of sight"' },
+      { id: 'M3', place: 'the thread you added, "Riley kept a second ledger in the back room"' },
+      { id: 'M4', place: 'the connection you struck, "The night of the sale is the night the result came back"' }
+    ]);
+    expect(data.meetingChanges.map((change) => change.id)).toEqual(meetingEditIdsOf(state));
+    expect(mapCheckpointData(approvedWith(() => {}), { keptPhotos: [], maxRevisions: 1 }).meetingChanges).toEqual([]);
+  });
+
+  it("the map rework's prompt holds the meeting's changes as M and the map's own edits as E: no id names two edits", async () => {
+    const { _testing: ai } = require('../workflow/nodes/ai-nodes');
+    const { PromptBuilder } = require('../prompt-builder');
+    const state = approvedWith(fourChanges);
+    const left = clone(MAP);
+    left.headline = 'The Ledger Kept Talking, and the Room Kept Quiet.';
+    const rework = {
+      ...state, outline: null, _previousOutline: left, _outlineHandEdits: standingOnMap(null, MAP, left),
+      _outlineFeedback: 'Lead with the ledger.', humanOutlineRevisionCount: 1, outlineRevisionCount: 0
+    };
+    const builder = new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() }, 'journalist', state.sessionConfig, state.canonicalCharacters, state.characterData.characters);
+    const { prompt } = await ai.mapReworkCall(rework, builder, 'journalist');
+    const block = (tag) => prompt.slice(prompt.indexOf(`<${tag}>`), prompt.indexOf(`</${tag}>`));
+    const meeting = [...block('SETTLED_WEAVE').matchAll(/\b([A-Z]\d+)\b(?=[:\]])/g)].map((m) => m[1]);
+    const map = [...block('HAND_EDITS').matchAll(/^(E\d+) \(/gm)].map((m) => m[1]);
+    expect(meeting).toEqual(['M1', 'M3', 'M2']);
+    expect(map).toEqual(['E1']);
   });
 });

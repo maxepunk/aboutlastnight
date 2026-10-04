@@ -13,9 +13,11 @@
  *   joins a thread left out, so no later writer meets the link;
  * - every question with what its answer changes, and the director's answer word for word
  *   or the mark that it is unanswered;
- * - each change the director made at the meeting, marked on its line by its edit's id
- *   (lib/hand-edit-diff.js weaveDirectorsShare reads the edits): the map marks what it
- *   fits in by those ids.
+ * - each change the director made at the meeting, marked on its line by its id in the
+ *   meeting's own form, M and the edit's number (meetingChangeId; brief 4.14a; the edits
+ *   are read by lib/hand-edit-diff.js weaveDirectorsShare): the map names what it fits in by
+ *   those ids, and no later prompt holds a meeting change and a map's or a desk's edit under
+ *   one id.
  *
  * The writer's stronger-main-thread proposal stays out: the roles say which thread the
  * director made the main thread.
@@ -34,6 +36,29 @@ const { weaveDirectorsShare, carriedEdits } = require('../hand-edit-diff');
 
 /** The settled weave's tag, the marker a later writer's render carries. */
 const SETTLED_WEAVE_TAG = 'SETTLED_WEAVE';
+
+/** The letter a meeting change's id opens with wherever a later stage's prompt shows it (meetingChangeId). */
+const MEETING_CHANGE_PREFIX = 'M';
+
+/**
+ * A meeting change's id in the meeting's own form, M and the edit's number (brief 4.14a): the
+ * meeting's E1 is M1. The meeting's edits are stored as E1, E2, ..., as the map's and the
+ * desk's are, so wherever a later stage's prompt shows a meeting change (the settled weave,
+ * which the map writer, the map rework, the article writer, the article rework and the article
+ * judge read) it carries this form, and no prompt holds two different edits under one id. A
+ * map's change to the weave names its source in this form (lib/map.js meetingEditIdsOf). The
+ * meeting's own calls, its rework and its fact check, hold its edits alone and name them as
+ * stored.
+ *
+ * @param {string} id - a meeting edit's id, as stored (`E3`)
+ * @returns {string} `M3`
+ * @throws {Error} for an id that is no meeting edit's
+ */
+function meetingChangeId(id) {
+  const m = /^E(\d+)$/.exec(typeof id === 'string' ? id.trim() : '');
+  if (!m) throw new Error(`meetingChangeId: a meeting edit's id is E and a number (got ${JSON.stringify(id)}).`);
+  return `${MEETING_CHANGE_PREFIX}${m[1]}`;
+}
 
 /** The answers' tag, as the fact check's prompt prints it (evaluator-nodes.js TRUTH_MATERIAL). */
 const DIRECTOR_ANSWERS_TAG = 'DIRECTOR_ANSWERS';
@@ -88,7 +113,7 @@ function questionLines(question, { unansweredLine }) {
 function renderSettledWeave(weave, edits) {
   if (!isWeave(weave)) return '';
   const share = weaveDirectorsShare(edits);
-  const fieldMark = (field) => changeMark(share.fields[field] ? [share.fields[field]] : []);
+  const fieldMark = (field) => changeMark(share.fields[field] ? [meetingChangeId(share.fields[field])] : []);
 
   const lines = [
     `<${SETTLED_WEAVE_TAG}>`,
@@ -114,11 +139,11 @@ function renderSettledWeave(weave, edits) {
   threads.forEach((thread) => {
     const id = textOf(thread.id);
     const parts = [];
-    if (share.addedThreads[id]) parts.push(`${share.addedThreads[id]}: a thread they added`);
-    if (share.reroledThreads[id]) parts.push(`${share.reroledThreads[id]}: the role`);
+    if (share.addedThreads[id]) parts.push(`${meetingChangeId(share.addedThreads[id])}: a thread they added`);
+    if (share.reroledThreads[id]) parts.push(`${meetingChangeId(share.reroledThreads[id])}: the role`);
     Object.entries(share.threadFields)
       .filter(([place]) => place.startsWith(`${id}.`))
-      .forEach(([place, editId]) => parts.push(`${editId}: the ${place.slice(id.length + 1)}`));
+      .forEach(([place, editId]) => parts.push(`${meetingChangeId(editId)}: the ${place.slice(id.length + 1)}`));
     const receipt = textOf(thread.receipt) ? ` Receipt: ${textOf(thread.receipt)}.` : '';
     const verdict = thread.verdict === true ? " It carries the room's verdict." : '';
     const reason = textOf(thread.reason) && thread.role === 'left-out' ? ` Why it is left out: ${textOf(thread.reason)}` : '';
@@ -180,5 +205,8 @@ module.exports = {
   DIRECTOR_ANSWERS_TAG,
   renderSettledWeave,
   settledWeaveOf,
-  renderDirectorAnswers
+  renderDirectorAnswers,
+  // Brief 4.14a: a meeting change's id in the meeting's own form
+  MEETING_CHANGE_PREFIX,
+  meetingChangeId
 };

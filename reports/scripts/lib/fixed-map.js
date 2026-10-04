@@ -14,7 +14,8 @@
  * The card names a document no record holds and the photos are no session's, so the map
  * checks find failures on every session, and the map's automatic rework has the checks'
  * lines to fix. Beat b1 carries the fixed weave's connection c1, and the one change to the
- * weave names its first edit.
+ * weave names its first edit, in the meeting's own form, as the settled weave marks it (M1;
+ * brief 4.14a).
  */
 
 const FIXED_MAP_BASELINE = Object.freeze({
@@ -46,7 +47,7 @@ const FIXED_MAP_BASELINE = Object.freeze({
   dropped: [{ slot: 'thePlayers', reason: 'RENDER-DIFF REASON: everyone appears above.' }],
   leftOut: [{ id: 'b9', kind: 'scene', material: 'RENDER-DIFF LEFT OUT: a scene the story does not need', players: [] }],
   expectedLength: 900,
-  weaveChanges: [{ source: 'E1', change: 'RENDER-DIFF CHANGE: the story the director rewrote at the meeting.' }]
+  weaveChanges: [{ source: 'M1', change: 'RENDER-DIFF CHANGE: the story the director rewrote at the meeting.' }]
 });
 
 /** The map as the director left it: b2 struck into leftOut, the second photo moved to the lede. */
