@@ -764,13 +764,10 @@ describe("4.9: the map's changes to the weave, and the standing notes", () => {
   });
 });
 
-describe('4.9: a stop with no map, and the photos', () => {
-  test('says so, with the way back to the meeting', () => {
-    const view = ViewLogic.mapView({ outline: { lede: { hook: 'An old outline' } }, settledStory: null }, null);
-    expect(view.hasMap).toBe(false);
-    expect(view.emptyLine).toBe('This stop holds no story map, so there is nothing to edit here. Go back to the story meeting: approving it there writes the map.');
-  });
-
+// Task 4.11: a stop with no map went with the old-thread guard. Only a thread from before
+// the story meeting reached one, and the console now shows the server's message in its
+// place (checkpoint-view-logic-old-thread.test.js).
+describe('4.9: the photos', () => {
   test("a photo's thumbnail is the session's photos folder, which the console serves to a logged-in director", () => {
     expect(ViewLogic.mapPhotoUrl('100326', 'Alex & Sarah.jpg')).toBe('/sessionphotos/100326/Alex%20%26%20Sarah.jpg');
     expect(ViewLogic.mapPhotoUrl('', 'a.jpg')).toBe('');

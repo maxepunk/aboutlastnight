@@ -2439,9 +2439,6 @@
   /** The line under the settled story: the story is the meeting's, and going back there costs no model call (R9). */
   var STORY_HINT = 'The story was settled at the story meeting. To change it, go back to the meeting: it reopens as you left it, with no model call.';
 
-  /** What a stop with no map says. */
-  var EMPTY_MAP_LINE = 'This stop holds no story map, so there is nothing to edit here. Go back to the story meeting: approving it there writes the map.';
-
   /** Why a line's controls are off, while any are: no move or edit can find a line under the writer's repeat. */
   var MAP_LOCKED_HINT = 'The writer gave one id to more than one beat, or placed a photo twice, so the map cannot move or edit those lines: a send-back gives each its own place.';
 
@@ -2732,8 +2729,12 @@
    *   under a repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its
    *   controls off, with `lockedHint`.
    *
+   * The stop always holds a map: a thread whose stop holds none is from before the story
+   * meeting, and app.js shows the server's message in place of the stop (oldThreadView;
+   * task 4.11).
+   *
    * @param {Object} data - the stop's payload
-   * @param {Object|null} map - the map as the director has it (mapDraftOf, then their changes)
+   * @param {Object} map - the map as the director has it (mapDraftOf, then their changes)
    * @returns {Object}
    */
   function mapView(data, map) {
@@ -2743,9 +2744,6 @@
     var story = isPlainObject(d.settledStory)
       ? { story: asString(d.settledStory.story), question: asString(d.settledStory.question) }
       : null;
-    if (!editLogic.isMapValue(map)) {
-      return { hasMap: false, emptyLine: EMPTY_MAP_LINE, settledStory: story, storyHint: STORY_HINT };
-    }
     var shown = editLogic.isMapValue(d.outline) ? d.outline : null;
     var shownBeatIds = editLogic.mapBeatPlacements(shown).map(function (placement) { return placement.id; });
     var writers = editLogic.mapRepeats(shown);
@@ -2839,7 +2837,6 @@
 
     return {
       hasMap: true,
-      emptyLine: '',
       settledStory: story,
       storyHint: STORY_HINT,
       round: human > 0
