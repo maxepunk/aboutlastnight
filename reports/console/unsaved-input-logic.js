@@ -21,7 +21,9 @@
  * it, and the review saw Approve drop it without a word. Save & Approve sends the JSON, so it waits
  * for what the JSON leaves out: an open editor's form, and every change made on the desk after the
  * JSON editor took its text from it. The review saved a block edit, as the line asked, and Save &
- * Approve then sent the JSON from before the save.
+ * Approve then sent the JSON from before the save. With an editor open too, its line names every
+ * step that releases it, in order (task 4.14g): a save changes the desk, so after one the JSON
+ * editor takes the desk's text again, and a cancel changes nothing.
  *
  * unsavedInputLine(stop, open) is the one rule. Each stop's component asks it once per render for
  * each set of buttons that sends one thing, with what it has open, and gets back the line for those
@@ -232,11 +234,24 @@
   /**
    * The JSON editor's Save & Approve sends the JSON typed there: neither an open editor's form nor a
    * change made on the desk after the editor opened is in it.
+   *
+   * With an editor open too, the one instruction names every step that releases it, in order (task
+   * 4.14g): a save puts the edit on the desk, after which the JSON editor must take the desk's text
+   * again; a cancel leaves the desk as it is, so it releases Save & Approve on its own while the desk
+   * is as the JSON editor took it, and with JSON typed, Save & Approve then sends what was typed.
    */
   function jsonEditorInstructions(open) {
-    var instructions = deskEditorInstructions(open);
     var json = deskJson(open);
-    if (json && json.behind) instructions.push(json.typed ? JSON_BEHIND_TYPED : JSON_BEHIND);
+    var reopen = json && json.typed ? JSON_BEHIND_TYPED : JSON_BEHIND;
+    if (json && isPlainObject(open.editor)) {
+      var name = deskEditorName(open.editor, open.bundle);
+      var edit = name ? 'your edit to ' + name : 'the edit you have open';
+      return [json.behind
+        ? 'save or cancel ' + edit + ', then ' + reopen
+        : 'cancel ' + edit + ', or save it and then ' + reopen];
+    }
+    var instructions = deskEditorInstructions(open);
+    if (json && json.behind) instructions.push(reopen);
     return instructions;
   }
 

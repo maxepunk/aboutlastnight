@@ -193,11 +193,11 @@ describe('4.14d fix round 1, finding 2: JSON typed in the desk\'s JSON editor ho
     expect(unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: null })).toBeNull();
   });
 
-  it('with an editor open too, names the editor and then the typed JSON; Save & Approve waits for the editor alone', () => {
+  it('with an editor open too, names the editor and then the typed JSON; Save & Approve names every step that releases it (task 4.14g)', () => {
     expect(unsavedInputLine('article', withJson(TYPED, OPEN_BLOCK)))
       .toBe('Before you approve or send back: save or cancel your edit to the paragraph in "The Story"; close the JSON editor to discard what you typed in it, or send what you typed with Save & Approve.');
     expect(unsavedInputLine('article-json', withJson(TYPED, OPEN_BLOCK)))
-      .toBe('Before you approve, save or cancel your edit to the paragraph in "The Story".');
+      .toBe('Before you approve, cancel your edit to the paragraph in "The Story", or save it and then close the JSON editor, which discards what you typed in it, and open it again so it holds your latest changes on the desk.');
   });
 
   it('refuses an open JSON editor that does not say what it holds and the text it opened with', () => {
@@ -238,14 +238,52 @@ describe('4.14d fix round 1, finding 1: the JSON editor\'s Save & Approve waits 
       .toBe('Before you approve or send back, close the JSON editor to discard what you typed in it.');
   });
 
-  it('with an editor open too, names the editor first', () => {
+  it('with an editor open too, names the editor\'s step and then the JSON editor\'s, in the order they release it (task 4.14g)', () => {
     expect(unsavedInputLine('article-json', withJson(SEED, { deskVersion: 3, editor: OPEN_BLOCK })))
-      .toBe('Before you approve: save or cancel your edit to the paragraph in "The Story"; close the JSON editor and open it again so it holds your latest changes on the desk.');
+      .toBe('Before you approve, save or cancel your edit to the paragraph in "The Story", then close the JSON editor and open it again so it holds your latest changes on the desk.');
   });
 
   it('refuses an open JSON editor that does not say the desk\'s count when it opened, or a desk that does not say its count now', () => {
     expect(() => unsavedInputLine('article-json', { editor: null, bundle: deskBundle(), json: { text: SEED, seed: SEED }, deskVersion: 2 })).toThrow(/seededAt/);
     expect(() => unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: { text: SEED, seed: SEED, seededAt: 2 } })).toThrow(/deskVersion/);
+  });
+});
+
+describe('4.14g: with the JSON editor and an editor both open, the line under Save & Approve names every step that releases it', () => {
+  // The re-review of 4.14d fix round 1 (a new minor): with both open, the line under Save & Approve
+  // said only to save or cancel the edit. A save changes the desk, so a second hold followed (close
+  // the JSON editor and open it again), and a director who saved in order to send typed JSON found it
+  // could no longer be sent. A cancel changes nothing on the desk, so while the desk is as the JSON
+  // editor took it, a cancel alone releases Save & Approve.
+  const SEED = JSON.stringify(deskBundle(), null, 2);
+  const TYPED = SEED.replace('We only kept the books.', 'We kept two sets of books.');
+  const OPEN_BLOCK = { type: 'block', sectionIdx: 1, blockIdx: 0 };
+  /** The desk at `deskVersion` with `editor` open, its JSON editor holding `text`, opened on SEED at `seededAt`. */
+  const both = (text, { seededAt = 2, deskVersion = 2, editor = OPEN_BLOCK } = {}) =>
+    ({ editor, bundle: deskBundle(), json: { text, seed: SEED, seededAt }, deskVersion });
+
+  it('with the desk as the JSON editor took it: cancel the edit, or save it and then close the JSON editor and open it again', () => {
+    expect(unsavedInputLine('article-json', both(SEED)))
+      .toBe('Before you approve, cancel your edit to the paragraph in "The Story", or save it and then close the JSON editor and open it again so it holds your latest changes on the desk.');
+  });
+
+  it('with the desk changed since the JSON editor opened: save or cancel the edit, then close the JSON editor and open it again, saying what that discards', () => {
+    expect(unsavedInputLine('article-json', both(TYPED, { deskVersion: 3 })))
+      .toBe('Before you approve, save or cancel your edit to the paragraph in "The Story", then close the JSON editor, which discards what you typed in it, and open it again so it holds your latest changes on the desk.');
+  });
+
+  it('names an editor it cannot name generically', () => {
+    expect(unsavedInputLine('article-json', both(SEED, { editor: { type: 'something-new' } })))
+      .toBe('Before you approve, cancel the edit you have open, or save it and then close the JSON editor and open it again so it holds your latest changes on the desk.');
+  });
+
+  it('each step releases Save & Approve as the line says: a cancel alone, or a save and then the JSON editor opened again', () => {
+    // A cancel closes the editor and leaves the desk as it was.
+    expect(unsavedInputLine('article-json', both(TYPED, { editor: null }))).toBeNull();
+    // A save moves the desk on; the JSON editor opened again takes the desk's text and count.
+    expect(unsavedInputLine('article-json', both(SEED, { editor: null, deskVersion: 3 })))
+      .toBe('Before you approve, close the JSON editor and open it again so it holds your latest changes on the desk.');
+    expect(unsavedInputLine('article-json', both(SEED, { editor: null, seededAt: 3, deskVersion: 3 }))).toBeNull();
   });
 });
 
