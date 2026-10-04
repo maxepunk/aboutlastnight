@@ -229,3 +229,160 @@ describe('4.12c: the harness prints the input review and the character-IDs stop 
     expect(SRC).not.toMatch(/--action and --note go with/);
   });
 });
+
+// Task 4.12c, fix round 1: the input review's and the character-IDs stop's pages are what the
+// stops log counts, and their screens show more than the page: the blocks each component renders
+// straight from the payload, with no view model. The harness prints those beside the page, where
+// the screen shows them (scripts/lib/stop-print.js), so a run sees what the director sees: an
+// enrichment that fell back (the article would have no quote bank), a remote session's mode, the
+// roster with its pronouns. The stops log still counts the page alone.
+describe('4.12c, fix round 1: the harness prints beside a page the blocks its screen renders from the payload', () => {
+  const { stopPage, wordsShown } = require('../../../lib/stop-pages');
+  const { BESIDE_HEADINGS } = require('../../../scripts/lib/stop-print');
+  const InputLogic = require('../../../console/input-review-logic');
+  const componentSrc = (file) => fs.readFileSync(path.join(SCRIPTS, '..', 'console', 'components', 'checkpoints', file), 'utf8');
+  const COMPONENT_SRC = { 'input-review': componentSrc('InputReview.js'), 'character-ids': componentSrc('CharacterIds.js') };
+
+  const FALLBACK = 'Director-notes enrichment failed (SDK timeout). The article will have no quote bank. Reject with corrections to retry.';
+  const DROPPED = '2 quotes dropped: not found verbatim in the prose. Anything a player actually said has to be in the notes word for word to reach the article.';
+
+  /** The input review's payload as GET /checkpoint sends it: a remote session whose enrichment fell back. */
+  function reviewData(extra = {}) {
+    return {
+      type: 'input-review',
+      sessionConfig: {
+        sessionId: '100426',
+        journalistFirstName: 'Cass',
+        reportingMode: 'remote',
+        guestReporter: { name: 'Quinn' },
+        roster: ['Alex', 'Morgan', 'Zed'],
+        rosterPronouns: { Alex: 'he/him', Morgan: 'she/her' },
+        accusation: { accused: ['Alex'], charge: 'Sold the company out from under Marcus', verdictKind: 'culprit' },
+        exposures: [{ tokenId: 'ale003', exposer: 'Quinn', time: '08:10 PM', owner: 'Alex Reeves' }],
+        exposedTokenCount: 1
+      },
+      directorNotes: { whiteboard: { names: ['Alex', 'Morgan'] } },
+      playerFocus: {
+        primaryInvestigation: 'Who sold the company?', primarySuspects: ['Alex', 'Morgan'],
+        playerTheory: 'Alex sold it to cover a debt.', confidenceLevel: 'medium', secondaryThreads: ['The second ledger']
+      },
+      canonicalCharacters: { Alex: 'Alex Reeves', Morgan: 'Morgan Reed' },
+      enrichment: { quotes: 0, characterMentions: 2, transactionReferences: 0, fallback: { reason: 'SDK timeout' }, warnings: { droppedQuotes: 2, unrecordedSpeakers: 1 } },
+      ledger: { clock: { decided: true, evening: true, firstTime: '07:50 PM' }, adjustmentsParsed: true, accounts: [{ name: 'Melanie', total: 75000, tokenCount: 1 }], adjustments: [], mismatches: [], unclassified: [] },
+      ...extra
+    };
+  }
+
+  /** The character-IDs stop's payload: the interrupt's analyses and roster, getCheckpointData's photos and list. */
+  function photosData(extra = {}) {
+    return {
+      type: 'character-ids',
+      photoAnalyses: { analyses: [{ filename: 'hero.jpg', visualContent: 'Alex and Morgan at the bar.', characterDescriptions: [{ role: 'CENTRAL', description: 'A man in a grey suit.' }] }] },
+      sessionPhotos: ['/p/hero.jpg'],
+      leftOutPhotos: [],
+      roster: ['Alex', 'Morgan'],
+      ...extra
+    };
+  }
+
+  /** Where a block's or a section's heading prints, folded or not. */
+  const titleAt = (printed, label) => printed.findIndex((line) => line.tone === 'title' && line.text.replace(/^▸ /, '') === `── ${label} ──`);
+
+  it('prints the enricher\'s fallback as an alert below the page, with the counts and the warnings the panel shows', () => {
+    const data = reviewData();
+    const printed = stopPrint('input-review', data);
+    const fallback = printed.find((line) => line.text.includes(FALLBACK));
+    expect(fallback).toEqual(expect.objectContaining({ tone: 'alert', folded: false }));
+    const text = textOf(printed);
+    expect(text).toContain('Quotes indexed: 0 · Character mentions: 2 · Transaction links: 0');
+    expect(text).toContain(DROPPED);
+    const warnings = InputLogic.enrichmentWarningLines(data.enrichment.warnings);
+    expect(warnings).toEqual(['1 quote speaker not recorded: the notes and corrections do not name them']);
+    warnings.forEach((warning) => expect(text).toContain(warning));
+    // The panel closes the screen: below the whiteboard, the page's last section.
+    expect(titleAt(printed, 'Director-Notes Enrichment')).toBeGreaterThan(titleAt(printed, 'Whiteboard'));
+    expect(printed.indexOf(fallback)).toBeGreaterThan(titleAt(printed, 'Director-Notes Enrichment'));
+  });
+
+  it('prints the session\'s settings and the roster with each pronoun above the page, flagging a name no character matches', () => {
+    const printed = stopPrint('input-review', reviewData());
+    const text = textOf(printed);
+    ['Session ID: 100426', 'Journalist: Cass', 'Reporting Mode: remote', 'Guest Reporter: Quinn | Guest Reporter', 'Theme: journalist']
+      .forEach((setting) => expect(text).toContain(setting));
+    const at = (name) => printed.findIndex((line) => line.text.trim() === name);
+    ['Alex (he/him)', 'Morgan (she/her)', 'Zed (they/them)'].forEach((name) => expect([name, at(name) > -1]).toEqual([name, true]));
+    expect(printed[at('Zed (they/them)') + 1]).toEqual(expect.objectContaining({ tone: 'concern', beside: true, text: '    ⚠ no character match' }));
+    expect(printed.filter((line) => line.text.includes('no character match'))).toHaveLength(1);
+    expect(titleAt(printed, 'Session Info')).toBeLessThan(titleAt(printed, 'Roster'));
+    expect(titleAt(printed, 'Roster')).toBeLessThan(titleAt(printed, 'Accusation'));
+  });
+
+  it('leaves out the reporting mode and the guest reporter at a detective session, as the screen does', () => {
+    const text = textOf(stopPrint('input-review', reviewData(), { theme: 'detective' }));
+    expect(text).toContain('Theme: detective');
+    expect(text).not.toMatch(/Reporting Mode|Guest Reporter/);
+  });
+
+  it('prints the player focus where the screen shows it: after the exposures, before the director\'s notes and the whiteboard', () => {
+    const data = reviewData({
+      directorNotes: { quotes: [{ speaker: 'Morgan', text: 'I only kept the books' }], whiteboard: { names: ['Alex', 'Morgan'] } },
+      enrichment: { quotes: 1, characterMentions: 2, transactionReferences: 0, fallback: null, warnings: {} }
+    });
+    const printed = stopPrint('input-review', data);
+    const focus = titleAt(printed, 'Player Focus');
+    expect(titleAt(printed, 'Exposed Memories (1)')).toBeLessThan(focus);
+    expect(focus).toBeLessThan(titleAt(printed, 'Quote Bank (1)'));
+    expect(titleAt(printed, 'Quote Bank (1)')).toBeLessThan(titleAt(printed, 'Whiteboard'));
+    expect(printed.slice(focus + 1, focus + 6).map((line) => line.text)).toEqual([
+      '  Primary Investigation: Who sold the company?', '  Primary Suspects: Alex, Morgan',
+      '  Player Theory: Alex sold it to cover a debt.', '  Confidence: medium', '  Secondary Threads: The second ledger'
+    ]);
+    expect(textOf(printed)).not.toContain('enrichment failed');
+  });
+
+  it('prints the page whole and in its order, and the stops log counts the page alone', () => {
+    const data = reviewData();
+    const page = stopPage('input-review', data);
+    const printed = stopPrint('input-review', data);
+    let at = 0;
+    page.lines.forEach((line) => {
+      const needle = line.text || line.label;
+      const found = printed.findIndex((p, i) => i >= at && p.text.includes(needle) && p.folded === line.folded);
+      expect([needle, found >= at]).toEqual([needle, true]);
+      at = found + 1;
+    });
+    // None of the blocks beside the page is a line of it, so none is counted.
+    const onPage = page.lines.map((line) => `${line.label} ${line.text}`).join('\n');
+    ['remote', 'enrichment failed', 'she/her', 'Who sold the company?'].forEach((text) => expect([text, onPage.includes(text)]).toEqual([text, false]));
+    const bare = reviewData({ playerFocus: null, canonicalCharacters: {}, enrichment: null });
+    bare.sessionConfig = { accusation: bare.sessionConfig.accusation, exposures: bare.sessionConfig.exposures, exposedTokenCount: 1 };
+    expect(wordsShown('input-review', data)).toBe(wordsShown('input-review', bare));
+  });
+
+  it('prints the session\'s roster above the character-IDs cards, as the roster bar shows it, and counts the cards alone', () => {
+    const printed = stopPrint('character-ids', photosData());
+    const bar = titleAt(printed, 'Session Roster');
+    expect(bar).toBe(0);
+    expect(printed[bar + 1].text).toBe('  Alex, Morgan');
+    expect(bar).toBeLessThan(titleAt(printed, 'hero.jpg'));
+    // A thread that has parsed already: the bar reads the parse's roster, as the component does.
+    expect(textOf(stopPrint('character-ids', photosData({ roster: undefined, sessionConfig: { roster: ['Riley'] } })))).toContain('  Riley');
+    expect(titleAt(stopPrint('character-ids', photosData({ roster: [] })), 'Session Roster')).toBe(-1);
+    expect(wordsShown('character-ids', photosData())).toBe(wordsShown('character-ids', photosData({ roster: [] })));
+  });
+
+  it('heads each block in its component\'s words, and the fallback\'s alert is the enrichment panel\'s sentence', () => {
+    expect(Object.keys(BESIDE_HEADINGS).sort()).toEqual(['character-ids', 'input-review']);
+    Object.entries(BESIDE_HEADINGS).forEach(([stop, headings]) => {
+      Object.values(headings).forEach((heading) => expect([stop, heading, COMPONENT_SRC[stop].includes(`'${heading}'`)]).toEqual([stop, heading, true]));
+    });
+    ['Director-notes enrichment failed (', 'no reason recorded', 'The article will have no quote bank. Reject with corrections to retry.']
+      .forEach((words) => expect([words, COMPONENT_SRC['input-review'].includes(`'${words}'`)]).toEqual([words, true]));
+  });
+
+  it('prints the roster bar before the character-IDs handler asks who is in each photo', () => {
+    const fn = body('async function handleCharacterIds(');
+    expect(fn.indexOf("printStop('character-ids', checkpoint, currentPhase)")).toBeGreaterThan(-1);
+    expect(fn.indexOf("printStop('character-ids', checkpoint, currentPhase)")).toBeLessThan(fn.indexOf('await prompt('));
+  });
+});

@@ -10,9 +10,10 @@
  *   (exposuresView), the whiteboard (whiteboardView), and the director's notes as the enricher
  *   indexed them (quoteView, epilogueItemView). The roster and the session's settings are what
  *   the director entered, and the component renders the rest of its payload with no view model,
- *   so neither is on the page;
+ *   so neither is on the page or in its count. The harness prints the session's settings, the
+ *   roster, the player focus and the enricher's result beside the page (scripts/lib/stop-print.js);
  * - the character-IDs stop (task 4.12c): its cards (characterIdCards), each text cut where the
- *   card cuts it until the director opens the card.
+ *   card cuts it until the director opens the card. The harness prints the roster bar above them.
  * Two readers share a page:
  * - the e2e harness prints it in step mode (scripts/lib/stop-print.js);
  * - the stops log (lib/stops-log.js) records the words the director reads at each return to a

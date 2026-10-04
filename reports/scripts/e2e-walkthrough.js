@@ -1293,9 +1293,11 @@ function showConfirmationPreview(original, edits, fieldDefs = {}) {
 // ============================================================================
 
 async function handleInputReview(checkpoint, currentPhase) {
-  // Task 4.12c: the parse as the console shows it, the page the stops log counts. The display
-  // this replaced read fields the parse no longer writes (the accusation's reasoning and
-  // confidence, the notes' observations, the whiteboard's old shape).
+  // Task 4.12c: the stop as the console shows it: the parse's page, which the stops log counts,
+  // with the session's settings, the roster, the player focus and the enricher's result beside it
+  // (an enrichment that fell back prints in red). The display this replaced read fields the parse
+  // no longer writes (the accusation's reasoning and confidence, the notes' observations, the
+  // whiteboard's old shape).
   printStop('input-review', checkpoint, currentPhase);
 
   // DRY: Use centralized helpers
@@ -1426,7 +1428,8 @@ function characterIdsApprovalFor(checkpoint, photoDescriptions) {
 }
 
 async function handleCharacterIds(checkpoint, currentPhase) {
-  // Task 4.12c: the cards as the console shows them, the page the stops log counts.
+  // Task 4.12c: the cards as the console shows them, the page the stops log counts, under the
+  // roster bar the operator names each photo's people from.
   printStop('character-ids', checkpoint, currentPhase);
   const cards = characterIdCardsOf(checkpoint);
 
@@ -1942,7 +1945,8 @@ const STOP_OUTPUT_KEYS = { 'arc-selection': 'weave', outline: 'outline', article
  * A stop with a page, as the console shows it, from the console's own view models
  * (scripts/lib/stop-print.js): each line coloured by its kind, and what the page folds dimmed
  * behind its ▸. The desk shows its marks beside their pieces, the marks beside no piece, the
- * problems the console would refuse before an approve, and no score.
+ * problems the console would refuse before an approve, and no score. At the input review and the
+ * character-IDs stop, the blocks the screen renders straight from the payload print beside the page.
  */
 function printStop(stop, checkpoint, currentPhase) {
   checkpointHeader(STOP_HEADINGS[stop] || stop, currentPhase);
