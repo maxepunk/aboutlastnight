@@ -889,6 +889,9 @@ function recordTexts(state) {
  * so a structural hit in the director's text, or caused by the director's cut, is a
  * concern for the director.
  *
+ * Phase 4 (brief 4.6; R5): the cards' sources are the record's alone, the evidence
+ * bundle's; the arc packages went.
+ *
  * @param {Object} state
  * @returns {Object}
  */
@@ -898,7 +901,6 @@ function buildFactCheckArgs(state) {
   const directorText = directorWords(state).join('\n');
   return {
     contentBundle: state.contentBundle,
-    arcEvidencePackages: state.arcEvidencePackages,
     evidenceBundle: state.evidenceBundle,
     roster: config.roster,
     sessionPhotos: state.sessionPhotos,

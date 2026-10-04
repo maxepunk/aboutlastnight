@@ -381,13 +381,7 @@ SECTION 6: CRAFT GUIDANCE (the rule set's craft files for the arc writer: story,
 
 **Checkpoints**: `photos` (2.36, conditional - skipped when photosPath came from /start); `character-ids` (1.66, historical number)
 
-### Phase 2.4: Arc Evidence Packaging
-
-**Node**: `buildArcEvidencePackages` (in `lib/workflow/nodes/ai-nodes.js`)
-
-**Purpose**: Creates per-arc evidence packages with full quotable content for outline generation.
-
-**Output**: `arcEvidencePackages` - Evidence grouped by selected arc with full text for quoting.
+The photo branch joins at the outline writer. Phase 2.4, the arc evidence packages (`buildArcEvidencePackages`), went in phase 4 (brief 4.6; R5): every writer reads the record whole, and the fact check's card sources come from it alone.
 
 ### Phase 3: Outline Generation
 
@@ -749,7 +743,7 @@ function extractFullContent(item) {
 **Fixed Locations**:
 - `evidence-preprocessor.js:328` - Batch processing
 - `node-helpers.js:439` - Token routing to exposed layer
-- `ai-nodes.js:777` - Arc evidence packages
+- `ai-nodes.js:777` - Arc evidence packages (gone since phase 4, brief 4.6; R5)
 
 ### Hybrid Evidence Curation (Commit 8.11)
 
@@ -827,7 +821,7 @@ The party, the investigation and Nova's day, and the clock every logged time is 
 1. Was a photos folder supplied - at /start or at the `photos` checkpoint? (state.photosPath)
 2. Are photos analyzed in `photoAnalyses`?
 3. Are `characterDescriptions` mapped to roster?
-4. Did the director exclude the photo at the `character-ids` stop? An excluded photo reaches no writer or judge (T13). Every photo the director kept reaches the article writer through `articleWriterInputs` (`options.photos`, since 3.9), whatever the arc packages list.
+4. Did the director exclude the photo at the `character-ids` stop? An excluded photo reaches no writer or judge (T13). Every photo the director kept reaches the article writer through `articleWriterInputs` (`options.photos`, since 3.9).
 
 **Fix**: `fetchSessionPhotos` THROWS on a missing folder now, so a bad path shows as a run error naming the path, not as a silent zero-photo article. Check the `photos` gate's answer, then the `character-ids` approval and its exclusions.
 

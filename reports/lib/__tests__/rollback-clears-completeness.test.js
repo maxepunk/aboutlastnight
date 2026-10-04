@@ -3,7 +3,8 @@
  *
  * buildRollbackState clears a hand-maintained denylist (ROLLBACK_CLEARS). Nothing
  * previously asserted that the denylist actually COVERS every field a node writes —
- * which is exactly how ROLL-1 (roster) and ROLL-2 (arcEvidencePackages) slipped in.
+ * which is exactly how ROLL-1 (roster) and ROLL-2 (the arc packages, which went in
+ * phase 4, brief 4.6) slipped in.
  *
  * This test enumerates every Annotation channel (ReportStateAnnotation.spec) and
  * asserts each one is EITHER cleared by some rollback point OR explicitly listed in
@@ -55,10 +56,6 @@ describe('ROLLBACK_CLEARS completeness (ROOT-1)', () => {
     expect(clearedSomewhere.has('rosterPronouns')).toBe(true);
   });
 
-  test('arcEvidencePackages is cleared somewhere (ROLL-2 guard)', () => {
-    expect(clearedSomewhere.has('arcEvidencePackages')).toBe(true);
-  });
-
   test('full-context raw inputs cleared + _previousFullContext exempt (ROLL-4 guard)', () => {
     expect(clearedSomewhere.has('accusation')).toBe(true);
     expect(clearedSomewhere.has('sessionReport')).toBe(true);
@@ -87,9 +84,9 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
   ];
 
   // The PHOTO BRANCH (photo late-join). These two gates are not stages of the main
-  // line: the branch hangs off checkpointArcSelection's forward leg and joins at
-  // buildArcEvidencePackages. In replay order: ... arc-selection -> photos ->
-  // character-ids -> outline ...
+  // line: the branch hangs off checkpointArcSelection's forward leg and joins at the
+  // outline writer (phase 4, brief 4.6: the arc packages that joined it went). In
+  // replay order: ... arc-selection -> photos -> character-ids -> outline ...
   const PHOTO_BRANCH = ['photos', 'character-ids'];
 
   // The branch's fields split in two, and the split is what the two rules below
@@ -155,8 +152,6 @@ describe('ROLLBACK_CLEARS per-point re-pause completeness (ROOT-1, audit extensi
     for (const point of PHOTO_BRANCH) {
       expect(ROLLBACK_CLEARS[point]).toContain('outlineApproved');
       expect(ROLLBACK_CLEARS[point]).toContain('articleApproved');
-      // The join rebuilds the packages from the new analyses/mappings.
-      expect(ROLLBACK_CLEARS[point]).toContain('arcEvidencePackages');
     }
   });
 

@@ -6,11 +6,11 @@
  *
  * Added in Commit 8.6 to provide rich visual context to arc analysis.
  * Photo late-join: the whole chain now runs at Phase 2.36, AFTER arc selection,
- * off checkpointArcSelection's forward leg and joining at
- * buildArcEvidencePackages. It no longer informs evidence curation (nothing
- * before the join consumed a photo analysis anyway), and the director can run a
- * session to its arcs before the photos are curated. The 1.65/1.66/1.67 phase
- * numbers below are historical display strings, not an order.
+ * off checkpointArcSelection's forward leg and joining at the outline writer
+ * (phase 4, brief 4.6: the arc packages that joined it went). It no longer informs
+ * evidence curation (nothing before the join consumed a photo analysis anyway), and
+ * the director can run a session to its arcs before the photos are curated. The
+ * 1.65/1.66/1.67 phase numbers below are historical display strings, not an order.
  *
  * Key features:
  * - Uses Haiku vision for fast, cost-effective analysis

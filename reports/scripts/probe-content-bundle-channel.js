@@ -12,9 +12,10 @@
  * don't need to re-run upstream nodes.
  *
  * Evidence: the session's memory tokens AND paper documents (fetched/tokens.json
- * `{ tokens }`, fetched/paper-evidence.json `{ evidence }`), packaged by the pipeline's
- * own buildArcEvidencePackages, so the prompt carries what the real article writer gets.
- * Until 2026-09-25 the probe misread the paper file's shape and sent no paper documents.
+ * `{ tokens }`, fetched/paper-evidence.json `{ evidence }`), in the record view the real
+ * article writer reads. Until 2026-09-25 the probe misread the paper file's shape and sent
+ * no paper documents. Phase 4 (brief 4.6; R5): the arc packages went, so the probe
+ * packages nothing; its record is the documents its synthetic arcs draw on.
  *
  * Output: the full diagnostic envelope, regardless of success or failure.
  *
@@ -107,57 +108,43 @@ const ARC_NAMES = [
 const ITEMS_PER_ARC = [13, 11, 21, 16, 12];
 
 /**
- * The probe's arc evidence packages, shaped by the pipeline's own packaging node
- * (buildArcEvidencePackages), so every item is what the real article writer gets: a
- * memory token as `memory`, a paper document as `paper`, each with its owner, its full
- * text and its quotable excerpts. The evidence is drawn from one pool that alternates
- * paper documents and tokens (the 092026 article prompt carried 24 paper documents and 15
- * tokens), skipping items with no text, and wraps when an arc asks for more than the
- * pool holds.
+ * The probe's record and each synthetic arc's share of it. The documents are drawn from
+ * one pool that alternates paper documents and tokens (the 092026 article prompt carried
+ * 24 paper documents and 15 tokens), skipping items with no text, as many as the five
+ * synthetic arcs of the 050926 call drew on (ITEMS_PER_ARC), wrapping when an arc asks for
+ * more than the pool holds. Each arc's share names its documents by their ids in the
+ * record view.
  *
- * @param {{tokens: Object[], paperEvidence: Object[], roster: string[]}} session
- * @returns {Promise<Object[]>} arcEvidencePackages
+ * @param {{tokens: Object[], paperEvidence: Object[]}} session
+ * @returns {{evidenceBundle: Object, arcDocuments: string[][]}}
  */
-async function buildProbePackages({ tokens, paperEvidence, roster }) {
+function buildProbeRecord({ tokens, paperEvidence }) {
   // Loaded here, not at the top: requiring the probe must not load the pipeline.
-  const { buildArcEvidencePackages } = require('../lib/workflow/nodes/ai-nodes');
   const { extractFullContent } = require('../lib/workflow/nodes/node-helpers');
+  const { recordIdOf } = require('../lib/prompt-renderers/record-view');
 
-  // The id the packaging node looks each item up by (ai-nodes.js buildArcEvidencePackages).
-  const withText = (items, idOf) => items
-    .filter((item) => extractFullContent(item).length > 0)
-    .map((item) => idOf(item))
-    .filter(Boolean);
-  const paperIds = withText(paperEvidence, (p) => p.notionId || p.id || p.pageId || p.name);
-  const tokenIds = withText(tokens, (t) => t.tokenId || t.id);
+  const withText = (items) => items.filter((item) => extractFullContent(item).length > 0 && recordIdOf(item));
+  const paper = withText(paperEvidence);
+  const memories = withText(tokens);
   const pool = [];
-  for (let i = 0; i < Math.max(paperIds.length, tokenIds.length); i++) {
-    if (i < paperIds.length) pool.push(paperIds[i]);
-    if (i < tokenIds.length) pool.push(tokenIds[i]);
+  for (let i = 0; i < Math.max(paper.length, memories.length); i++) {
+    if (i < paper.length) pool.push(paper[i]);
+    if (i < memories.length) pool.push(memories[i]);
   }
   if (pool.length === 0) throw new Error('the session has no memory token or paper document with any text');
 
   let next = 0;
-  const narrativeArcs = ARC_NAMES.map((title, arcIdx) => ({
-    id: `arc-${arcIdx}`,
-    title,
-    characterPlacements: {},
-    keyEvidence: Array.from({ length: ITEMS_PER_ARC[arcIdx] }, () => pool[next++ % pool.length])
-  }));
-
-  const { arcEvidencePackages } = await buildArcEvidencePackages({
-    selectedArcs: narrativeArcs.map((arc) => arc.id),
-    narrativeArcs,
-    evidenceBundle: { exposed: { tokens, paperEvidence } },
-    photoAnalyses: { analyses: [] }
-  }, {});
-
-  return arcEvidencePackages.map((pkg, arcIdx) => ({
-    ...pkg,
-    photos: [
-      { filename: `aln0509 (${arcIdx + 1} of 10).jpg`, characters: roster.slice(0, 3) }
-    ]
-  }));
+  const arcItems = ITEMS_PER_ARC.map((count) => Array.from({ length: count }, () => pool[next++ % pool.length]));
+  const drawn = new Set(arcItems.flat());
+  return {
+    evidenceBundle: {
+      exposed: {
+        tokens: tokens.filter((t) => drawn.has(t)),
+        paperEvidence: paperEvidence.filter((p) => drawn.has(p))
+      }
+    },
+    arcDocuments: arcItems.map((items) => items.map((item) => recordIdOf(item)))
+  };
 }
 
 /**
@@ -165,7 +152,7 @@ async function buildProbePackages({ tokens, paperEvidence, roster }) {
  * builds it, from a session's saved inputs, synthetic arcs and a synthetic outline.
  *
  * @param {{sessionId: string, sessionConfig: Object, directorNotes: Object, tokens: Object[], paperEvidence: Object[]}} session
- * @returns {Promise<{systemPrompt: string, userPrompt: string, arcEvidencePackages: Object[]}>}
+ * @returns {Promise<{systemPrompt: string, userPrompt: string, evidenceBundle: Object}>}
  */
 async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, tokens, paperEvidence }) {
   const { createPromptBuilder } = require('../lib/prompt-builder');
@@ -176,8 +163,13 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
     canonicalCharacters[name] = name;
   }
 
-  const arcEvidencePackages = await buildProbePackages({ tokens, paperEvidence, roster: sessionConfig.roster });
+  const { evidenceBundle, arcDocuments } = buildProbeRecord({ tokens, paperEvidence });
   const arcNames = ARC_NAMES;
+  // One photo per synthetic arc, each naming the first three of the roster.
+  const arcPhotos = ARC_NAMES.map((_, arcIdx) => ({
+    filename: `aln0509 (${arcIdx + 1} of 10).jpg`,
+    characters: sessionConfig.roster.slice(0, 3)
+  }));
 
   // Synthetic outline matching the real one's shape (the user's edited version was ~17KB).
   // We need similar prompt size and structure to trigger the same conditions.
@@ -198,14 +190,14 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
         ],
         convergencePoint: 'Arc 3 final paragraph: 1:08 AM, Remi turns Sam\'s laptop toward Vic and Alex.'
       },
-      arcs: arcEvidencePackages.map((pkg, idx) => ({
-        name: pkg.arcId,
+      arcs: arcDocuments.map((ids, idx) => ({
+        name: `arc-${idx}`,
         paragraphCount: 3,
         evidenceCards: [
-          { tokenId: pkg.evidenceItems[0]?.id, placement: 'after para 1', loopFunction: 'OPENER' },
-          { tokenId: pkg.evidenceItems[1]?.id, placement: 'after para 3', loopFunction: 'CLOSER' }
+          { tokenId: ids[0], placement: 'after para 1', loopFunction: 'OPENER' },
+          { tokenId: ids[1], placement: 'after para 3', loopFunction: 'CLOSER' }
         ],
-        photoPlacement: { filename: pkg.photos[0]?.filename, afterParagraph: 2, purpose: 'humanize' }
+        photoPlacement: { filename: arcPhotos[idx].filename, afterParagraph: 2, purpose: 'humanize' }
       }))
     },
     followTheMoney: {
@@ -265,27 +257,19 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
     characterData: {}
   });
 
-  // Brief 2.1: the article writer reads each document once, in full, in <RECORD>, and
-  // the packages name them by id. The probe's record is the documents its arcs cite,
-  // which keeps the prompt near a real session's size.
-  const citedIds = new Set(arcEvidencePackages.flatMap((pkg) => (pkg.evidenceItems || []).map((item) => item.id)));
-  const evidenceBundle = {
-    exposed: {
-      tokens: tokens.filter((t) => citedIds.has(t.tokenId || t.id)),
-      paperEvidence: paperEvidence.filter((p) => citedIds.has(p.notionId || p.id || p.pageId || p.name))
-    }
-  };
+  // Brief 2.1: the article writer reads each document once, in full, in <RECORD>. The
+  // probe's record is the documents its arcs draw on, which keeps the prompt near a real
+  // session's size.
 
   // The 4b fix batch (3.9 review minor 1): the article writer lists its photos under
-  // PHOTOS (options.photos), and a package points only at listed ones. The probe's photos
-  // come from the writer's own inputs (articleWriterInputs), as generateContentBundle's
-  // do: the hero first, then each package photo once. The hero is the group photo, so it
-  // names the roster.
+  // PHOTOS (options.photos). The probe's photos come from the writer's own inputs
+  // (articleWriterInputs), as generateContentBundle's do: the hero first, then each arc's
+  // photo once. The hero is the group photo, so it names the roster.
   const { articleWriterInputs } = require('../lib/workflow/nodes/ai-nodes');
   const heroImage = 'aln0509 (10 of 10).jpg';
   const sessionPhotos = [
     { filename: heroImage, characters: sessionConfig.roster },
-    ...arcEvidencePackages.flatMap((pkg) => pkg.photos || [])
+    ...arcPhotos
   ];
   const writerInputs = articleWriterInputs({
     theme: 'journalist',
@@ -299,7 +283,6 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(
     outline,
-    arcEvidencePackages,
     heroImage,
     shellAccounts,
     sessionFacts,
@@ -308,7 +291,7 @@ async function buildProbePrompt({ sessionId, sessionConfig, directorNotes, token
     { evidenceBundle, photos }
   );
 
-  return { systemPrompt, userPrompt, arcEvidencePackages };
+  return { systemPrompt, userPrompt, evidenceBundle };
 }
 
 async function main() {
@@ -339,10 +322,9 @@ async function main() {
   const session = loadSession(DATA_DIR);
   console.log(`Loaded: ${session.tokens.length} tokens, ${session.paperEvidence.length} paper items, roster=${session.sessionConfig.roster.length}`);
 
-  const { systemPrompt, userPrompt, arcEvidencePackages } = await buildProbePrompt({ sessionId: SESSION_ID, ...session });
-  const packaged = arcEvidencePackages.flatMap((pkg) => pkg.evidenceItems || []);
-  console.log(`Packaged: ${packaged.filter((i) => i.type === 'paper').length} paper documents and ` +
-    `${packaged.filter((i) => i.type === 'memory').length} memory tokens across ${arcEvidencePackages.length} arcs`);
+  const { systemPrompt, userPrompt, evidenceBundle } = await buildProbePrompt({ sessionId: SESSION_ID, ...session });
+  console.log(`Record: ${evidenceBundle.exposed.paperEvidence.length} paper documents and ` +
+    `${evidenceBundle.exposed.tokens.length} memory tokens`);
 
   console.log(`\nBuilt prompt: system=${systemPrompt.length} chars, user=${userPrompt.length} chars\n`);
 
@@ -412,4 +394,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main, tokensOf, paperEvidenceOf, loadSession, buildProbePackages, buildProbePrompt, ARC_NAMES, ITEMS_PER_ARC };
+module.exports = { main, tokensOf, paperEvidenceOf, loadSession, buildProbeRecord, buildProbePrompt, ARC_NAMES, ITEMS_PER_ARC };

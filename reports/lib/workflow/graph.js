@@ -39,7 +39,7 @@
  * checkpointArcSelection --forward--> checkpointPhotos [interrupt: photos]
  *   → fetchSessionPhotos → preprocessPhotos → analyzePhotos → detectWhiteboard
  *   → checkpointCharacterIds [interrupt: character-ids] → parseCharacterIds
- *   → finalizePhotoAnalyses → buildArcEvidencePackages
+ *   → finalizePhotoAnalyses → generateOutline
  * (The chain's PHASE numbers — 1.4/1.42/1.43/1.65/1.66/1.665/1.67 — are historical;
  *  they predate the move and are display-only strings.)
  *
@@ -563,14 +563,6 @@ function createGraphBuilder() {
   builder.addNode('reviseArcs', nodes.reviseArcs, LLM_RETRY);
 
   // ═══════════════════════════════════════════════════════
-  // ADD NODES - Phase 2.4: Arc Evidence Packages (Phase 1 Fix)
-  // ═══════════════════════════════════════════════════════
-
-  // Runs after arc selection, before outline generation
-  // Extracts full quotable content and enriched photos per arc
-  builder.addNode('buildArcEvidencePackages', nodes.buildArcEvidencePackages);
-
-  // ═══════════════════════════════════════════════════════
   // ADD NODES - Phase 3: Outline Generation
   // ═══════════════════════════════════════════════════════
 
@@ -627,9 +619,9 @@ function createGraphBuilder() {
   builder.addEdge('loadDirectorNotes', 'fetchMemoryTokens');
   builder.addEdge('fetchMemoryTokens', 'fetchPaperEvidence');
 
-  // Photo processing MOVED to Phase 2.36 (photo late-join): nothing before
-  // buildArcEvidencePackages consumes photo analyses, and the director needs the
-  // run to progress while the photos are still being curated and cleaned.
+  // Photo processing MOVED to Phase 2.36 (photo late-join): nothing before the
+  // outline writer consumes photo analyses, and the director needs the run to
+  // progress while the photos are still being curated and cleaned.
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 1.35-1.8: Sequential Checkpoints & Processing
@@ -715,9 +707,10 @@ function createGraphBuilder() {
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 2.36: Photo branch (photo late-join)
   // An independent INPUT branch, not a stage of the main line: it hangs off arc
-  // selection and joins at buildArcEvidencePackages, the first node that folds
-  // photo analyses into arc data. Placing it here also gives analyzePhotos a
-  // populated playerFocus, which was always null when the chain ran at 1.65.
+  // selection and joins at the outline writer, the first node that reads the photo
+  // analyses (phase 4, brief 4.6: the arc packages that joined it went, R5). Placing
+  // it here also gives analyzePhotos a populated playerFocus, which was always null
+  // when the chain ran at 1.65.
   // ═══════════════════════════════════════════════════════
 
   builder.addEdge('checkpointPhotos', 'fetchSessionPhotos');
@@ -727,10 +720,7 @@ function createGraphBuilder() {
   builder.addEdge('detectWhiteboard', 'checkpointCharacterIds');
   builder.addEdge('checkpointCharacterIds', 'parseCharacterIds');
   builder.addEdge('parseCharacterIds', 'finalizePhotoAnalyses');
-  builder.addEdge('finalizePhotoAnalyses', 'buildArcEvidencePackages');
-
-  // Arc evidence packages → outline generation
-  builder.addEdge('buildArcEvidencePackages', 'generateOutline');
+  builder.addEdge('finalizePhotoAnalyses', 'generateOutline');
 
   // ═══════════════════════════════════════════════════════
   // ADD EDGES - Phase 3: Outline Generation

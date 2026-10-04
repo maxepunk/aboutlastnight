@@ -14,7 +14,7 @@ const LLM_NODES = [
 ];
 const PURE_NODES = [
   'initializeSession', 'tagTokenDispositions', 'validateArcs', 'surfaceContradictions',
-  'assembleHtml', 'checkpointArcSelection', 'incrementArcRevision', 'buildArcEvidencePackages'
+  'assembleHtml', 'checkpointArcSelection', 'incrementArcRevision'
 ];
 
 function specOf(builder, name) {

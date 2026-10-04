@@ -212,7 +212,8 @@ function ensureArray(value) {
 /**
  * Extract full content from evidence item with comprehensive fallback chain
  *
- * DRY extraction from routeTokensByDisposition and buildArcEvidencePackages.
+ * DRY extraction from routeTokensByDisposition (and the arc packages, until they went
+ * in phase 4, brief 4.6).
  * Used to ensure evidence cards and pull quotes have verbatim content available.
  *
  * Fallback priority:

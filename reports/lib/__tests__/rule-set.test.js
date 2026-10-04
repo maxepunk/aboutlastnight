@@ -587,10 +587,10 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     const renders = {
       'outline writer': join(await builder.buildOutlinePrompt(
         { narrativeArcs: state.narrativeArcs, ...state._arcAnalysisCache }, state.selectedArcs, 'hero.jpg',
-        [], state.arcEvidencePackages, state.shellAccounts, null, { evidenceBundle: state.evidenceBundle }
+        [], state.shellAccounts, null, { evidenceBundle: state.evidenceBundle }
       )),
       'article writer': join(await builder.buildArticlePrompt(
-        state.outline, state.arcEvidencePackages, 'hero.jpg', state.shellAccounts, null, state.directorNotes, null,
+        state.outline, 'hero.jpg', state.shellAccounts, null, state.directorNotes, null,
         { evidenceBundle: state.evidenceBundle }
       )),
       'arc writer': arcs.buildWeavePrompt(state),
@@ -738,14 +738,13 @@ describe('the removed-phrase fixture: the wording 3.8 retires from the rule file
 });
 
 /**
- * The 3.6b fix batch: instructionText also strips the data three prompts carry, built
- * here by the real builders: the arc packages' excerpts (the documents' own words, in
- * the outline writer's <arc-evidence> and the article writer's packages), the outline
- * judge's photo analyses (Haiku's output), and the director's Blake and Valet sentences
- * (the article writer's <NARRATIVE_TENSIONS> and the arc writer's heading). The
- * pipeline's labels around them stay scanned.
+ * The 3.6b fix batch: instructionText also strips the data prompts carry, built here by
+ * the real builders: the outline judge's photo analyses (Haiku's output), and the
+ * director's Blake and Valet sentences (the article writer's <NARRATIVE_TENSIONS> and the
+ * arc writer's heading). The pipeline's labels around them stay scanned. The arc
+ * packages' excerpts it stripped too went with the packages (phase 4, brief 4.6; R5).
  */
-describe('instructionText: the excerpts, the photo analyses and the tension sentences (3.6b fix batch)', () => {
+describe('instructionText: the photo analyses and the tension sentences (3.6b fix batch)', () => {
   const { reworkFixtureState } = require('./fixtures/rework-state');
   const { stubThemeLoader } = require('./fixtures/render-writers');
   const { PHASE_REQUIREMENTS } = require('../theme-loader');
@@ -755,13 +754,11 @@ describe('instructionText: the excerpts, the photo analyses and the tension sent
   const { _testing: judges } = require('../workflow/nodes/evaluator-nodes');
 
   // Data that carries a removed phrase, as the director's and the documents' words may.
-  const EXCERPT = 'Marcus, the murder victim, owed a favour\nto who killed Marcus (EXCERPT-SENTINEL)';
   const SENTENCE = 'Blake said the murder victim had paid the Valet twice.';
   const ANALYSIS = "Nova and her camera stand by the murder victim's portrait.";
 
   const state = () => {
     const s = reworkFixtureState('journalist');
-    s.arcEvidencePackages[0].evidenceItems[0].quotableExcerpts = [EXCERPT, '"Worth it."'];
     s.directorNotes.rawProse = `${s.directorNotes.rawProse} ${SENTENCE}`;
     s.narrativeTensions = { tensions: [{ type: 'blake-proximity', observations: [SENTENCE] }] };
     s.photoAnalyses.analyses[1] = { ...s.photoAnalyses.analyses[1], visualContent: ANALYSIS };
@@ -771,37 +768,10 @@ describe('instructionText: the excerpts, the photo analyses and the tension sent
     stubThemeLoader(PHASE_REQUIREMENTS), 'journalist', s.sessionConfig, s.canonicalCharacters, s.characterData.characters
   );
   const join = ({ systemPrompt, userPrompt }) => `${systemPrompt}\n${userPrompt}`;
-  const outlineRender = async (s = state()) => join(await builderFor(s).buildOutlinePrompt(
-    { narrativeArcs: s.narrativeArcs, ...s._arcAnalysisCache }, s.selectedArcs, 'hero.jpg',
-    [], s.arcEvidencePackages, s.shellAccounts, null, { evidenceBundle: s.evidenceBundle }
-  ));
   const articleRender = async (s = state()) => join(await builderFor(s).buildArticlePrompt(
-    s.outline, s.arcEvidencePackages, 'hero.jpg', s.shellAccounts, null, s.directorNotes, s.narrativeTensions,
+    s.outline, 'hero.jpg', s.shellAccounts, null, s.directorNotes, s.narrativeTensions,
     { evidenceBundle: s.evidenceBundle }
   ));
-
-  it("strips the outline writer's excerpts, a multi-line one included, and keeps each document's line and its label", async () => {
-    const render = await outlineRender();
-    expect(render).toContain(`  Excerpts: "${EXCERPT}" | ""Worth it.""`);
-    const text = instructionText(render);
-    expect(findRemovedPhrases(text)).toEqual([]);
-    expect(text).not.toContain('EXCERPT-SENTINEL');
-    expect(text).toMatch(/^- ale003: memory\n {2}Excerpts:\n- p-dna: paper\n {2}Excerpts:\n\*\*Photos in which/m);
-    // The photos label after the excerpts is the pipeline's, and stays scanned.
-    expect(findRemovedPhrases(instructionText(render.replace("**Photos in which this arc's", "**Photos in which the murder victim and this arc's"))))
-      .toEqual(['the murder victim']);
-  });
-
-  it("strips the article writer's excerpts, a multi-line one included, and keeps EXCERPTS:, DOCUMENTS: and the documents", async () => {
-    const render = await articleRender();
-    expect(render).toContain(`- "${EXCERPT}" (from ale003)`);
-    const text = instructionText(render);
-    expect(findRemovedPhrases(text)).toEqual([]);
-    expect(text).not.toContain('EXCERPT-SENTINEL');
-    expect(text).toMatch(/^EXCERPTS:\nDOCUMENTS:\nale003 \(memory\)\np-dna \(paper\)$/m);
-    expect(findRemovedPhrases(instructionText(render.replace('DOCUMENTS:\nale003', 'DOCUMENTS:\nthe murder victim\nale003'))))
-      .toEqual(['the murder victim']);
-  });
 
   it("strips the outline judge's photo analyses, and keeps each photo's line and the analysis label", () => {
     const render = judges.buildEvaluationUserPrompt('outline', state(), {});
@@ -833,14 +803,6 @@ describe('instructionText: the excerpts, the photo analyses and the tension sent
   });
 
   describe('fails loud on a shape it cannot read', () => {
-    it('excerpts in the outline writer with no next document or photos line after them', () => {
-      expect(() => instructionText('- ale003: memory\n  Excerpts: "the murder victim"\nSomething else.')).toThrow(/Excerpts:/);
-    });
-
-    it('an EXCERPTS: list with no DOCUMENTS: line after it', () => {
-      expect(() => instructionText('EXCERPTS:\n- "the murder victim" (from ale003)\n\nARC PHOTOS:')).toThrow(/DOCUMENTS:/);
-    });
-
     it('a photo analysis whose JSON never closes', () => {
       expect(() => instructionText('1. hero.jpg: Alex\n   Photo analysis: {\n     "visualContent": "x"\n')).toThrow(/photo analysis/);
     });

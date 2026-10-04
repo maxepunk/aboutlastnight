@@ -15,10 +15,9 @@
  * first and the analysis's mark as the fallback: after a rollback to character-ids the
  * analyses are kept and the mappings parsed again, so the mark can be stale.
  *
- * Each arc package's photos are such a list (fix round 1): the outline writer and its
- * reworker print them in <arc-evidence>, and the parked detective article writer under
- * ARC PHOTOS. buildArcEvidencePackages built them from the analyses' names alone, so
- * after that rollback a photo the director had just excluded was listed again.
+ * Each arc package's photos were such a list (fix round 1), built from the analyses'
+ * names alone, so after that rollback a photo the director had just excluded was listed
+ * again. Phase 4 (brief 4.6; R5): the arc packages went, with their photo lists.
  */
 
 const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
@@ -30,7 +29,7 @@ const { createPromptBuilder } = require('../prompt-builder');
 const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
 
 const { buildAvailablePhotos, articleWriterInputs, outlineWriterInputs } = aiNodes;
-const { buildArcEvidencePackages, generateOutline, reviseOutline, generateContentBundle, reviseContentBundle } = aiNodes;
+const { generateOutline, reviseOutline, generateContentBundle, reviseContentBundle } = aiNodes;
 const { _testing: { selectHeroImage, buildOutlineRevisionPrompt } } = aiNodes;
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -78,19 +77,16 @@ const EXCLUDED = ['p3.jpg', 'p5.jpg', 'P3-DESCRIPTION', 'P5-DESCRIPTION'];
 
 /**
  * photoState after the nodes a rollback to character-ids replays (graph.js: the parse,
- * finalizePhotoAnalyses, buildArcEvidencePackages, then the outline). The rollback clears
- * the arc packages, the hero and the outline; the parse has stored the director's new
- * decision (photoState's mappings). finalizePhotoAnalyses skips, because an analysis is
- * already enriched (the known limitation in state.js), so p3's analysis keeps its names
- * and gets no mark, and the packages are built again from the analyses.
+ * finalizePhotoAnalyses, then the outline). The rollback clears the hero and the outline;
+ * the parse has stored the director's new decision (photoState's mappings).
+ * finalizePhotoAnalyses skips, because an analysis is already enriched (the known
+ * limitation in state.js), so p3's analysis keeps its names and gets no mark.
  */
 async function afterRollbackToCharacterIds(theme = 'journalist') {
   const state = photoState(theme);
-  state.arcEvidencePackages = null;
   state.heroImage = null;
   state.outline = null;
   Object.assign(state, await finalizePhotoAnalyses(state, {}));
-  Object.assign(state, await buildArcEvidencePackages(state, {}));
   return state;
 }
 
@@ -165,21 +161,13 @@ describe('every list a writer or judge may place from', () => {
   });
 });
 
-describe("each arc package's photos, after a rollback to character-ids excludes an enriched photo", () => {
-  it('the packages are built again without the photo the director excluded', async () => {
-    const state = await afterRollbackToCharacterIds();
-    // The case's premise: finalizePhotoAnalyses skipped, so p3's analysis names four
-    // players of the two arcs and carries no mark.
-    expect(state.photoAnalyses.analyses.find((a) => a.filename === 'p3.jpg'))
-      .toEqual({ filename: 'p3.jpg', identifiedCharacters: ['Riley', 'Alex', 'Morgan', 'Sarah'] });
-    expect(state.arcEvidencePackages.map((pkg) => [pkg.arcId, filenames(pkg.photos)])).toEqual([
-      ['arc-sale', ['hero.jpg', 'p2.jpg']],
-      ['arc-envelope', ['hero.jpg']]
-    ]);
-  });
-
+describe('after a rollback to character-ids excludes an enriched photo', () => {
   it('the outline writer and its reworker name it nowhere in their prompts', async () => {
     const state = await afterRollbackToCharacterIds();
+    // The case's premise: finalizePhotoAnalyses skipped, so p3's analysis names four
+    // players and carries no mark.
+    expect(state.photoAnalyses.analyses.find((a) => a.filename === 'p3.jpg'))
+      .toEqual({ filename: 'p3.jpg', identifiedCharacters: ['Riley', 'Alex', 'Morgan', 'Sarah'] });
     const writer = recordingSdk(OUTLINE);
     const { heroImage } = await generateOutline(state, cfg(writer));
     const rework = recordingSdk(OUTLINE);
@@ -187,13 +175,13 @@ describe("each arc package's photos, after a rollback to character-ids excludes 
     const prompts = [...promptsOf(writer), ...promptsOf(rework)];
     expect(prompts).toHaveLength(2);
     for (const prompt of prompts) {
-      const arcEvidence = prompt.slice(prompt.indexOf('<arc-evidence>'), prompt.indexOf('</arc-evidence>'));
-      expect(arcEvidence).toContain('- p2.jpg: Alex');
+      const photos = prompt.slice(prompt.indexOf('<available-photos>'), prompt.indexOf('</available-photos>'));
+      expect(photos).toContain('p2.jpg: Alex');
       EXCLUDED.forEach((text) => expect(`${text}: ${prompt.includes(text)}`).toBe(`${text}: false`));
     }
   });
 
-  it.each(['journalist', 'detective'])("the %s article writer and its reworker name it nowhere either (the detective prints the packages' ARC PHOTOS)", async (theme) => {
+  it.each(['journalist', 'detective'])('the %s article writer and its reworker name it nowhere either', async (theme) => {
     const state = { ...(await afterRollbackToCharacterIds(theme)), heroImage: 'hero.jpg', outline: OUTLINE };
     const writer = recordingSdk(PREVIOUS_BUNDLE);
     await generateContentBundle({ ...state, contentBundle: null }, cfg(writer, theme));
@@ -202,44 +190,31 @@ describe("each arc package's photos, after a rollback to character-ids excludes 
     const prompts = [...promptsOf(writer), ...promptsOf(rework)];
     expect(prompts).toHaveLength(2);
     for (const prompt of prompts) {
-      expect(prompt).toContain('ARC PHOTOS:');
       EXCLUDED.forEach((text) => expect(`${theme} ${text}: ${prompt.includes(text)}`).toBe(`${theme} ${text}: false`));
     }
   });
 });
 
 /**
- * Final review (rules-writers[1]; T13: the whiteboard photo is never placed). An arc
- * package's photos are matched by the names identified in them, so a whiteboard on which
- * the director named players at the character-IDs stop was listed under every arc with
- * those players, and the outline writer and its reworker print the packages as they are,
- * in <arc-evidence>. buildArcEvidencePackages leaves the whiteboard out, as
- * buildAvailablePhotos does (whiteboardFilenameOf), so no writer's list can name it.
+ * Final review (rules-writers[1]; T13: the whiteboard photo is never placed). A whiteboard
+ * on which the director named players at the character-IDs stop was listed under every arc
+ * package with those players. Phase 4 (brief 4.6; R5): the packages went;
+ * buildAvailablePhotos leaves the whiteboard out (whiteboardFilenameOf), so no writer's
+ * list can name it.
  */
-describe('each arc package leaves out the whiteboard photo, whatever names it carries', () => {
+describe('the writers leave out the whiteboard photo, whatever names it carries', () => {
   /** The fixture with its whiteboard analysed and named: Alex and Morgan, one in each arc. */
   function namedWhiteboard() {
     const state = clone(reworkFixtureState('journalist'));
-    state.arcEvidencePackages = null;
     state.heroImage = null;
     state.outline = null;
     state.photoAnalyses.analyses.push({ filename: 'whiteboard.jpg', identifiedCharacters: ['Alex', 'Morgan'] });
     return state;
   }
 
-  it('buildArcEvidencePackages lists no whiteboard under any arc', async () => {
+  it('the outline writer and its reworker name it nowhere', async () => {
     const state = namedWhiteboard();
     expect(aiNodes.whiteboardFilenameOf(state)).toBe('whiteboard.jpg');
-    const { arcEvidencePackages } = await buildArcEvidencePackages(state, {});
-    expect(arcEvidencePackages.map((pkg) => [pkg.arcId, filenames(pkg.photos)])).toEqual([
-      ['arc-sale', ['hero.jpg', 'p2.jpg']],
-      ['arc-envelope', ['hero.jpg']]
-    ]);
-  });
-
-  it('the outline writer and its reworker name it nowhere in <arc-evidence>', async () => {
-    const state = namedWhiteboard();
-    Object.assign(state, await buildArcEvidencePackages(state, {}));
     const writer = recordingSdk(OUTLINE);
     const { heroImage } = await generateOutline(state, cfg(writer));
     const rework = recordingSdk(OUTLINE);
@@ -247,9 +222,8 @@ describe('each arc package leaves out the whiteboard photo, whatever names it ca
     const prompts = [...promptsOf(writer), ...promptsOf(rework)];
     expect(prompts).toHaveLength(2);
     for (const prompt of prompts) {
-      const arcEvidence = prompt.slice(prompt.indexOf('<arc-evidence>'), prompt.indexOf('</arc-evidence>'));
-      expect(arcEvidence).toContain('- hero.jpg: Alex, Morgan, Sarah');
-      expect(arcEvidence).not.toContain('whiteboard.jpg');
+      expect(prompt).toContain('HERO IMAGE: hero.jpg');
+      expect(prompt).not.toContain('whiteboard.jpg');
     }
   });
 });
@@ -342,7 +316,7 @@ describe('with no kept photo there is no hero', () => {
 
     const articleState = { ...state, heroImage, outline: OUTLINE };
     const inputs = articleWriterInputs(articleState);
-    expect(inputs[2]).toBeNull();
+    expect(inputs[1]).toBeNull();
     expect(inputs[inputs.length - 1].photos).toEqual([]);
     const articleSdk = recordingSdk(PREVIOUS_BUNDLE);
     await generateContentBundle({ ...articleState, contentBundle: null }, cfg(articleSdk));

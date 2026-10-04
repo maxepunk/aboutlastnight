@@ -69,7 +69,7 @@ describe('prompt files carry no leakable example content', () => {
     beforeAll(async () => {
       const { PromptBuilder } = require('../prompt-builder');
       const builder = new PromptBuilder({ loadPhasePrompts: async () => ({}) }, 'journalist', { roster: [] }, {}, null);
-      const { userPrompt } = await builder.buildArticlePrompt({ lede: {} }, [], 'hero.jpg', [], null, null, null);
+      const { userPrompt } = await builder.buildArticlePrompt({ lede: {} }, 'hero.jpg', [], null, null, null);
       instruction = userPrompt.slice(userPrompt.indexOf('<GENERATION_INSTRUCTION>'), userPrompt.indexOf('\n<SCHEMA>\n'));
     });
 

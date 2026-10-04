@@ -170,32 +170,6 @@ describe('buildRollbackState re-pause correctness', () => {
     expect(state).toHaveProperty('selectedArcs', null);
   });
 
-  test('arc-selection clears arcEvidencePackages so it rebuilds for new arcs (ROLL-2)', () => {
-    const state = buildRollbackState('arc-selection');
-    // buildArcEvidencePackages skips when state.arcEvidencePackages.length > 0 —
-    // re-picking arcs must NOT reuse evidence packaged for the OLD arcs.
-    expect(state).toHaveProperty('arcEvidencePackages', null);
-  });
-
-  test('every rollback point at/upstream of arc-selection clears arcEvidencePackages', () => {
-    const upstreamOfPackages = [
-      'input-review', 'paper-evidence-selection', 'await-roster',
-      'pre-curation', 'evidence-and-photos', 'arc-selection'
-    ];
-    for (const point of upstreamOfPackages) {
-      const state = buildRollbackState(point);
-      expect(state).toHaveProperty('arcEvidencePackages', null);
-    }
-  });
-
-  test('the photo-branch points clear arcEvidencePackages so the join rebuilds them', () => {
-    // photos/character-ids are DOWNSTREAM of arc-selection now, but the packages
-    // fold photo analyses into arc data, so new mappings mean new packages.
-    for (const point of ['photos', 'character-ids']) {
-      expect(buildRollbackState(point)).toHaveProperty('arcEvidencePackages', null);
-    }
-  });
-
   test('a photos rollback clears the five photo inputs as a unit (C3)', () => {
     const state = buildRollbackState('photos');
     expect(state).toHaveProperty('photosPath', null);

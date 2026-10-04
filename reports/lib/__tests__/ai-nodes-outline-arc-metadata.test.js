@@ -132,7 +132,7 @@ describe('<arc-analysis> does not repeat the arcs (Task 1 Minor)', () => {
   ['journalist', 'detective'].forEach((theme) => {
     it(`${theme}: each arc title is serialized exactly once`, async () => {
       const { userPrompt } = await builder(theme).buildOutlinePrompt(
-        ARC_ANALYSIS, ['arc-1', 'arc-2'], 'hero.png', [], [], [], null
+        ARC_ANALYSIS, ['arc-1', 'arc-2'], 'hero.png', [], [], null
       );
       // <arc-metadata> already renders every arc, trimmed to the fields the
       // outline needs. <arc-analysis> dumped the SAME arcs again, untrimmed.
@@ -144,7 +144,7 @@ describe('<arc-analysis> does not repeat the arcs (Task 1 Minor)', () => {
 
     it(`${theme}: <arc-analysis> still carries the analysis itself`, async () => {
       const { userPrompt } = await builder(theme).buildOutlinePrompt(
-        ARC_ANALYSIS, ['arc-1'], 'hero.png', [], [], [], null
+        ARC_ANALYSIS, ['arc-1'], 'hero.png', [], [], null
       );
       expect(userPrompt).toContain('The money and the vote are the same story.');
       expect(userPrompt).toContain('convergencePoint');

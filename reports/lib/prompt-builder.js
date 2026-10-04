@@ -10,7 +10,7 @@ const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('./p
 const { renderRecordView, DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 const { withSessionClock } = require('./prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('./prompt-renderers/derived-labels');
-const { renderSessionFactsVerdict, renderPhotoEntry, renderPhotoListEntry, photoKey } = require('./prompt-renderers/director-words-renderer');
+const { renderSessionFactsVerdict, renderPhotoListEntry } = require('./prompt-renderers/director-words-renderer');
 const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // The journalist outline writer embeds this file as its <SCHEMA> (fix 3.2b), the one
 // the SDK channel enforces (ai-nodes.js), as the article writer embeds the schema above.
@@ -39,14 +39,6 @@ const JOURNALIST_RULE_SET_CALLS = Object.freeze({
   outlineGeneration: 'outline',
   articleGeneration: 'article'
 });
-
-/**
- * What the arc packages' excerpts are, in the journalist outline and article
- * prompts (phase 3, 3.2). They are fragments buildArcEvidencePackages cuts at
- * sentence breaks; their label used to send them to pull quotes, which never print.
- */
-const ARC_EXCERPTS_LABEL =
-  "Excerpts are fragments code cut from each document's text at its sentence breaks, in the document's own words: pointers to lines worth reading in its full text.";
 
 /**
  * Generate canonical character roster section
@@ -719,17 +711,16 @@ Only the ${n} players above were at the investigation. Every other character exc
    * @param {string[]} selectedArcs - User-selected arc names
    * @param {string} heroImage - Confirmed hero image filename
    * @param {Array} availablePhotos - List of available photos with analyses (Commit 8.24)
-   * @param {Array} arcEvidencePackages - Per-arc evidence: the arc's document ids and quotable excerpts
    * @param {Array} shellAccounts - Deterministic shell account data
    * @param {Object|null} sessionFacts - Roster and verdict (ai-nodes.js buildSessionFacts)
    * @param {Object} options - { directorGuidance, gateNotes, directorNotes, shouldConsider,
    *   evidenceBundle, directorCorrections, photoDescriptions }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
+  async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], shellAccounts = [], sessionFacts = null, options = {}) {
     const systemPrompt = await this.buildOutlineSystemPrompt();
     let userPrompt = await this.buildOutlineUserSections(
-      arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts, sessionFacts, options
+      arcAnalysis, selectedArcs, heroImage, availablePhotos, shellAccounts, sessionFacts, options
     );
 
     // Brief 1.3: the previous stage's advisory findings, second to last.
@@ -783,7 +774,7 @@ ${labelPromptSection('editorial-design', prompts['editorial-design'])}`;
    *
    * @returns {Promise<string>}
    */
-  async buildOutlineUserSections(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], arcEvidencePackages = [], shellAccounts = [], sessionFacts = null, options = {}) {
+  async buildOutlineUserSections(arcAnalysis, selectedArcs, heroImage, availablePhotos = [], shellAccounts = [], sessionFacts = null, options = {}) {
     // <arc-metadata> below renders every arc, trimmed to the fields the outline
     // needs. <arc-analysis> then dumped the SAME arcs again, untrimmed, so every
     // arc title, summary and evidence list was serialized twice in one prompt.
@@ -843,16 +834,6 @@ USING THREAD METADATA IN THE OUTLINE:
 </arc-metadata>
 
 ${recordSection}
-
-<evidence-context>
-
-${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
-### ${pkg.arcId} - ${pkg.arcTitle}
-
-**Evidence Items (${pkg.evidenceItems?.length || 0} items; each one's full text is ${DOCUMENT_POINTER}):**
-${(pkg.evidenceItems || []).map(item => `- ${item.id}: ${item.type}`).join('\n')}
-`).join('\n') : 'No arc evidence packages available - using evidence bundle directly'}
-</evidence-context>
 
 <arc-analysis>
 ${JSON.stringify(arcAnalysisOnly, null, 2)}
@@ -990,22 +971,6 @@ A photo placement names its photo by the exact filename above.
 
 ${recordSection}
 
-<arc-evidence>
-
-${arcEvidencePackages.length > 0 ? arcEvidencePackages.map(pkg => `
-### ${pkg.arcId} - ${pkg.arcTitle}
-
-**Documents (${pkg.evidenceItems?.length || 0}; each one's full text is ${DOCUMENT_POINTER}):**
-${(pkg.evidenceItems || []).map(item => `- ${item.id}: ${item.type}
-  Excerpts: ${(item.quotableExcerpts || []).slice(0, 2).map(q => `"${q}"`).join(' | ') || 'none'}`).join('\n')}
-
-**Photos in which this arc's characters were identified (${pkg.photos?.length || 0}):**
-${(pkg.photos || []).map(p => `- ${p.filename}: ${p.characters?.join(', ') || 'Unknown characters'}`).join('\n') || 'None'}
-`).join('\n') : 'No arc evidence packages; every document is in <RECORD>.'}
-
-${ARC_EXCERPTS_LABEL}
-</arc-evidence>
-
 <arc-analysis>
 ${JSON.stringify(arcAnalysisOnly, null, 2)}
 </arc-analysis>
@@ -1044,7 +1009,6 @@ ${loadRuleSet('outline').craft}`;
    * same two builders (ai-nodes.js buildArticleRevisionPrompt).
    *
    * @param {Object} outline - Approved article outline
-   * @param {Array} arcEvidencePackages - Per-arc evidence: document ids, quotable excerpts, photos
    * @param {string|null} heroImage - Hero image filename (prevents duplicate in photos)
    * @param {Array} shellAccounts - Shell account data for financial summary
    * @param {Object|null} sessionFacts - Session facts for non-roster character guardrail
@@ -1053,10 +1017,10 @@ ${loadRuleSet('outline').craft}`;
    * @param {Object} options - { directorGuidance, gateNotes, shouldConsider, evidenceBundle }
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
-  async buildArticlePrompt(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+  async buildArticlePrompt(outline, heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
     const systemPrompt = await this.buildArticleSystemPrompt();
     let userPrompt = await this.buildArticleUserSections(
-      outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options
+      outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options
     );
 
     // Brief 1.3: the previous stage's advisory findings, second to last.
@@ -1109,48 +1073,28 @@ ${labelPromptSection('evidence-boundaries', prompts['evidence-boundaries'])}`;
 
   /**
    * The article writer's user prompt up to, not including, <SHOULD_CONSIDER> and
-   * <DIRECTOR_GUIDANCE>: the data (outline, record, packages, money, observations),
+   * <DIRECTOR_GUIDANCE>: the data (outline, record, money, observations),
    * the rules and the generation instruction with its schema. Shared with the article
    * reworker (2.3). Takes buildArticlePrompt's arguments; the tail's options
    * (shouldConsider, directorGuidance, gateNotes) are not read here.
    *
    * @returns {Promise<string>}
    */
-  async buildArticleUserSections(outline, arcEvidencePackages = [], heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
-    // Brief 2.1: the record, once, in the data part. The packages name each arc's
-    // documents by id instead of repeating their text.
+  async buildArticleUserSections(outline, heroImage = null, shellAccounts = [], sessionFacts = null, directorNotes = null, narrativeTensions = null, options = {}) {
+    // Brief 2.1: the record, once, in the data part. Phase 4 (brief 4.6; R5): the arc
+    // packages that named each arc's documents went; the record is whole.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
 
     if (this.themeName === 'journalist') {
       return this._journalistArticleUserSections(
-        outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
+        outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection
       );
     }
 
-    // The detective is parked (spec D13): everything below is its text as it was.
+    // The detective is parked (spec D13): everything below is its text as it was, less
+    // the arc packages, which went for every theme (phase 4, brief 4.6; R5).
     const prompts = await this._loadResolvedPhasePrompts('articleGeneration');
     const constraints = THEME_CONSTRAINTS[this.themeName];
-
-    // Format arc evidence packages for verbatim quoting
-    const arcEvidenceSection = arcEvidencePackages.length > 0 ? `
-ARC EVIDENCE PACKAGES (Phase 1 Fix - use these for verbatim quotes):
-${arcEvidencePackages.map(pkg => `
-### ${pkg.arcId} - ${pkg.arcTitle}
-
-QUOTABLE EXCERPTS (use these VERBATIM for pull quotes and article text):
-${(pkg.evidenceItems || []).flatMap(item =>
-  (item.quotableExcerpts || []).map(q => `- "${q}" (from ${item.id})`)
-).join('\n') || 'No extracted quotes - quote the arc\'s documents in <RECORD> directly'}
-
-EVIDENCE (for context and additional quoting; each one's full text is ${DOCUMENT_POINTER}):
-${(pkg.evidenceItems || []).map(item =>
-  `${item.id} (${item.type})`
-).join('\n')}
-
-ARC PHOTOS:
-${(pkg.photos || []).map(p => `- ${renderPhotoEntry({ filename: p.filename, names: p.characters }, options.photoDescriptions)}`).join('\n') || 'None'}
-`).join('\n---\n')}
-` : '';
 
     // User prompt: Data first, then template, then RULES LAST (recency bias)
     let userPrompt;
@@ -1167,7 +1111,6 @@ Filename: ${heroImage || 'Use first available photo from outline'}
 - Do NOT include this filename in the "photos" array
 
 ${recordSection}
-${arcEvidenceSection}
 </DATA_CONTEXT>
 
 <RULES>
@@ -1301,44 +1244,19 @@ ${JSON.stringify(DETECTIVE_PRINTED_SCHEMA, null, 2)}
    * (options.photos, from articleWriterInputs): the hero image, then every other photo
    * the director kept but the whiteboard. A hero the director excluded comes as none.
    * PHOTOS prints each one's entry once (renderPhotoListEntry, the entry the article
-   * judge lists too: the 4b fix batch); an arc package points at its photos by filename,
-   * and only at listed ones, so the whiteboard a package names never reaches the writer.
-   * It used to see only the photos the arc packages listed.
+   * judge lists too: the 4b fix batch).
+   *
+   * Phase 4 (brief 4.6; R5): the arc packages went; the writer reads the record whole.
    *
    * @returns {string}
    */
-  _journalistArticleUserSections(outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
+  _journalistArticleUserSections(outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
     const photos = Array.isArray(options.photos) ? options.photos.filter(photo => photo && photo.filename) : [];
-    const listed = new Set(photos.map(photo => photoKey(photo.filename)));
     const photoSection = photos.length > 0
       ? `PHOTOS (every photo the director has not excluded, without the whiteboard${photos[0].hero ? ': the hero image, then the rest' : ''}; each gives the names identified in it and the director's description):
 
 ${photos.map((photo, i) => renderPhotoListEntry(photo, i, options.photoDescriptions)).join('\n\n')}`
       : 'PHOTOS: none';
-    /** One arc package's photos that PHOTOS lists, by filename, each once. */
-    const arcPhotoPointers = (pkg) => [...new Map((pkg.photos || [])
-      .filter(p => p && p.filename && listed.has(photoKey(p.filename)))
-      .map(p => [photoKey(p.filename), p.filename])).values()];
-
-    const packages = arcEvidencePackages.length > 0 ? `
-ARC EVIDENCE PACKAGES: each selected arc's documents by id, and its photos by filename. Each document's full text is ${DOCUMENT_POINTER}, and each photo's entry is in PHOTOS above. ${ARC_EXCERPTS_LABEL}
-${arcEvidencePackages.map(pkg => `
-### ${pkg.arcId} - ${pkg.arcTitle}
-
-EXCERPTS:
-${(pkg.evidenceItems || []).flatMap(item =>
-  (item.quotableExcerpts || []).map(q => `- "${q}" (from ${item.id})`)
-).join('\n') || 'None'}
-
-DOCUMENTS:
-${(pkg.evidenceItems || []).map(item =>
-  `${item.id} (${item.type})`
-).join('\n')}
-
-ARC PHOTOS:
-${arcPhotoPointers(pkg).map(filename => `- ${filename}`).join('\n') || 'None'}
-`).join('\n---\n')}
-` : '';
 
     // T4: the director's sentences about Blake and the Valet, through the filter the
     // arc writer's section uses (fix 3.2b): each stored sentence prints only when the
@@ -1368,7 +1286,6 @@ It prints at the top of the article, as "heroImage". The other photos in PHOTOS 
 ${photoSection}
 
 ${recordSection}
-${packages}
 ${this._buildFinancialSummary(shellAccounts)}
 ${this._buildInvestigationObservations(directorNotes, options.directorCorrections, options.evidenceBundle)}
 ${tensionsSection}

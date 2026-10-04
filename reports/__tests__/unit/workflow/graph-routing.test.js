@@ -123,7 +123,9 @@ describe('graph wiring — photo late-join', () => {
     expect(ends.revise).toBe('incrementArcRevision');
   });
 
-  test('the photo branch is a chain from the gate to the evidence-package join', () => {
+  // Phase 4 (brief 4.6; R5): the branch joins at the outline writer; the arc packages
+  // that joined it went.
+  test('the photo branch is a chain from the gate to the outline writer', () => {
     expect(has('checkpointPhotos', 'fetchSessionPhotos')).toBe(true);
     expect(has('fetchSessionPhotos', 'preprocessPhotos')).toBe(true);
     expect(has('preprocessPhotos', 'analyzePhotos')).toBe(true);
@@ -133,12 +135,12 @@ describe('graph wiring — photo late-join', () => {
     expect(has('detectWhiteboard', 'checkpointCharacterIds')).toBe(true);
     expect(has('checkpointCharacterIds', 'parseCharacterIds')).toBe(true);
     expect(has('parseCharacterIds', 'finalizePhotoAnalyses')).toBe(true);
-    expect(has('finalizePhotoAnalyses', 'buildArcEvidencePackages')).toBe(true);
-    expect(has('buildArcEvidencePackages', 'generateOutline')).toBe(true);
+    expect(has('finalizePhotoAnalyses', 'generateOutline')).toBe(true);
+    expect(Object.keys(builder.nodes)).not.toContain('buildArcEvidencePackages');
   });
 
   test('registers checkpointPhotos as a node', () => {
     expect(Object.keys(builder.nodes)).toContain('checkpointPhotos');
-    expect(Object.keys(builder.nodes)).toHaveLength(45);
+    expect(Object.keys(builder.nodes)).toHaveLength(44);
   });
 });

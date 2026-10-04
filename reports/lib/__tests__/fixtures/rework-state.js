@@ -137,11 +137,6 @@ function reworkFixtureState(theme = 'journalist') {
     }
   ];
 
-  const packageItem = (id, type, owner) => ({
-    id, type, owner, summary: `${id} summary`, fullContent: DOCUMENT_TEXT[id],
-    quotableExcerpts: id === 'ale003' ? ['"Worth it. Finally worth it."'] : []
-  });
-
   return {
     sessionId: '010126',
     theme,
@@ -192,20 +187,6 @@ function reworkFixtureState(theme = 'journalist') {
     narrativeTensions: {
       tensions: [{ type: 'public-vs-private', narrativeNote: 'Riley said they only kept the books, and an account in their circle took money.' }]
     },
-    arcEvidencePackages: [
-      {
-        arcId: 'arc-sale', arcTitle: 'The Sale', arcSource: 'accusation', evidenceStrength: 'moderate',
-        evidenceItems: [packageItem('ale003', 'memory', 'Alex Reeves'), packageItem('p-dna', 'paper', 'Sarah Blackwood')],
-        photos: [{ filename: 'p2.jpg', characters: ['Alex'] }],
-        characterPlacements: { Alex: 'witness' }, analysisNotes: {}
-      },
-      {
-        arcId: 'arc-envelope', arcTitle: 'The Envelope', arcSource: 'observation', evidenceStrength: 'weak',
-        evidenceItems: [packageItem('mor001', 'memory', 'Morgan Reed'), packageItem('p-rescued', 'paper', null)],
-        photos: [],
-        characterPlacements: { Morgan: 'payer' }, analysisNotes: {}
-      }
-    ],
     sessionPhotos: ['photos/hero.jpg', 'photos/p2.jpg', 'photos/whiteboard.jpg'],
     whiteboardPhotoPath: 'photos/whiteboard.jpg',
     photoAnalyses: {

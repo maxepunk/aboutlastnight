@@ -280,7 +280,7 @@ async function render() {
 
   // 1. outline generation
   const og = await promptBuilder.buildOutlinePrompt(arcAnalysis, state.selectedArcs || [], heroImage, availablePhotos,
-    state.arcEvidencePackages || [], state.shellAccounts || [], sessionFacts,
+    state.shellAccounts || [], sessionFacts,
     { directorGuidance: guidance, gateNotes: FIXED_NOTES, directorNotes: state.directorNotes || null, shouldConsider: FIXED_ADVISORIES,
       evidenceBundle: state.evidenceBundle || null, ...directorWords });
   write(FILES[0], og.systemPrompt, og.userPrompt);
@@ -309,8 +309,8 @@ async function render() {
   // a stored hero the director excluded is none (3.9 fix round 1).
   const articleInputs = articleWriterInputs ? await articleWriterInputs(state) : null;
   const articlePhotos = articleInputs ? (articleInputs[articleInputs.length - 1] || {}).photos : undefined;
-  const articleHero = articleInputs ? (articleInputs[2] || null) : heroImage;
-  const ag = await promptBuilder.buildArticlePrompt(outline, state.arcEvidencePackages || [], articleHero, state.shellAccounts || [],
+  const articleHero = articleInputs ? (articleInputs[1] || null) : heroImage;
+  const ag = await promptBuilder.buildArticlePrompt(outline, articleHero, state.shellAccounts || [],
     sessionFacts, state.directorNotes || null, state.narrativeTensions || null,
     { directorGuidance: guidance, gateNotes: FIXED_NOTES, shouldConsider: FIXED_ADVISORIES,
       evidenceBundle: state.evidenceBundle || null, ...directorWords, ...(articlePhotos && { photos: articlePhotos }) });

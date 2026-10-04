@@ -196,7 +196,7 @@ describe('ReportStateAnnotation', () => {
       expect(defaultState).not.toBeNull();
     });
 
-    it('includes all 88 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 87 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -264,7 +264,6 @@ describe('ReportStateAnnotation', () => {
         'narrativeArcs',
         'selectedArcs',
         'heroImage',  // Hero image filename for article generation
-        'arcEvidencePackages',  // Phase 1 Fix: per-arc evidence with fullContent
         '_arcAnalysisCache',
         // Evaluation (Commit 8.6)
         'evaluationHistory',
@@ -481,7 +480,7 @@ describe('ReportStateAnnotation', () => {
     it('getDefaultState field count matches the documented count (S12)', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes.
-      expect(Object.keys(getDefaultState()).length).toBe(88);
+      expect(Object.keys(getDefaultState()).length).toBe(87);
     });
 
     it('declares the leave-out list (phase 4, brief 4.2)', () => {
@@ -593,14 +592,15 @@ describe('ReportStateAnnotation', () => {
       expect(PHASES.ERROR).toBe('error');
     });
 
-    it('defines exactly 42 phases (photo late-join: added PHOTOS)', () => {
-      expect(Object.keys(PHASES)).toHaveLength(42);
+    // Phase 4 (brief 4.6; R5): the arc packages' phase went with the packages.
+    it('defines exactly 41 phases (photo late-join: added PHOTOS; brief 4.6: the arc packages went)', () => {
+      expect(Object.keys(PHASES)).toHaveLength(41);
     });
 
-    it('defines the photos gate phase between arc selection and evidence packaging', () => {
+    it('defines the photos gate phase after arc selection', () => {
       expect(PHASES.PHOTOS).toBe('2.36');
       expect(PHASES.ARC_SELECTION).toBe('2.35');
-      expect(PHASES.BUILD_ARC_PACKAGES).toBe('2.4');
+      expect(PHASES).not.toHaveProperty('BUILD_ARC_PACKAGES');
     });
 
     it('defines input parsing phases (Commit 8.9)', () => {

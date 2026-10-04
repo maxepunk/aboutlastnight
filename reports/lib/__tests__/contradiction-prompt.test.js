@@ -106,7 +106,7 @@ describe('contradiction data in arc prompt', () => {
     const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };
     const builder = new promptBuilderModule.PromptBuilder(themeLoader, 'journalist', { roster: ['Skyler', 'Alex'] });
     const { userPrompt } = await builder.buildArticlePrompt(
-      {}, [], null, [], null, state.directorNotes, state.narrativeTensions, { evidenceBundle: state.evidenceBundle }
+      {}, null, [], null, state.directorNotes, state.narrativeTensions, { evidenceBundle: state.evidenceBundle }
     );
     const articleBlock = userPrompt.slice(userPrompt.indexOf('<NARRATIVE_TENSIONS>'), userPrompt.indexOf('</NARRATIVE_TENSIONS>'));
     expect(listed(articleBlock)).toEqual(expected);

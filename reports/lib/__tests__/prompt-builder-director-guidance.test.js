@@ -32,7 +32,7 @@ describe('buildOutlinePrompt — <DIRECTOR_GUIDANCE>', () => {
   it('appends the guidance as the LAST section of the user prompt', async () => {
     const { userPrompt } = await makeBuilder().buildOutlinePrompt(
       { narrativeArcs: [{ id: 'a1', title: 'The money' }] },
-      ['The money'], 'hero.png', [], [], [], null,
+      ['The money'], 'hero.png', [], [], null,
       { directorGuidance: GUIDANCE }
     );
     expect(userPrompt).toContain('<DIRECTOR_GUIDANCE>');
@@ -44,7 +44,7 @@ describe('buildOutlinePrompt — <DIRECTOR_GUIDANCE>', () => {
 
   it('omits the section entirely when there is no guidance', async () => {
     const { userPrompt } = await makeBuilder().buildOutlinePrompt(
-      { narrativeArcs: [] }, [], 'hero.png', [], [], [], null
+      { narrativeArcs: [] }, [], 'hero.png', [], [], null
     );
     expect(userPrompt).not.toContain('DIRECTOR_GUIDANCE');
   });
@@ -52,7 +52,7 @@ describe('buildOutlinePrompt — <DIRECTOR_GUIDANCE>', () => {
   it('works for the detective theme too', async () => {
     const { userPrompt } = await makeBuilder('detective').buildOutlinePrompt(
       { narrativeArcs: [{ id: 'a1', title: 'The money' }] },
-      ['The money'], 'hero.png', [], [], [], null,
+      ['The money'], 'hero.png', [], [], null,
       { directorGuidance: GUIDANCE }
     );
     expect(userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
@@ -62,7 +62,7 @@ describe('buildOutlinePrompt — <DIRECTOR_GUIDANCE>', () => {
 describe('buildArticlePrompt — <DIRECTOR_GUIDANCE>', () => {
   it('appends the guidance as the LAST section of the user prompt', async () => {
     const { userPrompt } = await makeBuilder().buildArticlePrompt(
-      { lede: { hook: 'x' } }, [], 'hero.png', [], null, null, null,
+      { lede: { hook: 'x' } }, 'hero.png', [], null, null, null,
       { directorGuidance: GUIDANCE }
     );
     expect(userPrompt).toContain('<DIRECTOR_GUIDANCE>');
@@ -72,14 +72,14 @@ describe('buildArticlePrompt — <DIRECTOR_GUIDANCE>', () => {
 
   it('omits the section entirely when there is no guidance', async () => {
     const { userPrompt } = await makeBuilder().buildArticlePrompt(
-      { lede: { hook: 'x' } }, [], 'hero.png', [], null, null, null
+      { lede: { hook: 'x' } }, 'hero.png', [], null, null, null
     );
     expect(userPrompt).not.toContain('DIRECTOR_GUIDANCE');
   });
 
   it('works for the detective theme too', async () => {
     const { userPrompt } = await makeBuilder('detective').buildArticlePrompt(
-      { executiveSummary: { hook: 'x' } }, [], 'hero.png', [], null, null, null,
+      { executiveSummary: { hook: 'x' } }, 'hero.png', [], null, null, null,
       { directorGuidance: GUIDANCE }
     );
     expect(userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
@@ -127,27 +127,27 @@ describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
 
   it('remote: carries the remote block and not the on-site one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
-      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
     expect(systemPrompt).toContain(JOURNALIST_REMOTE);
     expect(systemPrompt).not.toContain(JOURNALIST_ONSITE);
   });
 
   it('on-site: carries the on-site block and not the remote one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'on-site' })
-      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
     expect(systemPrompt).toContain(JOURNALIST_ONSITE);
     expect(systemPrompt).not.toContain(JOURNALIST_REMOTE);
   });
 
   it('defaults to on-site when the session config says nothing', async () => {
     const { systemPrompt } = await makeBuilder('journalist', {})
-      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
     expect(systemPrompt).toContain(JOURNALIST_ONSITE);
   });
 
   it('no longer tells the reporter to write "We decided"', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })
-      .buildArticlePrompt({ lede: {} }, [], null, [], null, null, null);
+      .buildArticlePrompt({ lede: {} }, null, [], null, null, null);
     // This line directly contradicted the remote rule AND made Nova a member of
     // the room in both modes. It is gone, along with the stray detective line
     // that sat beside it in the JOURNALIST constraints.
@@ -157,7 +157,7 @@ describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
 
   it('states the mode for the detective theme too', async () => {
     const { systemPrompt } = await makeBuilder('detective', { reportingMode: 'remote' })
-      .buildArticlePrompt({ executiveSummary: {} }, [], null, [], null, null, null);
+      .buildArticlePrompt({ executiveSummary: {} }, null, [], null, null, null);
     expect(systemPrompt).toContain(REMOTE);
   });
 });
@@ -282,10 +282,10 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
   });
 
   it('buildOutlinePrompt and buildArticlePrompt read options.gateNotes and still end with the section', async () => {
-    const o = await makeBuilder().buildOutlinePrompt({ narrativeArcs: [] }, [], 'hero.png', [], [], [], null, { directorGuidance: null, gateNotes: NOTES });
+    const o = await makeBuilder().buildOutlinePrompt({ narrativeArcs: [] }, [], 'hero.png', [], [], null, { directorGuidance: null, gateNotes: NOTES });
     expect(o.userPrompt).toContain('- [outline, rejection 1] Lead with the ledger.');
     expect(o.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
-    const a = await makeBuilder().buildArticlePrompt({ lede: { hook: 'x' } }, [], 'hero.png', [], null, null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
+    const a = await makeBuilder().buildArticlePrompt({ lede: { hook: 'x' } }, 'hero.png', [], null, null, null, { directorGuidance: GUIDANCE, gateNotes: NOTES });
     expect(a.userPrompt).toContain(GUIDANCE);
     expect(a.userPrompt).toContain('- [arc-selection, rejection 1] Drop the vote arc.');
     expect(a.userPrompt.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);

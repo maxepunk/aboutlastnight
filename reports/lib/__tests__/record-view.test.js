@@ -179,7 +179,7 @@ describe('record view: the id rule', () => {
     // A card's tokenId must name a document the writer can see (brief 2.1 invariant).
     const b = bundle({ paper: [bundlePaper(), rescuedPaper()] });
     const out = renderRecordDocuments(b);
-    const sourceMap = buildSourceMap([], b);
+    const sourceMap = buildSourceMap(b);
     const docs = [...out.matchAll(/<document id="([^"]+)"[^>]*>\n([\s\S]*?)\n<\/document>/g)];
     expect(docs).toHaveLength(3);
     for (const [, id, body] of docs) {

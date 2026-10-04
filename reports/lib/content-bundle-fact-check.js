@@ -609,31 +609,39 @@ function escapeRegExp(s) {
 }
 
 /**
- * Build `id -> quotable source text` from the arc packages and the evidence
- * bundle.
- *
- * Both shapes are accepted for each source because both are live in the tree:
- * `buildArcEvidencePackages` emits `evidenceItems`, and the bundle nests its
- * items under `exposed.{tokens,paperEvidence}` (older callers pass a flat
- * `exposedEvidence` array).
+ * The ids a document in the record answers to: its id, tokenId, notionId, pageId and
+ * name, in that order. A card cites a document by any of them: the record view names it
+ * by the first of id, tokenId and notionId (record-view.js recordIdOf), and the ids a
+ * receipt or a card may name include a paper's pageId and name (node-helpers.js
+ * buildValidEvidenceIds).
  */
-function buildSourceMap(arcEvidencePackages, evidenceBundle) {
+const SOURCE_ID_FIELDS = ['id', 'tokenId', 'notionId', 'pageId', 'name'];
+
+/**
+ * Build `id -> quotable source text` from the record: the evidence bundle's exposed
+ * documents, nested under `exposed.{tokens,paperEvidence}` (older callers pass a flat
+ * `exposedEvidence` array).
+ *
+ * Phase 4 (brief 4.6; R5): the record alone. The arc packages that came first went, and
+ * each source a package supplied is still found: a package found its document by the
+ * token's id or tokenId, or the paper's id, notionId, pageId or name, and each document
+ * is entered under every one of them (SOURCE_ID_FIELDS). The first document to claim an
+ * id keeps it, as before.
+ *
+ * @param {Object} evidenceBundle - the curated bundle
+ * @returns {Map<string, string>}
+ */
+function buildSourceMap(evidenceBundle) {
   const map = new Map();
   const add = (item) => {
     if (!item || typeof item !== 'object') return;
-    const id = item.id || item.tokenId || item.notionId || item.pageId || item.name;
     const text = sourceTextOf(item);
-    if (!id || !text) return;
-    // First non-empty text wins; the arc packages are added first and carry the
-    // content the generator was actually shown.
-    if (!map.has(String(id))) map.set(String(id), text);
+    if (!text) return;
+    for (const field of SOURCE_ID_FIELDS) {
+      const id = item[field];
+      if (id && !map.has(String(id))) map.set(String(id), text);
+    }
   };
-
-  for (const pkg of asArray(arcEvidencePackages)) {
-    if (!pkg || typeof pkg !== 'object') continue;
-    asArray(pkg.evidenceItems).forEach(add);
-    asArray(pkg.evidence).forEach(add);   // alternate field name
-  }
 
   const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
   asArray(exposed.tokens).forEach(add);
@@ -844,8 +852,8 @@ function describeLocations(locations) {
  *
  * @param {Object}   args
  * @param {Object}   args.contentBundle        - the generated bundle
- * @param {Array}    args.arcEvidencePackages  - per-arc evidence the generator was shown
- * @param {Object}   args.evidenceBundle       - curated three-layer bundle
+ * @param {Object}   args.evidenceBundle       - curated three-layer bundle: the record, the
+ *                                               cards' one source (phase 4, brief 4.6)
  * @param {Array}    args.roster               - session roster (names or {name})
  * @param {Array}    args.sessionPhotos        - photo paths available to this session
  * @param {Array}    [args.excludedPhotos]     - the session photos the director excluded
@@ -892,7 +900,6 @@ function describeLocations(locations) {
  */
 function factCheckContentBundle({
   contentBundle,
-  arcEvidencePackages,
   evidenceBundle,
   roster,
   sessionPhotos,
@@ -924,7 +931,7 @@ function factCheckContentBundle({
   const cardFidelity = [];
 
   const bundle = contentBundle || {};
-  const sources = buildSourceMap(arcEvidencePackages, evidenceBundle);
+  const sources = buildSourceMap(evidenceBundle);
 
   // ── 1. Card fidelity (BASELINE class 1) ───────────────────────────────────
   // Only printed text is checked. An inline evidence card prints its content, so

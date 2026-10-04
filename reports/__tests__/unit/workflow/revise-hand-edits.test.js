@@ -268,8 +268,8 @@ describe('generators pass options.gateNotes', () => {
     const sdk = sdkReturning(OUTLINE);
     const directorNotes = { rawProse: 'Blake worked the room all morning.' };
     const evidenceBundle = { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [] } };
-    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [], directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.', directorNotes, evidenceBundle }, cfg(sdk, builder));
-    const options = builder.buildOutlinePrompt.mock.calls[0][7];
+    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], directorGateNotes: NOTES, _outlineGuidance: 'Lead with the money.', directorNotes, evidenceBundle }, cfg(sdk, builder));
+    const options = builder.buildOutlinePrompt.mock.calls[0][6];
     // brief 1.5 added directorNotes: the outline writer reads the director's own
     // account of the morning, which until now only the article writer saw;
     // brief 1.3 added shouldConsider: the arc evaluation's advisories;
@@ -282,8 +282,8 @@ describe('generators pass options.gateNotes', () => {
     const builder = createMockPromptBuilder();
     builder.buildArticlePrompt = jest.fn(builder.buildArticlePrompt);
     const sdk = sdkReturning({ headline: { main: 'x' }, sections: [] });
-    await generateContentBundle({ outline: OUTLINE, arcEvidencePackages: [], directorGateNotes: NOTES }, cfg(sdk, builder));
-    const options = builder.buildArticlePrompt.mock.calls[0][7];
+    await generateContentBundle({ outline: OUTLINE, directorGateNotes: NOTES }, cfg(sdk, builder));
+    const options = builder.buildArticlePrompt.mock.calls[0][6];
     // Phase 3 (3.9) added photos: the hero, then every photo the director kept (none here).
     expect(options).toEqual({ directorGuidance: null, gateNotes: NOTES, shouldConsider: [], evidenceBundle: null, directorCorrections: [], photoDescriptions: null, photos: [] });
   });
@@ -291,8 +291,8 @@ describe('generators pass options.gateNotes', () => {
   it('with no notes the generators pass an empty list (prompt unchanged)', async () => {
     const builder = createMockPromptBuilder();
     builder.buildOutlinePrompt = jest.fn(builder.buildOutlinePrompt);
-    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [], arcEvidencePackages: [] }, cfg(sdkReturning(OUTLINE), builder));
-    expect(builder.buildOutlinePrompt.mock.calls[0][7]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null, shouldConsider: [], evidenceBundle: null, directorCorrections: [], photoDescriptions: null });
+    await generateOutline({ selectedArcs: ['a'], narrativeArcs: [] }, cfg(sdkReturning(OUTLINE), builder));
+    expect(builder.buildOutlinePrompt.mock.calls[0][6]).toEqual({ directorGuidance: null, gateNotes: [], directorNotes: null, shouldConsider: [], evidenceBundle: null, directorCorrections: [], photoDescriptions: null });
   });
 });
 

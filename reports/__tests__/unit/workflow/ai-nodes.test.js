@@ -587,7 +587,7 @@ describe('ai-nodes', () => {
         { validationResults: { phase: 'arcs', passed: true, advisoryWarnings: ['Two arcs share a document'] } },
         configFor(builder, { outline: mockOutline })
       );
-      expect(builder.buildOutlinePrompt.mock.calls[0][7].shouldConsider)
+      expect(builder.buildOutlinePrompt.mock.calls[0][6].shouldConsider)
         .toEqual(['Two arcs share a document']);
     });
 
@@ -597,7 +597,7 @@ describe('ai-nodes', () => {
         { validationResults: { phase: 'outline', passed: true, advisoryWarnings: ['The lede frontloads the verdict'] } },
         configFor(builder, { contentBundle: mockContentBundle })
       );
-      expect(builder.buildArticlePrompt.mock.calls[0][7].shouldConsider)
+      expect(builder.buildArticlePrompt.mock.calls[0][6].shouldConsider)
         .toEqual(['The lede frontloads the verdict']);
     });
 
@@ -607,13 +607,13 @@ describe('ai-nodes', () => {
         { validationResults: { phase: 'arcs', passed: true, advisoryWarnings: ['Two arcs share a document'] } },
         configFor(builder, { contentBundle: mockContentBundle })
       );
-      expect(builder.buildArticlePrompt.mock.calls[0][7].shouldConsider).toEqual([]);
+      expect(builder.buildArticlePrompt.mock.calls[0][6].shouldConsider).toEqual([]);
     });
 
     it('passes an empty list when no evaluation has run', async () => {
       const builder = spyBuilder();
       await generateOutline({}, configFor(builder, { outline: mockOutline }));
-      expect(builder.buildOutlinePrompt.mock.calls[0][7].shouldConsider).toEqual([]);
+      expect(builder.buildOutlinePrompt.mock.calls[0][6].shouldConsider).toEqual([]);
     });
   });
 

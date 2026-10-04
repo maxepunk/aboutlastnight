@@ -45,7 +45,6 @@ const {
   createBatches,
   processWithConcurrency,
   pairRepliesWithBatch,  // residual item 8: scored items keyed to their inputs
-  resolveArc,
   findUncoveredRosterNames,  // F1 invariant guard: roster names with no canonical match
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper
 } = require('./node-helpers');
@@ -689,194 +688,6 @@ async function processRescuedItems(state, config) {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ARC EVIDENCE PACKAGES (Phase 1 Fix - Data Wiring)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Helper to extract quotable excerpts from full content
- *
- * @param {string} fullContent - Full text content
- * @returns {Array<string>} Key quotable phrases (max 5)
- */
-function extractQuotableExcerpts(fullContent) {
-  if (!fullContent || typeof fullContent !== 'string') return [];
-
-  // Split by sentences and filter for quotable ones (10-100 chars, contains dialogue indicators)
-  const sentences = fullContent.split(/[.!?]+/).filter(s => s.trim().length >= 10 && s.trim().length <= 100);
-
-  // Prioritize sentences with dialogue indicators or dramatic content
-  const quotable = sentences.filter(s =>
-    /"/.test(s) ||        // Contains quotes
-    /said|told|asked|whispered|shouted/i.test(s) ||  // Dialogue verbs
-    /never|always|everything|nothing/i.test(s) ||     // Absolute statements
-    /must|have to|need to/i.test(s)                   // Obligation/urgency
-  );
-
-  return quotable.slice(0, 5).map(s => s.trim());
-}
-
-/**
- * Build per-arc evidence packages after arc selection
- *
- * PHASE 1 FIX: This node extracts curated, per-arc evidence packages with:
- * - Full quotable content (not just 150-char summaries)
- * - Enriched photo analyses for characters in each arc
- * - Key quotable excerpts for pull quotes
- *
- * Runs after arc selection checkpoint, before outline generation.
- *
- * The 4b fix batch, fix round 1 (T13): an arc's photos never include one the director
- * excluded (isPhotoExcluded). The outline writer and its reworker print them in
- * <arc-evidence>, and the parked detective article writer under ARC PHOTOS. Matching by
- * the analyses' names alone listed such a photo again after a rollback to character-ids:
- * finalizePhotoAnalyses skips there, so the excluded photo's analysis keeps its names.
- *
- * Final review (rules-writers[1]; T13: the whiteboard photo is never placed): an arc's
- * photos leave out the whiteboard, as buildAvailablePhotos does (whiteboardFilenameOf).
- * Every session photo is analysed, the whiteboard included, so a whiteboard on which the
- * director named players was listed under every arc with those players.
- *
- * @param {Object} state - Current state with selectedArcs, evidenceBundle, photoAnalyses
- * @param {Object} config - Graph config
- * @returns {Object} Partial state update with arcEvidencePackages
- */
-async function buildArcEvidencePackages(state, config) {
-  // Skip if already built (resume case)
-  if (state.arcEvidencePackages && state.arcEvidencePackages.length > 0) {
-    console.log('[buildArcEvidencePackages] Skipping - packages already exist');
-    return { currentPhase: PHASES.BUILD_ARC_PACKAGES };
-  }
-
-  // C5 / H18: an empty selection here means the run has lost its arcs — either an
-  // old-graph thread resumed into the new edge chain, or a state clear went wrong.
-  // Emitting `arcEvidencePackages: []` let generateOutline (guarded only on
-  // state.outline) spend a Sonnet call and evaluateOutline an Opus call on an
-  // outline for no arcs. Brief 1.4 removed the one exception this guard carried:
-  // the arc stop's forced forward at the fourth send back, which existed only to
-  // end the director's rounds and which paid for exactly that outline.
-  if (!state.selectedArcs?.length) {
-    throw new Error(
-      '[buildArcEvidencePackages] No selected arcs. Refusing to package zero arcs and pay for ' +
-      'an outline about nothing. Roll back to arc-selection and choose arcs.'
-    );
-  }
-
-  const selectedArcIds = state.selectedArcs || [];
-  const allArcs = state.narrativeArcs || [];
-  const evidenceBundle = state.evidenceBundle || { exposed: { tokens: [], paperEvidence: [] } };
-  const photoAnalyses = state.photoAnalyses || { analyses: [] };
-  const whiteboardFilename = whiteboardFilenameOf(state);
-
-  console.log(`[buildArcEvidencePackages] Building packages for ${selectedArcIds.length} selected arcs`);
-
-  // Resolve arc IDs to full arc objects using helper (DRY - Commit 8.25)
-  const packages = selectedArcIds.map(arcIdOrObj => {
-    const arc = resolveArc(arcIdOrObj, allArcs);
-
-    if (!arc) {
-      console.log(`[buildArcEvidencePackages] Warning: arc "${arcIdOrObj}" not found in narrativeArcs`);
-      return null;
-    }
-    // Extract FULL content for this arc's keyEvidence
-    // Use Array.isArray to guard against non-array truthy values
-    const evidenceItems = (Array.isArray(arc.keyEvidence) ? arc.keyEvidence : []).map(evidenceId => {
-      // Look in exposed tokens
-      const token = (evidenceBundle.exposed?.tokens || []).find(t =>
-        t.id === evidenceId || t.tokenId === evidenceId
-      );
-
-      // Look in exposed paper evidence
-      const paper = (evidenceBundle.exposed?.paperEvidence || []).find(p =>
-        p.id === evidenceId || p.notionId === evidenceId || p.pageId === evidenceId || p.name === evidenceId
-      );
-
-      const item = token || paper;
-      if (!item) {
-        console.log(`[buildArcEvidencePackages] Warning: keyEvidence ${evidenceId} not found in bundle`);
-        return null;
-      }
-
-      // DRY: Use extractFullContent() helper for verbatim content
-      const fullContent = extractFullContent(item);
-
-      return {
-        id: evidenceId,
-        type: token ? 'memory' : 'paper',
-        owner: item.owner || item.ownerLogline || item.owners?.[0] || null,
-        summary: item.summary || item.description?.substring(0, 150) || '',
-        fullContent: fullContent,
-        quotableExcerpts: extractQuotableExcerpts(fullContent)
-      };
-    }).filter(Boolean);
-
-    // Include enriched photo analyses for characters in this arc
-    const arcCharacters = Object.keys(arc.characterPlacements || {});
-    const relevantPhotos = (photoAnalyses.analyses || [])
-      .filter(p => !whiteboardFilename || photoFilenameOf(p.filename) !== whiteboardFilename)  // T13: never the whiteboard
-      .filter(p => !isPhotoExcluded(state, p.filename))  // T13: the director's exclusions
-      .filter(p => {
-        const photoCharacters = p.identifiedCharacters || p.characterDescriptions || [];
-        return photoCharacters.some(c => {
-          const charName = typeof c === 'string' ? c : c?.name || c?.description || '';
-          return arcCharacters.some(ac => charName?.toLowerCase().includes(ac.toLowerCase()));
-        });
-      })
-      .map(p => ({
-        filename: p.filename,
-        characters: p.identifiedCharacters || p.characterDescriptions?.map(c => typeof c === 'string' ? c : c.name) || [],
-        enrichedCaption: p.finalCaption || p.captionSuggestion || '',
-        emotionalTone: p.emotionalTone || '',
-        storyRelevance: p.storyRelevance || '',
-        visualContext: p.enrichedVisualContent || p.visualContent || ''
-      }));
-
-    console.log(`[buildArcEvidencePackages] Arc "${arc.title}": ${evidenceItems.length} evidence items, ${relevantPhotos.length} photos`);
-
-    return {
-      arcId: arc.id,
-      arcTitle: arc.title,
-      arcSource: arc.arcSource,
-      evidenceStrength: arc.evidenceStrength,
-      evidenceItems,  // Named to match prompt-builder.js usage
-      photos: relevantPhotos,
-      characterPlacements: arc.characterPlacements || {},
-      analysisNotes: arc.analysisNotes || ''
-    };
-  }).filter(Boolean);  // Filter out arcs that weren't found in narrativeArcs
-
-  // C3 invariant: every evidence item routed to an arc package should have
-  // fullContent populated. If any are empty, surface loudly so we can trace
-  // back to which preserve-merge point failed.
-  let emptyContentCount = 0;
-  for (const pkg of packages) {
-    for (const item of pkg.evidenceItems || []) {
-      if (!item.fullContent || item.fullContent.length === 0) {
-        emptyContentCount++;
-      }
-    }
-  }
-  if (emptyContentCount > 0) {
-    console.error(
-      `[buildArcEvidencePackages] INVARIANT VIOLATION: ${emptyContentCount} evidence items routed to arcs lack fullContent. ` +
-      `Evidence cards will render empty. Check preprocessor and scorePaperEvidence merge for field stripping.`
-    );
-  }
-
-  console.log(`[buildArcEvidencePackages] Built ${packages.length} arc evidence packages`);
-
-  return {
-    arcEvidencePackages: packages,
-    // C5: prune consumed state to reduce checkpoint size and LangSmith trace pressure.
-    // preprocessedEvidence is consumed by curateEvidenceBundle (already pruned there)
-    // but we re-prune defensively in case state was rehydrated from an older checkpoint.
-    // Note: photoAnalyses.analyses is INTENTIONALLY not pruned here — evaluateOutline
-    // reads state.photoAnalyses?.analyses downstream (see evaluator-nodes.js).
-    preprocessedEvidence: null,
-    currentPhase: PHASES.BUILD_ARC_PACKAGES
-  };
-}
-
 /**
  * The previous stage's advisory findings, for the next writer (brief 1.3).
  *
@@ -947,10 +758,9 @@ function buildSessionFacts(state) {
  * appears, and an excluded photo never does). The one rule (the 4b fix batch; the
  * integrator's ruling) for every list a writer or judge may place photos from:
  * buildAvailablePhotos (the outline writer, its reworker, the outline judge, and the
- * article writer's and judge's PHOTOS), each arc package's photos (buildArcEvidencePackages:
- * the outline writer's and reworker's <arc-evidence>, the detective article's ARC PHOTOS)
- * and the hero entry (heroPhotoEntry). It also decides the hero choice (selectHeroImage)
- * and the fact check's usable photos (evaluator-nodes.js buildFactCheckArgs).
+ * article writer's and judge's PHOTOS) and the hero entry (heroPhotoEntry). It also
+ * decides the hero choice (selectHeroImage) and the fact check's usable photos
+ * (evaluator-nodes.js buildFactCheckArgs).
  *
  * The director leaves a photo out at the character-IDs stop with its "leave this photo
  * out" box (phase 4, brief 4.2), and the parse writes an explicit decision into the
@@ -1007,9 +817,7 @@ function heroPhotoEntry(state, heroImage) {
  *
  * The 4b fix batch (T13): a photo the director excluded is left out (isPhotoExcluded).
  * The outline writer, its reworker and the outline judge build their lists here, and so
- * do the article writer's and judge's PHOTOS (articleWriterInputs). The outline writer
- * and its reworker also print each arc's photos, which buildArcEvidencePackages filters
- * with the same predicate (fix round 1).
+ * do the article writer's and judge's PHOTOS (articleWriterInputs).
  *
  * @param {Object} state
  * @param {string} heroImage - excluded (it has its own slot)
@@ -1135,7 +943,7 @@ function selectHeroImage(state) {
  * @param {Object} state
  * @param {string} heroImage - the writer's hero image
  * @returns {Array} [arcAnalysis, selectedArcs, heroImage, availablePhotos,
- *   arcEvidencePackages, shellAccounts, sessionFacts, options]
+ *   shellAccounts, sessionFacts, options]
  */
 function outlineWriterInputs(state, heroImage) {
   // Arc metadata for the outline prompt. The cache carries the ANALYSIS
@@ -1160,7 +968,6 @@ function outlineWriterInputs(state, heroImage) {
     state.selectedArcs || [],
     heroImage,
     availablePhotos,  // Available photos
-    state.arcEvidencePackages || [],  // per-arc document ids, quotable excerpts and photos
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts: one builder for the outline and the article (RC3 guardrail, brief 2.2)
     buildSessionFacts(state),
@@ -1630,9 +1437,11 @@ Remember: You are IMPROVING, not regenerating. The previous work was valuable - 
  * excluded is the one rule's (isPhotoExcluded, which buildAvailablePhotos and the hero
  * entry read too); this list used to read the analysis's mark alone.
  *
+ * Phase 4 (brief 4.6; R5): no arc packages; the article writer reads the record whole.
+ *
  * @param {Object} state
- * @returns {Array} [outline, arcEvidencePackages, heroImage, shellAccounts,
- *   sessionFacts, directorNotes, narrativeTensions, options]
+ * @returns {Array} [outline, heroImage, shellAccounts, sessionFacts, directorNotes,
+ *   narrativeTensions, options]
  */
 function articleWriterInputs(state) {
   const parked = (state.theme || 'journalist') !== 'journalist';
@@ -1644,7 +1453,6 @@ function articleWriterInputs(state) {
   ];
   return [
     state.outline || {},
-    state.arcEvidencePackages || [],  // per-arc document ids, quotable excerpts and photos
     heroImage,  // Hero image filename (prevents duplicate in photos array)
     state.shellAccounts || [],  // Deterministic shell account data for financial summary
     // Session facts for the non-roster character guardrail (RC3) and the verdict (brief 2.2)
@@ -1687,20 +1495,6 @@ async function generateContentBundle(state, config) {
 
   const sdk = getSdkClient(config, 'generateContent');
   const promptBuilder = getPromptBuilder(config, state);
-
-  // PHASE 1 FIX: Pass arcEvidencePackages with fullContent for verbatim quoting
-  const arcEvidencePackages = state.arcEvidencePackages || [];
-
-  // Phase 3.2: Pre-generation logging - verify fullContent availability
-  console.log(`[generateContentBundle] Pre-generation: arcEvidencePackages summary:`);
-  arcEvidencePackages.forEach(pkg => {
-    const itemCount = pkg.evidenceItems?.length || 0;
-    const withFullContent = (pkg.evidenceItems || []).filter(item => item.fullContent && item.fullContent.length > 0).length;
-    console.log(`  Arc "${pkg.arcTitle || pkg.arcId}": ${itemCount} items, ${withFullContent} with fullContent`);
-    if (withFullContent < itemCount) {
-      console.warn(`    ⚠ ${itemCount - withFullContent} items missing fullContent - evidence cards may not render`);
-    }
-  });
 
   const { systemPrompt, userPrompt } = await promptBuilder.buildArticlePrompt(...articleWriterInputs(state));
 
@@ -2061,9 +1855,10 @@ async function buildArticleRevisionSystemPrompt(promptBuilder, theme = 'journali
  * <SHOULD_CONSIDER> and <DIRECTOR_GUIDANCE>), built by the writer's own builder from
  * the writer's own inputs, then the revision block, then <DIRECTOR_GUIDANCE> last.
  * On 092026 the reworker saw no document text and deleted four correct evidence
- * cards; it now has the approved outline, the record, the packages, the money
- * figures, the director's notes and the writer's whole rule set (which replaces the
- * three-file <RULES> it used to carry, and whose <SCHEMA> replaces its own copy).
+ * cards; it now has the approved outline, the record, the money figures, the
+ * director's notes and the writer's whole rule set (which replaces the three-file
+ * <RULES> it used to carry, and whose <SCHEMA> replaces its own copy). The arc
+ * packages it carried went in phase 4 (brief 4.6; R5).
  *
  * The writer's <SHOULD_CONSIDER> is the outline evaluation's advisories, which the
  * article evaluation has overwritten by the time a rework runs; the revision
@@ -2157,14 +1952,14 @@ function createMockPromptBuilder() {
       return `Generate article from outline with ${Object.keys(outline || {}).length} sections`;
     },
 
-    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, arcEvidencePackages, shellAccounts, sessionFacts) {
+    async buildOutlinePrompt(arcAnalysis, selectedArcs, heroImage, availablePhotos, shellAccounts, sessionFacts) {
       return {
         systemPrompt: 'Mock system prompt for outline generation',
         userPrompt: `Generate outline for arcs: ${selectedArcs?.join(', ') || 'none selected'}`
       };
     },
 
-    async buildArticlePrompt(outline, arcEvidencePackages, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions) {
+    async buildArticlePrompt(outline, heroImage, shellAccounts, sessionFacts, directorNotes, narrativeTensions) {
       return {
         systemPrompt: 'Mock system prompt for article generation',
         userPrompt: `Generate article from outline with ${Object.keys(outline).length} sections`
@@ -2179,9 +1974,6 @@ module.exports = {
     stateFields: ['preprocessedEvidence', 'selectedPaperEvidence']
   }),
   processRescuedItems: traceNode(processRescuedItems, 'processRescuedItems'),
-  buildArcEvidencePackages: traceNode(buildArcEvidencePackages, 'buildArcEvidencePackages', {
-    stateFields: ['selectedArcs', 'evidenceBundle', 'photoAnalyses']
-  }),
   generateOutline: traceNode(generateOutline, 'generateOutline', {
     stateFields: ['selectedArcs', 'playerFocus']
   }),

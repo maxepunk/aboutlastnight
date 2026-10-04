@@ -1110,7 +1110,7 @@ describe('evaluateArticle — programmatic fact-check pre-check (BASELINE class 
         }],
         evidenceCards: [{ tokenId: 'vic001', headline: 'The Offer', summary: 'Vic makes the offer' }]
       },
-      arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+      evidenceBundle: { exposed: { tokens: [{ id: 'vic001', fullContent: SOURCE }], paperEvidence: [] } },
       sessionConfig: { roster: ['Vic', 'Mel'], reportingMode: 'on-site' },
       canonicalCharacters: { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' },
       outline: {},
@@ -1270,7 +1270,7 @@ describe('evaluateArticle — the card check reads what the page prints (slice 2
     return {
       theme,
       contentBundle,
-      arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+      evidenceBundle: { exposed: { tokens: [{ id: 'vic001', fullContent: SOURCE }], paperEvidence: [] } },
       sessionConfig: { roster: ['Mel'], reportingMode: 'on-site' },
       canonicalCharacters: { Mel: 'Mel Nilsson' },
       outline: {}
@@ -1759,7 +1759,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
             ]
           }]
         },
-        arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+        evidenceBundle: { exposed: { tokens: [{ id: 'vic001', fullContent: SOURCE }], paperEvidence: [] } },
         sessionConfig: { roster: ['Vic', 'Mel'], reportingMode: 'on-site' },
         canonicalCharacters: { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' },
         outline: {},
@@ -1832,7 +1832,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
         {
           theme: 'journalist',
           contentBundle: { sections: [{ id: 's', type: 'narrative', content: [{ type: 'evidence-card', tokenId: 'vic001', headline: 'h', content: 'Invented text that is in no document at all.' }] }] },
-          arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: 'The real memory text, which says something else entirely.' }] }],
+          evidenceBundle: { exposed: { tokens: [{ id: 'vic001', fullContent: 'The real memory text, which says something else entirely.' }], paperEvidence: [] } },
           sessionConfig: { roster: [], reportingMode: 'on-site' },
           outline: {}
         },
@@ -2075,14 +2075,11 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
 
     // Phase 3 (3.9, ruled): the article places every photo the director kept (T13), so
     // the article writer gets the outline writer's whole set, and the judge's PHOTOS is
-    // that set. A kept photo no arc package lists (p9.jpg) used to reach neither.
+    // that set. A kept photo no arc package listed (p9.jpg) used to reach neither; the
+    // packages went in phase 4 (brief 4.6; R5).
     it('the article judge gets the article writer\'s photos: the hero, then every photo the director kept, once each, never the whiteboard', () => {
       const state = fullState();
-      state.arcEvidencePackages[1].photos = [
-        { filename: 'p2.jpg', characters: ['Alex'] },  // a package names it too: listed once
-        { filename: 'whiteboard.jpg', characters: ['Riley'] }  // the whiteboard photo: left out
-      ];
-      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];  // no package lists it
+      state.sessionPhotos = [...state.sessionPhotos, 'photos/p9.jpg'];
       const prompt = userFor('article', state);
       const start = prompt.indexOf('\nPHOTOS (');
       expect(start).toBeGreaterThan(prompt.indexOf('</RECORD>'));
@@ -2861,9 +2858,9 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       expect(photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
     });
 
-    it('the article writer and its reworker list every photo once, under PHOTOS, and the packages point at theirs by filename', async () => {
+    // Phase 4 (brief 4.6; R5): no arc package points at a photo; each prints once, in PHOTOS.
+    it('the article writer and its reworker list every photo once, under PHOTOS', async () => {
       const state = withKeptPhoto();
-      state.arcEvidencePackages[1].photos = [{ filename: 'whiteboard.jpg', characters: ['Riley'] }];
       const writer = recordingSdk();
       await generateContentBundle({ ...state, contentBundle: null }, cfg(writer));
       const rework = recordingSdk();
@@ -2872,8 +2869,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
         const photos = prompt.slice(prompt.indexOf('\nPHOTOS ('), prompt.indexOf('<RECORD>'));
         expect(photos).toContain(`\n\n${ENTRIES(state).join('\n\n')}`);
         expect(count(prompt, 'p2.jpg: Alex')).toBe(1);
-        expect(prompt).toContain('ARC PHOTOS:\n- p2.jpg\n');
-        // The whiteboard photo a package names is neither listed nor pointed at.
+        expect(prompt).not.toContain('ARC PHOTOS:');
+        // The whiteboard photo is never listed.
         expect(prompt).not.toContain('whiteboard.jpg');
       }
     });
@@ -2922,7 +2919,7 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       state.sessionPhotos = [...state.sessionPhotos, 'photos/p3-excluded.jpg'];
       state.photoDescriptions = { ...state.photoDescriptions, 'p3-excluded.jpg': 'Morgan mid-sentence, eyes half shut.' };
       const inputs = articleWriterInputs(state);
-      expect(inputs[2]).toBe('hero.jpg');
+      expect(inputs[1]).toBe('hero.jpg');
       expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['hero.jpg', 'p2.jpg', 'p9.jpg']);
       const prompts = await articlePrompts(state);
       expect(prompts.judge).toContain('PHOTOS (the 3 photos the article writer was given');
@@ -2936,7 +2933,7 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     it('a stored hero the director excluded is no hero: the writer is told none was chosen, and nothing lists it', async () => {
       const state = markExcluded(withKeptPhoto(), 'hero.jpg');
       const inputs = articleWriterInputs(state);
-      expect(inputs[2]).toBeNull();
+      expect(inputs[1]).toBeNull();
       expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['p2.jpg', 'p9.jpg']);
       const prompts = await articlePrompts(state);
       expect(prompts.writer).toContain('HERO IMAGE: none chosen: use the first photo the outline places');
@@ -2948,7 +2945,7 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       }
       // The detective is parked (spec D13): its writer keeps the hero it was given.
       const detective = markExcluded(stateFor('detective', { heroImage: 'hero.jpg' }), 'hero.jpg');
-      expect(articleWriterInputs(detective)[2]).toBe('hero.jpg');
+      expect(articleWriterInputs(detective)[1]).toBe('hero.jpg');
     });
   });
 });

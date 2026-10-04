@@ -40,7 +40,7 @@ describe.each(['journalist', 'detective'])('the %s article writer', (theme) => {
   let userPrompt;
   beforeAll(async () => {
     const builder = new PromptBuilder(stubThemeLoader(PHASE_REQUIREMENTS[theme]), theme, { roster: [] }, {}, null);
-    ({ userPrompt } = await builder.buildArticlePrompt({ lede: {} }, [], null, [], null, null, null));
+    ({ userPrompt } = await builder.buildArticlePrompt({ lede: {} }, null, [], null, null, null));
   });
 
   it('carries none of the stale card instructions', () => {

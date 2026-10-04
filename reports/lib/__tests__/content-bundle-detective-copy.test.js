@@ -44,7 +44,7 @@ describe("the detective's frozen copy of the content-bundle schema", () => {
   it("the detective's <SCHEMA> prints the schema as before, its id line included (D13)", async () => {
     const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };
     const { userPrompt } = await new PromptBuilder(themeLoader, 'detective', {})
-      .buildArticlePrompt({}, [], null, [], null, null, null, {});
+      .buildArticlePrompt({}, null, [], null, null, null, {});
     const block = userPrompt.slice(userPrompt.indexOf('```json\n', userPrompt.indexOf('<SCHEMA>')) + '```json\n'.length);
     const printed = block.slice(0, block.indexOf('\n```'));
     expect(printed.split('\n').slice(0, 4)).toEqual([

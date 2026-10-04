@@ -353,18 +353,6 @@ const LISTED_BLOCKS = ['QUOTE_BANK', 'TRANSACTION_LINKS', 'NARRATIVE_TENSIONS'];
 const TENSIONS_HEADING = "### Blake and the Valet in the director's notes";
 
 /**
- * The arc packages' excerpts, the documents' own words cut at sentence breaks; an
- * excerpt may run over lines.
- * - The outline writer's <arc-evidence>: an "  Excerpts:" line under each document's
- *   "- <id>: memory|paper" line, up to the next document's line or the package's photos.
- * - The article writer's packages: the lines between "EXCERPTS:" and "DOCUMENTS:".
- */
-const OUTLINE_EXCERPTS = /^ {2}Excerpts:/;
-const OUTLINE_EXCERPTS_END = /^- .*: (?:memory|paper)$|^\*\*Photos in which /;
-const ARTICLE_EXCERPTS = 'EXCERPTS:';
-const ARTICLE_EXCERPTS_END = 'DOCUMENTS:';
-
-/**
  * The outline judge's photo analyses (renderJudgePhotos, evaluator-nodes.js), the
  * Haiku model's output: "Photo analysis: {" then the indented JSON, closing on a line of
  * the same indent.
@@ -524,34 +512,6 @@ function stripTensionSentences(text) {
   return lines.join('\n');
 }
 
-/** Each arc package's excerpts taken out, the "Excerpts:", "EXCERPTS:" and "DOCUMENTS:" labels kept. */
-function stripExcerpts(text) {
-  const lines = text.split('\n');
-  const out = [];
-  for (let i = 0; i < lines.length; i += 1) {
-    if (OUTLINE_EXCERPTS.test(lines[i])) {
-      out.push('  Excerpts:');
-      let end = i + 1;
-      while (end < lines.length && !OUTLINE_EXCERPTS_END.test(lines[end])) end += 1;
-      if (end === lines.length) {
-        throw new Error('instructionText: an "Excerpts:" line with no next document or photos line after it; where the document\'s words end is unknown');
-      }
-      i = end - 1;
-    } else if (lines[i] === ARTICLE_EXCERPTS) {
-      out.push(lines[i]);
-      let end = i + 1;
-      while (end < lines.length && lines[end] !== ARTICLE_EXCERPTS_END) end += 1;
-      if (end === lines.length) {
-        throw new Error(`instructionText: an "${ARTICLE_EXCERPTS}" list with no "${ARTICLE_EXCERPTS_END}" line after it; where the documents' words end is unknown`);
-      }
-      i = end - 1;
-    } else {
-      out.push(lines[i]);
-    }
-  }
-  return out.join('\n');
-}
-
 /** Each photo analysis the outline judge prints taken out, its label and braces kept. */
 function stripPhotoAnalyses(text) {
   const lines = text.split('\n');
@@ -582,8 +542,9 @@ function stripPhotoAnalyses(text) {
  *   under the arc writer's TENSIONS_HEADING; the director's guidance and notes inside
  *   <DIRECTOR_GUIDANCE>; every paragraph of the send-back note after "HUMAN FEEDBACK
  *   (HIGHEST PRIORITY):", up to the pipeline's "NOTE: The human reviewer" line; the
- *   text after "The director's description" on a photo line; and the arc packages'
- *   excerpts, the documents' own words (3.6b fix batch);
+ *   text after "The director's description" on a photo line. (The arc packages'
+ *   excerpts, stripped since the 3.6b fix batch, went with the packages: phase 4, brief
+ *   4.6, R5.)
  * - a model's output the prompt carries as data: the previous version a rework shows,
  *   the JSON after each MODEL_OUTPUT_LABELS line (the approved outline, the arcs and the
  *   rest of the arc analysis, the plans, the content bundle, the weave the fact check
@@ -597,9 +558,8 @@ function stripPhotoAnalyses(text) {
  * @returns {string}
  * @throws {Error} on a shape it cannot read: a send-back note or a previous version
  *   with no end line, JSON that never closes (a photo analysis's included), a
- *   <DIRECTOR_GUIDANCE> block with neither of the pipeline's labels, excerpts with no
- *   line after them that ends them. A guess would scan the director's words or skip the
- *   pipeline's.
+ *   <DIRECTOR_GUIDANCE> block with neither of the pipeline's labels. A guess would scan
+ *   the director's words or skip the pipeline's.
  */
 function instructionText(render) {
   let text = String(render || '');
@@ -615,7 +575,6 @@ function instructionText(render) {
   text = stripModelOutputJson(text);
   text = stripWhiteboardReadings(text);
   text = stripTensionSentences(text);
-  text = stripExcerpts(text);
   text = stripPhotoAnalyses(text);
   text = text.replace(/(The director's description[^:\n]*:).*$/gm, '$1');
   return text;

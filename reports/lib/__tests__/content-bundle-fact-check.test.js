@@ -27,14 +27,13 @@ const PAPER_TEXT =
 function baseArgs(overrides = {}) {
   return {
     contentBundle: { sections: [], evidenceCards: [] },
-    arcEvidencePackages: [{
-      arcId: 'arc-1',
-      evidenceItems: [
-        { id: 'vic001', type: 'memory', owner: 'Vic Kingsley', fullContent: TOKEN_TEXT },
-        { id: 'paper-1', type: 'paper', fullContent: PAPER_TEXT }
-      ]
-    }],
-    evidenceBundle: { exposed: { tokens: [], paperEvidence: [] } },
+    // Phase 4 (brief 4.6; R5): the card check's source texts come from the record alone.
+    evidenceBundle: {
+      exposed: {
+        tokens: [{ id: 'vic001', owner: 'Vic Kingsley', fullContent: TOKEN_TEXT }],
+        paperEvidence: [{ id: 'paper-1', fullContent: PAPER_TEXT }]
+      }
+    },
     roster: [],
     sessionPhotos: [],
     reportingMode: 'on-site',
@@ -150,7 +149,6 @@ describe('card fidelity (class 1)', () => {
 
   it('(e) reads the description/text field chain when fullContent is absent', () => {
     const result = factCheckContentBundle(baseArgs({
-      arcEvidencePackages: [],
       evidenceBundle: {
         exposed: {
           tokens: [],
@@ -164,7 +162,6 @@ describe('card fidelity (class 1)', () => {
 
   it('never treats the source SUMMARY as quotable (that is the fabrication)', () => {
     const result = factCheckContentBundle(baseArgs({
-      arcEvidencePackages: [],
       evidenceBundle: {
         exposed: { tokens: [{ id: 'vic002', summary: 'Vic offers the job before the body is cold.' }], paperEvidence: [] }
       },
@@ -552,7 +549,7 @@ describe('shape and resilience', () => {
       contentBundle: { sections: 'nope', evidenceCards: null, heroImage: 'a-string' },
       roster: [null, 42],
       sessionPhotos: [null],
-      arcEvidencePackages: [null, { evidenceItems: null }]
+      evidenceBundle: { exposed: { tokens: [null, { id: null }], paperEvidence: null } }
     })).not.toThrow();
   });
 });
@@ -677,7 +674,7 @@ describe('ellipsis normalisation', () => {
   const SOURCE = 'You are standing by the bar when Vic leans in and says the job is already decided...';
 
   const verdictFor = (cardContent) => factCheckContentBundle(baseArgs({
-    arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+    evidenceBundle: { exposed: { tokens: [{ id: 'vic001', fullContent: SOURCE }] } },
     contentBundle: storyWith(inlineCard({ tokenId: 'vic001', content: cardContent }))
   })).cardFidelity[0];
 
@@ -691,7 +688,7 @@ describe('ellipsis normalisation', () => {
   it('folds the character in the other direction too', () => {
     const unicodeSource = 'You are standing by the bar when Vic leans in and says the job is already decided…';
     const result = factCheckContentBundle(baseArgs({
-      arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: unicodeSource }] }],
+      evidenceBundle: { exposed: { tokens: [{ id: 'vic001', fullContent: unicodeSource }] } },
       contentBundle: storyWith(inlineCard({ tokenId: 'vic001', content: SOURCE }))
     }));
     expect(result.cardFidelity[0].ok).toBe(true);
@@ -939,7 +936,7 @@ describe('quote-mark faults (slice 2.5, 092026 regression cases)', () => {
   Object.entries(CASES).forEach(([tokenId, { card: content, source }]) => {
     it(`passes ${tokenId}, a correct excerpt, as an inline card`, () => {
       const result = factCheckContentBundle(baseArgs({
-        arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: tokenId, fullContent: source }] }],
+        evidenceBundle: { exposed: { tokens: [{ id: tokenId, fullContent: source }] } },
         contentBundle: storyWith(inlineCard({ tokenId, content }))
       }));
       expect(result.cardFidelity).toEqual([{ tokenId, ok: true, reason: null, locations: IN_STORY }]);

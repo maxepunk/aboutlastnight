@@ -219,13 +219,18 @@ const REPO = path.join(__dirname, '..', '..');
  *   sentence a verdict naming no culprit adds to the accusation is worded for the weave
  *   ("the thread that tells the verdict holds no one as the accused, and never the
  *   victim", where it said "the accusation arc"). arcs-journalist only (9831 -> 9892).
+ * - Phase 4 (brief 4.6; R5), the arc packages go, whole: each render loses its package
+ *   section and nothing else, the record being whole in every one. The journalist outline
+ *   writer's <arc-evidence> (21224 -> 20492) and the detective's <evidence-context>
+ *   (8828 -> 8471); the journalist article writer's ARC EVIDENCE PACKAGES (28260 -> 27631)
+ *   and the detective's (29436 -> 28610). arcs-journalist does not move.
  */
 const PINNED = {
-  'outline-journalist': ['d0e96e6c2dc630ed4182df08f152e8377bd4e8b6379bb1227c016169db2f881c', 21224],
-  'article-journalist': ['4fe0b2b38714a8c0dd7bc72efaa43e382abbb3fd9ce1edf7d6f95846b1c7edb1', 28260],
+  'outline-journalist': ['8618f4b21202eb6cd23df199649b30f5e272db817fcb261fb820b74203adf263', 20492],
+  'article-journalist': ['e85630a0f011ce58931455d6e19cd1e0fba2b357552cbad1050defda27465fa3', 27631],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892],
-  'outline-detective': ['b5404dd77db9e23ba879bfc25242bff96d83264308da5c59066056166b2f8aaf', 8828],
-  'article-detective': ['59cfdf31e6c071a5b619492692771177e5e2ed74e29ca1679c244bd03f6cbf03', 29436]
+  'outline-detective': ['0521b490325112f9d3f8db05979b53f936a809b21719557ad28e76323e672017', 8471],
+  'article-detective': ['8e9a7637c4658265d021a4c4ee771cbc9bbe1aec3a685668b2f3d9799a24d22c', 28610]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

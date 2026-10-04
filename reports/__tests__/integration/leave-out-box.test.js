@@ -101,7 +101,6 @@ function atCharacterIdsStop() {
     ...reworkFixtureState('journalist'),
     outline: null,
     heroImage: null,
-    arcEvidencePackages: null,
     characterIdMappings: null,
     photoDescriptions: null,
     leftOutPhotos: null,

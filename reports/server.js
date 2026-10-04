@@ -307,9 +307,9 @@ function firstLineOf(item) {
  * The owner of a document, as a name.
  *
  * `owners` is the resolved relation (lib/notion/relations.js deletes `ownerIds`
- * on the join), `owner`/`ownerLogline` are what the preprocessor and the arc
- * evidence packages carry. Never a relation id: an id is exactly what this whole
- * index exists to keep off the screen.
+ * on the join), `owner`/`ownerLogline` are what the preprocessor carries. Never a
+ * relation id: an id is exactly what this whole index exists to keep off the
+ * screen.
  */
 function ownerNameOf(item) {
     const candidate = item.owner || item.ownerLogline || (Array.isArray(item.owners) ? item.owners[0] : null);

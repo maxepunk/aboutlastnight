@@ -50,7 +50,7 @@ async function renderArticlePrompt(mode) {
     sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
   });
   const { systemPrompt, userPrompt } = await builder.buildArticlePrompt(
-    { sections: [] }, [], null, [], null, DIRECTOR_NOTES, null, {}
+    { sections: [] }, null, [], null, DIRECTOR_NOTES, null, {}
   );
   return { systemPrompt, userPrompt, all: systemPrompt + '\n' + userPrompt };
 }
@@ -258,7 +258,7 @@ describe('the mode block reaches the arc and outline writers', () => {
     const sessionConfig = { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] };
     const builder = makeBuilder({ theme: 'journalist', sessionConfig });
     const { systemPrompt: outline } = await builder.buildOutlinePrompt(
-      { narrativeArcs: [] }, [], 'hero.png', [], [], [], null, {}
+      { narrativeArcs: [] }, [], 'hero.png', [], [], null, {}
     );
     return {
       'outline generation': outline,
@@ -452,7 +452,7 @@ describe('presence lines outside the article prompt', () => {
       sessionConfig: { reportingMode: mode, journalistFirstName: 'Cass', roster: ['Vic'] }
     });
     const { systemPrompt, userPrompt } = await builder.buildOutlinePrompt(
-      { narrativeArcs: [] }, [], 'hero.png', [], [], [], null, { directorNotes: DIRECTOR_NOTES }
+      { narrativeArcs: [] }, [], 'hero.png', [], [], null, { directorNotes: DIRECTOR_NOTES }
     );
     const all = systemPrompt + '\n' + userPrompt;
     expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');

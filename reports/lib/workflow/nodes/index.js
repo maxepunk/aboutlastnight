@@ -95,7 +95,6 @@ module.exports = {
   // AI nodes (from ai-nodes.js)
   curateEvidenceBundle: aiNodes.curateEvidenceBundle,
   processRescuedItems: aiNodes.processRescuedItems,  // Commit 8.10+: Handle human-rescued paper evidence
-  buildArcEvidencePackages: aiNodes.buildArcEvidencePackages, // Phase 1 Fix: Extract per-arc evidence with fullContent
   generateOutline: aiNodes.generateOutline,
   reviseOutline: aiNodes.reviseOutline,  // Revision node with previous output context (DRY)
   generateContentBundle: aiNodes.generateContentBundle,

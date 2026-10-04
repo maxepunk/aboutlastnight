@@ -33,7 +33,7 @@ const PROMPTS = {
 async function journalistArticlePrompt() {
   const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue(PROMPTS), validate: jest.fn() };
   const builder = new PromptBuilder(themeLoader, 'journalist', {}, { Vic: 'Vic Kingsley' });
-  const { userPrompt } = await builder.buildArticlePrompt({ lede: { hook: 'x' } }, [], 'hero.png', [], null, null, null);
+  const { userPrompt } = await builder.buildArticlePrompt({ lede: { hook: 'x' } }, 'hero.png', [], null, null, null);
   return userPrompt;
 }
 

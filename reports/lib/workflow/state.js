@@ -622,17 +622,6 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => null
   }),
 
-  /**
-   * Per-arc evidence packages with full quotable content
-   * Built by buildArcEvidencePackages after arc selection
-   * Contains: { arcId, arcTitle, evidence: [{ id, fullContent, quotableExcerpts }], photos: [...] }
-   * @see Phase 1 Fix in plan
-   */
-  arcEvidencePackages: Annotation({
-    reducer: replaceReducer,
-    default: () => []
-  }),
-
   /** Cached arc analysis for outline generation (internal) */
   _arcAnalysisCache: Annotation({
     reducer: replaceReducer,
@@ -1011,7 +1000,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (88 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks)
+ * Get default state with all fields initialized (87 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks; phase 4, brief 4.6: -1 the arc packages, R5)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */
@@ -1081,7 +1070,6 @@ function getDefaultState() {
     narrativeArcs: [],
     selectedArcs: [],
     heroImage: null,  // Confirmed hero image filename for article generation
-    arcEvidencePackages: [],  // Phase 1 Fix: per-arc evidence with fullContent
     _arcAnalysisCache: null,
     // Evaluation (Commit 8.6)
     evaluationHistory: [],
@@ -1182,7 +1170,6 @@ const PHASES = {
   ARC_EVALUATION: '2.3',            // Evaluator checks arcs
   ARC_SELECTION: '2.35',            // Checkpoint: user selects arcs (Commit 8.26 - SRP separation)
   PHOTOS: '2.36',                   // Photo late-join: gate that collects the photo folder after arc selection
-  BUILD_ARC_PACKAGES: '2.4',        // Phase 1 Fix: Build per-arc evidence packages after selection
   ANALYZE_ARCS: '2',                // @deprecated - use sub-phases
 
   // Outline sub-phases (Commit 8.6)
@@ -1328,7 +1315,7 @@ const ROLLBACK_CLEARS = {
     // Preprocessing and curation
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
     // Arc analysis
-    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
@@ -1369,7 +1356,7 @@ const ROLLBACK_CLEARS = {
     // only the analysis.
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
@@ -1394,7 +1381,7 @@ const ROLLBACK_CLEARS = {
     // roster, and both outputs are keyed to it.
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
@@ -1428,7 +1415,7 @@ const ROLLBACK_CLEARS = {
     // gate must re-open to show (and let the director reject) the NEW parse.
     'inputReviewApproved',
     'preprocessedEvidence', 'characterData', 'narrativeTensions', 'preCurationApproved', 'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
@@ -1444,7 +1431,7 @@ const ROLLBACK_CLEARS = {
     'preCurationApproved', 'characterData', 'narrativeTensions',
     // Note: preprocessedEvidence preserved - expensive to regenerate
     'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
@@ -1462,7 +1449,7 @@ const ROLLBACK_CLEARS = {
   'evidence-and-photos': [
     'memoryTokens', 'paperEvidence', 'preprocessedEvidence', 'characterData', 'narrativeTensions',
     'evidenceBundle', '_evidenceApproved',
-    'arcEvidencePackages', 'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
+    'weave', '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     // The story meeting (phase 4, brief 4.5): the weave is written again from here, so the
     // writer's last weave, the director's edits, the approval and the round go with it
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
@@ -1482,11 +1469,8 @@ const ROLLBACK_CLEARS = {
   // history go, so both are written and judged again. The director's notes are pruned, not
   // cleared: the meeting's stand, and the map's and the article's rejection notes go
   // (lib/api-helpers.js STOPS_INVALIDATED_BY).
-  // ROLL-2: arcEvidencePackages is built post-selection (buildArcEvidencePackages
-  // skips when non-empty), so it is rebuilt after the meeting approves again.
   'arc-selection': [
     'narrativeTensions',
-    'arcEvidencePackages',
     '_arcReworkTimeout', 'narrativeArcs', 'selectedArcs', '_arcAnalysisCache', '_arcFeedback',
     'meetingApproved', '_meetingRound', '_weaveHandEditReport', '_weaveMarks',
     // Q2: _outlineGuidance was captured AT this gate until the meeting (brief 4.5), which
@@ -1513,7 +1497,7 @@ const ROLLBACK_CLEARS = {
   'photos': [
     'photosPath', 'sessionPhotos', 'preprocessStats', 'whiteboardPhotoPath', 'genericPhotoAnalyses',
     'photoAnalyses', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
-    'heroImage', 'arcEvidencePackages',
+    'heroImage',
     'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
@@ -1537,7 +1521,7 @@ const ROLLBACK_CLEARS = {
   // isPhotoExcluded reads before the analysis's mark (brief 4.2).
   'character-ids': [
     'characterIdMappings', 'photoDescriptions', 'leftOutPhotos',
-    'heroImage', 'arcEvidencePackages',
+    'heroImage',
     'outline', 'outlineApproved', '_outlineFeedback', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
     'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
@@ -1644,7 +1628,7 @@ if (require.main === module) {
 
   // Test default state
   const defaultState = getDefaultState();
-  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 88
+  console.log('Default state keys:', Object.keys(defaultState).length); // Should be 87
   console.log('Default theme:', defaultState.theme);
   console.log('Default errors:', defaultState.errors);
   console.log('Default rawSessionInput:', defaultState.rawSessionInput); // Should be null

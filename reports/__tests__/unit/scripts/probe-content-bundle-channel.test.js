@@ -4,14 +4,16 @@
  * file as a bare array or `items` / `paperEvidence`, but fetchPaperEvidence writes
  * `{ evidence, fetchedAt, totalCount }`. And the probe never packaged paper documents at
  * all, so its prompt carried none of what the real article writer gets. No model call
- * here: the loaders are pure, and the prompt is built with the real packaging node and
- * the real PromptBuilder.
+ * here: the loaders are pure, and the prompt is built with the real PromptBuilder.
+ *
+ * Phase 4 (brief 4.6; R5): the arc packages went, so the probe packages nothing; its
+ * record is the documents its synthetic arcs draw on (buildProbeRecord).
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {
-  tokensOf, paperEvidenceOf, loadSession, buildProbePackages, buildProbePrompt, ITEMS_PER_ARC
+  tokensOf, paperEvidenceOf, loadSession, buildProbeRecord, buildProbePrompt, ITEMS_PER_ARC
 } = require('../../../scripts/probe-content-bundle-channel');
 
 // Shaped like a current session's fetched/ files (field names only; the text is
@@ -84,39 +86,28 @@ describe('loadSession', () => {
   });
 });
 
-describe('buildProbePackages (through the pipeline\'s buildArcEvidencePackages)', () => {
-  test('packages paper documents and memory tokens as the real writer gets them', async () => {
-    const packages = await buildProbePackages({ tokens: TOKENS, paperEvidence: PAPER, roster: ['Sam', 'Quinn', 'Morgan', 'Remi'] });
+describe('buildProbeRecord (phase 4, brief 4.6: the packages went)', () => {
+  test("the record holds the paper documents and memory tokens the synthetic arcs draw on", () => {
+    const { evidenceBundle, arcDocuments } = buildProbeRecord({ tokens: TOKENS, paperEvidence: PAPER });
 
-    expect(packages.map((p) => p.evidenceItems.length)).toEqual(ITEMS_PER_ARC);
-    const items = packages.flatMap((p) => p.evidenceItems);
-
-    const paper = items.find((i) => i.id === PAPER[1].notionId);
-    expect(paper).toMatchObject({
-      type: 'paper',
-      owner: 'Test Owner C',
-      fullContent: PAPER[1].description
-    });
-    const memory = items.find((i) => i.id === 'tst001');
-    expect(memory).toMatchObject({ type: 'memory', owner: 'Test Owner A', fullContent: TOKENS[0].fullDescription });
-
-    // The pool alternates paper and tokens, and skips the document with no text.
-    expect(items.slice(0, 4).map((i) => i.type)).toEqual(['paper', 'memory', 'paper', 'memory']);
-    expect(items.some((i) => i.id === PAPER[2].notionId)).toBe(false);
-    expect(items.every((i) => i.fullContent.length > 0)).toBe(true);
-
-    expect(packages[0].photos).toEqual([{ filename: 'aln0509 (1 of 10).jpg', characters: ['Sam', 'Quinn', 'Morgan'] }]);
+    expect(arcDocuments.map((ids) => ids.length)).toEqual(ITEMS_PER_ARC);
+    // The pool alternates paper and tokens, by their ids in the record view, and skips
+    // the document with no text.
+    expect(arcDocuments[0].slice(0, 4)).toEqual([PAPER[0].notionId, 'tst001', PAPER[1].notionId, 'tst002']);
+    expect(arcDocuments.flat()).not.toContain(PAPER[2].notionId);
+    expect(evidenceBundle.exposed.tokens).toEqual(TOKENS);
+    expect(evidenceBundle.exposed.paperEvidence).toEqual([PAPER[0], PAPER[1]]);
   });
 
-  test('a session with no text anywhere fails loudly', async () => {
-    await expect(buildProbePackages({ tokens: [], paperEvidence: [PAPER[2]], roster: [] }))
-      .rejects.toThrow(/no memory token or paper document with any text/);
+  test('a session with no text anywhere fails loudly', () => {
+    expect(() => buildProbeRecord({ tokens: [], paperEvidence: [PAPER[2]] }))
+      .toThrow(/no memory token or paper document with any text/);
   });
 });
 
 describe('buildProbePrompt', () => {
   test('the article prompt carries the paper documents', async () => {
-    const { userPrompt, arcEvidencePackages } = await buildProbePrompt({
+    const { userPrompt, evidenceBundle } = await buildProbePrompt({
       sessionId: '092026',
       sessionConfig: { roster: ['Sam', 'Quinn'], accusation: { accused: ['Sam'] } },
       directorNotes: { observations: {} },
@@ -124,8 +115,8 @@ describe('buildProbePrompt', () => {
       paperEvidence: PAPER
     });
 
-    expect(arcEvidencePackages).toHaveLength(ITEMS_PER_ARC.length);
-    // Brief 2.1: each document once, in full, in <RECORD>; the packages name it by id.
+    expect(evidenceBundle.exposed.paperEvidence).toHaveLength(2);
+    // Brief 2.1: each document once, in full, in <RECORD>.
     expect(userPrompt).toContain(
       `<document id="${PAPER[0].notionId}" kind="Document" name="Test letter (unlocked)" layer="exposed">\n${PAPER[0].description}\n</document>`);
     expect(userPrompt).toContain(
@@ -133,19 +124,17 @@ describe('buildProbePrompt', () => {
     expect(userPrompt).toContain(
       `<document id="tst001" kind="memory" name="TST001" owner="Test Owner A" layer="exposed">\n${TOKENS[0].fullDescription}\n</document>`);
     expect(userPrompt.split(PAPER[0].description).length - 1).toBe(1);
-    expect(userPrompt).toContain(`${PAPER[0].notionId} (paper)\n`);
-    expect(userPrompt).toContain('tst001 (memory)\n');
+    expect(userPrompt).not.toContain('ARC EVIDENCE PACKAGES');
     // The blank page is cited by no arc, so it is not in the probe's record.
     expect(userPrompt).not.toContain(PAPER[2].notionId);
   });
 
   // The 4b fix batch (3.9 review minor 1): since 3.9 the article writer lists its photos
-  // under PHOTOS (options.photos, from articleWriterInputs), and an arc package points at
-  // its photos by filename, only at listed ones. The probe passed no photos, so its
-  // prompt printed "PHOTOS: none" and every package's "ARC PHOTOS: None", while its
-  // outline placed photos and its HERO IMAGE named one. Its photos now come from the
-  // writer's own inputs, so its prompt is the writer's.
-  test("the article prompt lists the writer's photos, from articleWriterInputs: the hero, then each package photo once", async () => {
+  // under PHOTOS (options.photos, from articleWriterInputs). The probe passed no photos, so
+  // its prompt printed "PHOTOS: none", while its outline placed photos and its HERO IMAGE
+  // named one. Its photos now come from the writer's own inputs, so its prompt is the
+  // writer's. Phase 4 (brief 4.6): one photo per synthetic arc, with no package to name it.
+  test("the article prompt lists the writer's photos, from articleWriterInputs: the hero, then each arc's photo once", async () => {
     const { userPrompt } = await buildProbePrompt({
       sessionId: '092026',
       sessionConfig: { roster: ['Sam', 'Quinn'], accusation: { accused: ['Sam'] } },
@@ -162,7 +151,6 @@ describe('buildProbePrompt', () => {
       expect(userPrompt).toContain(`${arcIdx + 2}. ${filename}: Sam, Quinn`);
       expect(userPrompt.split(`${filename}: Sam, Quinn`).length - 1).toBe(1);
     });
-    expect(userPrompt).toContain('ARC PHOTOS:\n- aln0509 (1 of 10).jpg\n');
-    expect(userPrompt).not.toMatch(/ARC PHOTOS:\nNone/);
+    expect(userPrompt).not.toContain('ARC PHOTOS:');
   });
 });

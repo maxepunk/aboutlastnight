@@ -955,7 +955,8 @@ describe('fact-check card list and counts (slice 2.5)', () => {
         { tokenId: 'ghost1', headline: 'Nothing', summary: 'About nothing' }
       ]
     },
-    arcEvidencePackages: [{ arcId: 'a1', evidenceItems: [{ id: 'vic001', fullContent: SOURCE }] }],
+    // Phase 4 (brief 4.6; R5): the card check's sources come from the record alone.
+    evidenceBundle: { exposed: { tokens: [{ id: 'vic001', fullContent: SOURCE }] } },
     roster: [],
     sessionPhotos: []
   });

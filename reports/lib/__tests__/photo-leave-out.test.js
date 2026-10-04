@@ -97,7 +97,7 @@ describe('leavePhotosOut: the one function that adds to the list', () => {
 
     expect(buildAvailablePhotos(after, 'hero.jpg', null).map((p) => p.filename)).toEqual(['p3.jpg']);
     const inputs = articleWriterInputs(after);
-    expect(inputs[2]).toBeNull();   // the hero, left out, comes as none
+    expect(inputs[1]).toBeNull();   // the hero, left out, comes as none
     expect(inputs[inputs.length - 1].photos.map((p) => p.filename)).toEqual(['p3.jpg']);
   });
 

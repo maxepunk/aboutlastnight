@@ -160,7 +160,7 @@ describe('the detective\'s calls do not ask for the field (spec D13)', () => {
   it('the detective\'s printed <SCHEMA> leaves the field out', async () => {
     const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue({}), validate: jest.fn() };
     const { userPrompt } = await new PromptBuilder(themeLoader, 'detective', {})
-      .buildArticlePrompt({}, [], null, [], null, null, null, {});
+      .buildArticlePrompt({}, null, [], null, null, null, {});
     expect(userPrompt).not.toContain('writerQuestions');
   });
 });
