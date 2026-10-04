@@ -29,7 +29,7 @@ const {
   filterGateNotes
 } = require('../../prompt-builder');
 const {
-  carriedEdits, settleEdits, standingAfterSendBack, SEND_BACK_PASS, CHANGED_EDITS_KEY, MAP_TOP_PHOTO, isCut
+  carriedEdits, settleEdits, standingAfterSendBack, SEND_BACK_PASS, CHANGED_EDITS_KEY, MAP_TOP_PHOTO, isCut, photoBasename
 } = require('../../hand-edit-diff');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map's schema for the theme (its slots), and the hero its top
@@ -1739,10 +1739,15 @@ async function reviseContentBundle(state, config) {
     // it is, with its reasons. Spec §4.4: verify on EVERY pass. F1: the report adds this
     // pass's changes and restores to the round's (the server resets it at a send-back);
     // the edits stay, for the gate to clear on approve. Brief 4.7b: the article carries no
-    // writers' questions (spec section 10), so the rework carries none forward.
+    // writers' questions (spec section 10), so the rework carries none forward. Task 4.5f:
+    // code puts back no photo the article cannot print, so the restore is given the photos
+    // the session kept (keptPhotoFilenames), the references the fact check reads as usable,
+    // or no list when the session holds no photos, where the fact check checks none.
+    const sessionHoldsPhotos = (Array.isArray(state.sessionPhotos) ? state.sessionPhotos : []).some((photo) => photoBasename(photo) !== '');
     const settled = settleEdits(state._articleHandEditReport, {
       edits: handEdits, before: previousContentBundle, after: revised || previousContentBundle,
-      pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons
+      pass: sendBack ? SEND_BACK_PASS : revisionCount, reasons,
+      photos: sessionHoldsPhotos ? keptPhotoFilenames(state, null) : undefined
     });
 
     return {
