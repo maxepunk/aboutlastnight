@@ -34,9 +34,10 @@ const { DOCUMENT_POINTER } = require('./prompt-renderers/record-view');
 // F1 and FA (spec 2026-10-02 section 7): which printed field is one of the director's
 // edits, the one prefix a concern about an edit opens with, the one rule for a section's
 // key (known item 7) and the one roster-name test. Task 4.5f: a photo reference's name by
-// the rule the restore reads too (photoBasename), so the restore leaves out exactly the
-// photos this check reads as invalid.
-const { editLocator, directorEditConcern, sectionKey, namesPerson, photoBasename: basename } = require('./hand-edit-diff');
+// the rule the restore reads too (photoBasename), so the restore reads as unprintable exactly
+// the photos this check reads as invalid. Task 4.5g: the session's photo names, the one rule
+// for which photos the session holds, which the article's rework reads too (sessionPhotoNames).
+const { editLocator, directorEditConcern, sectionKey, namesPerson, photoBasename: basename, sessionPhotoNames } = require('./hand-edit-diff');
 // FA (requirement 12): the photos the page prints, the one rule the publish step and the
 // article approve read too (lib/publish-photos.js keeps the function's meaning).
 const { printedPhotos } = require('./publish-photos');
@@ -1238,7 +1239,7 @@ function factCheckContentBundle({
   // session's photo list holds, so it is checked even when that list is empty.
   const whiteboard = basename(whiteboardPhoto);
   const isWhiteboard = (name) => whiteboard !== '' && name === whiteboard;
-  const available = new Set(asArray(sessionPhotos).map(basename).filter(Boolean));
+  const available = new Set(sessionPhotoNames(sessionPhotos));
   const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
   const kept = Array.from(available).filter(filename => !excluded.has(filename) && !isWhiteboard(filename));
   const useKept = kept.length > 0 ? `Use one of [${kept.join(', ')}] or remove the reference.` : 'Remove the reference.';

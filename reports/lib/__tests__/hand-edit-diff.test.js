@@ -3107,11 +3107,15 @@ describe('4.5f: an edit whose photo still prints carries no `unprintable`', () =
     return D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1, photos: ['a.jpg'] });
   };
 
-  it('a pass that moves the photo to another section and recaptions it: code puts nothing back, and the photo, still printing there, marks nothing unprintable', () => {
+  // 4.5g (the integrator's ruling 1 on 4.5f's findings) changed what this test pinned: code put
+  // nothing back, and the director's caption was gone while the photo printed. The pass kept the
+  // photo, so the restore puts it back into the director's section with the director's caption,
+  // and the pass's copy goes.
+  it("a pass that moves the photo to another section and recaptions it: code puts it back into the director's section with the director's caption, the pass's copy goes, and the photo, still printing, marks nothing unprintable", () => {
     const after = article([A, B], [T, photo('A caption the pass wrote.')]);
     const { output, report } = settle(after);
-    expect(output.sections).toEqual(after.sections);
-    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: false })]);
+    expect(output.sections).toEqual(article([A, photo(CAPTION), B], [T]).sections);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
     expect(report.changed[0]).not.toHaveProperty('unprintable');
   });
 
@@ -3154,5 +3158,109 @@ describe('4.5f: a connection the director brought back goes back as the version 
     const fix = D.settleEdits(reweave.report, { edits: D.carriedEdits(look2, reweave.output), before: reweave.output, after: dropped, pass: 1 });
     expect(fix.output.connections).toEqual([C1, { ...WEAVE.connections[1], detail: REWOVEN }]);
     expect(fix.report.changed).toEqual([expect.objectContaining({ id: 'E3', became: null, restored: true })]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5g: the restore's photo rule, where the pass dropped the photo
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The integrator's ruling 1 on 4.5f's findings (progress.md, 2026-10-04), from the review of
+// 4.5f (scratch 4.5f-review/merge-cases.js). Invented text.
+// - The restore leaves out a photo the article cannot print only where the version the pass
+//   returned prints it nowhere, because the pass removed or renamed it: a photo the director
+//   placed or captioned that the pass kept goes back as the director left it (R11), and a
+//   caption on a photo the pass took out of print stays out with it (spec section 7; T13).
+// - The whiteboard stays out with no list, as the fact check reads it whatever the session holds.
+// - The session's photo names are one rule, which the fact check and the article's rework read.
+describe('4.5g: the restore leaves out a photo the article cannot print only where the pass took it out of print', () => {
+  const S = { id: 's', type: 'narrative', content: [paragraph('Alpha paragraph opens the section with a long first line here.')] };
+  const P = paragraph('A paragraph the director wrote for a new section here.');
+  const P2 = paragraph('A paragraph a pass rewrote inside the section the director added.');
+  const CAPTION = 'Six people huddle at the bar, late in the evening.';
+  const photo = (filename, caption = CAPTION) => ({ type: 'photo', filename, caption });
+  const article = (sections) => ({ metadata: { sessionId: '0926262' }, headline: { main: 'The Room Voted Five to Four' }, sections: sections.map(clone) });
+  const added = (content) => ({ id: 'added', type: 'narrative', heading: 'Added', content });
+  /** The director's version of `shown`, sent back, then an automatic pass that returns `after`, given the kept photos. */
+  const settle = (shown, sentBack, after) => {
+    const standing = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+    return D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1, photos: ['a.jpg'] });
+  };
+
+  it('(a) a section the director added whole, holding a photo the session does not have: a pass that rewrites only its paragraph and keeps the photo has the section put back as the director left it', () => {
+    const sentBack = article([S, added([P, photo('not-ours.jpg')])]);
+    const { output, report } = settle(article([S]), sentBack, article([S, added([P2, photo('not-ours.jpg')])]));
+    expect(output.sections).toEqual(sentBack.sections);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', where: 'section "added"', restored: true })]);
+    expect(report.changed[0]).not.toHaveProperty('unprintable');
+  });
+
+  it("(b) a whole photo block the director put in, which the session does not have: a pass that recaptions it in place has the director's block put back", () => {
+    const sentBack = article([{ ...S, content: [...S.content, photo('not-ours.jpg')] }]);
+    const after = article([{ ...S, content: [...S.content, photo('not-ours.jpg', 'A caption the pass wrote.')] }]);
+    const { output, report } = settle(article([S]), sentBack, after);
+    expect(output.sections).toEqual(sentBack.sections);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', where: 'section "s", photo not-ours.jpg', restored: true })]);
+    expect(report.changed[0]).not.toHaveProperty('unprintable');
+  });
+
+  it("a pass that took the photo out of print, by removing or renaming it, keeps its fix: the director's block stays out with its photo", () => {
+    const sentBack = article([{ ...S, content: [...S.content, photo('not-ours.jpg')] }]);
+    [article([S]), article([{ ...S, content: [...S.content, photo('a.jpg', 'A caption the pass wrote.')] }])].forEach((after) => {
+      const { output, report } = settle(article([S]), sentBack, after);
+      expect(output.sections).toEqual(after.sections);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: false, unprintable: true })]);
+    });
+  });
+});
+
+describe('4.5g: the whiteboard stays out with no list, as the fact check reads it', () => {
+  const { factCheckContentBundle } = require('../content-bundle-fact-check');
+  const { printableBlock } = D._testing;
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const CAPTION = "The whiteboard, covered in the room's theories by midnight.";
+  const photo = (filename, caption = 'The board.') => ({ type: 'photo', filename, caption });
+  const article = (content) => ({ metadata: { sessionId: '0926262' }, headline: { main: 'The Room Voted Five to Four' }, sections: [{ id: 's', type: 'narrative', content: content.map(clone) }] });
+
+  it('printableBlock: with no list, it refuses exactly the photos the fact check reads as invalid references when the session holds no photos, the whiteboard by any path', () => {
+    const filenames = ['a.jpg', 'photos/wb.jpg', 'wb.jpg', 'WB.jpg', 'not-ours.jpg'];
+    const result = factCheckContentBundle({
+      contentBundle: { sections: [{ id: 's', type: 'narrative', content: filenames.map((filename) => photo(filename)) }], evidenceCards: [] },
+      evidenceBundle: { exposed: { tokens: [], paperEvidence: [] } },
+      roster: [],
+      sessionPhotos: [],
+      excludedPhotos: [],
+      whiteboardPhoto: 'photos/wb.jpg',
+      reportingMode: 'on-site'
+    });
+    const refused = filenames.filter((filename) => !printableBlock(photo(filename), undefined, 'photos/wb.jpg'));
+    expect(refused).toEqual(['photos/wb.jpg', 'wb.jpg']);
+    expect(refused).toEqual(result.photoReferences.invalid);
+    // No whiteboard and no list refuse nothing; a list refuses the whiteboard even when it names it.
+    expect(filenames.filter((filename) => !printableBlock(photo(filename), undefined, null))).toEqual([]);
+    expect(printableBlock(photo('wb.jpg'), ['a.jpg', 'wb.jpg'], 'wb.jpg')).toBe(false);
+  });
+
+  it("settleEdits: with no list, the director's caption on the whiteboard's photo, which a pass took out, stays out with it; another photo goes back", () => {
+    const settle = (filename) => {
+      const sentBack = article([A, photo(filename, CAPTION), B]);
+      const standing = D.standingAfterSendBack(null, article([A, photo(filename), B]), sentBack, 'bundle');
+      return D.settleEdits(null, { edits: D.carriedEdits(standing, sentBack), before: sentBack, after: article([A, B]), pass: 1, whiteboard: 'photos/wb.jpg' });
+    };
+    const board = settle('wb.jpg');
+    expect(board.output.sections[0].content).toEqual([A, B]);
+    expect(board.report.changed).toEqual([expect.objectContaining({ id: 'E1', where: 'section "s", photo wb.jpg, caption', restored: false, unprintable: true })]);
+    const other = settle('a.jpg');
+    expect(other.output.sections[0].content).toEqual([A, photo('a.jpg', CAPTION), B]);
+    expect(other.report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+    expect(other.report.changed[0]).not.toHaveProperty('unprintable');
+  });
+});
+
+describe("4.5g: the session's photo names", () => {
+  it("are the basename of each of the session's photos (photoBasename), the empty ones left out", () => {
+    expect(D.sessionPhotoNames(['/data/0926262/photos/a.jpg', 'C:\\data\\0926262\\photos\\b.jpg', 'c.jpg', '', '/', null])).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+    [[], undefined, null, 'photos/a.jpg'].forEach((none) => expect(D.sessionPhotoNames(none)).toEqual([]));
   });
 });

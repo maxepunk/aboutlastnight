@@ -115,3 +115,60 @@ describe('4.5f: the article rework gives the restore the photos the article can 
     expect(result._articleHandEditReport.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5g: one rule for the session's photo names, and the whiteboard stays out with no list (the
+// integrator's ruling 1 on 4.5f's findings, progress.md 2026-10-04; the 4.5f review's minors 2
+// and 3). Invented text.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.5g: the session's photo names decide whether the fact check checks the session's photos and whether the rework gives the restore its list", () => {
+  const { sessionPhotoNames } = require('../../../lib/hand-edit-diff');
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const CAPTION = 'Six people huddle at the bar, late in the evening.';
+  const article = (content) => ({
+    metadata: { sessionId: '0926262' },
+    headline: { main: 'The Room Voted Five to Four', kicker: 'NovaNews', deck: 'The room named Alex.' },
+    sections: [{ id: 's', type: 'narrative', heading: 'The Story', content: content.map(clone) }]
+  });
+  const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: createMockPromptBuilder(), theme: 'journalist' } });
+
+  /** The director captions the writer's photo `filename` and sends back (E1); then an automatic pass takes the photo out. */
+  async function automaticPass(filename, state) {
+    const sentBack = article([A, photo(filename, CAPTION), B]);
+    const standing = standingAfterSendBack(null, article([A, photo(filename), B]), sentBack, 'bundle');
+    return reviseContentBundle(
+      { ...state, _previousContentBundle: sentBack, _articleHandEdits: standing, articleRevisionCount: 1 },
+      cfg(jest.fn(async () => article([A, B])))
+    );
+  }
+
+  /** The fact check of a bundle printing `filename`, given the arguments the article's evaluation builds from `state`. */
+  function factCheckOf(state, filename) {
+    const contentBundle = { sections: [{ id: 's', type: 'narrative', content: [photo(filename)] }], evidenceCards: [] };
+    return factCheckContentBundle({ ...buildFactCheckArgs({ ...state, contentBundle }), evidenceBundle: { exposed: { tokens: [], paperEvidence: [] } } });
+  }
+
+  it.each([
+    ['photos by path, and an empty entry', ['/data/0926262/photos/a.jpg', 'C:\\data\\0926262\\photos\\b.jpg', ''], ['a.jpg', 'b.jpg']],
+    ['entries with no name', ['/', ''], []],
+    ['no photos', [], []]
+  ])('%s', async (_name, sessionPhotos, names) => {
+    const state = { sessionPhotos };
+    expect(sessionPhotoNames(sessionPhotos)).toEqual(names);
+    const holds = names.length > 0;
+    // The fact check reads a photo the session never took as invalid only when the session holds photos.
+    expect(factCheckOf(state, 'not-ours.jpg').photoReferences.invalid).toEqual(holds ? ['not-ours.jpg'] : []);
+    // With a list the photo the pass took out stays out with the director's caption; with none it goes back.
+    const result = await automaticPass('not-ours.jpg', state);
+    expect(result.contentBundle.sections[0].content).toEqual(holds ? [A, B] : [A, photo('not-ours.jpg', CAPTION), B]);
+  });
+
+  it('the session holds no photos: the restore still refuses the whiteboard, as the fact check reads it as an invalid reference', async () => {
+    const state = { sessionPhotos: [], whiteboardPhotoPath: 'photos/wb.jpg' };
+    const result = await automaticPass('wb.jpg', state);
+    expect(result.contentBundle.sections[0].content).toEqual([A, B]);
+    expect(result._articleHandEditReport.changed).toEqual([expect.objectContaining({ id: 'E1', restored: false, unprintable: true })]);
+    expect(factCheckOf(state, 'wb.jpg').photoReferences.invalid).toEqual(['wb.jpg']);
+  });
+});

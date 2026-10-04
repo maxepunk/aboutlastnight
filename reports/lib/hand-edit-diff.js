@@ -2812,57 +2812,42 @@ function photoBasename(filename) {
 }
 
 /**
+ * The session's photo names: the basename of each of the session's photos (photoBasename), the
+ * empty ones left out. The one rule for which photos the session holds (task 4.5g): the fact
+ * check reads a printed photo against these names, and checks none but the whiteboard when
+ * there are none, and the article's rework gives the restore the kept photos only when there
+ * are some (ai-nodes.js reviseContentBundle).
+ *
+ * @param {*} sessionPhotos - the session's photos (state.sessionPhotos)
+ * @returns {string[]}
+ */
+function sessionPhotoNames(sessionPhotos) {
+  return (Array.isArray(sessionPhotos) ? sessionPhotos : []).map(photoBasename).filter(Boolean);
+}
+
+/**
  * Can the article print this block, as far as a photo goes (task 4.5e)? A block that is no
  * photo can, and so can a photo with no filename, which prints no photo (lib/publish-photos.js
- * printedPhotos). Given `photos`, the photos the article can print, a photo can only when it
- * is among them, so an empty list refuses every photo, as the fact check reads every printed
- * photo as invalid when the session holds photos and the director kept none (task 4.5f). With
- * no list, every block can, as the fact check checks no photo when the session holds none.
- * Given the kept photos, it refuses exactly the photos the fact check reads as invalid
- * references.
+ * printedPhotos). The whiteboard never can, list or no list, as the fact check reads a printed
+ * whiteboard as an invalid reference whatever the session holds (T13; task 4.5g). Given
+ * `photos`, the photos the article can print, any other photo can only when it is among them,
+ * so an empty list refuses every photo, as the fact check reads every printed photo as invalid
+ * when the session holds photos and the director kept none (task 4.5f). With no list, every
+ * other photo can, as the fact check checks no photo but the whiteboard when the session holds
+ * none. So it refuses exactly the photos the fact check reads as invalid references.
  *
  * @param {*} block
  * @param {string[]} [photos]
+ * @param {string|null} [whiteboard] - the whiteboard photo's filename (ai-nodes.js whiteboardFilenameOf)
  * @returns {boolean}
  */
-function printableBlock(block, photos) {
-  if (!Array.isArray(photos) || !isObj(block) || block.type !== 'photo') return true;
+function printableBlock(block, photos, whiteboard) {
+  if (!isObj(block) || block.type !== 'photo') return true;
   if (typeof block.filename !== 'string' || block.filename === '') return true;
   const name = photoBasename(block.filename);
-  return photos.some((photo) => photoBasename(photo) === name);
-}
-
-/**
- * An element a restore puts back, as the article can print it (task 4.5e): null for a photo
- * block the article cannot print (printableBlock), a section without such blocks, and any
- * other element as it is.
- */
-function printableElement(collection, element, photos) {
-  if (collection === 'content') return printableBlock(element, photos) ? element : null;
-  if (collection !== 'sections' || !isObj(element) || !Array.isArray(element.content)) return element;
-  const content = element.content.filter((block) => printableBlock(block, photos));
-  return content.length === element.content.length ? element : { ...element, content };
-}
-
-/**
- * The photo blocks the article cannot print (printableBlock) that an edit sits on or holds,
- * as the version the pass started from holds them (tasks 4.5e and 4.5f): the block the
- * edit's place is on, whether the director wrote its caption or put it in whole, or, for a
- * section the director put in whole, each such block of it. Code never puts one back, so the
- * director's text on it stays out with it.
- *
- * @returns {Object[]}
- */
-function unprintablePhotosOf(edit, before, photos) {
-  if (isCut(edit) || ownsNoText(edit) || mapAddressOf(edit)) return [];
-  const place = placeCarrying(before, edit);
-  if (!place) return [];
-  const steps = stepsOf(edit);
-  const last = steps.length - 1;
-  const blocks = isElementStep(steps[last]) && collectionAt(steps, last) === 'sections'
-    ? blocksOf('sections', place.value)
-    : place.chain.filter((link) => link.collection === 'content').map((link) => link.holder[link.index]);
-  return blocks.filter((block) => !printableBlock(block, photos));
+  const board = photoBasename(whiteboard);
+  if (board !== '' && name === board) return false;
+  return !Array.isArray(photos) || photos.some((photo) => photoBasename(photo) === name);
 }
 
 /** Does `obj` print a photo block of this photo (blockIdentity) in any of its sections? */
@@ -2873,18 +2858,73 @@ function printsPhoto(obj, block) {
 }
 
 /**
- * Does `obj` carry an edit as the article can print it (task 4.5f): carried, or, for an
- * element the director put in whole, carried apart from its photo blocks the article cannot
- * print, which code never puts back (printableElement), whichever path of the restore put it
- * back.
+ * Which photo blocks the restore leaves out (task 4.5g; the integrator's ruling 1 on 4.5f's
+ * findings): a photo the article cannot print (printableBlock) that the version the pass
+ * returned prints nowhere (printsPhoto), because the pass removed or renamed it. That is the
+ * pass's fix, and the director's text on the photo stays out with it (spec section 7; T13). A
+ * photo the pass kept goes back as the director left it, printable or not, since an automatic
+ * pass never changes a line the director wrote (R11): the fact check then reads it as a concern
+ * beside the director's edit where they set its filename, and otherwise as the writer's
+ * must-fix, which a later pass may take out of print.
+ *
+ * @param {Object} returned - the version the pass returned
+ * @param {string[]} [photos] - the photos the article can print (printableBlock)
+ * @param {string|null} [whiteboard] - the whiteboard photo's filename (printableBlock)
+ * @returns {function(*): boolean}
  */
-function carriedAsPrintable(obj, edit, photos) {
+function leftOutOfRestore(returned, photos, whiteboard) {
+  return (block) => !printableBlock(block, photos, whiteboard) && !printsPhoto(returned, block);
+}
+
+/** The restore's photo rule with nothing to leave out: every block goes back. */
+const NOTHING_LEFT_OUT = () => false;
+
+/**
+ * An element as a restore puts it back (tasks 4.5e and 4.5g): null for a photo block the
+ * restore leaves out (`leavesOut`, leftOutOfRestore's), a section without such blocks, and any
+ * other element as it is.
+ */
+function withoutLeftOut(collection, element, leavesOut) {
+  if (collection === 'content') return leavesOut(element) ? null : element;
+  if (collection !== 'sections' || !isObj(element) || !Array.isArray(element.content)) return element;
+  const content = element.content.filter((block) => !leavesOut(block));
+  return content.length === element.content.length ? element : { ...element, content };
+}
+
+/**
+ * The photo blocks the article cannot print (printableBlock) that an edit sits on or holds,
+ * as the version the pass started from holds them (tasks 4.5e and 4.5f): the block the
+ * edit's place is on, whether the director wrote its caption or put it in whole, or, for a
+ * section the director put in whole, each such block of it. The restore leaves one out only
+ * where the pass took it out of print (leftOutOfRestore; task 4.5g), and the director's text
+ * on it stays out with it.
+ *
+ * @returns {Object[]}
+ */
+function unprintablePhotosOf(edit, before, photos, whiteboard) {
+  if (isCut(edit) || ownsNoText(edit) || mapAddressOf(edit)) return [];
+  const place = placeCarrying(before, edit);
+  if (!place) return [];
+  const steps = stepsOf(edit);
+  const last = steps.length - 1;
+  const blocks = isElementStep(steps[last]) && collectionAt(steps, last) === 'sections'
+    ? blocksOf('sections', place.value)
+    : place.chain.filter((link) => link.collection === 'content').map((link) => link.holder[link.index]);
+  return blocks.filter((block) => !printableBlock(block, photos, whiteboard));
+}
+
+/**
+ * Does `obj` carry an edit as the restore puts it back (tasks 4.5f and 4.5g): carried, or, for
+ * an element the director put in whole, carried apart from its photo blocks the restore leaves
+ * out (`leavesOut`, leftOutOfRestore's), whichever path of the restore put it back.
+ */
+function carriedAsRestored(obj, edit, leavesOut) {
   if (editCarried(obj, edit)) return true;
   const steps = stepsOf(edit);
   const last = steps.length - 1;
   if (isCut(edit) || ownsNoText(edit) || mapAddressOf(edit) || !isElementStep(steps[last])) return false;
-  const printable = printableElement(collectionAt(steps, last), edit.after, photos);
-  return printable !== null && printable !== edit.after && editCarried(obj, { ...edit, after: printable });
+  const restored = withoutLeftOut(collectionAt(steps, last), edit.after, leavesOut);
+  return restored !== null && restored !== edit.after && editCarried(obj, { ...edit, after: restored });
 }
 
 /** The blocks an element of `collection` puts back: the block itself, or a section's blocks. */
@@ -2899,21 +2939,24 @@ function blocksOf(collection, element) {
  * from, into `out`, and write the director's value at its field. An element the pass
  * removed goes back where it sat, as it was in `before`, and each block that puts back, the
  * block itself or a section's blocks, loses the copy a pass left in another section
- * (takeOutPassCopies; task 4.3c). What goes back holds no photo block the article cannot
- * print (printableElement; task 4.5e): such a block stays out, with the edit on it, and a
- * section or a section's blocks go back without it, whether put back where they sat or
- * merged onto the element the pass kept in their place (task 4.5f). A connection the
- * director brought back goes back as `before` holds it, since its words are the writer's
- * (task 4.5f). A moved block goes back into the director's section as the pass left it
- * (restoreMove). A cut is never put back.
+ * (takeOutPassCopies; task 4.3c). What goes back holds no photo block the restore leaves out,
+ * a photo the article cannot print that the pass took out of print (withoutLeftOut; tasks
+ * 4.5e and 4.5g): such a block stays out, with the edit on it, and a section or a section's
+ * blocks go back without it, whether put back where they sat or merged onto the element the
+ * pass kept in their place (task 4.5f). A photo the pass kept goes back as the director left
+ * it, into the director's section, losing the copy the pass left in another section (task
+ * 4.5g). A connection the director brought back goes back as `before` holds it, since its
+ * words are the writer's (task 4.5f). A moved block goes back into the director's section as
+ * the pass left it (restoreMove). A cut is never put back.
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
  * @param {Object} out - the pass's output, changed in place
- * @param {string[]} [photos] - the photos the article can print (printableBlock)
+ * @param {function(*): boolean} [leavesOut] - the photo blocks the restore leaves out
+ *   (leftOutOfRestore); by default none
  * @returns {boolean} whether anything was written
  */
-function restoreEdit(edit, before, out, photos) {
+function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
   if (isCut(edit) || !isObj(out)) return false;
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
@@ -2937,7 +2980,7 @@ function restoreEdit(edit, before, out, photos) {
       if (!isObj(cur[link.key]) && !Array.isArray(cur[link.key])) {
         const value = clone(link.holder[link.key]);
         cur[link.key] = Array.isArray(value)
-          ? value.map((element) => printableElement(link.key, element, photos)).filter((element) => element !== null)
+          ? value.map((element) => withoutLeftOut(link.key, element, leavesOut)).filter((element) => element !== null)
           : value;
         if (link.key === 'content' && Array.isArray(cur.content)) printOnce(cur.content, section);
         return true;
@@ -2949,11 +2992,11 @@ function restoreEdit(edit, before, out, photos) {
     const partner = partnerIndex(link.collection, link.holder, cur, link.index);
     const inSections = link.collection === 'sections' && cur === out.sections;
     const putBack = (element) => {
-      const printable = printableElement(link.collection, element, photos);
-      if (printable === null) return false;
+      const restored = withoutLeftOut(link.collection, element, leavesOut);
+      if (restored === null) return false;
       const at = Math.min(link.index, cur.length);
-      cur.splice(at, 0, printable);
-      printOnce(blocksOf(link.collection, printable), inSections ? at : section);
+      cur.splice(at, 0, restored);
+      printOnce(blocksOf(link.collection, restored), inSections ? at : section);
       return true;
     };
     if (last) {
@@ -2962,9 +3005,9 @@ function restoreEdit(edit, before, out, photos) {
       // round, the fix of a false link among them, stands (task 4.5f).
       const element = clone(isUnstrike(edit) ? place.value : edit.after);
       if (partner !== -1 && sameKind(cur[partner], element)) {
-        const printable = printableElement(link.collection, isObj(cur[partner]) && isObj(element) ? { ...cur[partner], ...element } : element, photos);
-        if (printable === null) return false;
-        cur[partner] = printable;
+        const restored = withoutLeftOut(link.collection, isObj(cur[partner]) && isObj(element) ? { ...cur[partner], ...element } : element, leavesOut);
+        if (restored === null) return false;
+        cur[partner] = restored;
         return true;
       }
       return putBack(element);
@@ -2990,10 +3033,11 @@ function backInSection(edit, after, stored) {
 /**
  * The stop's report after one more pass of the round. For each edit the pass started
  * from:
- * - a field or element the pass changed: the director's text, what it became (null:
- *   gone), and whether code put it back (`restored`); `unprintable` marks one that holds a
- *   photo the article cannot print, which code left out and the version stored prints
- *   nowhere (tasks 4.5e and 4.5f);
+ * - a field or element the pass changed: the director's text, what it became (null: gone),
+ *   and whether code put it back (`restored`); `unprintable` marks one that holds a photo the
+ *   article cannot print, which the pass took out of print, code left out and the version
+ *   stored prints nowhere (tasks 4.5e to 4.5g): a caption left out with its photo, or, beside
+ *   `restored`, an element the director put in whole that went back without that photo;
  * - a block the director moved that the pass took to another section (`moved`, `became`
  *   that section) or removed (`became` null), and whether the block is back in the
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
@@ -3018,7 +3062,7 @@ function backInSection(edit, after, stored) {
  * @param {Array<{id: string, reason: string}>} [pass.reasons] - the rework's changed edits
  * @param {string[]} [pass.restored] - the edits code put back after the pass
  * @param {string[]} [pass.unprintable] - the edits holding a photo the article cannot print
- *   that code left out (settleEdits; tasks 4.5e and 4.5f)
+ *   that code left out (settleEdits; tasks 4.5e to 4.5g)
  * @param {Object} [pass.stored] - the version stored after the pass (default `after`)
  * @returns {{checked: string[], changed: Object[]}|null}
  */
@@ -3085,27 +3129,31 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed, and strikes
  * again, by id, each connection the director struck that it brought back. Code never puts
- * back a photo block the article cannot print (`photos`; task 4.5e): an edit on such a block,
- * a caption the director wrote under its photo, stays out with it, and a section the director
- * put in whole goes back without it, by either path of the restore (task 4.5f), so an
- * automatic pass that fixed an invalid photo keeps its fix. The article's rework gives the
- * list (ai-nodes.js reviseContentBundle; task 4.5f). The report records what each pass did
- * and each restore: an element put in whole counts as put back when it is carried apart from
- * the photos the article cannot print, and an edit holding such a photo that the version
- * stored prints nowhere is marked `unprintable`, so an edit whose photo a pass moved and
- * still prints carries no such mark (task 4.5f).
+ * back a photo the article cannot print that the pass took out of print, by removing or
+ * renaming it (`photos` and `whiteboard`; leftOutOfRestore; tasks 4.5e and 4.5g): an edit on
+ * such a block, a caption the director wrote under its photo, stays out with it, and a section
+ * the director put in whole goes back without it, by either path of the restore (task 4.5f),
+ * so an automatic pass that fixed an invalid photo keeps its fix. A photo the pass kept goes
+ * back as the director left it, printable or not, caption and place included (task 4.5g). The
+ * article's rework gives the list (ai-nodes.js reviseContentBundle; task 4.5f). The report
+ * records what each pass did and each restore: an element put in whole counts as put back when
+ * it is carried apart from the photos the restore left out, and an edit holding a photo the
+ * article cannot print that the version stored prints nowhere is marked `unprintable`, so an
+ * edit whose photo a pass moved and still prints carries no such mark (task 4.5f).
  *
  * @param {Object|null} previous - the round's report so far
  * @param {Object} pass - as reportAfterPass takes it: {edits, before, after, pass, reasons}
  * @param {string[]} [pass.photos] - the photos the article can print: the photos the session
  *   kept (ai-nodes.js keptPhotoFilenames), each matched by its basename as the fact check
  *   matches a photo reference (printableBlock); an empty list refuses every photo. With no
- *   list every photo goes back: the article's rework gives none when the session holds no
- *   photos, where the fact check checks none, and the story meeting's and the map's passes
- *   give none
+ *   list every photo but the whiteboard goes back: the article's rework gives none when the
+ *   session holds no photos (sessionPhotoNames), where the fact check checks none but the
+ *   whiteboard, and the story meeting's and the map's passes give none
+ * @param {string|null} [pass.whiteboard] - the whiteboard photo's filename, which no list
+ *   holds and the article never prints (T13; task 4.5g)
  * @returns {{output: *, report: Object|null}} the version to store, and the report
  */
-function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [], photos } = {}) {
+function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [], photos, whiteboard = null } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
   if (carried.length === 0) return { output: after, report: previous || null };
   let output = after;
@@ -3121,23 +3169,27 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
     const fields = changed.filter((e) => !isMove(e));
     if (moves.length + fields.length > 0) {
       output = clone(after);
+      // Task 4.5g: the restore leaves out only a photo the article cannot print that the
+      // version the pass returned prints nowhere: `after`, not the output the restores change.
+      const leavesOut = leftOutOfRestore(after, photos, whiteboard);
       // The moves first, so a field edit on a moved block finds the block where the
       // director put it. A move whose section the pass removed waits for the field edits,
       // one of which may put that section back whole, block included.
-      const waiting = moves.filter((e) => !restoreEdit(e, before, output, photos));
-      fields.forEach((e) => restoreEdit(e, before, output, photos));
-      waiting.forEach((e) => restoreEdit(e, before, output, photos));
+      const waiting = moves.filter((e) => !restoreEdit(e, before, output, leavesOut));
+      fields.forEach((e) => restoreEdit(e, before, output, leavesOut));
+      waiting.forEach((e) => restoreEdit(e, before, output, leavesOut));
       // Brief 4.6, fix round 1: a beat or photo put back whole keeps its copy in the
       // director's place and loses the pass's other copies, one of which may have held a
       // field the director wrote; that field goes back on the copy kept.
       carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
-        .forEach((e) => restoreEdit(e, before, output, photos));
+        .forEach((e) => restoreEdit(e, before, output, leavesOut));
       // Task 4.5f: one reading on every path of the restore. An element put in whole is put
-      // back when it is carried apart from its photo blocks the article cannot print, and an
-      // edit is unprintable when such a block of it prints nowhere in the version stored.
+      // back when it is carried apart from its photo blocks the restore left out, and an edit
+      // is unprintable when a photo block of it the article cannot print prints nowhere in the
+      // version stored.
       changed.forEach((e) => {
-        if (carriedAsPrintable(output, e, photos) || backInSection(e, after, output)) restored.push(e.id);
-        if (unprintablePhotosOf(e, before, photos).some((block) => !printsPhoto(output, block))) unprintable.push(e.id);
+        if (carriedAsRestored(output, e, leavesOut) || backInSection(e, after, output)) restored.push(e.id);
+        if (unprintablePhotosOf(e, before, photos, whiteboard).some((block) => !printsPhoto(output, block))) unprintable.push(e.id);
       });
     }
   }
@@ -3171,8 +3223,9 @@ module.exports = {
   mapEditAddress: mapAddressOf, isCut, isMove, isStrike,
   // Task 4.5e: an edit of a place alone, which the verdict guard reads
   ownsNoText,
-  // Task 4.5f: a photo's name as a photo reference is matched, which the fact check imports
-  photoBasename,
+  // Task 4.5f: a photo's name as a photo reference is matched, which the fact check imports.
+  // Task 4.5g: the session's photo names, which the fact check and the article's rework read
+  photoBasename, sessionPhotoNames,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
