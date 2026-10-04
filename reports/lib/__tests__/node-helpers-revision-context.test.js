@@ -90,7 +90,7 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
     const legacy = {
       phase: 'arcs',
       criteriaScores: { rosterCoverage: 0.5, coherence: 0.95 },
-      issues: ['legacy issue string'],
+      structuralIssues: ['legacy issue string'],
       feedback: 'legacy feedback',
       confidence: 0.9
     };
@@ -105,11 +105,11 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
     expect(build({ validationResults: legacy, humanFeedback: 'Rethink it.' })).toContain('legacy feedback');
   });
 
-  it('formats object-shaped issues by message (validateArcStructure shape)', () => {
+  it('formats an object in the must-fix list by its message', () => {
     const section = build({
       validationResults: {
         phase: 'arcs',
-        issues: [{ type: 'no-accusation-arc', message: 'No accusation arc present', severity: 'structural' }],
+        structuralIssues: [{ type: 'no-accusation-arc', message: 'No accusation arc present', severity: 'structural' }],
         criteriaScores: { rosterCoverage: 1.0 }
       }
     });

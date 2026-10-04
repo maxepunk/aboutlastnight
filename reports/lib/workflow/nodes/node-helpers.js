@@ -855,12 +855,9 @@ function buildRevisionContext(options) {
 
   // Brief 1.3: must-fix and should-consider are two lists, not one. Concatenated,
   // an advisory suggestion arrived at the writer as a defect it had to fix.
-  // `issues` when a legacy writer supplied it; otherwise the evaluator's own split.
-  const rawIssues = phaseMismatch
-    ? []
-    : (Array.isArray(validationResults?.issues) && validationResults.issues.length > 0
-        ? validationResults.issues
-        : (validationResults?.structuralIssues || []));
+  // A judge's own `issues` array never reaches a rework (brief 4.7c); its must-fix list is
+  // `structuralIssues`.
+  const rawIssues = phaseMismatch ? [] : (validationResults?.structuralIssues || []);
 
   const advisories = phaseMismatch ? [] : (validationResults?.advisoryWarnings || []);
 

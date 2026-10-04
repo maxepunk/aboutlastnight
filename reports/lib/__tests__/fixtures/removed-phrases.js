@@ -411,7 +411,14 @@ const REMOVED_PHRASES = [
   // are the writer's.
   'which is back in the story',
   'each thread they added stays in the weave, and each connection they struck',
-  "This automatic pass fixes the writer's text. Each change of the director's is final"
+  "This automatic pass fixes the writer's text. Each change of the director's is final",
+
+  // Phase 4, 4.7d: a heading and a photo's place hold the director's desk edits, worded as the
+  // headline line is. "nor the director's notes name (T6)" stays off: the weave's judge prints it.
+  'each under its heading',
+  "the map's heading for the section, as written",
+  'A section whose heading on the map is empty',
+  'each photo where the map places it'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

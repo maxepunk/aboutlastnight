@@ -1535,9 +1535,9 @@ async function generateContentBundle(state, config) {
  * article stop: the article stop's standing edits, as a send-back records them
  * (standingAfterSendBack), each a field with no writer's text before it. So the fixes'
  * machinery reads it as the director's: an automatic pass that changes it gets it put back
- * (settleEdits), and a judge's finding located in it is a concern (guardDirectorEdits). The
- * director edits them at the desk. A line the map writer wrote is stamped and stays the
- * writer's.
+ * (settleEdits), and a judge's finding located in it is a concern (guardDirectorEdits). At
+ * the desk the director edits the headline, the deck and the hero's caption. A line the map
+ * writer wrote is stamped and stays the writer's.
  *
  * Brief 4.7d: the stamp records no cut. The director takes the top photo off the map by
  * moving it into a section (the console's movePhoto), which leaves the map with no top photo:
