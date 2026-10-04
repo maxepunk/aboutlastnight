@@ -176,3 +176,100 @@ describe('4.5b: the settled weave prints each question kind, answered and unansw
     expect(lines[at(`q-${kind}-open`) + 1]).toBe('  Unanswered.');
   });
 });
+
+// 4.6b (4.6 review, ruling 2): the removed-phrase and em-dash scans skip <SETTLED_WEAVE>
+// whole, since it holds the writer's output and the director's words
+// (lib/__tests__/fixtures/removed-phrases.js WHOLE_BLOCKS). Its own labels are the
+// pipeline's words, so they are held to the list here: a settled weave that prints every
+// label, rendered from clean planted data, carries nothing on the list and no dash.
+describe("4.6b: the settled weave's own labels hold to the removed-phrase list", () => {
+  const { findRemovedPhrases } = require('./fixtures/removed-phrases');
+  const { WEAVE_ROLES } = require('../weave');
+  const { WEAVE_QUESTION_KINDS } = require('../writer-questions');
+
+  /** The writer's weave as the meeting showed it: a thread in each role, a connection of each kind, two questions of each kind. */
+  const planted = () => ({
+    story: 'The room built its case on one account, and the ledger points at another.',
+    question: 'Who gained from the sale the room set aside?',
+    headline: 'The Room Chose One Account',
+    fromYourNotes: 'the account on top was the wrong one',
+    threads: [
+      { id: 't1', claim: 'The room named one account holder in the final vote.', role: 'main-thread', receipt: 'ledger', verdict: true },
+      { id: 't2', claim: 'The account took its sales in the last two minutes.', role: 'grounds-it', receipt: 'ledger' },
+      { id: 't3', claim: 'Two allies told the room different stories.', role: 'complicates-it', receipt: 'row001' },
+      { id: 't4', claim: 'An old email shows the same move a year ago.', role: 'mirrors-it', receipt: 'row002' },
+      { id: 't5', claim: 'The plan for the empty chair goes on after the vote.', role: 'carries-it-forward', receipt: 'row003' },
+      { id: 't6', claim: 'A side deal by the coat rack.', role: 'left-out', receipt: 'row004', reason: 'It touches no thread the story follows.' },
+      { id: 't8', claim: 'A second account took the overflow.', role: 'grounds-it', receipt: 'ledger' }
+    ],
+    connections: [
+      { id: 'c1', kind: 'person', joins: ['t1', 't3'], detail: 'Sloane stood with both sides.' },
+      { id: 'c2', kind: 'moment', joins: ['t1', 't2'], detail: 'The scoreboard went up before the vote.' },
+      { id: 'c3', kind: 'document', joins: ['t2', 't4'], detail: 'The same email thread runs through both.' },
+      { id: 'c4', kind: 'line', joins: ['t3', 't5'], detail: 'One sign-off comes back at the end.' },
+      { id: 'c5', kind: 'moment', joins: ['t4', 't5'], detail: 'The two dates fall in one week.' }
+    ],
+    convergence: 'The vote, the ledger and the old email meet at the empty chair.',
+    questions: WEAVE_QUESTION_KINDS.flatMap((kind) => [
+      { id: `q-${kind}`, kind, about: `the ${kind} asked about`, question: `What about the ${kind}?`, changes: `The line the ${kind} prints in.` },
+      { id: `q-${kind}-open`, kind, about: `the ${kind} left open`, question: `What else about the ${kind}?`, changes: `Another line the ${kind} prints in.` }
+    ])
+  });
+
+  /**
+   * The director's version: every field the meeting marks rewritten, t8 given a new role and
+   * a new claim (two marks on one line), t7 added, c5 struck, and one question of each kind
+   * answered.
+   */
+  const directors = () => {
+    const weave = planted();
+    weave.story = 'Someone put one account on top, and the room followed it.';
+    weave.question = 'Will the vote cost the account holder anything?';
+    weave.headline = 'The Account on Top Was the Wrong One';
+    weave.fromYourNotes = 'the account on top was the wrong one, and the room knew it';
+    weave.convergence = 'The vote and the old email meet at the empty chair.';
+    const t8 = weave.threads.find((thread) => thread.id === 't8');
+    t8.role = 'complicates-it';
+    t8.claim = 'A second account took the overflow, under a name no one claimed.';
+    weave.threads.push({ id: 't7', claim: 'The guest list changed that morning.', role: 'grounds-it' });
+    weave.connections.find((connection) => connection.id === 'c5').struck = true;
+    weave.questions.filter((q) => !q.id.endsWith('-open')).forEach((q) => { q.answer = `The director's answer about ${q.about}.`; });
+    return weave;
+  };
+
+  const render = () => {
+    const weave = directors();
+    return renderSettledWeave(weave, carriedEdits(standingAtMeeting(null, planted(), weave), weave));
+  };
+
+  it('the render prints every label: each role and an added thread, live connections and the convergence, each question kind both ways, and changes by their edit ids', () => {
+    const text = render();
+    const lines = text.split('\n');
+    const labels = [
+      '<SETTLED_WEAVE>', 'The weave as the director settled it at the story meeting', 'STORY: ', 'QUESTION: ', 'WORKING HEADLINE: ',
+      "FROM THE DIRECTOR'S NOTES: \"", 'THREADS:', ' Receipt: ', " It carries the room's verdict.", ' Why it is left out: ',
+      'CONNECTIONS:', ', joining ', 'CONVERGENCE: ', "QUESTIONS TO THE DIRECTOR, WITH THE DIRECTOR'S ANSWERS:", ' Its answer changes: ',
+      "  The director's answer, word for word: \"", '  Unanswered.', '</SETTLED_WEAVE>'
+    ];
+    labels.forEach((label) => expect(`${label}: ${text.includes(label)}`).toBe(`${label}: true`));
+    WEAVE_ROLES.forEach((role) => expect(text).toContain(`(${role.replace(/-/g, ' ')}):`));
+    ['a shared person', 'a moment', 'a document', 'a line'].forEach((kind) => expect(text).toContain(`, ${kind}, joining `));
+    expect(text).not.toContain('c5,');
+    WEAVE_QUESTION_KINDS.forEach((kind) => {
+      expect(lines[lines.findIndex((line) => line.startsWith(`- q-${kind} `)) + 1]).toMatch(/^ {2}The director's answer, word for word: "/);
+      expect(lines[lines.findIndex((line) => line.startsWith(`- q-${kind}-open `)) + 1]).toBe('  Unanswered.');
+    });
+    ['STORY', 'QUESTION', 'WORKING HEADLINE', "FROM THE DIRECTOR'S NOTES", 'CONVERGENCE'].forEach((field) => {
+      expect(lines.find((line) => line.startsWith(`${field}: `))).toMatch(/ \[the director's change E\d+\]$/);
+    });
+    expect(lines.find((line) => line.startsWith('- t7 '))).toMatch(/ \[the director's change E\d+: a thread they added\]$/);
+    expect(lines.find((line) => line.startsWith('- t8 '))).toMatch(/ \[the director's changes E\d+: the (role|claim); E\d+: the (role|claim)\]$/);
+  });
+
+  it("carries nothing on the removed-phrase list and no dash: the planted data is clean, so what the scan reads is the labels'", () => {
+    expect(findRemovedPhrases(JSON.stringify([planted(), directors()])).map(String)).toEqual([]);
+    const text = render();
+    expect(findRemovedPhrases(text).map(String)).toEqual([]);
+    expect(text).not.toMatch(/[–—]/);
+  });
+});
