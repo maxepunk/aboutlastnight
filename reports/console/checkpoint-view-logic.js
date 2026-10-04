@@ -1166,7 +1166,9 @@
    *
    * Task 4.10 (spec 6.3 and section 10): the judges' scores go at every stop, so a pass shows
    * what it had to fix, what it was told to consider, the evaluation's guidance and what it
-   * changed, and none of the scores its findings recorded (`criteriaScores`).
+   * changed, and none of the scores its findings recorded (`criteriaScores`). Brief 4.10e: each
+   * must-fix line reads past its leading rule ids, as the desk's marks do (judgeMarkText), since
+   * the director reads the line, not the rule.
    *
    * @param {Array|null} trace - data.trace at the map or the article stop
    * @param {string} [theme='journalist'] - the session's theme, which decides whether a
@@ -1184,7 +1186,7 @@
         var findings = p.findings && typeof p.findings === 'object' ? p.findings : {};
         var number = typeof p.pass === 'number' && p.pass > 0 ? p.pass : index + 1;
         var time = traceTime(p.at);
-        var mustFix = stringList(findings.structuralIssues);
+        var mustFix = stringList(findings.structuralIssues).map(judgeMarkText);
         var shouldConsider = stringList(findings.advisoryWarnings);
         var guidance = asString(findings.revisionGuidance).trim();
         return {

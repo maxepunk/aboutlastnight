@@ -586,7 +586,8 @@ describe('4.10: no score at the article stop', () => {
     expect(pass).not.toHaveProperty('criteria');
     expect(pass).not.toHaveProperty('criteriaLabel');
     expect(JSON.stringify(pass)).not.toMatch(/0\.40|Wrong count/);
-    expect(pass.mustFix.items).toEqual(['T5: x']);
+    // Brief 4.10e: the must-fix line reads past its rule ids, as the desk's marks do.
+    expect(pass.mustFix.items).toEqual(['X']);
   });
 });
 
@@ -1000,5 +1001,38 @@ describe('4.5g: each stop says what happened to a photo the article cannot print
     const record = ViewLogic.steeringView(report, []);
     expect(record.changedEdits.map((e) => e.line)).toEqual([`E1, section "theStory", photo nope.jpg, caption: automatic pass 1 removed your "${CAPTION}". Your text was put back.`]);
     expect(record.kept).toBe('Your edit stands.');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10e: the folded trace reads past its rule ids (the integrator's ruling 2 on the fifth wave's
+// findings, 4.10d's minor 7). The trace at the map and the desk printed each pass's must-fix lines
+// as stored, "T5: …", the one place left where rule ids reached the director. They read past
+// their rule ids, as the desk's marks do (judgeMarkText).
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('4.10e: the folded trace reads past its rule ids', () => {
+  test("each pass's must-fix lines read past their leading rule ids, as the desk's marks do; a line with none reads as stored", () => {
+    const trace = [{
+      pass: 1, round: 1, trigger: 'evaluation', at: '2026-10-03T10:00:00.000Z', changedScopes: ['section:theStory'],
+      findings: {
+        structuralIssues: [
+          'T5: The judge found a fault in the money and gave no detail.',
+          'T4, T6: "Kai sold the memory" names a seller the ledger never shows.',
+          'Reporter-mode violation: "i voted". Nova reports on the room from outside its choices.'
+        ],
+        advisoryWarnings: ["Em-dash in the narrator's prose: 1 em-dash (in section \"theStory\", paragraph 2)."]
+      }
+    }];
+    const [pass] = traceView(trace, 'journalist').passes;
+    expect(pass.mustFix).toEqual({
+      label: 'Must fix (3)',
+      items: [
+        'The judge found a fault in the money and gave no detail.',
+        '"Kai sold the memory" names a seller the ledger never shows.',
+        'Reporter-mode violation: "i voted". Nova reports on the room from outside its choices.'
+      ]
+    });
+    expect(pass.shouldConsider.items).toEqual(trace[0].findings.advisoryWarnings);
   });
 });

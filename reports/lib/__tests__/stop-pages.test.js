@@ -287,7 +287,8 @@ describe('4.12a: the desk\'s page is deskView\'s, with the article as it will pr
     const all = page.lines.map((line) => `${line.label} ${line.text}`).join('\n');
     expect(all).not.toMatch(/\b0\.41\b|\bscores?\b/i);
     const folded = textsOf(page, true);
-    expect(folded).toContain('T1: a fixed line.');
+    // Brief 4.10e: the trace's must-fix line reads past its rule ids, as traceView gives it.
+    expect(folded).toContain('A fixed line.');
     expect(page.lines.filter((line) => line.folded && line.tone === 'title').map((line) => line.label))
       .toEqual(expect.arrayContaining([View.deskView(data, data.contentBundle).folds.factCheck.title]));
     // What folds is not counted: the trace adds nothing to the words shown.
