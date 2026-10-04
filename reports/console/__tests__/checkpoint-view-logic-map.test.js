@@ -1211,6 +1211,9 @@ describe('4.6e: one helper reads the map the stop showed, for the gate and the c
     expect(map).toMatch(/\bshownMapOf\b[^;]*= require\('\.\.\/console\/outline-edit-logic'\)/);
     // The ternary each caller wrote goes: the helper is the one place the rule is written.
     expect(`directorMapProblems: ${body(map, 'directorMapProblems', '').includes('isMapValue(')}`).toBe('directorMapProblems: false');
+    expect(body(view, 'mapProblems', '  ')).toContain('validateOutlineShape(');
     expect(`mapProblems: ${body(view, 'mapProblems', '  ').includes('isMapValue(')}`).toBe('mapProblems: false');
+    // mapView reads the map shown through the same helper (the integrator, at 4.6e's merge).
+    expect(body(view, 'mapView', '  ')).toContain('shownMapOf(d.outline)');
   });
 });

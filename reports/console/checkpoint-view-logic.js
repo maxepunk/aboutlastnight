@@ -2121,8 +2121,9 @@
 
   /**
    * The words lib/hand-edit-diff.js editWhere closes a place with when the edit is a whole element or
-   * a cut. A test holds the meeting's reading of a place to editWhere, each of these words included,
-   * through markOfEntry (brief 4.10c).
+   * a cut. A test holds the meeting's reading of a place to editWhere, through markOfEntry, for the
+   * words that decide a mark (added, struck and brought back); a cut is matched by its text (brief
+   * 4.10c).
    */
   var WHOLE_EDIT_WORDS = /(^|, )(added|cut|struck|brought back)$/;
 
@@ -2547,8 +2548,9 @@
    * the page uses, or null for a map it takes (the integrator's ruling 3): the map's client
    * gate, console/outline-edit-logic.js validateOutlineShape, which decides as lib/map.js
    * directorMapProblems does (a test holds the decisions equal), given the theme's slots and
-   * the map the stop showed, whose repeats are the writer's. The map shown is read as mapView
-   * reads it (isMapValue), so a value that is no map is no map shown (task 4.6c).
+   * the map the stop showed, whose repeats are the writer's. The validator reads the map shown
+   * through shownMapOf, as the gate and mapView do, so a value that is no map is no map shown
+   * (tasks 4.6c and 4.6e).
    *
    * @param {*} map - the map as the director left it
    * @param {Object} data - the stop's payload: the map it showed and the theme's slots
@@ -2737,7 +2739,7 @@
     var story = isPlainObject(d.settledStory)
       ? { story: asString(d.settledStory.story), question: asString(d.settledStory.question) }
       : null;
-    var shown = editLogic.isMapValue(d.outline) ? d.outline : null;
+    var shown = editLogic.shownMapOf(d.outline);
     var shownBeatIds = editLogic.mapBeatPlacements(shown).map(function (placement) { return placement.id; });
     var writers = editLogic.mapRepeats(shown);
     var placed = concernsBesideLines(d.concerns, mapLinesOnPage(map), mapLineKeyOf);

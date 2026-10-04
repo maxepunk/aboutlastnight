@@ -640,7 +640,8 @@
    * @param {*} outline - the map
    * @param {string} [theme] - unused: every theme's map has one shape
    * @param {Array} [slots] - the stop's mapSlots
-   * @param {Object|null} [shown] - the map the stop showed, whose repeats are the writer's
+   * @param {*} [shown] - the map the stop showed, whose repeats are the writer's; a value that is
+   *   no map is read as none (shownMapOf, task 4.6e)
    */
   function validateOutlineShape(outline, theme, slots, shown) {
     return validateMapShape(outline, { slots: slots, shown: shown });

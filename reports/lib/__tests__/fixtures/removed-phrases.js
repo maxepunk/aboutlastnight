@@ -432,7 +432,11 @@ const REMOVED_PHRASES = [
   // edits first, and the vote fix line reads the director's words for who turned a memory in.
   'the beats under leftOut stay out of the article',
   'each with its beats as C2',
-  "or the director's notes name who turned it in"
+  "or the director's notes name who turned it in",
+
+  // Phase 4, 4.6e: "no note" means no approval note at the meeting.
+  'empty when the director changed nothing and left no note',
+  'the director changed nothing at the meeting and left no note'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
