@@ -60,16 +60,20 @@
    *   interrupted+payload -> 'at-checkpoint' load the checkpoint screen
    *   inProgress        -> 'in-progress'    a run is going; attach, never POST (H8)
    *   phase 'complete'  -> 'complete'       finished; resuming re-runs it all (B9)
+   *   `oldThread`       -> 'old-thread'     from before the story meeting, at no stop;
+   *                                         the server refuses its resume, so show its
+   *                                         rollback (task 4.11, fix round 1)
    *   any other phase   -> 'resumable'      stopped mid-pipeline; resume is safe
    *
    * @param {object|null} resp
-   * @returns {'not-found'|'at-checkpoint'|'in-progress'|'complete'|'resumable'}
+   * @returns {'not-found'|'at-checkpoint'|'in-progress'|'complete'|'old-thread'|'resumable'}
    */
   function classifyCheckpointResponse(resp) {
     if (!resp || resp.error) return 'not-found';
     if (resp.interrupted && resp.checkpoint) return 'at-checkpoint';
     if (resp.inProgress === true) return 'in-progress';
     if (resp.currentPhase === 'complete') return 'complete';
+    if (resp.oldThread) return 'old-thread';
     if (resp.currentPhase) return 'resumable';
     return 'not-found';
   }

@@ -566,8 +566,10 @@ function App() {
 
   // Build main content
   let content;
-  // Task 4.11 (R2): the server's flag for a thread from before the story meeting, at its stop.
+  // Task 4.11 (R2): the server's flag for a thread from before the story meeting, at its stop,
+  // and for one at no stop, which the Session screen loaded into the state (fix round 1).
   const oldThreadAtStop = oldThreadView(state.checkpointData, CHECKPOINT_LABELS);
+  const oldThreadNoStop = oldThreadView(state, CHECKPOINT_LABELS);
 
   if (!state.sessionId) {
     // No session: show session start
@@ -620,6 +622,20 @@ function App() {
         result: { ...state.completedResult, sessionId: state.sessionId },
         onNewSession: () => dispatch({ type: APP_ACTIONS.RESET_SESSION })
       })
+    );
+  } else if (oldThreadNoStop) {
+    // Task 4.11 (R2; fix round 1): a thread from before the story meeting that sits at no
+    // stop (it stopped on an error, or its run was killed, after the old stages wrote its
+    // outline or article). The server refuses to resume it, so the Session screen loaded its
+    // flag: the message and the rollback, with the stepper opening only the points the
+    // server allows. The rollback's checkpoint clears the flag (CHECKPOINT_RECEIVED).
+    content = React.createElement(React.Fragment, null,
+      React.createElement(PipelineProgress, {
+        currentCheckpoint: null,
+        completedCheckpoints: oldThreadNoStop.rollbackPoints,
+        onRollback: (target) => setRollbackTarget(target)
+      }),
+      oldThreadNotice(oldThreadNoStop, setRollbackTarget)
     );
   } else if (state.checkpointType && oldThreadAtStop) {
     // Task 4.11 (R2): a thread from before the story meeting, paused at a stop. The

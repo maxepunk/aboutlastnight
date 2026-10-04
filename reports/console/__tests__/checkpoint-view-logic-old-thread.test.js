@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { oldThreadView } = require('../checkpoint-view-logic');
-const { completedResultFrom } = require('../session-start-logic');
+const { completedResultFrom, classifyCheckpointResponse, startFreshDecision, decideAttachFallback } = require('../session-start-logic');
 const { oldThreadOf, oldThreadRefusal } = require('../../lib/old-thread');
 
 const FLAG = oldThreadOf({ currentPhase: 'complete' }, null);
@@ -97,5 +97,76 @@ describe('4.11: app.js shows the message and the rollback before any stop render
   it('a refused request is not taken for the session lock: no attach on its 409', () => {
     const failure = src.slice(src.indexOf('function handlePostFailure('), src.indexOf('function App('));
     expect(failure).toMatch(/response\.status === 409 && response\.currentPhase !== 'complete' && !oldThreadView\(response, CHECKPOINT_LABELS\)/);
+  });
+});
+
+// Fix round 1, finding 1: a thread from before the story meeting that sits at no stop (it
+// stopped on an error, or its run was killed, after the old stages wrote its outline or
+// article) is flagged too, and the server refuses its resume. GET /checkpoint sends it with
+// no checkpoint, so the Session screen took it for a resumable thread and POSTed /resume.
+// It loads the flag instead, and App shows the message and the rollback to the meeting.
+describe('4.11 fix round 1: the Session screen shows an old thread at no stop its rollback instead of resuming it', () => {
+  const STOPPED = oldThreadOf({ currentPhase: 'error', outline: { lede: { hook: 'An old hook.' } } }, null);
+  /** GET /checkpoint's body for such a thread (server.js), and for one the server does not flag. */
+  const stoppedResponse = (oldThread) => ({
+    sessionId: '092626', currentPhase: 'error', interrupted: false, checkpointType: null, checkpoint: null,
+    theme: 'journalist', inProgress: false, lastOutcome: null, oldThread
+  });
+
+  it('classifies it apart from a resumable thread', () => {
+    expect(STOPPED).toEqual(FLAG);
+    expect(classifyCheckpointResponse(stoppedResponse(STOPPED))).toBe('old-thread');
+    expect(classifyCheckpointResponse(stoppedResponse(null))).toBe('resumable');
+  });
+
+  it('a stop, a finished session and a run in flight keep their own class, flag or not', () => {
+    expect(classifyCheckpointResponse({ ...stoppedResponse(FLAG), interrupted: true, checkpointType: 'photos', checkpoint: { type: 'photos', oldThread: FLAG } })).toBe('at-checkpoint');
+    expect(classifyCheckpointResponse({ ...stoppedResponse(FLAG), currentPhase: 'complete' })).toBe('complete');
+    expect(classifyCheckpointResponse({ ...stoppedResponse(FLAG), inProgress: true })).toBe('in-progress');
+  });
+
+  it('Start Fresh asks first, as for any session with state, and an attached stream that ends there is stranded', () => {
+    expect(startFreshDecision(stoppedResponse(STOPPED))).toBe('confirm');
+    expect(decideAttachFallback(stoppedResponse(STOPPED))).toBe('stranded');
+  });
+
+  it("App's state holds the flag as a stop's payload does, and the view reads it the same", () => {
+    expect(oldThreadView({ sessionId: '092626', checkpointType: null, oldThread: STOPPED }, LABELS)).toEqual(oldThreadView({ oldThread: FLAG }, LABELS));
+  });
+
+  // SessionStart.js, state.js and app.js are thin consumers (no DOM harness; the integrator's
+  // click-through covers the wiring): these hold the hand-off from the Session screen to App.
+  const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+
+  it("the Session screen's old-thread branch loads the flag and posts nothing", () => {
+    const resume = read('components/SessionStart.js');
+    const branch = resume.slice(resume.indexOf("case 'old-thread':"), resume.indexOf("case 'resumable':"));
+    expect(branch).toContain('type: SESSION_ACTIONS.OLD_THREAD_LOADED, oldThread: checkpoint.oldThread');
+    expect(branch).not.toMatch(/RESUME_REQUESTED|sessionApi\./);
+  });
+
+  it('the reducer keeps the flag, and every stop or completion that arrives supersedes it', () => {
+    const state = read('state.js');
+    expect(state).toMatch(/^ {2}OLD_THREAD_LOADED: 'OLD_THREAD_LOADED',$/m);
+    const loaded = state.slice(state.indexOf('case ACTIONS.OLD_THREAD_LOADED:'), state.indexOf('case ACTIONS.CACHE_REVISION:'));
+    expect(loaded).toContain('oldThread: action.oldThread');
+    expect(loaded).toMatch(/checkpointType: null/);
+    expect(loaded).toMatch(/processing: false/);
+    ['CHECKPOINT_RECEIVED', 'WORKFLOW_COMPLETE', 'SESSION_COMPLETE_LOADED'].forEach((action) => {
+      const from = state.indexOf(`case ACTIONS.${action}:`);
+      const body = state.slice(from, state.indexOf('case ACTIONS.', from + 1));
+      expect(`${action}: ${/oldThread: null/.test(body)}`).toBe(`${action}: true`);
+    });
+  });
+
+  it("App's no-stop branch reads the flag from its state, before the stop branches, and opens only the server's points", () => {
+    const render = read('app.js').slice(read('app.js').indexOf('// ── Render ──'));
+    expect(render).toContain('const oldThreadNoStop = oldThreadView(state, CHECKPOINT_LABELS);');
+    const branch = render.indexOf('} else if (oldThreadNoStop) {');
+    expect(branch).toBeGreaterThan(render.indexOf('} else if (state.completedResult) {'));
+    expect(branch).toBeLessThan(render.indexOf('} else if (state.checkpointType && oldThreadAtStop) {'));
+    const body = render.slice(branch, render.indexOf('} else if (state.checkpointType && oldThreadAtStop) {'));
+    expect(body).toContain('completedCheckpoints: oldThreadNoStop.rollbackPoints');
+    expect(body).toContain('oldThreadNotice(oldThreadNoStop, setRollbackTarget)');
   });
 });

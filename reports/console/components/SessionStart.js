@@ -217,7 +217,7 @@ function SessionStart({ dispatch, theme }) {
    * (B9): every checkpoint's skip condition already satisfied, so it never paused —
    * Notion re-fetch, Haiku vision on every photo, the Opus weave, outline, article, and
    * an overwritten published report, unattended, from one click on a button that
-   * does not sound destructive. The five branches below are the five things a
+   * does not sound destructive. The six branches below are the six things a
    * session can be; only two of them may start work.
    */
   const handleResume = async () => {
@@ -288,6 +288,18 @@ function SessionStart({ dispatch, theme }) {
             // is all completedResultFrom needs (pinned by its unit tests).
             result: completedResultFrom(checkpoint, sessionId)
           });
+          return;
+
+        case 'old-thread':
+          // Task 4.11 (R2; fix round 1): a session from before the story meeting that sits
+          // at no stop: it stopped on an error, or its run was killed, after the old stages
+          // wrote its outline or article. The server refuses to resume it, so nothing is
+          // POSTed here: App shows the server's message with the rollback to the story
+          // meeting, and the stepper opens only the points the server allows. Theme first,
+          // as above.
+          dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
+          dispatch({ type: SESSION_ACTIONS.SET_SESSION, sessionId });
+          dispatch({ type: SESSION_ACTIONS.OLD_THREAD_LOADED, oldThread: checkpoint.oldThread, phase: checkpoint.currentPhase });
           return;
 
         case 'resumable':

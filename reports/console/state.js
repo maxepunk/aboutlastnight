@@ -40,6 +40,11 @@ const initialState = {
   // stepper above CompletionView when it is set, which is the only way the
   // existing RollbackPanel flow can be reached for a complete thread.
   completedStepper: false,
+  // Task 4.11 (R2; fix round 1): the server's flag for a session from before the story
+  // meeting that sits at no stop, loaded from the Session screen in place of a resume the
+  // server refuses. App shows its message and its rollback; a stop's payload and a loaded
+  // completion carry their own flag.
+  oldThread: null,
   // Hand-off: set by SessionStart's reconnect-resume so App drives the streaming resume
   // (SessionStart unmounts once sessionId is set, so it can't own the EventSource).
   pendingResume: null,
@@ -68,6 +73,7 @@ const ACTIONS = {
   SSE_ERROR: 'SSE_ERROR',
   WORKFLOW_COMPLETE: 'WORKFLOW_COMPLETE',
   SESSION_COMPLETE_LOADED: 'SESSION_COMPLETE_LOADED',
+  OLD_THREAD_LOADED: 'OLD_THREAD_LOADED',
   CACHE_REVISION: 'CACHE_REVISION',
   SAVE_PENDING_EDITS: 'SAVE_PENDING_EDITS',
   RESET_SESSION: 'RESET_SESSION',
@@ -146,6 +152,9 @@ function reducer(state, action) {
         // complete session), and was already latent after WORKFLOW_COMPLETE.
         completedResult: null,
         completedStepper: false,
+        // Task 4.11: and a session from before the story meeting that sat at no stop, whose
+        // rollback to the meeting produced this checkpoint.
+        oldThread: null,
         // Clear all checkpoint edit slots when a new checkpoint arrives (deliberate
         // substitute for a dedicated RESET_PENDING_EDITS action), except
         // the story meeting's and the map's: the director's weave or map and note stay
@@ -231,6 +240,7 @@ function reducer(state, action) {
         // A run that finished HERE: the stepper is not offered, because the
         // director has just watched the pipeline arrive at this screen.
         completedStepper: false,
+        oldThread: null,
         processing: false,
         checkpointType: null,
         llmActivity: null,
@@ -248,7 +258,28 @@ function reducer(state, action) {
         ...state,
         completedResult: action.result,
         completedStepper: true,
+        oldThread: null,
         checkpointType: null,
+        processing: false,
+        llmActivity: null,
+        error: null
+      };
+
+    case ACTIONS.OLD_THREAD_LOADED:
+      // Task 4.11 (R2; fix round 1): a session from before the story meeting that sits at
+      // no stop, opened from the Session screen (it stopped on an error, or its run was
+      // killed, after the old stages wrote its outline or article). The server refuses to
+      // resume it, so the Session screen loads its flag instead: App shows the message and
+      // the rollback to the meeting, with the stepper opening only the points the server
+      // allows. Nothing is POSTed by this action.
+      return {
+        ...state,
+        oldThread: action.oldThread || null,
+        phase: action.phase || state.phase,
+        checkpointType: null,
+        checkpointData: {},
+        completedResult: null,
+        completedStepper: false,
         processing: false,
         llmActivity: null,
         error: null
