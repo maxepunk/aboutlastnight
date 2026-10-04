@@ -3173,6 +3173,7 @@ describe('4.5f: a connection the director brought back goes back as the version 
 //   caption on a photo the pass took out of print stays out with it (spec section 7; T13).
 // - The whiteboard stays out with no list, as the fact check reads it whatever the session holds.
 // - The session's photo names are one rule, which the fact check and the article's rework read.
+// - A brought-back connection's entry names the words the restore puts back.
 describe('4.5g: the restore leaves out a photo the article cannot print only where the pass took it out of print', () => {
   const S = { id: 's', type: 'narrative', content: [paragraph('Alpha paragraph opens the section with a long first line here.')] };
   const P = paragraph('A paragraph the director wrote for a new section here.');
@@ -3262,5 +3263,32 @@ describe("4.5g: the session's photo names", () => {
   it("are the basename of each of the session's photos (photoBasename), the empty ones left out", () => {
     expect(D.sessionPhotoNames(['/data/0926262/photos/a.jpg', 'C:\\data\\0926262\\photos\\b.jpg', 'c.jpg', '', '/', null])).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
     [[], undefined, null, 'photos/a.jpg'].forEach((none) => expect(D.sessionPhotoNames(none)).toEqual([]));
+  });
+});
+
+describe('4.5g: a connection the director brought back goes back with the words of the version the pass started from, and its entry names them', () => {
+  const { WEAVE } = require('./fixtures/rework-state');
+  const C1 = WEAVE.connections[0];
+  const REWOVEN = 'The result came back weeks after the sale, by the ledger.';
+  const writers = () => clone(WEAVE);
+  const struck = () => {
+    const weave = writers();
+    weave.connections[1].struck = true;
+    return weave;
+  };
+
+  it("a reweave rewords it and the round's one fix drops it: the entry's director text is the reweave's words, which code put back, not the words the meeting last showed", () => {
+    const look1 = D.standingAtMeeting(null, writers(), struck());
+    const left = { ...writers(), headline: 'A Director Headline For The Round.' };
+    const look2 = D.standingAtMeeting(look1, struck(), left, { shown: struck() });
+    const rewoven = clone(left);
+    rewoven.connections[1].detail = REWOVEN;
+    const reweave = D.settleEdits(null, { edits: D.carriedEdits(look2, left), before: left, after: rewoven, pass: D.REWEAVE_PASS });
+    const dropped = { ...clone(reweave.output), connections: [clone(C1)] };
+    const fix = D.settleEdits(reweave.report, { edits: D.carriedEdits(look2, reweave.output), before: reweave.output, after: dropped, pass: 1 });
+    expect(fix.output.connections[1].detail).toBe(REWOVEN);
+    expect(fix.report.changed).toEqual([expect.objectContaining({ id: 'E3', became: null, restored: true })]);
+    expect(fix.report.changed[0].director).toContain(REWOVEN);
+    expect(fix.report.changed[0].director).not.toContain(WEAVE.connections[1].detail);
   });
 });

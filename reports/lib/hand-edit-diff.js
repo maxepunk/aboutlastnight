@@ -2927,6 +2927,18 @@ function carriedAsRestored(obj, edit, leavesOut) {
   return restored !== null && restored !== edit.after && editCarried(obj, { ...edit, after: restored });
 }
 
+/**
+ * The value the restore writes for an edit (tasks 4.5f and 4.5g): the director's value, or,
+ * for a connection the director brought back, the connection as `before`, the version the
+ * pass started from, holds it, since its words are the writer's, so a rewording earlier in the
+ * round stands. The restore writes it, and the report's entry names it as the director's text.
+ */
+function restoredValue(edit, before) {
+  if (!isUnstrike(edit)) return edit.after;
+  const place = placeCarrying(before, edit);
+  return place ? place.value : edit.after;
+}
+
 /** The blocks an element of `collection` puts back: the block itself, or a section's blocks. */
 function blocksOf(collection, element) {
   if (collection === 'content') return [element];
@@ -2946,8 +2958,8 @@ function blocksOf(collection, element) {
  * pass kept in their place (task 4.5f). A photo the pass kept goes back as the director left
  * it, into the director's section, losing the copy the pass left in another section (task
  * 4.5g). A connection the director brought back goes back as `before` holds it, since its
- * words are the writer's (task 4.5f). A moved block goes back into the director's section as
- * the pass left it (restoreMove). A cut is never put back.
+ * words are the writer's (restoredValue; task 4.5f). A moved block goes back into the
+ * director's section as the pass left it (restoreMove). A cut is never put back.
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
@@ -3003,7 +3015,7 @@ function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
       // An un-strike owns its place alone (task 4.5d): its connection goes back with the
       // words of the version the pass started from, so a rewording by an earlier pass of the
       // round, the fix of a false link among them, stands (task 4.5f).
-      const element = clone(isUnstrike(edit) ? place.value : edit.after);
+      const element = clone(restoredValue(edit, before));
       if (partner !== -1 && sameKind(cur[partner], element)) {
         const restored = withoutLeftOut(link.collection, isObj(cur[partner]) && isObj(element) ? { ...cur[partner], ...element } : element, leavesOut);
         if (restored === null) return false;
@@ -3033,11 +3045,13 @@ function backInSection(edit, after, stored) {
 /**
  * The stop's report after one more pass of the round. For each edit the pass started
  * from:
- * - a field or element the pass changed: the director's text, what it became (null: gone),
- *   and whether code put it back (`restored`); `unprintable` marks one that holds a photo the
- *   article cannot print, which the pass took out of print, code left out and the version
- *   stored prints nowhere (tasks 4.5e to 4.5g): a caption left out with its photo, or, beside
- *   `restored`, an element the director put in whole that went back without that photo;
+ * - a field or element the pass changed: the director's text, as the restore writes it
+ *   (restoredValue: a connection the director brought back with the words of the version the
+ *   pass started from; task 4.5g), what it became (null: gone), and whether code put it back
+ *   (`restored`); `unprintable` marks one that holds a photo the article cannot print, which
+ *   the pass took out of print, code left out and the version stored prints nowhere (tasks
+ *   4.5e to 4.5g): a caption left out with its photo, or, beside `restored`, an element the
+ *   director put in whole that went back without that photo;
  * - a block the director moved that the pass took to another section (`moved`, `became`
  *   that section) or removed (`became` null), and whether the block is back in the
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
@@ -3100,7 +3114,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     }
     if (!editCarried(after, e)) {
       changed.push(entry(e, {
-        director: editValueText(e.after), became: becameOf(e, before, after), restored: putBack.has(e.id),
+        director: editValueText(restoredValue(e, before)), became: becameOf(e, before, after), restored: putBack.has(e.id),
         ...(leftOut.has(e.id) && { unprintable: true })
       }));
     }
