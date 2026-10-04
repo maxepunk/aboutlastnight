@@ -291,12 +291,12 @@ function SessionStart({ dispatch, theme }) {
           return;
 
         case 'old-thread':
-          // Task 4.11 (R2; fix round 1): a session from before the story meeting that sits
-          // at no stop: it stopped on an error, or its run was killed, after the old stages
-          // wrote its outline or article. The server refuses to resume it, so nothing is
-          // POSTed here: App shows the server's message with the rollback to the story
-          // meeting, and the stepper opens only the points the server allows. Theme first,
-          // as above.
+          // Task 4.11 (R2; fix rounds 1 and 2): a session from before the story meeting that
+          // sits at no stop: it stopped on an error, or its run was killed, past the arc
+          // writer (lib/old-thread.js says which). The server refuses to resume it, so
+          // nothing is POSTed here: App shows the server's message with the rollback to the
+          // story meeting, and the stepper opens only the points the server allows. Theme
+          // first, as above.
           dispatch({ type: SESSION_ACTIONS.SET_THEME, theme: checkpoint.theme || 'journalist' });
           dispatch({ type: SESSION_ACTIONS.SET_SESSION, sessionId });
           dispatch({ type: SESSION_ACTIONS.OLD_THREAD_LOADED, oldThread: checkpoint.oldThread, phase: checkpoint.currentPhase });

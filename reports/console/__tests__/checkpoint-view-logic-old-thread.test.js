@@ -100,9 +100,9 @@ describe('4.11: app.js shows the message and the rollback before any stop render
   });
 });
 
-// Fix round 1, finding 1: a thread from before the story meeting that sits at no stop (it
-// stopped on an error, or its run was killed, after the old stages wrote its outline or
-// article) is flagged too, and the server refuses its resume. GET /checkpoint sends it with
+// Fix rounds 1 and 2, finding 1: a thread from before the story meeting that sits at no stop
+// (it stopped on an error, or its run was killed, past the arc writer; lib/old-thread.js
+// says which) is flagged too, and the server refuses its resume. GET /checkpoint sends it with
 // no checkpoint, so the Session screen took it for a resumable thread and POSTed /resume.
 // It loads the flag instead, and App shows the message and the rollback to the meeting.
 describe('4.11 fix round 1: the Session screen shows an old thread at no stop its rollback instead of resuming it', () => {

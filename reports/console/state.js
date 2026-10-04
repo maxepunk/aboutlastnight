@@ -266,12 +266,12 @@ function reducer(state, action) {
       };
 
     case ACTIONS.OLD_THREAD_LOADED:
-      // Task 4.11 (R2; fix round 1): a session from before the story meeting that sits at
-      // no stop, opened from the Session screen (it stopped on an error, or its run was
-      // killed, after the old stages wrote its outline or article). The server refuses to
-      // resume it, so the Session screen loads its flag instead: App shows the message and
-      // the rollback to the meeting, with the stepper opening only the points the server
-      // allows. Nothing is POSTed by this action.
+      // Task 4.11 (R2; fix rounds 1 and 2): a session from before the story meeting that
+      // sits at no stop, opened from the Session screen (it stopped on an error, or its run
+      // was killed, past the arc writer; lib/old-thread.js says which). The server refuses
+      // to resume it, so the Session screen loads its flag instead: App shows the message
+      // and the rollback to the meeting, with the stepper opening only the points the
+      // server allows. Nothing is POSTed by this action.
       return {
         ...state,
         oldThread: action.oldThread || null,
