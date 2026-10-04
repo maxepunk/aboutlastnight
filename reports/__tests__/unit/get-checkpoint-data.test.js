@@ -637,8 +637,11 @@ describe('4.6: the map\'s payload at the outline stop', () => {
   const { mapKey } = require('../../lib/map');
   const { mapSlotsOf } = require('../../lib/theme-config');
   const { standingOnMap } = require('../../lib/hand-edit-diff');
+  const { mapTallyOf } = require('../../console/checkpoint-view-logic');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const CONCERN = "Director's edit E1: the map prints 2 cards; a map prints 3 to 5.";
+  /** Everyone and the counts as the page builds them from the payload (brief 4.6d: the payload sends no count). */
+  const countOf = (data) => mapTallyOf(data, data.outline);
 
   /**
    * The stop after the director struck b4 and sent the map back: the map in hand is theirs,
@@ -671,9 +674,10 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
     // Brief 4.6c: the documents by id (evidenceIndex), and the roster and the kept photos
     // the count reads, so the page names each document and rebuilds the count as edited.
+    // Brief 4.6d: the count is the page's alone, so the payload sends no tally.
     expect(Object.keys(data).sort()).toEqual([
       'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
-      'mapSlots', 'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'settledStory', 'tally', 'trace'
+      'mapSlots', 'maxRevisions', 'outline', 'previousFeedback', 'revisionCount', 'roster', 'settledStory', 'trace'
     ]);
   });
 
@@ -690,9 +694,9 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     });
   });
 
-  it("builds Everyone and the counts from the beats' players: each player under the first section that shows them", async () => {
+  it("carries what Everyone and the counts are built from: each player under the first section whose beats show them", async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atMap());
-    expect(data.tally).toEqual({
+    expect(countOf(data)).toEqual({
       everyone: [
         { slot: 'lede', heading: '', players: ['Alex', 'Morgan'] },
         { slot: 'theStory', heading: 'The Story', players: ['Riley'] }
@@ -709,8 +713,8 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     state.outline.gapNote = { line: 'The record holds nothing Jamie did.', players: ['Jamie'] };
     state.characterIdMappings = { 'p3.jpg': { exclude: true } };
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
-    expect(data.tally.raised).toEqual(['Jamie']);
-    expect(data.tally.photos).toEqual({ placed: 2, of: 2 });
+    expect(countOf(data).raised).toEqual(['Jamie']);
+    expect(countOf(data).photos).toEqual({ placed: 2, of: 2 });
   });
 
   it('shows a check still failing on the map in hand, and the concern beside the line of the edit it is about', async () => {
@@ -731,7 +735,7 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     const state = atMap();
     const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline }, state);
     expect(merged.type).toBe(CHECKPOINT_TYPES.OUTLINE);
-    expect(merged.tally.unplaced).toEqual(['Sarah', 'Jamie']);
+    expect(countOf(merged).unplaced).toEqual(['Sarah', 'Jamie']);
     expect(merged.checkFailures).toHaveLength(1);
   });
 });
@@ -775,7 +779,6 @@ describe('4.7b: the settled story at the article stop', () => {
 describe("4.6c: the map's payload carries the documents by id, the roster and the kept photos", () => {
   const { buildCompleteCheckpointData } = require('../../server.js');
   const { reworkFixtureState } = require('../../lib/__tests__/fixtures/rework-state');
-  const { mapTally } = require('../../console/outline-edit-logic');
 
   it("names each exposed document by the server's id rule, the index the story meeting's payload carries", async () => {
     const state = reworkFixtureState('journalist');
@@ -791,7 +794,7 @@ describe("4.6c: the map's payload carries the documents by id, the roster and th
     ]);
   });
 
-  it('carries the roster with its full names and the photos kept for the article, the inputs its count read', async () => {
+  it("carries the roster with its full names and the photos kept for the article, the inputs the page's count reads", async () => {
     const state = reworkFixtureState('journalist');
     const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
     expect(data.roster).toEqual([
@@ -799,7 +802,6 @@ describe("4.6c: the map's payload carries the documents by id, the roster and th
       { name: 'Sarah', fullName: 'Sarah Blackwood' }, { name: 'Riley', fullName: 'Riley Torres' }
     ]);
     expect(data.keptPhotos).toEqual(['hero.jpg', 'p2.jpg']);
-    expect(data.tally).toEqual(mapTally(state.outline, { roster: data.roster, keptPhotos: data.keptPhotos }));
   });
 
   it('survives the merge with the interrupt payload', async () => {
@@ -808,5 +810,32 @@ describe("4.6c: the map's payload carries the documents by id, the roster and th
     expect(Object.keys(merged.evidenceIndex)).toHaveLength(4);
     expect(merged.roster).toHaveLength(4);
     expect(merged.keptPhotos).toEqual(['hero.jpg', 'p2.jpg']);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6d: the map's payload carries what the page reads, and no count of its own
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The page builds Everyone and the counts from the roster and the kept photos the payload
+// carries (console/checkpoint-view-logic.js mapTallyOf, task 4.6c), so the payload sends no
+// tally (the integrator's ruling 3 on the follow-ups' findings; delete-last).
+describe("4.6d: the map's payload carries no tally", () => {
+  const { buildCompleteCheckpointData } = require('../../server.js');
+  const { reworkFixtureState } = require('../../lib/__tests__/fixtures/rework-state');
+  const { mapTallyOf } = require('../../console/checkpoint-view-logic');
+
+  it('sends no tally: the page counts from the roster and the kept photos it carries', async () => {
+    const state = reworkFixtureState('journalist');
+    const data = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, state);
+    expect(data).not.toHaveProperty('tally');
+    expect(mapTallyOf(data, data.outline)).toMatchObject({ unplaced: [], cards: 3, photos: { placed: 2, of: 2 } });
+  });
+
+  it('survives the merge with the interrupt payload with none', async () => {
+    const state = reworkFixtureState('journalist');
+    const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.OUTLINE, outline: state.outline }, state);
+    expect(merged).not.toHaveProperty('tally');
+    expect(mapTallyOf(merged, merged.outline).unplaced).toEqual([]);
   });
 });

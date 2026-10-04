@@ -27,9 +27,12 @@ const { getCheckpointData, buildResumePayload } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 const { buildRollbackState, rollbackNotesUpdate } = require('../../lib/api-helpers');
 const { mapKey } = require('../../lib/map');
+const { mapTallyOf } = require('../../console/checkpoint-view-logic');
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
+/** Everyone and the counts as the map's page builds them from the stop's payload (brief 4.6d: it sends no count). */
+const countOf = (data) => mapTallyOf(data, data.outline);
 
 const CLEAN = { ready: true, structuralPassed: true, overallScore: 1, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' };
 const RILEYS_LINE = 'Riley: "I kept the books, and the second ledger"';
@@ -157,7 +160,7 @@ describe('the story map through the real graph (phase 4, brief 4.6)', () => {
     expect(stop.values._mapCheck).toMatchObject({ mapKey: mapKey(MAP), passed: true, failures: [], concerns: [] });
     expect(stop.values.validationResults).toMatchObject({ phase: 'outline', source: 'map-checks', passed: true });
     expect(stop.data.checkFailures).toEqual([]);
-    expect(stop.data.tally).toMatchObject({ unplaced: [], cards: 3, photos: { placed: 2, of: 2 } });
+    expect(countOf(stop.data)).toMatchObject({ unplaced: [], cards: 3, photos: { placed: 2, of: 2 } });
     expect(stop.data.trace).toEqual([]);
     expect(stop.values.evaluationHistory).toEqual([]);
   });
@@ -186,7 +189,7 @@ describe('the story map through the real graph (phase 4, brief 4.6)', () => {
     expect(stop.type).toBe(CHECKPOINT_TYPES.OUTLINE);
     expect(sdk.calls).toEqual(['map writer', 'Map revision 1']);
     expect(stop.data.checkFailures).toEqual([expect.objectContaining({ type: 'player-not-placed', message: expect.stringContaining('Players in no beat: Riley.') })]);
-    expect(stop.data.tally.unplaced).toEqual(['Riley']);
+    expect(countOf(stop.data).unplaced).toEqual(['Riley']);
 
     // A replay passes the map's nodes again: the writer skips on the map, the checks on
     // their mark, and the route sends the marked map to the stop.

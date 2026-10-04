@@ -256,8 +256,9 @@ describe('4.9: Everyone and the counts are rebuilt from the map as edited, throu
     keptPhotos: keptPhotoFilenames(state, map.topPhoto)
   });
 
-  test("before any change, the console's count is the stop's", () => {
-    expect(ViewLogic.mapTallyOf(data, opened(data))).toEqual(data.tally);
+  // Task 4.6d: the stop's payload sends no count of its own, only the inputs it is built on.
+  test("before any change, the console's count is the server's count of the map the stop showed", () => {
+    expect(ViewLogic.mapTallyOf(data, opened(data))).toEqual(serverTally(clone(MAP)));
   });
 
   test('after a strike: the player whose only beat was struck is in no beat, and the card is gone from the count', () => {
@@ -890,18 +891,21 @@ describe("4.6c: Everyone and the counts read mapTally's own inputs, which the pa
     expect(ViewLogic.mapView(data, map).tally.unplaced).toBe('In no beat: Sarah, Riley');
   });
 
-  test("a beat that names a player by a full name not opening with the first name places them, as the stop's count does", () => {
+  test('a beat that names a player by a full name not opening with the first name places them, as the map checks do', () => {
     const base = stateAt();
     const named = clone(MAP);
     named.sections[2].beats[0].players = ['Cassandra Vale'];
-    const data = payloadOf(stateAt({
+    const state = stateAt({
       sessionConfig: { ...base.sessionConfig, roster: [...base.sessionConfig.roster, 'Cass'] },
       canonicalCharacters: { ...base.canonicalCharacters, Cass: 'Cassandra Vale' },
       outline: named,
       _mapBaseline: clone(named)
-    }));
-    expect(data.tally.unplaced).toEqual([]);
-    expect(ViewLogic.mapTallyOf(data, opened(data))).toEqual(data.tally);
+    });
+    const data = payloadOf(state);
+    expect(ViewLogic.mapTallyOf(data, opened(data)).unplaced).toEqual([]);
+    // Task 4.6d: the stop sends no count of its own; the server counts the map in its checks.
+    const { failures } = require('../../lib/map').mapFindings(named, { roster: mapRosterOf(state.sessionConfig, state.canonicalCharacters) });
+    expect(failures.filter((f) => f.type === 'player-not-placed')).toEqual([]);
   });
 
   test('a roster player whose name every object carries counts as any other, on the page and in the checks', () => {

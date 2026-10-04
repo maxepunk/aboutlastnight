@@ -29,9 +29,9 @@
  * - THE CHECKS (mapFindings), the map's version stamp (mapKey) and the roster they read;
  * - THE STOP: its payloads (mapResume, which server.js buildResumePayload calls) and what it
  *   shows (mapCheckpointData).
- * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks,
- * the stop and the console share, with its rule for a beat's card (beatCardOf) and for a
- * repeat (mapRepeats, which the gate and the checks read through repeatedBeatIds and
+ * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks and
+ * the console share, with its rule for a beat's card (beatCardOf) and for a repeat
+ * (mapRepeats, which the gate and the checks read through repeatedBeatIds and
  * repeatedPhotos; task 4.6c). What is a map is its rule too (isMapValue), by which the gate
  * reads the map the stop showed as the console does (task 4.6d). A photo is
  * read by its filename's one join key (lib/prompt-renderers/director-words-renderer.js
@@ -692,12 +692,12 @@ function settledStoryOf(weave) {
  * The payload the map's stop sends (brief 4.6; server.js getCheckpointData adds the trace):
  * the map; the theme's slots, for the screen; the settled story, which the map cannot
  * change; each exposed document by the id a card or a beat's material names (`evidenceIndex`,
- * which the page names them by, as the story meeting names each receipt's; brief 4.6c);
- * Everyone and the counts (mapTally), with the roster and the kept photos they read, so the
- * console rebuilds them on the same inputs as the director edits (checkpoint-view-logic.js
- * mapTallyOf); a check still failing on the map in hand; the concerns beside their lines;
- * the edits a send-back changed (the report); the standing notes; the round's note and its
- * counters.
+ * which the page names them by, as the story meeting names each receipt's; brief 4.6c); the
+ * roster and the kept photos, from which the console builds Everyone and the counts as the
+ * director edits (checkpoint-view-logic.js mapTallyOf, through mapTally, the checks' count),
+ * so the payload carries no count of its own (task 4.6d); a check still failing on the map
+ * in hand; the concerns beside their lines; the edits a send-back changed (the report); the
+ * standing notes; the round's note and its counters.
  *
  * @param {Object} state
  * @param {Object} options
@@ -716,7 +716,6 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
     evidenceIndex,
     roster,
     keptPhotos,
-    tally: mapTally(s.outline, { roster, keptPhotos }),
     checkFailures: mapCheckFailures(s),
     concerns: mapConcerns(s),
     handEditReport: handEditReportOf(s._outlineHandEditReport),
