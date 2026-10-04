@@ -4088,4 +4088,51 @@ describe('4.14f: a deleted Key Evidence entry stays deleted', () => {
       expect(two.report.changed).toEqual([]);
     });
   });
+
+  // Finding 7 of the review (removed-twice.js): a sentence a rewrite removed that came back in
+  // pass 1 and stayed through pass 2 gave one line per pass, since the field edit it belongs to
+  // stands through both and each pass read it again. The entry of the pass that brought it back
+  // keeps it, read against the version stored after each later pass (cameBackStillIn), and a later
+  // pass adds a line only for a sentence no entry of the round lists.
+  describe('one line per removed sentence', () => {
+    const FIRST = 'The vote went to the overdose.';
+    const SECOND = 'Nobody asked who held the account that morning.';
+    const THIRD = 'Riley kept the second ledger in a drawer by the till.';
+    const LAST = paragraph('Riley says they only kept the books.');
+    const story = (...content) => ({
+      headline: { main: 'H', deck: 'A deck.' },
+      sections: [{ id: 'the-story', type: 'narrative', heading: 'The Story', content: content.map(clone) }]
+    });
+    const shown = story(paragraph(`${FIRST} ${SECOND} ${THIRD}`), LAST);
+    const desk = story(paragraph(FIRST), LAST);
+    const standing = D.standingAfterSendBack(null, shown, desk, 'bundle');
+    const pass = (previous, before, after, n, reasons = []) =>
+      D.settleEdits(previous, { edits: D.carriedEdits(standing, before), before, after, pass: n, reasons });
+
+    test('a sentence that comes back in pass 1 and stays through pass 2 gives one line, from the pass that brought it back', () => {
+      expect(standing.edits.map((e) => [e.id, e.removed])).toEqual([['E1', [SECOND, THIRD]]]);
+      const back = story(paragraph(FIRST), LAST, paragraph(SECOND));
+      const one = pass(null, desk, back, 1);
+      const two = pass(one.report, one.output, clone(back), 2);
+      expect(two.report.changed).toEqual([expect.objectContaining({ id: 'E1', removed: true, pass: 1, director: SECOND, became: SECOND, pieces: [SECOND] })]);
+    });
+
+    test('a second sentence that comes back only in pass 2 gets a line of its own, and each line says where its sentence is now', () => {
+      const one = pass(null, desk, story(paragraph(FIRST), LAST, paragraph(SECOND)), 1);
+      const two = pass(one.report, one.output, story(paragraph(FIRST), LAST, paragraph(`${SECOND} ${THIRD}`)), 2);
+      expect(two.report.changed.map((c) => [c.id, c.pass, c.pieces, c.became])).toEqual([
+        ['E1', 1, [SECOND], `${SECOND} ${THIRD}`],
+        ['E1', 2, [THIRD], `${SECOND} ${THIRD}`]
+      ]);
+    });
+
+    test("one the send-back's rework brought back, which an automatic pass kept, gives one line: the send-back's, with its reason", () => {
+      const back = story(paragraph(FIRST), LAST, paragraph(SECOND));
+      const sent = pass(null, desk, back, D.SEND_BACK_PASS, [{ id: 'E1', reason: 'The note asks who held the account.' }]);
+      const one = pass(sent.report, sent.output, clone(back), 1);
+      expect(one.report.changed).toEqual([expect.objectContaining({
+        id: 'E1', removed: true, pass: D.SEND_BACK_PASS, automatic: false, reason: 'The note asks who held the account.', pieces: [SECOND]
+      })]);
+    });
+  });
 });

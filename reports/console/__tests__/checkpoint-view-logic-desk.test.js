@@ -1187,9 +1187,10 @@ describe('4.14c: the desk says what each pass did, and only what still holds', (
 // deleted stays deleted. Any entry of its tokenId a pass puts back, in any words, is the entry:
 // after an automatic pass code took it out again, and the round's record says so, as the map does
 // for a struck beat that comes back; after a send-back it stays, and its line sits beside it with
-// the rework's reason. Every report here is lib/hand-edit-diff.js settleEdits'.
+// the rework's reason. A sentence a rewrite removed that stays back through two passes gives one
+// line. Every report here is lib/hand-edit-diff.js settleEdits'.
 // ═══════════════════════════════════════════════════════════════════════════
-describe('4.14f: the desk says what came of a deleted Key Evidence entry', () => {
+describe('4.14f: the desk says once what came of a deleted Key Evidence entry or a removed sentence', () => {
   const changedAt = (d) => {
     const marks = deskMarks(d, d.contentBundle);
     return [
@@ -1223,5 +1224,19 @@ describe('4.14f: the desk says what came of a deleted Key Evidence entry', () =>
     expect(output).toBe(after);
     expect(changedAt(payloadFor(output, { handEditReport: report }))).toEqual([[deskAnchorKey({ kind: 'sidebar', index: 0 }),
       'Sidebar card vic001, cut: the rework of your send-back put back the entry you deleted. Why: The note asks for every inline card in Key Evidence.']]);
+  });
+
+  test('a sentence a rewrite removed that came back in pass 1 and stayed through pass 2 gives one line, beside where it is now', () => {
+    const EXTRA = 'Nobody in the room asked about the second ledger.';
+    const shown = article();
+    shown.sections[1].content[0] = paragraph(`${STORY_1} ${EXTRA}`);
+    const desk = article();
+    const standing = standingAfterSendBack(null, shown, desk, 'bundle');
+    const back = clone(desk);
+    back.sections[3].content.push(paragraph(EXTRA));
+    const one = settleEdits(null, { edits: carriedEdits(standing, desk), before: desk, after: back, pass: 1 });
+    const two = settleEdits(one.report, { edits: carriedEdits(standing, one.output), before: one.output, after: clone(back), pass: 2 });
+    expect(changedAt(payloadFor(two.output, { handEditReport: two.report }))).toEqual([[at(3, 1),
+      `The Story: Eight Minutes, paragraph: a sentence you removed came back as "${EXTRA}" (automatic pass 1). It is still in the article: cut it again if it should go.`]]);
   });
 });

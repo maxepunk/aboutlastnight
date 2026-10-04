@@ -1075,9 +1075,13 @@ function pieceBackIn(text, pieces) {
 /** Is every sentence of a removed sentence held by the version's text? */
 function removedHeld(text, sentence) { return sentencesOf(sentence).every((core) => partHolding(text, core)); }
 
-/** The removed sentences that came back in `obj`, and where the first came back, or null. */
-function removedReturnedIn(obj, edit) {
-  const removed = Array.isArray(edit.removed) ? edit.removed.filter((s) => typeof s === 'string') : [];
+/**
+ * The removed sentences that came back in `obj`, and where the first came back, or null. A
+ * sentence in `listed`, which an entry of the round already reports (listedSentences), is left
+ * out (task 4.14f).
+ */
+function removedReturnedIn(obj, edit, listed = new Set()) {
+  const removed = Array.isArray(edit.removed) ? edit.removed.filter((s) => typeof s === 'string' && !listed.has(s)) : [];
   if (removed.length === 0 || !isObj(obj)) return null;
   return sentencesBackIn(versionText(obj), removed);
 }
@@ -3685,6 +3689,22 @@ function returnedPieces(stored, pieces) {
 }
 
 /**
+ * The removed sentences of an edit that an entry of the round's report already lists as come
+ * back (task 4.14f): the `pieces` of its "removed" entries, which cameBackStillIn has read
+ * against the version stored, so a sentence that stays back through a later pass keeps the one
+ * entry of the pass that brought it back.
+ *
+ * @param {{changed: Object[]}} report - the round's report so far, read against the version stored
+ * @param {string} id - the edit's id
+ * @returns {Set<string>}
+ */
+function listedSentences(report, id) {
+  return new Set(report.changed
+    .filter((entry) => entry.id === id && entry.removed === true && Array.isArray(entry.pieces))
+    .flatMap((entry) => entry.pieces));
+}
+
+/**
  * The round's report with each "came back" entry of the article read against `stored`, the
  * version stored after the round's latest pass, and so, after the last, the version stored at
  * the stop (task 4.14c). A cut or a removed sentence that came back stays while `stored` holds
@@ -3750,7 +3770,9 @@ function cameBackStillIn(report, stored) {
  * - a cut whose text came back, or a rewrite's removed sentence that came back, flagged
  *   (`cut`, `removed`), with the text where it came back: code never takes it out; in the
  *   article's report each carries the `pieces` it is read by, and stays only while the version
- *   stored after the round's latest pass holds them (cameBackStillIn; task 4.14c);
+ *   stored after the round's latest pass holds them (cameBackStillIn; task 4.14c); a removed
+ *   sentence an entry of the round already lists, which the version stored still holds, keeps
+ *   that entry, so each sentence is one line at the stop (listedSentences; task 4.14f);
  * - a Key Evidence entry the director deleted that the pass put back under its tokenId, in any
  *   words (deletedEntryOf; task 4.14f): `cut`, with `became` the entry as the pass put it back,
  *   the `tokenId` it is read by, and whether code took it out again (`restored`), which only an
@@ -3833,7 +3855,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
         ...(maybeCopies.length > 0 && { maybeCopies })
       }));
     }
-    const back = removedReturnedIn(stored, e);
+    const back = removedReturnedIn(stored, e, listedSentences(prior, e.id));
     if (back) changed.push(entry(e, { removed: true, director: back.sentences.join(' '), became: back.leaf, ...returnedPieces(stored, back.sentences) }));
   });
   return {
