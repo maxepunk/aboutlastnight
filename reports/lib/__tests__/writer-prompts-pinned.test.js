@@ -288,10 +288,19 @@ const REPO = path.join(__dirname, '..', '..');
  *   <DIRECTOR_GUIDANCE> (lib/schemas/outline.schema.json, weaveChanges[].source). The map
  *   writer prints the schema in <SCHEMA>, so its render grows by the description's own 114
  *   characters (outline-journalist 18161 -> 18275). The article and arc pins do not move.
+ * - Phase 4 (brief 4.7e), the beats and the words hold the director's desk edits as the
+ *   heading, photo and headline lines do. The map keeps the beat of a card the director deleted
+ *   at the desk and lists in leftOut the material a paragraph they insert may use, and code
+ *   does not restore a send-back's rework. So the beats line names first that a block the
+ *   director cut stays out and a block they added stays, whatever its material, then the map's
+ *   beats and no other (+130); and the words line names first that the text the director wrote
+ *   into the article stays as written and a block they moved stays where they put it, then the
+ *   map's beats per section and the writer's words (+160). A rework carries both word for word
+ *   (article-journalist 31016 -> 31306). The outline and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['c55efcd18228ad09cec58f15785f777b8bf8d9ae8010069e4db26be1791faaa1', 18275],
-  'article-journalist': ['f630e1de1d7123ce166584559147ede4ab45c5655b2e081aaeb9b93db2faa158', 31016],
+  'article-journalist': ['d9c28010915c8720dcd764c0c16d6434ddb63a6b04eebf31519dd807c671940a', 31306],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
 

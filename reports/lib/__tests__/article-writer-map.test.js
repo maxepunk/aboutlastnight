@@ -320,6 +320,89 @@ describe("4.7d: a heading and a photo's place the director set at the desk hold 
     expect(user).toContain(`\n${HEADING_LINE}\n`);
     expect(user).toContain(`\n${PHOTO_LINE}\n`);
     expect(block(user, 'GENERATION_INSTRUCTION')).toContain(`\n${INSTRUCTION_HEADING}\n`);
-    expect(user).toContain("\n- the map's sections in its order, each with its beats as C2 (`<craft-form>`) sets them out;");
+    // Brief 4.7e reworded the section line to name the director's text and moves first; it
+    // still names no heading.
+    const sectionLines = user.split('\n').filter((line) => line.startsWith("- the map's sections in its order"));
+    expect(sectionLines).toHaveLength(1);
+    expect(sectionLines[0]).not.toMatch(/heading/);
+  });
+});
+
+// Brief 4.7e (ruling 4 on 4.5e's and 4.7d's findings): the task's beats line and its words line
+// hold the director's desk edits as the heading, photo and headline lines do. The map keeps the
+// beat of a card the director deleted at the desk (only a deleted photo leaves it, through the
+// leave-out list), and its leftOut holds the material a paragraph the director inserts may use.
+// Code does not restore a send-back's rework, so each line names the director's edits first.
+describe("4.7e: a card the director cut and a paragraph they inserted at the desk hold through the rework", () => {
+  const { standingAfterSendBack } = require('../hand-edit-diff');
+  /** A paragraph the director inserts at the desk, from the letter the map left out (b9, p-rescued). */
+  const DESK_PARAGRAPH = 'An unsigned letter warned Marcus about the Stanford patents a week before he died.';
+  /** The task's beats line: the director's cut and inserted blocks first, the map's beats otherwise. */
+  const BEATS_LINE = "- the beats: a block the director has cut stays out, and a block the director has added stays, whatever its material; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article;";
+  /** The task's words line: the director's text and moved blocks first, the map's beats and the writer's words otherwise. */
+  const WORDS_LINE = "- the map's sections in its order; the text the director has written into the article stays as written, and a block the director has moved stays where the director put it; otherwise each section holds its beats as C2 (`<craft-form>`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;";
+
+  /** The task's lines, from its opening to the data that follows it. */
+  function taskLines(prompt) {
+    const start = prompt.indexOf('Write the article from the settled weave and the story map above.');
+    expect(start).toBeGreaterThanOrEqual(0);
+    return prompt.slice(start, prompt.indexOf('<DATA_CONTEXT>', start)).split('\n').filter((line) => line.startsWith('- '));
+  }
+
+  /**
+   * A send-back rework: at the desk the director deleted the p-dna card, which carries beat b4
+   * on the map, and inserted a paragraph from the letter under the map's leftOut.
+   */
+  async function sendBackPrompt() {
+    const shown = clone(PREVIOUS_BUNDLE);
+    const sentBack = clone(shown);
+    sentBack.sections[0].content.splice(3, 1);
+    sentBack.sections[0].content.push({ type: 'paragraph', text: DESK_PARAGRAPH });
+    const sdk = recordingSdk(sentBack);
+    await reviseContentBundle(articleState({
+      _previousContentBundle: sentBack, articleRevisionCount: 0, humanArticleRevisionCount: 1,
+      _articleFeedback: 'Tighten the closing.',
+      _articleHandEdits: standingAfterSendBack(null, shown, sentBack, 'bundle')
+    }), cfg(sdk));
+    return sdk.mock.calls[0][0].prompt;
+  }
+
+  it('a send-back rework that deletes a card and inserts a paragraph from left-out material asks for nothing that contradicts either', async () => {
+    const prompt = await sendBackPrompt();
+    const edits = block(prompt, 'HAND_EDITS');
+    expect(edits).toContain('E1 (section "the-story", evidence-card p-dna, cut)');
+    expect(edits).toContain(`E2 (section "the-story", paragraph): "${DESK_PARAGRAPH}"`);
+    // The map the rework reads still carries the cut card's beat, and the letter under leftOut.
+    const map = blockJson(prompt, STORY_MAP_TAG);
+    expect(map.sections.flatMap((section) => section.beats).filter((beat) => beat.card === 'p-dna').map((beat) => beat.id)).toEqual(['b4']);
+    expect(map.leftOut.map((beat) => beat.material)).toEqual(['p-rescued']);
+
+    const lines = taskLines(prompt);
+    expect(lines.filter((line) => line.startsWith('- the beats:'))).toEqual([BEATS_LINE]);
+    expect(lines.filter((line) => line.startsWith("- the map's sections in its order"))).toEqual([WORDS_LINE]);
+    // Each task line that asks for the map's beats, keeps leftOut out of the article or gives the
+    // writer the words names the director's cut, inserted block and text before it.
+    const first = (line, director, after) => line.indexOf(director) >= 0 && line.indexOf(director) < line.indexOf(after);
+    lines.filter((line) => line.includes("every beat in the map's sections")).forEach((line) => {
+      expect(first(line, 'a block the director has cut stays out', "every beat in the map's sections")).toBe(true);
+    });
+    lines.filter((line) => line.includes('leftOut')).forEach((line) => {
+      expect(first(line, 'a block the director has added stays, whatever its material', 'leftOut')).toBe(true);
+    });
+    lines.filter((line) => line.includes('are yours')).forEach((line) => {
+      expect(first(line, 'the text the director has written into the article stays as written', 'are yours')).toBe(true);
+    });
+    // No line asks for the map's beats, or keeps leftOut out, ahead of the director's edits.
+    expect(prompt).not.toContain("- every beat in the map's sections, and no other;");
+    expect(prompt).not.toContain('the beats under leftOut stay out of the article');
+  });
+
+  it("the writer's first draft still asks for every beat of the map's sections and no other", async () => {
+    const { user } = await writerPrompt(articleState());
+    expect(user).not.toContain('<HAND_EDITS>');
+    const lines = taskLines(user);
+    expect(lines.filter((line) => line.startsWith('- the beats:'))).toEqual([BEATS_LINE]);
+    expect(lines.filter((line) => line.startsWith("- the map's sections in its order"))).toEqual([WORDS_LINE]);
+    expect(lines.filter((line) => line.includes("otherwise every beat in the map's sections, and no other,"))).toEqual([BEATS_LINE]);
   });
 });

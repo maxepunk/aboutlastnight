@@ -432,10 +432,21 @@ const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s sto
  * The instruction's heading and headline lines defer to this task, and the headline line gives
  * the kicker no owner, so a kicker the director edited at the desk stands on <HAND_EDITS>
  * alone. The top photo is the map's: the desk edits only its caption.
+ *
+ * The beats line and the words line do the same for the body (brief 4.7e). The map keeps the
+ * beat of a card the director deleted at the desk (only a deleted photo leaves it, through the
+ * leave-out list), its leftOut lists material a paragraph the director inserts may use, and
+ * code does not restore a send-back's rework. So a block the director cut stays out, a block
+ * they added stays whatever its material, the text they wrote into the article stays as written
+ * and a block they moved stays where they put it; otherwise the map's beats, and no other, and
+ * the writer's order, words, transitions and detail. With no desk edit, as in the first draft,
+ * the lines ask for every beat in the map's sections, and no other. The lines name the edits as
+ * <HAND_EDITS> does (cut, moved, the director's text), since the writer's prompts never say
+ * "desk".
  */
 const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
-- every beat in the map's sections, and no other; the beats under leftOut stay out of the article, the director's strikes among them;
-- the map's sections in its order, each with its beats as C2 (\`<craft-form>\`) sets them out; the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
+- the beats: a block the director has cut stays out, and a block the director has added stays, whatever its material; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article;
+- the map's sections in its order; the text the director has written into the article stays as written, and a block the director has moved stays where the director put it; otherwise each section holds its beats as C2 (\`<craft-form>\`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
 - each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
 - each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;
 - the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;
