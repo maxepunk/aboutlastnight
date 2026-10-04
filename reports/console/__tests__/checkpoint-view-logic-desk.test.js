@@ -83,6 +83,11 @@ function placed(marks) {
   return Object.keys(marks.at).sort().flatMap((key) => marks.at[key].map((m) => [key, m.tone, m.text.slice(0, 25)]));
 }
 
+// Brief 4.10b: a fact-check mark reads as its finding's line, these its opening words as `placed` prints them.
+const DASH_MARK = 'This paragraph has an em-';
+const CARD_MARK = "This card's text does not";
+const PHOTO_MARK = 'This photo, nope.jpg, is ';
+
 const block = (section, b) => ({ kind: 'block', section, block: b });
 const at = (section, b) => deskAnchorKey(block(section, b));
 
@@ -147,16 +152,16 @@ describe('4.10: a finding on a paragraph, a card and a photo', () => {
 
   test('each sits beside its block on the desk the stop opened', () => {
     expect(placed(marks)).toEqual([
-      [at(1, 1), 'advisory', "Em-dash in the narrator's"],
-      [at(1, 2), 'structural', 'Evidence card "vic001" (i'],
-      [at(1, 3), 'structural', 'Invalid photo reference "']
+      [at(1, 1), 'advisory', DASH_MARK],
+      [at(1, 2), 'structural', CARD_MARK],
+      [at(1, 3), 'structural', PHOTO_MARK]
     ]);
     expect(marks.resolved).toEqual([]);
   });
 
-  test("each mark carries the fact check's whole message, its label and the place in words", () => {
+  test("each mark carries its finding's line for that place (4.10b), its label and the place in words", () => {
     const [mark] = deskMarksAt(marks, block(1, 2));
-    expect(mark.text).toBe(data.factCheck.structuralIssues.find((m) => m.startsWith('Evidence card')));
+    expect(mark.text).toBe("This card's text does not match the document it cites word for word.");
     expect(mark.label).toBe('Fact check');
     expect(mark.where).toBe('The Story: Eight Minutes, block 3');
     expect(deskMarksAt(marks, block(1, 1))[0].label).toBe('Fact check, advisory');
@@ -170,7 +175,7 @@ describe('4.10: a finding on a paragraph, a card and a photo', () => {
     const d = payloadFor(bundle);
     const m = deskMarks(d, d.contentBundle);
     expect(deskMarksAt(m, { kind: 'headline' }).map((x) => x.tone)).toEqual(['advisory']);
-    expect(deskMarksAt(m, { kind: 'hero' }).map((x) => x.text.slice(0, 25))).toEqual(['Invalid photo reference "']);
+    expect(deskMarksAt(m, { kind: 'hero' }).map((x) => x.text)).toEqual(["This photo, not-ours.jpg, is not one of the session's photos."]);
   });
 
   test('a card in the sidebar sits beside its sidebar entry', () => {
@@ -192,9 +197,9 @@ describe('4.10: the ordinal holds while nothing at or before it changed; otherwi
     const desk = Desk.moveBlock(data.contentBundle, { section: 1, block: 4 }, { section: 1, block: 0 });
     expect(Desk.untouchedThrough(Desk.deskChanges(data.contentBundle, desk), 'theStory', 1)).toBe(false);
     expect(placed(deskMarks(data, desk))).toEqual([
-      [at(1, 2), 'advisory', "Em-dash in the narrator's"],
-      [at(1, 3), 'structural', 'Evidence card "vic001" (i'],
-      [at(1, 4), 'structural', 'Invalid photo reference "']
+      [at(1, 2), 'advisory', DASH_MARK],
+      [at(1, 3), 'structural', CARD_MARK],
+      [at(1, 4), 'structural', PHOTO_MARK]
     ]);
   });
 
@@ -222,7 +227,7 @@ describe('4.10: the ordinal holds while nothing at or before it changed; otherwi
 
   test('a card the director moved, unchanged, takes its mark along', () => {
     const desk = Desk.moveToSection(data.contentBundle, { section: 1, block: 2 }, 3);
-    expect(deskMarksAt(deskMarks(data, desk), block(3, 1)).map((m) => m.text.slice(0, 25))).toEqual(['Evidence card "vic001" (i']);
+    expect(deskMarksAt(deskMarks(data, desk), block(3, 1)).map((m) => m.text.slice(0, 25))).toEqual([CARD_MARK]);
   });
 });
 
@@ -238,7 +243,7 @@ describe('4.10: a finding whose excerpt the director removed folds below as poss
     const marks = deskMarks(data, desk);
     expect(deskMarksAt(marks, block(1, 1))).toEqual([]);
     expect(marks.resolved.map((m) => [m.tone, m.where, m.text.slice(0, 25)])).toEqual([
-      ['advisory', 'The Story: Eight Minutes, block 2', "Em-dash in the narrator's"]
+      ['advisory', 'The Story: Eight Minutes, block 2', DASH_MARK]
     ]);
   });
 
@@ -248,8 +253,8 @@ describe('4.10: a finding whose excerpt the director removed folds below as poss
     const marks = deskMarks(data, desk);
     expect(placed(marks).filter(([, tone]) => tone === 'structural')).toEqual([]);
     expect(marks.resolved.map((m) => [m.where, m.text.slice(0, 25)])).toEqual([
-      ['The Story: Eight Minutes, block 3', 'Evidence card "vic001" (i'],
-      ['The Story: Eight Minutes, block 4', 'Invalid photo reference "']
+      ['The Story: Eight Minutes, block 3', CARD_MARK],
+      ['The Story: Eight Minutes, block 4', PHOTO_MARK]
     ]);
   });
 
@@ -283,7 +288,7 @@ describe("4.10: a concern and a changed edit sit beside the director's edit", ()
     const [mark] = deskMarksAt(deskMarks(d, d.contentBundle), block(1, 2));
     expect(mark.tone).toBe('concern');
     expect(mark.label).toBe('Concern about your edit');
-    expect(mark.text.startsWith('Evidence card "vic001"')).toBe(true);
+    expect(mark.text).toBe("This card's text does not match the document it cites word for word.");
     expect(mark.text).not.toContain(DIRECTOR_EDIT_PREFIX);
   });
 
@@ -368,7 +373,7 @@ describe('4.10: a finding with no block sits in one line beside the approve butt
   test('a roster gap has no block', () => {
     const data = payloadFor(article());
     const marks = deskMarks(data, data.contentBundle);
-    expect(marks.apart.map((m) => [m.tone, m.where, m.text.slice(0, 26)])).toEqual([['structural', '', 'Roster coverage gap: Sam i']]);
+    expect(marks.apart.map((m) => [m.tone, m.where, m.text])).toEqual([['structural', '', 'Sam is on the roster but never named in the article.']]);
     const view = deskView(data, data.contentBundle);
     expect(view.apart).toEqual({ any: true, title: 'Not beside any block (1)', items: marks.apart });
   });
@@ -389,7 +394,7 @@ describe('4.10: a finding with no block sits in one line beside the approve butt
     bundle.sections[3].content.push(paragraph(words(900)));
     const d = payloadFor(bundle);
     const marks = deskMarks(d, d.contentBundle);
-    const length = (anchor) => deskMarksAt(marks, anchor).filter((m) => m.text.startsWith('Over length:'));
+    const length = (anchor) => deskMarksAt(marks, anchor).filter((m) => m.text.startsWith('This section has '));
     expect([0, 1, 2, 3].map((s) => length({ kind: 'heading', section: s }).length)).toEqual([1, 1, 1, 1]);
     expect(length({ kind: 'heading', section: 1 })[0].where).toBe('The Story: Eight Minutes, heading');
   });
@@ -644,5 +649,110 @@ describe('4.10: the changed-edit line says what each pass did', () => {
       'E1, story: a sentence you removed came back as "Who gained? Who paid Riley?" (your reweave). It is still in the weave: cut it again if it should go.'
     );
     expect(ViewLogic.REWEAVE_PASS).toBe(REWEAVE_PASS);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10b: the stops' lines, follow-ups (the integrator's ruling 1 on 4.10's minors and
+// hand-offs). Each mark at the desk says what is wrong in the article and where, in the
+// director's words: the fact check's line for the finding's place
+// (lib/content-bundle-fact-check.js, each finding's `line`), with a card's document named
+// through the stop's evidenceIndex as the story meeting names a receipt (receiptView). The
+// fact check's message, which the rework reads, stays as it is, and a finding marked at
+// several places reads once at each, with that place's part.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** The fixture's document as server.js buildEvidenceIndex keys it for a stop's payload. */
+const INDEX = { vic001: { name: 'VIC001 - The offer', owner: 'Vic Kingsley', type: 'memory', firstLine: MEMORY } };
+
+describe("4.10b: each mark says what is wrong in the article and where, in the director's words", () => {
+  const words = (n) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+  /** The article, with two em-dashes in a paragraph of Follow the Money, and The Story and the closing long enough to run over. */
+  const longArticle = () => {
+    const bundle = article();
+    bundle.sections[2].content.push(paragraph('The money moved—fast—before the vote.'));
+    bundle.sections[1].content.push(paragraph(words(1000)));
+    bundle.sections[3].content.push(paragraph(words(900)));
+    return bundle;
+  };
+  const data = payloadFor(longArticle(), { evidenceIndex: INDEX });
+  const marks = deskMarks(data, data.contentBundle);
+  const textsAt = (anchor) => deskMarksAt(marks, anchor).map((m) => m.text);
+
+  test('a card: its text against the document it cites, named as the story meeting names a receipt', () => {
+    expect(textsAt(block(1, 2))).toEqual(["This card's text does not match VIC001 - The offer (Vic Kingsley) word for word."]);
+  });
+
+  test("the console's copy of the words that stand for the card's document is the fact check's", () => {
+    const server = require('../../lib/content-bundle-fact-check').DOCUMENT_SLOT;
+    expect(typeof server).toBe('string');
+    expect(ViewLogic.DOCUMENT_SLOT).toBe(server);
+  });
+
+  test('a card whose document the stop cannot name: the document it cites, and never its id alone', () => {
+    const bare = payloadFor(article());
+    expect(deskMarksAt(deskMarks(bare, bare.contentBundle), block(1, 2)).map((m) => m.text))
+      .toEqual(["This card's text does not match the document it cites word for word."]);
+  });
+
+  test('a photo', () => {
+    expect(textsAt(block(1, 3))).toEqual(["This photo, nope.jpg, is not one of the session's photos."]);
+  });
+
+  test("a paragraph: each paragraph carries its own part of a finding that sits at several", () => {
+    expect(textsAt(block(1, 1))).toEqual(['This paragraph has an em-dash; house style uses none.']);
+    expect(textsAt(block(2, 2))).toEqual(['This paragraph has 2 em-dashes; house style uses none.']);
+  });
+
+  test("the length at two sections: each heading carries its own section's words, once", () => {
+    expect(textsAt({ kind: 'heading', section: 1 })).toEqual(["This section has 1,031 of the article's 1,998 words; the article aims at about 1,500."]);
+    expect(textsAt({ kind: 'heading', section: 3 })).toEqual(["This section has 914 of the article's 1,998 words; the article aims at about 1,500."]);
+  });
+
+  test('a finding with no block: one line beside the approve button, naming the player', () => {
+    expect(marks.apart.map((m) => [m.tone, m.text])).toEqual([['structural', 'Sam is on the roster but never named in the article.']]);
+  });
+
+  test("no mark carries the rework's message or a pipeline term, and each message stays the rework's", () => {
+    const all = [...Object.values(marks.at).flat(), ...marks.apart, ...marks.resolved];
+    const messages = data.factCheck.findings.map((f) => f.message);
+    // One mark for each finding: a card, a photo, two em-dashes, the length at four headings, a roster gap.
+    expect(all).toHaveLength(data.factCheck.findings.length);
+    expect(all).toHaveLength(9);
+    all.forEach((m) => {
+      expect([m.text, messages.includes(m.text)]).toEqual([m.text, false]);
+      expect([m.text, /<RECORD>|section "|\b[TC]\d+\b|narrator|Evidence card "|\bvic001\b/.test(m.text)]).toEqual([m.text, false]);
+    });
+    expect(data.factCheck.structuralIssues.map((m) => m.split(':')[0])).toEqual([
+      'Evidence card "vic001" (in section "theStory") is not verbatim', 'Roster coverage gap', 'Invalid photo reference "nope.jpg"'
+    ]);
+  });
+});
+
+describe('4.10b: a mark found by its words sits beside a block of the kind its line names', () => {
+  const quote = (text) => ({ type: 'quote', text, attribution: 'Mel' });
+
+  test('an example line in a quote block sits beside the quote, not beside a card above it that holds the same words', () => {
+    const bundle = article();
+    bundle.sections[1].content.splice(3, 0, card('vic001', 'The Job', 'The job is yours.'), quote('The job is yours, Vic.'));
+    const d = payloadFor(bundle);
+    const quoteAt = bundle.sections[1].content.findIndex((b) => b.type === 'quote');
+    expect(deskMarksAt(deskMarks(d, d.contentBundle), block(1, quoteAt)).map((m) => m.text)).toEqual([
+      'This quote holds "The job is yours", an example line from the writer\'s instructions; check that someone in the session said it.'
+    ]);
+  });
+
+  test("a paragraph's finding found by its words, once the ordinal no longer holds, sits beside a paragraph, never a quote that holds them too", () => {
+    const bundle = article();
+    bundle.sections[1].content.splice(1, 0, quote('Then I voted with the room, Mel said.'));
+    bundle.sections[1].content.push(paragraph('Then I voted with the room.'));
+    const d = payloadFor(bundle);
+    const desk = Desk.setBlock(d.contentBundle, 1, 0, paragraph('Mel built the first theory around a fight.'));
+    const marks = deskMarks(d, desk);
+    const last = desk.sections[1].content.length - 1;
+    expect(deskMarksAt(marks, block(1, 1))).toEqual([]);
+    expect(deskMarksAt(marks, block(1, last)).map((m) => m.text)).toEqual([
+      '"I voted" makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.'
+    ]);
   });
 });

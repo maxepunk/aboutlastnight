@@ -517,6 +517,39 @@ function times(n) {
   return n === 2 ? ' twice' : n > 2 ? ` ${n} times` : '';
 }
 
+// ── The director's lines (brief 4.10b) ───────────────────────────────────────
+//
+// Each finding carries `line`: what is wrong in the article at the finding's place, in the
+// words the director reads beside it at the desk, with that place's part of a finding that
+// sits at several. The message beside it stays the rework's: its prefix groups the findings,
+// and a rework reads it as its task. A line names a person as the record does and a photo by
+// its filename, and leaves a card's document for the desk to name (DOCUMENT_SLOT).
+
+/**
+ * The words in a finding's line that stand for the document a card cites. The desk names the
+ * document there by its name and owner, as the story meeting names a receipt
+ * (console/checkpoint-view-logic.js receiptView, through the stop's evidenceIndex). The
+ * console keeps a copy, which a test holds equal.
+ */
+const DOCUMENT_SLOT = '{document}';
+
+/** Article text a line quotes: its runs of whitespace as one space, in double quotation marks. */
+function quoted(text) {
+  return `"${String(text == null ? '' : text).replace(/\s+/g, ' ').trim()}"`;
+}
+
+/** Names as a line lists them: "Mel", "Mel and Kai", "Mel, Kai and Sam". */
+function namesList(names) {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** What a line calls a narrator piece: a headline field by its name, a paragraph "This paragraph". */
+const PIECE_NAMES = { 'headline.main': 'The headline', 'headline.kicker': 'The kicker', 'headline.deck': 'The deck' };
+
+function pieceOf(place) {
+  return place && Object.prototype.hasOwnProperty.call(PIECE_NAMES, place.field) ? PIECE_NAMES[place.field] : 'This paragraph';
+}
+
 /**
  * The first pronoun from `pronouns` within PRONOUN_WINDOW words after one of `names`,
  * in a sentence of the narrator's (quote-stripped) prose, where it can only be about
@@ -611,6 +644,9 @@ const PRODUCTION_WORDS = [
 
 /** The narrator's prose above this many words is flagged (C4, R4). */
 const LENGTH_FLAG_WORDS = 1800;
+
+/** The article's length, about this many words (C4): the length's message and its line name it. */
+const LENGTH_TARGET_WORDS = 1500;
 
 const NUMBER_WORDS = [
   'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven',
@@ -974,7 +1010,7 @@ function describeLocations(locations) {
  *            photoReferences: {invalid: string[]},
  *            reporterMode: {violations: string[]},
  *            findings: Array<{kind: string, status: 'structural'|'advisory', place: Object|null,
- *                             excerpt: string|null, message: string, editId?: string}>}}
+ *                             excerpt: string|null, message: string, line: string, editId?: string}>}}
  *   A cardFidelity item in one of the director's edits carries that edit's id
  *   (`directorEdit`); `missing`, `invalid` and `violations` list the structural hits only.
  *
@@ -986,10 +1022,12 @@ function describeLocations(locations) {
  *   `{tokenId, sidebar: true}` for a card, `{filename, section}` or `{filename, hero: true}`
  *   for a photo, `{section}` for a quote block or a section the length counted, or null
  *   where the hit has no one place (a player never named, a phrase across two pieces); an
- *   excerpt of the printed text there, or null for the length; and its message, a string
- *   of `structuralIssues` or `advisoryWarnings`. A message that names several places has a
- *   finding at each, and a concern about one of the director's edits carries the edit's id
- *   (`editId`).
+ *   excerpt of the printed text there, or null for the length; its message, a string of
+ *   `structuralIssues` or `advisoryWarnings`; and its line (brief 4.10b), what is wrong in
+ *   the article at that place in the director's words, with that place's part, a card's
+ *   document left to the desk to name (DOCUMENT_SLOT). A message that names several places
+ *   has a finding at each, and a concern about one of the director's edits carries the
+ *   edit's id (`editId`).
  */
 function factCheckContentBundle({
   contentBundle,
@@ -1018,10 +1056,11 @@ function factCheckContentBundle({
     advisoryWarnings.push(concern);
     return concern;
   };
-  // Brief 4.7a: each hit with where it sits (the JSDoc's `findings`).
+  // Brief 4.7a: each hit with where it sits (the JSDoc's `findings`); brief 4.10b: with the
+  // director's line for that place beside the rework's message.
   const findings = [];
-  const found = (kind, status, place, excerpt, message, editId) => {
-    findings.push({ kind, status, place: place || null, excerpt: findingExcerpt(excerpt), message, ...(editId && { editId }) });
+  const found = (kind, status, place, excerpt, message, line, editId) => {
+    findings.push({ kind, status, place: place || null, excerpt: findingExcerpt(excerpt), message, line, ...(editId && { editId }) });
   };
   const npcEntries = (Array.isArray(npcs)
     ? npcs
@@ -1085,7 +1124,9 @@ function factCheckContentBundle({
         `string from the prompt files, not session evidence. Quote ${DOCUMENT_POINTER} word for word, ` +
         `or drop the card.`;
       advisoryWarnings.push(message);
-      found('leakedExample', 'advisory', cardPlaceOf(tokenId, location), printedExcerpt(content, leaked), message);
+      const shown = printedExcerpt(content, leaked);
+      found('leakedExample', 'advisory', cardPlaceOf(tokenId, location), shown, message,
+        `This card holds ${quoted(shown)}, an example line from the writer's instructions; check that ${DOCUMENT_SLOT} says it.`);
     }
 
     const source = sources.get(tokenId);
@@ -1097,10 +1138,11 @@ function factCheckContentBundle({
   for (const item of cardFidelity) {
     if (item.ok) continue;
     const where = describeLocations(item.locations);
-    const report = (message) => {
+    /** One message for the item; a finding at each place it sits, with that place's line. */
+    const report = (message, lineAt) => {
       const filed = item.directorEdit ? directorHit(item.directorEdit, message) : (structuralIssues.push(message), message);
       for (const { place, excerpt } of cardPlaces.get(item)) {
-        found('cardFidelity', item.directorEdit ? 'advisory' : 'structural', place, excerpt, filed, item.directorEdit);
+        found('cardFidelity', item.directorEdit ? 'advisory' : 'structural', place, excerpt, filed, lineAt(place), item.directorEdit);
       }
     };
     if (item.reason === 'unknown source') {
@@ -1108,7 +1150,8 @@ function factCheckContentBundle({
       report(
         `Evidence card "${item.tokenId}" (${where}) has an unknown source: no memory or paper ` +
         `document in this session's record carries that id. Use the id of a document in <RECORD>, ` +
-        `or drop the card.`
+        `or drop the card.`,
+        (place) => `No memory or paper document from this session has the ID ${place.sidebar ? 'this sidebar card' : 'this card'} cites, ${quoted(item.tokenId)}.`
       );
     } else {
       // The document is real and the choice of it stands; only the text is wrong.
@@ -1117,7 +1160,8 @@ function factCheckContentBundle({
       report(
         `Evidence card "${item.tokenId}" (${where}) is not verbatim: its content does not appear ` +
         `in that document's text. Keep the card, and replace its content with sentences copied ` +
-        `exactly from ${DOCUMENT_POINTER}.`
+        `exactly from ${DOCUMENT_POINTER}.`,
+        () => `This card's text does not match ${DOCUMENT_SLOT} word for word.`
       );
     }
   }
@@ -1135,7 +1179,9 @@ function factCheckContentBundle({
           `Prompt example leaked into a quote block: "${leaked}" is an illustrative string from ` +
           `the prompt files, not something anyone said. Quote the source verbatim or cut the quote.`;
         advisoryWarnings.push(message);
-        found('leakedExample', 'advisory', { section: sectionIdOf(section) }, printedExcerpt(block.text, leaked), message);
+        const shown = printedExcerpt(block.text, leaked);
+        found('leakedExample', 'advisory', { section: sectionIdOf(section) }, shown, message,
+          `This quote holds ${quoted(shown)}, an example line from the writer's instructions; check that someone in the session said it.`);
       }
     }
   }
@@ -1162,11 +1208,13 @@ function factCheckContentBundle({
   const missing = unnamed.filter(name => !cutBy.get(name));
   const isCutEdit = (id) => asArray(directorEdits).some(e => e && e.id === id && (e.after === null || e.after === undefined));
   for (const [cutId, cutNames] of groupBy(unnamed.filter(name => cutBy.get(name)), name => cutBy.get(name))) {
+    const cutWord = isCutEdit(cutId) ? 'cut' : 'rewrite';
     const concern = directorHit(cutId,
       `Roster coverage gap: ${cutNames.join(', ')} ${cutNames.length === 1 ? 'is' : 'are'} on the session roster, and the ` +
-      `director's ${isCutEdit(cutId) ? 'cut' : 'rewrite'} removed the only place the article named ${cutNames.length === 1 ? cutNames[0] : 'each of them'}.`
+      `director's ${cutWord} removed the only place the article named ${cutNames.length === 1 ? cutNames[0] : 'each of them'}.`
     );
-    found('rosterCoverage', 'advisory', null, null, concern, cutId);
+    found('rosterCoverage', 'advisory', null, null, concern,
+      `Your ${cutWord} took out the only ${cutNames.length === 1 ? 'mention' : 'mentions'} of ${namesList(cutNames)} in the article.`, cutId);
   }
   if (missing.length > 0) {
     const message = placed
@@ -1177,7 +1225,8 @@ function factCheckContentBundle({
         `session roster but never named anywhere the reader can see. Give each of them at least one ` +
         `specific, evidence-grounded appearance.`;
     structuralIssues.push(message);
-    found('rosterCoverage', 'structural', null, null, message);
+    found('rosterCoverage', 'structural', null, null, message,
+      `${namesList(missing)} ${missing.length === 1 ? 'is' : 'are'} on the ${placed ? 'map' : 'roster'} but never named in the article.`);
   }
 
   // ── 3. Photo references (BASELINE class 7) ───────────────────────────────
@@ -1231,8 +1280,9 @@ function factCheckContentBundle({
     }
     return places.length > 0 ? places : [{ place: { filename }, excerpt: null }];
   };
-  const photoFindings = (filenames, status, message, editId) => filenames.forEach((filename) => {
-    photoPlaces(filename).forEach(({ place, excerpt }) => found('photoReferences', status, place, excerpt, message, editId));
+  /** A finding at each place a photo prints, each with the photo's line (`lineOf`, by its filename). */
+  const photoFindings = (filenames, status, message, lineOf, editId) => filenames.forEach((filename) => {
+    photoPlaces(filename).forEach(({ place, excerpt }) => found('photoReferences', status, place, excerpt, message, lineOf(filename), editId));
   });
 
   const invalidPhotos = [];
@@ -1255,24 +1305,34 @@ function factCheckContentBundle({
       `Could not verify ${unverified.length} photo reference(s): this session's photo list is ` +
       `empty in state, so there is nothing to check the filenames against.`;
     advisoryWarnings.push(message);
-    photoFindings(unverified, 'advisory', message);
+    photoFindings(unverified, 'advisory', message,
+      (filename) => `The session's photo list is empty, so this photo, ${filename}, could not be checked.`);
   }
-  const photoMessage = (filename) => {
+  /** Why a printed photo is no usable reference: the one rule its message and its line read. */
+  const photoReasonOf = (filename) => {
     const name = basename(filename);
-    const reason = isWhiteboard(name)
-      ? "this is the whiteboard, the room's working notes, and its photo stays out of the article."
-      : excluded.has(name)
-        ? 'the director excluded this photo.'
-        : "not one of this session's photos.";
+    return isWhiteboard(name) ? 'whiteboard' : excluded.has(name) ? 'excluded' : 'notTheSessions';
+  };
+  const photoMessage = (filename) => {
+    const reason = {
+      whiteboard: "this is the whiteboard, the room's working notes, and its photo stays out of the article.",
+      excluded: 'the director excluded this photo.',
+      notTheSessions: "not one of this session's photos."
+    }[photoReasonOf(filename)];
     return `Invalid photo reference "${filename}": ${reason} ${useKept}`;
   };
+  const photoLine = (filename) => ({
+    whiteboard: `This photo, ${filename}, is the whiteboard: the room's working notes, which stay out of the article.`,
+    excluded: `You left this photo, ${filename}, out of the article.`,
+    notTheSessions: `This photo, ${filename}, is not one of the session's photos.`
+  })[photoReasonOf(filename)];
   for (const filename of invalidPhotos) {
     const message = photoMessage(filename);
     structuralIssues.push(message);
-    photoFindings([filename], 'structural', message);
+    photoFindings([filename], 'structural', message, photoLine);
   }
   for (const [filename, editId] of invalidInEdits.filter(([f]) => !invalidPhotos.includes(f))) {
-    photoFindings([filename], 'advisory', directorHit(editId, photoMessage(filename)), editId);
+    photoFindings([filename], 'advisory', directorHit(editId, photoMessage(filename)), photoLine, editId);
   }
 
   // ── 4. Reporter mode (BASELINE class 6) ──────────────────────────────────
@@ -1301,8 +1361,11 @@ function factCheckContentBundle({
    * Brief 4.7c: each of the director's pieces is filed under its own edit. A phrase in
    * pieces under different edits is one concern per edit, and each finding carries its own
    * piece's edit and that edit's concern.
+   *
+   * Brief 4.10b: each finding's line is `lineOf` the phrase as the piece prints it, quoted,
+   * or as the check read it with "(across two paragraphs)" when it has no one place.
    */
-  const reporterHit = (phrase, message) => {
+  const reporterHit = (phrase, message, lineOf) => {
     const holding = segmentEdits.filter(segment => segment.text.includes(phrase));
     const directors = holding.length > 0 && holding.every(segment => segment.editId);
     const concerns = new Map();   // edit id -> its concern, filed once
@@ -1316,8 +1379,12 @@ function factCheckContentBundle({
       .filter(segment => directors || !segment.editId)
       .map(segment => ({ place: segment.place, excerpt: printedExcerpt(segment.original, phrase), editId: directors ? segment.editId : null }));
     (marks.length > 0 ? marks : [{ place: null, excerpt: phrase, editId: null }])
-      .forEach(({ place, excerpt, editId }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt, editId ? concerns.get(editId) : message, editId));
+      .forEach(({ place, excerpt, editId }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt,
+        editId ? concerns.get(editId) : message, lineOf(place ? quoted(excerpt) : `${quoted(excerpt)} (across two paragraphs)`), editId));
   };
+  // Brief 4.10b: the director's lines say what T8 asks of the reporter in either theme.
+  const votesLine = (phrase) => `${phrase} makes the reporter one of the room: the reporter never votes, joins the room's accusation or exposes a memory.`;
+  const presenceLine = (phrase) => `${phrase} puts the reporter in the room, but the reporter covered this session remotely.`;
 
   for (const phrase of NEVER_VOTES) {
     if (normProse.includes(phrase)) {
@@ -1331,7 +1398,8 @@ function factCheckContentBundle({
           `sentence without Nova in the vote or the exposure: the vote is the room's, and an exposure stays ` +
           `anonymous unless the evidence log or the director's notes name who turned it in.`
         : `Reporter-mode violation: "${phrase}". The reporter covers the room, they are not a member ` +
-          `of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.`
+          `of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.`,
+        votesLine
       );
     }
   }
@@ -1351,7 +1419,8 @@ function factCheckContentBundle({
           : `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: every ` +
             `exposure, observation and the verdict arrived as a tip from someone who was there. Show ` +
             `where each fact came from by attributing it to the people who told you, and state your ` +
-            `absence at most once.`
+            `absence at most once.`,
+          presenceLine
         );
       }
     }
@@ -1372,7 +1441,11 @@ function factCheckContentBundle({
       // Brief 4.7a: a statement sits inside one narrator piece (the joined text keeps each
       // piece on its own line), so each is found in its piece.
       for (const segment of narratorSegments(bundle)) {
-        for (const statement of findAbsenceStatements(segment.text)) found('repeatedAbsence', 'advisory', segment.place, printedExcerpt(segment.text, statement), message);
+        for (const statement of findAbsenceStatements(segment.text)) {
+          const shown = printedExcerpt(segment.text, statement);
+          found('repeatedAbsence', 'advisory', segment.place, shown, message,
+            `${quoted(shown)} is one of ${absences.length} places the article says the reporter was not in the room; once, early, is enough.`);
+        }
       }
     }
   }
@@ -1389,7 +1462,8 @@ function factCheckContentBundle({
         `Correct every pronoun used of ${hit.name}.`;
       advisoryWarnings.push(message);
       // This scan reads the page's whole printed text, so its hit has no one place.
-      found('npcPronouns', 'advisory', null, hit.excerpt, message);
+      found('npcPronouns', 'advisory', null, hit.excerpt, message,
+        `${quoted(hit.excerpt)} gives ${hit.name} the wrong pronoun: ${hit.name} takes ${declaredPronouns[hit.name]}.`);
     }
   } else {
     const segments = narratorSegments(bundle).map(segment => ({ ...segment, original: segment.text, text: stripQuotedSpans(segment.text) }));
@@ -1414,7 +1488,9 @@ function factCheckContentBundle({
             `(in ${hit.where}). The roster block's non-player-character line is the authority. ` +
             `Correct every pronoun used of ${entry.name}.`;
           advisoryWarnings.push(message);
-          found('npcPronouns', 'advisory', hit.place, printedExcerpt(hit.original, hit.matched), message);
+          const shown = printedExcerpt(hit.original, hit.matched);
+          found('npcPronouns', 'advisory', hit.place, shown, message,
+            `${quoted(shown)} gives ${entry.name} the wrong pronoun: ${entry.name} takes ${entry.pronouns}.`);
         }
         continue;
       }
@@ -1431,7 +1507,10 @@ function factCheckContentBundle({
           `the article writes "${hit.excerpt}" (in ${hit.where}). Use the pronoun the record gives, or write ` +
           `${entry.name} by name (T9).`;
       advisoryWarnings.push(message);
-      found('npcPronouns', 'advisory', hit.place, printedExcerpt(hit.original, hit.matched), message);
+      const shown = printedExcerpt(hit.original, hit.matched);
+      found('npcPronouns', 'advisory', hit.place, shown, message, given.size === 0
+        ? `${quoted(shown)} gives ${entry.name} a pronoun you never gave; write ${entry.name} by name.`
+        : `${quoted(shown)} gives ${entry.name} a pronoun other than the one you gave.`);
     }
 
     // 'novaPronoun' ADVISORY: Nova writes in the first person and is otherwise "Nova" (T9).
@@ -1442,7 +1521,9 @@ function factCheckContentBundle({
         `Gendered pronoun for Nova: "${novaHit.excerpt}" (in ${novaHit.where}). Nova writes in the first ` +
         `person and is otherwise "Nova", never a gendered pronoun (T9).`;
       advisoryWarnings.push(message);
-      found('novaPronoun', 'advisory', novaHit.place, printedExcerpt(novaHit.original, novaHit.matched), message);
+      const shown = printedExcerpt(novaHit.original, novaHit.matched);
+      found('novaPronoun', 'advisory', novaHit.place, shown, message,
+        `${quoted(shown)} gives ${NARRATOR} a gendered pronoun; ${NARRATOR} is never given one.`);
     }
 
     // 'emDash' ADVISORY: C4's house rule. Brief 4.7a: a finding at each piece that holds
@@ -1457,8 +1538,9 @@ function factCheckContentBundle({
         `(${dashes.map(d => `in ${d.where}${times(d.n)}`).join('; ')}). House style puts a comma, a ` +
         `colon or a full stop where an em-dash might go (C4).`;
       advisoryWarnings.push(message);
-      for (const { segment } of dashes) {
-        found('emDash', 'advisory', segment.place, printedExcerpt(segment.original, windowAround(segment.text, segment.text.indexOf('—'), 1)), message);
+      for (const { segment, n } of dashes) {
+        found('emDash', 'advisory', segment.place, printedExcerpt(segment.original, windowAround(segment.text, segment.text.indexOf('—'), 1)), message,
+          `${pieceOf(segment.place)} has ${n === 1 ? 'an em-dash' : `${n} em-dashes`}; house style uses none.`);
       }
     }
 
@@ -1470,7 +1552,7 @@ function factCheckContentBundle({
         let match;
         while ((match = re.exec(segment.text)) !== null) {
           const around = windowAround(segment.text, match.index, match[0].length);
-          production.push({ text: `"${word}" in ${segment.where} ("...${excerptOf(around)}...")`, place: segment.place, excerpt: printedExcerpt(segment.original, around) });
+          production.push({ word, text: `"${word}" in ${segment.where} ("...${excerptOf(around)}...")`, place: segment.place, excerpt: printedExcerpt(segment.original, around) });
         }
       }
     }
@@ -1479,7 +1561,10 @@ function factCheckContentBundle({
         `Production word in print: ${production.map(hit => hit.text).join('; ')}. The article speaks the fiction's own words ` +
         `(T14): rewrite each line in the world's terms.`;
       advisoryWarnings.push(message);
-      for (const hit of production) found('productionWords', 'advisory', hit.place, hit.excerpt, message);
+      for (const hit of production) {
+        found('productionWords', 'advisory', hit.place, hit.excerpt, message,
+          `${pieceOf(hit.place)} says ${quoted(hit.word)}, a word from behind the scenes of the game.`);
+      }
     }
 
     // 'length' ADVISORY: the narrator's prose above the flag (C4, R4), quoted lines
@@ -1497,14 +1582,21 @@ function factCheckContentBundle({
       const fmt = (n) => n.toLocaleString('en-US');
       const message =
         `Over length: the narrator's prose (headline, deck and paragraphs) runs ${fmt(totalWords)} words, above ` +
-        `the ${fmt(LENGTH_FLAG_WORDS)}-word flag for an article of about 1,500 words (C4): ` +
+        `the ${fmt(LENGTH_FLAG_WORDS)}-word flag for an article of about ${fmt(LENGTH_TARGET_WORDS)} words (C4): ` +
         `${[...bySection].map(([key, n]) => `${key} ${fmt(n)}`).join(', ')}. Cut what the thesis does not need.`;
       advisoryWarnings.push(message);
+      // Each section's words, by its place (brief 4.10b: the section's part of the line).
       const sections = new Map();
       for (const segment of unstripped) {
-        if (segment.section !== null) sections.set(segment.place.section, { section: segment.place.section });
+        if (segment.section !== null) sections.set(segment.place.section, (sections.get(segment.place.section) || 0) + wordCount(segment.text));
       }
-      (sections.size > 0 ? [...sections.values()] : [null]).forEach(place => found('length', 'advisory', place, null, message));
+      if (sections.size === 0) {
+        found('length', 'advisory', null, null, message, `The article runs ${fmt(totalWords)} words; it aims at about ${fmt(LENGTH_TARGET_WORDS)}.`);
+      }
+      for (const [section, words] of sections) {
+        found('length', 'advisory', { section }, null, message,
+          `This section has ${fmt(words)} of the article's ${fmt(totalWords)} words; the article aims at about ${fmt(LENGTH_TARGET_WORDS)}.`);
+      }
     }
 
     // 'headCount' ADVISORY: the room held the roster's players (T10).
@@ -1535,7 +1627,13 @@ function factCheckContentBundle({
           `Head count: ${counts.map(hit => hit.text).join('; ')}, but the roster lists ${names.length} players at the investigation` +
           `${reporterNote}. The head count is the players at the investigation (T10).`;
         advisoryWarnings.push(message);
-        for (const hit of counts) found('headCount', 'advisory', hit.place, hit.excerpt, message);
+        const reporterLine = !reporterName ? ''
+          : reporterOnRoster ? `, the guest reporter ${reporterName} among them`
+            : `; the guest reporter ${reporterName} plays no character and is not counted`;
+        for (const hit of counts) {
+          found('headCount', 'advisory', hit.place, hit.excerpt, message,
+            `${quoted(hit.excerpt)} does not match the roster: ${names.length} players were at the investigation${reporterLine}.`);
+        }
       }
     }
   }
@@ -1554,6 +1652,9 @@ function factCheckContentBundle({
 module.exports = {
   factCheckContentBundle,
   FACT_CHECK_ADVISORY_ONLY,
+  // Brief 4.10b: where a finding's line names a card's document, which the desk names
+  // (console/checkpoint-view-logic.js holds a copy, held equal by a test).
+  DOCUMENT_SLOT,
   // FA (requirement 9): the roster's names as the coverage check reads them, which the
   // send-back records a cut's names against (server.js buildResumePayload).
   rosterNames,

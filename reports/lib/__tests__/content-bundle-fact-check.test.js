@@ -1856,8 +1856,9 @@ describe('4.7a: each finding with its place', () => {
   it('a paragraph: the section id and the paragraph ordinal, with an excerpt and its message', () => {
     const result = located();
     const message = result.advisoryWarnings.find((w) => w.startsWith("Em-dash in the narrator's prose:"));
+    // Brief 4.10b: each finding also carries the director's line for its place.
     expect(result.findings.filter((f) => f.kind === 'emDash' && f.place && f.place.section)).toEqual([
-      { kind: 'emDash', status: 'advisory', place: { section: 'the-story', paragraph: 2 }, excerpt: DASHED, message }
+      { kind: 'emDash', status: 'advisory', place: { section: 'the-story', paragraph: 2 }, excerpt: DASHED, message, line: 'This paragraph has an em-dash; house style uses none.' }
     ]);
   });
 
@@ -1866,8 +1867,14 @@ describe('4.7a: each finding with its place', () => {
     const notVerbatim = result.structuralIssues.find((m) => m.startsWith('Evidence card "vic001"'));
     const unknown = result.structuralIssues.find((m) => m.startsWith('Evidence card "nope999"'));
     expect(result.findings.filter((f) => f.kind === 'cardFidelity')).toEqual([
-      { kind: 'cardFidelity', status: 'structural', place: { tokenId: 'vic001', section: 'the-story' }, excerpt: 'The Offer', message: notVerbatim },
-      { kind: 'cardFidelity', status: 'structural', place: { tokenId: 'nope999', sidebar: true }, excerpt: 'A card no document backs', message: unknown }
+      {
+        kind: 'cardFidelity', status: 'structural', place: { tokenId: 'vic001', section: 'the-story' }, excerpt: 'The Offer', message: notVerbatim,
+        line: "This card's text does not match {document} word for word."
+      },
+      {
+        kind: 'cardFidelity', status: 'structural', place: { tokenId: 'nope999', sidebar: true }, excerpt: 'A card no document backs', message: unknown,
+        line: 'No memory or paper document from this session has the ID this sidebar card cites, "nope999".'
+      }
     ]);
   });
 
@@ -1875,8 +1882,14 @@ describe('4.7a: each finding with its place', () => {
     const result = located();
     const of = (filename) => result.structuralIssues.find((m) => m.startsWith(`Invalid photo reference "${filename}"`));
     expect(result.findings.filter((f) => f.kind === 'photoReferences')).toEqual([
-      { kind: 'photoReferences', status: 'structural', place: { filename: 'hero-not-ours.jpg', hero: true }, excerpt: 'The room at noon.', message: of('hero-not-ours.jpg') },
-      { kind: 'photoReferences', status: 'structural', place: { filename: 'nope.jpg', section: 'the-story' }, excerpt: 'Mel at the ledger.', message: of('nope.jpg') }
+      {
+        kind: 'photoReferences', status: 'structural', place: { filename: 'hero-not-ours.jpg', hero: true }, excerpt: 'The room at noon.', message: of('hero-not-ours.jpg'),
+        line: "This photo, hero-not-ours.jpg, is not one of the session's photos."
+      },
+      {
+        kind: 'photoReferences', status: 'structural', place: { filename: 'nope.jpg', section: 'the-story' }, excerpt: 'Mel at the ledger.', message: of('nope.jpg'),
+        line: "This photo, nope.jpg, is not one of the session's photos."
+      }
     ]);
   });
 
@@ -1907,7 +1920,7 @@ describe('4.7a: each finding with its place', () => {
     const result = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits }));
     expect(result.findings).toEqual([{
       kind: 'cardFidelity', status: 'advisory', place: { tokenId: 'vic001', section: 'the-story' }, excerpt: 'The Offer',
-      message: result.advisoryWarnings[0], editId: 'E1'
+      message: result.advisoryWarnings[0], line: "This card's text does not match {document} word for word.", editId: 'E1'
     }]);
     expect(result.advisoryWarnings[0].startsWith(`${DIRECTOR_EDIT_PREFIX}E1: `)).toBe(true);
   });
@@ -1923,7 +1936,10 @@ describe('4.7a: each finding with its place', () => {
     const result = factCheckContentBundle(baseArgs({ contentBundle: directors, directorEdits }));
     expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "i voted"\./)]);
     expect(result.findings.filter((f) => f.kind === 'reporterMode')).toEqual([
-      { kind: 'reporterMode', status: 'structural', place: { section: 'the-story', paragraph: 2 }, excerpt: 'I voted', message: result.structuralIssues[0] }
+      {
+        kind: 'reporterMode', status: 'structural', place: { section: 'the-story', paragraph: 2 }, excerpt: 'I voted', message: result.structuralIssues[0],
+        line: '"I voted" makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.'
+      }
     ]);
   });
 
@@ -1988,8 +2004,8 @@ describe('4.7a: each finding with its place', () => {
     const message = result.advisoryWarnings.find((w) => w.startsWith('Over length:'));
     expect(message).toContain('the-story 1,010, closing 900');
     expect(result.findings.filter((f) => f.kind === 'length')).toEqual([
-      { kind: 'length', status: 'advisory', place: { section: 'the-story' }, excerpt: null, message },
-      { kind: 'length', status: 'advisory', place: { section: 'closing' }, excerpt: null, message }
+      { kind: 'length', status: 'advisory', place: { section: 'the-story' }, excerpt: null, message, line: "This section has 1,010 of the article's 1,917 words; the article aims at about 1,500." },
+      { kind: 'length', status: 'advisory', place: { section: 'closing' }, excerpt: null, message, line: "This section has 900 of the article's 1,917 words; the article aims at about 1,500." }
     ]);
   });
 });
@@ -2118,5 +2134,215 @@ describe("4.7c: a reporter-mode finding names its own edit", () => {
       [{ section: 'aside', paragraph: 2 }, 'E1']
     ]);
     expect(result.advisoryWarnings.filter((warning) => warning.includes('Reporter-mode violation'))).toEqual([findings[0].message]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Brief 4.10b: each finding carries the director's line for its place (`line`), beside the
+// rework's message. The desk marks the finding with the line: what is wrong in the article
+// and where, naming documents and people as the director's screens do, with no pipeline
+// terms. A finding at several places has that place's part. The message, which the rework
+// reads, and its prefix stay as they were. A card's document is the desk's to name: the line
+// holds DOCUMENT_SLOT where the document goes.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("4.10b: each finding carries the director's line for its place", () => {
+  const { DOCUMENT_SLOT } = require('../content-bundle-fact-check');
+  const { standingAfterSendBack, carriedEdits } = require('../hand-edit-diff');
+  const para = (text) => ({ type: 'paragraph', text });
+  const words = (n) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+  const NOT_VERBATIM = 'Vic told me the job was already handed out to somebody else.';
+  /** Each finding of a kind as [its place, its line]. */
+  const linesOf = (result, kind) => result.findings.filter((f) => f.kind === kind).map((f) => [f.place, f.line]);
+
+  it("a card: its text against the document it cites, which the desk names; a card that cites no document, inline or in the sidebar", () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        sections: [{ id: 'the-story', type: 'narrative', content: [inlineCard({ content: NOT_VERBATIM }), inlineCard({ tokenId: 'ghost1', headline: 'Nobody', content: 'Nothing at all.' })] }],
+        evidenceCards: [card({ tokenId: 'nope999', headline: 'A card no document backs' })]
+      }
+    }));
+    expect(DOCUMENT_SLOT).toBe('{document}');
+    expect(linesOf(result, 'cardFidelity')).toEqual([
+      [{ tokenId: 'vic001', section: 'the-story' }, "This card's text does not match {document} word for word."],
+      [{ tokenId: 'ghost1', section: 'the-story' }, 'No memory or paper document from this session has the ID this card cites, "ghost1".'],
+      [{ tokenId: 'nope999', sidebar: true }, 'No memory or paper document from this session has the ID this sidebar card cites, "nope999".']
+    ]);
+  });
+
+  it('an example line from the instructions: in a card, and in a quote', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: storyWith(inlineCard({ tokenId: 'paper-1', content: 'The job is yours.' }), { type: 'quote', text: 'The job is yours, Vic.', attribution: 'Someone' })
+    }));
+    expect(linesOf(result, 'leakedExample')).toEqual([
+      [{ tokenId: 'paper-1', section: 'the-story' }, 'This card holds "The job is yours", an example line from the writer\'s instructions; check that {document} says it.'],
+      [{ section: 'the-story' }, 'This quote holds "The job is yours", an example line from the writer\'s instructions; check that someone in the session said it.']
+    ]);
+  });
+
+  it("a photo: not the session's, one the director left out, the whiteboard, and one with no photo list to check it against", () => {
+    const photo = (filename) => ({ type: 'photo', filename, caption: `The caption of ${filename}.` });
+    const result = factCheckContentBundle(baseArgs({
+      sessionPhotos: ['/p/kept.jpg', '/p/gone.jpg', '/p/wb.jpg'], excludedPhotos: ['/p/gone.jpg'], whiteboardPhoto: '/p/wb.jpg',
+      contentBundle: storyWith(photo('nope.jpg'), photo('gone.jpg'), photo('wb.jpg'))
+    }));
+    expect(linesOf(result, 'photoReferences')).toEqual([
+      [{ filename: 'nope.jpg', section: 'the-story' }, "This photo, nope.jpg, is not one of the session's photos."],
+      [{ filename: 'gone.jpg', section: 'the-story' }, 'You left this photo, gone.jpg, out of the article.'],
+      [{ filename: 'wb.jpg', section: 'the-story' }, "This photo, wb.jpg, is the whiteboard: the room's working notes, which stay out of the article."]
+    ]);
+    const unchecked = factCheckContentBundle(baseArgs({ contentBundle: storyWith(photo('kept.jpg')) }));
+    expect(linesOf(unchecked, 'photoReferences')).toEqual([
+      [{ filename: 'kept.jpg', section: 'the-story' }, "The session's photo list is empty, so this photo, kept.jpg, could not be checked."]
+    ]);
+  });
+
+  it("the roster: a player on the map, a player on the roster, and a player whose only mention the director's cut took out", () => {
+    const article = storyWith(para('Vic argued at the bar.'));
+    expect(linesOf(factCheckContentBundle(baseArgs({ roster: ['Vic', 'Mel'], placedPlayers: ['Vic', 'Mel'], contentBundle: article })), 'rosterCoverage'))
+      .toEqual([[null, 'Mel is on the map but never named in the article.']]);
+    expect(linesOf(factCheckContentBundle(baseArgs({ roster: ['Vic', 'Mel', 'Kai'], contentBundle: article })), 'rosterCoverage'))
+      .toEqual([[null, 'Mel and Kai are on the roster but never named in the article.']]);
+    const writers = storyWith(para('Vic argued at the bar.'), para('Mel and Kai watched the ledger.'));
+    const directors = storyWith(para('Vic argued at the bar.'));
+    const directorEdits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    const cut = factCheckContentBundle(baseArgs({ roster: ['Vic', 'Mel', 'Kai'], contentBundle: directors, directorEdits }));
+    expect(cut.findings.filter((f) => f.kind === 'rosterCoverage').map((f) => [f.status, f.line]))
+      .toEqual([['advisory', 'Your cut took out the only mentions of Mel and Kai in the article.']]);
+  });
+
+  it("the reporter's place: a vote, a claim to have been in the room on a remote session, and a phrase that runs across two paragraphs", () => {
+    const remote = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote', contentBundle: storyWith(para('Then I voted with the room.'), para('I was in the room when it ended.'))
+    }));
+    expect(linesOf(remote, 'reporterMode')).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, '"I voted" makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.'],
+      [{ section: 'the-story', paragraph: 2 }, '"I was in the room" puts the reporter in the room, but the reporter covered this session remotely.']
+    ]);
+    const across = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('The vote came and I'), para('voted again.')) }));
+    expect(linesOf(across, 'reporterMode')).toEqual([
+      [null, '"i voted" (across two paragraphs) makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.']
+    ]);
+  });
+
+  it('a statement that the reporter was not in the room, each with how many the article holds', () => {
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote', contentBundle: storyWith(para('I was not in the room.'), para("I wasn't there when the vote came."))
+    }));
+    expect(linesOf(result, 'repeatedAbsence')).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, '"I was not in the room" is one of 2 places the article says the reporter was not in the room; once, early, is enough.'],
+      [{ section: 'the-story', paragraph: 2 }, '"I wasn\'t there" is one of 2 places the article says the reporter was not in the room; once, early, is enough.']
+    ]);
+  });
+
+  it('a pronoun: Marcus, Blake with none given, Blake with one given, and Nova', () => {
+    const NPCS = [{ name: 'Marcus', pronouns: 'he/him' }, { name: 'Blake' }, { name: 'Nova' }];
+    const result = factCheckContentBundle(baseArgs({
+      theme: 'journalist', npcs: NPCS,
+      contentBundle: storyWith(para('Marcus said they would pay.'), para('Blake counted his money.'), para('Nova said she was not sure.'))
+    }));
+    expect(linesOf(result, 'npcPronouns')).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, '"Marcus said they" gives Marcus the wrong pronoun: Marcus takes he/him.'],
+      [{ section: 'the-story', paragraph: 2 }, '"Blake counted his" gives Blake a pronoun you never gave; write Blake by name.']
+    ]);
+    expect(linesOf(result, 'novaPronoun')).toEqual([
+      [{ section: 'the-story', paragraph: 3 }, '"Nova said she" gives Nova a gendered pronoun; Nova is never given one.']
+    ]);
+    const given = factCheckContentBundle(baseArgs({
+      theme: 'journalist', npcs: NPCS, directorText: 'Blake said she would wait.', contentBundle: storyWith(para('Blake counted his money.'))
+    }));
+    expect(linesOf(given, 'npcPronouns')).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, '"Blake counted his" gives Blake a pronoun other than the one you gave.']
+    ]);
+  });
+
+  it('an em-dash and a word from behind the scenes: each piece with its own part', () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        headline: { main: 'The Offer', deck: 'A deck—with a dash.' },
+        sections: [{ id: 'the-story', type: 'narrative', content: [para('Vic signed—and Mel—watched.'), para('The final tier opened, and the timer ran out.')] }],
+        evidenceCards: []
+      }
+    }));
+    expect(linesOf(result, 'emDash')).toEqual([
+      [{ field: 'headline.deck' }, 'The deck has an em-dash; house style uses none.'],
+      [{ section: 'the-story', paragraph: 1 }, 'This paragraph has 2 em-dashes; house style uses none.']
+    ]);
+    expect(linesOf(result, 'productionWords')).toEqual([
+      [{ section: 'the-story', paragraph: 2 }, 'This paragraph says "tier", a word from behind the scenes of the game.'],
+      [{ section: 'the-story', paragraph: 2 }, 'This paragraph says "timer", a word from behind the scenes of the game.']
+    ]);
+  });
+
+  it("the length: each section with its own words, beside the article's", () => {
+    const result = factCheckContentBundle(baseArgs({
+      contentBundle: {
+        headline: { main: 'Short', deck: 'A deck of six words here.' },
+        sections: [
+          { id: 'the-story', type: 'narrative', content: [para(words(1000)), para(words(10))] },
+          { id: 'closing', type: 'narrative', content: [{ type: 'quote', text: 'Not counted.' }, para(words(900))] }
+        ],
+        evidenceCards: []
+      }
+    }));
+    expect(linesOf(result, 'length')).toEqual([
+      [{ section: 'the-story' }, "This section has 1,010 of the article's 1,917 words; the article aims at about 1,500."],
+      [{ section: 'closing' }, "This section has 900 of the article's 1,917 words; the article aims at about 1,500."]
+    ]);
+  });
+
+  it("a head count: each statement against the roster's count, with the guest reporter", () => {
+    const result = factCheckContentBundle(baseArgs({
+      roster: ['Vic', 'Mel', 'Kai'], guestReporter: { name: 'Kai Lune' },
+      contentBundle: storyWith(para('Vic, Mel and Kai argued. There were nine people in the room.'))
+    }));
+    expect(linesOf(result, 'headCount')).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, '"There were nine people in the room" does not match the roster: 3 players were at the investigation, the guest reporter Kai Lune among them.']
+    ]);
+  });
+
+  it("the parked detective's findings carry the same lines", () => {
+    const result = factCheckContentBundle(baseArgs({
+      theme: 'detective', reportingMode: 'remote', npcPronouns: { Marcus: 'he/him' },
+      contentBundle: storyWith(para('I voted with the room.'), para('Marcus said they would pay.'))
+    }));
+    expect(linesOf(result, 'reporterMode')).toEqual([
+      [{ section: 'the-story', paragraph: 1 }, '"I voted" makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.']
+    ]);
+    expect(linesOf(result, 'npcPronouns')).toEqual([
+      [null, '"Marcus said they would pay" gives Marcus the wrong pronoun: Marcus takes he/him.']
+    ]);
+  });
+
+  it("every finding has a line, and no line is its message or names a pipeline term; each message is the rework's, as before", () => {
+    const result = factCheckContentBundle(baseArgs({
+      reportingMode: 'remote', roster: ['Vic', 'Mel', 'Kai'], sessionPhotos: ['/p/a.jpg'], npcs: [{ name: 'Marcus', pronouns: 'he/him' }, { name: 'Nova' }],
+      contentBundle: {
+        headline: { main: 'The Offer', deck: 'A deck—with a dash.' },
+        heroImage: { filename: 'hero-not-ours.jpg', caption: 'The room at noon.' },
+        sections: [{
+          id: 'the-story', type: 'narrative', content: [
+            para('I was not in the room. Then I voted, and the final tier opened. Marcus said they would pay.'),
+            para("I wasn't there. Nova said she was not sure. There were nine people in the room."),
+            inlineCard({ content: NOT_VERBATIM }), inlineCard({ tokenId: 'paper-1', content: 'The job is yours.' }),
+            { type: 'photo', filename: 'nope.jpg', caption: 'Mel at the ledger.' }, para(words(1800))
+          ]
+        }],
+        evidenceCards: [card({ tokenId: 'nope999', headline: 'A card no document backs' })]
+      }
+    }));
+    expect([...new Set(result.findings.map((f) => f.kind))].sort()).toEqual([
+      'cardFidelity', 'emDash', 'headCount', 'leakedExample', 'length', 'novaPronoun', 'npcPronouns', 'photoReferences',
+      'productionWords', 'repeatedAbsence', 'reporterMode', 'rosterCoverage'
+    ]);
+    for (const finding of result.findings) {
+      expect([finding.kind, typeof finding.line === 'string' && finding.line.length > 0]).toEqual([finding.kind, true]);
+      expect([finding.line, finding.line === finding.message]).toEqual([finding.line, false]);
+      expect([finding.line, /<RECORD>|section "|\b[TC]\d+\b|narrator|Evidence card "|\bvic001\b/.test(finding.line)]).toEqual([finding.line, false]);
+    }
+    // The rework's messages keep their prefixes, so the console's groups and the rework read them as before.
+    expect(result.structuralIssues.map((m) => m.split(/[:(]/)[0].trim())).toEqual([
+      'Evidence card "vic001"', 'Evidence card "nope999"', 'Roster coverage gap', 'Invalid photo reference "hero-not-ours.jpg"',
+      'Invalid photo reference "nope.jpg"', 'Reporter-mode violation'
+    ]);
   });
 });

@@ -2934,6 +2934,36 @@
   var DESK_ECHO_TITLE = 'Settled at the story meeting';
   var DESK_RESOLVED_HINT = 'Each was about a line, a card or a photo you have since changed or taken out.';
 
+  /**
+   * The words in a fact-check finding's line that stand for the document its card cites: a copy
+   * of lib/content-bundle-fact-check.js DOCUMENT_SLOT, which the browser cannot import; a test
+   * holds the two equal.
+   */
+  var DOCUMENT_SLOT = '{document}';
+
+  /** What a line calls a card's document that the stop's evidenceIndex does not name. */
+  var UNNAMED_DOCUMENT = 'the document it cites';
+
+  /**
+   * What a fact-check finding's mark says (brief 4.10b): the finding's line, what is wrong in
+   * the article at its place in the director's words, with the card's document named where the
+   * line holds DOCUMENT_SLOT, as the story meeting names a receipt (receiptView, through the
+   * stop's evidenceIndex). A finding stored before the fact check wrote lines reads as its
+   * message, a concern's past its prefix and ids.
+   *
+   * @param {Object} finding - one of the fact check's findings
+   * @param {Object} evidenceIndex - data.evidenceIndex
+   * @returns {string}
+   */
+  function findingLine(finding, evidenceIndex) {
+    var line = asString(finding.line);
+    if (!line) return typeof finding.editId === 'string' && finding.editId ? concernFindingOf(finding.message) : asString(finding.message);
+    if (line.indexOf(DOCUMENT_SLOT) === -1) return line;
+    var place = isPlainObject(finding.place) ? finding.place : {};
+    var named = receiptView(place.tokenId, evidenceIndex);
+    return line.split(DOCUMENT_SLOT).join(named && named.known && !named.ledger ? named.label : UNNAMED_DOCUMENT);
+  }
+
   /** Text with its runs of whitespace as one space, trimmed: how a finding's excerpt is written. */
   function collapsedText(text) {
     return asString(text).replace(/\s+/g, ' ').trim();
@@ -3223,6 +3253,9 @@
    * - the length, on the heading of each section it counts;
    * - a quote block, by its excerpt;
    * - no place (a player never named, a phrase across two pieces): beside no piece.
+   * A finding found by its excerpt sits beside a block of its own kind, a paragraph's beside a
+   * paragraph and a quote block's beside a quote (brief 4.10b): its line names the piece it is
+   * about, and a card, a caption or a quote can hold the same words.
    */
   function findingPlace(finding, occurrence, ctx) {
     var place = finding.place;
@@ -3241,7 +3274,10 @@
       if (block !== -1 && cs !== -1 && ctx.desk.untouchedThrough(ctx.changes, key, block)) return { at: { kind: 'block', section: cs, block: block } };
     }
     if (!collapsedText(finding.excerpt)) return null;
-    return locate(ctx, function (piece) { return piece.anchor.kind === 'block' && holdsText(piece, finding.excerpt); }, inSection(key));
+    var type = typeof place.paragraph === 'number' ? 'paragraph' : 'quote';
+    return locate(ctx, function (piece) {
+      return piece.anchor.kind === 'block' && isPlainObject(piece.block) && piece.block.type === type && holdsText(piece, finding.excerpt);
+    }, inSection(key));
   }
 
   /**
@@ -3372,14 +3408,17 @@
    *   issues), each by the sentence it quotes (tone `judge`);
    * - the fact check's findings (brief 4.7a), each by its place (findingPlace): its must-fix
    *   flags (`structural`) and its advisories (`advisory`); one under a director's edit's id is a
-   *   concern (`concern`), its finding shown past the prefix and the id;
+   *   concern (`concern`). Each says what is wrong in the article there, in the director's
+   *   words: the finding's line for its place (findingLine; brief 4.10b), never the message the
+   *   rework reads;
    * - the judge's concerns about the director's edits, each beside the line it quotes (`concern`);
    * - the edits a round changed that a stop shows (changedEditsToShow), each beside what the
    *   director's text became (`changed`), with the rework's reason for a send-back's.
    * The judge's score, its notes on the writing and every other advisory of its are not marks.
    *
    * @param {Object} data - the article stop's payload: `contentBundle` (the article as the stop
-   *   opened it), `factCheck`, `lastEvaluation`, `handEditReport`
+   *   opened it), `factCheck`, `lastEvaluation`, `handEditReport`, and `evidenceIndex`, which
+   *   names a card's document
    * @param {Object} current - the bundle on the desk (Article.js getCurrentBundle)
    * @returns {{at: Object<string, Object[]>, apart: Object[], resolved: Object[]}} the marks by
    *   the key of the piece they sit beside (deskAnchorKey), the marks beside no piece, and the
@@ -3416,7 +3455,7 @@
       occurrences[key] = occurrence + 1;
       var concern = typeof finding.editId === 'string' && finding.editId !== '';
       var tone = concern ? 'concern' : (finding.status === 'structural' ? 'structural' : 'advisory');
-      add(tone, concern ? concernFindingOf(finding.message) : finding.message, findingPlace(finding, occurrence, ctx));
+      add(tone, findingLine(finding, d.evidenceIndex), findingPlace(finding, occurrence, ctx));
     });
 
     if (evaluation) {
@@ -3647,6 +3686,9 @@
     // Phase 4, task 4.10: the desk's marks, and one rule for the changed lines a stop shows
     REWEAVE_PASS: REWEAVE_PASS,
     changedEditsToShow: changedEditsToShow,
+    // Brief 4.10b: where a finding's line names a card's document (a copy of
+    // lib/content-bundle-fact-check.js DOCUMENT_SLOT, held equal by a test)
+    DOCUMENT_SLOT: DOCUMENT_SLOT,
     deskAnchorKey: deskAnchorKey,
     deskMarks: deskMarks,
     deskMarksAt: deskMarksAt,
