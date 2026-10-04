@@ -396,3 +396,44 @@ describe('the arc rework renders as it is sent (brief 4.5)', () => {
     expect([sent.prompt, sent.systemPrompt, sent.jsonSchema, sent.label]).toEqual([call.prompt, call.systemPrompt, call.jsonSchema, call.label]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5b: the meeting's plumbing, follow-ups
+// ═══════════════════════════════════════════════════════════════════════════
+
+// R12: an answer on a question and a strike on a connection are the director's keys,
+// written only at the meeting. WEAVE_SCHEMA leaves extra keys open, so a model could write
+// them: a model-written answer would show as answered and print in the settled weave as the
+// director's words, and a model-written strike would take a connection out of the story
+// with no one the wiser.
+describe("4.5b: the director's keys stay the director's (R12)", () => {
+  const MODEL_ANSWER = 'An answer the model wrote.';
+  const NEW_QUESTION = { id: 'q9', kind: 'pronoun', about: 'Riley', question: 'Which pronoun for Riley?', changes: "Riley's pronoun in print." };
+
+  it("the writer's path: the weave it stores carries no answer and no strike the writer wrote", async () => {
+    const written = clone(FIXTURE_WEAVE);
+    written.questions = written.questions.map((q) => ({ ...q, answer: MODEL_ANSWER }));
+    written.connections = written.connections.map((c) => ({ ...c, struck: true }));
+    const update = await analyzeArcsPlayerFocusGuided({ ...atMeeting(), weave: null }, cfg(recordingSdk(written)));
+    expect(update.weave.questions).toEqual(FIXTURE_WEAVE.questions);
+    expect(update.weave.connections).toEqual(FIXTURE_WEAVE.connections);
+    expect(update._weaveBaseline).toEqual(update.weave);
+  });
+
+  it.each([
+    ['an automatic pass', async () => atMeeting({ arcRevisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" has no receipt.'] } })],
+    ['a reweave', async () => roundState('reweave')]
+  ])("the rework's path, %s: no answer and no strike the rework wrote; the director's stay", async (_name, stateOf) => {
+    const state = await stateOf();
+    const before = weaveForPrompt(state.weave);
+    const rework = weaveForPrompt(clone(state.weave));
+    rework.connections = rework.connections.filter((c) => !c.struck).map((c) => ({ ...c, struck: true }));
+    rework.questions = [...rework.questions.map((q) => ({ ...q, answer: MODEL_ANSWER })), { ...NEW_QUESTION, answer: MODEL_ANSWER }];
+    const update = await reviseArcs(state, cfg(recordingSdk(rework)));
+    // The connections the rework struck are live; the director's strike, if any, stands.
+    expect(update.weave.connections).toEqual(before.connections);
+    // The director's answers stand; the rework's new question is asked, with no answer.
+    expect(update.weave.questions).toEqual([...before.questions, NEW_QUESTION]);
+    expect(JSON.stringify(update.weave)).not.toContain(MODEL_ANSWER);
+  });
+});

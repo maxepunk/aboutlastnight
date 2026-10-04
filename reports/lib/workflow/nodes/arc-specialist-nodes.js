@@ -53,9 +53,9 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // builder the arc writer and the outline writer print it with.
 const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes, rosterWithPronounsSection } = require('../../prompt-builder');
 const { loadRuleSet } = require('../../rule-set');
-const { WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions } = require('../../writer-questions');
+const { WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions, withoutAnswers } = require('../../writer-questions');
 const {
-  WEAVE_ROLES, CONNECTION_KINDS, LEDGER_RECEIPT, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS,
+  WEAVE_ROLES, CONNECTION_KINDS, LEDGER_RECEIPT, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS, STRUCK_KEY,
   isWeave, weaveForPrompt, weaveKey, weaveWordCount, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
   weaveFindings, withStruckConnections
 } = require('../../weave');
@@ -385,9 +385,23 @@ function buildWeavePrompt(state) {
 // THE ARC WRITER
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** Connections with no strike on any: the strike is the director's key alone (R12). */
+function withoutStrikes(connections) {
+  return connections.map((connection) => {
+    if (!connection || typeof connection !== 'object' || !(STRUCK_KEY in connection)) return connection;
+    const { [STRUCK_KEY]: _struck, ...live } = connection;
+    return live;
+  });
+}
+
 /**
  * The weave a writer or a rework returned, as the state stores it: its fields as the
- * model wrote them, with only the well-formed questions kept.
+ * model wrote them, with only the well-formed questions kept, and without the director's
+ * keys (R12; brief 4.5b). An `answer` on a question and `struck` on a connection are
+ * written only by the director at the meeting: WEAVE_SCHEMA leaves extra keys open, and a
+ * model-written answer would show at the meeting as answered and print in the settled
+ * weave as the director's words, and a model-written strike would take a connection out
+ * of the story silently.
  *
  * @param {Object} result - the model's output
  * @param {string} who - the call, for the error
@@ -398,7 +412,12 @@ function weaveFromOutput(result, who) {
   if (!isWeave(result) || result.threads.length === 0) {
     throw new Error(`The ${who} returned no threads: its output is not a weave.`);
   }
-  return { ...weaveForPrompt(result), questions: weaveQuestionsOf(result.questions) };
+  const weave = weaveForPrompt(result);
+  return {
+    ...weave,
+    ...(Array.isArray(weave.connections) && { connections: withoutStrikes(weave.connections) }),
+    questions: withoutAnswers(weaveQuestionsOf(result.questions))
+  };
 }
 
 /**
@@ -569,12 +588,15 @@ ${ARC_REWORK_TASK}${buildArcStandingNotes(state)}`;
 }
 
 /**
- * The weave a rework returned, as the state stores it:
+ * The weave a rework returned, as the state stores it (weaveFromOutput: no answer and no
+ * strike the rework wrote):
  * - the questions (carriedWeaveQuestions, brief 4.5): every answered question whole, with
  *   the director's answer, and every question the rework did not answer, whatever kind of
  *   rework; an answer the rework wrote is no answer;
  * - the connections the director struck, which the rework never saw (they are out of its
- *   view), back where they sat, still struck (withStruckConnections);
+ *   view), back where they sat, still struck (withStruckConnections). One the rework
+ *   returned under a struck connection's id comes back live, and code strikes it again
+ *   (settleEdits), except on a send-back, which may change an edit;
  * - the fact check's mark: the fix (an automatic pass on a weave the fact check judged)
  *   keeps it, counting the fix; a check rework starts from a weave not yet judged, so
  *   there is none to keep; a director's round writes the weave without it, so the
