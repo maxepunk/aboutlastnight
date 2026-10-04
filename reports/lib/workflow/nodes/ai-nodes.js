@@ -28,7 +28,9 @@ const {
   buildDirectorGuidanceSection,
   filterGateNotes
 } = require('../../prompt-builder');
-const { carriedEdits, settleEdits, SEND_BACK_PASS, CHANGED_EDITS_KEY } = require('../../hand-edit-diff');
+const {
+  carriedEdits, settleEdits, standingAfterSendBack, SEND_BACK_PASS, CHANGED_EDITS_KEY, MAP_TOP_PHOTO, isCut
+} = require('../../hand-edit-diff');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map's schema for the theme (its slots), and the hero its top
 // photo names; the settled weave, which the map writer reads first, as its task.
@@ -1499,10 +1501,68 @@ async function generateContentBundle(state, config) {
     contentBundle.metadata.storyDate = themeConfig.display.storyDate;
   }
 
+  // R7 (brief 4.7b): the map's headline, deck and top photo, stamped into the first draft,
+  // and the director's lines among them recorded as the director's at the article stop.
+  const stamped = stampFromMap(contentBundle, state);
+
   return {
-    contentBundle,
+    contentBundle: stamped.contentBundle,
+    _articleHandEdits: stamped.edits,
     currentPhase: PHASES.GENERATE_CONTENT
   };
+}
+
+/**
+ * The stamp (R7; brief 4.7b): the map's headline, deck and top photo, stamped into the
+ * article writer's first draft, where the writer was told to print them as the map gives
+ * them. The writer's kicker stays, and its hero caption when it captioned the map's top
+ * photo; a caption written for another photo goes with that photo. A map with no top photo,
+ * or one the director has left out since, prints no hero (articleMapOf).
+ *
+ * Where the director wrote one of them or chose the top photo on the map (a standing edit
+ * the map carries, `_outlineHandEdits`), the stamp records it as the director's line at the
+ * article stop: the article stop's standing edits, as a send-back records them
+ * (standingAfterSendBack), each a field with no writer's text before it. So the fixes'
+ * machinery reads it as the director's: an automatic pass that changes it gets it put back
+ * (settleEdits), and a judge's finding located in it is a concern (guardDirectorEdits). The
+ * director edits them at the desk. A line the map writer wrote is stamped and stays the
+ * writer's.
+ *
+ * @param {Object} bundle - the writer's first draft
+ * @param {Object} state - reads the map, the director's edits on it and the leave-out list
+ * @returns {{contentBundle: Object, edits: Object|null}} the stamped draft, and the article
+ *   stop's standing edits (null when the director wrote none of the three)
+ */
+function stampFromMap(bundle, state) {
+  const map = articleMapOf(state);
+  if (!map) return { contentBundle: bundle, edits: null };
+  const stamped = { ...bundle, headline: { ...(bundle.headline || {}) } };
+  if (typeof map.headline === 'string') stamped.headline.main = map.headline;
+  if (typeof map.deck === 'string') stamped.headline.deck = map.deck;
+  const topPhoto = topPhotoOf(map);
+  if (topPhoto) {
+    const writers = bundle.heroImage && typeof bundle.heroImage === 'object' ? bundle.heroImage : null;
+    const sameKey = writers && photoKey(writers.filename) === photoKey(topPhoto);
+    stamped.heroImage = { ...(sameKey ? writers : {}), filename: topPhoto };
+  } else {
+    delete stamped.heroImage;
+  }
+
+  // The director's lines on the map: the map's standing edits at its headline, its deck
+  // and its top photo that the map as left carries.
+  const theirs = new Set(carriedEdits(state._outlineHandEdits, state.outline)
+    .filter((edit) => !isCut(edit) && Array.isArray(edit.at) && edit.at.length === 1)
+    .map((edit) => edit.at[0].key));
+  // The draft with the director's lines taken out: the stamp's diff against it records
+  // each of them as the director's, with no writer's text before it.
+  const without = { ...stamped, headline: { ...stamped.headline } };
+  if (theirs.has('headline')) delete without.headline.main;
+  if (theirs.has('deck')) delete without.headline.deck;
+  if (theirs.has(MAP_TOP_PHOTO) && stamped.heroImage) {
+    const { filename: _chosen, ...rest } = stamped.heroImage;
+    without.heroImage = rest;
+  }
+  return { contentBundle: stamped, edits: standingAfterSendBack(null, without, stamped, 'bundle') };
 }
 
 /**
