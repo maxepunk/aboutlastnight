@@ -1239,4 +1239,18 @@ describe('4.14f: the desk says once what came of a deleted Key Evidence entry or
     expect(changedAt(payloadFor(two.output, { handEditReport: two.report }))).toEqual([[at(3, 1),
       `The Story: Eight Minutes, paragraph: a sentence you removed came back as "${EXTRA}" (automatic pass 1). It is still in the article: cut it again if it should go.`]]);
   });
+
+  // Fix round 1 (the review's finding 1): the entry's words outside every entry of its tokenId are
+  // nothing code can match to the entry, so the delete stands and the desk flags them beside where
+  // they are, as it flags any cut text that came back.
+  test('its words written into a paragraph after an automatic pass: the delete stands, and the paragraph is marked as cut text that came back', () => {
+    const after = clone(deleted());
+    after.sections[3].content.push(paragraph('Vic, in his own memory.'));
+    const { output, report } = settleEdits(null, { edits: edits(), before: deleted(), after, pass: 1 });
+    expect(output).toBe(after);
+    expect(carriedEdits(standingAfterSendBack(null, article(), deleted(), 'bundle'), output).map((e) => e.id)).toEqual(['E1']);
+    expect(changedAt(payloadFor(output, { handEditReport: report }))).toEqual([[at(3, 1),
+      'Sidebar card vic001, cut: the text you cut came back as "Vic, in his own memory." (automatic pass 1). It is still in the article: cut it again if it should go.']]);
+    expect(ViewLogic.steeringView(report, []).kept).toBe('');
+  });
 });

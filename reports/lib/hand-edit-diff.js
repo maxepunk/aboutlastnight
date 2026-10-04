@@ -49,7 +49,9 @@
  *   deleted is a cut, and one they moved is a move whose `from` is the sidebar and whose
  *   `between` names the entries it follows and precedes by their tokenIds, by the same
  *   naming rule (diffSidebar); a field they changed on it is an edit of its own. An entry has
- *   an id, its tokenId, so the delete is read by it (deletedEntryOf; task 4.14f).
+ *   an id, its tokenId, so the delete is read by it (deletedEntryOf; task 4.14f), and its
+ *   words printed outside every entry of that tokenId are flagged as cut text that came back
+ *   (entryWordsBackIn; fix round 1).
  * - Given the roster's names, a cut or a removal records `names` (FA, requirement 9):
  *   the names its text held that the director's version no longer named.
  * Ids (E1, E2, ...) are stable within a stop. The edits stand across every send-back
@@ -1024,9 +1026,11 @@ function cutPieces(edit) {
  * whole sidebar entry that its tokenId names, else null. An entry has an id (NAMED_COLLECTIONS),
  * so the plan's rule for an element with one applies (R11): it is back whenever the sidebar holds
  * an entry of its tokenId again, in any words (sidebarEntryBack), and its words printed anywhere
- * else are not the entry. Code takes it out again after an automatic pass (takeOutDeletedEntry),
- * and a send-back's rework that put it back keeps it, with the rework's reason. An entry with no
- * tokenId keeps the rule for cut text, by its pieces, and so does an inline card (a known item).
+ * else are not the entry, which code cannot match to it and flags as cut text that came back
+ * (entryWordsBackIn; fix round 1). Code takes it out again after an automatic pass
+ * (takeOutDeletedEntry), and a send-back's rework that put it back keeps it, with the rework's
+ * reason. An entry with no tokenId keeps the rule for cut text, by its pieces, and so does an
+ * inline card (a known item).
  *
  * @param {Object} edit
  * @returns {{tokenId: string}|null}
@@ -1047,6 +1051,30 @@ function sidebarEntryBack(obj, identity) {
   const entries = isObj(obj) && Array.isArray(obj[SIDEBAR]) ? obj[SIDEBAR] : [];
   const found = entries.find((card) => isObj(card) && matchesAfter(card, identity));
   return found ? editValueText(pick(found, PRINTED_FIELDS.sidebarCard)) : null;
+}
+
+/**
+ * Of a Key Evidence entry the director deleted, the pieces `obj` prints outside every entry of
+ * its tokenId, and where the first of them is, or null (task 4.14f, fix round 1). Such words are
+ * no entry of its tokenId, so code takes nothing out and the delete stands; the report flags them
+ * as cut text that came back (R11: code acts on what came back under the entry's id, and flags
+ * only what it cannot match). Each piece is read as a cut's is (partHolding).
+ *
+ * @param {*} obj - the version
+ * @param {{tokenId: string}} identity - what finds the entry (deletedEntryOf)
+ * @param {string[]} pieces - the pieces to look for
+ * @returns {{pieces: string[], became: string}|null} the pieces held, and the text of the part
+ *   holding the first
+ */
+function entryWordsBackIn(obj, identity, pieces) {
+  const wanted = pieces.filter((piece) => typeof piece === 'string' && fold(piece));
+  if (wanted.length === 0 || !isObj(obj)) return null;
+  const outside = Array.isArray(obj[SIDEBAR])
+    ? { ...obj, [SIDEBAR]: obj[SIDEBAR].filter((card) => !(isObj(card) && matchesAfter(card, identity))) }
+    : obj;
+  const text = versionText(outside);
+  const back = wanted.filter((piece) => partHolding(text, piece));
+  return back.length > 0 ? { pieces: back, became: partHolding(text, back[0]).text.trim() } : null;
 }
 
 /**
@@ -1254,8 +1282,20 @@ function completeEdit(edit, sentBackText, names) {
   return out;
 }
 
-/** An earlier edit as it stands now: its removed sentences that came back drop from it. */
+/**
+ * An earlier edit as it stands now: its removed sentences that came back drop from it, and so do
+ * the pieces of a Key Evidence entry the director deleted that one of `versions` prints outside
+ * every entry of its tokenId (entryWordsBackIn; task 4.14f, fix round 1). At a send-back those
+ * words are the director's to keep, write or cut in an edit of their own, and the delete flags
+ * only the rest. Its list of pieces may end empty, and is then still its list (cutPieces).
+ */
 function stillRemoved(edit, versions) {
+  const deletedEntry = deletedEntryOf(edit);
+  if (deletedEntry) {
+    const pieces = cutPieces(edit);
+    const held = new Set(versions.flatMap((version) => (entryWordsBackIn(version, deletedEntry, pieces) || { pieces: [] }).pieces));
+    return held.size === 0 ? edit : { ...edit, pieces: pieces.filter((piece) => !held.has(piece)) };
+  }
   if (!Array.isArray(edit.removed)) return edit;
   const texts = versions.map(versionText);
   const removed = edit.removed.filter((sentence) => !texts.some((text) => removedHeld(text, sentence)));
@@ -1332,7 +1372,8 @@ function standingEditsOf(value) {
  * The edits that stand after a send-back: each earlier edit that both the version the
  * stop showed and the version the director sent back carry, a move within its section
  * re-anchored to the version sent back (standingAcross; its removed sentences that came
- * back dropped from it), then the send-back's own edits, numbered on from every id
+ * back dropped from it, and a deleted Key Evidence entry's pieces either version prints
+ * outside it, stillRemoved), then the send-back's own edits, numbered on from every id
  * issued at the stop. Null when no edit stands and none was ever issued; with earlier
  * ids and none standing, the count is kept, so no id is given twice at a stop.
  *
@@ -3689,10 +3730,11 @@ function returnedPieces(stored, pieces) {
 }
 
 /**
- * The removed sentences of an edit that an entry of the round's report already lists as come
- * back (task 4.14f): the `pieces` of its "removed" entries, which cameBackStillIn has read
- * against the version stored, so a sentence that stays back through a later pass keeps the one
- * entry of the pass that brought it back.
+ * The sentences of an edit that an entry of the round's report already lists as come back (task
+ * 4.14f): the `pieces` of its "came back" entries, a rewrite's removed sentences or a deleted Key
+ * Evidence entry's words outside it (fix round 1), which cameBackStillIn has read against the
+ * version stored, so a sentence that stays back through a later pass keeps the one entry of the
+ * pass that brought it back.
  *
  * @param {{changed: Object[]}} report - the round's report so far, read against the version stored
  * @param {string} id - the edit's id
@@ -3700,7 +3742,7 @@ function returnedPieces(stored, pieces) {
  */
 function listedSentences(report, id) {
   return new Set(report.changed
-    .filter((entry) => entry.id === id && entry.removed === true && Array.isArray(entry.pieces))
+    .filter((entry) => entry.id === id && (entry.removed === true || entry.cut === true) && Array.isArray(entry.pieces))
     .flatMap((entry) => entry.pieces));
 }
 
@@ -3714,6 +3756,9 @@ function listedSentences(report, id) {
  * A Key Evidence entry the director deleted that a send-back's rework put back is read by the
  * tokenId it carries, as its edit is (deletedEntryOf): it stays while `stored`'s sidebar holds an
  * entry of that tokenId, and one code took out again (`restored`) stays as it is (task 4.14f).
+ * The words of a deleted entry that came back outside it are read outside every entry of its
+ * tokenId (`outsideEntry`; entryWordsBackIn), and each stays only while `stored` holds it there,
+ * as a removed sentence does (fix round 1).
  * The report itself when no entry changed, and any other version's report as it is.
  *
  * @param {*} report - the round's report so far
@@ -3736,6 +3781,9 @@ function cameBackStillIn(report, stored) {
     if (entryBack) {
       const became = sidebarEntryBack(stored, { tokenId: entry.tokenId });
       if (became !== null) now = { ...entry, became };
+    } else if (entry.cut === true && typeof entry.outsideEntry === 'string') {
+      const back = entryWordsBackIn(stored, { tokenId: entry.outsideEntry }, pieces);
+      if (back) now = { ...entry, ...back };
     } else if (entry.cut === true) {
       if (text === null) text = versionText(stored);
       const became = pieceBackIn(text, pieces);
@@ -3778,6 +3826,11 @@ function cameBackStillIn(report, stored) {
  *   the `tokenId` it is read by, and whether code took it out again (`restored`), which only an
  *   automatic pass has it do; after a send-back it stays while the sidebar holds an entry of that
  *   tokenId (cameBackStillIn);
+ * - that entry's words the version stored prints outside every entry of its tokenId, which code
+ *   cannot match to it (entryWordsBackIn; fix round 1): `cut`, flagged as cut text that came back,
+ *   with the `pieces` that came back and `outsideEntry`, the tokenId whose entries they are read
+ *   outside; each sentence is in one entry of the round, as a removed sentence is
+ *   (listedSentences), and the delete stands all the while;
  * - beside `restored`, `maybeCopies` on a block the director wrote that code put back where it
  *   sat, finding no version of it in the pass's output that it could tell was the pass's
  *   (passVersionOf): the texts of the blocks the pass wrote that may be its version of the
@@ -3828,6 +3881,11 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       if (deletedEntry) {
         const back = cutReturnedIn(after, e);
         if (back !== null) changed.push(entry(e, { cut: true, director: editValueText(e.before), became: back, restored: putBack.has(e.id), tokenId: deletedEntry.tokenId }));
+        // Fix round 1: its words outside every entry of its tokenId, in the version stored, which
+        // code cannot match to the entry, flagged as cut text that came back.
+        const listed = listedSentences(prior, e.id);
+        const words = entryWordsBackIn(stored, deletedEntry, cutPieces(e).filter((piece) => !listed.has(piece)));
+        if (words) changed.push(entry(e, { cut: true, director: editValueText(e.before), ...words, outsideEntry: deletedEntry.tokenId }));
         return;
       }
       const back = cutReturnedIn(stored, e);
@@ -3870,7 +3928,8 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * or removed sentence that came back stays, flagged in the report. A Key Evidence entry the
  * director deleted that the pass put back under its tokenId, in any words, goes again
  * (takeOutDeletedEntry; task 4.14f), before every other restore, so the moves read the sidebar
- * as the director left it; the report records each such restore. A block the director
+ * as the director left it; the report records each such restore, and its words outside every
+ * entry of its tokenId stay, flagged as cut text (fix round 1). A block the director
  * moved goes back into the director's section as the pass left it, and a block moved
  * within its section back into the director's order there (task 4.3), before the field
  * edits that find it there; one the pass removed stays out, since only its place was the

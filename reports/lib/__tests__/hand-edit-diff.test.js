@@ -4039,7 +4039,8 @@ describe('4.14f: a deleted Key Evidence entry stays deleted', () => {
       expect(carriedIds(desk)).toContain(id);
       expect(carriedIds(bundleOf(inlineKept, JES, MOR))).not.toContain(id);
       expect(carriedIds(bundleOf(inlineKept, REWORDED, JES))).not.toContain(id);
-      // Its words printed anywhere but under its tokenId in the sidebar are not the entry.
+      // Its words printed anywhere but under its tokenId in the sidebar are not the entry, so the
+      // delete stands; the report flags them as cut text (fix round 1, below).
       const echoed = bundleOf(inlineKept, JES);
       echoed.sections[0].content.push(paragraph(MOR.summary));
       expect(carriedIds(echoed)).toContain(id);
@@ -4133,6 +4134,118 @@ describe('4.14f: a deleted Key Evidence entry stays deleted', () => {
       expect(one.report.changed).toEqual([expect.objectContaining({
         id: 'E1', removed: true, pass: D.SEND_BACK_PASS, automatic: false, reason: 'The note asks who held the account.', pieces: [SECOND]
       })]);
+    });
+  });
+
+  // Fix round 1 (the review's finding 1): code acts on what came back under the entry's id and
+  // flags only what it cannot match (R11; plan: "Prose that comes back at the desk is still
+  // flagged"). The entry's words printed outside every entry of its tokenId (its summary in a
+  // paragraph, the entry put back in its old words under another tokenId or none) are no entry of
+  // its tokenId, so code takes nothing out and the delete stands; the report flags them as cut text
+  // that came back, an entry carrying the pieces it reports and `outsideEntry`, the tokenId whose
+  // entries it is not read in. The flag reads only the pieces the delete took out of the article
+  // (with the inline card kept, its headline still prints there, so the summary alone).
+  describe.each([
+    ['the inline card kept', true, 'E1'],
+    ['the inline card deleted too', false, 'E2']
+  ])('its words outside every entry of its tokenId, %s', (_, inlineKept, id) => {
+    const SUMMARY = 'Morgan pays Riley out of sight of the room';
+    const HEADLINE = 'The envelope at the bar';
+    const shown = bundleOf(true, JES, MOR);
+    const desk = bundleOf(inlineKept, JES);
+    const standing = D.standingAfterSendBack(null, shown, desk, 'bundle');
+    const settle = (previous, before, after, pass, reasons = []) =>
+      D.settleEdits(previous, { edits: D.carriedEdits(standing, before), before, after, pass, reasons });
+    /** `bundle` with paragraphs added to THE STORY. */
+    const plus = (bundle, ...texts) => {
+      const out = clone(bundle);
+      texts.forEach((text) => out.sections[0].content.push(paragraph(text)));
+      return out;
+    };
+    const ofEntry = (report) => report.changed.filter((c) => c.id === id);
+    /** The flag: the entry's words that came back outside it, as cut text that came back. */
+    const flagged = (became, pieces, fields = {}) => ({
+      id, scope: 'evidenceCards', where: 'sidebar card mor001, cut', cut: true, removed: false, moved: false,
+      director: asText(MOR), became, pass: 1, automatic: true, reason: null, restored: false, pieces, outsideEntry: 'mor001', ...fields
+    });
+    const { tokenId: _gone, ...UNNAMED } = MOR;
+
+    test.each([
+      ['its summary written into a paragraph', () => plus(desk, MOR.summary), MOR.summary, [SUMMARY]],
+      ['the entry put back in its old words under another tokenId', () => bundleOf(inlineKept, JES, { ...MOR, tokenId: 'mor-001' }),
+        inlineKept ? MOR.summary : HEADLINE, inlineKept ? [SUMMARY] : [HEADLINE, SUMMARY]],
+      ['the entry put back in its old words with no tokenId', () => bundleOf(inlineKept, JES, UNNAMED),
+        inlineKept ? MOR.summary : HEADLINE, inlineKept ? [SUMMARY] : [HEADLINE, SUMMARY]]
+    ])('%s, after an automatic pass: code takes nothing out, the delete stands, and the text is flagged', (__, afterOf, became, pieces) => {
+      const after = afterOf();
+      const { output, report } = settle(null, desk, after, 1);
+      expect(output).toBe(after);
+      expect(ofEntry(report)).toEqual([flagged(became, pieces)]);
+      expect(D.carriedEdits(standing, output).map((e) => e.id)).toContain(id);
+    });
+
+    test('a pass that puts the entry back under its tokenId and writes its summary into a paragraph: the entry is out again, and the paragraph is flagged', () => {
+      const { output, report } = settle(null, desk, plus(bundleOf(inlineKept, JES, REWORDED), MOR.summary), 1);
+      expect(sidebarOf(output)).toEqual(['jes002']);
+      expect(output.sections[0].content.map((b) => b.text || b.tokenId)).toContain(MOR.summary);
+      expect(ofEntry(report)).toEqual([
+        expect.objectContaining({ id, cut: true, became: asText(REWORDED), restored: true, tokenId: 'mor001' }),
+        flagged(MOR.summary, [SUMMARY])
+      ]);
+    });
+
+    test('the flag is one line through a later pass that keeps the text, from the pass that brought it back, and goes once a pass takes the text out', () => {
+      const back = plus(desk, MOR.summary);
+      const one = settle(null, desk, back, 1);
+      const two = settle(one.report, one.output, clone(back), 2);
+      expect(ofEntry(two.report)).toEqual([flagged(MOR.summary, [SUMMARY])]);
+      const three = settle(two.report, two.output, clone(desk), 3);
+      expect(ofEntry(three.report)).toEqual([]);
+    });
+
+    test('its headline, back only in pass 2, is a line of its own where the delete took it out of the article, each line saying where its words are now', () => {
+      const one = settle(null, desk, plus(desk, MOR.summary), 1);
+      const two = settle(one.report, one.output, plus(desk, MOR.summary, `${HEADLINE}.`), 2);
+      expect(ofEntry(two.report).map((c) => [c.pass, c.pieces, c.became])).toEqual(inlineKept
+        ? [[1, [SUMMARY], MOR.summary]]
+        : [[1, [SUMMARY], MOR.summary], [2, [HEADLINE], `${HEADLINE}.`]]);
+    });
+
+    test("a send-back's rework that writes its summary into a paragraph: flagged, with the rework's reason", () => {
+      const after = plus(desk, MOR.summary);
+      const { output, report } = settle(null, desk, after, D.SEND_BACK_PASS, [{ id, reason: REASON }]);
+      expect(output).toBe(after);
+      expect(ofEntry(report)).toEqual([flagged(MOR.summary, [SUMMARY], { pass: D.SEND_BACK_PASS, automatic: false, reason: REASON })]);
+    });
+
+    test("one that puts the entry back under its tokenId in its old words has the entry's line alone: its words there are the entry", () => {
+      const { report } = settle(null, desk, bundleOf(inlineKept, JES, MOR), D.SEND_BACK_PASS, [{ id, reason: REASON }]);
+      expect(ofEntry(report)).toEqual([expect.objectContaining({ id, became: asText(MOR), tokenId: 'mor001', reason: REASON })]);
+    });
+
+    test("a later pass that moves the words into the entry the send-back's rework put back leaves the entry's line alone", () => {
+      const sent = settle(null, desk, plus(bundleOf(inlineKept, JES, REWORDED), MOR.summary), D.SEND_BACK_PASS, [{ id, reason: REASON }]);
+      expect(ofEntry(sent.report).map((c) => c.tokenId || c.outsideEntry)).toEqual(['mor001', 'mor001']);
+      const one = settle(sent.report, sent.output, bundleOf(inlineKept, JES, MOR), 1);
+      expect(ofEntry(one.report)).toEqual([expect.objectContaining({ id, pass: D.SEND_BACK_PASS, became: asText(MOR), tokenId: 'mor001', reason: REASON })]);
+    });
+
+    test('words the director kept at their next send-back are no longer the delete\'s: it stands without them, and a rework that keeps them flags nothing', () => {
+      const one = settle(null, desk, plus(desk, MOR.summary), 1);
+      // The director keeps the paragraph and sends the article back with a note and no edit.
+      const next = D.standingAfterSendBack(standing, one.output, one.output, 'bundle');
+      const kept = next.edits.find((e) => e.id === id);
+      expect(kept.pieces).toEqual(inlineKept ? [] : [HEADLINE]);
+      const sent = D.settleEdits(null, {
+        edits: D.carriedEdits(next, one.output), before: one.output, after: clone(one.output), pass: D.SEND_BACK_PASS
+      });
+      expect(ofEntry(sent.report)).toEqual([]);
+      // The delete still holds by its id.
+      const again = D.settleEdits(sent.report, {
+        edits: D.carriedEdits(next, sent.output), before: sent.output, after: plus(bundleOf(inlineKept, JES, REWORDED), MOR.summary), pass: 1
+      });
+      expect(sidebarOf(again.output)).toEqual(['jes002']);
+      expect(ofEntry(again.report)).toEqual([expect.objectContaining({ id, tokenId: 'mor001', restored: true })]);
     });
   });
 });
