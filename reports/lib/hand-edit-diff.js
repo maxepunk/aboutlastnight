@@ -2405,10 +2405,42 @@ function moveSectionIndex(obj, edit) {
   return sections.findIndex((s, i) => (sec.match ? matchesAfter(s, sec.match) : i === sec.index));
 }
 
-/** The index of the first section of `obj` whose content holds a block of `identity`, or -1. */
-function sectionHoldingIdentity(obj, identity) {
-  const sections = isObj(obj) && Array.isArray(obj.sections) ? obj.sections : [];
-  return sections.findIndex((s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, identity)));
+/**
+ * The copies of a block a pass left outside the section at `keptIndex` (task 4.3c, fix
+ * round 1): in each other section of `out`, in the order of the sections, the blocks of
+ * `identity` beyond as many as `before`, the version the pass started from, held in that
+ * section. A block that version held there unchanged is never one of them, so a copy the
+ * director kept, such as a card cited in two sections, stays. The one rule for which copy
+ * is the pass's: the section the report says a pass took a moved block to (moveOutcome),
+ * the copy a move's restore takes back (restoreMove) and the copies a restore takes out
+ * (takeOutPassCopies).
+ *
+ * @param {Object} out - the pass's version, as code has changed it so far
+ * @param {Object|null} before - the version the pass started from
+ * @param {Object|null} identity - what finds the block (blockIdentity, moveIdentity)
+ * @param {number} keptIndex - the index in `out` of the section the block belongs in, or -1
+ * @returns {Array<{section: number, block: Object}>}
+ */
+function passCopies(out, before, identity, keptIndex) {
+  if (!isObj(identity)) return [];
+  const isCopy = (b) => matchesAfter(b, identity);
+  const was = isObj(before) && Array.isArray(before.sections) ? before.sections : [];
+  const found = [];
+  (isObj(out) && Array.isArray(out.sections) ? out.sections : []).forEach((section, i) => {
+    if (i === keptIndex || !isObj(section) || !Array.isArray(section.content)) return;
+    const key = sectionKey(section, i);
+    const then = was.find((s, j) => sectionKey(s, j) === key);
+    const held = (isObj(then) && Array.isArray(then.content) ? then.content : []).filter(isCopy);
+    const copies = section.content.filter(isCopy);
+    const unmatched = [...held];
+    copies.filter((b) => {
+      const k = unmatched.findIndex((h) => same(h, b));
+      if (k === -1) return true;
+      unmatched.splice(k, 1);
+      return false;
+    }).slice(0, Math.max(0, copies.length - held.length)).forEach((block) => found.push({ section: i, block }));
+  });
+  return found;
 }
 
 /**
@@ -2436,8 +2468,11 @@ function rewrittenInPlace(link, afterContent) {
  *   in the director's order there;
  * - `reordered`: a block the director moved within its section is in that section out
  *   of the director's order (task 4.3);
- * - `moved`, with `section`: a block of its identity is in another section;
+ * - `moved`, with `section`: the pass's copy of it (passCopies) is in another section;
+ *   a copy the director kept there is not (task 4.3c, fix round 1);
  * - `gone`: the pass removed it.
+ * Where the director's section holds the block and another section the pass's copy, the
+ * section that comes first decides.
  *
  * @returns {{outcome: 'kept'|'reordered'|'moved'|'gone', section?: string}}
  */
@@ -2446,10 +2481,13 @@ function moveOutcome(edit, before, after) {
   if (address) return mapMoveOutcome(edit, address, after);
   if (editCarried(after, edit)) return { outcome: 'kept' };
   const sections = isObj(after) && Array.isArray(after.sections) ? after.sections : [];
-  const elsewhere = sectionHoldingIdentity(after, moveIdentity(edit));
-  if (elsewhere !== -1 && elsewhere === moveSectionIndex(after, edit)) return { outcome: 'reordered' };
-  if (elsewhere !== -1) return { outcome: 'moved', section: sectionKey(sections[elsewhere], elsewhere) };
   const target = moveSectionIndex(after, edit);
+  const identity = moveIdentity(edit);
+  const holds = target !== -1 && isObj(sections[target]) && Array.isArray(sections[target].content)
+    && indexOfIdentity(sections[target].content, identity) !== -1;
+  const [copy] = passCopies(after, before, identity, target);
+  if (holds && !(copy && copy.section < target)) return { outcome: 'reordered' };
+  if (copy) return { outcome: 'moved', section: sectionKey(sections[copy.section], copy.section) };
   const place = movedBlockPlaces(before, edit)[0];
   if (target !== -1 && place && Array.isArray(sections[target].content)
     && rewrittenInPlace(place.chain[place.chain.length - 1], sections[target].content)) return { outcome: 'kept' };
@@ -2511,69 +2549,60 @@ function placeInDirectorsOrder(edit, section) {
 /**
  * Put a block the director moved, which a pass took to another section, back in the
  * director's section, at the place the director gave it, as the pass left it: its fields
- * are the writer's (fix round 1, findings 1 and 2). The block is the one of its identity
- * outside the director's section. When the director's section already holds one (a field
- * edit's restore put the block back, or the pass left it there), the copy outside is
- * taken out whatever the order, so the page prints the block once. A block the director
- * moved within its section goes into that section, and back into the director's order
- * there (placeInDirectorsOrder), only where that order can hold (directorsOrderCanHold):
- * where the pass swapped the blocks it sat between, the block stays where it is (task
- * 4.3b). With no such section, or nothing to move, nothing is written.
+ * are the writer's (fix round 1, findings 1 and 2). The block is the pass's copy
+ * (passCopies), and each other copy the pass left goes; a copy the director kept in
+ * another section stays (task 4.3c, fix round 1). When the director's section already
+ * holds the block (a field edit's restore put it back, or the pass left it there), the
+ * pass's copies are taken out whatever the order, so the page prints the block once. A
+ * block the director moved within its section goes into that section, and back into the
+ * director's order there (placeInDirectorsOrder), only where that order can hold
+ * (directorsOrderCanHold): where the pass swapped the blocks it sat between, the block
+ * stays where it is (task 4.3b). With no such section, or no copy of the pass's to take
+ * back, nothing is written.
+ *
+ * @param {Object} edit - a move (isMove)
+ * @param {Object} before - the version the pass started from
+ * @param {Object} out - the pass's output, changed in place
+ * @returns {boolean} whether anything was written
  */
-function restoreMove(edit, out) {
+function restoreMove(edit, before, out) {
   const steps = stepsOf(edit);
   const sections = isObj(out) && Array.isArray(out.sections) ? out.sections : null;
   const targetIndex = moveSectionIndex(out, edit);
-  if (!sections || targetIndex === -1 || !isElementStep(steps[3])) return false;
+  if (!sections || targetIndex === -1 || !isObj(sections[targetIndex]) || !isElementStep(steps[3])) return false;
   const identity = moveIdentity(edit);
-  const holds = (s) => isObj(s) && Array.isArray(s.content) && s.content.some((b) => matchesAfter(b, identity));
-  const fromIndex = sections.findIndex((s, i) => i !== targetIndex && holds(s));
   const target = sections[targetIndex];
+  const holds = Array.isArray(target.content) && target.content.some((b) => matchesAfter(b, identity));
   const insertable = !isMoveWithin(edit) || directorsOrderCanHold(Array.isArray(target.content) ? target.content : [], edit);
   let wrote = false;
-  if (fromIndex !== -1 && (holds(target) || insertable)) {
-    const from = sections[fromIndex].content;
-    const [block] = from.splice(from.findIndex((b) => matchesAfter(b, identity)), 1);
-    if (!holds(target)) {
+  if (holds || insertable) {
+    const [first] = takeOutPassCopies(out, before, identity, targetIndex);
+    if (first && !holds) {
       if (!Array.isArray(target.content)) target.content = [];
       const index = Number.isInteger(steps[3].index) ? steps[3].index : target.content.length;
-      target.content.splice(Math.min(index, target.content.length), 0, block);
+      target.content.splice(Math.min(index, target.content.length), 0, first.block);
     }
-    wrote = true;
+    wrote = Boolean(first);
   }
   if (isMoveWithin(edit)) wrote = placeInDirectorsOrder(edit, target) || wrote;
   return wrote;
 }
 
 /**
- * Take out of `out` (changed in place) each copy of `block` a pass left in another section,
- * once a restore has put the block back in the section at `keptIndex` (task 4.3c), so the
- * page prints it once. A copy is a block of its identity (blockIdentity). In each other
- * section, the copies beyond as many as the version the pass started from held there are the
- * pass's, and a copy that version held there unchanged stays, so a copy the director kept is
- * never taken out.
+ * Take out of `out` (changed in place) each copy of a block a pass left outside the
+ * section at `keptIndex` (passCopies), once a restore has put the block back there or is
+ * about to (task 4.3c), so the page prints it once.
+ *
+ * @returns {Array<{section: number, block: Object}>} the copies taken out, in the order of
+ *   the sections
  */
-function takeOutPassCopies(out, before, block, keptIndex) {
-  const identity = blockIdentity(block);
-  if (!isObj(identity)) return;
-  const isCopy = (b) => matchesAfter(b, identity);
-  const was = isObj(before) && Array.isArray(before.sections) ? before.sections : [];
-  (Array.isArray(out.sections) ? out.sections : []).forEach((section, i) => {
-    if (i === keptIndex || !isObj(section) || !Array.isArray(section.content)) return;
-    const key = sectionKey(section, i);
-    const then = was.find((s, j) => sectionKey(s, j) === key);
-    const held = (isObj(then) && Array.isArray(then.content) ? then.content : []).filter(isCopy);
-    const copies = section.content.filter(isCopy);
-    const unmatched = [...held];
-    const passCopies = copies.filter((b) => {
-      const k = unmatched.findIndex((h) => same(h, b));
-      if (k === -1) return true;
-      unmatched.splice(k, 1);
-      return false;
-    });
-    passCopies.slice(0, Math.max(0, copies.length - held.length))
-      .forEach((b) => section.content.splice(section.content.indexOf(b), 1));
+function takeOutPassCopies(out, before, identity, keptIndex) {
+  const copies = passCopies(out, before, identity, keptIndex);
+  copies.forEach(({ section, block }) => {
+    const content = out.sections[section].content;
+    content.splice(content.indexOf(block), 1);
   });
+  return copies;
 }
 
 /** The blocks an element of `collection` puts back: the block itself, or a section's blocks. */
@@ -2597,14 +2626,14 @@ function restoreEdit(edit, before, out) {
   if (isCut(edit) || !isObj(out)) return false;
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
-  if (isMove(edit)) return restoreMove(edit, out);
+  if (isMove(edit)) return restoreMove(edit, before, out);
   const place = placeCarrying(before, edit);
   if (!place) return false;
   let cur = out;
   // The index of the article's section the steps have reached in `out` (task 4.3c).
   let section = -1;
   const printOnce = (blocks, at) => {
-    if (at !== -1) blocks.forEach((block) => takeOutPassCopies(out, before, block, at));
+    if (at !== -1) blocks.forEach((block) => takeOutPassCopies(out, before, blockIdentity(block), at));
   };
   for (let i = 0; i < place.chain.length; i++) {
     const link = place.chain[i];
@@ -2746,7 +2775,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * director's and its removal can be the fix of a fault in the writer's text (fix round 1,
  * findings 1 and 2). A block a field edit's restore puts back prints once, without the copy
  * the pass left in another section, and the move's entry says the block is back (task
- * 4.3c). A send-back's rework is left as it is: the director's note may
+ * 4.3c). Every restore and the report read which copy is the pass's by one rule
+ * (passCopies), so a copy the director kept in another section stays (task 4.3c, fix
+ * round 1). A send-back's rework is left as it is: the director's note may
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed, and strikes
  * again, by id, each connection the director struck that it brought back. The report

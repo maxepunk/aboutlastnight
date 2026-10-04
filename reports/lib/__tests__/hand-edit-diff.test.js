@@ -2338,3 +2338,118 @@ describe('4.3c: blocks pair by place only with blocks of their own type', () => 
     ]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.3c fix round 1: one rule finds the copy a pass left in another section
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A block can print in two sections: a card the writer cited twice, which the director
+// kept in both. Two rules said which copy outside the director's section was the pass's. A
+// field's restore counted the copies against the version the pass started from; a move's
+// restore took the first copy it found outside, and the report named that copy's section.
+// So once a field's restore had taken out the pass's copy, the move's restore took out the
+// card the director kept, in every order of the sections (scratch 4.3c-review/keptcopy.js),
+// and a move's restore could take back the kept card in place of the pass's (known item 2).
+describe('4.3c fix round 1: one rule finds the copy a pass left in another section', () => {
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const C = paragraph('Charlie paragraph closes the section with a long first line.');
+  const T = paragraph('Tango paragraph sits alone in the second section of the article.');
+  const U = paragraph('Uniform paragraph sits in the third section of the article.');
+  const card = (headline) => ({ type: 'evidence-card', tokenId: 'jes002', headline, content: 'You can have him.' });
+  const K = card('You can have him');
+  const K2 = card('Jess gave him up');
+  /**
+   * An article of sections "s", "t" and "u", in that order, or with "u" before "t". By
+   * default "t" holds T, and "u" holds U and the card the director keeps there.
+   */
+  const article = ({ s, t = [T], u = [U, K] }, uFirst) => {
+    const content = { s, t, u };
+    return {
+      metadata: { sessionId: '0926262' },
+      headline: { main: 'The Room Voted Five to Four' },
+      sections: (uFirst ? ['s', 'u', 't'] : ['s', 't', 'u']).map((id) => ({ id, type: 'narrative', content: content[id].map(clone) }))
+    };
+  };
+  /** A section's blocks as letters: K for the card, else each paragraph's first letter. */
+  const letters = (output, id) => output.sections.find((sec) => sec.id === id).content
+    .map((b) => (b.type === 'evidence-card' ? 'K' : b.text[0])).join('');
+  /** Each card the version prints, as [section id, headline], in the order of the sections. */
+  const cardsOf = (output) => output.sections.flatMap((sec) => sec.content
+    .filter((b) => b.type === 'evidence-card').map((b) => [sec.id, b.headline]));
+  const settle = (standing, sentBack, after) => D.settleEdits(null, {
+    edits: D.carriedEdits(standing, sentBack), before: sentBack, after, pass: 1
+  });
+
+  describe.each([['"t" before "u"', false], ['"u" before "t"', true]])('with %s', (_order, uFirst) => {
+    /** Round 1 moves the card in "s" between A and B; round 2 rewrites its headline there. */
+    const moveThenHeadline = () => {
+      const roundOne = D.standingAfterSendBack(null, article({ s: [K, A, B, C] }, uFirst), article({ s: [A, K, B, C] }, uFirst), 'bundle');
+      return D.standingAfterSendBack(roundOne, article({ s: [A, K, B, C] }, uFirst), article({ s: [A, K2, B, C] }, uFirst), 'bundle');
+    };
+
+    test('a pass that takes the card in "s" to "t" and swaps its neighbours: the card the director kept in "u" stays', () => {
+      const sentBack = article({ s: [A, K2, B, C] }, uFirst);
+      const standing = moveThenHeadline();
+      expect(standing.edits.map((e) => [e.id, e.path, Boolean(e.between)])).toEqual([
+        ['E1', 'sections[#s].content[1]', true],
+        ['E2', 'sections[#s].content[1].headline', false]
+      ]);
+      const { output, report } = settle(standing, sentBack, article({ s: [B, A, C], t: [T, K] }, uFirst));
+      expect(letters(output, 's')).toBe('BKAC');
+      expect(cardsOf(output)).toEqual([['s', 'Jess gave him up'], ['u', 'You can have him']]);
+      expect(report.changed).toEqual([
+        expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: true, inOrder: false }),
+        expect.objectContaining({ id: 'E2', restored: true })
+      ]);
+    });
+
+    test('the same pass with the neighbours left in order: the card goes back in the director\'s place, and the one in "u" stays', () => {
+      const sentBack = article({ s: [A, K2, B, C] }, uFirst);
+      const standing = moveThenHeadline();
+      const { output, report } = settle(standing, sentBack, article({ s: [A, B, C], t: [T, K] }, uFirst));
+      expect(letters(output, 's')).toBe('AKBC');
+      expect(cardsOf(output)).toEqual([['s', 'Jess gave him up'], ['u', 'You can have him']]);
+      expect(report.changed[0]).toEqual(expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: true, inOrder: true }));
+      expect(D.carriedEdits(standing, output).map((e) => e.id)).toEqual(['E1', 'E2']);
+    });
+
+    test('a pass that only reorders "s": the card the director kept in "u" stays', () => {
+      const sentBack = article({ s: [A, K, B, C] }, uFirst);
+      const standing = D.standingAfterSendBack(null, article({ s: [K, A, B, C] }, uFirst), sentBack, 'bundle');
+      // The pass swaps the blocks the card sat between: no place keeps the director's order.
+      const swapped = settle(standing, sentBack, article({ s: [B, K, A, C] }, uFirst));
+      expect(letters(swapped.output, 's')).toBe('BKAC');
+      expect(letters(swapped.output, 'u')).toBe('UK');
+      expect(swapped.report.changed).toEqual([expect.objectContaining({
+        id: 'E1', moved: true, became: 'another place in section "s"', restored: false
+      })]);
+      // The pass moves the card to the end and keeps A before B: it goes back between them.
+      const moved = settle(standing, sentBack, article({ s: [A, B, C, K] }, uFirst));
+      expect(letters(moved.output, 's')).toBe('AKBC');
+      expect(letters(moved.output, 'u')).toBe('UK');
+      expect(moved.report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, restored: true })]);
+    });
+
+    test('a pass that removes the card the director moved: it stays out, the card in "u" stays where the director kept it, and the entry says the pass removed it', () => {
+      const sentBack = article({ s: [A, K, B, C] }, uFirst);
+      const standing = D.standingAfterSendBack(null, article({ s: [K, A, B, C] }, uFirst), sentBack, 'bundle');
+      const { output, report } = settle(standing, sentBack, article({ s: [A, B, C] }, uFirst));
+      expect(letters(output, 's')).toBe('ABC');
+      expect(cardsOf(output)).toEqual([['u', 'You can have him']]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: null, restored: false })]);
+    });
+
+    test('a card the director moved from "t" to "s", which a pass takes back to "t": the restore takes back the pass\'s copy, not the one in "u"', () => {
+      const shown = article({ s: [A, B, C], t: [T, K] }, uFirst);
+      const sentBack = article({ s: [A, K, B, C] }, uFirst);
+      const standing = D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+      expect(standing.edits.map((e) => [e.id, e.path, e.from])).toEqual([['E1', 'sections[#s].content[1]', 't']]);
+      const { output, report } = settle(standing, sentBack, article({ s: [A, B, C], t: [T, K] }, uFirst));
+      expect(letters(output, 's')).toBe('AKBC');
+      expect(letters(output, 't')).toBe('T');
+      expect(letters(output, 'u')).toBe('UK');
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', moved: true, became: 'section "t"', restored: true })]);
+    });
+  });
+});
