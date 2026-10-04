@@ -509,6 +509,135 @@ describe("4.6b: the card count is the director's only when their edits change it
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 4.6b fix round 1: a failing card count is the director's only where their edits moved it
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The director's edits own a card count that fails only when, together, they moved it the
+// way it fails: a strike cannot make too many cards, and a swap of one card beat for
+// another moves no count. Then the concern names only the edits that moved it that way.
+// When the count without their edits fails the same way, the failure splits, as every
+// check's does (R11): the writer's part fails, and theirs is a concern.
+describe("4.6b fix round 1: a failing card count is the director's only where their edits moved it", () => {
+  /** The director's standing edits on `left`, made against the writer's `base`. */
+  const editsAgainst = (base, left) => carriedEdits(standingOnMap(null, base, left), left);
+  const cardCount = (findings) => ({
+    failures: findings.failures.filter((f) => f.type === 'card-count').map((f) => f.message),
+    concerns: findings.concerns.filter((c) => c.type === 'card-count')
+  });
+  /** The writer's map with four cards: b1 carries one too. */
+  const fourCards = () => {
+    const map = writers();
+    map.sections[0].beats[0].card = 'row004';
+    return map;
+  };
+  /** The writer's map with five cards: b4 carries one too. */
+  const fiveCards = () => {
+    const map = fourCards();
+    map.sections[1].beats[1].card = 'row002';
+    return map;
+  };
+  /** The writer's map with six cards, one over the count: b2 carries one too. */
+  const sixCards = () => {
+    const map = fiveCards();
+    map.sections[0].beats[1].card = 'row001';
+    return map;
+  };
+
+  it("a strike, then a send-back's rework that marks three more cards: the writer's failure, and no concern", () => {
+    const shown = fourCards();
+    const left = clone(shown);
+    left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
+    const standing = standingOnMap(null, shown, left);
+    const rework = clone(left);
+    rework.sections[0].beats[1].card = 'row002';
+    rework.sections[1].beats[1].card = 'row003';
+    rework.sections[1].beats.push({ id: 'b10', kind: 'receipt', material: 'row001, the receipt', players: [], card: 'row001' });
+    const edits = carriedEdits(standing, rework);
+    expect(edits.map((e) => [e.id, e.path, e.struck])).toEqual([['E1', 'leftOut[#b6]', true]]);
+    expect(cardCount(mapFindings(rework, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(/^The map carries 6 cards\. Mark 3 to 5 beats as cards/)],
+      concerns: []
+    });
+  });
+
+  it("a card beat struck and another brought back, then a rework that marks two more cards: the writer's failure, and no concern", () => {
+    const shown = fourCards();
+    shown.leftOut[0].card = 'row002';
+    const left = clone(shown);
+    left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
+    left.sections[1].beats.push(left.leftOut.splice(0, 1)[0]);
+    const standing = standingOnMap(null, shown, left);
+    const rework = clone(left);
+    rework.sections[0].beats[1].card = 'row003';
+    rework.sections[1].beats[1].card = 'row001';
+    const edits = carriedEdits(standing, rework);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b9]'], ['E2', 'leftOut[#b6]']]);
+    expect(cardCount(mapFindings(rework, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(/^The map carries 6 cards\. /)],
+      concerns: []
+    });
+  });
+
+  it("a card beat brought back, then a rework that clears two cards: too few is the writer's failure, and no concern", () => {
+    const shown = writers();
+    shown.leftOut[0].card = 'row004';
+    const left = clone(shown);
+    left.sections[1].beats.push(left.leftOut.splice(0, 1)[0]);
+    const standing = standingOnMap(null, shown, left);
+    const rework = clone(left);
+    delete rework.sections[1].beats[0].card;
+    delete rework.sections[1].beats[2].card;
+    const edits = carriedEdits(standing, rework);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b9]']]);
+    expect(cardCount(mapFindings(rework, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(/^The map carries 2 cards\. /)],
+      concerns: []
+    });
+  });
+
+  it('the concern names only the edits that moved the count the way it fails, not a strike beside them', () => {
+    const shown = fiveCards();
+    const left = clone(shown);
+    left.sections[0].beats[1].card = 'row003';
+    left.sections[1].beats.push({ id: 'b10', material: 'row001, the receipt', card: 'row001' });
+    left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
+    const edits = editsAgainst(shown, left);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([
+      ['E1', 'sections[#lede].beats[#b2].card'], ['E2', 'sections[#theStory].beats[#b10]'], ['E3', 'leftOut[#b6]']
+    ]);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [],
+      concerns: [{ type: 'card-count', editIds: ['E1', 'E2'], finding: 'The map carries 6 cards; the article carries 3 to 5.' }]
+    });
+  });
+
+  it("a card beat added to a map the writer already gave too many: the writer's part fails, and the director's is a concern", () => {
+    const shown = sixCards();
+    const left = clone(shown);
+    left.sections[1].beats.push({ id: 'b10', material: 'row004, the receipt', card: 'row004' });
+    const edits = editsAgainst(shown, left);
+    expect(edits.map((e) => [e.id, e.path, e.from])).toEqual([['E1', 'sections[#theStory].beats[#b10]', 'none']]);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(/^The map carries 7 cards\. Mark 3 to 5 beats as cards/)],
+      concerns: [{ type: 'card-count', editIds: ['E1'], finding: 'The map carries 7 cards; the article carries 3 to 5.' }]
+    });
+  });
+
+  it("a card beat struck from a map the writer already gave too few: the writer's part fails, and the director's is a concern", () => {
+    const shown = writers();
+    delete shown.sections[1].beats[2].card;
+    const left = clone(shown);
+    left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
+    const edits = editsAgainst(shown, left);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'leftOut[#b6]']]);
+    expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
+      failures: [expect.stringMatching(/^The map carries 1 card\. Mark 3 to 5 beats as cards/)],
+      concerns: [{ type: 'card-count', editIds: ['E1'], finding: 'The map carries 1 card; the article carries 3 to 5.' }]
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 4.6b: the gate refuses a photo the director's changes place more than once
 // ═══════════════════════════════════════════════════════════════════════════
 //

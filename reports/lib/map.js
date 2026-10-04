@@ -186,15 +186,18 @@ function editsOnCards(entries, beatId) {
 }
 
 /**
- * The ids of the director's edits that changed how many card beats the map's sections hold,
- * the count the card check reads (mapTally; brief 4.6b): a card beat they added, brought
- * back, struck or cut, and a card they added to a beat or cleared from one. Each beat their
- * edits touch is read where it sat, with its card, before their edits and where it sits
- * now: their edits on it count when it is a card beat in a section on one side only. An
- * edit that changes which document a card prints, or moves a card beat between sections,
- * leaves the count as the writer made it.
+ * How the director's edits moved the card count the card check reads (mapTally; brief
+ * 4.6b): one change for each beat their edits touch that is a card beat in a section on one
+ * side only, read where it sat, with its card, before their edits and where it sits now.
+ * `delta` is +1 for a card beat they added or brought back and a card they gave a beat, and
+ * -1 for a card beat they struck or cut and a card they cleared; `editIds` are their edits
+ * on that beat. An edit that changes which document a card prints, or moves a card beat
+ * between sections, moves no count.
+ *
+ * @param {Array<{edit: Object, address: Object|null}>} entries - the edits with what each is about (addressed)
+ * @returns {Array<{delta: number, editIds: string[]}>}
  */
-function editsChangingCardCount(entries) {
+function cardCountChanges(entries) {
   const beats = new Map();
   entries.forEach(({ edit, address }) => {
     if (!address || address.kind !== 'beat') return;
@@ -205,7 +208,7 @@ function editsChangingCardCount(entries) {
   });
   const inSections = (container) => container !== MAP_LEFT_OUT && container !== MAP_NONE;
   const cardOf = (value) => beatCardOf({ card: value });
-  const ids = [];
+  const changes = [];
   beats.forEach(({ place, card }) => {
     let was;
     let now;
@@ -219,9 +222,34 @@ function editsChangingCardCount(entries) {
       now = inSections(sits) && Boolean(nowCard);
       was = inSections(sat) && Boolean(card ? cardOf(card.edit.before) : nowCard);
     }
-    if (was !== now) ids.push(...[place, card].filter(Boolean).map(({ edit }) => edit.id));
+    if (was !== now) changes.push({ delta: now ? 1 : -1, editIds: [place, card].filter(Boolean).map(({ edit }) => edit.id) });
   });
-  return ids;
+  return changes;
+}
+
+/**
+ * Whose a card count that fails is (brief 4.6b, fix round 1; R11). The director's edits
+ * own it only when, together, they moved the count the way it fails, and then only the
+ * edits that moved it that way: a strike cannot make too many cards, and a swap of one card
+ * beat for another moves no count. The writer owns the rest: all of it when their edits
+ * moved the count the other way or not at all, and a part of it when the count without
+ * their edits fails the same way, so the failure splits.
+ *
+ * @param {number} cards - the map's card count (mapTally), outside MAP_CARDS
+ * @param {Array<{edit: Object, address: Object|null}>} entries - the edits with what each is about (addressed)
+ * @returns {{editIds: string[], writers: boolean}} the director's edits the count is a
+ *   concern on, and whether the writer's part fails
+ */
+function cardCountOwners(cards, entries) {
+  const way = cards > MAP_CARDS.max ? 1 : -1;
+  const changes = cardCountChanges(entries);
+  const net = changes.reduce((sum, change) => sum + change.delta, 0);
+  if (Math.sign(net) !== way) return { editIds: [], writers: true };
+  const writersCount = cards - net;
+  return {
+    editIds: changes.filter((change) => change.delta === way).flatMap((change) => change.editIds),
+    writers: way > 0 ? writersCount > MAP_CARDS.max : writersCount < MAP_CARDS.min
+  };
 }
 
 /** The ids of the director's edits that took a connection off the map's beats. */
@@ -254,10 +282,11 @@ function editsRemovingConnection(entries, connection) {
  *
  * A failure the director caused is a concern on their edit, beside its line, never a
  * rework (R11): a beat they struck or cut that held the only place of a player or a
- * connection; a card or a photo they placed; the card count, when their edits changed how
- * many card beats the sections hold (editsChangingCardCount; brief 4.6b); a beat they added
- * under an id the map holds. A failure partly theirs splits: the writer's part fails, the
- * director's is a concern.
+ * connection; a card or a photo they placed; the card count, when their edits, together,
+ * moved it the way it fails (cardCountOwners; brief 4.6b); a beat they added under an id
+ * the map holds. A failure partly theirs splits: the writer's part fails, the director's is
+ * a concern. A card count is partly theirs when the count without their edits fails the
+ * same way.
  *
  * @param {*} map
  * @param {Object} inputs
@@ -353,10 +382,10 @@ function mapFindings(map, inputs = {}) {
     fail('card-not-in-record', `Cards naming no document in <RECORD>: ${unknown.join(', ')}. A card names the id of a document in <RECORD>: ${[...(inputs.recordIds || [])].join(', ')}.`);
   }
   if (tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max) {
-    const ids = editsChangingCardCount(entries);
+    const owners = cardCountOwners(tally.cards, entries);
     const carries = `The map carries ${tally.cards} card${tally.cards === 1 ? '' : 's'}`;
-    if (ids.length > 0) concern('card-count', ids, `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`);
-    else fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
+    if (owners.editIds.length > 0) concern('card-count', owners.editIds, `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`);
+    if (owners.writers) fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
   }
 
   // Every live connection of the settled weave lands in a beat.
