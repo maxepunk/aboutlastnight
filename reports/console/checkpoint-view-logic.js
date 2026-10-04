@@ -1855,8 +1855,21 @@
     return m ? finding.slice(DIRECTOR_EDIT_PREFIX.length + m[0].length) : finding;
   }
 
+  /**
+   * What the page calls each of the weave's lines: ArcSelection.js heads each line with it,
+   * and a mark whose line the page does not show is listed under it.
+   */
+  var MEETING_LINE_LABELS = {
+    story: 'The story',
+    question: 'The question it carries',
+    headline: 'Working headline',
+    fromYourNotes: 'From your notes',
+    convergence: 'Where they converge',
+    strongerMainThread: 'A stronger main thread'
+  };
+
   /** The weave's fields that each have a line on the page. */
-  var LINE_FIELDS = ['story', 'question', 'headline', 'fromYourNotes', 'convergence', 'strongerMainThread'];
+  var LINE_FIELDS = Object.keys(MEETING_LINE_LABELS);
 
   /**
    * The line on the page a place in the weave sits on (a path as lib/hand-edit-diff.js
@@ -1888,9 +1901,19 @@
     return hasOwn(WEAVE_ROLE_LABELS, t) ? WEAVE_ROLE_LABELS[t] : t;
   }
 
-  /** A mark's place, as the round's lines name it (its `where`, without the diff's ", cut"). */
+  /**
+   * A mark's place, as the page names it: one of the weave's lines by its heading
+   * (MEETING_LINE_LABELS), an element by its `where` ("Thread "t4"") without the diff's
+   * ", cut" or ", added".
+   */
   function markPlace(mark) {
-    return capitalized(asString(mark.where).replace(/, cut$/, ''));
+    var key = lineKeyOf(mark.path);
+    if (key !== null && hasOwn(MEETING_LINE_LABELS, key)) return MEETING_LINE_LABELS[key];
+    return capitalized(asString(mark.where).replace(/, (cut|added)$/, ''));
+  }
+
+  function lowerFirst(text) {
+    return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
   }
 
   /** The line beside a line of the page that the round's passes changed. */
@@ -1903,9 +1926,15 @@
     return 'Changed this round' + which + '. Before: "' + roleWord(before) + '"';
   }
 
-  /** The line for an element the round's passes took out, which no line of the page shows. */
+  /** The line for a line or an element the round's passes took out, which the page no longer shows. */
   function removedLine(mark) {
     return markPlace(mark) + ': taken out this round. Before: "' + asString(mark.before) + '"';
+  }
+
+  /** The line for any other mark whose line the page does not show: what changed, and what the place holds now. */
+  function elsewhereLine(mark) {
+    var after = asString(mark.after);
+    return markPlace(mark) + ': ' + lowerFirst(markLine(mark)) + (after ? ' Now: "' + roleWord(after) + '"' : '');
   }
 
   /** The banner over the marks after a round. */
@@ -1955,14 +1984,48 @@
   }
 
   /**
-   * The concerns and the marks by the line of the page they sit beside, and the ones no
-   * line shows: a concern whose place is not on the page, an element the round took out,
-   * a mark whose place is not on the page.
+   * The lines the page shows, by their keys (lineKeyOf), for the weave as the director has
+   * it and the questions the stop asks: the story, the question, the headline and the
+   * convergence always; "from your notes" and the stronger main thread while the weave holds
+   * them; each thread and connection by its id; each question the stop asks. meetingView
+   * shows exactly these, and a mark or a concern sits beside one of them or is listed apart.
+   *
+   * @param {Object} weave - the weave as the director has it
+   * @param {Object[]} questions - the stop's questions (data.questions)
+   * @returns {Set<string>}
    */
-  function besideLines(data) {
+  function linesOnPage(weave, questions) {
+    var keys = new Set(['story', 'question', 'headline', 'convergence']);
+    if (asString(weave.fromYourNotes).trim()) keys.add('fromYourNotes');
+    if (isPlainObject(weave.strongerMainThread)) keys.add('strongerMainThread');
+    [['threads', 'thread'], ['connections', 'connection']].forEach(function (pair) {
+      asArray(weave[pair[0]]).forEach(function (element) {
+        var id = weaveIdOf(element);
+        if (id) keys.add(pair[1] + ':' + id);
+      });
+    });
+    questions.forEach(function (q) {
+      var id = asString(q.id).trim();
+      if (id) keys.add('question:' + id);
+    });
+    return keys;
+  }
+
+  /**
+   * The concerns and the marks by the line of the page they sit beside (linesOnPage), and
+   * the ones no line shows, each listed with its place:
+   * - `otherConcerns`: a concern none of whose places is on the page;
+   * - `removed`: a line or an element the round took out (`takenOut`, by its key);
+   * - `otherMarks`: any other mark whose line the page does not show, such as a question the
+   *   stop does not ask.
+   *
+   * @param {Object} data - the stop's payload
+   * @param {Set<string>} onPage - the lines the page shows
+   */
+  function besideLines(data, onPage) {
     var concerns = new Map();
     var marks = new Map();
-    var out = { concerns: concerns, marks: marks, otherConcerns: [], removed: [], otherMarks: [] };
+    var out = { concerns: concerns, marks: marks, otherConcerns: [], removed: [], otherMarks: [], takenOut: new Set() };
     var add = function (map, key, line) {
       var list = map.get(key) || [];
       if (list.indexOf(line) === -1) list.push(line);
@@ -1970,19 +2033,23 @@
     };
     asArray(data.concerns).filter(isPlainObject).forEach(function (concern) {
       var line = 'Concern: ' + concernFindingOf(concern.text);
-      var keys = asArray(concern.places).map(function (place) { return lineKeyOf(place && place.path); }).filter(Boolean);
+      var keys = asArray(concern.places)
+        .map(function (place) { return lineKeyOf(place && place.path); })
+        .filter(function (key) { return onPage.has(key); });
       if (keys.length === 0) out.otherConcerns.push(line);
       keys.forEach(function (key) { add(concerns, key, line); });
     });
     var round = isPlainObject(data.marks) ? data.marks : {};
     asArray(round.marks).filter(isPlainObject).forEach(function (mark) {
-      if (isElementPath(mark.path) && !asString(mark.after)) {
-        out.removed.push(removedLine(mark));
-        return;
-      }
       var key = lineKeyOf(mark.path);
-      if (key) add(marks, key, markLine(mark));
-      else out.otherMarks.push(markPlace(mark) + ': ' + markLine(mark));
+      if (!asString(mark.after) && (isElementPath(mark.path) || !onPage.has(key))) {
+        out.removed.push(removedLine(mark));
+        if (key !== null) out.takenOut.add(key);
+      } else if (onPage.has(key)) {
+        add(marks, key, markLine(mark));
+      } else {
+        out.otherMarks.push(elsewhereLine(mark));
+      }
     });
     return out;
   }
@@ -2003,9 +2070,11 @@
    *   question and the working headline; "from your notes"; the threads; the connections
    *   and the convergence; the stronger main thread; the questions. A section with nothing
    *   in it is left out.
-   * - each line carries the concerns about the director's edit on it, and the marks of
-   *   what the round's passes changed on it;
-   * - `thinNotes`: the one line beside the story when the weave has no "from your notes";
+   * - each line the page shows (linesOnPage) carries the concerns about the director's edit
+   *   on it, and the marks of what the round's passes changed on it;
+   * - `thinNotes`: the one line beside the story when the weave has no "from your notes",
+   *   unless the round took it out: then the director's notes held a read the rework
+   *   dropped, and the mark of it is listed instead;
    * - the round's lines: `didNotRun`, `checkFailures` (one line each), `changedEdits` (the
    *   send-back's, with their reasons), `marked` and the marks no line shows (`removed`,
    *   `otherMarks`), and the concerns no line shows (`otherConcerns`).
@@ -2022,7 +2091,9 @@
       return { hasWeave: false, order: [], emptyLine: EMPTY_MEETING_LINE, didNotRun: didNotRunLine(d.roundDidNotRun) };
     }
     var shown = meetingWeaveOf(d.weave);
-    var beside = besideLines(d);
+    var stopQuestions = asArray(d.questions).filter(isPlainObject);
+    var onPage = linesOnPage(weave, stopQuestions);
+    var beside = besideLines(d, onPage);
     var at = function (key) {
       return { concerns: beside.concerns.get(key) || [], marks: beside.marks.get(key) || [] };
     };
@@ -2073,7 +2144,7 @@
         marks: b.marks
       };
     });
-    var stronger = isPlainObject(weave.strongerMainThread) ? weave.strongerMainThread : null;
+    var stronger = onPage.has('strongerMainThread') ? weave.strongerMainThread : null;
     var strongerView = null;
     if (stronger) {
       var strongerId = asString(stronger.thread).trim();
@@ -2083,7 +2154,7 @@
     }
     var draftQuestions = asArray(weave.questions);
     var cursor = 0;
-    var questions = asArray(d.questions).filter(isPlainObject).map(function (q, n) {
+    var questions = stopQuestions.map(function (q, n) {
       var index = -1;
       for (var i = cursor; i < draftQuestions.length; i += 1) {
         if (sameQuestion(draftQuestions[i], q)) { index = i; break; }
@@ -2104,7 +2175,7 @@
         marks: id ? at('question:' + id).marks : []
       };
     });
-    var fromYourNotes = asString(weave.fromYourNotes).trim() ? line('fromYourNotes', weave.fromYourNotes) : null;
+    var fromYourNotes = onPage.has('fromYourNotes') ? line('fromYourNotes', weave.fromYourNotes) : null;
     var present = {
       fromYourNotes: fromYourNotes !== null,
       strongerMainThread: strongerView !== null,
@@ -2119,7 +2190,7 @@
       story: line('story', weave.story),
       question: line('question', weave.question),
       headline: line('headline', weave.headline),
-      thinNotes: fromYourNotes ? '' : THIN_NOTES_LINE,
+      thinNotes: fromYourNotes || beside.takenOut.has('fromYourNotes') ? '' : THIN_NOTES_LINE,
       fromYourNotes: fromYourNotes,
       threads: threads,
       roles: Object.keys(WEAVE_ROLE_LABELS).map(function (value) { return { value: value, label: WEAVE_ROLE_LABELS[value] }; }),
@@ -2246,6 +2317,7 @@
     WEAVE_ANSWER_KEY: WEAVE_ANSWER_KEY,
     DIRECTOR_WEAVE_SHAPE: DIRECTOR_WEAVE_SHAPE,
     THIN_NOTES_LINE: THIN_NOTES_LINE,
+    MEETING_LINE_LABELS: MEETING_LINE_LABELS,
     MEETING_ROLLBACK_LINE: MEETING_ROLLBACK_LINE,
     meetingWeaveOf: meetingWeaveOf,
     meetingVersion: meetingVersion,

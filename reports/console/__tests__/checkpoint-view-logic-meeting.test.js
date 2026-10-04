@@ -676,6 +676,89 @@ describe('4.8: after a reweave, a send-back, and a reweave that did not run', ()
   });
 });
 
+// Fix round 1, finding 2. Each mark after a round sits beside the line it is about, and a
+// mark whose line the page does not show is listed with its place, as the page names it: a
+// line or an element the round took out, or a question the meeting does not ask. No mark is
+// lost, so the banner's "each line the writer changed ... is marked" holds.
+describe('4.8 fix round 1: every mark after a round shows on the page', () => {
+  /** How many marks the page shows: beside its lines, and listed with their places. */
+  function marksShown(view) {
+    return [view.story, view.question, view.headline, view.fromYourNotes, view.convergence, view.strongerMainThread]
+      .concat(view.threads, view.connections, view.questions)
+      .filter(Boolean)
+      .reduce((n, line) => n + line.marks.length, 0) + view.removed.length + view.otherMarks.length;
+  }
+
+  /** The meeting after a reweave whose rework turned the director's version `left` into `reworked`. */
+  function afterReweave(left, reworked) {
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveBaseline: clone(reworked),
+      _weaveMarks: { round: 'reweave', from: left }, humanArcRevisionCount: 1
+    }));
+    return { data, view: meetingView(data, meetingDraftOf(data, undefined)) };
+  }
+
+  test('a round that took out "from your notes": the mark is listed under the line\'s name, and the thin-notes line stays off', () => {
+    const reworked = clone(WEAVE);
+    delete reworked.fromYourNotes;
+    const { data, view } = afterReweave(clone(WEAVE), reworked);
+    expect(view.order).not.toContain('fromYourNotes');
+    expect(view.removed).toEqual([`From your notes: taken out this round. Before: "${WEAVE.fromYourNotes}"`]);
+    expect(view.thinNotes).toBe('');
+    expect(marksShown(view)).toBe(data.marks.marks.length);
+  });
+
+  test('a round that took out the stronger main thread: the mark is listed under the line\'s name', () => {
+    const left = clone(WEAVE);
+    left.strongerMainThread = { thread: 't2', reason: 'The sale explains the vote.' };
+    const { data, view } = afterReweave(left, clone(WEAVE));
+    expect(view.order).not.toContain('strongerMainThread');
+    expect(view.removed).toEqual(['A stronger main thread: taken out this round. Before: "thread: t2; reason: The sale explains the vote."']);
+    expect(marksShown(view)).toBe(data.marks.marks.length);
+  });
+
+  test('a question the meeting does not ask: the mark is listed with its place and what it holds now', () => {
+    const reworked = clone(WEAVE);
+    reworked.questions.push({ id: 'q2', kind: 'player', about: 'Riley', question: 'What did Riley do at the bar?', changes: '' });
+    const { data, view } = afterReweave(clone(WEAVE), reworked);
+    expect(view.questions.map((q) => q.id)).toEqual(['q1']);
+    expect(view.otherMarks).toEqual(['Question "q2": new this round. Now: "id: q2; kind: player; about: Riley; question: What did Riley do at the bar?"']);
+    expect(marksShown(view)).toBe(data.marks.marks.length);
+  });
+
+  test('a round that changed lines the page shows, took a thread out and dropped both optional lines: every mark shows', () => {
+    const left = directorsVersion();
+    left.strongerMainThread = { thread: 't2', reason: 'The sale explains the vote.' };
+    const reworked = clone(left);
+    delete reworked.strongerMainThread;
+    delete reworked.fromYourNotes;
+    reworked.threads[1].claim = 'Marcus bragged about the sale in front of Alex.';
+    reworked.threads.splice(3, 1);
+    const { data, view } = afterReweave(left, reworked);
+    expect(data.marks.marks).toHaveLength(4);
+    expect(marksShown(view)).toBe(4);
+    expect(view.threads.find((t) => t.id === 't2').marks).toHaveLength(1);
+    expect(view.removed.map((line) => line.split(':')[0])).toEqual(['From your notes', 'A stronger main thread', 'Thread "t4"']);
+  });
+
+  test('the thin-notes line still shows when the weave never had "from your notes"', () => {
+    const left = clone(WEAVE);
+    delete left.fromYourNotes;
+    const reworked = clone(left);
+    reworked.headline = 'The Ledger Kept Talking';
+    const { view } = afterReweave(left, reworked);
+    expect(view.thinNotes).toBe(ViewLogic.THIN_NOTES_LINE);
+    expect(view.headline.marks).toEqual([`Changed this round. Before: "${WEAVE.headline}"`]);
+  });
+
+  test('a concern whose only place is a line the page does not show is listed on its own', () => {
+    const weave = clone(WEAVE);
+    delete weave.fromYourNotes;
+    const data = { ...payloadOf(stateAt({ weave: weaveLib.withFactCheckMark(weave, MARK) })), concerns: [{ text: 'Director\'s edit E4: a place the page does not show.', editIds: ['E4'], places: [{ id: 'E4', path: 'fromYourNotes', where: 'fromYourNotes' }] }] };
+    expect(meetingView(data, meetingDraftOf(data, undefined)).otherConcerns).toEqual(['Concern: a place the page does not show.']);
+  });
+});
+
 describe('4.8: with a failing check and with a concern', () => {
   const typed = clone(WEAVE);
   typed.threads.push({ id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it', receipt: 'zzz999' });

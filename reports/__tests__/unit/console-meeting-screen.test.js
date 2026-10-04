@@ -42,6 +42,15 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
     expect(src).toContain('ViewLogic.meetingPayload(action, data, draft, note)');
   });
 
+  // Fix round 1, finding 2: a mark whose line the round took out is listed under the line's
+  // heading, so the page heads each line with the same labels.
+  it('heads each of the weave\'s lines with the view logic\'s labels', () => {
+    const { MEETING_LINE_LABELS } = require('../../console/checkpoint-view-logic');
+    expect(src).toContain('const LABELS = ViewLogic.MEETING_LINE_LABELS;');
+    Object.keys(MEETING_LINE_LABELS).forEach((key) => expect(src).toContain(`LABELS.${key}`));
+    Object.values(MEETING_LINE_LABELS).forEach((label) => expect(`${label}: ${src.includes(`'${label}'`)}`).toBe(`${label}: false`));
+  });
+
   it('edits the weave only through the view logic\'s operations: the four fields, a role, an added thread, a strike, an answer', () => {
     ['setMeetingField(', 'setThreadRole(', 'addMeetingThread(', 'removeMeetingThread(', 'setConnectionStruck(', 'setQuestionAnswer('].forEach((op) => {
       expect(count(src, `ViewLogic.${op}`)).toBe(1);

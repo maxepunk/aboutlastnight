@@ -51,6 +51,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
 
   const shown = data && data.weave;
   const view = ViewLogic.meetingView(data, draft);
+  // Each line's heading, the name a mark is listed under when the round took its line out.
+  const LABELS = ViewLogic.MEETING_LINE_LABELS;
   // The buttons and the payloads read the stop's payload: the weave it showed, and a round
   // that did not run, whose changes a reweave still has to fit in.
   const buttons = ViewLogic.meetingButtons(data, draft, note, sendBackArmed);
@@ -156,16 +158,16 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
 
     story: function () {
       return React.createElement('section', { key: 'story', className: 'meeting__section' },
-        fieldEditor('story', 'The story', view.story, 3),
+        fieldEditor('story', LABELS.story, view.story, 3),
         view.thinNotes && React.createElement('p', { className: 'meeting__thin-notes' }, view.thinNotes),
-        fieldEditor('question', 'The question it carries', view.question, 2),
-        fieldEditor('headline', 'Working headline', view.headline, 1)
+        fieldEditor('question', LABELS.question, view.question, 2),
+        fieldEditor('headline', LABELS.headline, view.headline, 1)
       );
     },
 
     fromYourNotes: function () {
       return React.createElement('section', { key: 'fromYourNotes', className: 'meeting__section' },
-        React.createElement('h4', { className: 'meeting__label' }, 'From your notes'),
+        React.createElement('h4', { className: 'meeting__label' }, LABELS.fromYourNotes),
         React.createElement('blockquote', { className: 'meeting__quote' }, '"' + view.fromYourNotes.text + '"'),
         beside(view.fromYourNotes)
       );
@@ -262,14 +264,14 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
             );
           })
         ),
-        fieldEditor('convergence', 'Where they converge', view.convergence, 2)
+        fieldEditor('convergence', LABELS.convergence, view.convergence, 2)
       );
     },
 
     strongerMainThread: function () {
       const stronger = view.strongerMainThread;
       return React.createElement('section', { key: 'strongerMainThread', className: 'meeting__section' },
-        React.createElement('h4', { className: 'meeting__label' }, 'A stronger main thread'),
+        React.createElement('h4', { className: 'meeting__label' }, LABELS.strongerMainThread),
         React.createElement('p', null,
           React.createElement('span', { className: 'meeting__id' }, stronger.thread), ' ', stronger.claim),
         React.createElement('p', { className: 'text-sm text-secondary' }, stronger.reason),
