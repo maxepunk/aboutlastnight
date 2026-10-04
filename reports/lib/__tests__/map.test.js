@@ -868,3 +868,36 @@ describe('4.6c: the gate and the checks find a repeat by mapRepeats, the rule th
     expect(`placedPhotos: ${/count/i.test(body('placedPhotos'))}`).toBe('placedPhotos: false');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6d: the gate reads the map the stop showed as the console does
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The integrator's ruling 3 on the follow-ups' findings, minor 1. The gate takes a repeat the
+// map the stop showed holds as the writer's, and reads that map as the console's refusal and
+// its page do (isMapValue): a value that is no map is no map shown, so every repeat in the
+// director's map is theirs.
+describe('4.6d: the gate reads the map the stop showed as the console does', () => {
+  const { directorMapProblems, mapResume } = require('../map');
+  /** The writer's map with b9 twice in leftOut. */
+  const repeatsB9 = () => {
+    const map = writers();
+    map.leftOut.push(clone(map.leftOut[0]));
+    return map;
+  };
+  const NO_MAP_SHOWN = "Two beats share the id \"b9\": the director's changes made this repeat. Give each beat an id of its own.";
+
+  it.each([
+    ['with no list of sections', () => ({ leftOut: repeatsB9().leftOut })],
+    ['whose sections are no list', () => ({ sections: {}, leftOut: repeatsB9().leftOut })]
+  ])("a shown value %s that repeats a beat is no map shown: the repeat is the director's, refused at the gate and at the payload", (_name, shownOf) => {
+    expect(directorMapProblems(repeatsB9(), { theme: 'journalist', shown: null })).toBe(NO_MAP_SHOWN);
+    expect(directorMapProblems(repeatsB9(), { theme: 'journalist', shown: shownOf() })).toBe(NO_MAP_SHOWN);
+    expect(mapResume({ outline: 'approve', map: repeatsB9() }, { outline: shownOf() }, { theme: 'journalist' }).error).toBe(NO_MAP_SHOWN);
+  });
+
+  it("the same repeat in a map the stop showed is the writer's: the gate lets it through to the checks", () => {
+    expect(directorMapProblems(repeatsB9(), { theme: 'journalist', shown: repeatsB9() })).toBeNull();
+    expect(typesOf(mapFindings(repeatsB9(), inputs()).failures)).toEqual(['duplicate-beat-id']);
+  });
+});

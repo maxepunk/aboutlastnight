@@ -32,7 +32,8 @@
  * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks,
  * the stop and the console share, with its rule for a beat's card (beatCardOf) and for a
  * repeat (mapRepeats, which the gate and the checks read through repeatedBeatIds and
- * repeatedPhotos; task 4.6c). A photo is
+ * repeatedPhotos; task 4.6c). What is a map is its rule too (isMapValue), by which the gate
+ * reads the map the stop showed as the console does (task 4.6d). A photo is
  * read by its filename's one join key (lib/prompt-renderers/director-words-renderer.js
  * photoKey), as the map's edits and the kept photos read it.
  *
@@ -45,7 +46,7 @@ const crypto = require('crypto');
 const Ajv = require('ajv');
 const outlineSchema = require('./schemas/outline.schema.json');
 const { mapSlotsOf } = require('./theme-config');
-const { mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf } = require('../console/outline-edit-logic');
+const { mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue } = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
   mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
@@ -118,11 +119,6 @@ function mapRosterOf(sessionConfig, canonicalCharacters) {
     .map((entry) => (entry && typeof entry === 'object' ? entry.name : entry))
     .filter((name) => typeof name === 'string' && name.trim())
     .map((name) => ({ name: name.trim(), fullName: typeof canon[name.trim()] === 'string' ? canon[name.trim()] : null }));
-}
-
-/** Is `map` a map: an object with a list of sections? */
-function isMapValue(map) {
-  return Boolean(map && typeof map === 'object' && !Array.isArray(map) && Array.isArray(map.sections));
 }
 
 /** The beats in the map's sections, each with the slot it sits in; a left-out beat is not among them. */
@@ -534,11 +530,14 @@ function directorMapSchemaFor(theme) {
  * and a rework fixes; one it does not hold is the director's, refused. The gate and the
  * checks find repeats by the same rules (repeatedBeatIds, repeatedPhotos), which build on
  * the console's mapRepeats, the rule its validator and the map on screen read (task 4.6c).
+ * The gate reads the map the stop showed as the console's refusal and the map on screen do
+ * (isMapValue): a value that is no map is no map shown, so every repeat is the director's
+ * (task 4.6d).
  *
  * @param {*} map - the map as the director left it
  * @param {Object} options
  * @param {string} options.theme
- * @param {Object|null} [options.shown] - the map the stop showed
+ * @param {*} [options.shown] - the map the stop showed; a value that is no map is read as none
  * @returns {string|null}
  */
 function directorMapProblems(map, { theme, shown = null } = {}) {
@@ -551,12 +550,13 @@ function directorMapProblems(map, { theme, shown = null } = {}) {
     const errors = (validate.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ');
     return `The map as the director left it failed the director-side schema: ${errors}`;
   }
-  const writers = new Set(repeatedBeatIds(shown));
+  const shownMap = isMapValue(shown) ? shown : null;
+  const writers = new Set(repeatedBeatIds(shownMap));
   const theirs = repeatedBeatIds(map).filter((id) => !writers.has(id));
   if (theirs.length > 0) {
     return `Two beats share the id ${listOf(theirs.map((id) => `"${id}"`))}: the director's changes made ${theirs.length > 1 ? 'these repeats' : 'this repeat'}. Give each beat an id of its own.`;
   }
-  const writersPhotos = repeatedPhotos(shown);
+  const writersPhotos = repeatedPhotos(shownMap);
   const theirPhotos = [...repeatedPhotos(map)].filter(([key]) => !writersPhotos.has(key)).map(([, filename]) => `"${filename}"`);
   if (theirPhotos.length > 0) {
     const many = theirPhotos.length > 1;

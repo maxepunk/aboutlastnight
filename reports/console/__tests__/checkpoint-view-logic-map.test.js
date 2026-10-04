@@ -1030,3 +1030,43 @@ describe('4.10: the map lists the changes no pass put back, and a send-back\'s w
       .toEqual(['Closing, beat "b3", moved from The Story: automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6d: the gate and the console read the map the stop showed by one rule (the integrator's
+// ruling 3 on the follow-ups' findings, minor 1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The gate takes a repeat the map the stop showed holds as the writer's. The console's
+// refusal reads that map as the page does (isMapValue, task 4.6c), and the gate reads it so
+// too: a value that is no map is no map shown, so a repeat in the director's map is theirs to
+// both.
+describe('4.6d: the gate and the console read the map the stop showed by one rule', () => {
+  const { mapResume } = require('../../lib/map');
+  /** The fixture's map with b9 twice in left out. */
+  const repeatsB9 = () => {
+    const map = clone(MAP);
+    map.leftOut.push(clone(MAP.leftOut[0]));
+    return map;
+  };
+
+  test.each([
+    ['with no list of sections', () => ({ leftOut: repeatsB9().leftOut })],
+    ['whose sections are no list', () => ({ sections: {}, leftOut: repeatsB9().leftOut })]
+  ])("a shown value %s that repeats a beat is no map shown: the gate and the console refuse the repeat as the director's", (_name, shownOf) => {
+    const left = repeatsB9();
+    const shown = shownOf();
+    expect([EditLogic.isMapValue(shown), EditLogic.mapRepeats(shown).beatIds]).toEqual([false, ['b9']]);
+    const onScreen = ViewLogic.mapProblems(left, { outline: shown, mapSlots: SLOTS });
+    expect(onScreen).toBe(ViewLogic.mapProblems(left, { outline: null, mapSlots: SLOTS }));
+    expect(onScreen).toMatch(/^The map cannot be sent yet: left out, beat b9 shares its id with another beat: your changes made this repeat\./);
+    expect({ gate: gateTakes(left, shown), console: onScreen === null }).toEqual({ gate: false, console: false });
+    expect(mapResume({ outline: 'approve', map: left }, { outline: shown }, { theme: 'journalist' }).error)
+      .toBe(directorMapProblems(left, { theme: 'journalist', shown: null }));
+  });
+
+  test("the same repeat in the map the stop showed is the writer's, to the gate and the console alike", () => {
+    const left = repeatsB9();
+    expect({ gate: gateTakes(left, repeatsB9()), console: ViewLogic.mapProblems(left, { outline: repeatsB9(), mapSlots: SLOTS }) })
+      .toEqual({ gate: true, console: null });
+  });
+});
