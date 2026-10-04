@@ -1752,3 +1752,44 @@ describe('4.5: the meeting\'s edits', () => {
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5b, fix round 1 (finding 2): one rule for an element's place under its id
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The diff pairs the elements under an id in order (elementsById), and the questions' carry
+// reads a question's place by lib/weave.js occurrenceKeys. Two copies of one rule can drift
+// apart; until the diff calls occurrenceKeys itself, this holds the two to one pairing.
+describe('4.5b: the diff pairs the elements under an id as lib/weave.js occurrenceKeys places them', () => {
+  const { occurrenceKeys } = require('../weave');
+  /** Threads under these ids, each claim naming its version and its index. */
+  const threads = (version, ids) => ids.map((id, i) => ({ id, claim: `${version}${i}`, role: 'grounds-it', receipt: 'ledger' }));
+  /** For each thread of `after`, the index of the thread of `before` the diff pairs it with; null for one it added. */
+  function diffPairs(before, after) {
+    const changes = D.weaveEditsBetween({ threads: before }, { threads: after });
+    return after.map((_thread, index) => {
+      const change = changes.find((c) => c.at[1].index === index && (c.before === null || (c.at[2] && c.at[2].key === 'claim')));
+      if (!change || change.before === null) return null;
+      return before.findIndex((thread) => thread.claim === change.before);
+    });
+  }
+  /** The same pairing read from occurrenceKeys: the thread of `before` in the same place, or null. */
+  function placePairs(before, after) {
+    const places = occurrenceKeys(before);
+    return occurrenceKeys(after).map((place) => (places.includes(place) ? places.indexOf(place) : null));
+  }
+
+  it.each([
+    ['a repeated id, in order', ['t1', 't2', 't2', 't3'], ['t1', 't2', 't2', 't3']],
+    ['a repeated id, with another thread moved between its occurrences', ['t2', 't1', 't2'], ['t1', 't2', 't2']],
+    ['a third occurrence added', ['t2', 't2'], ['t2', 't2', 't2']],
+    ['an occurrence gone', ['t2', 't2', 't2'], ['t2', 't2']],
+    ['an id read trimmed', ['t2', 't2 '], [' t2', 't2']]
+  ])('%s', (_case, beforeIds, afterIds) => {
+    const before = threads('b', beforeIds);
+    const after = threads('a', afterIds);
+    const pairs = diffPairs(before, after);
+    expect(pairs.some((index) => index !== null)).toBe(true);
+    expect(pairs).toEqual(placePairs(before, after));
+  });
+});
