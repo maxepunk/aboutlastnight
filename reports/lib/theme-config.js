@@ -52,11 +52,12 @@ const IDENTITY_CALLS = Object.freeze(Object.keys(RULE_SET_CALLS).flatMap(
 ));
 
 /**
- * A line that ends a sentence: its last mark, after any closing quotation mark or bracket
- * and any trailing space, is a full stop, a question mark, an exclamation mark or an
- * ellipsis. A rework's line may not (identityLineOf).
+ * A line that runs on into its task: it ends on a letter or a digit, or on a closing quotation
+ * mark or bracket that follows one, with nothing after it. A rework's line must (identityLineOf):
+ * code completes it with the rework's task, so a full stop, a comma, a colon, a dash or a
+ * trailing space at its end prints a broken first line (the integrator, at 4.13b's merge).
  */
-const ENDS_A_SENTENCE = /[.!?\u2026]['"\u2019\u201d)\]]*\s*$/;
+const RUNS_ON_INTO_ITS_TASK = /[\p{L}\p{N}]['"\u2019\u201d)\]]*$/u;
 
 const THEME_CONFIGS = {
   journalist: {
@@ -289,7 +290,9 @@ function mapSlotsOf(theme) {
  * task and never ends a sentence.
  *
  * Each refusal names the theme as it was given and the call, so a theme author who gets a
- * line wrong is told which, before any prompt is built.
+ * line wrong is told which, before that call's prompt is built. The suite runs every call of
+ * every theme that names a rules folder (lib/__tests__/theme-config.test.js), so a bad line
+ * fails there first.
  *
  * @param {string} theme - Theme name
  * @param {string} call - one of IDENTITY_CALLS
@@ -327,11 +330,11 @@ function identityLineOf(theme, call) {
   if (line.includes('\n')) {
     throw new Error(`[identityLineOf] The theme "${theme}" gives the call "${call}" an identity line of more than one line: ${fix}`);
   }
-  if (call.endsWith(REWORK_SUFFIX) && ENDS_A_SENTENCE.test(line)) {
+  if (call.endsWith(REWORK_SUFFIX) && !RUNS_ON_INTO_ITS_TASK.test(line)) {
     throw new Error(
-      `[identityLineOf] The theme "${theme}" gives the call "${call}" an identity line that ends a sentence ` +
+      `[identityLineOf] The theme "${theme}" gives the call "${call}" an identity line that does not end on a word ` +
       `(${JSON.stringify(line)}): a rework's line is a clause that opens its rework rules, and code completes it with ` +
-      'the rework\'s task (": the director sent it back, ..."), so drop the mark that ends the sentence.'
+      'the rework\'s task (": the director sent it back, ..."), so end it on its last word, with no mark after it but a closing quotation mark or bracket.'
     );
   }
   return line;

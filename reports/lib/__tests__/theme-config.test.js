@@ -392,10 +392,25 @@ describe("4.13b: a theme's identity lines", () => {
       for (const call of ['arc-rework', 'outline-rework', 'article-rework']) {
         plant(call, line);
         const error = refusalOf(PLANTED, call);
-        expect([call, error && error.message]).toEqual([call, expect.stringMatching(/ends a sentence/)]);
+        expect([call, error && error.message]).toEqual([call, expect.stringMatching(/does not end on a word/)]);
         expect(error.message).toContain(`"${PLANTED}"`);
         expect(error.message).toContain(`"${call}"`);
       }
+    });
+
+    // The integrator, at 4.13b's merge: the rule is stated positively, so a line that ends on
+    // any mark but a closing quotation mark or bracket is refused, as is a trailing space.
+    it.each([
+      ['a comma', 'You are reworking the weave you wrote,'],
+      ['a colon', 'You are reworking the weave you wrote:'],
+      ['a semicolon', 'You are reworking the weave you wrote;'],
+      ['a dash', 'You are reworking the weave you wrote -'],
+      ['a trailing space', 'You are reworking the weave you wrote ']
+    ])('a rework line that ends in %s is refused, naming the theme and the call', (_mark, line) => {
+      plant('arc-rework', line);
+      const error = refusalOf(PLANTED, 'arc-rework');
+      expect(error && error.message).toMatch(/does not end on a word/);
+      expect(error.message).toContain(`"${PLANTED}"`);
     });
 
     it("takes a rework line that runs on into its task, and a writer's or a judge's line that ends a sentence", () => {
@@ -410,6 +425,20 @@ describe("4.13b: a theme's identity lines", () => {
     });
   });
 
+  // The integrator, at 4.13b's merge: a theme's bad line fails here, in the suite, before any
+  // call of that theme pays for a prompt.
+  it('every theme that names a rules folder gives every identity call its line', () => {
+    const { THEME_CONFIGS: configs } = require('../theme-config');
+    const themes = Object.keys(configs).filter((name) => configs[name] && configs[name].rules);
+    expect(themes).toContain('journalist');
+    for (const theme of themes) {
+      for (const call of IDENTITY_CALLS) {
+        const line = identityLineOf(theme, call);
+        expect([theme, call, typeof line === 'string' && line.trim().length > 0]).toEqual([theme, call, true]);
+      }
+    }
+  });
+
   describe("identityLineOf's refusals, each naming the theme and the call", () => {
     it.each([
       ['an unknown call', 'journalist', 'map', undefined, /Unknown call/],
@@ -419,7 +448,7 @@ describe("4.13b: a theme's identity lines", () => {
       ['no line for the call: the parked detective (R1)', 'detective', 'judge-arc', undefined, /has no identity line/],
       ['an empty line', PLANTED, 'judge-article', '   ', /an empty identity line/],
       ['a line of more than one line', PLANTED, 'arc', 'You are the planted writer.\nYou write the weave.', /more than one line/],
-      ['a rework line that ends a sentence', PLANTED, 'outline-rework', 'You are reworking the map you wrote.', /ends a sentence/]
+      ['a rework line that does not end on a word', PLANTED, 'outline-rework', 'You are reworking the map you wrote.', /does not end on a word/]
     ])('%s', (_case, theme, call, line, reason) => {
       if (line !== undefined) plant(call, line);
       const error = refusalOf(theme, call);
