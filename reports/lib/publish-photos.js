@@ -188,9 +188,29 @@ async function publishPhotos({ bundle, theme, sourceDir, destDir }) {
   return photos.map((photo) => photo.filename);
 }
 
+/**
+ * The files in a session's published folder that its page does not print (the director's ruling
+ * at the end of phase 4, 2026-10-04): a photo an earlier publish wrote that the director has
+ * since left out or deleted, or any other file there. Publish deletes nothing (F2), and the
+ * folder is public once committed, so the completion names each one for the director to remove.
+ *
+ * @param {string} destDir - outputs/sessionphotos/<id>
+ * @param {string[]} printed - the filenames the page prints (publishPhotos' return)
+ * @returns {string[]} the other files' names, sorted; none when the folder does not exist
+ */
+function filesNotPrinted(destDir, printed) {
+  if (!fs.existsSync(destDir)) return [];
+  const onPage = new Set(printed.map((name) => path.basename(name).toLowerCase()));
+  return fs.readdirSync(destDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && !onPage.has(entry.name.toLowerCase()))
+    .map((entry) => entry.name)
+    .sort();
+}
+
 module.exports = {
   PUBLISHED_PHOTO,
   printedPhotos,
   missingPrintedPhotos,
-  publishPhotos
+  publishPhotos,
+  filesNotPrinted
 };

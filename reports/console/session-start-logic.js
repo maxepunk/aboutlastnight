@@ -281,6 +281,26 @@
     return typeof line === 'string' ? line.trim() : '';
   }
 
+  /**
+   * The files in the session's published folder that the page does not print, as the completion
+   * names them (the director's ruling at the end of phase 4, 2026-10-04): publish deletes nothing
+   * (F2), and the folder is public once committed. Null when there are none.
+   *
+   * @param {Object} result - the completed run (its photosNotPrinted, from the publish step)
+   * @returns {{line: string, files: string[]}|null}
+   */
+  function notPrintedPhotosView(result) {
+    const files = result && Array.isArray(result.photosNotPrinted)
+      ? result.photosNotPrinted.filter((name) => typeof name === 'string' && name)
+      : [];
+    if (files.length === 0) return null;
+    return {
+      line: 'Not on the page, but still in outputs/sessionphotos/' + result.sessionId + '/ from an earlier publish. ' +
+        'That folder is public once you commit it, so delete any of these that should not be public before you commit:',
+      files: files
+    };
+  }
+
   const api = {
     isValidSessionId,
     classifyCheckpointResponse,
@@ -290,6 +310,7 @@
     buildReportLinks,
     completedResultFrom,
     parkedThemeNote,
+    notPrintedPhotosView,
     SESSION_ID_PATTERN,
     CHECKPOINT_ORDER
   };

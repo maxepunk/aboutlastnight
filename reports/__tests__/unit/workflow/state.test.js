@@ -198,7 +198,7 @@ describe('ReportStateAnnotation', () => {
 
     // Phase 4 (brief 4.6): the old arc channels went with their last readers (R4), and the
     // map's baseline and its checks' mark came.
-    it('includes all 87 state fields (includes revision context + human feedback fields)', () => {
+    it('includes all 88 state fields (includes revision context + human feedback fields)', () => {
       const expectedFields = [
         // Session
         'sessionId',
@@ -275,6 +275,7 @@ describe('ReportStateAnnotation', () => {
         'assembledHtml',
         'outputPath',
         'photosCopied',
+        'photosNotPrinted',
         'validationResults',
         // Control flow
         'currentPhase',
@@ -487,7 +488,7 @@ describe('ReportStateAnnotation', () => {
       // Update this number AND the comments in state.js (header / getDefaultState JSDoc /
       // self-test) together if the field set changes. Task 4.14e: +2, the map's and the
       // article's rework records (_outlineRework, _articleRework).
-      expect(Object.keys(getDefaultState()).length).toBe(87);
+      expect(Object.keys(getDefaultState()).length).toBe(88);
     });
 
     it('declares the leave-out list (phase 4, brief 4.2)', () => {

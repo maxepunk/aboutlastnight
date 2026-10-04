@@ -72,3 +72,12 @@ describe('buildCompletionResponse', () => {
     expect(out).not.toHaveProperty('errors');
   });
 });
+
+// The director's ruling at the end of phase 4 (2026-10-04): the completion names the files in
+// the published folder that the page does not print.
+describe('buildCompletionResponse carries the published files the page does not print', () => {
+  it('passes photosNotPrinted through on a completed run', () => {
+    const out = buildCompletionResponse(completeResult({ photosNotPrinted: ['old.jpg'] }), '071826');
+    expect(out.photosNotPrinted).toEqual(['old.jpg']);
+  });
+});

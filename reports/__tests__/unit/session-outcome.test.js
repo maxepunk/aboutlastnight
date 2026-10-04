@@ -79,3 +79,13 @@ describe('buildOutcomeRecord — htmlUrl (Task 2 concern)', () => {
     expect(record.htmlUrl).toBeNull();
   });
 });
+
+// The director's ruling at the end of phase 4 (2026-10-04): a complete outcome keeps the files
+// in the published folder that the page does not print, so a completion recovered through
+// GET /checkpoint lists them too.
+describe('buildOutcomeRecord keeps the published files the page does not print', () => {
+  it('on a complete outcome, and none when the run named none', () => {
+    expect(buildOutcomeRecord({ currentPhase: 'complete', photosNotPrinted: ['old.jpg'] }).photosNotPrinted).toEqual(['old.jpg']);
+    expect(buildOutcomeRecord({ currentPhase: 'complete' }).photosNotPrinted).toEqual([]);
+  });
+});

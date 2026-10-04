@@ -379,3 +379,23 @@ describe('4.8: parkedThemeNote', () => {
     expect(parkedThemeNote('constructor', {})).toBe('');
   });
 });
+
+// The director's ruling at the end of phase 4 (2026-10-04): the completion names each file in
+// the session's published folder that the page does not print, so the director removes it
+// before committing; publish deletes nothing (F2).
+describe('notPrintedPhotosView', () => {
+  const { notPrintedPhotosView } = require('../session-start-logic');
+
+  it('names the folder and each file, and says what to do', () => {
+    expect(notPrintedPhotosView({ sessionId: '100426', photosNotPrinted: ['p3.jpg', 'old (2).jpg'] })).toEqual({
+      line: 'Not on the page, but still in outputs/sessionphotos/100426/ from an earlier publish. That folder is public once you commit it, so delete any of these that should not be public before you commit:',
+      files: ['p3.jpg', 'old (2).jpg']
+    });
+  });
+
+  it('shows nothing when every published file is on the page, or the run named none', () => {
+    expect(notPrintedPhotosView({ sessionId: '100426', photosNotPrinted: [] })).toBeNull();
+    expect(notPrintedPhotosView({ sessionId: '100426' })).toBeNull();
+    expect(notPrintedPhotosView(null)).toBeNull();
+  });
+});

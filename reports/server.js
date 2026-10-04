@@ -1142,6 +1142,7 @@ function buildCompletionResponse(result, sessionId, extra = {}) {
         response.validationResults = result.validationResults;
         response.outputPath = result.outputPath;
         response.photosCopied = result.photosCopied;
+        response.photosNotPrinted = result.photosNotPrinted;
         if (result.outputPath) response.htmlUrl = '/outputs/' + path.basename(result.outputPath);
     }
     if (result.errors?.length > 0) response.errors = result.errors;

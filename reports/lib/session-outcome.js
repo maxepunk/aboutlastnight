@@ -50,6 +50,9 @@ function buildOutcomeRecord(result = {}) {
     // recovered a lost SSE via GET /state with no usable link to the report.
     htmlUrl: result.htmlUrl || null,
     photosCopied: result.photosCopied || null,
+    // The director's ruling at the end of phase 4 (2026-10-04): the published files the page
+    // does not print, which the completion names.
+    photosNotPrinted: Array.isArray(result.photosNotPrinted) ? result.photosNotPrinted : [],
     recordedAt
   };
 }

@@ -13,6 +13,7 @@ function CompletionView({ result, onNewSession }) {
   const sessionId = result.sessionId || result.session || null;
   const outputPath = result.outputPath || result.htmlUrl || null;
   const validationResults = result.validationResults || null;
+  const notPrinted = window.Console.sessionStartLogic.notPrintedPhotosView(result);
 
   const handleViewReport = () => {
     const url = result.htmlUrl || result.outputPath;
@@ -42,6 +43,18 @@ function CompletionView({ result, onNewSession }) {
           React.createElement('span', { className: 'text-muted' }, 'Output: '),
           React.createElement('code', { className: 'text-xs' }, outputPath)
         )
+      )
+    ),
+
+    // The director's ruling at the end of phase 4 (2026-10-04): the published files the page does
+    // not print, named for the director to remove before committing (publish deletes nothing).
+    notPrinted && React.createElement('div', { className: 'completion-view__not-printed glass-panel mt-md', role: 'note' },
+      React.createElement('h4', { className: 'text-secondary mb-sm' }, 'Photos not on the page'),
+      React.createElement('p', { className: 'text-sm' }, notPrinted.line),
+      React.createElement('ul', { className: 'completion-view__details' },
+        notPrinted.files.map((name) => React.createElement('li', { key: name },
+          React.createElement('code', { className: 'text-xs' }, name)
+        ))
       )
     ),
 

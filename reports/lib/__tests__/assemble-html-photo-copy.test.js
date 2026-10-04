@@ -144,3 +144,27 @@ describe('assembleHtml renders and publishes in one theme', () => {
     expect(result.photosCopied).toBe(printed.length);
   });
 });
+
+// The director's ruling at the end of phase 4 (2026-10-04): publish deletes nothing (F2), and
+// it names each file in the session's published folder that the page does not print, such as
+// a photo an earlier publish wrote that the director has since left out or deleted. The folder
+// is public once committed, so the completion lists them for the director to remove.
+describe('assembleHtml names the published files the page no longer prints', () => {
+  test("an earlier publish's photo the page no longer prints stays in the folder, and is named", async () => {
+    const { baseDir, publishedDir } = await baseDirWith({ 'aln0919269 (1 of 2).jpg': [400, 300], 'aln0919269 (2 of 2).jpg': [400, 300] });
+    const both = ['aln0919269 (1 of 2).jpg', 'aln0919269 (2 of 2).jpg'];
+    const first = await assembleHtml({ contentBundle: bundlePrinting(both), sessionId: SESSION, theme: 'journalist' }, mockConfig(baseDir));
+    expect(first.photosNotPrinted).toEqual([]);
+    const again = await assembleHtml(
+      { contentBundle: bundlePrinting(['aln0919269 (1 of 2).jpg']), sessionId: SESSION, theme: 'journalist' }, mockConfig(baseDir)
+    );
+    expect(again.photosNotPrinted).toEqual(['aln0919269 (2 of 2).jpg']);
+    expect(fs.readdirSync(publishedDir).sort()).toEqual(both);
+  });
+
+  test('a page with no published folder names nothing', async () => {
+    const { baseDir } = await baseDirWith({});
+    const result = await assembleHtml({ contentBundle: bundlePrinting([]), sessionId: SESSION, theme: 'journalist' }, mockConfig(baseDir));
+    expect(result.photosNotPrinted).toEqual([]);
+  });
+});

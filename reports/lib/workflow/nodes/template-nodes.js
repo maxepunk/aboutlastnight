@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { PHASES } = require('../state');
 const { createTemplateAssembler } = require('../../template-assembler');
-const { publishPhotos } = require('../../publish-photos');
+const { publishPhotos, filesNotPrinted } = require('../../publish-photos');
 const { traceNode } = require('../../observability');
 
 /**
@@ -153,6 +153,7 @@ async function assembleHtml(state, config) {
   // size (lib/publish-photos.js), before the report: a printed photo missing from
   // data/{sessionId}/photos throws, naming it, and no report is written.
   let photosCopied = 0;
+  let photosNotPrinted = [];
   if (sessionId) {
     const sourcePhotosDir = path.join(baseDir, 'data', sessionId, 'photos');
     const destPhotosDir = path.join(outputDir, 'sessionphotos', sessionId);
@@ -162,6 +163,12 @@ async function assembleHtml(state, config) {
     photosCopied = published.length;
     if (photosCopied > 0) {
       console.log(`[assembleHtml] Published ${photosCopied} printed photos at web size to ${destPhotosDir}`);
+    }
+    // The director's ruling at the end of phase 4 (2026-10-04): publish deletes nothing (F2),
+    // so the completion names each file the folder holds that the page does not print.
+    photosNotPrinted = filesNotPrinted(destPhotosDir, published);
+    if (photosNotPrinted.length > 0) {
+      console.log(`[assembleHtml] ${photosNotPrinted.length} file(s) in ${destPhotosDir} are not on the page: ${photosNotPrinted.join(', ')}`);
     }
   }
 
@@ -174,6 +181,7 @@ async function assembleHtml(state, config) {
     assembledHtml: html,
     outputPath,
     photosCopied,
+    photosNotPrinted,
     currentPhase: PHASES.COMPLETE  // Final phase - signals pipeline completion
   };
 }

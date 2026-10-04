@@ -701,6 +701,16 @@ const ReportStateAnnotation = Annotation.Root({
     default: () => 0
   }),
 
+  /**
+   * The files in the session's published folder that the page does not print (the director's
+   * ruling at the end of phase 4, 2026-10-04), which the completion names: publish deletes
+   * nothing (F2), and the folder is public once committed.
+   */
+  photosNotPrinted: Annotation({
+    reducer: replaceReducer,
+    default: () => []
+  }),
+
   // ═══════════════════════════════════════════════════════
   // CONTROL FLOW
   // ═══════════════════════════════════════════════════════
@@ -1117,6 +1127,7 @@ function getDefaultState() {
     validationResults: null,
     outputPath: null,
     photosCopied: 0,
+    photosNotPrinted: [],
     // Control flow
     currentPhase: 'init',
     voiceRevisionCount: 0,  // @deprecated
@@ -1368,7 +1379,7 @@ const ROLLBACK_CLEARS = {
     'directorGateNotes',
     // Generation
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted',
     // Evaluation history
     'evaluationHistory'
   ],
@@ -1403,7 +1414,7 @@ const ROLLBACK_CLEARS = {
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted',
     'evaluationHistory'
   ],
 
@@ -1427,7 +1438,7 @@ const ROLLBACK_CLEARS = {
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted',
     'evaluationHistory'
   ],
 
@@ -1460,7 +1471,7 @@ const ROLLBACK_CLEARS = {
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted',
     'evaluationHistory'
   ],
 
@@ -1475,7 +1486,7 @@ const ROLLBACK_CLEARS = {
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted',
     'evaluationHistory'
   ],
 
@@ -1492,7 +1503,7 @@ const ROLLBACK_CLEARS = {
     'meetingApproved', '_meetingRound', '_weaveBaseline', '_weaveHandEdits', '_weaveHandEditReport', '_weaveMarks',
     'directorGateNotes',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted',
     'evaluationHistory'
   ],
 
@@ -1511,7 +1522,7 @@ const ROLLBACK_CLEARS = {
     'meetingApproved', '_meetingRound', '_weaveHandEditReport', '_weaveMarks',
     'heroImage', 'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
-    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied',
+    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted',
     'evaluationHistory'
   ],
 
@@ -1533,7 +1544,7 @@ const ROLLBACK_CLEARS = {
     'heroImage',
     'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
-    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted'
   ],
 
   // Phase 1.66: Character ID mappings (8.9.5) — second gate of the photo branch.
@@ -1557,7 +1568,7 @@ const ROLLBACK_CLEARS = {
     'heroImage',
     'outline', '_mapBaseline', '_mapCheck', 'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEdits', '_outlineHandEditReport', '_outlineTrace',
     'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace',
-    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted'
   ],
 
   // Phase 3.25: the map (phase 4, brief 4.6; R9). Going back to the map reopens it as the
@@ -1571,12 +1582,12 @@ const ROLLBACK_CLEARS = {
   // is invalidated (lib/api-helpers.js PHASES_INVALIDATED_BY).
   'outline': [
     'outlineApproved', '_outlineFeedback', '_outlineRework', '_outlineHandEditReport', '_outlineTrace',
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted'
   ],
 
   // Phase 4.2: Article
   'article': [
-    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied'
+    'contentBundle', '_articleFactCheck', 'articleApproved', '_articleFeedback', '_articleRework', '_articleHandEdits', '_articleHandEditReport', '_articleTrace', 'assembledHtml', 'validationResults', 'outputPath', 'photosCopied', 'photosNotPrinted'
   ]
 };
 
