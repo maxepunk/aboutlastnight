@@ -154,11 +154,15 @@ describe('requirePhasePrompts: the reworkers\' guard', () => {
     }
   });
 
-  // Phase 4 (brief 4.6; R1): the detective's outline phase went with its outline writer.
-  it.each(['articleGeneration'])('detective %s: passes on its files, and fails loud naming an empty one', async (phase) => {
-    await expect(createPromptBuilder({ theme: 'detective' }).requirePhasePrompts(phase)).resolves.toBeUndefined();
-    const names = PHASE_REQUIREMENTS.detective[phase];
-    const loader = { loadPhasePrompts: async () => Object.fromEntries(names.map((n, i) => [n, i === 0 ? '' : 'text'])) };
-    await expect(new PromptBuilder(loader, 'detective').requirePhasePrompts(phase)).rejects.toThrow(names[0]);
+  // Brief 4.7c (R1): the parked detective's branch, which checked its own craft files, went
+  // with the old stages its writers wrote: the check is the rule set's for every builder,
+  // and it never asks the theme loader. A detective builder's writers refuse it a step
+  // later, naming the parked theme (lib/map.js mapSchemaFor).
+  it.each(['outlineGeneration', 'articleGeneration'])('%s: the check never asks the theme loader, for any theme', async (phase) => {
+    const loader = { loadPhasePrompts: jest.fn(async () => { throw new Error('asked the theme loader'); }) };
+    for (const theme of ['journalist', 'detective']) {
+      await expect(new PromptBuilder(loader, theme).requirePhasePrompts(phase)).resolves.toBeUndefined();
+    }
+    expect(loader.loadPhasePrompts).not.toHaveBeenCalled();
   });
 });

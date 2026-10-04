@@ -14,7 +14,6 @@ const {
   carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE,
   MAP_EDIT_LINES_GUIDE, isMap
 } = require('../../hand-edit-diff');
-const { SHOULD_CONSIDER_PREAMBLE } = require('../../prompt-builder');
 const { WEAVE_CHECKS_SOURCE, MEETING_ROUNDS, weaveForRework } = require('../../weave');
 const { MAP_CHECKS_SOURCE } = require('../../map');
 
@@ -624,18 +623,17 @@ function buildValidEvidenceIds(evidenceBundle) {
 const STRUCTURAL_PASS_SCORE = 0.8;
 
 /**
- * The journalist rework's line under SHOULD CONSIDER (phase 3, 3.10): where the items
- * came from, and no rule for them. What a rework does with a suggestion is WHAT THIS
- * REWORK DOES's to say, once (R23). The generation prompts' preamble
- * (SHOULD_CONSIDER_PREAMBLE) adds "Apply them where they serve the piece", which in a
- * rework is a second, wider scope.
+ * The rework's line under SHOULD CONSIDER (phase 3, 3.10): where the items came from, and
+ * no rule for them. What a rework does with a suggestion is WHAT THIS REWORK DOES's to
+ * say, once (R23). The generation prompts' old preamble added "Apply them where they serve
+ * the piece", which in a rework is a second, wider scope; it went with its last reader,
+ * the parked detective's branch (phase 4, brief 4.7c; R1).
  */
 const REWORK_SHOULD_CONSIDER_LINE = 'These came from the evaluation that ran before this pass.';
 
 /**
- * The journalist revision context's line above CRITERIA SCORES: who computed the
- * scores. A model evaluation's scores are the judge's own and uncalibrated (phase 7
- * calibrates them).
+ * The revision context's line above CRITERIA SCORES: who computed the scores. A model
+ * evaluation's scores are the judge's own and uncalibrated (phase 7 calibrates them).
  */
 const MODEL_SCORES_LINE = "The scores below are the evaluating model's own and uncalibrated: no one has yet checked them against the director's approvals and send-backs.";
 
@@ -743,8 +741,21 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  * 2. Specific feedback on what needs to change
  * 3. Criteria scores to understand what's working vs needs work
  *
- * The revision prompt should instruct: "Keep everything that's working,
- * only modify the specific issues identified below."
+ * The context (phase 3, brief 3.3; TH7) has no fixed "preserve" text: the director's note
+ * sets how much a send back keeps, an advisory criterion is a suggestion, and a model
+ * evaluation's scores are said to be uncalibrated (a code check's are named as the
+ * check's). Phase 3 (3.10; R23): an automatic pass fixes the must-fix items and takes up a
+ * suggestion only where it touches a line it is already changing for one; everything else
+ * stays word for word, for the reason the context gives with it (the 4b fix batch). Only a
+ * criterion that failed (scored below STRUCTURAL_PASS_SCORE) prints its notes and fix, on
+ * either kind of rework. An automatic pass carries no EVALUATOR FEEDBACK, the judge's
+ * guidance. A code check's lines print under the check's own label (CODE_CHECKS) in place
+ * of ISSUES TO ADDRESS, on either kind (phase 4, brief 4.4).
+ *
+ * One context for every theme (phase 4, brief 4.7c; R1): the parked detective's branch,
+ * its PRESERVE lists, its four numbered instructions, its SHOULD CONSIDER preamble and its
+ * previous-output header, went with the old stages its reworks wrote, and with it the
+ * theme option that chose it.
  *
  * @param {Object} options - Revision context options
  * @param {string} options.phase - Phase name ('arcs', 'outline', 'article')
@@ -767,18 +778,6 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  *   no finding located in their text reaches the rework (withoutDirectorsFindings; FA)
  * @param {number} [options.round] - the director's round a send back opens (the stop's
  *   "Round N"); named in the banner of a send-back rework (brief 2.3)
- * @param {string} [options.theme='journalist'] - the session's theme. The journalist's
- *   context (phase 3, brief 3.3; TH7) has no fixed "preserve" text: the director's note
- *   sets how much a send back keeps, an advisory criterion is a suggestion, and a model
- *   evaluation's scores are said to be uncalibrated (a code check's are named as the
- *   check's). Phase 3 (3.10; R23): an automatic pass fixes the must-fix items and takes
- *   up a suggestion only where it touches a line it is already changing for one;
- *   everything else stays word for word, for the reason the context gives with it (the
- *   4b fix batch). Only a criterion that failed (scored below STRUCTURAL_PASS_SCORE)
- *   prints its notes and fix, on either kind of rework. An automatic pass carries no
- *   EVALUATOR FEEDBACK, the judge's guidance. A code check's lines print under the
- *   check's own label (CODE_CHECKS) in place of ISSUES TO ADDRESS, on either kind (phase
- *   4, brief 4.4). The detective keeps today's text (D13).
  * @param {string} [options.outputName] - what the context calls the output the rework
  *   starts from, where it differs from the phase's name: 'weave' for the arc stage's
  *   rework (phase 4, brief 4.4). The phase still names the stamp the findings must carry.
@@ -804,9 +803,8 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  * });
  */
 function buildRevisionContext(options) {
-  const { phase, revisionCount, previousOutput, handEdits, round, theme = 'journalist' } = options;
+  const { phase, revisionCount, previousOutput, handEdits, round } = options;
   const outputName = typeof options.outputName === 'string' && options.outputName ? options.outputName : phase;
-  const parkedDetective = theme === 'detective';
 
   // Brief 4.5 (ruling 1): at the story meeting the round mark decides the scope, the banner
   // and the rules for the director's edits; the note is only what the director wrote. Every
@@ -820,7 +818,7 @@ function buildRevisionContext(options) {
   // edits have their own wording below, and since no evaluator reads the map (spec 5.4;
   // brief 4.6b), it prints no evaluation line without a check result and no line about the
   // evaluator's issues after the director's note.
-  const mapMode = !meetingMode && !parkedDetective && phase === 'outline' && isMap(previousOutput);
+  const mapMode = !meetingMode && phase === 'outline' && isMap(previousOutput);
 
   // F1: the director's edits the version this rework starts from carries, by id. FA
   // (requirement 7): the rework reads the verdict without the findings located in them.
@@ -895,14 +893,13 @@ function buildRevisionContext(options) {
     : '  (none reported)';
 
   // Brief 1.3: the suggestions, under their own heading. Omitted entirely when there
-  // are none. The detective keeps the two lines of preamble a generation prompt gives
-  // them (D13); the journalist's says only where they came from (phase 3, 3.10), since
+  // are none. The line under it says only where they came from (phase 3, 3.10), since
   // WHAT THIS REWORK DOES states what a rework does with a suggestion.
   const shouldConsiderBlock = advisories.length > 0
     ? `
 
 SHOULD CONSIDER:
-${parkedDetective ? SHOULD_CONSIDER_PREAMBLE : REWORK_SHOULD_CONSIDER_LINE}
+${REWORK_SHOULD_CONSIDER_LINE}
 
 ${advisories.map(formatIssue).join('\n')}`
     : '';
@@ -910,8 +907,8 @@ ${advisories.map(formatIssue).join('\n')}`
   // Phase 3 (3.10; R23, final review rules-writers[0]): which criteria failed. A stored
   // verdict carries a fix on a passing criterion too (the gate's first arc rework had
   // four, "Optionally ..." among them), and a "fix:" line reads as must-fix, so only a
-  // failed criterion's notes and fix reach a journalist rework; a passing criterion
-  // prints its score alone, whatever the judge wrote.
+  // failed criterion's notes and fix reach a rework; a passing criterion prints its score
+  // alone, whatever the judge wrote.
   //
   // The 4b fix batch (the integrator's ruling): a criterion failed only when it scored
   // below the bar. Counting a criterion as failed when a must-fix issue named its key
@@ -922,7 +919,7 @@ ${advisories.map(formatIssue).join('\n')}`
 
   // Per-criterion: score, structural/advisory label, and the evaluator's own
   // notes + concrete fix. The notes and fix are the actionable part. Phase 3 (3.3):
-  // an advisory criterion's fix is a suggestion, and the journalist's line says so.
+  // an advisory criterion's fix is a suggestion, and its line says so.
   let hasFixLines = false;
   let hasSuggestionLines = false;
   const criteriaList = Object.keys(criteria).length > 0
@@ -932,8 +929,8 @@ ${advisories.map(formatIssue).join('\n')}`
           const scoreText = score === null ? 'unscored' : score.toFixed(2);
           const kind = (value && typeof value === 'object' && value.type) ? ` [${value.type}]` : '';
           const lines = [`  - ${name}: ${scoreText}${kind}`];
-          if (value && typeof value === 'object' && (parkedDetective || failed(score))) {
-            const fixLabel = (!parkedDetective && value.type === 'advisory') ? 'suggestion' : 'fix';
+          if (value && typeof value === 'object' && failed(score)) {
+            const fixLabel = value.type === 'advisory' ? 'suggestion' : 'fix';
             if (value.notes && String(value.notes).trim()) lines.push(`      notes: ${value.notes}`);
             if (value.fix && String(value.fix).trim()) {
               lines.push(`      ${fixLabel}: ${value.fix}`);
@@ -949,35 +946,18 @@ ${advisories.map(formatIssue).join('\n')}`
     .map(([name, value]) => [name, scoreOf(value)])
     .filter(([, score]) => score !== null);
 
-  // How to read the scores. The detective keeps today's two lists (D13). The
-  // journalist's (phase 3, 3.3) drops them: "PRESERVE THESE" listed every criterion at
-  // 0.8 or more, which after a pass is every criterion, so it outranked the director's
-  // note (TH7); and "need improvement" listed every criterion under 0.7, an advisory
-  // one included, as a defect.
+  // How to read the scores (phase 3, 3.3). The lists went: "PRESERVE THESE" listed every
+  // criterion at 0.8 or more, which after a pass is every criterion, so it outranked the
+  // director's note (TH7); and "need improvement" listed every criterion under 0.7, an
+  // advisory one included, as a defect. The parked detective's copy of them went with its
+  // branch (phase 4, brief 4.7c; R1).
   //
-  // The journalist's line says only who computed the scores (post-merge fix, 3.3
-  // review findings 1 and 2). A model evaluation's are the judge's own, uncalibrated.
-  // The weave checks (validateArcStructure, phase 4) and the fact check that runs before
-  // the article judge score nothing, so a record with no scores gets no line.
-  // What to do with each kind of finding is WHAT THIS REWORK DOES's to say, once.
-  let scoresGuide;
-  if (parkedDetective) {
-    const workingWell = scored.filter(([, score]) => score >= 0.8).map(([name]) => name);
-    const workingWellText = workingWell.length > 0
-      ? `These aspects are working well, PRESERVE THESE: ${workingWell.join(', ')}`
-      : 'Focus on the issues identified below.';
-
-    const needsWork = scored.filter(([, score]) => score < 0.7).map(([name]) => name);
-    const needsWorkText = needsWork.length > 0
-      ? `These aspects need improvement: ${needsWork.join(', ')}`
-      : '';
-    scoresGuide = `${workingWellText}\n${needsWorkText}`;
-  } else if (scored.length === 0) {
-    scoresGuide = '';
-  } else {
-    scoresGuide = MODEL_SCORES_LINE;
-  }
-  const scoresGuideBlock = scoresGuide ? `${scoresGuide}\n\n` : '';
+  // The line says only who computed the scores (post-merge fix, 3.3 review findings 1
+  // and 2). A model evaluation's are the judge's own, uncalibrated. The weave checks
+  // (validateArcStructure, phase 4) and the fact check that runs before the article judge
+  // score nothing, so a record with no scores gets no line. What to do with each kind of
+  // finding is WHAT THIS REWORK DOES's to say, once.
+  const scoresGuideBlock = scored.length > 0 ? `${MODEL_SCORES_LINE}\n\n` : '';
 
   // Confidence is a string ('high'|'medium'|'low') in the current schema and a
   // number in the legacy one; the old code multiplied both by 100 -> "NaN%".
@@ -992,23 +972,22 @@ ${advisories.map(formatIssue).join('\n')}`
     ? '\n\nThis evaluation passed. The director sent the work back anyway; their note below\nis the reason for this rework.'
     : '';
 
-  // Phase 3 (3.10; the integrator's ruling): an automatic journalist pass carries no
-  // EVALUATOR FEEDBACK. The judge's guidance repeats ISSUES TO ADDRESS in its must-fix
-  // steps, and its optional steps read as instructions; a stored verdict keeps its old
-  // guidance, so it is left out whole rather than filtered by its wording. A send back
-  // keeps it, and the detective keeps it on both (D13).
+  // Phase 3 (3.10; the integrator's ruling): an automatic pass carries no EVALUATOR
+  // FEEDBACK. The judge's guidance repeats ISSUES TO ADDRESS in its must-fix steps, and
+  // its optional steps read as instructions; a stored verdict keeps its old guidance, so
+  // it is left out whole rather than filtered by its wording. A send back keeps it.
   //
   // The 4b fix batch (the integrator's ruling): a code check's findings are not a
-  // judge's. They print on every journalist pass under the check's own label
-  // (CODE_CHECKS). Phase 4 (brief 4.4): the label heads the check's lines in place of
-  // ISSUES TO ADDRESS, each line the defect and its fix, and a guidance text a check
-  // writes follows its lines under the same label.
-  const codeCheck = parkedDetective ? null : codeCheckOf(validationResults);
+  // judge's. They print on every pass under the check's own label (CODE_CHECKS). Phase 4
+  // (brief 4.4): the label heads the check's lines in place of ISSUES TO ADDRESS, each line
+  // the defect and its fix, and a guidance text a check writes follows its lines under the
+  // same label.
+  const codeCheck = codeCheckOf(validationResults);
   const issuesHeading = codeCheck ? codeCheck.label : 'ISSUES TO ADDRESS';
   let feedbackBlock = '';
   if (codeCheck) {
     feedbackBlock = feedback ? `\n${feedback}` : '';
-  } else if (parkedDetective || directorsRound) {
+  } else if (directorsRound) {
     feedbackBlock = `
 
 EVALUATOR FEEDBACK:
@@ -1114,11 +1093,12 @@ ${formatEditLines(standingEdits)}
   // criterion scored above 0.8, so it told the writer to change nothing, and the
   // director's "rethink the closing" came back as a relabel.
   //
-  // Phase 3 (3.3, TH7): the journalist's instructions carry no fixed "preserve" or
-  // "do not regenerate" text. On a send back the director's note sets how much the
-  // rework keeps. Every reworker carries this section, so the rethink rule and the
-  // must-fix / suggestion rule are stated here and nowhere else in a rework (3.3
-  // review, finding 2). The detective keeps today's four lines (D13).
+  // Phase 3 (3.3, TH7): the instructions carry no fixed "preserve" or "do not
+  // regenerate" text. On a send back the director's note sets how much the rework keeps.
+  // Every reworker carries this section, so the rethink rule and the must-fix /
+  // suggestion rule are stated here and nowhere else in a rework (3.3 review, finding 2).
+  // The parked detective's four numbered lines went with its branch (phase 4, brief
+  // 4.7c; R1).
   //
   // Phase 3 (3.10): an automatic pass states R23 once. It fixes the must-fix items,
   // takes up a suggestion only where it touches a line it is already changing for one,
@@ -1160,16 +1140,7 @@ ${formatEditLines(standingEdits)}
   if (meetingRound === 'reweave') scope = reweaveScope;
   else if (directorsRound) scope = noteScope;
   else scope = automaticScope;
-  const instructionsSection = parkedDetective
-    ? `═══════════════════════════════════════════════════════════════════════════════
-CRITICAL REVISION INSTRUCTIONS:
-═══════════════════════════════════════════════════════════════════════════════
-
-1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch
-2. Make TARGETED FIXES only for the specific issues identified above
-3. Output the complete revised ${outputName} with all original content plus fixes
-4. Maintain consistency with the original structure and organization`
-    : `═══════════════════════════════════════════════════════════════════════════════
+  const instructionsSection = `═══════════════════════════════════════════════════════════════════════════════
 WHAT THIS REWORK DOES:
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1218,12 +1189,11 @@ ${evaluationBlock ? `${evaluationBlock}\n\n` : ''}${noteBlock}${noteBlock && noE
     previousOutputText = String(shownOutput);
   }
 
-  // Phase 3 (3.3): the journalist's header says what the version is, not how little
-  // to change it (TH7).
-  const previousLabel = parkedDetective ? '(to improve, not regenerate)' : '(the version this rework starts from)';
+  // Phase 3 (3.3): the header says what the version is, not how little to change it
+  // (TH7).
   const previousOutputSection = `
 ═══════════════════════════════════════════════════════════════════════════════
-PREVIOUS ${outputName.toUpperCase()} OUTPUT ${previousLabel}:
+PREVIOUS ${outputName.toUpperCase()} OUTPUT (the version this rework starts from):
 ═══════════════════════════════════════════════════════════════════════════════
 
 ${previousOutputText}

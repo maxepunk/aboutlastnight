@@ -1221,8 +1221,7 @@ async function mapReworkCall(state, promptBuilder, theme = state.theme || 'journ
     validationResults: state.validationResults,
     previousOutput: before,
     humanFeedback: state._outlineFeedback || null,
-    handEdits: edits,
-    theme
+    handEdits: edits
   });
   // Spec §5.3 [I10]: the note being acted on is already in the prompt as HUMAN FEEDBACK.
   const gateNotes = filterGateNotes(state.directorGateNotes, state._outlineFeedback, 'outline');
@@ -1308,7 +1307,7 @@ async function buildOutlineRevisionSystemPrompt(promptBuilder) {
 async function buildOutlineRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
   await promptBuilder.requirePhasePrompts('outlineGeneration');
   const writerSections = await promptBuilder.buildOutlineUserSections(...outlineWriterInputs(state));
-  const guidanceSection = buildDirectorGuidanceSection(null, gateNotes);
+  const guidanceSection = buildDirectorGuidanceSection(gateNotes);
 
   return `${writerSections}
 
@@ -1680,7 +1679,6 @@ async function reviseContentBundle(state, config) {
   // section 7): the edits the version this pass starts from carries, by id.
   const handEdits = carriedEdits(state._articleHandEdits, previousContentBundle);
   const sendBack = Boolean(state._articleFeedback);
-  const theme = config?.configurable?.theme || state?.theme || 'journalist';
 
   // Build revision context using centralized helper (DRY)
   const { contextSection, previousOutputSection } = buildRevisionContextDRY({
@@ -1691,8 +1689,7 @@ async function reviseContentBundle(state, config) {
     validationResults: state.validationResults,
     previousOutput: previousContentBundle,
     humanFeedback: state._articleFeedback || null,
-    handEdits,
-    theme
+    handEdits
   });
 
   const sdk = getSdkClient(config, 'reviseContent');
@@ -1857,7 +1854,7 @@ async function buildArticleRevisionSystemPrompt(promptBuilder) {
 async function buildArticleRevisionPrompt(state, contextSection, previousOutputSection, promptBuilder, gateNotes = []) {
   await promptBuilder.requirePhasePrompts('articleGeneration');
   const writerSections = await promptBuilder.buildArticleUserSections(...articleWriterInputs(state));
-  const guidanceSection = buildDirectorGuidanceSection(null, gateNotes);
+  const guidanceSection = buildDirectorGuidanceSection(gateNotes);
   return `${writerSections}
 
 ---

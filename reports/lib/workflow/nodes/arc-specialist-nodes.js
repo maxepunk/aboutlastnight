@@ -81,7 +81,7 @@ const { reworkSchemaWithChangedEdits, takeChangedEdits } = require('./ai-nodes')
 function buildArcStandingNotes(state) {
   const actingOn = meetingRoundOf(state) ? (state._arcFeedback || null) : null;
   const notes = filterGateNotes(state.directorGateNotes || [], actingOn, 'arc-selection');
-  const section = buildDirectorGuidanceSection(null, notes);
+  const section = buildDirectorGuidanceSection(notes);
   return section ? `\n\n${section}` : '';
 }
 
@@ -649,8 +649,7 @@ function arcReworkCall(state) {
     previousOutput: before,
     handEdits: state._weaveHandEdits,
     humanFeedback: note,
-    meetingRound,
-    theme: state.theme
+    meetingRound
   });
   return {
     meetingRound,

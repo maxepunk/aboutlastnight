@@ -1,11 +1,12 @@
 /**
- * Director guidance from the arc-selection gate (Q2 decision)
+ * <DIRECTOR_GUIDANCE>: the director's standing notes, last in every writer's prompt (Q2
+ * decision; spec 2026-09-19 §5.3).
  *
- * The director picks the arcs and then has nothing to say about them until the
- * outline is already written. The only intervention available was reject-and-
- * regenerate. `outlineGuidance` rides along with the arc selection and is
- * appended LAST to the outline AND article prompts (recency bias), stated to
- * outrank the craft rules where they conflict.
+ * The section first carried the arc-selection gate's `outlineGuidance`, appended LAST to
+ * the outline and article prompts (recency bias) and stated to outrank the craft rules
+ * where they conflicted. Phase 4: the story meeting wrote it no more (brief 4.5), its last
+ * readers went (brief 4.7b; R4), and the parameter and its label went with them (brief
+ * 4.7c). The section carries the standing notes alone.
  */
 
 const { PromptBuilder } = require('../prompt-builder');
@@ -171,20 +172,11 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
     { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Drop the vote arc.', at: '2026-09-19T10:00:00.000Z' },
     { gate: 'outline', kind: 'rejection', round: 1, text: 'Lead with the ledger.', at: '2026-09-19T11:00:00.000Z' }
   ];
-  // The pre-change output, captured with:
-  //   node -e "const {buildDirectorGuidanceSection}=require('./lib/prompt-builder');
-  //            console.log(JSON.stringify(buildDirectorGuidanceSection('Lead with the money, not the vote.')))"
-  const EXPECTED_GUIDANCE_ONLY =
-    '<DIRECTOR_GUIDANCE>\nThe director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\nLead with the money, not the vote.\n</DIRECTOR_GUIDANCE>';
-
-  it('guidance only is byte-identical to the pre-notes output, with or without an empty list', () => {
-    expect(buildDirectorGuidanceSection(GUIDANCE)).toBe(EXPECTED_GUIDANCE_ONLY);
-    expect(buildDirectorGuidanceSection(GUIDANCE, [])).toBe(EXPECTED_GUIDANCE_ONLY);
-    expect(buildDirectorGuidanceSection(GUIDANCE, [null, { text: '   ' }])).toBe(EXPECTED_GUIDANCE_ONLY);
-  });
-
+  // Brief 4.7c: the notes are the section's one input. The arc stop's guidance, which every
+  // caller passed as null since brief 4.7b, went with its label ("The director reviewed the
+  // arcs and asks for this emphasis"), and the tests of a section carrying it went too.
   it('notes only → the section carries only the standing-notes paragraph, in order, labelled', () => {
-    const section = buildDirectorGuidanceSection(null, NOTES);
+    const section = buildDirectorGuidanceSection(NOTES);
     expect(section.startsWith('<DIRECTOR_GUIDANCE>\nStanding notes the director gave at earlier stops, in order.')).toBe(true);
     // Phase 1 brief 1.1: an approval note has NOT been applied by a rework, so the
     // old blanket "each was already applied at its own gate" was a lie about it.
@@ -199,16 +191,17 @@ describe('<DIRECTOR_GUIDANCE> standing notes (spec 2026-09-19 §5.3)', () => {
     expect(section.trim().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 
-  it('both → the guidance paragraph first, then the notes, one section', () => {
-    const section = buildDirectorGuidanceSection(GUIDANCE, NOTES);
-    expect(section.indexOf('outranks')).toBeLessThan(section.indexOf('Standing notes'));
-    expect(section).toContain('an approval note is forward guidance');
-    expect(section.match(/<DIRECTOR_GUIDANCE>/g)).toHaveLength(1);
+  it('nothing → empty string', () => {
+    expect(buildDirectorGuidanceSection([])).toBe('');
+    expect(buildDirectorGuidanceSection(null)).toBe('');
+    expect(buildDirectorGuidanceSection()).toBe('');
+    expect(buildDirectorGuidanceSection([null, { text: '   ' }])).toBe('');
   });
 
-  it('nothing → empty string', () => {
-    expect(buildDirectorGuidanceSection(null, [])).toBe('');
-    expect(buildDirectorGuidanceSection('  ', null)).toBe('');
+  it("takes the standing notes alone: a call in the retired shape fails loud, naming what went", () => {
+    expect(() => buildDirectorGuidanceSection(null, NOTES)).toThrow(/standing notes alone/);
+    expect(() => buildDirectorGuidanceSection(GUIDANCE)).toThrow(/standing notes alone/);
+    expect(() => buildDirectorGuidanceSection(GUIDANCE, NOTES)).toThrow(/standing notes alone/);
   });
 
   it('filterGateNotes drops only the note whose text is the feedback being acted on', () => {

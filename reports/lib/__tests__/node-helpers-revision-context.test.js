@@ -57,12 +57,12 @@ describe('buildRevisionContext — evaluator criteria reach the prompt (B4)', ()
     expect(section).toMatch(/SHOULD CONSIDER:\n[\s\S]*?\n  - x/);
   });
 
-  it('names no criterion to preserve for the journalist (phase 3, 3.3; TH7); the detective keeps the list', () => {
+  it('names no criterion to preserve (phase 3, 3.3; TH7)', () => {
     // After a pass every criterion scores 0.8 or more, so the list outranked the
     // director's note; with one of nine players missing (0.89) it told the reworker to
     // keep rosterCoverage directly above the issue naming the missing player (V3).
+    // Brief 4.7c (R1): the parked detective's list went with its branch.
     expect(build()).not.toContain('PRESERVE THESE');
-    expect(build({ theme: 'detective' })).toContain('PRESERVE THESE: coherence');
   });
 
   it('never renders [object Object] or the empty-issues placeholder', () => {
@@ -257,16 +257,10 @@ describe('buildRevisionContext — the evaluation state it reports (brief 1.3)',
     const section = build();
     expect(section).not.toContain('scoring well');
     expect(section).not.toMatch(/do NOT change anything related to it/);
-    // Phase 3 (3.3): the journalist's instructions are one paragraph with no fixed
-    // "preserve" text; the detective keeps the four numbered lines, with no gap.
+    // Phase 3 (3.3): the instructions are one paragraph with no fixed "preserve" text.
+    // Brief 4.7c (R1): the parked detective's four numbered lines went with its branch.
     expect(section).toContain('WHAT THIS REWORK DOES:');
     expect(section).not.toContain('CRITICAL REVISION INSTRUCTIONS');
-    const parked = build({ theme: 'detective' });
-    const instructions = parked.slice(parked.indexOf('CRITICAL REVISION INSTRUCTIONS'));
-    expect(instructions).toContain('1. PRESERVE EVERYTHING');
-    expect(instructions).toContain('3. Output the complete revised article');
-    expect(instructions).toContain('4. Maintain consistency');
-    expect(instructions).not.toContain('5.');
   });
 });
 
@@ -589,15 +583,6 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
     expect(previousOutputSection).toMatch(/\n═+\nEND PREVIOUS OUTPUT\n═+$/);
   });
 
-  it('the detective keeps the parked text (D13)', () => {
-    const { contextSection, previousOutputSection } = build({ theme: 'detective', humanFeedback: 'x' });
-    expect(contextSection).toContain('These aspects are working well, PRESERVE THESE: voice');
-    expect(contextSection).toContain('These aspects need improvement: sectionFlow, lede');
-    expect(contextSection).toContain("1. PRESERVE EVERYTHING THAT'S WORKING - Do NOT regenerate from scratch");
-    expect(contextSection).toContain('      fix: open on a moment');
-    expect(contextSection).not.toMatch(/uncalibrated/i);
-    expect(previousOutputSection).toContain('PREVIOUS OUTLINE OUTPUT (to improve, not regenerate):');
-  });
 });
 
 /**
@@ -616,7 +601,6 @@ describe('buildRevisionContext: the director governs the rework, advisories are 
  * filters by the score, whatever the judge wrote.
  */
 describe('buildRevisionContext: an automatic rework fixes the must-fix items (phase 3, 3.10; R23)', () => {
-  const crypto = require('crypto');
   const fs = require('fs');
   const path = require('path');
   const { STRUCTURAL_PASS_SCORE } = require('../workflow/nodes/node-helpers');
@@ -802,37 +786,6 @@ describe('buildRevisionContext: an automatic rework fixes the must-fix items (ph
     expect(section).not.toMatch(/serve the piece|not requirements/);
   });
 
-  // The detective is parked (D13): its context is byte for byte what it was at 51d2b95,
-  // for this verdict, on an automatic pass and on a send back.
-  it("the detective's context is unchanged (D13)", () => {
-    const pinned = {
-      automatic: ['ea305fae85cac5b59ed479bca84632a8e64e1118471c182fe007a7a4b01072d5', 2176],
-      'send-back': ['d70f97a6cdff541df564b3c6907526f6779651b1a6837d191f993d020bedd846', 2395]
-    };
-    const DETECTIVE_EVALUATION = {
-      phase: 'arcs', passed: false,
-      criteriaScores: {
-        rosterCoverage: { score: 1, type: 'structural', notes: 'All placed.', fix: 'None needed.' },
-        verdictTruth: { score: 0.88, type: 'structural', notes: 'Two framing risks.', fix: 'Relabel the two candidates.' },
-        wordsTruth: { score: 0.5, type: 'structural', notes: 'A misquote.', fix: 'Give the text to its speaker.' },
-        coherence: { score: 0.7, type: 'advisory', notes: 'Bridges disagree.', fix: 'Align the bridges.' },
-        evidenceConfidenceBalance: { score: 1, type: 'advisory', notes: 'Balanced.', fix: 'None needed.' }
-      },
-      structuralIssues: ['T12: the text is given to the wrong speaker.'],
-      advisoryWarnings: ['T2: relabel the two candidates.'],
-      revisionGuidance: 'Step 1: give the text to its speaker. Step 2 (optional): relabel the candidates.',
-      confidence: 'high'
-    };
-    for (const [name, humanFeedback] of [['automatic', null], ['send-back', 'Rethink the money thread.']]) {
-      const { contextSection, previousOutputSection } = buildRevisionContext({
-        phase: 'arcs', revisionCount: humanFeedback ? 0 : 1, round: 2, validationResults: DETECTIVE_EVALUATION,
-        previousOutput: [{ id: 'arc-1' }], humanFeedback, theme: 'detective'
-      });
-      const text = `${contextSection}\n=====\n${previousOutputSection}`;
-      const hash = crypto.createHash('sha256').update(text).digest('hex');
-      expect(`${name} ${text.length} ${hash}`).toBe(`${name} ${pinned[name][1]} ${pinned[name][0]}`);
-    }
-  });
 });
 
 /**
@@ -920,7 +873,7 @@ describe("a code check's findings reach an automatic rework (the 4b fix batch)",
     const line = validationResults.structuralIssues[0];
     expect(line).toContain('"zzz999"');
     const { contextSection } = buildRevisionContext({
-      phase: 'arcs', outputName: 'weave', revisionCount: 1, validationResults, previousOutput: state.weave, humanFeedback: null, theme: 'journalist'
+      phase: 'arcs', outputName: 'weave', revisionCount: 1, validationResults, previousOutput: state.weave, humanFeedback: null
     });
     expect(contextSection).toContain(`WEAVE CHECK FAILURES:\n  - ${line}`);
     expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
@@ -943,7 +896,7 @@ describe("a code check's findings reach an automatic rework (the 4b fix batch)",
       confidence: 'high'
     };
     const { contextSection } = buildRevisionContext({
-      phase: 'arcs', revisionCount: 1, validationResults: verdict, previousOutput: [], humanFeedback: null, theme: 'journalist'
+      phase: 'arcs', revisionCount: 1, validationResults: verdict, previousOutput: [], humanFeedback: null
     });
     expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
     expect(contextSection).not.toContain('JUDGE-GUIDANCE');
@@ -981,11 +934,12 @@ describe('a rework never reads a finding located in the director\'s text (FA)', 
   };
   const evaluationOf = (contextSection) => contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY'), contextSection.indexOf('HUMAN FEEDBACK'));
 
-  it.each(['journalist', 'detective'])('%s: at a send-back, the stored verdict\'s findings that quote the newly standing edits are left out', (theme) => {
+  // Brief 4.7c (R1): one context for every theme, so the detective's case went with its branch.
+  it('at a send-back, the stored verdict\'s findings that quote the newly standing edits are left out', () => {
     const standing = standingAfterSendBack(null, shown, sentBack, 'bundle');
     const { contextSection } = buildRevisionContext({
       phase: 'article', revisionCount: 0, round: 2, validationResults: stored, previousOutput: sentBack,
-      humanFeedback: 'Move the photos.', handEdits: standing, theme
+      humanFeedback: 'Move the photos.', handEdits: standing
     });
     const evaluation = evaluationOf(contextSection);
     expect(evaluation).toContain(`T12: "${WRITERS}" puts the line in Sarah's mouth.`);
@@ -1053,7 +1007,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
   const STALE = { phase: 'arcs', passed: false, structuralIssues: ['T3: "a stale finding" from before the round.'], criteriaScores: { evidenceTruth: { score: 0.3, notes: 'stale', fix: 'stale fix' } } };
   const context = (overrides) => buildRevisionContext({
     phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: STALE,
-    previousOutput: left(), handEdits: edits(), theme: 'journalist', ...overrides
+    previousOutput: left(), handEdits: edits(), ...overrides
   }).contextSection;
 
   it("a reweave with no note gets the reweave's scope: fit the director's changes in, keep every other line", () => {
@@ -1087,7 +1041,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
   it('the previous weave prints as the rework reads it: the struck connection out, the strike listed in <HAND_EDITS>', () => {
     const { previousOutputSection } = buildRevisionContext({
       phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
-      previousOutput: left(), handEdits: edits(), theme: 'journalist', meetingRound: 'reweave', humanFeedback: null
+      previousOutput: left(), handEdits: edits(), meetingRound: 'reweave', humanFeedback: null
     });
     expect(previousOutputSection).toContain('"c1"');
     expect(previousOutputSection).not.toContain('"c2"');
@@ -1137,7 +1091,7 @@ describe("4.5b: the director's note ends on the same line at every stop", () => 
   const EVALUATOR = 'Address human feedback FIRST, then address any remaining evaluator issues.';
   const meeting = (meetingRound) => buildRevisionContext({
     phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
-    previousOutput: clone(WEAVE), handEdits: null, humanFeedback: 'Rethink the money thread.', meetingRound, theme: 'journalist'
+    previousOutput: clone(WEAVE), handEdits: null, humanFeedback: 'Rethink the money thread.', meetingRound
   }).contextSection;
 
   it.each(['send-back', 'reweave'])("at the story meeting, a %s's note is followed by the end line, with a blank line after it, and nothing about the evaluator", (round) => {
@@ -1148,7 +1102,7 @@ describe("4.5b: the director's note ends on the same line at every stop", () => 
 
   it('the outline and the article keep both lines, as before', () => {
     const text = buildRevisionContext({
-      phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'h' } }, humanFeedback: 'Tighten it.', theme: 'journalist'
+      phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'h' } }, humanFeedback: 'Tighten it.'
     }).contextSection;
     expect(text).toContain(`HUMAN FEEDBACK (HIGHEST PRIORITY):\nTighten it.\n\n${END}\n${EVALUATOR}\n`);
   });
@@ -1178,7 +1132,7 @@ describe("4.6: the map's rework context", () => {
     const left = directorsMap();
     const { contextSection } = buildRevisionContext({
       phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: left,
-      handEdits: standingOnMap(null, MAP, left), humanFeedback: 'Lead with the envelope.', theme: 'journalist'
+      handEdits: standingOnMap(null, MAP, left), humanFeedback: 'Lead with the envelope.'
     });
     expect(contextSection).toContain("REVISION CONTEXT: MAP (the director's send back)");
     const block = handEditsBlock(contextSection);
@@ -1192,7 +1146,7 @@ describe("4.6: the map's rework context", () => {
     const left = directorsMap();
     const { contextSection } = buildRevisionContext({
       phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: left,
-      handEdits: standingOnMap(null, MAP, left), humanFeedback: null, theme: 'journalist'
+      handEdits: standingOnMap(null, MAP, left), humanFeedback: null
     });
     const block = handEditsBlock(contextSection);
     expect(block).toContain(`This automatic pass fixes the writer's lines. Each edit of the director's is final: ${MAP_EDITS_FINAL}`);
@@ -1209,7 +1163,7 @@ describe("4.6: the map's rework context", () => {
     const [line] = validationResults.structuralIssues;
     expect(line).toBe("Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out.");
     const { contextSection } = buildRevisionContext({
-      phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: failing, validationResults, humanFeedback: null, theme: 'journalist'
+      phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: failing, validationResults, humanFeedback: null
     });
     expect(contextSection).toContain(`MAP CHECK FAILURES:\n  - ${line}`);
     expect(contextSection).toContain('This rework fixes the must-fix items: the MAP CHECK FAILURES.');
@@ -1259,7 +1213,7 @@ describe("4.6b: the map's rework context names no evaluator", () => {
     failing.sections[1].beats[1].players = ['Morgan'];
     return { failing, validationResults: checkMap({ ...reworkFixtureState(), outline: failing, _mapCheck: null }).validationResults };
   }
-  const context = (options) => buildRevisionContext({ phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, theme: 'journalist', ...options }).contextSection;
+  const context = (options) => buildRevisionContext({ phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, ...options }).contextSection;
 
   it("a send-back with no check result in hand prints no evaluator line, and the director's note ends on the NOTE line", () => {
     const left = directorsMap();
@@ -1299,5 +1253,38 @@ describe("4.6b: the map's rework context names no evaluator", () => {
     const revision = sent.prompt.slice(sent.prompt.indexOf('REVISION CONTEXT: MAP'), sent.prompt.indexOf('WHAT THIS REWORK DOES'));
     expect(revision).not.toMatch(/evaluator/i);
     expect(revision).toContain(`${NOTE}\n\n${END}\n\n<HAND_EDITS>`);
+  });
+});
+
+// Brief 4.7c (R1): the parked detective's branch went with the old stages its reworks wrote:
+// its PRESERVE lists, its four numbered instructions, its preamble for SHOULD CONSIDER
+// (SHOULD_CONSIDER_PREAMBLE) and its previous-output header. One context for every theme,
+// so buildRevisionContext takes no theme.
+describe('4.7c: one revision context for every theme (R1)', () => {
+  const VERDICT = {
+    phase: 'outline', passed: false,
+    criteriaScores: {
+      sectionFlow: { score: 0.4, type: 'structural', notes: 'the money section is missing', fix: 'add it' },
+      voice: { score: 0.95, type: 'advisory', notes: 'strong', fix: '' }
+    },
+    structuralIssues: ['The money section is missing.'],
+    advisoryWarnings: ['The closing could name the account.'],
+    revisionGuidance: 'Add the money section.',
+    confidence: 'medium'
+  };
+
+  it.each([['an automatic pass', null], ['a send-back', 'Rethink the closing.']])('%s: a theme in the options changes nothing, and no parked text prints', (name, humanFeedback) => {
+    const options = { phase: 'outline', revisionCount: humanFeedback ? 0 : 1, round: 2, validationResults: VERDICT, previousOutput: { lede: {} }, humanFeedback };
+    const context = buildRevisionContext(options);
+    expect(buildRevisionContext({ ...options, theme: 'detective' })).toEqual(context);
+    const text = `${context.contextSection}\n${context.previousOutputSection}`;
+    expect(text).not.toMatch(/PRESERVE|CRITICAL REVISION INSTRUCTIONS|need improvement|serve the piece|not requirements|to improve, not regenerate/);
+    expect(text).toContain('WHAT THIS REWORK DOES:');
+  });
+
+  it('SHOULD CONSIDER says only where its items came from', () => {
+    const { contextSection } = buildRevisionContext({ phase: 'outline', revisionCount: 1, validationResults: VERDICT, previousOutput: { lede: {} } });
+    expect(contextSection).toContain('SHOULD CONSIDER:\nThese came from the evaluation that ran before this pass.\n\n  - The closing could name the account.');
+    expect(require('../prompt-builder')).not.toHaveProperty('SHOULD_CONSIDER_PREAMBLE');
   });
 });

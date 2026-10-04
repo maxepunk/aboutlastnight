@@ -265,7 +265,8 @@ const REPO = path.join(__dirname, '..', '..');
  *   for word, never asks for the map's over a desk edit (article-journalist 30762 -> 30883,
  *   the two lines' own +74 and +47). The hero is the map's top photo, read through
  *   topPhotoOf; the fixture's stored hero is that photo, so PHOTOS and the hero line do not
- *   move. The outline and arc pins do not move.
+ *   move. The guidance parameter went from <DIRECTOR_GUIDANCE>, whose every caller passed
+ *   none, so the outline and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['62c525f1cbdd8d026f481a24ac11e75766f0307c6d036594f713157042861790', 18299],

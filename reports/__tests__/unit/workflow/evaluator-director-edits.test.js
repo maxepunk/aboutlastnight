@@ -313,10 +313,10 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
   });
 
   /** The part of a rework's context that carries the evaluation: from its summary to <HAND_EDITS>. */
-  function evaluationPart(validationResults, state, theme) {
+  function evaluationPart(validationResults, state) {
     const { contextSection } = buildRevisionContext({
       phase: 'article', revisionCount: 1, validationResults, previousOutput: state.contentBundle,
-      humanFeedback: null, handEdits: state._articleHandEdits, theme
+      humanFeedback: null, handEdits: state._articleHandEdits
     });
     expect(contextSection).toContain('<HAND_EDITS>');
     return contextSection.slice(contextSection.indexOf('EVALUATION SUMMARY'), contextSection.indexOf('<HAND_EDITS>'));
@@ -343,7 +343,7 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     expect(result.validationResults.revisionGuidance).toBe('');
     expect(result.validationResults.feedback).toBe('');
 
-    const part = evaluationPart(result.validationResults, state, 'journalist');
+    const part = evaluationPart(result.validationResults, state);
     expect(part).toContain(WRITER_ISSUE);
     expect(part).toContain('fix: Cut the line.');
     expect(part).not.toContain(CLOSING);

@@ -423,12 +423,11 @@ const TENSIONS_HEADING = "### Blake and the Valet in the director's notes";
 
 /**
  * The pipeline's own lines in <DIRECTOR_GUIDANCE> (buildDirectorGuidanceSection and
- * formatGateNotes in lib/prompt-builder.js). The director's arc-stop guidance follows
- * GUIDANCE_LABEL_END and runs to STANDING_NOTES_PREAMBLE or the block's end. The
- * preamble's lines are the pipeline's; the director's notes are the GATE_NOTE_LINE lines
- * after it, to the block's end.
+ * formatGateNotes in lib/prompt-builder.js): STANDING_NOTES_PREAMBLE's lines. The
+ * director's notes are the GATE_NOTE_LINE lines after it, to the block's end. Brief 4.7c:
+ * the arc stop's guidance and its label went from the section, so the preamble is the one
+ * label the parser reads.
  */
-const GUIDANCE_LABEL_END = 'It outranks the craft rules above where they conflict:';
 const STANDING_NOTES_PREAMBLE = 'Standing notes the director gave at earlier stops';
 const GATE_NOTE_LINE = /^- \[[^\]\n]+\] /m;
 
@@ -475,17 +474,11 @@ function guidanceLabels(block) {
   const open = '<DIRECTOR_GUIDANCE>';
   const close = '</DIRECTOR_GUIDANCE>';
   let inner = block.slice(open.length, block.length - close.length);
-  if (inner.trim() && !inner.includes(GUIDANCE_LABEL_END) && !inner.includes(STANDING_NOTES_PREAMBLE)) {
+  if (inner.trim() && !inner.includes(STANDING_NOTES_PREAMBLE)) {
     throw new Error(
-      `instructionText: a <DIRECTOR_GUIDANCE> block with neither "${GUIDANCE_LABEL_END}" nor ` +
-      `"${STANDING_NOTES_PREAMBLE}"; the director's words in it cannot be told from the pipeline's`
+      `instructionText: a <DIRECTOR_GUIDANCE> block without "${STANDING_NOTES_PREAMBLE}"; ` +
+      "the director's words in it cannot be told from the pipeline's"
     );
-  }
-  const labelAt = inner.indexOf(GUIDANCE_LABEL_END);
-  if (labelAt >= 0) {
-    const guidanceAt = labelAt + GUIDANCE_LABEL_END.length;
-    const notesAt = inner.indexOf(STANDING_NOTES_PREAMBLE, guidanceAt);
-    inner = inner.slice(0, guidanceAt) + (notesAt >= 0 ? `\n\n${inner.slice(notesAt)}` : '\n');
   }
   const noteAt = inner.search(GATE_NOTE_LINE);
   if (noteAt >= 0) inner = `${inner.slice(0, noteAt)}-\n`;
@@ -581,7 +574,7 @@ function stripTensionSentences(text) {
  * Taken out:
  * - the director's words and the record: the whole of each WHOLE_BLOCKS tag; the "- "
  *   lines inside each LISTED_BLOCKS tag (the narrative tensions' sentences included) and
- *   under the arc writer's TENSIONS_HEADING; the director's guidance and notes inside
+ *   under the arc writer's TENSIONS_HEADING; the director's notes inside
  *   <DIRECTOR_GUIDANCE>; every paragraph of the send-back note after "HUMAN FEEDBACK
  *   (HIGHEST PRIORITY):", up to the pipeline's "NOTE: The human reviewer" line; the
  *   text after "The director's description" on a photo line. (The arc packages'
@@ -602,8 +595,8 @@ function stripTensionSentences(text) {
  * @returns {string}
  * @throws {Error} on a shape it cannot read: a send-back note or a previous version
  *   with no end line, JSON that never closes, a
- *   <DIRECTOR_GUIDANCE> block with neither of the pipeline's labels. A guess would scan
- *   the director's words or skip the pipeline's.
+ *   <DIRECTOR_GUIDANCE> block without the pipeline's label. A guess would scan the
+ *   director's words or skip the pipeline's.
  */
 function instructionText(render) {
   let text = String(render || '');

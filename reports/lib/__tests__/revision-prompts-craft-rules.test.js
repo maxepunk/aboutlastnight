@@ -220,8 +220,7 @@ describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoad
   // on that would run without the craft rules its writer had, invisibly. The
   // reworkers check their writer's phase before building (brief 2.3); until then
   // they checked a smaller 'revision' set, which no longer exists.
-  const { PromptBuilder } = require('../prompt-builder');
-  const { createThemeLoader, PHASE_REQUIREMENTS } = require('../theme-loader');
+  const { PHASE_REQUIREMENTS } = require('../theme-loader');
 
   it("journalist: both writers' craft files load", async () => {
     const builder = createPromptBuilder({ theme: 'journalist' });
@@ -229,25 +228,13 @@ describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoad
     await expect(builder.requirePhasePrompts('articleGeneration')).resolves.toBeUndefined();
   });
 
-  // Brief 4.6 (R1): the detective's outline phase went with its outline writer.
-  it("detective: the article writer's craft files load, and there is no outline phase", async () => {
-    const builder = createPromptBuilder({ theme: 'detective' });
-    await expect(builder.requirePhasePrompts('articleGeneration')).resolves.toBeUndefined();
-    await expect(builder.requirePhasePrompts('outlineGeneration')).rejects.toThrow(/Unknown phase: outlineGeneration for theme "detective"/);
-  });
+  // Brief 4.7c (R1): the parked detective's branch, which checked its own craft files, went
+  // with the old stages its writers wrote; retired-craft-files.test.js holds the check to the
+  // rule set for every builder.
 
   it('has no revision phase to check any more', () => {
     expect(PHASE_REQUIREMENTS.journalist.revision).toBeUndefined();
     expect(PHASE_REQUIREMENTS.detective.revision).toBeUndefined();
-  });
-
-  it('FAILS LOUD, naming the phase and the files, when a detective craft file is missing', async () => {
-    const builder = new PromptBuilder(
-      createThemeLoader({ theme: 'detective', customPath: '/definitely/not/a/skill' }),
-      'detective'
-    );
-    await expect(builder.requirePhasePrompts('articleGeneration'))
-      .rejects.toThrow(/Missing articleGeneration prompts for theme "detective"/);
   });
 
   // Phase 3 (3.2): the journalist's writers read the rule set, so its check is the

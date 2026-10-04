@@ -254,45 +254,29 @@ function filterGateNotes(gateNotes, currentFeedback, gate) {
 }
 
 /**
- * What an advisory finding is, said once (brief 1.3).
- *
- * The evaluation splits its findings into structural issues, which the writer must
- * fix, and advisory warnings, which are suggestions. Concatenated into one list the
- * suggestions read as defects; dropped — as they were until this slice — the outline
- * evaluation's warnings about frontloading never reached the article writer at all.
- * These two lines introduced the list in a generation prompt's <SHOULD_CONSIDER> until
- * no writer read one (phase 4: the map writer's went with brief 4.6, the article
- * writer's with brief 4.7b); they introduce the detective rework's SHOULD CONSIDER block
- * (buildRevisionContext). Since phase 3
- * (3.10) a journalist rework introduces its list with REWORK_SHOULD_CONSIDER_LINE
- * (node-helpers.js) alone: "Apply them where they serve the piece" would give a
- * suggestion a scope of its own, and WHAT THIS REWORK DOES states that scope once (R23).
- */
-const SHOULD_CONSIDER_PREAMBLE =
-  'These came from the evaluation that ran before this pass. Apply them where they\n' +
-  'serve the piece. They are not requirements.';
-
-/**
- * Build the <DIRECTOR_GUIDANCE> section (Q2 decision + spec 2026-09-19 §5.3).
+ * Build the <DIRECTOR_GUIDANCE> section (Q2 decision + spec 2026-09-19 §5.3): the
+ * director's standing notes, last in every writer's and reworker's prompt.
  *
  * Standalone so the revision nodes can append it without going through a
  * PromptBuilder instance (their tests use a mock builder).
  *
- * @param {string|null} directorGuidance - free text from the arc-selection gate
+ * Phase 4 (brief 4.7c): the notes are its one input. The arc stop's guidance it took first,
+ * which every caller passed as null once the story meeting wrote it no more (briefs 4.5 and
+ * 4.7b; R4), went with its label. A call in that shape, guidance text or a second argument,
+ * fails loud rather than drop the notes it carries.
+ *
  * @param {Array} [gateNotes] - directorGateNotes entries (already filtered by the caller)
- * @returns {string} XML section, or '' when there is neither guidance nor notes
+ * @returns {string} XML section, or '' when no note has text
+ * @throws {Error} on guidance text in the notes' place, or a second argument
  */
-function buildDirectorGuidanceSection(directorGuidance, gateNotes = []) {
-  const hasGuidance = typeof directorGuidance === 'string' && !!directorGuidance.trim();
-  const notesText = formatGateNotes(gateNotes);
-  if (!hasGuidance && !notesText) return '';
-  const parts = [];
-  if (hasGuidance) {
-    parts.push('The director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\n' +
-      directorGuidance.trim());
+function buildDirectorGuidanceSection(gateNotes = [], ...retired) {
+  if (retired.length > 0 || typeof gateNotes === 'string') {
+    throw new Error(
+      'buildDirectorGuidanceSection takes the standing notes alone: the arc stop\'s guidance it ' +
+      'took first went with its last readers (phase 4, brief 4.7c)'
+    );
   }
-  if (notesText) parts.push(notesText);
-  return labelPromptSection('DIRECTOR_GUIDANCE', parts.join('\n\n'));
+  return labelPromptSection('DIRECTOR_GUIDANCE', formatGateNotes(gateNotes));
 }
 
 // Default reporter first name when the director provides none. The pipeline's
@@ -534,18 +518,17 @@ ${notes}
   }
 
   /**
-   * Build the <DIRECTOR_GUIDANCE> section (Q2 decision).
+   * Build the <DIRECTOR_GUIDANCE> section (Q2 decision): the standing notes.
    *
-   * Appended LAST to the outline and article user prompts. Recency bias is the
-   * point: the director reviewed the ARCS and is telling the writer where to put
-   * the weight, which has to survive several thousand tokens of craft rules.
+   * Appended LAST to the map and article writers' user prompts. Recency bias is the
+   * point: the director's notes have to survive several thousand tokens of craft rules.
+   * Brief 4.7c: the notes are its one input (buildDirectorGuidanceSection).
    *
-   * @param {string|null} directorGuidance - free text from the arc-selection gate
    * @param {Array} [gateNotes] - directorGateNotes entries carried into this prompt
-   * @returns {string} XML section, or '' when there is neither guidance nor notes
+   * @returns {string} XML section, or '' when no note has text
    */
-  _buildDirectorGuidance(directorGuidance, gateNotes = []) {
-    const section = buildDirectorGuidanceSection(directorGuidance, gateNotes);
+  _buildDirectorGuidance(gateNotes = []) {
+    const section = buildDirectorGuidanceSection(gateNotes);
     return section ? '\n' + section : '';
   }
 
@@ -662,7 +645,7 @@ Only the ${n} players above were at the investigation. Every other character exc
 
     // The standing notes, LAST, so they outrank the rules above (Q2; spec 2026-09-19 §5.3):
     // the director's note from the story meeting is among them.
-    userPrompt += this._buildDirectorGuidance(null, options.gateNotes || []);
+    userPrompt += this._buildDirectorGuidance(options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
   }
@@ -776,7 +759,7 @@ ${loadRuleSet('outline').craft}`;
     );
 
     // The standing notes, LAST, so they outrank the rules above (Q2; spec 2026-09-19 §5.3).
-    userPrompt += this._buildDirectorGuidance(null, options.gateNotes || []);
+    userPrompt += this._buildDirectorGuidance(options.gateNotes || []);
 
     return { systemPrompt, userPrompt };
   }
@@ -960,40 +943,26 @@ ${loadRuleSet('article').craft}`;
   /**
    * Fail loud when a writer's rules did not load.
    *
-   * ThemeLoader.loadPrompt WARNS and returns '' for a file it cannot read. A
-   * reworker built on that would run without the craft rules its writer had, and
-   * nothing in the output would show it. Phase 2 (2.3): each reworker is its
-   * writer's prompt plus a revision block, so the reworkers check their writer's
-   * phase (ai-nodes.js buildOutlineRevisionPrompt, buildArticleRevisionPrompt).
+   * A reworker built without a rule file its writer read would run without those rules,
+   * and nothing in the output would show it. Phase 2 (2.3): each reworker is its writer's
+   * prompt plus a revision block, so the reworkers check their writer's phase (ai-nodes.js
+   * buildOutlineRevisionPrompt, buildArticleRevisionPrompt).
    *
-   * Phase 3 (3.2): the journalist's writers read the rule set, so its check is the
-   * rule-set loader's own, which throws naming every missing or empty rule file. The
-   * detective is parked and checks its craft files as before.
+   * Phase 3 (3.2): the writers read the rule set, so the check is the rule-set loader's
+   * own, which throws naming every missing or empty rule file. Phase 4 (brief 4.7c; R1):
+   * the parked detective's branch, which checked its craft files through the theme loader,
+   * went with the old stages its writers wrote. A detective builder's writers refuse the
+   * theme a step later (lib/map.js mapSchemaFor).
    *
    * @param {'outlineGeneration'|'articleGeneration'} phase - the writer's phase
-   * @throws {Error} if any of the phase's rule or prompt files is empty or missing
+   * @throws {Error} on a phase no writer reads, or naming each missing or empty rule file
    */
   async requirePhasePrompts(phase) {
-    if (this.themeName === 'journalist') {
-      const call = JOURNALIST_RULE_SET_CALLS[phase];
-      if (!call) {
-        throw new Error(`[PromptBuilder] No journalist writer reads phase "${phase}"; phases: ${Object.keys(JOURNALIST_RULE_SET_CALLS).join(', ')}`);
-      }
-      loadRuleSet(call);
-      return;
+    const call = JOURNALIST_RULE_SET_CALLS[phase];
+    if (!call) {
+      throw new Error(`[PromptBuilder] No journalist writer reads phase "${phase}"; phases: ${Object.keys(JOURNALIST_RULE_SET_CALLS).join(', ')}`);
     }
-    const required = this.getPhaseRequirements(phase);
-    const rawPrompts = await this.theme.loadPhasePrompts(phase);
-    const empty = required.filter(
-      name => !rawPrompts[name] || !String(rawPrompts[name]).trim()
-    );
-    if (empty.length > 0) {
-      throw new Error(
-        `[PromptBuilder] Missing ${phase} prompt${empty.length > 1 ? 's' : ''} for theme ` +
-        `"${this.themeName}": ${empty.join(', ')}. ThemeLoader returns '' for an unreadable ` +
-        `file, so reworking now would silently drop the craft rules the writer had.`
-      );
-    }
+    loadRuleSet(call);
   }
 
   /**
@@ -1034,10 +1003,6 @@ module.exports = {
   buildDirectorGuidanceSection,
   // Brief 4.7b: the tag the article writer prints the story map in
   STORY_MAP_TAG,
-  // Shared with buildRevisionContext (node-helpers.js), which introduces the detective
-  // rework's advisory list with it; a journalist rework's list has its own line,
-  // REWORK_SHOULD_CONSIDER_LINE (phase 3, 3.10).
-  SHOULD_CONSIDER_PREAMBLE,
   filterGateNotes,
   DETECTIVE_REPORTING_MODE_BLOCKS,
   buildReportingModeBlock,

@@ -499,35 +499,38 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     expect(findRemovedPhrases(instructionText(`${render}\nRemember who killed Marcus.`))).toEqual(['who killed Marcus']);
   });
 
+  // Brief 4.7c: the section carries the standing notes alone. The arc stop's guidance and
+  // its label ("It outranks the craft rules above where they conflict:") went, and the
+  // parser reads the one label left, the standing-notes preamble.
   describe('<DIRECTOR_GUIDANCE>', () => {
-    const GUIDANCE = 'Lead with the money.\n\nThe murder victim is Marcus; say so once.';
     const NOTES = [
       { gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Ask who killed Marcus.\nThen ask why.' },
       { gate: 'outline', kind: 'approval', round: 1, text: 'Keep the shape of the silence.' }
     ];
-    const section = buildDirectorGuidanceSection(GUIDANCE, NOTES);
+    const section = buildDirectorGuidanceSection(NOTES);
 
-    it('strips the director\'s guidance and notes, every line of them', () => {
+    it('strips the director\'s notes, every line of them', () => {
       const text = instructionText(section);
       expect(findRemovedPhrases(text)).toEqual([]);
-      for (const words of ['Lead with the money.', 'say so once', 'Ask who killed', 'Then ask why.', 'Keep the shape']) {
+      for (const words of ['Ask who killed', 'Then ask why.', 'Keep the shape']) {
         expect(text).not.toContain(words);
       }
     });
 
-    it('keeps the pipeline\'s label lines, the standing-notes preamble included', () => {
+    it('keeps the pipeline\'s label lines, the standing-notes preamble', () => {
       const text = instructionText(section);
-      expect(text).toContain('It outranks the craft rules above where they conflict');
       expect(text).toContain('Standing notes the director gave at earlier stops, in order.');
       expect(text).toContain('Keep honoring each in what you write now.');
-      expect(instructionText(buildDirectorGuidanceSection('', NOTES))).toContain('Standing notes the director gave at earlier stops');
     });
 
-    it('scans a guidance label line: a removed phrase there is found', () => {
-      const relabelled = section.replace('It outranks the craft rules', 'It outranks the murder victim and the craft rules');
-      expect(findRemovedPhrases(instructionText(relabelled))).toEqual(['the murder victim']);
+    it('scans the preamble: a removed phrase there is found', () => {
       const preamble = section.replace('Keep honoring each', 'Keep honoring who killed Marcus and each');
       expect(findRemovedPhrases(instructionText(preamble))).toEqual(['who killed Marcus']);
+    });
+
+    it('a block in the retired guidance shape, with no standing-notes preamble, cannot be read, and says so', () => {
+      const retired = '<DIRECTOR_GUIDANCE>\nThe director reviewed the arcs and asks for this emphasis. It outranks the craft rules above where they conflict:\n\nLead with the money.\n</DIRECTOR_GUIDANCE>';
+      expect(() => instructionText(retired)).toThrow(/Standing notes the director gave at earlier stops/);
     });
   });
 
@@ -617,7 +620,7 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
       expect(() => instructionText(previousOutputSection.replace('END PREVIOUS OUTPUT', 'THE END'))).toThrow(/END PREVIOUS OUTPUT/);
     });
 
-    it('a <DIRECTOR_GUIDANCE> block with neither of the pipeline\'s labels', () => {
+    it('a <DIRECTOR_GUIDANCE> block without the pipeline\'s label, the standing-notes preamble', () => {
       expect(() => instructionText('<DIRECTOR_GUIDANCE>\nLead with the money.\n</DIRECTOR_GUIDANCE>')).toThrow(/DIRECTOR_GUIDANCE/);
     });
   });
