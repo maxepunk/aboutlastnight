@@ -418,7 +418,7 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 
 **The judge**: the fact check runs first, and a structural failure under the automated budget sends the article to its rework without the judge's call; then the article judge scores the truth criteria alone (see [Evaluation & Revision Architecture](#evaluation--revision-architecture)).
 
-**Checkpoint**: `article` (4.25) - The desk (tasks 4.3 and 4.10; spec 6.3): the article as it will print, every editor visible, move, delete and insert, the marks beside their pieces, and nothing in front of the article. Approve publishes exactly what is on the desk; Send back, with a note, starts a structural rework. The details are in `reports/CLAUDE.md`, **The map's and the desk's editors**.
+**Checkpoint**: `article` (4.25) - The desk (tasks 4.3 and 4.10; spec 6.3): the article as it will print, every editor visible, move, delete and insert, each Key Evidence entry moved and deleted as a block is (task 4.14c), the marks beside their pieces, and nothing in front of the article. Approve publishes exactly what is on the desk; Send back, with a note, starts a structural rework. The details are in `reports/CLAUDE.md`, **The map's and the desk's editors**.
 
 ### Phase 5: HTML Assembly
 

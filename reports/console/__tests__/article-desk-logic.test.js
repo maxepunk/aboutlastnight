@@ -678,3 +678,86 @@ describe('4.3c: the sidebar card\'s editor saves only what changed', () => {
     expect(editor).not.toContain('Object.assign({}, original, local)');
   });
 });
+
+// Task 4.14c (the final review's desk 1 and screens 2): C9 puts every inline card in the
+// sidebar too, so a card the director deleted from a section still printed under Key Evidence,
+// and its row on the desk had only a pencil. Spec 6.3: photos and cards can be moved or
+// deleted. Each Key Evidence entry now moves up or down within the sidebar and is deleted
+// there, as a section's blocks are; the change is the director's edit, which diffBundle reads.
+describe('4.14c: each Key Evidence entry can be moved and deleted at the desk', () => {
+  const D = require('../../lib/hand-edit-diff');
+  const JES = { tokenId: 'jes002', headline: 'You can have him', summary: 'Jess, in her own memory.', significance: 'critical' };
+  const MOR = { tokenId: 'mor001', headline: 'The envelope at the bar', summary: 'Morgan pays Riley out of sight.', significance: 'supporting' };
+  const DNA = { tokenId: 'p-dna', headline: 'A paternity result', summary: 'The result names Sarah as the heir.', significance: 'supporting' };
+  const withSidebar = () => ({ ...journalistBundle(), evidenceCards: [clone(JES), clone(MOR), clone(DNA)] });
+  const ids = (bundle) => bundle.evidenceCards.map((c) => c.tokenId);
+
+  test('a delete takes the entry out of the sidebar and leaves the bundle it was given as it was', () => {
+    const opened = deepFreeze(withSidebar());
+    const deleted = Desk.deleteSidebarCard(opened, 1);
+    expect(ids(deleted)).toEqual(['jes002', 'p-dna']);
+    expect(deleted.sections).toEqual(opened.sections);
+    expect(ids(opened)).toEqual(['jes002', 'mor001', 'p-dna']);
+    expect(() => Desk.deleteSidebarCard(opened, 3)).toThrow(/sidebar has no evidence entry 3/);
+    expect(() => Desk.deleteSidebarCard(journalistBundle(), -1)).toThrow(/sidebar has no evidence entry -1/);
+  });
+
+  test('a move goes one place up or down within the sidebar, and none past either end', () => {
+    const opened = deepFreeze(withSidebar());
+    expect(Desk.sidebarStepTarget(opened, 1, 'up')).toBe(0);
+    expect(Desk.sidebarStepTarget(opened, 1, 'down')).toBe(2);
+    expect(Desk.sidebarStepTarget(opened, 0, 'up')).toBeNull();
+    expect(Desk.sidebarStepTarget(opened, 2, 'down')).toBeNull();
+    expect(() => Desk.sidebarStepTarget(opened, 5, 'up')).toThrow(/sidebar has no evidence entry 5/);
+    expect(() => Desk.sidebarStepTarget(opened, 1, 'left')).toThrow(/'up' or 'down'/);
+
+    const down = Desk.moveSidebarCard(opened, 0, Desk.sidebarStepTarget(opened, 0, 'down'));
+    expect(ids(down)).toEqual(['mor001', 'jes002', 'p-dna']);
+    expect(Desk.moveSidebarCard(opened, 2, 0).evidenceCards).toEqual([DNA, JES, MOR]);
+    expect(ids(opened)).toEqual(['jes002', 'mor001', 'p-dna']);
+    expect(() => Desk.moveSidebarCard(opened, 0, 3)).toThrow(/no place for an entry at 3/);
+  });
+
+  test("each is the director's edit, read by diffBundle like any other: a delete is a cut, a move is a move within the sidebar", () => {
+    // Four entries, so the move is the director's one entry by the desk's naming rule: the
+    // longest run that kept its order stays (stayingInSection), and VIC left it.
+    const VIC = { tokenId: 'vic001', headline: 'The chair was mine', summary: 'Vic, promised the company.', significance: 'critical' };
+    const opened = { ...journalistBundle(), evidenceCards: [clone(JES), clone(MOR), clone(DNA), clone(VIC)] };
+    const desk = Desk.moveSidebarCard(Desk.deleteSidebarCard(opened, 1), 2, 0);   // MOR out; VIC to the top
+    expect(ids(desk)).toEqual(['vic001', 'jes002', 'p-dna']);
+    const standing = D.standingAfterSendBack(null, opened, desk, 'bundle');
+    expect(standing.edits.map((e) => [e.id, e.scope, e.path, e.after === null ? 'cut' : (e.from ? 'moved' : 'edit')])).toEqual([
+      ['E1', 'evidenceCards', 'evidenceCards[#mor001]', 'cut'],
+      ['E2', 'evidenceCards', 'evidenceCards[#vic001]', 'moved']
+    ]);
+    expect(standing.edits[1].between).toEqual({ follows: null, precedes: { tokenId: 'jes002' } });
+    expect(D.formatEditLines(standing.edits)).toBe([
+      'E1 (sidebar card mor001, cut): tokenId "mor001"; headline "The envelope at the bar"; summary "Morgan pays Riley out of sight."; significance "supporting"',
+      'E2 (sidebar card vic001, moved within the sidebar)'
+    ].join('\n'));
+    // The version the director sent back carries both; the writer's carries neither.
+    expect(D.carriedEdits(standing, desk).map((e) => e.id)).toEqual(['E1', 'E2']);
+    expect(D.carriedEdits(standing, opened).map((e) => e.id)).toEqual([]);
+    // An edit to the entry's text beside the move is an edit of its own: the move is its place alone.
+    const edited = Desk.setSidebarCard(desk, 0, { ...desk.evidenceCards[0], headline: 'The chair, promised' });
+    expect(D.standingAfterSendBack(null, opened, edited, 'bundle').edits.map((e) => [e.path, e.after === null ? 'cut' : (e.from ? 'moved' : 'edit')])).toEqual([
+      ['evidenceCards[#mor001]', 'cut'],
+      ['evidenceCards[#vic001]', 'moved'],
+      ['evidenceCards[#vic001].headline', 'edit']
+    ]);
+  });
+
+  test("each Key Evidence row offers up, down and delete beside its pencil, through these operations", () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'components', 'checkpoints', 'Article.js'), 'utf8');
+    const row = src.slice(src.indexOf('function renderSidebarEvidenceCard('), src.indexOf('function renderFinancialTracker('));
+    expect(row).toContain("deskRow('ec-' + idx, 'desk-row--card', body, function () { startSidebarEdit('evidenceCards', idx); }, sidebarControls(idx), marks)");
+    const controls = src.slice(src.indexOf('function sidebarControls('), src.indexOf('function blockBody('));
+    expect(controls).toContain("'Move this entry up'");
+    expect(controls).toContain("'Move this entry down'");
+    expect(controls).toContain("'Delete this entry'");
+    expect(controls).toContain("DeskLogic.sidebarStepTarget(bundle, idx, 'up')");
+    const hands = src.slice(src.indexOf('function sidebarStep('), src.indexOf('// -- Actions --'));
+    expect(hands).toContain('applyDesk(DeskLogic.moveSidebarCard(bundle, idx, to))');
+    expect(hands).toContain('applyDesk(DeskLogic.deleteSidebarCard(getCurrentBundle(), idx))');
+  });
+});

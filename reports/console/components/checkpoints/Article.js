@@ -759,6 +759,23 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       { type: 'block', sectionIdx: sectionIdx, blockIdx: blockIdx });
   }
 
+  /** One step up or down for a Key Evidence entry, within the sidebar (task 4.14c). */
+  function sidebarStep(idx, direction) {
+    var bundle = getCurrentBundle();
+    var to = DeskLogic.sidebarStepTarget(bundle, idx, direction);
+    if (to !== null) applyDesk(DeskLogic.moveSidebarCard(bundle, idx, to));
+  }
+
+  /** A Key Evidence entry's delete takes two clicks, as a block's does; it arms as 'sidebar:<index>'. */
+  function sidebarDeleteClick(idx) {
+    var key = 'sidebar:' + idx;
+    if (armedDelete !== key) {
+      setArmedDelete(key);
+      return;
+    }
+    applyDesk(DeskLogic.deleteSidebarCard(getCurrentBundle(), idx));
+  }
+
   // -- Actions --
 
   /**
@@ -952,6 +969,24 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     );
   }
 
+  /**
+   * A Key Evidence entry's controls beside the pencil (task 4.14c): one step up or down within
+   * the sidebar, and delete. Spec 6.3: cards can be moved or deleted, and C9 puts every inline
+   * card in the sidebar too.
+   */
+  function sidebarControls(idx) {
+    var bundle = getCurrentBundle();
+    var armed = armedDelete === 'sidebar:' + idx;
+    return React.createElement(React.Fragment, null,
+      deskButton('\u2191', 'Move this entry up', function () { sidebarStep(idx, 'up'); },
+        { disabled: DeskLogic.sidebarStepTarget(bundle, idx, 'up') === null }),
+      deskButton('\u2193', 'Move this entry down', function () { sidebarStep(idx, 'down'); },
+        { disabled: DeskLogic.sidebarStepTarget(bundle, idx, 'down') === null }),
+      deskButton(armed ? 'Delete?' : '\u2715', armed ? 'Click again to delete this entry' : 'Delete this entry',
+        function () { sidebarDeleteClick(idx); }, { armed: armed })
+    );
+  }
+
   /** What a block shows on the desk: what it prints, or, for an empty block, what to do about it. */
   function blockBody(block) {
     var emptyNote = DeskLogic.emptyBlockNote(block);
@@ -1110,7 +1145,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       ),
       card.tokenId && React.createElement('span', { className: 'text-xs text-muted d-block mt-sm' }, card.tokenId)
     );
-    return deskRow('ec-' + idx, 'desk-row--card', body, function () { startSidebarEdit('evidenceCards', idx); }, null, marks);
+    return deskRow('ec-' + idx, 'desk-row--card', body, function () { startSidebarEdit('evidenceCards', idx); }, sidebarControls(idx), marks);
   }
 
   // -- Financial tracker: the writer's, only when the page prints it --

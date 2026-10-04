@@ -3500,3 +3500,105 @@ describe('4.14b fix round 1: an automatic pass is held to a section the director
     expect(EditLogic.holdDroppedSections(null, ['followTheMoney'])).toBeNull();
   });
 });
+
+// ─── Task 4.14c: the desk's last defects (the final review's desk 1 to 3) ─────
+
+// Desk 1 (ruled major): C9 puts every inline card in the sidebar too, so a card the director
+// deleted at the desk still printed under Key Evidence. Each entry is now deleted and moved
+// there, and the change is the director's edit, which diffBundle reads like any other: a delete
+// is a cut, which stands while none of its pieces is back; a move is the entry's place in the
+// sidebar alone, which stands while it keeps the director's order, and which code puts back
+// after an automatic pass as it puts back a block moved within its section.
+describe('4.14c: a Key Evidence entry the director deleted or moved stands through every pass', () => {
+  const entry = (tokenId, headline, summary) => ({ tokenId, headline, summary, significance: 'supporting' });
+  const JES = entry('jes002', 'You can have him', 'Jess gives up the man and keeps the baby.');
+  const MOR = entry('mor001', 'The envelope at the bar', 'Morgan pays Riley out of sight of the room.');
+  const DNA = entry('p-dna', 'A paternity result', 'The lab names Sarah as the only heir.');
+  const VIC = entry('vic001', 'The chair was mine', 'Vic was promised the company before the party.');
+  const withSidebar = (...cards) => ({ ...articleAtStop(), evidenceCards: cards.map(clone) });
+  const shown = () => withSidebar(JES, MOR, DNA, VIC);
+  /** The desk: MOR deleted, VIC moved to the top. */
+  const desk = () => withSidebar(VIC, JES, DNA);
+  const standing = () => D.standingAfterSendBack(null, shown(), desk(), 'bundle');
+  const sidebarOf = (bundle) => bundle.evidenceCards.map((c) => c.tokenId);
+  const settle = (after, pass = 1, reasons = []) =>
+    D.settleEdits(null, { edits: D.carriedEdits(standing(), desk()), before: desk(), after, pass, reasons });
+
+  test("a delete is a cut and a move is one edit of the entry's place, which the trace reads as a change to the sidebar", () => {
+    expect(D.scopeKeys(D.diffBundle(withSidebar(JES, DNA, VIC), withSidebar(VIC, JES, DNA)))).toEqual(['evidenceCards']);
+    expect(standing().edits.map(bare)).toEqual([
+      {
+        id: 'E1', scope: 'evidenceCards', path: 'evidenceCards[#mor001]', before: MOR, after: null,
+        pieces: ['The envelope at the bar', 'Morgan pays Riley out of sight of the room']
+      },
+      {
+        id: 'E2', scope: 'evidenceCards', path: 'evidenceCards[#vic001]', before: null, after: VIC, from: 'evidenceCards',
+        between: { follows: null, precedes: { tokenId: 'jes002' } }
+      }
+    ]);
+  });
+
+  test("the move stands while the entry keeps the director's order, whatever else changes around it", () => {
+    const { edits } = standing();
+    expect(D.carriedEdits(edits, desk()).map((e) => e.id)).toEqual(['E1', 'E2']);
+    // Back where the writer had it: not the director's place.
+    expect(D.carriedEdits(edits, withSidebar(JES, DNA, VIC)).map((e) => e.id)).toEqual(['E1']);
+    // An entry a pass added, and a summary a pass rewrote, leave its order as it was.
+    const added = withSidebar(VIC, entry('kai001', 'The safe', 'Kai opens the dictionary safe.'), JES, DNA);
+    expect(D.carriedEdits(edits, added).map((e) => e.id)).toEqual(['E1', 'E2']);
+    const rewritten = withSidebar({ ...VIC, summary: 'Vic was promised the chair.' }, JES, DNA);
+    expect(D.carriedEdits(edits, rewritten).map((e) => e.id)).toEqual(['E1', 'E2']);
+  });
+
+  test("an automatic pass that reorders the sidebar has the entry put back in the director's order, as the pass left it", () => {
+    const after = withSidebar(JES, { ...DNA, summary: 'The lab names Sarah.' }, VIC);
+    const { output, report } = settle(after);
+    expect(sidebarOf(output)).toEqual(['vic001', 'jes002', 'p-dna']);
+    expect(output.evidenceCards[2].summary).toBe('The lab names Sarah.');
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E2', where: 'sidebar card vic001, moved within the sidebar', moved: true, became: 'another place in the sidebar',
+      restored: true, inOrder: true, automatic: true
+    })]);
+    expect(D.carriedEdits(standing(), output).map((e) => e.id)).toEqual(['E1', 'E2']);
+  });
+
+  test("an automatic pass that drops the entry leaves it out: only its place was the director's", () => {
+    const { output, report } = settle(withSidebar(JES, DNA));
+    expect(sidebarOf(output)).toEqual(['jes002', 'p-dna']);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E2', moved: true, became: null, restored: false, automatic: true })]);
+  });
+
+  test('the rework of a send-back that reorders it is left as it is, with its reason', () => {
+    const after = withSidebar(JES, DNA, VIC);
+    const { output, report } = settle(after, D.SEND_BACK_PASS, [{ id: 'E2', reason: 'The note opens Key Evidence on Jess.' }]);
+    expect(output).toBe(after);
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E2', moved: true, became: 'another place in the sidebar', automatic: false, restored: false, reason: 'The note opens Key Evidence on Jess.'
+    })]);
+  });
+
+  test('an entry the director deleted that a pass brings back is flagged and stays: code never takes text out', () => {
+    const { output, report } = settle(withSidebar(VIC, JES, MOR, DNA));
+    expect(sidebarOf(output)).toEqual(['vic001', 'jes002', 'mor001', 'p-dna']);
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', where: 'sidebar card mor001, cut', cut: true, became: 'The envelope at the bar', restored: false, automatic: true
+    })]);
+  });
+
+  test("a move stands across the director's next send-back, re-anchored when they moved a neighbour past it", () => {
+    const A = entry('a001', 'The first entry', 'The first summary of the four here.');
+    const B = entry('b001', 'The second entry', 'The second summary of the four here.');
+    const C = entry('c001', 'The third entry', 'The third summary of the four here.');
+    // Round one: the director moved VIC up two places, between A and B. (One place, a swap with
+    // B, is a tie the desk's naming rule may name either way, as for a section's blocks.)
+    const first = D.standingAfterSendBack(null, withSidebar(A, B, C, VIC), withSidebar(A, VIC, B, C), 'bundle');
+    expect(first.edits.map((e) => [e.path, e.between])).toEqual([['evidenceCards[#vic001]', { follows: { tokenId: 'a001' }, precedes: { tokenId: 'b001' } }]]);
+    // Round two: they moved A to the end. VIC still sits where they put it, before B.
+    const second = D.standingAfterSendBack(first, withSidebar(A, VIC, B, C), withSidebar(VIC, B, C, A), 'bundle');
+    expect(second.edits.map((e) => [e.id, e.path, e.between])).toEqual([
+      ['E1', 'evidenceCards[#vic001]', { follows: null, precedes: { tokenId: 'b001' } }],
+      ['E2', 'evidenceCards[#a001]', { follows: { tokenId: 'c001' }, precedes: null }]
+    ]);
+    expect(D.carriedEdits(second, withSidebar(VIC, B, C, A)).map((e) => e.id)).toEqual(['E1', 'E2']);
+  });
+});

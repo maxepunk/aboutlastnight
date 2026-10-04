@@ -16,7 +16,9 @@
  *   gives a block no id (each variant is additionalProperties:false), so a move or a delete
  *   shifts the addresses after it, and the desk closes an open editor when it applies one.
  *   An address the bundle does not have throws: the desk only offers addresses it has.
- *   Only paragraphs and quotes are inserted; photos and cards come from the record.
+ *   Only paragraphs and quotes are inserted; photos and cards come from the record. Each of
+ *   the sidebar's evidence entries, the page's Key Evidence, is moved within the sidebar and
+ *   deleted the same way, by its index there (task 4.14c).
  *
  *   THE CHECKS return a list of problems, each `{path, message, ...}`, never throwing on a
  *   malformed bundle. They run on every approve and every send-back, edited or not:
@@ -271,13 +273,65 @@
     return { headline: asString(c.headline), summary: asString(c.summary), significance: asString(c.significance) };
   }
 
+  /** The sidebar's evidence entries, the page's Key Evidence, or none. */
+  function sidebarOf(bundle) {
+    return isPlainObject(bundle) && Array.isArray(bundle.evidenceCards) ? bundle.evidenceCards : [];
+  }
+
+  function requireSidebarEntry(bundle, index) {
+    var cards = sidebarOf(bundle);
+    if (!Number.isInteger(index) || index < 0 || index >= cards.length) throw new Error('The sidebar has no evidence entry ' + index);
+  }
+
   /** The bundle with one sidebar evidence entry replaced. */
   function setSidebarCard(bundle, index, card) {
-    var cards = isPlainObject(bundle) && Array.isArray(bundle.evidenceCards) ? bundle.evidenceCards : [];
-    if (!Number.isInteger(index) || index < 0 || index >= cards.length) throw new Error('The sidebar has no evidence entry ' + index);
+    requireSidebarEntry(bundle, index);
     var next = cloneBundle(bundle);
     next.evidenceCards[index] = JSON.parse(JSON.stringify(card));
     return next;
+  }
+
+  /**
+   * The bundle without one sidebar evidence entry (task 4.14c). C9 puts every inline card in the
+   * sidebar too, so a card the director deletes from a section has a Key Evidence entry of its
+   * own to delete.
+   */
+  function deleteSidebarCard(bundle, index) {
+    requireSidebarEntry(bundle, index);
+    var next = cloneBundle(bundle);
+    next.evidenceCards.splice(index, 1);
+    return next;
+  }
+
+  /**
+   * The bundle with one sidebar evidence entry moved within the sidebar (task 4.14c).
+   *
+   * @param {Object} bundle
+   * @param {number} from - the entry's index
+   * @param {number} to - its index once it has left its place, as moveBlock takes a block's
+   */
+  function moveSidebarCard(bundle, from, to) {
+    requireSidebarEntry(bundle, from);
+    var length = sidebarOf(bundle).length - 1;
+    if (!Number.isInteger(to) || to < 0 || to > length) throw new Error('The sidebar has no place for an entry at ' + to);
+    var next = cloneBundle(bundle);
+    var moved = next.evidenceCards.splice(from, 1)[0];
+    next.evidenceCards.splice(to, 0, moved);
+    return next;
+  }
+
+  /**
+   * Where one step up or down takes a sidebar entry, as moveSidebarCard takes it: one place
+   * within the sidebar, or null at either end (task 4.14c).
+   *
+   * @param {'up'|'down'} direction
+   * @returns {number|null}
+   */
+  function sidebarStepTarget(bundle, index, direction) {
+    requireSidebarEntry(bundle, index);
+    if (direction === 'up') return index > 0 ? index - 1 : null;
+    if (direction === 'down') return index < sidebarOf(bundle).length - 1 ? index + 1 : null;
+    throw new Error("A step is 'up' or 'down', not '" + String(direction) + "'");
   }
 
   /** The bundle with one row of the writer's money tracker replaced. */
@@ -971,6 +1025,10 @@
     setHero: setHero,
     sidebarCardForm: sidebarCardForm,
     setSidebarCard: setSidebarCard,
+    // Task 4.14c: each Key Evidence entry is deleted and moved at the desk
+    deleteSidebarCard: deleteSidebarCard,
+    moveSidebarCard: moveSidebarCard,
+    sidebarStepTarget: sidebarStepTarget,
     setTrackerEntry: setTrackerEntry,
 
     HEADLINE_LIMITS: HEADLINE_LIMITS,

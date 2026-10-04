@@ -572,14 +572,16 @@
    * - A block the director moved that a pass took to another section: where it went, and
    *   whether code put it back, in the director's order or not (task 4.3c, `inOrder`); one a
    *   pass removed: that code left it out, since only its place was the director's edit. The
-   *   map (task 4.9) names the element a beat or a photo.
+   *   map (task 4.9) names the element a beat or a photo, and the desk a Key Evidence entry an
+   *   entry (task 4.14c).
    * - A change a send-back's rework made: the rework's reason, or that it gave none.
    *
    * @param {Object} entry - one of the report's `changed` entries (lib/hand-edit-diff.js reportAfterPass)
    * @param {Object} [options]
    * @param {function(Object): string} [options.place] - the entry's place; by default its id and `where`
    * @param {function(string): string} [options.valueText] - how a value reads; by default as written
-   * @param {function(Object): string} [options.thing] - what a moved element is called; by default a block
+   * @param {function(Object): string} [options.thing] - what a moved element is called; by default a
+   *   sidebar entry is an entry and anything else a block
    * @param {string} [options.stillIn] - where text that came back still is: by default 'in the article'
    * @returns {string}
    */
@@ -589,7 +591,7 @@
       ? o.place(entry)
       : entry.id + ', ' + (asString(entry.where) ? entry.where : scopeLabel(entry.scope));
     var valueText = typeof o.valueText === 'function' ? o.valueText : function (text) { return text; };
-    var thing = typeof o.thing === 'function' ? o.thing(entry) : 'block';
+    var thing = typeof o.thing === 'function' ? o.thing(entry) : (entry.scope === 'evidenceCards' ? 'entry' : 'block');
     var became = typeof entry.became === 'string' ? valueText(entry.became) : null;
     var director = valueText(asString(entry.director));
     // A pass held to the director's edits: code puts back what it changed.

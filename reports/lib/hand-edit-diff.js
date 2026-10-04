@@ -45,6 +45,10 @@
  *   rule, which this module calls (console/article-desk-logic.js pairSectionBlocks and
  *   stayingInSection; task 4.3b): the fewest it can, a photo or a card before the text it
  *   passed, and a changed block kept in its place, so its change is an edit there.
+ * - A sidebar entry, which the page prints under Key Evidence (task 4.14c): one the director
+ *   deleted is a cut, and one they moved is a move whose `from` is the sidebar and whose
+ *   `between` names the entries it follows and precedes by their tokenIds, by the same
+ *   naming rule (diffSidebar); a field they changed on it is an edit of its own.
  * - Given the roster's names, a cut or a removal records `names` (FA, requirement 9):
  *   the names its text held that the director's version no longer named.
  * Ids (E1, E2, ...) are stable within a stop. The edits stand across every send-back
@@ -56,7 +60,8 @@
  * block of its identity (its type with its filename, tokenId or text) sits in the section
  * the director put it in, whatever its other fields (fix round 1, finding 1), and a move
  * within the section while it also sits after the block it follows and before the block
- * it precedes, each where the section still holds it (task 4.3). A cut is
+ * it precedes, each where the section still holds it (task 4.3); a sidebar entry's move,
+ * the same way within the sidebar (moveContainer; task 4.14c). A cut is
  * carried while none of its pieces is back. Text is read from the fields the page prints
  * (printedParts; known item 6), and a piece under six words is back only as a whole
  * sentence (known item 4). An element the director put in whole that code put back without
@@ -352,17 +357,86 @@ const matchBlocks = pairSectionBlocks;
 
 /**
  * The block a moved block follows and the block it precedes among the blocks that kept
- * their order (null at an end): what finds its place (task 4.3).
+ * their order (null at an end): what finds its place (task 4.3). A sidebar entry's
+ * neighbours are found by their tokenIds (sidebarIdentity; task 4.14c).
  *
  * @param {Array<{ai: number}>} staying - the pairs that kept their order, by their place in `content`
  * @param {number} ai - the moved block's index in `content`
  * @param {Array} content - the section in the director's version
+ * @param {function(Object): Object|null} [identity] - what finds a neighbour (blockIdentity)
  * @returns {{follows: Object|null, precedes: Object|null}}
  */
-function betweenAt(staying, ai, content) {
+function betweenAt(staying, ai, content, identity = blockIdentity) {
   const follows = staying.filter((p) => p.ai < ai).pop();
   const precedes = staying.find((p) => p.ai > ai);
-  return { follows: follows ? blockIdentity(content[follows.ai]) : null, precedes: precedes ? blockIdentity(content[precedes.ai]) : null };
+  return { follows: follows ? identity(content[follows.ai]) : null, precedes: precedes ? identity(content[precedes.ai]) : null };
+}
+
+/**
+ * The bundle's sidebar: its evidence entries, which the page prints under Key Evidence, each
+ * named by its tokenId (ELEMENT_KEYS). The director deletes and moves them at the desk as they
+ * do a section's blocks (task 4.14c).
+ */
+const SIDEBAR = 'evidenceCards';
+
+/** A sidebar entry's path, `evidenceCards[#tokenId]`. */
+const SIDEBAR_ENTRY_PATH = /^evidenceCards\[#[^\]]+\]$/;
+
+/** An entry's tokenId, or null for an entry with none, which keeps no place in the sidebar's order. */
+function sidebarName(card) {
+  return isObj(card) && card.tokenId != null && String(card.tokenId).trim() ? String(card.tokenId) : null;
+}
+
+/** What finds a sidebar entry in any version: its tokenId (identityOf). */
+function sidebarIdentity(card) {
+  return identityOf(SIDEBAR, card);
+}
+
+/**
+ * The sidebar's entries in two versions, each paired with the first entry of its tokenId:
+ * `[{bi, ai}]`, as pairSectionBlocks gives a section's pairs (task 4.14c).
+ */
+function sidebarPairs(beforeArr, afterArr) {
+  const b = Array.isArray(beforeArr) ? beforeArr : [];
+  const a = Array.isArray(afterArr) ? afterArr : [];
+  const used = new Set();
+  const pairs = [];
+  a.forEach((card, ai) => {
+    const name = sidebarName(card);
+    if (name === null) return;
+    const bi = b.findIndex((other, i) => !used.has(i) && sidebarName(other) === name);
+    if (bi !== -1) { used.add(bi); pairs.push({ bi, ai }); }
+  });
+  return pairs;
+}
+
+/**
+ * The sidebar's entries, diffed: one change per entry that differs, found by its tokenId (an
+ * entry with none by its index), in the order the entries first appear. Since task 4.14c each
+ * entry outside the run that kept its order carries `between`, its place in the newer version
+ * among the entries that kept theirs, and is a change though its fields are the same. Which
+ * entries moved is the desk's naming rule (stayingInSection), as for a section's blocks.
+ * rawEditsOf reads such a change as a move of the entry's place, and any field changed on it
+ * as an edit of its own.
+ */
+function diffSidebar(before, after) {
+  const b = Array.isArray(before) ? before : [];
+  const a = Array.isArray(after) ? after : [];
+  const pairs = sidebarPairs(b, a);
+  const staying = stayingInSection(b, a, pairs);
+  const moved = new Map(pairs.filter((pair) => !staying.includes(pair))
+    .map((pair) => [sidebarName(a[pair.ai]), betweenAt(staying, pair.ai, a, sidebarIdentity)]));
+  const bMap = new Map(b.map((x, i) => [idOf(x, 'tokenId', i), x]));
+  const aMap = new Map(a.map((x, i) => [idOf(x, 'tokenId', i), x]));
+  const changes = [];
+  for (const id of new Set([...bMap.keys(), ...aMap.keys()])) {
+    const bv = bMap.get(id);
+    const av = aMap.get(id);
+    const between = moved.get(id);
+    if (same(bv, av) && !between) continue;
+    changes.push({ path: `${SIDEBAR}[#${id}]`, before: bv === undefined ? null : bv, after: av === undefined ? null : av, ...(between && { between }) });
+  }
+  return changes;
 }
 
 /**
@@ -404,20 +478,6 @@ function idOf(item, idField, i) {
 // `sectionKey` (required above): the one rule, which the diff, the fact check (known item 7)
 // and the desk's change report read.
 
-function diffById(name, idField, before, after) {
-  const b = Array.isArray(before) ? before : [];
-  const a = Array.isArray(after) ? after : [];
-  const bMap = new Map(b.map((x, i) => [idOf(x, idField, i), x]));
-  const aMap = new Map(a.map((x, i) => [idOf(x, idField, i), x]));
-  const changes = [];
-  for (const id of new Set([...bMap.keys(), ...aMap.keys()])) {
-    const bv = bMap.get(id);
-    const av = aMap.get(id);
-    if (!same(bv, av)) changes.push({ path: `${name}[#${id}]`, before: bv === undefined ? null : bv, after: av === undefined ? null : av });
-  }
-  return changes;
-}
-
 function diffByIndex(name, before, after) {
   const b = Array.isArray(before) ? before : [];
   const a = Array.isArray(after) ? after : [];
@@ -456,7 +516,7 @@ function diffBundle(before, after) {
     }
   }
 
-  push('evidenceCards', diffById('evidenceCards', 'tokenId', before.evidenceCards, after.evidenceCards));
+  push(SIDEBAR, diffSidebar(before[SIDEBAR], after[SIDEBAR]));
   BUNDLE_INDEX_COLLECTIONS.forEach((k) => push(k, diffByIndex(k, before[k], after[k])));
   return { kind: 'bundle', scopes };
 }
@@ -833,7 +893,8 @@ const SECTION_BLOCK_PATH = /^sections\[#([^\]]+)\]\.content\[(?:\d+|-)\]$/;
  * A diff's changes as the director's edits, before ids: one per field changed, a move
  * for a block that left one section and arrived unchanged in another, or that the
  * director moved within its section (an addition the diff marked with `between`, paired
- * with its own removal; task 4.3), a cut for each element or field removed.
+ * with its own removal; task 4.3), a move for a sidebar entry the diff marked with
+ * `between` (task 4.14c), and a cut for each element or field removed.
  */
 function rawEditsOf(diff) {
   const changes = [];
@@ -866,6 +927,11 @@ function rawEditsOf(diff) {
     if (moves.has(c)) {
       out.push({ scope: c.scope, at, before: null, after: c.after, from: moves.get(c), ...(c.between ? { between: c.between } : {}) });
       return;
+    }
+    // Task 4.14c: a sidebar entry the director moved within the sidebar. The move is its place
+    // alone; a field they changed on it is an edit of its own, below.
+    if (isObj(c.between) && SIDEBAR_ENTRY_PATH.test(c.path)) {
+      out.push({ scope: c.scope, at, before: null, after: c.after, from: SIDEBAR, between: c.between });
     }
     valueEdits(c.before, c.after, at).forEach((edit) => out.push({ scope: c.scope, ...edit }));
   });
@@ -1060,6 +1126,24 @@ function directorsOrderCanHold(content, edit) {
   return follows === -1 || precedes === -1 || follows < precedes;
 }
 
+/** Is this edit on the sidebar's entries (task 4.14c)? Its steps start at the sidebar. */
+function onSidebar(edit) {
+  const steps = stepsOf(edit);
+  return Boolean(steps[0]) && steps[0].key === SIDEBAR;
+}
+
+/**
+ * The list a move keeps its place in: the sidebar's entries for an entry the director moved
+ * within the sidebar (task 4.14c), else the blocks of the section the director moved a block
+ * to; null when `obj` has none.
+ */
+function moveContainer(obj, edit) {
+  if (!isObj(obj)) return null;
+  if (onSidebar(edit)) return Array.isArray(obj[SIDEBAR]) ? obj[SIDEBAR] : null;
+  const index = moveSectionIndex(obj, edit);
+  return index !== -1 && isObj(obj.sections[index]) && Array.isArray(obj.sections[index].content) ? obj.sections[index].content : null;
+}
+
 /** Does `obj` still carry this edit (see the module header)? */
 function editCarried(obj, edit) {
   if (!isObj(obj) || !isEdit(edit)) return false;
@@ -1069,7 +1153,7 @@ function editCarried(obj, edit) {
   if (stepsOf(edit).length === 0) return false;
   if (isMove(edit)) {
     if (movedBlockPlaces(obj, edit).length === 0) return false;
-    return !isMoveWithin(edit) || inDirectorsOrder(obj.sections[moveSectionIndex(obj, edit)].content, edit);
+    return !isMoveWithin(edit) || inDirectorsOrder(moveContainer(obj, edit) || [], edit);
   }
   // An un-strike is carried by its connection's place alone (placeCarrying; task 4.5d).
   return placeCarrying(obj, edit) !== undefined;
@@ -1145,17 +1229,17 @@ function stillRemoved(edit, versions) {
  * @returns {Object|null}
  */
 function reanchoredMove(edit, shown, sentBack) {
-  const was = moveSectionIndex(shown, edit);
-  const target = moveSectionIndex(sentBack, edit);
-  if (was === -1 || target === -1) return null;
-  const bc = Array.isArray(shown.sections[was].content) ? shown.sections[was].content : [];
-  const ac = Array.isArray(sentBack.sections[target].content) ? sentBack.sections[target].content : [];
+  const bc = moveContainer(shown, edit);
+  const ac = moveContainer(sentBack, edit);
+  if (!bc || !ac) return null;
   const ai = indexOfIdentity(ac, moveIdentity(edit));
   if (ai === -1) return null;
-  const staying = stayingInSection(bc, ac, matchBlocks(bc, ac).pairs);
+  // Task 4.14c: a sidebar entry's neighbours pair, and are found, by their tokenIds.
+  const sidebar = onSidebar(edit);
+  const staying = stayingInSection(bc, ac, sidebar ? sidebarPairs(bc, ac) : matchBlocks(bc, ac).pairs);
   if (!staying.some((pair) => pair.ai === ai)) return null;
   const at = stepsOf(edit).map((step, i, steps) => (i === steps.length - 1 ? { ...step, index: ai } : step));
-  return { ...edit, at, path: pathOf(at), between: betweenAt(staying, ai, ac) };
+  return { ...edit, at, path: pathOf(at), between: betweenAt(staying, ai, ac, sidebar ? sidebarIdentity : blockIdentity) };
 }
 
 /**
@@ -1736,7 +1820,8 @@ function editWhere(edit) {
   if (isCut(edit)) parts.push('cut');
   if (isStrike(edit)) parts.push('struck');
   if (isUnstrike(edit)) parts.push('brought back');
-  if (edit.from) parts.push(isObj(edit.between) ? 'moved within the section' : `moved from section "${edit.from}"`);
+  // Task 4.14c: a sidebar entry moves within the sidebar, a block within its section.
+  if (edit.from) parts.push(isObj(edit.between) ? `moved within the ${head === SIDEBAR ? 'sidebar' : 'section'}` : `moved from section "${edit.from}"`);
   return parts.filter(Boolean).join(', ');
 }
 
@@ -2729,7 +2814,8 @@ function rewrittenInPlace(link, afterContent) {
  *   a copy the director kept there is not (task 4.3c, fix round 1);
  * - `gone`: the pass removed it.
  * Where the director's section holds the block and another section the pass's copy, the
- * section that comes first decides.
+ * section that comes first decides. An entry the director moved within the sidebar is
+ * `kept`, `reordered` or `gone` there (task 4.14c).
  *
  * @returns {{outcome: 'kept'|'reordered'|'moved'|'gone', section?: string}}
  */
@@ -2737,6 +2823,11 @@ function moveOutcome(edit, before, after) {
   const address = mapAddressOf(edit);
   if (address) return mapMoveOutcome(edit, address, after);
   if (editCarried(after, edit)) return { outcome: 'kept' };
+  // Task 4.14c: an entry the director moved within the sidebar is there out of their order, or gone.
+  if (onSidebar(edit)) {
+    const entries = moveContainer(after, edit);
+    return entries && indexOfIdentity(entries, moveIdentity(edit)) !== -1 ? { outcome: 'reordered' } : { outcome: 'gone' };
+  }
   const sections = isObj(after) && Array.isArray(after.sections) ? after.sections : [];
   const target = moveSectionIndex(after, edit);
   const identity = moveIdentity(edit);
@@ -2764,7 +2855,7 @@ function becameOf(edit, before, after) {
   if (isCut(edit)) return cutReturnedIn(after, edit);
   if (isMove(edit)) {
     const { outcome, section } = moveOutcome(edit, before, after);
-    if (outcome === 'reordered') return `another place in section "${edit.from}"`;
+    if (outcome === 'reordered') return onSidebar(edit) ? 'another place in the sidebar' : `another place in section "${edit.from}"`;
     return outcome === 'moved' ? `section "${section}"` : null;
   }
   const place = placeCarrying(before, edit);
@@ -2788,13 +2879,15 @@ function becameOf(edit, before, after) {
  * Put a block the director moved within its section back in the director's order, as the
  * pass left it: right after the block it follows, else right before the block it
  * precedes (task 4.3). Writes nothing when the order already holds, or when no place can
- * hold it (directorsOrderCanHold; task 4.3b): the section then keeps its order.
+ * hold it (directorsOrderCanHold; task 4.3b): the section then keeps its order. A sidebar
+ * entry goes back into the director's order in the sidebar the same way (task 4.14c).
  *
+ * @param {Object} edit - a move within its section or within the sidebar (isMoveWithin)
+ * @param {Array|null} content - the list it moved within (moveContainer), changed in place
  * @returns {boolean} whether it moved the block
  */
-function placeInDirectorsOrder(edit, section) {
-  const content = isObj(section) && Array.isArray(section.content) ? section.content : null;
-  if (!content || indexOfIdentity(content, moveIdentity(edit)) === -1 || inDirectorsOrder(content, edit)
+function placeInDirectorsOrder(edit, content) {
+  if (!Array.isArray(content) || indexOfIdentity(content, moveIdentity(edit)) === -1 || inDirectorsOrder(content, edit)
     || !directorsOrderCanHold(content, edit)) return false;
   const [block] = content.splice(indexOfIdentity(content, moveIdentity(edit)), 1);
   const follows = indexOfIdentity(content, edit.between.follows);
@@ -2815,7 +2908,8 @@ function placeInDirectorsOrder(edit, section) {
  * director's order there (placeInDirectorsOrder), only where that order can hold
  * (directorsOrderCanHold): where the pass swapped the blocks it sat between, the block
  * stays where it is (task 4.3b). With no such section, or no copy of the pass's to take
- * back, nothing is written.
+ * back, nothing is written. An entry the director moved within the sidebar goes back into
+ * their order there, as the pass left it (task 4.14c).
  *
  * @param {Object} edit - a move (isMove)
  * @param {Object} before - the version the pass started from
@@ -2823,6 +2917,7 @@ function placeInDirectorsOrder(edit, section) {
  * @returns {boolean} whether anything was written
  */
 function restoreMove(edit, before, out) {
+  if (onSidebar(edit)) return placeInDirectorsOrder(edit, moveContainer(out, edit));
   const steps = stepsOf(edit);
   const sections = isObj(out) && Array.isArray(out.sections) ? out.sections : null;
   const targetIndex = moveSectionIndex(out, edit);
@@ -2841,7 +2936,7 @@ function restoreMove(edit, before, out) {
     }
     wrote = Boolean(first);
   }
-  if (isMoveWithin(edit)) wrote = placeInDirectorsOrder(edit, target) || wrote;
+  if (isMoveWithin(edit)) wrote = placeInDirectorsOrder(edit, Array.isArray(target.content) ? target.content : null) || wrote;
   return wrote;
 }
 

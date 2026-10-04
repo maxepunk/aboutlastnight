@@ -1092,3 +1092,41 @@ describe('4.10e: a section code put back without its photo is marked at its head
     expect(changedMarks(deskMarks(apart, apart.contentBundle)).map(([key, , where]) => [key, where])).toEqual([['apart', '']]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Task 4.14c: the desk's last defects (the final review's desk 1 to 3). The desk's marks sit only
+// where something needs them: beside the director's paragraph when code cannot tell which block
+// is a pass's version of it, never for text the article no longer holds, and beside a Key
+// Evidence entry a rework moved. Every report here is lib/hand-edit-diff.js settleEdits'.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.14c: the desk says what each pass did, and only what still holds', () => {
+  const changedAt = (d) => {
+    const marks = deskMarks(d, d.contentBundle);
+    return [
+      ...Object.keys(marks.at).sort().flatMap((key) => marks.at[key].filter((m) => m.tone === 'changed').map((m) => [key, m.text])),
+      ...marks.apart.filter((m) => m.tone === 'changed').map((m) => ['apart', m.text])
+    ];
+  };
+
+  test('a Key Evidence entry a rework moved: a send-back\'s move sits beside the entry with its reason, and an automatic pass\'s, which code put back, folds below', () => {
+    const entry = (tokenId, headline) => ({ tokenId, headline, summary: `${headline}, in the record.`, significance: 'supporting' });
+    const withSidebar = (...ids) => {
+      const b = article();
+      b.evidenceCards = ids.map((id) => entry(id, `Entry ${id}`));
+      return b;
+    };
+    const edits = carriedEdits(standingAfterSendBack(null, withSidebar('a001', 'b001', 'c001', 'vic001'), withSidebar('vic001', 'a001', 'b001', 'c001'), 'bundle'), withSidebar('vic001', 'a001', 'b001', 'c001'));
+    const before = withSidebar('vic001', 'a001', 'b001', 'c001');
+    const sendBack = settleEdits(null, { edits, before, after: withSidebar('a001', 'b001', 'c001', 'vic001'), pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note puts Vic last.' }] });
+    const d = payloadFor(sendBack.output, { handEditReport: sendBack.report });
+    expect(changedAt(d)).toEqual([[deskAnchorKey({ kind: 'sidebar', index: 3 }),
+      'Sidebar card vic001, moved within the sidebar: the rework of your send-back moved the entry you placed here to another place in the sidebar. Why: The note puts Vic last.']]);
+
+    const automatic = settleEdits(null, { edits, before, after: withSidebar('a001', 'b001', 'c001', 'vic001'), pass: 1 });
+    expect(automatic.output.evidenceCards.map((c) => c.tokenId)).toEqual(['vic001', 'a001', 'b001', 'c001']);
+    expect(changedEditsToShow(automatic.report)).toEqual([]);
+    expect(ViewLogic.steeringView(automatic.report, []).changedEdits.map((e) => e.line)).toEqual([
+      'E1, sidebar card vic001, moved within the sidebar: automatic pass 1 moved the entry you placed here to another place in the sidebar. It was put back.'
+    ]);
+  });
+});
