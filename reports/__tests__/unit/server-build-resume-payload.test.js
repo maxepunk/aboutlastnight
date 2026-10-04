@@ -340,15 +340,24 @@ describe('buildResumePayload — whiteboardPhotoPath rides along, never approves
   });
 
   it('is ignored at every other gate', () => {
-    // Brief 4.5: the story meeting's approve.
-    const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+    // Brief 4.6: the map's approve.
     const result = buildResumePayload({
+      outline: 'approve',
+      map: mapFixture(),
+      whiteboardPhotoPath: 'D:/x.jpg'
+    }, { ...current, outline: mapFixture() }, 'journalist', 'outline');
+    expect(result.error).toBeNull();
+    expect('rawSessionInput' in result.stateUpdates).toBe(false);
+    // Brief 4.5c: the story meeting takes only its own keys, so beside the meeting's
+    // approve the rider is refused, and nothing is written.
+    const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+    const atMeeting = buildResumePayload({
       meeting: 'approve',
       weave: JSON.parse(JSON.stringify(WEAVE)),
       whiteboardPhotoPath: 'D:/x.jpg'
     }, { ...current, weave: WEAVE }, 'journalist', 'arc-selection');
-    expect(result.error).toBeNull();
-    expect('rawSessionInput' in result.stateUpdates).toBe(false);
+    expect(atMeeting.error).toContain('This request carries whiteboardPhotoPath, which the story meeting does not take.');
+    expect(atMeeting.stateUpdates).toEqual({});
   });
 });
 
@@ -1083,7 +1092,13 @@ describe('4.5: the story meeting through buildResumePayload', () => {
 
   it('refuses the arc selection\'s old shape by name, so a stale console never approves by a selection', () => {
     [{ selectedArcs: ['a'] }, { selectedArcs: false, arcFeedback: 'x' }, { outlineGuidance: 'Lead with the money.' }].forEach((approvals) => {
-      const result = buildResumePayload(approvals, shown(), 'journalist', 'arc-selection');
+      // Brief 4.5c: at the meeting the meeting's own keys are the only ones taken, so the old
+      // shape is refused there by its keys, naming the stop; with no stop given, by name.
+      const atMeeting = buildResumePayload(approvals, shown(), 'journalist', 'arc-selection');
+      expect(atMeeting.error).toMatch(/^The thread is paused at the story meeting \(arc-selection\), which takes only its own action: \{meeting/);
+      expect(atMeeting.error).toContain(`This request carries ${Object.keys(approvals).join(' and ')}, which the story meeting does not take.`);
+      expect(atMeeting.stateUpdates).toEqual({});
+      const result = buildResumePayload(approvals, shown());
       expect(result.error).toMatch(/The arc selection is gone: the story meeting takes \{meeting/);
       expect(result.stateUpdates).toEqual({});
     });
@@ -1126,7 +1141,9 @@ describe("4.5b: at the story meeting only the meeting's own action is taken", ()
   it.each(OTHER_STOPS)("refuses the %s stop's %j at the meeting, naming the stop the thread is paused at, and writes nothing", (_stop, approvals) => {
     const result = buildResumePayload(approvals, atMeeting(), 'journalist', 'arc-selection');
     expect(result.error).toMatch(/^The thread is paused at the story meeting \(arc-selection\), which takes only its own action/);
-    expect(result.error).toContain(`This request carries ${Object.keys(approvals)[0]}, another stop's approval.`);
+    // Brief 4.5c: the meeting names every key it does not take, its riders included; a note
+    // is the meeting's own key, so it is not named.
+    expect(result.error).toContain(`This request carries ${Object.keys(approvals).filter((key) => key !== 'note').join(' and ')}, which the story meeting does not take.`);
     expect(result.resume).toEqual({});
     expect(result.stateUpdates).toEqual({});
   });
@@ -1139,7 +1156,7 @@ describe("4.5b: at the story meeting only the meeting's own action is taken", ()
 
   it("refuses another stop's key beside the meeting's own action: a reweave never turns into an approval", () => {
     const result = buildResumePayload({ meeting: 'reweave', weave: edited(), outline: true, article: true }, atMeeting(), 'journalist', 'arc-selection');
-    expect(result.error).toContain("This request carries outline and article, other stops' approvals.");
+    expect(result.error).toContain('This request carries outline and article, which the story meeting does not take.');
     expect(result.resume).toEqual({});
     expect(result.stateUpdates).toEqual({});
   });
@@ -1483,5 +1500,166 @@ describe('4.3c: a structured character-IDs answer holds mappings', () => {
     const { error, stateUpdates } = at(ids);
     expect(error).toBeNull();
     expect(stateUpdates.characterIdMappings).toEqual(ids);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5c: the meeting takes only its own keys; a note sent again in its round files once
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// 4.5b's guard refused a fixed list of other stops' keys, so an approval key a later arm
+// adds would approve the meeting again. While the thread is paused at the story meeting the
+// server takes the meeting's own keys, the ones console/checkpoint-view-logic.js
+// meetingPayload builds, and the photos folder that rides along with them, and refuses any
+// other, naming the stop. A note the director sends again in the round it was filed in (a
+// round whose rework did not run, retried) files once. Invented text.
+describe('4.5c: the meeting takes only its own keys, and a note sent again in its round files once', () => {
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { withFactCheckMark } = require('../../lib/weave');
+  const { meetingCheckpointData } = require('../../lib/meeting');
+  const {
+    meetingWeaveOf, meetingPayload, setThreadRole, setConnectionStruck, setQuestionAnswer
+  } = require('../../console/checkpoint-view-logic');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const MARK = { at: 't', ready: true, fixes: 0 };
+  const atMeeting = (extra = {}) => ({
+    weave: withFactCheckMark(clone(WEAVE), MARK), _weaveBaseline: clone(WEAVE), directorGateNotes: [],
+    arcRevisionCount: 0, humanArcRevisionCount: 0, ...extra
+  });
+  const take = (payload, state = atMeeting()) => buildResumePayload(payload, state, 'journalist', 'arc-selection');
+  /** The stop's payload at a state, which the console's builders read (server.js getCheckpointData's arm). */
+  const dataOf = (state) => meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 });
+  const shownOf = (state) => meetingWeaveOf(state.weave);
+  const PAUSED = /^The thread is paused at the story meeting \(arc-selection\), which takes only its own action: \{meeting: "approve" \| "reweave" \| "send-back", weave, note\}\. /;
+
+  describe('at the meeting the server takes its own keys and the photos folder, and refuses any other, naming the stop', () => {
+    it.each([
+      ['an approval key no stop has', { approved: true }, 'approved'],
+      ["a rider no arm reads at the meeting, beside the meeting's own approve", { meeting: 'approve', weave: clone(WEAVE), rescuedItems: ['p-rescued'] }, 'rescuedItems'],
+      ["another stop's note, beside a reweave", { meeting: 'reweave', weave: clone(WEAVE), note: 'Fit the ledger in.', outlineNote: 'Keep the bonus beat.' }, 'outlineNote'],
+      ['two keys the meeting does not take', { meeting: 'approve', weave: clone(WEAVE), theme: 'journalist', force: true }, 'theme and force']
+    ])('%s: refused, naming the stop and the keys, and nothing written', (_name, approvals, named) => {
+      const result = take(approvals);
+      expect(result.error).toMatch(PAUSED);
+      expect(result.error).toContain(`This request carries ${named}, which the story meeting does not take.`);
+      expect(result.resume).toEqual({});
+      expect(result.stateUpdates).toEqual({});
+    });
+
+    it("takes every payload the console builds, each carrying only the meeting's keys, and the photos folder beside the meeting's own action", () => {
+      const state = atMeeting();
+      const data = dataOf(state);
+      const reroled = setThreadRole(shownOf(state), 2, 'mirrors-it');
+      const payloads = [
+        meetingPayload('approve', data, shownOf(state), ''),
+        meetingPayload('approve', data, reroled, 'Lead with the vote.'),
+        meetingPayload('reweave', data, reroled, ''),
+        meetingPayload('reweave', data, shownOf(state), 'Make the sale the main thread.'),
+        meetingPayload('send-back', data, shownOf(state), 'Rethink the money thread.'),
+        meetingPayload('send-back', data, setQuestionAnswer(shownOf(state), 0, 'Sarah ran the bar.'), 'Rethink it.')
+      ];
+      payloads.forEach((payload) => {
+        expect(Object.keys(payload).filter((key) => !['meeting', 'weave', 'note'].includes(key))).toEqual([]);
+        expect(take(payload, atMeeting()).error).toBeNull();
+      });
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-meeting-photos-'));
+      const withPhotos = take({ ...payloads[0], photosPath: dir }, atMeeting());
+      expect(withPhotos.error).toBeNull();
+      expect(withPhotos.stateUpdates.photosPath).toBe(dir);
+    });
+  });
+
+  describe('a note sent again in the round it was filed in files once', () => {
+    const NOTE = 'Make the sale the main thread.';
+    /** The meeting reopened after a round whose rework timed out: reviseArcs gives the round back. */
+    const reopenedAfter = (state, taken) => ({
+      ...state, ...taken.stateUpdates, _meetingRound: null, _arcFeedback: null, arcRevisionCount: 0,
+      humanArcRevisionCount: state.humanArcRevisionCount,
+      _arcReworkTimeout: { consecutive: 1, attempt: 0, round: taken.stateUpdates._meetingRound, note: taken.stateUpdates._arcFeedback, at: 't' }
+    });
+
+    it('the retry of a round that did not run, with its note, files no second note; the round reads the note all the same', () => {
+      const state = atMeeting();
+      const first = take(meetingPayload('reweave', dataOf(state), shownOf(state), NOTE), state);
+      expect(first.stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'arc-selection', kind: 'rejection', round: 1, text: NOTE })]);
+      const reopened = reopenedAfter(state, first);
+      const retry = take(meetingPayload('reweave', dataOf(reopened), shownOf(reopened), NOTE), reopened);
+      expect(retry.error).toBeNull();
+      expect(retry.resume).toEqual({ approved: false, round: 'reweave', feedback: NOTE });
+      expect(retry.stateUpdates._arcFeedback).toBe(NOTE);
+      expect(retry.stateUpdates.directorGateNotes).toBeUndefined();
+    });
+
+    it('the same words in a later round file again, and so do they as an approval note, another kind', () => {
+      const state = atMeeting();
+      const first = take(meetingPayload('reweave', dataOf(state), shownOf(state), NOTE), state);
+      const reopened = reopenedAfter(state, first);
+      // A round that ran: the next look at the meeting is its next round.
+      const nextRound = { ...reopened, humanArcRevisionCount: 1, _arcReworkTimeout: null };
+      const again = take(meetingPayload('reweave', dataOf(nextRound), shownOf(nextRound), NOTE), nextRound);
+      expect(again.stateUpdates.directorGateNotes.map((n) => [n.kind, n.round, n.text])).toEqual([['rejection', 1, NOTE], ['rejection', 2, NOTE]]);
+      const kept = take(meetingPayload('approve', dataOf(reopened), shownOf(reopened), NOTE), reopened);
+      expect(kept.stateUpdates.directorGateNotes.map((n) => [n.kind, n.text])).toEqual([['rejection', NOTE], ['approval', NOTE]]);
+    });
+
+    it('a note filed before notes recorded their round holds back no note', () => {
+      const state = atMeeting({ directorGateNotes: [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: NOTE, at: 't0' }] });
+      expect(take(meetingPayload('reweave', dataOf(state), shownOf(state), NOTE), state).stateUpdates.directorGateNotes).toHaveLength(2);
+    });
+  });
+
+  // Review 4.8, minor 8: the two payload shapes the pure tests alone covered.
+  describe("the console's note-only reweave and a send-back that carries a role change, through the gate", () => {
+    it("a note-only reweave: the director's round, on the weave as shown, with no edit and the note as the round's", () => {
+      const state = atMeeting();
+      const payload = meetingPayload('reweave', dataOf(state), shownOf(state), 'Make the sale the main thread.');
+      expect(payload).toEqual({ meeting: 'reweave', weave: clone(WEAVE), note: 'Make the sale the main thread.' });
+      const { resume, stateUpdates, error } = take(payload, state);
+      expect(error).toBeNull();
+      expect(resume).toEqual({ approved: false, round: 'reweave', feedback: 'Make the sale the main thread.' });
+      expect(stateUpdates).toMatchObject({ weave: state.weave, _weaveHandEdits: null, _meetingRound: 'reweave', _arcFeedback: 'Make the sale the main thread.' });
+      expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'arc-selection', kind: 'rejection', text: 'Make the sale the main thread.' })]);
+    });
+
+    it('a send-back that carries a role change: the role stored as the director left it, its edit standing, and the note as the round\'s', () => {
+      const state = atMeeting();
+      const reroled = setThreadRole(shownOf(state), 2, 'mirrors-it');
+      const payload = meetingPayload('send-back', dataOf(state), reroled, 'Rethink the money thread.');
+      expect(payload).toEqual({ meeting: 'send-back', note: 'Rethink the money thread.', weave: reroled });
+      const { resume, stateUpdates, error } = take(payload, state);
+      expect(error).toBeNull();
+      expect(resume).toEqual({ approved: false, round: 'send-back', feedback: 'Rethink the money thread.' });
+      expect(stateUpdates.weave.threads[2].role).toBe('mirrors-it');
+      expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].role']);
+      expect(stateUpdates).toMatchObject({ _meetingRound: 'send-back', _arcFeedback: 'Rethink the money thread.' });
+    });
+  });
+
+  describe('a reweave whose only change brings back a connection the director struck is taken', () => {
+    const struck = () => setConnectionStruck(clone(WEAVE), 1, true);
+    /** The director strikes c2 and approves: their strike is E1. */
+    const approvedWithStrike = () => take(meetingPayload('approve', dataOf(atMeeting()), struck(), ''), atMeeting());
+
+    it("after a round, whose weave holds the strike: the console sends the reweave, and the un-strike is the director's edit", () => {
+      const afterRound = atMeeting({
+        weave: withFactCheckMark(struck(), MARK), _weaveBaseline: struck(),
+        _weaveHandEdits: approvedWithStrike().stateUpdates._weaveHandEdits, humanArcRevisionCount: 1
+      });
+      const payload = meetingPayload('reweave', dataOf(afterRound), setConnectionStruck(shownOf(afterRound), 1, false), '');
+      expect(payload).not.toBeNull();
+      const { resume, stateUpdates, error } = take(payload, afterRound);
+      expect(error).toBeNull();
+      expect(resume).toEqual({ approved: false, round: 'reweave' });
+      expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.unstruck])).toEqual([['E2', 'connections[#c2]', true]]);
+    });
+
+    it('with no round since the strike (an approve, then back to the meeting, which reopens as the director left it)', () => {
+      const back = atMeeting({ ...approvedWithStrike().stateUpdates });
+      const payload = meetingPayload('reweave', dataOf(back), setConnectionStruck(shownOf(back), 1, false), '');
+      expect(payload).not.toBeNull();
+      const { stateUpdates, error } = take(payload, back);
+      expect(error).toBeNull();
+      expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.unstruck])).toEqual([['E2', 'connections[#c2]', true]]);
+    });
   });
 });

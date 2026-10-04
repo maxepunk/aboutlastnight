@@ -504,6 +504,17 @@ function sanitizePhotosPath(raw) {
 }
 
 /**
+ * The counter of the director's rounds that ran at each stop that takes a note: the stop's
+ * round is one more than it (brief 4.5c). reviseArcs gives the meeting's back when a round's
+ * rework times out, so a round that did not run keeps its number.
+ */
+const DIRECTOR_ROUNDS_BY_GATE = Object.freeze({
+    'arc-selection': 'humanArcRevisionCount',
+    outline: 'humanOutlineRevisionCount',
+    article: 'humanArticleRevisionCount'
+});
+
+/**
  * Append one director gate note (spec 2026-09-19 §5.2). The channel is a REPLACE
  * channel, so this writes the full array; buildResumePayload has the current state
  * and the per-session lock rules out a concurrent writer. `round` counts the
@@ -514,14 +525,26 @@ function sanitizePhotosPath(raw) {
  * note and a rejection note, and `round` counts per gate AND kind so the two series
  * do not share numbers ([outline, approval 1] and [outline, rejection 1] coexist).
  *
+ * Brief 4.5c: each note records the stop's round it was sent in (`stopRound`), and a note
+ * whose gate, kind and text match a note already standing from this round is not appended
+ * again. A director who retries a round whose rework did not run, with its note, files the
+ * note once; the round still reads it, as its own note. The same words in a later round
+ * are that round's note, and file again. A note stored before notes recorded their round
+ * holds no note back.
+ *
  * @param {string} kind - 'rejection' (sent with a send back) or 'approval' (sent with an approve)
  */
 function appendGateNote(stateUpdates, currentState, gate, text, kind) {
     const existing = Array.isArray(currentState.directorGateNotes)
         ? currentState.directorGateNotes.filter(n => n && typeof n === 'object')
         : [];
-    const round = existing.filter(n => n.gate === gate && (n.kind || 'rejection') === kind).length + 1;
-    stateUpdates.directorGateNotes = [...existing, { gate, kind, round, text, at: new Date().toISOString() }];
+    const stopRound = (Number(currentState[DIRECTOR_ROUNDS_BY_GATE[gate]]) || 0) + 1;
+    const sameKind = (n) => n.gate === gate && (n.kind || 'rejection') === kind;
+    const filed = existing.some((n) => sameKind(n) && n.stopRound === stopRound
+        && typeof n.text === 'string' && n.text.trim() === String(text).trim());
+    if (filed) return;
+    const round = existing.filter(sameKind).length + 1;
+    stateUpdates.directorGateNotes = [...existing, { gate, kind, round, stopRound, text, at: new Date().toISOString() }];
 }
 
 /**
@@ -612,35 +635,31 @@ function validateEdits(schemaName, edits, noun) {
 }
 
 /**
- * The keys with which each stop other than the story meeting is approved or sent back
- * (brief 4.5b): the story meeting refuses a request that carries one (meetingOnlyRefusal).
- * Each of their arms in buildResumePayload writes the resume its own stop reads, and the
- * meeting's stop reads `{approved: true}` as its own approval. The photos folder is not
- * among them: at the meeting it rides along with the meeting's own action
- * (PHOTOS_PATH_GATES), and alone it approves nothing there.
+ * The keys the story meeting takes (brief 4.5c): its own action's, `{meeting, weave, note}`
+ * (lib/meeting.js meetingResume; the console's console/checkpoint-view-logic.js
+ * meetingPayload builds no other), and the photos folder, which rides along with the action
+ * there (PHOTOS_PATH_GATES) and alone approves nothing.
  */
-const OTHER_STOPS_APPROVAL_KEYS = Object.freeze([
-    'inputReview', 'selectedPaperEvidence', 'roster', 'fullContext', 'preCuration',
-    'evidenceBundle', 'characterIdsRaw', 'characterIds', 'outline', 'article'
-]);
+const MEETING_KEYS = Object.freeze(['meeting', 'weave', 'note', 'photosPath']);
 
 /**
  * The refusal for a request posted while the thread is paused at the story meeting that
- * carries another stop's approval key, or null (brief 4.5b). The meeting is approved only by
- * its own action: a stale console tab's `{outline: true}` approved it with no weave, no
- * edits and no note, and wrote the approved weave the readout takes as the director's
- * settled story.
+ * carries any key the meeting does not take (MEETING_KEYS), or null (briefs 4.5b and 4.5c).
+ * The meeting is approved only by its own action: a stale console tab's `{outline: true}`
+ * approved it with no weave, no edits and no note, and wrote the approved weave the readout
+ * takes as the director's settled story. A list of the other stops' keys missed any key an
+ * arm added later, so the meeting names the keys it takes and refuses the rest.
  *
  * @param {object} approvals - the request body
  * @returns {string|null}
  */
 function meetingOnlyRefusal(approvals) {
-    const carried = Object.keys(approvals || {}).filter((key) => OTHER_STOPS_APPROVAL_KEYS.includes(key) && approvals[key] !== undefined);
+    const carried = Object.keys(approvals || {}).filter((key) => !MEETING_KEYS.includes(key) && approvals[key] !== undefined);
     if (carried.length === 0) return null;
     const keys = carried.length > 1 ? `${carried.slice(0, -1).join(', ')} and ${carried[carried.length - 1]}` : carried[0];
     return 'The thread is paused at the story meeting (arc-selection), which takes only its own action: ' +
         '{meeting: "approve" | "reweave" | "send-back", weave, note}. ' +
-        `This request carries ${keys}, ${carried.length > 1 ? "other stops' approvals" : "another stop's approval"}. ` +
+        `This request carries ${keys}, which the story meeting does not take. ` +
         'Reload the console to act at the story meeting.';
 }
 
@@ -658,9 +677,9 @@ function meetingOnlyRefusal(approvals) {
  *   I3: some approval shapes are only meaningful at one gate. `{photosPath}` posted at
  *   `outline`/`article`/`arc-selection` used to count as a valid approval whose resume
  *   value was neither an approve nor a reject-with-feedback, which routes straight into
- *   a PAID revision loop. Gate those shapes on the type. Brief 4.5b: at the story meeting
- *   (`arc-selection`) only the meeting's own arm is taken, and another stop's approval key
- *   is refused (meetingOnlyRefusal).
+ *   a PAID revision loop. Gate those shapes on the type. Briefs 4.5b and 4.5c: at the story
+ *   meeting (`arc-selection`) only the meeting's own keys are taken, and any other key is
+ *   refused (meetingOnlyRefusal).
  * @param {object} [options]
  * @param {string} [options.dataDir] - the folder holding each session's data/<id>/ (default
  *   the server's data/); the article approve checks the printed photos against its
@@ -673,9 +692,9 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     let error = null;
     let validApprovalDetected = false;
 
-    // Brief 4.5b: while the thread is paused at the story meeting, only the meeting's own
-    // arm is taken (4.5's guard, I3, the other way round). Refused before any arm runs, so
-    // nothing is written.
+    // Briefs 4.5b and 4.5c: while the thread is paused at the story meeting, only the
+    // meeting's own keys are taken (4.5's guard, I3, the other way round). Refused before
+    // any arm runs, so nothing is written.
     if (checkpointType === CHECKPOINT_TYPES.ARC_SELECTION) {
         const refusal = meetingOnlyRefusal(approvals);
         if (refusal) return { resume: {}, stateUpdates: {}, error: refusal };
