@@ -1094,7 +1094,8 @@ describe('reporterMode: a remote article states its absence at most once (phase 
   // the article against the mode block, which says it, and the fact check counts a repeated
   // absence.
   it('the remote judge reads the remote mode block, and its user prompt names the mode once', () => {
-    const { loadModeBlock } = require('../../../lib/rule-set');
+    // Brief 4.13 (R14): the journalist's mode file, from the folder its config names.
+    const loadModeBlock = (mode) => require('../../../lib/rule-set').loadModeBlock(mode, { theme: 'journalist' });
     const state = { contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' } };
     const prompt = buildEvaluationUserPrompt('article', state);
     expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: remote (the mode block in your instructions says what Nova could witness; stagesTruth and novaPositionTruth score the article against it)');
@@ -1104,7 +1105,7 @@ describe('reporterMode: a remote article states its absence at most once (phase 
   });
 
   it('the on-site judge reads the on-site mode block, which carries no absence limit', () => {
-    const { loadModeBlock } = require('../../../lib/rule-set');
+    const loadModeBlock = (mode) => require('../../../lib/rule-set').loadModeBlock(mode, { theme: 'journalist' });
     const prompt = buildEvaluationUserPrompt('article', {
       contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'on-site' }
     });
@@ -1566,7 +1567,10 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
 // the truth rules as must-fix (spec 2026-09-30-rule-set.md sections 4 and 8, R2).
 // ═══════════════════════════════════════════════════════════════════════════
 describe('the judges read the rule set (phase 3, 3.4)', () => {
-  const { loadRuleSet, loadModeBlock } = require('../../../lib/rule-set');
+  // Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's.
+  const ruleSet = require('../../../lib/rule-set');
+  const loadRuleSet = (call) => ruleSet.loadRuleSet(call, { theme: 'journalist' });
+  const loadModeBlock = (mode) => ruleSet.loadModeBlock(mode, { theme: 'journalist' });
   const { renderRecordView } = require('../../../lib/prompt-renderers/record-view');
   const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
   const { _testing: { getPhaseCriteria, TRUTH_ONLY_EVALUATION_RULES } } = require('../../../lib/workflow/nodes/evaluator-nodes');
@@ -2166,7 +2170,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
   it('the article judge has no card-count line', () => {
     const LINE = 'A tight article with 3 perfectly-placed evidence cards beats a bloated one with 10 forced cards.';
     expect(systemFor('article', stateFor())).not.toContain(LINE);
-    expect(systemFor('article', stateFor('detective'))).not.toContain(LINE);
+    // Brief 4.13 (R14; R1): the parked detective has no article judge to carry it.
+    expect(() => systemFor('article', stateFor('detective'))).toThrow(/"detective" names no rules folder/);
   });
 
   describe('nothing holds a draft on an advisory (R22)', () => {
@@ -2193,7 +2198,9 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
   // Final review judges-factcheck[1]: every passing criterion carried a fix and the
   // guidance carried optional steps, and the reworks acted on them. Since phase 4 both
   // judges read one contract, the truth-only one, for every theme (R1; brief 4.7c).
-  describe('the judge\'s output contract asks for the must-fix work only (both themes)', () => {
+  // Brief 4.13 (R14; R1): a judge's prompt is its theme's, and the parked detective, which
+  // names no rules folder, has none, so the contract is the journalist's judges' alone.
+  describe('the judge\'s output contract asks for the must-fix work only', () => {
     it('the schema asks for a criterion\'s fix only below the bar, and guidance only for the structural issues', () => {
       const { fix } = TRUTH_ONLY_EVALUATION_JSON_SCHEMA.properties.criteriaScores.additionalProperties.properties;
       expect(fix.description).toContain('Only for a score below 0.8');
@@ -2203,7 +2210,7 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       expect(revisionGuidance.description).toContain('One step per structural issue');
     });
 
-    it.each(['journalist', 'detective'])('the %s judges\' OUTPUT FORMAT asks for a fix only below the bar and one step per structural issue', (theme) => {
+    it.each(['journalist'])('the %s judges\' OUTPUT FORMAT asks for a fix only below the bar and one step per structural issue', (theme) => {
       for (const phase of ['arcs', 'article']) {
         const prompt = systemFor(phase, stateFor(theme));
         const format = prompt.slice(prompt.indexOf('OUTPUT FORMAT (JSON):'));

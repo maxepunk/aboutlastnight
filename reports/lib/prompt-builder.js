@@ -17,7 +17,9 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // writer embeds the schema above; its slots are the theme's. Brief 4.6c: its task points
 // at the meeting's note by the rule the map checks read the note by (meetingNoteOf).
 const { mapSchemaFor, topPhotoOf, meetingNoteOf } = require('./map');
-const { getThemeNPCEntries, mapSlotsOf } = require('./theme-config');
+// Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
+// and the mode block come from the theme's rules folder (R14).
+const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // theme-config import removed: canonicalCharacters now derived entirely from Notion
 
@@ -71,8 +73,11 @@ Code builds Everyone from each beat's players, and checks the players, the photo
 /** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */
 const PRONOUN_NOT_GIVEN = 'pronoun not given';
 
-/** The rule-set call each journalist writer phase reads (lib/rule-set.js), for requirePhasePrompts. */
-const JOURNALIST_RULE_SET_CALLS = Object.freeze({
+/**
+ * The rule-set call each writer phase reads (lib/rule-set.js), for requirePhasePrompts: the
+ * same calls for every theme, each from its theme's rules folder (R14).
+ */
+const WRITER_RULE_SET_CALLS = Object.freeze({
   outlineGeneration: 'outline',
   articleGeneration: 'article'
 });
@@ -300,7 +305,8 @@ function buildDirectorGuidanceSection(gateNotes = [], ...retired) {
 const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
 
 /**
- * Reporting-mode blocks (BASELINE.md §4 class 6).
+ * The reporting-mode block for one session and theme, defaulting to on-site
+ * (BASELINE.md §4 class 6).
  *
  * BOTH remote sessions of the last five were written as on-site. The rule
  * existed (a "REPORTING MODE OVERRIDE" section in character-voice.md) but arrived
@@ -314,12 +320,11 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * T8 in the truth rules defers here. This block is the only place the reporter's
  * whereabouts are stated. Pinned by prompt-reporting-mode-neutral.test.js.
  *
- * "You did not vote" is in both of the detective's blocks below. The reporter covers
- * the room and is never a member of it; hardConstraints used to say the opposite in
- * so many words (`use "We decided"`). The journalist's blocks said it too until
- * phase 3 (task 3.1); for the journalist it is now T8's shared part in
- * truth-rules.md, which the outline and article writers carry in their system
- * prompts since 3.2 (the arc calls and judges from 3.3 and 3.4).
+ * The reporter covers the room and is never a member of it; hardConstraints used to
+ * say the opposite in so many words (`use "We decided"`). The journalist's blocks said
+ * "you did not vote" until phase 3 (task 3.1); it is now T8's shared part in
+ * truth-rules.md, which the outline and article writers carry in their system prompts
+ * since 3.2 (the arc calls and judges from 3.3 and 3.4).
  *
  * Phase 2 (2.6): the remote block asks for attribution and allows the absence to
  * be stated at most once. 092026's remote article announced it five times ("I was
@@ -327,21 +332,16 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * the article evaluation praised it as voice. The prompt lines that restated where
  * the reporter was now defer to this block instead.
  *
- * Phase 3 (task 3.1): these two strings are the DETECTIVE's blocks only, kept as they
- * were while the detective is parked (spec D13). The journalist's block is the rule
- * set's mode file, `references/rules/mode-on-site.md` or `mode-remote.md`, read
- * through lib/rule-set.js: T8's mode part, Nova's position as the uninterested
- * third party and what Nova could witness. Its remote file sends exposures to Nova
- * by turn-in, never as tips; "never votes" moved to the truth rules (T8's shared
- * part) and the party to T7.
- */
-const DETECTIVE_REPORTING_MODE_BLOCKS = {
-  'on-site': 'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.',
-  remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there: show where each fact came from by attributing it to the people who told you. State your absence at most once in the whole piece; the attribution shows it everywhere else. You did not vote and you were not at the party.'
-};
-
-/**
- * The block for one session and theme, defaulting to on-site.
+ * Phase 3 (task 3.1): the journalist's block is the rule set's mode file,
+ * `references/rules/mode-on-site.md` or `mode-remote.md`, read through lib/rule-set.js:
+ * T8's mode part, Nova's position as the uninterested third party and what Nova could
+ * witness. Its remote file sends exposures to Nova by turn-in, never as tips; "never
+ * votes" moved to the truth rules (T8's shared part) and the party to T7.
+ *
+ * Phase 4 (R14; brief 4.13): every theme's block is its own mode file, from the rules
+ * folder its config names. The detective's one-line blocks, which served its writers of
+ * the old stages, went with them (R1): the parked detective names no rules folder, so its
+ * block throws, naming it.
  *
  * The single source of the wording for all eight system prompts that carry it:
  * the article's (PromptBuilder._buildReportingModeBlock) and the article rework's,
@@ -351,24 +351,20 @@ const DETECTIVE_REPORTING_MODE_BLOCKS = {
  * phase 2 (2.3) every rework system prompt opens with its writer's, so each rework
  * carries the block its writer does, once, in the writer's position.
  *
- * The journalist reads the rule set's mode file (loadModeBlock), wrapped in one tag
- * named after the file (`<mode-remote>`), so the system prompt's text after the block
- * is not read as part of its "## T8" section; the detective keeps
- * DETECTIVE_REPORTING_MODE_BLOCKS. The theme is required: a missing one would
- * silently give one theme the other's block.
+ * The theme's mode file (loadModeBlock), wrapped in one tag named after the file
+ * (`<mode-remote>`), so the system prompt's text after the block is not read as part of
+ * its "## T8" section. The theme is required: a missing one would silently give one
+ * theme another's block.
  *
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
- * @param {'journalist'|'detective'} theme
+ * @param {string} theme - the theme the caller holds
  * @returns {string}
- * @throws {Error} on any other theme, a missing one included
+ * @throws {Error} without a theme, or for a theme with no rules folder or no mode file,
+ *   naming it (lib/rule-set.js)
  */
 function buildReportingModeBlock(sessionConfig, theme) {
   const mode = sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
-  if (theme === 'journalist') return loadModeBlock(mode);
-  if (theme === 'detective') return DETECTIVE_REPORTING_MODE_BLOCKS[mode];
-  throw new Error(
-    `buildReportingModeBlock: unknown theme "${theme}"; the theme is required ('journalist' or 'detective')`
-  );
+  return loadModeBlock(mode, { theme });
 }
 
 /**
@@ -405,7 +401,7 @@ ${generateRosterSection('journalist', canonicalCharacters || null, null, config.
  *
  * @param {string} systemPrompt - a system prompt whose FIRST LINE is its identity
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
- * @param {'journalist'|'detective'} theme - see buildReportingModeBlock
+ * @param {string} theme - the theme the caller holds; see buildReportingModeBlock
  * @returns {string}
  */
 function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
@@ -414,20 +410,6 @@ function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
   const rest = text.slice(identityLine.length).replace(/^\n+/, '');
   return `${identityLine}\n\n${buildReportingModeBlock(sessionConfig, theme)}\n\n${rest}`;
 }
-
-/**
- * Each writer's identity line, by theme and phase: who is writing, and nothing more. The
- * world, the truth rules and the craft guidance (lib/rule-set.js) carry the rest (phase
- * 3, 3.2). A rework's first line is its rework rules' own (ai-nodes.js). The parked
- * detective's lines went with its writers (R1): its outline writer's in phase 4 brief
- * 4.6, its article writer's and its revision line in brief 4.7b.
- */
-const THEME_SYSTEM_PROMPTS = {
-  journalist: {
-    outlineGeneration: 'You are laying out the story map of a NovaNews investigative article.',
-    articleGeneration: 'You are Nova, writing a NovaNews investigative article in the first person.'
-  }
-};
 
 /**
  * The article writer's map block (brief 4.7b): the tag the story map prints in, right after
@@ -672,22 +654,24 @@ Only the ${n} players above were at the investigation. Every other character exc
   }
 
   /**
-   * The map writer's system prompt, shared with its rework (2.3): the identity line, the
-   * mode block right after it (brief 1.5), then the world and the truth rules, the stable
-   * frame every writer reads first (phase 3, 3.2; the integrator's placement ruling). Its
-   * craft files go last in the user prompt.
+   * The map writer's system prompt, shared with its rework (2.3): the theme's identity line
+   * (lib/theme-config.js identityLineOf; brief 4.13), the mode block right after it (brief
+   * 1.5), then the world and the truth rules, the stable frame every writer reads first
+   * (phase 3, 3.2; the integrator's placement ruling), from the theme's rules folder (R14).
+   * Its craft files go last in the user prompt.
    *
    * @returns {Promise<string>}
    * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
-   *   parked detective (R1): the outline stage's detective branch went with the old stage
+   *   parked detective (R1): the outline stage's detective branch went with the old stage;
+   *   for a theme with no identity line for the map writer or no rules folder, naming it
    */
   async buildOutlineSystemPrompt() {
     mapSchemaFor(this.themeName);
-    return `${THEME_SYSTEM_PROMPTS[this.themeName].outlineGeneration}
+    return `${identityLineOf(this.themeName, 'outline')}
 
 ${this._buildReportingModeBlock()}
 
-${loadRuleSet('outline').core}`;
+${loadRuleSet('outline', { theme: this.themeName }).core}`;
   }
 
   /**
@@ -752,7 +736,7 @@ ${JSON.stringify(mapSchemaFor(this.themeName), null, 2)}
 \`\`\`
 </SCHEMA>
 
-${loadRuleSet('outline').craft}`;
+${loadRuleSet('outline', { theme: this.themeName }).craft}`;
   }
 
   /**
@@ -790,22 +774,24 @@ ${loadRuleSet('outline').craft}`;
 
   /**
    * The article writer's system prompt, shared with the article reworker (2.3): the
-   * identity, the mode block, the world, the truth rules and the roster with pronouns
-   * (phase 3, 3.2: the integrator's placement ruling). The roster prints here alone (M20:
-   * the user prompt's <RULES> carried a second copy).
+   * theme's identity line (lib/theme-config.js identityLineOf; brief 4.13), the mode block,
+   * the world, the truth rules and the roster with pronouns (phase 3, 3.2: the integrator's
+   * placement ruling), the rules from the theme's folder (R14). The roster prints here alone
+   * (M20: the user prompt's <RULES> carried a second copy).
    *
    * @returns {Promise<string>}
    * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
    *   parked detective (R1): the article writer writes from the map, and the article
-   *   stage's detective branch went with the old stages (phase 4, brief 4.7b)
+   *   stage's detective branch went with the old stages (phase 4, brief 4.7b); for a theme
+   *   with no identity line for the article writer or no rules folder, naming it
    */
   async buildArticleSystemPrompt() {
     mapSchemaFor(this.themeName);
-    return `${THEME_SYSTEM_PROMPTS[this.themeName].articleGeneration}
+    return `${identityLineOf(this.themeName, 'article')}
 
 ${this._buildReportingModeBlock()}
 
-${loadRuleSet('article').core}
+${loadRuleSet('article', { theme: this.themeName }).core}
 
 ${this._rosterSection()}`;
   }
@@ -962,7 +948,7 @@ ${JSON.stringify(contentBundleSchema, null, 2)}
 </SCHEMA>
 </GENERATION_INSTRUCTION>
 
-${loadRuleSet('article').craft}`;
+${loadRuleSet('article', { theme: this.themeName }).craft}`;
   }
 
   /**
@@ -976,18 +962,20 @@ ${loadRuleSet('article').craft}`;
    * Phase 3 (3.2): the writers read the rule set, so the check is the rule-set loader's
    * own, which throws naming every missing or empty rule file. Phase 4 (brief 4.7c; R1):
    * the parked detective's branch, which checked its craft files through the theme loader,
-   * went with the old stages its writers wrote. A detective builder's writers refuse the
-   * theme a step later (lib/map.js mapSchemaFor).
+   * went with the old stages its writers wrote. Brief 4.13 (R14): the check reads the
+   * rules folder of the builder's theme, so the parked detective, which names none, fails
+   * it, named.
    *
    * @param {'outlineGeneration'|'articleGeneration'} phase - the writer's phase
-   * @throws {Error} on a phase no writer reads, or naming each missing or empty rule file
+   * @throws {Error} on a phase no writer reads; for a theme with no rules folder, naming it;
+   *   or naming each missing or empty rule file
    */
   async requirePhasePrompts(phase) {
-    const call = JOURNALIST_RULE_SET_CALLS[phase];
+    const call = WRITER_RULE_SET_CALLS[phase];
     if (!call) {
-      throw new Error(`[PromptBuilder] No journalist writer reads phase "${phase}"; phases: ${Object.keys(JOURNALIST_RULE_SET_CALLS).join(', ')}`);
+      throw new Error(`[PromptBuilder] No writer reads phase "${phase}"; phases: ${Object.keys(WRITER_RULE_SET_CALLS).join(', ')}`);
     }
-    loadRuleSet(call);
+    loadRuleSet(call, { theme: this.themeName });
   }
 
   /**
@@ -1029,7 +1017,6 @@ module.exports = {
   // Brief 4.7b: the tag the article writer prints the story map in
   STORY_MAP_TAG,
   filterGateNotes,
-  DETECTIVE_REPORTING_MODE_BLOCKS,
   buildReportingModeBlock,
   // Consumed by the system prompts assembled outside PromptBuilder (the two arc
   // calls, and through the arc writer's the two arc rework branches), so the

@@ -6,8 +6,8 @@
  * phase 3 (task 3.1) the journalist's block is the mode file of the rule set
  * (`references/rules/mode-on-site.md` / `mode-remote.md`, through `loadModeBlock`):
  * T8's mode part, Nova's position as the uninterested third party and what Nova
- * could witness. The detective keeps the old one-line blocks
- * (DETECTIVE_REPORTING_MODE_BLOCKS).
+ * could witness. Since phase 4 (brief 4.13; R14) every theme's block is its own mode
+ * file, and the parked detective, which names no rules folder, has none (R1).
  *
  * The craft prompts then said the opposite, several thousand tokens later and
  * LAST (the <RULES> block is placed last on purpose, for recency):
@@ -29,7 +29,9 @@
 
 const { createPromptBuilder } = require('../prompt-builder');
 const { _testing: { buildArticleRevisionSystemPrompt } } = require('../workflow/nodes/ai-nodes');
-const { loadModeBlock } = require('../rule-set');
+const ruleSet = require('../rule-set');
+// Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's.
+const loadModeBlock = (mode) => ruleSet.loadModeBlock(mode, { theme: 'journalist' });
 const { findRemovedPhrases } = require('./fixtures/removed-phrases');
 const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
 const { WEAVE, MAP } = require('./fixtures/rework-state');
@@ -408,11 +410,12 @@ describe("the journalist mode blocks state T8's mode part", () => {
 });
 
 /**
- * buildReportingModeBlock(sessionConfig, theme): the journalist reads the mode files;
- * the detective is parked (spec D13) and keeps today's strings, byte for byte.
+ * buildReportingModeBlock(sessionConfig, theme): each theme's own mode file (brief 4.13;
+ * R14). The parked detective's one-line strings went with the old stages they served (R1):
+ * it names no rules folder, so it has no block.
  */
 describe('buildReportingModeBlock', () => {
-  const { buildReportingModeBlock, DETECTIVE_REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+  const { buildReportingModeBlock } = require('../prompt-builder');
 
   it.each(['on-site', 'remote'])('journalist, %s: the mode file', (mode) => {
     expect(buildReportingModeBlock({ reportingMode: mode }, 'journalist')).toBe(loadModeBlock(mode));
@@ -423,13 +426,10 @@ describe('buildReportingModeBlock', () => {
     expect(buildReportingModeBlock(undefined, 'journalist')).toBe(loadModeBlock('on-site'));
   });
 
-  it("detective: today's strings, unchanged", () => {
-    expect(DETECTIVE_REPORTING_MODE_BLOCKS).toEqual({
-      'on-site': 'You watched the investigation from inside the room and spoke to people there. You did not vote and you were not at the party; the party reaches you only through the memories people exposed.',
-      remote: 'You were not in the room. Every exposure, observation, and the verdict reached you as tips from people who were there: show where each fact came from by attributing it to the people who told you. State your absence at most once in the whole piece; the attribution shows it everywhere else. You did not vote and you were not at the party.'
-    });
-    expect(buildReportingModeBlock({ reportingMode: 'remote' }, 'detective')).toBe(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
-    expect(buildReportingModeBlock({}, 'detective')).toBe(DETECTIVE_REPORTING_MODE_BLOCKS['on-site']);
+  it('detective: no block, since it names no rules folder (R1), and nothing of its old strings is left', () => {
+    expect(() => buildReportingModeBlock({ reportingMode: 'remote' }, 'detective')).toThrow(/"detective" names no rules folder/);
+    expect(() => buildReportingModeBlock({}, 'detective')).toThrow(/"detective" names no rules folder/);
+    expect('DETECTIVE_REPORTING_MODE_BLOCKS' in require('../prompt-builder')).toBe(false);
   });
 
   it('throws on a theme it does not know, a missing one included', () => {

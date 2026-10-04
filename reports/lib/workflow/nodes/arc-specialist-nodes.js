@@ -40,7 +40,8 @@ const {
   getNonRosterPCs,
   buildRevisionContext
 } = require('./node-helpers');
-const { getThemeNPCs } = require('../../theme-config');
+// Brief 4.13: the weave writer's and its reworks' identity lines are the theme's.
+const { getThemeNPCs, identityLineOf } = require('../../theme-config');
 const { traceNode } = require('../../observability');
 const { WEAVE_SYSTEM_PROMPT, WEAVE_SCHEMA } = require('../../sdk-client/subagents');
 const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('../../prompt-renderers/director-notes-renderer');
@@ -87,31 +88,19 @@ function buildArcStandingNotes(state) {
 
 /**
  * The arc writer's system prompt, with the session's reporting-mode block (brief 1.5)
- * and the rule set's world and truth rules (phase 3, 3.3): the identity line, the mode
- * block, <world>, <truth-rules>, then the prompt's own text. The call's craft files go
- * in its user prompt.
+ * and the rule set's world and truth rules (phase 3, 3.3): the theme's identity line
+ * (lib/theme-config.js identityLineOf; brief 4.13), the mode block, <world>, <truth-rules>
+ * from the theme's rules folder (R14), then the prompt's own text. The call's craft files
+ * go in its user prompt.
  *
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
- * @param {string} [theme='journalist'] - state.theme, for the mode block
+ * @param {string} [theme='journalist'] - state.theme: its identity line, mode block and rules
  * @returns {string}
  */
 function weaveSystemPrompt(sessionConfig, theme = 'journalist') {
-  return withReportingModeBlock(withRuleSetCore(WEAVE_SYSTEM_PROMPT, 'arc'), sessionConfig, theme);
-}
-
-/**
- * A system prompt with the rule set's core (the world, then the truth rules) right
- * after its identity line, where withReportingModeBlock then puts the mode block
- * before it.
- *
- * @param {string} systemPrompt - a prompt whose first line is its identity
- * @param {'arc'} call - the rule set's call
- * @returns {string}
- */
-function withRuleSetCore(systemPrompt, call) {
-  const identityLine = systemPrompt.split('\n', 1)[0];
-  const rest = systemPrompt.slice(identityLine.length).replace(/^\n+/, '');
-  return `${identityLine}\n\n${loadRuleSet(call).core}\n\n${rest}`;
+  const prompt = `${identityLineOf(theme, 'arc')}\n\n${loadRuleSet('arc', { theme }).core}\n\n${WEAVE_SYSTEM_PROMPT}`;
+  // The mode block goes right after the identity line, where every writer has it.
+  return withReportingModeBlock(prompt, sessionConfig, theme);
 }
 
 /**
@@ -274,8 +263,8 @@ ${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one on
  * Valet, the investigation focus, the roster, the character categories, the roster with
  * pronouns and the character context); the record with its morning timeline and the
  * receipts the weave may give; the weave's task; and the rule set's craft files, last,
- * by the placement ruling. The arc rework opens with the same sections (phase 2, 2.3),
- * so whatever the writer reads reaches its rework.
+ * by the placement ruling, from the theme's rules folder (R14). The arc rework opens with
+ * the same sections (phase 2, 2.3), so whatever the writer reads reaches its rework.
  *
  * @param {Object} state - Current workflow state
  * @returns {string}
@@ -284,7 +273,7 @@ function buildWeaveSections(state) {
   const context = extractPlayerFocusContext(state);
   const evidenceSummary = extractEvidenceSummary(state.evidenceBundle || {});
   const allCharacters = Object.keys(state.canonicalCharacters || {});
-  const { craft } = loadRuleSet('arc');
+  const { craft } = loadRuleSet('arc', { theme: state.theme || 'journalist' });
   const blakeSentences = directorTensionSentences(state.narrativeTensions, context.directorProse);
 
   const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
@@ -502,54 +491,54 @@ async function analyzeArcsPlayerFocusGuided(state, config) {
 const NOTE_CORRECTS_A_MECHANIC = 'The director knows the game, so a note that corrects a game mechanic (burial attribution, evidence boundaries) corrects every thread it touches, not only the one it names.';
 
 /**
- * The rules the arc rework's system prompt adds after its writer's, one set per kind of
- * rework (phase 3, brief 3.3; TH7; brief 4.5). The first line says why the rework runs
- * and where its task is: on a send-back, the director's note in the revision context; on
- * a reweave, the director's changes the revision context lists; on an automatic pass,
- * after a weave check or the fact check, what the revision context says it found. How
- * much of the previous weave a rework keeps is the revision context's to say
- * (buildRevisionContext), once.
+ * Each kind of arc rework's task, the clause its first line gives after the theme's rework
+ * identity (lib/theme-config.js identityLineOf, the call `arc-rework`; brief 4.13): why the
+ * rework runs and where its task is (phase 3, brief 3.3; TH7; brief 4.5). On a send-back,
+ * the director's note in the revision context; on a reweave, the director's changes the
+ * revision context lists; on an automatic pass, after a weave check or the fact check, what
+ * the revision context says it found. How much of the previous weave a rework keeps is the
+ * revision context's to say (buildRevisionContext), once. Each clause opens with the mark
+ * that joins it to the identity.
  */
-const ARC_REVISION_RULES = {
-  'send-back': `You are reworking the weave you wrote: the director sent it back, and the director's note in the revision context is the task.
-
-${NOTE_CORRECTS_A_MECHANIC}`,
-
-  reweave: `You are reworking the weave you wrote: the director changed it at the story meeting and asked for a reweave, and the revision context lists the changes this rework fits in.
-
-${NOTE_CORRECTS_A_MECHANIC}`,
-
-  automatic: 'You are reworking the weave you wrote after an automatic check or fact check; the revision context lists what it found and what this rework fixes.'
+const ARC_REWORK_CLAUSES = {
+  'send-back': ": the director sent it back, and the director's note in the revision context is the task.",
+  reweave: ': the director changed it at the story meeting and asked for a reweave, and the revision context lists the changes this rework fits in.',
+  automatic: ' after an automatic check or fact check; the revision context lists what it found and what this rework fixes.'
 };
 
 /**
- * The arc rework rules for one kind of rework, by the story meeting's round mark (brief
- * 4.5; lib/weave.js meetingRoundOf).
+ * The rules the arc rework's system prompt adds after its writer's, for one kind of
+ * rework, by the story meeting's round mark (brief 4.5; lib/weave.js meetingRoundOf): the
+ * theme's rework identity with the rework's task, and on the director's round the line on
+ * a note that corrects a game mechanic.
  *
  * @param {'reweave'|'send-back'|null} round - the director's round, or null for an automatic pass
+ * @param {string} theme - the theme the rework holds, whose rework identity opens the rules
  * @returns {string}
- * @throws {TypeError} on anything else, such as the old boolean
+ * @throws {TypeError} on any other round, such as the old boolean
+ * @throws {Error} for a theme with no rework identity line, naming it
  */
-function arcRevisionRules(round) {
-  if (round === null) return ARC_REVISION_RULES.automatic;
-  if (!MEETING_ROUNDS.includes(round)) {
+function arcRevisionRules(round, theme) {
+  if (round !== null && !MEETING_ROUNDS.includes(round)) {
     throw new TypeError(`arcRevisionRules takes the story meeting's round mark: 'reweave', 'send-back' or null (got ${JSON.stringify(round)}).`);
   }
-  return ARC_REVISION_RULES[round];
+  const line = `${identityLineOf(theme, 'arc-rework')}${ARC_REWORK_CLAUSES[round === null ? 'automatic' : round]}`;
+  return round === null ? line : `${line}\n\n${NOTE_CORRECTS_A_MECHANIC}`;
 }
 
 /**
  * The arc rework's system prompt: the arc writer's, then the rework rules for this kind
- * of rework (phase 2, 2.3). The writer's brings the mode block, the world and the truth
- * rules.
+ * of rework (phase 2, 2.3). The writer's brings the theme's identity line, the mode block,
+ * the world and the truth rules.
  *
  * @param {'reweave'|'send-back'|null} [round=null] - the director's round, by its mark
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
- * @param {string} [theme] - state.theme; weaveSystemPrompt's default when absent
+ * @param {string} [theme='journalist'] - state.theme, read by the writer's part and the
+ *   rework rules alike (weaveSystemPrompt's default)
  * @returns {string}
  */
-function getArcRevisionSystemPrompt(round = null, sessionConfig = undefined, theme = undefined) {
-  return `${weaveSystemPrompt(sessionConfig, theme)}\n\n${arcRevisionRules(round)}`;
+function getArcRevisionSystemPrompt(round = null, sessionConfig = undefined, theme = 'journalist') {
+  return `${weaveSystemPrompt(sessionConfig, theme)}\n\n${arcRevisionRules(round, theme)}`;
 }
 
 /**
@@ -940,7 +929,7 @@ module.exports = {
     arcReworkCall,
     getArcRevisionSystemPrompt,
     arcRevisionRules,
-    ARC_REVISION_RULES,
+    ARC_REWORK_CLAUSES,
     NOTE_CORRECTS_A_MECHANIC,
     ARC_REWORK_TASK,
     WEAVE_TASK,

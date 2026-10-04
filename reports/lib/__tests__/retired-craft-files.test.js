@@ -16,7 +16,7 @@ const os = require('os');
 const path = require('path');
 const { createThemeLoader, PHASE_REQUIREMENTS, ALL_PROMPTS } = require('../theme-loader');
 const { createPromptBuilder, PromptBuilder } = require('../prompt-builder');
-const { setDefaultRulesRoot, DEFAULT_RULES_ROOT, RULE_SET_CALLS } = require('../rule-set');
+const { setDefaultRulesRoot, rulesFolderOf, RULE_SET_CALLS } = require('../rule-set');
 
 const REPO = path.join(__dirname, '..', '..');
 const SKILLS = path.join(REPO, '.claude', 'skills');
@@ -37,7 +37,7 @@ const STUB_RULES = path.join(__dirname, 'fixtures', 'rules');
 
 describe('the five craft files the rule set retires (task 3.8)', () => {
   it.each(RETIRED_RULE_FILES)('%s.md is gone from the rules folder and from the stubs', (name) => {
-    expect(fs.existsSync(path.join(DEFAULT_RULES_ROOT, `${name}.md`))).toBe(false);
+    expect(fs.existsSync(path.join(rulesFolderOf('journalist'), `${name}.md`))).toBe(false);
     expect(fs.existsSync(path.join(STUB_RULES, `${name}.md`))).toBe(false);
   });
 
@@ -156,13 +156,12 @@ describe('requirePhasePrompts: the reworkers\' guard', () => {
 
   // Brief 4.7c (R1): the parked detective's branch, which checked its own craft files, went
   // with the old stages its writers wrote: the check is the rule set's for every builder,
-  // and it never asks the theme loader. A detective builder's writers refuse it a step
-  // later, naming the parked theme (lib/map.js mapSchemaFor).
+  // and it never asks the theme loader. Brief 4.13 (R14): it reads the rules folder of the
+  // builder's theme, so it fails the parked detective, which names none, naming it.
   it.each(['outlineGeneration', 'articleGeneration'])('%s: the check never asks the theme loader, for any theme', async (phase) => {
     const loader = { loadPhasePrompts: jest.fn(async () => { throw new Error('asked the theme loader'); }) };
-    for (const theme of ['journalist', 'detective']) {
-      await expect(new PromptBuilder(loader, theme).requirePhasePrompts(phase)).resolves.toBeUndefined();
-    }
+    await expect(new PromptBuilder(loader, 'journalist').requirePhasePrompts(phase)).resolves.toBeUndefined();
+    await expect(new PromptBuilder(loader, 'detective').requirePhasePrompts(phase)).rejects.toThrow(/"detective" names no rules folder/);
     expect(loader.loadPhasePrompts).not.toHaveBeenCalled();
   });
 });

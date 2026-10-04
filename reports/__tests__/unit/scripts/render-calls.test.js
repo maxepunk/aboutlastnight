@@ -4,9 +4,10 @@
  * inline (createEvaluator's criteria and fact check), so the module repeats them. This
  * test keeps the copy and the node together: it runs each node with a recording
  * stand-in for the model and requires the node to send exactly the module's render,
- * system prompt and user prompt, for both themes, on the fixture state the writer pins
- * use. A node that starts passing its builder something the module does not fails here
- * until render-calls.js passes it too.
+ * system prompt and user prompt, on the fixture state the writer pins use, for each theme
+ * with a judge prompt: the journalist, since brief 4.13 (the parked detective has none).
+ * A node that starts passing its builder something the module does not fails here until
+ * render-calls.js passes it too.
  *
  * Phase 4 (brief 4.4): the interweaving call went, and the arcs judge is the story
  * meeting's fact check on the fixture's weave.
@@ -57,7 +58,10 @@ beforeAll(() => {
 });
 afterAll(() => jest.restoreAllMocks());
 
-describe.each(['journalist', 'detective'])('%s: each node sends exactly what the script renders', (theme) => {
+// Brief 4.13 (R14; R1): a judge's prompt is its theme's, and the parked detective, which
+// names no rules folder, has none; lib/__tests__/theme-rules.test.js holds that its nodes
+// call no model and the script renders nothing for it.
+describe.each(['journalist'])('%s: each node sends exactly what the script renders', (theme) => {
   test.each(JUDGE_PHASES)('the %s judge', async (phase) => {
     const [node, sendsItsCall] = JUDGES[phase];
     const state = { ...reworkFixtureState(theme), contentBundle: clone(PREVIOUS_BUNDLE), evaluationHistory: [], ...sendsItsCall };
@@ -83,7 +87,7 @@ describe('loadCallModules', () => {
 // F1: the article judge receives the director's standing edits (evaluator-nodes.js
 // judgedEdits), and render-calls.js passes them as the node does. Phase 4 (brief 4.6): the
 // outline judge, which read them too, left the graph.
-describe.each(['journalist', 'detective'])('%s: a judge with the director\'s edits sends what the script renders (F1)', (theme) => {
+describe.each(['journalist'])('%s: a judge with the director\'s edits sends what the script renders (F1)', (theme) => {
   const { standingAfterSendBack } = require('../../../lib/hand-edit-diff');
 
   test('the article judge', async () => {

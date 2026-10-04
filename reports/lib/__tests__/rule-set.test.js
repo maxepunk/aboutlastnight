@@ -21,12 +21,14 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {
-  loadRuleSet, loadModeBlock, setDefaultRulesRoot, DEFAULT_RULES_ROOT, RULE_SET_CALLS
+  loadRuleSet, loadModeBlock, setDefaultRulesRoot, rulesFolderOf, RULE_SET_CALLS
 } = require('../rule-set');
 const { REMOVED_PHRASES, instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
 
 const RULES_ROOT = path.join(__dirname, '..', '..', '.claude', 'skills', 'journalist-report', 'references', 'rules');
 const STUB_ROOT = path.join(__dirname, 'fixtures', 'rules');
+/** Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's. */
+const JOURNALIST = { theme: 'journalist' };
 
 const CORE_FILES = ['world', 'truth-rules'];
 /**
@@ -106,8 +108,9 @@ function tempStubRoot() {
 }
 
 describe('the loader', () => {
-  it('reads the journalist skill\'s rules folder by default', () => {
-    expect(path.resolve(DEFAULT_RULES_ROOT)).toBe(path.resolve(RULES_ROOT));
+  // Brief 4.13 (R14): there is no default folder; the journalist's config names its skill's.
+  it('reads the journalist skill\'s rules folder for the journalist', () => {
+    expect(rulesFolderOf('journalist')).toBe(path.resolve(RULES_ROOT));
   });
 
   // Phase 4 (brief 4.6): the outline judge's call went with it.
@@ -127,7 +130,7 @@ describe('the loader', () => {
   });
 
   it.each(Object.keys(SPEC_SECTION_11))('%s: the real files give exactly the craft items spec section 11 lists, each once', (call) => {
-    const { core, craft } = loadRuleSet(call);
+    const { core, craft } = loadRuleSet(call, JOURNALIST);
     // An item is counted by its heading; a body may point at an item another file states.
     const crafted = itemIds(craft).filter((id) => id.startsWith('C'));
     expect(crafted.sort()).toEqual([...SPEC_SECTION_11[call]].sort());
@@ -136,7 +139,7 @@ describe('the loader', () => {
   });
 
   it.each(Object.keys(BRIEF_MAP))('%s: the real files are read once each, each in its own tag', (call) => {
-    const { core, craft } = loadRuleSet(call);
+    const { core, craft } = loadRuleSet(call, JOURNALIST);
     expect(tagsOf(core)).toEqual(CORE_FILES);
     expect(tagsOf(craft)).toEqual(BRIEF_MAP[call]);
     for (const name of [...CORE_FILES, ...BRIEF_MAP[call]]) {
@@ -184,8 +187,8 @@ describe('the mode block', () => {
   });
 
   it('the two real blocks differ, and each carries T8', () => {
-    const onSite = loadModeBlock('on-site');
-    const remote = loadModeBlock('remote');
+    const onSite = loadModeBlock('on-site', JOURNALIST);
+    const remote = loadModeBlock('remote', JOURNALIST);
     expect(onSite).not.toBe(remote);
     expect(ruleIds(onSite)).toEqual(['T8']);
     expect(ruleIds(remote)).toEqual(['T8']);
@@ -202,20 +205,27 @@ describe('the mode block', () => {
   });
 });
 
+// Brief 4.13 (R14): the stand-in is read in place of the folder each call's theme names.
 describe('the default root, which a test can point at the stubs', () => {
   afterEach(() => setDefaultRulesRoot(null));
 
   it('serves the stubs to every call that passes no root, and returns the previous root', () => {
-    const previous = setDefaultRulesRoot(STUB_ROOT);
-    expect(path.resolve(previous)).toBe(path.resolve(DEFAULT_RULES_ROOT));
-    expect(loadRuleSet('arc').core).toContain('STUB world');
-    expect(loadModeBlock('remote')).toBe('<mode-remote>\nSTUB mode-remote\n</mode-remote>');
+    expect(setDefaultRulesRoot(STUB_ROOT)).toBeNull();
+    expect(loadRuleSet('arc', JOURNALIST).core).toContain('STUB world');
+    expect(loadModeBlock('remote', JOURNALIST)).toBe('<mode-remote>\nSTUB mode-remote\n</mode-remote>');
+    expect(setDefaultRulesRoot(STUB_ROOT)).toBe(path.resolve(STUB_ROOT));
   });
 
   it('goes back to the skill\'s folder on null', () => {
     setDefaultRulesRoot(STUB_ROOT);
     setDefaultRulesRoot(null);
-    expect(loadModeBlock('remote')).not.toContain('STUB mode-remote');
+    expect(loadModeBlock('remote', JOURNALIST)).not.toContain('STUB mode-remote');
+  });
+
+  it('stands in for a theme\'s folder, and gives no rules to a theme that names none', () => {
+    setDefaultRulesRoot(STUB_ROOT);
+    expect(() => loadRuleSet('arc', { theme: 'detective' })).toThrow(/"detective" names no rules folder/);
+    expect(() => loadModeBlock('remote')).toThrow(/theme is required/);
   });
 });
 

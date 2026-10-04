@@ -13,12 +13,27 @@
  * - map: the story map's slots (phase 4, brief 4.6), each with its key, its label on
  *   the screen and its default heading, in their usual order (read through mapSlotsOf).
  *   The map writer lays the settled weave across them; a theme without them has no map
+ * - rules: the theme's rules folder (phase 4, R14), relative to the reports folder, which
+ *   lib/rule-set.js reads for every writer, rework and judge of the theme
+ * - identities: the line that opens each writer's, rework's and judge's prompt of the new
+ *   stages (phase 4, brief 4.13), by call (read through identityLineOf)
  *
  * To add a new theme:
  * 1. Add entry to THEME_CONFIGS with theme name as key
- * 2. Define npcs, display.printsHero and, for a theme with a story map, map.slots
+ * 2. Define npcs, display.printsHero, rules and identities, and, for a theme with a story
+ *    map, map.slots
  * 3. No changes needed to validation code (Open/Closed principle)
  */
+
+/**
+ * The calls whose prompts open with the theme's identity line (phase 4, brief 4.13): the
+ * rule set's calls (lib/rule-set.js RULE_SET_CALLS), with each writer's rework beside it.
+ * `arc` is the weave writer, `outline` the map writer; `judge-arc` is the story meeting's
+ * fact check.
+ */
+const IDENTITY_CALLS = Object.freeze([
+  'arc', 'arc-rework', 'outline', 'outline-rework', 'article', 'article-rework', 'judge-arc', 'judge-article'
+]);
 
 const THEME_CONFIGS = {
   journalist: {
@@ -48,6 +63,28 @@ const THEME_CONFIGS = {
     // Article content rules: REMOVED (F9/CR-5). The bannedPatterns/getArticleRules
     // config had zero runtime consumers. Since phase 3 the writers read the rule set
     // (lib/rule-set.js), and the evaluator holds the checks.
+
+    // The rules folder (phase 4, R14): the world, the truth rules, the eight craft files and
+    // the two mode files, which every writer, rework and judge of this theme reads through
+    // lib/rule-set.js.
+    rules: '.claude/skills/journalist-report/references/rules',
+
+    // The identity lines (phase 4, brief 4.13): who is writing, reworking or judging, the
+    // first line of each call's prompt. The narrator, the publication and the form of the
+    // output are the theme's to name, so the lines live here and none sits in code. A
+    // writer's and a judge's line is a sentence of its own. A rework's line is the opening
+    // of its rework rules, which code completes with the rework's task (": the director sent
+    // it back, ..." or " after an automatic check ..."), so it ends where that task begins.
+    identities: {
+      arc: 'You are the arc writer for an investigative article about one session of the game: you write the weave, the story the article will tell, for the director to settle at the story meeting.',
+      'arc-rework': 'You are reworking the weave you wrote',
+      outline: 'You are laying out the story map of a NovaNews investigative article.',
+      'outline-rework': 'You are reworking the story map you wrote',
+      article: 'You are Nova, writing a NovaNews investigative article in the first person.',
+      'article-rework': 'You are Nova, reworking your article',
+      'judge-arc': 'You are the WEAVE fact check for an investigative article about one session of the game: you check the weave the arc writer wrote, before the director reads it at the story meeting.',
+      'judge-article': 'You are the ARTICLE judge for an investigative article about one session of the game: you check the article the article writer wrote, before the director reads it.'
+    },
 
     // The story map's slots (phase 4, brief 4.6; spec 5.2): the article's house
     // sections, in their usual order, each with its label for the screen and the heading
@@ -219,6 +256,41 @@ function mapSlotsOf(theme) {
 }
 
 /**
+ * The theme's identity line for one call (phase 4, brief 4.13): the first line of the
+ * writer's, judge's or rework rules' prompt. Every call reads its line here, through the
+ * theme it holds, so a theme brings its narrator, its publication and its form of output in
+ * its own config. One line of text: the composers put the mode block right after it
+ * (prompt-builder.js withReportingModeBlock).
+ *
+ * @param {string} theme - Theme name
+ * @param {string} call - one of IDENTITY_CALLS
+ * @returns {string}
+ * @throws {Error} on a call no prompt opens with, without a theme, for a theme the config
+ *   does not know, and for a theme whose config gives no line for the call (the parked
+ *   detective, R1), naming the theme and the call
+ */
+function identityLineOf(theme, call) {
+  if (!IDENTITY_CALLS.includes(call)) {
+    throw new Error(`[identityLineOf] No prompt of the call "${call}" opens with an identity line. Calls: ${IDENTITY_CALLS.join(', ')}.`);
+  }
+  if (typeof theme !== 'string' || !theme) {
+    throw new Error(`[identityLineOf] The theme is required: the identity line of the call "${call}" is its theme's (lib/theme-config.js).`);
+  }
+  if (!Object.prototype.hasOwnProperty.call(THEME_CONFIGS, theme)) {
+    throw new Error(`[identityLineOf] Unknown theme "${theme}": no config in lib/theme-config.js gives its identity lines.`);
+  }
+  const identities = THEME_CONFIGS[theme].identities || {};
+  const line = Object.prototype.hasOwnProperty.call(identities, call) ? identities[call] : undefined;
+  if (typeof line !== 'string' || !line.trim() || line.includes('\n')) {
+    throw new Error(
+      `[identityLineOf] The theme "${theme}" has no identity line for the call "${call}": give its config ` +
+      `(lib/theme-config.js) identities["${call}"], one line of text.`
+    );
+  }
+  return line;
+}
+
+/**
  * Get canonical full name for a character first name
  *
  * Looks up a first name in a Notion-derived canonical characters map.
@@ -255,6 +327,8 @@ module.exports = {
   getThemeConfig,
   isValidTheme,
   mapSlotsOf,
+  IDENTITY_CALLS,
+  identityLineOf,
   getCanonicalName,
   getThemeCharacters,
   printedHero

@@ -24,15 +24,20 @@ const {
     buildArticleRevisionSystemPrompt,
     buildOutlineRevisionPrompt,
     buildArticleRevisionPrompt,
-    OUTLINE_REVISION_RULES,
-    ARTICLE_REVISION_RULES
+    outlineRevisionRules,
+    articleRevisionRules
   },
   createMockPromptBuilder
 } = require('../workflow/nodes/ai-nodes');
 
 const {
-  _testing: { buildArcRevisionPrompt, getArcRevisionSystemPrompt, ARC_REVISION_RULES }
+  _testing: { buildArcRevisionPrompt, getArcRevisionSystemPrompt, arcRevisionRules: arcRulesFor }
 } = require('../workflow/nodes/arc-specialist-nodes');
+
+// Brief 4.13: a rework's rules open with its theme's rework identity; these are the journalist's.
+const OUTLINE_REVISION_RULES = outlineRevisionRules('journalist');
+const ARTICLE_REVISION_RULES = articleRevisionRules('journalist');
+const ARC_AUTOMATIC_RULES = arcRulesFor(null, 'journalist');
 
 const { createPromptBuilder } = require('../prompt-builder');
 // Phase 4 (brief 4.6): the outline writer is the map writer, which reads the settled weave.
@@ -63,8 +68,8 @@ describe('revision system prompts', () => {
     // word "journalist". A reworker is its writer's prompt plus the rework rules.
     expect(() => getOutlineRevisionSystemPrompt('journalist')).toThrow(/writer's system prompt/);
     expect(() => getArticleRevisionSystemPrompt('detective')).toThrow(/writer's system prompt/);
-    expect(getOutlineRevisionSystemPrompt('W1\nW2')).toBe(`W1\nW2\n\n${OUTLINE_REVISION_RULES}`);
-    expect(getArticleRevisionSystemPrompt('W1\nW2')).toBe(`W1\nW2\n\n${ARTICLE_REVISION_RULES}`);
+    expect(getOutlineRevisionSystemPrompt('W1\nW2', 'journalist')).toBe(`W1\nW2\n\n${OUTLINE_REVISION_RULES}`);
+    expect(getArticleRevisionSystemPrompt('W1\nW2', 'journalist')).toBe(`W1\nW2\n\n${ARTICLE_REVISION_RULES}`);
   });
 });
 
@@ -79,7 +84,7 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
   });
 
   it('the evaluator-driven arc rework system prompt carries no 80% rule', () => {
-    expect(ARC_REVISION_RULES.automatic).not.toContain('80%');
+    expect(ARC_AUTOMATIC_RULES).not.toContain('80%');
     expect(getArcRevisionSystemPrompt(null)).not.toContain('80%');
   });
 
@@ -103,7 +108,7 @@ describe('no rework system prompt tells the writer to preserve a high-scoring cr
       .map((match) => Number(match[1]));
 
     expect(numbered(OUTLINE_REVISION_RULES)).toEqual([]);
-    expect(numbered(ARC_REVISION_RULES.automatic)).toEqual([]);
+    expect(numbered(ARC_AUTOMATIC_RULES)).toEqual([]);
   });
 });
 
@@ -390,7 +395,8 @@ describe('a prompt build that throws becomes the node error contract, for the ju
  * keeps today's rules (D13).
  */
 describe('the rework rules (phase 3, 3.3)', () => {
-  const { _testing: { arcRevisionRules } } = require('../workflow/nodes/arc-specialist-nodes');
+  // Brief 4.13: the journalist's arc rework rules, opened by its rework identity.
+  const arcRevisionRules = (round) => arcRulesFor(round, 'journalist');
   const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
   const promptBuilder = createMockPromptBuilder();
   const ARC_STATE = {
@@ -478,7 +484,7 @@ describe('the rework rules (phase 3, 3.3)', () => {
     expect(articleLine).toMatch(/under WHAT THIS REWORK DOES/);
     expect(articleLine).not.toMatch(/findings/);
     expect(articleLine).not.toMatch(/voice issues|you identified/);
-    expect(getArticleRevisionSystemPrompt('W1\nW2').split('\n')[3]).toBe(articleLine);
+    expect(getArticleRevisionSystemPrompt('W1\nW2', 'journalist').split('\n')[3]).toBe(articleLine);
   });
 
   // 3.10, fix round 1 (R23): an automatic rework fixes the must-fix items, and the

@@ -17,7 +17,8 @@
 
 const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
-const { loadRuleSet } = require('../rule-set');
+// Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's.
+const loadRuleSet = (call) => require('../rule-set').loadRuleSet(call, { theme: 'journalist' });
 const { ThemeLoader } = require('../theme-loader');
 const {
   generateOutline, reviseOutline, generateContentBundle, reviseContentBundle
@@ -193,7 +194,7 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
 
   it.each(Object.keys(CALL_OF))('%s: no removed phrase, gendered Nova included, in the instruction text', (name) => {
     const text = instructionText(`${renders[name].systemPrompt}\n${renders[name].prompt}`);
-    // The rework rules a reworker adds after its writer's prompt (OUTLINE_REVISION_RULES,
+    // The rework rules a reworker adds after its writer's prompt (outlineRevisionRules,
     // articleRevisionRules, buildRevisionContext) are task 3.3's, which removes their
     // fixed "preserve, do not regenerate" lines; the integrator's composed scan holds
     // them once both land. Every other phrase is held here, the gendered Nova included.

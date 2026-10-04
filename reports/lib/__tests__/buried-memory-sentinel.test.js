@@ -208,7 +208,9 @@ describe('journalist: the article writer and its rework carry no buried memory',
   });
 });
 
-describe.each(['journalist', 'detective'])('%s: no judge prompt carries the buried memory', (theme) => {
+// Brief 4.13 (R14; R1): a judge's prompt is its theme's, and the parked detective, which
+// names no rules folder, has none (lib/__tests__/theme-rules.test.js).
+describe.each(['journalist'])('%s: no judge prompt carries the buried memory', (theme) => {
   // Phase 4 (brief 4.6): the outline judge went; the article judge stays.
   it('the article judge', async () => {
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });

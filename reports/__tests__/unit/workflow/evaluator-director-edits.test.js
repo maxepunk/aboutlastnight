@@ -426,14 +426,16 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
   // FA, requirement 5 at a later send-back: the verdict carries each criterion's rule ids,
   // so the send-back's rework can keep a criterion's notes and fix away when an issue under
   // its rules is located in the director's newest edits (node-helpers.js withoutDirectorsFindings).
-  it.each(['journalist', 'detective'])('%s: the rework\'s verdict carries the rule ids each criterion scores', async (theme) => {
+  // Brief 4.13 (R14; R1): the journalist's judge; the parked detective, which names no rules
+  // folder, has no judge prompt and so no verdict (lib/__tests__/theme-rules.test.js).
+  it.each(['journalist'])('%s: the rework\'s verdict carries the rule ids each criterion scores', async (theme) => {
     const result = await evaluateArticle(articleState(theme, { _articleHandEdits: null }), cfg(judging(verdict({ ready: true, structuralPassed: true })), theme));
     const { getPhaseCriteria } = require('../../../lib/workflow/nodes/evaluator-nodes')._testing;
     const expected = Object.fromEntries(Object.entries(getPhaseCriteria('article', theme))
       .filter(([, criterion]) => Array.isArray(criterion.rules) && criterion.rules.length > 0)
       .map(([key, criterion]) => [key, criterion.rules]));
     expect(result.validationResults.criteriaRules || {}).toEqual(expected);
-    if (theme === 'journalist') expect(result.validationResults.criteriaRules.verdictTruth).toEqual(['T2']);
+    expect(result.validationResults.criteriaRules.verdictTruth).toEqual(['T2']);
   });
 });
 

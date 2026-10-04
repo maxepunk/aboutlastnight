@@ -98,9 +98,10 @@ describe('reporting mode REPLACES the persona (BASELINE §4 class 6)', () => {
   // Phase 3 (3.1): the journalist's block is the rule set's mode file (T8's mode
   // part). "You did not vote" left the block: it is T8's mode-independent part, in
   // the truth rules every writer reads from wave 2 on.
+  // Brief 4.13 (R14): the journalist's mode files, from the folder its config names.
   const { loadModeBlock } = require('../rule-set');
-  const JOURNALIST_REMOTE = loadModeBlock('remote');
-  const JOURNALIST_ONSITE = loadModeBlock('on-site');
+  const JOURNALIST_REMOTE = loadModeBlock('remote', { theme: 'journalist' });
+  const JOURNALIST_ONSITE = loadModeBlock('on-site', { theme: 'journalist' });
 
   it('remote: carries the remote block and not the on-site one', async () => {
     const { systemPrompt } = await makeBuilder('journalist', { reportingMode: 'remote' })

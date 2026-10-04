@@ -18,7 +18,12 @@ const { routeArcValidation, routeArcEvaluation, incrementArcRevision } = graphTe
 const { buildRevisionContext, STRUCTURAL_PASS_SCORE } = require('../workflow/nodes/node-helpers');
 const { WEAVE_SCHEMA, WEAVE_SYSTEM_PROMPT } = require('../sdk-client/subagents');
 const subagents = require('../sdk-client/subagents');
-const { loadRuleSet, loadModeBlock, RULE_SET_CALLS } = require('../rule-set');
+const ruleSet = require('../rule-set');
+const { RULE_SET_CALLS } = ruleSet;
+// Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's.
+const loadRuleSet = (call) => ruleSet.loadRuleSet(call, { theme: 'journalist' });
+const loadModeBlock = (mode) => ruleSet.loadModeBlock(mode, { theme: 'journalist' });
+const { identityLineOf } = require('../theme-config');
 const { REVISION_CAPS, getDefaultState, PHASES } = require('../workflow/state');
 const { weaveKey, withFactCheckMark, WEAVE_CHECKS_SOURCE, WEAVE_WORD_BOUND } = require('../weave');
 const { reworkFixtureState } = require('./fixtures/rework-state');
@@ -97,8 +102,10 @@ describe('the arc writer writes one weave in one call', () => {
   it('the system prompt: the identity line, the mode block, the world and the truth rules, then the role, and no every-player line', () => {
     const state = weaveState();
     const system = weaveSystemPrompt(state.sessionConfig, 'journalist');
-    expect(system.split('\n')[0]).toBe(WEAVE_SYSTEM_PROMPT.split('\n')[0]);
+    // Brief 4.13: the identity line is the theme's, and the prompt's own text follows the rules.
+    expect(system.split('\n')[0]).toBe(identityLineOf('journalist', 'arc'));
     expect(system.split('\n')[0]).toMatch(/you write the weave/);
+    expect(system.endsWith(`\n\n${WEAVE_SYSTEM_PROMPT}`)).toBe(true);
     expect(system.indexOf(loadModeBlock('remote'))).toBeLessThan(system.indexOf('<world>'));
     expect(count(system, loadRuleSet('arc').core)).toBe(1);
     expect(system).not.toContain('<craft-');
@@ -326,10 +333,16 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
   });
 
   it('both judges, for every theme, score the truth criteria alone and carry the truth-only OUTPUT FORMAT', () => {
-    // Phase 4 (brief 4.6): the outline judge left the graph.
+    // Phase 4 (brief 4.6): the outline judge left the graph. Brief 4.13 (R14; R1): a judge's
+    // prompt is its theme's, so only a theme with its own rules has one; the parked
+    // detective names none.
     for (const theme of ['journalist', 'detective']) {
       for (const phase of ['arcs', 'article']) {
         expect([theme, phase, Object.values(getPhaseCriteria(phase, theme)).every((criterion) => criterion.truth === true)]).toEqual([theme, phase, true]);
+        if (theme === 'detective') {
+          expect(() => systemFor(phase, theme)).toThrow(/"detective" names no rules folder/);
+          continue;
+        }
         const format = formatOf(systemFor(phase, theme));
         expect([theme, phase, format.includes(TRUTH_ONLY_ADVISORY_WARNINGS), format.includes('"type"')]).toEqual([theme, phase, true, false]);
       }

@@ -17,12 +17,17 @@
 const { reworkFixtureState, DOCUMENT_TEXT, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 const {
   generateOutline, reviseOutline, generateContentBundle, reviseContentBundle,
-  _testing: { OUTLINE_REVISION_RULES, ARTICLE_REVISION_RULES }
+  _testing: { outlineRevisionRules, articleRevisionRules }
 } = require('../workflow/nodes/ai-nodes');
 const {
   reviseArcs,
-  _testing: { generateWeave, arcRevisionRules }
+  _testing: { generateWeave, arcRevisionRules: arcRulesFor }
 } = require('../workflow/nodes/arc-specialist-nodes');
+
+// Brief 4.13: a rework's rules open with its theme's rework identity; these are the journalist's.
+const OUTLINE_REVISION_RULES = outlineRevisionRules('journalist');
+const ARTICLE_REVISION_RULES = articleRevisionRules('journalist');
+const arcRevisionRules = (round) => arcRulesFor(round, 'journalist');
 const { standingOnMap, diffBundle } = require('../hand-edit-diff');
 const { PromptBuilder } = require('../prompt-builder');
 

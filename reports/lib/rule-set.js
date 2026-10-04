@@ -1,9 +1,11 @@
 /**
- * The rule set: one loader for the model-facing rules every journalist writer and
- * judge reads (phase 3, task 3.1; spec docs/superpowers/specs/2026-09-30-rule-set.md).
+ * The rule set: one loader for the model-facing rules every writer and judge reads
+ * (phase 3, task 3.1; spec docs/superpowers/specs/2026-09-30-rule-set.md), from the rules
+ * folder of the theme the caller holds.
  *
- * The rules live as Markdown files in the journalist skill,
- * `.claude/skills/journalist-report/references/rules/`:
+ * The journalist's rules live as Markdown files in its skill,
+ * `.claude/skills/journalist-report/references/rules/`, and a theme's folder holds files of
+ * the same names:
  * - `world.md`: the purpose of the article, the world (spec section 2) and how a
  *   memory moves through the game (3a);
  * - `truth-rules.md`: T1 to T15, with T8's mode-independent part;
@@ -21,21 +23,18 @@
  * builder that calls it stays synchronous. The cache lives for the process: a
  * changed rule file reaches the prompts on the next server start.
  *
- * Journalist only. Since phase 4 the detective is parked at start (R1), and no caller
- * branches on the theme before reading here: the arc stage's calls and both judges read
- * this folder for every session; the map's and the article's writers read it after their
- * builders refuse a theme with no story map (lib/map.js mapSchemaFor); and their reworks'
- * check reads it first (prompt-builder.js requirePhasePrompts; brief 4.7c). A theme's own
- * rules folder, read through the theme, is the phase 4 integrator's ruling R14.
+ * Each theme's own rules (phase 4, the integrator's ruling R14). A theme's config names its
+ * rules folder (lib/theme-config.js `rules`), and every caller passes the theme it holds,
+ * so a second theme brings its rules as files. The parked detective (R1) names none, so a
+ * call for it throws here, naming it.
  */
 
 const fs = require('fs');
 const path = require('path');
+const { THEME_CONFIGS } = require('./theme-config');
 
-/** The journalist skill's rules folder, where every call reads unless told otherwise. */
-const DEFAULT_RULES_ROOT = path.resolve(
-  __dirname, '..', '.claude', 'skills', 'journalist-report', 'references', 'rules'
-);
+/** The folder a theme's `rules` path is relative to: the reports folder. */
+const REPORTS_ROOT = path.resolve(__dirname, '..');
 
 /** Every writer and judge reads these first: the world, then the truth rules. */
 const CORE_FILES = ['world', 'truth-rules'];
@@ -74,22 +73,77 @@ const RULE_SET_CALLS = Object.freeze({
 
 const MODE_FILES = Object.freeze({ 'on-site': 'mode-on-site', remote: 'mode-remote' });
 
-let defaultRoot = DEFAULT_RULES_ROOT;
+/** The folder a test has every call read in place of its theme's (setDefaultRulesRoot), or null. */
+let standInRoot = null;
 const cache = new Map();
 
 /**
- * Point every later call that passes no root at another folder. For tests: the
- * pinned renders read one-line stubs (lib/__tests__/fixtures/rules/), so a change
- * to the rule text does not move their hashes. Jest gives each test file its own
- * module registry, so the setting never leaks into another file.
+ * Point every later call that passes no root at another folder, in place of the folder its
+ * theme names. For tests: the pinned renders read one-line stubs
+ * (lib/__tests__/fixtures/rules/), so a change to the rule text does not move their
+ * hashes. The theme must still name a rules folder: the stand-in changes where a theme's
+ * rules are read, never whether it has any. Jest gives each test file its own module
+ * registry, so the setting never leaks into another file.
  *
- * @param {string|null} root - a folder holding the rule files; null restores the skill's
- * @returns {string} the root that was in force before
+ * @param {string|null} root - a folder holding the rule files; null reads each theme's own again
+ * @returns {string|null} the stand-in that was in force before, or null
  */
 function setDefaultRulesRoot(root) {
-  const previous = defaultRoot;
-  defaultRoot = root ? path.resolve(root) : DEFAULT_RULES_ROOT;
+  const previous = standInRoot;
+  standInRoot = root ? path.resolve(root) : null;
   return previous;
+}
+
+/**
+ * The folder a theme's rules are read from: the one its config names, resolved against
+ * the reports folder.
+ *
+ * @param {string} theme - the theme the caller holds
+ * @returns {string} an absolute path
+ * @throws {Error} without a theme, for a theme the config does not know, and for a theme
+ *   whose config names no rules folder (the parked detective, R1), naming the theme
+ */
+function rulesFolderOf(theme) {
+  if (typeof theme !== 'string' || !theme) {
+    throw new Error(
+      '[rule-set] The theme is required: each call reads the rules folder its theme names ' +
+      '(lib/theme-config.js), and a call with none would read another theme\'s rules.'
+    );
+  }
+  if (!Object.prototype.hasOwnProperty.call(THEME_CONFIGS, theme)) {
+    throw new Error(`[rule-set] Unknown theme "${theme}": no config in lib/theme-config.js names its rules folder.`);
+  }
+  const rules = THEME_CONFIGS[theme].rules;
+  if (typeof rules !== 'string' || !rules.trim()) {
+    throw new Error(
+      `[rule-set] The theme "${theme}" names no rules folder: its config (lib/theme-config.js) gives no ` +
+      '`rules`, so its writers and judges have no rules to read.'
+    );
+  }
+  return path.resolve(REPORTS_ROOT, rules);
+}
+
+/**
+ * The folder one call reads: `root` when the call passes one (tests); otherwise the
+ * folder its theme names, or the stand-in a test set in its place.
+ *
+ * @param {string} theme
+ * @param {string} [root]
+ * @returns {string}
+ * @throws {Error} as rulesFolderOf does, and naming the folder when it does not exist
+ */
+function folderFor(theme, root) {
+  if (root) return path.resolve(root);
+  const folder = rulesFolderOf(theme);
+  if (standInRoot) return standInRoot;
+  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+    throw new Error(
+      `[rule-set] The theme "${theme}" has no rules folder at ${folder}, the folder its config ` +
+      '(lib/theme-config.js) names. A call built without it would run without the rules every ' +
+      'writer and judge must read.'
+    );
+  }
+  return folder;
 }
 
 /**
@@ -129,24 +183,26 @@ function tagged(name, text) {
 }
 
 /**
- * The rule set for one call.
+ * The rule set for one call, from the rules folder of the theme the caller holds.
  *
  * @param {'arc'|'outline'|'article'|'judge-arc'|'judge-article'} call
- * @param {Object} [options]
- * @param {string} [options.root] - the folder to read; the default root otherwise
+ * @param {Object} options
+ * @param {string} [options.theme] - the caller's theme, whose rules folder is read
+ * @param {string} [options.root] - a folder to read instead (tests); the theme is not read then
  * @returns {{core: string, craft: string}} `core`: <world> then <truth-rules>; `craft`:
  *   the call's craft files in RULE_SET_CALLS order. Each file is in its own tag; the
  *   caller inserts both strings unchanged.
- * @throws {Error} on an unknown call, or naming every missing or empty file
+ * @throws {Error} on an unknown call; without a theme or a root; for a theme with no rules
+ *   folder, naming the theme or the folder; or naming every missing or empty file
  */
-function loadRuleSet(call, { root } = {}) {
+function loadRuleSet(call, { theme, root } = {}) {
   const craftFiles = RULE_SET_CALLS[call];
   if (!craftFiles) {
     throw new Error(
       `[rule-set] Unknown call "${call}". Calls: ${Object.keys(RULE_SET_CALLS).join(', ')}.`
     );
   }
-  const folder = root ? path.resolve(root) : defaultRoot;
+  const folder = folderFor(theme, root);
   const texts = readRuleFiles([...CORE_FILES, ...craftFiles], folder, `call "${call}"`);
   return {
     core: CORE_FILES.map((name) => tagged(name, texts[name])).join('\n\n'),
@@ -165,17 +221,19 @@ function loadRuleSet(call, { root } = {}) {
  * follows it in the prompt is not read as part of T8.
  *
  * @param {'on-site'|'remote'} mode
- * @param {Object} [options]
- * @param {string} [options.root] - the folder to read; the default root otherwise
+ * @param {Object} options
+ * @param {string} [options.theme] - the caller's theme, whose rules folder holds the mode files
+ * @param {string} [options.root] - a folder to read instead (tests); the theme is not read then
  * @returns {string}
- * @throws {Error} on an unknown mode, or a missing or empty mode file
+ * @throws {Error} on an unknown mode; without a theme or a root; for a theme with no rules
+ *   folder, naming the theme or the folder; or on a missing or empty mode file
  */
-function loadModeBlock(mode, { root } = {}) {
+function loadModeBlock(mode, { theme, root } = {}) {
   const name = MODE_FILES[mode];
   if (!name) {
     throw new Error(`[rule-set] Unknown reporting mode "${mode}". Modes: ${Object.keys(MODE_FILES).join(', ')}.`);
   }
-  const folder = root ? path.resolve(root) : defaultRoot;
+  const folder = folderFor(theme, root);
   return tagged(name, readRuleFiles([name], folder, `the ${mode} mode block`)[name]);
 }
 
@@ -183,6 +241,6 @@ module.exports = {
   loadRuleSet,
   loadModeBlock,
   setDefaultRulesRoot,
-  DEFAULT_RULES_ROOT,
+  rulesFolderOf,
   RULE_SET_CALLS
 };

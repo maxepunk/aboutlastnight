@@ -1321,7 +1321,8 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
  * writer reads its rules from lib/rule-set.js, never from the retired craft files.
  */
 describe('phase 3 (3.2): the journalist writers read the rule set', () => {
-  const { loadRuleSet } = require('../rule-set');
+  // Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's.
+  const loadRuleSet = (call) => require('../rule-set').loadRuleSet(call, { theme: 'journalist' });
   const { generateRosterSection } = require('../prompt-builder');
   const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
 

@@ -38,10 +38,12 @@ const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
-const { getThemeNPCEntries } = require('../../theme-config');
+// Brief 4.13: each judge's identity line is its theme's (identityLineOf).
+const { getThemeNPCEntries, identityLineOf } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
-// Phase 3 (3.4): each journalist judge reads the rule set its writer reads, through
-// the writers' own loader and mode-block placement (lib/rule-set.js, prompt-builder.js).
+// Phase 3 (3.4): each judge reads the rule set its writer reads, through the writers' own
+// loader and mode-block placement (lib/rule-set.js, prompt-builder.js), from the rules
+// folder of its theme (R14).
 const { loadRuleSet } = require('../../rule-set');
 const { withReportingModeBlock } = require('../../prompt-builder');
 // Phase 2, brief 2.4: the judges read the record and the director's words through
@@ -921,20 +923,22 @@ function truthOnlyOutputFormat(notes) {
 /**
  * Build system prompt for evaluation
  *
- * Phase 3 (3.4): the judges read the rule set (journalistEvaluationSystemPrompt). Phase 4:
- * each judge is one prompt for every theme, since the detective's judges went with its old
- * stages (ruling R1): the weave's fact check (brief 4.4) and the article judge (brief
- * 4.7a). The outline judge went with the map (brief 4.6).
+ * Phase 3 (3.4): the judges read the rule set (judgeSystemPrompt). Phase 4: each judge's
+ * task, criteria and output contract are one for every theme, since the detective's judges
+ * went with its old stages (ruling R1): the weave's fact check (brief 4.4) and the article
+ * judge (brief 4.7a). The outline judge went with the map (brief 4.6). Brief 4.13 (R14):
+ * the prompt's identity line, mode block and rules are the theme's.
  *
  * @param {string} phase - Phase name (arcs, article)
  * @param {Object} criteria - Quality criteria for phase
- * @param {string} [theme='journalist'] - the session's theme, which no judge's prompt varies by since R1
+ * @param {string} [theme='journalist'] - the session's theme: its identity line, its mode
+ *   block and its rules folder
  * @param {Object} [options]
  * @param {Object|null} [options.sessionConfig] - its reportingMode picks the mode block
  * @returns {string} System prompt
  */
 function buildEvaluationSystemPrompt(phase, criteria, theme = 'journalist', { sessionConfig = null } = {}) {
-  return journalistEvaluationSystemPrompt(phase, criteria, sessionConfig);
+  return judgeSystemPrompt(phase, criteria, theme, sessionConfig);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -945,21 +949,16 @@ function buildEvaluationSystemPrompt(phase, criteria, theme = 'journalist', { se
 // in the system prompt, the stable frame, read first. Since phase 4 no judge reads a craft
 // file (spec section 11): neither writes notes on the writing.
 
-/** The rule-set call each judge reads (lib/rule-set.js): the world and the truth rules alone (spec section 11). */
+/**
+ * The rule-set call each judge reads (lib/rule-set.js): the world and the truth rules alone
+ * (spec section 11). It names the judge's identity line in its theme's config too
+ * (lib/theme-config.js identityLineOf; brief 4.13), which opens its system prompt; the
+ * session's mode block follows it.
+ */
 const JUDGE_RULE_CALLS = { arcs: 'judge-arc', article: 'judge-article' };
 
 /** The writer whose output each judge judges, as the prompts name it. */
 const JUDGED_WRITERS = { arcs: 'arc writer', article: 'article writer' };
-
-/**
- * Each judge's identity line, which opens its system prompt; the session's mode block
- * follows it. Brief 4.7a (spec 6.2): the article judge checks the article against the
- * truth rules before the director reads it.
- */
-const JUDGE_IDENTITIES = {
-  arcs: 'You are the WEAVE fact check for an investigative article about one session of the game: you check the weave the arc writer wrote, before the director reads it at the story meeting.',
-  article: 'You are the ARTICLE judge for an investigative article about one session of the game: you check the article the article writer wrote, before the director reads it.'
-};
 
 /** What a truth criterion's notes hold, per judge, as its OUTPUT FORMAT asks for them. */
 const BREACH_NOTES = {
@@ -1011,9 +1010,10 @@ T3: "<the text at fault>" states what a buried memory said; the record holds onl
 }
 
 /**
- * A judge's system prompt: the identity line, the session's mode block, the world and the
- * truth rules (loadRuleSet), then its task, its truth criteria, the truth-only scoring rules
- * and the truth-only OUTPUT FORMAT.
+ * A judge's system prompt: the theme's identity line for the judge, the session's mode
+ * block, the world and the truth rules (loadRuleSet), all from the theme's files (brief
+ * 4.13; R14), then its task, its truth criteria, the truth-only scoring rules and the
+ * truth-only OUTPUT FORMAT.
  *
  * Phase 4: each judge scores the truth criteria alone and reads no craft file (spec
  * section 11): the weave's fact check (brief 4.4; spec 4.5) and the article judge (brief
@@ -1023,16 +1023,17 @@ T3: "<the text at fault>" states what a buried memory said; the record holds onl
  *
  * @param {'arcs'|'article'} phase
  * @param {Object} criteria - getPhaseCriteria(phase), or any criteria to render
+ * @param {string} theme - the session's theme
  * @param {Object|null} sessionConfig - its reportingMode picks the mode block
  * @returns {string}
  */
-function journalistEvaluationSystemPrompt(phase, criteria, sessionConfig) {
+function judgeSystemPrompt(phase, criteria, theme, sessionConfig) {
   const call = JUDGE_RULE_CALLS[phase];
   if (!call) throw new Error(`Unknown evaluation phase: ${phase}`);
-  const { core } = loadRuleSet(call);
+  const { core } = loadRuleSet(call, { theme });
   const judged = TRUTH_SUBJECTS[phase];
   const frame = `The rules above are the ones the ${JUDGED_WRITERS[phase]} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.`;
-  const prompt = `${JUDGE_IDENTITIES[phase]}
+  const prompt = `${identityLineOf(theme, call)}
 
 ${core}
 
@@ -1043,7 +1044,7 @@ ${truthCriteriaSection(phase, criteria)}${TRUTH_ONLY_EVALUATION_RULES}
 ${truthOnlyOutputFormat(BREACH_NOTES[phase])}`;
 
   // The mode block goes right after the identity line, where every writer has it.
-  return withReportingModeBlock(prompt, sessionConfig, 'journalist');
+  return withReportingModeBlock(prompt, sessionConfig, theme);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

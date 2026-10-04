@@ -41,7 +41,10 @@ beforeAll(() => {
 });
 afterAll(() => jest.restoreAllMocks());
 
-describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 renders every prompt', (theme) => {
+// Brief 4.13 (R14; R1): the journalist's alone. The parked detective's last prompt here, its
+// article judge, went when a judge's prompt became its theme's: the detective names no rules
+// folder (lib/__tests__/theme-rules.test.js).
+describe.each(['journalist'])('%s: a thread from before phase 3 renders every prompt', (theme) => {
   const SALE_LINE = '- 07:50 AM | sale | account: Melanie | amount: $75,000';
 
   // Phase 4 (brief 4.4): the arc writer writes the weave in one call, and the arc stage
@@ -49,19 +52,17 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
   // judge went, and the map writer is the journalist's alone too (R1). Brief 4.7b: so is
   // the article writer (R1).
   it('the arc writer, the outline and article writers and the article judge carry the sales on the clock', async () => {
-    if (theme === 'journalist') {
-      const arcSdk = recordingSdk(() => oldShapeState(theme).weave);
-      await analyzeArcsPlayerFocusGuided({ ...oldShapeState(theme), weave: null }, cfg(arcSdk, theme));
-      expect(promptOf(arcSdk, 0)).toContain(SALE_LINE);
+    const arcSdk = recordingSdk(() => oldShapeState(theme).weave);
+    await analyzeArcsPlayerFocusGuided({ ...oldShapeState(theme), weave: null }, cfg(arcSdk, theme));
+    expect(promptOf(arcSdk, 0)).toContain(SALE_LINE);
 
-      const outlineSdk = recordingSdk(() => OUTLINE);
-      await generateOutline({ ...oldShapeState(theme), outline: null }, cfg(outlineSdk, theme));
-      expect(promptOf(outlineSdk)).toContain(SALE_LINE);
+    const outlineSdk = recordingSdk(() => OUTLINE);
+    await generateOutline({ ...oldShapeState(theme), outline: null }, cfg(outlineSdk, theme));
+    expect(promptOf(outlineSdk)).toContain(SALE_LINE);
 
-      const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
-      await generateContentBundle({ ...oldShapeState(theme), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
-      expect(promptOf(articleSdk)).toContain(SALE_LINE);
-    }
+    const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
+    await generateContentBundle({ ...oldShapeState(theme), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
+    expect(promptOf(articleSdk)).toContain(SALE_LINE);
 
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
     const articleJudge = recordingSdk(verdict);
@@ -92,11 +93,9 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     const arcSdk = recordingSdk(() => withLink().weave);
     const outlineSdk = recordingSdk(() => OUTLINE);
     const articleSdk = recordingSdk(() => PREVIOUS_BUNDLE);
-    if (theme === 'journalist') {
-      await analyzeArcsPlayerFocusGuided({ ...withLink(), weave: null }, cfg(arcSdk, theme));
-      await generateOutline({ ...withLink(), outline: null }, cfg(outlineSdk, theme));
-      await generateContentBundle({ ...withLink(), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
-    }
+    await analyzeArcsPlayerFocusGuided({ ...withLink(), weave: null }, cfg(arcSdk, theme));
+    await generateOutline({ ...withLink(), outline: null }, cfg(outlineSdk, theme));
+    await generateContentBundle({ ...withLink(), heroImage: 'hero.jpg', contentBundle: null }, cfg(articleSdk, theme));
     const verdict = () => ({ ready: true, structuralPassed: true, overallScore: 0.9, criteriaScores: {}, structuralIssues: [], advisoryWarnings: [], confidence: 'high' });
     // Phase 4 (brief 4.6): the article judge, in place of the outline judge that went.
     const articleJudge = recordingSdk(verdict);
@@ -106,14 +105,11 @@ describe.each(['journalist', 'detective'])('%s: a thread from before phase 3 ren
     }, cfg(articleJudge, theme));
 
     const prompts = {
-      ...(theme === 'journalist' && { arcWriter: promptOf(arcSdk, 0), outlineWriter: promptOf(outlineSdk), articleWriter: promptOf(articleSdk) }),
+      arcWriter: promptOf(arcSdk, 0), outlineWriter: promptOf(outlineSdk), articleWriter: promptOf(articleSdk),
       articleJudge: promptOf(articleJudge)
     };
     const withLinks = Object.entries(prompts).filter(([, prompt]) => prompt.includes('<TRANSACTION_LINKS>'));
-    // The detective has no writer past the parse (R1).
-    expect(withLinks.map(([name]) => name)).toEqual(theme === 'journalist'
-      ? ['arcWriter', 'outlineWriter', 'articleWriter', 'articleJudge']
-      : ['articleJudge']);
+    expect(withLinks.map(([name]) => name)).toEqual(['arcWriter', 'outlineWriter', 'articleWriter', 'articleJudge']);
     withLinks.forEach(([, prompt]) => {
       // The timeline prints this sale at 07:50 AM (the test above); the link agrees.
       expect(prompt).toContain(LINK_LINE);

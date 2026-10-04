@@ -20,7 +20,7 @@
 
 const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
 const { analyzeArcsPlayerFocusGuided, reviseArcs, validateArcStructure } = arcNodes;
-const { getArcRevisionSystemPrompt, ARC_REVISION_RULES } = arcNodes._testing;
+const { getArcRevisionSystemPrompt, arcRevisionRules } = arcNodes._testing;
 const { evaluateArcs, _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
 const { truthOnlyVerdict, guardDirectorEdits, getPhaseCriteria, buildEvaluationUserPrompt, judgedEdits, TRUTH_MATERIAL } = evalTesting;
 const { _testing: graphTesting } = require('../workflow/graph');
@@ -112,7 +112,7 @@ describe('a reweave (brief 4.5)', () => {
     await reviseArcs(state, cfg(sdk));
     const { prompt, systemPrompt, jsonSchema } = sdk.calls[0];
     expect(systemPrompt).toBe(getArcRevisionSystemPrompt('reweave', state.sessionConfig, 'journalist'));
-    expect(systemPrompt.endsWith(ARC_REVISION_RULES.reweave)).toBe(true);
+    expect(systemPrompt.endsWith(arcRevisionRules('reweave', 'journalist'))).toBe(true);
     expect(jsonSchema).toBe(WEAVE_SCHEMA);
     expect(prompt).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
     expect(prompt).toContain("This rework fits the director's changes into the weave: each change in <HAND_EDITS>.");

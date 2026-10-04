@@ -19,7 +19,11 @@ const {
   getPhaseCriteria, buildEvaluationSystemPrompt, buildEvaluationUserPrompt,
   TRUTH_ONLY_EVALUATION_RULES, TRUTH_ONLY_EVALUATION_JSON_SCHEMA, TRUTH_MATERIAL
 } = evalTesting;
-const { loadRuleSet, loadModeBlock, RULE_SET_CALLS } = require('../rule-set');
+const ruleSet = require('../rule-set');
+const { RULE_SET_CALLS } = ruleSet;
+// Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's.
+const loadRuleSet = (call) => ruleSet.loadRuleSet(call, { theme: 'journalist' });
+const loadModeBlock = (mode) => ruleSet.loadModeBlock(mode, { theme: 'journalist' });
 const { standingOnMap, standingAfterSendBack, DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
 const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
 const { settledWeaveOf, renderDirectorAnswers } = require('../prompt-renderers/settled-weave');

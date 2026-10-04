@@ -85,8 +85,8 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     // arc summaries said "I watched". The block is the same one the article system
     // prompt carries, in the same position: after the identity line. Phase 3 (3.1):
     // the journalist's is the rule set's mode file; the detective keeps the old block.
-    const { loadModeBlock } = require('../rule-set');
-    const { DETECTIVE_REPORTING_MODE_BLOCKS } = require('../prompt-builder');
+    // Brief 4.13 (R14): a call names the theme whose rules folder it reads.
+    const loadModeBlock = (mode) => require('../rule-set').loadModeBlock(mode, { theme: 'journalist' });
     const remote = { reportingMode: 'remote' };
 
     expect(arcModule._testing.weaveSystemPrompt(remote, 'journalist')).toContain(loadModeBlock('remote'));
@@ -98,7 +98,9 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     expect(() => arcModule._testing.getArcRevisionSystemPrompt(true, remote, 'journalist')).toThrow(/round mark/);
     // No theme: the arc file's own default, the journalist.
     expect(arcModule._testing.weaveSystemPrompt(remote)).toContain(loadModeBlock('remote'));
-    expect(arcModule._testing.weaveSystemPrompt(remote)).not.toContain(DETECTIVE_REPORTING_MODE_BLOCKS.remote);
+    // Brief 4.13 (R14; R1): the parked detective has no mode block of its own, nor the
+    // journalist's: it names no rules folder and no identity line.
+    expect(() => arcModule._testing.weaveSystemPrompt(remote, 'detective')).toThrow(/"detective"/);
   });
 
   it('no arc system prompt hands the writer a first-person presence marker (integrator ruling, phase 1)', () => {
@@ -336,7 +338,10 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
   const arcModule = require('../workflow/nodes/arc-specialist-nodes');
   const { reviseArcs } = arcModule;
   const { buildWeavePrompt, buildWeaveSections, weaveSystemPrompt, generateWeave } = arcModule._testing;
-  const { loadRuleSet, loadModeBlock } = require('../rule-set');
+  // Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's.
+  const ruleSet = require('../rule-set');
+  const loadRuleSet = (call) => ruleSet.loadRuleSet(call, { theme: 'journalist' });
+  const loadModeBlock = (mode) => ruleSet.loadModeBlock(mode, { theme: 'journalist' });
   const { reworkFixtureState } = require('./fixtures/rework-state');
   const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
   const { DERIVED_LABELS } = require('../prompt-renderers/derived-labels');

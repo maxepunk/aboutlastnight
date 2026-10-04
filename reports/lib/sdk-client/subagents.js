@@ -11,21 +11,21 @@
  * with its arc stage (ruling R1): its theme starts no session until it has files for the
  * meeting, the map and the article.
  *
- * The arc composers in arc-specialist-nodes.js put the mode block, the world and the
- * truth rules after this prompt's identity line (loadRuleSet), and the craft files go in
- * the user prompt.
+ * The arc composers in arc-specialist-nodes.js open the system prompt with the theme's
+ * identity line, put the mode block, the world and the truth rules after it (loadRuleSet,
+ * from the theme's rules folder), then this prompt's text; the craft files go in the user
+ * prompt.
  */
 
 const { WEAVE_ROLES, CONNECTION_KINDS, LEDGER_RECEIPT } = require('../weave');
 const { WEAVE_QUESTIONS_KEY, WEAVE_QUESTIONS_PROPERTY } = require('../writer-questions');
 
 /**
- * The arc writer's system prompt: what the rule set does not say. Its identity line opens
- * it, as every system prompt's does, so the mode block can follow it.
+ * The arc writer's system prompt text: what the rule set does not say. The theme's identity
+ * line opens the system prompt (lib/theme-config.js identityLineOf, the call `arc`; brief
+ * 4.13), so this text names no narrator, publication or form of output.
  */
-const WEAVE_SYSTEM_PROMPT = `You are the arc writer for an investigative article about one session of the game: you write the weave, the story the article will tell, for the director to settle at the story meeting.
-
-YOUR ROLE:
+const WEAVE_SYSTEM_PROMPT = `YOUR ROLE:
 Read the record and the director's account of the room, find the threads of the session's story, and weave them into one story. The director reads the weave at the story meeting, changes what they choose, and settles it; every later writer works from the weave the director settles.`;
 
 /**

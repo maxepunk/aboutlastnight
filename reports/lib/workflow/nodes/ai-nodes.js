@@ -36,6 +36,8 @@ const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 // photo names; the settled weave, which the map writer reads first, as its task.
 const { mapSchemaFor, topPhotoOf } = require('../../map');
 const { settledWeaveOf } = require('../../prompt-renderers/settled-weave');
+// Brief 4.13: the map's and the article's reworks open with their theme's rework identity.
+const { identityLineOf } = require('../../theme-config');
 const {
   safeParseJson,
   getSdkClient,
@@ -1258,35 +1260,50 @@ function assertWriterSystemPrompt(writerSystemPrompt, caller, builder) {
 }
 
 /**
- * The rules the map's rework adds to its writer's system prompt (phase 3, brief 3.3; TH7;
- * phase 4, brief 4.6): its first line names the task the revision context gives the rework,
+ * The map rework's task, the clause its first line gives after the theme's rework identity
+ * (lib/theme-config.js identityLineOf, the call `outline-rework`; brief 4.13): it names the
+ * task the revision context gives the rework (phase 3, brief 3.3; TH7; phase 4, brief 4.6),
  * and how much of the previous map the rework keeps is the revision context's to say, from
  * the director's note or the map checks' lines (buildRevisionContext). The detective's
- * outline rules went with its outline stage (R1).
+ * outline rules went with its outline stage (R1). It opens with the mark that joins it to
+ * the identity.
  */
-const OUTLINE_REVISION_RULES = 'You are reworking the story map you wrote, for the reason the revision context in the prompt gives: the director\'s note when the director sent it back, or what the map checks found.';
+const OUTLINE_REWORK_CLAUSE = ', for the reason the revision context in the prompt gives: the director\'s note when the director sent it back, or what the map checks found.';
 
 /**
- * The map's rework system prompt: the map writer's system prompt, then the rework rules
- * (phase 2, 2.3). The writer's brings the identity line, the reporting-mode block right
- * after it, and the world and the truth rules.
+ * The rules the map's rework adds to its writer's system prompt: the theme's rework identity
+ * with the rework's task.
  *
- * @param {string} writerSystemPrompt - PromptBuilder.buildOutlineSystemPrompt()
+ * @param {string} theme - the theme the rework holds
  * @returns {string}
+ * @throws {Error} for a theme with no rework identity line, naming it
  */
-function getOutlineRevisionSystemPrompt(writerSystemPrompt) {
-  assertWriterSystemPrompt(writerSystemPrompt, 'getOutlineRevisionSystemPrompt', 'buildOutlineSystemPrompt');
-  return `${writerSystemPrompt}\n\n${OUTLINE_REVISION_RULES}`;
+function outlineRevisionRules(theme) {
+  return `${identityLineOf(theme, 'outline-rework')}${OUTLINE_REWORK_CLAUSE}`;
 }
 
 /**
- * The map's rework system prompt, built from its writer's builder.
+ * The map's rework system prompt: the map writer's system prompt, then the rework rules
+ * (phase 2, 2.3). The writer's brings the theme's identity line, the reporting-mode block
+ * right after it, and the world and the truth rules.
+ *
+ * @param {string} writerSystemPrompt - PromptBuilder.buildOutlineSystemPrompt()
+ * @param {string} theme - the writer's theme, whose rework identity opens the rules
+ * @returns {string}
+ */
+function getOutlineRevisionSystemPrompt(writerSystemPrompt, theme) {
+  assertWriterSystemPrompt(writerSystemPrompt, 'getOutlineRevisionSystemPrompt', 'buildOutlineSystemPrompt');
+  return `${writerSystemPrompt}\n\n${outlineRevisionRules(theme)}`;
+}
+
+/**
+ * The map's rework system prompt, built from its writer's builder, for the builder's theme.
  *
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @returns {Promise<string>}
  */
 async function buildOutlineRevisionSystemPrompt(promptBuilder) {
-  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt());
+  return getOutlineRevisionSystemPrompt(await promptBuilder.buildOutlineSystemPrompt(), promptBuilder.themeName);
 }
 
 /**
@@ -1768,13 +1785,14 @@ async function reviseContentBundle(state, config) {
 }
 
 /**
- * The article rework's rules, which its system prompt adds after its writer's (phase 3,
- * brief 3.3; TH7): one line that names the task the revision context gives the rework
- * and points at WHAT THIS REWORK DOES, the one section of that context that states the
- * task (R23), so it states no scope of its own. The fixed "preserve" lists and the
- * "WHAT TO FIX" list, which made every low-scoring criterion and every flagged
- * anti-pattern a defect though most criteria are advisory, are gone: the revision
- * context says what the rework changes (buildRevisionContext).
+ * The article rework's task, the clause its one line gives after the theme's rework
+ * identity (lib/theme-config.js identityLineOf, the call `article-rework`; brief 4.13):
+ * it names the task the revision context gives the rework and points at WHAT THIS REWORK
+ * DOES, the one section of that context that states the task (R23), so it states no scope
+ * of its own (phase 3, brief 3.3; TH7). The fixed "preserve" lists and the "WHAT TO FIX"
+ * list, which made every low-scoring criterion and every flagged anti-pattern a defect
+ * though most criteria are advisory, are gone: the revision context says what the rework
+ * changes (buildRevisionContext). It opens with the space that joins it to the identity.
  *
  * Phase 3 (3.10, fix round 1): the line used to be the theme's revision framing
  * (THEME_SYSTEM_PROMPTS.journalist.revision, 3.2's string), which named the automatic
@@ -1787,36 +1805,50 @@ async function reviseContentBundle(state, config) {
  * slot for the journalist, went with the detective's article rework, whose framing,
  * voice and fixed rules were the slot's one use.
  */
-const ARTICLE_REVISION_RULES = "You are Nova, reworking your article after the director's note on a send back, or after an automatic check or evaluation. The task is the one the REVISION CONTEXT in the user prompt gives, under WHAT THIS REWORK DOES.";
+const ARTICLE_REWORK_CLAUSE = " after the director's note on a send back, or after an automatic check or evaluation. The task is the one the REVISION CONTEXT in the user prompt gives, under WHAT THIS REWORK DOES.";
+
+/**
+ * The article rework's rules, which its system prompt adds after its writer's: the theme's
+ * rework identity with the rework's task, one line.
+ *
+ * @param {string} theme - the theme the rework holds
+ * @returns {string}
+ * @throws {Error} for a theme with no rework identity line, naming it
+ */
+function articleRevisionRules(theme) {
+  return `${identityLineOf(theme, 'article-rework')}${ARTICLE_REWORK_CLAUSE}`;
+}
 
 /**
  * Get system prompt for article revision: the article writer's system prompt, then
  * the rework rules (phase 2, 2.3).
  *
- * The writer's system prompt brings the identity, the reporting-mode block in its
- * place (phase 1: a remote session's rework must not be the one writer left able
+ * The writer's system prompt brings the theme's identity line, the reporting-mode block in
+ * its place (phase 1: a remote session's rework must not be the one writer left able
  * to put the reporter back in the room), the world, the truth rules and the roster
  * with pronouns.
  *
  * @param {string} writerSystemPrompt - PromptBuilder.buildArticleSystemPrompt()
+ * @param {string} theme - the writer's theme, whose rework identity opens the rules
  * @returns {string}
  */
-function getArticleRevisionSystemPrompt(writerSystemPrompt) {
+function getArticleRevisionSystemPrompt(writerSystemPrompt, theme) {
   assertWriterSystemPrompt(writerSystemPrompt, 'getArticleRevisionSystemPrompt', 'buildArticleSystemPrompt');
   return `${writerSystemPrompt}
 
-${ARTICLE_REVISION_RULES}`;
+${articleRevisionRules(theme)}`;
 }
 
 /**
- * The article reworker's system prompt, built from its writer's builder.
+ * The article reworker's system prompt, built from its writer's builder, for the builder's
+ * theme.
  *
  * @param {Object} promptBuilder - the PromptBuilder the writer used
  * @returns {Promise<string>}
  * @throws {Error} for a theme with no story map, such as the parked detective (R1)
  */
 async function buildArticleRevisionSystemPrompt(promptBuilder) {
-  return getArticleRevisionSystemPrompt(await promptBuilder.buildArticleSystemPrompt());
+  return getArticleRevisionSystemPrompt(await promptBuilder.buildArticleSystemPrompt(), promptBuilder.themeName);
 }
 
 /**
@@ -1902,6 +1934,9 @@ function createMockPromptBuilder() {
 
   return {
     theme: mockTheme,
+    // Brief 4.13: the theme a real builder holds, whose rework identity lines the map's
+    // and the article's reworks open their rules with.
+    themeName: 'journalist',
 
     // Brief 2.3: the reworkers check their writer's craft files and build from the
     // writer's section builders. The mock's files always load.
@@ -2001,9 +2036,10 @@ module.exports = {
     // scripts/render-prompts.js renders the rework system prompts through these.
     buildOutlineRevisionSystemPrompt,
     buildArticleRevisionSystemPrompt,
-    OUTLINE_REVISION_RULES,
+    // Brief 4.13: each rework's rules, the theme's rework identity with the rework's task
+    outlineRevisionRules,
     reworkTask,
-    ARTICLE_REVISION_RULES,
+    articleRevisionRules,
     outlineWriterInputs,
     articleWriterInputs,
     selectHeroImage,
