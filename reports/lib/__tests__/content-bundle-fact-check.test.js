@@ -2788,3 +2788,24 @@ describe("4.14c: the Marcus scan reads they/them as it reads the gendered forms,
     expect(result.findings.filter((f) => f.kind === 'npcPronouns').map((f) => f.excerpt)).toEqual(['Marcus signed their name']);
   });
 });
+
+// The integrator, on the review of 4.14c (finding 3): a present-tense speech tag after "they"
+// takes the verb's base form, which the speech verbs now hold.
+describe("4.14c, the integrator's pin: a present-tense speech tag is the speaker's", () => {
+  const NPCS = [{ name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him' }];
+  const hits = (text) => factCheckContentBundle(baseArgs({
+    theme: 'journalist', npcs: NPCS, contentBundle: storyWith({ type: 'paragraph', text })
+  })).findings.filter((f) => f.kind === 'npcPronouns').map((f) => f.excerpt);
+
+  it.each([
+    'Marcus, they say, never lost a deal.',
+    'Marcus never lost a deal, they tell me.',
+    'Marcus, they claim, kept the codes.'
+  ])('%s', (text) => {
+    expect(hits(text)).toEqual([]);
+  });
+
+  it('still finds Marcus written they in a clause about him alone', () => {
+    expect(hits('Marcus said they would never sell the company.')).toEqual(['Marcus said they']);
+  });
+});

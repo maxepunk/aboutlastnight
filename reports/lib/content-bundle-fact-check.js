@@ -389,11 +389,15 @@ const NPC_THEY_PRONOUNS = ['they', 'themself', 'themselves'];
  * dash, a bracket or a quoted line, is a speech tag ("Marcus, she said, was ..."; "Marcus was
  * “a thief,” she said"): the speaker's, never the person named before it (task 4.14c).
  */
+// Each verb in the past, the third person and the base form, since a present-tense tag after
+// "they" takes the base form ("Marcus, they say, never lost a deal"; review of 4.14c).
 const SPEECH_VERBS = [
-  'said', 'says', 'told', 'tells', 'asked', 'asks', 'added', 'adds', 'admitted', 'admits', 'answered', 'answers',
-  'argued', 'argues', 'claimed', 'claims', 'explained', 'explains', 'insisted', 'insists', 'noted', 'notes',
-  'recalled', 'recalls', 'remembered', 'remembers', 'replied', 'replies', 'swore', 'swears', 'wrote', 'writes',
-  'went on', 'goes on'
+  'said', 'says', 'say', 'told', 'tells', 'tell', 'asked', 'asks', 'ask', 'added', 'adds', 'add',
+  'admitted', 'admits', 'admit', 'answered', 'answers', 'answer', 'argued', 'argues', 'argue',
+  'claimed', 'claims', 'claim', 'explained', 'explains', 'explain', 'insisted', 'insists', 'insist',
+  'noted', 'notes', 'note', 'recalled', 'recalls', 'recall', 'remembered', 'remembers', 'remember',
+  'replied', 'replies', 'reply', 'swore', 'swears', 'swear', 'wrote', 'writes', 'write',
+  'went on', 'goes on', 'go on'
 ];
 
 /** A verb of saying right after a pronoun. */
