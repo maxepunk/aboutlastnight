@@ -446,8 +446,9 @@ describe("4.5b: a writer's repeat under the id of a thread the director added", 
   const WRITERS_T6 = { id: 't6', claim: 'Riley kept the receipts for every burial.', role: 'grounds-it', receipt: 'ledger' };
 
   it("is a failure, a check rework fixes it, and the repeat is gone with the director's thread intact", async () => {
-    // The director adds t6 and reweaves; the reweave puts a thread of its own under t6.
-    const state = await roundState('reweave');
+    // The director adds t6 and reweaves; the reweave puts a thread of its own under t6. The
+    // meeting is open, so the checks run whatever the shared fixture holds.
+    const state = { ...(await roundState('reweave')), meetingApproved: null };
     const directorsT6 = leftByDirector().threads.find((t) => t.id === 't6');
     const rework = reworkOf((weave) => { weave.threads.push(clone(WRITERS_T6)); });
     const rewoven = { ...state, ...(await reviseArcs(state, cfg(recordingSdk(rework)))) };

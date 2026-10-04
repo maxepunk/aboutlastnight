@@ -635,8 +635,9 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
   it('through the arc rework: the weave it stores holds each question once, and the checks find no repeat', async () => {
     const state = reworkFixtureState('journalist');
     const previous = { ...clone(state.weave), questions: [W_SARAH, { ...MORGAN, answer: ANSWER }] };
+    // The meeting is open, so the checks run whatever the shared fixture holds.
     const fixState = {
-      ...state, weave: previous, arcRevisionCount: 1,
+      ...state, weave: previous, arcRevisionCount: 1, meetingApproved: null,
       validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Two questions share the id "q1". Give each question an id of its own.'] }
     };
     const rework = { ...clone(previous), questions: [clone(W_SARAH), { ...MORGAN, id: 'q2' }] };
