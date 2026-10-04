@@ -2856,39 +2856,92 @@ function holdsItWhole(block, other) {
   return sentences.length > 0 && sentences.every((sentence) => holdsWhole(text, sentence));
 }
 
+/** The words of `words` left once each word of `taken` is taken out, as many times as `taken` holds it. */
+function wordsLeft(words, taken) {
+  const left = new Map();
+  taken.forEach((word) => left.set(word, (left.get(word) || 0) + 1));
+  return words.filter((word) => {
+    const n = left.get(word) || 0;
+    if (n === 0) return true;
+    left.set(word, n - 1);
+    return false;
+  });
+}
+
 /**
- * Is a rewording of the director's block (rewordingsOf) the pass's version of another block of the
- * version the pass started from (fix round 2)? It is when the pairing holds it as that block's
- * partner (pairSectionBlocks) and it holds half that block's words or more, so the words back the
- * pairing: the pairing pairs by place last, and a block the pass inserted moves the pairs by place
- * after it along by one, which can pair the pass's version of the director's block with the block
- * that followed it. A rewording plainly the director's stays theirs whatever the pairing says: one
+ * The block of the version the pass started from, other than the director's, whose version a
+ * rewording of the director's block is (rewordingsOf), or null (fix rounds 2 and 3). It is that
+ * block's version when the pairing holds it as that block's partner (pairSectionBlocks), it holds
+ * half that block's words or more, so the words back the pairing, and no other block of its section
+ * that the pass wrote is closer to that block both ways. The pairing pairs by place last, and a
+ * block the pass inserted moves the pairs by place after it along by one: that can give the pass's
+ * version of the director's block the place of the block that followed it, while the pass's
+ * rewording of that block stands beside, closer to it. Closeness both ways is the lesser of two
+ * shares, how much of that block's words a block holds and how much of its words that block holds,
+ * so a long paragraph holding a short one's words through the common ones is never closer. A
+ * rewording plainly the director's is no other block's version whatever the pairing says: one
  * holding their text whole (holdsItWhole), or one four in five of whose words are theirs, as a
  * rewrite cut down from it.
  *
- * @param {Object} rewording - one of rewordingsOf's, in the section `pairs` pairs
+ * @param {Object} rewording - one of rewordingsOf's, in the section `cur`
  * @param {Object} link - the director's block's link (placeCarrying's)
  * @param {Array<{bi: number, ai: number}>} pairs - pairSectionBlocks' pairs, from the section's blocks
  *   in the version the pass started from (`bi`) to its blocks in the pass's (`ai`)
+ * @param {Array} cur - the section's blocks in the pass's output
+ * @param {Object} before - the version the pass started from
+ * @returns {Object|null}
  */
-function anotherBlocksVersion(rewording, link, pairs) {
+function originalOf(rewording, link, pairs, cur, before) {
   const pair = pairs.find((p) => p.ai === rewording.index && p.bi !== link.index);
-  if (!pair || rewording.back >= COPY_SHARE || holdsItWhole(link.holder[link.index], rewording.block)) return false;
-  return wordsHeld(link.holder[pair.bi], rewording.block).share >= MAYBE_COPY_SHARE;
+  if (!pair || rewording.back >= COPY_SHARE || holdsItWhole(link.holder[link.index], rewording.block)) return null;
+  const original = link.holder[pair.bi];
+  const asOriginal = wordsHeld(original, rewording.block);
+  if (asOriginal.share < MAYBE_COPY_SHARE) return null;
+  const closeness = (held) => Math.min(held.share, held.back);
+  const unchanged = blocksHeldBy(before);
+  const closerElsewhere = cur.some((other, k) => k !== rewording.index && sameKind(other, original)
+    && !unchanged.has(canon(other)) && closeness(wordsHeld(original, other)) > closeness(asOriginal));
+  return closerElsewhere ? null : original;
+}
+
+/**
+ * How near a rewording of the director's block (rewordingsOf) comes to it as the pass's version of
+ * it: how much of the director's words it holds (`share`), and how much of its words the director's
+ * holds (`back`). A rewording that is another block's version (originalOf) is weighed by the words
+ * it holds beyond that block's (fix round 3): a paragraph the pass merged the director's into, a word
+ * changed or not, holds their words there beside the other block's text, while a rewording that
+ * holds them only through that block's words holds none there: 062626's "Still, here is what the
+ * room kept stepping around. ...", or the rewording of a neighbouring paragraph about the same
+ * people.
+ *
+ * @param {Object} rewording - one of rewordingsOf's, in the section `cur`
+ * @param {Object} link - the director's block's link (placeCarrying's)
+ * @param {Array<{bi: number, ai: number}>} pairs - pairSectionBlocks' pairs, as originalOf reads them
+ * @param {Array} cur - the section's blocks in the pass's output
+ * @param {Object} before - the version the pass started from
+ * @returns {{share: number, back: number}}
+ */
+function nearAsItsVersion(rewording, link, pairs, cur, before) {
+  const original = originalOf(rewording, link, pairs, cur, before);
+  if (!original) return { share: rewording.share, back: rewording.back };
+  const own = copyWords(link.holder[link.index]);
+  const beyond = wordsLeft(copyWords(rewording.block), copyWords(original));
+  return { share: shareHeld(own, beyond), back: shareHeld(beyond, own) };
 }
 
 /**
  * The blocks of the section at `cur` that beat `placed`, the block in the place of the director's
- * block, as the pass's version of it (passVersionOf), the closest both ways first (fix round 2):
- * each rewording of the director's block there (rewordingsOf) that may be its version
- * (mayBeItsVersion), that is no other block's version (anotherBlocksVersion), and that is closer
- * to the director's block both ways (it holds more of the director's words than `placed` does,
- * and more of its own words are the director's), or holds the director's text whole, as a
- * paragraph the pass merged it into does, where `placed` may not be the pass's version by its
- * words (mayBeItsVersion). A long paragraph that holds a short line's words through the common
- * ones ("by", "the", "of") holds them one way only, so it never beats a rewrite of the line in
- * its place, most of whose words are the director's (the re-review of fix round 1: 062626's "By
- * the night of the party, Quinn was unspooling.").
+ * block, as the pass's version of it (passVersionOf), the closest both ways first (fix rounds 2
+ * and 3): each rewording of the director's block there (rewordingsOf), weighed as its version
+ * (nearAsItsVersion: a block that is another block's version by the words it holds beyond that
+ * block's), that may be its version (mayBeItsVersion) and is closer to the director's block both
+ * ways (it holds more of the director's words than `placed` does, and more of its own words are the
+ * director's), or holds the director's text whole, as a paragraph the pass merged it into does,
+ * where `placed` may not be the pass's version by its words (mayBeItsVersion). A long paragraph
+ * that holds a short line's words through the common ones ("by", "the", "of") holds them one way
+ * only, so it never beats a rewrite of the line in its place, most of whose words are the
+ * director's (the re-review of fix round 1: 062626's "By the night of the party, Quinn was
+ * unspooling.").
  *
  * @param {Object} link - the director's block's link in the chain to the edit's place (placeCarrying)
  * @param {Array} cur - the section's blocks in `version`, where `placed` sits
@@ -2901,13 +2954,15 @@ function closerRivals(link, cur, before, version, placed) {
   const block = link.holder[link.index];
   const held = wordsHeld(block, placed);
   const pairs = matchBlocks(link.holder, cur).pairs;
-  const beats = (r) => (r.share > held.share && r.back > held.back)
+  const beats = (near, r) => (near.share > held.share && near.back > held.back)
     || (!mayBeItsVersion(held) && holdsItWhole(block, r.block));
-  const bothWays = (r) => Math.min(r.share, r.back);
-  return rewordingsOf(block, before, version).filter((r) => r.block !== placed
-    && version.sections[r.section].content === cur && mayBeItsVersion(r)
-    && !anotherBlocksVersion(r, link, pairs) && beats(r))
-    .sort((x, y) => (bothWays(y) - bothWays(x)) || (y.share - x.share));
+  const bothWays = (near) => Math.min(near.share, near.back);
+  return rewordingsOf(block, before, version)
+    .filter((r) => r.block !== placed && version.sections[r.section].content === cur)
+    .map((r) => ({ r, near: nearAsItsVersion(r, link, pairs, cur, before) }))
+    .filter(({ r, near }) => mayBeItsVersion(near) && beats(near, r))
+    .sort((x, y) => (bothWays(y.near) - bothWays(x.near)) || (y.near.share - x.near.share))
+    .map(({ r }) => r);
 }
 
 /**
@@ -2921,9 +2976,10 @@ function closerRivals(link, cur, before, version, placed) {
  *   may be a block the pass wrote there, such as a paragraph inserted right before the pass's
  *   version (fix round 1). It is the pass's copy of the block, where there is one, and the
  *   partner stays the writer's. With no copy, it is none where another block of the partner's
- *   section beats the partner (closerRivals: no other block's version, and closer to the
- *   director's block both ways, or a paragraph the pass merged it into; fix round 2): code
- *   cannot tell which of the two is. Else it is the partner.
+ *   section beats the partner (closerRivals: closer to the director's block both ways, a block
+ *   that is another block's version weighed by the words it holds beyond that block's, or a
+ *   paragraph the pass merged it into; fix rounds 2 and 3): code cannot tell which of the two
+ *   is. Else it is the partner.
  * With none, the restore puts the director's block back where it sat, and the report names the
  * blocks that may be the pass's version (maybeCopiesOf).
  *

@@ -3800,6 +3800,73 @@ describe("4.14c: a restore never prints the director's paragraph twice", () => {
     });
   });
 
+  // Fix round 3: fix round 2 held a block to be another paragraph's version wherever the pairing
+  // gave it that paragraph's place and it held half that paragraph's words. A paragraph the pass
+  // merged the director's into with one word changed is that too, and so is the pass's version of
+  // the director's paragraph, when a paragraph the pass wrote in its place moves it into the place
+  // of a short next paragraph that shares its words. Code wrote the director's text over the pass's
+  // paragraph and left its version beside it, unnamed (the re-review's paired-version.js, A to F).
+  describe("fix round 3: a block that is another paragraph's version is weighed by the words it holds beyond that paragraph's", () => {
+    // A paragraph the pass wrote in the director's place: three of the director's fourteen words.
+    const NEW = paragraph('The bar was the only place in the house with no camera.');
+    const NEXT = 'Sarah named the bar as the place it happened.';
+    const still = (text) => `Still, ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+    /** The director rewrote the writer's third paragraph, which `next` follows, and an automatic pass returned `after`. */
+    const rewriteBefore = (next, after) => settleFrom(story(A, B, WRITERS, paragraph(next)), story(A, B, paragraph(DIRECTORS), paragraph(next)), after);
+
+    test("a paragraph the pass merged the director's into, the next one, with a word changed: the text goes back where it sat, the pass's paragraph in its place stays, and the entry names the merged one", () => {
+      // "by" for "at".
+      const MERGED = `${LAST.text} Morgan paid Riley by the bar, out of sight, and the result named Sarah.`;
+      const { output, report } = rewrite(story(A, B, NEW, paragraph(MERGED)));
+      expect(textsOf(output)).toEqual([[A.text, B.text, DIRECTORS, NEW.text, MERGED], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', director: DIRECTORS, became: null, restored: true, maybeCopies: [MERGED] })]);
+    });
+
+    test('so does one the pass merged it into the previous paragraph with a word changed', () => {
+      // "He" for "Morgan".
+      const MERGED = `${B.text} He paid Riley at the bar, out of sight, and the result named Sarah.`;
+      const { output, report } = rewrite(story(A, paragraph(MERGED), NEW, LAST));
+      expect(textsOf(output)).toEqual([[A.text, MERGED, DIRECTORS, NEW.text, LAST.text], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: true, maybeCopies: [MERGED] })]);
+    });
+
+    test("so does one merged into a long paragraph, though the merged paragraph's own words are mostly that paragraph's", () => {
+      // Fifty-four words, so the merged paragraph holds fewer of its words in the director's than the pass's paragraph in their place does.
+      const LONG_NEXT = 'Riley says they only kept the books for the man who paid them, and that nobody at the party asked where the money went, who held the account, or why the transfers stopped the moment the music did, which is the part of the night the room never came back to before the vote.';
+      const MERGED = `${LONG_NEXT} Morgan paid Riley by the bar, out of sight, and the result named Sarah.`;
+      const { output, report } = rewriteBefore(LONG_NEXT, story(A, B, NEW, paragraph(MERGED)));
+      expect(textsOf(output)).toEqual([[A.text, B.text, DIRECTORS, NEW.text, MERGED], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: true, maybeCopies: [MERGED] })]);
+    });
+
+    test("a version with its opening reworded, which the pairing gives a short next paragraph's place, is no version of that paragraph where the pass's rewording of it stands beside", () => {
+      // Every one of the director's words, and five of NEXT's nine; the pass's rewording of NEXT holds all nine.
+      const REOPENED = 'Later that night Morgan quietly paid Riley at the bar, out of sight, and the result named Sarah.';
+      const { output, report } = rewriteBefore(NEXT, story(A, B, NEW, paragraph(REOPENED), paragraph(still(NEXT))));
+      expect(textsOf(output)).toEqual([[A.text, B.text, DIRECTORS, NEW.text, REOPENED, still(NEXT)], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: true, maybeCopies: [REOPENED] })]);
+    });
+
+    test('nor is a heavier rewrite there, though its words beyond that paragraph hold few of the director\'s', () => {
+      // About half the director's words both ways; five of NEXT's nine are among them.
+      const REWRITE = 'Morgan slipped Riley cash by the bar while nobody watched, and the lab named Sarah.';
+      const { output, report } = rewriteBefore(NEXT, story(A, B, NEW, paragraph(REWRITE), paragraph(still(NEXT))));
+      expect(textsOf(output)).toEqual([[A.text, B.text, DIRECTORS, NEW.text, REWRITE, still(NEXT)], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: true, maybeCopies: [REWRITE] })]);
+    });
+
+    test("a paragraph that holds the neighbour's words one way only leaves the neighbour's rewording its version, so a full rewrite in the director's place still takes their text", () => {
+      const FULL = 'The writer rewrote this line entirely.';
+      const LAST_REWORDED = 'Riley says Morgan paid them at the end of the night, and the books were clean.';
+      // Holds every one of LAST's thirteen words, and LAST holds thirteen of its forty-six.
+      const ECHO = 'Nobody at the party asked where the money went or who held the account, and when the vote came round Riley says they only kept the books for the man who paid them, which is the part of the night the room never came back to.';
+      const { output, report } = rewrite(story(A, B, paragraph(FULL), paragraph(LAST_REWORDED), paragraph(ECHO)));
+      expect(textsOf(output)).toEqual([[A.text, B.text, DIRECTORS, LAST_REWORDED, ECHO], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: FULL, restored: true })]);
+      expect(report.changed[0]).not.toHaveProperty('maybeCopies');
+    });
+  });
+
   test("so does one that moved the reworded copy to another section: the copy takes the director's text where the pass put it", () => {
     const after = story(A, B, LAST);
     after.sections[1].content.unshift(paragraph(REWORDED));
