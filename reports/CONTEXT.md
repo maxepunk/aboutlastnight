@@ -41,7 +41,7 @@ The character whose memory it is: the point of view the memory records. The arti
 _Avoid_: author, source
 
 **Exposer**:
-The player who turned a memory in to Nova. Anonymous unless the evidence log carries a name or the director's notes record who turned it in. A name on a turn-in is the player taking public credit: an honest attribution, which the article may print. Never assumed to be the owner.
+The player who turned a memory in to Nova. Anonymous unless the evidence log carries a name or the director's own words (the notes, a correction at the input review, the accusation as written, or an answer at the story meeting) record who turned it in. A name on a turn-in is the player taking public credit: an honest attribution, which the article may print. Never assumed to be the owner.
 _Avoid_: source, submitter
 
 **Ledger**:

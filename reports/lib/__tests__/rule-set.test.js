@@ -301,7 +301,8 @@ describe('the rule files', () => {
 
   it('state when an exposure is anonymous only with both of T6\'s conditions, wherever they state it', () => {
     // T6 lifts anonymity on either of two records: a name in the evidence log, or the
-    // director's notes recording who turned the memory in. The mode files restate the
+    // director's own words recording who turned the memory in (their notes, corrections,
+    // accusation or meeting answers; the director's ruling, 2026-10-04). The mode files restate the
     // rule beside T6 (plan review I6), so a copy that carries only the first condition
     // would tell a judge that a credit taken from the notes breaks anonymity.
     const statements = [];
@@ -314,7 +315,7 @@ describe('the rule files', () => {
     expect(statements.map(({ name }) => name).sort()).toEqual(['mode-on-site', 'mode-remote', 'truth-rules']);
     for (const { name, sentence } of statements) {
       expect(`${name}: ${/\bevidence log\b/.test(sentence)}`).toBe(`${name}: true`);
-      expect(`${name}: ${/the director's notes record who turned the memory in/.test(sentence)}`).toBe(`${name}: true`);
+      expect(`${name}: ${/the director's own words record who turned the memory in/.test(sentence)}`).toBe(`${name}: true`);
     }
   });
 
@@ -366,7 +367,8 @@ describe('the items phase 4 rewrites (task 4.1)', () => {
     ['C7', 'craft-material', 'The map places every player in a beat, through something the record shows they did or said, in the section where it matters, never as a roll call.'],
     ['C15', 'craft-questions', "The director answers each in its own box at the story meeting, and the answer travels with its question to every later writer as the director's words."],
     ['T1', 'truth-rules', "What happened or was said in the room, as the director's notes or their answers at the story meeting record it, Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
-    ['T2', 'truth-rules', 'The map places each alternative theory the room debated, a line each, and the article reports every one the map carries; a theory the director strikes from the map stays out.'],
+    // T2 gained the desk clause on the director's ruling (2026-10-04): the desk edits come first.
+    ['T2', 'truth-rules', "The map places each alternative theory the room debated, a line each, and the article reports every one the map carries, as the director's desk edits leave it; a theory the director strikes from the map or cuts at the desk stays out."],
     ['T5', 'truth-rules', 'An entry that looks like a mistake is raised as a question at the story meeting (C15); with no answer, a later writer leaves that entry out of print.'],
     ['T9', 'truth-rules', "A pronoun the director's own words give that player counts as the answer; with none, a later writer uses the player's name in place of a pronoun."]
   ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {

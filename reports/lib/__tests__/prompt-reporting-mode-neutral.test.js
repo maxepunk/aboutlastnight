@@ -354,7 +354,7 @@ describe('the mode block reaches the arc and outline writers', () => {
  * section 2). Each states Nova's position as the uninterested third party Fremont PD
  * required and what Nova could witness in that mode. In both, exposed memories are
  * turned in to Nova directly, anonymous unless the evidence log carries a name or the
- * director's notes record who turned the memory in (T6's two conditions, word for
+ * director's own words record who turned the memory in (T6's two conditions, word for
  * word, so the block and T6 never disagree): the old remote block sent every exposure
  * through a tipster ("Every exposure ... reached you as tips"), which pushed the
  * article to name or invent exposers (plan review I6).
@@ -382,7 +382,7 @@ describe("the journalist mode blocks state T8's mode part", () => {
   it.each(['on-site', 'remote'])("%s: exposed memories reach Nova directly, anonymous unless T6's records name who turned one in", (mode) => {
     expect(blocks[mode]).toMatch(/Exposed memories were turned in to Nova directly/);
     expect(blocks[mode]).toMatch(
-      /anonymous unless the evidence log carries a name or the director's notes record who turned the memory in/
+      /anonymous unless the evidence log carries a name or the director's own words record who turned the memory in/
     );
   });
 

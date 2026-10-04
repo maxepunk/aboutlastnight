@@ -14,7 +14,7 @@ Why: the players know what happened, and a false detail about their character br
 
 ## T2. The verdict is the group's negotiated official story
 
-The article reports the verdict as the official story the room negotiated. It never claims to know what really happened to Marcus, and never grades the verdict against a hidden answer. A verdict with no culprit, such as an overdose or an accident, names no one. The map places each alternative theory the room debated, a line each, and the article reports every one the map carries; a theory the director strikes from the map stays out. How the room's choices made the story is craft (C3).
+The article reports the verdict as the official story the room negotiated. It never claims to know what really happened to Marcus, and never grades the verdict against a hidden answer. A verdict with no culprit, such as an overdose or an accident, names no one. The map places each alternative theory the room debated, a line each, and the article reports every one the map carries, as the director's desk edits leave it; a theory the director strikes from the map or cuts at the desk stays out. How the room's choices made the story is craft (C3).
 
 Why: the statement is a story everyone could live with, built under the clock from what was on the Evidence Board. Showing how it was made is the article's promise.
 
@@ -38,7 +38,7 @@ Why: money running the wrong way is the most common factual slip, and stating th
 
 ## T6. Exposers are anonymous unless named
 
-An exposure is anonymous unless the evidence log carries a name, which is an honest attribution, or the director's notes record who turned the memory in. A memory's owner is never assumed to be its exposer. A card's citation never names the exposer.
+An exposure is anonymous unless the evidence log carries a name, which is an honest attribution, or the director's own words record who turned the memory in: their notes, their corrections at the input review, the accusation as they wrote it, or their answers at the story meeting. A memory's owner is never assumed to be its exposer. A card's citation never names the exposer.
 
 Why: at turn-in the player chooses whether to go on the record, and anonymity protects the source, even from Nova on site.
 
