@@ -1,7 +1,7 @@
 /**
  * The rendered prompts do not contradict the session's reporting mode (I3)
  *
- * `reportingMode` REPLACES the reporter's persona: `_buildReportingModeBlock` puts
+ * `reportingMode` REPLACES the reporter's persona: `systemPromptOpening` (brief 4.13b) puts
  * one mode block in the article SYSTEM prompt, right after the identity line. Since
  * phase 3 (task 3.1) the journalist's block is the mode file of the rule set
  * (`references/rules/mode-on-site.md` / `mode-remote.md`, through `loadModeBlock`):

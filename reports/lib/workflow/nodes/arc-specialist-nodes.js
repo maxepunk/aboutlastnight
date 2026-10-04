@@ -51,8 +51,9 @@ const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
 // rosterWithPronounsSection: the roster with pronouns (phase 3, 3.10; T9), the one
-// builder the arc writer and the outline writer print it with.
-const { withReportingModeBlock, buildDirectorGuidanceSection, filterGateNotes, rosterWithPronounsSection } = require('../../prompt-builder');
+// builder the arc writer and the outline writer print it with. systemPromptOpening: the
+// opening every writer's and judge's system prompt shares (brief 4.13b).
+const { systemPromptOpening, buildDirectorGuidanceSection, filterGateNotes, rosterWithPronounsSection } = require('../../prompt-builder');
 const { loadRuleSet } = require('../../rule-set');
 const { WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions, withoutAnswers } = require('../../writer-questions');
 const {
@@ -87,20 +88,17 @@ function buildArcStandingNotes(state) {
 }
 
 /**
- * The arc writer's system prompt, with the session's reporting-mode block (brief 1.5)
- * and the rule set's world and truth rules (phase 3, 3.3): the theme's identity line
- * (lib/theme-config.js identityLineOf; brief 4.13), the mode block, <world>, <truth-rules>
- * from the theme's rules folder (R14), then the prompt's own text. The call's craft files
- * go in its user prompt.
+ * The arc writer's system prompt: its opening (lib/prompt-builder.js systemPromptOpening;
+ * brief 4.13b), the theme's identity line, the session's reporting-mode block (brief 1.5),
+ * <world> and <truth-rules> from the theme's rules folder (phase 3, 3.3; R14), then the
+ * prompt's own text. The call's craft files go in its user prompt.
  *
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
  * @param {string} [theme='journalist'] - state.theme: its identity line, mode block and rules
  * @returns {string}
  */
 function weaveSystemPrompt(sessionConfig, theme = 'journalist') {
-  const prompt = `${identityLineOf(theme, 'arc')}\n\n${loadRuleSet('arc', { theme }).core}\n\n${WEAVE_SYSTEM_PROMPT}`;
-  // The mode block goes right after the identity line, where every writer has it.
-  return withReportingModeBlock(prompt, sessionConfig, theme);
+  return `${systemPromptOpening(theme, 'arc', sessionConfig)}\n\n${WEAVE_SYSTEM_PROMPT}`;
 }
 
 /**

@@ -345,13 +345,10 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  * the old stages, went with them (R1): the parked detective names no rules folder, so its
  * block throws, naming it.
  *
- * The single source of the wording for all eight system prompts that carry it:
- * the article's (PromptBuilder._buildReportingModeBlock) and the article rework's,
- * the outline's and the outline rework's, the two arc calls' and the two arc rework
- * branches'. The two arc calls are built outside PromptBuilder, in
- * arc-specialist-nodes.js, and reach this through withReportingModeBlock. Since
- * phase 2 (2.3) every rework system prompt opens with its writer's, so each rework
- * carries the block its writer does, once, in the writer's position.
+ * The single source of the wording for every system prompt that carries it: each writer's
+ * and judge's, through systemPromptOpening (brief 4.13b), and each rework's. Since phase 2
+ * (2.3) every rework system prompt opens with its writer's, so each rework carries the block
+ * its writer does, once, in the writer's position.
  *
  * The theme's mode file (loadModeBlock), wrapped in one tag named after the file
  * (`<mode-remote>`), so the system prompt's text after the block is not read as part of
@@ -393,24 +390,31 @@ ${generateRosterSection('journalist', canonicalCharacters || null, null, config.
 }
 
 /**
- * Put the block into a system prompt assembled somewhere else.
+ * The opening of a writer's or a judge's system prompt (brief 4.13b): one rule for the weave
+ * writer's, the map writer's, the article writer's and the two judges' system prompts, which
+ * open with it. A rework's system prompt is its writer's, so it opens with this too.
  *
- * Phase 1 brief 1.5: the arc writer and the outline reworker were never told the
- * mode, so a remote session's arc summaries said "I watched" and its outline
- * carried six presence claims. Their system prompts are fixed constants, so the
- * block is inserted here, in the position the article uses: immediately after the
- * identity line, before anything else the prompt asserts.
+ * The theme's identity line for the call (lib/theme-config.js identityLineOf; brief 4.13),
+ * then the session's mode block, before anything else the prompt asserts (phase 1 brief 1.5:
+ * the arc writer and the outline reworker were never told the mode, so a remote session's
+ * arc summaries said "I watched"), then the world and the truth rules, the stable frame
+ * every writer and judge reads first (phase 3, 3.2: the integrator's placement ruling), all
+ * from the theme's files (R14). The call's own text follows it.
  *
- * @param {string} systemPrompt - a system prompt whose FIRST LINE is its identity
+ * The rules are read first, so a theme with no rules folder, such as the parked detective
+ * (R1), is refused for that, named, before its identity line is read.
+ *
+ * @param {string} theme - the theme the caller holds
+ * @param {string} call - the rule-set call (lib/rule-set.js RULE_SET_CALLS), which names the
+ *   identity line too
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
- * @param {string} theme - the theme the caller holds; see buildReportingModeBlock
  * @returns {string}
+ * @throws {Error} as loadRuleSet, identityLineOf and buildReportingModeBlock do, naming the
+ *   theme
  */
-function withReportingModeBlock(systemPrompt, sessionConfig, theme) {
-  const text = String(systemPrompt || '');
-  const identityLine = text.split('\n', 1)[0];
-  const rest = text.slice(identityLine.length).replace(/^\n+/, '');
-  return `${identityLine}\n\n${buildReportingModeBlock(sessionConfig, theme)}\n\n${rest}`;
+function systemPromptOpening(theme, call, sessionConfig) {
+  const { core } = loadRuleSet(call, { theme });
+  return `${identityLineOf(theme, call)}\n\n${buildReportingModeBlock(sessionConfig, theme)}\n\n${core}`;
 }
 
 /**
@@ -476,18 +480,6 @@ class PromptBuilder {
   _rosterSection() {
     return generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData,
       this.sessionConfig?.rosterPronouns, this.sessionConfig?.roster);
-  }
-
-  /**
-   * The session's reporting-mode block (BASELINE §4 class 6).
-   *
-   * Placed in the SYSTEM prompt right after the identity line, where it replaces
-   * the persona rather than overriding it later in a rules file.
-   *
-   * @returns {string}
-   */
-  _buildReportingModeBlock() {
-    return buildReportingModeBlock(this.sessionConfig, this.themeName);
   }
 
   /**
@@ -667,11 +659,10 @@ Only the ${n} players above were at the investigation. Every other character exc
   }
 
   /**
-   * The map writer's system prompt, shared with its rework (2.3): the theme's identity line
-   * (lib/theme-config.js identityLineOf; brief 4.13), the mode block right after it (brief
-   * 1.5), then the world and the truth rules, the stable frame every writer reads first
-   * (phase 3, 3.2; the integrator's placement ruling), from the theme's rules folder (R14).
-   * Its craft files go last in the user prompt.
+   * The map writer's system prompt, shared with its rework (2.3): its opening alone
+   * (systemPromptOpening; brief 4.13b), the theme's identity line, the mode block, then the
+   * world and the truth rules from the theme's rules folder (R14). Its craft files go last in
+   * the user prompt.
    *
    * @returns {Promise<string>}
    * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
@@ -680,11 +671,7 @@ Only the ${n} players above were at the investigation. Every other character exc
    */
   async buildOutlineSystemPrompt() {
     mapSchemaFor(this.themeName);
-    return `${identityLineOf(this.themeName, 'outline')}
-
-${this._buildReportingModeBlock()}
-
-${loadRuleSet('outline', { theme: this.themeName }).core}`;
+    return systemPromptOpening(this.themeName, 'outline', this.sessionConfig);
   }
 
   /**
@@ -786,11 +773,11 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
   }
 
   /**
-   * The article writer's system prompt, shared with the article reworker (2.3): the
-   * theme's identity line (lib/theme-config.js identityLineOf; brief 4.13), the mode block,
-   * the world, the truth rules and the roster with pronouns (phase 3, 3.2: the integrator's
-   * placement ruling), the rules from the theme's folder (R14). The roster prints here alone
-   * (M20: the user prompt's <RULES> carried a second copy).
+   * The article writer's system prompt, shared with the article reworker (2.3): its opening
+   * (systemPromptOpening; brief 4.13b), the theme's identity line, the mode block, the world
+   * and the truth rules from the theme's folder (R14), then the roster with pronouns (phase
+   * 3, 3.2: the integrator's placement ruling). The roster prints here alone (M20: the user
+   * prompt's <RULES> carried a second copy).
    *
    * @returns {Promise<string>}
    * @throws {Error} for a theme with no story map (lib/map.js mapSchemaFor), such as the
@@ -800,11 +787,7 @@ ${loadRuleSet('outline', { theme: this.themeName }).craft}`;
    */
   async buildArticleSystemPrompt() {
     mapSchemaFor(this.themeName);
-    return `${identityLineOf(this.themeName, 'article')}
-
-${this._buildReportingModeBlock()}
-
-${loadRuleSet('article', { theme: this.themeName }).core}
+    return `${systemPromptOpening(this.themeName, 'article', this.sessionConfig)}
 
 ${this._rosterSection()}`;
   }
@@ -1031,10 +1014,10 @@ module.exports = {
   STORY_MAP_TAG,
   filterGateNotes,
   buildReportingModeBlock,
-  // Consumed by the system prompts assembled outside PromptBuilder (the two arc
-  // calls, and through the arc writer's the two arc rework branches), so the
-  // block's wording has one home.
-  withReportingModeBlock
+  // Brief 4.13b: the opening of every writer's and judge's system prompt, which the weave
+  // writer (arc-specialist-nodes.js) and the judges (evaluator-nodes.js) call too, so the
+  // placement has one home.
+  systemPromptOpening
 };
 
 // Self-test when run directly

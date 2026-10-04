@@ -38,14 +38,12 @@ const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
-// Brief 4.13: each judge's identity line is its theme's (identityLineOf).
-const { getThemeNPCEntries, identityLineOf } = require('../../theme-config');
+const { getThemeNPCEntries } = require('../../theme-config');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
-// Phase 3 (3.4): each judge reads the rule set its writer reads, through the writers' own
-// loader and mode-block placement (lib/rule-set.js, prompt-builder.js), from the rules
-// folder of its theme (R14).
-const { loadRuleSet } = require('../../rule-set');
-const { withReportingModeBlock } = require('../../prompt-builder');
+// Phase 3 (3.4): each judge reads the rule set its writer reads, from the rules folder of its
+// theme (R14), after its theme's identity line (brief 4.13) and the mode block: its system
+// prompt opens as a writer's does (prompt-builder.js systemPromptOpening; brief 4.13b).
+const { systemPromptOpening } = require('../../prompt-builder');
 // Phase 2, brief 2.4: the judges read the record and the director's words through
 // the same renderers and builders the writers use, so a judge sees what it judges.
 const { renderRecordView } = require('../../prompt-renderers/record-view');
@@ -1019,10 +1017,10 @@ T3: "<the text at fault>" states what a buried memory said; the record holds onl
 }
 
 /**
- * A judge's system prompt: the theme's identity line for the judge, the session's mode
- * block, the world and the truth rules (loadRuleSet), all from the theme's files (brief
- * 4.13; R14), then its task, its truth criteria, the truth-only scoring rules and the
- * truth-only OUTPUT FORMAT.
+ * A judge's system prompt: its opening (prompt-builder.js systemPromptOpening; brief 4.13b),
+ * the theme's identity line for the judge, the session's mode block, the world and the truth
+ * rules, all from the theme's files (brief 4.13; R14), then its task, its truth criteria, the
+ * truth-only scoring rules and the truth-only OUTPUT FORMAT.
  *
  * Phase 4: each judge scores the truth criteria alone and reads no craft file (spec
  * section 11): the weave's fact check (brief 4.4; spec 4.5) and the article judge (brief
@@ -1039,21 +1037,16 @@ T3: "<the text at fault>" states what a buried memory said; the record holds onl
 function judgeSystemPrompt(phase, criteria, theme, sessionConfig) {
   const call = JUDGE_RULE_CALLS[phase];
   if (!call) throw new Error(`Unknown evaluation phase: ${phase}`);
-  const { core } = loadRuleSet(call, { theme });
+  const opening = systemPromptOpening(theme, call, sessionConfig);
   const judged = TRUTH_SUBJECTS[phase];
   const frame = `The rules above are the ones the ${JUDGED_WRITERS[phase]} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.`;
-  const prompt = `${identityLineOf(theme, call)}
-
-${core}
+  return `${opening}
 
 Your task is to find each breach of the truth rules in ${judged}. ${frame}
 
 ${truthCriteriaSection(phase, criteria)}${TRUTH_ONLY_EVALUATION_RULES}
 
 ${truthOnlyOutputFormat(BREACH_NOTES[phase])}`;
-
-  // The mode block goes right after the identity line, where every writer has it.
-  return withReportingModeBlock(prompt, sessionConfig, theme);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

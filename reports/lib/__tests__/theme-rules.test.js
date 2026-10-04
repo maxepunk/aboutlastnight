@@ -286,7 +286,10 @@ describe('4.13: the parked detective has no prompt of the new stages (R1)', () =
 
   it('each writer, rework and judge throws, naming the theme', async () => {
     const builder = new PromptBuilder(refusingLoader(), 'detective', {}, null, null);
-    expect(() => weaveSystemPrompt({}, 'detective')).toThrow(/"detective" has no identity line for the call "arc"/);
+    // Brief 4.13b: every writer's and judge's system prompt opens through systemPromptOpening,
+    // which reads the rules first, so the detective is refused for its missing rules folder
+    // before its identity line is read, at the weave writer as at the judges.
+    expect(() => weaveSystemPrompt({}, 'detective')).toThrow(/"detective" names no rules folder/);
     expect(() => getArcRevisionSystemPrompt('send-back', {}, 'detective')).toThrow(/"detective"/);
     // The map and the article refuse it first for its missing story map (lib/map.js).
     await expect(builder.buildOutlineSystemPrompt()).rejects.toThrow(/The "detective" theme has no story map/);
@@ -335,5 +338,45 @@ describe('4.13: no identity line sits in code', () => {
     const source = fs.readFileSync(path.join(REPO, file), 'utf8');
     expect(source).not.toMatch(/You are Nova\b/);
     expect(source).not.toMatch(/You are [^'"`\n]*NovaNews/);
+  });
+});
+
+/**
+ * 4.13b: one opening for every writer's and judge's system prompt. The theme's identity line,
+ * the session's mode block, and the world and the truth rules are composed in one place,
+ * prompt-builder.js systemPromptOpening, which the weave writer, the map writer, the article
+ * writer and the two judges open with. Each rework opens with its writer's.
+ */
+describe("4.13b: every writer's and judge's system prompt opens through systemPromptOpening", () => {
+  const { systemPromptOpening } = require('../prompt-builder');
+  const { identityLineOf } = require('../theme-config');
+  const JOURNALIST = 'journalist';
+
+  beforeAll(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterAll(() => jest.restoreAllMocks());
+
+  it.each(['on-site', 'remote'])("is the theme's identity line, the %s mode block, then the world and the truth rules", (mode) => {
+    for (const call of Object.keys(RULE_SET_CALLS)) {
+      expect(systemPromptOpening(JOURNALIST, call, { reportingMode: mode })).toBe(
+        `${identityLineOf(JOURNALIST, call)}\n\n${loadModeBlock(mode, { theme: JOURNALIST })}\n\n${loadRuleSet(call, { theme: JOURNALIST }).core}`
+      );
+    }
+  });
+
+  it.each(['on-site', 'remote'])('the weave writer, the map writer, the article writer and both judges open with it (%s)', async (mode) => {
+    const base = reworkFixtureState();
+    const sessionConfig = { ...base.sessionConfig, reportingMode: mode };
+    const builder = new PromptBuilder(refusingLoader(), JOURNALIST, sessionConfig, base.canonicalCharacters, base.characterData.characters);
+    const opening = (call) => systemPromptOpening(JOURNALIST, call, sessionConfig);
+    const opensWith = (system, call) => expect([call, system.startsWith(`${opening(call)}\n\n`)]).toEqual([call, true]);
+
+    opensWith(weaveSystemPrompt(sessionConfig, JOURNALIST), 'arc');
+    expect(await builder.buildOutlineSystemPrompt()).toBe(opening('outline'));
+    opensWith(await builder.buildArticleSystemPrompt(), 'article');
+    opensWith(buildEvaluationSystemPrompt('arcs', getPhaseCriteria('arcs', JOURNALIST), JOURNALIST, { sessionConfig }), 'judge-arc');
+    opensWith(buildEvaluationSystemPrompt('article', getPhaseCriteria('article', JOURNALIST), JOURNALIST, { sessionConfig }), 'judge-article');
   });
 });
