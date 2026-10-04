@@ -732,9 +732,10 @@
   // (checkpoint-view-logic.js, task 4.9) take each of these from here, so the lines the page
   // locks sit under exactly the repeats the client gate takes as the writer's.
   //
-  // Everyone, the cards and the photos are built by one function from the beats, so the
-  // stop's payload, the map on screen as the director edits it (task 4.9) and the map checks
-  // (lib/map.js) count alike. A name in a beat counts for the roster member it names.
+  // Everyone, the cards and the photos are built by one function from the beats, so the map
+  // on screen as the director edits it (task 4.9) and the map checks (lib/map.js) count alike,
+  // on the roster and the kept photos the stop's payload carries (task 4.6d: the payload sends
+  // no count of its own). A name in a beat counts for the roster member it names.
 
   /** Is `value` a story map: an object with a list of sections? */
   function isMapValue(value) {

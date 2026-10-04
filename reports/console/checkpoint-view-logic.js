@@ -2684,11 +2684,12 @@
 
   /**
    * Everyone and the counts of the map as the director has it, rebuilt through mapTally
-   * (console/outline-edit-logic.js), the function the stop's payload and the map checks count
-   * with, on the inputs the stop's count read (task 4.6c): the session's roster with the
-   * canon's full names (`roster`, lib/map.js mapRosterOf) and the photos kept for the article
-   * (`keptPhotos`). So "In no beat" lists the players in roster order whatever the director
-   * moved, and a beat that names a player by a full name places them as on the server.
+   * (console/outline-edit-logic.js), the function the map checks count with, on the inputs the
+   * stop's payload carries (task 4.6c; it sends no count of its own, task 4.6d): the session's
+   * roster with the canon's full names (`roster`, lib/map.js mapRosterOf) and the photos kept
+   * for the article (`keptPhotos`). So "In no beat" lists the players in roster order whatever
+   * the director moved, and a beat that names a player by a full name places them as on the
+   * server.
    *
    * @param {Object} data - the stop's payload, with its `roster` and `keptPhotos`
    * @param {Object} map - the map as the director has it

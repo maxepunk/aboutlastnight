@@ -418,7 +418,11 @@ const REMOVED_PHRASES = [
   'each under its heading',
   "the map's heading for the section, as written",
   'A section whose heading on the map is empty',
-  'each photo where the map places it'
+  'each photo where the map places it',
+
+  // Phase 4, 4.6d: the map's schema says "note" is the meeting's approval note, when the
+  // prompt holds it. The shorter "the director's note from the meeting" stays live.
+  '"note" for the director\x27s note from the meeting'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

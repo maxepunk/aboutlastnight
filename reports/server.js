@@ -460,12 +460,13 @@ async function getCheckpointData(checkpointType, state) {
             });
         case CHECKPOINT_TYPES.OUTLINE:
             // Brief 4.6: the map (lib/map.js mapCheckpointData): the map, the theme's slots,
-            // the settled story, Everyone and the counts, a check still failing on the map in
-            // hand, the concerns beside their lines, the edits a send-back changed, the
-            // standing notes, the round's note and counters. No judge reads the map and the
-            // map writer asks nothing, so the stop sends no evaluation and no questions.
+            // the settled story, a check still failing on the map in hand, the concerns beside
+            // their lines, the edits a send-back changed, the standing notes, the round's note
+            // and counters. No judge reads the map and the map writer asks nothing, so the stop
+            // sends no evaluation and no questions.
             // Brief 4.6c: evidenceIndex names each card's and each beat's document, as at the
-            // meeting, and the roster and the kept photos the counts read go with them.
+            // meeting, and the roster and the kept photos go with them, so the page builds
+            // Everyone and the counts (task 4.6d: the payload sends no count).
             // Brief 2.7: the automatic passes of this round, with what each changed.
             return {
                 ...mapCheckpointData(state, {
