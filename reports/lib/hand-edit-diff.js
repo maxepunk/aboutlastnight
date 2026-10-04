@@ -129,13 +129,6 @@ const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const BUNDLE_OBJECT_SCOPES = ['headline', 'byline', 'financialTracker'];
 const BUNDLE_SCALAR_SCOPES = ['heroImage'];
 const BUNDLE_INDEX_COLLECTIONS = ['pullQuotes', 'photos'];
-// Phase 3 (3.7): the writer's questions for the director are not part of the outline
-// the director edits or a rework changes, so neither diff shows them as a scope. The
-// bundle diff never visits them (its scope lists do not name them); the outline diff,
-// which walks every top-level key, skips them. The console's RevisionDiff skips the
-// same keys (console/checkpoint-view-logic.js REVISION_DIFF_IGNORED_KEYS; fix 3.7b, a
-// test holds the two lists equal).
-const OUTLINE_IGNORED_KEYS = ['writerQuestions'];
 
 /**
  * The one prefix of a finding about one of the director's edits, in advisoryWarnings:
@@ -192,7 +185,7 @@ const MIN_LOCATING_WORDS = 3;
 const MIN_INLINE_PIECE_WORDS = 6;
 
 /** Keys whose text is no part of what the director edits or a reader reads. */
-const UNPRINTED_KEYS = new Set(['metadata', '_revisionHistory', 'voice_self_check', '_voiceSelfCheck', ...OUTLINE_IGNORED_KEYS, CHANGED_EDITS_KEY]);
+const UNPRINTED_KEYS = new Set(['metadata', '_revisionHistory', 'voice_self_check', '_voiceSelfCheck', CHANGED_EDITS_KEY]);
 
 /**
  * The printed fields of each content block, by type (templates/journalist/partials/
@@ -304,7 +297,6 @@ function diffOutline(before, after) {
   if (isMap(before) && isMap(after)) return diffMap(before, after);
   const sections = [];
   for (const key of unionKeys(before, after)) {
-    if (OUTLINE_IGNORED_KEYS.includes(key)) continue;
     const b = before[key];
     const a = after[key];
     if (same(a, b)) continue;
@@ -3010,7 +3002,7 @@ module.exports = {
   mapEditAddress: mapAddressOf, isCut, isMove, isStrike,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
-    OUTLINE_IGNORED_KEYS, MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
+    MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,
     stayingInSection, pathOf,
     // Brief 4.5c: the weave's fields and elements, which the console copies (a test holds them equal)
     WEAVE_FIELDS, WEAVE_ELEMENTS

@@ -3538,16 +3538,8 @@
   // ── RevisionDiff's key walk (fix 3.7b) ──────────────────────────────────────
 
   /**
-   * The top-level keys RevisionDiff's client-side shallow diff skips: the writer's
-   * questions are not part of the output a rework changes, so a round whose questions
-   * changed lists nothing for them. The same list as the server's outline diff
-   * (lib/hand-edit-diff.js OUTLINE_IGNORED_KEYS; a test holds the two equal).
-   */
-  var REVISION_DIFF_IGNORED_KEYS = ['writerQuestions'];
-
-  /**
    * The keys RevisionDiff compares: every top-level key of either version, each once,
-   * sorted, less REVISION_DIFF_IGNORED_KEYS. A missing version reads as empty.
+   * sorted. A missing version reads as empty.
    *
    * @param {Object|Array|null} previous
    * @param {Object|Array|null} current
@@ -3556,7 +3548,7 @@
   function revisionDiffKeys(previous, current) {
     var keys = Object.keys(previous || {}).concat(Object.keys(current || {}));
     return keys
-      .filter(function (key, index) { return keys.indexOf(key) === index && REVISION_DIFF_IGNORED_KEYS.indexOf(key) === -1; })
+      .filter(function (key, index) { return keys.indexOf(key) === index; })
       .sort();
   }
 
@@ -3676,9 +3668,8 @@
     findingSectionId: findingSectionId,
     // Phase 4, task 4.11: a thread from before the story meeting
     oldThreadView: oldThreadView,
-    // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
-    revisionDiffKeys: revisionDiffKeys,
-    REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS
+    // Fix 3.7b: RevisionDiff's key walk
+    revisionDiffKeys: revisionDiffKeys
   };
 
   if (typeof window !== 'undefined') {

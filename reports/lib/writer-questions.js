@@ -9,7 +9,9 @@
  * them (a player, a pronoun, a figure that looks wrong) and what each answer changes in
  * print. The outline's `writerQuestions` went with the map (brief 4.6), and the
  * article's with brief 4.7b, their carry through a rework (carriedWriterQuestions) and
- * their normalizer with them.
+ * their normalizer with them. Their strip from what prints (withoutWriterQuestions) went
+ * with task 4.11: only a thread from before the story meeting carried the field, and the
+ * server refuses such a thread (lib/old-thread.js).
  *
  * Brief 4.5 (C15, ruling 4): the director answers each question in its own box at the
  * story meeting, and the answer (`answer`, WEAVE_ANSWER_KEY) travels with its question
@@ -20,12 +22,6 @@
  * (carriedWeaveQuestions). The writer's schema has no `answer`; the director-side schema
  * (lib/meeting.js) adds it.
  */
-
-/**
- * The old field's name on the outline and the article. No schema carries it since brief
- * 4.7b; withoutWriterQuestions still strips it from a bundle stored before then.
- */
-const WRITER_QUESTIONS_KEY = 'writerQuestions';
 
 /** A text with its case and spacing folded: lower case, each run of whitespace one space. */
 function fold(text) {
@@ -45,19 +41,6 @@ function questionKey(q) {
  */
 function subjectKey(q) {
   return `${q.kind || ''}\n${fold(q.about)}`;
-}
-
-/**
- * An output with its questions taken out, for every print that is not the stop's:
- * a later writer's prompt, a judge's JSON, the template.
- *
- * @param {*} output
- * @returns {*} the same value when it is not an object or carries no questions
- */
-function withoutWriterQuestions(output) {
-  if (!output || typeof output !== 'object' || Array.isArray(output) || !(WRITER_QUESTIONS_KEY in output)) return output;
-  const { [WRITER_QUESTIONS_KEY]: _questions, ...rest } = output;
-  return rest;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -318,8 +301,6 @@ function carriedWeaveQuestions(returned, previous) {
 }
 
 module.exports = {
-  WRITER_QUESTIONS_KEY,
-  withoutWriterQuestions,
   // Phase 4 (brief 4.4): the weave's questions; brief 4.5: their answers
   WEAVE_QUESTIONS_KEY,
   WEAVE_QUESTION_KINDS,

@@ -24,7 +24,6 @@ const path = require('path');
 const { registerHelpers } = require('./template-helpers');
 const { SchemaValidator } = require('./schema-validator');
 const { createThemeLoader } = require('./theme-loader');
-const { withoutWriterQuestions } = require('./writer-questions');
 const { spacePhotos } = require('./photo-spacing');
 const { printedHero } = require('./theme-config');
 
@@ -282,9 +281,8 @@ class TemplateAssembler {
     }
 
     return {
-      // Pass through ContentBundle data. Phase 3 (3.7): the writer's questions for
-      // the director never print, so the template never receives them.
-      ...withoutWriterQuestions(contentBundle),
+      // Pass through ContentBundle data
+      ...contentBundle,
 
       // Photos base path for session-specific photo serving
       photosBasePath,

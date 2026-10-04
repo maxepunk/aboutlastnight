@@ -13,8 +13,10 @@
  * shape; this file follows their carry through the arc rework (R5).
  *
  * - A weave rework carries forward every question the director has not answered (R5).
- * - The field never prints, and never reaches the template, the fact check's printed
- *   text or a later writer's prompt.
+ * - The field never prints: no schema after the meeting carries it, so the page refuses a
+ *   bundle that does, and it never reaches the fact check's printed text or a later
+ *   writer's prompt. Task 4.11: the strips that took it out of an old thread's map and
+ *   article (the article judge's JSON, the template) went with the old-thread guard.
  * - Roster coverage left the arc stage (phase 4, brief 4.4), and with it the rule that a
  *   question of kind "player" covered a player there. The article fact check's
  *   coverage is unchanged.
@@ -30,7 +32,6 @@ const outlineSchema = require('../schemas/outline.schema.json');
 const contentBundleSchema = require('../schemas/content-bundle.schema.json');
 const arcNodes = require('../workflow/nodes/arc-specialist-nodes');
 const aiNodes = require('../workflow/nodes/ai-nodes');
-const { _testing: { buildEvaluationUserPrompt } } = require('../workflow/nodes/evaluator-nodes');
 const { diffOutline, diffBundle } = require('../hand-edit-diff');
 const { TemplateAssembler } = require('../template-assembler');
 const { reworkFixtureState, OUTLINE, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
@@ -233,7 +234,7 @@ describe('a map or article rework carries no questions', () => {
 // Kept out of every later prompt, the template and the trace
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('the questions never reach a later writer, a judge\'s JSON or the template', () => {
+describe('the questions never reach a later writer or the template', () => {
   function withQuestions(state) {
     return {
       ...state,
@@ -242,10 +243,6 @@ describe('the questions never reach a later writer, a judge\'s JSON or the templ
       contentBundle: { ...clone(PREVIOUS_BUNDLE), writerQuestions: [Q_LEDGER, Q_PRONOUN] }
     };
   }
-  const expectNoQuestions = (text) => {
-    expect(text).not.toContain('writerQuestions');
-    QUESTION_TEXTS.forEach((q) => expect(text).not.toContain(q));
-  };
 
   // Brief 4.6: the map writer reads the weave's questions in the settled weave alone, each
   // with the director's answer or "Unanswered.", and no other list of questions.
@@ -276,22 +273,13 @@ describe('the questions never reach a later writer, a judge\'s JSON or the templ
     expect(prompt).not.toContain('writerQuestions');
   });
 
-  // Phase 4 (brief 4.6): the outline judge left the graph.
-  it.each(['article'])('the %s judge\'s JSON carries none of the questions', (phase) => {
-    for (const theme of ['journalist', 'detective']) {
-      const prompt = buildEvaluationUserPrompt(phase, withQuestions(reworkFixtureState(theme)), {});
-      expectNoQuestions(prompt);
-    }
-  });
-
   // Brief 4.7b: the content bundle's schema carries no questions, so the page refuses a
-  // bundle that carries them before it prints a word.
-  it('the template context carries none of them, and the page refuses a bundle that carries them', async () => {
+  // bundle that carries them before it prints a word. Task 4.11: the article judge's JSON
+  // and the template context no longer strip them; only an old thread's map and article
+  // carried them, and the server refuses such a thread.
+  it('the page refuses a bundle that carries them', async () => {
     const bundle = { ...clone(require('../../__tests__/fixtures/content-bundles/valid-journalist.json')), writerQuestions: [Q_LEDGER] };
-    const assembler = new TemplateAssembler('journalist');
-    const context = await assembler.buildContext(bundle, '010126', []);
-    expect(context).not.toHaveProperty('writerQuestions');
-    await expect(assembler.assemble(bundle)).rejects.toThrow(/Invalid ContentBundle/);
+    await expect(new TemplateAssembler('journalist').assemble(bundle)).rejects.toThrow(/Invalid ContentBundle/);
   });
 
   it('the fact check\'s printed text carries none of them', () => {

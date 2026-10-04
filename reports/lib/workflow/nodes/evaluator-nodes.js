@@ -61,10 +61,9 @@ const { ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const {
   buildSessionFacts, articleWriterInputs, getPromptBuilder, isPhotoExcluded, whiteboardFilenameOf
 } = require('./ai-nodes');
-// Phase 3 (3.7): the article judge's JSON of the outline and the article leaves the
-// writers' questions out. Brief 4.7a: the director's answers at the story meeting, which
-// the fact check reads among the director's words (T1).
-const { withoutWriterQuestions, weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../../writer-questions');
+// Brief 4.7a: the director's answers at the story meeting, which the fact check reads
+// among the director's words (T1).
+const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../../writer-questions');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
 // the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
 // (no struck connection, no answer), and the director's answers, which it reads as record.
@@ -1378,7 +1377,7 @@ ${renderArticleJudgePhotos(state)}
 
 ${settledWeave ? `${settledWeave}\n\n` : ''}The map below is the one the article writer wrote from, as the director left it: the beats in its sections are what the article tells, and leftOut holds what it leaves out, each beat the director struck among them.
 ${JUDGE_MAP_LABEL}
-${JSON.stringify(withoutWriterQuestions(state.outline || {}), null, 2)}
+${JSON.stringify(state.outline || {}, null, 2)}
 
 The content bundle below holds only the fields the published page prints.
 CONTENT BUNDLE:
