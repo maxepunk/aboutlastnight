@@ -26,7 +26,9 @@
  *
  * Input that lands (task 4.14d): an open editor holds Approve, Send back and the JSON editor's
  * Save & Approve, and a line beside them says to save or cancel it first (unsavedInputLine), so
- * an approve never publishes the writer's text over an edit the director left open.
+ * an approve never publishes the writer's text over an edit the director left open. JSON typed
+ * in the JSON editor holds Approve and Send back the same way, since only the JSON editor's own
+ * Save & Approve sends it (fix round 1).
  */
 
 window.Console = window.Console || {};
@@ -555,6 +557,9 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   });
   const [mode, setMode] = React.useState('view'); // 'view' | 'json'
   const [jsonText, setJsonText] = React.useState('');
+  // Task 4.14d: the text the JSON editor opened with, set each time it opens and read while it is
+  // open; the JSON differs from it once the director types.
+  const [jsonSeed, setJsonSeed] = React.useState('');
   const [jsonError, setJsonError] = React.useState('');
   // B6: inline error for a bundle that fails the desk's checks or the client shape gate.
   const [editError, setEditError] = React.useState('');
@@ -582,9 +587,18 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     return ViewLogic.deskMarksAt(desk.marks, anchor);
   }
 
-  // Task 4.14d: an open editor's form reaches the desk only when the director saves it, so while
-  // one is open every action waits, and the line beside the buttons says why.
-  const held = unsavedInputLine('article', { editor: editingBlock, bundle: editedBundle || contentBundle });
+  // Task 4.14d: an open editor's form reaches the desk only when the director saves it, and JSON
+  // typed in the JSON editor reaches a payload only through its own Save & Approve. The desk sends
+  // two things, so it asks twice: `held` for Approve and Send back, which send the bundle on the
+  // desk, and `jsonHeld` for the JSON editor's Save & Approve, which sends the JSON. While an answer
+  // holds, its buttons wait, and its line beside them says why.
+  const unsaved = {
+    editor: editingBlock,
+    bundle: editedBundle || contentBundle,
+    json: mode === 'json' ? { text: jsonText, seed: jsonSeed } : null
+  };
+  const held = unsavedInputLine('article', unsaved);
+  const jsonHeld = unsavedInputLine('article-json', unsaved);
 
   // Reset when data changes
   // Both counters: the automated one resets to 0 at every round of the director's,
@@ -831,7 +845,7 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   function handleJsonApprove() {
-    if (held) return;
+    if (jsonHeld) return;
     var parsed;
     try {
       parsed = JSON.parse(jsonText);
@@ -855,7 +869,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     }
     setMode(newMode);
     if (newMode === 'json') {
-      setJsonText(safeStringify(getCurrentBundle(), 2));
+      // The JSON editor opens on the bundle on the desk, and keeps that text as its seed.
+      var seed = safeStringify(getCurrentBundle(), 2);
+      setJsonText(seed);
+      setJsonSeed(seed);
       setJsonError('');
     }
   }
@@ -1481,11 +1498,12 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
       jsonError && React.createElement('p', { className: 'validation-error desk-error' }, jsonError),
       React.createElement('button', {
         className: 'btn btn-primary',
-        disabled: !!held,
+        disabled: !!jsonHeld,
         onClick: handleJsonApprove,
         'aria-label': 'Save JSON and approve'
       }, 'Save & Approve'),
-      held && React.createElement('p', { className: 'validation-error', role: 'status' }, held)
+      // Task 4.14d: what holds the JSON editor's Save & Approve, beside it.
+      jsonHeld && React.createElement('p', { className: 'validation-error', role: 'status' }, jsonHeld)
     ),
 
     // Folded below the article (task 4.10; spec 6.3): the marks the director's edits may have

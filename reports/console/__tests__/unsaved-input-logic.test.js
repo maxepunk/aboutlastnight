@@ -163,3 +163,45 @@ describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', ()
     });
   });
 });
+
+describe('4.14d fix round 1, finding 2: JSON typed in the desk\'s JSON editor holds Approve and Send back', () => {
+  // The desk sends two things. Approve and Send back ('article') send the bundle on the desk; the JSON
+  // editor's Save & Approve ('article-json') sends the JSON typed there. The review saw Approve, with
+  // the JSON editor open and holding a rewritten closing, publish the writer's closing without a word.
+  const SEED = JSON.stringify(deskBundle(), null, 2);
+  const TYPED = SEED.replace('We only kept the books.', 'We kept two sets of books.');
+  const OPEN_BLOCK = { type: 'block', sectionIdx: 1, blockIdx: 0 };
+  /** The desk with its JSON editor open on SEED and holding `text`, and `editor` open or not. */
+  const withJson = (text, editor = null) => ({ editor, bundle: deskBundle(), json: { text, seed: SEED } });
+
+  it('holds nothing while the JSON editor holds the text it opened with', () => {
+    expect(unsavedInputLine('article', withJson(SEED))).toBeNull();
+    expect(unsavedInputLine('article-json', withJson(SEED))).toBeNull();
+  });
+
+  it('holds Approve and Send back while it holds JSON the director typed, and says to close it or send the JSON with Save & Approve', () => {
+    expect(unsavedInputLine('article', withJson(TYPED)))
+      .toBe('Before you approve or send back, close the JSON editor to discard what you typed in it, or send what you typed with Save & Approve.');
+  });
+
+  it('leaves the JSON editor\'s Save & Approve free, since it sends what was typed', () => {
+    expect(unsavedInputLine('article-json', withJson(TYPED))).toBeNull();
+  });
+
+  it('holds nothing once the text is back to what the editor opened with, or once the editor is closed, since it opens on the desk again', () => {
+    expect(unsavedInputLine('article', withJson(TYPED.replace('We kept two sets of books.', 'We only kept the books.')))).toBeNull();
+    expect(unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: null })).toBeNull();
+  });
+
+  it('with an editor open too, names the editor and then the typed JSON; Save & Approve waits for the editor alone', () => {
+    expect(unsavedInputLine('article', withJson(TYPED, OPEN_BLOCK)))
+      .toBe('Before you approve or send back: save or cancel your edit to the paragraph in "The Story"; close the JSON editor to discard what you typed in it, or send what you typed with Save & Approve.');
+    expect(unsavedInputLine('article-json', withJson(TYPED, OPEN_BLOCK)))
+      .toBe('Before you approve, save or cancel your edit to the paragraph in "The Story".');
+  });
+
+  it('refuses an open JSON editor that does not say what it holds and the text it opened with', () => {
+    expect(() => unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: { text: TYPED } })).toThrow(/JSON editor/);
+    expect(() => unsavedInputLine('article-json', { editor: null, bundle: deskBundle(), json: {} })).toThrow(/JSON editor/);
+  });
+});

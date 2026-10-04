@@ -16,10 +16,20 @@
  * its actions wait (Approve, Reweave, Send back, and the desk's JSON Save & Approve), and one line
  * beside the buttons names each unsaved piece and says to save or discard it first.
  *
- * unsavedInputLine(stop, open) is the one rule. Each stop's component asks it once per render, with
- * what it has open, and gets back that line, or null when nothing waits:
- *   - 'article', the desk: { editor, bundle }. `editor` is Article.js's editingBlock: an open
- *     editor holds the actions whatever it holds, since the desk cannot see an editor's form.
+ * The desk sends two things (fix round 1). Approve and Send back send the bundle on the desk, so JSON
+ * the director typed in the JSON editor holds them too: only that editor's own Save & Approve sends
+ * it, and the review saw Approve drop it without a word. Save & Approve sends the JSON, so it waits
+ * only for what the JSON leaves out.
+ *
+ * unsavedInputLine(stop, open) is the one rule. Each stop's component asks it once per render for
+ * each set of buttons that sends one thing, with what it has open, and gets back the line for those
+ * buttons, or null when nothing waits:
+ *   - 'article', the desk's Approve and Send back: { editor, bundle, json }. `editor` is Article.js's
+ *     editingBlock: an open editor holds the actions whatever it holds, since the desk cannot see an
+ *     editor's form. `json` is the JSON editor while it is open, { text, seed }: the text it holds
+ *     and the text it opened with, which differ once the director types in it. It is null while the
+ *     editor is closed, since the editor takes the desk's text again when it opens.
+ *   - 'article-json', the JSON editor's Save & Approve: the desk's { editor, bundle, json }.
  *   - 'outline', the map: { editor, adding, sections }. `editor` is Outline.js's editing, an open
  *     editor; `adding` its add-a-beat line, which holds the actions once it holds text; `sections`
  *     the page's sections as mapView lists them, whose labels name a section.
@@ -77,11 +87,15 @@
     return view;
   }
 
-  /** Each stop's actions, by their ids: the desk's two are the ones articleReviewPayload takes. */
+  /**
+   * Each stop's actions, by their ids. The desk's are the ones articleReviewPayload takes: its
+   * Approve and Send back, and the JSON editor's Save & Approve, which it takes as an approve.
+   */
   var ACTIONS = {
     'arc-selection': function () { return viewLogic().MEETING_ACTIONS; },
     outline: function () { return viewLogic().MAP_ACTIONS; },
-    article: function () { return ['approve', 'send-back']; }
+    article: function () { return ['approve', 'send-back']; },
+    'article-json': function () { return ['approve']; }
   };
 
   /** The word the line gives each action, by its id. */
@@ -163,9 +177,43 @@
     return '';
   }
 
-  function deskInstructions(open) {
+  /** An open editor's instruction, which every button at the desk takes: no payload holds its form. */
+  function deskEditorInstructions(open) {
     if (!isPlainObject(open.editor)) return [];
     return [saveOrCancel(deskEditorName(open.editor, open.bundle))];
+  }
+
+  /**
+   * The desk's JSON editor while it is open, or null while it is closed. It says the text it holds
+   * and the text it opened with, which tell JSON the director typed from the desk's own.
+   */
+  function deskJson(open) {
+    var json = open.json;
+    if (json === undefined || json === null) return null;
+    if (!isPlainObject(json) || typeof json.text !== 'string' || typeof json.seed !== 'string') {
+      throw new Error('unsavedInputLine: the desk\'s open JSON editor must say the text it holds and the text it opened with ({ text, seed })');
+    }
+    return json;
+  }
+
+  /**
+   * What the line asks of JSON the director typed in the JSON editor, which Approve and Send back
+   * would leave behind: discard it by closing the editor, or send it with the editor's own button.
+   */
+  var JSON_TYPED = 'close the JSON editor to discard what you typed in it, or send what you typed with Save & Approve';
+
+  /** Approve and Send back send the bundle on the desk: neither an open editor's form nor typed JSON is in it. */
+  function deskInstructions(open) {
+    var instructions = deskEditorInstructions(open);
+    var json = deskJson(open);
+    if (json && json.text !== json.seed) instructions.push(JSON_TYPED);
+    return instructions;
+  }
+
+  /** The JSON editor's Save & Approve sends the JSON typed there: an open editor's form is not in it. */
+  function jsonEditorInstructions(open) {
+    deskJson(open);
+    return deskEditorInstructions(open);
   }
 
   // ── The map ───────────────────────────────────────────────────────────────
@@ -209,7 +257,8 @@
   var INSTRUCTIONS = {
     'arc-selection': meetingInstructions,
     outline: mapInstructions,
-    article: deskInstructions
+    article: deskInstructions,
+    'article-json': jsonEditorInstructions
   };
 
   /**
@@ -218,13 +267,14 @@
    * piece and says to save or discard it before the stop's actions: "Before you approve or send
    * back, save or cancel your edit to the paragraph in "The Story"."
    *
-   * @param {string} stop - 'arc-selection', 'outline' or 'article'
+   * @param {string} stop - 'arc-selection', 'outline', 'article', or 'article-json' for the desk's
+   *   JSON editor
    * @param {Object} open - what the stop has open (see the header)
    * @returns {string|null}
    */
   function unsavedInputLine(stop, open) {
     if (!Object.prototype.hasOwnProperty.call(INSTRUCTIONS, stop)) {
-      throw new Error('unsavedInputLine: no rule for the stop ' + String(stop) + '; the story meeting, the map and the desk have one');
+      throw new Error('unsavedInputLine: no rule for the stop ' + String(stop) + '; the story meeting, the map, the desk and the desk\'s JSON editor have one');
     }
     if (!isPlainObject(open)) {
       throw new Error('unsavedInputLine: the ' + stop + ' stop must say what it has open');
