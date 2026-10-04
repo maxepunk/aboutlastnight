@@ -488,7 +488,9 @@ describe('4.5: struck connections, the round mark and the views of the weave', (
       expect(output.connections).toHaveLength(3);
     });
 
-    it('leaves a connection the output returned under a struck id as the output has it', () => {
+    // Brief 4.14a: the struck connection itself; another connection under its id takes an id
+    // of its own (the 4.14a block below).
+    it('leaves the struck connection the output returned under its id as the output has it', () => {
       const previous = struck();
       const output = clone(WEAVE);
       expect(withStruckConnections(output, previous)).toEqual(output);
@@ -758,5 +760,48 @@ describe('4.14a: a connection that joins a left-out thread goes out of the story
     weave.threads[2].reason = 'The director left it out.';
     weave.connections.push({ id: 'c5', kind: 'person', joins: ['t3', 't9'], detail: 'Someone the weave never names.' });
     expect(typesOf(check(weave))).toEqual(['connection-joins-unknown-thread']);
+  });
+});
+
+// Meeting 1: a rework shown the weave without its struck connections numbered a new connection
+// with a struck one's id, and code wrote the struck connection over it. Code strikes again only
+// the struck one; any other connection under a struck id keeps its words and joins under a
+// fresh id, numbered after every connection id in use, and the struck one goes back where it sat.
+describe("4.14a: a rework never takes a struck connection's id", () => {
+  const { withStruckConnections, isSameConnection, freshConnectionId } = require('../weave');
+  /** WEAVE with c2 (a moment joining t1 and t2) struck. */
+  const struck = () => ({ ...clone(WEAVE), connections: clone(WEAVE).connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c)) });
+  /** A rework's output: WEAVE without c2, with `added` where c2 sat. */
+  const reworkWith = (added) => ({ ...clone(WEAVE), connections: [WEAVE.connections[0], added, WEAVE.connections[2], WEAVE.connections[3]] });
+  const NEW = { id: 'c2', kind: 'person', joins: ['t6', 't3'], detail: 'Kai: at the coat check, then in the bathroom.' };
+
+  it('another connection under a struck id keeps its words and joins under a fresh id, and the struck one goes back where it sat', () => {
+    const previous = struck();
+    const output = reworkWith(NEW);
+    const back = withStruckConnections(output, previous);
+    expect(back.connections.map((c) => [c.id, c.struck === true])).toEqual([['c1', false], ['c2', true], ['c5', false], ['c3', false], ['c4', false]]);
+    expect(back.connections[1]).toEqual(previous.connections[1]);
+    expect(back.connections[2]).toEqual({ ...NEW, id: 'c5' });
+    expect(output.connections[1].id).toBe('c2');
+  });
+
+  it('another kind of connection between the same two threads is another connection too', () => {
+    const back = withStruckConnections(reworkWith({ id: 'c2', kind: 'person', joins: ['t1', 't2'], detail: 'Sloane: at the scoreboard and at the bar.' }), struck());
+    expect(back.connections.map((c) => [c.id, c.struck === true])).toEqual([['c1', false], ['c2', true], ['c5', false], ['c3', false], ['c4', false]]);
+  });
+
+  it('the struck one brought back under its id, in other words or with its joins the other way round, stays as the rework wrote it: the restore strikes it again', () => {
+    const output = reworkWith({ ...WEAVE.connections[1], joins: ['t2', 't1'], detail: 'The scoreboard: the sale reaches the vote.' });
+    expect(withStruckConnections(output, struck())).toEqual(output);
+    expect(isSameConnection(output.connections[1], struck().connections[1])).toBe(true);
+    expect(isSameConnection(NEW, struck().connections[1])).toBe(false);
+  });
+
+  it("the fresh id is numbered after every connection id in use: the output's, the version it started from and the weave the round started from", () => {
+    expect(freshConnectionId(new Set(['c1', 'c2', 'c4']))).toBe('c5');
+    expect(freshConnectionId(new Set(['link-a']))).toBe('c1');
+    const roundStart = { ...struck(), connections: [...struck().connections, { id: 'c7', kind: 'line', joins: ['t1', 't5'], detail: 'A line the round took out.' }] };
+    const back = withStruckConnections(reworkWith(NEW), struck(), { roundStart });
+    expect(back.connections.find((c) => c.detail === NEW.detail).id).toBe('c8');
   });
 });

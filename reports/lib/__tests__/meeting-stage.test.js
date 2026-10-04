@@ -703,3 +703,70 @@ describe("4.5f: a finding filed under a brought-back connection's id is the fix'
     expect(routeArcEvaluation({ ...round, weave: update.weave })).toBe('checkpoint');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.14a: a rework never takes a struck connection's id (the final review, ruling 1)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Meeting 1: the rework reads the weave without the connections the director struck, so a
+// connection it added for the director's thread took the struck one's id, and code wrote the
+// struck connection over it (a reweave, the fact check's fix), or kept it and told the director
+// their strike was undone (a send-back). The rework's task says a struck connection keeps its
+// id. Code strikes again only the struck connection itself: any other connection under a struck
+// id keeps its words and joins under an id of its own, numbered after every connection id the
+// round has used, and the meeting marks it as new this round.
+describe("4.14a: a rework never takes a struck connection's id", () => {
+  const { meetingMarksOf } = require('../meeting');
+  const { standingAtMeeting } = require('../hand-edit-diff');
+  const { ARC_REWORK_STRUCK_IDS } = arcNodes._testing;
+  /** The connection a rework adds for the director's thread t6, under the struck c2's id. */
+  const NEW = { id: 'c2', kind: 'person', joins: ['t6', 't3'], detail: 'Riley: kept the second ledger, and took the envelope at the bar.' };
+  const connectionsOf = (weave) => weave.connections.map((c) => [c.id, c.struck === true]);
+  const taskOf = (prompt) => prompt.slice(prompt.indexOf('## YOUR TASK'));
+
+  it('tells the rework, in its task, that each struck connection keeps its id, only when <HAND_EDITS> lists a strike', async () => {
+    expect(ARC_REWORK_STRUCK_IDS).toMatch(/<HAND_EDITS> marks struck keeps its id/);
+    const struck = recordingSdk(reworkOf(() => {}));
+    await reviseArcs(await roundState('reweave'), cfg(struck));
+    expect(taskOf(struck.calls[0].prompt)).toContain(ARC_REWORK_STRUCK_IDS);
+    const noStrike = leftByDirector();
+    noStrike.connections = noStrike.connections.map(({ struck: _struck, ...connection }) => connection);
+    const plain = recordingSdk(weaveForPrompt(clone(noStrike)));
+    await reviseArcs(await roundState('reweave', null, noStrike), cfg(plain));
+    expect(plain.calls[0].prompt).not.toContain(ARC_REWORK_STRUCK_IDS);
+  });
+
+  it.each([['reweave', null], ['send-back', 'Rethink the money thread.']])(
+    "a %s whose rework gives a new connection a struck one's id: the new one keeps its words and joins under an id of its own, the strike stands, and the meeting marks the new one new",
+    async (round, note) => {
+      const state = await roundState(round, note);
+      const rework = reworkOf((weave) => { weave.connections.push(clone(NEW)); });
+      const update = await reviseArcs(state, cfg(recordingSdk(note ? { ...rework, [CHANGED_EDITS_KEY]: [] } : rework)));
+      expect(connectionsOf(update.weave)).toEqual([['c1', false], ['c2', true], ['c3', false]]);
+      expect(update.weave.connections[1]).toEqual(leftByDirector().connections[1]);
+      expect(update.weave.connections[2]).toEqual({ ...NEW, id: 'c3' });
+      expect(update._weaveHandEditReport.changed).toEqual([]);
+      const { marks } = meetingMarksOf({ ...state, ...update });
+      expect(marks.map((m) => [m.path, m.before])).toEqual([['connections[#c3]', '']]);
+    }
+  );
+
+  it("the fact check's fix that gives a new connection a struck one's id: the same, numbered after every connection id the round has used", async () => {
+    const left = leftByDirector();
+    // The weave the round started from held a writer's c3 that the reweave took out.
+    const roundStart = weaveForPrompt(clone(left));
+    roundStart.connections.push({ id: 'c3', kind: 'line', joins: ['t1', 't4'], detail: 'The verdict and the heir share a line.' });
+    const fixState = {
+      ...atMeeting(),
+      weave: withFactCheckMark(clone(left), { at: 't1', ready: false, fixes: 0 }),
+      _weaveHandEdits: standingAtMeeting(null, FIXTURE_WEAVE, left),
+      _weaveMarks: { round: 'reweave', from: roundStart, at: 't' },
+      validationResults: { phase: 'arcs', passed: false, structuralIssues: ['T3: "Morgan paid Riley at the bar, out of sight" states what a buried memory held.'] }
+    };
+    const pass = { ...fixState, ...(await incrementArcRevision(fixState)) };
+    const update = await reviseArcs(pass, cfg(recordingSdk(reworkOf((weave) => { weave.connections.push(clone(NEW)); }))));
+    expect(connectionsOf(update.weave)).toEqual([['c1', false], ['c2', true], ['c4', false]]);
+    expect(update.weave.connections[2]).toEqual({ ...NEW, id: 'c4' });
+    expect(update._weaveHandEditReport.changed).toEqual([]);
+  });
+});

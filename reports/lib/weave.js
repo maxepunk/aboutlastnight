@@ -343,24 +343,87 @@ function weaveForJudge(weave) {
 }
 
 /**
- * A rework's weave with the connections the director struck that it never saw (they are
- * out of its view, weaveForRework) back where they sat in the weave it started from, still
- * struck. A connection the rework returned under a struck connection's id stays as the
- * rework wrote it: putting the strike back on it is the restore's work
- * (lib/hand-edit-diff.js settleEdits), which records it.
+ * Whether two connections are one connection whatever their words (brief 4.14a): the same
+ * kind, joining the same two threads in either order. A rework may reword a connection it
+ * brings back; another kind of touch between the same threads, or a touch between other
+ * threads, is another connection.
+ *
+ * @param {Object} a
+ * @param {Object} b
+ * @returns {boolean}
+ */
+function isSameConnection(a, b) {
+  if (!a || typeof a !== 'object' || !b || typeof b !== 'object') return false;
+  const ends = (connection) => (Array.isArray(connection.joins) ? connection.joins.map(textOf) : []).sort().join('\n');
+  return textOf(a.kind) === textOf(b.kind) && ends(a) === ends(b);
+}
+
+/**
+ * A connection id no connection holds (brief 4.14a): `c` and the number after the highest of
+ * the `c<n>` ids in use, so a connection a rework added never takes an id the round has used.
+ *
+ * @param {Iterable<string>} taken - the connection ids in use
+ * @returns {string}
+ */
+function freshConnectionId(taken) {
+  let highest = 0;
+  [...taken].forEach((id) => {
+    const m = /^c(\d+)$/.exec(textOf(id));
+    if (m) highest = Math.max(highest, Number(m[1]));
+  });
+  return `c${highest + 1}`;
+}
+
+/**
+ * A rework's weave with each connection the director struck as the weave it started from
+ * holds it (briefs 4.5 and 4.14a). The rework never saw them (they are out of its view,
+ * weaveForRework), so it may return another connection under a struck one's id:
+ * - the struck connection itself, returned under its id, in its words or others, stays as
+ *   the rework wrote it: putting the strike back on it is the restore's work
+ *   (lib/hand-edit-diff.js settleEdits), which records it, and a send-back's rework that
+ *   brings it back is a change of the director's edit, which it names with its reason;
+ * - any other connection under a struck id keeps its words and joins under an id of its own
+ *   (freshConnectionId), numbered after every connection id in use in the output, in the
+ *   weave the rework started from and in the weave the round started from (`roundStart`), so
+ *   the meeting's marks read it as new this round;
+ * - a struck connection the output then lacks goes back where it sat, still struck.
  *
  * @param {Object} output - the rework's weave
  * @param {Object} previous - the weave the rework started from
- * @returns {Object} `output` itself when no struck connection is missing from it
+ * @param {Object} [options]
+ * @param {Object|null} [options.roundStart] - the weave the director's round started from, the
+ *   version the meeting's marks are read against (state `_weaveMarks.from`), when a round ran
+ * @returns {Object} `output` itself when it needs neither
  */
-function withStruckConnections(output, previous) {
+function withStruckConnections(output, previous, { roundStart = null } = {}) {
   if (!isWeave(output) || !isWeave(previous)) return output;
-  const present = new Set(objectsOf(output.connections).map(connection => weaveIdOf(connection)));
-  const missing = objectsOf(previous.connections)
+  const struck = objectsOf(previous.connections)
     .map((connection, index) => ({ connection, index }))
-    .filter(({ connection }) => isStruck(connection) && weaveIdOf(connection) && !present.has(weaveIdOf(connection)));
-  if (missing.length === 0) return output;
-  const connections = Array.isArray(output.connections) ? [...output.connections] : [];
+    .filter(({ connection }) => isStruck(connection) && weaveIdOf(connection));
+  if (struck.length === 0) return output;
+  const taken = new Set([output, previous, roundStart]
+    .flatMap((weave) => objectsOf(isWeave(weave) ? weave.connections : []).map(connection => weaveIdOf(connection)))
+    .filter(Boolean));
+  let renamed = false;
+  let connections = Array.isArray(output.connections) ? [...output.connections] : [];
+  struck.forEach(({ connection: struckOne }) => {
+    const id = weaveIdOf(struckOne);
+    let kept = false;
+    connections = connections.map((connection) => {
+      if (weaveIdOf(connection) !== id) return connection;
+      if (!kept && isSameConnection(connection, struckOne)) {
+        kept = true;
+        return connection;
+      }
+      const fresh = freshConnectionId(taken);
+      taken.add(fresh);
+      renamed = true;
+      return { ...connection, id: fresh };
+    });
+  });
+  const present = new Set(objectsOf(connections).map(connection => weaveIdOf(connection)));
+  const missing = struck.filter(({ connection }) => !present.has(weaveIdOf(connection)));
+  if (!renamed && missing.length === 0) return output;
   missing.forEach(({ connection, index }) => {
     connections.splice(Math.min(index, connections.length), 0, JSON.parse(JSON.stringify(connection)));
   });
@@ -631,7 +694,9 @@ module.exports = {
   printedWeaveFields,
   occurrenceKeys,
   // Brief 4.14a: the connections the story keeps, the left-out threads a connection goes out
-  // with
+  // with, and the struck connection a rework returned, told from another under its id
   storyConnections,
-  leftOutThreadsJoined
+  leftOutThreadsJoined,
+  isSameConnection,
+  freshConnectionId
 };
