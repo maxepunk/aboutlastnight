@@ -300,8 +300,9 @@ describe("4.10: a concern and a changed edit sit beside the director's edit", ()
       }
     });
     const marks = deskMarks(d, d.contentBundle);
+    // 4.10c: the concern reads past its prefix and ids, and past its rule ids too.
     expect(deskMarksAt(marks, block(3, 0)).map((m) => [m.tone, m.text])).toEqual([
-      ['concern', 'T1: "Whether the verdict costs Alex anything" states a motive as fact.']
+      ['concern', '"Whether the verdict costs Alex anything" states a motive as fact.']
     ]);
     expect(JSON.stringify(marks)).not.toContain('the lede runs long');
   });
@@ -406,8 +407,9 @@ describe("4.10: a judge's issue left unresolved at the cap is anchored by the se
   test('the issue sits beside the block that holds its quote, in any case and with curly quotes', () => {
     const issue = 'T5: “thirteen sales landed in one account” contradicts the ledger, which records eleven. Report the ledger\'s count.';
     const d = payloadFor(article(), { lastEvaluation: AT_CAP([issue]) });
+    // 4.10c: the mark reads past the issue's rule ids.
     expect(deskMarksAt(deskMarks(d, d.contentBundle), block(2, 0)).map((m) => [m.tone, m.label, m.text])).toEqual([
-      ['judge', 'The judge could not fix this', issue]
+      ['judge', 'The judge could not fix this', issue.slice('T5: '.length)]
     ]);
   });
 
@@ -793,5 +795,68 @@ describe('4.10b: a mark found by its words sits beside a block of the kind its l
     expect(deskMarksAt(marks, block(1, last)).map((m) => m.text)).toEqual([
       '"I voted" makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.'
     ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.10c: the desk's last lines (the integrator's ruling 2 on 4.10b's minors). The judge's marks
+// read without their rule ids, since the director reads the line, not the rule; and a finding
+// stored before the fact check wrote lines reads as its message.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("4.10c: the judge's marks read without their rule ids", () => {
+  const AT_CAP = (issues, advisories = []) => ({ phase: 'article', ready: false, escalatedToHuman: true, overallScore: 0.4, structuralIssues: issues, advisoryWarnings: advisories });
+
+  test("an issue the judge could not fix at the cap, and its concern about the director's edit, each past its leading rule ids", () => {
+    const issue = 'T4, T6: “thirteen sales landed in one account” names who sold; the ledger names only the account. Report the account.';
+    const concern = `${DIRECTOR_EDIT_PREFIX}E2: T1: "Whether the verdict costs Alex anything" states a motive as fact.`;
+    const d = payloadFor(article(), { lastEvaluation: AT_CAP([issue], [concern]) });
+    const marks = deskMarks(d, d.contentBundle);
+    expect(deskMarksAt(marks, block(2, 0)).map((m) => [m.tone, m.text])).toEqual([
+      ['judge', '“thirteen sales landed in one account” names who sold; the ledger names only the account. Report the account.']
+    ]);
+    expect(deskMarksAt(marks, block(3, 0)).map((m) => [m.tone, m.text])).toEqual([
+      ['concern', '"Whether the verdict costs Alex anything" states a motive as fact.']
+    ]);
+  });
+
+  test('the rule ids taken off are the ones lib/workflow/nodes/node-helpers.js leadingRuleIds reads, with the colon after them; a finding that opens with none reads as written', () => {
+    const { leadingRuleIds } = require('../../lib/workflow/nodes/node-helpers');
+    // [the judge's finding, the mark's text]: a finding that quotes nothing on the page sits apart.
+    const CORPUS = [
+      ['T5: the ledger records eleven sales.', 'The ledger records eleven sales.'],
+      ['T4, T6: the account names no one by itself.', 'The account names no one by itself.'],
+      ['T4 and T6: the money went to one account.', 'The money went to one account.'],
+      ['T4/T6 : the vote count is wrong.', 'The vote count is wrong.'],
+      ['T4 & T12:the exposure names no one.', 'The exposure names no one.'],
+      ["T5,: the total is the ledger's.", "The total is the ledger's."],
+      ['The ledger records twelve sales (T5).', 'The ledger records twelve sales (T5).'],
+      ['T5 is breached: the ledger records thirteen sales.', 'T5 is breached: the ledger records thirteen sales.'],
+      ['t5: a lower-case id is no rule id.', 't5: a lower-case id is no rule id.']
+    ];
+    const d = payloadFor(article(), { lastEvaluation: AT_CAP(CORPUS.map(([finding]) => finding)) });
+    expect(deskMarks(d, d.contentBundle).apart.filter((m) => m.tone === 'judge').map((m) => m.text)).toEqual(CORPUS.map(([, shown]) => shown));
+    CORPUS.forEach(([finding, shown]) => {
+      const cut = finding.slice(0, finding.length - shown.length);
+      expect([finding, cut.match(/T\d{1,2}/g) || []]).toEqual([finding, cut ? leadingRuleIds(finding) : []]);
+    });
+  });
+});
+
+describe('4.10c: a finding stored before the fact check wrote lines reads as its message', () => {
+  test('a plain finding reads as its message, and a concern as its message past the prefix and the ids', () => {
+    const writers = article();
+    const directors = clone(writers);
+    directors.sections[1].content[2].content = 'Vic told me the job was mine.';
+    const directorEdits = carriedEdits(standingAfterSendBack(null, writers, directors, 'bundle'), directors);
+    const fresh = factCheckOf(directors, { directorEdits });
+    const stored = { ...fresh, findings: fresh.findings.map(({ line, ...rest }) => rest) };
+    const d = payloadFor(directors, { factCheck: stored });
+    const marks = deskMarks(d, d.contentBundle);
+    const photoFinding = fresh.findings.find((f) => f.kind === 'photoReferences');
+    const cardFinding = fresh.findings.find((f) => f.kind === 'cardFidelity');
+    expect([photoFinding.editId, cardFinding.editId]).toEqual([undefined, 'E1']);
+    expect(deskMarksAt(marks, block(1, 3)).map((m) => [m.tone, m.text])).toEqual([['structural', photoFinding.message]]);
+    expect(deskMarksAt(marks, block(1, 2)).map((m) => [m.tone, m.text])).toEqual([['concern', handEditDiff.concernFinding(cardFinding.message)]]);
   });
 });

@@ -199,8 +199,9 @@ describe('0926262\'s shape: the judge flags the director\'s edits after a send-b
     // director's edit; the evaluation's own view went with the harness, its last reader.
     const desk = deskView(data, data.contentBundle);
     const marks = [...Object.values(desk.marks.at).flat(), ...desk.marks.apart, ...desk.marks.resolved];
+    // Brief 4.10c: the desk reads a judge's concern past its rule ids, as a sentence.
     expect(marks.filter((mark) => mark.tone === 'concern').map((mark) => mark.text))
-      .toEqual(expect.arrayContaining([CLOSING_FINDING, THEORY_FINDING]));
+      .toEqual(expect.arrayContaining([CLOSING_FINDING.slice('T1: '.length), `The ${THEORY_FINDING.slice('T2: the '.length)}`]));
 
     // The stored article never carries the rework's list, and the report says every edit was kept.
     expect(next.values.contentBundle).not.toHaveProperty(CHANGED_EDITS_KEY);

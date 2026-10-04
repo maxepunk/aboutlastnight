@@ -1841,6 +1841,24 @@
   }
 
   /**
+   * The rule ids a judge's finding opens with, and the colon after them ("T5: ", "T4, T6: "): the
+   * ids as lib/workflow/nodes/node-helpers.js leadingRuleIds reads them, which the browser cannot
+   * import; a test holds the two equal.
+   */
+  var LEADING_RULE_IDS = /^\s*((?:T\d{1,2}(?:\s*(?:,|&|\/|and)\s*)?)+)\s*:\s*/;
+
+  /**
+   * What a judge's mark says at the desk (brief 4.10c): its finding past the leading rule ids, and a
+   * concern's past its prefix and ids first (concernFindingOf), since the director reads the line,
+   * not the rule. A finding that opens with no rule ids is shown as it is.
+   */
+  function judgeMarkText(text) {
+    var finding = concernFindingOf(text);
+    var m = LEADING_RULE_IDS.exec(finding);
+    return m ? capitalized(finding.slice(m[0].length)) : finding;
+  }
+
+  /**
    * What the page calls each of the weave's lines: ArcSelection.js heads each line with it,
    * and a mark whose line the page does not show is listed under it.
    */
@@ -3317,13 +3335,15 @@
    * The desk's marks (spec 6.2 and 6.3): each mark, `{key, tone, label, text, where, anchor}`,
    * beside the piece of the desk it is about, or apart:
    * - the judge's issues left unresolved at the cap (an escalated evaluation's structural
-   *   issues), each by the sentence it quotes (tone `judge`);
+   *   issues), each by the sentence it quotes (tone `judge`), read past its leading rule ids
+   *   (judgeMarkText; brief 4.10c);
    * - the fact check's findings (brief 4.7a), each by its place (findingPlace): its must-fix
    *   flags (`structural`) and its advisories (`advisory`); one under a director's edit's id is a
    *   concern (`concern`). Each says what is wrong in the article there, in the director's
    *   words: the finding's line for its place (findingLine; brief 4.10b), never the message the
    *   rework reads;
-   * - the judge's concerns about the director's edits, each beside the line it quotes (`concern`);
+   * - the judge's concerns about the director's edits, each beside the line it quotes (`concern`),
+   *   read past its prefix, its ids and its leading rule ids (judgeMarkText);
    * - the edits a round changed that a stop shows (changedEditsToShow), each beside what the
    *   director's text became (`changed`), with the rework's reason for a send-back's.
    * The judge's score, its notes on the writing and every other advisory of its are not marks.
@@ -3357,7 +3377,7 @@
 
     var evaluation = isPlainObject(d.lastEvaluation) && d.lastEvaluation.source !== FACT_CHECK_SOURCE ? d.lastEvaluation : null;
     if (evaluation && evaluation.escalatedToHuman === true) {
-      stringList(evaluation.structuralIssues).forEach(function (issue) { add('judge', issue, quotePlace(issue, ctx)); });
+      stringList(evaluation.structuralIssues).forEach(function (issue) { add('judge', judgeMarkText(issue), quotePlace(issue, ctx)); });
     }
 
     var occurrences = {};
@@ -3372,7 +3392,7 @@
 
     if (evaluation) {
       stringList(evaluation.advisoryWarnings).filter(isDirectorEditConcern).forEach(function (text) {
-        add('concern', concernFindingOf(text), quotePlace(text, ctx));
+        add('concern', judgeMarkText(text), quotePlace(text, ctx));
       });
     }
 
