@@ -306,10 +306,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   change's source prints as before: mapSchemaFor fills in its pointer at the note from the
  *   one constant the task's note clause reads (lib/map.js MEETING_NOTE_POINTER). The article
  *   and arc pins do not move.
+ * - Phase 4 (brief 4.7f), the director's desk edits are stated once: the rule for them, with
+ *   its send-back exception, lives in the rework's <HAND_EDITS>, and the task's beats and words
+ *   lines give them precedence without restating it. Each line's restated clauses become "the
+ *   director's edits first, as HAND_EDITS gives them" (the beats line -51, the words line -83;
+ *   article-journalist 31306 -> 31172). The outline and arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['cd1098a0c9d73955db806c230fd650825ad546d21f69ade988abc98266d0d5d6', 18299],
-  'article-journalist': ['d9c28010915c8720dcd764c0c16d6434ddb63a6b04eebf31519dd807c671940a', 31306],
+  'article-journalist': ['2b440b4d69685f2c792341dc7950781d3bc0c8405dd7acb6830236bd58e9cb17', 31172],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
 

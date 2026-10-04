@@ -342,6 +342,11 @@ describe('evaluator → reviser wiring (the write side)', () => {
 // edit only where the note's structural change means it no longer fits, and returns
 // each one it changed, with why. The sentence about the evaluator's notes predating the
 // edits is gone: the judge now reads the edits.
+//
+// Brief 4.7f: a cut takes its material with it. The cut check flags only the cut's own
+// sentences coming back, so the rule asks the rework to retell the cut in no other words, under
+// the same exception on a send-back. The rule and its exception are stated here alone: the
+// article writer's task gives these edits precedence and restates neither.
 describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
   const { diffOutline, standingAfterSendBack } = require('../hand-edit-diff');
   let standing;
@@ -349,8 +354,8 @@ describe('<HAND_EDITS> block (spec 2026-09-19 §4.3; F1)', () => {
     standing = standingAfterSendBack(null, { lede: { hook: 'Old' }, closing: { finalLine: 'The ledger never lies.' } }, { lede: { hook: 'New' }, closing: {} }, 'outline');
   });
   const base = { phase: 'outline', revisionCount: 1, validationResults: null, previousOutput: { lede: { hook: 'New' }, closing: {} } };
-  const SEND_BACK_RULE = "An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
-  const AUTOMATIC_RULE = "This automatic pass fixes the writer's text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out.";
+  const SEND_BACK_RULE = "An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, each removed sentence stays out, and each cut stays out with its material, which this rework retells in no other words, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.";
+  const AUTOMATIC_RULE = "This automatic pass fixes the writer's text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, each removed sentence stays out, and each cut stays out with its material, which this rework retells in no other words.";
 
   it('sits after HUMAN FEEDBACK and before the instructions (WHAT THIS REWORK DOES since phase 3)', () => {
     const { contextSection, previousOutputSection } = buildRevisionContext({ ...base, humanFeedback: 'Tighten it', handEdits: standing });

@@ -1031,6 +1031,12 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // carries; ai-nodes.js). EDIT_LINES_GUIDE says how to read the lines, in the words
   // the judges' section uses.
   //
+  // Brief 4.7f: the article's rule is stated here alone; the article writer's task gives these
+  // edits precedence ("the director's edits first, as HAND_EDITS gives them") and restates
+  // neither the rule nor its exception. A cut takes its material with it, under the same
+  // exception: the cut check finds only the cut's own sentences coming back
+  // (lib/hand-edit-diff.js), so the rule asks the rework to retell the cut in no other words.
+  //
   // Brief 4.5: the story meeting's changes have their own wording, by the round mark: an
   // automatic pass and a reweave keep every change of the director's (code holds both to
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
@@ -1045,6 +1051,8 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // note needs it, saying why. The wording names beats, photos and the top photo, so it is
   // the map's when the version the rework starts from is a map (mapMode, above).
   const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each removed sentence stays out, and the top photo they chose stays the top photo.';
+  // Brief 4.7f: the article's edits, one list for both kinds of rework, the cut's material in it.
+  const BUNDLE_EDITS_FINAL = 'the text the director wrote stays exactly as written, each block they moved stays where they put it, each removed sentence stays out, and each cut stays out with its material, which this rework retells in no other words';
   let handEditsRule;
   if (mapMode) {
     handEditsRule = humanFeedback
@@ -1060,8 +1068,8 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
     }
   } else {
     handEditsRule = humanFeedback
-      ? `An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
-      : 'This automatic pass fixes the writer\'s text, in a block the director moved too. An edit is the final word on its text, so the text the director wrote stays exactly as written, each block they moved stays where they put it, and each cut and each removed sentence stays out.';
+      ? `An edit is the final word on its text, so ${BUNDLE_EDITS_FINAL}, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
+      : `This automatic pass fixes the writer's text, in a block the director moved too. An edit is the final word on its text, so ${BUNDLE_EDITS_FINAL}.`;
   }
   let handEditsIntro;
   if (meetingMode) handEditsIntro = `The director's changes to the weave at the story meeting. ${WEAVE_EDIT_LINES_GUIDE}`;
