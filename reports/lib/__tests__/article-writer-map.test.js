@@ -420,9 +420,9 @@ describe("4.7f: the director's desk edits, stated once", () => {
   /** The round-2 note: it asks for the card the director cut at the desk in round 1. */
   const BRING_BACK = 'Bring the DNA test card back into The Story, right after "Then the test came back."';
   /** The rule's line on a cut, as <HAND_EDITS> states it. */
-  const CUT_RULE = 'and each cut stays out with its material, which this rework retells in no other words';
+  const CUT_RULE = 'What a block they cut said is not said again anywhere in the article.';
   /** The rule's exception, which <HAND_EDITS> states on a send-back. */
-  const EXCEPTION = "unless the structural change the director's note asks for means it no longer fits";
+  const EXCEPTION = 'unless the structural change their note asks for means it no longer fits';
   /** Each rule-set file's block in the prompts (the world, the truth rules, the mode block, the craft), the director's wording. */
   const RULE_SET_BLOCK = /^<(world|truth-rules|mode-[a-z-]+|craft-[a-z]+)>$[\s\S]*?^<\/\1>$/gm;
 
@@ -460,15 +460,17 @@ describe("4.7f: the director's desk edits, stated once", () => {
 
     const edits = block(user, 'HAND_EDITS');
     expect(edits).toContain('E1 (section "the-story", evidence-card p-dna, cut)');
-    expect(edits).toContain(`${CUT_RULE}, ${EXCEPTION}.`);
+    expect(edits).toContain(EXCEPTION);
+    expect(edits).toContain(CUT_RULE);
   });
 
-  it("a cut card's material: <HAND_EDITS> asks the rework to retell it in no other words, on a send-back and on an automatic pass", async () => {
+  it("a cut card's content: <HAND_EDITS> says what the cut block said is not said again, on a send-back and on an automatic pass", async () => {
     const sendBack = block((await cutCardRework({ round: 1 })).user, 'HAND_EDITS');
     expect(sendBack).toContain('E1 (section "the-story", evidence-card p-dna, cut)');
-    expect(sendBack).toContain(`${CUT_RULE}, ${EXCEPTION}.`);
+    expect(sendBack).toContain(EXCEPTION);
+    expect(sendBack).toContain(CUT_RULE);
     const automatic = block((await cutCardRework({ round: 0 })).user, 'HAND_EDITS');
-    expect(automatic).toContain(`${CUT_RULE}.`);
+    expect(automatic).toContain(CUT_RULE);
     expect(automatic).not.toContain(EXCEPTION);
   });
 

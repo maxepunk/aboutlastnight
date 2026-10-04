@@ -436,7 +436,18 @@ const REMOVED_PHRASES = [
 
   // Phase 4, 4.6e: "no note" means no approval note at the meeting.
   'empty when the director changed nothing and left no note',
-  'the director changed nothing at the meeting and left no note'
+  'the director changed nothing at the meeting and left no note',
+
+  // Phase 4, 4.7f and its merge: the director's desk edits are stated once, in <HAND_EDITS>,
+  // with the send-back's exception first; the article task gives precedence. 4.7e's clauses
+  // and 4.7f's first wording went. ("An edit is the final word on its text" alone stays: the
+  // judges print it.)
+  'a block the director has cut stays out',
+  'a block the director has added stays, whatever its material',
+  'the text the director has written into the article stays as written',
+  'a block the director has moved stays where the director put it',
+  'which this rework retells in no other words',
+  'An edit is the final word on its text, so the text the director wrote'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

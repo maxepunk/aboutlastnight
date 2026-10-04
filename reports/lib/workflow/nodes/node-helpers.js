@@ -1051,8 +1051,11 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // note needs it, saying why. The wording names beats, photos and the top photo, so it is
   // the map's when the version the rework starts from is a map (mapMode, above).
   const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each removed sentence stays out, and the top photo they chose stays the top photo.';
-  // Brief 4.7f: the article's edits, one list for both kinds of rework, the cut's material in it.
-  const BUNDLE_EDITS_FINAL = 'the text the director wrote stays exactly as written, each block they moved stays where they put it, each removed sentence stays out, and each cut stays out with its material, which this rework retells in no other words';
+  // Brief 4.7f: the article's edits, one list for both kinds of rework. The integrator, at
+  // 4.7f's merge: the send-back's exception comes first, as the map's and the meeting's do,
+  // and what a cut block said has a sentence of its own, bounded to that block.
+  const BUNDLE_EDITS_FINAL = 'the text the director wrote stays exactly as written, each block they moved stays where they put it, each removed sentence stays out, and each block they cut stays out';
+  const BUNDLE_CUT_CONTENT = 'What a block they cut said is not said again anywhere in the article.';
   let handEditsRule;
   if (mapMode) {
     handEditsRule = humanFeedback
@@ -1068,8 +1071,8 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
     }
   } else {
     handEditsRule = humanFeedback
-      ? `An edit is the final word on its text, so ${BUNDLE_EDITS_FINAL}, unless the structural change the director's note asks for means it no longer fits. List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
-      : `This automatic pass fixes the writer's text, in a block the director moved too. An edit is the final word on its text, so ${BUNDLE_EDITS_FINAL}.`;
+      ? `Each edit of the director's is final unless the structural change their note asks for means it no longer fits: ${BUNDLE_EDITS_FINAL}. ${BUNDLE_CUT_CONTENT} List each edit this rework changes, removes or brings back in ${CHANGED_EDITS_KEY}, with its id and one sentence on why.`
+      : `This automatic pass fixes the writer's text, in a block the director moved too. Each edit of the director's is final: ${BUNDLE_EDITS_FINAL}. ${BUNDLE_CUT_CONTENT}`;
   }
   let handEditsIntro;
   if (meetingMode) handEditsIntro = `The director's changes to the weave at the story meeting. ${WEAVE_EDIT_LINES_GUIDE}`;
