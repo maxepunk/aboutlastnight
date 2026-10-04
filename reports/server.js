@@ -863,9 +863,8 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     // weave, note}`. lib/meeting.js meetingResume holds the weave to the director-side
     // schema, refusing a malformed one with its reason, and writes the director's version
     // and their standing edits; a reweave and a send-back are the director's round, marked.
-    // The note joins the standing notes: an approval note on an approve (the arc
-    // selection's _outlineGuidance is written no more), a rejection note on a round. The note
-    // of a round that did not run stands only if this action sends it again
+    // The note joins the standing notes: an approval note on an approve, a rejection note on
+    // a round. The note of a round that did not run stands only if this action sends it again
     // (withdrawUnrunRoundNote). Taken only at the meeting's own stop (I3): `{approved: true}`
     // posted at another stop would approve that stop. The arc selection's old shape is
     // refused by name.

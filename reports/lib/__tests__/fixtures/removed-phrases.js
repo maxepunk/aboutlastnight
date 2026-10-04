@@ -349,7 +349,46 @@ const REMOVED_PHRASES = [
 
   // Phase 4, 4.6b: the map's task names the approval note marked arc-selection, the one
   // the map's check counts, not any standing note.
-  'the standing note marked arc-selection'
+  'the standing note marked arc-selection',
+
+  // Phase 4, 4.7a: the article judge scores the truth criteria alone (spec 6.2). Its
+  // frame, its craft findings and its weighted criteria went, and the detective's judge
+  // with its old stages (R1). The card-count line is on the list above.
+  'IMMUTABLE INPUTS (DO NOT suggest changes to these',
+  '- selectedArcs: The narrative arcs are locked',
+  '- outline: The article structure is approved',
+  '- evidenceBundle: The evidence is curated and final',
+  'how the ARTICLE EXECUTES the outline',
+  'EVALUATION GOAL: COMPELLING GIFT FOR PLAYERS',
+  "celebrates the players' gameplay experience",
+  'Visual distribution serves narrative flow, NOT quota compliance',
+  'CRAFT FINDINGS (should-consider)',
+  'THE CRAFT GUIDANCE the article writer followed',
+  'CRITICAL: Your feedback MUST be actionable',
+  'Human always makes final decision',
+  'STRUCTURAL issues block. ADVISORY issues are warnings',
+  'Evaluate this article content:',
+  'Is this article ready for human review?',
+  'reporterMode scores it',
+  'overallScore is the weighted average of the weighted criteria',
+  'You are the ARTICLE Evaluator',
+  'Report MUST use third-person investigative voice',
+
+  // Phase 4, 4.7b: the article writer reads the settled weave and the map (<STORY_MAP>),
+  // and code stamps the map's headline, deck and top photo (R7); the outline, its hero
+  // line and its old section ids went. The detective's article writer and rework went
+  // with its old stages (R1); its character-voice.md keeps its own voice line.
+  'APPROVED OUTLINE:',
+  // Case-sensitive: the record can describe a "hero image:" in a document's text.
+  /HERO IMAGE:/,
+  '<the HERO IMAGE filename>',
+  'none chosen: use the first photo the outline places',
+  'It prints at the top of the article, as "heroImage"',
+  'one of lede, the-story, follow-the-money, the-players, whats-missing or closing',
+  'Remember: You are IMPROVING, not regenerating.',
+  'CRITICAL REVISION RULES:',
+  'DETECTIVE VOICE:',
+  'Before generating, internalize Detective Anondono'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
