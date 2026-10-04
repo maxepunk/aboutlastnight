@@ -48,6 +48,8 @@ const { meetingResume, meetingCheckpointData, unrunRoundNoteIndex } = require('.
 const { mapResume, mapCheckpointData, settledStoryOf } = require('./lib/map');
 const { keptPhotoFilenames } = require('./lib/workflow/nodes/ai-nodes');
 const { isWeave } = require('./lib/weave');
+// Task 4.11 (R2): a thread from before the story meeting, refused and sent back to the meeting.
+const { oldThreadOf, oldThreadRefusal, oldThreadRollbackState } = require('./lib/old-thread');
 const { createLoginRateLimiter } = require('./lib/login-rate-limiter');
 const { staticGuard } = require('./lib/static-guard');
 const { buildOutcomeRecord, recordSessionOutcome, getSessionOutcome, clearSessionOutcome } = require('./lib/session-outcome');
@@ -1417,9 +1419,18 @@ app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
         // endpoint renders degraded. H2: theme, or a journalist thread is rendered
         // with whatever the console's toggle happens to say. H8: inProgress +
         // lastOutcome let a client reattach to a run instead of 409-ing blind.
-        const checkpoint = interrupted
-            ? await buildCompleteCheckpointData(interruptData, graphState.values)
-            : null;
+        //
+        // Task 4.11 (R2): `oldThread` flags a thread from before the story meeting, so the
+        // console shows the message and the rollback to the meeting before any stop renders.
+        // Its stop is sent as its type and the flag alone: no stop's payload is built from
+        // the old shapes.
+        const oldThread = oldThreadOf(graphState.values, interruptData?.type || null);
+        let checkpoint = null;
+        if (interrupted) {
+            checkpoint = oldThread
+                ? { type: interruptData.type, oldThread }
+                : await buildCompleteCheckpointData(interruptData, graphState.values);
+        }
         res.json({
             sessionId,
             currentPhase: graphState.values.currentPhase,
@@ -1428,7 +1439,8 @@ app.get('/api/session/:id/checkpoint', requireAuth, async (req, res) => {
             checkpoint,
             theme: graphState.values.theme || 'journalist',
             inProgress: isSessionLocked(sessionId),
-            lastOutcome: getSessionOutcome(sessionId) || null
+            lastOutcome: getSessionOutcome(sessionId) || null,
+            oldThread
         });
 
     } catch (error) {
@@ -1742,6 +1754,14 @@ app.post('/api/session/:id/approve', requireAuth, async (req, res) => {
 
         // Check if graph is interrupted using native LangGraph pattern
         const graphState = await graph.getState(config);
+
+        // Task 4.11 (R2): a thread from before the story meeting never resumes on the new
+        // stages, paused or complete; the director rolls it back to the meeting.
+        const oldThread = oldThreadOf(graphState?.values, getInterruptData(graphState)?.type || null);
+        if (oldThread) {
+            return res.status(409).json(oldThreadRefusal(sessionId, oldThread));
+        }
+
         if (!graphState || !isGraphInterrupted(graphState)) {
             const stateValues = graphState?.values || {};
             if (stateValues.currentPhase === 'error' && stateValues.articleApproved === true) {
@@ -1846,12 +1866,24 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
         }
 
+        // Task 4.11 (R2): a thread from before the story meeting rolls back to the meeting or
+        // a point before it, which write the weave fresh; every later point would replay the
+        // old shapes.
+        const oldThread = oldThreadOf(session.state, session.checkpointType);
+        if (oldThread && !oldThread.rollbackPoints.includes(rollbackTo)) {
+            return res.status(409).json(oldThreadRefusal(sessionId, oldThread));
+        }
+
         const { graph, config } = createGraphAndConfig(sessionId, session.state.theme || 'journalist', {
             checkpointer: sharedCheckpointer
         });
 
-        // Build rollback state (synchronous setup).
+        // Build rollback state (synchronous setup). An old thread's arc counters are the old
+        // arc stage's, so the meeting's point starts them over for it (task 4.11).
         const initialState = buildRollbackState(rollbackTo);
+        if (oldThread) {
+            Object.assign(initialState, oldThreadRollbackState(rollbackTo));
+        }
 
         // ROLL-4: stash prior full-context so AwaitFullContext pre-fills re-collection
         // whenever the rollback CLEARS those channels. buildRollbackState nulls the
@@ -1933,6 +1965,13 @@ app.post('/api/session/:id/resume', requireAuth, async (req, res) => {
         const session = await getSessionState(sessionId);
         if (!session) {
             return res.status(404).json({ sessionId, exists: false, error: 'Session not found' });
+        }
+
+        // Task 4.11 (R2): a thread from before the story meeting never replays on the new
+        // stages, `force` or not; the director rolls it back to the meeting.
+        const oldThread = oldThreadOf(session.state, session.checkpointType);
+        if (oldThread) {
+            return res.status(409).json(oldThreadRefusal(sessionId, oldThread));
         }
 
         // B9: re-invoking a COMPLETE thread replays it from START. Every checkpoint's

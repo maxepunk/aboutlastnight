@@ -3509,6 +3509,32 @@
     };
   }
 
+  // ── A thread from before the story meeting (phase 4, task 4.11; R2) ─────────
+
+  /**
+   * What the console shows for a thread the server flags as started before the story
+   * meeting (lib/old-thread.js; GET /checkpoint's `oldThread`, and a refused request's
+   * body): the server's message, a button for the rollback it names, and the rollback
+   * points the stepper opens. app.js shows it in place of the stop, and above a finished
+   * session's completion. The message and the points are the server's; the console words
+   * the button from its stop labels.
+   *
+   * @param {Object|null} holder - a stop's payload, a loaded completion or a refused request's body
+   * @param {Object} labels - the console's stop labels (utils.js CHECKPOINT_LABELS)
+   * @returns {{message: string, rollbackTo: string, rollbackLabel: string, rollbackPoints: string[]}|null}
+   */
+  function oldThreadView(holder, labels) {
+    var flag = isPlainObject(holder) ? holder.oldThread : null;
+    if (!isPlainObject(flag) || !asString(flag.message) || !asString(flag.rollbackTo)) return null;
+    var label = isPlainObject(labels) && asString(labels[flag.rollbackTo]) ? labels[flag.rollbackTo].toLowerCase() : flag.rollbackTo;
+    return {
+      message: flag.message,
+      rollbackTo: flag.rollbackTo,
+      rollbackLabel: 'Roll back to the ' + label,
+      rollbackPoints: stringList(flag.rollbackPoints)
+    };
+  }
+
   // ── RevisionDiff's key walk (fix 3.7b) ──────────────────────────────────────
 
   /**
@@ -3648,6 +3674,8 @@
     locatingPassages: locatingPassages,
     headingsOf: headingsOf,
     findingSectionId: findingSectionId,
+    // Phase 4, task 4.11: a thread from before the story meeting
+    oldThreadView: oldThreadView,
     // Fix 3.7b: RevisionDiff's key walk skips the writer's questions
     revisionDiffKeys: revisionDiffKeys,
     REVISION_DIFF_IGNORED_KEYS: REVISION_DIFF_IGNORED_KEYS

@@ -128,12 +128,17 @@ beforeEach(() => {
   mockGraph = null;
 });
 
+// Task 4.11: the threads below are the new code's, so each holds a weave. A thread with
+// none, paused at the story meeting or later or complete, is from before the meeting and
+// is refused before these guards run (old-thread-guard.test.js).
+const WEAVE = { threads: [] };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1.1 — B9: resuming a complete thread re-runs the whole paid pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 describe('POST /resume on a complete session (B9)', () => {
   it('409s with currentPhase:complete instead of re-running the pipeline', async () => {
-    mockGraph = graphAtPhase({ currentPhase: 'complete', theme: 'journalist' });
+    mockGraph = graphAtPhase({ currentPhase: 'complete', theme: 'journalist', weave: WEAVE });
 
     const res = await send('POST', '/api/session/071826/resume', {});
 
@@ -144,7 +149,7 @@ describe('POST /resume on a complete session (B9)', () => {
   });
 
   it('re-runs deliberately when the body carries force:true', async () => {
-    mockGraph = graphAtPhase({ currentPhase: 'complete', theme: 'journalist' });
+    mockGraph = graphAtPhase({ currentPhase: 'complete', theme: 'journalist', weave: WEAVE });
 
     const res = await send('POST', '/api/session/071826/resume', { force: true });
 
@@ -155,7 +160,7 @@ describe('POST /resume on a complete session (B9)', () => {
   });
 
   it('still resumes a thread paused mid-pipeline (guard is complete-only)', async () => {
-    mockGraph = graphInterruptedAt({ currentPhase: 2.35, theme: 'journalist' }, { type: 'arc-selection' });
+    mockGraph = graphInterruptedAt({ currentPhase: 2.35, theme: 'journalist', weave: WEAVE }, { type: 'arc-selection' });
 
     const res = await send('POST', '/api/session/071826/resume', {});
 
@@ -414,6 +419,7 @@ describe('GET /checkpoint payload completeness (H1, H2, H8)', () => {
   const STATE = {
     currentPhase: 1.66,
     theme: 'detective',
+    weave: WEAVE,
     sessionPhotos: ['a.jpg'],
     sessionConfig: { roster: ['Vic'] }
   };

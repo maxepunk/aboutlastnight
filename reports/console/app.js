@@ -22,6 +22,8 @@ const { decideAttachFallback, shouldApplyAttachPoll, completedResultFrom } = win
 const { noteSlotKey, meetingPayload, meetingWeaveOf } = window.Console.checkpointViewLogic;
 // The map's approve for the fallback below (task 4.9).
 const { mapPayload, mapDraftOf } = window.Console.checkpointViewLogic;
+// A thread from before the story meeting: the server's message and its rollback (task 4.11).
+const { oldThreadView } = window.Console.checkpointViewLogic;
 
 // How long an attached stream may say nothing before the watchdog re-reads
 // /checkpoint, and how often it looks. The server's heartbeat is an SSE COMMENT
@@ -212,17 +214,35 @@ function assignSse(sseRef, eventSource) {
  * A 409 from the session lock means a run we are not attached to is already going
  * (H8) — the director refreshed, or two tabs are open. Attaching to its stream is
  * the useful answer; a banner on the session form, with progress hidden, was not.
- * The OTHER 409 is Task 1's B9 refusal: it names currentPhase 'complete' and is a
- * real error — that thread must not be resumed.
+ * The OTHER 409s are real errors: Task 1's B9 refusal names currentPhase 'complete'
+ * (that thread must not be resumed), and task 4.11's carries the server's flag for a
+ * thread from before the story meeting, whose message goes on the banner.
  */
 function handlePostFailure(dispatch, sseRef, sessionId, response) {
-  if (response.status === 409 && response.currentPhase !== 'complete') {
+  if (response.status === 409 && response.currentPhase !== 'complete' && !oldThreadView(response, CHECKPOINT_LABELS)) {
     // streamingAttach closes the current stream before opening its own.
     dispatch({ type: APP_ACTIONS.ATTACH_REQUESTED, sessionId });
     return;
   }
   eventSourceClose(sseRef);
   dispatch({ type: APP_ACTIONS.SET_ERROR, message: response.error });
+}
+
+/**
+ * The notice for a thread from before the story meeting (task 4.11; R2): the server's
+ * message, and a button that opens the rollback modal on the rollback it names, as a
+ * stepper click does. `view` is oldThreadView's.
+ */
+function oldThreadNotice(view, onRollback) {
+  return React.createElement('div', { className: 'flex flex-col gap-md', role: 'alert' },
+    React.createElement('div', { className: 'revision-diff__warning' }, view.message),
+    React.createElement('button', {
+      type: 'button',
+      className: 'btn btn-primary',
+      onClick: () => onRollback(view.rollbackTo),
+      'aria-label': view.rollbackLabel
+    }, view.rollbackLabel)
+  );
 }
 
 function App() {
@@ -546,6 +566,8 @@ function App() {
 
   // Build main content
   let content;
+  // Task 4.11 (R2): the server's flag for a thread from before the story meeting, at its stop.
+  const oldThreadAtStop = oldThreadView(state.checkpointData, CHECKPOINT_LABELS);
 
   if (!state.sessionId) {
     // No session: show session start
@@ -583,17 +605,38 @@ function App() {
     // is the only route to the existing RollbackPanel flow, and re-running the
     // article or outline of a finished session with a note is a real need.
     // Clicking a step only OPENS the modal; nothing is POSTed until Confirm, and
-    // Cancel returns here untouched.
+    // Cancel returns here untouched. Task 4.11: a session from before the story
+    // meeting gets the server's message and rollback above the completion, and its
+    // stepper opens only the points the server allows it.
+    const oldThread = oldThreadView(state.completedResult, CHECKPOINT_LABELS);
     content = React.createElement(React.Fragment, null,
       state.completedStepper && React.createElement(PipelineProgress, {
         currentCheckpoint: 'article',
-        completedCheckpoints: CHECKPOINT_ORDER,
+        completedCheckpoints: oldThread ? oldThread.rollbackPoints : CHECKPOINT_ORDER,
         onRollback: (target) => setRollbackTarget(target)
       }),
+      oldThread && oldThreadNotice(oldThread, setRollbackTarget),
       React.createElement(CompletionView, {
         result: { ...state.completedResult, sessionId: state.sessionId },
         onNewSession: () => dispatch({ type: APP_ACTIONS.RESET_SESSION })
       })
+    );
+  } else if (state.checkpointType && oldThreadAtStop) {
+    // Task 4.11 (R2): a thread from before the story meeting, paused at a stop. The
+    // server sends the stop as its type and the flag; the console shows the message and
+    // the rollback in place of the stop, whose component never renders, and the stepper
+    // opens only the points the server allows it.
+    content = React.createElement(React.Fragment, null,
+      React.createElement(PipelineProgress, {
+        currentCheckpoint: state.checkpointType,
+        completedCheckpoints: oldThreadAtStop.rollbackPoints,
+        onRollback: (target) => setRollbackTarget(target)
+      }),
+      React.createElement(CheckpointShell, {
+        type: state.checkpointType,
+        phase: state.phase,
+        data: state.checkpointData
+      }, oldThreadNotice(oldThreadAtStop, setRollbackTarget))
     );
   } else if (state.checkpointType) {
     // At checkpoint: render PipelineProgress + CheckpointShell with generic content

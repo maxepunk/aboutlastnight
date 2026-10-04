@@ -211,7 +211,9 @@
    * needs is rebuilt from the response: the recorded outcome (in-memory, so null
    * after a server restart) plus a SERVABLE `htmlUrl` derived from the session id.
    * `sessionId` and `currentPhase` are stamped last so a stale recorded value
-   * cannot override them.
+   * cannot override them. Task 4.11: the server's flag for a thread from before the
+   * story meeting (`oldThread`) rides along when there is one, so App shows its
+   * message and its rollback above the completion.
    *
    * @param {object|null} checkpointResponse - GET /api/session/:id/checkpoint body
    * @param {string} [fallbackSessionId] - when the response carries no sessionId
@@ -224,6 +226,7 @@
     const links = buildReportLinks(sessionId, resp.lastOutcome);
     return {
       ...(resp.lastOutcome || {}),
+      ...(resp.oldThread ? { oldThread: resp.oldThread } : {}),
       sessionId: sessionId,
       currentPhase: 'complete',
       htmlUrl: links[links.length - 1] || null
