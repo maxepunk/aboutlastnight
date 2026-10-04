@@ -459,6 +459,11 @@
     return null;
   }
 
+  /** A block its text names (blockIdentity null): the only kind that pairs by its opening words or its place. */
+  function namedByText(block) {
+    return blockIdentity(block) === null;
+  }
+
   /**
    * A section's blocks in two versions, paired: a block with its unchanged self; then a
    * photo, a card or a reference with itself, whatever its other fields; then a block with one
@@ -466,7 +471,11 @@
    * before it does not throw it off; then, for what is left, the block in the same place when
    * it is of the same type (task 4.3c). Each block pairs once, with the first one the test
    * finds. Every pair is of one type, so a block retyped (the JSON editor's) pairs with
-   * nothing: it was deleted and another inserted.
+   * nothing: it was deleted and another inserted. A photo, a card or a reference pairs by its
+   * name alone, never by its opening words or its place (task 4.5d): two photos with different
+   * filenames, or two cards with different tokenIds, never pair, so a swap of two of them is
+   * two moves, each keeping its own caption or text, and one renamed through the JSON editor is
+   * deleted and another inserted, as a block retyped is.
    *
    * @param {Array} openedBlocks - the section in the older version
    * @param {Array} currentBlocks - the section in the newer version
@@ -500,9 +509,10 @@
     }
     pairOn(trimmedCanonical);
     pairOn(blockIdentity);
-    pairOn(blockKey);
+    pairOn(function (block) { return namedByText(block) ? blockKey(block) : null; });
     current.forEach(function (block, ai) {
-      if (!usedCurrent[ai] && ai < opened.length && !usedOpened[ai] && blockType(opened[ai]) === blockType(block)) {
+      if (!usedCurrent[ai] && ai < opened.length && !usedOpened[ai] && blockType(opened[ai]) === blockType(block)
+        && namedByText(opened[ai]) && namedByText(block)) {
         usedOpened[ai] = true;
         usedCurrent[ai] = true;
         byPlace.push({ bi: ai, ai: ai });

@@ -2660,3 +2660,91 @@ describe('4.5c fix round 1: a look reads the director\'s version against what th
       .toEqual([['E1', 'threads[#t3].role', 'complicates-it', 'mirrors-it'], ['E2', 'headline', WEAVE.headline, 'The Ledger Kept Talking.']]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5d: a connection the director brought back, and a swap is two moves
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The integrator's rulings 2 and 4 on run 4's follow-ups (progress.md, 2026-10-03).
+// - A connection the director struck and later brought back is theirs by its place in the
+//   weave, and its words are the writer's, as a block moved at the desk is. It was one edit
+//   of the whole connection held as the director's text, so code undid a pass's rewording of
+//   a false link in it, a pass that dropped it had it written over the connection the pass
+//   put at its index, and a finding that quoted it was filed as a concern on the director's
+//   edit (scratch 4.5d/brought-back-probe.js).
+// - Two photos with different filenames, or two cards with different tokenIds, never pair:
+//   a swap is two moves, each keeping its own caption or text. The by-place pass paired them
+//   by their index, so a desk swap recorded the writer's captions as the director's, and a
+//   restore after a pass that swapped two photos wrote the director's caption under the
+//   other photo, against T13 (scratch 4.3c-review/swap.js and sametype.js).
+// Invented text.
+describe('4.5d: two photos or two cards swapped are two moves, each keeping its own caption or text', () => {
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const B = paragraph('Bravo paragraph follows with another long first line of text.');
+  const T = paragraph('Tango paragraph sits alone in the second section of the article.');
+  const X = { type: 'photo', filename: 'x.jpg', caption: 'Mel lays out the theory at the whiteboard.' };
+  const Y = { type: 'photo', filename: 'y.jpg', caption: 'Taylor and Sam talk at the bar, early.' };
+  const X2 = { ...X, caption: 'Six people around the whiteboard, late.' };
+  const K = { type: 'evidence-card', tokenId: 'jes002', headline: 'Jess lets him go', content: 'You can have him. I never wanted the money anyway.' };
+  const L = { type: 'evidence-card', tokenId: 'vic001', headline: 'The replacement plan', content: 'He is out. You are in.' };
+  const K2 = { ...K, headline: 'Jess gave him up' };
+  /** An article whose section "s" holds `s` and whose section "t" holds `t`. */
+  const article = (s, t) => ({
+    metadata: { sessionId: '0926262' },
+    headline: { main: 'The Room Voted Five to Four' },
+    sections: [
+      { id: 's', type: 'narrative', content: s.map(clone) },
+      { id: 't', type: 'narrative', content: t.map(clone) }
+    ]
+  });
+  /** Each photo and card a version prints, as [section id, its filename or tokenId, its caption or headline]. */
+  const named = (output) => output.sections.flatMap((s) => s.content
+    .filter((b) => b.filename || b.tokenId)
+    .map((b) => [s.id, b.filename || b.tokenId, b.caption || b.headline]));
+  const nameOf = (block) => block.filename || block.tokenId;
+
+  test.each([
+    ['photos', X, Y, 'photo'],
+    ['cards', K, L, 'evidence-card']
+  ])('a desk swap of two %s across sections is two moves, each with its own caption or text', (_kind, P, Q, type) => {
+    const { edits } = D.standingAfterSendBack(null, article([A, P, B], [T, Q]), article([A, Q, B], [T, P]), 'bundle');
+    expect(edits.map((e) => [e.id, e.path, e.from, e.after])).toEqual([
+      ['E1', 'sections[#s].content[1]', 't', Q],
+      ['E2', 'sections[#t].content[1]', 's', P]
+    ]);
+    expect(D.formatEditLines(edits)).toBe([
+      `E1 (section "s", ${type} ${nameOf(Q)}, moved from section "t")`,
+      `E2 (section "t", ${type} ${nameOf(P)}, moved from section "s")`
+    ].join('\n'));
+  });
+
+  test.each([
+    ['photos', X, X2, Y, 'caption'],
+    ['cards', K, K2, L, 'headline']
+  ])("a pass that swaps two %s: the director's field goes back on its own block, and the other block keeps its own", (_kind, P, P2, Q, field) => {
+    const sentBack = article([A, P2, B], [T, Q]);
+    const standing = D.standingAfterSendBack(null, article([A, P, B], [T, Q]), sentBack, 'bundle');
+    expect(standing.edits.map((e) => e.path)).toEqual([`sections[#s].content[1].${field}`]);
+    const { output, report } = D.settleEdits(null, {
+      edits: D.carriedEdits(standing, sentBack), before: sentBack, after: article([A, Q, B], [T, P]), pass: 1
+    });
+    // Each prints once, under its own name: the director's line on theirs, the writer's on the other.
+    expect(named(output)).toEqual([['s', nameOf(P), P2[field]], ['s', nameOf(Q), Q[field]]]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+    expect(JSON.stringify(report)).not.toContain(Q[field]);
+  });
+
+  test('a field the director changed on a thread a pass dropped goes back on that thread, never on the thread the pass put in its place', () => {
+    const { WEAVE } = require('./fixtures/rework-state');
+    const left = clone(WEAVE);
+    left.threads[2].role = 'mirrors-it';
+    const standing = D.standingAtMeeting(null, clone(WEAVE), left);
+    expect(standing.edits.map((e) => e.path)).toEqual(['threads[#t3].role']);
+    const after = clone(left);
+    after.threads[2] = { id: 't6', claim: 'A thread the pass wrote in its place.', role: 'grounds-it', receipt: 'ledger' };
+    const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(standing, left), before: left, after, pass: 1 });
+    expect(output.threads.map((t) => `${t.id}:${t.role}`))
+      .toEqual(['t1:main-thread', 't2:grounds-it', 't3:mirrors-it', 't6:grounds-it', 't4:carries-it-forward', 't5:left-out']);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+  });
+});

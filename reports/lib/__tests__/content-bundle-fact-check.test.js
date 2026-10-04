@@ -1706,10 +1706,13 @@ describe('the director\'s edits, field by field, at the fact check (FA)', () => 
     );
     expect(captioned.photoReferences.invalid).toEqual(['not-ours.jpg']);
     expect(captioned.structuralIssues).toEqual([expect.stringMatching(/^Invalid photo reference "not-ours.jpg"/)]);
+    // Task 4.5d: a photo pairs only with a photo of its own name, so a filename the director
+    // set is a cut of the writer's photo (E1) and an addition of theirs (E2), the photo the
+    // concern is about.
     const placed = run(storyWith(photo('a.jpg', 'The huddle')), storyWith(photo('not-ours.jpg', 'The huddle')), { sessionPhotos: ['/photos/a.jpg'] });
     expect(placed.photoReferences.invalid).toEqual([]);
     expect(placed.advisoryWarnings).toEqual([
-      `${DIRECTOR_EDIT_PREFIX}E1: Invalid photo reference "not-ours.jpg": not one of this session's photos. Use one of [a.jpg] or remove the reference.`
+      `${DIRECTOR_EDIT_PREFIX}E2: Invalid photo reference "not-ours.jpg": not one of this session's photos. Use one of [a.jpg] or remove the reference.`
     ]);
   });
 

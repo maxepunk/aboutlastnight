@@ -26,7 +26,8 @@
  *   director's. An element the director added whole is one edit whose `after` is the
  *   element. Block-level matching only finds where an edit is, and pairs a block only
  *   with one of its type, so a block retyped (the JSON editor's) is a cut and an
- *   addition (task 4.3c).
+ *   addition (task 4.3c), and a photo, a card or a reference only with one of its own name,
+ *   so two the director swapped are two moves, each with its own caption or text (task 4.5d).
  * - A null `after` is a cut: `before` is the text the director removed, and `pieces` each
  *   of its sentences of three words or more that the director's version no longer held.
  * - A rewritten text field also records `removed` (FA, requirement 3): each sentence of
@@ -2501,10 +2502,27 @@ function sameKind(a, b) {
 }
 
 /**
+ * The name an element of a collection goes by whatever its other fields (task 4.5d), or
+ * null: a sidebar card's tokenId, and a thread's, a connection's or a question's id (lib/
+ * weave.js weaveIdOf). A section's blocks pair by the desk's naming rule, which pairs a
+ * photo, a card or a reference by its name alone (pairSectionBlocks); every other element
+ * is found by its text or its place.
+ */
+function nameOf(collection, element) {
+  if (!isObj(element)) return null;
+  if (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, collection)) return weaveIdOf(element) || null;
+  if (collection === 'evidenceCards') return element.tokenId != null && String(element.tokenId).trim() ? String(element.tokenId).trim() : null;
+  return null;
+}
+
+/**
  * Where an element of the version a pass started from is in the version it returned, or
  * -1: by what names it (a section's id, a card's tokenId, a paragraph's text), then as
  * the collection pairs (pairElements; a section's blocks by the desk's naming rule,
- * pairSectionBlocks), of the same kind.
+ * pairSectionBlocks), of the same kind and the same name (task 4.5d). A partner by place
+ * whose name differs is another element: a photo, a card, a thread or a connection the pass
+ * put where this one stood, so the restore puts this one back beside it, and never writes
+ * its fields onto the other (T13: a caption under its own photo).
  */
 function partnerIndex(collection, beforeArr, afterArr, bi) {
   const element = beforeArr[bi];
@@ -2514,7 +2532,7 @@ function partnerIndex(collection, beforeArr, afterArr, bi) {
     if (found !== -1) return found;
   }
   const pair = pairElements(collection, beforeArr, afterArr).pairs.find((p) => p.bi === bi);
-  return pair && sameKind(afterArr[pair.ai], element) ? pair.ai : -1;
+  return pair && sameKind(afterArr[pair.ai], element) && nameOf(collection, afterArr[pair.ai]) === nameOf(collection, element) ? pair.ai : -1;
 }
 
 /** What finds a moved block in any version: its type with its filename, tokenId or text. */
