@@ -9,7 +9,7 @@
  *   const { ReportStateAnnotation } = require('./state');
  *   const graph = new StateGraph(ReportStateAnnotation);
  *
- * State Fields (82 total - includes revision context + human feedback):
+ * State Fields (86 total - includes revision context + human feedback):
  *   - Session: sessionId, theme
  *   - Raw Input (8.9): rawSessionInput
  *   - Input Data: sessionConfig, directorNotes, playerFocus, inputReviewApproved, _inputCorrections,
@@ -1018,7 +1018,7 @@ const ReportStateAnnotation = Annotation.Root({
 });
 
 /**
- * Get default state with all fields initialized (87 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks; phase 4, brief 4.6: -1 the arc packages, R5)
+ * Get default state with all fields initialized (86 fields; +2 input-review gate channels, +1 director guidance, +1 article fact-check, +1 photo path, +1 photo-path rollback stash, +4 hand-edit steering, +1 director gate notes, +2 round counters, +2 the director's words: input-review corrections, photo descriptions, +2 trace, +1 the leave-out list (phase 4, brief 4.2); phase 4, brief 4.4: +2 the weave and the arc rework's timeout bookkeeping, -1 the dead specialistAnalyses; phase 4, brief 4.5: +6 the story meeting's approval, round mark, baseline, standing edits, report and marks; phase 4, brief 4.6: -1 the arc packages (R5), -3 the old arc stage's narrativeArcs, selectedArcs and _arcAnalysisCache (R4), +2 the map's baseline and check mark)
  * Useful for testing and initialization
  * @returns {Object} Default state object
  */

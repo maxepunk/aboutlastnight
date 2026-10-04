@@ -3,7 +3,7 @@
  *
  * The rule files under .claude/skills/journalist-report/references/rules/ state the
  * world (spec sections 1, 2 and 3a), the truth rules T1 to T15 and the craft items C1
- * to C19, each once. lib/rule-set.js hands each call the files spec section 8 gives
+ * to C19, each once. lib/rule-set.js hands each call the files the phase 4 spec's section 11 gives
  * it, and the reporting-mode block for the session's mode.
  *
  * Task 3.8 (spec round 7): the craft items are regrouped by the writer's job into

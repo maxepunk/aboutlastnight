@@ -905,7 +905,7 @@ The journalist writers and judges read the rule set (phase 3), which `lib/rule-s
 | `references/rules/craft-questions.md` | C15: the writer's questions to the director |
 | `references/rules/mode-on-site.md`, `mode-remote.md` | The reporting-mode block: T8's mode part, what Nova could witness |
 
-The eight craft files group C1 to C19 by the writer's job (phase 3, task 3.8). Each call reads the ones spec section 8 gives it (`RULE_SET_CALLS` in `lib/rule-set.js`).
+The eight craft files group C1 to C19 by the writer's job (phase 3, task 3.8). Each call reads the ones the phase 4 spec's section 11 gives it (`RULE_SET_CALLS` in `lib/rule-set.js`; it was the rule-set spec's section 8).
 
 ### Data Directory Structure
 

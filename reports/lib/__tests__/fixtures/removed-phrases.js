@@ -325,7 +325,27 @@ const REMOVED_PHRASES = [
   'Every thread you find stays in the weave',
   "only when another thread would carry a stronger story as the main thread (C1): that thread's id",
   'the weave C16 (<craft-story>) sets out',
-  'each saying what its answer changes in print'
+  'each saying what its answer changes in print',
+
+  // Phase 4, 4.6: the outline writer, its rework and the arc packages went with the map;
+  // the map writer lays out the settled weave and writes no prose (C2). The detective's
+  // outline went with its old stages (R1).
+  'You are creating an article outline for a NovaNews investigative piece.',
+  'Plan the outline of the article from these selected arcs.',
+  "Write the plan in the third person: the article writer gives it Nova's voice.",
+  'SELECTED ARCS:',
+  '<arc-metadata>',
+  'Each arc above is one thread of the story, as the arc writer found it.',
+  '<arc-analysis>',
+  'A photo placement names its photo by the exact filename above.',
+  'The outline is JSON in this shape',
+  'You are reworking the outline you wrote',
+  '# Outline Revision Request',
+  'REVISION CONTEXT: OUTLINE',
+  'PREVIOUS OUTLINE OUTPUT',
+  "You are planning the structure of Detective Anondono's case report.",
+  'You are REVISING that outline, not writing it from scratch.',
+  '<arc-evidence>'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

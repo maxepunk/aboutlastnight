@@ -602,57 +602,6 @@ function buildValidEvidenceIds(evidenceBundle) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ARC RESOLUTION HELPERS
-// ═══════════════════════════════════════════════════════════════════════════════
-//
-// selectedArcs contains string IDs, but many nodes need full arc objects.
-// These helpers resolve string IDs to arc objects from state.narrativeArcs.
-// DRY extraction from ai-nodes.js and evaluator-nodes.js.
-
-/**
- * Resolve arc ID (string) or arc object to full arc object
- *
- * Used when selectedArcs may contain either string IDs or arc objects.
- * This handles the contract where API passes string IDs but code expects objects.
- *
- * @param {string|Object} arcIdOrObj - Arc ID string or arc object
- * @param {Array} availableArcs - Array of arc objects to search (state.narrativeArcs)
- * @returns {Object|null} - Resolved arc object or null if not found
- *
- * @example
- * resolveArc('murder-accusation', arcs)     // Returns matching arc object
- * resolveArc({ id: 'arc-1' }, arcs)         // Returns the object as-is
- * resolveArc('nonexistent', arcs)           // Returns null
- * resolveArc(null, arcs)                    // Returns null
- */
-function resolveArc(arcIdOrObj, availableArcs) {
-  if (!arcIdOrObj) return null;
-  if (typeof arcIdOrObj !== 'string') return arcIdOrObj;
-  if (!Array.isArray(availableArcs)) return null;
-
-  return availableArcs.find(a =>
-    a.id === arcIdOrObj || a.title === arcIdOrObj
-  ) || null;
-}
-
-/**
- * Resolve array of arc IDs/objects to arc objects
- *
- * Filters out nulls (arcs not found in availableArcs).
- * Safe to use with undefined/null input.
- *
- * @param {Array} arcs - Array of arc IDs (strings) or arc objects
- * @param {Array} availableArcs - Array of arc objects to search (state.narrativeArcs)
- * @returns {Array} - Array of resolved arc objects (nulls filtered out)
- */
-function resolveArcs(arcs, availableArcs) {
-  if (!Array.isArray(arcs)) return [];
-  return arcs
-    .map(arc => resolveArc(arc, availableArcs))
-    .filter(Boolean);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // REVISION CONTEXT HELPER (DRY)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -1432,8 +1381,6 @@ module.exports = {
   buildValidEvidenceIds,
 
   // Arc resolution helpers (Commit 8.25)
-  resolveArc,
-  resolveArcs,
 
   // Non-roster PCs (Commit 8.xx) - Three-category character model
   getNonRosterPCs,
