@@ -250,7 +250,8 @@ class TemplateAssembler {
 
     // Never two photos in a row (spec 2026-10-02 section 9): what prints is spaced, and
     // the stored bundle keeps the writer's order. A printed hero is a photo just above
-    // the first block. A section the spacing empties is gone from both the page and its
+    // the first block. A section with no blocks, one the spacing empties or one the
+    // director emptied at the desk (task 4.14c), is gone from both the page and its
     // section nav.
     const sections = spacePhotos(contentBundle.sections, { photoAboveFirstBlock: hero !== null });
 
@@ -443,7 +444,7 @@ class TemplateAssembler {
    *
    * @private
    * @param {Array} sections - The sections that print, as spacePhotos returns them, so
-   *   a section the spacing emptied has no link
+   *   a section with no blocks has no link
    * @returns {Array} Navigation items with id, label, href
    */
   buildSectionNav(sections) {

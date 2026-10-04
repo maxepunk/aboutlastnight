@@ -28,10 +28,13 @@
  * - So two photos print together only when the photos outnumber the blocks that can
  *   separate them.
  * - Only photo blocks move. A placed photo belongs to the section of the block it
- *   follows, and a section the spacing empties does not print.
+ *   follows.
+ * - A section with no blocks does not print: one the spacing empties, and one that came
+ *   with none, such as a section the director emptied at the desk (task 4.14c), so the
+ *   page prints no heading over nothing and its nav no link to it.
  *
- * Pure: nothing it is given is mutated, and an article with no photo after a photo
- * comes back exactly as it was, so spacing twice changes nothing.
+ * Pure: nothing it is given is mutated, and an article with no photo after a photo and no
+ * section without blocks comes back exactly as it was, so spacing twice changes nothing.
  */
 
 const isPhoto = (block) => Boolean(block) && block.type === 'photo';
@@ -46,9 +49,9 @@ const hasContent = (section) => Boolean(section) && Array.isArray(section.conten
  * @param {Object} [options]
  * @param {boolean} [options.photoAboveFirstBlock=false] - The page prints a photo just
  *   above the first block (the journalist hero)
- * @returns {Array} New sections in the printed order, without the sections the spacing
- *   emptied. A value that is not an array comes back as given, and so does a section
- *   with no content array.
+ * @returns {Array} New sections in the printed order, without the sections that hold no
+ *   block. A value that is not an array comes back as given, and so does a section with no
+ *   content array.
  */
 function spacePhotos(sections, { photoAboveFirstBlock = false } = {}) {
   if (!Array.isArray(sections)) return sections;
@@ -102,8 +105,7 @@ function spacePhotos(sections, { photoAboveFirstBlock = false } = {}) {
   for (const { section, block } of printed) contents[section].push(block);
   return sections
     .map((section, index) => (hasContent(section) ? { ...section, content: contents[index] } : section))
-    .filter((section, index) =>
-      !(hasContent(section) && sections[index].content.length > 0 && contents[index].length === 0));
+    .filter((section, index) => !(hasContent(section) && contents[index].length === 0));
 }
 
 /**

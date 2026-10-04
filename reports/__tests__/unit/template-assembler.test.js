@@ -434,6 +434,29 @@ describe('photo spacing in what prints', () => {
   });
 });
 
+// Task 4.14c (the final review's desk 6): the director cuts a whole section at the desk by
+// deleting its blocks. The page, the preview and the published report print nothing of it, as
+// they print nothing of a section the photo spacing empties.
+describe('4.14c: a section with no blocks prints nothing', () => {
+  it('prints no heading and no nav link for a section the director emptied', async () => {
+    const assembler = new TemplateAssembler('journalist');
+    const bundle = {
+      ...JSON.parse(JSON.stringify(validBundle)),
+      heroImage: { filename: 'hero.jpg', caption: 'The hero.' },
+      sections: sectionsFrom('[the-story] P PH1 [whats-missing] [closing] P P')
+    };
+
+    const context = await assembler.buildContext(bundle, '010126');
+    expect(notationOf(context.sections)).toBe('[the-story] P PH1 [closing] P P');
+    expect(context.sectionNav.map((item) => item.href)).toEqual(['#the-story', '#closing']);
+
+    const html = await assembler.assemble(bundle, { sessionId: '010126' });
+    expect(html).not.toContain('id="whats-missing"');
+    expect(html).not.toContain('href="#whats-missing"');
+    expect(html).toContain('id="closing"');
+  });
+});
+
 // Note: overrideFinancialTracker now generates entries authoritatively from
 // shellAccounts rather than merging with LLM data. Tests for the new contract
 // live in lib/__tests__/template-assembler-financial.test.js.

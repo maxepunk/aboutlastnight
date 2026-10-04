@@ -12,7 +12,8 @@
  * at the end goes under the last paragraph with no photo after it, else under the last
  * other block with none, else at the end, and the waiting photos fill those places in
  * the writer's order. So two photos print together only when the photos outnumber the
- * blocks that can separate them. A section the spacing empties does not print.
+ * blocks that can separate them. A section with no blocks does not print, whether the
+ * spacing emptied it or it came empty (task 4.14c).
  */
 
 const { isDeepStrictEqual } = require('util');
@@ -129,9 +130,13 @@ describe('spacePhotos', () => {
       expect(notationOf(spaced)).toBe('[the-story] P PH1 [closing] P PH2 P');
     });
 
-    it('is only one the spacing emptied: a section the writer left empty prints as before', () => {
+    // Task 4.14c (the final review's desk 6): the director cuts a whole section at the desk by
+    // deleting its blocks, and the page printed its heading over nothing. One rule now: a
+    // section with no blocks does not print, whether the spacing emptied it or it came empty.
+    it('nor does a section that came with no blocks, such as one the director emptied at the desk (4.14c)', () => {
       const sections = sectionsFrom('[lede] P PH1 [aside] [closing] P');
-      expect(spacePhotos(sections, HERO)).toEqual(sections);
+      expect(notationOf(spacePhotos(sections, HERO))).toBe('[lede] P PH1 [closing] P');
+      expect(notationOf(spacePhotos(sectionsFrom('[lede] P [aside] [closing] P')))).toBe('[lede] P [closing] P');
     });
   });
 
