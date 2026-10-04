@@ -901,3 +901,26 @@ describe('4.6d: the gate reads the map the stop showed as the console does', () 
     expect(typesOf(mapFindings(repeatsB9(), inputs()).failures)).toEqual(['duplicate-beat-id']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.6d: the schema says what "note" means
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The integrator's ruling 3 on the follow-ups' findings, minor 2. The schema's line for a
+// change's source says that "note" is the meeting's approval note, offered when the prompt
+// holds that note: on 0926262 the meeting's note was a rejection, and a change sourced "note"
+// there fails the check and spends the round's one rework.
+describe('4.6d: the schema says what "note" means', () => {
+  const { mapSchemaFor, MEETING_NOTE_SOURCE } = require('../map');
+  const outlineSchema = require('../schemas/outline.schema.json');
+
+  it("a change's source is a meeting edit's id, or \"note\" for the meeting's approval note when the prompt holds it", () => {
+    const SOURCE = 'The id of the director\'s change in <SETTLED_WEAVE>, such as E3, or "note" for a change the director\'s note from the meeting asks for, when the prompt holds that note: the approval note marked arc-selection in <DIRECTOR_GUIDANCE>';
+    expect(outlineSchema.properties.weaveChanges.items.properties.source.description).toBe(SOURCE);
+    // The map writer's schema, which <SCHEMA> prints and the SDK enforces, carries it as written.
+    expect(mapSchemaFor('journalist').properties.weaveChanges.items.properties.source.description).toBe(SOURCE);
+    expect(SOURCE).toContain(`"${MEETING_NOTE_SOURCE}"`);
+    // Every theme's map prompt prints it: it names no theme, and carries no em-dash.
+    expect(SOURCE).not.toMatch(/Nova|journalist|detective|\u2014/);
+  });
+});

@@ -282,9 +282,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   otherwise (+60); and the instruction's heading line defers to the task (the same length).
  *   A rework carries all three word for word (article-journalist 30862 -> 31016). The outline
  *   and arc pins do not move.
+ * - Phase 4 (brief 4.6d), the map's schema says what "note" means: a change's source is the
+ *   id of the director's change, or "note" for a change the director's note from the meeting
+ *   asks for, when the prompt holds that note, the approval note marked arc-selection in
+ *   <DIRECTOR_GUIDANCE> (lib/schemas/outline.schema.json, weaveChanges[].source). The map
+ *   writer prints the schema in <SCHEMA>, so its render grows by the description's own 114
+ *   characters (outline-journalist 18161 -> 18275). The article and arc pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['1cecd0c98a0d14cf6cbec182113f5835288f30f6e1597b6e5f26497279636a34', 18161],
+  'outline-journalist': ['c55efcd18228ad09cec58f15785f777b8bf8d9ae8010069e4db26be1791faaa1', 18275],
   'article-journalist': ['f630e1de1d7123ce166584559147ede4ab45c5655b2e081aaeb9b93db2faa158', 31016],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };
