@@ -42,7 +42,7 @@ const { leftOutPhotosOf, listAfterStopChoices } = require('./lib/photo-leave-out
 // Phase 3 (3.7): the writers' questions for the director, sent at the three stops.
 const { writerQuestionsOf } = require('./lib/writer-questions');
 // Brief 4.5: the story meeting's payloads and what its stop sends.
-const { meetingResume, meetingCheckpointData } = require('./lib/meeting');
+const { meetingResume, meetingCheckpointData, unrunRoundNoteIndex } = require('./lib/meeting');
 // Phase 4 (brief 4.6): the map's payloads and what its stop shows; the photos kept for the
 // article, which Everyone and the counts read.
 const { mapResume, mapCheckpointData } = require('./lib/map');
@@ -530,14 +530,14 @@ const DIRECTOR_ROUNDS_BY_GATE = Object.freeze({
  * again. A director who retries a round whose rework did not run, with its note, files the
  * note once; the round still reads it, as its own note. The same words in a later round
  * are that round's note, and file again. A note stored before notes recorded their round
- * holds no note back.
+ * holds no note back. It appends to the notes this request already wrote, when it wrote
+ * them (withdrawUnrunRoundNote), and to the state's otherwise.
  *
  * @param {string} kind - 'rejection' (sent with a send back) or 'approval' (sent with an approve)
  */
 function appendGateNote(stateUpdates, currentState, gate, text, kind) {
-    const existing = Array.isArray(currentState.directorGateNotes)
-        ? currentState.directorGateNotes.filter(n => n && typeof n === 'object')
-        : [];
+    const notes = Array.isArray(stateUpdates.directorGateNotes) ? stateUpdates.directorGateNotes : currentState.directorGateNotes;
+    const existing = Array.isArray(notes) ? notes.filter(n => n && typeof n === 'object') : [];
     const stopRound = (Number(currentState[DIRECTOR_ROUNDS_BY_GATE[gate]]) || 0) + 1;
     const sameKind = (n) => n.gate === gate && (n.kind || 'rejection') === kind;
     const filed = existing.some((n) => sameKind(n) && n.stopRound === stopRound
@@ -545,6 +545,28 @@ function appendGateNote(stateUpdates, currentState, gate, text, kind) {
     if (filed) return;
     const round = existing.filter(sameKind).length + 1;
     stateUpdates.directorGateNotes = [...existing, { gate, kind, round, stopRound, text, at: new Date().toISOString() }];
+}
+
+/**
+ * Withdraw the note of the story meeting's round that did not run, unless the director's
+ * action sends it again with a round (review of 4.5c, finding 1). The round filed it as a
+ * rejection note when it was posted, which a later writer reads as applied by the rework at
+ * its stop, and no rework ran with it. So the director's next action at the meeting decides
+ * (lib/meeting.js unrunRoundNoteIndex finds the note): a reweave or a send-back with the same
+ * words leaves it standing as filed, and appendGateNote files it no second time; an approve
+ * that keeps it files it again as an approval note; an approve that clears it, or an action
+ * with another note or none, leaves it out. Called before the action's own note is filed.
+ *
+ * @param {Object} stateUpdates
+ * @param {Object} currentState
+ * @param {{text: string, kind: string}|null} sent - the action's note (lib/meeting.js meetingResume)
+ */
+function withdrawUnrunRoundNote(stateUpdates, currentState, sent) {
+    const at = unrunRoundNoteIndex(currentState);
+    if (at === -1) return;
+    const filed = currentState.directorGateNotes[at];
+    if (sent && sent.kind === 'rejection' && sent.text.trim() === filed.text.trim()) return;
+    stateUpdates.directorGateNotes = currentState.directorGateNotes.filter((n, i) => i !== at && n && typeof n === 'object');
 }
 
 /**
@@ -799,9 +821,11 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
     // schema, refusing a malformed one with its reason, and writes the director's version
     // and their standing edits; a reweave and a send-back are the director's round, marked.
     // The note joins the standing notes: an approval note on an approve (the arc
-    // selection's _outlineGuidance is written no more), a rejection note on a round. Taken
-    // only at the meeting's own stop (I3): `{approved: true}` posted at another stop would
-    // approve that stop. The arc selection's old shape is refused by name.
+    // selection's _outlineGuidance is written no more), a rejection note on a round. The note
+    // of a round that did not run stands only if this action sends it again
+    // (withdrawUnrunRoundNote). Taken only at the meeting's own stop (I3): `{approved: true}`
+    // posted at another stop would approve that stop. The arc selection's old shape is
+    // refused by name.
     if (approvals.meeting !== undefined) {
         if (checkpointType !== null && checkpointType !== CHECKPOINT_TYPES.ARC_SELECTION) {
             return { resume: {}, stateUpdates: {}, error: `The story meeting's actions are taken at the story meeting (arc-selection), not at ${checkpointType}.` };
@@ -811,6 +835,7 @@ function buildResumePayload(approvals, currentState = {}, theme = (currentState.
         validApprovalDetected = true;
         Object.assign(resume, meeting.resume);
         Object.assign(stateUpdates, meeting.stateUpdates);
+        withdrawUnrunRoundNote(stateUpdates, currentState, meeting.note);
         if (meeting.note) appendGateNote(stateUpdates, currentState, 'arc-selection', meeting.note.text, meeting.note.kind);
     } else if (['selectedArcs', 'arcFeedback', 'outlineGuidance'].some((key) => approvals[key] !== undefined)) {
         return {

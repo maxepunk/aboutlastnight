@@ -1070,3 +1070,31 @@ describe('4.5c fix round 1: the gate takes every reweave the console offers, wit
     if (!offered) expect(gate.error).toMatch(/carries no change to the weave and no note/);
   });
 });
+
+// Review of 4.5c, finding 1: the note of a round that did not run is the director's to send
+// again. The stop lists it in the note box, not among the standing notes, and the director's
+// next action files it or leaves it out (server.js withdrawUnrunRoundNote), so Approve's
+// question tells the truth: keeping it files an approval note, and clearing it files none.
+describe('4.5c fix round 1: the reopened meeting lists the round\'s note in the box, not among the standing notes', () => {
+  const LABELS = { 'arc-selection': 'Story meeting', outline: 'Map', article: 'Article' };
+  const NOTE = 'Make the sale the main thread.';
+  const EARLIER = { gate: 'outline', kind: 'approval', round: 1, stopRound: 1, text: 'Keep the bonus beat.', at: 't0' };
+
+  test('the standing notes leave out the note the round filed, and Approve asks about the note in the box', () => {
+    const before = stateAt({ directorGateNotes: [EARLIER] });
+    const taken = meetingResume(meetingPayload('reweave', payloadOf(before), meetingWeaveOf(before.weave), NOTE), before);
+    expect(taken.error).toBeNull();
+    // The note as server.js appendGateNote files it with the round, and the round's rework timing out.
+    const filed = { gate: 'arc-selection', kind: 'rejection', round: 1, stopRound: 1, text: NOTE, at: 't1' };
+    const reopened = {
+      ...before, ...taken.stateUpdates, directorGateNotes: [EARLIER, filed], _meetingRound: null, _arcFeedback: null,
+      _arcReworkTimeout: { consecutive: 1, attempt: 0, round: 'reweave', note: NOTE, at: 't2' }
+    };
+    const data = payloadOf(reopened);
+    expect(meetingStandingNotes(data.directorGateNotes, LABELS).items.map((n) => [n.label, n.text])).toEqual([['Map, approval note 1', EARLIER.text]]);
+    expect(ViewLogic.meetingApproveAsk(data, NOTE)).not.toBeNull();
+    // Once a round runs, the note stands, listed as the round's.
+    const ran = payloadOf({ ...reopened, _arcReworkTimeout: null, humanArcRevisionCount: 1 });
+    expect(meetingStandingNotes(ran.directorGateNotes, LABELS).items.map((n) => n.label)).toEqual(['Map, approval note 1', 'Story meeting, rework note 1']);
+  });
+});

@@ -1590,7 +1590,10 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
       expect(retry.stateUpdates.directorGateNotes).toBeUndefined();
     });
 
-    it('the same words in a later round file again, and so do they as an approval note, another kind', () => {
+    // Fix round 1, finding 1: the same words kept with Approve at the reopened meeting are no
+    // longer filed beside the round's note; they replace it (the "a round that did not run
+    // leaves its note to the director's next action" describe at the end of this file).
+    it('the same words in a later round file again', () => {
       const state = atMeeting();
       const first = take(meetingPayload('reweave', dataOf(state), shownOf(state), NOTE), state);
       const reopened = reopenedAfter(state, first);
@@ -1598,8 +1601,6 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
       const nextRound = { ...reopened, humanArcRevisionCount: 1, _arcReworkTimeout: null };
       const again = take(meetingPayload('reweave', dataOf(nextRound), shownOf(nextRound), NOTE), nextRound);
       expect(again.stateUpdates.directorGateNotes.map((n) => [n.kind, n.round, n.text])).toEqual([['rejection', 1, NOTE], ['rejection', 2, NOTE]]);
-      const kept = take(meetingPayload('approve', dataOf(reopened), shownOf(reopened), NOTE), reopened);
-      expect(kept.stateUpdates.directorGateNotes.map((n) => [n.kind, n.text])).toEqual([['rejection', NOTE], ['approval', NOTE]]);
     });
 
     it('a note filed before notes recorded their round holds back no note', () => {
@@ -1744,5 +1745,115 @@ describe('4.5c fix round 1: a change at the place of a standing edit is the dire
     expect(back.taken.error).toBeNull();
     expect(back.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.before, e.after]))
       .toEqual([['E2', 'threads[#t3].role', 'mirrors-it', 'complicates-it']]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5c fix round 1, finding 1: a round that did not run leaves its note to the director's
+// next action
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The review's probe (p4/4.5c-review/restored-note-clear.js): a reweave posted with a note
+// filed it as a standing rejection note, and its rework timed out; at the reopened meeting
+// "Clear it and approve" left the note standing, and the map writer read it as applied by a
+// rework that never ran; "Keep it and approve" filed it again, as an approval note beside it.
+// The director's next action at the meeting now decides: sent again with a round, it stands
+// as filed; kept with Approve, it is an approval note; cleared, or replaced by another note,
+// it goes. Until then the stop lists it in the note box, not among the standing notes.
+// Invented text.
+describe('4.5c fix round 1: a round that did not run leaves its note to the director\'s next action', () => {
+  const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
+  const { withFactCheckMark } = require('../../lib/weave');
+  const { meetingCheckpointData } = require('../../lib/meeting');
+  const { meetingWeaveOf, meetingPayload } = require('../../console/checkpoint-view-logic');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const MARK = { at: 't', ready: true, fixes: 0 };
+  const NOTE = 'Make the sale the main thread.';
+  const EARLIER = { gate: 'outline', kind: 'approval', round: 1, stopRound: 1, text: 'Keep the bonus beat.', at: 't0' };
+  const atMeeting = (extra = {}) => ({
+    weave: withFactCheckMark(clone(WEAVE), MARK), _weaveBaseline: clone(WEAVE), directorGateNotes: [],
+    arcRevisionCount: 0, humanArcRevisionCount: 0, ...extra
+  });
+  const take = (payload, state) => buildResumePayload(payload, state, 'journalist', 'arc-selection');
+  const dataOf = (state) => meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 });
+  const shownOf = (state) => meetingWeaveOf(state.weave);
+  const notesOf = (list) => list.map((n) => [n.gate, n.kind, n.text]);
+
+  /** A round posted with its note, whose rework timed out: reviseArcs gives the round back, and the meeting reopens. */
+  function reopenedAfter(action, note = NOTE, before = atMeeting()) {
+    const taken = take(meetingPayload(action, dataOf(before), shownOf(before), note), before);
+    expect(taken.error).toBeNull();
+    return {
+      ...before, ...taken.stateUpdates, _meetingRound: null, _arcFeedback: null, arcRevisionCount: 0,
+      humanArcRevisionCount: before.humanArcRevisionCount,
+      _arcReworkTimeout: { consecutive: 1, attempt: 0, round: action, note: taken.stateUpdates._arcFeedback, at: 't' }
+    };
+  }
+
+  it('clear it and approve: the note the round filed goes, and no later writer reads it', () => {
+    const reopened = reopenedAfter('reweave', NOTE, atMeeting({ directorGateNotes: [EARLIER] }));
+    expect(notesOf(reopened.directorGateNotes)).toEqual([['outline', 'approval', EARLIER.text], ['arc-selection', 'rejection', NOTE]]);
+    const cleared = take(meetingPayload('approve', dataOf(reopened), shownOf(reopened), ''), reopened);
+    expect(cleared.error).toBeNull();
+    expect(cleared.resume).toEqual({ approved: true });
+    expect(notesOf(cleared.stateUpdates.directorGateNotes)).toEqual([['outline', 'approval', EARLIER.text]]);
+  });
+
+  it('keep it and approve: the note stands once, as an approval note, which a later writer reads as forward guidance', () => {
+    const reopened = reopenedAfter('reweave');
+    const kept = take(meetingPayload('approve', dataOf(reopened), shownOf(reopened), NOTE), reopened);
+    expect(kept.error).toBeNull();
+    expect(kept.stateUpdates.directorGateNotes).toEqual([
+      expect.objectContaining({ gate: 'arc-selection', kind: 'approval', round: 1, stopRound: 1, text: NOTE })
+    ]);
+  });
+
+  it('a retry with the note edited: the edited note is the round\'s, and the first goes', () => {
+    const edited = 'Make the sale the main thread, and keep the heir out.';
+    const reopened = reopenedAfter('reweave');
+    const retry = take(meetingPayload('reweave', dataOf(reopened), shownOf(reopened), edited), reopened);
+    expect(retry.error).toBeNull();
+    expect(retry.stateUpdates._arcFeedback).toBe(edited);
+    expect(retry.stateUpdates.directorGateNotes).toEqual([
+      expect.objectContaining({ gate: 'arc-selection', kind: 'rejection', round: 1, stopRound: 1, text: edited })
+    ]);
+    // A send-back after a send-back that did not run, with another note, the same way.
+    const sentBack = reopenedAfter('send-back', 'Rethink the money thread.');
+    const again = take(meetingPayload('send-back', dataOf(sentBack), shownOf(sentBack), 'Rethink the heir thread.'), sentBack);
+    expect(notesOf(again.stateUpdates.directorGateNotes)).toEqual([['arc-selection', 'rejection', 'Rethink the heir thread.']]);
+  });
+
+  it('the retry with the note as it was, by either round: the note stands as filed, once, and the round reads it as its own', () => {
+    const reopened = reopenedAfter('reweave');
+    const retry = take(meetingPayload('reweave', dataOf(reopened), shownOf(reopened), NOTE), reopened);
+    expect(retry.stateUpdates._arcFeedback).toBe(NOTE);
+    expect(retry.stateUpdates.directorGateNotes).toBeUndefined();
+    const asSendBack = take(meetingPayload('send-back', dataOf(reopened), shownOf(reopened), NOTE), reopened);
+    expect(asSendBack.resume).toEqual({ approved: false, round: 'send-back', feedback: NOTE });
+    expect(asSendBack.stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  it('only the round\'s own note goes: the same words from an earlier round stand, and a round with no note withdraws none', () => {
+    // An earlier round ran with these words; this round (the second) carried them again and did not run.
+    const secondRound = reopenedAfter('reweave', NOTE, atMeeting({
+      humanArcRevisionCount: 1,
+      directorGateNotes: [{ gate: 'arc-selection', kind: 'rejection', round: 1, stopRound: 1, text: NOTE, at: 't0' }]
+    }));
+    expect(secondRound.directorGateNotes.map((n) => n.stopRound)).toEqual([1, 2]);
+    const cleared = take(meetingPayload('approve', dataOf(secondRound), shownOf(secondRound), ''), secondRound);
+    expect(cleared.stateUpdates.directorGateNotes.map((n) => [n.kind, n.stopRound, n.text])).toEqual([['rejection', 1, NOTE]]);
+    // A reweave with no note that did not run filed no note, and the next action withdraws none.
+    const noteless = { ...atMeeting({ directorGateNotes: [EARLIER] }), _arcReworkTimeout: { consecutive: 1, attempt: 0, round: 'reweave', note: null, at: 't' } };
+    expect(take(meetingPayload('approve', dataOf(noteless), shownOf(noteless), ''), noteless).stateUpdates.directorGateNotes).toBeUndefined();
+  });
+
+  it('the reopened stop lists the round\'s note in the note box\'s place, not among the standing notes; the others stay listed', () => {
+    const reopened = reopenedAfter('reweave', NOTE, atMeeting({ directorGateNotes: [EARLIER] }));
+    const data = dataOf(reopened);
+    expect(data.roundDidNotRun).toEqual({ round: 'reweave', at: 't', note: NOTE });
+    expect(notesOf(data.directorGateNotes)).toEqual([['outline', 'approval', EARLIER.text]]);
+    // With no round that did not run, every note is listed.
+    expect(notesOf(dataOf({ ...reopened, _arcReworkTimeout: null }).directorGateNotes))
+      .toEqual([['outline', 'approval', EARLIER.text], ['arc-selection', 'rejection', NOTE]]);
   });
 });

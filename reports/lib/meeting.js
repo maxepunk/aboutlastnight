@@ -24,8 +24,9 @@
  * - WHAT THE STOP SHOWS (meetingCheckpointData, which server.js getCheckpointData sends at
  *   `arc-selection`): the weave, the verdict as the parse holds it, the questions with any
  *   answers, a code check still failing on the weave in hand, the concerns beside their
- *   lines, the marks after a round, the edits a send-back changed, the standing notes, the
- *   round counters, and a round that did not run.
+ *   lines, the marks after a round, the edits a send-back changed, the standing notes (a
+ *   round that did not run leaves its note to the note box: unrunRoundNoteIndex), the round
+ *   counters, and a round that did not run.
  */
 'use strict';
 
@@ -269,6 +270,34 @@ function roundDidNotRunOf(state) {
   return { round: timeout.round, at: timeout.at || null, note: typeof timeout.note === 'string' ? timeout.note : null };
 }
 
+/** The story meeting's stop, as the director's notes name it (server.js appendGateNote). */
+const MEETING_GATE = 'arc-selection';
+
+/**
+ * Where the note of a director's round that did not run stands among the director's notes,
+ * or -1 (review of 4.5c, finding 1). The round filed its note as a rejection note when it was
+ * posted (server.js appendGateNote), and no rework ran with it, so it is the director's to
+ * send again: their next action at the meeting sends it with a round, keeps it with Approve
+ * as an approval note, or leaves it out, and the server withdraws it unless a round sends it
+ * again (server.js withdrawUnrunRoundNote). Until then the stop lists it in the note box, not
+ * among the standing notes (meetingCheckpointData). It is the rejection note at the meeting
+ * with the round's text, filed in the stop's round (`stopRound`: one more than the director's
+ * rounds that ran, a count reviseArcs gives back when the round's rework times out). A note
+ * stored before notes recorded their round is never it.
+ *
+ * @param {Object} state
+ * @returns {number}
+ */
+function unrunRoundNoteIndex(state) {
+  const round = roundDidNotRunOf(state);
+  const text = round && round.note ? round.note.trim() : '';
+  if (!text || !Array.isArray(state.directorGateNotes)) return -1;
+  const stopRound = (Number(state.humanArcRevisionCount) || 0) + 1;
+  return state.directorGateNotes.findIndex((n) => Boolean(n) && typeof n === 'object' && n.gate === MEETING_GATE
+    && (n.kind || 'rejection') === 'rejection' && n.stopRound === stopRound
+    && typeof n.text === 'string' && n.text.trim() === text);
+}
+
 /**
  * The payload the story meeting's stop sends (brief 4.5; server.js getCheckpointData).
  *
@@ -280,6 +309,8 @@ function roundDidNotRunOf(state) {
  */
 function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
   const s = state || {};
+  const notes = Array.isArray(s.directorGateNotes) ? s.directorGateNotes : [];
+  const unrunNote = unrunRoundNoteIndex(s);
   return {
     weave: s.weave || null,
     evidenceIndex,
@@ -292,7 +323,9 @@ function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
     // The edits the round's passes changed, a send-back's with its reasons, and each
     // restore (lib/hand-edit-diff.js reportAfterPass).
     handEditReport: handEditReportOf(s._weaveHandEditReport),
-    directorGateNotes: s.directorGateNotes || [],
+    // The standing notes, without the note of a round that did not run: the note box holds
+    // it, or the round's line gives it back, and the director's next action files it or not.
+    directorGateNotes: unrunNote === -1 ? notes : notes.filter((_, i) => i !== unrunNote),
     revisionCount: s.arcRevisionCount || 0,
     humanRevisionCount: s.humanArcRevisionCount || 0,
     maxRevisions,
@@ -309,5 +342,6 @@ module.exports = {
   meetingConcerns,
   meetingMarksOf,
   roundDidNotRunOf,
+  unrunRoundNoteIndex,
   meetingCheckpointData
 };
