@@ -38,69 +38,8 @@
     return arr.join(', ');
   }
 
-  function setRowField(rows, idx, field, value) {
-    var src = Array.isArray(rows) ? rows : [];
-    return src.map(function (row, i) {
-      if (i !== idx) return row;
-      var next = Object.assign({}, row);
-      next[field] = value;
-      return next;
-    });
-  }
-
-  function setRowList(rows, idx, field, value) {
-    var list = Array.isArray(value) ? value.slice() : splitCsv(value);
-    return setRowField(rows, idx, field, list);
-  }
-
-  function removeRow(rows, idx) {
-    var src = Array.isArray(rows) ? rows : [];
-    return src.filter(function (_row, i) { return i !== idx; });
-  }
-
-  function addRow(rows, newRow) {
-    var src = Array.isArray(rows) ? rows : [];
-    return src.concat([newRow]);
-  }
-
-  function coerceInt(value) {
-    if (value === '' || value === null || value === undefined) return undefined;
-    var n = parseInt(String(value), 10);
-    return Number.isNaN(n) ? undefined : n;
-  }
-
-  function coerceTotal(value) {
-    if (value === '' || value === null || value === undefined) return undefined;
-    if (typeof value === 'number') return value;
-    var str = String(value).trim();
-    if (str === '') return undefined;
-    if (/^-?\d+(\.\d+)?$/.test(str)) {
-      var n = Number(str);
-      if (Number.isFinite(n)) return n;
-    }
-    return str;
-  }
-
   function nonEmpty(value) {
     return typeof value === 'string' && value.trim().length > 0;
-  }
-
-  function rowsToMap(rows) {
-    var out = {};
-    (Array.isArray(rows) ? rows : []).forEach(function (row) {
-      if (!row) return;
-      var k = typeof row.key === 'string' ? row.key.trim() : '';
-      if (k === '') return;
-      out[k] = typeof row.value === 'string' ? row.value : (row.value == null ? '' : String(row.value));
-    });
-    return out;
-  }
-
-  function mapToRows(map) {
-    if (!map || typeof map !== 'object' || Array.isArray(map)) return [];
-    return Object.keys(map).map(function (k) {
-      return { key: k, value: typeof map[k] === 'string' ? map[k] : String(map[k]) };
-    });
   }
 
   // ── (B) RESET-KEY HELPER ──────────────────────────────────────────────────
@@ -931,15 +870,7 @@
     deepClone: deepClone,
     splitCsv: splitCsv,
     joinCsv: joinCsv,
-    setRowField: setRowField,
-    setRowList: setRowList,
-    removeRow: removeRow,
-    addRow: addRow,
-    coerceInt: coerceInt,
-    coerceTotal: coerceTotal,
     nonEmpty: nonEmpty,
-    rowsToMap: rowsToMap,
-    mapToRows: mapToRows,
     computeResetKey: computeResetKey,
 
     // Task 4.9: the map's editors (init, build, merge) and its moves

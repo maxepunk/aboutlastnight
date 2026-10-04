@@ -4,9 +4,9 @@
  *
  * Phase 4 (brief 4.6): the outline is the story map. The map's client gate is held to the
  * director-side schema, and Everyone and the counts come from the beats (the 4.6 describes).
- * Task 4.9: the old outline's section editors, its thesis panel and the retired-field strip
- * went with the screen that read them (ruling 5); the map's editors and moves are pinned in
- * console/__tests__/checkpoint-view-logic-map.test.js.
+ * Task 4.9: the old outline's section editors, its thesis panel, the retired-field strip and
+ * the row helpers its widgets used went with the screen that read them (ruling 5); the map's
+ * editors and moves are pinned in console/__tests__/checkpoint-view-logic-map.test.js.
  */
 const L = require('../../console/outline-edit-logic.js');
 const { SchemaValidator } = require('../../lib/schema-validator');
@@ -101,63 +101,12 @@ describe('primitives', () => {
     expect(L.joinCsv('x')).toBe('');
   });
 
-  it('setRowField immutably replaces one field on one row', () => {
-    const rows = [{ arcName: 'A', financialAngle: 'x' }];
-    const out = L.setRowField(rows, 0, 'financialAngle', 'y');
-    expect(out).toEqual([{ arcName: 'A', financialAngle: 'y' }]);
-    expect(rows[0].financialAngle).toBe('x');
-    expect(out[0]).not.toBe(rows[0]);
-    expect(L.setRowField(rows, 9, 'financialAngle', 'y')).toEqual(rows);
-  });
-
-  it('setRowList accepts CSV string or array', () => {
-    const a = L.setRowList([{ characters: [] }], 0, 'characters', 'a,b');
-    expect(a[0].characters).toEqual(['a', 'b']);
-    const b = L.setRowList([{ characters: [] }], 0, 'characters', ['x']);
-    expect(b[0].characters).toEqual(['x']);
-  });
-
-  it('removeRow / addRow are immutable', () => {
-    expect(L.removeRow([1, 2, 3], 1)).toEqual([1, 3]);
-    expect(L.addRow([1], 2)).toEqual([1, 2]);
-    expect(L.addRow(null, { x: 1 })).toEqual([{ x: 1 }]);
-  });
-
-  it('coerceInt floors valid numbers, undefined otherwise', () => {
-    expect(L.coerceInt('3')).toBe(3);
-    expect(L.coerceInt(3)).toBe(3);
-    expect(L.coerceInt('3.9')).toBe(3);
-    expect(L.coerceInt('')).toBeUndefined();
-    expect(L.coerceInt('abc')).toBeUndefined();
-    expect(L.coerceInt(null)).toBeUndefined();
-  });
-
-  it('coerceTotal keeps currency strings, numbers stay numbers', () => {
-    expect(L.coerceTotal('1200')).toBe(1200);
-    expect(L.coerceTotal(1200)).toBe(1200);
-    expect(L.coerceTotal('1200.5')).toBe(1200.5);
-    expect(L.coerceTotal('$1.2M')).toBe('$1.2M');
-    expect(L.coerceTotal('approx 500')).toBe('approx 500');
-    expect(L.coerceTotal('-50')).toBe(-50);
-    expect(L.coerceTotal('')).toBeUndefined();
-  });
-
   it('nonEmpty gates non-blank strings only', () => {
     expect(L.nonEmpty('x')).toBe(true);
     expect(L.nonEmpty('  ')).toBe(false);
     expect(L.nonEmpty('')).toBe(false);
     expect(L.nonEmpty(null)).toBe(false);
     expect(L.nonEmpty(5)).toBe(false);
-  });
-
-  it('rowsToMap / mapToRows round-trip; blank keys dropped', () => {
-    expect(L.rowsToMap([{ key: 'Sarah', value: 'lead' }, { key: '', value: 'z' }, { key: 'Bob', value: 'x' }]))
-      .toEqual({ Sarah: 'lead', Bob: 'x' });
-    expect(L.rowsToMap([])).toEqual({});
-    expect(L.mapToRows({ Sarah: 'lead' })).toEqual([{ key: 'Sarah', value: 'lead' }]);
-    expect(L.mapToRows(null)).toEqual([]);
-    expect(L.mapToRows(['a'])).toEqual([]);
-    expect(L.rowsToMap(L.mapToRows({ a: '1', b: '2' }))).toEqual({ a: '1', b: '2' });
   });
 
   it('computeResetKey (B5) distinguishes revisions with identical 100-char prefixes', () => {
