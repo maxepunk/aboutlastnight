@@ -19,17 +19,21 @@
  * The desk sends two things (fix round 1). Approve and Send back send the bundle on the desk, so JSON
  * the director typed in the JSON editor holds them too: only that editor's own Save & Approve sends
  * it, and the review saw Approve drop it without a word. Save & Approve sends the JSON, so it waits
- * only for what the JSON leaves out.
+ * for what the JSON leaves out: an open editor's form, and every change made on the desk after the
+ * JSON editor took its text from it. The review saved a block edit, as the line asked, and Save &
+ * Approve then sent the JSON from before the save.
  *
  * unsavedInputLine(stop, open) is the one rule. Each stop's component asks it once per render for
  * each set of buttons that sends one thing, with what it has open, and gets back the line for those
  * buttons, or null when nothing waits:
- *   - 'article', the desk's Approve and Send back: { editor, bundle, json }. `editor` is Article.js's
- *     editingBlock: an open editor holds the actions whatever it holds, since the desk cannot see an
- *     editor's form. `json` is the JSON editor while it is open, { text, seed }: the text it holds
- *     and the text it opened with, which differ once the director types in it. It is null while the
- *     editor is closed, since the editor takes the desk's text again when it opens.
- *   - 'article-json', the JSON editor's Save & Approve: the desk's { editor, bundle, json }.
+ *   - 'article', the desk's Approve and Send back: { editor, bundle, json, deskVersion }. `editor` is
+ *     Article.js's editingBlock: an open editor holds the actions whatever it holds, since the desk
+ *     cannot see an editor's form. `deskVersion` is Article.js's count of the changes on the desk.
+ *     `json` is the JSON editor while it is open, { text, seed, seededAt }: the text it holds, the
+ *     text it opened with, and the desk's count when it opened. The text differs from the seed once
+ *     the director types, and the count moves once the desk changes after the editor opened. `json`
+ *     is null while the editor is closed, since the editor takes the desk's text again when it opens.
+ *   - 'article-json', the JSON editor's Save & Approve: the desk's { editor, bundle, json, deskVersion }.
  *   - 'outline', the map: { editor, adding, sections }. `editor` is Outline.js's editing, an open
  *     editor; `adding` its add-a-beat line, which holds the actions once it holds text; `sections`
  *     the page's sections as mapView lists them, whose labels name a section.
@@ -184,8 +188,9 @@
   }
 
   /**
-   * The desk's JSON editor while it is open, or null while it is closed. It says the text it holds
-   * and the text it opened with, which tell JSON the director typed from the desk's own.
+   * The desk's JSON editor while it is open, as { typed, behind }, or null while it is closed.
+   * `typed`: its text differs from the text it opened with. `behind`: the desk's count of changes
+   * has moved since it opened, so its text lacks those changes.
    */
   function deskJson(open) {
     var json = open.json;
@@ -193,27 +198,46 @@
     if (!isPlainObject(json) || typeof json.text !== 'string' || typeof json.seed !== 'string') {
       throw new Error('unsavedInputLine: the desk\'s open JSON editor must say the text it holds and the text it opened with ({ text, seed })');
     }
-    return json;
+    if (typeof json.seededAt !== 'number' || typeof open.deskVersion !== 'number') {
+      throw new Error('unsavedInputLine: the desk\'s open JSON editor must say the desk\'s count of changes when it opened (json.seededAt), and the desk its count now (deskVersion)');
+    }
+    return { typed: json.text !== json.seed, behind: json.seededAt !== open.deskVersion };
   }
 
   /**
-   * What the line asks of JSON the director typed in the JSON editor, which Approve and Send back
-   * would leave behind: discard it by closing the editor, or send it with the editor's own button.
+   * What the row's line asks of JSON the director typed in the JSON editor, which Approve and Send
+   * back would leave behind: discard it by closing the editor, or send it with the editor's own Save
+   * & Approve. Once the desk has changed since the editor opened, Save & Approve would drop that
+   * change, so closing is the one way on.
    */
   var JSON_TYPED = 'close the JSON editor to discard what you typed in it, or send what you typed with Save & Approve';
+  var JSON_TYPED_BEHIND = 'close the JSON editor to discard what you typed in it';
+
+  /**
+   * What Save & Approve's line asks once the desk has changed since the JSON editor took its text:
+   * closed and opened again, the editor takes the desk's text, and closing it discards anything typed
+   * in it.
+   */
+  var JSON_BEHIND = 'close the JSON editor and open it again so it holds your latest changes on the desk';
+  var JSON_BEHIND_TYPED = 'close the JSON editor, which discards what you typed in it, and open it again so it holds your latest changes on the desk';
 
   /** Approve and Send back send the bundle on the desk: neither an open editor's form nor typed JSON is in it. */
   function deskInstructions(open) {
     var instructions = deskEditorInstructions(open);
     var json = deskJson(open);
-    if (json && json.text !== json.seed) instructions.push(JSON_TYPED);
+    if (json && json.typed) instructions.push(json.behind ? JSON_TYPED_BEHIND : JSON_TYPED);
     return instructions;
   }
 
-  /** The JSON editor's Save & Approve sends the JSON typed there: an open editor's form is not in it. */
+  /**
+   * The JSON editor's Save & Approve sends the JSON typed there: neither an open editor's form nor a
+   * change made on the desk after the editor opened is in it.
+   */
   function jsonEditorInstructions(open) {
-    deskJson(open);
-    return deskEditorInstructions(open);
+    var instructions = deskEditorInstructions(open);
+    var json = deskJson(open);
+    if (json && json.behind) instructions.push(json.typed ? JSON_BEHIND_TYPED : JSON_BEHIND);
+    return instructions;
   }
 
   // ── The map ───────────────────────────────────────────────────────────────

@@ -171,8 +171,8 @@ describe('4.14d fix round 1, finding 2: JSON typed in the desk\'s JSON editor ho
   const SEED = JSON.stringify(deskBundle(), null, 2);
   const TYPED = SEED.replace('We only kept the books.', 'We kept two sets of books.');
   const OPEN_BLOCK = { type: 'block', sectionIdx: 1, blockIdx: 0 };
-  /** The desk with its JSON editor open on SEED and holding `text`, and `editor` open or not. */
-  const withJson = (text, editor = null) => ({ editor, bundle: deskBundle(), json: { text, seed: SEED } });
+  /** The desk with its JSON editor open on SEED and holding `text`, the desk unchanged since, and `editor` open or not. */
+  const withJson = (text, editor = null) => ({ editor, bundle: deskBundle(), json: { text, seed: SEED, seededAt: 0 }, deskVersion: 0 });
 
   it('holds nothing while the JSON editor holds the text it opened with', () => {
     expect(unsavedInputLine('article', withJson(SEED))).toBeNull();
@@ -203,5 +203,48 @@ describe('4.14d fix round 1, finding 2: JSON typed in the desk\'s JSON editor ho
   it('refuses an open JSON editor that does not say what it holds and the text it opened with', () => {
     expect(() => unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: { text: TYPED } })).toThrow(/JSON editor/);
     expect(() => unsavedInputLine('article-json', { editor: null, bundle: deskBundle(), json: {} })).toThrow(/JSON editor/);
+  });
+});
+
+describe('4.14d fix round 1, finding 1: the JSON editor\'s Save & Approve waits for changes made on the desk after it opened', () => {
+  // The JSON editor takes its text from the desk when it opens, and Save & Approve sends that text. The
+  // review followed the held line (save the open block editor) and pressed Save & Approve: it sent the
+  // JSON from before the save, the writer's closing over the director's. `deskVersion` counts the
+  // changes on the desk, and `seededAt` is its count when the JSON editor opened.
+  const SEED = JSON.stringify(deskBundle(), null, 2);
+  const TYPED = SEED.replace('We only kept the books.', 'We kept two sets of books.');
+  const OPEN_BLOCK = { type: 'block', sectionIdx: 1, blockIdx: 0 };
+  /** The desk at `deskVersion`, its JSON editor holding `text`, opened on SEED at `seededAt`. */
+  const withJson = (text, { seededAt = 2, deskVersion = 2, editor = null } = {}) =>
+    ({ editor, bundle: deskBundle(), json: { text, seed: SEED, seededAt }, deskVersion });
+
+  it('holds nothing while the desk has not changed since the JSON editor opened', () => {
+    expect(unsavedInputLine('article-json', withJson(SEED))).toBeNull();
+  });
+
+  it('holds Save & Approve once the desk has changed since, and says to close the JSON editor and open it again', () => {
+    expect(unsavedInputLine('article-json', withJson(SEED, { deskVersion: 3 })))
+      .toBe('Before you approve, close the JSON editor and open it again so it holds your latest changes on the desk.');
+  });
+
+  it('leaves Approve and Send back free, since they send the desk with its changes', () => {
+    expect(unsavedInputLine('article', withJson(SEED, { deskVersion: 3 }))).toBeNull();
+  });
+
+  it('with JSON typed too, holds all three, since no button sends both, and says closing the JSON editor discards what was typed', () => {
+    expect(unsavedInputLine('article-json', withJson(TYPED, { deskVersion: 3 })))
+      .toBe('Before you approve, close the JSON editor, which discards what you typed in it, and open it again so it holds your latest changes on the desk.');
+    expect(unsavedInputLine('article', withJson(TYPED, { deskVersion: 3 })))
+      .toBe('Before you approve or send back, close the JSON editor to discard what you typed in it.');
+  });
+
+  it('with an editor open too, names the editor first', () => {
+    expect(unsavedInputLine('article-json', withJson(SEED, { deskVersion: 3, editor: OPEN_BLOCK })))
+      .toBe('Before you approve: save or cancel your edit to the paragraph in "The Story"; close the JSON editor and open it again so it holds your latest changes on the desk.');
+  });
+
+  it('refuses an open JSON editor that does not say the desk\'s count when it opened, or a desk that does not say its count now', () => {
+    expect(() => unsavedInputLine('article-json', { editor: null, bundle: deskBundle(), json: { text: SEED, seed: SEED }, deskVersion: 2 })).toThrow(/seededAt/);
+    expect(() => unsavedInputLine('article', { editor: null, bundle: deskBundle(), json: { text: SEED, seed: SEED, seededAt: 2 } })).toThrow(/deskVersion/);
   });
 });

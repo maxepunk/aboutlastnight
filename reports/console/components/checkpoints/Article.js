@@ -28,7 +28,8 @@
  * Save & Approve, and a line beside them says to save or cancel it first (unsavedInputLine), so
  * an approve never publishes the writer's text over an edit the director left open. JSON typed
  * in the JSON editor holds Approve and Send back the same way, since only the JSON editor's own
- * Save & Approve sends it (fix round 1).
+ * Save & Approve sends it, and a change made on the desk after the JSON editor opened holds that
+ * Save & Approve, since its JSON lacks the change (fix round 1).
  */
 
 window.Console = window.Console || {};
@@ -557,9 +558,11 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   });
   const [mode, setMode] = React.useState('view'); // 'view' | 'json'
   const [jsonText, setJsonText] = React.useState('');
-  // Task 4.14d: the text the JSON editor opened with, set each time it opens and read while it is
-  // open; the JSON differs from it once the director types.
+  // Task 4.14d: the text the JSON editor opened with and the desk's count of changes (deskVersion)
+  // then, set each time it opens and read while it is open. The JSON differs from the seed once the
+  // director types, and the count moves once the desk changes after it opened.
   const [jsonSeed, setJsonSeed] = React.useState('');
+  const [jsonSeededAt, setJsonSeededAt] = React.useState(0);
   const [jsonError, setJsonError] = React.useState('');
   // B6: inline error for a bundle that fails the desk's checks or the client shape gate.
   const [editError, setEditError] = React.useState('');
@@ -588,14 +591,16 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   // Task 4.14d: an open editor's form reaches the desk only when the director saves it, and JSON
-  // typed in the JSON editor reaches a payload only through its own Save & Approve. The desk sends
-  // two things, so it asks twice: `held` for Approve and Send back, which send the bundle on the
-  // desk, and `jsonHeld` for the JSON editor's Save & Approve, which sends the JSON. While an answer
-  // holds, its buttons wait, and its line beside them says why.
+  // typed in the JSON editor reaches a payload only through its own Save & Approve, which sends
+  // nothing changed on the desk after the JSON editor opened. The desk sends two things, so it asks
+  // twice: `held` for Approve and Send back, which send the bundle on the desk, and `jsonHeld` for
+  // the JSON editor's Save & Approve, which sends the JSON. While an answer holds, its buttons wait,
+  // and its line beside them says why.
   const unsaved = {
     editor: editingBlock,
     bundle: editedBundle || contentBundle,
-    json: mode === 'json' ? { text: jsonText, seed: jsonSeed } : null
+    json: mode === 'json' ? { text: jsonText, seed: jsonSeed, seededAt: jsonSeededAt } : null,
+    deskVersion: deskVersion
   };
   const held = unsavedInputLine('article', unsaved);
   const jsonHeld = unsavedInputLine('article-json', unsaved);
@@ -869,10 +874,12 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
     }
     setMode(newMode);
     if (newMode === 'json') {
-      // The JSON editor opens on the bundle on the desk, and keeps that text as its seed.
+      // The JSON editor opens on the bundle on the desk, and keeps that text as its seed and the
+      // desk's count of changes then.
       var seed = safeStringify(getCurrentBundle(), 2);
       setJsonText(seed);
       setJsonSeed(seed);
+      setJsonSeededAt(deskVersion);
       setJsonError('');
     }
   }

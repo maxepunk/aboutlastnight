@@ -147,13 +147,31 @@ describe('4.14d: at the desk, the JSON editor', () => {
     expect(panel.indexOf(line('jsonHeld'))).toBeGreaterThan(panel.indexOf("'Save & Approve'"));
   });
 
-  it('tells both asks, while it is open, what it holds and the text it opened with (fix round 1, finding 2)', () => {
-    expect(src).toContain("json: mode === 'json' ? { text: jsonText, seed: jsonSeed } : null");
+  it('tells both asks, while it is open, what it holds, the text it opened with and the desk\'s count of changes then, beside the count now (fix round 1)', () => {
+    expect(src).toContain([
+      '  const unsaved = {',
+      '    editor: editingBlock,',
+      '    bundle: editedBundle || contentBundle,',
+      "    json: mode === 'json' ? { text: jsonText, seed: jsonSeed, seededAt: jsonSeededAt } : null,",
+      '    deskVersion: deskVersion',
+      '  };'
+    ].join('\n'));
   });
 
-  it('keeps the text it opens with as its seed, which tells JSON the director typed from the desk\'s own', () => {
+  it('keeps, when it opens, its text as its seed, which tells JSON the director typed, and the desk\'s count then', () => {
     const body = functionBody(src, 'handleModeChange');
     expect(body).toContain('setJsonText(seed);');
     expect(body).toContain('setJsonSeed(seed);');
+    expect(body).toContain('setJsonSeededAt(deskVersion);');
+  });
+
+  it('sees every change to the desk: each place that puts a bundle on the desk also moves its count (fix round 1, finding 1)', () => {
+    const places = [...src.matchAll(/setEditedBundle\(/g)].map((m) => m.index);
+    expect(places.length).toBeGreaterThan(0);
+    places.forEach((at) => {
+      const where = src.slice(at, src.indexOf('\n', at));
+      const block = src.slice(at, src.indexOf('\n  }', at));
+      expect([where, block.includes('setDeskVersion(')]).toEqual([where, true]);
+    });
   });
 });
