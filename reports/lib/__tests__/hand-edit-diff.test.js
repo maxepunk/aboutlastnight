@@ -3292,3 +3292,93 @@ describe('4.5g: a connection the director brought back goes back with the words 
     expect(fix.report.changed[0].director).not.toContain(WEAVE.connections[1].detail);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5g, fix round 1: an element code put back without its photo stands as code put it back
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The review of 4.5g, finding 1 (scratch 4.5g-review/form2-second-pass.js): code put back a
+// section the director added whole without a photo the article cannot print, which a pass took
+// out of print, and every later reader still read the edit with its photo, which the version
+// stored no longer prints. The round's next pass was held to nothing there and rewrote the
+// director's paragraph unrestored, the judge and the fact check read the paragraph as the
+// writer's, and the next send-back dropped the edit, while the stop said the rest of the edit
+// stands (R11). The edit now stands as code put it back: one reading of "carried" for the
+// report, the edits' carry and the send-back. Invented text.
+describe('4.5g, fix round 1: an element code put back without a photo the article cannot print stands as code put it back', () => {
+  const S = { id: 's', type: 'narrative', content: [paragraph('Alpha paragraph opens the section with a long first line here.')] };
+  const P = paragraph('A paragraph the director wrote for a new section here.');
+  const P2 = paragraph('A paragraph a pass rewrote inside the section the director added.');
+  const CAPTION = 'Six people huddle at the bar, late in the evening.';
+  const photo = (filename, caption = CAPTION) => ({ type: 'photo', filename, caption });
+  const article = (sections) => ({ metadata: { sessionId: '0926262' }, headline: { main: 'The Room Voted Five to Four' }, sections: sections.map(clone) });
+  const added = (content) => ({ id: 'added', type: 'narrative', heading: 'Added', content });
+  const KEPT = ['a.jpg'];
+  const shown = article([S]);
+  const sentBack = article([S, added([P, photo('not-ours.jpg')])]);
+  const standing = () => D.standingAfterSendBack(null, shown, sentBack, 'bundle');
+  /** One automatic pass of the round, from `before` to `after`, held to the edits `held` carries in `before`. */
+  const pass = (previous, held, before, after, n, options = { photos: KEPT }) =>
+    D.settleEdits(previous, { edits: D.carriedEdits(held, before), before, after, pass: n, ...options });
+
+  it.each([
+    ['removed the photo', article([S, added([P])])],
+    ['renamed the photo to one the article can print', article([S, added([P, photo('a.jpg')])])],
+    ['removed the section', article([S])]
+  ])('a pass that %s: the edit stands without the photo, so the next pass is held to the rest, and the next send-back keeps it', (_name, after) => {
+    const asRestored = { ...standing().edits[0], after: added([P]) };
+    const pass1 = pass(null, standing(), sentBack, after, 1);
+    expect(pass1.output.sections).toEqual([S, added([P])]);
+    expect(pass1.report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true, unprintable: true })]);
+    expect(pass1.narrowed).toEqual([asRestored]);
+    const held = D.standingAfterPass(standing(), pass1.narrowed);
+    expect(held).toEqual({ ...standing(), edits: [asRestored] });
+    // One reading: the version stored carries the edit exactly where the report says code put it back.
+    expect(D.carriedEdits(held, pass1.output).map((e) => e.id)).toEqual(['E1']);
+
+    // The round's next pass rewrites the director's paragraph: code puts it back.
+    const pass2 = pass(pass1.report, held, pass1.output, article([S, added([P2])]), 2);
+    expect(pass2.output.sections).toEqual([S, added([P])]);
+    expect(pass2.report.changed).toEqual([
+      expect.objectContaining({ id: 'E1', pass: 1, restored: true, unprintable: true }),
+      expect.objectContaining({ id: 'E1', pass: 2, restored: true })
+    ]);
+    expect(pass2.report.changed[1]).not.toHaveProperty('unprintable');
+    expect(pass2.narrowed).toEqual([]);
+    expect(D.standingAfterPass(held, pass2.narrowed)).toBe(held);
+
+    // The next send-back, where the director changed nothing: the edit stands as code put it back.
+    expect(D.standingAfterSendBack(held, pass2.output, pass2.output, 'bundle')).toEqual({ ...standing(), edits: [asRestored] });
+  });
+
+  it('nothing else narrows: a photo the pass kept, a caption or a whole photo block left out with its photo, and a pass given no list', () => {
+    const kept = pass(null, standing(), sentBack, article([S, added([P2, photo('not-ours.jpg')])]), 1);
+    expect(kept.output.sections).toEqual(sentBack.sections);
+    expect(kept.narrowed).toEqual([]);
+
+    const block = article([{ ...S, content: [...S.content, photo('not-ours.jpg')] }]);
+    const blockStanding = D.standingAfterSendBack(null, shown, block, 'bundle');
+    const blockOut = pass(null, blockStanding, block, shown, 1);
+    expect(blockOut.report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: false, unprintable: true })]);
+    expect(blockOut.narrowed).toEqual([]);
+
+    const writers = article([{ ...S, content: [...S.content, photo('not-ours.jpg', 'The writer.')] }]);
+    const captioned = article([{ ...S, content: [...S.content, photo('not-ours.jpg')] }]);
+    const captionOut = pass(null, D.standingAfterSendBack(null, writers, captioned, 'bundle'), captioned, shown, 1);
+    expect(captionOut.report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: false, unprintable: true })]);
+    expect(captionOut.narrowed).toEqual([]);
+
+    const noList = pass(null, standing(), sentBack, article([S, added([P])]), 1, {});
+    expect(noList.output.sections).toEqual(sentBack.sections);
+    expect(noList.narrowed).toEqual([]);
+  });
+
+  it('standingAfterPass: an edit narrowed takes the place of the one under its id, and with none narrowed the standing edits are returned as they are', () => {
+    const two = D.standingAfterSendBack(null, shown, article([{ ...S, heading: 'The Story' }, added([P, photo('not-ours.jpg')])]), 'bundle');
+    expect(two.edits.map((e) => e.path)).toEqual(['sections[#s].heading', 'sections[#added]']);
+    const narrowed = { ...two.edits[1], after: added([P]) };
+    expect(D.standingAfterPass(two, [narrowed])).toEqual({ ...two, edits: [two.edits[0], narrowed] });
+    [undefined, null, []].forEach((none) => expect(D.standingAfterPass(two, none)).toBe(two));
+    expect(D.standingAfterPass(null, [narrowed])).toBeNull();
+  });
+});

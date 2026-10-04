@@ -501,8 +501,9 @@
   /**
    * What the line says of an element the director put in whole that code put back without a photo
    * the article cannot print, which a pass took out of print (task 4.5g: the entry's `unprintable`
-   * beside `restored`): the rest of the director's edit stands, and the place may want a photo the
-   * article can print.
+   * beside `restored`): the rest of the director's edit stands, as code put it back, for every
+   * later pass and the next send-back (lib/hand-edit-diff.js standingAfterPass; fix round 1), and
+   * the place may want a photo the article can print.
    */
   var PUT_BACK_WITHOUT_PHOTO = 'The rest of your edit stands: place a photo the article can print here if it should have one.';
 

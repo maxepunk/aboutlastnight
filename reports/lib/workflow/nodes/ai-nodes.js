@@ -29,7 +29,8 @@ const {
   filterGateNotes
 } = require('../../prompt-builder');
 const {
-  carriedEdits, settleEdits, standingAfterSendBack, SEND_BACK_PASS, CHANGED_EDITS_KEY, MAP_TOP_PHOTO, isCut, sessionPhotoNames
+  carriedEdits, settleEdits, standingAfterSendBack, SEND_BACK_PASS, CHANGED_EDITS_KEY, MAP_TOP_PHOTO, isCut, sessionPhotoNames,
+  standingAfterPass
 } = require('../../hand-edit-diff');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map's schema for the theme (its slots), and the hero its top
@@ -1751,6 +1752,10 @@ async function reviseContentBundle(state, config) {
       photos: sessionPhotoNames(state.sessionPhotos).length > 0 ? keptPhotoFilenames(state, null) : undefined,
       whiteboard: whiteboardFilenameOf(state)
     });
+    // Task 4.5g, fix round 1: an element the director put in whole that code put back without
+    // such a photo stands as code put it back, so the round's next pass, the judge, the fact
+    // check and the next send-back hold the rest of it as the director's.
+    const standing = standingAfterPass(state._articleHandEdits, settled.narrowed);
 
     return {
       contentBundle: {
@@ -1767,6 +1772,7 @@ async function reviseContentBundle(state, config) {
       _previousContentBundle: null,  // Clear temporary field after use
       _articleFeedback: null,  // Clear human feedback after consumption
       _articleHandEditReport: settled.report,
+      ...(standing !== state._articleHandEdits && { _articleHandEdits: standing }),
       currentPhase: PHASES.GENERATE_CONTENT
     };
 

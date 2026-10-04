@@ -59,7 +59,9 @@
  * it precedes, each where the section still holds it (task 4.3). A cut is
  * carried while none of its pieces is back. Text is read from the fields the page prints
  * (printedParts; known item 6), and a piece under six words is back only as a whole
- * sentence (known item 4).
+ * sentence (known item 4). An element the director put in whole that code put back without
+ * a photo the article cannot print stands without it from then on (standingAfterPass; task
+ * 4.5g, fix round 1), so a version carries it while it holds the rest.
  *
  * A MOVE WITHIN A SECTION STAYS WHILE ITS BLOCK DOES (task 4.3b). At a send-back where the
  * director's own move of a neighbour broke the order a move within the section recorded,
@@ -2914,17 +2916,25 @@ function unprintablePhotosOf(edit, before, photos, whiteboard) {
 }
 
 /**
- * Does `obj` carry an edit as the restore puts it back (tasks 4.5f and 4.5g): carried, or, for
- * an element the director put in whole, carried apart from its photo blocks the restore leaves
- * out (`leavesOut`, leftOutOfRestore's), whichever path of the restore put it back.
+ * An edit as the restore puts it back (tasks 4.5f and 4.5g): an element the director put in
+ * whole, without its photo blocks the restore leaves out (`leavesOut`, leftOutOfRestore's),
+ * which is what every path of the restore writes; any other edit as it is, and so is an element
+ * the restore leaves out whole, a photo block the director put in, which stays out with its
+ * photo. The one reading of whether a version carries an edit after a pass (4.5g, fix round 1):
+ * the report's `restored` reads it (settleEdits), and an edit it narrows stands narrowed
+ * (standingAfterPass), which every later reader carries as it does any edit (carriedEdits,
+ * standingAfterSendBack).
+ *
+ * @param {Object} edit
+ * @param {function(*): boolean} leavesOut - the photo blocks the restore leaves out
+ * @returns {Object} the edit itself, or a copy whose `after` is the element as put back
  */
-function carriedAsRestored(obj, edit, leavesOut) {
-  if (editCarried(obj, edit)) return true;
+function editAsRestored(edit, leavesOut) {
   const steps = stepsOf(edit);
   const last = steps.length - 1;
-  if (isCut(edit) || ownsNoText(edit) || mapAddressOf(edit) || !isElementStep(steps[last])) return false;
+  if (isCut(edit) || ownsNoText(edit) || mapAddressOf(edit) || !isElementStep(steps[last])) return edit;
   const restored = withoutLeftOut(collectionAt(steps, last), edit.after, leavesOut);
-  return restored !== null && restored !== edit.after && editCarried(obj, { ...edit, after: restored });
+  return restored === null || restored === edit.after ? edit : { ...edit, after: restored };
 }
 
 /**
@@ -3149,11 +3159,15 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  * the director put in whole goes back without it, by either path of the restore (task 4.5f),
  * so an automatic pass that fixed an invalid photo keeps its fix. A photo the pass kept goes
  * back as the director left it, printable or not, caption and place included (task 4.5g). The
- * article's rework gives the list (ai-nodes.js reviseContentBundle; task 4.5f). The report
- * records what each pass did and each restore: an element put in whole counts as put back when
- * it is carried apart from the photos the restore left out, and an edit holding a photo the
- * article cannot print that the version stored prints nowhere is marked `unprintable`, so an
- * edit whose photo a pass moved and still prints carries no such mark (task 4.5f).
+ * article's rework gives the list (ai-nodes.js reviseContentBundle; task 4.5f). An element put
+ * in whole that went back without such a photo stands as it went back (`narrowed`; 4.5g, fix
+ * round 1): the caller stores it in the edit's place (standingAfterPass), so the rest of the
+ * element stays the director's for every later reader of the round and past its stop. The
+ * report records what each pass did and each restore: an edit counts as put back when the
+ * version stored carries it as the restore puts it back (editAsRestored), and an edit holding a
+ * photo the article cannot print that the version stored prints nowhere is marked
+ * `unprintable`, so an edit whose photo a pass moved and still prints carries no such mark
+ * (task 4.5f).
  *
  * @param {Object|null} previous - the round's report so far
  * @param {Object} pass - as reportAfterPass takes it: {edits, before, after, pass, reasons}
@@ -3165,14 +3179,17 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
  *   whiteboard, and the story meeting's and the map's passes give none
  * @param {string|null} [pass.whiteboard] - the whiteboard photo's filename, which no list
  *   holds and the article never prints (T13; task 4.5g)
- * @returns {{output: *, report: Object|null}} the version to store, and the report
+ * @returns {{output: *, report: Object|null, narrowed: Object[]}} the version to store, the
+ *   report, and each edit code put back without a photo it left out, as it stands now: empty
+ *   unless the pass was given `photos` or `whiteboard`, as only the article's rework is
  */
 function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [], photos, whiteboard = null } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
-  if (carried.length === 0) return { output: after, report: previous || null };
+  if (carried.length === 0) return { output: after, report: previous || null, narrowed: [] };
   let output = after;
   const restored = [];
   const unprintable = [];
+  const narrowed = [];
   if (pass !== SEND_BACK_PASS && isObj(after)) {
     const outcome = (e) => moveOutcome(e, before, after).outcome;
     const changed = carried.filter((e) => !isCut(e) && (isMove(e) ? outcome(e) !== 'kept' : !editCarried(after, e)));
@@ -3197,17 +3214,42 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // field the director wrote; that field goes back on the copy kept.
       carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
         .forEach((e) => restoreEdit(e, before, output, leavesOut));
-      // Task 4.5f: one reading on every path of the restore. An element put in whole is put
-      // back when it is carried apart from its photo blocks the restore left out, and an edit
-      // is unprintable when a photo block of it the article cannot print prints nowhere in the
-      // version stored.
+      // Task 4.5f: one reading on every path of the restore. An edit is put back when the
+      // version stored carries it as the restore puts it back (editAsRestored), and one put
+      // back without a photo the restore left out stands so from here on (4.5g, fix round 1).
+      // An edit is unprintable when a photo block of it the article cannot print prints
+      // nowhere in the version stored.
       changed.forEach((e) => {
-        if (carriedAsRestored(output, e, leavesOut) || backInSection(e, after, output)) restored.push(e.id);
+        const asRestored = editAsRestored(e, leavesOut);
+        const carriedNow = editCarried(output, asRestored);
+        if (carriedNow || backInSection(e, after, output)) restored.push(e.id);
+        if (carriedNow && asRestored !== e) narrowed.push(asRestored);
         if (unprintablePhotosOf(e, before, photos, whiteboard).some((block) => !printsPhoto(output, block))) unprintable.push(e.id);
       });
     }
   }
-  return { output, report: reportAfterPass(previous, { edits: carried, before, after, pass, reasons, restored, unprintable, stored: output }) };
+  return { output, report: reportAfterPass(previous, { edits: carried, before, after, pass, reasons, restored, unprintable, stored: output }), narrowed };
+}
+
+/**
+ * The stop's standing edits after a pass (4.5g, fix round 1): `previous`, with each edit
+ * settleEdits narrowed in the place of the edit under its id. An edit narrowed is an element
+ * the director put in whole that code put back without a photo the article cannot print, which
+ * the pass took out of print (editAsRestored): it stands as code put it back, so the round's
+ * next pass, the judge, the verdict guard and the fact check (carriedEdits) and the next
+ * send-back (standingAfterSendBack) hold the rest of it as the director's (R11). `previous`
+ * itself when the pass narrowed none. The article's rework stores it (ai-nodes.js
+ * reviseContentBundle), the one pass given the photos the article can print.
+ *
+ * @param {*} previous - the stop's standing edits (state._articleHandEdits)
+ * @param {Object[]} [narrowed] - settleEdits' `narrowed`
+ * @returns {*} the standing edits to store
+ */
+function standingAfterPass(previous, narrowed) {
+  const byId = new Map((Array.isArray(narrowed) ? narrowed : []).filter(isEdit).map((e) => [e.id, e]));
+  const standing = byId.size > 0 ? standingEditsOf(previous) : null;
+  if (!standing) return previous;
+  return { ...standing, edits: standing.edits.map((e) => byId.get(e.id) || e) };
 }
 
 /**
@@ -3238,8 +3280,9 @@ module.exports = {
   // Task 4.5e: an edit of a place alone, which the verdict guard reads
   ownsNoText,
   // Task 4.5f: a photo's name as a photo reference is matched, which the fact check imports.
-  // Task 4.5g: the session's photo names, which the fact check and the article's rework read
-  photoBasename, sessionPhotoNames,
+  // Task 4.5g: the session's photo names, which the fact check and the article's rework read,
+  // and the standing edits after a pass, which the article's rework stores (fix round 1)
+  photoBasename, sessionPhotoNames, standingAfterPass,
   _testing: {
     matchBlocks, blockKey, canon, same, matchesAfter, editCarried, editWhere, becameOf, sentencesOf, holdsWhole,
     MIN_LOCATING_WORDS, MIN_INLINE_PIECE_WORDS, printedLeaves, restoreEdit, idOf, stepsOf,

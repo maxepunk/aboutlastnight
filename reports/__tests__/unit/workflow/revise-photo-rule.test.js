@@ -172,3 +172,51 @@ describe("4.5g: the session's photo names decide whether the fact check checks t
     expect(factCheckOf(state, 'wb.jpg').photoReferences.invalid).toEqual(['wb.jpg']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4.5g, fix round 1: the article rework stores an element code put back without a photo the
+// article cannot print as code put it back (the review of 4.5g, finding 1). Invented text.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('4.5g, fix round 1: the article rework stores an element code put back without its photo as code put it back', () => {
+  const { judgedEdits } = require('../../../lib/workflow/nodes/evaluator-nodes')._testing;
+  const A = paragraph('Alpha paragraph opens the section with a long first line here.');
+  const P = paragraph('A paragraph the director wrote for the section they added.');
+  const CAPTION = 'Six people huddle at the bar, late in the evening.';
+  const story = (content) => ({ id: 's', type: 'narrative', heading: 'The Story', content: content.map(clone) });
+  const added = (content) => ({ id: 'added', type: 'narrative', heading: 'What the Room Missed', content: content.map(clone) });
+  const article = (sections) => ({
+    metadata: { sessionId: '0926262' },
+    headline: { main: 'The Room Voted Five to Four', kicker: 'NovaNews', deck: 'The room named Alex.' },
+    sections
+  });
+  const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: createMockPromptBuilder(), theme: 'journalist' } });
+  const state = { sessionPhotos: ['photos/a.jpg'] };
+
+  /** The director adds a section whole, their paragraph and a photo the session does not hold; then an automatic pass returns `after`. */
+  async function automaticPass(after) {
+    const sentBack = article([story([A]), added([P, photo('not-ours.jpg', CAPTION)])]);
+    const standing = standingAfterSendBack(null, article([story([A])]), sentBack, 'bundle');
+    const result = await reviseContentBundle(
+      { ...state, _previousContentBundle: sentBack, _articleHandEdits: standing, articleRevisionCount: 1 },
+      cfg(jest.fn(async () => clone(after)))
+    );
+    return { standing, result };
+  }
+
+  it("a pass that took the photo out: the edit stands without it, and the judge and the fact check read the rest as the director's", async () => {
+    const { standing, result } = await automaticPass(article([story([A]), added([P])]));
+    expect(result.contentBundle.sections[1].content).toEqual([P]);
+    expect(result._articleHandEdits).toEqual({ ...standing, edits: [{ ...standing.edits[0], after: added([P]) }] });
+    const next = { ...state, contentBundle: result.contentBundle, _articleHandEdits: result._articleHandEdits };
+    expect(judgedEdits('article', next).map((e) => e.id)).toEqual(['E1']);
+    expect(buildFactCheckArgs(next).directorEdits.map((e) => e.id)).toEqual(['E1']);
+  });
+
+  it('a pass that kept the photo, or left the section as the director left it, stores nothing: the edits stand as they are', async () => {
+    const kept = await automaticPass(article([story([A]), added([paragraph('A pass rewrote this line.'), photo('not-ours.jpg', CAPTION)])]));
+    expect(kept.result.contentBundle.sections[1].content).toEqual([P, photo('not-ours.jpg', CAPTION)]);
+    expect(kept.result).not.toHaveProperty('_articleHandEdits');
+    const untouched = await automaticPass(article([story([A, paragraph('A line the writer added.')]), added([P, photo('not-ours.jpg', CAPTION)])]));
+    expect(untouched.result).not.toHaveProperty('_articleHandEdits');
+  });
+});

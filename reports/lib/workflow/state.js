@@ -907,8 +907,10 @@ const ReportStateAnnotation = Annotation.Root({
    * version the stop showed and the version sent back both carry, then the send-back's
    * own, numbered on from `issued`. Read on EVERY pass of the round by the reworks
    * (<HAND_EDITS>, and the restore after an automatic pass), the judges and the fact
-   * check, each through carriedEdits; no node clears it. checkpointArticle clears it on
-   * approve, as do a rollback and a fresh start.
+   * check, each through carriedEdits; no node clears it. The article's rework stores an
+   * element the director put in whole that code put back without a photo the article cannot
+   * print as code put it back (lib/hand-edit-diff.js standingAfterPass; task 4.5g, fix round
+   * 1). checkpointArticle clears it on approve, as do a rollback and a fresh start.
    *
    * Phase 4 (brief 4.6): `_outlineHandEdits` holds the director's edits on the map, made at
    * every approve and send-back against the writer's last map (`_mapBaseline`;
