@@ -297,9 +297,18 @@ const REPO = path.join(__dirname, '..', '..');
  *   into the article stays as written and a block they moved stays where they put it, then the
  *   map's beats per section and the writer's words (+160). A rework carries both word for word
  *   (article-journalist 31016 -> 31306). The outline and arc pins do not move.
+ * - Phase 4 (brief 4.6e), "no note" means no approval note: the map's schema says
+ *   weaveChanges is empty when the director changed nothing and left no approval note at the
+ *   meeting, where it said "left no note" (lib/schemas/outline.schema.json, weaveChanges), as
+ *   lib/map.js meetingNoteOf decides; the fixture's note at the meeting is a rejection. The map
+ *   writer prints the schema in <SCHEMA>, so its render grows by the 24 characters of
+ *   "approval " and " at the meeting" (outline-journalist 18275 -> 18299). The line for a
+ *   change's source prints as before: mapSchemaFor fills in its pointer at the note from the
+ *   one constant the task's note clause reads (lib/map.js MEETING_NOTE_POINTER). The article
+ *   and arc pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['c55efcd18228ad09cec58f15785f777b8bf8d9ae8010069e4db26be1791faaa1', 18275],
+  'outline-journalist': ['cd1098a0c9d73955db806c230fd650825ad546d21f69ade988abc98266d0d5d6', 18299],
   'article-journalist': ['d9c28010915c8720dcd764c0c16d6434ddb63a6b04eebf31519dd807c671940a', 31306],
   'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
 };

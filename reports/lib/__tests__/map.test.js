@@ -928,21 +928,51 @@ describe('4.6d: the schema says what "note" means', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4.6e: the meeting note's pointer has one source
+// 4.6e: "no note" means no approval note, and the note's pointer has one source
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The integrator's ruling 1 on 4.6d's minors (minor 4). Where the prompt holds the director's
-// approval note from the meeting is one constant, MEETING_NOTE_POINTER: the map writer's task
-// prints it, and mapSchemaFor fills it into the schema's line for a change's source.
-describe("4.6e: the meeting note's pointer has one source", () => {
+// The integrator's ruling 1 on 4.6d's minors (minors 2 and 4). The map lists no change to the
+// weave when the director changed nothing at the meeting and approved it with no note, as
+// meetingNoteOf decides: a rejection note the meeting's send-back left prints in the same
+// <DIRECTOR_GUIDANCE> (0926262), so "left no note" read as false beside it. Where the prompt
+// holds the approval note is one constant, MEETING_NOTE_POINTER: the map writer's task prints
+// it, and mapSchemaFor fills it into the schema's line for a change's source.
+describe('4.6e: "no note" means no approval note, and the note\'s pointer has one source', () => {
   const fs = require('fs');
   const path = require('path');
-  const { mapSchemaFor, MEETING_NOTE_POINTER } = require('../map');
+  const { mapSchemaFor, meetingNoteOf, MEETING_NOTE_POINTER } = require('../map');
   const outlineSchema = require('../schemas/outline.schema.json');
   const { PromptBuilder } = require('../prompt-builder');
   const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
   const { WEAVE } = require('./fixtures/rework-state');
+  const EMPTY_WHEN = 'What the map changed in the weave to fit in each change the director made at the story meeting; empty when the director changed nothing and left no approval note at the meeting';
+  const UNASKED = 'The map lists changes to the weave, and the director changed nothing and left no approval note at the meeting. Leave weaveChanges empty.';
   const note = (kind, gate = 'arc-selection') => ({ gate, kind, round: 1, text: 'Lead with the money.', at: '2026-10-04T09:00:00.000Z' });
+  /** The writer's map with one change to the weave, sourced to the meeting's note. */
+  const changed = () => ({ ...writers(), weaveChanges: [{ source: 'note', change: 'The money now leads the closing.' }] });
+
+  it("the schema says weaveChanges is empty when the director changed nothing and left no approval note at the meeting", () => {
+    expect(outlineSchema.properties.weaveChanges.description).toBe(EMPTY_WHEN);
+    // The map writer's schema, which <SCHEMA> prints and the SDK enforces, carries it as written.
+    expect(mapSchemaFor('journalist').properties.weaveChanges.description).toBe(EMPTY_WHEN);
+    expect(EMPTY_WHEN).not.toMatch(/Nova|journalist|detective|\u2014/);
+  });
+
+  it.each([
+    ['no notes at all', []],
+    ["the meeting's rejection note, from a send-back or a reweave", [note('rejection')]],
+    ['an approval note from another stop', [note('approval', 'outline')]]
+  ])('with %s and no edit at the meeting, a change to the weave fails on the line that names the approval note', (_name, notes) => {
+    const meetingNote = meetingNoteOf({ directorGateNotes: notes });
+    expect(meetingNote).toBe(false);
+    expect(mapFindings(changed(), inputs({ meetingNote }))).toEqual({ failures: [{ type: 'weave-change-unasked', message: UNASKED }], concerns: [] });
+  });
+
+  it("with the meeting's approval note, the same change passes", () => {
+    const meetingNote = meetingNoteOf({ directorGateNotes: [note('approval')] });
+    expect(meetingNote).toBe(true);
+    expect(mapFindings(changed(), inputs({ meetingNote }))).toEqual({ failures: [], concerns: [] });
+  });
 
   it("the pointer at the approval note is one constant, which the map writer's task prints and mapSchemaFor fills in", async () => {
     expect(MEETING_NOTE_POINTER).toBe('the approval note marked arc-selection in <DIRECTOR_GUIDANCE>');

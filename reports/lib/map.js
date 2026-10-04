@@ -62,7 +62,7 @@ const MAP_CARDS = Object.freeze({ min: 3, max: 5 });
 /** The `source` the map checks stamp on validationResults (node-helpers.js CODE_CHECKS). */
 const MAP_CHECKS_SOURCE = 'map-checks';
 
-/** The source a change to the weave names when the director's note at the meeting asked for it. */
+/** The source a change to the weave names when the director's approval note at the meeting asked for it. */
 const MEETING_NOTE_SOURCE = 'note';
 
 /** The story meeting's stop type (R3), the gate its notes carry. */
@@ -340,9 +340,9 @@ function editsRemovingConnection(entries, connection) {
  *   three to five (`card-count`; C9);
  * - every live connection of the settled weave lands in a section's beat
  *   (`connection-not-landed`);
- * - each change to the weave names a meeting edit's id or the meeting's note
- *   (`weave-change-source`), and there is none when the director changed nothing at the
- *   meeting and left no note (`weave-change-unasked`).
+ * - each change to the weave names a meeting edit's id or the meeting's approval note
+ *   (`weave-change-source`), and there is none when the director changed nothing and left no
+ *   approval note at the meeting (`weave-change-unasked`; brief 4.6e).
  *
  * A failure the director caused is a concern on their edit, beside its line, never a
  * rework (R11): a beat they struck or cut that held the only place of a player or a
@@ -359,7 +359,7 @@ function editsRemovingConnection(entries, connection) {
  * @param {Iterable<string>} inputs.recordIds - the ids a document in the record answers to
  * @param {string[]} inputs.connections - the ids of the settled weave's live connections
  * @param {string[]} inputs.meetingEdits - the ids of the director's edits at the meeting
- * @param {boolean} inputs.meetingNote - whether the director left a note at the meeting
+ * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
  * @returns {{failures: Array<{type: string, message: string}>,
  *            concerns: Array<{type: string, editIds: string[], finding: string}>}}
@@ -465,7 +465,7 @@ function mapFindings(map, inputs = {}) {
   const directorsChanges = edits.filter((edit) => Array.isArray(edit.at) && edit.at[0] && edit.at[0].key === 'weaveChanges').map((edit) => edit.id);
   if (changes.length > 0 && sources.size === 0) {
     if (directorsChanges.length > 0) concern('weave-change-unasked', directorsChanges, 'The map lists changes to the weave the meeting did not ask for.');
-    else fail('weave-change-unasked', 'The map lists changes to the weave, and the director changed nothing at the meeting and left no note. Leave weaveChanges empty.');
+    else fail('weave-change-unasked', 'The map lists changes to the weave, and the director changed nothing and left no approval note at the meeting. Leave weaveChanges empty.');
   } else {
     const unnamed = changes.map((change) => textOf(change.source)).filter((source) => !sources.has(source));
     if (unnamed.length > 0) {

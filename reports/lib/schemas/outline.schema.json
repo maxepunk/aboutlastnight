@@ -124,7 +124,7 @@
     },
     "weaveChanges": {
       "type": "array",
-      "description": "What the map changed in the weave to fit in each change the director made at the story meeting; empty when the director changed nothing and left no note",
+      "description": "What the map changed in the weave to fit in each change the director made at the story meeting; empty when the director changed nothing and left no approval note at the meeting",
       "items": {
         "type": "object",
         "additionalProperties": false,
