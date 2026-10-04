@@ -2813,15 +2813,70 @@ function rewordingsOf(block, before, version) {
 }
 
 /**
- * The pass's copy of a block the director wrote, which nothing pairs it with (task 4.14c): the
- * one block of `version` holding COPY_SHARE of the director's words and held as much by them
- * (rewordingsOf). Null when there is none, or more than one, so code cannot tell which.
+ * The pass's copy of a block the director wrote (task 4.14c): the one block of `version` holding
+ * COPY_SHARE of the director's words and held as much by them (rewordingsOf). Null when there is
+ * none, or more than one, so code cannot tell which. passVersionOf reads it.
  *
  * @returns {{section: number, index: number}|null}
  */
 function passCopyOf(block, before, version) {
   const copies = rewordingsOf(block, before, version).filter((r) => r.share >= COPY_SHARE && r.back >= COPY_SHARE);
   return copies.length === 1 ? copies[0] : null;
+}
+
+/**
+ * Whether a rewording (rewordingsOf) may be the pass's version of the director's block, where
+ * it competes with the block in the director's block's place (passVersionOf; fix round 1): it
+ * holds four in five of the director's words, as a light rewording or a paragraph the pass merged
+ * it into does, or half of them while the director's holds half of its words, as a heavier
+ * rewording of about its length does. A longer paragraph that holds half the director's words
+ * only through the common ones ("the", "and", "who") is neither: on the stored articles, where a
+ * pass rewrote the director's paragraph in place and reworded the rest of its section, such a
+ * paragraph stood in the section of 5 of the 292 paragraphs.
+ */
+function mayBeItsVersion(rewording) {
+  return rewording.share >= COPY_SHARE || (rewording.share >= MAYBE_COPY_SHARE && rewording.back >= MAYBE_COPY_SHARE);
+}
+
+/**
+ * Where the pass put its version of a block of the version it started from, or null when code
+ * cannot find it: the block the restore writes the director's text onto (restoreEdit) and the
+ * report reads what it became from (becameOf), one rule for both (task 4.14c). It is the
+ * block's partner (partnerIndex), except for a block named by its words (a paragraph, a quote,
+ * a list):
+ * - with no partner, it is the pass's copy of the block (passCopyOf), else none;
+ * - a partner it pairs with by its place alone, which holds fewer than COPY_SHARE of its words,
+ *   may be a block the pass wrote there, such as a paragraph inserted right before the pass's
+ *   version (fix round 1). It is the pass's copy of the block, where there is one, and the
+ *   partner stays the writer's. With no copy, it is none where another block of the partner's
+ *   section may be the pass's version (mayBeItsVersion) and holds more of the block's words
+ *   than the partner: code cannot tell which of the two is. Else it is the partner.
+ * With none, the restore puts the director's block back where it sat, and the report names a
+ * block that may be the pass's version (maybeCopyOf).
+ *
+ * @param {Object} link - the block's link in the chain to the edit's place (placeCarrying)
+ * @param {Array} cur - the list the chain has reached in `version`
+ * @param {Object} before - the version the pass started from
+ * @param {Object} version - the pass's output, as code has changed it so far
+ * @returns {{index: number, section: number|null}|null} its index in `cur`, or, given a
+ *   `section`, in that section of `version`
+ */
+function passVersionOf(link, cur, before, version) {
+  const partner = partnerIndex(link.collection, link.holder, cur, link.index);
+  const block = link.holder[link.index];
+  const atPartner = partner === -1 ? null : { index: partner, section: null };
+  if (link.collection !== 'content' || !isObj(block) || NAMED_BLOCK_TYPES.includes(block.type)) return atPartner;
+  const own = copyWords(block);
+  const placed = partner === -1 ? null : cur[partner];
+  // A partner that opens with the block's words (blockKey), or holds four in five of them, is its version.
+  const partnerShare = placed ? shareHeld(own, copyWords(placed)) : 0;
+  if (placed && (blockKey(placed) === blockKey(block) || partnerShare >= COPY_SHARE)) return atPartner;
+  const copy = passCopyOf(block, before, version);
+  if (copy) return { index: copy.index, section: copy.section };
+  if (!placed) return null;
+  const rival = rewordingsOf(block, before, version)
+    .some((r) => r.block !== placed && version.sections[r.section].content === cur && r.share > partnerShare && mayBeItsVersion(r));
+  return rival ? null : atPartner;
 }
 
 /** What finds a moved block in any version: its type with its filename, tokenId or text. */
@@ -2937,8 +2992,10 @@ function moveOutcome(edit, before, after) {
 /**
  * What an edit's text became in a pass's output, or null when it is gone: the field's
  * new value, found by following the edit's element from where it sat in the version the
- * pass started from; for a cut, the text where it came back; for a move, the section
- * the pass took the block to, or another place in the director's section (moveOutcome).
+ * pass started from, to the pass's version of each block on the way, as the restore
+ * follows it (passVersionOf; task 4.14c), so null where code cannot tell which block that
+ * is; for a cut, the text where it came back; for a move, the section the pass took the
+ * block to, or another place in the director's section (moveOutcome).
  */
 function becameOf(edit, before, after) {
   if (!isObj(after)) return null;
@@ -2960,15 +3017,10 @@ function becameOf(edit, before, after) {
       continue;
     }
     if (!Array.isArray(cur)) return null;
-    let partner = partnerIndex(link.collection, link.holder, cur, link.index);
-    // Task 4.14c: the pass's copy of a block nothing pairs, as the restore finds it.
-    const copy = partner === -1 && link.collection === 'content' ? passCopyOf(link.holder[link.index], before, after) : null;
-    if (copy) {
-      cur = after.sections[copy.section].content;
-      partner = copy.index;
-    }
-    if (partner === -1) return null;
-    cur = cur[partner];
+    const version = passVersionOf(link, cur, before, after);
+    if (!version) return null;
+    if (version.section !== null) cur = after.sections[version.section].content;
+    cur = cur[version.index];
   }
   return cur === undefined || cur === null ? null : editValueText(cur);
 }
@@ -3233,9 +3285,11 @@ function blocksOf(collection, element) {
  * 4.5g). A connection the director brought back goes back as `before` holds it, since its
  * words are the writer's (restoredValue; task 4.5f). A moved block goes back into the
  * director's section as the pass left it (restoreMove). A cut is never put back. A block
- * named by its words that nothing pairs, because the pass reworded it and moved the blocks
- * around it, goes back in place of the pass's copy of it where code can tell which block that
- * is (passCopyOf; task 4.14c), and where it sat otherwise.
+ * named by its words, which the pass reworded while it moved the blocks around it, goes on
+ * the pass's version of it (passVersionOf; task 4.14c): the pass's copy of it where nothing
+ * pairs it, or where only its place pairs it with a block holding fewer of its words, such as
+ * a paragraph the pass inserted right before its copy, which stays the writer's (fix round
+ * 1). Where code cannot tell which block is the pass's version, it goes back where it sat.
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
@@ -3277,15 +3331,13 @@ function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
       continue;
     }
     if (!Array.isArray(cur)) return false;
-    let partner = partnerIndex(link.collection, link.holder, cur, link.index);
-    // Task 4.14c: a block nothing pairs, which a pass reworded in place while it moved the
-    // blocks around it, has its copy take the director's text where the pass put it, so the
-    // page prints it once.
-    const copy = partner === -1 && link.collection === 'content' ? passCopyOf(link.holder[link.index], before, out) : null;
-    if (copy) {
-      cur = out.sections[copy.section].content;
-      partner = copy.index;
-      section = copy.section;
+    // Task 4.14c: the pass's version of the block, which takes the director's text where the
+    // pass put it, so the page prints it once; none where code cannot tell which block that is.
+    const version = passVersionOf(link, cur, before, out);
+    const partner = version ? version.index : -1;
+    if (version && version.section !== null) {
+      cur = out.sections[version.section].content;
+      section = version.section;
     }
     const inSections = link.collection === 'sections' && cur === out.sections;
     const putBack = (element) => {
@@ -3366,13 +3418,13 @@ function blocksWhereItSat(place, version) {
 
 /**
  * The text of a block of `stored` that may be a pass's version of a block the director wrote,
- * named by its words, which the pass took out and code put back where it sat (task 4.14c), or
- * null. Code could not tell which block was the pass's copy, so the stop asks the director
+ * named by its words, which code put back where it sat (task 4.14c), or null. Code could not
+ * tell which block was the pass's version (passVersionOf), so the stop asks the director
  * whether their text now prints twice. The block is one the pass wrote that does not hold the
  * director's text: the closest of its rewordings (rewordingsOf), else one of its type in the
  * place it sat (blocksWhereItSat), such as a full rewrite of it.
  *
- * @param {Object} edit - an edit code put back after the pass, whose text the pass's output held nowhere (becameOf null)
+ * @param {Object} edit - an edit code put back after the pass where it sat, finding no version of it in the pass's output (becameOf null)
  * @param {Object} before - the version the pass started from, which carries the edit
  * @param {Object} stored - the version stored after the pass
  * @returns {string|null}
@@ -3462,9 +3514,10 @@ function cameBackStillIn(report, stored) {
  *   (`cut`, `removed`), with the text where it came back: code never takes it out; in the
  *   article's report each carries the `pieces` it is read by, and stays only while the version
  *   stored after the round's latest pass holds them (cameBackStillIn; task 4.14c);
- * - beside `restored`, `maybeCopy` on a block the director wrote that the pass's output held no
- *   version of, so code put it back where it sat: the text of a block the pass wrote that may be
- *   its version of the director's (maybeCopyOf; task 4.14c);
+ * - beside `restored`, `maybeCopy` on a block the director wrote that code put back where it sat,
+ *   finding no version of it in the pass's output that it could tell was the pass's
+ *   (passVersionOf): the text of a block the pass wrote that may be its version of the
+ *   director's (maybeCopyOf; task 4.14c);
  * - each with the pass (SEND_BACK_PASS, REWEAVE_PASS or the automatic pass's number),
  *   whether an automatic pass made it, and the rework's reason (null: none given);
  * - a connection the director struck that a pass brought back (brief 4.5) is marked
@@ -3521,8 +3574,8 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     }
     if (!editCarried(after, e)) {
       const became = becameOf(e, before, after);
-      // Task 4.14c: only where the pass's output held no version of the director's text for code
-      // to write it onto, so code put it back where it sat.
+      // Task 4.14c: only where code found no version of the director's text in the pass's output
+      // to write it onto (passVersionOf), so it put the text back where it sat.
       const maybeCopy = putBack.has(e.id) && became === null ? maybeCopyOf(e, before, stored) : null;
       changed.push(entry(e, {
         director: editValueText(restoredValue(e, before)), became, restored: putBack.has(e.id),

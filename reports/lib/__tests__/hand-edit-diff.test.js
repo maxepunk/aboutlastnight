@@ -3648,6 +3648,70 @@ describe("4.14c: a restore never prints the director's paragraph twice", () => {
     expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: REWORDED, restored: true })]);
   });
 
+  // Fix round 1: a paragraph the pass wrote at the director's paragraph's own index pairs with it
+  // by its place, so the restore wrote the director's text over the pass's new paragraph and left
+  // the reworded copy beside it, with no mark (the review's restore-insert-before.js, case h).
+  describe('fix round 1: a block in its place that holds fewer of its words is not taken for its version', () => {
+    const NEW = paragraph('The bar was the only place in the house with no camera.');
+    // About half the director's words: a heavier rewrite of theirs, or a paragraph of the pass's own.
+    const REWRITE = 'Morgan slipped Riley cash by the bar while nobody watched, and the lab named Sarah.';
+
+    test("a pass that inserts a paragraph right before it, at its place: the director's text goes on the pass's copy, and the new paragraph stays the writer's", () => {
+      const { output, report } = rewrite(story(A, B, NEW, paragraph(REWORDED), LAST));
+      expect(textsOf(output)).toEqual([[A.text, B.text, NEW.text, DIRECTORS, LAST.text], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', director: DIRECTORS, became: REWORDED, restored: true, automatic: true })]);
+      expect(report.changed[0]).not.toHaveProperty('maybeCopy');
+    });
+
+    test('a pass that writes a new paragraph in its place and moves the reworded copy later in the section: the copy takes the text where the pass put it', () => {
+      const { output, report } = rewrite(story(A, B, NEW, LAST, paragraph(REWORDED)));
+      expect(textsOf(output)).toEqual([[A.text, B.text, NEW.text, LAST.text, DIRECTORS], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: REWORDED, restored: true })]);
+      expect(report.changed[0]).not.toHaveProperty('maybeCopy');
+    });
+
+    test("where the pass's version beside the new paragraph is a heavier rewrite, code cannot tell: the director's text goes back where it sat, both stay, and the entry names the rewrite", () => {
+      const beside = rewrite(story(A, B, NEW, paragraph(REWRITE), LAST));
+      expect(textsOf(beside.output)).toEqual([[A.text, B.text, DIRECTORS, NEW.text, REWRITE, LAST.text], [CLOSING]]);
+      expect(beside.report.changed).toEqual([expect.objectContaining({ id: 'E1', director: DIRECTORS, became: null, restored: true, maybeCopy: REWRITE })]);
+      const later = rewrite(story(A, B, NEW, LAST, paragraph(REWRITE)));
+      expect(textsOf(later.output)).toEqual([[A.text, B.text, DIRECTORS, NEW.text, LAST.text, REWRITE], [CLOSING]]);
+      expect(later.report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, restored: true, maybeCopy: REWRITE })]);
+    });
+
+    test("a block in its place stays its version where no block of its section holds more of its words: the director's text goes on it, with nothing to ask", () => {
+      // A full rewrite where it sat.
+      const FULL = 'The writer rewrote this line entirely.';
+      const full = rewrite(story(A, B, paragraph(FULL), LAST));
+      expect(textsOf(full.output)).toEqual([[A.text, B.text, DIRECTORS, LAST.text], [CLOSING]]);
+      expect(full.report.changed).toEqual([expect.objectContaining({ id: 'E1', became: FULL, restored: true })]);
+      expect(full.report.changed[0]).not.toHaveProperty('maybeCopy');
+      // The heavier rewrite where it sat, beside a paragraph of the pass's own.
+      const heavier = rewrite(story(A, B, paragraph(REWRITE), NEW, LAST));
+      expect(textsOf(heavier.output)).toEqual([[A.text, B.text, DIRECTORS, NEW.text, LAST.text], [CLOSING]]);
+      expect(heavier.report.changed).toEqual([expect.objectContaining({ id: 'E1', became: REWRITE, restored: true })]);
+      expect(heavier.report.changed[0]).not.toHaveProperty('maybeCopy');
+      // A paragraph of another section that echoes the director's words leaves the block in its place alone.
+      const echoed = story(A, B, paragraph(FULL), LAST);
+      echoed.sections[1].content.unshift(paragraph(REWRITE));
+      const elsewhere = rewrite(echoed);
+      expect(textsOf(elsewhere.output)).toEqual([[A.text, B.text, DIRECTORS, LAST.text], [REWRITE, CLOSING]]);
+      expect(elsewhere.report.changed).toEqual([expect.objectContaining({ id: 'E1', became: FULL, restored: true })]);
+      expect(elsewhere.report.changed[0]).not.toHaveProperty('maybeCopy');
+    });
+
+    test('a longer paragraph of its section that holds half its words only through the common ones leaves the block in its place alone', () => {
+      const FULL = 'The writer rewrote this line entirely.';
+      // Seven of the director's fourteen words ("at", "the" twice, "bar", "out", "of", "and"), and
+      // the director's paragraph holds seven of its thirty-seven.
+      const LONGER = 'Still, at the end of the night the room was out of patience, and the vote went to the overdose because nobody wanted to argue with the clock or the people holding the money at the bar.';
+      const { output, report } = rewrite(story(A, B, paragraph(FULL), paragraph(LONGER)));
+      expect(textsOf(output)).toEqual([[A.text, B.text, DIRECTORS, LONGER], [CLOSING]]);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', became: FULL, restored: true })]);
+      expect(report.changed[0]).not.toHaveProperty('maybeCopy');
+    });
+  });
+
   test("so does one that moved the reworded copy to another section: the copy takes the director's text where the pass put it", () => {
     const after = story(A, B, LAST);
     after.sections[1].content.unshift(paragraph(REWORDED));
