@@ -156,3 +156,23 @@ describe('renderDirectorAnswers: the answers, for the fact check after a directo
     expect(renderDirectorAnswers(undefined)).toBe('');
   });
 });
+
+// 4.5b (4.5 review, minor 11): every kind of question, both ways. The map writer and the
+// article writer read each answer as the director's words, and an unanswered question as
+// one the director left open, whatever C15 case it raises.
+describe('4.5b: the settled weave prints each question kind, answered and unanswered', () => {
+  const KIND_WORDS = { player: 'a player', pronoun: 'a pronoun', figure: 'a figure' };
+  const asked = (kind) => ({ id: `q-${kind}`, kind, about: `the ${kind} asked about`, question: `What about the ${kind}?`, changes: `The line the ${kind} prints in.` });
+
+  it.each(Object.keys(KIND_WORDS))('%s: answered, the answer word for word; unanswered, marked so', (kind) => {
+    const weave = clone(WRITERS);
+    weave.questions = [{ ...asked(kind), answer: `The director's answer about the ${kind}.` }, { ...asked(kind), id: `q-${kind}-open` }];
+    const lines = renderSettledWeave(weave, []).split('\n');
+    const at = (id) => lines.findIndex((line) => line.startsWith(`- ${id} `));
+    const question = asked(kind);
+    expect(lines[at(question.id)]).toBe(`- ${question.id} (${KIND_WORDS[kind]}; about: ${question.about}): ${question.question} Its answer changes: ${question.changes}`);
+    expect(lines[at(question.id) + 1]).toBe(`  The director's answer, word for word: "The director's answer about the ${kind}."`);
+    expect(lines[at(`q-${kind}-open`)]).toBe(`- q-${kind}-open (${KIND_WORDS[kind]}; about: ${question.about}): ${question.question} Its answer changes: ${question.changes}`);
+    expect(lines[at(`q-${kind}-open`) + 1]).toBe('  Unanswered.');
+  });
+});
