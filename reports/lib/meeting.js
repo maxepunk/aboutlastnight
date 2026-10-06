@@ -146,7 +146,7 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
   if (touched.size > 0) {
     return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.`;
   }
-  return pickProblems(weave, shownWeave);
+  return angleSetProblems(weave, shownWeave) || pickProblems(weave, shownWeave);
 }
 
 /**
@@ -192,10 +192,41 @@ function pickProblems(weave, shown = null) {
 }
 
 /**
- * The director's version as the gate stores it (R9): the angle they picked as they left it, and
- * every other angle as the meeting showed it, by id, since only the angle the director sends goes
- * on and a change to another is not kept. A change to a thread's name or line is the thread's,
- * which every angle that tells it shares, so the threads are kept as the director left them.
+ * What the gate refuses in the director's angles (R9; fix round 1, finding 3), or null: an angle
+ * the meeting showed that the version drops, and one it adds that the meeting never showed, each
+ * named by its headline. The gate stores the angles the meeting showed, by id, so a dropped angle
+ * could not be switched to after a reweave or a rollback, and an added one would reopen as the
+ * writer's. With no weave shown there is nothing to hold the version to.
+ *
+ * @param {Object} weave - the weave as the director left it, which the schema has taken
+ * @param {Object|null} shown - the weave the meeting showed
+ * @returns {string|null}
+ */
+function angleSetProblems(weave, shown) {
+  if (!isWeave(shown) || !Array.isArray(shown.angles)) return null;
+  const idsOf = (angles) => angles.filter((angle) => angle && typeof angle === 'object').map((angle) => weaveIdOf(angle));
+  const shownIds = idsOf(shown.angles);
+  const leftIds = idsOf(weave.angles);
+  const named = (angle, id) => `"${(angle && typeof angle.headline === 'string' && angle.headline.trim()) || id || 'an angle with no id'}"`;
+  const dropped = shown.angles.filter((angle, i) => angle && typeof angle === 'object' && !leftIds.includes(shownIds[i]));
+  const added = weave.angles.filter((angle, i) => !shownIds.includes(leftIds[i]));
+  const problems = [
+    ...dropped.map((angle) => `drops the angle ${named(angle, weaveIdOf(angle))}, which the meeting showed`),
+    ...added.map((angle) => `adds the angle ${named(angle, weaveIdOf(angle))}, which the meeting never showed`)
+  ];
+  if (problems.length === 0) return null;
+  return `The director's version ${listOf(problems)}. The meeting keeps the angles it showed: pick one of them, and change only the one you pick.`;
+}
+
+/**
+ * The director's version as the gate stores it (R9): the angles the meeting showed, in its order
+ * and by id, each as the meeting showed it but the one they picked, which is as they left it,
+ * since only the angle the director sends goes on and a change to another is not kept (fix round
+ * 1, finding 3: the stored list is built from the meeting's, and the gate refuses a version that
+ * drops or adds an angle, angleSetProblems). A pick the director's order alone made, the first
+ * angle of a version that names none, is written as their pick, so the angle they sent stays open.
+ * A change to a thread's name or line is the thread's, which every angle that tells it shares, so
+ * the threads are kept as the director left them.
  *
  * @param {Object} left - the weave as the director left it
  * @param {Object|null} shown - the weave the meeting showed
@@ -205,14 +236,11 @@ function withUnsentAnglesAsShown(left, shown) {
   if (!isWeave(shown) || !Array.isArray(shown.angles)) return left;
   const picked = pickedAngleOf(left);
   const pickedId = picked ? weaveIdOf(picked) : '';
-  const asShown = new Map(shown.angles.filter((angle) => weaveIdOf(angle)).map((angle) => [weaveIdOf(angle), angle]));
-  return {
-    ...left,
-    angles: left.angles.map((angle) => {
-      const id = weaveIdOf(angle);
-      return id && id !== pickedId && asShown.has(id) ? structuredClone(asShown.get(id)) : angle;
-    })
-  };
+  if (!pickedId) return left;
+  const angles = shown.angles.map((angle) => (weaveIdOf(angle) === pickedId ? picked : structuredClone(angle)));
+  const stored = { ...left, angles };
+  if (weaveIdOf(pickedAngleOf(stored)) !== pickedId) stored[PICKED_KEY] = pickedId;
+  return stored;
 }
 
 /**

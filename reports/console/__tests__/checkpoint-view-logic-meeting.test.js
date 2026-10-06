@@ -260,6 +260,11 @@ const DECISION_CASES = [
   ["the verdict's flag moved to a thread in the picked angle", false, () => { const w = clone(WEAVE); delete w.threads[0].verdict; w.threads[1].verdict = true; w.angles[0].threads = w.angles[0].threads.filter((id) => id !== 't1'); return [w, clone(WEAVE)]; }],
   ["the verdict's thread deleted from the weave and every angle", false, () => { const w = clone(WEAVE); w.threads.splice(0, 1); w.angles.forEach((a) => { a.threads = a.threads.filter((id) => id !== 't1'); }); return [w, clone(WEAVE)]; }],
   ["the verdict's thread renamed, kept flagged in the picked angle", true, () => { const w = clone(WEAVE); w.threads[0].name = 'The vote the room settled'; return [w, clone(WEAVE)]; }],
+  // Fix round 1, finding 3: the angles the meeting showed are the angles stored, by id (R9).
+  ['an angle the meeting showed dropped', false, () => { const w = clone(WEAVE); w.angles.splice(2, 1); return [w, clone(WEAVE)]; }],
+  ['an angle the meeting never showed added', false, () => { const w = clone(WEAVE); w.angles.push({ ...clone(w.angles[2]), id: 'a4' }); return [w, clone(WEAVE)]; }],
+  ['an angle swapped for one the meeting never showed', false, () => { const w = clone(WEAVE); w.angles[2] = { ...clone(w.angles[2]), id: 'a4' }; return [w, clone(WEAVE)]; }],
+  ['the angles in another order, none added or dropped', true, () => { const w = clone(WEAVE); w.angles.reverse(); return [w, clone(WEAVE)]; }],
   ['a pick that names no angle', false, () => { const w = clone(WEAVE); w.picked = 'a9'; return [w, clone(WEAVE)]; }],
   ['a pick that is not text', false, () => { const w = clone(WEAVE); w.picked = 3; return [w, clone(WEAVE)]; }],
   ['the director repeats an angle id', false, () => { const w = clone(WEAVE); w.angles.push({ ...w.angles[2] }); return [w, clone(WEAVE)]; }],

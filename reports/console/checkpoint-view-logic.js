@@ -1964,7 +1964,30 @@
     if (touched.length > 0) {
       return 'The writer gave more than one ' + ELEMENT_WORDS[touched[0].scope] + ' the id "' + touched[0].id + '", so the meeting cannot tell which of them you changed. Put them back as the meeting showed them: a reweave with a note, or a send-back, gives each its own id.';
     }
-    return meetingPickProblem(left, shownWeave);
+    return meetingAngleSetProblem(left, shownWeave) || meetingPickProblem(left, shownWeave);
+  }
+
+  /**
+   * What the gate refuses in the director's angles, or null (lib/meeting.js angleSetProblems,
+   * whose decisions a test holds this to; R9, fix round 1): an angle the meeting showed that the
+   * version drops, or one it adds that the meeting never showed, named by its headline. The gate
+   * stores the angles the meeting showed, by id, and only the picked one as the director left it.
+   *
+   * @param {Object} weave - the weave as the director left it, which the shape has taken
+   * @param {Object|null} shown - the weave the meeting showed, without its code-owned keys
+   * @returns {string|null}
+   */
+  function meetingAngleSetProblem(weave, shown) {
+    if (!isPlainObject(shown) || !Array.isArray(shown.angles)) return null;
+    var idsOf = function (angles) { return asArray(angles).filter(isPlainObject).map(function (angle) { return weaveIdOf(angle); }); };
+    var shownIds = idsOf(shown.angles);
+    var leftIds = idsOf(weave.angles);
+    var named = function (angle) { return '"' + (asString(angle.headline).trim() || weaveIdOf(angle) || 'an angle with no id') + '"'; };
+    var dropped = asArray(shown.angles).filter(isPlainObject).filter(function (angle) { return leftIds.indexOf(weaveIdOf(angle)) === -1; });
+    var added = asArray(weave.angles).filter(isPlainObject).filter(function (angle) { return shownIds.indexOf(weaveIdOf(angle)) === -1; });
+    if (dropped.length > 0) return 'Keep the angle ' + named(dropped[0]) + ': the meeting keeps the angles it showed, and you change only the one you pick.';
+    if (added.length > 0) return 'The angle ' + named(added[0]) + ' is not one the meeting showed: pick one of the angles the meeting showed, and change only that one.';
+    return null;
   }
 
   /**

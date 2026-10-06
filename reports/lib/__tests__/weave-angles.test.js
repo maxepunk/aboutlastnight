@@ -254,6 +254,31 @@ describe('the gate (R8, R9)', () => {
     expect(directorWeaveProblems(left, { shown: anglesWeave() })).toBeNull();
   });
 
+  // Fix round 1, finding 3: the angles the meeting showed are the angles stored, by id (R9).
+  test.each([
+    ['drops an angle the meeting showed', (left) => { left.angles.splice(2, 1); }, 'Nobody Named Alex Reeves. By Evening She Was Rising.'],
+    ['adds an angle the meeting never showed', (left) => { left.angles.push({ ...clone(left.angles[2]), id: 'a4', headline: 'An Angle the Director Wrote' }); }, 'An Angle the Director Wrote'],
+    ['swaps an angle for one the meeting never showed', (left) => { left.angles[2] = { ...clone(left.angles[2]), id: 'a4', headline: 'An Angle the Director Wrote' }; }, 'An Angle the Director Wrote']
+  ])('refuses a version that %s, naming the angle', (_name, change, named) => {
+    const left = anglesWeave();
+    change(left);
+    expect(directorWeaveProblems(left, { shown: anglesWeave() })).toContain(named);
+    expect(meetingResume({ meeting: 'approve', weave: left }, stateAt()).error).toContain(named);
+  });
+
+  test("stores the angles in the order the meeting showed them, the director's own pick kept open", () => {
+    const left = anglesWeave();
+    left.angles = [left.angles[1], left.angles[0], left.angles[2]];
+    left.angles[0].story = 'The story the director gave the angle they sent.';
+    const { error, stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, stateAt());
+    expect(error).toBeNull();
+    const stored = stateUpdates.weave;
+    expect(stored.angles.map((angle) => angle.id)).toEqual(['a1', 'a2', 'a3']);
+    expect(stored[PICKED_KEY]).toBe('a2');
+    expect(pickedAngleOf(stored).story).toBe('The story the director gave the angle they sent.');
+    expect(stored.angles[0]).toEqual(anglesWeave().angles[0]);
+  });
+
   test('refuses a pick that names no angle the weave holds', () => {
     const left = { ...anglesWeave(), picked: 'a9' };
     expect(directorWeaveProblems(left, { shown: anglesWeave() })).toMatch(/pick/i);
