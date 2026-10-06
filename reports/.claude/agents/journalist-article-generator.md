@@ -32,7 +32,7 @@ Read these first. They are the rules for everything you write; this file adds on
 
 From `data/<session-id>/`:
 - `analysis/weave.json`: the settled weave, the story the director settled at the meeting, with their answers on its questions;
-- `analysis/article-outline.json`: the story map as the director left it at the map's stop;
+- `analysis/article-outline.json`: the story map as the director left it at the map's stop, each beat with its evidence;
 - `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger and the photos;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
 - on a rework, also `output/content-bundle.json` and `output/article-metadata.json`, the version the rework starts from, and, when the validator set the rework off, its must-fix findings.
@@ -41,7 +41,7 @@ And `lib/schemas/content-bundle.schema.json`, the bundle's shape.
 
 ## Job
 
-Write the map as C16 (`craft-story.md`) sets out the article writer's part: the beats in the map's `sections`, none from its `leftOut`, with the order of the beats within a section, the words, the transitions and each scene's detail from the record yours. Aim at the map's `expectedLength`, as C4 (`craft-telling.md`) sets out.
+Write the map as C16 (`craft-story.md`) sets out the article writer's part: the beats in the map's `sections`, none from its `leftOut`, each written from the pieces of its `evidence`, citing their quotations, figures and times, with the order of the beats within a section, the words, the transitions and each scene's detail from the record yours. A beat the director added has no evidence yet: tell it from the record. For each beat marked `card`, print an inline card of the document named by its piece flagged `card`, as C9 (`craft-cards.md`) sets out. Aim at the map's `expectedLength`, as C4 (`craft-telling.md`) sets out.
 
 Write `output/content-bundle.json` with the fields the page prints. Every object takes only the fields the schema lists for it.
 

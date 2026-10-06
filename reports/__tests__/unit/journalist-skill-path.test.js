@@ -29,6 +29,17 @@ const FILES = {
 };
 const NAMES = Object.keys(FILES);
 
+/** The text under a `## <heading>` of an agent definition, to the next `## `. */
+function section(text, heading) {
+  const at = text.indexOf(`\n## ${heading}\n`);
+  if (at < 0) return '';
+  const rest = text.slice(at + heading.length + 5);
+  const end = rest.search(/\n## /);
+  return end < 0 ? rest : rest.slice(0, end);
+}
+const filesIn = (text) => [...text.matchAll(/`((?:analysis|output|inputs|summaries)\/[\w.-]+\.json)`/g)].map((m) => m[1]);
+const agent = (name) => FILES[`journalist-${name}.md`];
+
 describe('the agents', () => {
   it('are exactly the ones SKILL.md starts', () => {
     const started = [...FILES['SKILL.md'].matchAll(/^\|[^|\n]*\|\s*`(journalist-[a-z-]+)`/gm)].map((m) => m[1]);
@@ -70,17 +81,6 @@ describe('the stages (phase 4)', () => {
   const { WEAVE_SCHEMA } = require('../../lib/sdk-client/subagents');
   const { WEAVE_ROLES, CONNECTION_KINDS } = require('../../lib/weave');
   const { WEAVE_QUESTION_KINDS, WEAVE_ANSWER_KEY } = require('../../lib/writer-questions');
-
-  /** The text under a `## <heading>` of an agent definition, to the next `## `. */
-  function section(text, heading) {
-    const at = text.indexOf(`\n## ${heading}\n`);
-    if (at < 0) return '';
-    const rest = text.slice(at + heading.length + 5);
-    const end = rest.search(/\n## /);
-    return end < 0 ? rest : rest.slice(0, end);
-  }
-  const filesIn = (text) => [...text.matchAll(/`((?:analysis|output|inputs|summaries)\/[\w.-]+\.json)`/g)].map((m) => m[1]);
-  const agent = (name) => FILES[`journalist-${name}.md`];
 
   it('the arc analyzer writes the weave, and reads it back for a round at the story meeting', () => {
     expect(filesIn(section(agent('arc-analyzer'), 'Output'))).toEqual(['analysis/weave.json']);
@@ -126,6 +126,118 @@ describe('the stages (phase 4)', () => {
       'interweaving', 'narrativeArcs', 'analysisNotes', 'characterPlacements', 'heroSuggestion', 'shouldConsider'
     ];
     retired.forEach((word) => expect(`${name}: ${word}: ${FILES[name].includes(word)}`).toBe(`${name}: ${word}: false`));
+  });
+});
+
+/**
+ * Phase 4b, piece 1 (brief 1H; spec docs/superpowers/specs/2026-10-05-story-level-and-evidence.md
+ * sections 3 to 5 and 11): the story meeting and the map stay at the level of the story, and the
+ * evidence behind each line travels underneath it to the article writer. The standalone path
+ * follows the pipeline (R13):
+ * - the two stops' pages and the two planning agents hold the bounds the code holds;
+ * - schemas.md gives the weave no field beyond the pipeline's, and gives a beat and its pieces of
+ *   evidence the pipeline's shape. lib/schemas/outline.schema.json leaves a piece's shape to
+ *   lib/evidence.js, which lib/map.js mapSchemaFor fills in code, so the outline generator reads
+ *   the piece here;
+ * - the article generator writes each beat from its evidence and prints a card from its flagged
+ *   piece;
+ * - no file describes what went: a thread's claim and its receipt, a beat's material, the weave's
+ *   old bound and the pages of about 400 and 450 words. The beat kind `receipt` and the craft
+ *   file craft-material.md keep their names (the footprint survey's dismissed hits).
+ */
+describe('the story level, with the evidence underneath (phase 4b, piece 1)', () => {
+  const { WEAVE_SCHEMA } = require('../../lib/sdk-client/subagents');
+  const { MEETING_WORD_BOUND } = require('../../lib/weave');
+  const { MAP_WORD_BOUND, MAP_WORD_AIM, MAP_BEAT_KINDS } = require('../../lib/map');
+  const { EVIDENCE_PIECE_SCHEMA, EVIDENCE_SOURCES, EVIDENCE_STANCES } = require('../../lib/evidence');
+  const { WEAVE_ANSWER_KEY } = require('../../lib/writer-questions');
+  const outlineSchema = require('../../lib/schemas/outline.schema.json');
+
+  /** The text of SKILL.md from `from` to `to`. */
+  function skillBetween(from, to) {
+    const text = FILES['SKILL.md'];
+    const at = text.indexOf(from);
+    if (at < 0) return '';
+    const end = text.indexOf(to, at);
+    return end < 0 ? text.slice(at) : text.slice(at, end);
+  }
+  /** The first code block of schemas.md after `heading`. */
+  function schemasBlock(heading) {
+    const doc = FILES['schemas.md'];
+    const at = doc.indexOf(heading);
+    if (at < 0) return '';
+    const found = doc.slice(at).match(/```\n([\s\S]*?)\n```/);
+    return found ? found[1] : '';
+  }
+  const keysOf = (block) => [...new Set([...block.matchAll(/"([A-Za-z]+)":/g)].map((m) => m[1]))];
+  /** The values a block lists for a key, as `"key": "a | b"` or `"key": ["a | b"]`, each kept as written. */
+  function listedIn(block, key) {
+    const found = block.match(new RegExp(`"${key}": \\[?"([^"]+)"`));
+    return found ? found[1].split('|').map((s) => s.trim()) : null;
+  }
+  const atMost = (words) => new RegExp(`\\bat most ${words} words\\b`);
+  const aimingFor = new RegExp(`\\baim(?:ing)? for ${MAP_WORD_AIM}\\b`);
+  const BEAT = outlineSchema.properties.sections.items.properties.beats.items.properties;
+  const PIECE = EVIDENCE_PIECE_SCHEMA.properties;
+  const SOURCES = ['<document id>', ...Object.values(EVIDENCE_SOURCES)];
+
+  it("the story meeting's page and the arc analyzer hold the meeting's bound", () => {
+    expect(skillBetween('**Stop: the story meeting.**', '### 9.')).toMatch(atMost(MEETING_WORD_BOUND));
+    expect(section(agent('arc-analyzer'), 'Job')).toMatch(atMost(MEETING_WORD_BOUND));
+  });
+
+  it("the map's page and the outline generator hold the map's bound and its aim", () => {
+    const stop = skillBetween('**Stop: the map.**', '### 10.');
+    expect(stop).toMatch(atMost(MAP_WORD_BOUND));
+    expect(stop).toMatch(aimingFor);
+    const job = section(agent('outline-generator'), 'Job');
+    expect(job).toMatch(atMost(MAP_WORD_BOUND));
+    expect(job).toMatch(aimingFor);
+  });
+
+  it("schemas.md gives the weave no field beyond the pipeline's and the director's, and its pieces the pipeline's sources and stances", () => {
+    const block = schemasBlock('### analysis/weave.json');
+    const items = (prop) => Object.keys(WEAVE_SCHEMA.properties[prop].items.properties);
+    const allowed = new Set([
+      ...Object.keys(WEAVE_SCHEMA.properties), ...items('threads'), ...items('connections'), ...items('questions'),
+      ...Object.keys(WEAVE_SCHEMA.properties.strongerMainThread.properties),
+      ...Object.keys(WEAVE_SCHEMA.properties.threads.items.properties.evidence.items.properties),
+      WEAVE_ANSWER_KEY, 'struck', 'directorChanges', 'change'
+    ]);
+    keysOf(block).forEach((key) => expect(`${key}: ${allowed.has(key)}`).toBe(`${key}: true`));
+    expect(listedIn(block, 'sources')).toEqual(SOURCES);
+    expect(listedIn(block, 'stance')).toEqual([...EVIDENCE_STANCES]);
+  });
+
+  it("schemas.md gives a beat, and each piece of its evidence, the pipeline's shape", () => {
+    const block = schemasBlock('### analysis/article-outline.json');
+    expect(block).not.toBe('');
+    expect(keysOf(block).sort()).toEqual([...new Set([...Object.keys(BEAT), ...Object.keys(PIECE)])].sort());
+    expect(listedIn(block, 'kind')).toEqual([...MAP_BEAT_KINDS]);
+    expect(listedIn(block, 'sources')).toEqual(SOURCES);
+    expect(listedIn(block, 'stance')).toEqual([...EVIDENCE_STANCES]);
+  });
+
+  it("the outline generator reads the beat's shape in schemas.md", () => {
+    expect(section(agent('outline-generator'), 'Input')).toContain('.claude/skills/journalist-report/references/schemas.md');
+  });
+
+  it("the article generator writes each beat from its evidence, and prints a card from the flagged piece", () => {
+    const job = section(agent('article-generator'), 'Job');
+    expect(job).toContain('`evidence`');
+    expect(job).toContain('`card`');
+  });
+
+  it.each(NAMES)('%s describes no thread claim or receipt, no beat material, and none of the old bounds', (name) => {
+    const text = FILES[name].split(MAP_BEAT_KINDS.join(' | ')).join('');
+    const old = {
+      claimField: /["`]claim["`]/,
+      receipt: /\breceipts?\b/i,
+      material: /(?<!craft-)\bmaterial\b/i,
+      weaveBound: /WEAVE_WORD_BOUND/,
+      oldPages: /\babout (?:400|450) words\b/
+    };
+    Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(text)}`).toBe(`${name}: ${what}: false`));
   });
 });
 

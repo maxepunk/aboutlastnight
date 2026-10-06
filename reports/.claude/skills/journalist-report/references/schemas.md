@@ -3,10 +3,15 @@
 The shapes of the files the journalist skill's steps pass to one another, under `data/<session-id>/`. Angle brackets hold placeholders, and `a | b` lists the allowed values. The inputs and the record keep every text, name and figure as their source gives it; the record puts logged times on the session clock.
 
 What the article says, and how, is the rule set's (`references/rules/`). Two files take their shape from JSON schemas instead of this page:
-- `analysis/article-outline.json`, the story map: `lib/schemas/outline.schema.json`;
+- `analysis/article-outline.json`, the story map: `lib/schemas/outline.schema.json`, with a beat's evidence as "The map" below gives it;
 - `output/content-bundle.json`: `lib/schemas/content-bundle.schema.json`, which `scripts/assemble-article.js` validates.
 
 A **document** is any item of the record, an exposed memory or a piece of paper evidence, named by its `id`.
+
+A **piece of evidence** is one piece of the record a line of the story rests on. A thread, a connection and a beat each carry theirs in `evidence`, each piece with:
+- `sources`: where it comes from, a document by its `id`, `ledger` for a sale, the bonus or a transfer, `evidence-log` for an exposure, or `notes` for the director's own words. A piece that sets two sources side by side names both;
+- `shows`: what it shows, in a short line with the words or figures that matter; a quotation is word for word from its source;
+- `stance`: whether it supports its line or cuts against it.
 
 A **record question** is one the session report or the record leaves for the director at the record's stop:
 
@@ -155,7 +160,13 @@ The arc analyzer writes the weave. The director's changes at the story meeting a
 
 ### analysis/article-outline.json
 
-The story map, in the shape of `lib/schemas/outline.schema.json`. Each section's `slot`, and each dropped slot, is one of the journalist theme's slots, `map.slots` in `lib/theme-config.js`. The director's changes at the map's stop are written into it: a struck beat moves to `leftOut`, and a beat brought back moves into the section the director picks.
+The story map, in the shape of `lib/schemas/outline.schema.json`. Each section's `slot`, and each dropped slot, is one of the journalist theme's slots, `map.slots` in `lib/theme-config.js`. The schema leaves a piece of evidence open; a beat, in a section's `beats` or in `leftOut`, is:
+
+```
+{"id": "<beat id, its own across the map, such as b1>", "move": "<the move of the story, in a few plain words with its people>", "players": ["<roster player's name>"], "threads": ["<id of a settled weave's thread the move carries>"], "connection": "<id of the settled weave's connection that lands here>", "card": true, "kind": "scene | receipt | line | figure", "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows, with the words or figures that matter>", "stance": "supports | cuts-against", "card": true}]}
+```
+
+`connection` is there only on the beat where a live connection lands. `card` marks a beat whose evidence prints as a card, and then one of its pieces, whose source is the card's document. `kind` is a hint for the article generator, which the page never prints. A beat the director adds has an id, a move and its people, and no evidence yet: the article generator finds its evidence. The director's changes at the map's stop are written into the map: a struck beat moves to `leftOut`, and a beat brought back moves into the section the director picks.
 
 ## The article
 

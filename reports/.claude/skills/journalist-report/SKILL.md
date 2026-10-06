@@ -100,16 +100,19 @@ Start `journalist-evidence-curator`.
 
 Start `journalist-arc-analyzer`.
 
-**Stop: the story meeting.** Show the weave as one page of about 400 words, in this order:
+**Stop: the story meeting.** Show the weave as one page at the level of the story, in this order:
 1. the verdict: the group statement, from the record;
 2. the story, the question it carries and the working headline;
 3. from your notes, or, when the weave has none, the line "Your notes end without your read of the session, so this story is the writer's proposal.";
-4. the threads, each with its role and its receipt by the document's name, a left-out thread with its reason;
-5. the connections, each with the threads it joins, and where they converge;
-6. the stronger main thread, when the weave has one;
-7. the questions, each with what its answer changes.
+4. the threads in the story, the main thread first, each as its role, its name and its line;
+5. the threads left out, by name, with their reasons when the director asks;
+6. where the threads touch: each live connection's line, with the names of the two threads it joins; then where they converge;
+7. the stronger main thread, when the weave has one;
+8. the questions, each with what its answer changes.
 
-The director can edit the story, the question, the headline and the convergence; change a thread's role; add a thread in one line, with a role; strike a connection, or bring a struck one back; answer each question; and leave a note. Write each answer on its question, and each other change into `analysis/weave.json`, listed in `directorChanges` (`references/schemas.md`, "The weave"). Then:
+The page names a thread by its name and a connection by its line, and shows no ids. Each line's evidence stays off the page: when the director asks what is behind a line, show its pieces under it, each piece's sources by name (a document by its name and owner in the record; the ledger, the evidence log or the director's notes), what it shows, and whether it cuts against the line. A thread the director added has none yet: the outline generator finds its evidence. Counted without the evidence, the arc analyzer's page comes to at most 300 words; the director's own additions may take it past.
+
+The director can edit the story, the question, the headline and the convergence; change a thread's role; add a thread with a name, a line and a role; strike a connection, or bring a struck one back; answer each question; and leave a note. The evidence is the writers', so a change is to the lines alone. Write each answer on its question, and each other change into `analysis/weave.json`, listed in `directorChanges` (`references/schemas.md`, "The weave"). Then:
 - **Approve**: go on to step 9.
 - **Reweave**, once the director has changed more than the answers or written a note: start `journalist-arc-analyzer` for a reweave, then hold this stop again.
 - **Send back**, with a note: start it for a send-back, then hold this stop again, showing each of the director's changes the rework changed, with its reason.
@@ -118,24 +121,26 @@ The director can edit the story, the question, the headline and the convergence;
 
 Start `journalist-outline-generator`.
 
-**Stop: the map.** Show the map as one page of about 450 words, in this order:
+**Stop: the map.** Show the map as one page at the level of the story, in this order:
 1. the settled story: the weave's story and question, read-only;
 2. the gap line, when the map has one;
 3. the headline, the deck and the top photo;
-4. each section in the map's order, under its slot's label: its heading, its job, its beats with their material, cards and players, and its photos;
+4. each section in the map's order, under its slot's label: its heading, its job, its beats, each as its move and its people with "(card)" after a beat marked as a card, and its photos;
 5. the dropped sections, each with its reason;
 6. Everyone: where each roster player appears, from the beats' players; then the cards, the photos placed of those the director kept, and the expected length;
-7. left out;
+7. left out, when the director asks;
 8. what the map changed to fit the meeting's changes, each with its source.
 
-The director can edit any line; move a beat to another section, or a photo to another section or the top; strike a beat into left out; bring a beat back from left out into a section they pick; add a beat; and leave a note. Write each change into `analysis/article-outline.json` (`references/schemas.md`, "The map"). Then:
+The page names a beat by its move, and shows no ids. Each photo goes by the director's description in `inputs/character-ids.json`, or its filename when there is none. Each beat's evidence stays off the page, as at the story meeting, with the card's document marked among its pieces. A beat the director added has none yet: the article generator finds its evidence. Counted without the evidence, the outline generator's page comes to at most 450 words, aiming for 300; the director's own additions may take it past.
+
+The director can edit any line, a beat's move and its people among them; move a beat to another section, or a photo to another section or the top; strike a beat into left out; bring a beat back from left out into a section they pick; add a beat with its move and its people; and leave a note. Write each change into `analysis/article-outline.json` (`references/schemas.md`, "The map"). Then:
 - **Approve**: go on to step 10.
 - **Send back**, with a note: start `journalist-outline-generator` again, then hold this stop again.
 - **Back to the story meeting**, to change the story itself: hold step 8's stop again on the weave as the director left it, with no agent run. After its approval, step 9 writes the map again.
 
 ### 10. Write the article
 
-Start `journalist-article-generator`. It writes from the settled weave and the map as the director left them, and renders `output/article.html`.
+Start `journalist-article-generator`. It writes from the settled weave and the map as the director left them, each beat from the evidence it carries, and renders `output/article.html`.
 
 ### 11. Check the article
 
