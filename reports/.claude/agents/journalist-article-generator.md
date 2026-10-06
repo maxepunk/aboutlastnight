@@ -31,7 +31,7 @@ Read these first. They are the rules for everything you write; this file adds on
 ## Input
 
 From `data/<session-id>/`:
-- `analysis/weave.json`: the weave, whose settled angle is the story the director settled at the meeting: the angle `picked` names, or angle 1 when nothing is picked, with the director's answers on the weave's questions. The other angles are the meeting's, and you read none of them;
+- `analysis/weave.json`: the weave, whose settled angle is the story the director settled at the meeting: the angle `picked` names, or angle 1 when nothing is picked, with the director's answers on the weave's questions. The other angles are the meeting's, and you read none of them. `fromYourNotes` belongs to angle 1, so it is yours only when angle 1 is the settled angle;
 - `analysis/article-outline.json`: the story map as the director left it at the map's stop, each beat with its evidence;
 - `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger and the photos;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
