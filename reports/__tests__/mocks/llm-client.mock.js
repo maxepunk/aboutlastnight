@@ -236,13 +236,16 @@ function detectFixtureKey(options) {
     return 'articleEvaluation';
   }
 
+  // The arc writer (and its rework, built from its sections), by the heading its prompt
+  // opens with, which marks its call alone. Phase 4 (brief 4.4): it writes the weave. It
+  // comes before every match on a word the prompt holds: the prompt carries the whole record,
+  // whose text can hold "batch" (fix round 3: on a real record, 092026's, the weave writer got
+  // the preprocessor's fixture and threw), and its whiteboard section is labelled as a
+  // model's reading of the photo, which the photo match would otherwise take.
+  if (promptLower.startsWith('# the weave')) return 'weave';
+
   // Preprocessing
   if (promptLower.includes('preprocess') || promptLower.includes('batch')) return 'preprocess';
-
-  // The arc writer (and its rework, built from its sections), by its own heading:
-  // its whiteboard section is labelled as a model's reading of the photo, which the
-  // photo match below would otherwise take. Phase 4 (brief 4.4): it writes the weave.
-  if (promptLower.startsWith('# the weave')) return 'weave';
 
   // Photo analysis
   if (promptLower.includes('photo') || promptLower.includes('image') ||
