@@ -184,15 +184,18 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
   });
 
   // Review focus 1: a thread the director adds carries no evidence, and its fold says the map
-  // writer finds it, folded as the rest of the evidence is.
-  it('folds the line that a thread with no evidence yet gets it from the map writer', () => {
+  // writer finds it, folded as the rest of the evidence is. The page the harness prints is a
+  // stop's, whose weave holds a thread the director added at an earlier look and whose payload
+  // names it (`addedThreads`; fix round, fix 2).
+  it('folds the line that a thread the director added, with no evidence yet, gets it from the map writer', () => {
     const data = meetingData();
     const draft = View.addMeetingThread(View.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
     const view = View.meetingView(data, draft, '');
     const added = view.threads.find((t) => t.id === 't6');
     expect(added.noEvidence).toBe(View.MEETING_NO_EVIDENCE_LINE);
-    expect(stopPage('arc-selection', { ...data, weave: draft }).lines.find((line) => line.text === View.MEETING_NO_EVIDENCE_LINE))
+    expect(stopPage('arc-selection', { ...data, weave: draft, addedThreads: ['t6'] }).lines.find((line) => line.text === View.MEETING_NO_EVIDENCE_LINE))
       .toMatchObject({ folded: true });
+    expect(stopPage('arc-selection', { ...data, weave: draft }).lines.find((line) => line.text === View.MEETING_NO_EVIDENCE_LINE)).toBeUndefined();
   });
 
   // Spec 9: the tags leave the page. A thread carries its verdict as a label, and a connection

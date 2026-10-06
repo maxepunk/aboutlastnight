@@ -2040,8 +2040,9 @@
   var CUTS_AGAINST_LABEL = 'Cuts against';
 
   /**
-   * The fold of a thread at the story meeting that carries no evidence, such as one the
-   * director added: the next writer finds its evidence (spec 5.3; Review focus 1).
+   * The fold of a thread the director added at the story meeting while it carries no evidence:
+   * the next writer finds its evidence (spec 5.3; Review focus 1). A thread of the writer's with
+   * none is a check's failure, which the page shows beside it instead.
    */
   var MEETING_NO_EVIDENCE_LINE = 'Nothing yet: the map writer finds the evidence for it.';
 
@@ -2708,8 +2709,10 @@
    *   in it is left out.
    * - `threads`: the threads in the story, the main thread first and the others in the order of
    *   the roles (WEAVE_ROLE_LABELS), each as its role, its name and its line, with its evidence
-   *   folded (`evidence`, evidenceFoldView's) and, for a thread with none, such as one the
-   *   director added, the fold's one line (`noEvidence`, MEETING_NO_EVIDENCE_LINE).
+   *   folded (`evidence`, evidenceFoldView's) and, for a thread the director added that has none,
+   *   at this look or an earlier one (`data.addedThreads`), the fold's one line (`noEvidence`,
+   *   MEETING_NO_EVIDENCE_LINE). A thread of the writer's with none shows the check's failure
+   *   beside it (`failures`) instead.
    * - `leftOut`: the threads left out, by name (`names`, under its `title`), with their reasons
    *   folded under `reasonsTitle`.
    * - `connections`: each connection's line, with the names of the two threads it joins and its
@@ -2765,6 +2768,7 @@
       return { text: asString(text), concerns: b.concerns, marks: b.marks, failures: b.failures };
     };
     var shownThreads = shown ? asArray(shown.threads) : [];
+    var addedEarlier = new Set(asArray(d.addedThreads).map(function (id) { return asString(id).trim(); }).filter(Boolean));
     var threadRepeats = new Set(repeatedIdsOf(shownThreads));
     var connectionRepeats = new Set(repeatedIdsOf(shown ? shown.connections : []));
     var allThreads = asArray(weave.threads).map(function (element, index) {
@@ -2773,6 +2777,7 @@
       var role = asString(thread.role);
       var b = id ? at('thread:' + id) : none;
       var evidence = evidenceFoldView(thread.evidence, d.evidenceIndex);
+      var added = index >= shownThreads.length;
       return {
         key: 'thread-' + index,
         index: index,
@@ -2783,10 +2788,10 @@
         roleLabel: roleWord(role),
         reason: asString(thread.reason),
         verdict: thread.verdict === true,
-        added: index >= shownThreads.length,
+        added: added,
         repeatedId: id !== '' && threadRepeats.has(id),
         evidence: evidence,
-        noEvidence: evidence.length === 0 ? MEETING_NO_EVIDENCE_LINE : '',
+        noEvidence: evidence.length === 0 && (added || addedEarlier.has(id)) ? MEETING_NO_EVIDENCE_LINE : '',
         concerns: b.concerns,
         marks: b.marks,
         failures: b.failures

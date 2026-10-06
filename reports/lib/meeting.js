@@ -26,8 +26,8 @@
  *   checkpointArcSelection).
  * - WHAT THE STOP SHOWS (meetingCheckpointData, which server.js getCheckpointData sends at
  *   `arc-selection`): the weave, the verdict as the parse holds it, the questions with any
- *   answers, a code check still failing on the weave in hand, the concerns beside their
- *   lines, the marks after a round, the edits a send-back changed, the standing notes (a
+ *   answers, a code check still failing on the weave in hand, the threads the director
+ *   added, the concerns beside their lines, the marks after a round, the edits a send-back changed, the standing notes (a
  *   round that did not run leaves its note to the note box: unrunRoundNoteIndex), the round
  *   counters, and a round that did not run.
  */
@@ -42,7 +42,7 @@ const {
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
 const { stopRoundOf, isNoteOf } = require('./workflow/state');
 const {
-  standingAtMeeting, carriedEdits, concernEditIds, editWhere, weaveMarks, handEditReportOf, weaveEditsBetween
+  standingAtMeeting, carriedEdits, concernEditIds, editWhere, weaveMarks, handEditReportOf, weaveEditsBetween, weaveDirectorsShare
 } = require('./hand-edit-diff');
 
 /** The meeting's three actions: approve, and the director's two rounds. */
@@ -255,6 +255,20 @@ function meetingConcerns(state) {
 }
 
 /**
+ * The threads the director added at the meeting that the weave carries, by id (their standing
+ * edits, lib/hand-edit-diff.js weaveDirectorsShare): the meeting says the map writer finds the
+ * evidence for such a thread, at whatever look the director added it (spec 2026-10-05 section
+ * 5.3), where a thread of the writer's with none is a check's failure, shown beside it.
+ *
+ * @param {Object} state
+ * @returns {string[]}
+ */
+function meetingAddedThreads(state) {
+  if (!state || !isWeave(state.weave)) return [];
+  return Object.keys(weaveDirectorsShare(carriedEdits(state._weaveHandEdits, state.weave)).addedThreads);
+}
+
+/**
  * The marks after a director's round (brief 4.5): what the round's passes changed in the
  * weave, from the version the director left, with the round.
  *
@@ -395,6 +409,7 @@ function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
     questions: weaveQuestionsOf(s.weave && s.weave.questions),
     checkFailures: meetingCheckFailures(s),
     concerns: meetingConcerns(s),
+    addedThreads: meetingAddedThreads(s),
     marks: meetingMarksOf(s),
     // The edits the round's passes changed, a send-back's with its reasons, and each
     // restore (lib/hand-edit-diff.js reportAfterPass).
@@ -416,6 +431,7 @@ module.exports = {
   meetingResume,
   meetingCheckFailures,
   meetingConcerns,
+  meetingAddedThreads,
   meetingMarksOf,
   roundDidNotRunOf,
   unrunRoundNoteIndex,

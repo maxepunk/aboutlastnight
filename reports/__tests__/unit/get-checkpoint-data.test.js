@@ -570,7 +570,7 @@ describe('4.5: the story meeting\'s payload at arc-selection', () => {
   it("sends the meeting's keys and none of the arc selection's", async () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, atMeeting());
     expect(Object.keys(data).sort()).toEqual([
-      'accusation', 'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport',
+      'accusation', 'addedThreads', 'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport',
       'humanRevisionCount', 'marks', 'maxRevisions', 'questions', 'revisionCount', 'roundDidNotRun', 'weave'
     ]);
     ['narrativeArcs', 'lastEvaluation', 'writerQuestions', 'previousFeedback'].forEach((key) => expect(`${key}: ${key in data}`).toBe(`${key}: false`));

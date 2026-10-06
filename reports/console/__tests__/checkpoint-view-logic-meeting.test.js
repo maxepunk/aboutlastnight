@@ -790,6 +790,48 @@ describe('1B: a code check still failing sits beside the line it names', () => {
   });
 });
 
+// Fix round, fix 2 (spec 5.3 and 6.1; Review focus 1): "Nothing yet: the map writer finds the
+// evidence for it." belongs to a thread the director added, at this look or an earlier one, which
+// the stop names (`addedThreads`). A thread of the writer's with no evidence is a failing check,
+// and the page shows the check's line beside it instead.
+describe("1B fix 2: the fold says the map writer finds the evidence only for a thread the director added", () => {
+  const NO_EVIDENCE = {
+    type: 'thread-without-evidence',
+    message: 'The thread "The envelope" is in the story with no piece of evidence that supports it. Give it the pieces of the record that tell it, at least one with the stance "supports".',
+    line: 'The thread "The envelope" is in the story with nothing behind it: no piece of the record supports it.',
+    place: 'threads[#t3]'
+  };
+
+  test("a writer's thread with no evidence shows the check's failure beside it, not the fold's line", () => {
+    const weave = clone(WEAVE);
+    weave.threads[2].evidence = [];
+    const marked = weaveLib.withFactCheckMark(weave, MARK);
+    const data = payloadOf(stateAt({ weave: marked, _arcValidation: { weaveKey: weaveLib.weaveKey(marked), passed: false, failures: [NO_EVIDENCE], concerns: [] } }));
+    const t3 = threadOf(meetingView(data, meetingDraftOf(data, undefined)), 't3');
+    expect(t3).toMatchObject({ evidence: [], noEvidence: '' });
+    expect(t3.failures).toEqual([`Check still failing: ${NO_EVIDENCE.line}`]);
+  });
+
+  test("a thread the director added at an earlier look, still with no evidence, keeps the fold's line; once it has evidence, its fold lists it", () => {
+    const left = clone(WEAVE);
+    left.threads.push(clone(ADDED));
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const data = payloadOf(stateAt({ weave: weaveLib.withFactCheckMark(left, MARK), _weaveHandEdits: edits }));
+    expect(data.addedThreads).toEqual(['t6']);
+    expect(threadOf(meetingView(data, meetingDraftOf(data, undefined)), 't6')).toMatchObject({
+      added: false, evidence: [], noEvidence: ViewLogic.MEETING_NO_EVIDENCE_LINE
+    });
+    const found = clone(left);
+    found.threads[5].evidence = [piece(['ledger'], 'Two ledgers for one bar.')];
+    const later = payloadOf(stateAt({ weave: weaveLib.withFactCheckMark(found, MARK), _weaveHandEdits: edits }));
+    expect(threadOf(meetingView(later, meetingDraftOf(later, undefined)), 't6')).toMatchObject({ noEvidence: '', evidence: [expect.objectContaining({ shows: 'Two ledgers for one bar.' })] });
+  });
+
+  test('the stop names no added thread when the director added none', () => {
+    expect(payloadOf(stateAt()).addedThreads).toEqual([]);
+  });
+});
+
 describe('4.8: after a reweave, a send-back, and a reweave that did not run', () => {
   const left = directorsVersion();
 
