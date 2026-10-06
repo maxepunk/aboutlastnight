@@ -2989,6 +2989,14 @@ textarea.input {
   font-size: 0.9rem;
 }
 
+/* A connection's line, under "Where they meet", in the thread line's look. */
+.meeting__detail {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .meeting__controls {
   display: flex;
   align-items: center;

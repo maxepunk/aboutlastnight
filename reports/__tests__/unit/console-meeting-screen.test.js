@@ -885,3 +885,17 @@ describe('3 fix A: a thread with no id cannot be flipped', () => {
     expect(page.actions).toEqual([]);
   });
 });
+
+// 3 final, item 8: a connection's line had the class meeting__detail, which console.css never
+// defined, so it printed in the browser's default paragraph style. Every meeting__ class the screen
+// gives an element is styled.
+describe("every meeting__ class the story meeting's screen uses is defined in console.css", () => {
+  test('no class goes unstyled', () => {
+    const screen = read('components/checkpoints/ArcSelection.js');
+    const css = read('console.css');
+    // A class built from a prefix (meeting__input-- and the field) is read by its prefix's modifiers.
+    const used = [...new Set(screen.match(/meeting__[A-Za-z0-9-]+/g) || [])].filter((cls) => !cls.endsWith('-'));
+    const missing = used.filter((cls) => !new RegExp(`\.${cls}(?![A-Za-z0-9_-])`).test(css));
+    expect(missing).toEqual([]);
+  });
+});
