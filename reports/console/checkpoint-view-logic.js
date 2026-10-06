@@ -4724,7 +4724,8 @@
     meetingNoteOf: meetingNoteOf,
     pendingEditsAfterCheckpoint: pendingEditsAfterCheckpoint,
     // Phase 4b, piece 3 (brief 3B): the open angle (the console's copy of lib/weave.js
-    // pickedAngleOf, held equal by a test) and the director's changes on angles
+    // pickedAngleOf) and its story (the copy of settledAngleOf's threads), each held equal by a
+    // test, and the director's changes on angles
     openAngleOf: openAngleOf,
     openStoryOf: openStoryOf,
     pickMeetingAngle: pickMeetingAngle,
