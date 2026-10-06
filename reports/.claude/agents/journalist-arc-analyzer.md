@@ -36,7 +36,7 @@ The prompt that starts you says which: the first weave, a reweave or a send-back
 
 ## Job
 
-Write one weave for the director to read in a few minutes at the story meeting: the page they read, your lines without the evidence under them, comes to at most 300 words. C1 (`craft-story.md`) sets out the story, its question and the stronger main thread; C16 sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line; C15 (`craft-questions.md`) sets out the questions. The fields hold them:
+Write one weave for the director to read in a few minutes at the story meeting. The page they read comes to at most 300 words in all: your lines, without the evidence under them, and the labels printed beside them (each thread's role, the names of the threads each connection joins, and the verdict). So your own lines come to about 225 words. C1 (`craft-story.md`) sets out the story, its question and the stronger main thread; C16 sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line; C15 (`craft-questions.md`) sets out the questions. The fields hold them:
 - `story`, `question` and `headline`: the thesis, the question that carries it, and a working headline.
 - `fromYourNotes`: when the story starts from the director's read (C1), the words it rests on, one unbroken passage copied exactly from the notes. A story from the record leaves the field out.
 - `threads`: every thread you find, each a short `name` and one `line`, in its role. The thread that carries the room's verdict has `"verdict": true`. The page shows a left-out thread by its name, with its one line on why in `reason`.
