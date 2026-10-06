@@ -1,15 +1,17 @@
 /**
  * The story meeting (phase 4, task 4.8; spec 4.3 and 4.4): the arc stop, where the
  * director settles the weave before anything is planned. A page of at most 300 words, in
- * the spec's order: the verdict; the story, the question and the working headline; "from
- * your notes"; the threads in the story, each as its role, its name and its line, with its
- * evidence folded, then the left-out threads by name; the connections, each a line with the
- * threads it joins, and where they converge; the optional stronger main thread; the
- * questions, each with its answer box (phase 4b, brief 1B, the least change to the story
- * level: 1C renders the page in full). Beside them: a code check still failing beside the
- * line it names, a concern beside its line, the marks after a round, the edits a send-back
- * changed with their reasons, a round that did not run, the note box with the standing notes
- * folded under it, and the three buttons.
+ * the spec's order (phase 4b, briefs 1B and 1C; spec 2026-10-05 sections 4.1 and 9): the
+ * verdict; the story, the question and the working headline; "from your notes"; the threads
+ * in the story, each as its role, its name and its line, with a "What's behind it" toggle that
+ * opens its evidence in place, then the left-out threads by name, their reasons behind one
+ * toggle; the connections, each its line with the names of the threads it joins, and where
+ * they converge; the optional stronger main thread; the questions, each with its answer box.
+ * Beside them: a code check still failing under the line it names, a concern beside its line,
+ * the marks after a round, the edits a send-back changed with their reasons, a round that did
+ * not run, the note box with the standing notes folded under it, and the three buttons. No
+ * tag on the page: a thread is named by its name, a connection by the threads it joins, in
+ * every line and every aria-label.
  *
  * The director edits the story, the question, the headline and the convergence in place,
  * changes a thread's role, adds a thread with a name, a line and a role, strikes a
@@ -148,17 +150,25 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     send('send-back');
   }
 
-  /** A code check still failing on a line, the concerns and the marks beside it. */
-  function beside(line) {
+  /**
+   * What sits under a line: a code check still failing on it, in the director's words (spec
+   * 6.3), the concerns about the director's edit on it and the marks of what the round changed
+   * on it. `label` names the line they sit under where the line above them is another's: a
+   * left-out thread's, under the names of the threads left out.
+   */
+  function beside(line, label) {
+    const lead = function () {
+      return label ? React.createElement('span', { className: 'text-muted' }, label + ': ') : null;
+    };
     return React.createElement(React.Fragment, null,
       (line.failures || []).map(function (text, i) {
-        return React.createElement('p', { key: 'check-' + i, className: 'meeting__check', role: 'alert' }, text);
+        return React.createElement('p', { key: 'check-' + i, className: 'meeting__check meeting__check--beside', role: 'alert' }, lead(), text);
       }),
-      line.concerns.map(function (text, i) {
-        return React.createElement('p', { key: 'concern-' + i, className: 'meeting__concern', role: 'note' }, text);
+      (line.concerns || []).map(function (text, i) {
+        return React.createElement('p', { key: 'concern-' + i, className: 'meeting__concern', role: 'note' }, lead(), text);
       }),
-      line.marks.map(function (text, i) {
-        return React.createElement('p', { key: 'mark-' + i, className: 'meeting__mark' }, text);
+      (line.marks || []).map(function (text, i) {
+        return React.createElement('p', { key: 'mark-' + i, className: 'meeting__mark' }, lead(), text);
       })
     );
   }
@@ -169,19 +179,33 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     });
   }
 
+  /** A thread as the page names it, on screen and to a screen reader: its name, or its line when it has none. */
+  function threadName(thread) {
+    return thread.name || thread.line;
+  }
+
+  /** A connection as the page names it to a screen reader: by the threads it joins, or its line when it joins none the weave holds. */
+  function connectionName(connection) {
+    return connection.joins ? 'the connection between ' + connection.joins : 'the connection "' + connection.line + '"';
+  }
+
   /**
-   * A line's evidence, folded under it (phase 4b, brief 1B; spec 9): each piece as
-   * evidenceFoldView words it, or, for a line with none, why (`noEvidence`).
+   * A line's evidence under it (phase 4b, briefs 1B and 1C; spec 5.4 and 9): a "What's behind it"
+   * toggle that opens it in place, each piece as evidenceFoldView words it, a piece that cuts
+   * against the line marked so, or, for a thread the director added that has none, why
+   * (`noEvidence`). The group is named for a screen reader by the line's `subject`.
    */
-  function evidenceFold(pieces, noEvidence) {
+  function evidenceFold(pieces, noEvidence, subject) {
     if (pieces.length === 0 && !noEvidence) return null;
-    return React.createElement(CollapsibleSection, { title: view.evidenceTitle },
-      React.createElement('ul', { className: 'meeting__list' },
-        pieces.map(function (piece) {
-          return React.createElement('li', { key: piece.key, className: 'text-sm' + (piece.cutsAgainst ? ' meeting__cuts-against' : '') }, piece.text);
-        })
-      ),
-      noEvidence && React.createElement('p', { className: 'text-xs text-muted' }, noEvidence)
+    return React.createElement('div', { className: 'meeting__fold', role: 'group', 'aria-label': view.evidenceTitle + ': ' + subject },
+      React.createElement(CollapsibleSection, { title: view.evidenceTitle },
+        React.createElement('ul', { className: 'meeting__pieces' },
+          pieces.map(function (piece) {
+            return React.createElement('li', { key: piece.key, className: 'meeting__piece' + (piece.cutsAgainst ? ' meeting__cuts-against' : '') }, piece.text);
+          })
+        ),
+        noEvidence && React.createElement('p', { className: 'meeting__no-evidence' }, noEvidence)
+      )
     );
   }
 
@@ -231,29 +255,34 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     },
 
     threads: function () {
-      /** One thread's row: its role picker, its name and its line, what sits beside it, and its evidence folded. */
+      /** A thread's role picker, named by the thread's name; a line under an id the writer repeated has it off. */
+      function rolePicker(thread) {
+        return React.createElement('select', {
+          className: 'meeting__role',
+          value: thread.role,
+          disabled: thread.repeatedId,
+          onChange: function (e) { editRole(thread.index, e.target.value); },
+          'aria-label': 'Role of the thread ' + threadName(thread)
+        }, roleOptions());
+      }
+
+      /** One thread in the story: its role picker, its name and its line, what sits under it, and what's behind it. */
       function threadRow(thread) {
         return React.createElement('li', { key: thread.key, className: 'meeting__thread' },
           React.createElement('div', { className: 'meeting__head' },
-            React.createElement('select', {
-              className: 'meeting__role',
-              value: thread.role,
-              disabled: thread.repeatedId,
-              onChange: function (e) { editRole(thread.index, e.target.value); },
-              'aria-label': 'Role of the thread ' + (thread.name || thread.line)
-            }, roleOptions()),
+            rolePicker(thread),
             thread.verdict && React.createElement(Badge, { label: "the room's verdict", color: 'var(--accent-cyan)' }),
             thread.added && React.createElement('button', {
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               onClick: function () { removeThread(thread.index); },
-              'aria-label': 'Take out the thread you added: ' + (thread.name || thread.line)
+              'aria-label': 'Take out the thread you added: ' + threadName(thread)
             }, 'Take out')
           ),
-          React.createElement('p', { className: 'meeting__claim' },
-            thread.name && React.createElement('strong', null, thread.name + (thread.line ? ': ' : '')), thread.line),
+          React.createElement('p', { className: 'meeting__line' },
+            thread.name && React.createElement('strong', { className: 'meeting__name' }, thread.name + (thread.line ? ': ' : '')), thread.line),
           beside(thread),
-          evidenceFold(thread.evidence, thread.noEvidence)
+          evidenceFold(thread.evidence, thread.noEvidence, threadName(thread))
         );
       }
 
@@ -261,41 +290,36 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
       return React.createElement('section', { key: 'threads', className: 'meeting__section' },
         React.createElement('h4', { className: 'meeting__label' }, 'The threads'),
         React.createElement('ul', { className: 'meeting__list' }, view.threads.map(threadRow)),
-        // The threads left out, by name, each with its role picker; their reasons a click away.
+        // The threads left out, by name, each with its role picker to bring it into the story;
+        // what sits under one, under its name; their reasons a click away (spec 4.1).
         leftOut.threads.length > 0 && React.createElement('div', { className: 'meeting__left-out' },
           React.createElement('p', { className: 'meeting__label' }, leftOut.title),
-          React.createElement('ul', { className: 'meeting__list' },
+          React.createElement('ul', { className: 'meeting__left-out-names' },
             leftOut.threads.map(function (thread) {
-              return React.createElement('li', { key: thread.key, className: 'meeting__thread meeting__thread--left-out' },
-                React.createElement('div', { className: 'meeting__head' },
-                  React.createElement('select', {
-                    className: 'meeting__role',
-                    value: thread.role,
-                    disabled: thread.repeatedId,
-                    onChange: function (e) { editRole(thread.index, e.target.value); },
-                    'aria-label': 'Role of the thread ' + (thread.name || thread.line)
-                  }, roleOptions()),
-                  React.createElement('span', null, thread.name || thread.line)
-                ),
-                beside(thread)
+              return React.createElement('li', { key: thread.key, className: 'meeting__left-out-name' },
+                React.createElement('span', null, threadName(thread)),
+                rolePicker(thread)
               );
             })
           ),
+          leftOut.threads.map(function (thread) {
+            return React.createElement(React.Fragment, { key: thread.key }, beside(thread, threadName(thread)));
+          }),
           React.createElement(CollapsibleSection, { title: leftOut.reasonsTitle },
             React.createElement('ul', { className: 'meeting__list' },
               leftOut.threads.map(function (thread) {
                 return React.createElement('li', { key: thread.key, className: 'text-sm' },
-                  React.createElement('span', { className: 'text-muted' }, (thread.name || thread.line) + ': '), thread.reason);
+                  React.createElement('span', { className: 'text-muted' }, threadName(thread) + ': '), thread.reason);
               })
             )
           )
         ),
         view.repeatedIdHint && React.createElement('p', { className: 'meeting__hint' }, view.repeatedIdHint),
-        // Add a thread the writer missed: its name, its line and its role.
+        // Add a thread the writer missed: its name, its line and its role (addMeetingThread).
         React.createElement('div', { className: 'meeting__add' },
           React.createElement('input', {
             type: 'text',
-            className: 'input meeting__add-claim',
+            className: 'input meeting__add-name',
             value: newName,
             placeholder: 'A short name for the thread',
             onChange: function (e) { setNewName(e.target.value); },
@@ -303,7 +327,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
           }),
           React.createElement('input', {
             type: 'text',
-            className: 'input meeting__add-claim',
+            className: 'input meeting__add-line',
             value: newLine,
             placeholder: 'The thread in one line',
             onChange: function (e) { setNewLine(e.target.value); },
@@ -335,21 +359,21 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
               className: 'meeting__connection' + (connection.struck ? ' meeting__connection--struck' : '')
             },
               React.createElement('div', { className: 'meeting__head' },
-                React.createElement('span', { className: 'text-xs text-muted' }, connection.joins ? 'Joins ' + connection.joins : ''),
+                React.createElement('span', { className: 'meeting__joins' }, connection.joins ? 'Joins ' + connection.joins : ''),
                 React.createElement('button', {
                   type: 'button',
                   className: 'btn btn-ghost btn-sm',
                   disabled: connection.repeatedId,
                   onClick: function () { strike(connection.index, !connection.struck); },
                   'aria-pressed': connection.struck,
-                  'aria-label': (connection.struck ? 'Unstrike the connection: ' : 'Strike the connection: ') + connection.line
+                  'aria-label': (connection.struck ? 'Unstrike ' : 'Strike ') + connectionName(connection)
                 }, connection.struck ? 'Unstrike' : 'Strike')
               ),
               React.createElement('p', { className: 'meeting__detail' }, connection.line),
               // Brief 4.14a: out of the story with a left-out thread, and why.
               connection.leftOut && React.createElement('p', { className: 'text-xs text-muted' }, connection.leftOut),
               beside(connection),
-              evidenceFold(connection.evidence, '')
+              evidenceFold(connection.evidence, '', connectionName(connection))
             );
           })
         ),
@@ -385,9 +409,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
               onChange: function (e) { answer(question.index, e.target.value); },
               'aria-label': 'Your answer: ' + question.question
             }),
-            question.marks.map(function (text, i) {
-              return React.createElement('p', { key: 'mark-' + i, className: 'meeting__mark' }, text);
-            })
+            // A check still failing on the question, and the marks of what the round changed on it.
+            beside(question)
           );
         })
       );

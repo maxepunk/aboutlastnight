@@ -2788,9 +2788,10 @@ textarea.input {
 }
 
 /* ── 4.8: the story meeting ──
-   The arc stop's page (ArcSelection.js): about 400 words to read and settle in minutes.
-   Each line keeps its concerns and its marks under it, so the director reads them where
-   they apply; the round's lines sit above the verdict. */
+   The arc stop's page (ArcSelection.js): at most 300 words as it first opens, read and settled
+   in minutes (phase 4b, brief 1C). Each line keeps under it what is about it, a check still
+   failing, its concerns and its marks, so the director reads them where they apply, and what's
+   behind it, folded; the round's lines sit above the verdict. */
 .meeting__section {
   padding-left: var(--space-md);
   border-left: 2px solid rgba(212, 168, 83, 0.2);
@@ -2860,8 +2861,101 @@ textarea.input {
   word-break: break-word;
 }
 
-.meeting__thread--left-out {
-  opacity: 0.7;
+/* A thread in the story: its role picker, then its name and its line. */
+.meeting__line {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.meeting__name {
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
+/* What's behind a line: a small toggle under it that opens its evidence in place, quieter than
+   the line itself, so the page reads as the story and the evidence stays a click away. */
+.meeting__fold .collapsible-section {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.meeting__fold .collapsible-header {
+  width: auto;
+  padding: 2px 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.meeting__fold .collapsible-header:hover {
+  background: none;
+  color: var(--accent-amber);
+}
+
+.meeting__fold .collapsible-body {
+  padding: var(--space-xs) 0 0 var(--space-sm);
+}
+
+.meeting__pieces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* One piece of evidence: its sources by name, what it shows. */
+.meeting__piece {
+  padding-left: var(--space-sm);
+  border-left: 2px solid rgba(78, 205, 196, 0.3);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* A piece that cuts against its line: the line still stands, and the piece says where it gives. */
+.meeting__piece.meeting__cuts-against {
+  border-left-color: rgba(231, 76, 60, 0.6);
+  color: var(--text-primary);
+}
+
+.meeting__no-evidence {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* The threads left out, by name on one wrapping line, each with its role picker to bring it
+   into the story; what sits under one names it, and the reasons fold below. */
+.meeting__left-out {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px dashed rgba(212, 168, 83, 0.2);
+}
+
+.meeting__left-out-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.meeting__left-out-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 /* A connection the director struck stays on the page, struck through. */
@@ -2877,11 +2971,16 @@ textarea.input {
   flex-wrap: wrap;
 }
 
-.meeting__id,
 .meeting__kind {
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: var(--accent-cyan);
+}
+
+/* The threads a connection joins, by name. */
+.meeting__joins {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 .meeting__kind {
@@ -2906,7 +3005,13 @@ textarea.input {
   flex-wrap: wrap;
 }
 
-.meeting__add-claim {
+/* The add line: a short name, the thread in one line, its role. */
+.meeting__add-name {
+  flex: 0 1 220px;
+  min-width: 160px;
+}
+
+.meeting__add-line {
   flex: 1;
   min-width: 220px;
 }
@@ -2941,6 +3046,12 @@ textarea.input {
   border-left: 2px solid var(--accent-red);
   background: rgba(231, 76, 60, 0.06);
   font-size: 0.85rem;
+}
+
+/* A check still failing under the line it names: as compact as the concerns and marks beside it. */
+.meeting__check--beside {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.8rem;
 }
 
 .meeting__changed {
