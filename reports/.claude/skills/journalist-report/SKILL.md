@@ -106,7 +106,7 @@ Start `journalist-arc-analyzer`.
 3. from your notes, or, when the weave has none, the line "Your notes end without your read of the session, so this story is the writer's proposal.";
 4. the threads in the story, the main thread first, each as its role, its name and its line;
 5. the threads left out, by name, with their reasons when the director asks;
-6. where the threads touch: each live connection's line, with the names of the two threads it joins; then where they converge;
+6. where the threads touch: each connection's line, with the names of the two threads it joins, and a struck connection marked as struck; then where they converge;
 7. the stronger main thread, when the weave has one;
 8. the questions, each with what its answer changes.
 
