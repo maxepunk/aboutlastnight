@@ -355,8 +355,8 @@ describe('the rule files', () => {
  */
 describe('the items phase 4 rewrites (task 4.1)', () => {
   it.each([
-    ['C1', 'craft-story', 'The director settles the thesis at the meeting, and every later writer works from the settled story.'],
-    ['C16', 'craft-story', "The arc writer weighs each thread by how it bears on the room's verdict, and that weight decides its role."],
+    // Task 3A (phase 4b piece 3's read, 2026-10-06) rewrote C1's and C16's sentences these
+    // rows pinned, on the angles and the threads' roles; its block below pins the new ones.
     ['C2', 'craft-form', 'The map decides, from the settled story, which sections exist, their order and their headings.'],
     ['C4', 'craft-telling', "The article writer gives each beat the sentences its job needs, a supporting player's beat a line or two and a decisive scene more, and aims at the map's expected length: a session that gives less makes a shorter article, never a padded one."],
     // Task 1A (phase 4b's read, 2026-10-05) rewrote the sentence this row pinned, on where
@@ -399,12 +399,43 @@ describe('the items phase 4 rewrites (task 4.1)', () => {
  */
 describe('the items phase 4b rewrites (task 1A)', () => {
   it.each([
-    ['C16', 'craft-story', "The story and its question, each thread, each connection, the convergence and every beat on the map are said in plain words, with people's names, and with no quotation from the record, no figure, no clock time and no document id."],
+    // Task 3A rewrote the C16 sentence this row pinned, for the angles; its block below pins it.
     ['C2', 'craft-form', "A section's beats are the moves of its story, each said in a few plain words with its people, at the level of the story (C16)."],
     ['C8', 'craft-material', 'The map chooses, from the notes and the record, the lines the settled story needs, and places each as evidence under the beat where it makes sense, a line from the room under the moment it was said.'],
     ['C9', 'craft-cards', "The map chooses the cards with the story: it marks each beat whose evidence prints as a card, and names the card's document under that beat."]
   ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
     expect(itemText(name, id)).toContain(sentence);
+  });
+});
+
+/**
+ * Phase 4b, piece 3, task 3A: the rule text the director approved on 2026-10-06
+ * (rule-text-read.md in the piece 3 workspace; the piece 3 spec's section 11). The arc
+ * writer pitches two or three angles over one shared set of threads, and the director
+ * settles the story by picking one: C1 says how the thesis is pitched, C16 how the threads
+ * make each angle with no main thread and no roles, and C15 how the questions are asked,
+ * once per subject. Each changed item carries one of the read's new sentences inside its
+ * own item. The lint above holds the rest: each item once, every pointer, no em-dash, no
+ * gendered Nova and nothing on the removed list.
+ */
+describe('the items phase 4b piece 3 rewrites (task 3A)', () => {
+  it.each([
+    ['C1', 'craft-story', 'The arc writer pitches the thesis at the story meeting as two or three angles, each a different story the article could tell.'],
+    ['C1', 'craft-story', 'The director settles the thesis by picking an angle and adjusting it, and every later writer works from the settled story.'],
+    ['C16', 'craft-story', "The arc writer weighs each thread by how it bears on the room's verdict, and that weight decides which angles use it and where in each it falls."],
+    ['C16', 'craft-story', "Each angle's story, question and ending, each thread, each connection and every beat on the map are said in plain words, with people's names, and with no quotation from the record, no figure, no clock time and no document id."],
+    ['C15', 'craft-questions', 'It asks once about each subject, each player, each pronoun and each figure, however many threads the answer touches.']
+  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
+    expect(itemText(name, id)).toContain(sentence);
+  });
+
+  // The read retires the main thread, the roles and the left-out thread's reason from C1 and C16.
+  it.each([
+    'main thread', 'grounds it', 'complicates it', 'mirrors it', 'carries it forward', 'left out, with one line on why'
+  ])('C1 and C16 no longer say "%s"', (phrase) => {
+    const text = `${itemText('craft-story', 'C1')}
+${itemText('craft-story', 'C16')}`.toLowerCase();
+    expect(text).not.toContain(phrase);
   });
 });
 
