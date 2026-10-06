@@ -332,10 +332,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   it joins, with a sentence on the evidence in its opening (the fixture's settled weave 1709 ->
  *   2208): outline-journalist 18299 -> 18798 and article-journalist 31172 -> 31671, each by the
  *   settled weave alone.
+ * - Phase 4b (fix round on brief 1B, fix 5), the settled weave prints a left-out thread by its
+ *   name and its reason only: the map writer adds no thread, so a left-out thread's id, line and
+ *   evidence were noise in its prompt. The fixture's left-out thread loses its id, its line and
+ *   its one piece of evidence (-125), and the opening says the evidence is under each thread in
+ *   the story and that a thread left out comes last, by its name and why (+78): the fixture's
+ *   settled weave 2208 -> 2161, outline-journalist 18798 -> 18751 and article-journalist
+ *   31671 -> 31624, each by the settled weave alone. The arc pin does not move.
  */
 const PINNED = {
-  'outline-journalist': ['e0f6694730e48b75cb07136c2f924cdd3f3d236c0dc5397f3121c5495450a8f7', 18798],
-  'article-journalist': ['f7967ea54f0947c14b8710de29fce631198456deab910da4529785fd4a519ed6', 31671],
+  'outline-journalist': ['11044647f8e827954b6d366dcd8882ba992097b46bb9ecf6759ba2160c333ef9', 18751],
+  'article-journalist': ['97f0fc2890ed4e6cf61968a99c552f47ae4396282d0a46d417ad809ffb2b694d', 31624],
   'arcs-journalist': ['0cc6d84aaa1d94a20080934235e0bfacbf9f9920627f6fdd9b881b6cfd43004c', 11475]
 };
 

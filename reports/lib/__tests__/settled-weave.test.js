@@ -3,9 +3,10 @@
  * as the director left it at the story meeting, for every later writer (the map writer
  * and the article writer call it, 4.6 and 4.7):
  * - the story, its question and the working headline, the director's words it rests on;
- * - every thread by its id, its role, its name and its line, a thread the director added among
- *   them, and under each its evidence, one piece a line (phase 4b, brief 1B; R7): the map
- *   writer gives each beat the pieces that tell it;
+ * - every thread in the story by its id, its role, its name and its line, a thread the director
+ *   added among them, and under each its evidence, one piece a line (phase 4b, brief 1B; R7): the
+ *   map writer gives each beat the pieces that tell it; then each thread left out, by its name and
+ *   why, and nothing more (fix round, fix 5): the map writer adds no thread;
  * - the connections the story keeps, each by its line and the names of the threads it joins,
  *   and the convergence; a struck connection is gone;
  * - every question with the director's answer word for word, or marked unanswered, and
@@ -83,14 +84,33 @@ describe('renderSettledWeave: the weave as the director left it (brief 4.5)', ()
     expect(text).toContain(`FROM THE DIRECTOR'S NOTES: "${WRITERS.fromYourNotes}"`);
   });
 
-  it('prints every thread by its id, its role, its name and its line, the main thread first and the left-out threads last, a thread the director added among them', () => {
-    const lines = settled().split('\n').filter((line) => /^- t\d/.test(line));
+  it('prints every thread in the story by its id, its role, its name and its line, the main thread first, a thread the director added among them, and the left-out threads last', () => {
+    const lines = settled().split('\n').filter((line) => /^- (t\d|\(left out\))/.test(line));
     expect(lines.map((line) => line.slice(0, line.indexOf(')') + 1))).toEqual([
-      '- t1 (main thread)', '- t2 (grounds it)', '- t7 (grounds it)', '- t3 (mirrors it)', '- t4 (left out)'
+      '- t1 (main thread)', '- t2 (grounds it)', '- t7 (grounds it)', '- t3 (mirrors it)', '- (left out)'
     ]);
     expect(lines[0]).toBe(`- t1 (main thread) The case against Rowan: ${WRITERS.threads[0].line} It carries the room's verdict.`);
-    expect(lines[4]).toBe(`- t4 (left out) The coat check: ${WRITERS.threads[3].line} Why it is left out: ${WRITERS.threads[3].reason}`);
+    expect(lines[4]).toBe(`- (left out) The coat check. Why it is left out: ${WRITERS.threads[3].reason}`);
     expect(settled()).not.toMatch(/Receipt|claim/);
+  });
+
+  // Fix round, fix 5: the map writer adds no thread, so a left-out thread's line and evidence
+  // are noise in its prompt. The settled weave prints a left-out thread by its name and its
+  // reason only, whatever the thread carries.
+  it('prints a left-out thread by its name and why it is left out, and nothing more: no id, no line, no evidence, no verdict flag', () => {
+    const weave = clone(WRITERS);
+    weave.threads[3] = { ...weave.threads[3], verdict: true, evidence: [piece(['row001'], 'Kai trades a favour at the coat check.'), piece(['ledger'], 'A sale at the coat check.', 'cuts-against')] };
+    weave.threads[0].verdict = false;
+    const text = renderSettledWeave(weave, []);
+    const lines = text.split('\n');
+    const at = lines.findIndex((line) => line.startsWith('- (left out) '));
+    expect(lines[at]).toBe(`- (left out) The coat check. Why it is left out: ${WRITERS.threads[3].reason}`);
+    expect(lines[at + 1]).not.toMatch(/^ {2}- /);
+    ['Kai trades a favour at the coat check.', 'A sale at the coat check.', WRITERS.threads[3].line, '- t4'].forEach((text_) => expect(text).not.toContain(text_));
+    expect(text).not.toContain("It carries the room's verdict.");
+    const noReason = clone(WRITERS);
+    delete noReason.threads[3].reason;
+    expect(renderSettledWeave(noReason, []).split('\n')).toContain('- (left out) The coat check.');
   });
 
   // R7: the settled weave carries each thread's evidence to the map writer, which gives each beat
@@ -106,10 +126,10 @@ describe('renderSettledWeave: the weave as the director left it (brief 4.5)', ()
   });
 
   // Review focus 1: a thread the director added carries no evidence; the map writer finds it.
-  it('says a thread in the story has no evidence yet, such as one the director added, and prints nothing under a left-out thread with none', () => {
+  it('says a thread in the story has no evidence yet, such as one the director added, and prints nothing under a left-out thread', () => {
     const lines = settled().split('\n');
     expect(lines[lines.findIndex((line) => line.startsWith('- t7 ')) + 1]).toBe('  - No evidence yet.');
-    const leftOut = lines.findIndex((line) => line.startsWith('- t4 '));
+    const leftOut = lines.findIndex((line) => line.startsWith('- (left out) '));
     expect(lines[leftOut + 1]).not.toMatch(/^ {2}- /);
   });
 
@@ -322,7 +342,7 @@ describe('4.14a: the settled weave tells the story the director settled', () => 
     const out = renderSettledWeave(left, carriedEdits(standingAtMeeting(null, WRITERS, left), left));
     expect(out).not.toContain(WRITERS.connections[0].line);
     expect(out).toContain('- c2, joining "The case against Rowan" and "The last two minutes": The scoreboard brought the money into the vote.');
-    expect(out.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/^- t3 \(left out\) .*\[the director's changes M1: the role; M2: the reason\]$/);
+    expect(out.split('\n').find((line) => line.startsWith('- (left out) The bathroom.'))).toMatch(/^- \(left out\) The bathroom\. Why it is left out: The director left it out\. \[the director's changes M1: the role; M2: the reason\]$/);
     const back = clone(left);
     back.threads[2].role = 'mirrors-it';
     expect(renderSettledWeave(back, [])).toContain('- c1, joining "The case against Rowan" and "The bathroom": Sloane turned the room against Rowan.');

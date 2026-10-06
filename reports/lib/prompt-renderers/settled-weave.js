@@ -6,11 +6,14 @@
  * It prints:
  * - the story, its question and the working headline, and the director's words the story
  *   rests on;
- * - every thread by its id, its role, its name and its line, the main thread first and the
- *   left-out threads last, a thread the director added among them; and under each, its
- *   evidence, one piece a line: its stance, its sources and what it shows (phase 4b, brief
- *   1B; R7), for the map writer to give each beat the pieces that tell it. A thread in the
- *   story with none yet, such as one the director added, says so;
+ * - every thread in the story by its id, its role, its name and its line, the main thread
+ *   first, a thread the director added among them; and under each, its evidence, one piece a
+ *   line: its stance, its sources and what it shows (phase 4b, brief 1B; R7), for the map
+ *   writer to give each beat the pieces that tell it. A thread with none yet, such as one the
+ *   director added, says so;
+ * - each thread left out, last, by its name and why it is left out, and nothing more: no id,
+ *   no line, no evidence (phase 4b fix round, fix 5). The map writer adds no thread, so what a
+ *   left-out thread carries is noise in its prompt;
  * - the connections the story keeps, each by its line and the names of the threads it joins,
  *   and the convergence (lib/weave.js storyConnections). A connection's kind stays underneath,
  *   unprinted. A connection the director struck is gone from it, and since brief 4.14a so is
@@ -101,12 +104,12 @@ function listOf(words) {
 
 /**
  * A thread's evidence, one piece a line under it (phase 4b, brief 1B; R7): the piece's stance,
- * its sources as the record names them, and what it shows. A thread in the story with no piece
- * yet says so; a left-out one with none prints nothing.
+ * its sources as the record names them, and what it shows. A thread with no piece yet says so.
+ * Only a thread in the story has its evidence printed (renderSettledWeave).
  */
 function evidenceLines(thread) {
   const pieces = objectsOf(thread.evidence);
-  if (pieces.length === 0) return thread.role === LEFT_OUT_ROLE ? [] : ['  - No evidence yet.'];
+  if (pieces.length === 0) return ['  - No evidence yet.'];
   return pieces.map((piece) => {
     const sources = listOf((Array.isArray(piece.sources) ? piece.sources : []).map(textOf).filter(Boolean));
     const stance = STANCE_WORDS[piece.stance] || textOf(piece.stance);
@@ -141,7 +144,7 @@ function renderSettledWeave(weave, edits) {
 
   const lines = [
     `<${SETTLED_WEAVE_TAG}>`,
-    "The weave as the director settled it at the story meeting, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. Under each thread is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.",
+    "The weave as the director settled it at the story meeting, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. Under each thread in the story is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows. A thread left out comes last, by its name and why it is left out.",
     '',
     `STORY: ${textOf(weave.story)}${fieldMark('story')}`,
     `QUESTION: ${textOf(weave.question)}${fieldMark('question')}`,
@@ -168,9 +171,13 @@ function renderSettledWeave(weave, edits) {
     Object.entries(share.threadFields)
       .filter(([place]) => place.startsWith(`${id}.`))
       .forEach(([place, editId]) => parts.push(`${meetingChangeId(editId)}: the ${place.slice(id.length + 1)}`));
+    if (thread.role === LEFT_OUT_ROLE) {
+      const reason = textOf(thread.reason) ? ` Why it is left out: ${textOf(thread.reason)}` : '';
+      lines.push(`- (${roleWords(thread.role)}) ${textOf(thread.name) || textOf(thread.line)}.${reason}${changeMark(parts)}`);
+      return;
+    }
     const verdict = thread.verdict === true ? " It carries the room's verdict." : '';
-    const reason = textOf(thread.reason) && thread.role === LEFT_OUT_ROLE ? ` Why it is left out: ${textOf(thread.reason)}` : '';
-    lines.push(`- ${id} (${roleWords(thread.role)}) ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${reason}${changeMark(parts)}`);
+    lines.push(`- ${id} (${roleWords(thread.role)}) ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${changeMark(parts)}`);
     lines.push(...evidenceLines(thread));
   });
 
