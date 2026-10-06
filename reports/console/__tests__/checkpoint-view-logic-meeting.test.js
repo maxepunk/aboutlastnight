@@ -2252,9 +2252,10 @@ describe('fix round 4: a meeting line after a send-back shows no evidence', () =
   });
 });
 
-// Fix round 4, fix 4 (spec 5.3): the fold's line is the director's thread's alone. A thread the
-// director flips into the story is theirs once slice 3C reads a flip as an edit; until then the
-// stop names only the threads they added (lib/meeting.js meetingDirectorsThreads).
+// Fix round 4, fix 4 (spec 5.3): the fold's line is the director's thread's alone. Since slice 3C
+// a flip is an edit, so lib/meeting.js meetingDirectorsThreads names a thread the director flipped
+// into the story beside the threads they added; a thread of the writer's that no edit of the
+// director's touches gets no line, and the stop names it nowhere.
 describe('fix round 4: "Nothing yet" is never under a thread of the writer\'s', () => {
   const { storyLevelWeave } = require('../../lib/__tests__/fixtures/story-level-weave');
 

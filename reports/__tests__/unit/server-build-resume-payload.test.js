@@ -1036,7 +1036,7 @@ describe('4.5: the story meeting through buildResumePayload', () => {
   });
   const left = () => {
     const weave = clone(WEAVE);
-    weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
+    weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, line: 'Morgan paid Riley at the bar, where no one looked.' } : t));
     weave.questions = weave.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar.' }));
     return weave;
   };
@@ -1047,7 +1047,7 @@ describe('4.5: the story meeting through buildResumePayload', () => {
     expect(resume).toEqual({ approved: true });
     expect(stateUpdates.weave.questions[0].answer).toBe('Sarah ran the bar.');
     expect(stateUpdates.weave._factCheck).toEqual({ at: 't', ready: true, fixes: 0 });
-    expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'threads[#t3].role']]);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'threads[#t3].line']]);
     expect(stateUpdates.directorGateNotes[1]).toMatchObject({ gate: 'arc-selection', kind: 'approval', round: 1, text: 'Lead with the vote.' });
     ['_outlineGuidance', 'selectedArcs', '_meetingRound', '_arcFeedback'].forEach((key) => expect(`${key}: ${key in stateUpdates}`).toBe(`${key}: false`));
   });
@@ -1119,7 +1119,7 @@ describe("4.5b: at the story meeting only the meeting's own action is taken", ()
   const { withFactCheckMark } = require('../../lib/weave');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const atMeeting = () => ({ weave: withFactCheckMark(clone(WEAVE), { at: 't', ready: true, fixes: 0 }), _weaveBaseline: clone(WEAVE) });
-  const edited = () => ({ ...clone(WEAVE), threads: clone(WEAVE).threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t)) });
+  const edited = () => ({ ...clone(WEAVE), threads: clone(WEAVE).threads.map((t) => (t.id === 't3' ? { ...t, line: 'Morgan paid Riley at the bar, where no one looked.' } : t)) });
 
   /** Each other stop's approval or send-back, as its console sends it, with the stop it answers. */
   const OTHER_STOPS = [
@@ -1552,11 +1552,11 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
     it("takes every payload the console builds, each carrying only the meeting's keys, and the photos folder beside the meeting's own action", () => {
       const state = atMeeting();
       const data = dataOf(state);
-      const reroled = setThreadField(shownOf(state), 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
+      const rewritten = setThreadField(shownOf(state), 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
       const payloads = [
         meetingPayload('approve', data, shownOf(state), ''),
-        meetingPayload('approve', data, reroled, 'Lead with the vote.'),
-        meetingPayload('reweave', data, reroled, ''),
+        meetingPayload('approve', data, rewritten, 'Lead with the vote.'),
+        meetingPayload('reweave', data, rewritten, ''),
         meetingPayload('reweave', data, shownOf(state), 'Make the sale the main thread.'),
         meetingPayload('send-back', data, shownOf(state), 'Rethink the money thread.'),
         meetingPayload('send-back', data, setQuestionAnswer(shownOf(state), 0, 'Sarah ran the bar.'), 'Rethink it.')
@@ -1617,7 +1617,7 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
   });
 
   // Review 4.8, minor 8: the two payload shapes the pure tests alone covered.
-  describe("the console's note-only reweave and a send-back that carries a role change, through the gate", () => {
+  describe("the console's note-only reweave and a send-back that carries a thread's line rewritten, through the gate", () => {
     it("a note-only reweave: the director's round, on the weave as shown, with no edit and the note as the round's", () => {
       const state = atMeeting();
       const payload = meetingPayload('reweave', dataOf(state), shownOf(state), 'Make the sale the main thread.');
@@ -1631,9 +1631,9 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
 
     it('a send-back that carries a thread rewritten: the line stored as the director left it, its edit standing, and the note as the round\'s', () => {
       const state = atMeeting();
-      const reroled = setThreadField(shownOf(state), 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
-      const payload = meetingPayload('send-back', dataOf(state), reroled, 'Rethink the money thread.');
-      expect(payload).toEqual({ meeting: 'send-back', note: 'Rethink the money thread.', weave: reroled });
+      const rewritten = setThreadField(shownOf(state), 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
+      const payload = meetingPayload('send-back', dataOf(state), rewritten, 'Rethink the money thread.');
+      expect(payload).toEqual({ meeting: 'send-back', note: 'Rethink the money thread.', weave: rewritten });
       const { resume, stateUpdates, error } = take(payload, state);
       expect(error).toBeNull();
       expect(resume).toEqual({ approved: false, round: 'send-back', feedback: 'Rethink the money thread.' });
@@ -1650,8 +1650,8 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
 // whether or not a round ran since
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The review's probe (p4/4.5c-review/role-back-and-forth.js): a role set back and forth with no
-// round since was no edit, so the console offered Reweave and the gate refused it as empty. The gate now reads each place a standing edit is
+// The review's probe (p4/4.5c-review/role-back-and-forth.js): a thread's role, which a thread's
+// line stands for since a thread has no role, set back and forth with no round since was no edit, so the console offered Reweave and the gate refused it as empty. The gate now reads each place a standing edit is
 // carried in the weave the meeting showed as the meeting showed it (lib/hand-edit-diff.js
 // withShownEdits). Invented text.
 describe('4.5c fix round 1: a change at the place of a standing edit is the director\'s whether or not a round ran since', () => {

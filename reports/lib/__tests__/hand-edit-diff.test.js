@@ -1466,9 +1466,9 @@ describe('4.5: the meeting\'s edits', () => {
     ],
     fromYourNotes: 'the frame this morning did not land the way it was meant to',
     threads: [
-      { id: 't1', name: 'The case against Rowan', line: 'The case against Rowan held at four votes.', role: 'main-thread', verdict: true, evidence: [piece(['notes'], 'Four hands went up for Rowan.')] },
-      { id: 't2', name: 'The last sales', line: 'The RowanVale account took the last two minutes of selling.', role: 'grounds-it', evidence: [piece(['ledger'], 'RowanVale took the last sales.')] },
-      { id: 't3', name: 'The split', line: 'Two allies split over the same secret.', role: 'complicates-it', evidence: [piece(['row001'], 'The fight in the hall.')] }
+      { id: 't1', name: 'The case against Rowan', line: 'The case against Rowan held at four votes.', verdict: true, evidence: [piece(['notes'], 'Four hands went up for Rowan.')] },
+      { id: 't2', name: 'The last sales', line: 'The RowanVale account took the last two minutes of selling.', evidence: [piece(['ledger'], 'RowanVale took the last sales.')] },
+      { id: 't3', name: 'The split', line: 'Two allies split over the same secret.', evidence: [piece(['row001'], 'The fight in the hall.')] }
     ],
     connections: [
       { id: 'c1', joins: ['t1', 't3'], line: 'Sloane turned the room against Rowan.', kind: 'person', evidence: [piece(['notes'], 'Sloane spoke first.')] },
@@ -1478,14 +1478,16 @@ describe('4.5: the meeting\'s edits', () => {
       { id: 'q1', kind: 'player', about: 'Kai', question: 'The record holds nothing Kai did: what did Kai do?', changes: 'Where Kai appears.' }
     ]
   });
-  const ADDED = { id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.', role: 'grounds-it' };
+  const ADDED = { id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.' };
   /** The director's line on c2. */
   const C2_LINE = 'The scoreboard put the money in front of every voter.';
-  /** The director's version: "from your notes" rewritten, t3 re-roled, a thread added, c2's line rewritten, q1 answered. */
+  /** The director's name for t3. */
+  const T3_NAME = 'The falling-out';
+  /** The director's version: "from your notes" rewritten, t3 renamed, a thread added, c2's line rewritten, q1 answered. */
   const directors = () => {
     const weave = writers();
     weave.fromYourNotes = 'Someone built the case against Rowan, and it failed in the room.';
-    weave.threads[2].role = 'mirrors-it';
+    weave.threads[2].name = T3_NAME;
     weave.threads.push({ ...ADDED });
     weave.connections[1].line = C2_LINE;
     weave.questions[0].answer = 'Kai ran the coat check all morning.';
@@ -1494,12 +1496,12 @@ describe('4.5: the meeting\'s edits', () => {
   const byPath = (edits) => Object.fromEntries(edits.map((e) => [e.path, e]));
 
   describe('weaveEditsBetween: one change per place', () => {
-    it("a field rewritten, a role changed, a thread added whole and a connection's line rewritten; the answer is no edit", () => {
+    it("a field rewritten, a thread renamed, a thread added whole and a connection's line rewritten; the answer is no edit", () => {
       const changes = D.weaveEditsBetween(writers(), directors());
-      expect(changes.map((c) => D._testing.pathOf(c.at))).toEqual(['fromYourNotes', 'threads[#t3].role', 'threads[#t7]', 'connections[#c2].line']);
-      const [story, role, added, line] = changes;
+      expect(changes.map((c) => D._testing.pathOf(c.at))).toEqual(['fromYourNotes', 'threads[#t3].name', 'threads[#t7]', 'connections[#c2].line']);
+      const [story, name, added, line] = changes;
       expect(story).toMatchObject({ scope: 'fromYourNotes', before: writers().fromYourNotes, after: directors().fromYourNotes });
-      expect(role).toMatchObject({ scope: 'threads', before: 'complicates-it', after: 'mirrors-it' });
+      expect(name).toMatchObject({ scope: 'threads', before: 'The split', after: T3_NAME });
       expect(added).toMatchObject({ scope: 'threads', before: null, after: ADDED });
       expect(line).toMatchObject({ scope: 'connections', before: writers().connections[1].line, after: C2_LINE });
       // R7: a connection's change is a change of its fields; no change marks a strike.
@@ -1525,7 +1527,7 @@ describe('4.5: the meeting\'s edits', () => {
       expect(standing.kind).toBe('weave');
       expect(standing.issued).toBe(4);
       expect(standing.edits.map((e) => [e.id, e.path])).toEqual([
-        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].role'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line']
+        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].name'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line']
       ]);
       expect(standing.edits[0].removed).toEqual([writers().fromYourNotes]);
       expect(standing.edits[3]).toMatchObject({ after: C2_LINE, removed: [writers().connections[1].line] });
@@ -1538,7 +1540,7 @@ describe('4.5: the meeting\'s edits', () => {
       later.threads[0].line = 'The case against Rowan held at four votes, and then it broke.';
       const second = D.standingAtMeeting(first, writers(), later);
       expect(second.edits.map((e) => [e.id, e.path])).toEqual([
-        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].role'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line'], ['E5', 'threads[#t1].line']
+        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].name'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line'], ['E5', 'threads[#t1].line']
       ]);
       expect(second.issued).toBe(5);
     });
@@ -1546,7 +1548,7 @@ describe('4.5: the meeting\'s edits', () => {
     it('drops an edit the director undid, and adds none for it', () => {
       const first = D.standingAtMeeting(null, writers(), directors());
       const undone = directors();
-      undone.threads[2].role = 'complicates-it';
+      undone.threads[2].name = writers().threads[2].name;
       const second = D.standingAtMeeting(first, writers(), undone);
       expect(second.edits.map((e) => e.id)).toEqual(['E1', 'E3', 'E4']);
       expect(second.issued).toBe(4);
@@ -1560,7 +1562,7 @@ describe('4.5: the meeting\'s edits', () => {
       next.threads[0].name = 'Who pays for the frame';
       const second = D.standingAtMeeting(first, rewoven, next);
       expect(second.edits.map((e) => [e.id, e.path])).toEqual([
-        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].role'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line'], ['E5', 'threads[#t1].name']
+        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].name'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line'], ['E5', 'threads[#t1].name']
       ]);
     });
 
@@ -1571,15 +1573,13 @@ describe('4.5: the meeting\'s edits', () => {
 
   it("weaveDirectorsShare reads the director's share of the weave from the edits", () => {
     const edits = D.standingAtMeeting(null, writers(), { ...directors(), threads: directors().threads.map((t) => (t.id === 't2' ? { ...t, line: 'A line the director typed.' } : t)) }).edits;
-    // Piece 3 (brief 3C): a thread has no role, so a field the fixture still calls `role` is one of
-    // the thread's fields like any other; no share is kept for re-roled threads.
     expect(D.weaveDirectorsShare(edits)).toEqual({
       addedThreads: { t7: 'E4' },
       fields: { fromYourNotes: 'E1' },
       angleFields: {},
       flippedIn: {},
       flippedOut: {},
-      threadFields: { 't2.line': 'E2', 't3.role': 'E3' },
+      threadFields: { 't2.line': 'E2', 't3.name': 'E3' },
       addedConnections: {},
       connectionFields: { 'c2.line': 'E5' }
     });
@@ -1595,7 +1595,7 @@ describe('4.5: the meeting\'s edits', () => {
     const left = directors();
     left.threads[1] = { ...left.threads[1], line: 'A line the director typed.' };
     const edits = D.standingAtMeeting(null, writers(), left).edits;
-    const writersSeventh = { id: 't7', name: "The writer's seventh", line: 'A thread the writer put under the same id.', role: 'grounds-it', evidence: [piece(['ledger'], 'A sale.')] };
+    const writersSeventh = { id: 't7', name: "The writer's seventh", line: 'A thread the writer put under the same id.', evidence: [piece(['ledger'], 'A sale.')] };
     const reworked = { ...clone(left), threads: [...clone(left).threads.slice(0, 3), writersSeventh, { ...clone(ADDED), evidence: [] }] };
     const share = D.weaveDirectorsShare(D.carriedEdits(edits, reworked), reworked);
     expect(share.threadIndexes).toEqual({ t2: [1], t3: [2], t7: [4] });
@@ -1627,8 +1627,8 @@ describe('4.5: the meeting\'s edits', () => {
     expect(lines).toEqual([
       `E1 (fromYourNotes): "${directors().fromYourNotes}"`,
       `  removed: "${writers().fromYourNotes}"`,
-      'E2 (thread "t3", role): "mirrors-it"',
-      `E3 (thread "t7", added): id "t7"; name "${ADDED.name}"; line "${ADDED.line}"; role "grounds-it"`,
+      `E2 (thread "t3", name): "${T3_NAME}"`,
+      `E3 (thread "t7", added): id "t7"; name "${ADDED.name}"; line "${ADDED.line}"`,
       `E4 (connection "c2", line): "${C2_LINE}"`,
       `  removed: "${writers().connections[1].line}"`
     ]);
@@ -1704,15 +1704,15 @@ describe('4.5: the meeting\'s edits', () => {
     };
 
     it.each([
-      ['its role', (t) => ({ ...t, role: 'mirrors-it' })],
       ['its line', (t) => ({ ...t, line: 'The guest list was rewritten twice that morning.' })],
-      ['its name', (t) => ({ ...t, name: 'The rewritten guest list' })]
+      ['its name', (t) => ({ ...t, name: 'The rewritten guest list' })],
+      ['its name and its line', (t) => ({ ...t, name: 'The rewritten guest list', line: 'The guest list was rewritten twice that morning.' })]
     ])('a thread they added, changed in %s: one added edit under its id, the whole thread as they left it', (_name, change) => {
       const first = D.standingAtMeeting(null, writers(), directors());
       const left = withT7(change);
       const second = D.standingAtMeeting(first, rewoven(), left, { shown: rewoven() });
       expect(second.edits.map((e) => [e.id, e.path])).toEqual([
-        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].role'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line']
+        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].name'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2].line']
       ]);
       expect(second.issued).toBe(4);
       expect(byPath(second.edits)['threads[#t7]']).toMatchObject({ before: null, after: left.threads.find((t) => t.id === 't7') });
@@ -1722,7 +1722,7 @@ describe('4.5: the meeting\'s edits', () => {
 
     it('a reweave that then paraphrases the thread gets it put back whole, still marked added', () => {
       const first = D.standingAtMeeting(null, writers(), directors());
-      const left = withT7((t) => ({ ...t, role: 'mirrors-it' }));
+      const left = withT7((t) => ({ ...t, name: 'The rewritten guest list' }));
       const second = D.standingAtMeeting(first, rewoven(), left, { shown: rewoven() });
       const rework = clone(left);
       rework.threads = rework.threads.map((t) => (t.id === 't7' ? { ...t, line: 'The guest list may have changed.' } : t));
@@ -1735,7 +1735,7 @@ describe('4.5: the meeting\'s edits', () => {
       const first = D.standingAtMeeting(null, writers(), directors());
       const reworked = withT7((t) => ({ ...t, line: 'The rework rewrote the thread the director added.', evidence: [piece(['row001'], 'The fight in the hall.')] }));
       const second = D.standingAtMeeting(first, reworked, clone(reworked), { shown: reworked });
-      expect(second.edits.map((e) => e.path)).toEqual(['fromYourNotes', 'threads[#t3].role', 'connections[#c2].line']);
+      expect(second.edits.map((e) => e.path)).toEqual(['fromYourNotes', 'threads[#t3].name', 'connections[#c2].line']);
       expect(D.weaveDirectorsShare(second.edits).addedThreads).toEqual({});
     });
 
@@ -1743,12 +1743,12 @@ describe('4.5: the meeting\'s edits', () => {
       const first = D.standingAtMeeting(null, writers(), directors());
       const reworked = withT7((t) => ({ ...t, line: 'The rework rewrote the thread the director added.', evidence: [piece(['row001'], 'The fight in the hall.')] }));
       const left = clone(reworked);
-      left.threads = left.threads.map((t) => (t.id === 't7' ? { ...t, role: 'mirrors-it' } : t));
+      left.threads = left.threads.map((t) => (t.id === 't7' ? { ...t, name: 'The rewritten guest list' } : t));
       const second = D.standingAtMeeting(first, reworked, left, { shown: reworked });
       expect(second.edits.map((e) => [e.id, e.path])).toEqual([
-        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].role'], ['E4', 'connections[#c2].line'], ['E5', 'threads[#t7].role']
+        ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].name'], ['E4', 'connections[#c2].line'], ['E5', 'threads[#t7].name']
       ]);
-      expect(D.weaveDirectorsShare(second.edits)).toMatchObject({ addedThreads: {}, threadFields: { 't3.role': 'E2', 't7.role': 'E5' } });
+      expect(D.weaveDirectorsShare(second.edits)).toMatchObject({ addedThreads: {}, threadFields: { 't3.name': 'E2', 't7.name': 'E5' } });
     });
   });
 
@@ -1760,7 +1760,7 @@ describe('4.5: the meeting\'s edits', () => {
   describe('fix round 1: an id the weave repeats', () => {
     const doubledT7 = () => {
       const weave = directors();
-      weave.threads.push({ id: 't7 ', name: 'The burned list', line: 'The guest list was burned that night.', role: 'grounds-it' });
+      weave.threads.push({ id: 't7 ', name: 'The burned list', line: 'The guest list was burned that night.' });
       return weave;
     };
 
@@ -1777,9 +1777,9 @@ describe('4.5: the meeting\'s edits', () => {
       repeated.threads.push({ ...repeated.threads[1], line: 'A second thread the writer put under t2.' });
       expect(D.weaveEditsBetween(repeated, clone(repeated))).toEqual([]);
       const changed = clone(repeated);
-      changed.threads[3].role = 'mirrors-it';
+      changed.threads[3].name = 'The second sale';
       expect(D.weaveEditsBetween(repeated, changed)).toEqual([
-        expect.objectContaining({ scope: 'threads', before: 'grounds-it', after: 'mirrors-it', repeatedId: true })
+        expect.objectContaining({ scope: 'threads', before: 'The last sales', after: 'The second sale', repeatedId: true })
       ]);
       // An id no version repeats carries no flag.
       expect(D.weaveEditsBetween(writers(), directors()).some((c) => 'repeatedId' in c)).toBe(false);
@@ -1809,7 +1809,7 @@ describe('4.5: the meeting\'s edits', () => {
 describe('4.5b: the diff pairs the elements under an id as lib/weave.js occurrenceKeys places them', () => {
   const { occurrenceKeys } = require('../weave');
   /** Threads under these ids, each line naming its version and its index. */
-  const threads = (version, ids) => ids.map((id, i) => ({ id, name: `${version}${i}`, line: `${version}${i}`, role: 'grounds-it', evidence: [] }));
+  const threads = (version, ids) => ids.map((id, i) => ({ id, name: `${version}${i}`, line: `${version}${i}`, evidence: [] }));
   /** For each thread of `after`, the index of the thread of `before` the diff pairs it with; null for one it added. */
   function diffPairs(before, after) {
     const changes = D.weaveEditsBetween({ threads: before }, { threads: after });

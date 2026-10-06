@@ -917,7 +917,7 @@ describe("a code check's findings reach an automatic rework (the 4b fix batch)",
   it("a check's line that names a thread by the name the director gave it still reaches the automatic pass", () => {
     const { standingAtMeeting } = require('../hand-edit-diff');
     const state = clone(reworkFixtureState('journalist'));
-    const added = { id: 't6', name: 'The second ledger in the back room', line: 'Riley kept a second ledger.', role: 'grounds-it' };
+    const added = { id: 't6', name: 'The second ledger in the back room', line: 'Riley kept a second ledger.' };
     const left = { ...clone(state.weave), threads: [...clone(state.weave).threads, added] };
     const handEdits = standingAtMeeting(null, clone(state.weave), left);
     // A reweave kept the thread and gave it evidence, a piece naming a document the record lacks.
@@ -1028,10 +1028,11 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const left = () => {
     const weave = clone(WEAVE);
-    weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
+    weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, line: T3_LINE } : t));
     weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, line: C2_LINE } : c));
     return weave;
   };
+  const T3_LINE = 'Morgan paid Riley at the bar, where no one looked.';
   const C2_LINE = 'The sale and the result came back the same night.';
   const edits = () => carriedEdits(standingAtMeeting(null, WEAVE, left()), left());
   const STALE = { phase: 'arcs', passed: false, structuralIssues: ['T3: "a stale finding" from before the round.'], criteriaScores: { evidenceTruth: { score: 0.3, notes: 'stale', fix: 'stale fix' } } };
@@ -1063,7 +1064,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     const block = text.slice(text.indexOf('<HAND_EDITS>'), text.indexOf('</HAND_EDITS>'));
     expect(block).toContain("The director's changes to the weave at the story meeting.");
     expect(block).toContain('each thread they brought into an angle stays in it and each they left out of one stays out, each thread they added stays in the weave where they put it, and each removed sentence stays out of it.');
-    expect(block).toContain('E1 (thread "t3", role): "mirrors-it"');
+    expect(block).toContain(`E1 (thread "t3", line): "${T3_LINE}"`);
     expect(block).toContain(`E2 (connection "c2", line): "${C2_LINE}"`);
     // R7: the strike went from the weave, and with it every line on a connection struck or brought back.
     expect(block).not.toMatch(/struck|brought back/);
