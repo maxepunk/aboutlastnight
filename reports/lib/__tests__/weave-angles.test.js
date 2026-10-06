@@ -357,6 +357,16 @@ describe('the gate (R8, R9)', () => {
     });
   });
 
+  // 3 final, item 6: with no angle the settled weave renders empty and the map writer throws, so an
+  // approve of a weave with no angle is refused, offering Send back.
+  test('refuses an approve of a weave with no angle, offering Send back; a send-back goes through', () => {
+    const empty = () => ({ ...anglesWeave(), angles: [] });
+    const at = () => ({ ...stateAt(), weave: empty(), _weaveBaseline: empty() });
+    const refusal = meetingResume({ meeting: 'approve', weave: empty() }, at()).error;
+    expect(refusal).toBe('The weave holds no angle to send on to the map. Send it back with a note, and the writer pitches the angles again.');
+    expect(meetingResume({ meeting: 'send-back', note: 'Pitch me three angles.' }, at()).error).toBeNull();
+  });
+
   test("takes a version that keeps the verdict's thread flagged in the picked angle, the director's rename of it included", () => {
     const left = anglesWeave();
     left.threads[0].name = 'Morgan, named by the room';

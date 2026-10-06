@@ -327,6 +327,9 @@ const DECISION_CASES = [
   // send-back, whose rework can fix it.
   ["the writer's angle lacks the verdict's thread, picked unchanged", { approve: false, reweave: true, 'send-back': true }, () => { const b = clone(WEAVE); b.angles[1].threads = ['t3']; const w = clone(b); w.picked = 'a2'; return [w, b]; }],
   ["the writer's angle lacks the verdict's thread, open with no pick", { approve: false, reweave: true, 'send-back': true }, () => { const b = clone(WEAVE); b.angles[0].threads = ['t2', 't3']; return [clone(b), b]; }],
+  // 3 final, item 6: an approve sends an angle on to the map, so a weave with none is refused on
+  // approve; a send-back has the writer pitch angles again.
+  ['a weave with no angle', { approve: false, reweave: true, 'send-back': true }, () => { const b = clone(WEAVE); b.angles = []; return [clone(b), b]; }],
   ['the first angle, open with no pick, lacks the verdict\'s thread', false, () => { const w = clone(WEAVE); w.angles[0].threads = ['t2', 't3']; return [w, clone(WEAVE)]; }],
   // Fix round 1, finding 2: the verdict's thread is the one the meeting showed, by id (R8).
   ["the verdict's flag taken off its thread, which stays in the picked angle", false, () => { const w = clone(WEAVE); delete w.threads[0].verdict; return [w, clone(WEAVE)]; }],

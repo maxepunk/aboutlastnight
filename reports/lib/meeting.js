@@ -157,6 +157,12 @@ function directorWeaveProblems(weave, { shown = null, action = 'approve' } = {})
   return angleSetProblems(weave, shownWeave) || pickProblems(weave, shownWeave, action);
 }
 
+/**
+ * The refusal of an approve of a weave with no angle (3 final, item 6): the settled weave would be
+ * empty and the map writer would have nothing to lay out, so the approve offers Send back.
+ */
+const NO_ANGLE_TO_APPROVE = 'The weave holds no angle to send on to the map. Send it back with a note, and the writer pitches the angles again.';
+
 /** How a refusal of R8 names the angle the action sends (3 final, item 5). */
 const ANGLE_THE_ACTION_SENDS = Object.freeze({
   approve: 'the angle the director approves',
@@ -199,7 +205,9 @@ function pickProblems(weave, shown = null, action = 'approve') {
     return `The pick names an angle the weave does not hold ("${picked}"). Pick one of the angles the meeting showed.`;
   }
   const angle = pickedAngleOf(weave);
-  if (!angle) return null;
+  // 3 final, item 6: an approve sends an angle on to the map, which a weave with none cannot; the
+  // writer pitches angles again on a send-back.
+  if (!angle) return action === 'approve' ? NO_ANGLE_TO_APPROVE : null;
   const openId = weaveIdOf(angle);
   const shownOpen = isWeave(shown) ? pickedAngleOf(shown) : null;
   if (openId && isWeave(shown) && idCount(shown.angles, openId) > 1 && openId !== weaveIdOf(shownOpen)) {

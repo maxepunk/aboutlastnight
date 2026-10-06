@@ -2045,6 +2045,7 @@
   }
 
   /** How a refusal of R8 names the angle the action sends (lib/meeting.js ANGLE_THE_ACTION_SENDS; 3 final, item 5). */
+  var MEETING_NO_ANGLE_LINE = 'There is no angle to approve. Send the weave back with a note, and the writer pitches the angles again.';
   var MEETING_ANGLE_SENT = { approve: 'The angle you approve', reweave: 'The angle you reweave', 'send-back': 'The angle you send back' };
 
   /**
@@ -2072,7 +2073,8 @@
     var byId = function (id) { return angles.filter(function (angle) { return weaveIdOf(angle) === id; })[0] || null; };
     if (picked && !byId(picked)) return 'Pick one of the angles the meeting showed.';
     var angle = openAngleOf(weave);
-    if (!angle) return null;
+    // 3 final, item 6: an approve sends an angle on to the map (lib/meeting.js NO_ANGLE_TO_APPROVE).
+    if (!angle) return action === 'approve' || !action ? MEETING_NO_ANGLE_LINE : null;
     var openId = weaveIdOf(angle);
     var shownOpen = isPlainObject(shown) ? openAngleOf(shown) : null;
     if (openId && isPlainObject(shown) && (idCounts(shown.angles).get(openId) || 0) > 1 && openId !== weaveIdOf(shownOpen)) {
