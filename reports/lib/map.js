@@ -62,7 +62,7 @@ const {
   mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, cardPiecesOf, beatWithId, isMapValue, shownMapOf,
   freeStruckBeatPhotos, dropEmptiedSections, leftOutTopPhoto, EMPTIED_SECTION_REASON
 } = require('../console/outline-edit-logic');
-const { photoKey } = require('./prompt-renderers/director-words-renderer');
+const { photoKey, photoDescriptionFor } = require('./prompt-renderers/director-words-renderer');
 const {
   mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
   handEditReportOf, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE, MAP_TOP_PHOTO
@@ -798,6 +798,8 @@ function cardFault(beat, known) {
  *   the meeting's own form (meetingEditIdsOf)
  * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
+ * @param {Object} [inputs.photoDescriptions] - the director's description of each photo, `{filename: text}`,
+ *   by which the director's words name a photo (a failure's `line`, a concern's finding)
  * @param {Object} [inputs.evidence] - what the evidence and story-terms checks read (lib/evidence.js
  *   evidenceContextOf); none, no evidence check
  * @param {{page: number, writer: number, allowance: number}|null} [inputs.length] - the map's page
@@ -907,28 +909,34 @@ function mapFindings(map, inputs = {}) {
       `${listOf(writersMissing)} ${writersMissing.length > 1 ? 'are' : 'is'} in no move and not in the gap note.`);
   }
 
-  // Every kept photo is placed once, and only kept photos are placed (T13).
+  // Every kept photo is placed once, and only kept photos are placed (T13). The director's words
+  // name a photo by their description of it, where they gave one, as the map's page does; the
+  // rework's keep the filename (fix round 2).
   const keptKeys = kept.map(photoKey);
   const placed = placedPhotos(map);
   const nameOfKey = (key) => (kept.find((f) => photoKey(f) === key) || placed.get(key));
+  const photoSaid = (filename) => {
+    const description = photoDescriptionFor(inputs.photoDescriptions, filename);
+    return description ? `"${description}"` : filename;
+  };
   const writersPhotos = (type, filenames, directorsFinding) => filenames.filter((filename) => {
     const ids = editsOnPhoto(entries, filename);
-    if (ids.length > 0) concern(type, ids, directorsFinding(filename));
+    if (ids.length > 0) concern(type, ids, directorsFinding(photoSaid(filename)));
     return ids.length === 0;
   });
-  const nowhere = writersPhotos('photo-not-placed', kept.filter((filename) => !placed.has(photoKey(filename))), (filename) => `${filename} is placed nowhere.`);
+  const nowhere = writersPhotos('photo-not-placed', kept.filter((filename) => !placed.has(photoKey(filename))), (said) => `The photo ${said} is placed nowhere.`);
   if (nowhere.length > 0) {
     fail('photo-not-placed', `Photos placed nowhere: ${nowhere.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people, as C2 (\`<craft-form>\`) sets out.`,
-      `${nowhere.length > 1 ? 'These photos are' : 'This photo is'} placed nowhere: ${listOf(nowhere)}.`);
+      `${nowhere.length > 1 ? 'These photos are' : 'This photo is'} placed nowhere: ${listOf(nowhere.map(photoSaid))}.`);
   }
-  writersPhotos('photo-placed-twice', [...repeatedPhotos(map).keys()].filter((key) => keptKeys.includes(key)).map(nameOfKey), (filename) => `${filename} is placed more than once.`)
+  writersPhotos('photo-placed-twice', [...repeatedPhotos(map).keys()].filter((key) => keptKeys.includes(key)).map(nameOfKey), (said) => `The photo ${said} is placed more than once.`)
     .forEach((filename) => {
-      fail('photo-placed-twice', `The photo ${filename} is placed more than once. Place each photo once.`, `The photo ${filename} is placed more than once.`, photoPlace(map, filename));
+      fail('photo-placed-twice', `The photo ${filename} is placed more than once. Place each photo once.`, `The photo ${photoSaid(filename)} is placed more than once.`, photoPlace(map, filename));
     });
-  writersPhotos('photo-not-offered', [...placed.keys()].filter((key) => !keptKeys.includes(key)).map(nameOfKey), (filename) => `${filename} is not among the photos kept for the article.`)
+  writersPhotos('photo-not-offered', [...placed.keys()].filter((key) => !keptKeys.includes(key)).map(nameOfKey), (said) => `The photo ${said} is not among the photos kept for the article.`)
     .forEach((filename) => {
       fail('photo-not-offered', `The photo ${filename} is placed, and it is not among the photos offered. Place only the photos offered: ${kept.join(', ') || 'none'}.`,
-        `The photo ${filename} is not among the photos kept for the article.`, photoPlace(map, filename));
+        `The photo ${photoSaid(filename)} is not among the photos kept for the article.`, photoPlace(map, filename));
     });
 
   // Each beat marked as a card flags one piece, whose source is a document in the record (R4),

@@ -152,6 +152,51 @@ describe("1D: a beat's card is the piece it flags, read through beatCardOf by ev
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Fix round 2: a failing photo check names the photo by the director's description
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("fix round 2: a failing photo check names a photo by the director's description in the director's words, by its filename to the rework", () => {
+  const photoFindings = (map, overrides = {}, edits) => {
+    const state = storyLevelMapState(overrides);
+    return mapFindings(map, { ...inputsOf(state, map), ...(edits ? { edits } : {}) });
+  };
+  const withoutBar = () => {
+    const map = storyLevelMap();
+    map.sections[1].photos = map.sections[1].photos.filter((p) => p.filename !== 'bar.jpg');
+    return map;
+  };
+  const boardTwice = () => {
+    const map = storyLevelMap();
+    map.sections[3].photos.push({ filename: 'board.jpg' });
+    return map;
+  };
+
+  it('the node passes the photo descriptions to the checks', () => {
+    expect(inputsOf(storyLevelMapState()).photoDescriptions).toEqual(PHOTO_DESCRIPTIONS);
+  });
+
+  it('a photo placed nowhere, or placed twice, is named by its description in the line, and by its filename in the message', () => {
+    const [nowhere] = photoFindings(withoutBar()).failures;
+    expect(nowhere.line).toBe('This photo is placed nowhere: "Jess and Sarah at the bar".');
+    expect(nowhere.message).toMatch(/^Photos placed nowhere: bar\.jpg\. /);
+    const [twice] = photoFindings(boardTwice()).failures;
+    expect(twice.line).toBe('The photo "Sam reading the journal by the board" is placed more than once.');
+    expect(twice.message).toBe('The photo board.jpg is placed more than once. Place each photo once.');
+  });
+
+  it('a photo with no description is named by its filename', () => {
+    expect(photoFindings(withoutBar(), { photoDescriptions: {} }).failures[0].line).toBe('This photo is placed nowhere: bar.jpg.');
+  });
+
+  it("a concern about the director's photo names it by its description too", () => {
+    const left = withoutBar();
+    const { failures, concerns } = photoFindings(left, {}, editsAgainst(storyLevelMap(), left));
+    expect(failures).toEqual([]);
+    expect(concerns).toEqual([{ type: 'photo-not-placed', editIds: ['E1'], finding: 'The photo "Jess and Sarah at the bar" is placed nowhere.' }]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Every thread in the story lands in a beat (R3)
 // ═══════════════════════════════════════════════════════════════════════════
 

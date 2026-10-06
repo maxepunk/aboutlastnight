@@ -142,7 +142,9 @@ function mapCheckInputsOf(state, map) {
     meetingNote: meetingNoteOf(state),
     edits: carriedEdits(state._outlineHandEdits, map),
     // Phase 4b (brief 1D): what the evidence and story-terms checks read.
-    evidence: evidenceContextOf(state)
+    evidence: evidenceContextOf(state),
+    // Fix round 2: the director's words name a photo by their description of it.
+    photoDescriptions: state.photoDescriptions
   };
 }
 
