@@ -96,17 +96,17 @@ _Avoid_: point, item, paragraph plan
 What the director says a photo shows, given at the character-IDs stop: who is in it and what moment it catches. The caption keeps its subject and action, and may add context from the article or the record.
 _Avoid_: beat (a map item), narrative moment, story relevance
 
+**Angle**:
+One story the article could tell, pitched at the story meeting: a headline, the story in two or three sentences, the question that carries it, why it lands with the players, and where it ends up, told through the threads it uses, in its own order. The arc writer pitches two or three; when the director's notes end with their own read, angle 1 is that read. The director picks one and settles it, and the settled angle is the story every later writer works from.
+_Avoid_: option, variant, draft
+
 **Arc**:
-One thread of the session's story, a line of it: an idea about what happened or what it means, said in plain words with its people. The writers tell it through its evidence, usually several pieces, and some threads appear only when sources are set side by side. The arcs are the threads the article weaves toward one convergence; at the story meeting each arc gets its role in the weave.
-_Avoid_: storyline, angle
+One thread of the session's story, a line of it: an idea about what happened or what it means, said in plain words with its people, and named for what happened. The writers tell it through its evidence, usually several pieces, and some threads appear only when sources are set side by side. The angles draw on one shared set of threads, each using the ones its story needs.
+_Avoid_: storyline
 
 **Weave**:
-How the threads make one story: a main thread, the other threads each in a role toward it, the connections where they touch, and the convergence near the end, each said in story terms with its evidence underneath. The same threads woven around a different main thread make a different story.
-_Avoid_: interweaving plan, angle, structure
-
-**Main thread**:
-The thread the story follows from the lede to the convergence. The other threads ground it, complicate it, mirror it or carry it forward.
-_Avoid_: spine, primary arc
+What the arc writer brings to the story meeting: the angles, the threads they draw on, and the connections where the threads touch, each said in story terms with its evidence underneath. The settled weave is the angle the director settled, with its threads, the threads it leaves out by name, and the connections between its threads.
+_Avoid_: interweaving plan, structure
 
 **Connection**:
 A point where two threads touch, said in story terms: a shared person, a moment, a document or a line, with the evidence that shows it underneath. A cause counts as a connection only when the record shows it.
@@ -117,15 +117,15 @@ The official story: the group statement the room agrees on when the recovery win
 _Avoid_: the answer, the solution, the truth
 
 **Thesis**:
-The answer Nova argues by the end. When the director gives one, in the notes or at a stop, that is the thesis; otherwise it is the most interesting journalistic angle on what happened in the session. Usually it lies in the gap between the verdict and what happened leading up to it, and in what that gap shows about the biases the group brought to what it decided to tell the world. When the verdict agrees with everything the room found, it is what the players' own path to the verdict shows. Settled by the director at the story meeting; the outline is built to it, and it lands at the convergence.
-_Avoid_: angle, key tension, hook, primary arc
+The answer Nova argues by the end. When the director gives one, in the notes or at a stop, that is the thesis; otherwise it is the most interesting journalistic angle on what happened in the session. Usually it lies in the gap between the verdict and what happened leading up to it, and in what that gap shows about the biases the group brought to what it decided to tell the world. When the verdict agrees with everything the room found, it is what the players' own path to the verdict shows. Pitched at the story meeting as angles and settled by the director's pick; the map is built to it, and it lands at the convergence.
+_Avoid_: key tension, hook, primary arc
 
 **Throughline**:
 The question that carries the thesis. It opens early and runs through every section, each section carrying it forward from its own angle and leaving it sharper, until the thesis lands at the convergence.
 _Avoid_: thread (an arc), theme
 
 **Convergence**:
-The point near the end where the threads meet and the thesis lands. The weave says where in a line or two of story terms; the article says it once and sharply, in this session's names and sums.
+The point near the end where the threads meet and the thesis lands. Each angle says where it ends up in a line of story terms; the article says it once and sharply, in this session's names and sums.
 _Avoid_: climax, resolution, payoff (a detail planted early coming back)
 
 **Whiteboard**:
@@ -133,15 +133,15 @@ The working notes the game master and the players keep during the investigation 
 _Avoid_: evidence board (the Evidence Board is where exposed memories' summaries go up), source
 
 **Story meeting**:
-The arc stop, where the director settles the weave the article will tell before anything is planned. What the director leaves there is the task every later writer works from.
-_Avoid_: story memo, arc cards, arc analysis, pitch
+The arc stop, where the director picks one of the angles the arc writer pitches and settles it, before anything is planned. What the director leaves there is the task every later writer works from.
+_Avoid_: story memo, arc cards, arc analysis
 
 **Story map**:
-The outline: the weave laid across the article's sections, in story terms, with each beat's evidence underneath. Under the headline, the deck and the settled story, each section has its job, its beats and its photos; sections the story does not need are dropped, and the beats left out are listed. Length comes from what is on the map, not from a budget per section.
+The outline: the settled angle laid across the article's sections, in story terms, with each beat's evidence underneath. Under the headline, the deck and the settled story, each section has its job, its beats and its photos; sections the story does not need are dropped, and the beats left out are listed. Length comes from what is on the map, not from a budget per section.
 _Avoid_: outline structure, allocation, section plan, script
 
 **Reweave**:
-The rework of the story meeting after the director changes a thread's role, adds a thread or picks another main thread. The writer fits the change into the weave and keeps everything else.
+The rework of the story meeting after the director changes the angle they have open: its pitch, which threads are in, a thread's words, or a thread they added. The writer fits the changes into that angle, keeps every line the director wrote, and leaves the other angles as they were.
 _Avoid_: rebuild, regenerate
 
 **Evidence**:
