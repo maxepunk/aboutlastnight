@@ -222,13 +222,26 @@ describe('the evidence check (evidenceProblems)', () => {
       [1, [], []], [2, [], []], [0, ['"words Jess never said"'], []], [0, ['"more words never said"'], []], [0, [], ['sources', 'shows', 'stance']]
     ]);
     const said = evidenceProblemsSaid(problems);
-    expect(said).toBe('cites documents the record does not hold; quotes "words Jess never said" and "more words never said", which its sources do not say word for word; and has a piece that does not say where it comes from, what it shows or whether it supports the line');
-    expect(said).not.toMatch(/zzz999|qqq111|kai009|jes002|ledger|piece \d/i);
+    // Fix round 4, fix 8: a misquoting piece is said without its quotation.
+    expect(said).toBe('cites documents the record does not hold; has pieces that quote words their sources do not hold; and has a piece that does not say where it comes from, what it shows or whether it supports the line');
+    expect(said).not.toMatch(/zzz999|qqq111|kai009|jes002|ledger|piece \d|never said/i);
     expect(evidenceProblemsSaid(problemsOf([piece(['zzz999'], 'x'), piece(['jes002'], 'Jess, "words Jess never said"')])))
-      .toBe('cites a document the record does not hold, and quotes "words Jess never said", which its source does not say word for word');
+      .toBe('cites a document the record does not hold, and has a piece that quotes words its source does not hold');
     expect(evidenceProblemsSaid(problemsOf([{ sources: ['jes002'], stance: 'supports' }, { sources: [], shows: 'x', stance: 'supports' }])))
       .toBe('has pieces that do not say where it comes from or what it shows');
     expect(evidenceProblemsSaid([])).toBe('');
+  });
+
+  // Fix round 4, fix 8 (spec 4.1): the only quotation on the meeting's page is the director's own
+  // words, so the director's line says a piece misquotes its source without the quotation; the
+  // rework's message keeps it.
+  it("says a misquoting piece to the director without its quotation, and the rework's message keeps it", () => {
+    const one = problemsOf([piece(['jes002'], 'Jess, "words Jess never said"')]);
+    expect(evidenceProblemsSaid(one)).toBe('has a piece that quotes words its source does not hold');
+    expect(evidenceProblemsSaid(problemsOf([piece(['jes002'], 'Jess, "one thing"'), piece(['sam001'], 'Sam, "another thing"')])))
+      .toBe('has pieces that quote words their sources do not hold');
+    expect(evidenceProblemsSaid(one)).not.toMatch(/words Jess never said|"/);
+    expect(describeEvidenceProblems(one).what).toBe('piece 1 quotes "words Jess never said", which none of its sources holds word for word');
   });
 
   it("says a line's failing pieces in one phrase, each by its place from one, and each kind of fix once", () => {

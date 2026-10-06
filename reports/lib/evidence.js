@@ -471,11 +471,13 @@ const LACKS_SAID = { sources: 'where it comes from', shows: 'what it shows', sta
 /**
  * A line's evidence problems (evidenceProblems') said to the director, in a phrase that follows
  * "the evidence behind" the line, for the whole line at once: `cites a document the record does
- * not hold, and quotes "...", which its source does not say word for word`. It says each kind of
- * fault once, the documents the record lacks first, then the quotations, then a piece's missing
- * parts, and names no source's id and no piece's number, since the director reads the line and
- * not its pieces. The weave's checks and the map's give it in a failure's `line` (lib/weave.js
- * weaveFindings).
+ * not hold, and has a piece that quotes words its source does not hold`. It says each kind of
+ * fault once, the documents the record lacks first, then the misquoting pieces, then a piece's
+ * missing parts, and names no source's id, no piece's number and no quotation, since the director
+ * reads the line and not its pieces, and the only quotation on the meeting's page is the
+ * director's own words (spec 2026-10-05 section 4.1; fix round 4). The rework's message keeps the
+ * quotation (describeEvidenceProblems). The weave's checks and the map's give it in a failure's
+ * `line` (lib/weave.js weaveFindings).
  *
  * @param {Array<{unknownSources: number, quotations: string[], lacks: string[]}>} problems
  * @returns {string} '' for no problem
@@ -483,12 +485,12 @@ const LACKS_SAID = { sources: 'where it comes from', shows: 'what it shows', sta
 function evidenceProblemsSaid(problems) {
   const list = asArray(problems).filter(isObject);
   const unknown = list.reduce((sum, problem) => sum + (Number(problem.unknownSources) || 0), 0);
-  const quotations = list.flatMap((problem) => asArray(problem.quotations));
+  const misquoting = list.filter((problem) => asArray(problem.quotations).length > 0).length;
   const malformed = list.filter((problem) => asArray(problem.lacks).length > 0);
   const lacks = Object.keys(LACKS_SAID).filter((part) => malformed.some((problem) => problem.lacks.includes(part))).map((part) => LACKS_SAID[part]);
   const clauses = [
     unknown > 0 && `cites ${unknown > 1 ? 'documents' : 'a document'} the record does not hold`,
-    quotations.length > 0 && `quotes ${listOf(quotations)}, which its ${quotations.length > 1 ? 'sources do' : 'source does'} not say word for word`,
+    misquoting > 0 && (misquoting > 1 ? 'has pieces that quote words their sources do not hold' : 'has a piece that quotes words its source does not hold'),
     lacks.length > 0 && `has ${malformed.length > 1 ? 'pieces that do' : 'a piece that does'} not say ${lacks.length > 1 ? `${lacks.slice(0, -1).join(', ')} or ${lacks[lacks.length - 1]}` : lacks[0]}`
   ].filter(Boolean);
   if (clauses.length < 3) return clauses.join(', and ');

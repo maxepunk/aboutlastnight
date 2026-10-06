@@ -576,7 +576,7 @@ describe("each failure says what is wrong to the director in plain words (its li
     );
     expect(lineOf('story-terms', 'threads[#t4]')).toMatch(/^The thread "The replacement plan": its line gives the quotation "replace the founder", the time 9 PM and a document's id\. /);
     expect(lineOf('evidence-not-in-record', 'threads[#t3]')).toBe(
-      'The evidence behind the thread "The bathroom" cites a document the record does not hold; quotes "Not one word to Ellis.", which its source does not say word for word; and has a piece that does not say where it comes from, what it shows or whether it supports the line.'
+      'The evidence behind the thread "The bathroom" cites a document the record does not hold; has a piece that quotes words its source does not hold; and has a piece that does not say where it comes from, what it shows or whether it supports the line.'
     );
     expect(lineOf('thread-without-evidence', 'threads[#t2]')).toBe('The thread "The last two minutes" is in the story with nothing behind it: no piece of the record supports it.');
     expect(lineOf('left-out-without-reason', 'threads[#t6]')).toBe('The thread "The coat check" is left out with no reason given.');
