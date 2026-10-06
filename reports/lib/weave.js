@@ -173,7 +173,8 @@ function occurrenceKeys(elements) {
  * weaveDirectorsShare builds it): a thread they added (`t7`), a thread they re-roled
  * (`t3`), a top-level field they rewrote (`story`), a field of a thread they rewrote
  * (`t3.line`), a connection they added (`c5`), a field of a connection they rewrote
- * (`c1.line`).
+ * (`c1.line`); and `threadIndexes`, where in the weave's threads each thread their edits find
+ * sits, by its id, which tells their thread from the writer's under an id the writer repeated.
  */
 function shareOf(directorsShare) {
   const share = directorsShare && typeof directorsShare === 'object' ? directorsShare : {};
@@ -183,7 +184,8 @@ function shareOf(directorsShare) {
     fields: share.fields || {},
     threadFields: share.threadFields || {},
     addedConnections: share.addedConnections || {},
-    connectionFields: share.connectionFields || {}
+    connectionFields: share.connectionFields || {},
+    threadIndexes: share.threadIndexes || {}
   };
 }
 
@@ -726,9 +728,12 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
   // one thread under an id, since the meeting's gate refuses a repeat the director's changes
   // make (lib/meeting.js directorWeaveProblems), so every repeat holds a thread of the
   // writer's: R11 exempts the director's thread, never the writer's duplicate of its id.
-  // When one of the threads is the director's, the line says which thread keeps the id.
+  // When one of the threads is the director's, the line names it, the thread their edits find
+  // under the id (the share's threadIndexes), so the rework knows which thread keeps the id.
   repeatedIds(threads).forEach((id) => {
-    const names = listOf(threads.filter((thread) => weaveIdOf(thread) === id).map((thread) => `"${textOf(thread.name) || textOf(thread.line) || id}"`));
+    const under = threads.filter((thread) => weaveIdOf(thread) === id);
+    const nameOf = (thread) => `"${textOf(thread.name) || textOf(thread.line) || id}"`;
+    const names = listOf(under.map(nameOf));
     const nameTheThread = 'make each connection and the stronger main thread name the thread they mean.';
     const added = editOf(share.addedThreads, id);
     const changed = editOf(share.reroledThreads, id) || Object.keys(share.threadFields).some((place) => place.startsWith(`${id}.`));
@@ -737,7 +742,17 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
       fail('duplicate-id', `Two threads share one id: ${names}. Give each thread an id of its own, and ${nameTheThread}`, `${said}.`, `threads[#${id}]`);
       return;
     }
-    fail('duplicate-id', `Two threads share one id: ${names}, and one of them is the thread the director ${added ? 'added' : 'changed'}. Keep the id on the director's thread, since their edits find it by its id, and give the other thread an id of its own; ${nameTheThread}`,
+    const did = added ? 'added' : 'changed';
+    const theirs = [...new Set((share.threadIndexes[id] || []).map((index) => weave.threads[index]))].filter((thread) => under.includes(thread));
+    if (theirs.length === 1) {
+      const director = nameOf(theirs[0]);
+      const others = under.filter((thread) => thread !== theirs[0]);
+      const othersNamed = listOf(others.map(nameOf));
+      fail('duplicate-id', `Two threads share one id: ${names}, and ${director} is the thread the director ${did}. Keep the id on ${director}, since their edits find it by its id, and give ${othersNamed} ${others.length > 1 ? 'each ' : ''}an id of its own; ${nameTheThread}`,
+        `The writer gave the ${others.length > 1 ? 'threads' : 'thread'} ${othersNamed} the id of your thread ${director}, so the meeting cannot change them.`, `threads[#${id}]`);
+      return;
+    }
+    fail('duplicate-id', `Two threads share one id: ${names}, and one of them is the thread the director ${did}. Keep the id on the director's thread, since their edits find it by its id, and give the other thread an id of its own; ${nameTheThread}`,
       `${said}, and one of them is yours.`, `threads[#${id}]`);
   });
 

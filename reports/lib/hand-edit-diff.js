@@ -1782,12 +1782,20 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
  * writer wrote, so it is in none of them: a struck connection prints nothing, and the words
  * of one brought back are the writer's (task 4.5d).
  *
+ * Given the weave the edits are carried in, the share also has `threadIndexes`: for each
+ * thread id the director's edits are under, the place in `weave.threads` of each thread that
+ * carries one of them, where the edits find it (placeCarrying). Under an id the writer
+ * repeated, it tells the director's thread from the writer's, which the checks name, so the
+ * rework knows which thread keeps the id (fix round, fix 3).
+ *
  * @param {Object[]|null} edits - the standing edits the weave carries
+ * @param {Object|null} [weave] - the weave they are carried in
  * @returns {{addedThreads: Object, reroledThreads: Object, fields: Object, threadFields: Object,
- *            addedConnections: Object, connectionFields: Object}}
+ *            addedConnections: Object, connectionFields: Object, threadIndexes?: Object<string, number[]>}}
  */
-function weaveDirectorsShare(edits) {
+function weaveDirectorsShare(edits, weave = null) {
   const share = { addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {} };
+  const threadIndexes = isWeave(weave) ? {} : null;
   (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).forEach((e) => {
     const steps = stepsOf(e);
     const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
@@ -1806,6 +1814,14 @@ function weaveDirectorsShare(edits) {
       }
       return;
     }
+    if (threadIndexes) {
+      const place = placeCarrying(weave, e);
+      const index = place && place.chain[1] ? place.chain[1].index : undefined;
+      if (Number.isInteger(index)) {
+        const indexes = threadIndexes[id] || (threadIndexes[id] = []);
+        if (!indexes.includes(index)) indexes.push(index);
+      }
+    }
     if (steps.length === 2) {
       if (added) share.addedThreads[id] = e.id;
       return;
@@ -1814,6 +1830,7 @@ function weaveDirectorsShare(edits) {
     if (field === 'role') share.reroledThreads[id] = e.id;
     else share.threadFields[`${id}.${field}`] = e.id;
   });
+  if (threadIndexes) share.threadIndexes = threadIndexes;
   return share;
 }
 

@@ -206,6 +206,24 @@ describe('the weave checks (the check node)', () => {
     expect(update).not.toHaveProperty('weave');
   });
 
+  // Fix round, fix 3: the node gives the checks the weave with the director's edits, so the
+  // line names the director's thread under an id the writer repeated, whichever comes first.
+  it("names the director's thread when the writer repeats its id, so the rework knows which keeps it", () => {
+    const { standingAtMeeting } = require('../hand-edit-diff');
+    const state = pass();
+    const added = { id: 't9', name: 'The guest list', line: 'The guest list was rewritten that morning.', role: 'grounds-it' };
+    const left = { ...clone(state.weave), threads: [...clone(state.weave).threads, added] };
+    const edits = standingAtMeeting(null, clone(state.weave), left);
+    const writers = { id: 't9', name: "The writer's ninth", line: 'A thread the writer put under the same id.', role: 'grounds-it', evidence: clone(state.weave.threads[0].evidence) };
+    [[writers, added], [added, writers]].forEach(([first, second]) => {
+      const reworked = { ...clone(left), threads: [...clone(state.weave).threads, clone(first), clone(second)] };
+      const failures = validateArcStructure({ ...state, weave: reworked, _weaveHandEdits: edits }, {})._arcValidation.failures;
+      expect(failures.map((f) => f.type)).toEqual(['duplicate-id']);
+      expect(failures[0].message).toContain('and "The guest list" is the thread the director added. Keep the id on "The guest list", since their edits find it by its id, and give "The writer\'s ninth" an id of its own;');
+      expect(failures[0].line).toBe('The writer gave the thread "The writer\'s ninth" the id of your thread "The guest list", so the meeting cannot change them.');
+    });
+  });
+
   it("reads the director's notes and corrections for \"from your notes\"", () => {
     const state = weaveState();
     state.weave = { ...clone(state.weave), fromYourNotes: state.inputReviewCorrections[0] };

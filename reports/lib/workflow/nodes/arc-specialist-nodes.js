@@ -943,7 +943,8 @@ function validateArcStructure(state) {
     return {};
   }
   const weave = state.weave;
-  const directorsShare = weaveDirectorsShare(carriedEdits(state._weaveHandEdits, weaveForPrompt(weave)));
+  const forPrompt = weaveForPrompt(weave);
+  const directorsShare = weaveDirectorsShare(carriedEdits(state._weaveHandEdits, forPrompt), forPrompt);
   const words = isWeave(weave) ? meetingPageWords(state, directorsShare) : null;
   const { failures, concerns } = weaveFindings(weave, {
     evidence: evidenceContextOf(state),

@@ -1581,6 +1581,21 @@ describe('4.5: the meeting\'s edits', () => {
     expect(D.weaveDirectorsShare(null)).toEqual({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {} });
   });
 
+  // Fix round, fix 3: given the weave the edits are carried in, the share says where each thread
+  // the director's edits find sits, so a check can tell the director's thread from the writer's
+  // under an id the writer repeated.
+  it("weaveDirectorsShare, given the weave, places each thread the director's edits find, the director's among the writer's under one id", () => {
+    const left = directors();
+    left.threads[1] = { ...left.threads[1], line: 'A line the director typed.' };
+    const edits = D.standingAtMeeting(null, writers(), left).edits;
+    const writersSeventh = { id: 't7', name: "The writer's seventh", line: 'A thread the writer put under the same id.', role: 'grounds-it', evidence: [piece(['ledger'], 'A sale.')] };
+    const reworked = { ...clone(left), threads: [...clone(left).threads.slice(0, 3), writersSeventh, { ...clone(ADDED), evidence: [] }] };
+    const share = D.weaveDirectorsShare(D.carriedEdits(edits, reworked), reworked);
+    expect(share.threadIndexes).toEqual({ t2: [1], t3: [2], t7: [4] });
+    expect(share.addedThreads).toEqual({ t7: 'E4' });
+    expect(D.weaveDirectorsShare(edits)).not.toHaveProperty('threadIndexes');
+  });
+
   // Fix round 1, finding 2 (R11): a connection's line the director rewrote, and a connection
   // they added, are the director's share too, which the story-terms check and the writer's page
   // leave out. A strike is a whole-element edit of a connection the writer wrote, so it is

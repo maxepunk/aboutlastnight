@@ -851,6 +851,37 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
     expect(concerns).toEqual([]);
   });
 
+  // Fix round, fix 3: the rework must know which of the two names keeps the id. The share says
+  // where the director's edits find their thread (lib/hand-edit-diff.js weaveDirectorsShare,
+  // given the weave), and the line names it, whichever of the two comes first.
+  it("names the director's thread, where their edits find it, and the writer's that gives up the id", () => {
+    [[ADDED, WRITERS_T7, 6], [WRITERS_T7, ADDED, 7]].forEach(([one, two, theirs]) => {
+      const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, clone(one), clone(two)] };
+      const { failures } = findings(weave, share({ addedThreads: { t7: 'E1' }, threadIndexes: { t7: [theirs] } }));
+      expect(failures).toEqual([{
+        type: 'duplicate-id',
+        place: 'threads[#t7]',
+        message: expect.stringContaining('and "The guest list" is the thread the director added. Keep the id on "The guest list", since their edits find it by its id, and give "The writer\'s seventh" an id of its own; make each connection and the stronger main thread name the thread they mean.'),
+        line: 'The writer gave the thread "The writer\'s seventh" the id of your thread "The guest list", so the meeting cannot change them.'
+      }]);
+    });
+  });
+
+  it("names the thread the director changed, and gives each of the writer's threads under its id an id of its own", () => {
+    const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[2], name: 'A second bathroom' }, { ...clone(WEAVE).threads[2], name: 'A third bathroom' }] };
+    const { failures } = findings(weave, share({ reroledThreads: { t3: 'E2' }, threadIndexes: { t3: [2] } }));
+    expect(failures.map((f) => f.message)).toEqual([expect.stringContaining('and "The bathroom" is the thread the director changed. Keep the id on "The bathroom", since their edits find it by its id, and give "A second bathroom" and "A third bathroom" each an id of its own;')]);
+    expect(failures[0].line).toBe('The writer gave the threads "A second bathroom" and "A third bathroom" the id of your thread "The bathroom", so the meeting cannot change them.');
+  });
+
+  it("keeps the line that says one of them is the director's when their edits find no one thread under the id", () => {
+    const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, clone(ADDED), clone(WRITERS_T7)] };
+    [{}, { t7: [6, 7] }, { t7: [2] }].forEach((threadIndexes) => {
+      expect(findings(weave, share({ addedThreads: { t7: 'E1' }, threadIndexes })).failures[0].message)
+        .toMatch(/, and one of them is the thread the director added\. Keep the id on the director's thread/);
+    });
+  });
+
   it('a repeat no edit of the director\'s is under keeps its line', () => {
     const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[1] }] };
     expect(findings(weave, share({ addedThreads: { t7: 'E1' } })).failures).toEqual([{

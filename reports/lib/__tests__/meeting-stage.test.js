@@ -460,7 +460,9 @@ describe("4.5b: a writer's repeat under the id of a thread the director added", 
     const checked = { ...rewoven, ...validateArcStructure(rewoven, {}) };
     expect(checked._arcValidation.failures.map((f) => f.type)).toEqual(['duplicate-id']);
     // Phase 4b (brief 1B): the line names the threads by their names, never the id, which the meeting shows none of.
-    expect(checked._arcValidation.failures[0].message).toMatch(/^Two threads share one id: "The second ledger" and "The burials", and one of them is the thread the director added\. Keep the id on the director's thread/);
+    // Fix round, fix 3: it names which of the two is the director's, so the rework knows which keeps the id.
+    expect(checked._arcValidation.failures[0].message).toMatch(/^Two threads share one id: "The second ledger" and "The burials", and "The second ledger" is the thread the director added\. Keep the id on "The second ledger", since their edits find it by its id, and give "The burials" an id of its own;/);
+    expect(checked._arcValidation.failures[0].line).toBe('The writer gave the thread "The burials" the id of your thread "The second ledger", so the meeting cannot change them.');
     expect(checked._arcValidation.failures[0].place).toBe('threads[#t6]');
     expect(checked._arcValidation.concerns).toEqual([]);
     expect(routeArcValidation(checked)).toBe('revise');
