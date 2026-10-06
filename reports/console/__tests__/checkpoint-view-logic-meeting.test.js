@@ -370,8 +370,17 @@ const DECISION_CASES = [
   ['an unknown connection kind', false, () => { const w = clone(WEAVE); w.connections[0].kind = 'rumour'; return [w, clone(WEAVE)]; }],
   ['joins that are not a list', false, () => { const w = clone(WEAVE); w.connections[0].joins = 't1'; return [w, clone(WEAVE)]; }],
   ['joins holding a number', false, () => { const w = clone(WEAVE); w.connections[0].joins = ['t1', 2]; return [w, clone(WEAVE)]; }],
-  // R7: the strike went from the weave, so a struck key on a connection is an extra key, which the schema leaves open.
-  ['a struck key on a connection', true, () => { const w = clone(WEAVE); w.connections[0].struck = 'yes'; return [w, clone(WEAVE)]; }],
+  // 3 final, item 7: a key the meeting no longer has is refused by name when the director's version
+  // brings it (R7's strike among them); one the weave the meeting showed holds as it is, the
+  // writer's, passes, so the director can still act on that weave.
+  ['a struck key on a connection', false, () => { const w = clone(WEAVE); w.connections[0].struck = 'yes'; return [w, clone(WEAVE)]; }],
+  ["a thread's role", false, () => { const w = clone(WEAVE); w.threads[1].role = 'complicates'; return [w, clone(WEAVE)]; }],
+  ["a thread's reason", false, () => { const w = clone(WEAVE); w.threads[4].reason = 'Left out.'; return [w, clone(WEAVE)]; }],
+  ["an angle's role", false, () => { const w = clone(WEAVE); w.angles[0].role = 'main'; return [w, clone(WEAVE)]; }],
+  ...['story', 'question', 'headline', 'convergence'].map((key) => [`a top-level ${key}`, false, () => { const w = clone(WEAVE); w[key] = 'x'; return [w, clone(WEAVE)]; }]),
+  ['a top-level strongerMainThread', false, () => { const w = clone(WEAVE); w.strongerMainThread = { thread: 't2', reason: 'x' }; return [w, clone(WEAVE)]; }],
+  ["a thread's role the writer wrote, left as the meeting showed it", true, () => { const b = clone(WEAVE); b.threads[1].role = 'complicates'; b.convergence = 'x'; return [clone(b), b]; }],
+  ["a thread's role the writer wrote, changed by the director", false, () => { const b = clone(WEAVE); b.threads[1].role = 'complicates'; const w = clone(b); w.threads[1].role = 'mirrors'; return [w, b]; }],
   ['a question with no changes', false, () => { const w = clone(WEAVE); delete w.questions[0].changes; return [w, clone(WEAVE)]; }],
   ['a question kind the weave does not ask', false, () => { const w = clone(WEAVE); w.questions[0].kind = 'ledger'; return [w, clone(WEAVE)]; }],
   ['an answer that is not text', false, () => { const w = clone(WEAVE); w.questions[0].answer = 42; return [w, clone(WEAVE)]; }],
@@ -408,6 +417,17 @@ describe('4.8: the console\'s validator reaches the gate\'s decisions (ruling 4)
         .toEqual({ action, gateAccepts: expected, consoleAccepts: expected });
       if (!expected) expect(typeof consoleSays === 'string' && consoleSays.length > 0).toBe(true);
     });
+  });
+
+  // 3 final, item 7: the console's copy of the keys the meeting no longer has is the gate's.
+  test("the console's retired keys are the gate's, and both refuse them in the same words", () => {
+    const { RETIRED_WEAVE_KEYS } = require('../../lib/meeting');
+    expect(ViewLogic.MEETING_RETIRED_KEYS).toEqual(JSON.parse(JSON.stringify(RETIRED_WEAVE_KEYS)));
+    const left = clone(WEAVE);
+    left.threads[1].role = 'complicates';
+    left.convergence = 'x';
+    expect(meetingWeaveProblems(left, clone(WEAVE), 'approve'))
+      .toBe(directorWeaveProblems(weaveLib.weaveForPrompt(left), { shown: weaveLib.weaveForPrompt(clone(WEAVE)), action: 'approve' }));
   });
 
   test("each R8 refusal names the action's angle, in the gate and the console", () => {

@@ -74,6 +74,57 @@ const DIRECTOR_WEAVE_SCHEMA = (() => {
 
 const validateDirectorWeave = new Ajv({ allErrors: true, strict: true }).compile(DIRECTOR_WEAVE_SCHEMA);
 
+/**
+ * The keys the story meeting no longer has (3 final, item 7; spec 2026-10-06 section 6): the weave's
+ * own story, question, headline, convergence and stronger main thread, which each angle's pitch
+ * replaced; a role on an angle or a thread and a left-out reason, which a thread's place in an angle
+ * replaced; and a connection's strike (R7), which a note replaced. The schema leaves extra keys open,
+ * so the gate refuses each by name (retiredKeyProblems). The console's copy
+ * (console/checkpoint-view-logic.js MEETING_RETIRED_KEYS) is held equal by a test.
+ */
+const RETIRED_WEAVE_KEYS = Object.freeze({
+  weave: Object.freeze(['story', 'question', 'headline', 'convergence', 'strongerMainThread']),
+  angles: Object.freeze(['role']),
+  threads: Object.freeze(['role', 'reason']),
+  connections: Object.freeze(['struck'])
+});
+
+/** The word for one element of a collection, as a refusal names it. */
+const RETIRED_ELEMENT_WORDS = Object.freeze({ angles: 'angle', threads: 'thread', connections: 'connection' });
+
+/**
+ * What the gate refuses as a key the meeting no longer has (3 final, item 7), or null: each retired
+ * key the director's version holds that the weave the meeting showed does not hold with the same
+ * value, on the same element by its id. One the meeting showed as it is was the writer's, so the
+ * director can still act on that weave; with no weave shown, every retired key is the director's.
+ *
+ * @param {Object} weave - the weave as the director left it, which the schema has taken
+ * @param {Object|null} shown - the weave the meeting showed
+ * @returns {string|null}
+ */
+function retiredKeyProblems(weave, shown) {
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const theirs = (element, before) => (key) => Object.prototype.hasOwnProperty.call(element, key)
+    && !(before && Object.prototype.hasOwnProperty.call(before, key) && same(before[key], element[key]));
+  const named = (keys) => listOf(keys.map((key) => `"${key}"`));
+  const found = [];
+  const onWeave = RETIRED_WEAVE_KEYS.weave.filter(theirs(weave, isWeave(shown) ? shown : null));
+  if (onWeave.length > 0) found.push(`${named(onWeave)} on the weave`);
+  ['angles', 'threads', 'connections'].forEach((collection) => {
+    (Array.isArray(weave[collection]) ? weave[collection] : []).forEach((element) => {
+      if (!element || typeof element !== 'object') return;
+      const id = weaveIdOf(element);
+      const before = isWeave(shown) && Array.isArray(shown[collection])
+        ? shown[collection].find((own) => own && typeof own === 'object' && weaveIdOf(own) === id)
+        : null;
+      const keys = RETIRED_WEAVE_KEYS[collection].filter(theirs(element, before));
+      if (keys.length > 0) found.push(`${named(keys)} on ${RETIRED_ELEMENT_WORDS[collection]} "${id}"`);
+    });
+  });
+  if (found.length === 0) return null;
+  return `The story meeting no longer has ${listOf(found)}: take them out of the version you send. Each angle carries its own headline, story, question and ending, a thread is in an angle or out of it, and a connection you want gone goes with a note.`;
+}
+
 /** The weave's collections whose elements name themselves by an id. */
 const ID_COLLECTIONS = ['angles', 'threads', 'connections', 'questions'];
 
@@ -134,6 +185,8 @@ function directorWeaveProblems(weave, { shown = null, action = 'approve' } = {})
     return `The weave as the director left it failed the director-side schema: ${errors}`;
   }
   const shownWeave = isWeave(shown) ? shown : null;
+  const retired = retiredKeyProblems(weave, shownWeave);
+  if (retired) return retired;
   const theirs = ID_COLLECTIONS.flatMap((collection) => repeatedIds(weave[collection])
     .filter((id) => idCount(weave[collection], id) > idCount(shownWeave && shownWeave[collection], id))
     .map((id) => `two ${collection} share the id "${id}"`));
@@ -665,6 +718,8 @@ function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
 module.exports = {
   MEETING_ACTIONS,
   DIRECTOR_WEAVE_SCHEMA,
+  // 3 final, item 7: the keys the meeting no longer has, which the gate refuses by name
+  RETIRED_WEAVE_KEYS,
   directorWeaveProblems,
   meetingResume,
   meetingCheckFailures,

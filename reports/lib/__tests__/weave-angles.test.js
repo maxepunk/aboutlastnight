@@ -357,6 +357,24 @@ describe('the gate (R8, R9)', () => {
     });
   });
 
+  // 3 final, item 7: through --approve-file the gate stored retired keys as the director's edits. It
+  // refuses each by name, with a line saying the meeting no longer has it.
+  test('refuses each key the meeting no longer has, by name', () => {
+    const left = anglesWeave();
+    left.threads[1].role = 'complicates';
+    left.threads[1].reason = 'Why it is out.';
+    left.connections[0].struck = true;
+    left.angles[0].role = 'main';
+    left.convergence = 'Where it all meets.';
+    left.strongerMainThread = { thread: 't2', reason: 'x' };
+    left.story = 'x';
+    left.question = 'x';
+    left.headline = 'x';
+    const refusal = meetingResume({ meeting: 'approve', weave: left }, stateAt()).error;
+    expect(refusal).toBe('The story meeting no longer has "story", "question", "headline", "convergence" and "strongerMainThread" on the weave, "role" on angle "a1", "role" and "reason" on thread "t2" and "struck" on connection "c1": take them out of the version you send. Each angle carries its own headline, story, question and ending, a thread is in an angle or out of it, and a connection you want gone goes with a note.');
+    expect(directorWeaveProblems(left, { shown: anglesWeave(), action: 'send-back' })).toBe(refusal);
+  });
+
   // 3 final, item 6: with no angle the settled weave renders empty and the map writer throws, so an
   // approve of a weave with no angle is refused, offering Send back.
   test('refuses an approve of a weave with no angle, offering Send back; a send-back goes through', () => {

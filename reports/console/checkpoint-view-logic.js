@@ -2001,6 +2001,8 @@
     var malformed = shapeProblem(left, DIRECTOR_WEAVE_SHAPE, '');
     if (malformed) return 'The weave as you left it is malformed: ' + malformed + '.';
     var shownWeave = isWeaveValue(shown) ? withoutCodeOwned(shown) : null;
+    var retired = meetingRetiredKeyProblem(left, shownWeave);
+    if (retired) return retired;
     var repeats = [];
     ['angles', 'threads', 'connections', 'questions'].forEach(function (collection) {
       var theirs = shownWeave ? idCounts(shownWeave[collection]) : new Map();
@@ -2042,6 +2044,56 @@
     if (dropped.length > 0) return 'Keep the angle ' + named(dropped[0]) + ': the meeting keeps the angles it showed, and you change only the one you pick.';
     if (added.length > 0) return 'The angle ' + named(added[0]) + ' is not one the meeting showed: pick one of the angles the meeting showed, and change only that one.';
     return null;
+  }
+
+  /**
+   * The keys the story meeting no longer has (lib/meeting.js RETIRED_WEAVE_KEYS, which a test holds
+   * this copy equal to; 3 final, item 7): the weave's own story, question, headline, convergence and
+   * stronger main thread, a role on an angle or a thread, a left-out reason and a connection's strike.
+   */
+  var MEETING_RETIRED_KEYS = {
+    weave: ['story', 'question', 'headline', 'convergence', 'strongerMainThread'],
+    angles: ['role'],
+    threads: ['role', 'reason'],
+    connections: ['struck']
+  };
+
+  /**
+   * What the gate refuses as a key the meeting no longer has, or null (lib/meeting.js
+   * retiredKeyProblems, whose decisions a test holds this to): each retired key the director's
+   * version holds that the weave the meeting showed does not hold with the same value, on the same
+   * element by its id.
+   *
+   * @param {Object} weave - the weave as the director left it, which the shape has taken
+   * @param {Object|null} shown - the weave the meeting showed, without its code-owned keys
+   * @returns {string|null}
+   */
+  function meetingRetiredKeyProblem(weave, shown) {
+    var has = function (object, key) { return Object.prototype.hasOwnProperty.call(object, key); };
+    var theirs = function (element, before) {
+      return function (key) {
+        return has(element, key) && !(before && has(before, key) && JSON.stringify(before[key]) === JSON.stringify(element[key]));
+      };
+    };
+    var listed = function (words) {
+      return words.length > 1 ? words.slice(0, -1).join(', ') + ' and ' + words[words.length - 1] : words.join('');
+    };
+    var named = function (keys) { return listed(keys.map(function (key) { return '"' + key + '"'; })); };
+    var found = [];
+    var onWeave = MEETING_RETIRED_KEYS.weave.filter(theirs(weave, isPlainObject(shown) ? shown : null));
+    if (onWeave.length > 0) found.push(named(onWeave) + ' on the weave');
+    ['angles', 'threads', 'connections'].forEach(function (collection) {
+      asArray(weave[collection]).filter(isPlainObject).forEach(function (element) {
+        var id = weaveIdOf(element);
+        var before = isPlainObject(shown)
+          ? asArray(shown[collection]).filter(function (own) { return isPlainObject(own) && weaveIdOf(own) === id; })[0]
+          : null;
+        var keys = MEETING_RETIRED_KEYS[collection].filter(theirs(element, before));
+        if (keys.length > 0) found.push(named(keys) + ' on ' + ELEMENT_WORDS[collection] + ' "' + id + '"');
+      });
+    });
+    if (found.length === 0) return null;
+    return 'The story meeting no longer has ' + listed(found) + ': take them out of the version you send. Each angle carries its own headline, story, question and ending, a thread is in an angle or out of it, and a connection you want gone goes with a note.';
   }
 
   /** How a refusal of R8 names the angle the action sends (lib/meeting.js ANGLE_THE_ACTION_SENDS; 3 final, item 5). */
@@ -4920,6 +4972,7 @@
     evidenceFoldLabel: evidenceFoldLabel,
     CUTS_AGAINST_LABEL: CUTS_AGAINST_LABEL,
     MEETING_NO_EVIDENCE_LINE: MEETING_NO_EVIDENCE_LINE,
+    MEETING_RETIRED_KEYS: MEETING_RETIRED_KEYS,
     MEETING_NOTHING_FOUND_LINE: MEETING_NOTHING_FOUND_LINE,
     evidenceFoldView: evidenceFoldView,
     WEAVE_ANSWER_KEY: WEAVE_ANSWER_KEY,
