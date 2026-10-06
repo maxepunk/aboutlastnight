@@ -1064,8 +1064,8 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
   // lib/word-count.js pageLengthOf's rule): `length` is the worst angle's count, with its id.
   if (length && Number.isFinite(length.writer) && Number.isFinite(length.allowance) && length.writer > length.allowance) {
     const opened = angles.find((angle) => weaveIdOf(angle) && weaveIdOf(angle) === textOf(length.angle)) || null;
-    const share = writersShareOf(weave, directorsShare);
-    const page = opened ? { ...share, [PICKED_KEY]: weaveIdOf(opened) } : share;
+    const writersShare = writersShareOf(weave, directorsShare);
+    const page = opened ? { ...writersShare, [PICKED_KEY]: weaveIdOf(opened) } : writersShare;
     const longest = writersLinesOnPage(page).slice(0, 3).map((line) => `${line.name} (${line.words} words)`);
     const open = opened ? `With ${angleWords(opened)} open, the` : 'The';
     fail('over-length', `${open} meeting's page runs to ${length.page} words, ${length.writer} of them in the lines you write, past the ${length.allowance} those lines may use (${MEETING_WORD_FLOOR}, or more while the whole page stays within ${MEETING_WORD_BOUND}). Cut ${length.writer - length.allowance} words or more from your lines on that page${longest.length > 0 ? `, starting with the longest: ${listOf(longest)}` : ''}. Keep each line short, and keep in each angle only the threads its story turns on: the headline and card line of every other angle print beside the open one. The rest of the page (the verdict and the lines beside yours) is printed by code.`,
