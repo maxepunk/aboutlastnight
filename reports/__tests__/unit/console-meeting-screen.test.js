@@ -14,8 +14,11 @@
  * 3B; spec 2026-10-06 section 5): the open angle's pitch, each thread in its story as its name and
  * its line with its evidence folded under "What's behind it", the left-out threads by name, each
  * opening in place to its line, each connection between the threads in as its line, a check still
- * failing under the line it names, and no tag anywhere. Slice 3D adds the pick, the flips and the
- * thread editors next run.
+ * failing under the line it names, and no tag anywhere. Since slice 3D (spec 2026-10-06 sections 5
+ * and 6): each angle's card picks it, each thread's name and line are rewritten in place, each
+ * thread's control flips it in or out of the open angle (the verdict's locked), and the page shows
+ * no strike. The wiring is run here: mountMeeting re-renders after each change, so a test types,
+ * clicks and reads the action each control dispatches.
  */
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used-for-signing-in-tests';
 const fs = require('fs');
@@ -64,10 +67,15 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
     Object.values(MEETING_LINE_LABELS).forEach((label) => expect(`${label}: ${src.includes(`'${label}'`)}`).toBe(`${label}: false`));
   });
 
-  it('edits the weave only through the view logic\'s operations: the open angle\'s pitch, an added thread, a strike, an answer', () => {
-    ['setAngleField(', 'addMeetingThread(', 'removeMeetingThread(', 'setConnectionStruck(', 'setQuestionAnswer('].forEach((op) => {
-      expect(count(src, `ViewLogic.${op}`)).toBe(1);
+  it('edits the weave only through the view logic\'s operations: the pick, the open angle\'s pitch, a thread\'s name and line, a flip, an added thread, an answer', () => {
+    ['pickMeetingAngle(', 'setAngleField(', 'setThreadField(', 'flipMeetingThread(', 'addMeetingThread(', 'removeMeetingThread(', 'setQuestionAnswer('].forEach((op) => {
+      expect(`${op} ${count(src, `ViewLogic.${op}`)}`).toBe(`${op} 1`);
     });
+  });
+
+  // Slice 3D (R7; spec 6 and 14): the strike goes, and the page reads no part of it.
+  it('shows no strike: it reads neither a connection\'s struck nor its strike label', () => {
+    ['setConnectionStruck', 'connection.struck', 'labels.strike', 'Strike', 'struck'].forEach((gone) => expect(`${gone}: ${src.includes(gone)}`).toBe(`${gone}: false`));
   });
 
   it('keeps the director\'s weave and note in the meeting\'s pending slot, keyed to the weave\'s version', () => {
@@ -161,8 +169,13 @@ describe('4.8: the meeting\'s styles', () => {
     ['.arc-grid', '.arc-card', '.arc-selection__note', '.character-tag'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
     const meeting = css.slice(css.indexOf('/* ── 4.8: the story meeting ──'));
     expect(css).toContain('/* ── 4.8: the story meeting ──');
-    ['.meeting__section', '.meeting__thread', '.meeting__connection--struck', '.meeting__concern', '.meeting__mark', '.meeting__thin-notes']
+    ['.meeting__section', '.meeting__thread', '.meeting__connection', '.meeting__concern', '.meeting__mark', '.meeting__thin-notes']
       .forEach((rule) => expect(`${rule}: ${meeting.includes(rule)}`).toBe(`${rule}: true`));
+  });
+
+  // Slice 3D (spec 14): the role picker's, the old left-out list's and the strike's styles went with their markup.
+  it('keeps no style for a role, the old left-out list or a struck connection', () => {
+    ['.meeting__role', '.meeting__left-out', '.meeting__connection--struck'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
   });
 });
 
@@ -188,6 +201,7 @@ describe('4.5c: the meeting reads its note box for the retry line, and Approve a
 // ═══════════════════════════════════════════════════════════════════════════
 
 const ViewLogic = require('../../console/checkpoint-view-logic');
+const { unsavedInputLine } = require('../../console/unsaved-input-logic');
 const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
 const { meetingCheckpointData } = require('../../lib/meeting');
 const weaveLib = require('../../lib/weave');
@@ -238,11 +252,27 @@ function withFailures(failures) {
  * reads. A component the page uses (CollapsibleSection, Badge) stays a node, uncalled.
  */
 function renderMeeting(props) {
+  return mountMeeting(props).render();
+}
+
+/**
+ * ArcSelection.js mounted with a React whose hooks keep their state across renders, in the order
+ * the component calls them, as React's do: a setter changes the value the next render reads. Its
+ * effects never run, as on a remount of the same weave version. `render` renders the page again
+ * after a change; `actions` are what the page dispatched, in order.
+ */
+function mountMeeting(props) {
   const src = read('components/checkpoints/ArcSelection.js');
+  const states = [];
+  let hook = 0;
   const React = {
     Fragment: 'Fragment',
     createElement: (type, p, ...children) => ({ type, props: p || {}, children }),
-    useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
+    useState: (initial) => {
+      const at = hook++;
+      if (!(at in states)) states[at] = typeof initial === 'function' ? initial() : initial;
+      return [states[at], (value) => { states[at] = typeof value === 'function' ? value(states[at]) : value; }];
+    },
     useEffect: () => {}
   };
   const window = {
@@ -253,7 +283,13 @@ function renderMeeting(props) {
     }
   };
   const ArcSelection = new Function('window', 'React', `${src}\nreturn window.Console.checkpoints.ArcSelection;`)(window, React);
-  return ArcSelection({ onApprove: () => {}, onReject: () => {}, onRollback: () => {}, dispatch: () => {}, ...props });
+  const actions = [];
+  const all = { onApprove: () => {}, onReject: () => {}, onRollback: () => {}, dispatch: (action) => actions.push(action), ...props };
+  return {
+    actions,
+    last: () => actions[actions.length - 1],
+    render: () => { hook = 0; return ArcSelection(all); }
+  };
 }
 
 const classesOf = (node) => String(node.props.className || '').split(/\s+/).filter(Boolean);
@@ -290,10 +326,23 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
     rows.forEach((row, i) => {
       const thread = view.threads[i];
       expect(elementsOf(row, (n) => n.type === 'select')).toEqual([]);
-      const [line] = elementsOf(row, withClass('meeting__line'));
-      expect(textOf(line)).toBe(`${thread.name}: ${thread.line}`);
+      const [name] = elementsOf(row, withClass('meeting__thread-name'));
+      const [line] = elementsOf(row, withClass('meeting__thread-line'));
+      expect([name.props.value, name.props['aria-label']]).toEqual([thread.name, thread.labels.name]);
+      expect([line.props.value, line.props['aria-label']]).toEqual([thread.line, thread.labels.line]);
       expect(textOf(row).includes(ViewLogic.VERDICT_LOCK_LINE)).toBe(thread.locked);
     });
+  });
+
+  // Slice 3D (R8; spec 6): every thread in the story but the verdict's has the control that leaves
+  // it out, named by meetingView; the verdict's says it is always in, and has none.
+  it('gives each thread in the story its flip control, and the verdict\'s its lock in its place', () => {
+    rows.forEach((row, i) => {
+      const thread = view.threads[i];
+      const flips = elementsOf(row, withClass('meeting__flip'));
+      expect(flips.map((b) => b.props['aria-label'])).toEqual(thread.locked ? [] : [thread.labels.flip]);
+    });
+    expect(view.threads.filter((t) => t.locked).map((t) => t.id)).toEqual(['t1']);
   });
 
   it('folds each thread\'s evidence under "What\'s behind it", each piece as evidenceFoldView words it, in a group named by the thread\'s name', () => {
@@ -333,22 +382,24 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
     expect(takeOut.map((b) => b.props['aria-label'])).toEqual(['Take out the thread you added: The second ledger']);
   });
 
-  it('shows the left-out threads by name, each opening in place to its line', () => {
-    const [leftOut] = elementsOf(tree, withClass('meeting__left-out'));
+  it('shows the left-out threads by name, each opening in place to its name and line, rewritten there, with the control that brings it in', () => {
+    const [leftOut] = elementsOf(tree, withClass('meeting__out'));
     expect(view.leftOut.threads.map((t) => t.name)).toEqual(['The letter']);
     expect(textOf(leftOut)).toContain(view.leftOut.title);
-    const names = elementsOf(leftOut, withClass('meeting__left-out-name'));
+    const names = elementsOf(leftOut, withClass('meeting__out-thread'));
     expect(names).toHaveLength(view.leftOut.threads.length);
     const folds = foldsIn(leftOut);
     expect(folds.map((f) => f.props.title)).toEqual(view.leftOut.threads.map((t) => t.label));
     view.leftOut.threads.forEach((thread, i) => {
-      expect(held(folds[i])).toContain(thread.line);
+      const fields = elementsOf(folds[i].children, (n) => n.type === 'input' || n.type === 'textarea');
+      expect(fields.map((f) => [f.props.value, f.props['aria-label']])).toEqual([[thread.name, thread.labels.name], [thread.line, thread.labels.line]]);
       expect(textOf(leftOut)).not.toContain(thread.line);
+      expect(elementsOf(names[i], withClass('meeting__flip')).map((b) => b.props['aria-label'])).toEqual([thread.labels.flip]);
     });
   });
 });
 
-describe('1C: each connection between the threads in the story shows its line, with its strike control', () => {
+describe('1C: each connection between the threads in the story shows its line, and no control', () => {
   const data = payloadOf(meetingState());
   const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
   const rows = elementsOf(renderMeeting({ data }), withClass('meeting__connection'));
@@ -368,12 +419,10 @@ describe('1C: each connection between the threads in the story shows its line, w
     });
   });
 
-  it('names the connection its strike control strikes by the threads it joins', () => {
-    rows.forEach((row, i) => {
-      const [strike] = elementsOf(row, (n) => n.type === 'button');
-      expect(textOf(strike)).toBe('Strike');
-      expect(strike.props['aria-label']).toBe(`Strike the connection between ${view.connections[i].joins}`);
-    });
+  // Slice 3D (R7; spec 6): a connection the director wants gone goes with a note; the page offers no strike.
+  it('offers no control on a connection', () => {
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach((row) => expect(elementsOf(row, (n) => n.type === 'button')).toEqual([]));
   });
 });
 
@@ -409,7 +458,7 @@ describe('1C: a check still failing shows under the line it names (spec 6.3)', (
   });
 
   it('shows a left-out thread\'s failure beside the names, under that thread\'s name', () => {
-    const [leftOut] = elementsOf(tree, withClass('meeting__left-out'));
+    const [leftOut] = elementsOf(tree, withClass('meeting__out'));
     const failure = view.leftOut.threads[0].failures[0];
     const [check] = elementsOf(leftOut, (n) => withClass('meeting__check')(n) && textOf(n).includes(failure));
     expect(textOf(check)).toBe(`The letter: ${failure}`);
@@ -444,7 +493,7 @@ describe('1C: no tag on the page, and every aria-label names a thread by its nam
 
 // The page's other controls behave as today: each changes the weave the director has through the
 // view logic's operations, by the element's place in the weave, never its place on the page.
-describe('1C: the pitch\'s editors, the strike and the answer change the director\'s weave', () => {
+describe('1C: the pitch\'s editors and the answer change the director\'s weave', () => {
   const data = payloadOf(meetingState());
   const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
   const saved = () => {
@@ -462,11 +511,8 @@ describe('1C: the pitch\'s editors, the strike and the answer change the directo
     expect(last().edits.weave.angles.map((a) => a.story)).toEqual(['The room voted, and the ledger kept talking.', WEAVE.angles[1].story, WEAVE.angles[2].story]);
   });
 
-  it('a strike strikes its connection, and an answer answers its question', () => {
+  it('an answer answers its question', () => {
     const { tree, last } = saved();
-    const [strike] = elementsOf(elementsOf(tree, withClass('meeting__connection'))[1], (n) => n.type === 'button');
-    strike.props.onClick();
-    expect(last().edits.weave.connections.map((c) => c.struck === true)).toEqual([false, true]);
     const [answer] = elementsOf(tree, withClass('meeting__answer'));
     answer.props.onChange({ target: { value: 'Sarah ran the bar all morning.' } });
     expect(last().edits.weave.questions[0].answer).toBe('Sarah ran the bar all morning.');
@@ -524,7 +570,8 @@ describe('1C: a weave the add line builds passes buildResumePayload on a state i
     const after = payloadOf({ ...state, ...stateUpdates, weave: weaveLib.withFactCheckMark(clone(stateUpdates.weave), MARK), _meetingRound: null });
     expect(after.directorsThreads).toEqual(['t6']);
     const row = elementsOf(renderMeeting({ data: after }), withClass('meeting__thread')).find((r) => textOf(r).includes('The second ledger'));
-    expect(textOf(elementsOf(row, withClass('meeting__line'))[0])).toBe('The second ledger');
+    expect(elementsOf(row, withClass('meeting__thread-name')).map((n) => n.props.value)).toEqual(['The second ledger']);
+    expect(elementsOf(row, withClass('meeting__thread-line')).map((n) => n.props.value)).toEqual(['']);
     expect(held(foldsIn(row)[0])).toContain(ViewLogic.MEETING_NO_EVIDENCE_LINE);
   });
 });
@@ -533,9 +580,10 @@ describe('1C: the meeting\'s styles', () => {
   const css = read('console.css');
   const meeting = css.slice(css.indexOf('/* ── 4.8: the story meeting ──'), css.indexOf('/* ── 4.9: the map ──'));
 
-  it('styles the line, the fold and its pieces, a piece that cuts against its line, the left-out names, a check beside its line and the add line', () => {
-    ['.meeting__line', '.meeting__name', '.meeting__fold', '.meeting__piece', '.meeting__cuts-against', '.meeting__left-out', '.meeting__left-out-names',
-      '.meeting__left-out-name', '.meeting__check--beside', '.meeting__add-name', '.meeting__add-line']
+  it('styles the angle cards, the pitch, a thread\'s name and line rewritten in place, its flip, the fold and its pieces, a piece that cuts against its line, the left-out names, a check beside its line and the add line', () => {
+    ['.meeting__angles', '.meeting__angle', '.meeting__angle--open', '.meeting__pitch', '.meeting__inline', '.meeting__thread-name', '.meeting__thread-line', '.meeting__flip',
+      '.meeting__fold', '.meeting__piece', '.meeting__cuts-against', '.meeting__out', '.meeting__out-list', '.meeting__out-thread',
+      '.meeting__check--beside', '.meeting__add-name', '.meeting__add-line']
       .forEach((rule) => expect(`${rule}: ${new RegExp(`${rule.replace(/[.-]/g, '\\$&')}[\\s,{:]`).test(meeting)}`).toBe(`${rule}: true`));
   });
 
@@ -577,15 +625,15 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
     expect(view.leftOut.names).toBe('The letter');
   });
 
-  it("each connection carries its label, the line the page prints, and the fold's and the strike's labels, naming it by the threads it joins", () => {
-    const { data, view } = labelled();
+  it("each connection carries its label, the line the page prints, and its fold's label, naming it by the threads it joins", () => {
+    const { view } = labelled();
     expect(view.connections[0].label).toBe(WEAVE.connections[0].line);
-    expect(view.connections[0].labels).toEqual({
-      fold: `What's behind it: the connection between "The overdose vote" and "The envelope"`,
-      strike: 'Strike the connection between "The overdose vote" and "The envelope"'
-    });
-    const after = ViewLogic.meetingView(data, ViewLogic.setConnectionStruck(ViewLogic.meetingDraftOf(data), 0, true), '');
-    expect(after.connections[0].labels.strike).toBe('Unstrike the connection between "The overdose vote" and "The envelope"');
+    expect(view.connections[0].labels.fold).toBe(`What's behind it: the connection between "The overdose vote" and "The envelope"`);
+  });
+
+  it('each angle carries its label, its headline, and its pick control\'s label', () => {
+    const { view } = labelled();
+    expect(view.angles.map((a) => [a.label, a.labels.pick])).toEqual(WEAVE.angles.map((a) => [a.headline, `Open the angle "${a.headline}"`]));
   });
 
   it('the page names each thread and connection by those fields, its fold groups and aria-labels included', () => {
@@ -594,8 +642,9 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
     const envelope = elementsOf(tree, withClass('meeting__thread')).find((row) => textOf(row).includes('The envelope'));
     const thread = view.threads.find((t) => t.id === 't3');
     expect(elementsOf(envelope, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([thread.labels.fold]);
+    expect(elementsOf(envelope, withClass('meeting__flip')).map((n) => n.props['aria-label'])).toEqual([thread.labels.flip]);
+    expect(elementsOf(tree, withClass('meeting__angle')).map((n) => n.props['aria-label'])).toEqual(view.angles.map((a) => a.labels.pick));
     elementsOf(tree, withClass('meeting__connection')).forEach((row, i) => {
-      expect(elementsOf(row, (n) => n.type === 'button').map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.strike]);
       expect(elementsOf(row, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.fold]);
       expect(elementsOf(row, withClass('meeting__detail')).map(textOf)).toEqual([view.connections[i].label]);
     });
@@ -603,7 +652,7 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
 
   it('ArcSelection.js reads the labels and builds none of them', () => {
     const src = read('components/checkpoints/ArcSelection.js');
-    ['thread.label', 'thread.labels.fold', 'thread.labels.takeOut', 'connection.line', 'connection.labels.fold', 'connection.labels.strike']
+    ['angle.labels.pick', 'thread.label', 'thread.labels.fold', 'thread.labels.flip', 'thread.labels.name', 'thread.labels.line', 'thread.labels.takeOut', 'connection.line', 'connection.labels.fold']
       .forEach((field) => expect(`${field}: ${src.includes(field)}`).toBe(`${field}: true`));
     ['function threadName', 'function connectionName', "'Role of the thread ' +", "'Take out the thread you added: ' +", "'the connection between ' +", "view.evidenceTitle + ': '", "'Joins '",
       'foldLabel:', 'AriaLabel']
@@ -619,5 +668,143 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
     const moves = view.slice(view.indexOf('function moveLabelsOf('), view.indexOf('function photoNameOf('));
     expect(count(meeting, 'evidenceFoldLabel(')).toBe(2);
     expect(count(moves, 'evidenceFoldLabel(')).toBe(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Slice 3D: the meeting's page (spec 2026-10-06 sections 5 and 6). Each control is run on the page
+// mounted once, re-rendered after each change, and each is held to the action it dispatches: the
+// meeting's pending slot, `{version, weave}` under the stop's version, with the note beside it.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('3D: the angles side by side, each card picking its angle', () => {
+  const data = payloadOf(meetingState());
+  const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
+
+  it('shows each angle as its card in the view\'s order: the open one says only that it is open below, every other its headline and its card line', () => {
+    const cards = elementsOf(renderMeeting({ data }), withClass('meeting__angle'));
+    expect(cards.map((c) => c.type)).toEqual(view.angles.map(() => 'button'));
+    expect(cards.map(textOf)).toEqual(view.angles.map((a) => (a.open ? `${a.number}${view.angleOpenLine}` : `${a.number}${a.headline}${a.gist}`)));
+    expect(cards.map((c) => c.props['aria-pressed'])).toEqual(view.angles.map((a) => a.open));
+    expect(cards.map((c) => classesOf(c).includes('meeting__angle--open'))).toEqual([true, false, false]);
+  });
+
+  it('a card picks its angle: the action carries the pick, and the page opens that angle\'s pitch and threads', () => {
+    const page = mountMeeting({ data });
+    const [, second] = elementsOf(page.render(), withClass('meeting__angle'));
+    second.props.onClick();
+    expect(page.last()).toMatchObject({ type: 'SAVE_PENDING_EDITS', checkpoint: 'arc-selection', edits: { version: ViewLogic.meetingVersion(data) }, note: '' });
+    expect(page.last().edits.weave.picked).toBe('a2');
+    expect(page.last().edits.weave.angles).toEqual(ViewLogic.meetingDraftOf(data).angles);
+    const after = page.render();
+    const [headline] = elementsOf(after, (n) => n.props.id === 'meeting-headline');
+    expect(headline.props.value).toBe(WEAVE.angles[1].headline);
+    expect(elementsOf(after, withClass('meeting__thread-name')).map((n) => n.props.value).slice(0, 2)).toEqual(['The envelope', 'The overdose vote']);
+    expect(elementsOf(after, withClass('meeting__angle')).map((c) => c.props['aria-pressed'])).toEqual([false, true, false]);
+  });
+
+  it('the open angle\'s card picks nothing', () => {
+    const page = mountMeeting({ data });
+    const [first] = elementsOf(page.render(), withClass('meeting__angle'));
+    first.props.onClick();
+    expect(page.actions).toEqual([]);
+  });
+});
+
+describe('3D: the open angle\'s pitch, each line rewritten in place', () => {
+  const data = payloadOf(meetingState());
+  const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
+
+  it('shows each line of the pitch under its heading, inside the pitch\'s panel', () => {
+    const [pitch] = elementsOf(renderMeeting({ data }), withClass('meeting__pitch'));
+    const fields = elementsOf(pitch, (n) => n.type === 'textarea' && /^meeting-/.test(n.props.id || ''));
+    expect(fields.map((f) => [f.props.id, f.props.value])).toEqual(['headline', 'story', 'question', 'lands', 'ends'].map((k) => [`meeting-${k}`, view.pitch[k].text]));
+  });
+
+  it('a pitch edit rewrites the line on the open angle, and on the angle picked after a pick', () => {
+    const page = mountMeeting({ data });
+    const [headline] = elementsOf(page.render(), (n) => n.props.id === 'meeting-headline');
+    headline.props.onChange({ target: { value: 'The Ledger Kept Talking' } });
+    expect(page.last().edits.weave.angles.map((a) => a.headline)).toEqual(['The Ledger Kept Talking', WEAVE.angles[1].headline, WEAVE.angles[2].headline]);
+    elementsOf(page.render(), withClass('meeting__angle'))[2].props.onClick();
+    const [lands] = elementsOf(page.render(), (n) => n.props.id === 'meeting-lands');
+    lands.props.onChange({ target: { value: 'Sarah was in the room.' } });
+    expect(page.last().edits.weave.angles.map((a) => a.lands)).toEqual([WEAVE.angles[0].lands, WEAVE.angles[1].lands, 'Sarah was in the room.']);
+    expect(page.last().edits.weave.angles[0].headline).toBe('The Ledger Kept Talking');
+  });
+});
+
+describe('3D: each thread rewritten in place, and flipped in or out of the open angle', () => {
+  const data = payloadOf(meetingState());
+  /** The row of the thread in the story whose name box holds `name`. */
+  const rowNamed = (tree, name) => elementsOf(tree, withClass('meeting__thread'))
+    .find((r) => elementsOf(r, withClass('meeting__thread-name'))[0].props.value === name);
+
+  it('a thread edit rewrites its name, and its line, on the weave\'s thread', () => {
+    const page = mountMeeting({ data });
+    elementsOf(rowNamed(page.render(), 'The envelope'), withClass('meeting__thread-name'))[0].props.onChange({ target: { value: 'The envelope at the bar' } });
+    expect(page.last().edits.weave.threads.map((t) => t.name)).toEqual(['The sale', 'The overdose vote', 'The envelope at the bar', 'The heir', 'The letter']);
+    elementsOf(rowNamed(page.render(), 'The envelope at the bar'), withClass('meeting__thread-line'))[0].props.onChange({ target: { value: 'Morgan paid Riley out of sight.' } });
+    expect(page.last().edits.weave.threads[2]).toMatchObject({ id: 't3', name: 'The envelope at the bar', line: 'Morgan paid Riley out of sight.' });
+  });
+
+  it('a left-out thread is rewritten in place inside its fold', () => {
+    const page = mountMeeting({ data });
+    const [out] = elementsOf(page.render(), withClass('meeting__out-thread'));
+    const [line] = elementsOf(out, withClass('meeting__thread-line'));
+    line.props.onChange({ target: { value: 'An unsigned letter warned Marcus off the patents.' } });
+    expect(page.last().edits.weave.threads[4]).toMatchObject({ id: 't5', line: 'An unsigned letter warned Marcus off the patents.' });
+  });
+
+  it('a flip leaves a thread out of the open angle, and the next brings a left-out one in, after the angle\'s own', () => {
+    const page = mountMeeting({ data });
+    elementsOf(rowNamed(page.render(), 'The sale'), withClass('meeting__flip'))[0].props.onClick();
+    expect(page.last().edits.weave.angles.map((a) => a.threads)).toEqual([['t1', 't3', 't4'], ['t3', 't1'], ['t4', 't1']]);
+    const after = page.render();
+    expect(elementsOf(after, withClass('meeting__out-thread')).map((li) => foldsIn(li)[0].props.title)).toEqual(['The sale', 'The letter']);
+    const letter = elementsOf(after, withClass('meeting__out-thread'))[1];
+    elementsOf(letter, withClass('meeting__flip'))[0].props.onClick();
+    expect(page.last().edits.weave.angles[0].threads).toEqual(['t1', 't3', 't4', 't5']);
+  });
+
+  it('a question beside a thread moves out with it, and its answer box stays on the page', () => {
+    const page = mountMeeting({ data });
+    expect(elementsOf(rowNamed(page.render(), 'The sale'), withClass('meeting__answer'))).toHaveLength(1);
+    elementsOf(rowNamed(page.render(), 'The sale'), withClass('meeting__flip'))[0].props.onClick();
+    const [out] = elementsOf(page.render(), withClass('meeting__out'));
+    expect(elementsOf(out, withClass('meeting__answer')).map((n) => n.props['aria-label'])).toEqual([`Your answer: ${WEAVE.questions[1].question}`]);
+  });
+});
+
+describe('3D: the add line adds a thread to the open angle, and holds the buttons while it holds text', () => {
+  const data = payloadOf(meetingState());
+
+  it('an add puts the typed thread in the open angle\'s story, after its own, and clears the line', () => {
+    const page = mountMeeting({ data });
+    const field = (cls) => elementsOf(page.render(), withClass(cls))[0];
+    field('meeting__add-name').props.onChange({ target: { value: 'The second ledger' } });
+    field('meeting__add-line').props.onChange({ target: { value: 'Riley kept a second ledger.' } });
+    const tree = page.render();
+    expect(elementsOf(tree, withClass('held-line')).map(textOf)).toEqual([unsavedInputLine('arc-selection', { addLine: 'The second ledgerRiley kept a second ledger.' })]);
+    const [button] = elementsOf(elementsOf(tree, withClass('meeting__add'))[0], (n) => n.type === 'button');
+    expect(page.actions).toEqual([]);
+    button.props.onClick();
+    expect(page.last().edits.weave.threads[5]).toEqual({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.' });
+    expect(page.last().edits.weave.angles[0].threads).toEqual(['t1', 't2', 't3', 't4', 't6']);
+    expect([field('meeting__add-name').props.value, field('meeting__add-line').props.value]).toEqual(['', '']);
+    expect(elementsOf(page.render(), withClass('held-line'))).toEqual([]);
+  });
+});
+
+describe('3D: an answer, in its box beside what it changes', () => {
+  it('an answer by the pitch sets the answer on its question', () => {
+    const data = payloadOf(meetingState());
+    const page = mountMeeting({ data });
+    const [pitch] = elementsOf(page.render(), withClass('meeting__pitch'));
+    const [answer] = elementsOf(pitch, withClass('meeting__answer'));
+    expect(answer.props['aria-label']).toBe(`Your answer: ${WEAVE.questions[0].question}`);
+    answer.props.onChange({ target: { value: 'Sarah ran the bar all morning.' } });
+    expect(page.last()).toMatchObject({ type: 'SAVE_PENDING_EDITS', checkpoint: 'arc-selection' });
+    expect(page.last().edits.weave.questions.map((q) => q.answer)).toEqual(['Sarah ran the bar all morning.', undefined]);
   });
 });

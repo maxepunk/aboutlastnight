@@ -49,7 +49,8 @@
  *     its move or its players hold text; `sections` the page's sections as mapView lists them,
  *     whose labels name a section and whose beats' moves name a beat (phase 4b, brief 1F).
  *   - 'arc-selection', the story meeting: { addLine }, the add-a-thread line's text, which holds
- *     the actions once it holds text. Every other change at the meeting is kept as it is typed.
+ *     the actions once it holds text. Every other change at the meeting (a pick, a flip, a line
+ *     rewritten, an answer) is kept as the director makes it.
  * `control`, when given, is a kind of control at the desk or on the map (CONTROLS below); without it,
  * the rule answers for the stop's actions. An editor this module cannot name still holds them: a new
  * kind of editor is named generically, never dropped. The line names a stop's actions from the list
@@ -345,7 +346,10 @@
    *   closes the JSON editor, so JSON typed there holds none of them.
    * - The map: a pencil opens its editor in place of the open one, and "+ Add a beat" opens the add
    *   line in its section in place of the open one. Neither closes what the other holds.
-   * The story meeting has none: no control there closes or replaces its add line.
+   * The story meeting has none: no control there closes or replaces its add line. Its other
+   * controls (an angle's card, a flip, a line rewritten in place) change the weave as the director
+   * acts, and an angle's card leaves the add line as typed, so a thread added after a pick goes into
+   * the angle then open (spec 2026-10-06 section 6).
    */
   var CONTROLS = {
     article: [
