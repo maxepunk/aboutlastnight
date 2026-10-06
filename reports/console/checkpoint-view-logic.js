@@ -4377,7 +4377,8 @@
    * body): the server's message, a button for the rollback it names, and the rollback
    * points the stepper opens. app.js shows it in place of the stop, and above a finished
    * session's completion. The message and the points are the server's; the console words
-   * the button from its stop labels.
+   * the button from its stop labels. The server decides the line once: a thread with no
+   * weave gets one, and a thread on phase 4's shapes another (brief 1G), each shown as sent.
    *
    * @param {Object|null} holder - a stop's payload, a loaded completion or a refused request's body
    * @param {Object} labels - the console's stop labels (utils.js CHECKPOINT_LABELS)

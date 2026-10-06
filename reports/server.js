@@ -1893,10 +1893,12 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
         });
 
         // Build rollback state (synchronous setup). An old thread's arc counters are the old
-        // arc stage's, so the meeting's point starts them over for it (task 4.11).
+        // arc stage's, so the meeting's point starts them over for it (task 4.11), and one on
+        // phase 4's shapes has its weave cleared there too, so the weave is written fresh
+        // (brief 1G): the thread's state says which.
         const initialState = buildRollbackState(rollbackTo);
         if (oldThread) {
-            Object.assign(initialState, oldThreadRollbackState(rollbackTo));
+            Object.assign(initialState, oldThreadRollbackState(rollbackTo, session.state));
         }
 
         // ROLL-4: stash prior full-context so AwaitFullContext pre-fills re-collection

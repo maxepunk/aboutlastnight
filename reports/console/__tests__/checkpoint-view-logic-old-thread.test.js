@@ -14,6 +14,7 @@ const path = require('path');
 const { oldThreadView } = require('../checkpoint-view-logic');
 const { completedResultFrom, classifyCheckpointResponse, startFreshDecision, decideAttachFallback } = require('../session-start-logic');
 const { oldThreadOf, oldThreadRefusal } = require('../../lib/old-thread');
+const { oldShapeMapChannels } = require('../../lib/__tests__/fixtures/old-shapes');
 
 const FLAG = oldThreadOf({ currentPhase: 'complete' }, null);
 const LABELS = { 'arc-selection': 'Story meeting', photos: 'Photos', outline: 'Map' };
@@ -49,6 +50,34 @@ describe("4.11: oldThreadView, the server's flag as the console shows it", () =>
   it('a flag with no list of points opens no step of the stepper', () => {
     const { rollbackPoints: _points, ...noPoints } = FLAG;
     expect(oldThreadView({ oldThread: noPoints }, LABELS).rollbackPoints).toEqual([]);
+  });
+});
+
+// Phase 4b, brief 1G: a session paused on phase 4's shapes is flagged with a line of its own.
+// The server decides the line once (lib/old-thread.js oldThreadOf), and the view shows the
+// flag's message as it shows the other.
+describe("1G: oldThreadView shows an old-shape thread's line, and a thread with no weave keeps its own", () => {
+  const SHAPES_LINE = "This session's story meeting was written before the story level. Roll back to the story meeting to write it again.";
+  const SHAPES_FLAG = oldThreadOf({ currentPhase: '3.25', ...oldShapeMapChannels() }, 'outline');
+
+  it("an old-shape thread's notice reads the brief's line, with the rollback to the story meeting", () => {
+    expect(oldThreadView({ type: 'outline', oldThread: SHAPES_FLAG }, LABELS)).toEqual({
+      message: SHAPES_LINE,
+      rollbackTo: 'arc-selection',
+      rollbackLabel: 'Roll back to the story meeting',
+      rollbackPoints: FLAG.rollbackPoints
+    });
+  });
+
+  it("a thread with no weave keeps today's line", () => {
+    expect(oldThreadView({ type: 'photos', oldThread: FLAG }, LABELS).message)
+      .toBe('This session was started before the story meeting. Roll back to the story meeting to continue.');
+  });
+
+  it("a refused request's body and a loaded completion show the same line", () => {
+    const view = oldThreadView({ oldThread: SHAPES_FLAG }, LABELS);
+    expect(oldThreadView({ ...oldThreadRefusal('100526', SHAPES_FLAG), status: 409 }, LABELS)).toEqual(view);
+    expect(oldThreadView(completedResultFrom({ sessionId: '100526', currentPhase: 'complete', oldThread: SHAPES_FLAG }), LABELS)).toEqual(view);
   });
 });
 

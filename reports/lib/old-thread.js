@@ -36,8 +36,19 @@
  * stopped in its arc writer, before any check rework or evaluation. One that stopped in the
  * old arc check's rework holds that rework's count, so it is flagged.
  *
+ * Phase 4b (brief 1G; spec 2026-10-05 section 10; R9): a thread on phase 4's shapes is old
+ * too. The story level changed a thread and a beat: a thread is a name and a line with its
+ * evidence, where phase 4's was a claim pinned to one receipt, and a beat is a move, where
+ * phase 4's was named by its material. Every new gate refuses the old shapes, and no
+ * conversion is offered, so a thread paused on them is sent back to the meeting, where the
+ * weave is written fresh. Only the arc writer writes a weave and only the map writer a map,
+ * so a thread holding either in the old shape is past the arc writer wherever it sits: at a
+ * stop, complete, or at no stop after an error. Its flag carries a message of its own
+ * (OLD_SHAPES_MESSAGE). Every rollback point above the meeting clears the weave and the map,
+ * so a thread paused before the meeting holds neither and is read as before.
+ *
  * server.js applies it: /approve, /resume and every /rollback past the meeting answer 409
- * with OLD_THREAD_MESSAGE, and GET /checkpoint carries the flag, which the console shows
+ * with the flag's message, and GET /checkpoint carries the flag, which the console shows
  * before any stop renders (console/checkpoint-view-logic.js oldThreadView).
  */
 'use strict';
@@ -46,9 +57,13 @@ const { CHECKPOINT_ORDER } = require('../console/session-start-logic');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const { PHASES } = require('./workflow/state');
 const { isWeave } = require('./weave');
+const { isMapValue } = require('../console/outline-edit-logic');
 
-/** What the director is told, on every refusal and in the flag. */
+/** What the director is told, on every refusal and in the flag, for a thread with no weave. */
 const OLD_THREAD_MESSAGE = 'This session was started before the story meeting. Roll back to the story meeting to continue.';
+
+/** What the director is told for a thread on phase 4's shapes (brief 1G), the director's line word for word. */
+const OLD_SHAPES_MESSAGE = "This session's story meeting was written before the story level. Roll back to the story meeting to write it again.";
 
 /** The stop an old thread goes back to: the story meeting (the stop types keep their names, R3). */
 const OLD_THREAD_ROLLBACK = CHECKPOINT_TYPES.ARC_SELECTION;
@@ -71,6 +86,62 @@ const PAST_THE_ARC_WRITER = Object.freeze([
   'articleRevisionCount', 'humanArticleRevisionCount',
   'outline', 'contentBundle'
 ]);
+
+/**
+ * The weave's channels that the rollback to the meeting keeps (R9: it reopens as the director
+ * left it) and an old-shape thread's rollback clears, so the weave writer runs fresh: the
+ * weave, which carries the fact check's mark, the writer's last weave the director's changes
+ * are read against, the director's edits against it, and the weave checks' last result. The
+ * rest goes by the meeting point's own list in the rollback table (lib/workflow/state.js
+ * ROLLBACK_CLEARS['arc-selection'], which lib/api-helpers.js buildRollbackState applies): the
+ * meeting's approval, round, marks and report, the map and its channels, the article, and
+ * the evaluations.
+ */
+const OLD_SHAPES_WEAVE_CHANNELS = Object.freeze(['weave', '_weaveBaseline', '_weaveHandEdits', '_arcValidation']);
+
+/** The objects in a list, or none. */
+function objectsOf(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) : [];
+}
+
+/**
+ * Whether a weave is in phase 4's shape: a thread with no line. Phase 4's threads were claims
+ * pinned to one receipt; every thread of the story level has its line, the writer's and the
+ * director's alike (a thread the director adds has no evidence, so the evidence decides
+ * nothing). A value that is no weave (lib/weave.js isWeave) is no weave in the old shape.
+ *
+ * @param {*} weave
+ * @returns {boolean}
+ */
+function isOldShapeWeave(weave) {
+  return isWeave(weave) && objectsOf(weave.threads).some((thread) => typeof thread.line !== 'string');
+}
+
+/**
+ * Whether a map is in phase 4's shape: a beat, in a section or in left out, with no move.
+ * Phase 4's beats were named by their material; every beat of the story level has its move,
+ * the writer's and the director's alike. A value that is no map (the console's isMapValue,
+ * the map's own rule) is no map in the old shape, and so is the outline from before phase 4,
+ * which has no sections.
+ *
+ * @param {*} map
+ * @returns {boolean}
+ */
+function isOldShapeMap(map) {
+  if (!isMapValue(map)) return false;
+  const beats = [...objectsOf(map.sections).flatMap((section) => objectsOf(section.beats)), ...objectsOf(map.leftOut)];
+  return beats.some((beat) => typeof beat.move !== 'string');
+}
+
+/**
+ * Whether a thread holds its weave, or its map, in phase 4's shape.
+ *
+ * @param {Object} state
+ * @returns {boolean}
+ */
+function holdsOldShapes(state) {
+  return isOldShapeWeave(state.weave) || isOldShapeMap(state.outline);
+}
 
 /**
  * Whether an entry in the evaluations is a rollback's stub (lib/api-helpers.js
@@ -101,8 +172,15 @@ function holds(state, channel) {
   return Array.isArray(value) ? value.length > 0 : Boolean(value);
 }
 
+/** The flag with its message, the rollback to the meeting and the points open to it; each flag a copy. */
+function flagOf(message) {
+  return { message, rollbackTo: OLD_THREAD_ROLLBACK, rollbackPoints: [...OLD_THREAD_ROLLBACK_POINTS] };
+}
+
 /**
- * The flag for a thread from before the story meeting, or null for any other thread.
+ * The flag for a thread from before the story meeting, or for one on phase 4's shapes, or
+ * null for any other thread. A thread with a weave is old only on the old shapes, wherever it
+ * sits (brief 1G); one with no weave is old once the old stages took it past the arc writer.
  *
  * @param {Object|undefined} values - the thread's state values
  * @param {string|null} pausedAt - the stop the thread is paused at (its interrupt's type), or null
@@ -110,12 +188,12 @@ function holds(state, channel) {
  */
 function oldThreadOf(values, pausedAt) {
   const state = values || {};
-  if (isWeave(state.weave)) return null;
+  if (isWeave(state.weave)) return holdsOldShapes(state) ? flagOf(OLD_SHAPES_MESSAGE) : null;
   const pastTheArcWriter = state.currentPhase === PHASES.COMPLETE
     || CHECKPOINT_ORDER.indexOf(pausedAt) >= MEETING_INDEX
     || PAST_THE_ARC_WRITER.some((channel) => holds(state, channel));
   if (!pastTheArcWriter) return null;
-  return { message: OLD_THREAD_MESSAGE, rollbackTo: OLD_THREAD_ROLLBACK, rollbackPoints: [...OLD_THREAD_ROLLBACK_POINTS] };
+  return flagOf(OLD_THREAD_MESSAGE);
 }
 
 /**
@@ -139,18 +217,33 @@ function oldThreadRefusal(sessionId, oldThread) {
  * them the thread holds nothing past the arc writer until the weave is written, so a weave
  * writer that fails leaves it resumable.
  *
+ * A thread on phase 4's shapes holds a weave the meeting's point would keep, so its rollback
+ * also clears the weave's channels (OLD_SHAPES_WEAVE_CHANNELS; brief 1G): the weave writer
+ * then runs fresh, and the checks, the fact check and everything after them run on its weave.
+ * The director's notes and the photo stops' choices stay, as on any rollback to the meeting.
+ * Every point before the meeting clears the weave and the map already, so it adds nothing there.
+ *
  * @param {string} rollbackTo
+ * @param {Object} [values] - the thread's state values, which say whether it holds the old shapes
  * @returns {Object}
  */
-function oldThreadRollbackState(rollbackTo) {
-  return rollbackTo === OLD_THREAD_ROLLBACK ? { arcRevisionCount: 0, humanArcRevisionCount: 0 } : {};
+function oldThreadRollbackState(rollbackTo, values) {
+  if (rollbackTo !== OLD_THREAD_ROLLBACK) return {};
+  const counters = { arcRevisionCount: 0, humanArcRevisionCount: 0 };
+  const state = values || {};
+  if (!isWeave(state.weave) || !holdsOldShapes(state)) return counters;
+  return { ...counters, ...Object.fromEntries(OLD_SHAPES_WEAVE_CHANNELS.map((channel) => [channel, null])) };
 }
 
 module.exports = {
   OLD_THREAD_MESSAGE,
+  OLD_SHAPES_MESSAGE,
   OLD_THREAD_ROLLBACK,
   OLD_THREAD_ROLLBACK_POINTS,
+  OLD_SHAPES_WEAVE_CHANNELS,
   PAST_THE_ARC_WRITER,
+  isOldShapeWeave,
+  isOldShapeMap,
   oldThreadOf,
   oldThreadRefusal,
   oldThreadRollbackState

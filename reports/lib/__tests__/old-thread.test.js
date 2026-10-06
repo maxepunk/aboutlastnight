@@ -11,9 +11,13 @@
  */
 const {
   OLD_THREAD_MESSAGE,
+  OLD_SHAPES_MESSAGE,
   OLD_THREAD_ROLLBACK,
   OLD_THREAD_ROLLBACK_POINTS,
+  OLD_SHAPES_WEAVE_CHANNELS,
   PAST_THE_ARC_WRITER,
+  isOldShapeWeave,
+  isOldShapeMap,
   oldThreadOf,
   oldThreadRefusal,
   oldThreadRollbackState
@@ -23,6 +27,7 @@ const { ReportStateAnnotation, VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS, R
 const { buildRollbackState, buildFreshStartState } = require('../api-helpers');
 const { isWeave } = require('../weave');
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
+const { OLD_SHAPE_WEAVE, OLD_SHAPE_MAP, oldShapeWeave, oldShapeMap, oldShapeMeetingChannels, oldShapeMapChannels } = require('./fixtures/old-shapes');
 
 const WEAVE = reworkFixtureState('journalist').weave;
 const MESSAGE = 'This session was started before the story meeting. Roll back to the story meeting to continue.';
@@ -248,5 +253,182 @@ describe('4.11: an old thread rolled back to the meeting starts the arc counters
     MEETING_AND_BEFORE.filter((point) => point !== 'arc-selection').forEach((point) => {
       expect(`${point}: ${JSON.stringify(oldThreadRollbackState(point))}`).toBe(`${point}: {}`);
     });
+  });
+});
+
+// Phase 4b, brief 1G (spec 2026-10-05 section 10; ruling R9): a session paused at the story
+// meeting or a later stop when the story level lands holds a weave and a map in phase 4's
+// shapes, which every new gate refuses. The guard reads the shapes too: a weave with a thread
+// that has no line, or a map with a beat that has no move. Such a thread gets its own message
+// and the same rollback to the meeting, which writes the weave fresh. There is no conversion.
+describe('1G: the old shapes, one test each', () => {
+  const NEW_WEAVE = reworkFixtureState('journalist').weave;
+
+  it('a weave whose threads have no line is in the old shape, and so is one with a single such thread', () => {
+    expect(isOldShapeWeave(OLD_SHAPE_WEAVE)).toBe(true);
+    expect(isOldShapeWeave({ ...NEW_WEAVE, threads: [...NEW_WEAVE.threads, OLD_SHAPE_WEAVE.threads[0]] })).toBe(true);
+  });
+
+  it('a weave in the new shape is not, a thread the director added with no evidence among its threads', () => {
+    expect(isOldShapeWeave(NEW_WEAVE)).toBe(false);
+    const added = { id: 't9', name: 'The test run', line: 'The director added this thread at the meeting.', role: 'complicates-it' };
+    expect(isOldShapeWeave({ ...NEW_WEAVE, threads: [...NEW_WEAVE.threads, added] })).toBe(false);
+  });
+
+  it('a value that is no weave is no weave in the old shape', () => {
+    [undefined, null, {}, { story: 'No threads.' }, [], 'a weave'].forEach((value) => {
+      expect(`${JSON.stringify(value)}: ${isOldShapeWeave(value)}`).toBe(`${JSON.stringify(value)}: false`);
+    });
+  });
+
+  it('a map with a beat that has no move is in the old shape, in a section or in left out', () => {
+    expect(isOldShapeMap(OLD_SHAPE_MAP)).toBe(true);
+    const leftOutOnly = { ...MAP, leftOut: [...(MAP.leftOut || []), OLD_SHAPE_MAP.leftOut[0]] };
+    expect(isOldShapeMap(leftOutOnly)).toBe(true);
+    const inASection = { ...MAP, sections: MAP.sections.map((section, i) => (i === 0 ? { ...section, beats: [...section.beats, OLD_SHAPE_MAP.sections[1].beats[0]] } : section)) };
+    expect(isOldShapeMap(inASection)).toBe(true);
+  });
+
+  it('a map in the new shape is not, a beat the director added with its move and players among its beats', () => {
+    expect(isOldShapeMap(MAP)).toBe(false);
+    const added = { id: 'b20', move: 'The director added this move.', players: ['Riley'] };
+    expect(isOldShapeMap({ ...MAP, sections: MAP.sections.map((section, i) => (i === 0 ? { ...section, beats: [...section.beats, added] } : section)) })).toBe(false);
+  });
+
+  it('a value that is no map is no map in the old shape: the outline from before phase 4, a map with no beat, nothing', () => {
+    [undefined, null, {}, OLD_OUTLINE, { sections: [] }, { sections: [{ slot: 'lede', beats: [] }], leftOut: [] }].forEach((value) => {
+      expect(`${JSON.stringify(value)}: ${isOldShapeMap(value)}`).toBe(`${JSON.stringify(value)}: false`);
+    });
+  });
+});
+
+describe('1G: which thread is on the old shapes', () => {
+  const NEW_WEAVE = reworkFixtureState('journalist').weave;
+  const SHAPES_FLAG = { message: OLD_SHAPES_MESSAGE, rollbackTo: 'arc-selection', rollbackPoints: MEETING_AND_BEFORE };
+  const FLAG = { message: MESSAGE, rollbackTo: 'arc-selection', rollbackPoints: MEETING_AND_BEFORE };
+
+  it("the message is the brief's, word for word, one constant beside the other", () => {
+    expect(OLD_SHAPES_MESSAGE).toBe("This session's story meeting was written before the story level. Roll back to the story meeting to write it again.");
+    expect(OLD_SHAPES_MESSAGE).not.toBe(OLD_THREAD_MESSAGE);
+  });
+
+  it('a thread paused at the meeting on the old weave is flagged, with the old-shape message', () => {
+    expect(oldThreadOf({ currentPhase: '2.35', ...oldShapeMeetingChannels() }, 'arc-selection')).toEqual(SHAPES_FLAG);
+  });
+
+  it.each(PAST_THE_MEETING)('a thread paused at %s on the old weave and map is flagged', (stop) => {
+    expect(oldThreadOf({ currentPhase: '3.25', ...oldShapeMapChannels() }, stop)).toEqual(SHAPES_FLAG);
+  });
+
+  it.each(['arc-selection', ...PAST_THE_MEETING])('a thread paused at %s on the old map alone, beside a weave in the new shape, is flagged', (stop) => {
+    expect(oldThreadOf({ currentPhase: '3.25', weave: NEW_WEAVE, outline: oldShapeMap() }, stop)).toEqual(SHAPES_FLAG);
+  });
+
+  it('a complete thread on the old shapes is flagged, and so is one at no stop after an error, or killed mid-run', () => {
+    expect(oldThreadOf({ ...oldShapeMapChannels(), currentPhase: 'complete', contentBundle: PREVIOUS_BUNDLE }, null)).toEqual(SHAPES_FLAG);
+    expect(oldThreadOf({ ...oldShapeMapChannels(), currentPhase: 'error' }, null)).toEqual(SHAPES_FLAG);
+    expect(oldThreadOf({ ...oldShapeMeetingChannels(), currentPhase: '2.2' }, null)).toEqual(SHAPES_FLAG);
+  });
+
+  it.each(['arc-selection', ...PAST_THE_MEETING])('a thread paused at %s on the new shapes is not', (stop) => {
+    expect(oldThreadOf({ currentPhase: '3.25', weave: NEW_WEAVE, outline: MAP }, stop)).toBeNull();
+    expect(oldThreadOf({ currentPhase: '2.35', weave: NEW_WEAVE, outline: null }, stop)).toBeNull();
+  });
+
+  it('a thread with no weave keeps the message it had, an old-shape map beside it included', () => {
+    expect(oldThreadOf({ currentPhase: 'complete' }, null)).toEqual(FLAG);
+    expect(oldThreadOf({ currentPhase: 'error', outline: oldShapeMap() }, null)).toEqual(FLAG);
+    expect(oldThreadOf({ currentPhase: '3.25', weave: null, outline: oldShapeMap() }, 'outline')).toEqual(FLAG);
+  });
+
+  it.each(MEETING_AND_BEFORE.filter((stop) => stop !== 'arc-selection'))('a thread paused at %s, before the meeting, holding no weave and no map, is not', (stop) => {
+    expect(oldThreadOf({ currentPhase: '1.8', weave: null, outline: null }, stop)).toBeNull();
+  });
+
+  it("the rule's premise: every rollback point above the meeting clears the weave and the map, so a thread paused before the meeting holds neither", () => {
+    MEETING_AND_BEFORE.filter((point) => point !== 'arc-selection').forEach((point) => {
+      const after = { currentPhase: '3.25', ...oldShapeMapChannels(), ...buildRollbackState(point) };
+      expect(`${point}: ${isWeave(after.weave)} ${after.outline}`).toBe(`${point}: false null`);
+      expect(`${point}: ${JSON.stringify(oldThreadOf(after, point))}`).toBe(`${point}: null`);
+    });
+  });
+});
+
+// The rollback to the meeting keeps the weave as the director left it (R9), so a thread on
+// the old shapes needs more: the weave and everything read with it go, so the weave writer
+// runs fresh, and so does everything after it. The map's and the article's channels are the
+// meeting point's own list in the rollback table, which buildRollbackState applies.
+describe("1G: the rollback to the meeting writes an old-shape thread's weave fresh", () => {
+  const holding = () => ({
+    currentPhase: '3.25', ...oldShapeMapChannels(),
+    contentBundle: PREVIOUS_BUNDLE, articleApproved: true, evaluationHistory: [{ phase: 'arcs', ready: true }],
+    arcRevisionCount: 1, humanArcRevisionCount: 2, outlineRevisionCount: 1, humanOutlineRevisionCount: 1,
+    directorGateNotes: [{ gate: 'arc-selection', kind: 'approval', round: 1, stopRound: 1, text: 'Keep the vote first.', at: 'then' }],
+    characterIdMappings: { 'p1.jpg': { characters: ['Alex'], exclude: false } },
+    photoDescriptions: { 'p1.jpg': 'Alex at the bar.' },
+    leftOutPhotos: ['p2.jpg'],
+    photosPath: 'D:/shoots/1004'
+  });
+  const rolledBack = (values) => ({ ...values, ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection', values) });
+
+  it("names the weave, its baseline, the director's weave edits and the checks' mark as the weave's channels, each a channel the meeting's point keeps", () => {
+    expect([...OLD_SHAPES_WEAVE_CHANNELS].sort()).toEqual(['_arcValidation', '_weaveBaseline', '_weaveHandEdits', 'weave'].sort());
+    OLD_SHAPES_WEAVE_CHANNELS.forEach((channel) => expect(ReportStateAnnotation.spec).toHaveProperty(channel));
+    OLD_SHAPES_WEAVE_CHANNELS.forEach((channel) => expect(`${channel}: ${ROLLBACK_CLEARS['arc-selection'].includes(channel)}`).toBe(`${channel}: false`));
+  });
+
+  it('clears the weave and its channels and starts the arc counters over', () => {
+    expect(oldThreadRollbackState('arc-selection', holding())).toEqual({
+      arcRevisionCount: 0, humanArcRevisionCount: 0, weave: null, _weaveBaseline: null, _weaveHandEdits: null, _arcValidation: null
+    });
+  });
+
+  it("with the meeting point's list, it clears the weave, its baseline, the director's edits, marks and report, the fact check's and the checks' marks, the map and its channels, and the article", () => {
+    const after = rolledBack(holding());
+    [...ROLLBACK_CLEARS['arc-selection'], ...OLD_SHAPES_WEAVE_CHANNELS].forEach((channel) => {
+      const cleared = channel === 'evaluationHistory' ? [] : null;
+      expect(`${channel}: ${JSON.stringify(after[channel])}`).toBe(`${channel}: ${JSON.stringify(cleared)}`);
+    });
+    ['weave', '_weaveBaseline', '_weaveHandEdits', '_weaveMarks', '_weaveHandEditReport', '_arcValidation', 'meetingApproved', '_meetingRound',
+      'outline', '_mapBaseline', '_outlineHandEdits', '_mapCheck', 'heroImage', 'contentBundle', 'articleApproved']
+      .forEach((channel) => expect(`${channel}: ${ROLLBACK_CLEARS['arc-selection'].includes(channel) || OLD_SHAPES_WEAVE_CHANNELS.includes(channel)}`).toBe(`${channel}: true`));
+    expect(after).toMatchObject({ arcRevisionCount: 0, humanArcRevisionCount: 0, outlineRevisionCount: 0, humanOutlineRevisionCount: 0 });
+  });
+
+  it("keeps the director's notes and the photo stops' choices", () => {
+    const values = holding();
+    const after = rolledBack(values);
+    ['directorGateNotes', 'characterIdMappings', 'photoDescriptions', 'leftOutPhotos', 'photosPath'].forEach((channel) => {
+      expect(after[channel]).toEqual(values[channel]);
+    });
+  });
+
+  it('leaves the thread holding nothing the guard reads, so the weave writer runs and a failure there leaves it resumable', () => {
+    const after = rolledBack(holding());
+    expect(isWeave(after.weave)).toBe(false);
+    expect(oldThreadOf(after, null)).toBeNull();
+  });
+
+  it('a thread at the meeting on the old weave alone gets the same', () => {
+    const values = { currentPhase: '2.35', ...oldShapeMeetingChannels(), arcRevisionCount: 1 };
+    expect(oldThreadRollbackState('arc-selection', values)).toEqual({
+      arcRevisionCount: 0, humanArcRevisionCount: 0, weave: null, _weaveBaseline: null, _weaveHandEdits: null, _arcValidation: null
+    });
+  });
+
+  it('a thread with no weave gets what it got before: the arc counters alone', () => {
+    expect(oldThreadRollbackState('arc-selection', { currentPhase: 'complete', outline: OLD_OUTLINE })).toEqual({ arcRevisionCount: 0, humanArcRevisionCount: 0 });
+    expect(oldThreadRollbackState('arc-selection', { currentPhase: 'error', outline: oldShapeMap() })).toEqual({ arcRevisionCount: 0, humanArcRevisionCount: 0 });
+  });
+
+  it('every point before the meeting already clears the weave and the map, so it adds nothing there', () => {
+    MEETING_AND_BEFORE.filter((point) => point !== 'arc-selection').forEach((point) => {
+      expect(`${point}: ${JSON.stringify(oldThreadRollbackState(point, holding()))}`).toBe(`${point}: {}`);
+    });
+  });
+
+  it('a fresh weave in the new shape leaves the thread alone; one in the old shape would not', () => {
+    expect(oldThreadOf({ ...rolledBack(holding()), weave: reworkFixtureState('journalist').weave }, 'arc-selection')).toBeNull();
+    expect(oldThreadOf({ ...rolledBack(holding()), weave: oldShapeWeave() }, 'arc-selection')).not.toBeNull();
   });
 });

@@ -5,6 +5,9 @@
  * Fix round 1 adds one that stopped on an error after its article was approved, at no stop,
  * and fix round 2 one that stopped on an error in the old outline rework, which held no
  * outline, beside a thread of the new code whose weave writer failed, which is resumed.
+ * Phase 4b (brief 1G) adds threads on phase 4's shapes, at the meeting, at the map and
+ * complete, each refused and rolled back to the meeting, where the weave is written fresh in
+ * the story level's shape, beside a thread on the new shapes, which is left alone.
  *
  * The thread is seeded as a thread from before phase 4 reaches the photos stop: the parse,
  * the curation and the photos' earlier stops answered, no weave, and the old arc stage's
@@ -35,8 +38,10 @@ jest.mock('../../lib/llm', () => {
 const { createReportGraphWithCheckpointer, RECURSION_LIMIT } = require('../../lib/workflow/graph');
 const { app, CHECKPOINT_DB_PATH, getSessionOutcome, _inFlight } = require('../../server.js');
 const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
-const { isWeave } = require('../../lib/weave');
-const { reworkFixtureState } = require('../../lib/__tests__/fixtures/rework-state');
+const { isWeave, weaveForPrompt, weaveKey, withFactCheckMark } = require('../../lib/weave');
+const { isOldShapeWeave } = require('../../lib/old-thread');
+const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
+const { oldShapeWeave, oldShapeMeetingChannels, oldShapeMapChannels } = require('../../lib/__tests__/fixtures/old-shapes');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const SESSION = '1004111';
@@ -388,5 +393,110 @@ describe('4.11 fix round 2: a thread of the new code whose weave writer failed i
     expect(getSessionOutcome(NEW_THREAD)).toMatchObject({ outcome: 'interrupted', checkpointType: 'arc-selection' });
     expect(mockSdk.calls).toEqual(['weave writer', 'weave writer', 'fact check']);
     expect(isWeave((await stopOfThread(thread)).values.weave)).toBe(true);
+  });
+});
+
+// Phase 4b, brief 1G (spec 2026-10-05 section 10; R9; Review focus 4): a session paused at
+// the meeting or a later stop when the story level lands holds a weave and a map in phase 4's
+// shapes. Through the real graph it is refused at the meeting, at the map and complete, then
+// rolled back to the meeting, where the weave writer writes the weave fresh in the new shape
+// and the fact check judges it. Nothing replays on mixed shapes. A thread on the new shapes is
+// untouched: its rollback to the meeting reopens it as the director left it, with no call.
+describe('1G: a thread on the old shapes, through the real graph', () => {
+  const SHAPES_MESSAGE = "This session's story meeting was written before the story level. Roll back to the story meeting to write it again.";
+  const graph = () => createReportGraphWithCheckpointer(saver);
+  const threadOf = (id) => ({ configurable: { thread_id: id, sessionId: id, theme: 'journalist', dataDir } });
+  /** The thread as one on the new code reaches the meeting, past every answered stop, with nothing written after the meeting. */
+  const base = (id) => {
+    const { weave: _weave, _weaveBaseline: _baseline, meetingApproved: _approved, outline: _outline, _mapBaseline: _mapBase, ...state } = reworkFixtureState('journalist');
+    return {
+      ...state, ...ANSWERED_BEFORE_THE_MEETING, sessionId: id,
+      arcRevisionCount: 1, humanArcRevisionCount: 1, evaluationHistory: [{ phase: 'arcs', ready: true }]
+    };
+  };
+
+  /** Each case: where the thread sits and how it got there, written as the node before it. */
+  const CASES = [
+    ['paused at the meeting', '1004121', 'arc-selection', (id) => ({ ...base(id), ...oldShapeMeetingChannels() }), 'evaluateArcs'],
+    ['paused at the map', '1004122', 'outline', (id) => ({ ...base(id), ...oldShapeMapChannels(), photosPath: null }), 'checkMap'],
+    ['complete', '1004123', null, (id) => ({
+      ...base(id), ...oldShapeMapChannels(), outlineApproved: true, photosPath: null,
+      contentBundle: clone(PREVIOUS_BUNDLE), articleApproved: true, currentPhase: 'complete'
+    }), 'assembleHtml']
+  ];
+
+  it.each(CASES)('%s: refused, then rolled back to the meeting, where the weave is written fresh in the new shape', async (_case, id, stop, seed, asNode) => {
+    mockSdk = scriptedSdk();
+    const thread = threadOf(id);
+    await graph().updateState(thread, seed(id), asNode);
+    if (stop) await graph().invoke(null, { ...thread, recursionLimit: RECURSION_LIMIT, durability: 'sync' });
+    const held = await stopOfThread(thread);
+    expect(held.type).toBe(stop);
+    expect(isOldShapeWeave(held.values.weave)).toBe(true);
+    expect(mockSdk.calls).toEqual([]);
+
+    // GET /checkpoint flags it, with the old-shape message: the console shows it and the rollback.
+    const checkpoint = await send('GET', `/api/session/${id}/checkpoint`);
+    expect(checkpoint.body.oldThread).toMatchObject({ message: SHAPES_MESSAGE, rollbackTo: 'arc-selection' });
+    expect(checkpoint.body.checkpoint).toEqual(stop ? { type: stop, oldThread: checkpoint.body.oldThread } : null);
+
+    // Approve, resume and every rollback past the meeting are refused, and nothing ran.
+    for (const [route, body] of [['approve', { meeting: 'approve', weave: oldShapeWeave() }], ['resume', {}], ['resume', { force: true }],
+      ['rollback', { rollbackTo: 'outline' }], ['rollback', { rollbackTo: 'photos' }]]) {
+      const res = await send('POST', `/api/session/${id}/${route}`, body);
+      expect(`${route} ${res.status} ${res.body.error}`).toBe(`${route} 409 ${SHAPES_MESSAGE}`);
+    }
+    expect((await stopOfThread(thread)).id).toBe(held.id);
+    expect(mockSdk.calls).toEqual([]);
+
+    // The rollback to the meeting: the weave writer and the fact check run once each, and the
+    // meeting opens on a weave in the new shape, with nothing of the old shapes beside it.
+    const rollback = await send('POST', `/api/session/${id}/rollback`, { rollbackTo: 'arc-selection' });
+    expect(rollback.status).toBe(200);
+    await Promise.allSettled([..._inFlight]);
+    expect(getSessionOutcome(id)).toMatchObject({ outcome: 'interrupted', checkpointType: 'arc-selection' });
+    const meeting = await stopOfThread(thread);
+    expect(meeting.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
+    expect(mockSdk.calls).toEqual(['weave writer', 'fact check']);
+    const { weave, _weaveBaseline: baseline } = meeting.values;
+    expect(isOldShapeWeave(weave)).toBe(false);
+    expect(isOldShapeWeave(baseline)).toBe(false);
+    weave.threads.forEach((t) => expect(`${t.id}: ${typeof t.line} ${Array.isArray(t.evidence)}`).toBe(`${t.id}: string true`));
+    expect(weaveForPrompt(baseline)).toEqual(weaveForPrompt(weave));
+    expect(meeting.values._arcValidation.weaveKey).toBe(weaveKey(weave));
+    expect(meeting.values).toMatchObject({
+      _weaveHandEdits: null, _weaveMarks: null, _weaveHandEditReport: null,
+      outline: null, _mapBaseline: null, _outlineHandEdits: null, _mapCheck: null, heroImage: null,
+      contentBundle: null, arcRevisionCount: 0, humanArcRevisionCount: 0
+    });
+    expect(meeting.values.meetingApproved).not.toBe(true);
+
+    // The thread is on the new shapes now: GET /checkpoint flags nothing and sends the meeting's payload.
+    const after = await send('GET', `/api/session/${id}/checkpoint`);
+    expect(after.body.oldThread).toBeNull();
+    expect(isOldShapeWeave(after.body.checkpoint.weave)).toBe(false);
+  });
+
+  it('a thread on the new shapes at the map is untouched: no flag, and its rollback to the meeting reopens it with no call', async () => {
+    mockSdk = scriptedSdk();
+    const id = '1004124';
+    const thread = threadOf(id);
+    const shown = withFactCheckMark(clone(reworkFixtureState('journalist').weave), { at: '2026-10-05T00:00:00.000Z', ready: true, fixes: 0 });
+    await graph().updateState(thread, {
+      ...base(id), weave: shown, _weaveBaseline: clone(reworkFixtureState('journalist').weave), meetingApproved: true,
+      outline: clone(MAP), _mapBaseline: clone(MAP), photosPath: null
+    }, 'checkMap');
+    await graph().invoke(null, { ...thread, recursionLimit: RECURSION_LIMIT, durability: 'sync' });
+    expect((await stopOfThread(thread)).type).toBe(CHECKPOINT_TYPES.OUTLINE);
+    expect((await send('GET', `/api/session/${id}/checkpoint`)).body.oldThread).toBeNull();
+
+    const rollback = await send('POST', `/api/session/${id}/rollback`, { rollbackTo: 'arc-selection' });
+    expect(rollback.status).toBe(200);
+    await Promise.allSettled([..._inFlight]);
+    const meeting = await stopOfThread(thread);
+    expect(meeting.type).toBe(CHECKPOINT_TYPES.ARC_SELECTION);
+    expect(mockSdk.calls).toEqual([]);
+    expect(weaveForPrompt(meeting.values.weave)).toEqual(weaveForPrompt(shown));
+    expect(meeting.values).toMatchObject({ arcRevisionCount: 1, humanArcRevisionCount: 1 });
   });
 });

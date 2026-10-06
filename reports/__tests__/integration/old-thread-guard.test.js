@@ -12,6 +12,10 @@
  * thread paused before the meeting, and one at no stop that holds nothing past the arc
  * writer are not touched.
  *
+ * Phase 4b (brief 1G): a thread on phase 4's shapes, a weave with a thread that has no line
+ * or a map with a beat that has no move, is refused the same way with its own message, and
+ * its rollback to the meeting clears the weave as well, so the weave is written fresh.
+ *
  * Boots the actual `app` exported by server.js, as session-id-and-resume-guard does, with
  * the LangGraph module mocked: a refusal returns before any invoke, so `invoke` not being
  * called is the proof nothing ran. lib/__tests__/old-thread.test.js holds the rule;
@@ -33,6 +37,7 @@ const { app } = require('../../server.js');
 const { _resetLocks } = require('../../lib/session-locks');
 const { _resetOutcomeStore } = require('../../lib/session-outcome');
 const { reworkFixtureState } = require('../../lib/__tests__/fixtures/rework-state');
+const { oldShapeWeave, oldShapeMeetingChannels, oldShapeMapChannels } = require('../../lib/__tests__/fixtures/old-shapes');
 
 const MESSAGE = 'This session was started before the story meeting. Roll back to the story meeting to continue.';
 const FLAG = {
@@ -386,5 +391,111 @@ describe('4.11: the guard leaves every other thread alone', () => {
     await flushBackground();
     expect(mockGraph.invoke).toHaveBeenCalledTimes(1);
     expect((await send('GET', '/api/session/092626/checkpoint')).body.oldThread).toBeNull();
+  });
+});
+
+// Phase 4b, brief 1G (spec 2026-10-05 section 10; R9): a session paused at the meeting or a
+// later stop when the story level lands holds a weave and a map in phase 4's shapes. It is
+// refused as a thread with no weave is, with its own message, and its rollback to the meeting
+// clears the weave, so the weave writer runs fresh. A thread on the new shapes is untouched.
+describe('1G: a thread on the old shapes is refused, and rolled back to the meeting with its weave cleared', () => {
+  const SHAPES_MESSAGE = "This session's story meeting was written before the story level. Roll back to the story meeting to write it again.";
+  const SHAPES_FLAG = { ...FLAG, message: SHAPES_MESSAGE };
+  /** A thread on the old shapes, at the meeting (the weave alone) or past it (the weave and the map). */
+  const shapesAt = (stop, extra = {}) => ({
+    currentPhase: stop === 'arc-selection' ? '2.35' : '3.25', theme: 'journalist',
+    ...(stop === 'arc-selection' ? oldShapeMeetingChannels() : oldShapeMapChannels()),
+    arcRevisionCount: 1, humanArcRevisionCount: 1,
+    ...extra
+  });
+  const expectShapesRefused = (res) => {
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ sessionId: '092626', error: SHAPES_MESSAGE, oldThread: SHAPES_FLAG });
+  };
+
+  describe.each(OLD_STOPS)('paused at %s', (stop) => {
+    it('/approve answers 409 with the old-shape message, and nothing runs', async () => {
+      mockGraph = pausedAt(stop, shapesAt(stop));
+      expectShapesRefused(await send('POST', '/api/session/092626/approve', { meeting: 'approve', weave: oldShapeWeave() }));
+      expect(mockGraph.invoke).not.toHaveBeenCalled();
+    });
+
+    it('/resume answers 409, with force too', async () => {
+      mockGraph = pausedAt(stop, shapesAt(stop));
+      expectShapesRefused(await send('POST', '/api/session/092626/resume', {}));
+      expectShapesRefused(await send('POST', '/api/session/092626/resume', { force: true }));
+      expect(mockGraph.invoke).not.toHaveBeenCalled();
+    });
+
+    it.each(PAST_THE_MEETING)('/rollback to %s answers 409', async (target) => {
+      mockGraph = pausedAt(stop, shapesAt(stop));
+      expectShapesRefused(await send('POST', '/api/session/092626/rollback', { rollbackTo: target }));
+      expect(mockGraph.invoke).not.toHaveBeenCalled();
+    });
+
+    it("/rollback to the story meeting proceeds: the weave and its channels, the map's and the article's go, and the arc counters start over", async () => {
+      mockGraph = pausedAt(stop, shapesAt(stop));
+      const res = await send('POST', '/api/session/092626/rollback', { rollbackTo: 'arc-selection' });
+      expect(res.status).toBe(200);
+      await flushBackground();
+      expect(mockGraph.invoke.mock.calls[0][0]).toMatchObject({
+        weave: null, _weaveBaseline: null, _weaveHandEdits: null, _weaveMarks: null, _weaveHandEditReport: null, _arcValidation: null,
+        meetingApproved: null, outline: null, _mapBaseline: null, _outlineHandEdits: null, _mapCheck: null, heroImage: null,
+        contentBundle: null, evaluationHistory: [], arcRevisionCount: 0, humanArcRevisionCount: 0
+      });
+    });
+
+    it('GET /checkpoint flags it with the old-shape message, and sends the stop as its type and the flag', async () => {
+      mockGraph = pausedAt(stop, shapesAt(stop));
+      const res = await send('GET', '/api/session/092626/checkpoint');
+      expect(res.body.oldThread).toEqual(SHAPES_FLAG);
+      expect(res.body.checkpoint).toEqual({ type: stop, oldThread: SHAPES_FLAG });
+    });
+  });
+
+  it('complete: /approve, /resume and every rollback past the meeting answer 409; the rollback to the meeting clears the weave', async () => {
+    mockGraph = complete(shapesAt('article', { contentBundle: { headline: { main: 'A headline' }, sections: [] }, articleApproved: true }));
+    expectShapesRefused(await send('POST', '/api/session/092626/approve', { article: true }));
+    expectShapesRefused(await send('POST', '/api/session/092626/resume', { force: true }));
+    for (const target of PAST_THE_MEETING) {
+      expectShapesRefused(await send('POST', '/api/session/092626/rollback', { rollbackTo: target }));
+    }
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+    expect((await send('GET', '/api/session/092626/checkpoint')).body).toMatchObject({ checkpoint: null, oldThread: SHAPES_FLAG });
+    const res = await send('POST', '/api/session/092626/rollback', { rollbackTo: 'arc-selection' });
+    expect(res.status).toBe(200);
+    await flushBackground();
+    expect(mockGraph.invoke.mock.calls[0][0]).toMatchObject({ weave: null, _weaveBaseline: null, outline: null, contentBundle: null, arcRevisionCount: 0 });
+  });
+
+  it('at no stop after an error: /resume answers 409, with force too, and GET /checkpoint flags it', async () => {
+    mockGraph = atNoStop(shapesAt('outline', { currentPhase: 'error' }));
+    expectShapesRefused(await send('POST', '/api/session/092626/resume', {}));
+    expectShapesRefused(await send('POST', '/api/session/092626/resume', { force: true }));
+    expect(mockGraph.invoke).not.toHaveBeenCalled();
+    expect((await send('GET', '/api/session/092626/checkpoint')).body).toMatchObject({ checkpoint: null, oldThread: SHAPES_FLAG });
+  });
+
+  it('a rollback to a point before the meeting proceeds, as it does for any old thread', async () => {
+    mockGraph = pausedAt('outline', shapesAt('outline'));
+    const res = await send('POST', '/api/session/092626/rollback', { rollbackTo: 'evidence-and-photos' });
+    expect(res.status).toBe(200);
+    await flushBackground();
+    expect(mockGraph.invoke.mock.calls[0][0]).toMatchObject({ weave: null, outline: null });
+  });
+
+  it('a thread on the new shapes, paused at the map: GET /checkpoint flags nothing, and its rollback to the meeting keeps its weave and arc counters (R9)', async () => {
+    const values = { ...reworkFixtureState('journalist'), currentPhase: '3.25', arcRevisionCount: 1, humanArcRevisionCount: 1 };
+    mockGraph = pausedAt('outline', values);
+    const checkpoint = await send('GET', '/api/session/092626/checkpoint');
+    expect(checkpoint.body.oldThread).toBeNull();
+    expect(checkpoint.body.checkpoint.type).toBe('outline');
+    expect(checkpoint.body.checkpoint).not.toHaveProperty('oldThread');
+    const res = await send('POST', '/api/session/092626/rollback', { rollbackTo: 'arc-selection' });
+    expect(res.status).toBe(200);
+    await flushBackground();
+    const seeded = mockGraph.invoke.mock.calls[0][0];
+    ['weave', '_weaveBaseline', '_weaveHandEdits', '_arcValidation', 'arcRevisionCount', 'humanArcRevisionCount']
+      .forEach((channel) => expect(`${channel}: ${Object.prototype.hasOwnProperty.call(seeded, channel)}`).toBe(`${channel}: false`));
   });
 });
