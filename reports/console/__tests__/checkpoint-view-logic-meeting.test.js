@@ -1359,6 +1359,67 @@ describe("3C: the director's edits on angles at the meeting", () => {
     });
   });
 
+  // Fix round 1, findings 1 and 2: the gate stores every angle the director did not send as the
+  // meeting showed it (R9), so a change left on an angle they switched away from is nothing to fit in.
+  test("a change left on an angle the director switched away from is not something to fit in; a thread's line is, whichever angle goes (R9)", () => {
+    const onAngle2ThenBack = (change) => pickMeetingAngle(change(pickMeetingAngle(untouched(), 'a2')), 'a1');
+    const pitchedAway = onAngle2ThenBack((w) => setAngleField(w, 'a2', 'story', 'Morgan paid Riley at the bar, and the room never asked why.'));
+    const flippedAway = onAngle2ThenBack((w) => flipMeetingThread(w, 't5', true));
+    [pitchedAway, flippedAway].forEach((weave) => {
+      expect(meetingButtons(data(), weave, '', false).reweave.disabled).toBe(true);
+      expect(meetingPayload('reweave', data(), weave, '')).toBeNull();
+      // The gate refuses the same version as empty.
+      expect(meetingResume({ meeting: 'reweave', weave }, stateAt()).error).toMatch(/carries no change to an angle or a thread and no note/);
+    });
+    const threadAway = onAngle2ThenBack((w) => setThreadField(w, 2, 'line', T3_LINE));
+    expect(meetingButtons(data(), threadAway, '', false).reweave.disabled).toBe(false);
+    expect(meetingResume(meetingPayload('reweave', data(), threadAway, ''), stateAt()).error).toBeNull();
+  });
+
+  test('the console stores the angles the director did not send as lib/meeting.js withUnsentAnglesAsShown does, on one corpus (R9)', () => {
+    const { withUnsentAnglesAsShown } = require('../../lib/meeting');
+    const shown = () => clone(WEAVE);
+    const corpus = [
+      ['the weave as shown', () => [shown(), shown()]],
+      ['angle 2 picked, its story rewritten', () => { const w = shown(); w.picked = 'a2'; w.angles[1].story = 'x'; return [w, shown()]; }],
+      ['angle 2 rewritten and a thread flipped into it, angle 1 picked', () => { const w = shown(); w.picked = 'a1'; w.angles[1].story = 'x'; w.angles[1].threads.push('t5'); return [w, shown()]; }],
+      ['angle 2 rewritten, no pick', () => { const w = shown(); w.angles[1].ends = 'x'; return [w, shown()]; }],
+      ['the angles in another order, the first open by order alone', () => { const w = shown(); w.angles.reverse(); w.angles[2].story = 'x'; return [w, shown()]; }],
+      ['a thread renamed with angle 3 picked', () => { const w = shown(); w.picked = 'a3'; w.threads[1].name = 'The brag'; return [w, shown()]; }],
+      ["the writer's repeated angle id, both angles under it rewritten", () => { const b = shown(); b.angles[1].id = 'a1'; const w = clone(b); w.angles[0].story = 'x'; w.angles[1].story = 'y'; return [w, b]; }],
+      ['an open angle with no id', () => { const b = shown(); b.angles[0].id = ''; const w = clone(b); w.angles[1].story = 'x'; return [w, b]; }],
+      ['no weave shown', () => [shown(), null]],
+      ['a shown weave with no angles', () => [shown(), { threads: [] }]]
+    ];
+    corpus.forEach(([name, build]) => {
+      const [left, meetingShowed] = build();
+      expect([name, ViewLogic.withUnsentAnglesAsShown(clone(left), clone(meetingShowed))])
+        .toEqual([name, withUnsentAnglesAsShown(clone(left), clone(meetingShowed))]);
+    });
+  });
+
+  test('the console offers a reweave exactly when the gate takes one, on one corpus (ruling 5, R9)', () => {
+    const onThenBack = (angleId, change) => (w) => pickMeetingAngle(change(pickMeetingAngle(w, angleId)), 'a1');
+    const corpus = [
+      ['nothing changed', (w) => w],
+      ['the pick alone', (w) => pickMeetingAngle(w, 'a3')],
+      ['an answer alone', (w) => setQuestionAnswer(w, 0, 'Sarah ran the bar.')],
+      ['a line of the open pitch', (w) => setAngleField(w, 'a1', 'lands', 'Every player watched the vote go to overdose.')],
+      ['a flip in the open angle', (w) => flipMeetingThread(w, 't5', true)],
+      ["angle 2's story, then back to angle 1", onThenBack('a2', (w) => setAngleField(w, 'a2', 'story', 'x'))],
+      ['a flip in angle 3, then back to angle 1', onThenBack('a3', (w) => flipMeetingThread(w, 't2', true))],
+      ['angle 2 picked, its story rewritten', (w) => setAngleField(pickMeetingAngle(w, 'a2'), 'a2', 'story', 'x')],
+      ["a thread's line, on angle 2, then back to angle 1", onThenBack('a2', (w) => setThreadField(w, 2, 'line', T3_LINE))],
+      ['a thread added', (w) => addMeetingThread(w, ADDED.name, ADDED.line)]
+    ];
+    corpus.forEach(([name, change]) => {
+      const weave = change(untouched());
+      const offered = !meetingButtons(data(), weave, '', false).reweave.disabled;
+      const taken = meetingResume({ meeting: 'reweave', weave }, stateAt()).error === null;
+      expect([name, offered]).toEqual([name, taken]);
+    });
+  });
+
   test('after a reweave: a flip and a line of the pitch the round changed are marked beside their lines, by their words', () => {
     const left = untouched();
     const reworked = clone(left);

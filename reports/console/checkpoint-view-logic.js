@@ -2077,9 +2077,43 @@
     return null;
   }
 
-  /** Whether the director changed the weave at this look: anything but an answer (ruling 5). */
+  /**
+   * The director's version as the gate stores it (R9): the angles the meeting showed, in its
+   * order and by id, each as the meeting showed it but the one open, which is as the director left
+   * it, so a change left on an angle they switched away from is not kept. A pick the director's
+   * order alone made is written as their pick. A copy of lib/meeting.js withUnsentAnglesAsShown,
+   * which a test holds this to on one corpus.
+   *
+   * @param {Object} left - the weave as the director left it, without its code-owned keys
+   * @param {Object|null} shown - the weave the meeting showed, without its code-owned keys
+   * @returns {Object}
+   */
+  function withUnsentAnglesAsShown(left, shown) {
+    if (!isWeaveValue(shown) || !Array.isArray(shown.angles)) return left;
+    var picked = openAngleOf(left);
+    var pickedId = picked ? weaveIdOf(picked) : '';
+    if (!pickedId) return left;
+    var sentAt = -1;
+    shown.angles.some(function (angle, index) {
+      if (weaveIdOf(angle) !== pickedId) return false;
+      sentAt = index;
+      return true;
+    });
+    var angles = shown.angles.map(function (angle, index) { return index === sentAt ? picked : cloneJson(angle); });
+    var stored = Object.assign({}, left, { angles: angles });
+    if (weaveIdOf(openAngleOf(stored)) !== pickedId) stored[PICKED_KEY] = pickedId;
+    return stored;
+  }
+
+  /**
+   * Whether the director changed the weave the gate stores at this look: anything but an answer
+   * or the pick (ruling 5), read on their version with the angles they did not send as the
+   * meeting showed them (withUnsentAnglesAsShown, R9).
+   */
   function hasWeaveChanges(shown, weave) {
-    return isPlainObject(shown) && isPlainObject(weave) && meetingWeaveChanges(withoutCodeOwned(shown), withoutCodeOwned(weave)).length > 0;
+    if (!isPlainObject(shown) || !isPlainObject(weave)) return false;
+    var meetingShowed = withoutCodeOwned(shown);
+    return meetingWeaveChanges(meetingShowed, withUnsentAnglesAsShown(withoutCodeOwned(weave), meetingShowed)).length > 0;
   }
 
   /**
@@ -2095,9 +2129,11 @@
 
   /**
    * Whether a reweave has something to fit in (the integrator's ruling 5): the director has
-   * changed the weave, anything but an answer, or written a note. The changes of a reweave
-   * that did not run count, since they are the director's and still unfitted
-   * (isUnfittedReweave). The buttons and the payload read this one rule.
+   * changed the open angle or a thread, or written a note (spec 7). A change left on an angle
+   * they did not send is none, since the gate stores that angle as the meeting showed it (R9;
+   * hasWeaveChanges). The changes of a reweave that did not run count, since they are the
+   * director's and still unfitted (isUnfittedReweave). The buttons and the payload read this one
+   * rule.
    *
    * @param {Object} data - the stop's payload: the weave it showed and a round that did not run
    * @param {*} weave - the weave as the director left it
@@ -4847,6 +4883,9 @@
     removeMeetingThread: removeMeetingThread,
     setQuestionAnswer: setQuestionAnswer,
     meetingWeaveChanges: meetingWeaveChanges,
+    // Fix round 1 (R9): the director's version as the gate stores it, which the reweave's offer
+    // reads (the copy of lib/meeting.js withUnsentAnglesAsShown, held equal by a test)
+    withUnsentAnglesAsShown: withUnsentAnglesAsShown,
     meetingWeaveProblems: meetingWeaveProblems,
     meetingPayload: meetingPayload,
     meetingButtons: meetingButtons,

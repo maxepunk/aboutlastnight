@@ -593,5 +593,8 @@ module.exports = {
   unrunRoundNoteIndex,
   meetingCheckpointData,
   // Brief 4.14a: where a meeting change sits, as the meeting names the line
-  meetingChangePlace
+  meetingChangePlace,
+  // Piece 3 (R9; brief 3C, fix round 1): the director's version as the gate stores it, which the
+  // console's copy (console/checkpoint-view-logic.js withUnsentAnglesAsShown) is held to by a test
+  withUnsentAnglesAsShown
 };
