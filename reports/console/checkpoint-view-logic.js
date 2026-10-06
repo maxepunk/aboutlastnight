@@ -2963,8 +2963,8 @@
 
   // ── The map on screen (phase 4, task 4.9; spec 5.2 and 5.3) ────────────────
   //
-  // The outline stop is the map: about 450 words the director reads in minutes and edits line
-  // by line. Outline.js renders it from mapView and changes it only through the editors and
+  // The outline stop is the map: at most 450 words, aiming for 300 (phase 4b), which the
+  // director reads in minutes and edits line by line. Outline.js renders it from mapView and changes it only through the editors and
   // moves of console/outline-edit-logic.js; it sends only mapPayload's payloads, 4.6's
   // `{outline: 'approve' | 'send-back', map, note}` (lib/map.js mapResume), each held first to
   // mapProblems, the gate's decisions. What the director types is sent as typed. The slots, their

@@ -980,7 +980,8 @@ function outlineWriterInputs(state) {
 
 /**
  * The map writer (phase 4, brief 4.6; spec 5.1 and 5.2): lays the settled weave across the
- * article's sections in about 450 words. Skips when the thread already holds a map (a
+ * article's sections, a page of at most 450 words that aims for 300 (lib/map.js
+ * MAP_WORD_BOUND, MAP_WORD_AIM; phase 4b). Skips when the thread already holds a map (a
  * replay).
  *
  * It reads the settled weave first, as its task, then what the outline writer read: the
