@@ -534,10 +534,10 @@ const MEETING_SECTIONS = {
     const leftOut = view.leftOut;
     if (leftOut.threads.length > 0) {
       page.text(leftOut.names, leftOut.title);
-      leftOut.threads.forEach((thread) => addBesideLine(page, thread, thread.name));
+      leftOut.threads.forEach((thread) => addBesideLine(page, thread, thread.label));
       page.folded(() => {
         page.title(leftOut.reasonsTitle);
-        leftOut.threads.forEach((thread) => page.text(thread.reason, thread.name));
+        leftOut.threads.forEach((thread) => page.text(thread.reason, thread.label));
       });
     }
     page.hint(view.repeatedIdHint);

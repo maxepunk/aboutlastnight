@@ -179,25 +179,16 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     });
   }
 
-  /** A thread as the page names it, on screen and to a screen reader: its name, or its line when it has none. */
-  function threadName(thread) {
-    return thread.name || thread.line;
-  }
-
-  /** A connection as the page names it to a screen reader: by the threads it joins, or its line when it joins none the weave holds. */
-  function connectionName(connection) {
-    return connection.joins ? 'the connection between ' + connection.joins : 'the connection "' + connection.line + '"';
-  }
-
   /**
    * A line's evidence under it (phase 4b, briefs 1B and 1C; spec 5.4 and 9): a "What's behind it"
    * toggle that opens it in place, each piece as evidenceFoldView words it, a piece that cuts
    * against the line marked so, or, for a thread the director added that has none, why
-   * (`noEvidence`). The group is named for a screen reader by the line's `subject`.
+   * (`noEvidence`). The group is named for a screen reader by the line's `foldLabel`, which
+   * meetingView gives it.
    */
-  function evidenceFold(pieces, noEvidence, subject) {
+  function evidenceFold(pieces, noEvidence, foldLabel) {
     if (pieces.length === 0 && !noEvidence) return null;
-    return React.createElement('div', { className: 'meeting__fold', role: 'group', 'aria-label': view.evidenceTitle + ': ' + subject },
+    return React.createElement('div', { className: 'meeting__fold', role: 'group', 'aria-label': foldLabel },
       React.createElement(CollapsibleSection, { title: view.evidenceTitle },
         React.createElement('ul', { className: 'meeting__pieces' },
           pieces.map(function (piece) {
@@ -262,7 +253,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
           value: thread.role,
           disabled: thread.repeatedId,
           onChange: function (e) { editRole(thread.index, e.target.value); },
-          'aria-label': 'Role of the thread ' + threadName(thread)
+          'aria-label': thread.roleAriaLabel
         }, roleOptions());
       }
 
@@ -276,13 +267,13 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               onClick: function () { removeThread(thread.index); },
-              'aria-label': 'Take out the thread you added: ' + threadName(thread)
+              'aria-label': thread.takeOutAriaLabel
             }, 'Take out')
           ),
           React.createElement('p', { className: 'meeting__line' },
             thread.name && React.createElement('strong', { className: 'meeting__name' }, thread.name + (thread.line ? ': ' : '')), thread.line),
           beside(thread),
-          evidenceFold(thread.evidence, thread.noEvidence, threadName(thread))
+          evidenceFold(thread.evidence, thread.noEvidence, thread.foldLabel)
         );
       }
 
@@ -297,19 +288,19 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
           React.createElement('ul', { className: 'meeting__left-out-names' },
             leftOut.threads.map(function (thread) {
               return React.createElement('li', { key: thread.key, className: 'meeting__left-out-name' },
-                React.createElement('span', null, threadName(thread)),
+                React.createElement('span', null, thread.label),
                 rolePicker(thread)
               );
             })
           ),
           leftOut.threads.map(function (thread) {
-            return React.createElement(React.Fragment, { key: thread.key }, beside(thread, threadName(thread)));
+            return React.createElement(React.Fragment, { key: thread.key }, beside(thread, thread.label));
           }),
           React.createElement(CollapsibleSection, { title: leftOut.reasonsTitle },
             React.createElement('ul', { className: 'meeting__list' },
               leftOut.threads.map(function (thread) {
                 return React.createElement('li', { key: thread.key, className: 'text-sm' },
-                  React.createElement('span', { className: 'text-muted' }, threadName(thread) + ': '), thread.reason);
+                  React.createElement('span', { className: 'text-muted' }, thread.label + ': '), thread.reason);
               })
             )
           )
@@ -366,14 +357,14 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
                   disabled: connection.repeatedId,
                   onClick: function () { strike(connection.index, !connection.struck); },
                   'aria-pressed': connection.struck,
-                  'aria-label': (connection.struck ? 'Unstrike ' : 'Strike ') + connectionName(connection)
+                  'aria-label': connection.strikeAriaLabel
                 }, connection.struck ? 'Unstrike' : 'Strike')
               ),
               React.createElement('p', { className: 'meeting__detail' }, connection.line),
               // Brief 4.14a: out of the story with a left-out thread, and why.
               connection.leftOut && React.createElement('p', { className: 'text-xs text-muted' }, connection.leftOut),
               beside(connection),
-              evidenceFold(connection.evidence, '', connectionName(connection))
+              evidenceFold(connection.evidence, '', connection.foldLabel)
             );
           })
         ),

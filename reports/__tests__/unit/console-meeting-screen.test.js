@@ -580,3 +580,66 @@ describe('1C: the meeting\'s styles', () => {
     ['.meeting__claim', '.meeting__add-claim', '.meeting__id'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
   });
 });
+
+// Fix round 2: the page decides no label itself (the plan's Console rule). meetingView gives each
+// thread and connection the labels the page names it by, read from one name rule (threadLabelOf,
+// which the meeting's words read too), and ArcSelection.js reads them.
+describe('fix round 2: meetingView gives each thread and connection the labels the page reads, and the page builds none', () => {
+  /** The meeting with the envelope's name padded, and the heir named by its line alone. */
+  function labelled() {
+    const state = meetingState();
+    state.weave.threads[2].name = '  The envelope  ';
+    state.weave.threads[3].name = '';
+    const data = payloadOf(state);
+    return { data, view: ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '') };
+  }
+
+  it("each thread carries its label, its name trimmed or its line when it has none, and the fold's, the role picker's and the Take out's labels built from it", () => {
+    const { view } = labelled();
+    const envelope = view.threads.find((t) => t.id === 't3');
+    expect(envelope).toMatchObject({
+      label: 'The envelope',
+      foldLabel: "What's behind it: The envelope",
+      roleAriaLabel: 'Role of the thread The envelope',
+      takeOutAriaLabel: 'Take out the thread you added: The envelope'
+    });
+    expect(view.threads.find((t) => t.id === 't4').label).toBe("A paternity result names Sarah as Marcus's heir.");
+    expect(view.leftOut.threads.map((t) => t.label)).toEqual(['The letter']);
+    expect(view.leftOut.names).toBe('The letter');
+  });
+
+  it("each connection carries its label, by the threads it joins or its quoted line when it joins none, and the fold's and the strike's labels built from it", () => {
+    const { data, view } = labelled();
+    expect(view.connections[0]).toMatchObject({
+      label: 'the connection between "The overdose vote" and "The envelope"',
+      foldLabel: `What's behind it: the connection between "The overdose vote" and "The envelope"`,
+      strikeAriaLabel: 'Strike the connection between "The overdose vote" and "The envelope"'
+    });
+    const draft = ViewLogic.setConnectionStruck(ViewLogic.meetingDraftOf(data), 0, true);
+    draft.connections[1].joins = [];
+    const after = ViewLogic.meetingView(data, draft, '');
+    expect(after.connections[0].strikeAriaLabel).toBe('Unstrike the connection between "The overdose vote" and "The envelope"');
+    expect(after.connections[1].label).toBe('the connection "The night of the sale is the night the result came back."');
+  });
+
+  it('the page names each thread and connection by those fields, its fold groups and aria-labels included', () => {
+    const { data, view } = labelled();
+    const tree = renderMeeting({ data });
+    const envelope = elementsOf(tree, withClass('meeting__thread')).find((row) => shown(row).includes('The envelope'));
+    const thread = view.threads.find((t) => t.id === 't3');
+    expect(elementsOf(envelope, (n) => n.type === 'select').map((n) => n.props['aria-label'])).toEqual([thread.roleAriaLabel]);
+    expect(elementsOf(envelope, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([thread.foldLabel]);
+    elementsOf(tree, withClass('meeting__connection')).forEach((row, i) => {
+      expect(elementsOf(row, (n) => n.type === 'button').map((n) => n.props['aria-label'])).toEqual([view.connections[i].strikeAriaLabel]);
+      expect(elementsOf(row, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([view.connections[i].foldLabel]);
+    });
+  });
+
+  it('ArcSelection.js reads the labels and builds none of them', () => {
+    const src = read('components/checkpoints/ArcSelection.js');
+    ['thread.label', 'thread.foldLabel', 'thread.roleAriaLabel', 'thread.takeOutAriaLabel', 'connection.foldLabel', 'connection.strikeAriaLabel']
+      .forEach((field) => expect(`${field}: ${src.includes(field)}`).toBe(`${field}: true`));
+    ['function threadName', 'function connectionName', "'Role of the thread ' +", "'Take out the thread you added: ' +", "'the connection between ' +", "view.evidenceTitle + ': '"]
+      .forEach((built) => expect(`${built}: ${src.includes(built)}`).toBe(`${built}: false`));
+  });
+});

@@ -2194,6 +2194,19 @@
   }
 
   /**
+   * A thread as the meeting names it, on the page and to a screen reader: its name, or its line
+   * when it has none, trimmed (meetingWordsOf's rule, which meetingView's labels read too; fix
+   * round 2).
+   *
+   * @param {*} thread
+   * @returns {string}
+   */
+  function threadLabelOf(thread) {
+    var t = isPlainObject(thread) ? thread : {};
+    return asString(t.name).trim() || asString(t.line).trim();
+  }
+
+  /**
    * The meeting's words for the weave's elements (phase 4b, brief 1B; spec 9: the tags leave
    * the page): each thread by its name, each connection by the names of the threads it joins,
    * each question by what it is about, read from the weave as the director has it, then the
@@ -2228,7 +2241,7 @@
     var quoted = function (text) { return '"' + text + '"'; };
     var threadName = function (id) {
       var thread = elements.threads.get(asString(id).trim());
-      return thread ? asString(thread.name).trim() || asString(thread.line).trim() : '';
+      return thread ? threadLabelOf(thread) : '';
     };
     var namesOf = function (ids, quote) {
       var named = asArray(ids).map(function (id) {
@@ -2718,11 +2731,16 @@
    *   folded (`evidence`, evidenceFoldView's) and, for a thread the director added that has none,
    *   at this look or an earlier one (`data.addedThreads`), the fold's one line (`noEvidence`,
    *   MEETING_NO_EVIDENCE_LINE). A thread of the writer's with none shows the check's failure
-   *   beside it (`failures`) instead.
+   *   beside it (`failures`) instead. Each thread carries the labels the page names it by (fix
+   *   round 2; the page decides none): `label`, its name or its line when it has none
+   *   (threadLabelOf), and from it `foldLabel` (its fold's group), `roleAriaLabel` and
+   *   `takeOutAriaLabel`.
    * - `leftOut`: the threads left out, by name (`names`, under its `title`), with their reasons
    *   folded under `reasonsTitle`.
    * - `connections`: each connection's line, with the names of the two threads it joins and its
-   *   evidence folded; its kind stays underneath, unprinted. One that joins a left-out thread,
+   *   evidence folded; its kind stays underneath, unprinted. Each carries `label`, by the threads
+   *   it joins or its line, quoted, when it joins none, and from it `foldLabel` and
+   *   `strikeAriaLabel` (fix round 2). One that joins a left-out thread,
    *   unstruck, carries `leftOut`, the line that says it is out of the story with that thread and
    *   comes back with it (leftOutThreadsOf; brief 4.14a), read from the weave as the director has
    *   it, so it follows their roles.
@@ -2784,12 +2802,17 @@
       var b = id ? at('thread:' + id) : none;
       var evidence = evidenceFoldView(thread.evidence, d.evidenceIndex);
       var added = index >= shownThreads.length;
+      var label = threadLabelOf(thread);
       return {
         key: 'thread-' + index,
         index: index,
         id: id,
         name: asString(thread.name),
         line: asString(thread.line),
+        label: label,
+        foldLabel: EVIDENCE_FOLD_TITLE + ': ' + label,
+        roleAriaLabel: 'Role of the thread ' + label,
+        takeOutAriaLabel: 'Take out the thread you added: ' + label,
         role: role,
         roleLabel: roleWord(role),
         reason: asString(thread.reason),
@@ -2812,12 +2835,17 @@
       var id = weaveIdOf(connection);
       var b = id ? at('connection:' + id) : none;
       var struck = isStruckConnection(connection);
+      var joins = words.joinsText(connection.joins);
+      var label = joins ? 'the connection between ' + joins : 'the connection "' + asString(connection.line) + '"';
       return {
         key: 'connection-' + index,
         index: index,
         id: id,
         line: asString(connection.line),
-        joins: words.joinsText(connection.joins),
+        joins: joins,
+        label: label,
+        foldLabel: EVIDENCE_FOLD_TITLE + ': ' + label,
+        strikeAriaLabel: (struck ? 'Unstrike ' : 'Strike ') + label,
         struck: struck,
         // Brief 4.14a: out of the story with a left-out thread, said under it; a strike already keeps it out.
         leftOut: struck ? '' : leftOutLine(leftOutThreadsOf(connection, weave), words),
@@ -2878,7 +2906,7 @@
       threads: threads,
       leftOut: {
         title: 'Left out (' + leftOutThreads.length + ')',
-        names: leftOutThreads.map(function (t) { return t.name || t.line; }).filter(Boolean).join(' · '),
+        names: leftOutThreads.map(function (t) { return t.label; }).filter(Boolean).join(' · '),
         reasonsTitle: LEFT_OUT_REASONS_TITLE,
         threads: leftOutThreads
       },
