@@ -659,7 +659,7 @@ function times(n) {
 
 /**
  * The words in a finding's line that stand for the document a card cites. The desk names the
- * document there by its name and owner, as the story meeting names a receipt
+ * document there by its name and owner, as the story meeting names a document a piece of evidence cites
  * (console/checkpoint-view-logic.js receiptView, through the stop's evidenceIndex). The
  * console keeps a copy, which a test holds equal.
  */

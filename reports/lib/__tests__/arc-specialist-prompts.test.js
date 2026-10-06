@@ -70,9 +70,10 @@ describe('arc-specialist prompt builders consume enriched director-notes', () =>
     // The summaries were what the director read on the arc cards and what the outline
     // was built from, and they came back in the reporter's voice with presence claims in
     // them. Phase 4 (brief 4.4): the weave is what the director reads and the map is
-    // built from; its story and its threads' claims are the fields that say it.
+    // built from; its story and its threads' claims are the fields that say it. Phase 4b
+    // (brief 1B): a thread's line, at the level of the story.
     const prompt = arcModule._testing.buildWeavePrompt(state);
-    for (const field of ['story', 'claim']) {
+    for (const field of ['story', 'line']) {
       const line = prompt.split(String.fromCharCode(10)).find(l => l.trim().startsWith(`"${field}":`));
       expect(line).toBeDefined();
       expect(line).toMatch(/plain/);
@@ -187,9 +188,9 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     expect(count(prompt, 'Melanie')).toBe(1);
   });
 
-  it('names a rescued document by the id the view gives it, in the receipts and the weave checks', () => {
+  it('names a rescued document by the id the view gives it, in the sources a piece may name and the weave checks', () => {
     const prompt = arcModule._testing.buildWeavePrompt(state);
-    const idList = prompt.slice(prompt.indexOf('### Receipts'), prompt.indexOf('## SECTION 3:'));
+    const idList = prompt.slice(prompt.indexOf('### Sources'), prompt.indexOf('## SECTION 3:'));
     expect(idList).toContain('"p-rescued"');
     expect(idList).not.toContain('"Rescued letter"');
     expect(buildValidEvidenceIds(evidenceBundle).has('p-rescued')).toBe(true);
@@ -493,8 +494,9 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       expect(restated(prompt, craft)).toEqual([]);
       const section = prompt.slice(prompt.indexOf('## SECTION 3: THE WEAVE'), prompt.indexOf('## SECTION 4'));
       // Brief 4.5 (ruling 10): the task names the fields and points at C1 and C16 for the rest.
+      // Phase 4b (brief 1B): C16 sets out the level of the story and the evidence under each line too.
       expect(section).toContain('C1 (<craft-story>) sets out the story, its question and the stronger main thread');
-      expect(section).toContain('C16 (<craft-story>) sets out the threads, their roles, the connections and the convergence');
+      expect(section).toContain('C16 (<craft-story>) sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line');
       expect(prompt.replace(craft, '')).not.toMatch(/analysisNotes|"financial"|"behavioral"|"victimization"/);
     });
 

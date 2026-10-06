@@ -299,9 +299,9 @@ describe('journalist arc stop', () => {
     ].forEach((heading) => expect(rework.user).toContain(heading));
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user).toContain(text));
 
-    // The receipts follow the writer's id rule, so a rescued document is named by its
-    // Notion id in both (wave-2 ruling W2).
-    expect(rework.user).toContain('### Receipts\nA thread\'s receipt is one of these document ids, or "ledger" for the ledger:\n["ale003","mor001","p-dna","p-rescued"]');
+    // The sources a piece may name follow the writer's id rule, so a rescued document is named
+    // by its Notion id in both (wave-2 ruling W2; phase 4b, brief 1B: the Sources list).
+    expect(rework.user).toContain("### Sources\nA piece of evidence names each of its sources by one of these document ids, or as \"ledger\" for a sale, the bonus or a transfer on the morning timeline, \"evidence-log\" for an exposure on it, or \"notes\" for the director's own words: the notes, the corrections, the accusation and the answers at the story meeting.\n[\"ale003\",\"mor001\",\"p-dna\",\"p-rescued\"]");
     expect(rework.user).not.toContain('## SESSION CONTEXT');
 
     const at = (s) => rework.user.indexOf(s);
@@ -320,7 +320,7 @@ describe('journalist arc stop', () => {
     expect(reweave.rework.user).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
     const automated = await writerAndRework({
       arcRevisionCount: 1, humanArcRevisionCount: 0,
-      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" has no receipt.'] }
+      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['The thread "The sale" is in the story with no piece of evidence that supports it.'] }
     });
     expect(automated.rework.system).toBe(`${automated.writer.system}\n\n${arcRevisionRules(null)}`);
     expect(automated.rework.user).toContain('REVISION CONTEXT: WEAVE (automated pass 1)');

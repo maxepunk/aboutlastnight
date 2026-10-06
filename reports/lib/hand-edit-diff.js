@@ -103,7 +103,9 @@
  * against what the meeting showed at the places their standing edits are (withShownEdits),
  * so a change there is theirs with or without a pass since. And a reweave is held to them as
  * an automatic pass is (REWEAVE_PASS). The answers are the director's words, kept by their
- * own rule (lib/writer-questions.js carriedWeaveQuestions): no edit.
+ * own rule (lib/writer-questions.js carriedWeaveQuestions): no edit. The evidence under a
+ * thread or a connection is never the director's either (phase 4b, brief 1B; R6): the diff
+ * reads every element without it (withoutEvidence), so it is in no edit and no mark.
  *
  * THE MAP (brief 4.6): the director's edits on the story map go through the same
  * machinery, as the meeting's do. They are made at every approve and send-back, against
@@ -1442,6 +1444,20 @@ function without(element, key) {
   return rest;
 }
 
+/** The key that holds the evidence under a thread's or a connection's line (phase 4b, brief 1B). */
+const EVIDENCE_KEY = 'evidence';
+
+/**
+ * An element of the weave without its evidence (phase 4b, brief 1B; ruling R6): the evidence is
+ * never the director's edit, so the weave's diff, its edits and its marks read every element
+ * without it, as they read a connection without its strike. A writer that finds new evidence for
+ * a line the director wrote has not changed that line, and a pass's restore writes the director's
+ * value onto the pass's element, whose evidence stays the writer's.
+ */
+function withoutEvidence(element) {
+  return isObj(element) && Object.prototype.hasOwnProperty.call(element, EVIDENCE_KEY) ? without(element, EVIDENCE_KEY) : element;
+}
+
 /**
  * The questions' changes between two versions of a weave (brief 4.5c): each question of
  * `after` is read against the question of `before` it is, by the carry's rule of sameness
@@ -1491,7 +1507,9 @@ function questionChanges(beforeList, afterList) {
  * connection too, marked `unstruck`: the director brought back a connection they had
  * struck (brief 4.5c). With `questions`, the questions too, each read against the question
  * it is by the carry's rule (questionChanges), never their answers, which are the
- * director's words and no edit.
+ * director's words and no edit. No element is read with its evidence (withoutEvidence;
+ * phase 4b, brief 1B, R6): a difference in a thread's or a connection's evidence is no
+ * change, and an element added, cut, struck or brought back is one without it.
  *
  * An id is read as the meeting's gate and the checks read it (lib/weave.js weaveIdOf), and
  * the elements under an id either version repeats (repeatedIds) pair in order (fix round
@@ -1521,21 +1539,21 @@ function weaveEditsBetween(before, after, { questions = false } = {}) {
       const at = [{ key: collection }, { index, match: { id } }];
       const prior = b.map.get(key);
       if (!prior) {
-        change(collection, at, null, element, flag(id));
+        change(collection, at, null, withoutEvidence(element), flag(id));
         return;
       }
       if (collection === 'connections' && isStruck(element) !== isStruck(prior)) {
-        change(collection, at, prior, element, { ...(isStruck(element) ? { struck: true } : { unstruck: true }), ...flag(id) });
+        change(collection, at, withoutEvidence(prior), withoutEvidence(element), { ...(isStruck(element) ? { struck: true } : { unstruck: true }), ...flag(id) });
         return;
       }
-      const p = collection === 'connections' ? without(prior, STRUCK_KEY) : prior;
-      const e = collection === 'connections' ? without(element, STRUCK_KEY) : element;
+      const p = withoutEvidence(collection === 'connections' ? without(prior, STRUCK_KEY) : prior);
+      const e = withoutEvidence(collection === 'connections' ? without(element, STRUCK_KEY) : element);
       unionKeys(p, e).forEach((field) => {
         if (!same(p[field], e[field])) change(collection, [...at, { key: field }], p[field], e[field], flag(id));
       });
     });
     b.list.forEach(({ id, key, element }) => {
-      if (!a.map.has(key)) change(collection, [{ key: collection }, { index: null, match: { id } }], element, null, flag(id));
+      if (!a.map.has(key)) change(collection, [{ key: collection }, { index: null, match: { id } }], withoutEvidence(element), null, flag(id));
     });
   });
   if (questions) out.push(...questionChanges(before.questions, after.questions));
@@ -1587,10 +1605,12 @@ function wholeElementAsLeft(edit, shown, left) {
   const id = weaveIdOf(step.match);
   const now = elementsUnder(left, collection, id);
   const then = elementsUnder(shown, collection, id);
-  if (!id || now.length !== 1 || then.length !== 1 || same(now[0].element, then[0].element)) return null;
+  // Phase 4b (brief 1B; R6): read without the evidence, which a pass may have given the
+  // element since; the element as the director left it is theirs, its evidence never.
+  if (!id || now.length !== 1 || then.length !== 1 || same(withoutEvidence(now[0].element), withoutEvidence(then[0].element))) return null;
   if (isStrike(edit) && !isStruck(now[0].element)) return null;
   const at = [{ key: collection }, { index: now[0].index, match: { id } }];
-  return { ...edit, at, path: pathOf(at), after: clone(now[0].element) };
+  return { ...edit, at, path: pathOf(at), after: clone(withoutEvidence(now[0].element)) };
 }
 
 /**
@@ -1676,7 +1696,7 @@ function unstrikeAsShown(edit, shown) {
   if (!id || !head || !('key' in head)) return edit;
   const there = elementsUnder(shown, head.key, id);
   if (there.length !== 1 || isStruck(there[0].element)) return edit;
-  return { ...edit, after: clone(there[0].element) };
+  return { ...edit, after: clone(withoutEvidence(there[0].element)) };
 }
 
 /**
@@ -1754,7 +1774,7 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
  * - `addedThreads`: a thread they added, by its id;
  * - `reroledThreads`: a thread whose role they changed;
  * - `fields`: a text field of the weave they rewrote (`story`, `fromYourNotes`, ...);
- * - `threadFields`: a field of a thread they rewrote, as `t3.receipt`.
+ * - `threadFields`: a field of a thread they rewrote, as `t3.line`.
  *
  * @param {Object[]|null} edits - the standing edits the weave carries
  * @returns {{addedThreads: Object, reroledThreads: Object, fields: Object, threadFields: Object}}
@@ -1934,12 +1954,14 @@ function moveLine(edit) {
 
 /**
  * A strike's line (brief 4.5): its id and place, then the connection the director struck, by
- * its fields, its id and the strike itself said by the place. A rework reads the weave
- * without it (lib/weave.js weaveForRework), so the line is where it reads what stays out.
+ * its line (phase 4b, brief 1B), its id and the strike itself said by the place. A rework reads
+ * the weave without it (lib/weave.js weaveForRework), so the line is where it reads what stays
+ * out. An edit stored before the story level, with no line, prints the connection's fields.
  */
 function strikeLine(edit) {
   const connection = isObj(edit.after) ? edit.after : {};
-  const fields = Object.keys(connection).filter((k) => k !== 'id' && k !== STRUCK_KEY);
+  if (typeof connection.line === 'string') return `${edit.id} (${editWhere(edit)}): ${valueLine(connection.line)}`;
+  const fields = Object.keys(connection).filter((k) => k !== 'id' && k !== STRUCK_KEY && k !== EVIDENCE_KEY);
   return `${edit.id} (${editWhere(edit)}): ${valueLine(pick(connection, fields))}`;
 }
 
@@ -4099,6 +4121,9 @@ module.exports = {
     stayingInSection, pathOf,
     // Brief 4.5c: the weave's fields and elements, which the console copies (a test holds them equal)
     WEAVE_FIELDS, WEAVE_ELEMENTS,
+    // Phase 4b (brief 1B; R6): the key a line carries its evidence under, which no diff reads and
+    // the console copies (a test holds the two equal)
+    EVIDENCE_KEY, withoutEvidence,
     // Task 4.5e: one rule names an element (a test holds nameOf to identityOf), and the
     // restore reads a photo as the fact check does (a test holds printableBlock to it)
     nameOf, identityOf, printableBlock

@@ -42,7 +42,7 @@ const BREACH = {
 };
 const TIMEOUT = () => new Error('SDK timeout after 900.0s idle (limit: 900s) - Arc revision');
 const ANSWER = 'Sarah ran the bar all morning.';
-const ADDED = { id: 't6', claim: 'Riley kept a second ledger in the back room.', role: 'grounds-it' };
+const ADDED = { id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger in the back room.', role: 'grounds-it' };
 
 /** The writer's weave: the fixture's. */
 const writersWeave = () => clone(reworkFixtureState('journalist').weave);
@@ -83,7 +83,7 @@ function scriptedSdk({ writer = writersWeave(), reworks = [], verdicts = [CLEAN]
   return sdk;
 }
 
-/** The director's changes at the meeting: a role, a thread with no receipt, a strike, an answer. */
+/** The director's changes at the meeting: a role, a thread with no evidence (phase 4b, brief 1B), a strike, an answer. */
 function leftBy(weave) {
   const left = weaveForPrompt(clone(weave));
   left.threads = left.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
@@ -160,7 +160,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     const rewoven = (shown) => {
       const weave = weaveForPrompt(clone(shown));
       weave.convergence = 'The verdict closes the night; the sale and the second ledger keep it open.';
-      weave.threads = [...weave.threads.filter((t) => t.id !== 't6'), { ...ADDED, claim: 'Riley may have kept another ledger.' }];
+      weave.threads = [...weave.threads.filter((t) => t.id !== 't6'), { ...ADDED, line: 'Riley may have kept another ledger.' }];
       weave.connections = writersWeave().connections;
       weave.questions = writersWeave().questions;
       return weave;
@@ -170,7 +170,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     expect(snapshot.next).toEqual(['checkpointArcSelection']);
     expect(sdk.calls).toEqual(['fact check']);
 
-    // At the meeting: a role, a thread with no receipt, a strike and an answer; a reweave with no note.
+    // At the meeting: a role, a thread with no evidence, a strike and an answer; a reweave with no note.
     const left = leftBy(snapshot.values.weave);
     const scripted = scriptedSdk({ reworks: [rewoven(left)], verdicts: [CLEAN] });
     thread.configurable.sdkClient = scripted;
@@ -197,7 +197,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     // The restores, reported for the reweave.
     const restored = reopened.data.handEditReport.changed.map((c) => [c.where, c.restored, c.pass]);
     expect(restored).toEqual(expect.arrayContaining([['thread "t6", added', true, 'reweave'], ['connection "c2", struck', true, 'reweave']]));
-    // The checks read only the writer's text: the thread with no receipt is no failure.
+    // The checks read only the writer's text: the thread with no evidence is no failure.
     expect(reopened.data.checkFailures).toEqual([]);
     expect(reopened.data).toMatchObject({ humanRevisionCount: 1, revisionCount: 0, roundDidNotRun: null });
 
@@ -214,8 +214,10 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
 
     const settled = settledWeaveOf(photos.values);
     // Brief 4.14a: each change in the meeting's own form, M and its number.
-    expect(settled).toMatch(/- t3 \(mirrors it\): .*\[the director's change M\d+: the role\]/);
-    expect(settled).toMatch(/- t6 \(grounds it\): Riley kept a second ledger in the back room\. \[the director's change M\d+: a thread they added\]/);
+    // Phase 4b (brief 1B): each thread by its role, its name and its line, and the added thread's
+    // fold says the map writer finds its evidence.
+    expect(settled).toMatch(/- t3 \(mirrors it\) The envelope: .*\[the director's change M\d+: the role\]/);
+    expect(settled).toMatch(/- t6 \(grounds it\) The second ledger: Riley kept a second ledger in the back room\. \[the director's change M\d+: a thread they added\]\n {2}- No evidence yet\./);
     expect(settled).not.toContain('The night of the sale is the night the result came back.');
     expect(settled).toContain(`The director's answer, word for word: "${ANSWER}"`);
     expect(settled).toContain('The verdict closes the night; the sale and the second ledger keep it open.');
@@ -304,7 +306,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
   it("a repeated id the fact check's fix made leaves the meeting's actions working: a send-back with only a note goes through, and its rework fixes it", async () => {
     const doubled = (weave) => ({
       ...weaveForPrompt(clone(weave)),
-      threads: [...weave.threads, { id: 't2', claim: 'A second money thread the fix put under a taken id.', role: 'grounds-it', receipt: 'ledger' }]
+      threads: [...weave.threads, { id: 't2', name: 'The second money thread', line: 'A second money thread the fix put under a taken id.', role: 'grounds-it', evidence: [{ sources: ['ledger'], shows: 'A sale.', stance: 'supports' }] }]
     });
     const { graph, thread } = await toMeeting(scriptedSdk({ reworks: [doubled(writersWeave())], verdicts: [BREACH] }));
     const meeting = await stopOf(graph, thread);
@@ -323,7 +325,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
   });
 
   it("an automatic pass that times out after a director's round is retried free, and the round's count stays (ruling 5)", async () => {
-    const fixed = (weave) => ({ ...weaveForPrompt(clone(weave)), threads: weave.threads.map((t) => (t.id === 't3' ? { ...t, claim: 'Morgan paid Riley at the bar.' } : t)) });
+    const fixed = (weave) => ({ ...weaveForPrompt(clone(weave)), threads: weave.threads.map((t) => (t.id === 't3' ? { ...t, line: 'Morgan paid Riley at the bar.' } : t)) });
     const { graph, thread, snapshot } = await toMeeting(scriptedSdk({ verdicts: [CLEAN] }));
     const sent = weaveForPrompt(clone(snapshot.values.weave));
     const scripted = scriptedSdk({ reworks: [sent, TIMEOUT, fixed(sent)], verdicts: [BREACH] });

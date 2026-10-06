@@ -140,16 +140,16 @@ The arc analyzer writes the weave. The director's changes at the story meeting a
   "question": "<the question the story carries through the article>",
   "headline": "<a working headline>",
   "fromYourNotes": "<the director's own words the story rests on, copied exactly>",
-  "threads": [{"id": "<thread id>", "claim": "<what the thread claims, in one line>", "role": "main-thread | grounds-it | complicates-it | mirrors-it | carries-it-forward | left-out", "receipt": "<document id> | ledger", "reason": "<for a left-out thread, why the story does not need it>", "verdict": true}],
-  "connections": [{"id": "<connection id>", "kind": "person | moment | document | line", "joins": ["<thread id>", "<thread id>"], "detail": "<where the two threads touch, named exactly>", "struck": true}],
-  "convergence": "<where the threads converge and the story lands>",
+  "threads": [{"id": "<thread id>", "name": "<a short name for the thread>", "line": "<the thread in one plain line>", "role": "main-thread | grounds-it | complicates-it | mirrors-it | carries-it-forward | left-out", "verdict": true, "reason": "<for a left-out thread, why the story does not need it>", "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows, with the words or figures that matter>", "stance": "supports | cuts-against"}]}],
+  "connections": [{"id": "<connection id>", "joins": ["<thread id>", "<thread id>"], "line": "<where the two threads touch, in one plain line>", "kind": "person | moment | document | line", "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows>", "stance": "supports | cuts-against"}], "struck": true}],
+  "convergence": "<where the threads converge and the story lands, in a line or two>",
   "strongerMainThread": {"thread": "<thread id>", "reason": "<why, in one line>"},
   "questions": [{"id": "<question id>", "kind": "player | pronoun | figure", "about": "<the player's name; for a figure, the ledger entry's time and amount or the words said in the room>", "question": "<the question>", "changes": "<what its answer changes in print>", "answer": "<the director's answer, word for word>"}],
   "directorChanges": [{"id": "E<n>", "change": "<what the director changed at the story meeting, as they gave it>"}]
 }
 ```
 
-`fromYourNotes` is there only when the story starts from the director's read, `verdict` only on the thread that carries the room's verdict, and `strongerMainThread` only when the writer sees one. A thread the director adds has an id of its own and may have no receipt. `struck`, `answer` and `directorChanges` are the director's, written at the story meeting: `struck` on each connection they struck, `answer` on each question they answered, and in `directorChanges` each change they made, under the next id from E1.
+`fromYourNotes` is there only when the story starts from the director's read, `verdict` only on the thread that carries the room's verdict, and `strongerMainThread` only when the writer sees one. A thread the director adds has an id of its own, a name, a line and a role, and no evidence yet: the outline generator finds its evidence. `struck`, `answer` and `directorChanges` are the director's, written at the story meeting: `struck` on each connection they struck, `answer` on each question they answered, and in `directorChanges` each change they made, under the next id from E1.
 
 ## The map
 

@@ -43,7 +43,7 @@ const { CHECKPOINT_TYPES } = require('../../../lib/workflow/checkpoint-helpers')
  */
 const WEAVE = {
   story: 'The room named Vic.', question: 'Why Vic?', headline: 'The Room Named Vic',
-  threads: [{ id: 't1', claim: 'The room named Vic.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+  threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
   connections: [], convergence: 'The vote.', questions: []
 };
 const weaveState = (extra = {}) => ({ weave: JSON.parse(JSON.stringify(WEAVE)), ...extra });
@@ -209,7 +209,9 @@ describe('evaluator-nodes', () => {
 
         expect(prompt).toContain('WEAVE:\n');
         expect(prompt).toContain(WEAVE.story);
-        expect(prompt).toContain(WEAVE.threads[0].claim);
+        // Phase 4b (brief 1B): each thread with its name, its line and its evidence underneath.
+        expect(prompt).toContain(WEAVE.threads[0].line);
+        expect(prompt).toContain(WEAVE.threads[0].evidence[0].shows);
       });
 
       it('includes evidence bundle summary', () => {
@@ -231,7 +233,8 @@ describe('evaluator-nodes', () => {
         // summaries and 100-character excerpts). Phase 3 (3.4): the journalist arc
         // judge reads the sales on the record view's morning timeline, not a list of
         // its own. Phase 4 (brief 4.4): the code checks hold the receipts to the
-        // record's ids, so the fact check prints no id list.
+        // record's ids, so the fact check prints no id list; since phase 4b (brief 1B), the
+        // evidence's sources.
         expect(prompt).toContain('<RECORD>');
         expect(prompt).not.toContain('EXPOSED EVIDENCE DETAILS');
         expect(prompt).toContain('<morning-timeline>');

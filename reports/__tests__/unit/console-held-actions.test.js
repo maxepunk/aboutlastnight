@@ -97,7 +97,7 @@ describe.each([
   {
     stop: 'the story meeting',
     rel: 'components/checkpoints/ArcSelection.js',
-    asks: ["const held = unsavedInputLine('arc-selection', { addLine: newClaim });"],
+    asks: ["const held = unsavedInputLine('arc-selection', { addLine: newName + newLine });"],
     controls: [],
     paths: [['send', 'held'], ['send', 'held']],
     payload: 'ViewLogic.meetingPayload(',

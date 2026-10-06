@@ -5,7 +5,7 @@ const { weaveKey } = require('../weave');
 /** A weave the checks and the fact check read (phase 4, brief 4.4). */
 const WEAVE = {
   story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
-  threads: [{ id: 't1', claim: 'The room named Vic.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+  threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
   connections: [], convergence: 'C', questions: []
 };
 
@@ -278,7 +278,7 @@ describe('routeAfterArcCheckpoint', () => {
 // Phase 4 (brief 4.4; R6): the routing reads the weave checks' result, stamped for the
 // weave they checked, and the fact check's mark on the weave.
 describe('routeArcValidation', () => {
-  const failed = { weaveKey: weaveKey(WEAVE), passed: false, failures: [{ type: 'receipt-not-in-record', message: 'x' }] };
+  const failed = { weaveKey: weaveKey(WEAVE), passed: false, failures: [{ type: 'evidence-not-in-record', message: 'x' }] };
 
   test('evaluates when the checks pass', () => {
     expect(routeArcValidation({ weave: WEAVE, _arcValidation: { weaveKey: weaveKey(WEAVE), passed: true, failures: [] } })).toBe('evaluate');

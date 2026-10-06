@@ -193,17 +193,18 @@ describe('arc revision prompt gives the model the record (PROMPT-REVIEW; brief 2
     }
   };
 
-  it("carries each exposed document in full, labelled, and the writer's list of receipts", () => {
+  it("carries each exposed document in full, labelled, and the writer's list of the sources a piece may name", () => {
     const prompt = buildArcRevisionPrompt(STATE, 'ctx', 'prev');
     // The reviser was once shown ONLY `["vic001","paper-1"]` and told to fix its
     // keyEvidence; then an id, an owner and a summary of the name. It now reads the
     // documents themselves, as the writer does, and the ids follow the writer's rule.
-    // Phase 4 (brief 4.4): the ids are the receipts a thread may give.
+    // Phase 4 (brief 4.4): the ids are the receipts a thread may give. Phase 4b (brief 1B): the
+    // sources a piece of evidence may name, beside the ledger, the evidence log and the notes.
     expect(prompt).toContain('<document id="vic001" kind="memory" name="VIC001 - The ledger" owner="Vic Kingsley" layer="exposed">');
     expect(prompt).toContain(MEMORY_TEXT);
     expect(prompt).toContain('<document id="paper-1" kind="Document" name="Cease and desist" layer="exposed">');
     expect(prompt).toContain(PAPER_TEXT);
-    expect(prompt).toContain('### Receipts\nA thread\'s receipt is one of these document ids, or "ledger" for the ledger:\n["vic001","paper-1"]');
+    expect(prompt).toContain("### Sources\nA piece of evidence names each of its sources by one of these document ids, or as \"ledger\" for a sale, the bonus or a transfer on the morning timeline, \"evidence-log\" for an exposure on it, or \"notes\" for the director's own words: the notes, the corrections, the accusation and the answers at the story meeting.\n[\"vic001\",\"paper-1\"]");
     expect(prompt).not.toContain('A summary of the name only');
   });
 

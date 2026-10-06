@@ -862,11 +862,13 @@ describe("a code check's findings reach an automatic rework (the 4b fix batch)",
   });
   afterAll(() => jest.restoreAllMocks());
 
-  /** The fixture's weave with one receipt the record does not hold, so a check fails. */
+  /** The fixture's weave with one piece of evidence naming a document the record does not hold, so a check fails. */
   function stateWithBadReceipt() {
     const state = clone(reworkFixtureState('journalist'));
     state.meetingApproved = false; // the meeting is still open: the checks skip an approved one
-    state.weave.threads = state.weave.threads.map((t) => (t.id === 't2' ? { ...t, receipt: 'zzz999' } : t));
+    state.weave.threads = state.weave.threads.map((t) => (t.id === 't2'
+      ? { ...t, evidence: [{ sources: ['zzz999'], shows: 'A document no record holds.', stance: 'supports' }] }
+      : t));
     return state;
   }
 
@@ -906,6 +908,28 @@ describe("a code check's findings reach an automatic rework (the 4b fix batch)",
     expect(contextSection).not.toContain('EVALUATOR FEEDBACK');
     expect(contextSection).not.toContain('JUDGE-GUIDANCE');
     expect(contextSection).not.toContain('WEAVE CHECK FAILURES');
+  });
+
+  // Phase 4b (brief 1B): a check's line names the line it is about in the director's words for
+  // it, here the name of a thread the director added, whose evidence a rework gave a document the
+  // record lacks. The checks read only the writer's text (R11), so the failure is the writer's,
+  // and the rework reads it, though it quotes words the director wrote.
+  it("a check's line that names a thread by the name the director gave it still reaches the automatic pass", () => {
+    const { standingAtMeeting } = require('../hand-edit-diff');
+    const state = clone(reworkFixtureState('journalist'));
+    const added = { id: 't6', name: 'The second ledger in the back room', line: 'Riley kept a second ledger.', role: 'grounds-it' };
+    const left = { ...clone(state.weave), threads: [...clone(state.weave).threads, added] };
+    const handEdits = standingAtMeeting(null, clone(state.weave), left);
+    // A reweave kept the thread and gave it evidence, a piece naming a document the record lacks.
+    const rewoven = clone(left);
+    rewoven.threads[5].evidence = [{ sources: ['zzz999'], shows: 'A ledger no record holds.', stance: 'supports' }];
+    const checked = { ...state, meetingApproved: false, weave: rewoven, _weaveHandEdits: handEdits };
+    const { validationResults } = arcNodes.validateArcStructure(checked, {});
+    expect(validationResults.structuralIssues).toEqual([expect.stringMatching(/^The thread "The second ledger in the back room": piece 1 names "zzz999"/)]);
+    const { contextSection } = buildRevisionContext({
+      phase: 'arcs', outputName: 'weave', revisionCount: 1, validationResults, previousOutput: rewoven, handEdits, humanFeedback: null
+    });
+    expect(contextSection).toContain(`WEAVE CHECK FAILURES:\n  - ${validationResults.structuralIssues[0]}`);
   });
 });
 
@@ -1039,7 +1063,8 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     // Task 4.5d: the rule names a connection the director brought back among what stays in the weave.
     expect(block).toContain('each role they gave stays, each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.');
     expect(block).toContain('E1 (thread "t3", role): "mirrors-it"');
-    expect(block).toMatch(/E2 \(connection "c2", struck\): kind "moment"/);
+    // Phase 4b (brief 1B): a struck connection by its line.
+    expect(block).toContain(`E2 (connection "c2", struck): "${WEAVE.connections[1].line}"`);
     expect(block).not.toContain('changedDirectorEdits');
     expect(block).not.toMatch(/block they moved|marked moved/);
   });
@@ -1326,7 +1351,7 @@ describe("4.5d: the meeting's edits-are-final line names a connection the direct
   };
 
   it.each([
-    ['an automatic pass', { meetingRound: null, revisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" gives the receipt "zzz".'] } }],
+    ['an automatic pass', { meetingRound: null, revisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['The thread "The sale": piece 1 names "zzz", which is no document in the record.'] } }],
     ['a reweave', { meetingRound: 'reweave' }],
     ['a send-back', { meetingRound: 'send-back', humanFeedback: 'Rethink the money thread.' }]
   ])('%s: the rule keeps it in the weave, and its line names it by its place', (_name, overrides) => {
@@ -1334,7 +1359,7 @@ describe("4.5d: the meeting's edits-are-final line names a connection the direct
     expect(block).toContain('each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.');
     expect(block).toContain("A line marked brought back names a connection they struck at an earlier look and brought back: its place in the story is the director's, and its wording, as the weave holds it, is still the writer's.");
     expect(block).toContain('E2 (connection "c2", brought back)');
-    expect(block).not.toContain(WEAVE.connections[1].detail);
+    expect(block).not.toContain(WEAVE.connections[1].line);
   });
 
   it("an automatic pass fixes the writer's text in a connection the director brought back too; a reweave and a send-back keep their own frames", () => {

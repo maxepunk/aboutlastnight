@@ -547,7 +547,7 @@ describe('4.5: the story meeting\'s payload at arc-selection', () => {
 
   function atMeeting() {
     const left = clone(WEAVE);
-    left.threads.push({ id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it', receipt: 'zzz999' });
+    left.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'left-out', verdict: true });
     left.questions[0].answer = 'Sarah ran the bar.';
     const weave = withFactCheckMark(left, { at: 't', ready: true, fixes: 0 });
     return {
@@ -556,7 +556,7 @@ describe('4.5: the story meeting\'s payload at arc-selection', () => {
       _arcValidation: {
         weaveKey: weaveKey(weave), passed: false,
         failures: [{ type: 'over-length', message: 'The weave runs long.' }],
-        concerns: ['Director\'s edit E1: Thread "t6" gives the receipt "zzz999", which names no document in the record.']
+        concerns: ['Director\'s edit E1: "The second ledger" carries the room\'s verdict and is left out.']
       },
       sessionConfig: { accusation: ACCUSATION },
       evidenceBundle: { exposed: { tokens: [{ id: 'ale003', rawData: { name: 'The sale', owners: ['Alex'] }, fullContent: 'A line.' }] } },
@@ -576,7 +576,7 @@ describe('4.5: the story meeting\'s payload at arc-selection', () => {
     ['narrativeArcs', 'lastEvaluation', 'writerQuestions', 'previousFeedback'].forEach((key) => expect(`${key}: ${key in data}`).toBe(`${key}: false`));
   });
 
-  it('carries the weave, the receipts\' documents, the verdict as the parse holds it, the questions with the answer, and the counters', async () => {
+  it('carries the weave, the documents its evidence cites, the verdict as the parse holds it, the questions with the answer, and the counters', async () => {
     const state = atMeeting();
     const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, state);
     expect(data.weave).toEqual(state.weave);

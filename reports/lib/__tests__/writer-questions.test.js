@@ -386,7 +386,13 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
 
   // Fix round 1, finding 1: two questions pair only when they are the same question.
   const RILEY = { ...W_PRONOUN, id: 'q2' };
-  const REPEAT_FAILURE = { type: 'duplicate-id', message: 'Two questions share the id "q1". Give each question an id of its own.' };
+  // Phase 4b (brief 1B): the check names the questions by their words, and carries its place,
+  // where the meeting shows it.
+  const REPEAT_FAILURE = {
+    type: 'duplicate-id',
+    message: `Two questions share one id: "${W_SARAH.question}" and "${MORGAN.question}". Give each question an id of its own.`,
+    place: 'questions[#q1]'
+  };
 
   it('a renumbering in order pairs each question with its own: the answer stays with its question, and the question after it is kept', () => {
     const carried = carriedWeaveQuestions(

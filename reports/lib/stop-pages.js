@@ -25,15 +25,17 @@
  *   stop, counted over it (wordsShown).
  *
  * A line is `{tone, text, label, folded, beside?, piece?, region?}`:
- * - `text` is the view models' own text: a claim, a beat's material, a paragraph, a mark;
+ * - `text` is the view models' own text: a thread's line, a beat's material, a paragraph, a mark;
  * - `label` names the line: an id, a piece of the desk, or the page's own heading for the line
- *   ("Receipt", "Job"). A title, and a line the page shows by its name alone (a photo, a heading
+ *   ("Charge", "Job"). A title, and a line the page shows by its name alone (a photo, a heading
  *   the page does not print, a line in the component's own fixed words), carries only a label;
  * - `tone` is what kind of line it is: title, text, note (what happened this round), alert (a
  *   check still failing, a problem the console would refuse), concern, mark, struck or hint;
  * - `folded` marks what the page folds away, as its component folds it: the standing notes, the
  *   map's left out (until a concern opens it), the trace, the desk's folds below the article, the
- *   input review's closed sections, and what a character-IDs card shows only once opened;
+ *   input review's closed sections, what a character-IDs card shows only once opened, and the
+ *   story meeting's evidence under each line and the left-out threads' reasons (phase 4b, brief
+ *   1B);
  * - `beside` marks a concern or a mark that sits beside the line before it;
  * - `piece` is the desk's key for the piece a line prints or sits beside (deskAnchorKey);
  * - `region` names the part of the screen a line sits in, where the component names that part
@@ -467,10 +469,36 @@ function addMeetingRound(page, view) {
   });
 }
 
+/**
+ * What sits beside a line of the meeting: the code checks still failing whose place it is
+ * (phase 4b, brief 1B; spec 6.3), the concerns about the director's edit on it and the marks
+ * of what the round changed on it. `label` names the line they sit beside where the line
+ * before them is another's (a left-out thread's, beside the names of the threads left out).
+ */
+function addBesideLine(page, line, label = '') {
+  (line.failures || []).forEach((text) => page.besideMark('alert', text, label));
+  (line.concerns || []).forEach((text) => page.besideMark('concern', text, label));
+  (line.marks || []).forEach((text) => page.besideMark('mark', text, label));
+}
+
+/**
+ * A line's evidence, folded under it as ArcSelection.js folds it (phase 4b, brief 1B; spec 9):
+ * the fold's title, each piece (evidenceFoldView), and, for a line with none, why. A line with
+ * no piece and nothing to say of it has no fold.
+ */
+function addEvidenceFold(page, title, pieces, noEvidence) {
+  if (pieces.length === 0 && !noEvidence) return;
+  page.folded(() => {
+    page.title(title);
+    pieces.forEach((piece) => page.text(piece.text));
+    page.text(noEvidence);
+  });
+}
+
 /** One of the weave's lines, under the label the meeting heads it with, and what sits beside it. */
 function addWeaveLine(page, key, line) {
   page.text(line.text, View.MEETING_LINE_LABELS[key]);
-  page.beside(line.concerns, line.marks);
+  addBesideLine(page, line);
 }
 
 const MEETING_SECTIONS = {
@@ -493,35 +521,47 @@ const MEETING_SECTIONS = {
   fromYourNotes(page, view) {
     addWeaveLine(page, 'fromYourNotes', view.fromYourNotes);
   },
+  // Phase 4b (brief 1B; spec 4.1 and 9): each thread in the story as its role, its name and its
+  // line, with its evidence folded under it; then the left-out threads by name, each reason
+  // folded. No line or label names a thread by its id.
   threads(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].threads);
     view.threads.forEach((thread) => {
-      page.text(`${thread.roleLabel} · ${thread.claim}`, thread.id + (thread.verdict ? " (the room's verdict)" : ''));
-      if (thread.receipt) page.text(thread.receipt.label, 'Receipt');
-      else page.tag(thread.added ? 'Added by you' : 'No receipt');
-      if (thread.role === 'left-out') page.text(thread.reason, 'Left out because');
-      page.beside(thread.concerns, thread.marks);
+      page.text(`${thread.roleLabel} · ${[thread.name, thread.line].filter(Boolean).join(': ')}`, thread.verdict ? "The room's verdict" : '');
+      addBesideLine(page, thread);
+      addEvidenceFold(page, view.evidenceTitle, thread.evidence, thread.noEvidence);
     });
+    const leftOut = view.leftOut;
+    if (leftOut.threads.length > 0) {
+      page.text(leftOut.names, leftOut.title);
+      leftOut.threads.forEach((thread) => addBesideLine(page, thread, thread.name));
+      page.folded(() => {
+        page.title(leftOut.reasonsTitle);
+        leftOut.threads.forEach((thread) => page.text(thread.reason, thread.name));
+      });
+    }
     page.hint(view.repeatedIdHint);
   },
+  // Each connection's line, with the names of the two threads it joins; its kind stays
+  // underneath, unprinted (R1), and its evidence folds under it.
   connections(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].connections);
     view.connections.forEach((connection) => {
-      const label = connection.id + (connection.joins ? ` (${connection.joins})` : '');
-      const text = `${connection.kindLabel} · ${connection.detail}`;
-      if (connection.struck) page.struck(text, label);
-      else page.text(text, label);
+      const label = connection.joins ? `Joins ${connection.joins}` : '';
+      if (connection.struck) page.struck(connection.line, label);
+      else page.text(connection.line, label);
       // Brief 4.14a: out of the story with a left-out thread, said under the connection.
       page.note(connection.leftOut);
-      page.beside(connection.concerns, connection.marks);
+      addBesideLine(page, connection);
+      addEvidenceFold(page, view.evidenceTitle, connection.evidence, '');
     });
     addWeaveLine(page, 'convergence', view.convergence);
   },
   strongerMainThread(page, view) {
     const stronger = view.strongerMainThread;
-    page.text(stronger.claim, `${View.MEETING_LINE_LABELS.strongerMainThread} (${stronger.thread})`);
+    page.text(stronger.name, View.MEETING_LINE_LABELS.strongerMainThread);
     page.text(stronger.reason);
-    page.beside(stronger.concerns, stronger.marks);
+    addBesideLine(page, stronger);
   },
   questions(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].questions);
@@ -529,14 +569,17 @@ const MEETING_SECTIONS = {
       page.text(`${question.about}: ${question.question}`, question.kindLabel);
       page.text(question.changes, 'Its answer changes');
       page.text(question.answer, 'Your answer');
-      page.beside([], question.marks);
+      addBesideLine(page, question);
     });
   }
 };
 
 /**
- * The story meeting's page (spec 4.3): what happened since the director last looked, then
- * meetingView's sections in the spec's order, then the standing notes, folded.
+ * The story meeting's page (spec 4.3; phase 4b, brief 1B, spec 2026-10-05 sections 4.1 and 9):
+ * what happened since the director last looked, then meetingView's sections in the spec's order,
+ * the evidence under each line and the left-out threads' reasons folded, then the standing notes,
+ * folded. The check node counts the writer's page as it first opens through wordsShown
+ * (lib/workflow/nodes/arc-specialist-nodes.js meetingPageWords).
  */
 function meetingPage(data) {
   const weave = View.meetingDraftOf(data);

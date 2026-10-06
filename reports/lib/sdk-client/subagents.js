@@ -17,8 +17,11 @@
  * prompt.
  */
 
-const { WEAVE_ROLES, CONNECTION_KINDS, LEDGER_RECEIPT } = require('../weave');
+const { WEAVE_ROLES, CONNECTION_KINDS } = require('../weave');
 const { WEAVE_QUESTIONS_KEY, WEAVE_QUESTIONS_PROPERTY } = require('../writer-questions');
+// Phase 4b (brief 1B; R1): the piece of evidence under each thread and connection, the shape the
+// map's beats embed too.
+const { EVIDENCE_PIECE_SCHEMA } = require('../evidence');
 
 /**
  * The arc writer's system prompt text: what the rule set does not say. The theme's identity
@@ -29,10 +32,13 @@ const WEAVE_SYSTEM_PROMPT = `YOUR ROLE:
 Read the record and the director's account of the room, find the threads of the session's story, and weave them into one story. The director reads the weave at the story meeting, changes what they choose, and settles it; every later writer works from the weave the director settles.`;
 
 /**
- * The weave's schema (lib/weave.js holds the shape and its constants). A thread's receipt
- * and reason are optional here so a thread the director adds stays valid; the code checks
- * require them on the writer's threads (lib/weave.js checkWeave). Every description says
- * what its field holds and names the rule item that governs it, restating none.
+ * The weave's schema (lib/weave.js holds the shape and its constants; phase 4b, brief 1B, R1).
+ * A thread is `{id, name, line, role, verdict?, reason?, evidence}` and a connection `{id, joins,
+ * line, kind, evidence}`: the lines at the level of the story, the evidence underneath (each piece
+ * lib/evidence.js EVIDENCE_PIECE_SCHEMA), and a connection's kind underneath too, unprinted. The
+ * director-side schema (lib/meeting.js DIRECTOR_WEAVE_SCHEMA) is derived from this one, and lets a
+ * thread the director adds have only its id, name, line and role. Every description says what its
+ * field holds and names the rule item that governs it, restating none.
  */
 const WEAVE_SCHEMA = {
   type: 'object',
@@ -46,35 +52,37 @@ const WEAVE_SCHEMA = {
     },
     threads: {
       type: 'array',
-      description: 'Every thread of the story, each in one line (C16)',
+      description: 'The threads of the story, each a short name and one line in story terms, with its evidence underneath (C16)',
       items: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'A short id, unique in the weave' },
-          claim: { type: 'string', description: 'What the thread claims, in one line' },
+          name: { type: 'string', description: 'A short name for the thread, in a few words' },
+          line: { type: 'string', description: 'The thread in one line, in story terms' },
           role: { type: 'string', enum: [...WEAVE_ROLES], description: "The thread's role toward the main thread (C16)" },
-          receipt: { type: 'string', description: `The thread's strongest receipt: the id of a document in <RECORD>, or "${LEDGER_RECEIPT}"` },
+          verdict: { type: 'boolean', description: "true on the thread that carries the room's verdict" },
           reason: { type: 'string', description: 'For a left-out thread: one line on why the story does not need it' },
-          verdict: { type: 'boolean', description: "true on the thread that carries the room's verdict" }
+          evidence: { type: 'array', items: EVIDENCE_PIECE_SCHEMA, description: 'The pieces of the record that tell the thread' }
         },
-        required: ['id', 'claim', 'role']
+        required: ['id', 'name', 'line', 'role', 'evidence']
       }
     },
     connections: {
       type: 'array',
-      description: 'Where two threads touch (C16)',
+      description: 'Where two threads touch, the touches the story turns on (C16)',
       items: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'A short id, unique in the weave' },
-          kind: { type: 'string', enum: [...CONNECTION_KINDS], description: 'What the two threads share' },
           joins: { type: 'array', items: { type: 'string' }, description: 'The ids of the two threads it joins' },
-          detail: { type: 'string', description: 'Where the two threads touch, named exactly' }
+          line: { type: 'string', description: 'Where the two threads touch, in one line in story terms' },
+          kind: { type: 'string', enum: [...CONNECTION_KINDS], description: 'What the two threads share' },
+          evidence: { type: 'array', items: EVIDENCE_PIECE_SCHEMA, description: 'The pieces of the record that show the two threads touch' }
         },
-        required: ['id', 'kind', 'joins', 'detail']
+        required: ['id', 'joins', 'line', 'kind', 'evidence']
       }
     },
-    convergence: { type: 'string', description: 'Where the threads converge and the story lands (C16)' },
+    convergence: { type: 'string', description: 'Where the threads converge and the story lands, in a line or two in story terms (C16)' },
     strongerMainThread: {
       type: 'object',
       description: 'Present only when another thread would carry a stronger story as the main thread (C1)',

@@ -29,7 +29,7 @@ const { evaluateArcs } = require('../workflow/nodes/evaluator-nodes');
 describe('evaluateArcs skip logic', () => {
   const WEAVE = {
     story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
-    threads: [{ id: 't1', claim: 'The room named Vic.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+    threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
     connections: [], convergence: 'C', questions: []
   };
   const judged = (ready) => ({ ...WEAVE, _factCheck: { at: '2026-01-01', ready, fixes: 0 } });
@@ -108,7 +108,7 @@ describe('evaluateArcs skip logic', () => {
 describe("4.5: the fact check skips on the meeting's approval", () => {
   const WEAVE = {
     story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
-    threads: [{ id: 't1', claim: 'The room named Vic.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+    threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
     connections: [], convergence: 'C', questions: []
   };
   const session = {

@@ -319,11 +319,24 @@ const REPO = path.join(__dirname, '..', '..');
  *   reverting the one id gives back the previous hash). The fixture's weave carries no change of
  *   the director's and no connection to a left-out thread, so its settled weave prints as before,
  *   and the article and arc pins do not move.
+ * - Phase 4b (brief 1B; spec 2026-10-05 sections 4.1, 5 and 7; R1, R5, R7), the weave at the level
+ *   of the story, with its evidence underneath. The weave writer's OUTPUT FORMAT gives each thread
+ *   a name and a line in place of a claim and a receipt, and each thread and connection its
+ *   evidence, each piece its sources, what it shows and its stance (1516 -> 2289); its task asks
+ *   for a page of at most 300 words, the level of the story C16 sets out, the evidence, the
+ *   connections the story turns on and the left-out threads by name (1251 -> 1827); and the
+ *   Receipts list becomes the Sources list, the record's ids beside the ledger, the evidence log
+ *   and the director's notes (136 -> 370). arcs-journalist 9892 -> 11475. The settled weave the
+ *   map writer and the article writer read prints each thread by its role, its name and its line
+ *   with its evidence under it, one piece a line, and each connection by the names of the threads
+ *   it joins, with a sentence on the evidence in its opening (the fixture's settled weave 1709 ->
+ *   2208): outline-journalist 18299 -> 18798 and article-journalist 31172 -> 31671, each by the
+ *   settled weave alone.
  */
 const PINNED = {
-  'outline-journalist': ['c7543c361999e35f67d4e800d806ea6ad39b79b3a486ad0071ec8119cb185307', 18299],
-  'article-journalist': ['2b440b4d69685f2c792341dc7950781d3bc0c8405dd7acb6830236bd58e9cb17', 31172],
-  'arcs-journalist': ['0dc2111d5eec80aa9cb56062a02f369ac626c991d7b846f64fe08118ac76734f', 9892]
+  'outline-journalist': ['e0f6694730e48b75cb07136c2f924cdd3f3d236c0dc5397f3121c5495450a8f7', 18798],
+  'article-journalist': ['f7967ea54f0947c14b8710de29fce631198456deab910da4529785fd4a519ed6', 31671],
+  'arcs-journalist': ['0cc6d84aaa1d94a20080934235e0bfacbf9f9920627f6fdd9b881b6cfd43004c', 11475]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

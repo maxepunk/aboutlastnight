@@ -41,8 +41,8 @@
  * story meeting of scripts/lib/fixed-weave.js is planted, as the fixed notes are:
  * invented text, the writer's weave as the baseline and the director's version with an
  * edit, an answer, a struck connection and a new main thread, its changes the standing
- * edits; one receipt the record does not hold gives the automatic pass a check failure to
- * fix. A thread whose weave carries no edits gets the fixed edit on its story, as the
+ * edits; one piece of evidence naming a document the record does not hold gives the
+ * automatic pass a check failure to fix. A thread whose weave carries no edits gets the fixed edit on its story, as the
  * outline and the article get theirs, so every arc rework render shows <HAND_EDITS>.
  * Every builder is awaited. The run fails (exit 1, naming the file) when a render's
  * system or user prompt is empty, when it contains "[object Promise]", or when no line

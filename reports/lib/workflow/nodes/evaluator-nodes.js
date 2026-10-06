@@ -280,7 +280,8 @@ const TRUTH_GROUPS = [
     key: 'wordsTruth',
     about: 'the quoted words',
     rules: ['T12'],
-    // Only the article prints a card's text; the weave names a receipt by id. Brief 4.7c:
+    // Only the article prints a card's text; the weave's evidence quotes the record under its
+    // lines (phase 4b, brief 1B), which the weave's question reads. Brief 4.7c:
     // at the article, a line the director's words hold is quoted from them, any of the four.
     reads: (phase) => (phase === 'article' ? ['record', ...DIRECTOR_WORDS_MATERIAL, 'printedCards'] : ['record', 'notes']),
     describe: (s, phase) => (phase === 'article'
@@ -331,8 +332,8 @@ function truthCriteria(phase) {
 /**
  * The weave's fact check's criteria (phase 4, brief 4.4; spec 4.5): the truth criteria,
  * worded for the weave, and nothing else. Its weighted criteria went: player coverage
- * left the arc stage for the map, the code checks hold the receipts and the verdict
- * thread, and no notes on the writing reach the story meeting. One set for every theme:
+ * left the arc stage for the map, the code checks hold the evidence's sources and the
+ * verdict thread, and no notes on the writing reach the story meeting. One set for every theme:
  * the detective's arc criteria went with its arc stage (ruling R1).
  *
  * @returns {Object} the truth criteria
@@ -1004,16 +1005,18 @@ const JUDGED_WRITERS = { arcs: 'arc writer', article: 'article writer' };
 
 /** What a truth criterion's notes hold, per judge, as its OUTPUT FORMAT asks for them. */
 const BREACH_NOTES = {
-  arcs: 'the breach: the text at fault, the thread it is in, and the record it contradicts',
+  arcs: 'the breach: the text at fault, the thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts',
   article: 'the breach: the sentence at fault, its section, and the record it contradicts'
 };
 
 /**
  * How a truth finding quotes the text at fault, per judge. A breach in the weave names
- * the thread it is in (phase 4, brief 4.4), so the fix and the meeting find its line.
+ * the thread it is in (phase 4, brief 4.4), so the fix and the meeting find its line, and
+ * the piece of evidence where one is at fault (phase 4b, brief 1B; spec 6.2), so the fix can
+ * cite something else.
  */
 const TRUTH_FINDING_QUOTE = {
-  arcs: 'quotes the text at fault, names the thread it is in by its id (or the field, for the story, the question, the headline, the convergence or a connection)',
+  arcs: 'quotes the text at fault, names the thread or connection it is in by its id (or the field, for the story, the question, the headline or the convergence) and, where a piece of evidence is at fault, the piece by its sources',
   article: 'quotes the sentence and names its section'
 };
 
@@ -1408,14 +1411,17 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // Phase 4 (brief 4.4): the weave's fact check reads the weave, without its mark,
       // then what the arc writer read for the truth rules: the verdict beside the
       // director's account of it, the roster with pronouns, the director's notes under
-      // the arc writer's own label, and the record with its morning timeline. The weave's
-      // receipts and its verdict thread are the code checks', and no craft file is read.
+      // the arc writer's own label, and the record with its morning timeline. The evidence's
+      // sources and the verdict thread are the code checks', and no craft file is read.
+      //
+      // Phase 4b (brief 1B; spec 6.2): it opens by naming the evidence under each line, and
+      // reads each line against its evidence and each piece against the record.
       //
       // Brief 4.5: after a director's round it reads the weave as it judges it (no struck
       // connection, no answer), the director's changes right after it, and their answers
       // after the notes, as the director's words (T1).
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
-      return `Check this weave against the record and the director's words:
+      return `Check this weave against the record and the director's words. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
 WEAVE:
 ${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
@@ -2141,7 +2147,7 @@ if (require.main === module) {
 
   const mockState = {
     sessionId: 'self-test',
-    weave: { story: 'Test story.', threads: [{ id: 't1', claim: 'Test claim.', role: 'main-thread', receipt: 'ledger', verdict: true }], connections: [], questions: [] },
+    weave: { story: 'Test story.', threads: [{ id: 't1', name: 'Test thread', line: 'Test line.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'Test sale.', stance: 'supports' }] }], connections: [], questions: [] },
     playerFocus: { primaryInvestigation: 'Who is the Valet?' },
     evidenceBundle: { exposed: [{ id: 'e1' }], buried: [] },
     contentBundle: { headline: { main: 'Test' }, sections: [] }

@@ -61,12 +61,12 @@ function atMeeting(overrides = {}) {
   };
 }
 
-/** The director's version: the story rewritten, t3 re-roled, a thread added with no receipt, c2 struck, q1 answered. */
+/** The director's version: the story rewritten, t3 re-roled, a thread added with no evidence (phase 4b, brief 1B), c2 struck, q1 answered. */
 function leftByDirector() {
   const weave = clone(FIXTURE_WEAVE);
   weave.story = STORY;
   weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
-  weave.threads.push({ id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it' });
+  weave.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'grounds-it' });
   weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
   weave.questions = weave.questions.map((q) => ({ ...q, answer: ANSWER }));
   return weave;
@@ -187,7 +187,7 @@ describe('a thread the director added, changed after a reweave kept it (fix roun
 
   it.each([
     ['its role', (t) => ({ ...t, role: 'mirrors-it' })],
-    ['its claim', (t) => ({ ...t, claim: 'Riley kept a second ledger, and hid it.' })]
+    ['its line', (t) => ({ ...t, line: 'Riley kept a second ledger, and hid it.' })]
   ])('add, reweave, change %s, reweave with a paraphrase: the thread is put back whole, still marked added, and no check fails on it', async (_name, change) => {
     const first = await reweaveRound(atMeeting(), leftByDirector(), asSeen);
     expect(first.weave.threads.find((t) => t.id === 't6')).toEqual(leftByDirector().threads.find((t) => t.id === 't6'));
@@ -196,7 +196,7 @@ describe('a thread the director added, changed after a reweave kept it (fix roun
     left.threads = left.threads.map((t) => (t.id === 't6' ? change(t) : t));
     const paraphrase = (seen) => {
       const weave = asSeen(seen);
-      weave.threads = weave.threads.map((t) => (t.id === 't6' ? { ...t, claim: 'Riley may have kept another ledger.' } : t));
+      weave.threads = weave.threads.map((t) => (t.id === 't6' ? { ...t, line: 'Riley may have kept another ledger.' } : t));
       return weave;
     };
     const second = await reweaveRound(first, left, paraphrase);
@@ -207,7 +207,7 @@ describe('a thread the director added, changed after a reweave kept it (fix roun
     expect(Object.keys(share.addedThreads)).toEqual(['t6']);
     expect(validateArcStructure(second, {})._arcValidation.failures).toEqual([]);
     // Brief 4.14a: the settled weave names a meeting change in the meeting's own form, M and its number.
-    expect(settledWeaveOf(second)).toMatch(/- t6 \([^)]*\): .*\[the director's change M\d+: a thread they added\]/);
+    expect(settledWeaveOf(second)).toMatch(/- t6 \([^)]*\) The second ledger: .*\[the director's change M\d+: a thread they added\]/);
   });
 });
 
@@ -286,15 +286,17 @@ describe('a round that times out (rulings 5 and 6)', () => {
 });
 
 describe("the checks read only the writer's text (R11, ruling 2)", () => {
-  it("a thread the director added with no receipt is no failure, and a receipt they typed that names no document is a concern", async () => {
+  // Phase 4b (brief 1B; Review focus 1): a thread the director adds carries no evidence, and
+  // the map writer finds it; a fault their change causes is a concern beside it.
+  it('a thread the director added with no evidence is no failure, and the verdict thread they left out is a concern', async () => {
     const left = leftByDirector();
-    left.threads = left.threads.map((t) => (t.id === 't6' ? { ...t, receipt: 'zzz999' } : t));
+    left.threads = left.threads.map((t) => (t.id === 't1' ? { ...t, role: 'left-out' } : t));
     const { stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atMeeting());
     const update = validateArcStructure({ ...atMeeting(), ...stateUpdates }, {});
     expect(update._arcValidation.passed).toBe(true);
     expect(update.validationResults.structuralIssues).toEqual([]);
     expect(update._arcValidation.concerns).toEqual([
-      `${DIRECTOR_EDIT_PREFIX}E3: Thread "t6" gives the receipt "zzz999", which names no document in the record.`
+      `${DIRECTOR_EDIT_PREFIX}E2: The thread "The overdose vote" carries the room's verdict and is left out.`
     ]);
     expect(update.validationResults).not.toHaveProperty('concerns');
   });
@@ -389,7 +391,7 @@ describe('the arc rework renders as it is sent (brief 4.5)', () => {
   it.each(['reweave', 'send-back', null])("%s: reviseArcs sends arcReworkCall's prompt, system prompt, schema and label", async (round) => {
     const state = round
       ? await roundState(round, round === 'send-back' ? 'Rethink the money thread.' : null)
-      : { ...atMeeting(), arcRevisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" has no receipt.'] } };
+      : { ...atMeeting(), arcRevisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['The thread "The sale" is in the story with no piece of evidence that supports it.'] } };
     const sdk = recordingSdk({ ...reworkOf(() => {}), ...(round === 'send-back' && { [CHANGED_EDITS_KEY]: [] }) });
     await reviseArcs(state, cfg(sdk));
     const call = arcReworkCall(state);
@@ -422,7 +424,7 @@ describe("4.5b: the director's keys stay the director's (R12)", () => {
   });
 
   it.each([
-    ['an automatic pass', async () => atMeeting({ arcRevisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" has no receipt.'] } })],
+    ['an automatic pass', async () => atMeeting({ arcRevisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['The thread "The sale" is in the story with no piece of evidence that supports it.'] } })],
     ['a reweave', async () => roundState('reweave')]
   ])("the rework's path, %s: no answer and no strike the rework wrote; the director's stay", async (_name, stateOf) => {
     const state = await stateOf();
@@ -444,7 +446,7 @@ describe("4.5b: the director's keys stay the director's (R12)", () => {
 // repeat to refuse the director's next change on (4.5 review, minor 6 and re-review minor a).
 describe("4.5b: a writer's repeat under the id of a thread the director added", () => {
   const { routeArcValidation } = graphTesting;
-  const WRITERS_T6 = { id: 't6', claim: 'Riley kept the receipts for every burial.', role: 'grounds-it', receipt: 'ledger' };
+  const WRITERS_T6 = { id: 't6', name: 'The burials', line: 'Riley kept the receipts for every burial.', role: 'grounds-it', evidence: [{ sources: ['ledger'], shows: 'Each burial on the ledger.', stance: 'supports' }] };
 
   it("is a failure, a check rework fixes it, and the repeat is gone with the director's thread intact", async () => {
     // The director adds t6 and reweaves; the reweave puts a thread of its own under t6. The
@@ -457,7 +459,9 @@ describe("4.5b: a writer's repeat under the id of a thread the director added", 
 
     const checked = { ...rewoven, ...validateArcStructure(rewoven, {}) };
     expect(checked._arcValidation.failures.map((f) => f.type)).toEqual(['duplicate-id']);
-    expect(checked._arcValidation.failures[0].message).toMatch(/^Two threads share the id "t6", and one of them is the thread the director added \(E3 in <HAND_EDITS>\)\. Keep "t6" on the director's thread/);
+    // Phase 4b (brief 1B): the line names the threads by their names, never the id, which the meeting shows none of.
+    expect(checked._arcValidation.failures[0].message).toMatch(/^Two threads share one id: "The second ledger" and "The burials", and one of them is the thread the director added\. Keep the id on the director's thread/);
+    expect(checked._arcValidation.failures[0].place).toBe('threads[#t6]');
     expect(checked._arcValidation.concerns).toEqual([]);
     expect(routeArcValidation(checked)).toBe('revise');
 
@@ -466,7 +470,7 @@ describe("4.5b: a writer's repeat under the id of a thread the director added", 
     const sdk = recordingSdk(() => {
       const weave = weaveForPrompt(clone(pass.weave));
       weave.connections = weave.connections.filter((c) => !c.struck);
-      weave.threads = weave.threads.map((t) => (t.claim === WRITERS_T6.claim ? { ...t, id: 't7' } : t));
+      weave.threads = weave.threads.map((t) => (t.line === WRITERS_T6.line ? { ...t, id: 't7' } : t));
       return weave;
     });
     const fixed = { ...pass, ...(await reviseArcs(pass, cfg(sdk))) };
@@ -494,7 +498,7 @@ describe("4.5b: the removed-phrase scan reads the arc rework's three renders", (
     const left = leftByDirector();
     return atMeeting({
       weave: left, _weaveHandEdits: standingAtMeeting(null, clone(FIXTURE_WEAVE), left), arcRevisionCount: 1,
-      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['Thread "t2" gives the receipt "zzz", which names no document in <RECORD>.'] }
+      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['The thread "The sale": piece 1 names "zzz", which is no document in the record.'] }
     });
   };
 
@@ -546,12 +550,12 @@ describe('4.5d: a connection the director brought back, through the meeting\'s n
 
   it("a reweave reads it by its place, and its rewording stands: the connection and the reweave's words are kept, and no edit of the director's changed", async () => {
     const state = await broughtBack('reweave');
-    const sdk = recordingSdk(reworkWith([FIXTURE_WEAVE.connections[0], { ...C2, detail: REWORDED }]));
+    const sdk = recordingSdk(reworkWith([FIXTURE_WEAVE.connections[0], { ...C2, line: REWORDED }]));
     const update = await reviseArcs(state, cfg(sdk));
     const block = sdk.calls[0].prompt.slice(sdk.calls[0].prompt.indexOf('<HAND_EDITS>'), sdk.calls[0].prompt.indexOf('</HAND_EDITS>'));
     expect(block).toContain('E2 (connection "c2", brought back)');
-    expect(block).not.toContain(C2.detail);
-    expect(update.weave.connections).toEqual([FIXTURE_WEAVE.connections[0], { ...C2, detail: REWORDED }]);
+    expect(block).not.toContain(C2.line);
+    expect(update.weave.connections).toEqual([FIXTURE_WEAVE.connections[0], { ...C2, line: REWORDED }]);
     expect(update._weaveHandEditReport.changed).toEqual([]);
   });
 
@@ -571,10 +575,10 @@ describe('4.5d: a connection the director brought back, through the meeting\'s n
   it("a fact-check finding that quotes it is the writer's must-fix, and the one automatic fix runs on it", async () => {
     const state = await broughtBack('reweave');
     const round = { ...state, ...(await reviseArcs(state, cfg(recordingSdk(reworkWith(FIXTURE_WEAVE.connections))))) };
-    const issue = `T1: "${C2.detail}" states a cause the record does not show.`;
+    const issue = `T1: "${C2.line}" states a cause the record does not show.`;
     const update = await evaluateArcs(round, cfg(recordingSdk({
       ready: false, structuralPassed: false, overallScore: 0.4,
-      criteriaScores: { evidenceTruth: { score: 0.4, notes: `The connection "${C2.detail}" outruns the record.`, fix: 'Name only what the record shows.' } },
+      criteriaScores: { evidenceTruth: { score: 0.4, notes: `The connection "${C2.line}" outruns the record.`, fix: 'Name only what the record shows.' } },
       structuralIssues: [issue], advisoryWarnings: [], confidence: 'high'
     })));
     expect(update.validationResults.structuralIssues).toEqual([issue]);
@@ -594,7 +598,7 @@ describe('4.5d: a connection the director brought back, through the meeting\'s n
 describe("4.5e: a finding filed under a brought-back connection's id is read by its quotes", () => {
   const { standingAtMeeting } = require('../hand-edit-diff');
   const C2 = FIXTURE_WEAVE.connections[1];
-  const FINDING = `T1: "${C2.detail}" states a cause the record does not show.`;
+  const FINDING = `T1: "${C2.line}" states a cause the record does not show.`;
 
   /**
    * After a round that kept the director's strike of c2 (E1), the director brings c2 back (E2)
@@ -644,7 +648,7 @@ describe("4.5f: a finding filed under a brought-back connection's id is the fix'
   const C2 = FIXTURE_WEAVE.connections[1];
   const HEADLINE = 'The Room Voted Overdose. The Sale Kept Its Night.';
   const PLACE_FINDING = 'T1: bringing this connection back joins two threads the record keeps apart.';
-  const WORDS_FINDING = `T1: "${C2.detail}" states a cause the record does not show.`;
+  const WORDS_FINDING = `T1: "${C2.line}" states a cause the record does not show.`;
   const LISTS = [
     ['a structural issue', (finding) => ({ structuralIssues: [finding] })],
     ['an advisory', (finding) => ({ advisoryWarnings: [finding] })]
@@ -721,7 +725,7 @@ describe("4.14a: a rework never takes a struck connection's id", () => {
   const { standingAtMeeting } = require('../hand-edit-diff');
   const { ARC_REWORK_STRUCK_IDS } = arcNodes._testing;
   /** The connection a rework adds for the director's thread t6, under the struck c2's id. */
-  const NEW = { id: 'c2', kind: 'person', joins: ['t6', 't3'], detail: 'Riley: kept the second ledger, and took the envelope at the bar.' };
+  const NEW = { id: 'c2', joins: ['t6', 't3'], line: 'Riley kept the second ledger and took the envelope at the bar.', kind: 'person', evidence: [{ sources: ['notes'], shows: 'Riley at the bar.', stance: 'supports' }] };
   const connectionsOf = (weave) => weave.connections.map((c) => [c.id, c.struck === true]);
   const taskOf = (prompt) => prompt.slice(prompt.indexOf('## YOUR TASK'));
 
@@ -756,7 +760,7 @@ describe("4.14a: a rework never takes a struck connection's id", () => {
     const left = leftByDirector();
     // The weave the round started from held a writer's c3 that the reweave took out.
     const roundStart = weaveForPrompt(clone(left));
-    roundStart.connections.push({ id: 'c3', kind: 'line', joins: ['t1', 't4'], detail: 'The verdict and the heir share a line.' });
+    roundStart.connections.push({ id: 'c3', joins: ['t1', 't4'], line: 'The verdict and the heir share a line.', kind: 'line', evidence: [] });
     const fixState = {
       ...atMeeting(),
       weave: withFactCheckMark(clone(left), { at: 't1', ready: false, fixes: 0 }),

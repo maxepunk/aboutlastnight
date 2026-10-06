@@ -5,8 +5,10 @@
  * - THE DIRECTOR-SIDE SCHEMA (DIRECTOR_WEAVE_SCHEMA): the weave as the director leaves it,
  *   derived in code from the writer's (lib/sdk-client/subagents.js WEAVE_SCHEMA). It adds
  *   what no writer writes, the director's `answer` on a question and `struck: true` on a
- *   connection they struck, and, as the writer's does, lets a thread the director added or
- *   re-roled have no receipt and no reason. The payload gate validates against it. The
+ *   connection they struck, and lets a thread the director adds have only its id, name, line
+ *   and role (phase 4b, brief 1B): the evidence is never the director's (R6), so no thread or
+ *   connection needs it here, and the next writer finds the evidence for a thread they added
+ *   (spec 2026-10-05 section 5.3). The payload gate validates against it. The
  *   console's validator (console/checkpoint-view-logic.js meetingWeaveProblems, 4.8) applies the
  *   same rules, held to the gate's decisions by a corpus test. It is
  *   never sent to the SDK, and code strips both keys from what a writer or a rework returns
@@ -48,7 +50,9 @@ const MEETING_ACTIONS = Object.freeze(['approve', ...MEETING_ROUNDS]);
 
 /**
  * The weave as the director leaves it at the story meeting (R12): the writer's schema,
- * with the director's answer on a question and the strike on a connection.
+ * with the director's answer on a question and the strike on a connection, and no thread or
+ * connection held to have its evidence (phase 4b, brief 1B; R6): a thread the director adds
+ * is its id, name, line and role.
  */
 const DIRECTOR_WEAVE_SCHEMA = (() => {
   const schema = structuredClone(WEAVE_SCHEMA);
@@ -58,6 +62,10 @@ const DIRECTOR_WEAVE_SCHEMA = (() => {
   schema.properties.connections.items.properties[STRUCK_KEY] = {
     type: 'boolean', description: 'true on a connection the director struck'
   };
+  ['threads', 'connections'].forEach((collection) => {
+    const items = schema.properties[collection].items;
+    items.required = items.required.filter((field) => field !== 'evidence');
+  });
   return schema;
 })();
 
@@ -286,13 +294,17 @@ const MEETING_FIELD_PLACES = Object.freeze({
   strongerMainThread: 'the stronger main thread'
 });
 
-/** How the meeting names a change to one field of a thread, given the thread's claim, quoted. */
+/**
+ * How the meeting names a change to one field of a thread (phase 4b, brief 1B): the thread by
+ * its name, quoted, and a change to its line or its name by the words the director gave it.
+ * Each takes the thread's name and its line, each quoted.
+ */
 const THREAD_FIELD_PLACES = Object.freeze({
-  role: (claim) => `the role of ${claim}`,
-  claim: (claim) => `the claim ${claim}`,
-  receipt: (claim) => `the receipt of ${claim}`,
-  reason: (claim) => `the reason ${claim} is left out`,
-  verdict: (claim) => `whether ${claim} carries the room's verdict`
+  role: (name) => `the role of ${name}`,
+  name: (name) => `the name ${name}`,
+  line: (name, line) => `the line ${line}`,
+  reason: (name) => `the reason ${name} is left out`,
+  verdict: (name) => `whether ${name} carries the room's verdict`
 });
 
 /** A line of the weave quoted in a place: its words in quotation marks, without the full stop it ends on. */
@@ -302,12 +314,12 @@ function quotedLine(text) {
 
 /**
  * Where one of the director's changes at the meeting sits, as the meeting names the line
- * (brief 4.14a): a field of the weave by its line ("the story"), a thread by its claim and a
- * connection by its words, as the meeting's page shows them ("the role of "Morgan paid Riley
- * at the bar""), never by an edit id, which the meeting never shows. A later stop that names a
- * meeting change to the director reads it (the map's page, through lib/map.js
- * meetingChangesOf). The element's words are read from `weave` under the edit's id, or from the
- * edit itself for an element the weave no longer holds.
+ * (brief 4.14a): a field of the weave by its line ("the story"), a thread by its name and a
+ * connection by its line, as the meeting's page shows them ("the role of "The envelope"", "the
+ * line "Morgan paid Riley at the bar""; phase 4b, brief 1B), never by an id, which the meeting
+ * never shows. A later stop that names a meeting change to the director reads it (the map's
+ * page, through lib/map.js meetingChangesOf). The element's words are read from `weave` under
+ * the edit's id, or from the edit itself for an element the weave no longer holds.
  *
  * @param {Object} edit - one of the meeting's standing edits
  * @param {Object|null} weave - the weave as the director settled it
@@ -323,15 +335,15 @@ function meetingChangePlace(edit, weave) {
   const element = held || (edit.after && typeof edit.after === 'object' ? edit.after : edit.before) || {};
   const gone = edit.after === null || edit.after === undefined;
   if (head === 'threads') {
-    const claim = element.claim ? quotedLine(element.claim) : `thread ${id}`;
-    if (field) return (THREAD_FIELD_PLACES[field] || ((c) => `the ${field} of ${c}`))(claim);
-    return gone ? `the thread you took out, ${claim}` : `the thread you added, ${claim}`;
+    const name = element.name ? quotedLine(element.name) : `thread ${id}`;
+    if (field) return (THREAD_FIELD_PLACES[field] || ((n) => `the ${field} of ${n}`))(name, element.line ? quotedLine(element.line) : name);
+    return gone ? `the thread you took out, ${name}` : `the thread you added, ${name}`;
   }
-  const detail = element.detail ? quotedLine(element.detail) : `connection ${id}`;
-  if (field) return field === 'detail' ? `the connection ${detail}` : `the ${field} of the connection ${detail}`;
-  if (edit.struck === true) return `the connection you struck, ${detail}`;
-  if (edit.unstruck === true) return `the connection you brought back, ${detail}`;
-  return gone ? `the connection you took out, ${detail}` : `the connection you added, ${detail}`;
+  const line = element.line ? quotedLine(element.line) : `connection ${id}`;
+  if (field) return field === 'line' ? `the connection ${line}` : `the ${field} of the connection ${line}`;
+  if (edit.struck === true) return `the connection you struck, ${line}`;
+  if (edit.unstruck === true) return `the connection you brought back, ${line}`;
+  return gone ? `the connection you took out, ${line}` : `the connection you added, ${line}`;
 }
 
 /** The story meeting's stop, as the director's notes name it (server.js appendGateNote). */
@@ -366,7 +378,7 @@ function unrunRoundNoteIndex(state) {
  *
  * @param {Object} state
  * @param {Object} options
- * @param {Object} options.evidenceIndex - each exposed document, by the id a receipt names
+ * @param {Object} options.evidenceIndex - each exposed document, by the id a piece of evidence names
  * @param {number} options.maxRevisions - the automated budget of a round
  * @returns {Object}
  */

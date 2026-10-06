@@ -79,16 +79,21 @@ function deskData() {
 }
 
 describe('4.12a: step mode prints the three stops from the console\'s view models (scripts/lib/stop-print.js)', () => {
-  it('prints the story meeting\'s page: the verdict, each line under the label the meeting gives it, each thread with its id and role, the questions', () => {
+  // Phase 4b (brief 1B; spec 9): each thread as its role, its name and its line, the verdict's
+  // thread under its label, and its evidence folded; no line names a thread by its id.
+  it('prints the story meeting\'s page: the verdict, each line under the label the meeting gives it, each thread with its role, name and line, its evidence folded, the questions', () => {
     const data = meetingData();
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
-    const text = textOf(stopPrint('arc-selection', data));
+    const printed = stopPrint('arc-selection', data);
+    const text = textOf(printed);
     expect(text).toContain(view.verdict.who);
     expect(text).toContain(`${View.MEETING_LINE_LABELS.story}: ${view.story.text}`);
     expect(text).toContain(`${View.MEETING_LINE_LABELS.headline}: ${view.headline.text}`);
-    expect(text).toContain(`t1 (the room's verdict): ${view.threads[0].roleLabel} · ${view.threads[0].claim}`);
-    expect(text).toContain(`Receipt: ${view.threads[0].receipt.label}`);
+    expect(text).toContain(`The room's verdict: ${view.threads[0].roleLabel} · ${view.threads[0].name}: ${view.threads[0].line}`);
+    const piece = printed.find((line) => line.text.includes(view.threads[0].evidence[0].text));
+    expect(piece.folded).toBe(true);
     expect(text).toContain(`${view.questions[0].about}: ${view.questions[0].question}`);
+    expect(text).not.toMatch(/\bt1\b/);
   });
 
   it('prints what the page folds as folded', () => {

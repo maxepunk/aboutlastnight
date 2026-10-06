@@ -52,8 +52,9 @@ describe('buried transaction ID stripping', () => {
   });
 
   // Phase 4 (brief 4.4): the summary lists no buried sale at all (the detective arc
-  // writer's list, its only reader, went with R1), so no buried id reaches the receipts.
-  test('extractEvidenceSummary lists no buried sale, so no buried id reaches the receipts (second defense)', () => {
+  // writer's list, its only reader, went with R1), so no buried id reaches the Sources list
+  // a piece of evidence names its sources from (phase 4b, brief 1B).
+  test('extractEvidenceSummary lists no buried sale, so no buried id reaches the Sources list (second defense)', () => {
     const evidenceBundle = {
       exposed: { tokens: [], paperEvidence: [] },
       buried: {

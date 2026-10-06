@@ -3,8 +3,11 @@
  * as the director left it at the story meeting, for every later writer (the map writer
  * and the article writer call it, 4.6 and 4.7):
  * - the story, its question and the working headline, the director's words it rests on;
- * - every thread with its role, a thread the director added among them;
- * - the live connections and the convergence; a struck connection is gone;
+ * - every thread by its id, its role, its name and its line, a thread the director added among
+ *   them, and under each its evidence, one piece a line (phase 4b, brief 1B; R7): the map
+ *   writer gives each beat the pieces that tell it;
+ * - the connections the story keeps, each by its line and the names of the threads it joins,
+ *   and the convergence; a struck connection is gone;
  * - every question with the director's answer word for word, or marked unanswered, and
  *   what its answer changes;
  * - each change the director made at the meeting, marked by its edit's id.
@@ -17,6 +20,7 @@ const { renderSettledWeave, renderDirectorAnswers, SETTLED_WEAVE_TAG, DIRECTOR_A
 const { standingAtMeeting, carriedEdits } = require('../hand-edit-diff');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
+const piece = (sources, shows, stance = 'supports') => ({ sources, shows, stance });
 
 /** The writer's weave as the meeting showed it. */
 const WRITERS = {
@@ -25,14 +29,17 @@ const WRITERS = {
   headline: 'Ellis Pointed the Room at Rowan',
   fromYourNotes: 'the frame this morning did not land the way it was meant to',
   threads: [
-    { id: 't1', claim: 'The case against Rowan held at four votes, and the room named Ellis.', role: 'main-thread', receipt: 'ledger', verdict: true },
-    { id: 't2', claim: 'The RowanVale account took the last two minutes of selling.', role: 'grounds-it', receipt: 'ledger' },
-    { id: 't3', claim: 'Two allies split over the same secret.', role: 'complicates-it', receipt: 'row001' },
-    { id: 't4', claim: 'A side deal at the coat check.', role: 'left-out', receipt: 'kai004', reason: 'It touches no thread the story follows.' }
+    {
+      id: 't1', name: 'The case against Rowan', line: 'The case against Rowan held at four votes, and the room named Ellis.', role: 'main-thread', verdict: true,
+      evidence: [piece(['notes'], 'The room named Ellis at the vote.'), piece(['ledger', 'evidence-log'], 'A sale into RowanVale a minute after the warning was turned in.', 'cuts-against')]
+    },
+    { id: 't2', name: 'The last two minutes', line: 'The RowanVale account took the last two minutes of selling.', role: 'grounds-it', evidence: [piece(['ledger'], 'The late sales into RowanVale.')] },
+    { id: 't3', name: 'The bathroom', line: 'Two allies split over the same secret.', role: 'complicates-it', evidence: [piece(['row001'], 'Rowan to Sloane: "Not a word to Ellis."')] },
+    { id: 't4', name: 'The coat check', line: 'A side deal at the coat check.', role: 'left-out', reason: 'It touches no thread the story follows.', evidence: [] }
   ],
   connections: [
-    { id: 'c1', kind: 'person', joins: ['t1', 't3'], detail: 'Sloane turned the room against Rowan.' },
-    { id: 'c2', kind: 'moment', joins: ['t1', 't2'], detail: 'The scoreboard brought the money into the vote.' }
+    { id: 'c1', joins: ['t1', 't3'], line: 'Sloane turned the room against Rowan.', kind: 'person', evidence: [piece(['row001'], 'Sloane in the bathroom.')] },
+    { id: 'c2', joins: ['t1', 't2'], line: 'The scoreboard brought the money into the vote.', kind: 'moment', evidence: [piece(['ledger'], 'The late sales.')] }
   ],
   convergence: 'The retainer and the empty chair meet the old sign-off.',
   strongerMainThread: { thread: 't2', reason: 'The money reaches past the morning.' },
@@ -48,7 +55,7 @@ function directors() {
   const weave = clone(WRITERS);
   weave.story = 'Someone built the case against Rowan, and it failed in the room.';
   weave.threads[2].role = 'mirrors-it';
-  weave.threads.push({ id: 't7', claim: 'The guest list was rewritten that morning.', role: 'grounds-it' });
+  weave.threads.push({ id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.', role: 'grounds-it' });
   weave.connections[1].struck = true;
   weave.questions[0].answer = 'Print it as the room said it, as their exaggeration.';
   weave.questions[2].answer = 'she/her';
@@ -76,23 +83,46 @@ describe('renderSettledWeave: the weave as the director left it (brief 4.5)', ()
     expect(text).toContain(`FROM THE DIRECTOR'S NOTES: "${WRITERS.fromYourNotes}"`);
   });
 
-  it('prints every thread with its role, the main thread first and the left-out threads last, a thread the director added among them', () => {
+  it('prints every thread by its id, its role, its name and its line, the main thread first and the left-out threads last, a thread the director added among them', () => {
     const lines = settled().split('\n').filter((line) => /^- t\d/.test(line));
-    expect(lines.map((line) => line.slice(0, line.indexOf(':')))).toEqual([
+    expect(lines.map((line) => line.slice(0, line.indexOf(')') + 1))).toEqual([
       '- t1 (main thread)', '- t2 (grounds it)', '- t7 (grounds it)', '- t3 (mirrors it)', '- t4 (left out)'
     ]);
-    expect(lines[0]).toContain(WRITERS.threads[0].claim);
-    expect(lines[0]).toContain("It carries the room's verdict.");
-    expect(lines[0]).toContain('Receipt: ledger.');
-    expect(lines[4]).toContain(`Why it is left out: ${WRITERS.threads[3].reason}`);
+    expect(lines[0]).toBe(`- t1 (main thread) The case against Rowan: ${WRITERS.threads[0].line} It carries the room's verdict.`);
+    expect(lines[4]).toBe(`- t4 (left out) The coat check: ${WRITERS.threads[3].line} Why it is left out: ${WRITERS.threads[3].reason}`);
+    expect(settled()).not.toMatch(/Receipt|claim/);
   });
 
-  it('prints the live connections and the convergence; a struck connection is gone from it', () => {
+  // R7: the settled weave carries each thread's evidence to the map writer, which gives each beat
+  // the pieces that tell it.
+  it("prints each thread's evidence under it, one piece a line: its stance, its sources and what it shows", () => {
+    const lines = settled().split('\n');
+    const at = lines.findIndex((line) => line.startsWith('- t1 '));
+    expect(lines.slice(at + 1, at + 3)).toEqual([
+      '  - supports, from notes: The room named Ellis at the vote.',
+      '  - cuts against, from ledger and evidence-log: A sale into RowanVale a minute after the warning was turned in.'
+    ]);
+    expect(lines[lines.findIndex((line) => line.startsWith('- t3 ')) + 1]).toBe('  - supports, from row001: Rowan to Sloane: "Not a word to Ellis."');
+  });
+
+  // Review focus 1: a thread the director added carries no evidence; the map writer finds it.
+  it('says a thread in the story has no evidence yet, such as one the director added, and prints nothing under a left-out thread with none', () => {
+    const lines = settled().split('\n');
+    expect(lines[lines.findIndex((line) => line.startsWith('- t7 ')) + 1]).toBe('  - No evidence yet.');
+    const leftOut = lines.findIndex((line) => line.startsWith('- t4 '));
+    expect(lines[leftOut + 1]).not.toMatch(/^ {2}- /);
+  });
+
+  it('prints the live connections, each by its line and the names of the threads it joins, and the convergence; a struck connection is gone from it', () => {
     const text = settled();
-    expect(text).toContain('- c1, a shared person, joining t1 and t3: Sloane turned the room against Rowan.');
+    expect(text).toContain('- c1, joining "The case against Rowan" and "The bathroom": Sloane turned the room against Rowan.');
     expect(text).not.toContain('c2');
-    expect(text).not.toContain(WRITERS.connections[1].detail);
+    expect(text).not.toContain(WRITERS.connections[1].line);
     expect(text).toContain(`CONVERGENCE: ${WRITERS.convergence}`);
+  });
+
+  it("keeps a connection's kind underneath: the settled weave never prints it", () => {
+    expect(settled()).not.toMatch(/a shared person|a moment,|person|kind/);
   });
 
   it("leaves out the writer's stronger-main-thread proposal: the roles say which thread the director made the main thread", () => {
@@ -122,7 +152,7 @@ describe('renderSettledWeave: the weave as the director left it (brief 4.5)', ()
   it('marks nothing when the director changed nothing', () => {
     const text = renderSettledWeave(clone(WRITERS), []);
     expect(text).not.toMatch(/\[the director's changes? [EM]\d/);
-    expect(text).toContain('- c2, a moment, joining t1 and t2: The scoreboard brought the money into the vote.');
+    expect(text).toContain('- c2, joining "The case against Rowan" and "The last two minutes": The scoreboard brought the money into the vote.');
   });
 
   it('prints no "from your notes" line when the story did not start from the director\'s read', () => {
@@ -136,7 +166,7 @@ describe('renderSettledWeave: the weave as the director left it (brief 4.5)', ()
   });
 
   it('carries no em-dash and names no theme in its own words', () => {
-    const own = renderSettledWeave({ story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', claim: 'c', role: 'main-thread', verdict: true }], connections: [], convergence: 'v', questions: [] }, []);
+    const own = renderSettledWeave({ story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', name: 'n', line: 'l', role: 'main-thread', verdict: true, evidence: [piece(['ledger'], 'x')] }], connections: [], convergence: 'v', questions: [] }, []);
     expect(own).not.toMatch(/[–—]/);
     expect(own).not.toMatch(/Nova|NovaNews|detective/i);
   });
@@ -197,20 +227,20 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
     headline: 'The Room Chose One Account',
     fromYourNotes: 'the account on top was the wrong one',
     threads: [
-      { id: 't1', claim: 'The room named one account holder in the final vote.', role: 'main-thread', receipt: 'ledger', verdict: true },
-      { id: 't2', claim: 'The account took its sales in the last two minutes.', role: 'grounds-it', receipt: 'ledger' },
-      { id: 't3', claim: 'Two allies told the room different stories.', role: 'complicates-it', receipt: 'row001' },
-      { id: 't4', claim: 'An old email shows the same move a year ago.', role: 'mirrors-it', receipt: 'row002' },
-      { id: 't5', claim: 'The plan for the empty chair goes on after the vote.', role: 'carries-it-forward', receipt: 'row003' },
-      { id: 't6', claim: 'A side deal by the coat rack.', role: 'left-out', receipt: 'row004', reason: 'It touches no thread the story follows.' },
-      { id: 't8', claim: 'A second account took the overflow.', role: 'grounds-it', receipt: 'ledger' }
+      { id: 't1', name: 'The final vote', line: 'The room named one account holder in the final vote.', role: 'main-thread', verdict: true, evidence: [piece(['notes'], 'The final vote.')] },
+      { id: 't2', name: 'The late sales', line: 'The account took its sales in the last two minutes.', role: 'grounds-it', evidence: [piece(['ledger'], 'The late sales.'), piece(['evidence-log'], 'A turn-in after them.', 'cuts-against')] },
+      { id: 't3', name: 'Two stories', line: 'Two allies told the room different stories.', role: 'complicates-it', evidence: [piece(['row001'], 'One ally.')] },
+      { id: 't4', name: 'A year ago', line: 'An old email shows the same move a year ago.', role: 'mirrors-it', evidence: [piece(['row002'], 'The old email.')] },
+      { id: 't5', name: 'The empty chair', line: 'The plan for the empty chair goes on after the vote.', role: 'carries-it-forward', evidence: [piece(['row003'], 'The plan.')] },
+      { id: 't6', name: 'The coat rack', line: 'A side deal by the coat rack.', role: 'left-out', reason: 'It touches no thread the story follows.', evidence: [] },
+      { id: 't8', name: 'The overflow', line: 'A second account took the overflow.', role: 'grounds-it', evidence: [piece(['ledger'], 'The overflow sales.')] }
     ],
     connections: [
-      { id: 'c1', kind: 'person', joins: ['t1', 't3'], detail: 'Sloane stood with both sides.' },
-      { id: 'c2', kind: 'moment', joins: ['t1', 't2'], detail: 'The scoreboard went up before the vote.' },
-      { id: 'c3', kind: 'document', joins: ['t2', 't4'], detail: 'The same email thread runs through both.' },
-      { id: 'c4', kind: 'line', joins: ['t3', 't5'], detail: 'One sign-off comes back at the end.' },
-      { id: 'c5', kind: 'moment', joins: ['t4', 't5'], detail: 'The two dates fall in one week.' }
+      { id: 'c1', joins: ['t1', 't3'], line: 'Sloane stood with both sides.', kind: 'person', evidence: [piece(['row001'], 'Sloane.')] },
+      { id: 'c2', joins: ['t1', 't2'], line: 'The scoreboard went up before the vote.', kind: 'moment', evidence: [piece(['ledger'], 'The scoreboard.')] },
+      { id: 'c3', joins: ['t2', 't4'], line: 'The same email thread runs through both.', kind: 'document', evidence: [piece(['row002'], 'The thread.')] },
+      { id: 'c4', joins: ['t3', 't5'], line: 'One sign-off comes back at the end.', kind: 'line', evidence: [piece(['row003'], 'The sign-off.')] },
+      { id: 'c5', joins: ['t4', 't5'], line: 'The two dates fall in one week.', kind: 'moment', evidence: [piece(['row002', 'row003'], 'The dates.')] }
     ],
     convergence: 'The vote, the ledger and the old email meet at the empty chair.',
     questions: WEAVE_QUESTION_KINDS.flatMap((kind) => [
@@ -221,7 +251,7 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
 
   /**
    * The director's version: every field the meeting marks rewritten, t8 given a new role and
-   * a new claim (two marks on one line), t7 added, c5 struck, and one question of each kind
+   * a new line (two marks on one line), t7 added, c5 struck, and one question of each kind
    * answered.
    */
   const directors = () => {
@@ -233,8 +263,8 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
     weave.convergence = 'The vote and the old email meet at the empty chair.';
     const t8 = weave.threads.find((thread) => thread.id === 't8');
     t8.role = 'complicates-it';
-    t8.claim = 'A second account took the overflow, under a name no one claimed.';
-    weave.threads.push({ id: 't7', claim: 'The guest list changed that morning.', role: 'grounds-it' });
+    t8.line = 'A second account took the overflow, under a name no one claimed.';
+    weave.threads.push({ id: 't7', name: 'The guest list', line: 'The guest list changed that morning.', role: 'grounds-it' });
     weave.connections.find((connection) => connection.id === 'c5').struck = true;
     weave.questions.filter((q) => !q.id.endsWith('-open')).forEach((q) => { q.answer = `The director's answer about ${q.about}.`; });
     return weave;
@@ -245,18 +275,18 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
     return renderSettledWeave(weave, carriedEdits(standingAtMeeting(null, planted(), weave), weave));
   };
 
-  it('the render prints every label: each role and an added thread, live connections and the convergence, each question kind both ways, and changes by their edit ids', () => {
+  it('the render prints every label: each role and an added thread, the evidence of each stance, live connections and the convergence, each question kind both ways, and changes by their edit ids', () => {
     const text = render();
     const lines = text.split('\n');
     const labels = [
       '<SETTLED_WEAVE>', 'The weave as the director settled it at the story meeting', 'STORY: ', 'QUESTION: ', 'WORKING HEADLINE: ',
-      "FROM THE DIRECTOR'S NOTES: \"", 'THREADS:', ' Receipt: ', " It carries the room's verdict.", ' Why it is left out: ',
+      "FROM THE DIRECTOR'S NOTES: \"", 'THREADS:', " It carries the room's verdict.", ' Why it is left out: ',
+      '  - supports, from ', '  - cuts against, from ', '  - No evidence yet.',
       'CONNECTIONS:', ', joining ', 'CONVERGENCE: ', "QUESTIONS TO THE DIRECTOR, WITH THE DIRECTOR'S ANSWERS:", ' Its answer changes: ',
       "  The director's answer, word for word: \"", '  Unanswered.', '</SETTLED_WEAVE>'
     ];
     labels.forEach((label) => expect(`${label}: ${text.includes(label)}`).toBe(`${label}: true`));
-    WEAVE_ROLES.forEach((role) => expect(text).toContain(`(${role.replace(/-/g, ' ')}):`));
-    ['a shared person', 'a moment', 'a document', 'a line'].forEach((kind) => expect(text).toContain(`, ${kind}, joining `));
+    WEAVE_ROLES.forEach((role) => expect(text).toContain(`(${role.replace(/-/g, ' ')}) `));
     expect(text).not.toContain('c5,');
     WEAVE_QUESTION_KINDS.forEach((kind) => {
       expect(lines[lines.findIndex((line) => line.startsWith(`- q-${kind} `)) + 1]).toMatch(/^ {2}The director's answer, word for word: "/);
@@ -267,7 +297,7 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
       expect(lines.find((line) => line.startsWith(`${field}: `))).toMatch(/ \[the director's change M\d+\]$/);
     });
     expect(lines.find((line) => line.startsWith('- t7 '))).toMatch(/ \[the director's change M\d+: a thread they added\]$/);
-    expect(lines.find((line) => line.startsWith('- t8 '))).toMatch(/ \[the director's changes M\d+: the (role|claim); M\d+: the (role|claim)\]$/);
+    expect(lines.find((line) => line.startsWith('- t8 '))).toMatch(/ \[the director's changes M\d+: the (role|line); M\d+: the (role|line)\]$/);
   });
 
   it("carries nothing on the removed-phrase list and no dash: the planted data is clean, so what the scan reads is the labels'", () => {
@@ -290,12 +320,12 @@ describe('4.14a: the settled weave tells the story the director settled', () => 
     left.threads[2].role = 'left-out';
     left.threads[2].reason = 'The director left it out.';
     const out = renderSettledWeave(left, carriedEdits(standingAtMeeting(null, WRITERS, left), left));
-    expect(out).not.toContain(WRITERS.connections[0].detail);
-    expect(out).toContain('- c2, a moment, joining t1 and t2: The scoreboard brought the money into the vote.');
-    expect(out.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/^- t3 \(left out\): .*\[the director's changes M1: the role; M2: the reason\]$/);
+    expect(out).not.toContain(WRITERS.connections[0].line);
+    expect(out).toContain('- c2, joining "The case against Rowan" and "The last two minutes": The scoreboard brought the money into the vote.');
+    expect(out.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/^- t3 \(left out\) .*\[the director's changes M1: the role; M2: the reason\]$/);
     const back = clone(left);
     back.threads[2].role = 'mirrors-it';
-    expect(renderSettledWeave(back, [])).toContain('- c1, a shared person, joining t1 and t3: Sloane turned the room against Rowan.');
+    expect(renderSettledWeave(back, [])).toContain('- c1, joining "The case against Rowan" and "The bathroom": Sloane turned the room against Rowan.');
   });
 
   // Meeting 3: the meeting's changes have an id form of their own wherever a prompt shows them.

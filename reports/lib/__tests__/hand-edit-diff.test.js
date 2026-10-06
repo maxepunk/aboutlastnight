@@ -1450,26 +1450,30 @@ describe('4.3b: a move within a section, across the director\'s rounds and an au
 // connection struck again by id); a send-back may change one, with its reason. The
 // answers are the director's words, kept by their own rule, and are no edit.
 describe('4.5: the meeting\'s edits', () => {
-  /** The writer's weave as the meeting showed it. Invented text. */
+  /** A piece of evidence, as the weave carries it under a line (phase 4b, brief 1B). */
+  const piece = (sources, shows, stance = 'supports') => ({ sources, shows, stance });
+  /** An element as the edits read it: without its evidence, which is never the director's (R6). */
+  const bare = ({ evidence: _evidence, ...rest }) => rest;
+  /** The writer's weave as the meeting showed it, at the level of the story. Invented text. */
   const writers = () => ({
     story: 'The room built a case against Rowan and it landed on Ellis.',
     question: 'Will the verdict cost Ellis anything?',
     headline: 'Ellis Pointed the Room at Rowan',
     convergence: 'The retainer and the empty chair meet the old sign-off.',
     threads: [
-      { id: 't1', claim: 'The case against Rowan held at four votes.', role: 'main-thread', receipt: 'ledger', verdict: true },
-      { id: 't2', claim: 'The RowanVale account took the last two minutes of selling.', role: 'grounds-it', receipt: 'ledger' },
-      { id: 't3', claim: 'Two allies split over the same secret.', role: 'complicates-it', receipt: 'row001' }
+      { id: 't1', name: 'The case against Rowan', line: 'The case against Rowan held at four votes.', role: 'main-thread', verdict: true, evidence: [piece(['notes'], 'Four hands went up for Rowan.')] },
+      { id: 't2', name: 'The last sales', line: 'The RowanVale account took the last two minutes of selling.', role: 'grounds-it', evidence: [piece(['ledger'], 'RowanVale took the last sales.')] },
+      { id: 't3', name: 'The split', line: 'Two allies split over the same secret.', role: 'complicates-it', evidence: [piece(['row001'], 'The fight in the hall.')] }
     ],
     connections: [
-      { id: 'c1', kind: 'person', joins: ['t1', 't3'], detail: 'Sloane turned the room against Rowan.' },
-      { id: 'c2', kind: 'moment', joins: ['t1', 't2'], detail: 'The scoreboard brought the money into the vote.' }
+      { id: 'c1', joins: ['t1', 't3'], line: 'Sloane turned the room against Rowan.', kind: 'person', evidence: [piece(['notes'], 'Sloane spoke first.')] },
+      { id: 'c2', joins: ['t1', 't2'], line: 'The scoreboard brought the money into the vote.', kind: 'moment', evidence: [piece(['ledger', 'notes'], 'The vote at the last sale.')] }
     ],
     questions: [
       { id: 'q1', kind: 'player', about: 'Kai', question: 'The record holds nothing Kai did: what did Kai do?', changes: 'Where Kai appears.' }
     ]
   });
-  const ADDED = { id: 't7', claim: 'The guest list was rewritten that morning.', role: 'grounds-it' };
+  const ADDED = { id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.', role: 'grounds-it' };
   /** The director's version: the story rewritten, t3 re-roled, a thread added, c2 struck, q1 answered. */
   const directors = () => {
     const weave = writers();
@@ -1490,7 +1494,9 @@ describe('4.5: the meeting\'s edits', () => {
       expect(story).toMatchObject({ scope: 'story', before: writers().story, after: directors().story });
       expect(role).toMatchObject({ scope: 'threads', before: 'complicates-it', after: 'mirrors-it' });
       expect(added).toMatchObject({ scope: 'threads', before: null, after: ADDED });
-      expect(struck).toMatchObject({ scope: 'connections', struck: true, before: writers().connections[1], after: directors().connections[1] });
+      expect(struck).toMatchObject({ scope: 'connections', struck: true, before: bare(writers().connections[1]), after: bare(directors().connections[1]) });
+      // R6: no change carries the evidence.
+      [struck.before, struck.after].forEach((element) => expect(element).not.toHaveProperty('evidence'));
     });
 
     // Brief 4.5c (the ledger's ruling on 4.5b's minor 5): bringing a struck connection back is
@@ -1498,7 +1504,7 @@ describe('4.5: the meeting\'s edits', () => {
     // change until then, so a reweave carrying only it was refused as empty.
     it('a connection unstruck puts the writer\'s connection back, one change of the whole connection, marked unstruck', () => {
       expect(D.weaveEditsBetween(directors(), { ...directors(), connections: writers().connections })).toEqual([
-        expect.objectContaining({ scope: 'connections', before: directors().connections[1], after: writers().connections[1], unstruck: true })
+        expect.objectContaining({ scope: 'connections', before: bare(directors().connections[1]), after: bare(writers().connections[1]), unstruck: true })
       ]);
     });
 
@@ -1506,7 +1512,7 @@ describe('4.5: the meeting\'s edits', () => {
       const less = { ...writers(), threads: writers().threads.slice(0, 2) };
       const cut = D.weaveEditsBetween(writers(), less);
       expect(cut).toHaveLength(1);
-      expect(cut[0]).toMatchObject({ scope: 'threads', before: writers().threads[2], after: null });
+      expect(cut[0]).toMatchObject({ scope: 'threads', before: bare(writers().threads[2]), after: null });
       const asked = { ...writers(), questions: [...writers().questions, { id: 'q2', kind: 'pronoun', about: 'Sloane', question: 'Which pronoun?', changes: 'A pronoun.' }] };
       expect(D.weaveEditsBetween(writers(), asked)).toEqual([]);
       expect(D.weaveEditsBetween(writers(), asked, { questions: true }).map((c) => D._testing.pathOf(c.at))).toEqual(['questions[#q2]']);
@@ -1563,12 +1569,12 @@ describe('4.5: the meeting\'s edits', () => {
   });
 
   it("weaveDirectorsShare reads the director's share of the weave from the edits", () => {
-    const edits = D.standingAtMeeting(null, writers(), { ...directors(), threads: directors().threads.map((t) => (t.id === 't2' ? { ...t, receipt: 'zzz999' } : t)) }).edits;
+    const edits = D.standingAtMeeting(null, writers(), { ...directors(), threads: directors().threads.map((t) => (t.id === 't2' ? { ...t, line: 'A line the director typed.' } : t)) }).edits;
     expect(D.weaveDirectorsShare(edits)).toEqual({
       addedThreads: { t7: 'E4' },
       reroledThreads: { t3: 'E3' },
       fields: { story: 'E1' },
-      threadFields: { 't2.receipt': 'E2' }
+      threadFields: { 't2.line': 'E2' }
     });
     expect(D.weaveDirectorsShare(null)).toEqual({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {} });
   });
@@ -1587,8 +1593,9 @@ describe('4.5: the meeting\'s edits', () => {
       `E1 (story): "${directors().story}"`,
       `  removed: "${writers().story}"`,
       'E2 (thread "t3", role): "mirrors-it"',
-      `E3 (thread "t7", added): id "t7"; claim "${ADDED.claim}"; role "grounds-it"`,
-      'E4 (connection "c2", struck): kind "moment"; joins "t1" / "t2"; detail "The scoreboard brought the money into the vote."'
+      `E3 (thread "t7", added): id "t7"; name "${ADDED.name}"; line "${ADDED.line}"; role "grounds-it"`,
+      // Phase 4b (brief 1B): a struck connection by its line.
+      'E4 (connection "c2", struck): "The scoreboard brought the money into the vote."'
     ]);
   });
 
@@ -1628,7 +1635,10 @@ describe('4.5: the meeting\'s edits', () => {
     const standing = D.standingAtMeeting(null, writers(), directors());
     const edits = D.carriedEdits(standing, directors());
     expect(D.locateQuotedText(`T1: "${directors().story}" states a motive.`, edits, directors())).toEqual({ editIds: ['E1'], writer: false });
-    expect(D.locateQuotedText(`T3: "${writers().threads[1].claim}" names a buried memory's owner.`, edits, directors())).toEqual({ editIds: [], writer: true });
+    expect(D.locateQuotedText(`T3: "${writers().threads[1].line}" names a buried memory's owner.`, edits, directors())).toEqual({ editIds: [], writer: true });
+    // Phase 4b (brief 1B): a finding that quotes a piece of evidence locates no line of the
+    // director's: the evidence is the writer's to fix.
+    expect(D.locateQuotedText('T3: "RowanVale took the last sales" names a buried memory\'s owner.', edits, directors())).toEqual({ editIds: [], writer: false });
     expect(D.locateQuotedText('T1: "The scoreboard brought the money into the vote" is a false cause.', edits, directors()).editIds).toEqual(['E4']);
   });
 
@@ -1659,8 +1669,8 @@ describe('4.5: the meeting\'s edits', () => {
 
     it.each([
       ['its role', (t) => ({ ...t, role: 'mirrors-it' })],
-      ['its claim', (t) => ({ ...t, claim: 'The guest list was rewritten twice that morning.' })],
-      ['a receipt typed into it', (t) => ({ ...t, receipt: 'zzz999' })]
+      ['its line', (t) => ({ ...t, line: 'The guest list was rewritten twice that morning.' })],
+      ['its name', (t) => ({ ...t, name: 'The rewritten guest list' })]
     ])('a thread they added, changed in %s: one added edit under its id, the whole thread as they left it', (_name, change) => {
       const first = D.standingAtMeeting(null, writers(), directors());
       const left = withT7(change);
@@ -1679,21 +1689,21 @@ describe('4.5: the meeting\'s edits', () => {
       const left = withT7((t) => ({ ...t, role: 'mirrors-it' }));
       const second = D.standingAtMeeting(first, rewoven(), left, { shown: rewoven() });
       const rework = clone(left);
-      rework.threads = rework.threads.map((t) => (t.id === 't7' ? { ...t, claim: 'The guest list may have changed.' } : t));
+      rework.threads = rework.threads.map((t) => (t.id === 't7' ? { ...t, line: 'The guest list may have changed.' } : t));
       const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(second, left), before: left, after: rework, pass: D.REWEAVE_PASS });
       expect(output.threads.find((t) => t.id === 't7')).toEqual(left.threads.find((t) => t.id === 't7'));
       expect(report.changed).toEqual([expect.objectContaining({ id: 'E3', where: 'thread "t7", added', restored: true, pass: 'reweave' })]);
     });
 
-    it('a connection they struck stays one strike when they change its detail, and goes when they unstrike it', () => {
+    it('a connection they struck stays one strike when they change its line, and goes when they unstrike it', () => {
       const first = D.standingAtMeeting(null, writers(), directors());
       const detailed = directors();
-      detailed.connections[1].detail = 'The scoreboard, which the director struck.';
+      detailed.connections[1].line = 'The scoreboard, which the director struck.';
       const second = D.standingAtMeeting(first, rewoven(), detailed, { shown: rewoven() });
       expect(second.edits.map((e) => [e.id, e.path])).toEqual([
         ['E1', 'story'], ['E2', 'threads[#t3].role'], ['E3', 'threads[#t7]'], ['E4', 'connections[#c2]']
       ]);
-      expect(byPath(second.edits)['connections[#c2]']).toMatchObject({ struck: true, after: detailed.connections[1] });
+      expect(byPath(second.edits)['connections[#c2]']).toMatchObject({ struck: true, after: bare(detailed.connections[1]) });
       const unstruck = directors();
       delete unstruck.connections[1].struck;
       // Brief 4.5c: the strike goes, and bringing the connection back is the next edit.
@@ -1703,7 +1713,7 @@ describe('4.5: the meeting\'s edits', () => {
 
     it("a thread a send-back's rework changed, which the director leaves as the meeting showed it, is the writer's again", () => {
       const first = D.standingAtMeeting(null, writers(), directors());
-      const reworked = withT7((t) => ({ ...t, claim: 'The rework rewrote the thread the director added.', receipt: 'row001' }));
+      const reworked = withT7((t) => ({ ...t, line: 'The rework rewrote the thread the director added.', evidence: [piece(['row001'], 'The fight in the hall.')] }));
       const second = D.standingAtMeeting(first, reworked, clone(reworked), { shown: reworked });
       expect(second.edits.map((e) => e.path)).toEqual(['story', 'threads[#t3].role', 'connections[#c2]']);
       expect(D.weaveDirectorsShare(second.edits).addedThreads).toEqual({});
@@ -1711,7 +1721,7 @@ describe('4.5: the meeting\'s edits', () => {
 
     it("a thread a send-back's rework changed, which the director then changes again: their change is a field edit, and the rest stays the writer's", () => {
       const first = D.standingAtMeeting(null, writers(), directors());
-      const reworked = withT7((t) => ({ ...t, claim: 'The rework rewrote the thread the director added.', receipt: 'row001' }));
+      const reworked = withT7((t) => ({ ...t, line: 'The rework rewrote the thread the director added.', evidence: [piece(['row001'], 'The fight in the hall.')] }));
       const left = clone(reworked);
       left.threads = left.threads.map((t) => (t.id === 't7' ? { ...t, role: 'mirrors-it' } : t));
       const second = D.standingAtMeeting(first, reworked, left, { shown: reworked });
@@ -1730,21 +1740,21 @@ describe('4.5: the meeting\'s edits', () => {
   describe('fix round 1: an id the weave repeats', () => {
     const doubledT7 = () => {
       const weave = directors();
-      weave.threads.push({ id: 't7 ', claim: 'The guest list was burned that night.', role: 'grounds-it' });
+      weave.threads.push({ id: 't7 ', name: 'The burned list', line: 'The guest list was burned that night.', role: 'grounds-it' });
       return weave;
     };
 
     it('reads "t7" and "t7 " as one id: both threads are in the diff, in order, each flagged', () => {
       const added = D.weaveEditsBetween(writers(), doubledT7()).filter((c) => c.before === null);
-      expect(added.map((c) => [D._testing.pathOf(c.at), c.after.claim, c.repeatedId])).toEqual([
-        ['threads[#t7]', ADDED.claim, true],
+      expect(added.map((c) => [D._testing.pathOf(c.at), c.after.line, c.repeatedId])).toEqual([
+        ['threads[#t7]', ADDED.line, true],
         ['threads[#t7]', 'The guest list was burned that night.', true]
       ]);
     });
 
     it("pairs a writer's repeated id in order: a change to the second element is flagged, and elements left as they were are no change", () => {
       const repeated = writers();
-      repeated.threads.push({ ...repeated.threads[1], claim: 'A second thread the writer put under t2.' });
+      repeated.threads.push({ ...repeated.threads[1], line: 'A second thread the writer put under t2.' });
       expect(D.weaveEditsBetween(repeated, clone(repeated))).toEqual([]);
       const changed = clone(repeated);
       changed.threads[3].role = 'mirrors-it';
@@ -1761,7 +1771,7 @@ describe('4.5: the meeting\'s edits', () => {
 
     it('weaveMarks keeps the flag, so the meeting can say a mark sits under a repeated id', () => {
       const rewoven = directors();
-      rewoven.threads.push({ ...rewoven.threads[1], claim: 'A thread the reweave added under t2.' });
+      rewoven.threads.push({ ...rewoven.threads[1], line: 'A thread the reweave added under t2.' });
       expect(D.weaveMarks(directors(), rewoven)).toEqual([
         { path: 'threads[#t2]', where: 'thread "t2", added', before: '', after: expect.stringContaining('A thread the reweave added under t2.'), repeatedId: true }
       ]);
@@ -1778,15 +1788,15 @@ describe('4.5: the meeting\'s edits', () => {
 // apart; the diff calls occurrenceKeys itself (the 4.5b merge), and this holds the pairing.
 describe('4.5b: the diff pairs the elements under an id as lib/weave.js occurrenceKeys places them', () => {
   const { occurrenceKeys } = require('../weave');
-  /** Threads under these ids, each claim naming its version and its index. */
-  const threads = (version, ids) => ids.map((id, i) => ({ id, claim: `${version}${i}`, role: 'grounds-it', receipt: 'ledger' }));
+  /** Threads under these ids, each line naming its version and its index. */
+  const threads = (version, ids) => ids.map((id, i) => ({ id, name: `${version}${i}`, line: `${version}${i}`, role: 'grounds-it', evidence: [] }));
   /** For each thread of `after`, the index of the thread of `before` the diff pairs it with; null for one it added. */
   function diffPairs(before, after) {
     const changes = D.weaveEditsBetween({ threads: before }, { threads: after });
     return after.map((_thread, index) => {
-      const change = changes.find((c) => c.at[1].index === index && (c.before === null || (c.at[2] && c.at[2].key === 'claim')));
+      const change = changes.find((c) => c.at[1].index === index && (c.before === null || (c.at[2] && c.at[2].key === 'line')));
       if (!change || change.before === null) return null;
-      return before.findIndex((thread) => thread.claim === change.before);
+      return before.findIndex((thread) => thread.line === change.before);
     });
   }
   /** The same pairing read from occurrenceKeys: the thread of `before` in the same place, or null. */
@@ -2479,6 +2489,8 @@ describe('4.5c: the meeting\'s un-strike, and the marks\' questions', () => {
   const { WEAVE } = require('./fixtures/rework-state');
   const { carriedWeaveQuestions } = require('../writer-questions');
   const C2 = WEAVE.connections[1];
+  /** An element as the edits read it: without its evidence, which is never the director's (phase 4b, brief 1B; R6). */
+  const bare = ({ evidence: _evidence, ...rest }) => rest;
   /** The writer's weave with c2 struck by the director. */
   const struck = () => {
     const weave = clone(WEAVE);
@@ -2491,7 +2503,7 @@ describe('4.5c: the meeting\'s un-strike, and the marks\' questions', () => {
 
   it('weaveEditsBetween reads a connection struck before and live after as one change of the whole connection, marked unstruck', () => {
     expect(D.weaveEditsBetween(struck(), clone(WEAVE))).toEqual([{
-      scope: 'connections', at: [{ key: 'connections' }, { index: 1, match: { id: 'c2' } }], before: struck().connections[1], after: C2, unstruck: true
+      scope: 'connections', at: [{ key: 'connections' }, { index: 1, match: { id: 'c2' } }], before: bare(struck().connections[1]), after: bare(C2), unstruck: true
     }]);
     // A connection struck on both sides, or live on both, is no change.
     expect(D.weaveEditsBetween(struck(), struck())).toEqual([]);
@@ -2541,7 +2553,7 @@ describe('4.5c: the meeting\'s un-strike, and the marks\' questions', () => {
       const edits = D.standingAtMeeting(strike(), struck(), clone(WEAVE)).edits;
       expect(D.formatEditLines(edits)).toBe('E2 (connection "c2", brought back)');
       expect(D.WEAVE_EDIT_LINES_GUIDE).toContain('A line marked brought back names a connection they struck at an earlier look and brought back');
-      expect(D.locateQuotedText(`T1: "${C2.detail}" is a false cause.`, edits, clone(WEAVE))).toEqual({ editIds: [], writer: true });
+      expect(D.locateQuotedText(`T1: "${C2.line}" is a false cause.`, edits, clone(WEAVE))).toEqual({ editIds: [], writer: true });
     });
   });
 
@@ -2648,7 +2660,7 @@ describe('4.5c fix round 1: a look reads the director\'s version against what th
   });
 
   it('a thread added at an approve and changed at the next look with no round since stays one added edit, as after a round', () => {
-    const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it' }] };
+    const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'grounds-it' }] };
     const first = D.standingAtMeeting(null, clone(WEAVE), added);
     const changed = clone(added);
     changed.threads[5].role = 'mirrors-it';
@@ -2690,14 +2702,14 @@ describe("4.5d: a connection the director brought back is theirs by its place, a
   const { WEAVE } = require('./fixtures/rework-state');
   const C1 = WEAVE.connections[0];
   const C2 = WEAVE.connections[1];
-  const C3 = { id: 'c3', kind: 'person', joins: ['t3', 't4'], detail: 'Sarah sat at the bar for both conversations that morning.' };
-  const C4 = { id: 'c4', kind: 'line', joins: ['t1', 't4'], detail: 'A line the pass wrote between the vote and the heir.' };
+  const C3 = { id: 'c3', joins: ['t3', 't4'], line: 'Sarah sat at the bar for both conversations that morning.', kind: 'person', evidence: [{ sources: ['notes'], shows: 'Sarah at the bar twice.', stance: 'supports' }] };
+  const C4 = { id: 'c4', joins: ['t1', 't4'], line: 'A line the pass wrote between the vote and the heir.', kind: 'line', evidence: [] };
   const REWORDED = 'The result came back on the night Marcus made the sale.';
   /** The writer's weave, with a third connection after c2. */
   const writers = () => ({ ...clone(WEAVE), connections: [clone(C1), clone(C2), clone(C3)] });
   /** `writers()` with its connections as `connections` gives them. */
   const withConnections = (connections) => ({ ...writers(), connections: connections.map(clone) });
-  const reworded = () => withConnections([C1, { ...C2, detail: REWORDED }, C3]);
+  const reworded = () => withConnections([C1, { ...C2, line: REWORDED }, C3]);
   /** The director struck c2 at one look (E1) and brought it back at the next (E2). */
   const broughtBack = () => {
     const struck = withConnections([C1, { ...C2, struck: true }, C3]);
@@ -2737,11 +2749,11 @@ describe("4.5d: a connection the director brought back is theirs by its place, a
     // Dropped after an earlier pass of the round reworded it: back as that pass left it. Task
     // 4.5f (the integrator's ruling 3 on 4.5e's findings) changed what this line pinned, the
     // words the meeting showed, which undid the earlier pass's fix of a false link.
-    expect(settle(withConnections([C1, C3]), 2, { before: reworded() }).output.connections).toEqual([C1, { ...C2, detail: REWORDED }, C3]);
+    expect(settle(withConnections([C1, C3]), 2, { before: reworded() }).output.connections).toEqual([C1, { ...C2, line: REWORDED }, C3]);
   });
 
   it("a finding that quotes it is the writer's, as the pass reworded it too", () => {
-    expect(D.locateQuotedText(`T1: "${C2.detail}" states a cause the record does not show.`, edits(), writers()))
+    expect(D.locateQuotedText(`T1: "${C2.line}" states a cause the record does not show.`, edits(), writers()))
       .toEqual({ editIds: [], writer: true });
     expect(D.locateQuotedText(`T1: "${REWORDED}" states a cause.`, D.carriedEdits(broughtBack(), reworded()), reworded()))
       .toEqual({ editIds: [], writer: true });
@@ -2826,7 +2838,7 @@ describe('4.5d: two photos or two cards swapped are two moves, each keeping its 
     const standing = D.standingAtMeeting(null, clone(WEAVE), left);
     expect(standing.edits.map((e) => e.path)).toEqual(['threads[#t3].role']);
     const after = clone(left);
-    after.threads[2] = { id: 't6', claim: 'A thread the pass wrote in its place.', role: 'grounds-it', receipt: 'ledger' };
+    after.threads[2] = { id: 't6', name: 'A new thread', line: 'A thread the pass wrote in its place.', role: 'grounds-it', evidence: [{ sources: ['ledger'], shows: 'A sale.', stance: 'supports' }] };
     const { output, report } = D.settleEdits(null, { edits: D.carriedEdits(standing, left), before: left, after, pass: 1 });
     expect(output.threads.map((t) => `${t.id}:${t.role}`))
       .toEqual(['t1:main-thread', 't2:grounds-it', 't3:mirrors-it', 't6:grounds-it', 't4:carries-it-forward', 't5:left-out']);
@@ -2861,21 +2873,23 @@ describe('4.5e: a connection the director brought back goes back as the meeting 
   /** The writer's weave with c2's words as a fix pass reworded them. */
   const reworded = () => {
     const weave = writers();
-    weave.connections[1].detail = FIXED;
+    weave.connections[1].line = FIXED;
     return weave;
   };
+  /** An element as the edits read it: without its evidence (phase 4b, brief 1B; R6). */
+  const bare = ({ evidence: _evidence, ...rest }) => rest;
   /** Look 1 strikes c2 (E1), and look 2 brings it back (E2). */
   const broughtBack = () => D.standingAtMeeting(D.standingAtMeeting(null, writers(), struck()), struck(), writers());
 
   it('a later look takes its words from the connection the meeting showed, so a pass that drops it after a round reworded it puts back the rewording', () => {
     // Round A: the fix rewords c2, a false cause in the writer's words, and code keeps the words.
     const roundA = D.settleEdits(null, { edits: D.carriedEdits(broughtBack(), writers()), before: writers(), after: reworded(), pass: 1 });
-    expect(roundA.output.connections[1].detail).toBe(FIXED);
+    expect(roundA.output.connections[1].line).toBe(FIXED);
     // Look 3: the meeting shows the rewording; the director changes the headline and reweaves.
     const left = { ...reworded(), headline: 'The Ledger Kept a Second Book.' };
     const look3 = D.standingAtMeeting(broughtBack(), reworded(), left, { shown: reworded() });
     expect(look3.edits.map((e) => [e.id, e.path, e.unstruck === true])).toEqual([['E2', 'connections[#c2]', true], ['E3', 'headline', false]]);
-    expect(look3.edits[0].after).toEqual(reworded().connections[1]);
+    expect(look3.edits[0].after).toEqual(bare(reworded().connections[1]));
     // Round B: the reweave drops c2, and code puts it back with the words the meeting last showed.
     const dropped = { ...clone(left), connections: [clone(C1)] };
     const roundB = D.settleEdits(null, { edits: D.carriedEdits(look3, left), before: left, after: dropped, pass: D.REWEAVE_PASS });
@@ -3154,14 +3168,14 @@ describe('4.5f: a connection the director brought back goes back as the version 
     expect(look2.edits.map((e) => [e.id, e.path, e.unstruck === true])).toEqual([['E2', 'headline', false], ['E3', 'connections[#c2]', true]]);
     // The reweave rewords c2, the fix of a false link in the writer's words, and code keeps the words.
     const rewoven = clone(left);
-    rewoven.connections[1].detail = REWOVEN;
+    rewoven.connections[1].line = REWOVEN;
     const reweave = D.settleEdits(null, { edits: D.carriedEdits(look2, left), before: left, after: rewoven, pass: D.REWEAVE_PASS });
-    expect(reweave.output.connections[1].detail).toBe(REWOVEN);
+    expect(reweave.output.connections[1].line).toBe(REWOVEN);
     expect(reweave.report.changed).toEqual([]);
     // The fact check's one fix drops c2: code puts it back as the reweave left it.
     const dropped = { ...clone(reweave.output), connections: [clone(C1)] };
     const fix = D.settleEdits(reweave.report, { edits: D.carriedEdits(look2, reweave.output), before: reweave.output, after: dropped, pass: 1 });
-    expect(fix.output.connections).toEqual([C1, { ...WEAVE.connections[1], detail: REWOVEN }]);
+    expect(fix.output.connections).toEqual([C1, { ...WEAVE.connections[1], line: REWOVEN }]);
     expect(fix.report.changed).toEqual([expect.objectContaining({ id: 'E3', became: null, restored: true })]);
   });
 });
@@ -3287,14 +3301,14 @@ describe('4.5g: a connection the director brought back goes back with the words 
     const left = { ...writers(), headline: 'A Director Headline For The Round.' };
     const look2 = D.standingAtMeeting(look1, struck(), left, { shown: struck() });
     const rewoven = clone(left);
-    rewoven.connections[1].detail = REWOVEN;
+    rewoven.connections[1].line = REWOVEN;
     const reweave = D.settleEdits(null, { edits: D.carriedEdits(look2, left), before: left, after: rewoven, pass: D.REWEAVE_PASS });
     const dropped = { ...clone(reweave.output), connections: [clone(C1)] };
     const fix = D.settleEdits(reweave.report, { edits: D.carriedEdits(look2, reweave.output), before: reweave.output, after: dropped, pass: 1 });
-    expect(fix.output.connections[1].detail).toBe(REWOVEN);
+    expect(fix.output.connections[1].line).toBe(REWOVEN);
     expect(fix.report.changed).toEqual([expect.objectContaining({ id: 'E3', became: null, restored: true })]);
     expect(fix.report.changed[0].director).toContain(REWOVEN);
-    expect(fix.report.changed[0].director).not.toContain(WEAVE.connections[1].detail);
+    expect(fix.report.changed[0].director).not.toContain(WEAVE.connections[1].line);
   });
 });
 

@@ -99,8 +99,8 @@
   // ── Documents by name (brief 1.2) ─────────────────────────────────────────
 
   /**
-   * One document as the stop names it (brief 1.2; task 4.8: a thread's receipt at the
-   * story meeting, through receiptView).
+   * One document as the stop names it (brief 1.2; a piece's document at the story meeting,
+   * through receiptView; phase 4b, brief 1B).
    *
    * `evidenceIndex` is the stop's payload map from a document's id to the document
    * (`server.js#buildEvidenceIndex`); without it the director judged the arcs by
@@ -1268,12 +1268,14 @@
 
   // ── The story meeting (phase 4, task 4.8; spec 4.3 and 4.4) ────────────────
   //
-  // The arc stop is the story meeting: a page of about 400 words that the director reads
-  // and settles in minutes. ArcSelection.js renders it from meetingView and changes the
+  // The arc stop is the story meeting: a page of at most 300 words, at the level of the
+  // story, that the director reads and settles in minutes (phase 4b, brief 1B; spec
+  // 2026-10-05 section 4.1). ArcSelection.js renders it from meetingView and changes the
   // weave only through the operations below; it sends only meetingPayload's payloads,
   // 4.5's `{meeting: 'approve' | 'reweave' | 'send-back', weave, note}` (lib/meeting.js
   // meetingResume), each held first to meetingWeaveProblems, the gate's decisions. What
-  // the director types is sent as typed.
+  // the director types is sent as typed. The evidence under each line is the writers', so the
+  // page folds it, and no change of the director's touches it (R6).
 
   /** The meeting's stop type: the stop types keep their names (R3). */
   var MEETING_STOP = 'arc-selection';
@@ -1294,19 +1296,37 @@
     'left-out': 'Left out'
   };
 
-  /** What two threads share at a connection. The keys are lib/weave.js CONNECTION_KINDS (a test holds them equal). */
-  var CONNECTION_KIND_LABELS = { person: 'A shared person', moment: 'A moment', document: 'A document', line: 'A line' };
+  /**
+   * What two threads share at a connection: a copy of lib/weave.js CONNECTION_KINDS (a test
+   * holds the two equal). The kind stays underneath, unprinted (R1): the gate's shape reads it.
+   */
+  var CONNECTION_KINDS = ['person', 'moment', 'document', 'line'];
 
   /** The role of a thread the story does not need: a copy of lib/weave.js LEFT_OUT_ROLE (a test holds the two equal). */
   var LEFT_OUT_ROLE = 'left-out';
 
   /**
-   * Copies of lib/weave.js LEDGER_RECEIPT and STRUCK_KEY and of lib/writer-questions.js
-   * WEAVE_ANSWER_KEY, which the browser cannot import; a test holds each equal.
+   * Copies of lib/weave.js STRUCK_KEY and of lib/writer-questions.js WEAVE_ANSWER_KEY, which
+   * the browser cannot import; a test holds each equal.
    */
-  var LEDGER_RECEIPT = 'ledger';
   var STRUCK_KEY = 'struck';
   var WEAVE_ANSWER_KEY = 'answer';
+
+  /** The key a line carries its evidence under: a copy of lib/hand-edit-diff.js EVIDENCE_KEY (a test holds the two equal). */
+  var EVIDENCE_KEY = 'evidence';
+
+  /**
+   * The sources a piece of evidence may name besides a document, each with the words the fold
+   * names it by (phase 4b, brief 1B). The keys are lib/evidence.js EVIDENCE_SOURCES' values,
+   * which the browser cannot import (a test holds them equal).
+   */
+  var EVIDENCE_SOURCE_LABELS = { ledger: 'The ledger', 'evidence-log': 'The evidence log', notes: 'Your notes' };
+
+  /** Whether a piece supports its line or cuts against it: a copy of lib/evidence.js EVIDENCE_STANCES (a test holds the two equal). */
+  var EVIDENCE_STANCES = ['supports', 'cuts-against'];
+
+  /** The stance the fold names, where a piece takes it. */
+  var CUTS_AGAINST = 'cuts-against';
 
   /**
    * The weave's text fields, read one place each as lib/hand-edit-diff.js weaveEditsBetween
@@ -1319,11 +1339,23 @@
   var MEETING_EDITABLE_FIELDS = ['story', 'question', 'headline', 'convergence'];
 
   /**
+   * One piece of evidence, as the gate's director-side schema holds it (lib/evidence.js
+   * EVIDENCE_PIECE_SCHEMA, which both the weave's and the map's schemas embed).
+   */
+  var EVIDENCE_PIECE_SHAPE = { list: {
+    required: ['sources', 'shows', 'stance'],
+    fields: { sources: 'nonEmptyStrings', shows: 'string', stance: EVIDENCE_STANCES, card: 'boolean' }
+  } };
+
+  /**
    * The weave as the director leaves it, as the gate's director-side schema holds it
    * (lib/meeting.js DIRECTOR_WEAVE_SCHEMA, which the browser cannot import): each
-   * property's type ('string', 'boolean', 'strings' for a list of text, an enum's values,
-   * or a list's or an object's own shape) and the names required. A test builds this
-   * shape from DIRECTOR_WEAVE_SCHEMA and holds the two equal.
+   * property's type ('string', 'boolean', 'strings' for a list of text, 'nonEmptyStrings'
+   * for one that holds at least one, an enum's values, or a list's or an object's own
+   * shape) and the names required. A thread the director adds is its id, name, line and
+   * role; the evidence, the writers', is held to its shape wherever a line carries it
+   * (phase 4b, brief 1B). A test builds this shape from DIRECTOR_WEAVE_SCHEMA and holds the
+   * two equal.
    */
   var DIRECTOR_WEAVE_SHAPE = {
     required: ['story', 'question', 'headline', 'threads', 'connections', 'convergence', 'questions'],
@@ -1333,12 +1365,12 @@
       headline: 'string',
       fromYourNotes: 'string',
       threads: { list: {
-        required: ['id', 'claim', 'role'],
-        fields: { id: 'string', claim: 'string', role: Object.keys(WEAVE_ROLE_LABELS), receipt: 'string', reason: 'string', verdict: 'boolean' }
+        required: ['id', 'name', 'line', 'role'],
+        fields: { id: 'string', name: 'string', line: 'string', role: Object.keys(WEAVE_ROLE_LABELS), verdict: 'boolean', reason: 'string', evidence: EVIDENCE_PIECE_SHAPE }
       } },
       connections: { list: {
-        required: ['id', 'kind', 'joins', 'detail'],
-        fields: { id: 'string', kind: Object.keys(CONNECTION_KIND_LABELS), joins: 'strings', detail: 'string', struck: 'boolean' }
+        required: ['id', 'joins', 'line', 'kind'],
+        fields: { id: 'string', joins: 'strings', line: 'string', kind: CONNECTION_KINDS, evidence: EVIDENCE_PIECE_SHAPE, struck: 'boolean' }
       } },
       convergence: 'string',
       strongerMainThread: { object: { required: ['thread', 'reason'], fields: { thread: 'string', reason: 'string' } } },
@@ -1551,14 +1583,24 @@
   }
 
   /**
-   * A thread the writer missed, in one line, with a role: under an id of its own, with no
-   * receipt and no reason, which the director-side schema allows. A blank line adds none.
+   * A thread the writer missed (phase 4b, brief 1B): its name, its line and its role, under an
+   * id of its own, `{id, name, line, role}`, as typed. It carries no evidence and no reason,
+   * which the director-side schema allows: the map writer finds its evidence (spec 5.3). With
+   * no name and no line it adds none; either alone is kept as typed, the other left blank.
+   *
+   * @param {Object} weave - the weave as the director has it
+   * @param {string} name - the thread's short name
+   * @param {string} line - the thread in one line
+   * @param {string} role - one of the meeting's roles
+   * @returns {Object} the weave with the thread, or the weave given when there is nothing to add
    */
-  function addMeetingThread(weave, claim, role) {
+  function addMeetingThread(weave, name, line, role) {
     checkedRole(role, 'addMeetingThread');
-    if (typeof claim !== 'string' || !claim.trim()) return weave;
+    var typedName = typeof name === 'string' ? name : '';
+    var typedLine = typeof line === 'string' ? line : '';
+    if (!typedName.trim() && !typedLine.trim()) return weave;
     var next = editedWeave(weave, 'addMeetingThread');
-    next.threads.push({ id: freshThreadId(next.threads), claim: claim, role: role });
+    next.threads.push({ id: freshThreadId(next.threads), name: typedName, line: typedLine, role: role });
     return next;
   }
 
@@ -1694,19 +1736,18 @@
 
   /**
    * The line under a connection that goes out of the story with a left-out thread (brief 4.14a),
-   * or '' for a connection in the story: which threads it goes with, and that bringing them in
-   * brings it back.
+   * or '' for a connection in the story: which threads it goes with, by their names (phase 4b,
+   * brief 1B), and that bringing them in brings it back.
    *
    * @param {string[]} threads - the left-out threads it joins (leftOutThreadsOf)
+   * @param {Object} words - meetingWordsOf's, which names them
    * @returns {string}
    */
-  function leftOutLine(threads) {
+  function leftOutLine(threads, words) {
     if (threads.length === 0) return '';
-    if (threads.length === 1) {
-      return 'Out of the story with thread ' + threads[0] + ', which is left out. Bring ' + threads[0] + ' in and this connection comes back.';
-    }
-    var named = threads.slice(0, -1).join(', ') + ' and ' + threads[threads.length - 1];
-    return 'Out of the story with threads ' + named + ', which are left out. Bring ' + (threads.length === 2 ? 'both' : 'all of them') + ' in and this connection comes back.';
+    var named = words.joinsText(threads);
+    if (threads.length === 1) return 'Out of the story with ' + named + ', which is left out. Bring it in and this connection comes back.';
+    return 'Out of the story with ' + named + ', which are left out. Bring ' + (threads.length === 2 ? 'both' : 'all of them') + ' in and this connection comes back.';
   }
 
   /**
@@ -1715,8 +1756,9 @@
    * stronger main thread whole; each thread and connection found by its id, field by
    * field, added whole or taken out whole; a connection struck as one change of the whole,
    * and one brought back as one change of the whole too (task 4.5c). The questions are not
-   * read: an answer is the director's words, no edit. Each change under an id either weave
-   * repeats carries `repeatedId`, since no edit can find its element by the id.
+   * read: an answer is the director's words, no edit. Nor is the evidence under a line, the
+   * writers' (phase 4b, brief 1B; R6). Each change under an id either weave repeats carries
+   * `repeatedId`, since no edit can find its element by the id.
    *
    * @param {*} before
    * @param {*} after
@@ -1745,8 +1787,10 @@
           change(collection, entry.id, null, repeated(entry.id), isStruckConnection(entry.element));
           return;
         }
-        var p = collection === 'connections' ? withoutKey(prior, STRUCK_KEY) : prior;
-        var e = collection === 'connections' ? withoutKey(entry.element, STRUCK_KEY) : entry.element;
+        // Phase 4b (brief 1B; R6): the evidence is never the director's edit, so no change
+        // reads it, as lib/hand-edit-diff.js withoutEvidence leaves it out.
+        var p = withoutKey(collection === 'connections' ? withoutKey(prior, STRUCK_KEY) : prior, EVIDENCE_KEY);
+        var e = withoutKey(collection === 'connections' ? withoutKey(entry.element, STRUCK_KEY) : entry.element, EVIDENCE_KEY);
         unionKeys(p, e).forEach(function (field) {
           if (!sameValue(p[field], e[field])) change(collection, entry.id, field, repeated(entry.id), false);
         });
@@ -1762,8 +1806,9 @@
   function typeProblem(value, type, at) {
     if (type === 'string') return typeof value === 'string' ? null : at + ' must be text';
     if (type === 'boolean') return typeof value === 'boolean' ? null : at + ' must be true or false';
-    if (type === 'strings') {
+    if (type === 'strings' || type === 'nonEmptyStrings') {
       if (!Array.isArray(value)) return at + ' must be a list';
+      if (type === 'nonEmptyStrings' && value.length === 0) return at + ' must name at least one';
       for (var i = 0; i < value.length; i += 1) {
         if (typeof value[i] !== 'string') return at + '[' + i + '] must be text';
       }
@@ -1965,27 +2010,86 @@
   }
 
   /**
-   * A thread's receipt, named through the stop's evidenceIndex: the document and its owner,
-   * found in any case as the weave checks find a receipt, or the ledger. A receipt the index
-   * does not hold shows as its id.
+   * A document the stop names, through its evidenceIndex: its name and owner, found in any
+   * case as the evidence check finds a source (lib/evidence.js). A document the index does not
+   * hold shows as its id. The story meeting names a piece's document by it (evidenceFoldView),
+   * the map a card's, and the desk the document a card cites.
    *
-   * @param {*} receipt
+   * @param {*} documentId
    * @param {Object} evidenceIndex - data.evidenceIndex
-   * @returns {{id: string, label: string, ledger: boolean, known: boolean, firstLine: string}|null}
+   * @returns {{id: string, label: string, known: boolean, firstLine: string}|null}
    */
-  function receiptView(receipt, evidenceIndex) {
-    var id = asString(receipt).trim();
+  function receiptView(documentId, evidenceIndex) {
+    var id = asString(documentId).trim();
     if (!id) return null;
-    if (id.toLowerCase() === LEDGER_RECEIPT) return { id: id, label: 'the ledger', ledger: true, known: true, firstLine: '' };
     var index = isPlainObject(evidenceIndex) ? evidenceIndex : {};
     var key = hasOwn(index, id) ? id : null;
     if (key === null) {
       var lower = id.toLowerCase();
       key = Object.keys(index).filter(function (k) { return k.toLowerCase() === lower; })[0] || null;
     }
-    if (key === null) return { id: id, label: id, ledger: false, known: false, firstLine: '' };
+    if (key === null) return { id: id, label: id, known: false, firstLine: '' };
     var entry = evidenceEntry(key, index);
-    return { id: id, label: entry.label, ledger: false, known: true, firstLine: entry.firstLine };
+    return { id: id, label: entry.label, known: true, firstLine: entry.firstLine };
+  }
+
+  /** The fold under each line of the story meeting and the map (spec 9). */
+  var EVIDENCE_FOLD_TITLE = "What's behind it";
+
+  /** What the fold says of a piece that cuts against its line. */
+  var CUTS_AGAINST_LABEL = 'Cuts against';
+
+  /**
+   * The fold of a thread at the story meeting that carries no evidence, such as one the
+   * director added: the next writer finds its evidence (spec 5.3; Review focus 1).
+   */
+  var MEETING_NO_EVIDENCE_LINE = 'Nothing yet: the map writer finds the evidence for it.';
+
+  /**
+   * One of a piece's sources as the fold names it: the ledger, the evidence log or the
+   * director's notes in EVIDENCE_SOURCE_LABELS' words, read in any case as the evidence check
+   * reads them, and a document by its name and owner (receiptView), or as written when the
+   * index does not hold it.
+   */
+  function sourceWords(source, evidenceIndex) {
+    var id = asString(source).trim();
+    if (!id) return null;
+    var named = id.toLowerCase();
+    if (hasOwn(EVIDENCE_SOURCE_LABELS, named)) return { label: EVIDENCE_SOURCE_LABELS[named], named: true };
+    return { label: receiptView(id, evidenceIndex).label, named: false };
+  }
+
+  /** A piece's sources as one phrase: "The ledger and the evidence log", "ALE003 - The sale (Alex Reeves), the ledger and your notes". */
+  function sourcesPhrase(words) {
+    var labels = words.map(function (w, n) { return n > 0 && w.named ? lowerFirst(w.label) : w.label; });
+    return labels.length > 1 ? labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1] : labels.join('');
+  }
+
+  /**
+   * The "What's behind it" fold of a line (phase 4b, brief 1B; spec 5.4 and 9): each piece of
+   * its evidence, in order, with its sources by name (sourceWords), what it shows, and whether
+   * it cuts against the line. The story meeting folds each thread's and each connection's
+   * evidence with it, and the map each move's. A line with no evidence folds no piece: its
+   * stop says why in its own words (MEETING_NO_EVIDENCE_LINE at the meeting).
+   *
+   * @param {*} pieces - a line's evidence
+   * @param {Object} evidenceIndex - data.evidenceIndex
+   * @returns {Array<{key: string, sources: string[], shows: string, cutsAgainst: boolean, text: string}>}
+   */
+  function evidenceFoldView(pieces, evidenceIndex) {
+    return asArray(pieces).filter(isPlainObject).map(function (piece, n) {
+      var words = asArray(piece.sources).map(function (source) { return sourceWords(source, evidenceIndex); }).filter(Boolean);
+      var named = sourcesPhrase(words);
+      var shows = asString(piece.shows).trim();
+      var cutsAgainst = piece.stance === CUTS_AGAINST;
+      return {
+        key: 'piece-' + n,
+        sources: words.map(function (w) { return w.label; }),
+        shows: shows,
+        cutsAgainst: cutsAgainst,
+        text: (cutsAgainst ? CUTS_AGAINST_LABEL + ' · ' : '') + (named ? named + ': ' : '') + shows
+      };
+    });
   }
 
   /** The ids after the prefix of a concern ("E1, E3: "), as lib/hand-edit-diff.js CONCERN_IDS reads them. */
@@ -2068,32 +2172,148 @@
   }
 
   /**
-   * A place in the weave as the meeting names it: one of the weave's lines by its heading
-   * (MEETING_LINE_LABELS), anything else by the diff's `where` ("Thread "t3", role").
-   *
-   * @param {string|null} field - the weave line the place is, if it is one
-   * @param {string} where - the diff's words for the place
+   * The words of a value the weave's diff wrote as an element's fields (lib/hand-edit-diff.js
+   * editValueText: `id: t6; name: …; line: …; role: grounds-it`, or the stronger main thread's
+   * `thread: t2; reason: …`), each field by its key, or null for any other text. The fields are
+   * found by the keys a weave's elements carry, so a value that is plain text reads as itself.
    */
-  function meetingPlace(field, where) {
-    return field !== null && hasOwn(MEETING_LINE_LABELS, field) ? MEETING_LINE_LABELS[field] : capitalized(asString(where));
+  var ELEMENT_FIELD_KEYS = ['id', 'name', 'line', 'role', 'verdict', 'reason', 'joins', 'kind', 'struck', 'about', 'question', 'changes', 'answer', 'thread'];
+  var ELEMENT_FIELD_SPLIT = new RegExp('; (?=(?:' + ELEMENT_FIELD_KEYS.join('|') + '): )');
+  var ELEMENT_FIELD_START = /^(?:id|thread): /;
+
+  function elementFieldsOf(text) {
+    var value = asString(text);
+    if (!ELEMENT_FIELD_START.test(value)) return null;
+    var fields = {};
+    value.split(ELEMENT_FIELD_SPLIT).forEach(function (part) {
+      var at = part.indexOf(': ');
+      if (at > 0) fields[part.slice(0, at)] = part.slice(at + 2);
+    });
+    return fields;
   }
 
-  /** A mark's place: its line, or its element ("Thread "t4"") without the diff's ", cut" or ", added", which the mark's line says. */
-  function markPlace(mark) {
-    return meetingPlace(lineKeyOf(mark.path), asString(mark.where).replace(/, (cut|added)$/, ''));
+  /**
+   * The meeting's words for the weave's elements (phase 4b, brief 1B; spec 9: the tags leave
+   * the page): each thread by its name, each connection by the names of the threads it joins,
+   * each question by what it is about, read from the weave as the director has it, then the
+   * weave the meeting showed, then the elements the round's marks carry (one the round took
+   * out). No line or label of the meeting names an element by its id: a place the diff names
+   * by an id (`thread "t3", role`), and a value it writes as an element's fields, read through
+   * these words.
+   *
+   * @param {Object} weave - the weave as the director has it
+   * @param {Object|null} shown - the weave the meeting showed
+   * @param {Array} marks - the round's marks (data.marks.marks)
+   * @returns {{threadName: function(string): string, joinsText: function(*): string,
+   *            place: function(string|null, string): string, value: function(*): string,
+   *            fieldValue: function(string, *): string}}
+   */
+  function meetingWordsOf(weave, shown, marks) {
+    var elements = { threads: new Map(), connections: new Map(), questions: new Map() };
+    var remember = function (collection, element) {
+      var id = weaveIdOf(element);
+      if (id && !elements[collection].has(id)) elements[collection].set(id, element);
+    };
+    [weave, shown].forEach(function (w) {
+      if (!isPlainObject(w)) return;
+      Object.keys(elements).forEach(function (collection) {
+        asArray(w[collection]).forEach(function (element) { remember(collection, element); });
+      });
+    });
+    asArray(marks).filter(isPlainObject).forEach(function (mark) {
+      var collection = (/^([A-Za-z]+)\[/.exec(asString(mark.path)) || [])[1];
+      if (hasOwn(elements, collection) && isPlainObject(mark.element)) remember(collection, mark.element);
+    });
+    var quoted = function (text) { return '"' + text + '"'; };
+    var threadName = function (id) {
+      var thread = elements.threads.get(asString(id).trim());
+      return thread ? asString(thread.name).trim() || asString(thread.line).trim() : '';
+    };
+    var namesOf = function (ids, quote) {
+      var named = asArray(ids).map(function (id) {
+        var name = threadName(id);
+        if (!name) return 'a thread the weave does not hold';
+        return quote ? quoted(name) : name;
+      });
+      return named.length > 1 ? named.slice(0, -1).join(', ') + ' and ' + named[named.length - 1] : named.join('');
+    };
+    /**
+     * An element's place by its words, found by its id in the weaves and the marks, or else in
+     * `fields`, the element as a report entry wrote it (one a send-back took out, which no weave
+     * the stop holds keeps).
+     */
+    var elementPlace = function (word, id, fields) {
+      var own = fields || {};
+      if (word === 'thread') {
+        var name = threadName(id) || asString(own.name).trim() || asString(own.line).trim();
+        return name ? 'Thread ' + quoted(name) : 'A thread';
+      }
+      if (word === 'connection') {
+        var connection = elements.connections.get(id);
+        var joins = connection ? asArray(connection.joins) : asString(own.joins).split(' / ').filter(Boolean);
+        return joins.length > 0 ? 'The connection between ' + namesOf(joins, true) : 'A connection';
+      }
+      var question = elements.questions.get(id);
+      var about = question ? asString(question.about).trim() : asString(own.about).trim();
+      return about ? 'The question about ' + quoted(about) : 'A question';
+    };
+    var value = function (text) {
+      var fields = elementFieldsOf(text);
+      if (!fields) return roleWord(text);
+      if (hasOwn(fields, 'thread')) return [threadName(fields.thread), asString(fields.reason)].filter(Boolean).join(': ');
+      if (hasOwn(fields, 'joins')) return asString(fields.line);
+      if (hasOwn(fields, 'question')) return asString(fields.question);
+      var said = [asString(fields.name), asString(fields.line)].filter(Boolean).join(': ');
+      return said + (fields.role ? ' (' + roleWord(fields.role) + ')' : '');
+    };
+    return {
+      threadName: threadName,
+      /** The threads a connection joins, by name: "The sale" and "The heir". */
+      joinsText: function (joins) { return namesOf(joins, true); },
+      /**
+       * A place in the weave as the meeting names it: one of the weave's lines by its heading
+       * (MEETING_LINE_LABELS); an element by its words (`Thread "The envelope", role`), from
+       * the diff's `where` (`thread "t3", role`), read from `elementText` (a report entry's
+       * element, as the diff wrote it) when no weave holds it; anything else by the diff's words.
+       */
+      place: function (field, where, elementText) {
+        if (field !== null && hasOwn(MEETING_LINE_LABELS, field)) return MEETING_LINE_LABELS[field];
+        var m = ELEMENT_PLACE.exec(asString(where));
+        if (!m) return capitalized(asString(where));
+        return elementPlace(m[1], m[2], elementFieldsOf(elementText)) + (m[3] ? ', ' + m[3] : '');
+      },
+      /** A value as the meeting names it: an element by its words, a role as the role picker names it, any other text as it is. */
+      value: value,
+      /** A field's value as a mark names it: the threads a connection joins by name; anything else as `value` names it. */
+      fieldValue: function (field, text) {
+        if (field === 'joins') return namesOf(asString(text).split(' / ').filter(Boolean), false);
+        return value(text);
+      }
+    };
   }
 
-  /** The place of an edit a send-back changed: its line (the edit's scope names it), or its `where`. */
-  function meetingEditPlace(entry) {
-    return meetingPlace(asString(entry.scope), asString(entry.where) || asString(entry.scope));
+  /** A mark's place: its line, or its element by its words, without the diff's ", cut" or ", added", which the mark's line says. */
+  function markPlace(mark, words) {
+    return words.place(lineKeyOf(mark.path), asString(mark.where).replace(/, (cut|added)$/, ''));
   }
 
   /**
    * How the meeting phrases an edit a round changed (changedEditLine, every stop's builder):
-   * its place as the page heads it, with no edit id, since the meeting shows none, a role as
-   * the role picker names it, and text that came back as still in the weave.
+   * its place as the page heads it (an element by its words), with no edit id, since the
+   * meeting shows none; a value as the meeting names it, an element by its words and a role as
+   * the role picker names it; and text that came back as still in the weave.
+   *
+   * @param {Object} words - meetingWordsOf's
    */
-  var MEETING_EDIT_LINE = { place: meetingEditPlace, valueText: roleWord, stillIn: 'in the weave' };
+  function meetingEditLineOptions(words) {
+    return {
+      place: function (entry) {
+        return words.place(asString(entry.scope), asString(entry.where) || asString(entry.scope), asString(entry.director) || asString(entry.became));
+      },
+      valueText: words.value,
+      stillIn: 'in the weave'
+    };
+  }
 
   function lowerFirst(text) {
     return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
@@ -2103,19 +2323,15 @@
   var VERDICT_FIELD = 'verdict';
 
   /**
-   * A value a mark names, as the meeting names it elsewhere on its page (brief 4.14a): a receipt by
-   * its document, as the thread's receipt line names it (receiptView); a role as the role picker
-   * names it; any other text as it is.
-   *
-   * @param {string} field - the field of an element the mark is at, or ''
-   * @param {*} text - the mark's before or after
-   * @param {Object} evidenceIndex - the stop's evidenceIndex
-   * @returns {string}
+   * The field of a connection the page never prints (R1): what the two threads share. A mark of
+   * it sits beside no line, so the meeting leaves it out (besideLines).
    */
-  function markValueWords(field, text, evidenceIndex) {
-    var value = asString(text);
-    if (field === 'receipt' && value.trim()) return receiptView(value, evidenceIndex).label;
-    return roleWord(value);
+  var UNPRINTED_FIELDS = { connections: ['kind'] };
+
+  /** Whether a mark is of a field the page never prints. */
+  function isUnprintedMark(mark) {
+    var collection = (/^([A-Za-z]+)\[/.exec(asString(mark.path)) || [])[1];
+    return hasOwn(UNPRINTED_FIELDS, collection) && UNPRINTED_FIELDS[collection].indexOf(elementFieldOf(mark.path)) !== -1;
   }
 
   /** A mark of a thread's verdict flag, in words (brief 4.14a): whether the thread carries the room's verdict now. */
@@ -2126,22 +2342,22 @@
   }
 
   /** The line beside a line of the page that the round's passes changed: what it was, as the meeting names it. */
-  function markLine(mark, evidenceIndex) {
+  function markLine(mark, words) {
     var field = elementFieldOf(mark.path);
     if (field === VERDICT_FIELD) return verdictMarkLine(mark);
     var which = field ? ' (' + field + ')' : '';
     var before = asString(mark.before);
     if (!before) return isElementPath(mark.path) ? 'New this round.' : 'Added this round' + which + '.';
-    var was = markValueWords(field, before, evidenceIndex);
+    var was = words.fieldValue(field, before);
     if (!asString(mark.after)) return 'Emptied this round' + which + '. Before: "' + was + '"';
     return 'Changed this round' + which + '. Before: "' + was + '"';
   }
 
   /**
-   * What an element the round took out whole held, as the meeting shows it (brief 4.14a): a thread
-   * by its claim and its role, a connection by its words, its kind and the threads it joins, a
-   * question by its words and its kind. Read from the element the mark carries (lib/hand-edit-diff.js
-   * weaveMarks); null for a mark that carries none.
+   * What an element the round took out whole held, as the meeting shows it (brief 4.14a; phase
+   * 4b, brief 1B): a thread by its line and its role, a connection by its line, a question by its
+   * words and its kind; the place before it names the element (markPlace). Read from the element
+   * the mark carries (lib/hand-edit-diff.js weaveMarks); null for a mark that carries none.
    */
   function takenOutWords(mark) {
     var element = isPlainObject(mark.element) ? mark.element : null;
@@ -2152,20 +2368,16 @@
       var said = parts.filter(Boolean).join(', ');
       return said ? ' (' + said + ')' : '';
     };
-    if (collection === 'threads') return quoted(element.claim) + about([roleWord(asString(element.role))]);
-    if (collection === 'connections') {
-      var kind = asString(element.kind);
-      var joins = asArray(element.joins).map(function (joined) { return String(joined); }).join(' and ');
-      return quoted(element.detail) + about([hasOwn(CONNECTION_KIND_LABELS, kind) ? CONNECTION_KIND_LABELS[kind] : kind, joins ? 'joining ' + joins : '']);
-    }
+    if (collection === 'threads') return quoted(element.line) + about([roleWord(asString(element.role))]);
+    if (collection === 'connections') return quoted(element.line);
     var questionKind = asString(element.kind);
     return quoted(element.question) + about([hasOwn(WRITER_QUESTION_KIND_LABELS, questionKind) ? WRITER_QUESTION_KIND_LABELS[questionKind] : '']);
   }
 
   /** The line for a line or an element the round's passes took out, which the page no longer shows: what it held, in words. */
-  function removedLine(mark) {
-    var words = takenOutWords(mark);
-    return markPlace(mark) + ': taken out this round. Before: ' + (words !== null ? words : '"' + asString(mark.before) + '"');
+  function removedLine(mark, words) {
+    var held = takenOutWords(mark);
+    return markPlace(mark, words) + ': taken out this round. Before: ' + (held !== null ? held : '"' + words.value(mark.before) + '"');
   }
 
   /**
@@ -2180,21 +2392,22 @@
    * @param {Object} mark - the round's mark that took the element out
    * @param {Array<{entry: Object, field: string}>} edits - the report's entries for the
    *   director's edits of the element's fields, in the report's order, each with its field (`role`)
+   * @param {Object} words - meetingWordsOf's
    */
-  function takenOutWithEditLine(mark, edits) {
+  function takenOutWithEditLine(mark, edits, words) {
     var gave = edits.map(function (edit) {
-      return 'the ' + edit.field + ' you gave it, "' + roleWord(asString(edit.entry.director)) + '"';
+      return 'the ' + edit.field + ' you gave it, "' + words.value(edit.entry.director) + '"';
     });
     var listed = gave.length < 2 ? gave.join('') : gave.slice(0, -1).join(', ') + ', and ' + gave[gave.length - 1];
     var pass = passWords(edits.map(function (edit) { return edit.entry; }));
-    return removedLine(mark) + '. ' + capitalized(listed) + ', went with it (' + pass.by + '). ' + pass.why;
+    return removedLine(mark, words) + '. ' + capitalized(listed) + ', went with it (' + pass.by + '). ' + pass.why;
   }
 
   /** The line for any other mark whose line the page does not show: what changed, and what the place holds now. */
-  function elsewhereLine(mark, evidenceIndex) {
+  function elsewhereLine(mark, words) {
     var field = elementFieldOf(mark.path);
     var after = field === VERDICT_FIELD ? '' : asString(mark.after);
-    return markPlace(mark) + ': ' + lowerFirst(markLine(mark, evidenceIndex)) + (after ? ' Now: "' + markValueWords(field, after, evidenceIndex) + '"' : '');
+    return markPlace(mark, words) + ': ' + lowerFirst(markLine(mark, words)) + (after ? ' Now: "' + words.fieldValue(field, after) + '"' : '');
   }
 
   /** The banner over the marks after a round. */
@@ -2360,6 +2573,38 @@
     return line.field === '' || field === '' || line.field === field;
   }
 
+  /** How a code check still failing opens its line on the meeting's page. */
+  var CHECK_FAILING_PREFIX = 'Check still failing: ';
+
+  /**
+   * The code checks still failing on the weave in hand (lib/meeting.js meetingCheckFailures), by
+   * the line of the page their place names (phase 4b, brief 1B; spec 6.3): a failure about a
+   * thread, a connection, a question or a field of the weave sits beside that line, and one with
+   * no place, or a place the page does not show, stays at the top of the page.
+   *
+   * @param {Array} failures - the stop's `checkFailures`, each `{type, message, place?}`
+   * @param {Set<string>} onPage - the keys of the lines the page shows
+   * @returns {{byLine: Map<string, string[]>, top: string[]}}
+   */
+  function failuresBesideLines(failures, onPage) {
+    var byLine = new Map();
+    var top = [];
+    asArray(failures).filter(isPlainObject).forEach(function (failure) {
+      var message = asString(failure.message).trim();
+      if (!message) return;
+      var line = CHECK_FAILING_PREFIX + message;
+      var key = lineKeyOf(failure.place);
+      if (key === null || !onPage.has(key)) {
+        top.push(line);
+        return;
+      }
+      var list = byLine.get(key) || [];
+      list.push(line);
+      byLine.set(key, list);
+    });
+    return { byLine: byLine, top: top };
+  }
+
   /**
    * The concerns and the marks by the line of the page they sit beside (linesOnPage), and
    * the ones no line shows, each listed with its place:
@@ -2375,14 +2620,18 @@
    * - Several marks about one entry, such as two fields of a thread the director added: the
    *   entry's line stands in the first mark's place, and the other marks show nothing.
    * - A mark that took an element out whole, about the entries for its fields, such as the
-   *   claim and the role the director gave a thread a send-back took out: one line says the
+   *   line and the role the director gave a thread a send-back took out: one line says the
    *   element went and names each field (takenOutWithEditLine; brief 4.10d).
+   * A mark of a field the page never prints, a connection's kind, is no line (isUnprintedMark).
+   * Every place is named in the meeting's words, never by an id (meetingWordsOf; phase 4b,
+   * brief 1B).
    *
    * @param {Object} data - the stop's payload
    * @param {Set<string>} onPage - the lines the page shows
    * @param {Object[]} entries - the report's entries the meeting shows
+   * @param {Object} words - meetingWordsOf's
    */
-  function besideLines(data, onPage, entries) {
+  function besideLines(data, onPage, entries, words) {
     var placed = concernsBesideLines(data.concerns, onPage, lineKeyOf);
     var marks = new Map();
     var out = { concerns: placed.byLine, marks: marks, otherConcerns: placed.other, removed: [], otherMarks: [], takenOut: new Set(), edits: [] };
@@ -2391,7 +2640,8 @@
       if (list.indexOf(line) === -1) list.push(line);
       map.set(key, list);
     };
-    var lines = asArray(entries).map(function (entry) { return { entry: entry, line: changedEditLine(entry, MEETING_EDIT_LINE), shown: false }; });
+    var editLine = meetingEditLineOptions(words);
+    var lines = asArray(entries).map(function (entry) { return { entry: entry, line: changedEditLine(entry, editLine), shown: false }; });
     /**
      * What the page shows in a mark's place for the entries the mark is about: each entry's line
      * the first time a mark is about it, in the report's order; when the mark took the element out
@@ -2408,21 +2658,21 @@
       fresh.forEach(function (l) {
         if (fields.indexOf(l) === -1) shown.push(l.line);
         else if (l === fields[0]) {
-          shown.push(takenOutWithEditLine(mark, fields.map(function (f) { return { entry: f.entry, field: entryLineOf(f.entry).field }; })));
+          shown.push(takenOutWithEditLine(mark, fields.map(function (f) { return { entry: f.entry, field: entryLineOf(f.entry).field }; }), words));
         }
       });
       return shown;
     };
     var round = isPlainObject(data.marks) ? data.marks : {};
-    asArray(round.marks).filter(isPlainObject).forEach(function (mark) {
+    asArray(round.marks).filter(isPlainObject).filter(function (mark) { return !isUnprintedMark(mark); }).forEach(function (mark) {
       var key = lineKeyOf(mark.path);
       if (!asString(mark.after) && (isElementPath(mark.path) || !onPage.has(key))) {
-        out.removed.push.apply(out.removed, editLinesOf(mark, isElementPath(mark.path)) || [removedLine(mark)]);
+        out.removed.push.apply(out.removed, editLinesOf(mark, isElementPath(mark.path)) || [removedLine(mark, words)]);
         if (key !== null) out.takenOut.add(key);
       } else if (onPage.has(key)) {
-        (editLinesOf(mark, false) || [markLine(mark, data.evidenceIndex)]).forEach(function (line) { add(marks, key, line); });
+        (editLinesOf(mark, false) || [markLine(mark, words)]).forEach(function (line) { add(marks, key, line); });
       } else {
-        out.otherMarks.push.apply(out.otherMarks, editLinesOf(mark, false) || [elsewhereLine(mark, data.evidenceIndex)]);
+        out.otherMarks.push.apply(out.otherMarks, editLinesOf(mark, false) || [elsewhereLine(mark, words)]);
       }
     });
     out.edits = lines.filter(function (l) { return !l.shown; }).map(function (l) { return l.line; });
@@ -2435,41 +2685,62 @@
     });
   }
 
-  /** The meeting's sections, in the spec's order (4.3). */
+  /** The fold that holds each left-out thread's reason, a click away (spec 4.1). */
+  var LEFT_OUT_REASONS_TITLE = 'Why each is left out';
+
+  /** The meeting's sections, in the spec's order (4.1). */
   var MEETING_SECTIONS = ['verdict', 'story', 'fromYourNotes', 'threads', 'connections', 'strongerMainThread', 'questions'];
 
+  /** A thread's place in the meeting's order of roles: the main thread first, then WEAVE_ROLES' order, a role the meeting does not know last. */
+  function roleRank(role) {
+    var rank = Object.keys(WEAVE_ROLE_LABELS).indexOf(role);
+    return rank === -1 ? Object.keys(WEAVE_ROLE_LABELS).length : rank;
+  }
+
   /**
-   * The story meeting's page (spec 4.3): the stop's payload (4.5's, lib/meeting.js
-   * meetingCheckpointData) with the director's weave as they have it.
+   * The story meeting's page (spec 2026-10-05 sections 4.1 and 9; phase 4b, brief 1B): the stop's
+   * payload (4.5's, lib/meeting.js meetingCheckpointData) with the director's weave as they have it.
    * - `order`: the sections to show, in the spec's order: the verdict; the story, the
    *   question and the working headline; "from your notes"; the threads; the connections
    *   and the convergence; the stronger main thread; the questions. A section with nothing
    *   in it is left out.
+   * - `threads`: the threads in the story, the main thread first and the others in the order of
+   *   the roles (WEAVE_ROLE_LABELS), each as its role, its name and its line, with its evidence
+   *   folded (`evidence`, evidenceFoldView's) and, for a thread with none, such as one the
+   *   director added, the fold's one line (`noEvidence`, MEETING_NO_EVIDENCE_LINE).
+   * - `leftOut`: the threads left out, by name (`names`, under its `title`), with their reasons
+   *   folded under `reasonsTitle`.
+   * - `connections`: each connection's line, with the names of the two threads it joins and its
+   *   evidence folded; its kind stays underneath, unprinted. One that joins a left-out thread,
+   *   unstruck, carries `leftOut`, the line that says it is out of the story with that thread and
+   *   comes back with it (leftOutThreadsOf; brief 4.14a), read from the weave as the director has
+   *   it, so it follows their roles.
    * - each line the page shows (linesOnPage) carries the concerns about the director's edit
-   *   on it, and the marks of what the round's passes changed on it;
-   * - each connection that joins a left-out thread, unstruck, carries `leftOut`, the line that
-   *   says it is out of the story with that thread and comes back with it (leftOutThreadsOf;
-   *   brief 4.14a), read from the weave as the director has it, so it follows their roles;
+   *   on it, the marks of what the round's passes changed on it, and the code checks still
+   *   failing whose place it is (`failures`, failuresBesideLines; spec 6.3).
    * - `thinNotes`: the one line beside the story when the weave has no "from your notes",
    *   unless the round took it out: then the director's notes held a read the rework
-   *   dropped, and the mark of it is listed instead;
+   *   dropped, and the mark of it is listed instead.
    * - the round's lines: `didNotRun` (by what the note box holds; task 4.5c),
-   *   `checkFailures` (one line each), `changedEdits` (the edits a round changed that a stop
-   *   shows, changedEditsToShow: a send-back's with their reasons, and what no pass put back;
-   *   task 4.10), `kept`, the line that says the director's edits stand when none of theirs is
-   *   shown (editsStandLine; brief 4.10b), `marked` and the marks no line shows (`removed`,
-   *   `otherMarks`), and the concerns no line shows (`otherConcerns`). One line per edit (briefs
-   *   4.10b and 4.10c): a changed edit that a mark of the round is about stands in that mark's
-   *   place, the first mark's when several are about it, beside its line or listed with the
-   *   marks no line shows, and `changedEdits` lists the rest (besideLines).
+   *   `checkFailures` (the failures with no place on the page, one line each), `changedEdits`
+   *   (the edits a round changed that a stop shows, changedEditsToShow: a send-back's with their
+   *   reasons, and what no pass put back; task 4.10), `kept`, the line that says the director's
+   *   edits stand when none of theirs is shown (editsStandLine; brief 4.10b), `marked` and the
+   *   marks no line shows (`removed`, `otherMarks`), and the concerns no line shows
+   *   (`otherConcerns`). One line per edit (briefs 4.10b and 4.10c): a changed edit that a mark
+   *   of the round is about stands in that mark's place, the first mark's when several are about
+   *   it, beside its line or listed with the marks no line shows, and `changedEdits` lists the
+   *   rest (besideLines).
+   * No line or label names an element by its id (meetingWordsOf): the tags leave the page (spec
+   * 9). Each element's `id` stays on its view for the controls, which change the weave by it.
    * The questions are the stop's (`data.questions`), each paired with its place in the
    * director's weave, whose answer the box shows and sets.
    *
-   * @param {Object} data - the stop's payload
    * The stop always holds a weave (the integrator, at 4.11's merge): the arc writer writes one
    * or throws, and only a thread from before the story meeting holds none, which the server
    * refuses wherever it sits and the console shows the server's message for (oldThreadView).
    *
+   * @param {Object} data - the stop's payload
    * @param {Object} weave - the weave as the director has it (meetingDraftOf, then their changes)
    * @param {string} [note] - the meeting's note box (meetingNoteOf, then what they type)
    * @returns {Object}
@@ -2477,69 +2748,79 @@
   function meetingView(data, weave, note) {
     var d = isPlainObject(data) ? data : {};
     var shown = meetingWeaveOf(d.weave);
+    var round = isPlainObject(d.marks) ? d.marks : {};
+    var words = meetingWordsOf(weave, shown, round.marks);
     var stopQuestions = asArray(d.questions).filter(isPlainObject);
     var onPage = linesOnPage(weave, stopQuestions);
-    var beside = besideLines(d, onPage, changedEditsToShow(d.handEditReport));
+    var beside = besideLines(d, onPage, changedEditsToShow(d.handEditReport), words);
+    var failing = failuresBesideLines(d.checkFailures, onPage);
     var at = function (key) {
-      return { concerns: beside.concerns.get(key) || [], marks: beside.marks.get(key) || [] };
+      return { concerns: beside.concerns.get(key) || [], marks: beside.marks.get(key) || [], failures: failing.byLine.get(key) || [] };
     };
+    var none = { concerns: [], marks: [], failures: [] };
     var line = function (key, text) {
       var b = at(key);
-      return { text: asString(text), concerns: b.concerns, marks: b.marks };
+      return { text: asString(text), concerns: b.concerns, marks: b.marks, failures: b.failures };
     };
     var shownThreads = shown ? asArray(shown.threads) : [];
     var threadRepeats = new Set(repeatedIdsOf(shownThreads));
     var connectionRepeats = new Set(repeatedIdsOf(shown ? shown.connections : []));
-    var threads = asArray(weave.threads).map(function (element, index) {
+    var allThreads = asArray(weave.threads).map(function (element, index) {
       var thread = isPlainObject(element) ? element : {};
       var id = weaveIdOf(thread);
       var role = asString(thread.role);
-      var b = id ? at('thread:' + id) : { concerns: [], marks: [] };
+      var b = id ? at('thread:' + id) : none;
+      var evidence = evidenceFoldView(thread.evidence, d.evidenceIndex);
       return {
         key: 'thread-' + index,
         index: index,
         id: id,
-        claim: asString(thread.claim),
+        name: asString(thread.name),
+        line: asString(thread.line),
         role: role,
         roleLabel: roleWord(role),
-        receipt: receiptView(thread.receipt, d.evidenceIndex),
         reason: asString(thread.reason),
         verdict: thread.verdict === true,
         added: index >= shownThreads.length,
         repeatedId: id !== '' && threadRepeats.has(id),
+        evidence: evidence,
+        noEvidence: evidence.length === 0 ? MEETING_NO_EVIDENCE_LINE : '',
         concerns: b.concerns,
-        marks: b.marks
+        marks: b.marks,
+        failures: b.failures
       };
     });
+    var threads = allThreads
+      .filter(function (t) { return t.role !== LEFT_OUT_ROLE; })
+      .sort(function (a, b) { return roleRank(a.role) - roleRank(b.role) || a.index - b.index; });
+    var leftOutThreads = allThreads.filter(function (t) { return t.role === LEFT_OUT_ROLE; });
     var connections = asArray(weave.connections).map(function (element, index) {
       var connection = isPlainObject(element) ? element : {};
       var id = weaveIdOf(connection);
-      var kind = asString(connection.kind);
-      var b = id ? at('connection:' + id) : { concerns: [], marks: [] };
+      var b = id ? at('connection:' + id) : none;
       var struck = isStruckConnection(connection);
       return {
         key: 'connection-' + index,
         index: index,
         id: id,
-        kind: kind,
-        kindLabel: hasOwn(CONNECTION_KIND_LABELS, kind) ? CONNECTION_KIND_LABELS[kind] : kind,
-        detail: asString(connection.detail),
-        joins: asArray(connection.joins).map(function (joined) { return String(joined); }).join(' and '),
+        line: asString(connection.line),
+        joins: words.joinsText(connection.joins),
         struck: struck,
         // Brief 4.14a: out of the story with a left-out thread, said under it; a strike already keeps it out.
-        leftOut: struck ? '' : leftOutLine(leftOutThreadsOf(connection, weave)),
+        leftOut: struck ? '' : leftOutLine(leftOutThreadsOf(connection, weave), words),
         repeatedId: id !== '' && connectionRepeats.has(id),
+        evidence: evidenceFoldView(connection.evidence, d.evidenceIndex),
         concerns: b.concerns,
-        marks: b.marks
+        marks: b.marks,
+        failures: b.failures
       };
     });
     var stronger = onPage.has('strongerMainThread') ? weave.strongerMainThread : null;
     var strongerView = null;
     if (stronger) {
       var strongerId = asString(stronger.thread).trim();
-      var named = asArray(weave.threads).filter(function (t) { return weaveIdOf(t) === strongerId; })[0];
       var sb = at('strongerMainThread');
-      strongerView = { thread: strongerId, claim: named ? asString(named.claim) : '', reason: asString(stronger.reason), concerns: sb.concerns, marks: sb.marks };
+      strongerView = { thread: strongerId, name: words.threadName(strongerId), reason: asString(stronger.reason), concerns: sb.concerns, marks: sb.marks, failures: sb.failures };
     }
     var draftQuestions = asArray(weave.questions);
     var cursor = 0;
@@ -2551,6 +2832,7 @@
       if (index !== -1) cursor = index + 1;
       var id = asString(q.id).trim();
       var kind = asString(q.kind);
+      var b = id ? at('question:' + id) : none;
       return {
         key: 'question-' + n,
         index: index,
@@ -2561,7 +2843,8 @@
         question: asString(q.question),
         changes: asString(q.changes),
         answer: asString((index !== -1 ? draftQuestions[index] : q)[WEAVE_ANSWER_KEY]),
-        marks: id ? at('question:' + id).marks : []
+        marks: b.marks,
+        failures: b.failures
       };
     });
     var fromYourNotes = onPage.has('fromYourNotes') ? line('fromYourNotes', weave.fromYourNotes) : null;
@@ -2578,17 +2861,21 @@
       headline: line('headline', weave.headline),
       thinNotes: fromYourNotes || beside.takenOut.has('fromYourNotes') ? '' : THIN_NOTES_LINE,
       fromYourNotes: fromYourNotes,
+      evidenceTitle: EVIDENCE_FOLD_TITLE,
       threads: threads,
+      leftOut: {
+        title: 'Left out (' + leftOutThreads.length + ')',
+        names: leftOutThreads.map(function (t) { return t.name || t.line; }).filter(Boolean).join(' · '),
+        reasonsTitle: LEFT_OUT_REASONS_TITLE,
+        threads: leftOutThreads
+      },
       roles: Object.keys(WEAVE_ROLE_LABELS).map(function (value) { return { value: value, label: WEAVE_ROLE_LABELS[value] }; }),
       connections: connections,
       convergence: line('convergence', weave.convergence),
       strongerMainThread: strongerView,
       questions: questions,
-      repeatedIdHint: threads.some(function (t) { return t.repeatedId; }) || connections.some(function (c) { return c.repeatedId; }) ? REPEATED_ID_HINT : '',
-      checkFailures: asArray(d.checkFailures).filter(isPlainObject)
-        .map(function (failure) { return asString(failure.message).trim(); })
-        .filter(Boolean)
-        .map(function (message) { return 'Check still failing: ' + message; }),
+      repeatedIdHint: allThreads.some(function (t) { return t.repeatedId; }) || connections.some(function (c) { return c.repeatedId; }) ? REPEATED_ID_HINT : '',
+      checkFailures: failing.top,
       changedEdits: beside.edits,
       kept: editsStandLine(d.handEditReport),
       didNotRun: didNotRunLine(d.roundDidNotRun, note),
@@ -2990,8 +3277,8 @@
   /**
    * A beat's material or card as the map's page prints it (task 4.6c): the document it names,
    * by its name and owner, found through the stop's evidenceIndex as the story meeting finds a
-   * receipt's (receiptView); or the text as written when it names no document the index holds,
-   * such as a speaker and the line, or a ledger entry.
+   * piece's document (receiptView); or the text as written when it names no document the index
+   * holds, such as a speaker and the line, or a ledger entry.
    *
    * @param {*} text - a beat's material, or its card
    * @param {Object} evidenceIndex - data.evidenceIndex
@@ -2999,7 +3286,7 @@
    */
   function mapDocumentText(text, evidenceIndex) {
     var named = receiptView(text, evidenceIndex);
-    return named && named.known && !named.ledger ? named.label : asString(text);
+    return named && named.known ? named.label : asString(text);
   }
 
   /**
@@ -3302,8 +3589,8 @@
   /**
    * What a fact-check finding's mark says (brief 4.10b): the finding's line, what is wrong in
    * the article at its place in the director's words, with the card's document named where the
-   * line holds DOCUMENT_SLOT, as the story meeting names a receipt (receiptView, through the
-   * stop's evidenceIndex). A finding stored before the fact check wrote lines reads as its
+   * line holds DOCUMENT_SLOT, as the story meeting names a piece's document (receiptView,
+   * through the stop's evidenceIndex). A finding stored before the fact check wrote lines reads as its
    * message, a concern's past its prefix and ids.
    *
    * @param {Object} finding - one of the fact check's findings
@@ -3316,7 +3603,7 @@
     if (line.indexOf(DOCUMENT_SLOT) === -1) return line;
     var place = isPlainObject(finding.place) ? finding.place : {};
     var named = receiptView(place.tokenId, evidenceIndex);
-    return line.split(DOCUMENT_SLOT).join(named && named.known && !named.ledger ? named.label : UNNAMED_DOCUMENT);
+    return line.split(DOCUMENT_SLOT).join(named && named.known ? named.label : UNNAMED_DOCUMENT);
   }
 
   /** Text with its runs of whitespace as one space, trimmed: how a finding's excerpt is written. */
@@ -4034,8 +4321,17 @@
     MEETING_STOP: MEETING_STOP,
     MEETING_ACTIONS: MEETING_ACTIONS,
     WEAVE_ROLE_LABELS: WEAVE_ROLE_LABELS,
-    CONNECTION_KIND_LABELS: CONNECTION_KIND_LABELS,
-    LEDGER_RECEIPT: LEDGER_RECEIPT,
+    CONNECTION_KINDS: CONNECTION_KINDS,
+    // Phase 4b (brief 1B): the evidence under each line, folded (the map reuses the fold's view),
+    // and the console's copies of lib/evidence.js's sources and stances and of the evidence's key
+    // (held equal by a test)
+    EVIDENCE_SOURCE_LABELS: EVIDENCE_SOURCE_LABELS,
+    EVIDENCE_STANCES: EVIDENCE_STANCES,
+    EVIDENCE_KEY: EVIDENCE_KEY,
+    EVIDENCE_FOLD_TITLE: EVIDENCE_FOLD_TITLE,
+    CUTS_AGAINST_LABEL: CUTS_AGAINST_LABEL,
+    MEETING_NO_EVIDENCE_LINE: MEETING_NO_EVIDENCE_LINE,
+    evidenceFoldView: evidenceFoldView,
     STRUCK_KEY: STRUCK_KEY,
     WEAVE_ANSWER_KEY: WEAVE_ANSWER_KEY,
     DIRECTOR_WEAVE_SHAPE: DIRECTOR_WEAVE_SHAPE,

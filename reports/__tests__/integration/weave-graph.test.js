@@ -64,10 +64,12 @@ function scriptedSdk({ reworks = [], verdicts = [] }) {
   return sdk;
 }
 
-/** The fixture's weave with one receipt that names no document: the check fails. */
+/** The fixture's weave with one piece of evidence that names no document: the check fails (phase 4b, brief 1B). */
 function weaveWithBadReceipt() {
   const weave = clone(reworkFixtureState('journalist').weave);
-  weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, receipt: 'zzz999' } : t));
+  weave.threads = weave.threads.map((t) => (t.id === 't3'
+    ? { ...t, evidence: [{ sources: ['zzz999'], shows: 'A document no record holds.', stance: 'supports' }] }
+    : t));
   return weave;
 }
 
@@ -112,14 +114,14 @@ describe('the weave through the real graph (phase 4, brief 4.4)', () => {
 
   it('one check rework, one fact check, one fix, then the stop, with no second judge call', async () => {
     const passing = clone(reworkFixtureState('journalist').weave);
-    const fixed = { ...clone(passing), threads: passing.threads.map((t) => (t.id === 't3' ? { ...t, claim: 'Morgan paid Riley at the bar.' } : t)) };
+    const fixed = { ...clone(passing), threads: passing.threads.map((t) => (t.id === 't3' ? { ...t, line: 'Morgan paid Riley at the bar.' } : t)) };
     const sdk = scriptedSdk({ reworks: [passing, fixed], verdicts: [BREACH, CLEAN] });
 
     const { snapshot } = await runToStop({ sdk, weave: weaveWithBadReceipt() });
 
     expect(snapshot.next).toEqual(['checkpointArcSelection']);
     expect(sdk.calls).toEqual(['Arc revision 1', 'fact check', 'Arc revision 2']);
-    expect(snapshot.values.weave.threads.find((t) => t.id === 't3').claim).toBe('Morgan paid Riley at the bar.');
+    expect(snapshot.values.weave.threads.find((t) => t.id === 't3').line).toBe('Morgan paid Riley at the bar.');
     expect(snapshot.values.weave._factCheck).toMatchObject({ ready: false, fixes: 1 });
     expect(snapshot.values._arcValidation.passed).toBe(true);
     expect(snapshot.values.evaluationHistory.filter((e) => e.phase === 'arcs')).toHaveLength(1);
@@ -133,7 +135,7 @@ describe('the weave through the real graph (phase 4, brief 4.4)', () => {
     expect(snapshot.next).toEqual(['checkpointArcSelection']);
     expect(sdk.calls).toEqual(['Arc revision 1', 'fact check']);
     expect(snapshot.values._arcValidation.passed).toBe(false);
-    expect(snapshot.values._arcValidation.failures.map((f) => f.type)).toEqual(['receipt-not-in-record']);
+    expect(snapshot.values._arcValidation.failures.map((f) => [f.type, f.place])).toEqual([['evidence-not-in-record', 'threads[#t3]']]);
     expect(snapshot.values._arcValidation.weaveKey).toBeDefined();
   });
 

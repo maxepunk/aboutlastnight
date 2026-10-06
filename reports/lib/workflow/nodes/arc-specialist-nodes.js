@@ -36,7 +36,6 @@ const { isSdkTimeoutError } = require('../../llm');
 // The pure module, not lib/llm's index: several node tests mock lib/llm with a factory.
 const { isRefusalError } = require('../../llm/refusal');
 const {
-  buildValidEvidenceIds,
   getSdkClient,
   getNonRosterPCs,
   buildRevisionContext
@@ -58,10 +57,16 @@ const { systemPromptOpening, buildDirectorGuidanceSection, filterGateNotes, rost
 const { loadRuleSet } = require('../../rule-set');
 const { WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions, withoutAnswers } = require('../../writer-questions');
 const {
-  WEAVE_ROLES, CONNECTION_KINDS, LEDGER_RECEIPT, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS, STRUCK_KEY,
-  isWeave, weaveForPrompt, weaveKey, weaveWordCount, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
-  weaveFindings, withStruckConnections
+  WEAVE_ROLES, CONNECTION_KINDS, MEETING_WORD_BOUND, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS, STRUCK_KEY,
+  isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
+  weaveFindings, withStruckConnections, writersShareOf
 } = require('../../weave');
+// Phase 4b (brief 1B; R10): the evidence under each line, the sources a piece may name, and what
+// the checks the weave and the map share read.
+const { EVIDENCE_SOURCES, EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../../evidence');
+// Phase 4b (brief 1B; R5): the meeting's page as it first opens, counted as the stops log counts it.
+const { meetingCheckpointData } = require('../../meeting');
+const { wordsShown } = require('../../stop-pages');
 const {
   carriedEdits, settleEdits, weaveDirectorsShare, directorEditConcern, isStrike, SEND_BACK_PASS, REWEAVE_PASS
 } = require('../../hand-edit-diff');
@@ -171,8 +176,22 @@ function weaveQuestionsFormatLine() {
 }
 
 /**
- * The arc writer's OUTPUT FORMAT: the weave's shape with a placeholder in each field,
- * its roles and kinds listed from the schema's constants (lib/weave.js).
+ * One piece of evidence as the OUTPUT FORMAT shows it (phase 4b, brief 1B; R1): its sources and
+ * what it shows in the schema's own wording (lib/evidence.js EVIDENCE_PIECE_SCHEMA), so the
+ * format and the schema say one thing, and its stances. A weave's piece flags no card: only a
+ * beat on the map does.
+ *
+ * @returns {string}
+ */
+function evidencePieceFormat() {
+  const { sources, shows, stance } = EVIDENCE_PIECE_SCHEMA.properties;
+  return `{ "sources": [${JSON.stringify(sources.description)}], "shows": ${JSON.stringify(shows.description)}, "stance": ${stance.enum.map(value => JSON.stringify(value)).join(' | ')} }`;
+}
+
+/**
+ * The arc writer's OUTPUT FORMAT: the weave's shape with a placeholder in each field, its
+ * roles and kinds listed from the schema's constants (lib/weave.js), each thread and each
+ * connection with its evidence underneath (phase 4b, brief 1B).
  *
  * @returns {string}
  */
@@ -189,17 +208,28 @@ Return one JSON object in this shape:
   "threads": [
     {
       "id": "t1",
-      "claim": "What the thread claims happened, in one plain line in the third person",
+      "name": "A short name for the thread, in a few words",
+      "line": "The thread in one plain line, in the third person",
       "role": ${alternatives(WEAVE_ROLES)},
-      "receipt": "The id of the thread's strongest document from the Receipts list, or ${JSON.stringify(LEDGER_RECEIPT).replace(/"/g, '\\"')}",
+      "verdict": true,
       "reason": "For a left-out thread: one line on why the story does not need it",
-      "verdict": true
+      "evidence": [
+        ${evidencePieceFormat()}
+      ]
     }
   ],
   "connections": [
-    { "id": "c1", "kind": ${alternatives(CONNECTION_KINDS)}, "joins": ["t1", "t2"], "detail": "Where the two threads touch, named exactly" }
+    {
+      "id": "c1",
+      "joins": ["t1", "t2"],
+      "line": "Where the two threads touch, in one plain line",
+      "kind": ${alternatives(CONNECTION_KINDS)},
+      "evidence": [
+        ${evidencePieceFormat()}
+      ]
+    }
   ],
-  "convergence": "Where the threads converge and the story lands",
+  "convergence": "Where the threads converge and the story lands, in a line or two",
   "strongerMainThread": { "thread": "t2", "reason": "Why it would carry a stronger story, in one line" },
   "questions": []
 }
@@ -208,20 +238,24 @@ ${weaveQuestionsFormatLine()}`;
 }
 
 /**
- * The arc writer's task (phase 4, briefs 4.4 and 4.5; ruling 10): which field holds what.
- * C1 states the story, its question and the stronger main thread; C16 the threads, their
- * roles, the connections and the convergence; C15 the questions. The task points at them
- * and states only what no rule says: where each lands in the weave's fields, the words
- * "from your notes" holds, the verdict flag, the receipt's source, and the shape of the
- * stronger main thread. The lens work C16 sets out stays in the writer's reasoning: the
- * weave has no field for it.
+ * The arc writer's task (phase 4, briefs 4.4 and 4.5; ruling 10; phase 4b, brief 1B): which
+ * field holds what, and the page's bound. C1 states the story, its question and the stronger
+ * main thread; C16 the threads, their roles, the connections, the convergence, the level of
+ * the story every line keeps and the evidence under each line; C15 the questions. The task
+ * points at them and states only what no rule says: the meeting's bound (MEETING_WORD_BOUND,
+ * which the checks hold the writer's page to), where each lands in the weave's fields, the
+ * words "from your notes" holds, the verdict flag, where a piece names its sources, and the
+ * shape of the stronger main thread. The lens work C16 sets out reaches the weave as each
+ * thread's role and its evidence's stances.
  */
-const WEAVE_TASK = `Write one weave of about 400 words, for the director to read in a few minutes at the story meeting. C1 (<craft-story>) sets out the story, its question and the stronger main thread; C16 (<craft-story>) sets out the threads, their roles, the connections and the convergence. The fields hold them:
+const WEAVE_TASK = `Write one weave for the director to read in a few minutes at the story meeting: the page they read, your lines without the evidence under them, comes to at most ${MEETING_WORD_BOUND} words. C1 (<craft-story>) sets out the story, its question and the stronger main thread; C16 (<craft-story>) sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line. The fields hold them:
 
 - **story**, **question** and **headline**: the thesis, the question that carries it, and a working headline.
 - **fromYourNotes**: when the story starts from the director's read (C1), the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. A story from the record rests on no words of the director's, and the field stays out.
-- **threads**: every thread you find, each in its role, a left-out thread with its one line on why in **reason**. A thread's **receipt** is the id of its strongest document from the Receipts list, or "${LEDGER_RECEIPT}". The thread that carries the room's verdict has "verdict": true.
-- **connections** and **convergence**: as C16 names them.
+- **threads**: every thread you find, each a short **name** and one **line**, in its role. The thread that carries the room's verdict has "verdict": true. The page shows a left-out thread by its name, with its one line on why in **reason**.
+- **evidence**: under each thread, the pieces of the record that tell it, and under each connection, the pieces that show the two threads touch; each piece with its **sources** from the Sources list, what it **shows**, and its **stance**. Each thread in the story has at least one piece that supports it, so the map writer can tell it from the record.
+- **connections**: the ones the story turns on (C16), each one **line**, with the ids of the two threads it **joins** and its **kind**.
+- **convergence**: as C16 names it.
 - **strongerMainThread**: when you see a stronger main thread (C1), its id as "thread" and your one-line reason as "reason".
 - **questions**: C15's (<craft-questions>), each with what its answer changes in print as "changes".`;
 
@@ -261,7 +295,7 @@ ${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one on
  * reading, the director's notes and corrections and their sentences about Blake and the
  * Valet, the investigation focus, the roster, the character categories, the roster with
  * pronouns and the character context); the record with its morning timeline and the
- * receipts the weave may give; the weave's task; and the rule set's craft files, last,
+ * sources a piece of evidence may name; the weave's task; and the rule set's craft files, last,
  * by the placement ruling, from the theme's rules folder (R14). The arc rework opens with
  * the same sections (phase 2, 2.3), so whatever the writer reads reaches its rework.
  *
@@ -341,8 +375,8 @@ ${characterContext}
 The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents in full, then the morning timeline: every sale, exposure, bonus and transfer, in time order on the morning clock.
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
-### Receipts
-A thread's receipt is one of these document ids, or "${LEDGER_RECEIPT}" for the ledger:
+### Sources
+A piece of evidence names each of its sources by one of these document ids, or as "${EVIDENCE_SOURCES.LEDGER}" for a sale, the bonus or a transfer on the morning timeline, "${EVIDENCE_SOURCES.EVIDENCE_LOG}" for an exposure on it, or "${EVIDENCE_SOURCES.NOTES}" for the director's own words: the notes, the corrections, the accusation and the answers at the story meeting.
 ${JSON.stringify(evidenceSummary.allEvidenceIds)}
 
 ---
@@ -372,6 +406,12 @@ function buildWeavePrompt(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 // THE ARC WRITER
 // ═══════════════════════════════════════════════════════════════════════════
+
+/** How many pieces of evidence a weave carries under its threads and connections, for the log. */
+function evidenceCountOf(weave) {
+  return [...(weave.threads || []), ...(weave.connections || [])]
+    .reduce((n, element) => n + (element && Array.isArray(element.evidence) ? element.evidence.length : 0), 0);
+}
 
 /** Connections with no strike on any: the strike is the director's key alone (R12). */
 function withoutStrikes(connections) {
@@ -432,7 +472,7 @@ async function generateWeave(state, config) {
   });
 
   const weave = weaveFromOutput(result, 'weave writer');
-  console.log(`[generateWeave] Complete: ${weave.threads.length} threads, ${weaveWordCount(weave)} words, in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+  console.log(`[generateWeave] Complete: ${weave.threads.length} threads, ${evidenceCountOf(weave)} pieces of evidence, in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
   return weave;
 }
 
@@ -752,7 +792,7 @@ async function reviseArcs(state, config) {
       reasons: call.asksForChangedEdits ? reasons : []
     });
     const weave = settled.output;
-    console.log(`[reviseArcs] Complete: ${weave.threads.length} threads, ${weaveWordCount(weave)} words, in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+    console.log(`[reviseArcs] Complete: ${weave.threads.length} threads, ${evidenceCountOf(weave)} pieces of evidence, in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     return {
       weave,
       _weaveBaseline: weaveForPrompt(weave),
@@ -812,8 +852,8 @@ async function reviseArcs(state, config) {
  * The record's documents and sales, with every id a document is cited by.
  *
  * @param {Object} evidenceBundle - Curated evidence bundle
- * @returns {Object} the exposed memories and documents, and `allEvidenceIds`, the ids a
- *   receipt may name
+ * @returns {Object} the exposed memories and documents, and `allEvidenceIds`, the document
+ *   ids a piece of evidence may name
  */
 function extractEvidenceSummary(evidenceBundle) {
   const exposed = evidenceBundle?.exposed || {};
@@ -840,8 +880,8 @@ function extractEvidenceSummary(evidenceBundle) {
   return {
     exposedTokens,
     exposedPaper,
-    // The exposed documents only: a buried sale is the ledger's, which a receipt names
-    // as "ledger".
+    // The exposed documents only: a buried sale is the ledger's, which a piece names as
+    // "ledger" (lib/evidence.js EVIDENCE_SOURCES).
     allEvidenceIds: [
       ...exposedTokens.map(t => t.id),
       ...exposedPaper.map(p => p.id)
@@ -852,6 +892,23 @@ function extractEvidenceSummary(evidenceBundle) {
 // ═══════════════════════════════════════════════════════════════════════════
 // THE WEAVE CHECKS
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The words of the story meeting's page as it first opens, of the writer's share of the weave
+ * (phase 4b, brief 1B; spec 4.1 and 6.1; R5): the page of the weave, its questions and the
+ * verdict, with no round's lines (lib/meeting.js meetingCheckpointData on a first look), counted
+ * by lib/stop-pages.js wordsShown, the count the stops log records, which leaves the folded
+ * evidence out. Only the writer's share is counted (lib/weave.js writersShareOf), so the
+ * director's version is never held to the bound (Review focus 3).
+ *
+ * @param {Object} state - the weave and the session's parse
+ * @param {Object} directorsShare - the director's share of the weave (weaveDirectorsShare)
+ * @returns {number}
+ */
+function meetingPageWords(state, directorsShare) {
+  const firstLook = { weave: writersShareOf(weaveForPrompt(state.weave), directorsShare), sessionConfig: state.sessionConfig };
+  return wordsShown(CHECKPOINT_TYPES.ARC_SELECTION, meetingCheckpointData(firstLook, { evidenceIndex: {}, maxRevisions: 0 }));
+}
 
 /**
  * The weave checks' node (phase 4, brief 4.4; spec 4.5): code checks the weave the
@@ -865,10 +922,14 @@ function extractEvidenceSummary(evidenceBundle) {
  * every player.
  *
  * The checks read only the writer's text (R11, brief 4.5): the director's share of the
- * weave, read from the standing edits it carries, is never a failure. A fault in the
- * director's own change, such as a receipt they typed that names no document, is a
- * concern under the edit's id, kept in `_arcValidation.concerns` for the meeting to show
- * beside the line; no rework reads it.
+ * weave, read from the standing edits it carries, is never a failure. A fault their change
+ * causes, such as the verdict thread they left out, is a concern under the edit's id, kept in
+ * `_arcValidation.concerns` for the meeting to show beside the line; no rework reads it.
+ *
+ * Phase 4b (brief 1B; spec 2026-10-05 sections 4.1 and 6.1): the checks read the evidence
+ * under each line against the record (lib/evidence.js evidenceContextOf), and the meeting's
+ * page as it first opens, counted (meetingPageWords). Each failure carries its place, so the
+ * meeting shows a check still failing beside its line.
  *
  * Once the meeting is approved it checks nothing and writes nothing, so a replay past
  * the meeting leaves a later stage's findings in validationResults as they were.
@@ -883,15 +944,16 @@ function validateArcStructure(state) {
   }
   const weave = state.weave;
   const directorsShare = weaveDirectorsShare(carriedEdits(state._weaveHandEdits, weaveForPrompt(weave)));
+  const words = isWeave(weave) ? meetingPageWords(state, directorsShare) : null;
   const { failures, concerns } = weaveFindings(weave, {
-    recordIds: buildValidEvidenceIds(state.evidenceBundle),
+    evidence: evidenceContextOf(state),
     directorWords: directorWordsOf(state),
-    directorsShare
+    directorsShare,
+    pageWords: words
   });
   const key = weaveKey(weave);
   const passed = failures.length === 0;
-  const words = weaveWordCount(weave, directorsShare);
-  console.log(`[validateArcs] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${words} words, weave ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
+  console.log(`[validateArcs] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${words} words on the meeting's page, weave ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
 
   return {
     _arcValidation: {
@@ -957,6 +1019,9 @@ module.exports = {
     WEAVE_TASK,
     buildCharacterCategoriesBlock,
     buildArcStandingNotes,
-    directorWordsOf
+    directorWordsOf,
+    // Phase 4b (brief 1B): a piece of evidence in the OUTPUT FORMAT, and the meeting's page counted
+    evidencePieceFormat,
+    meetingPageWords
   }
 };

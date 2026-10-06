@@ -65,14 +65,22 @@ describe('4.12c: each page heads its parts in its component\'s words', () => {
 });
 
 describe('4.12c: each page folds what its component folds', () => {
-  it('the story meeting folds the standing notes alone', () => {
+  // Phase 4b (brief 1B; spec 9): the meeting folds each line's evidence under it and the
+  // left-out threads' reasons, beside the standing notes.
+  it('the story meeting folds the evidence under each line, the left-out threads\' reasons and the standing notes', () => {
     const src = read(COMPONENTS['arc-selection']);
-    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(1);
+    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(3);
     expect(src).toContain('standing.any && React.createElement(CollapsibleSection, { title: standing.title }');
+    expect(src).toContain('React.createElement(CollapsibleSection, { title: view.evidenceTitle }');
+    expect(src).toContain('React.createElement(CollapsibleSection, { title: leftOut.reasonsTitle }');
     const state = { ...reworkFixtureState('journalist'), meetingApproved: null };
     const data = { type: 'arc-selection', ...meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 }), directorGateNotes: NOTE };
+    const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const page = stopPage('arc-selection', data);
-    expect(titles(page, true)).toEqual([View.standingNotesView(NOTE).title]);
+    expect(titles(page, true)).toEqual([
+      ...view.threads.map(() => view.evidenceTitle), view.leftOut.reasonsTitle, ...view.connections.map(() => view.evidenceTitle),
+      View.standingNotesView(NOTE).title
+    ]);
   });
 
   it('the map folds left out (unless a concern opens it), the standing notes and the trace', () => {

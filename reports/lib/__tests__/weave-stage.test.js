@@ -25,7 +25,7 @@ const loadRuleSet = (call) => ruleSet.loadRuleSet(call, { theme: 'journalist' })
 const loadModeBlock = (mode) => ruleSet.loadModeBlock(mode, { theme: 'journalist' });
 const { identityLineOf } = require('../theme-config');
 const { REVISION_CAPS, getDefaultState, PHASES } = require('../workflow/state');
-const { weaveKey, withFactCheckMark, WEAVE_CHECKS_SOURCE, WEAVE_WORD_BOUND } = require('../weave');
+const { weaveKey, withFactCheckMark, WEAVE_CHECKS_SOURCE, MEETING_WORD_BOUND } = require('../weave');
 const { reworkFixtureState } = require('./fixtures/rework-state');
 const { instructionText, findRemovedPhrases } = require('./fixtures/removed-phrases');
 
@@ -41,7 +41,7 @@ function recordingSdk(answer) {
 }
 
 /**
- * The fixture state, which carries a weave whose receipts name its record's documents,
+ * The fixture state, which carries a weave whose evidence names its record's documents,
  * at the arc stage: the meeting not yet approved (the fixture's arc selection is the
  * later stages').
  */
@@ -117,15 +117,20 @@ describe('the arc writer writes one weave in one call', () => {
     const prompt = buildWeaveSections(weaveState());
     expect(prompt.startsWith('# The Weave\n')).toBe(true);
     const format = prompt.slice(prompt.indexOf('## OUTPUT FORMAT'), prompt.indexOf('## SECTION 1'));
-    ['"story"', '"question"', '"headline"', '"fromYourNotes"', '"threads"', '"claim"', '"role"', '"receipt"', '"reason"', '"verdict"',
-      '"connections"', '"kind"', '"joins"', '"detail"', '"convergence"', '"strongerMainThread"', '"questions"', '"changes"']
+    // Phase 4b (brief 1B; R1): each thread a name and a line, and each thread and connection
+    // its evidence, each piece its sources, what it shows and its stance.
+    ['"story"', '"question"', '"headline"', '"fromYourNotes"', '"threads"', '"name"', '"line"', '"role"', '"reason"', '"verdict"', '"evidence"',
+      '"sources"', '"shows"', '"stance"', '"connections"', '"kind"', '"joins"', '"convergence"', '"strongerMainThread"', '"questions"', '"changes"']
       .forEach((field) => expect(format).toContain(field));
     expect(format).toContain('"main-thread" | "grounds-it" | "complicates-it" | "mirrors-it" | "carries-it-forward" | "left-out"');
     expect(format).toContain('"person" | "moment" | "document" | "line"');
+    expect(format).toContain('"supports" | "cuts-against"');
     expect(format).toContain('"player" | "pronoun" | "figure"');
     const task = prompt.slice(prompt.indexOf('## SECTION 3'), prompt.indexOf('## SECTION 4'));
     ['C1', 'C15', 'C16'].forEach((item) => expect(task).toMatch(new RegExp(`\\b${item}\\b`)));
-    expect(task).toMatch(/about 400 words/);
+    expect(task).toContain(`comes to at most ${MEETING_WORD_BOUND} words`);
+    // The old shape's words went: a claim, a receipt, a connection named exactly.
+    expect(`${format}${task}`).not.toMatch(/\bclaim|\breceipt|named exactly|"detail"/i);
     // The prompt's own text: the craft files state their own rules.
     const own = prompt.replace(loadRuleSet('arc').craft, '');
     ['narrativeArcs', 'analysisNotes', 'characterPlacements', 'arcSource', 'evidenceStrength', 'caveats', 'emotionalHook', 'interweav', 'synthesisNotes', 'writerQuestions']
@@ -173,9 +178,13 @@ describe('the arc writer writes one weave in one call', () => {
 
 describe('the weave checks (the check node)', () => {
   const pass = () => weaveState();
+  /** The fixture with a piece of t2's evidence naming a document the record lacks (phase 4b, brief 1B). */
   const failing = () => {
     const state = weaveState();
-    state.weave = { ...clone(state.weave), threads: state.weave.threads.map((t) => (t.id === 't2' ? { ...t, receipt: 'zzz999' } : t)) };
+    state.weave = {
+      ...clone(state.weave),
+      threads: state.weave.threads.map((t) => (t.id === 't2' ? { ...t, evidence: [{ sources: ['zzz999'], shows: 'A document no record holds.', stance: 'supports' }] } : t))
+    };
     return state;
   };
 
@@ -192,8 +201,8 @@ describe('the weave checks (the check node)', () => {
     expect(update.validationResults.passed).toBe(false);
     expect(update.validationResults.weaveKey).toBe(weaveKey(state.weave));
     expect(update.validationResults.structuralIssues).toHaveLength(1);
-    expect(update.validationResults.structuralIssues[0]).toMatch(/"t2".*"zzz999"/);
-    expect(update._arcValidation.failures.map((f) => f.type)).toEqual(['receipt-not-in-record']);
+    expect(update.validationResults.structuralIssues[0]).toMatch(/^The thread "The sale": piece 1 names "zzz999"/);
+    expect(update._arcValidation.failures.map((f) => [f.type, f.place])).toEqual([['evidence-not-in-record', 'threads[#t2]']]);
     expect(update).not.toHaveProperty('weave');
   });
 
@@ -213,6 +222,42 @@ describe('the weave checks (the check node)', () => {
 
   it('skips once the meeting is approved, leaving every channel as it was', () => {
     expect(validateArcStructure(weaveState({ meetingApproved: true }), {})).toEqual({});
+  });
+
+  // Phase 4b (brief 1B; R5; Review focus 3): the node counts the meeting's page as it first
+  // opens, by lib/stop-pages.js wordsShown, on the writer's share of the weave alone, and fails
+  // the writer's page past MEETING_WORD_BOUND. The director's version is never held to it.
+  describe("the meeting's page, counted as it first opens", () => {
+    const { wordsShown } = require('../stop-pages');
+    const { meetingCheckpointData } = require('../meeting');
+    const { standingAtMeeting } = require('../hand-edit-diff');
+    const firstLook = (state) => wordsShown('arc-selection', meetingCheckpointData({ weave: state.weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
+    /** The fixture's weave, its story run long. */
+    const longStory = (weave) => ({ ...clone(weave), story: `${weave.story} ${'The room kept arguing about the money. '.repeat(30).trim()}` });
+
+    it('records the words the page shows when it first opens, the folded evidence left out', () => {
+      const state = pass();
+      expect(validateArcStructure(state, {})._arcValidation.words).toBe(firstLook(state));
+      expect(firstLook(state)).toBeLessThan(MEETING_WORD_BOUND);
+    });
+
+    it("fails the writer's page past the bound, in one line with no place, so it sits at the top of the meeting", () => {
+      const state = pass();
+      state.weave = longStory(state.weave);
+      const { _arcValidation } = validateArcStructure(state, {});
+      expect(_arcValidation.words).toBeGreaterThan(MEETING_WORD_BOUND);
+      expect(_arcValidation.failures).toEqual([{ type: 'over-length', message: expect.stringContaining(`past its bound of ${MEETING_WORD_BOUND}`) }]);
+    });
+
+    it("never fails a page the director lengthened: their lines are not the writer's to count", () => {
+      const state = pass();
+      const left = longStory(state.weave);
+      const directors = { ...state, weave: left, _weaveHandEdits: standingAtMeeting(null, clone(state.weave), left) };
+      const { _arcValidation } = validateArcStructure(directors, {});
+      expect(firstLook(directors)).toBeGreaterThan(MEETING_WORD_BOUND);
+      expect(_arcValidation.failures).toEqual([]);
+      expect(_arcValidation.words).toBeLessThan(MEETING_WORD_BOUND);
+    });
   });
 });
 
@@ -252,7 +297,9 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
     expect(TRUTH_ONLY_EVALUATION_RULES).not.toMatch(/weighted average/);
     ['STRUCTURAL CRITERIA', 'ADVISORY CRITERIA', 'CRAFT FINDINGS', 'rosterCoverage', 'characterPlacements', 'KNOWN NPCs', 'arcSource', 'evidenceIdValidity']
       .forEach((gone) => expect(`${gone}: ${system.includes(gone)}`).toBe(`${gone}: false`));
-    expect(system).toMatch(/names the thread it is in/);
+    // Phase 4b (brief 1B; spec 6.2): a breach names the line it is in and the piece of evidence at fault.
+    expect(system).toMatch(/names the thread or connection it is in/);
+    expect(system).toMatch(/where a piece of evidence is at fault, the piece by its sources/);
   });
 
   it('reads no craft file: RULE_SET_CALLS[\'judge-arc\'] is the core alone', () => {
@@ -274,6 +321,16 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
     expect(prompt).toContain(arcNodes.ARC_NOTES_LABEL);
     expect(prompt.match(/^<RECORD>$/gm)).toHaveLength(1);
     expect(prompt).not.toContain('ALL VALID EVIDENCE IDS');
+  });
+
+  // Phase 4b (brief 1B; spec 6.2): the fact check reads each line against its evidence, and each
+  // piece against the record; the weave it prints carries the evidence under each line.
+  it('its user prompt opens by naming the evidence under each line, and prints it with the weave', () => {
+    const prompt = buildEvaluationUserPrompt('arcs', weaveState());
+    expect(prompt.split('\n')[0]).toBe("Check this weave against the record and the director's words. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.");
+    const weave = prompt.slice(prompt.indexOf('WEAVE:'), prompt.indexOf('THE ACCUSATION'));
+    expect(weave).toContain('"evidence": [');
+    expect(weave).toContain('"shows": "Marcus on the sale: \\"Worth it. Finally worth it.\\""');
   });
 
   it('judges an unjudged weave once and marks it', async () => {
@@ -317,7 +374,7 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
 // seam that chose between them went, with the tests that compared the two contracts.
 describe('the fact check writes to the truth-only contract (fix round 1)', () => {
   const { truthOnlyOutputFormat, TRUTH_ONLY_ADVISORY_WARNINGS, TRUTH_ONLY_EVALUATION_JSON_SCHEMA } = evalTesting;
-  const NOTES = 'the breach: the text at fault, the thread it is in, and the record it contradicts';
+  const NOTES = 'the breach: the text at fault, the thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts';
   const systemFor = (phase, theme = 'journalist') => buildEvaluationSystemPrompt(
     phase, getPhaseCriteria(phase, theme), theme, { sessionConfig: weaveState().sessionConfig }
   );
@@ -446,7 +503,10 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
 describe('the automatic passes run through reviseArcs with the weave\'s schema', () => {
   const failingCheck = (state) => validateArcStructure({
     ...state,
-    weave: { ...clone(state.weave), threads: state.weave.threads.map((t) => (t.id === 't2' ? { ...t, receipt: 'zzz999' } : t)) }
+    weave: {
+      ...clone(state.weave),
+      threads: state.weave.threads.map((t) => (t.id === 't2' ? { ...t, evidence: [{ sources: ['zzz999'], shows: 'A document no record holds.', stance: 'supports' }] } : t))
+    }
   }, {}).validationResults;
 
   it("a check rework reads the check's lines under their own label, and keeps everything its findings do not name word for word (R23)", async () => {
@@ -635,7 +695,8 @@ describe('the arc rework\'s prompt', () => {
   it('the bound reaches the rework through the writer\'s task', () => {
     const state = weaveState();
     const prompt = buildArcRevisionPrompt(state, '', '');
-    expect(prompt).toMatch(/about 400 words/);
-    expect(WEAVE_WORD_BOUND).toBe(500);
+    // Phase 4b (brief 1B; R5): the meeting's page, at most 300 words.
+    expect(prompt).toContain(`comes to at most ${MEETING_WORD_BOUND} words`);
+    expect(MEETING_WORD_BOUND).toBe(300);
   });
 });

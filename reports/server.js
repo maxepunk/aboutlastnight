@@ -461,7 +461,7 @@ async function getCheckpointData(checkpointType, state) {
             // still failing on the weave in hand, the concerns beside their lines, the marks
             // after a round, the edits a send-back changed, the standing notes, the round
             // counters and a round that did not run. Brief 1.2: evidenceIndex names each
-            // receipt's document.
+            // document a piece of evidence cites (phase 4b, brief 1B).
             return meetingCheckpointData(state, {
                 evidenceIndex: buildEvidenceIndex(state.evidenceBundle),
                 maxRevisions: REVISION_CAPS.ARCS

@@ -27,11 +27,11 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The writer's weave, judged, as the meeting shows it. */
 const shown = () => withFactCheckMark(clone(FIXTURE_WEAVE), { at: '2026-10-03T10:00:00.000Z', ready: true, fixes: 0 });
 
-/** The director's version: a role changed, a thread added with no receipt, a connection struck, a question answered. */
+/** The director's version: a role changed, a thread added with no evidence, a connection struck, a question answered. */
 function leftByDirector() {
   const weave = clone(FIXTURE_WEAVE);
   weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
-  weave.threads.push({ id: 't6', claim: 'Riley kept a second ledger.', role: 'grounds-it' });
+  weave.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'grounds-it' });
   weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
   weave.questions = weave.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar all morning.' }));
   return weave;
@@ -44,13 +44,17 @@ describe("the director-side schema (R12)", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
   const validate = ajv.compile(DIRECTOR_WEAVE_SCHEMA);
 
-  it("is derived from the writer's schema: the same fields and requirements, with the answer and the strike the director adds", () => {
+  it("is derived from the writer's schema: the same fields, with the answer and the strike the director adds, and no evidence required (R6)", () => {
     expect(DIRECTOR_WEAVE_SCHEMA).not.toBe(WEAVE_SCHEMA);
     expect(DIRECTOR_WEAVE_SCHEMA.required).toEqual(WEAVE_SCHEMA.required);
     expect(Object.keys(DIRECTOR_WEAVE_SCHEMA.properties)).toEqual(Object.keys(WEAVE_SCHEMA.properties));
     expect(DIRECTOR_WEAVE_SCHEMA.properties.questions.items.properties.answer).toMatchObject({ type: 'string' });
     expect(DIRECTOR_WEAVE_SCHEMA.properties.connections.items.properties.struck).toMatchObject({ type: 'boolean' });
-    expect(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.required).toEqual(['id', 'claim', 'role']);
+    expect(Object.keys(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.properties)).toEqual(Object.keys(WEAVE_SCHEMA.properties.threads.items.properties));
+    // Phase 4b (brief 1B): a thread the director adds needs only its id, name, line and role.
+    expect(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.required).toEqual(['id', 'name', 'line', 'role']);
+    expect(DIRECTOR_WEAVE_SCHEMA.properties.connections.items.required).toEqual(['id', 'joins', 'line', 'kind']);
+    expect(WEAVE_SCHEMA.properties.threads.items.required).toContain('evidence');
   });
 
   it("leaves the writer's schema as it is: no model writes an answer or a strike", () => {
@@ -58,11 +62,19 @@ describe("the director-side schema (R12)", () => {
     expect(WEAVE_SCHEMA.properties.connections.items.properties).not.toHaveProperty('struck');
   });
 
-  it('accepts the weave as the director left it: a thread added or re-roled with no receipt and no reason, a struck connection, an answer', () => {
+  it('accepts the weave as the director left it: a thread added or re-roled with no evidence and no reason, a struck connection, an answer', () => {
     const left = leftByDirector();
-    left.threads = left.threads.map((t) => (t.id === 't2' ? { id: 't2', claim: t.claim, role: 'left-out' } : t));
+    left.threads = left.threads.map((t) => (t.id === 't2' ? { id: 't2', name: t.name, line: t.line, role: 'left-out' } : t));
     expect(validate(left)).toBe(true);
     expect(directorWeaveProblems(left)).toBeNull();
+  });
+
+  // Review focus 3: only the writer's output is held to the bound; the gate never counts words.
+  it("never refuses the director's version for its length", () => {
+    const left = leftByDirector();
+    left.threads.push({ id: 't7', name: 'A long thread', line: Array.from({ length: 400 }, (_, i) => `word${i}`).join(' '), role: 'grounds-it' });
+    expect(directorWeaveProblems(left)).toBeNull();
+    expect(meetingResume({ meeting: 'approve', weave: left }, atMeeting()).error).toBeNull();
   });
 
   it.each([
@@ -70,7 +82,9 @@ describe("the director-side schema (R12)", () => {
     ['a strike that is not true or false', (w) => { w.connections[0].struck = 'yes'; }, /connections\/0\/struck/],
     ['a role the weave does not have', (w) => { w.threads[0].role = 'supports-it'; }, /threads\/0\/role/],
     ['no story', (w) => { delete w.story; }, /story/],
-    ['a thread with no claim', (w) => { delete w.threads[1].claim; }, /threads\/1.*claim/]
+    ['a thread with no line', (w) => { delete w.threads[1].line; }, /threads\/1.*line/],
+    ['a thread with no name', (w) => { delete w.threads[1].name; }, /threads\/1.*name/],
+    ['a piece of evidence with no sources', (w) => { w.threads[1].evidence[0].sources = []; }, /threads\/1\/evidence\/0\/sources/]
   ])('refuses %s, saying where', (_name, change, where) => {
     const left = leftByDirector();
     change(left);
@@ -87,7 +101,7 @@ describe("the director-side schema (R12)", () => {
   // Fix round 1, finding 2: the refusal says who made the repeat.
   it("refuses the repeats the director's changes made, naming each and the director", () => {
     const doubled = clone(FIXTURE_WEAVE);
-    doubled.threads.push({ id: 't3', claim: 'A thread the director added under a taken id.', role: 'grounds-it' });
+    doubled.threads.push({ id: 't3', name: 'A taken id', line: 'A thread the director added under a taken id.', role: 'grounds-it' });
     doubled.connections.push({ ...clone(FIXTURE_WEAVE.connections[0]) });
     doubled.questions.push({ ...clone(FIXTURE_WEAVE.questions[0]) });
     // 4.5b: the remedy keeps the ids the meeting showed, so it works when the director's
@@ -104,7 +118,7 @@ describe("the director-side schema (R12)", () => {
   // have to resolve.
   it('reads an id as the checks and the diff do: "t6" and "t6 " are one id', () => {
     const left = leftByDirector();
-    left.threads.push({ id: 't6 ', claim: 'Riley burned the second ledger.', role: 'grounds-it' });
+    left.threads.push({ id: 't6 ', name: 'The burned ledger', line: 'Riley burned the second ledger.', role: 'grounds-it' });
     expect(directorWeaveProblems(left)).toMatch(/threads share the id "t6"/);
   });
 });
@@ -119,7 +133,7 @@ describe('a repeated id the writer made (fix round 1, finding 2)', () => {
   /** The writer's weave with a second thread under t2, as the fact check's fix might leave it. */
   const writersRepeat = () => {
     const weave = clone(FIXTURE_WEAVE);
-    weave.threads.push({ id: 't2', claim: 'A second thread the fix put under a taken id.', role: 'grounds-it', receipt: 'ledger' });
+    weave.threads.push({ id: 't2', name: 'A second sale', line: 'A second thread the fix put under a taken id.', role: 'grounds-it', evidence: [{ sources: ['ledger'], shows: 'A sale into Melanie.', stance: 'supports' }] });
     return weave;
   };
   const atRepeat = () => atMeeting({ weave: withFactCheckMark(writersRepeat(), { at: 't', ready: true, fixes: 1 }), _weaveBaseline: writersRepeat() });
@@ -157,7 +171,7 @@ describe('a repeated id the writer made (fix round 1, finding 2)', () => {
 
   it('refuses a repeat the director made beside it, naming the director', () => {
     const left = writersRepeat();
-    left.threads.push({ id: 't3', claim: 'A thread the director put under a taken id.', role: 'grounds-it' });
+    left.threads.push({ id: 't3', name: 'A taken id', line: 'A thread the director put under a taken id.', role: 'grounds-it' });
     expect(meetingResume({ meeting: 'approve', weave: left }, atRepeat()).error)
       .toBe('Two threads share the id "t3": the director\'s changes made this repeat. Keep the ids the meeting showed, and give each one the director added an id of its own.');
   });
@@ -257,7 +271,7 @@ describe("the meeting's payloads (brief 4.5)", () => {
 
 describe('what the stop shows (brief 4.5)', () => {
   it('a code check still failing, only when it was run on the weave in hand (ruling 7)', () => {
-    const failures = [{ type: 'receipt-not-in-record', message: 'Thread "t2" gives the receipt "zzz".' }];
+    const failures = [{ type: 'evidence-not-in-record', message: 'The thread "The sale": piece 1 names "zzz", which is no document in <RECORD>.', place: 'threads[#t2]' }];
     const state = atMeeting({ _arcValidation: { weaveKey: weaveKey(shown()), passed: false, failures, concerns: [] } });
     expect(meetingCheckFailures(state)).toEqual(failures);
     expect(meetingCheckFailures({ ...state, _arcValidation: { ...state._arcValidation, weaveKey: 'another-weave' } })).toEqual([]);
@@ -267,18 +281,18 @@ describe('what the stop shows (brief 4.5)', () => {
 
   it("the concerns: the checks' and the fact check's, each beside the line of the edit it is about", () => {
     const left = leftByDirector();
-    left.threads = left.threads.map((t) => (t.id === 't6' ? { ...t, receipt: 'zzz999' } : t));
+    left.threads = left.threads.map((t) => (t.id === 't1' ? { ...t, role: 'left-out', reason: 'The director left it out.' } : t));
     const edits = standingAtMeeting(null, FIXTURE_WEAVE, left);
-    const checkConcern = `${DIRECTOR_EDIT_PREFIX}E2: Thread "t6" gives the receipt "zzz999", which names no document in the record.`;
-    const judgeConcern = `${DIRECTOR_EDIT_PREFIX}E1: T1: the new role puts weight the record does not carry.`;
+    const checkConcern = `${DIRECTOR_EDIT_PREFIX}E1: The thread "The overdose vote" carries the room's verdict and is left out.`;
+    const judgeConcern = `${DIRECTOR_EDIT_PREFIX}E3: T1: the new role puts weight the record does not carry.`;
     const weave = withFactCheckMark(left, { at: 't', ready: true, fixes: 0, concerns: [judgeConcern] });
     const state = atMeeting({
       weave, _weaveHandEdits: edits,
       _arcValidation: { weaveKey: weaveKey(weave), passed: true, failures: [], concerns: [checkConcern] }
     });
     expect(meetingConcerns(state)).toEqual([
-      { text: checkConcern, editIds: ['E2'], places: [{ id: 'E2', path: 'threads[#t6]', where: 'thread "t6", added' }] },
-      { text: judgeConcern, editIds: ['E1'], places: [{ id: 'E1', path: 'threads[#t3].role', where: 'thread "t3", role' }] }
+      { text: checkConcern, editIds: ['E1'], places: [{ id: 'E1', path: 'threads[#t1].role', where: 'thread "t1", role' }] },
+      { text: judgeConcern, editIds: ['E3'], places: [{ id: 'E3', path: 'threads[#t3].role', where: 'thread "t3", role' }] }
     ]);
     // A concern about an edit the weave no longer carries is not shown.
     const undone = { ...weave, threads: weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'complicates-it' } : t)) };
@@ -315,7 +329,7 @@ describe('what the stop shows (brief 4.5)', () => {
 describe("4.5b: who made a repeat, read from each id's count", () => {
   const writersRepeat = () => {
     const weave = clone(FIXTURE_WEAVE);
-    weave.threads.push({ id: 't2', claim: 'A second thread the fix put under a taken id.', role: 'grounds-it', receipt: 'ledger' });
+    weave.threads.push({ id: 't2', name: 'A second sale', line: 'A second thread the fix put under a taken id.', role: 'grounds-it', evidence: [{ sources: ['ledger'], shows: 'A sale into Melanie.', stance: 'supports' }] });
     return weave;
   };
   const atRepeat = () => atMeeting({ weave: withFactCheckMark(writersRepeat(), { at: 't', ready: true, fixes: 1 }), _weaveBaseline: writersRepeat() });
@@ -323,7 +337,7 @@ describe("4.5b: who made a repeat, read from each id's count", () => {
 
   it("a third t2 the director added over the writer's two is the director's repeat, and the refusal names the director", () => {
     const left = writersRepeat();
-    left.threads.push({ id: 't2', claim: 'A third thread the director put under t2.', role: 'grounds-it' });
+    left.threads.push({ id: 't2', name: 'A third sale', line: 'A third thread the director put under t2.', role: 'grounds-it' });
     expect(directorWeaveProblems(left, { shown: writersRepeat() })).toBe(DIRECTORS);
     const { error, stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atRepeat());
     expect(error).toBe(DIRECTORS);
@@ -332,7 +346,7 @@ describe("4.5b: who made a repeat, read from each id's count", () => {
 
   it("its remedy works: the director's thread under an id of its own goes through, the writer's two left as the meeting showed them", () => {
     const left = writersRepeat();
-    left.threads.push({ id: 't7', claim: 'A third thread the director put under an id of its own.', role: 'grounds-it' });
+    left.threads.push({ id: 't7', name: 'A third sale', line: 'A third thread the director put under an id of its own.', role: 'grounds-it' });
     expect(directorWeaveProblems(left, { shown: writersRepeat() })).toBeNull();
     const { error, stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atRepeat());
     expect(error).toBeNull();
@@ -389,6 +403,8 @@ describe('4.5b: an empty reweave is refused, with its reason', () => {
 // Each mark of a thread or a connection a round took out carries the element as the director
 // left it, so the meeting reads it by its words and its role or kind.
 describe("4.14a: each mark of an element a round took out carries the element", () => {
+  // Phase 4b (brief 1B; R6): the element as the version the director left held it, without its
+  // evidence, which no mark carries.
   it('a thread and a connection a round took out each carry the element as the version the director left held it; a field mark carries none', () => {
     const left = leftByDirector();
     const reworked = clone(left);
@@ -396,19 +412,89 @@ describe("4.14a: each mark of an element a round took out carries the element", 
     reworked.connections = reworked.connections.filter((c) => c.id !== 'c1');
     reworked.headline = 'A headline the reweave wrote.';
     const { marks } = meetingMarksOf(atMeeting({ weave: reworked, _weaveMarks: { round: 'reweave', from: left, at: 't' } }));
+    const withoutEvidence = ({ evidence: _evidence, ...rest }) => rest;
     expect(marks.map((m) => [m.path, m.element])).toEqual([
       ['headline', undefined],
-      ['threads[#t5]', left.threads.find((t) => t.id === 't5')],
-      ['connections[#c1]', left.connections.find((c) => c.id === 'c1')]
+      ['threads[#t5]', withoutEvidence(left.threads.find((t) => t.id === 't5'))],
+      ['connections[#c1]', withoutEvidence(left.connections.find((c) => c.id === 'c1'))]
     ]);
+  });
+
+  it('a round that only re-cites a line marks nothing: the evidence is never the director\'s (R6)', () => {
+    const left = leftByDirector();
+    const reworked = clone(left);
+    reworked.threads[1].evidence = [{ sources: ['mor001'], shows: 'A piece the rework found.', stance: 'supports' }];
+    reworked.threads[5].evidence = [{ sources: ['notes'], shows: 'Riley watched the ledger.', stance: 'supports' }];
+    expect(meetingMarksOf(atMeeting({ weave: reworked, _weaveMarks: { round: 'reweave', from: left, at: 't' } })).marks).toEqual([]);
   });
 
   it("under an id the director's version repeats, each mark carries the element the round took out, by its place under the id", () => {
     const left = clone(FIXTURE_WEAVE);
-    left.threads.push({ id: 't2', claim: 'A second thread the writer put under t2.', role: 'mirrors-it', receipt: 'ledger' });
+    left.threads.push({ id: 't2', name: 'A second sale', line: 'A second thread the writer put under t2.', role: 'mirrors-it', evidence: [{ sources: ['ledger'], shows: 'A sale into Melanie.', stance: 'supports' }] });
     const reworked = clone(left);
-    reworked.threads = reworked.threads.filter((t) => t.claim !== 'A second thread the writer put under t2.');
+    reworked.threads = reworked.threads.filter((t) => t.line !== 'A second thread the writer put under t2.');
     const { marks } = meetingMarksOf(atMeeting({ weave: reworked, _weaveMarks: { round: 'send-back', from: left, at: 't' } }));
-    expect(marks.map((m) => [m.path, m.element && m.element.claim])).toEqual([['threads[#t2]', 'A second thread the writer put under t2.']]);
+    expect(marks.map((m) => [m.path, m.element && m.element.line])).toEqual([['threads[#t2]', 'A second thread the writer put under t2.']]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 4b, piece 1 (brief 1B): the story level, with the evidence underneath
+// ═══════════════════════════════════════════════════════════════════════════
+
+// R6: the evidence is never the director's edit. The console sends the weave with the writer's
+// evidence on it, and a version whose evidence differs (a pass re-cited a thread since the
+// meeting showed it) makes no edit and no refusal.
+describe("1B: the evidence under a line is never the director's edit (R6)", () => {
+  it('a version whose evidence differs from the weave shown makes no edit', () => {
+    const left = clone(FIXTURE_WEAVE);
+    left.threads[1].evidence = [{ sources: ['mor001'], shows: 'Another piece the writer cited.', stance: 'cuts-against' }];
+    left.connections[0].evidence = [];
+    const result = meetingResume({ meeting: 'approve', weave: left }, atMeeting());
+    expect(result.error).toBeNull();
+    expect(result.stateUpdates._weaveHandEdits).toBeNull();
+  });
+
+  it('a thread the director added carries no evidence into its edit, and their other changes stand as edits', () => {
+    const left = leftByDirector();
+    left.threads[1].evidence = [];
+    const { stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atMeeting());
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].role', 'threads[#t6]', 'connections[#c2]']);
+    expect(stateUpdates._weaveHandEdits.edits[1].after).toEqual({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'grounds-it' });
+    expect(JSON.stringify(stateUpdates._weaveHandEdits)).not.toMatch(/"evidence"/);
+  });
+});
+
+// The map's page names a meeting change by the line the meeting shows (brief 4.14a): a thread by
+// its name and a connection by its line, never by an id (phase 4b, brief 1B).
+describe('1B: where a meeting change sits, by the names the meeting shows', () => {
+  const { meetingChangePlace } = require('../meeting');
+  const placesOf = (left) => standingAtMeeting(null, FIXTURE_WEAVE, left).edits.map((edit) => meetingChangePlace(edit, left));
+
+  it("names a thread by its name, quotes a line the director rewrote, and names a connection by its line", () => {
+    const left = leftByDirector();
+    left.threads[1].line = 'Marcus bragged about the sale at the bar.';
+    left.threads[1].name = 'The brag';
+    expect(placesOf(left)).toEqual([
+      'the name "The brag"',
+      'the line "Marcus bragged about the sale at the bar"',
+      'the role of "The envelope"',
+      'the thread you added, "The second ledger"',
+      'the connection you struck, "The night of the sale is the night the result came back"'
+    ]);
+  });
+
+  it('names the reason and the verdict flag by the thread they belong to, and no place carries an id', () => {
+    const left = clone(FIXTURE_WEAVE);
+    left.threads[4].reason = 'The director keeps it out.';
+    delete left.threads[0].verdict;
+    left.threads[1].verdict = true;
+    const places = placesOf(left);
+    expect(places).toEqual([
+      'whether "The overdose vote" carries the room\'s verdict',
+      'whether "The sale" carries the room\'s verdict',
+      'the reason "The letter" is left out'
+    ]);
+    places.forEach((place) => expect(place).not.toMatch(/\b[tc]\d\b/));
   });
 });

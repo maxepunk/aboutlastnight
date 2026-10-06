@@ -14,7 +14,7 @@
 const Ajv = require('ajv');
 const {
   EVIDENCE_SOURCES, EVIDENCE_STANCES, EVIDENCE_PIECE_SCHEMA,
-  evidenceProblems, storyTermsProblems, describeStoryTerms, STORY_TERMS_FIX,
+  evidenceProblems, describeEvidenceProblems, storyTermsProblems, describeStoryTerms, STORY_TERMS_FIX,
   documentTextsOf, documentIdsOf, evidenceContextOf
 } = require('../evidence');
 
@@ -132,7 +132,7 @@ describe('the evidence check (evidenceProblems)', () => {
     expect(rest).toEqual([]);
     expect(problem).toMatchObject({ index: 1, kinds: ['source'] });
     expect(problem.what).toMatch(/"zzz999"/);
-    expect(problem.what).toMatch(/no document in <RECORD>/);
+    expect(problem.what).toMatch(/no document in the record/);
     expect(problem.fix).toMatch(/"ledger", "evidence-log" or "notes"/);
   });
 
@@ -207,6 +207,15 @@ describe('the evidence check (evidenceProblems)', () => {
   it('reads no evidence in a value that is not a list', () => {
     expect(problemsOf(undefined)).toEqual([]);
     expect(problemsOf({ sources: ['zzz999'] })).toEqual([]);
+  });
+
+  it("says a line's failing pieces in one phrase, each by its place from one, and each kind of fix once", () => {
+    const problems = problemsOf([piece(['jes002'], 'Fine.'), piece(['zzz999'], 'x'), piece(['jes002'], 'Jess, "words Jess never said"'), piece(['qqq111'], 'y')]);
+    const { what, fix } = describeEvidenceProblems(problems);
+    expect(what).toMatch(/^piece 2 names "zzz999", .*; piece 3 quotes "words Jess never said", .*; piece 4 names "qqq111"/);
+    expect(fix.match(/Name each source/g)).toHaveLength(1);
+    expect(fix.indexOf('Name each source')).toBeLessThan(fix.indexOf('Copy each quotation'));
+    expect(describeEvidenceProblems([])).toEqual({ what: '', fix: '' });
   });
 });
 

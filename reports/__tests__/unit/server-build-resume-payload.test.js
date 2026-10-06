@@ -1356,7 +1356,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     let w = meetingWeaveOf(shown);
     w = setMeetingField(w, 'story', 'The room named an overdose; the ledger names a sale. ');
     w = setThreadRole(w, 2, 'mirrors-it');
-    w = addMeetingThread(w, 'Riley kept a second ledger.', 'grounds-it');
+    w = addMeetingThread(w, 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
     w = setConnectionStruck(w, 1, true);
     w = setQuestionAnswer(w, 0, ' Sarah ran the bar all morning.');
     return w;

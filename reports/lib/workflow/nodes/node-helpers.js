@@ -593,8 +593,8 @@ function buildValidEvidenceIds(evidenceBundle) {
   }
 
   // NOTE: Buried transactions and relationships are intentionally EXCLUDED from valid IDs.
-  // A buried sale is the ledger's: a weave thread names it with the receipt "ledger", as
-  // the arc writer's receipts list says (phase 4, brief 4.4; lib/weave.js checkWeave).
+  // A buried sale is the ledger's: a piece of evidence names it as "ledger" (phase 4b,
+  // brief 1B; lib/evidence.js EVIDENCE_SOURCES).
 
   console.log(`[buildValidEvidenceIds] Extracted ${ids.size} valid evidence IDs`);
   return ids;
@@ -692,6 +692,13 @@ function leadingRuleIds(finding) {
  * 3); after an evaluation the verdict guard has already left such findings out, so this
  * is the same rule held at the rework's door.
  *
+ * A code check's failures stay whole (phase 4b, brief 1B): the checks read only the writer's
+ * text (R11), and file a fault the director's change causes as a concern, so every failure
+ * is the writer's to fix. Since phase 4b a weave check's line names the line it is about in
+ * the director's words for it, which may be words the director wrote, such as the name of a
+ * thread they added whose evidence the writer gave a document the record lacks: read as a
+ * finding located in their text, it would never reach the rework that fixes it.
+ *
  * @param {Object|null} validationResults
  * @param {Object[]} edits - the standing edits the rework's starting version carries
  * @param {Object} output - that version
@@ -699,6 +706,7 @@ function leadingRuleIds(finding) {
  */
 function withoutDirectorsFindings(validationResults, edits, output) {
   if (!validationResults || typeof validationResults !== 'object' || edits.length === 0) return validationResults;
+  if (codeCheckOf(validationResults)) return validationResults;
   const located = (text) => typeof text === 'string' && locateQuotedText(text, edits, output).editIds.length > 0;
   const keep = (finding) => !located(typeof finding === 'string' ? finding : (finding && finding.message));
   const verdict = { ...validationResults };

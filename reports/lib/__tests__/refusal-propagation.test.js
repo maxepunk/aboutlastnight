@@ -145,7 +145,7 @@ describe('the paths that swallow errors into state keep "declined" and the categ
     const state = {
       weave: {
         story: 'The room named Alex.', question: 'Why Alex?', headline: 'H',
-        threads: [{ id: 't1', claim: 'The room named Alex.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+        threads: [{ id: 't1', name: 'The verdict', line: 'The room named Alex.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
         connections: [], convergence: 'C', questions: []
       },
       evaluationHistory: [],
@@ -172,7 +172,7 @@ describe('the paths that swallow errors into state keep "declined" and the categ
     const state = {
       weave: {
         story: 'The room named Test.', question: 'Why?', headline: 'H',
-        threads: [{ id: 't1', claim: 'The room named Test.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+        threads: [{ id: 't1', name: 'The verdict', line: 'The room named Test.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
         connections: [], convergence: 'C', questions: []
       },
       arcRevisionCount: 1,

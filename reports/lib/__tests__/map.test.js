@@ -1026,7 +1026,7 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
   const fourChanges = (w) => {
     w.story = 'The room called it an overdose, and the envelope says the money moved first.';
     w.threads[2].role = 'mirrors-it';
-    w.threads.push({ id: 't6', claim: 'Riley kept a second ledger in the back room.', role: 'grounds-it' });
+    w.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger in the back room.', role: 'grounds-it' });
     w.connections[1].struck = true;
   };
   /** The fixture's map with t3's material kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
@@ -1065,8 +1065,9 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     const data = mapCheckpointData(state, { keptPhotos: ['hero.jpg', 'p2.jpg'], evidenceIndex: {}, maxRevisions: 1 });
     expect(data.meetingChanges).toEqual([
       { id: 'M1', place: 'the story' },
-      { id: 'M2', place: 'the role of "Morgan paid Riley at the bar, out of sight"' },
-      { id: 'M3', place: 'the thread you added, "Riley kept a second ledger in the back room"' },
+      // Phase 4b (brief 1B): a thread by its name, as the meeting's page shows it.
+      { id: 'M2', place: 'the role of "The envelope"' },
+      { id: 'M3', place: 'the thread you added, "The second ledger"' },
       { id: 'M4', place: 'the connection you struck, "The night of the sale is the night the result came back"' }
     ]);
     expect(data.meetingChanges.map((change) => change.id)).toEqual(meetingEditIdsOf(state));

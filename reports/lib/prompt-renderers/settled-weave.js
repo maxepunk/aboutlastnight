@@ -6,11 +6,15 @@
  * It prints:
  * - the story, its question and the working headline, and the director's words the story
  *   rests on;
- * - every thread with its role, the main thread first and the left-out threads last, each
- *   with its receipt, a thread the director added among them;
- * - the connections the story keeps and the convergence (lib/weave.js storyConnections). A
- *   connection the director struck is gone from it, and since brief 4.14a so is one that
- *   joins a thread left out, so no later writer meets the link;
+ * - every thread by its id, its role, its name and its line, the main thread first and the
+ *   left-out threads last, a thread the director added among them; and under each, its
+ *   evidence, one piece a line: its stance, its sources and what it shows (phase 4b, brief
+ *   1B; R7), for the map writer to give each beat the pieces that tell it. A thread in the
+ *   story with none yet, such as one the director added, says so;
+ * - the connections the story keeps, each by its line and the names of the threads it joins,
+ *   and the convergence (lib/weave.js storyConnections). A connection's kind stays underneath,
+ *   unprinted. A connection the director struck is gone from it, and since brief 4.14a so is
+ *   one that joins a thread left out, so no later writer meets the link;
  * - every question with what its answer changes, and the director's answer word for word
  *   or the mark that it is unanswered;
  * - each change the director made at the meeting, marked on its line by its id in the
@@ -30,7 +34,7 @@
  */
 'use strict';
 
-const { isWeave, storyConnections, WEAVE_ROLES } = require('../weave');
+const { isWeave, storyConnections, WEAVE_ROLES, LEFT_OUT_ROLE } = require('../weave');
 const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../writer-questions');
 const { weaveDirectorsShare, carriedEdits } = require('../hand-edit-diff');
 
@@ -63,8 +67,8 @@ function meetingChangeId(id) {
 /** The answers' tag, as the fact check's prompt prints it (evaluator-nodes.js TRUTH_MATERIAL). */
 const DIRECTOR_ANSWERS_TAG = 'DIRECTOR_ANSWERS';
 
-/** What two threads share at a connection, in words. */
-const CONNECTION_KIND_WORDS = { person: 'a shared person', moment: 'a moment', document: 'a document', line: 'a line' };
+/** A piece's stance, in words. */
+const STANCE_WORDS = { supports: 'supports', 'cuts-against': 'cuts against' };
 
 /** A question's kind, in words. */
 const QUESTION_KIND_WORDS = { player: 'a player', pronoun: 'a pronoun', figure: 'a figure' };
@@ -88,6 +92,26 @@ function roleWords(role) {
 function changeMark(parts) {
   if (parts.length === 0) return '';
   return ` [the director's ${parts.length > 1 ? 'changes' : 'change'} ${parts.join('; ')}]`;
+}
+
+/** Words joined as a list is read: "a", "a and b", "a, b and c". */
+function listOf(words) {
+  return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words.join('');
+}
+
+/**
+ * A thread's evidence, one piece a line under it (phase 4b, brief 1B; R7): the piece's stance,
+ * its sources as the record names them, and what it shows. A thread in the story with no piece
+ * yet says so; a left-out one with none prints nothing.
+ */
+function evidenceLines(thread) {
+  const pieces = objectsOf(thread.evidence);
+  if (pieces.length === 0) return thread.role === LEFT_OUT_ROLE ? [] : ['  - No evidence yet.'];
+  return pieces.map((piece) => {
+    const sources = listOf((Array.isArray(piece.sources) ? piece.sources : []).map(textOf).filter(Boolean));
+    const stance = STANCE_WORDS[piece.stance] || textOf(piece.stance);
+    return `  - ${stance}, from ${sources || 'no source'}: ${textOf(piece.shows)}`;
+  });
 }
 
 /**
@@ -117,7 +141,7 @@ function renderSettledWeave(weave, edits) {
 
   const lines = [
     `<${SETTLED_WEAVE_TAG}>`,
-    "The weave as the director settled it at the story meeting, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word.",
+    "The weave as the director settled it at the story meeting, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. Under each thread is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows.",
     '',
     `STORY: ${textOf(weave.story)}${fieldMark('story')}`,
     `QUESTION: ${textOf(weave.question)}${fieldMark('question')}`,
@@ -144,19 +168,22 @@ function renderSettledWeave(weave, edits) {
     Object.entries(share.threadFields)
       .filter(([place]) => place.startsWith(`${id}.`))
       .forEach(([place, editId]) => parts.push(`${meetingChangeId(editId)}: the ${place.slice(id.length + 1)}`));
-    const receipt = textOf(thread.receipt) ? ` Receipt: ${textOf(thread.receipt)}.` : '';
     const verdict = thread.verdict === true ? " It carries the room's verdict." : '';
-    const reason = textOf(thread.reason) && thread.role === 'left-out' ? ` Why it is left out: ${textOf(thread.reason)}` : '';
-    lines.push(`- ${id} (${roleWords(thread.role)}): ${textOf(thread.claim)}${receipt}${verdict}${reason}${changeMark(parts)}`);
+    const reason = textOf(thread.reason) && thread.role === LEFT_OUT_ROLE ? ` Why it is left out: ${textOf(thread.reason)}` : '';
+    lines.push(`- ${id} (${roleWords(thread.role)}) ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${reason}${changeMark(parts)}`);
+    lines.push(...evidenceLines(thread));
   });
 
   const connections = storyConnections(weave);
   if (connections.length > 0) {
+    const nameOf = (id) => {
+      const named = objectsOf(weave.threads).find((thread) => textOf(thread.id) === id);
+      return named && textOf(named.name) ? `"${textOf(named.name)}"` : id;
+    };
     lines.push('', 'CONNECTIONS:');
     connections.forEach((connection) => {
       const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf).filter(Boolean) : [];
-      const kind = CONNECTION_KIND_WORDS[connection.kind] || textOf(connection.kind);
-      lines.push(`- ${textOf(connection.id)}, ${kind}, joining ${joins.join(' and ')}: ${textOf(connection.detail)}`);
+      lines.push(`- ${textOf(connection.id)}, joining ${joins.map(nameOf).join(' and ')}: ${textOf(connection.line)}`);
     });
   }
   lines.push('', `CONVERGENCE: ${textOf(weave.convergence)}${fieldMark('convergence')}`);

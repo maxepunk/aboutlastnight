@@ -48,7 +48,10 @@ const WEAVE = {
   story: 'The room accused Vic, and the ledger tells another story.',
   question: 'Why Vic?',
   headline: 'The Room Named Vic',
-  threads: [{ id: 't1', claim: 'The room accused Vic of the murder.', role: 'main-thread', receipt: 'ledger', verdict: true }],
+  threads: [{
+    id: 't1', name: 'The accusation', line: 'The room accused Vic of the murder.', role: 'main-thread', verdict: true,
+    evidence: [{ sources: ['notes'], shows: 'The room voted for Vic.', stance: 'supports' }]
+  }],
   connections: [],
   convergence: 'The vote and the ledger meet at the end.',
   questions: [W_ZIA, W_FIGURE]

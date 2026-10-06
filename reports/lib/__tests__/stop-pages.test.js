@@ -139,7 +139,10 @@ describe('4.12a: the pages the decision stops show (lib/stop-pages.js)', () => {
 });
 
 describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
-  it('shows the weave in the spec\'s order: the verdict, the story, the question, the headline, from your notes, the threads, the connections and the convergence, the questions', () => {
+  /** A thread's line as the page prints it: its role, its name and its line (phase 4b, brief 1B). */
+  const threadLine = (t) => `${t.roleLabel} · ${t.name}: ${t.line}`;
+
+  it('shows the weave in the spec\'s order: the verdict, the story, the question, the headline, from your notes, the threads, the left-out threads by name, the connections and the convergence, the questions', () => {
     const data = meetingData();
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const page = stopPage('arc-selection', data);
@@ -148,42 +151,79 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
       view.verdict.who, view.verdict.charge,
       view.story.text, view.question.text, view.headline.text,
       view.fromYourNotes.text,
-      `${t(0).roleLabel} · ${t(0).claim}`, t(0).receipt.label,
-      `${t(1).roleLabel} · ${t(1).claim}`, t(1).receipt.label,
-      `${t(4).roleLabel} · ${t(4).claim}`, t(4).receipt.label, t(4).reason,
-      `${view.connections[0].kindLabel} · ${view.connections[0].detail}`,
-      `${view.connections[1].kindLabel} · ${view.connections[1].detail}`,
+      threadLine(t(0)), threadLine(t(1)), threadLine(t(2)), threadLine(t(3)),
+      view.leftOut.names,
+      view.connections[0].line,
+      view.connections[1].line,
       view.convergence.text,
       `${view.questions[0].about}: ${view.questions[0].question}`, view.questions[0].changes
     ])).toBe('in order');
-    // A receipt is named through the stop's evidence index, as the meeting names it.
-    expect(textsOf(page)).toContain('ALE003 - The sale (Alex Reeves)');
+    expect(view.leftOut.names).toBe('The letter');
   });
 
-  it('labels each thread and connection with its id, which is not counted', () => {
+  // Phase 4b (brief 1B; spec 9): the evidence under each line, and the left-out threads'
+  // reasons, are folded, so the stops log does not count them.
+  it('folds the evidence under each thread and connection, and the left-out threads\' reasons, by the view\'s titles', () => {
+    const data = meetingData();
+    const view = View.meetingView(data, View.meetingDraftOf(data), '');
+    const page = stopPage('arc-selection', data);
+    const folded = textsOf(page, true);
+    view.threads.concat(view.connections).forEach((line) => line.evidence.forEach((piece) => expect(folded).toContain(piece.text)));
+    expect(folded).toContain('ALE003 - The sale (Alex Reeves): Marcus on the sale: "Worth it. Finally worth it."');
+    expect(folded).toContain(view.leftOut.threads[0].reason);
+    expect(textsOf(page)).not.toContain(view.leftOut.threads[0].reason);
+    const foldedTitles = page.lines.filter((line) => line.tone === 'title' && line.folded).map((line) => line.label);
+    expect(foldedTitles).toEqual([
+      ...view.threads.map(() => view.evidenceTitle), view.leftOut.reasonsTitle, ...view.connections.map(() => view.evidenceTitle)
+    ]);
+    // The folds count for nothing: a page with more evidence under its lines shows as many words.
+    const more = meetingData();
+    more.weave = clone(more.weave);
+    more.weave.threads[1].evidence.push({ sources: ['ledger'], shows: 'The sale on the ledger, with every figure that matters in it.', stance: 'cuts-against' });
+    expect(wordsShown('arc-selection', more)).toBe(wordsShown('arc-selection', data));
+  });
+
+  // Review focus 1: a thread the director adds carries no evidence, and its fold says the map
+  // writer finds it, folded as the rest of the evidence is.
+  it('folds the line that a thread with no evidence yet gets it from the map writer', () => {
+    const data = meetingData();
+    const draft = View.addMeetingThread(View.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
+    const view = View.meetingView(data, draft, '');
+    const added = view.threads.find((t) => t.id === 't6');
+    expect(added.noEvidence).toBe(View.MEETING_NO_EVIDENCE_LINE);
+    expect(stopPage('arc-selection', { ...data, weave: draft }).lines.find((line) => line.text === View.MEETING_NO_EVIDENCE_LINE))
+      .toMatchObject({ folded: true });
+  });
+
+  // Spec 9: the tags leave the page. A thread carries its verdict as a label, and a connection
+  // the names of the threads it joins; no line or label names an element by its id.
+  it('labels no line with an id: the verdict\'s thread by its label, a connection by the names of the threads it joins', () => {
     const data = meetingData();
     const page = stopPage('arc-selection', data);
-    const lineOf = (text) => page.lines.find((line) => line.text === text);
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
-    expect(lineOf(`${view.threads[0].roleLabel} · ${view.threads[0].claim}`).label).toMatch(/^t1\b/);
-    expect(lineOf(`${view.connections[0].kindLabel} · ${view.connections[0].detail}`).label).toMatch(/^c1\b/);
+    const lineOf = (text) => page.lines.find((line) => line.text === text);
+    expect(lineOf(threadLine(view.threads[0])).label).toBe("The room's verdict");
+    expect(lineOf(view.connections[0].line).label).toBe('Joins "The overdose vote" and "The envelope"');
+    expect(page.lines.filter((line) => /\b[tcq]\d+\b/.test(`${line.label} ${line.text}`)).map((line) => line.label || line.text)).toEqual([]);
     const renamed = meetingData();
     renamed.weave = clone(renamed.weave);
     renamed.weave.threads[0].id = 'thread-with-a-much-longer-id';
     expect(wordsShown('arc-selection', renamed)).toBe(wordsShown('arc-selection', data));
   });
 
-  it('puts a concern and a mark right after the line they sit beside', () => {
+  it('puts a check still failing, a concern and a mark right after the line they sit beside', () => {
     const data = meetingData({
+      checkFailures: [{ type: 'story-terms', message: 'The thread "The sale": its line holds the clock time "9:58".', place: 'threads[#t2]' }],
       concerns: [{ text: "Director's edit E1: T1: the story names a motive the record does not give.", places: [{ path: 'story' }] }],
-      marks: { round: 'reweave', marks: [{ path: 'threads[#t2].claim', before: 'The old claim.', after: 'Marcus bragged about the BizAI sale the night he died.', where: 'thread "t2", claim' }] }
+      marks: { round: 'reweave', marks: [{ path: 'threads[#t2].line', before: 'The old line.', after: 'Marcus bragged about the BizAI sale the night he died.', where: 'thread "t2", line' }] }
     });
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const texts = textsOf(stopPage('arc-selection', data));
     const story = texts.indexOf(view.story.text);
     expect(texts[story + 1]).toBe(view.story.concerns[0]);
-    const thread = texts.indexOf(`${view.threads[1].roleLabel} · ${view.threads[1].claim}`);
-    expect(texts.slice(thread, thread + 4)).toContain(view.threads[1].marks[0]);
+    const thread = texts.indexOf(threadLine(view.threads[1]));
+    expect(texts.slice(thread + 1, thread + 3)).toEqual([view.threads[1].failures[0], view.threads[1].marks[0]]);
+    expect(view.threads[1].failures).toEqual(['Check still failing: The thread "The sale": its line holds the clock time "9:58".']);
     // The round's banner sits above the page, where the meeting shows what changed since the director last looked.
     expect(texts.indexOf(view.marked)).toBeLessThan(texts.indexOf(view.verdict.who));
   });
@@ -202,7 +242,7 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
     data.weave = clone(data.weave);
     data.weave.connections[1].struck = true;
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
-    const line = stopPage('arc-selection', data).lines.find((l) => l.text === `${view.connections[1].kindLabel} · ${view.connections[1].detail}`);
+    const line = stopPage('arc-selection', data).lines.find((l) => l.text === view.connections[1].line);
     expect(line.tone).toBe('struck');
     expect(line.folded).toBe(false);
   });
@@ -638,9 +678,9 @@ describe('4.14a: the story meeting\'s page says which connections go out with a 
     data.weave = clone(data.weave);
     data.weave.threads[2].role = 'left-out';
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
-    expect(view.connections[0].leftOut).toMatch(/^Out of the story with thread t3/);
+    expect(view.connections[0].leftOut).toMatch(/^Out of the story with "The envelope"/);
     const lines = stopPage('arc-selection', data).lines;
-    const at = lines.findIndex((line) => line.text === `${view.connections[0].kindLabel} · ${view.connections[0].detail}`);
+    const at = lines.findIndex((line) => line.text === view.connections[0].line);
     expect(lines[at + 1]).toMatchObject({ text: view.connections[0].leftOut, folded: false });
     expect(textsOf(stopPage('arc-selection', meetingData()))).not.toContainEqual(expect.stringMatching(/^Out of the story/));
   });

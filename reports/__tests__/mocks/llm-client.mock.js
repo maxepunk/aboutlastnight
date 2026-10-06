@@ -46,8 +46,9 @@ function getDefaultArcAnalysis() {
 }
 
 /**
- * Default weave fixture (phase 4, brief 4.4): one thread, the room's verdict, with the
- * ledger as its receipt, so it passes the weave checks on any record.
+ * Default weave fixture (phase 4, brief 4.4; phase 4b, brief 1B): one thread, the room's
+ * verdict, in the story-level shape, its evidence from the director's notes with no quotation,
+ * so it passes the weave checks on any record.
  */
 function getDefaultWeave() {
   return {
@@ -55,7 +56,10 @@ function getDefaultWeave() {
     question: 'What did the money buy this morning?',
     headline: 'Test Headline for the Weave',
     threads: [
-      { id: 't1', claim: 'The room named its culprit after a split vote.', role: 'main-thread', receipt: 'ledger', verdict: true }
+      {
+        id: 't1', name: 'The verdict', line: 'The room named its culprit after a split vote.', role: 'main-thread', verdict: true,
+        evidence: [{ sources: ['notes'], shows: 'The room argued its way to a split vote.', stance: 'supports' }]
+      }
     ],
     connections: [],
     convergence: 'The verdict and the ledger meet at the last sale.',

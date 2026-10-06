@@ -52,7 +52,9 @@ const NAMED_SOURCES = (() => {
 
 /**
  * One piece of evidence, as the weave's schema and the map's embed it (R1). Every description
- * says what its field holds; the rule items the writers read state the rest.
+ * says what its field holds; the rule items the writers read state the rest. A description names
+ * the record in words, never by its tag: the weave writer's OUTPUT FORMAT prints them above the
+ * record.
  */
 const EVIDENCE_PIECE_SCHEMA = {
   type: 'object',
@@ -62,7 +64,7 @@ const EVIDENCE_PIECE_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
       minItems: 1,
-      description: `Where the piece comes from: a document in <RECORD> by its id, or ${NAMED_SOURCES}. A piece that sets two sources side by side names both`
+      description: `Where the piece comes from: the id of a document in the record, or ${NAMED_SOURCES}. A piece that sets two sources side by side names both`
     },
     shows: { type: 'string', description: 'What the piece shows, in a short line with the words or figures that matter; a quotation is word for word from its source' },
     stance: { type: 'string', enum: [...EVIDENCE_STANCES], description: 'Whether the piece supports its line or cuts against it' },
@@ -282,7 +284,7 @@ function sourceTexts(source, ctx, documentsByLowerId) {
 /** How to fix each kind of fault a piece can have, in the order a line gives them. */
 const PIECE_FIXES = {
   malformed: 'Give each piece its sources, what it shows and its stance, "supports" or "cuts-against".',
-  source: `Name each source by the id of a document in <RECORD>, or as ${NAMED_SOURCES}.`,
+  source: `Name each source by the id of a document in the record, or as ${NAMED_SOURCES}.`,
   quotation: 'Copy each quotation word for word from a source the piece names, or name the source that holds it.'
 };
 
@@ -327,7 +329,7 @@ function evidenceProblems(pieces, context) {
     const read = sources.map((source) => ({ source, texts: sourceTexts(source, ctx, documentsByLowerId) }));
     const unknown = read.filter((entry) => entry.texts === null).map((entry) => `"${entry.source}"`);
     if (unknown.length > 0) {
-      faults.push({ kind: 'source', what: `names ${listOf(unknown)}, which ${unknown.length > 1 ? 'are no documents' : 'is no document'} in <RECORD> and none of ${NAMED_SOURCES}` });
+      faults.push({ kind: 'source', what: `names ${listOf(unknown)}, which ${unknown.length > 1 ? 'are no documents' : 'is no document'} in the record and none of ${NAMED_SOURCES}` });
     }
     const texts = read.filter((entry) => entry.texts !== null).flatMap((entry) => entry.texts);
     if (read.some((entry) => entry.texts !== null)) {
@@ -338,6 +340,26 @@ function evidenceProblems(pieces, context) {
     const kinds = faults.map((fault) => fault.kind);
     return { index, kinds, what: faults.map((fault) => fault.what).join('; and '), fix: kinds.map((kind) => PIECE_FIXES[kind]).join(' ') };
   }).filter(Boolean);
+}
+
+/**
+ * A line's evidence problems (evidenceProblems') as one phrase and one fix, the line the weave's
+ * checks and the map's write: `piece 2 names "zzz999", which is no document in the record ...; piece
+ * 3 quotes "...", which none of its sources holds word for word`, each piece by its place in the
+ * line's evidence, counted from one, and each kind of fix once, in the order its fault first
+ * comes.
+ *
+ * @param {Array<{index: number, kinds: string[], what: string}>} problems
+ * @returns {{what: string, fix: string}}
+ */
+function describeEvidenceProblems(problems) {
+  const list = asArray(problems);
+  const kinds = [];
+  list.forEach((problem) => asArray(problem.kinds).forEach((kind) => { if (!kinds.includes(kind)) kinds.push(kind); }));
+  return {
+    what: list.map((problem) => `piece ${problem.index + 1} ${problem.what}`).join('; '),
+    fix: kinds.map((kind) => PIECE_FIXES[kind]).filter(Boolean).join(' ')
+  };
 }
 
 // ── The story-terms check ────────────────────────────────────────────────────
@@ -428,6 +450,7 @@ module.exports = {
   EVIDENCE_STANCES,
   EVIDENCE_PIECE_SCHEMA,
   evidenceProblems,
+  describeEvidenceProblems,
   storyTermsProblems,
   describeStoryTerms,
   STORY_TERMS_FIX,

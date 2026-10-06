@@ -72,9 +72,10 @@ const MAP = {
 const OUTLINE = MAP;
 
 /**
- * The arc writer's weave (phase 4, brief 4.4), for this fixture's record: each receipt
- * names one of its documents or the ledger, "from your notes" is the notes' own words,
- * and every check passes. Invented text.
+ * The arc writer's weave (phase 4, brief 4.4; phase 4b, brief 1B), for this fixture's record:
+ * each thread a short name and one line in story terms, with its evidence underneath, every piece
+ * naming one of the record's documents, the ledger or the director's notes and quoting its source
+ * word for word; "from your notes" is the notes' own words, and every check passes. Invented text.
  */
 const WEAVE = {
   story: 'The room called it an accidental overdose, and the record points at a sale Marcus made the night he died.',
@@ -82,15 +83,36 @@ const WEAVE = {
   headline: 'The Room Voted Overdose. The Ledger Kept Talking.',
   fromYourNotes: 'Riley watched the ledger all morning',
   threads: [
-    { id: 't1', claim: 'The room settled on an accidental overdose after a deadlock between Alex and Morgan.', role: 'main-thread', receipt: 'ledger', verdict: true },
-    { id: 't2', claim: 'Marcus bragged about the BizAI sale the night he died.', role: 'grounds-it', receipt: 'ale003' },
-    { id: 't3', claim: 'Morgan paid Riley at the bar, out of sight.', role: 'complicates-it', receipt: 'mor001' },
-    { id: 't4', claim: "A paternity result names Sarah as Marcus's heir.", role: 'carries-it-forward', receipt: 'p-dna' },
-    { id: 't5', claim: 'An unsigned letter threatened Marcus over the patents.', role: 'left-out', receipt: 'p-rescued', reason: 'No one in the room took it up.' }
+    {
+      id: 't1', name: 'The overdose vote', line: 'The room settled on an accidental overdose after a deadlock between Alex and Morgan.', role: 'main-thread', verdict: true,
+      evidence: [{ sources: ['notes'], shows: 'Alex and Morgan argued at the bar.', stance: 'supports' }]
+    },
+    {
+      id: 't2', name: 'The sale', line: 'Marcus bragged about the BizAI sale the night he died.', role: 'grounds-it',
+      evidence: [{ sources: ['ale003'], shows: 'Marcus on the sale: "Worth it. Finally worth it."', stance: 'supports' }]
+    },
+    {
+      id: 't3', name: 'The envelope', line: 'Morgan paid Riley at the bar, out of sight.', role: 'complicates-it',
+      evidence: [{ sources: ['mor001'], shows: 'Morgan hands Riley an envelope by the bar, and Riley says "Not here."', stance: 'supports' }]
+    },
+    {
+      id: 't4', name: 'The heir', line: "A paternity result names Sarah as Marcus's heir.", role: 'carries-it-forward',
+      evidence: [{ sources: ['p-dna'], shows: 'The paternity test names Sarah Blackwood.', stance: 'supports' }]
+    },
+    {
+      id: 't5', name: 'The letter', line: 'An unsigned letter threatened Marcus over the patents.', role: 'left-out', reason: 'No one in the room took it up.',
+      evidence: [{ sources: ['p-rescued'], shows: 'A friend gives Marcus "until Friday".', stance: 'supports' }]
+    }
   ],
   connections: [
-    { id: 'c1', kind: 'person', joins: ['t1', 't3'], detail: 'Morgan: one side of the deadlock, and the payer at the bar.' },
-    { id: 'c2', kind: 'moment', joins: ['t2', 't4'], detail: 'The night of the sale is the night the result came back.' }
+    {
+      id: 'c1', joins: ['t1', 't3'], line: 'Morgan sits on one side of the deadlock and pays at the bar.', kind: 'person',
+      evidence: [{ sources: ['notes', 'mor001'], shows: 'Morgan argues at the bar and hands Riley the envelope there.', stance: 'supports' }]
+    },
+    {
+      id: 'c2', joins: ['t2', 't4'], line: 'The night of the sale is the night the result came back.', kind: 'moment',
+      evidence: [{ sources: ['ale003', 'p-dna'], shows: 'The brag and the test result come from the same night.', stance: 'supports' }]
+    }
   ],
   convergence: 'The verdict closes the night; the sale and the heir keep it open.',
   questions: [
