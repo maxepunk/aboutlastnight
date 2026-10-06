@@ -40,7 +40,7 @@ const Ajv = require('ajv');
 const { WEAVE_SCHEMA } = require('./sdk-client/subagents');
 const {
   MEETING_ROUNDS, PICKED_KEY, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
-  weaveIdOf, repeatedIds, pickedAngleOf, settledAngleOf
+  weaveIdOf, repeatedIds, pickedAngleOf, settledAngleOf, ID_ELEMENTS, idlessChanges
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
 const { stopRoundOf, isNoteOf } = require('./workflow/state');
@@ -307,6 +307,8 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
   const problems = directorWeaveProblems(sentVersion, { shown });
   if (problems) return refuse(problems);
   const left = withUnsentAnglesAsShown(sentVersion, shown);
+  const idless = idlessRefusal(left, shown);
+  if (idless) return refuse(idless);
 
   const mark = factCheckMarkOf(currentState.weave);
   const baseline = isWeave(currentState._weaveBaseline) ? currentState._weaveBaseline : shown;
@@ -332,6 +334,29 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
     note: note ? { text: note, kind: 'rejection' } : null,
     error: null
   };
+}
+
+/**
+ * The meeting's refusal of an element with no id in the director's version, or null (the final
+ * review): no edit, restore, hold or answer can find an element with no id (lib/weave.js
+ * ID_ELEMENTS), so the gate refuses one the director adds, and a change to one the writer left
+ * with no id, which the checks report as the writer's failure (`missing-id`) and a rework fixes.
+ * The writer's, left as the meeting showed them, pass, so every action works (lib/weave.js
+ * idlessChanges). The console never writes an element with no id.
+ *
+ * @param {Object} weave - the director's version, as the gate stores it
+ * @param {Object|null} shown - the weave the meeting showed
+ * @returns {string|null}
+ */
+function idlessRefusal(weave, shown) {
+  const { added, changed } = idlessChanges(weave, shown);
+  const named = (list) => listOf(list.map(({ collection, element }) => ID_ELEMENTS[collection].words(element)));
+  if (added.length > 0) {
+    return `The director's version adds ${named(added)} with no id. Give each one the director adds an id of its own: the meeting finds every change by its id.`;
+  }
+  if (changed.length === 0) return null;
+  const [them, each] = changed.length > 1 ? ['them', 'each'] : ['it', 'it'];
+  return `The writer gave ${named(changed)} no id, so the meeting cannot keep a change to ${them}. Leave ${them} as the meeting showed ${them}, and send the weave back or reweave it with a note: the rework gives ${each} an id of its own.`;
 }
 
 /**

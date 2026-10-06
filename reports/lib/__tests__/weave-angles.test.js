@@ -225,6 +225,34 @@ describe('the checks on the angles (spec 9.1; R4)', () => {
     expect(failuresOf(weave, 'duplicate-id').map((f) => f.place)).toEqual(['angles[#a2]']);
   });
 
+  // The final review: an element with no id is one no edit, restore, hold or answer can find, so
+  // the writer's output fails for it, and one automatic rework gives it an id.
+  test.each([
+    ['an angle', (w) => w.angles[2], 'the angle "Nobody Named Alex Reeves. By Evening She Was Rising."', 'change it'],
+    ['a thread', (w) => w.threads[6], 'the thread "Marcus\'s stolen code"', 'change it'],
+    ['a connection', (w) => w.connections[2], 'the connection "Vic kept handing Alex his memories, and Alex kept her distance."', 'change it'],
+    ['a question', (w) => w.questions[0], 'the question "What did Mel do in the room?"', 'show it']
+  ])('%s with a blank id fails, at the top of the page, naming it', (_kind, elementOf, words, can) => {
+    ['', '  '].forEach((blank) => {
+      const weave = anglesWeave();
+      elementOf(weave).id = blank;
+      const failures = findings(weave).failures;
+      expect(failures.map((f) => f.type)).toEqual(['missing-id']);
+      expect(failures[0]).not.toHaveProperty('place');
+      expect(failures[0].message).toContain(`${words.charAt(0).toUpperCase()}${words.slice(1)} has no id. Give each`);
+      expect(failures[0].line).toBe(`The writer gave ${words} no id, so the meeting cannot ${can}.`);
+    });
+  });
+
+  test('two threads with no id are one failure that names both', () => {
+    const weave = anglesWeave();
+    weave.threads[6].id = '';
+    weave.threads.push({ ...clone(weave.threads[6]), name: 'A second thread' });
+    const failures = failuresOf(weave, 'missing-id');
+    expect(failures).toHaveLength(1);
+    expect(failures[0].line).toBe('The writer gave the thread "Marcus\'s stolen code" and the thread "A second thread" no id, so the meeting cannot change them.');
+  });
+
   test('no check names a role, a left-out reason, the convergence or the stronger main thread', () => {
     const weave = anglesWeave();
     const types = findings(weave).failures.map((f) => f.type);
@@ -257,6 +285,38 @@ describe('the gate (R8, R9)', () => {
     change(left);
     expect(directorWeaveProblems(left, { shown: anglesWeave() })).toContain('Morgan, named by her own memories');
     expect(meetingResume({ meeting: 'approve', weave: left }, stateAt()).error).toContain('Morgan, named by her own memories');
+  });
+
+  // The final review: no edit could find an element with no id, so the gate refuses one the director
+  // adds, and a change to one the writer left with no id; the writer's, left as the meeting showed
+  // it, passes, so every action works while the checks hold the writer to it.
+  describe('an element with no id', () => {
+    const idlessShown = () => {
+      const weave = anglesWeave();
+      weave.threads[6].id = '';
+      return weave;
+    };
+    test.each([
+      ['a thread', (left) => left.threads.push({ id: '', name: 'Jess turned in the meeting', line: 'Jess turned in the memory of Vic meeting Morgan.' }), 'the thread "Jess turned in the meeting"'],
+      ['a connection', (left) => left.connections.push({ id: ' ', joins: ['t1', 't2'], line: 'Morgan and Vic met before the vote.', kind: 'person' }), 'the connection "Morgan and Vic met before the vote."'],
+      ['a question', (left) => left.questions.push({ id: '', kind: 'player', about: 'Sam', question: 'What did Sam do?', changes: 'Whether Sam appears.' }), 'the question "What did Sam do?"']
+    ])('refuses %s the director adds with no id, naming it', (_kind, add, words) => {
+      const left = anglesWeave();
+      add(left);
+      expect(meetingResume({ meeting: 'approve', weave: left }, stateAt()).error)
+        .toBe(`The director's version adds ${words} with no id. Give each one the director adds an id of its own: the meeting finds every change by its id.`);
+    });
+
+    test("takes the writer's element with no id left as the meeting showed it, and refuses a change to it", () => {
+      const state = { ...stateAt(), weave: idlessShown(), _weaveBaseline: idlessShown() };
+      ['approve', 'reweave', 'send-back'].forEach((meeting) => {
+        expect([meeting, meetingResume({ meeting, weave: idlessShown(), note: 'Give every thread an id.' }, state).error]).toEqual([meeting, null]);
+      });
+      const changed = idlessShown();
+      changed.threads[6].line = 'Someone took the code, and the room never asked.';
+      expect(meetingResume({ meeting: 'approve', weave: changed }, state).error)
+        .toBe('The writer gave the thread "Marcus\'s stolen code" no id, so the meeting cannot keep a change to it. Leave it as the meeting showed it, and send the weave back or reweave it with a note: the rework gives it an id of its own.');
+    });
   });
 
   test("takes a version that keeps the verdict's thread flagged in the picked angle, the director's rename of it included", () => {

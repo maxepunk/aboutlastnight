@@ -861,6 +861,59 @@ function questionWords(question) {
   return `the question "${textOf(question.question) || textOf(question.about) || weaveIdOf(question)}"`;
 }
 
+/**
+ * The weave's elements that each carry an id of their own, and how a check names one (the final
+ * review): the meeting, the director's edits, R9's restore, the Reweave's hold and the answers find
+ * every angle, thread, connection and question by its id, and the meeting shows no question without
+ * one (lib/writer-questions.js weaveQuestionsOf).
+ */
+const ID_ELEMENTS = Object.freeze({
+  angles: Object.freeze({ kind: 'angle', words: angleWords, cannot: 'change' }),
+  threads: Object.freeze({ kind: 'thread', words: threadWords, cannot: 'change' }),
+  connections: Object.freeze({ kind: 'connection', words: connectionWords, cannot: 'change' }),
+  questions: Object.freeze({ kind: 'question', words: questionWords, cannot: 'show' })
+});
+
+/** The elements of one of the weave's collections with no id (weaveIdOf: blank or missing), in order. */
+function idlessElements(weave, collection) {
+  return objectsOf(weave && weave[collection]).filter((element) => !weaveIdOf(element));
+}
+
+/** An element with no id as one text, read without its evidence and its answer, which are never the director's change to it. */
+function idlessKeyOf(element) {
+  const { evidence: _evidence, [WEAVE_ANSWER_KEY]: _answer, ...rest } = element;
+  return canonicalJson(rest);
+}
+
+/**
+ * The elements with no id in the director's version that the weave the meeting showed does not
+ * hold as it is (the final review), for the meeting's gate (lib/meeting.js meetingResume): `added`,
+ * those beyond as many as the meeting showed in each collection, which the director put in, and
+ * `changed`, the rest, the writer's elements with no id that the director changed. Each is
+ * `{collection, element}`. No edit can find an element with no id, so neither can stand; the
+ * writer's, left as the meeting showed them, are no change.
+ *
+ * @param {Object} weave - the director's version
+ * @param {Object|null} shown - the weave the meeting showed
+ * @returns {{added: Array<{collection: string, element: Object}>, changed: Array<{collection: string, element: Object}>}}
+ */
+function idlessChanges(weave, shown) {
+  const out = { added: [], changed: [] };
+  Object.keys(ID_ELEMENTS).forEach((collection) => {
+    const asShown = idlessElements(shown, collection).map(idlessKeyOf);
+    const left = idlessElements(weave, collection);
+    const unmatched = left.filter((element) => {
+      const at = asShown.indexOf(idlessKeyOf(element));
+      if (at === -1) return true;
+      asShown.splice(at, 1);
+      return false;
+    });
+    const added = Math.max(0, left.length - idlessElements(shown, collection).length);
+    unmatched.forEach((element, i) => (i >= unmatched.length - added ? out.added : out.changed).push({ collection, element }));
+  });
+  return out;
+}
+
 /** Where a failure about an element sits, as the meeting reads a place (`threads[#t3]`), or null for an element with no id. */
 function elementPlace(collection, element) {
   const id = weaveIdOf(element);
@@ -908,6 +961,10 @@ function elementPlace(collection, element) {
  *   repeatedIds, the rule the meeting's gate and the diff read too. A repeat is the writer's
  *   failure, under the id of a thread the director added or changed too, and then its line says
  *   the director's thread keeps the id (brief 4.5b);
+ * - every angle, thread, connection and question has an id (`missing-id`, one failure for each
+ *   kind, at the top of the page; the final review): nothing that finds an element by its id can
+ *   find one with none, and the meeting shows no question without one. The meeting's gate refuses
+ *   one in the director's version (lib/meeting.js idlessRefusal), so every one is the writer's;
  * - the room's verdict is one of the threads: a thread marked `verdict: true`
  *   (`no-verdict-thread`);
  * - every connection joins two threads the weave holds (`connection-joins-unknown-thread`);
@@ -1137,6 +1194,17 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     fail('duplicate-id', `Two questions share one id: ${asked}. Give each question an id of its own.`, `The writer gave the questions ${asked} one id.`, `questions[#${id}]`);
   });
 
+  // An element with no id (the final review): nothing that finds an element by its id can find it,
+  // so the writer's output fails for it, one failure for each kind, at the top of the page.
+  Object.entries(ID_ELEMENTS).forEach(([collection, { kind, words, cannot }]) => {
+    const idless = idlessElements(weave, collection);
+    if (idless.length === 0) return;
+    const named = listOf(idless.map(words));
+    const thread = kind === 'thread' ? ', and put that id in each angle that tells it' : '';
+    fail('missing-id', `${opening(named)} ${idless.length > 1 ? 'have' : 'has'} no id. Give each ${kind} an id of its own${thread}: the meeting and the director's changes find every ${kind} by its id.`,
+      `The writer gave ${named} no id, so the meeting cannot ${cannot} ${idless.length > 1 ? 'them' : 'it'}.`);
+  });
+
   // The writer's own words on the page stay within its allowance with each angle open (R5;
   // lib/word-count.js pageLengthOf's rule): `length` is the worst angle's count, with its id.
   if (length && Number.isFinite(length.writer) && Number.isFinite(length.allowance) && length.writer > length.allowance) {
@@ -1204,6 +1272,9 @@ module.exports = {
   // Fix round 1, finding 3: the one reading of an id, and the one rule for a repeated id
   weaveIdOf,
   repeatedIds,
+  // The final review: an element with no id, which the checks fail and the gate refuses
+  ID_ELEMENTS,
+  idlessChanges,
   // Brief 4.5b: the one list of the fields the meeting prints, which the edits read, and an
   // element's place under its id, which the questions' carry pairs by
   WEAVE_PRINTED_FIELDS,
