@@ -471,7 +471,16 @@ const REMOVED_PHRASES = [
   // named exactly, and the article writer writes from each beat's evidence.
   'named exactly',
   'each named by its material',
-  'from the documents the map names'
+  'from the documents the map names',
+  // Phase 4b, piece 3 (slices 3A to 3C): the meeting pitches angles over one shared set of
+  // threads, so no thread has a role toward a main thread. A bare "complicates it" stays
+  // off the list: C17 and C18 say "confirms or complicates it" of a receipt.
+  'stronger main thread',
+  /the main thread/i,
+  'grounds it',
+  'mirrors it',
+  'carries it forward',
+  'left out, with one line on why'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

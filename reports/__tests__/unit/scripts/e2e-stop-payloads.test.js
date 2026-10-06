@@ -94,7 +94,7 @@ describe('4.12a: the story meeting\'s payload is meetingPayload\'s', () => {
   it('reweaves and sends back on a note, and the gate takes each as the director\'s round', async () => {
     const s = state();
     const data = await payloadAt('arc-selection', s);
-    const reweave = stopApproval('arc-selection', data, { action: 'reweave', note: 'Make the ledger the main thread.' });
+    const reweave = stopApproval('arc-selection', data, { action: 'reweave', note: 'Lead with the money.' });
     expect(gate(reweave.payload, s, 'arc-selection').resume).toMatchObject({ approved: false, round: 'reweave' });
     const sendBack = stopApproval('arc-selection', data, { action: 'send-back', note: 'Rethink the weave around the heir.' });
     expect(gate(sendBack.payload, s, 'arc-selection').resume).toMatchObject({ approved: false, round: 'send-back', feedback: 'Rethink the weave around the heir.' });

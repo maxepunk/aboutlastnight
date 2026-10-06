@@ -623,7 +623,7 @@ ${color('EXAMPLES:', 'cyan')}
   # 3. Approve with custom payload (e.g., character mappings):
   node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --approve-file mappings.json --step
   # 4. Ask the story meeting for a reweave, send the map back, leave a photo out:
-  node scripts/e2e-walkthrough.js --session 1225 --approve arc-selection --action reweave --note "Make the ledger the main thread." --step
+  node scripts/e2e-walkthrough.js --session 1225 --approve arc-selection --action reweave --note "Lead with the money." --step
   node scripts/e2e-walkthrough.js --session 1225 --approve arc-selection --angle 2 --step
   node scripts/e2e-walkthrough.js --session 1225 --approve outline --action send-back --note "Move the vote earlier." --step
   node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --leave-out "p3.jpg" --step

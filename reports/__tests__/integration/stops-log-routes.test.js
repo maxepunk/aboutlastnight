@@ -171,7 +171,7 @@ describe('4.12a: /approve writes the director\'s action, then the pause its run 
     const round2 = atMeeting({ humanArcRevisionCount: 1 });
     mockGraph = graphOf([atMeeting(), round2]);
     const data = await checkpointPayload();
-    await send('POST', `/api/session/${SESSION}/approve`, View.meetingPayload('reweave', data, View.meetingDraftOf(data), 'Make the ledger the main thread.'));
+    await send('POST', `/api/session/${SESSION}/approve`, View.meetingPayload('reweave', data, View.meetingDraftOf(data), 'Lead with the money.'));
     await flushBackground();
     expect(summary()).toEqual([['action', 'arc-selection', 1, 'reweave'], ['pause', 'arc-selection', 2]]);
     const reopened = await checkpointPayload();

@@ -149,7 +149,7 @@ describe('4.12a: one line for each action the director takes', () => {
     const weave = View.meetingDraftOf(data);
     const actions = [
       resumeFor(View.meetingPayload('approve', data, weave, ''), state, 'arc-selection'),
-      resumeFor(View.meetingPayload('reweave', data, weave, 'Make the ledger the main thread.'), state, 'arc-selection'),
+      resumeFor(View.meetingPayload('reweave', data, weave, 'Lead with the money.'), state, 'arc-selection'),
       resumeFor(View.meetingPayload('send-back', data, weave, 'Rethink the weave around the heir.'), state, 'arc-selection')
     ].map((resume) => stopsLog.actionOf(resume));
     expect(actions).toEqual(['approve', 'reweave', 'send-back']);
@@ -206,7 +206,7 @@ describe('4.12a fix round 1: a stop\'s round is one rule, stopRoundOf (lib/workf
   const { CHECKPOINT_TYPES } = require('../workflow/checkpoint-helpers');
   const { unrunRoundNoteIndex } = require('../meeting');
   const { PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
-  const NOTE = 'Make the ledger the main thread.';
+  const NOTE = 'Lead with the money.';
 
   it('the log writes stopRoundOf\'s round on every line and keeps no copy of the rule', () => {
     expect(DIRECTOR_ROUND_COUNTERS).toEqual({
