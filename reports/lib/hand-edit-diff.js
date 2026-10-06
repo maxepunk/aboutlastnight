@@ -2604,11 +2604,15 @@ function mapBeatText(beat) {
  * filename and the move it sits beside; the beat a photo sits beside (its `beat` field) by that
  * beat's move, found in `maps` in order; any other value as editValueText reads it. Every
  * report entry on the map reads its values through it, a change's and a cut's that came back
- * alike (reportAfterPass, mapBecame, mapCutReturned). So no entry about an edit the map's page
- * makes (a beat's move, its people and its place; a photo's place and the beat it sits beside)
- * carries a beat's, a thread's or a connection's tag. A beat's threads, connection, card and
- * kind, which the page neither prints nor edits, read as editValueText reads them. An edit
- * that is not on the map's beats or photos reads as editValueText reads it.
+ * alike (reportAfterPass, mapBecame, mapCutReturned). So no value of an entry about an edit the
+ * map's page makes (a beat's move, its people and its place; a photo's place and the beat it sits
+ * beside) carries a beat's, a thread's or a connection's tag; the entry's `where` still names a
+ * beat by its id (mapEditWhere), which the page reads as the beat's move
+ * (console/checkpoint-view-logic.js beatWords). A beat's threads, connection, card and kind, which
+ * the page does not edit, read as editValueText reads them, so an edit of its threads reads by the
+ * threads' ids. Of those four the page prints only the card, as the marker "(card)" beside the
+ * move. An edit that is not on the map's beats or photos reads as
+ * editValueText reads it.
  *
  * @param {Object} edit
  * @param {*} value - a value of the edit, or of the element it is about in a version
@@ -3963,8 +3967,9 @@ function cameBackStillIn(report, stored) {
  *   4.5e to 4.5g): a caption left out with its photo, or, beside `restored`, an element the
  *   director put in whole that went back without that photo; on the map, a beat the director
  *   added that a pass rewrote where they put it is such a change, not a move (mapChangedInPlace),
- *   and every value on the map's beats and photos reads as the map's page reads it, a beat by its
- *   move and its people, never by a tag (mapReportText; phase 4b, brief 1D);
+ *   and every value of an edit the map's page makes on its beats and photos reads as the page
+ *   reads it, a beat by its move and its people, never by a tag (mapReportText; phase 4b, brief
+ *   1D);
  * - a block the director moved that the pass took to another section (`moved`, `became`
  *   that section) or removed (`became` null), and whether the block is back in the
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
@@ -4028,8 +4033,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     director: '', became: null, pass, automatic, reason: why.get(e.id) || null, restored: false,
     ...(isStrike(e) && { struck: true }), ...fields
   });
-  // Phase 4b, brief 1D: a value on the map's beats or photos as the map's page reads it, never by a
-  // tag (mapReportText); every other value as editValueText reads it.
+  // Phase 4b, brief 1D: a value of an edit the map's page makes on its beats or photos as the page
+  // reads it, never by a tag (mapReportText); every other value, a beat's threads among them, as
+  // editValueText reads it.
   const textOf = (e, value) => mapReportText(e, value, [before, after]);
   const changed = [];
   carried.forEach((e) => {
