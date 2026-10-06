@@ -229,6 +229,24 @@ describe('the hold is the Reweave\'s alone (R1, R3)', () => {
     expect(update._weaveHandEditReport || {}).not.toHaveProperty('held');
   });
 
+  // Fix round 1, finding 5: an automatic pass that drops the angle the director picked has it put
+  // back by their edits on it, whichever kind, and the pick stays on it.
+  it('an automatic pass that drops the picked angle has it put back by the edit on it, a flip or a line of its pitch, and the pick stays', async () => {
+    const onlyFlip = clone(FIXTURE_WEAVE);
+    onlyFlip[PICKED_KEY] = 'a2';
+    onlyFlip.angles[1].threads.push('t5');
+    const onlyPitch = clone(FIXTURE_WEAVE);
+    onlyPitch[PICKED_KEY] = 'a2';
+    onlyPitch.angles[1].story = A2_STORY;
+    for (const left of [onlyFlip, onlyPitch]) {
+      const state = { ...(await roundState('reweave', null, left)), _meetingRound: null, arcRevisionCount: 1 };
+      const update = await reviseArcs(state, cfg(recordingSdk(reworkOf((w) => { w.angles.splice(1, 1); }, left))));
+      expect(update.weave.angles).toEqual(left.angles);
+      expect(update.weave[PICKED_KEY]).toBe('a2');
+      expect(update._weaveHandEditReport.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+    }
+  });
+
   it('a send-back may rewrite any angle, and the pick stays while its angle survives by id', async () => {
     const state = await roundState('send-back', 'Lead with the money.');
     const update = await reviseArcs(state, cfg(recordingSdk(reworkOf((w) => { w.angles[0].story = A1_STORY; }))));

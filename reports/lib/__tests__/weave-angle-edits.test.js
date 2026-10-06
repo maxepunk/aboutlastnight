@@ -138,6 +138,25 @@ describe('a thread flipped into or out of an angle is one edit of its own kind (
       expect(anglesThreads(output, 'a1')).toEqual(['t1', 't2', 't3', 't5']);
     });
 
+    // Fix round 1, finding 5: whether the angle survives a pass does not depend on the kind of edit
+    // the director made on it. A flip whose angle the pass dropped puts the angle back where it sat,
+    // as a pitch edit's restore does, then the thread's place.
+    test('a pass that drops the angle a flip is on has the angle put back where it sat, with the flip', () => {
+      [['in', (angle) => angle.threads.push('t2')], ['out', (angle) => { angle.threads = angle.threads.filter((id) => id !== 't3'); }]]
+        .forEach(([flip, change]) => {
+          const left = anglesWeave();
+          left[PICKED_KEY] = 'a2';
+          change(left.angles[1]);
+          const edits = standingAtMeeting(null, anglesWeave(), left).edits;
+          expect(edits.map((edit) => edit.flip)).toEqual([flip]);
+          const pass = clone(left);
+          pass.angles.splice(1, 1);
+          const { output, report } = settleEdits(null, { edits, before: left, after: pass, pass: 1 });
+          expect([flip, output.angles]).toEqual([flip, left.angles]);
+          expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', flip, restored: true })]);
+        });
+    });
+
     test('a send-back that undoes a flip is left as it is, with its reason', () => {
       const before = lookTwo();
       const pass = clone(before);

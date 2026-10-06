@@ -3913,6 +3913,9 @@ function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
  * brought in, after the angle's own threads when its list lacks it, with the thread itself put back
  * where it sat in `before` when the pass took it out of the weave, so the angle names a thread the
  * weave holds; or left out, off the angle's list. The pass's own order and its own threads stay.
+ * An angle the pass took out goes back first, as `before` holds it, where it sat, as a pitch edit's
+ * restore puts back its angle (restoreElement), so whether the angle survives the pass does not
+ * depend on which kind of edit the director made on it (fix round 1, finding 5).
  *
  * @param {{angleId: string, threadId: string, flip: ('in'|'out')}} membership
  * @param {Object} before - the version the pass started from
@@ -3920,6 +3923,11 @@ function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
  * @returns {boolean} whether the place now holds as the edit puts it
  */
 function restoreMembership({ angleId, threadId, flip }, before, out) {
+  if (!angleUnder(out, angleId)) {
+    const sat = elementsUnder(before, 'angles', angleId)[0];
+    if (!sat || !Array.isArray(out.angles)) return false;
+    out.angles.splice(Math.min(sat.index, out.angles.length), 0, clone(sat.element));
+  }
   const angle = angleUnder(out, angleId);
   if (!angle) return false;
   const tells = angleThreadIds(angle).includes(threadId);

@@ -785,7 +785,9 @@ async function reviseArcs(state, config) {
       pass,
       reasons: call.asksForChangedEdits ? reasons : []
     });
-    const weave = settled.output;
+    // Fix round 1, finding 5 (R1): an angle code put back for the director's edits on it keeps their
+    // pick, which weaveFromRework took off while the pass's weave lacked the angle.
+    const weave = withPickFrom(settled.output, previous);
     console.log(`[reviseArcs] Complete: ${weave.threads.length} threads, ${evidenceCountOf(weave)} pieces of evidence, in ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
     return {
       weave,
