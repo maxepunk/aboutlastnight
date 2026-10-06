@@ -563,13 +563,14 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     expect(taskLines(user).filter((line) => line.includes("each scene's detail from the record"))).toHaveLength(1);
   });
 
-  it('a beat the director added on the map, with no evidence, prints as they left it, and the beats line sends the writer to the record for it', async () => {
+  // The task's offer of the record for a beat with no evidence is a fixed line, in the prompt
+  // whether such a beat is or not: the beats-line test above holds it.
+  it('a beat the director added on the map, with no evidence, prints as they left it', async () => {
     const map = clone(MAP);
     map.sections[3].beats.push({ id: 'b7', move: 'Riley leaves by the back door', players: ['Riley'] });
     const { user } = await writerPrompt(articleState({ outline: map }));
     const printed = blockJson(user, STORY_MAP_TAG).sections[3].beats.find((beat) => beat.id === 'b7');
     expect(printed).toEqual({ id: 'b7', move: 'Riley leaves by the back door', players: ['Riley'] });
-    expect(taskLines(user).filter((line) => line.includes('or from the record where it carries none'))).toHaveLength(1);
   });
 
   it('a send-back that cut a card at the desk: the card line still names the map\'s card, behind the director\'s edits', async () => {
