@@ -4,7 +4,10 @@
  * the component itself:
  * - rendersHeading: whether a component's source renders a text as a heading;
  * - loadInputReview: InputReview.js run with a React that builds a tree of its elements, so a test
- *   reads the text the input review renders (elementsOf, textOf).
+ *   reads the text the input review renders (elementsOf, textOf);
+ * - elementsOf and textOf, the one way the input review's, the story meeting's and the map's tests
+ *   read such a tree (phase 4b, fix round 3): an element with whether a fold holds it, and the
+ *   text a node shows as the page first opens.
  */
 'use strict';
 
@@ -68,21 +71,43 @@ function loadInputReview() {
   return new Function('window', 'React', `${src}\nreturn { EnrichmentPanel, InputReview };`)(window, React);
 }
 
-/** The text a rendered node shows: its strings and numbers, its children's in order. */
+/**
+ * The components a test's React keeps as nodes, uncalled, whose text is a prop: the fold a page
+ * folds its content in, and a badge.
+ */
+const FOLD = 'CollapsibleSection';
+const BADGE = 'Badge';
+
+/**
+ * The text a rendered node shows as the page first opens, its children's in order: its strings
+ * and numbers, a field's value, a select's chosen option, a badge's label and a fold's title, never
+ * what a fold holds.
+ */
 function textOf(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(textOf).join('');
-  return node && typeof node === 'object' ? textOf(node.children) : '';
+  if (!node || typeof node !== 'object') return '';
+  if (node.type === FOLD) return String(node.props.title || '');
+  if (node.type === BADGE) return String(node.props.label || '');
+  if (node.type === 'textarea' || node.type === 'input') return String(node.props.value || '');
+  if (node.type === 'select') {
+    const chosen = elementsOf(node.children, (n) => n.type === 'option').find((option) => option.props.value === node.props.value);
+    return chosen ? textOf(chosen.children) : '';
+  }
+  return textOf(node.children);
 }
 
-/** The elements of a rendered tree that `test` takes, in document order. */
-function elementsOf(node, test, found = []) {
-  if (Array.isArray(node)) node.forEach((child) => elementsOf(child, test, found));
+/**
+ * The elements of a rendered tree that `test` takes, in document order. `test` gets each element
+ * and whether a fold holds it, so a test can tell what shows as the page first opens.
+ */
+function elementsOf(node, test, found = [], folded = false) {
+  if (Array.isArray(node)) node.forEach((child) => elementsOf(child, test, found, folded));
   else if (node && typeof node === 'object') {
-    if (test(node)) found.push(node);
-    elementsOf(node.children, test, found);
+    if (test(node, folded)) found.push(node);
+    elementsOf(node.children, test, found, folded || node.type === FOLD);
   }
   return found;
 }
 
-module.exports = { rendersHeading, consoleSafeStringify, loadInputReview, textOf, elementsOf };
+module.exports = { rendersHeading, consoleSafeStringify, loadInputReview, textOf, elementsOf, FOLD };

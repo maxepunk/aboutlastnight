@@ -189,6 +189,8 @@ const ViewLogic = require('../../console/checkpoint-view-logic');
 const { WEAVE } = require('../../lib/__tests__/fixtures/rework-state');
 const { meetingCheckpointData } = require('../../lib/meeting');
 const weaveLib = require('../../lib/weave');
+// One way to read a rendered tree, the map's test's too (fix round 3).
+const { elementsOf, textOf, FOLD } = require('../../lib/__tests__/fixtures/component-source');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const MARK = { at: '2026-10-05T21:40:00.000Z', ready: true, fixes: 0 };
@@ -252,41 +254,11 @@ function renderMeeting(props) {
   return ArcSelection({ onApprove: () => {}, onReject: () => {}, onRollback: () => {}, dispatch: () => {}, ...props });
 }
 
-const FOLD = 'CollapsibleSection';
-
-/** Every element of a tree that `test` takes, in document order, with whether a fold holds it. */
-function elementsOf(node, test, found = [], folded = false) {
-  if (Array.isArray(node)) node.forEach((child) => elementsOf(child, test, found, folded));
-  else if (node && typeof node === 'object') {
-    if (test(node, folded)) found.push(node);
-    elementsOf(node.children, test, found, folded || node.type === FOLD);
-  }
-  return found;
-}
-
 const classesOf = (node) => String(node.props.className || '').split(/\s+/).filter(Boolean);
 const withClass = (name) => (node) => classesOf(node).includes(name);
 
-/**
- * The text a node shows as the page first opens: its strings, a field's value, a select's chosen
- * option, a badge's label and a fold's title, never what a fold holds.
- */
-function shown(node) {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(shown).join('');
-  if (!node || typeof node !== 'object') return '';
-  if (node.type === FOLD) return String(node.props.title || '');
-  if (node.type === 'Badge') return String(node.props.label || '');
-  if (node.type === 'textarea' || node.type === 'input') return String(node.props.value || '');
-  if (node.type === 'select') {
-    const chosen = elementsOf(node.children, (n) => n.type === 'option').find((o) => o.props.value === node.props.value);
-    return chosen ? shown(chosen.children) : '';
-  }
-  return shown(node.children);
-}
-
 /** The text a fold holds once opened, each of its items and lines apart. */
-const held = (fold) => elementsOf(fold.children, (n) => n.type === 'li' || n.type === 'p').map(shown).join(' | ');
+const held = (fold) => elementsOf(fold.children, (n) => n.type === 'li' || n.type === 'p').map(textOf).join(' | ');
 
 /** The folds inside a node, outside any fold. */
 const foldsIn = (node) => elementsOf(node.children, (n, folded) => n.type === FOLD && !folded);
@@ -317,9 +289,9 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
       const thread = view.threads[i];
       const [picker] = elementsOf(row, (n) => n.type === 'select');
       expect(picker.props.value).toBe(thread.role);
-      expect(shown(picker)).toBe(thread.roleLabel);
+      expect(textOf(picker)).toBe(thread.roleLabel);
       const [line] = elementsOf(row, withClass('meeting__line'));
-      expect(shown(line)).toBe(`${thread.name}: ${thread.line}`);
+      expect(textOf(line)).toBe(`${thread.name}: ${thread.line}`);
     });
   });
 
@@ -331,7 +303,7 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
       expect(folds[0].props.title).toBe(view.evidenceTitle);
       expect(view.evidenceTitle).toBe("What's behind it");
       thread.evidence.forEach((piece) => expect(held(folds[0])).toContain(piece.text));
-      thread.evidence.forEach((piece) => expect(shown(row)).not.toContain(piece.shows));
+      thread.evidence.forEach((piece) => expect(textOf(row)).not.toContain(piece.shows));
       const [group] = elementsOf(row, withClass('meeting__fold'));
       expect(group.props['aria-label']).toBe(`${view.evidenceTitle}: ${thread.name}`);
       expect(elementsOf(group, (n) => n === folds[0])).toHaveLength(1);
@@ -344,31 +316,31 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
     const page = renderMeeting({ data: payloadOf(state) });
     const pieces = elementsOf(page, withClass('meeting__piece'));
     const against = pieces.filter(withClass('meeting__cuts-against'));
-    expect(against.map(shown)).toEqual(['Cuts against · Your notes: Riley says the envelope held a tip.']);
+    expect(against.map(textOf)).toEqual(['Cuts against · Your notes: Riley says the envelope held a tip.']);
     expect(pieces.length).toBeGreaterThan(against.length);
   });
 
   it('a thread the director added shows, folded under it, that the map writer finds its evidence, and its Take out names it', () => {
     const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
     const page = renderMeeting({ data, pendingEdits: ViewLogic.meetingPendingSlot(data, draft) });
-    const row = elementsOf(page, withClass('meeting__thread')).find((r) => shown(r).includes('The second ledger'));
+    const row = elementsOf(page, withClass('meeting__thread')).find((r) => textOf(r).includes('The second ledger'));
     const folds = foldsIn(row);
     expect(folds).toHaveLength(1);
     expect(held(folds[0])).toContain(ViewLogic.MEETING_NO_EVIDENCE_LINE);
-    expect(shown(row)).not.toContain(ViewLogic.MEETING_NO_EVIDENCE_LINE);
-    const takeOut = elementsOf(row, (n) => n.type === 'button' && shown(n) === 'Take out');
+    expect(textOf(row)).not.toContain(ViewLogic.MEETING_NO_EVIDENCE_LINE);
+    const takeOut = elementsOf(row, (n) => n.type === 'button' && textOf(n) === 'Take out');
     expect(takeOut.map((b) => b.props['aria-label'])).toEqual(['Take out the thread you added: The second ledger']);
   });
 
   it('shows the left-out threads by name, each with its role picker, and folds their reasons under "Why each is left out"', () => {
     const [leftOut] = elementsOf(tree, withClass('meeting__left-out'));
     expect(view.leftOut.threads.map((t) => t.name)).toEqual(['The letter']);
-    expect(shown(leftOut)).toContain(view.leftOut.title);
+    expect(textOf(leftOut)).toContain(view.leftOut.title);
     const names = elementsOf(leftOut, withClass('meeting__left-out-name'));
     expect(names).toHaveLength(view.leftOut.threads.length);
     names.forEach((name, i) => {
       const thread = view.leftOut.threads[i];
-      expect(shown(name)).toContain(thread.name);
+      expect(textOf(name)).toContain(thread.name);
       const [picker] = elementsOf(name, (n) => n.type === 'select');
       expect(picker.props.value).toBe('left-out');
       expect(picker.props['aria-label']).toBe(`Role of the thread ${thread.name}`);
@@ -377,7 +349,7 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
     expect(folds.map((f) => f.props.title)).toEqual([view.leftOut.reasonsTitle]);
     view.leftOut.threads.forEach((thread) => {
       expect(held(folds[0])).toContain(`${thread.name}: ${thread.reason}`);
-      expect(shown(leftOut)).not.toContain(thread.reason);
+      expect(textOf(leftOut)).not.toContain(thread.reason);
     });
   });
 });
@@ -392,8 +364,8 @@ describe('1C: each connection shows its line and the names of the threads it joi
     expect(view.connections[0].joins).toBe('"The overdose vote" and "The envelope"');
     rows.forEach((row, i) => {
       const connection = view.connections[i];
-      expect(shown(row)).toContain(connection.line);
-      expect(shown(row)).toContain(`Joins ${connection.joins}`);
+      expect(textOf(row)).toContain(connection.line);
+      expect(textOf(row)).toContain(`Joins ${connection.joins}`);
       const folds = foldsIn(row);
       expect(folds.map((f) => f.props.title)).toEqual([view.evidenceTitle]);
       connection.evidence.forEach((piece) => expect(held(folds[0])).toContain(piece.text));
@@ -405,7 +377,7 @@ describe('1C: each connection shows its line and the names of the threads it joi
   it('names the connection its strike control strikes by the threads it joins', () => {
     rows.forEach((row, i) => {
       const [strike] = elementsOf(row, (n) => n.type === 'button');
-      expect(shown(strike)).toBe('Strike');
+      expect(textOf(strike)).toBe('Strike');
       expect(strike.props['aria-label']).toBe(`Strike the connection between ${view.connections[i].joins}`);
     });
   });
@@ -422,11 +394,11 @@ describe('1C: a check still failing shows under the line it names (spec 6.3)', (
   ]);
   const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
   const tree = renderMeeting({ data });
-  const checksIn = (node) => elementsOf(node, withClass('meeting__check')).map(shown);
+  const checksIn = (node) => elementsOf(node, withClass('meeting__check')).map(textOf);
   const [round] = elementsOf(tree, withClass('meeting__round'));
 
   it('shows each failure the view sets beside a line under that line, in the director\'s words, styled as beside its line', () => {
-    const thread = elementsOf(tree, withClass('meeting__thread')).find((r) => shown(r).includes('The envelope'));
+    const thread = elementsOf(tree, withClass('meeting__thread')).find((r) => textOf(r).includes('The envelope'));
     expect(checksIn(thread)).toEqual(view.threads.find((t) => t.id === 't3').failures);
     const connection = elementsOf(tree, withClass('meeting__connection'))[1];
     expect(checksIn(connection)).toEqual(view.connections[1].failures);
@@ -444,8 +416,8 @@ describe('1C: a check still failing shows under the line it names (spec 6.3)', (
   it('shows a left-out thread\'s failure beside the names, under that thread\'s name', () => {
     const [leftOut] = elementsOf(tree, withClass('meeting__left-out'));
     const failure = view.leftOut.threads[0].failures[0];
-    const [check] = elementsOf(leftOut, (n) => withClass('meeting__check')(n) && shown(n).includes(failure));
-    expect(shown(check)).toBe(`The letter: ${failure}`);
+    const [check] = elementsOf(leftOut, (n) => withClass('meeting__check')(n) && textOf(n).includes(failure));
+    expect(textOf(check)).toBe(`The letter: ${failure}`);
   });
 
   it('keeps a failure with no place at the top, in the round\'s lines', () => {
@@ -560,8 +532,8 @@ describe('1C: a weave the add line builds passes buildResumePayload on a state i
     // The rework keeps the thread and finds it no evidence: the meeting after shows it with the fold's line.
     const after = payloadOf({ ...state, ...stateUpdates, weave: weaveLib.withFactCheckMark(clone(stateUpdates.weave), MARK), _meetingRound: null });
     expect(after.addedThreads).toEqual(['t6']);
-    const row = elementsOf(renderMeeting({ data: after }), withClass('meeting__thread')).find((r) => shown(r).includes('The second ledger'));
-    expect(shown(elementsOf(row, withClass('meeting__line'))[0])).toBe('The second ledger');
+    const row = elementsOf(renderMeeting({ data: after }), withClass('meeting__thread')).find((r) => textOf(r).includes('The second ledger'));
+    expect(textOf(elementsOf(row, withClass('meeting__line'))[0])).toBe('The second ledger');
     expect(held(foldsIn(row)[0])).toContain(ViewLogic.MEETING_NO_EVIDENCE_LINE);
   });
 });
@@ -634,14 +606,14 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
   it('the page names each thread and connection by those fields, its fold groups and aria-labels included', () => {
     const { data, view } = labelled();
     const tree = renderMeeting({ data });
-    const envelope = elementsOf(tree, withClass('meeting__thread')).find((row) => shown(row).includes('The envelope'));
+    const envelope = elementsOf(tree, withClass('meeting__thread')).find((row) => textOf(row).includes('The envelope'));
     const thread = view.threads.find((t) => t.id === 't3');
     expect(elementsOf(envelope, (n) => n.type === 'select').map((n) => n.props['aria-label'])).toEqual([thread.labels.role]);
     expect(elementsOf(envelope, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([thread.labels.fold]);
     elementsOf(tree, withClass('meeting__connection')).forEach((row, i) => {
       expect(elementsOf(row, (n) => n.type === 'button').map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.strike]);
       expect(elementsOf(row, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.fold]);
-      expect(elementsOf(row, withClass('meeting__joins')).map(shown)).toEqual([view.connections[i].label]);
+      expect(elementsOf(row, withClass('meeting__joins')).map(textOf)).toEqual([view.connections[i].label]);
     });
   });
 
