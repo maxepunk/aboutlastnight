@@ -188,6 +188,17 @@ describe('the checks on the angles (spec 9.1; R4)', () => {
     expect(failure.message).toContain('79');
   });
 
+  // Fix round 1, finding 5: code keeps an answered question's words whatever a rework writes
+  // (C15), so no rework could shorten it; the bound holds the writer's unanswered questions alone.
+  test('a question of 79 words the director has answered is no failure and no concern', () => {
+    const weave = anglesWeave();
+    const words = (n) => Array.from({ length: n }, () => 'word').join(' ');
+    weave.questions[0] = { ...weave.questions[0], about: words(19), question: `${words(39)}?`, changes: `${words(21)}.`, answer: 'Mel ran the bar.' };
+    const { failures, concerns } = findings(weave);
+    expect(failures.filter((f) => f.type === 'question-too-long')).toEqual([]);
+    expect(concerns.filter((c) => c.type === 'question-too-long')).toEqual([]);
+  });
+
   test('a question of 40 words passes', () => {
     const weave = anglesWeave();
     const words = (n) => Array.from({ length: n }, () => 'word').join(' ');

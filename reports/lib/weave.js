@@ -1037,12 +1037,15 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
       `The writer gave the connections ${lines} one id, so the meeting cannot change them.`, `connections[#${id}]`);
   });
 
-  // The questions (R4): each short, and beside a thread the weave holds when it names one.
+  // The questions (R4): each short, and beside a thread the weave holds when it names one. A
+  // question the director has answered is not held to the bound (fix round 1, finding 5): code
+  // keeps its words whatever a rework writes (C15, lib/writer-questions.js carriedWeaveQuestions),
+  // so no rework could shorten it, and the director has already read it.
   objectsOf(weave.questions).forEach((question) => {
     const words = questionWords(question);
     const place = elementPlace('questions', question);
     const count = ['about', 'question', 'changes'].reduce((sum, field) => sum + wordCount(textOf(question[field])), 0);
-    if (count > QUESTION_WORD_BOUND) {
+    if (count > QUESTION_WORD_BOUND && !isAnswered(question)) {
       fail('question-too-long', `${opening(words)} runs to ${count} words across its about, question and changes, past the ${QUESTION_WORD_BOUND} a question may use. Ask it in one or two short sentences, with a line on what its answer changes, as C15 (<craft-questions>) sets out.`,
         `${opening(words)} runs to ${count} words, past the ${QUESTION_WORD_BOUND} a question may use.`, place);
     }
