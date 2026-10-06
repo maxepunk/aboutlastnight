@@ -157,6 +157,53 @@ describe('a thread flipped into or out of an angle is one edit of its own kind (
         });
     });
 
+    // 3 fix A: restoreMembership's re-insert branch. The angle names only threads the weave holds,
+    // so a flip whose thread the pass took out of the weave puts the thread back where it sat.
+    test('a pass that drops the flipped thread from the weave entirely has it put back where it sat, and in the angle', () => {
+      const left = anglesWeave();
+      left.angles[0].threads.push('t7');
+      const edits = standingAtMeeting(null, anglesWeave(), left).edits;
+      expect(edits.map((edit) => [edit.id, edit.path, edit.flip])).toEqual([['E1', 'angles[#a1].threads[#t7]', 'in']]);
+      const pass = clone(left);
+      pass.threads = pass.threads.filter((thread) => thread.id !== 't7');
+      pass.angles.forEach((angle) => { angle.threads = angle.threads.filter((id) => id !== 't7'); });
+      pass.threads.find((thread) => thread.id === 't2').line = 'A line the pass rewrote.';
+      const { output, report } = settleEdits(null, { edits, before: left, after: pass, pass: 1 });
+      expect(output.threads.map((thread) => thread.id)).toEqual(left.threads.map((thread) => thread.id));
+      expect(output.threads.find((thread) => thread.id === 't7')).toEqual(left.threads.find((thread) => thread.id === 't7'));
+      expect(output.threads.find((thread) => thread.id === 't2').line).toBe('A line the pass rewrote.');
+      expect(anglesThreads(output, 'a1')).toEqual(['t1', 't2', 't3', 't4', 't5', 't7']);
+      expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', flip: 'in', restored: true, where: 'angle "a1", thread "t7", brought in' })]);
+    });
+
+    // 3 fix A: withMembershipAsShown. With no round since the last look, the writer's last weave
+    // still tells the thread the director flipped out at the approve, so flipping it in again is a
+    // change only when read against what the meeting showed.
+    test('flipped in, kept by a round, flipped out at approve, then flipped in again with no round since: the last flip is an edit', () => {
+      const lookOne = anglesWeave();
+      lookOne.angles[0].threads.push('t7');
+      const first = standingAtMeeting(null, anglesWeave(), lookOne);
+      expect(first.edits.map((edit) => [edit.id, edit.flip])).toEqual([['E1', 'in']]);
+      // A reweave kept the flip: its weave is the writer's last weave from here on.
+      const round = settleEdits(null, { edits: carriedEdits(first, lookOne), before: lookOne, after: clone(lookOne), pass: REWEAVE_PASS }).output;
+      expect(anglesThreads(round, 'a1')).toContain('t7');
+      // Look two: the director flips it out and approves.
+      const lookTwo = clone(round);
+      lookTwo.angles[0].threads = lookTwo.angles[0].threads.filter((id) => id !== 't7');
+      const second = standingAtMeeting(first, round, lookTwo, { shown: round });
+      expect(second.edits.map((edit) => [edit.id, edit.path, edit.flip])).toEqual([['E2', 'angles[#a1].threads[#t7]', 'out']]);
+      // Back at the meeting with no round: the writer's last weave is still the round's, which tells t7.
+      const lookThree = clone(lookTwo);
+      lookThree.angles[0].threads.push('t7');
+      const third = standingAtMeeting(second, round, lookThree, { shown: lookTwo });
+      expect(third.edits.map((edit) => [edit.id, edit.path, edit.flip])).toEqual([['E3', 'angles[#a1].threads[#t7]', 'in']]);
+      // The gate takes it as a change to fit in.
+      const state = { weave: withFactCheckMark(lookTwo, { at: 'x', ready: true, fixes: 0 }), _weaveBaseline: round, _weaveHandEdits: second };
+      const taken = meetingResume({ meeting: 'reweave', weave: lookThree }, state);
+      expect(taken.error).toBeNull();
+      expect(taken.stateUpdates._weaveHandEdits.edits.map((edit) => [edit.id, edit.flip])).toEqual([['E3', 'in']]);
+    });
+
     test('a send-back that undoes a flip is left as it is, with its reason', () => {
       const before = lookTwo();
       const pass = clone(before);
