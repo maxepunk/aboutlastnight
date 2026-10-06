@@ -654,7 +654,8 @@ const ReportStateAnnotation = Annotation.Root({
 
   /**
    * The map checks' mark on the map they checked (brief 4.6; map-nodes.js checkMap):
-   * `{mapKey, passed, failures, concerns, checkedAt}`. The writer and every rework return
+   * `{mapKey, passed, failures, concerns, words, checkedAt}`, `words` the length the check read,
+   * `{page, writer, allowance}` (lib/map.js mapLengthOf). The writer and every rework return
    * their map unchecked (null), so the checks run once on each map; a replay and the
    * rollback to the map keep the mark, so no rework runs again on a map already checked. The
    * stop shows a failure only while the mark's mapKey names the map in hand.

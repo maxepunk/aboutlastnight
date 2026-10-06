@@ -6,14 +6,15 @@
  * evidence}`. Its `card` is a marker, and the card's document is the piece flagged `card`; every
  * reader of a beat's card reads it through beatCardOf. The checks hold every thread in the story
  * to a beat, each of the writer's beats to its evidence, each of the writer's lines to story
- * terms, and the writer's page to MAP_WORD_BOUND, and each failure carries the place the map
+ * terms, and the writer's own words on the page to its allowance under MAP_WORD_BOUND, and each failure carries the place the map
  * shows it beside. The evidence is never the director's edit. Invented text: the repo is public.
  */
 const Ajv = require('ajv');
 const {
   mapFindings, mapSchemaFor, directorMapSchemaFor, directorMapProblems, mapResume, mapCheckpointData,
-  MAP_WORD_BOUND, MAP_WORD_AIM
+  MAP_WORD_BOUND, MAP_WORD_AIM, mapLengthOf
 } = require('../map');
+const { wordCount } = require('../word-count');
 const { EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../evidence');
 const { mapEditsBetween, standingOnMap, carriedEdits, settleEdits, _testing: diffTesting } = require('../hand-edit-diff');
 const { beatCardOf, mapTally, strikeBeat, bringBackBeat, addBeat } = require('../../console/outline-edit-logic');
@@ -33,7 +34,7 @@ const inputsOf = (state, map = state.outline) => mapNodes.mapCheckInputsOf(state
 /** The checks on a map, against the story-level state. */
 const check = (map, overrides = {}) => {
   const state = storyLevelMapState(overrides);
-  return mapFindings(map, { ...inputsOf(state, map), pageWords: null });
+  return mapFindings(map, { ...inputsOf(state, map) });
 };
 /** The director's standing edits on `left`, made against the writer's map. */
 const editsAgainst = (base, left) => carriedEdits(standingOnMap(null, base, left), left);
@@ -245,7 +246,7 @@ describe("1D: each of the writer's beats passes the evidence check, and each of 
     const map = storyLevelMap();
     change(map);
     const state = storyLevelMapState({ directorGateNotes: [{ gate: 'arc-selection', kind: 'approval', round: 1, stopRound: 1, text: 'Lead with the vote.', at: '2026-10-05T09:00:00.000Z' }] });
-    const failure = mapFindings(map, { ...inputsOf(state, map), pageWords: null }).failures.find((f) => f.type === 'story-terms');
+    const failure = mapFindings(map, { ...inputsOf(state, map) }).failures.find((f) => f.type === 'story-terms');
     expect(failure).toMatchObject({ place });
     expect(failure.message).toMatch(inMessage);
     expect(failure.message).toMatch(/C16 \(<craft-story>\)/);
@@ -286,7 +287,7 @@ describe("1D: each of the writer's beats passes the evidence check, and each of 
 // The page's length (R5)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("1D: the writer's page is held to MAP_WORD_BOUND, the director's version never", () => {
+describe("1D: the writer's own words on the page are held to its allowance under MAP_WORD_BOUND, the director's version never", () => {
   /** The map with every move padded to `words` words. */
   const padded = (words) => {
     const map = storyLevelMap();
@@ -300,24 +301,57 @@ describe("1D: the writer's page is held to MAP_WORD_BOUND, the director's versio
     expect([MAP_WORD_BOUND, MAP_WORD_AIM]).toEqual([450, 300]);
   });
 
-  it('a page over the bound fails, and one at the bound passes', () => {
-    const state = storyLevelMapState();
-    expect(typesOf(mapFindings(storyLevelMap(), { ...inputsOf(state), pageWords: 451 }))).toEqual(['over-length']);
-    const over = mapFindings(storyLevelMap(), { ...inputsOf(state), pageWords: 451 }).failures[0];
-    expect(over.message).toMatch(/451 words.*450/);
-    expect(over.line).toBe("The writer's page runs to 451 words, past the map's 450.");
-    expect(mapFindings(storyLevelMap(), { ...inputsOf(state), pageWords: 450 }).failures).toEqual([]);
+  // Fix round 2 (the integrator's ruling): the writer is held only to the words it wrote.
+  it('the writer may use 300 words of its own, and more only while the whole page stays within 450 (mapLengthOf)', () => {
+    expect(mapLengthOf(244, 115)).toEqual({ page: 244, writer: 129, allowance: 335 });
+    expect(mapLengthOf(488, 359)).toEqual({ page: 488, writer: 129, allowance: 300 });
+    expect(mapLengthOf(450, 150)).toEqual({ page: 450, writer: 300, allowance: 300 });
   });
 
-  it("the node counts the page as it first opens, by wordsShown, and fails the writer's page over the bound", () => {
+  it("the writer's own words past its allowance fail, and words within it pass, however long the page", () => {
+    const state = storyLevelMapState();
+    expect(mapFindings(storyLevelMap(), { ...inputsOf(state), length: { page: 520, writer: 290, allowance: 300 } }).failures).toEqual([]);
+    expect(mapFindings(storyLevelMap(), { ...inputsOf(state), length: { page: 450, writer: 349, allowance: 349 } }).failures).toEqual([]);
+    const over = mapFindings(storyLevelMap(), { ...inputsOf(state), length: { page: 452, writer: 351, allowance: 349 } }).failures;
+    expect(typesOf({ failures: over })).toEqual(['over-length']);
+    expect(over[0].line).toBe("The writer's part of the map runs to 351 words, past the 349 it may use.");
+    expect(over[0].line).not.toMatch(/\bb\d+\b/);
+    // The rework reads which of its lines to cut, the longest first, and that code prints the rest.
+    expect(over[0].message).toMatch(/^The map's page runs to 452 words, 351 of them in the lines you write, past the 349 those lines may use \(300, or more while the whole page stays within 450\)\. Cut 2 words or more from your lines, starting with the longest: /);
+    expect(over[0].message).toContain("beat b6's move and people (10 words)");
+    expect(over[0].message).toContain("The rest of the page (the settled story, the photos' descriptions and the counts) is printed by code.");
+  });
+
+  it("the node counts the page by wordsShown and its overhead on the page with the writer's text blank, and records the three on _mapCheck", () => {
     const state = storyLevelMapState();
     const words = mapNodes.mapPageWords(state, state.outline, []);
-    expect(words).toBe(wordsShown(CHECKPOINT_TYPES.OUTLINE, mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, 'top.jpg'), maxRevisions: 0 })));
-    expect(words).toBeLessThanOrEqual(MAP_WORD_BOUND);
-    expect(mapNodes.checkMap(state)._mapCheck.passed).toBe(true);
-    const long = padded(50);
-    const result = mapNodes.checkMap(storyLevelMapState({ outline: long }));
+    expect(words.page).toBe(wordsShown(CHECKPOINT_TYPES.OUTLINE, mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, 'top.jpg'), maxRevisions: 0 })));
+    // The writer's own words: the lines it wrote that the page prints unfolded.
+    const map = state.outline;
+    const writers = wordCount(map.headline) + wordCount(map.deck) + wordCount(map.gapNote.line)
+      + map.sections.reduce((n, s) => n + wordCount(s.heading) + wordCount(s.job)
+        + s.beats.reduce((m, b) => m + wordCount(b.move) + wordCount(b.players.join(', ')), 0), 0)
+      + map.dropped.reduce((n, d) => n + wordCount(d.reason), 0);
+    expect(words.writer).toBe(writers);
+    expect(words.allowance).toBe(Math.max(MAP_WORD_AIM, MAP_WORD_BOUND - (words.page - words.writer)));
+    const result = mapNodes.checkMap(state);
+    expect(result._mapCheck).toMatchObject({ passed: true, words });
+  });
+
+  it("long photo descriptions push the page past 450, and a writer within its own 300 passes", () => {
+    const long = (word) => Array.from({ length: 90 }, () => word).join(' ');
+    const state = storyLevelMapState({ photoDescriptions: { 'top.jpg': long('crowd'), 'board.jpg': long('board'), 'bar.jpg': long('bar') } });
+    const result = mapNodes.checkMap(state);
+    expect(result._mapCheck.failures).toEqual([]);
+    expect(result._mapCheck.words.page).toBeGreaterThan(MAP_WORD_BOUND);
+    expect(result._mapCheck.words.writer).toBeLessThanOrEqual(MAP_WORD_AIM);
+  });
+
+  it("the writer's own words past its allowance fail at the node, in story terms", () => {
+    const result = mapNodes.checkMap(storyLevelMapState({ outline: padded(50) }));
     expect(result._mapCheck.failures.map((f) => f.type)).toEqual(['over-length']);
+    const { writer, allowance } = result._mapCheck.words;
+    expect(result._mapCheck.failures[0].line).toBe(`The writer's part of the map runs to ${writer} words, past the ${allowance} it may use.`);
   });
 
   it("the director's long lines add nothing to the count, and their version is never refused for its length", () => {
@@ -528,7 +562,7 @@ describe("1D: the fixed map's planted failure is a card flag on a piece whose so
     const cardBeat = map.sections.flatMap((s) => s.beats).find((b) => b.card === true);
     expect(beatCardOf(cardBeat)).toBe('RENDER-DIFF-DOC');
     const state = storyLevelMapState({ outline: map });
-    const failure = mapFindings(map, { ...inputsOf(state, map), pageWords: null }).failures.find((f) => f.type === 'card-not-in-record');
+    const failure = mapFindings(map, { ...inputsOf(state, map) }).failures.find((f) => f.type === 'card-not-in-record');
     expect(failure.place).toBe(`sections[#theStory].beats[#${cardBeat.id}]`);
     expect(writerTakes(map)).toBe(true);
   });
@@ -538,7 +572,7 @@ describe("1D: the fixed map's planted failure is a card flag on a piece whose so
 describe('the story-level map fixture', () => {
   it('passes every check on its own state', () => {
     const state = storyLevelMapState();
-    expect(mapFindings(STORY_LEVEL_MAP, { ...inputsOf(state), pageWords: null })).toEqual({ failures: [], concerns: [] });
+    expect(mapFindings(STORY_LEVEL_MAP, { ...inputsOf(state) })).toEqual({ failures: [], concerns: [] });
     expect(evidenceContextOf(state).documents.has('sam001')).toBe(true);
   });
 });
