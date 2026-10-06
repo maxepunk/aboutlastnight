@@ -579,7 +579,8 @@
    *   after an automatic pass, whether code struck it again.
    * - A thread the director brought into an angle's story or left out of it (`flip`; piece 3,
    *   R2) that a pass flipped the other way; after a pass held to the edits, whether code put it
-   *   back (`options.story` names the story, by default "the story").
+   *   back (`options.story` names the story, by default "the story"). One whose angle the pass
+   *   took out whole (`angleTakenOut`, the final review) says the flip went with the angle.
    * - A field or element an automatic pass changed: code put it back (`restored`), and
    *   the line says so; an entry from before FA says the pass should have kept it.
    * - One on a photo the article cannot print (`unprintable`, task 4.5e), which a pass took out of
@@ -636,6 +637,14 @@
     // Piece 3 (R2): a thread the director brought into an angle's story, or left out of it, which a
     // pass flipped the other way; `options.story` names that story (the meeting's open angle, or
     // another angle by its name).
+    if ((entry.flip === 'in' || entry.flip === 'out') && entry.angleTakenOut === true) {
+      // The final review: the pass took out the angle the flip was on, and the flip went with it;
+      // the place names that angle's story.
+      var choice = 'your choice to ' + (entry.flip === 'in' ? 'bring this thread into it' : 'leave this thread out of it');
+      var tookOut = label + ': ' + by + ' took out that angle';
+      if (!held) return tookOut + ', and ' + choice + ' went with it. ' + why;
+      return tookOut + ', with ' + choice + '.' + (entry.restored === true ? ' Both were put back.' : ' It could not be put back.');
+    }
     if (entry.flip === 'in' || entry.flip === 'out') {
       var story = typeof o.story === 'function' ? o.story(entry) : 'the story';
       var flipped = label + ': ' + by + (entry.flip === 'in'

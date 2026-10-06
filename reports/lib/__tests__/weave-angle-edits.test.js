@@ -155,7 +155,8 @@ describe('a thread flipped into or out of an angle is one edit of its own kind (
           pass.angles.splice(1, 1);
           const { output, report } = settleEdits(null, { edits, before: left, after: pass, pass: 1 });
           expect([flip, output.angles]).toEqual([flip, left.angles]);
-          expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', flip, restored: true })]);
+          // The final review: the report says the pass took out the angle, not the flip inside it.
+          expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', flip, restored: true, angleTakenOut: true })]);
         });
     });
 

@@ -1513,6 +1513,42 @@ describe("3C: the director's edits on angles at the meeting", () => {
     expect(viewTexts(view).filter((text) => TAG.test(text))).toEqual([]);
   });
 
+  // The final review: a send-back's rework that drops the angle the director flipped threads on
+  // took out the angle, not the flip inside it, and each flip's line says the flip went with it.
+  test('after a send-back that took out the angle the director flipped threads on: each flip went with the angle, and no line says the rework undid it there', () => {
+    const left = flipMeetingThread(flipMeetingThread(pickMeetingAngle(untouched(), 'a2'), 't5', true), 't3', false);
+    const sent = meetingResume(meetingPayload('send-back', data(), left, 'Lead with the heir.'), stateAt());
+    expect(sent.error).toBeNull();
+    const edits = sent.stateUpdates._weaveHandEdits;
+    expect(edits.edits.map((edit) => [edit.path, edit.flip])).toEqual([['angles[#a2].threads[#t5]', 'in'], ['angles[#a2].threads[#t3]', 'out']]);
+    const before = sent.stateUpdates.weave;
+    const reworked = weaveLib.weaveForRework(before);
+    reworked.angles = reworked.angles.filter((angle) => angle.id !== 'a2');
+    const report = reportAfterPass(null, {
+      edits: edits.edits, before: weaveLib.weaveForPrompt(before), after: reworked, pass: SEND_BACK_PASS,
+      reasons: [{ id: 'E1', reason: 'The note asked to lead with the heir.' }, { id: 'E2', reason: 'The note asked to lead with the heir.' }]
+    });
+    expect(report.changed.map((entry) => [entry.flip, entry.angleTakenOut])).toEqual([['in', true], ['out', true]]);
+    const d = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
+      _weaveMarks: { round: 'send-back', from: weaveLib.weaveForPrompt(before) }, humanArcRevisionCount: 1
+    }));
+    const view = meetingView(d, meetingDraftOf(d, undefined));
+    const story = `the story of "${WEAVE.angles[1].headline}"`;
+    expect(view.changedEdits).toEqual([
+      `Thread "The letter", in ${story}: the rework of your send-back took out that angle, and your choice to bring this thread into it went with it. Why: The note asked to lead with the heir.`,
+      `Thread "The envelope", in ${story}: the rework of your send-back took out that angle, and your choice to leave this thread out of it went with it. Why: The note asked to lead with the heir.`
+    ]);
+    expect(viewTexts(view).filter((text) => /which you (brought it into|left it out of)/.test(text))).toEqual([]);
+  });
+
+  test("a flip whose angle an automatic pass took out reads as the angle taken out and put back, with the flip (changedEditLine)", () => {
+    const entry = { id: 'E1', where: 'angle "a2", thread "t5", brought in', flip: 'in', angleTakenOut: true, director: 'The letter', pass: 1, automatic: true, restored: true };
+    expect(ViewLogic.changedEditLine(entry)).toBe('E1, angle "a2", thread "t5", brought in: automatic pass 1 took out that angle, with your choice to bring this thread into it. Both were put back.');
+    expect(ViewLogic.changedEditLine({ ...entry, flip: 'out', where: 'angle "a2", thread "t3", left out', restored: false }))
+      .toBe('E1, angle "a2", thread "t3", left out: automatic pass 1 took out that angle, with your choice to leave this thread out of it. It could not be put back.');
+  });
+
   test("a flip's entry and its mark are about one edit; a thread's own field is not the flip (markOfEntry)", () => {
     const { markOfEntry } = ViewLogic;
     const entry = { where: 'angle "a1", thread "t5", brought in', flip: 'in' };

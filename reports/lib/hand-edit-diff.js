@@ -4313,6 +4313,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   // without its evidence (weaveReportText); every other value, a beat's threads among them, as
   // editValueText reads it (reportValueText).
   const textOf = (e, value) => reportValueText(e, value, [before, after]);
+  // Piece 3 (the final review): a thread's place in an angle the pass took out whole went with the
+  // angle, so the entry says so (`angleTakenOut`) and never reads as the pass undoing it there.
+  const angleTakenOutOf = (membership) => (membership && angleUnder(after, membership.angleId) === null ? { angleTakenOut: true } : {});
   const changed = [];
   carried.forEach((e) => {
     if (isCut(e)) {
@@ -4353,7 +4356,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     // moved out of the place they gave it in an angle is reported as that place alone, as a flip is.
     const lapsed = lapsedPlaceOf(after, e);
     if (lapsed) {
-      changed.push(entry(e, { where: membershipWhere(lapsed), flip: lapsed.flip, director: threadLabelOf(e.after), restored: putBack.has(e.id) }));
+      changed.push(entry(e, {
+        where: membershipWhere(lapsed), flip: lapsed.flip, director: threadLabelOf(e.after), restored: putBack.has(e.id), ...angleTakenOutOf(lapsed)
+      }));
       return;
     }
     if (!editCarried(after, e)) {
@@ -4363,6 +4368,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       const maybeCopies = putBack.has(e.id) && became === null ? maybeCopiesOf(e, before, after, stored) : [];
       changed.push(entry(e, {
         director: textOf(e, e.after), became, restored: putBack.has(e.id),
+        ...angleTakenOutOf(flipOf(e)),
         ...(leftOut.has(e.id) && { unprintable: true }),
         ...(maybeCopies.length > 0 && { maybeCopies })
       }));
