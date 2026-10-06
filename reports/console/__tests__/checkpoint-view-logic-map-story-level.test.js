@@ -219,4 +219,28 @@ describe("1D: the map's view gives each beat its move, its people, its card mark
     ]);
     view.changedEdits.forEach((text) => expect(text).not.toMatch(/\b[btc]\d+\b/));
   });
+
+  test("a photo the director took from beside its beat that a pass sat beside another beat reads as the move it came back beside, with no tag", () => {
+    const { reportAfterPass, settleEdits, carriedEdits, SEND_BACK_PASS } = require('../../lib/hand-edit-diff');
+    const left = EditLogic.setPhotoBeside(storyLevelMap(), 'theStory', 0, '');
+    const standing = standingOnMap(null, storyLevelMap(), left);
+    const pass = EditLogic.setPhotoBeside(left, 'theStory', 0, 'b4');
+    const linesOf = (report) => {
+      const data = payloadOf(storyLevelMapState({
+        outline: pass, _outlineHandEdits: standing, _outlineHandEditReport: report, humanOutlineRevisionCount: 1
+      }));
+      return ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined)).changedEdits;
+    };
+
+    const sendBack = linesOf(reportAfterPass(null, { edits: carriedEdits(standing, left), before: left, after: pass, pass: SEND_BACK_PASS }));
+    expect(sendBack).toEqual([
+      'The Story, photo "board.jpg", beat, cut: the text you cut came back as "Marcus asks Quinn for a higher dose" (the rework of your send-back). No reason given.'
+    ]);
+
+    const automatic = linesOf(settleEdits(null, { edits: carriedEdits(standing, left), before: left, after: pass, pass: 1 }).report);
+    expect(automatic).toEqual([
+      'The Story, photo "board.jpg", beat, cut: the text you cut came back as "Marcus asks Quinn for a higher dose" (automatic pass 1). It is still on the map: cut it again if it should go.'
+    ]);
+    [...sendBack, ...automatic].forEach((text) => expect(text).not.toMatch(/\b[btc]\d+\b/));
+  });
 });

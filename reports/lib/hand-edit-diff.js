@@ -2532,7 +2532,8 @@ function inStory(place) {
 
 /**
  * Where a cut beat or photo, or a field of one the director removed, came back in `obj`:
- * the text it came back as (a beat whole by its move and its people, mapReportText), or null.
+ * the text it came back as, read as the page reads it (mapReportText: a beat whole by its move
+ * and its people, the beat a photo came back beside by that beat's move), or null.
  * Found by its id or filename: a beat in leftOut is not back in the story.
  */
 function mapCutReturned(obj, edit, address) {
@@ -2543,7 +2544,7 @@ function mapCutReturned(obj, edit, address) {
   }
   for (const place of places) {
     const value = valueAtSteps(place.element, address.fieldSteps);
-    if (value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())) return editValueText(value);
+    if (value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())) return mapReportText(edit, value, [obj]);
   }
   return null;
 }
@@ -2601,9 +2602,13 @@ function mapBeatText(beat) {
  * A value of an edit on the map as the report gives it to the director's page (phase 4b, brief
  * 1D; spec 9): a beat whole by its move and its people (mapBeatText); a photo whole by its
  * filename and the move it sits beside; the beat a photo sits beside (its `beat` field) by that
- * beat's move, found in `maps` in order; any other value as editValueText reads it. So no
- * report entry on the map carries a beat's, a thread's or a connection's tag. An edit that is
- * not on the map's beats or photos reads as editValueText reads it.
+ * beat's move, found in `maps` in order; any other value as editValueText reads it. Every
+ * report entry on the map reads its values through it, a change's and a cut's that came back
+ * alike (reportAfterPass, mapBecame, mapCutReturned). So no entry about an edit the map's page
+ * makes (a beat's move, its people and its place; a photo's place and the beat it sits beside)
+ * carries a beat's, a thread's or a connection's tag. A beat's threads, connection, card and
+ * kind, which the page neither prints nor edits, read as editValueText reads them. An edit
+ * that is not on the map's beats or photos reads as editValueText reads it.
  *
  * @param {Object} edit
  * @param {*} value - a value of the edit, or of the element it is about in a version

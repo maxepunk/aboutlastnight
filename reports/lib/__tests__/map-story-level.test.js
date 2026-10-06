@@ -380,6 +380,21 @@ describe("1D: the evidence is never the director's edit", () => {
     })]);
   });
 
+  it("a photo the director took from beside its beat that a pass sat beside another beat reads, in the report, as the move it came back beside, never its tag", () => {
+    const { setPhotoBeside } = require('../../console/outline-edit-logic');
+    const left = setPhotoBeside(storyLevelMap(), 'theStory', 0, '');
+    const standing = standingOnMap(null, storyLevelMap(), left);
+    const pass = setPhotoBeside(left, 'theStory', 0, 'b4');
+    const { reportAfterPass, SEND_BACK_PASS } = require('../hand-edit-diff');
+    const cameBack = { cut: true, director: 'Marcus trying the batch on himself', became: 'Marcus asks Quinn for a higher dose' };
+
+    const sendBack = reportAfterPass(null, { edits: carriedEdits(standing, left), before: left, after: pass, pass: SEND_BACK_PASS });
+    expect(sendBack.changed).toEqual([expect.objectContaining(cameBack)]);
+
+    const { report } = settleEdits(null, { edits: carriedEdits(standing, left), before: left, after: pass, pass: 1 });
+    expect(report.changed).toEqual([expect.objectContaining({ ...cameBack, automatic: true })]);
+  });
+
   it("the map's printed text is its lines and its moves, never the evidence under them", () => {
     const leaves = diffTesting.printedLeaves(storyLevelMap());
     expect(leaves).toContain('Marcus asks Quinn for a higher dose');
