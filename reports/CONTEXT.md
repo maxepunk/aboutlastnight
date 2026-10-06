@@ -89,7 +89,7 @@ The model pass that produces the arcs, the outline or the article.
 _Avoid_: generator, agent, model, Nova (the reporter persona, not the pass)
 
 **Beat**:
-One item on the story map: a scene, a receipt, a line or a figure, named by the material it uses. The article writer writes the prose for every beat and adds none.
+One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, and the evidence under it. The article writer writes every beat from its evidence and adds none.
 _Avoid_: point, item, paragraph plan
 
 **Photo description**:
@@ -97,11 +97,11 @@ What the director says a photo shows, given at the character-IDs stop: who is in
 _Avoid_: beat (a map item), narrative moment, story relevance
 
 **Arc**:
-One thread of the session's story: a claim about what happened, with its people, its evidence, its tension and its open questions. The arcs are the threads the article weaves toward one convergence; at the story meeting each arc gets its role in the weave.
+One thread of the session's story, a line of it: an idea about what happened or what it means, said in plain words with its people. The writers tell it through its evidence, usually several pieces, and some threads appear only when sources are set side by side. The arcs are the threads the article weaves toward one convergence; at the story meeting each arc gets its role in the weave.
 _Avoid_: storyline, angle
 
 **Weave**:
-How the threads make one story: a main thread, the other threads each in a role toward it, the connections where they touch, and the convergence near the end. The same threads woven around a different main thread make a different story.
+How the threads make one story: a main thread, the other threads each in a role toward it, the connections where they touch, and the convergence near the end, each said in story terms with its evidence underneath. The same threads woven around a different main thread make a different story.
 _Avoid_: interweaving plan, angle, structure
 
 **Main thread**:
@@ -109,7 +109,7 @@ The thread the story follows from the lede to the convergence. The other threads
 _Avoid_: spine, primary arc
 
 **Connection**:
-A point where two threads touch, named exactly: a shared person, a moment, a document or a line. A cause counts as a connection only when the record shows it.
+A point where two threads touch, said in story terms: a shared person, a moment, a document or a line, with the evidence that shows it underneath. A cause counts as a connection only when the record shows it.
 _Avoid_: bridge, link, callback
 
 **Verdict**:
@@ -125,7 +125,7 @@ The question that carries the thesis. It opens early and runs through every sect
 _Avoid_: thread (an arc), theme
 
 **Convergence**:
-The point near the end where the threads meet and the thesis lands, said once and sharply, in this session's names and sums.
+The point near the end where the threads meet and the thesis lands. The weave says where in a line or two of story terms; the article says it once and sharply, in this session's names and sums.
 _Avoid_: climax, resolution, payoff (a detail planted early coming back)
 
 **Whiteboard**:
@@ -137,12 +137,16 @@ The arc stop, where the director settles the weave the article will tell before 
 _Avoid_: story memo, arc cards, arc analysis, pitch
 
 **Story map**:
-The outline: the weave laid across the article's sections. Under the headline, the deck and the settled story, each section has its job, its beats and its photos; sections the story does not need are dropped, and the material left out is listed. Length comes from what is on the map, not from a budget per section.
+The outline: the weave laid across the article's sections, in story terms, with each beat's evidence underneath. Under the headline, the deck and the settled story, each section has its job, its beats and its photos; sections the story does not need are dropped, and the beats left out are listed. Length comes from what is on the map, not from a budget per section.
 _Avoid_: outline structure, allocation, section plan, script
 
 **Reweave**:
 The rework of the story meeting after the director changes a thread's role, adds a thread or picks another main thread. The writer fits the change into the weave and keeps everything else.
 _Avoid_: rebuild, regenerate
+
+**Evidence**:
+What gets cited. A piece of evidence is a memory, a paper document, a ledger line, an exposure in the evidence log, or something the director's own words record from the room (their notes, their corrections and their answers at the story meeting, as T1 sets out). Each piece names its source or sources, says in a short line what it shows, with the words or figures that matter, and is marked as supporting its line or cutting against it; a piece that sets two sources side by side names both. One thread draws on many pieces, and one piece can serve several threads. The evidence travels under each thread, connection and beat to the article writer, which cites it. The writers choose it; the director sees it only by opening a line, and never edits it.
+_Avoid_: sources (what a piece names), citation (the line on an evidence card)
 
 **Evidence card**:
 A printed card that quotes one memory, or one passage of a document, from the record word for word. Memories are the main cited evidence: a memory card prints the whole memory, and a document card prints only the passage that matters. The writer chooses the memory or the document and passage; the text itself is copied from the record.
