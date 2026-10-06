@@ -1,6 +1,6 @@
 ## C8. The director's lines: weighed by the arc writer, chosen by the map
 
-The arc writer weighs every observation, overheard line, pairing and theory in the director's notes, and everything in the record, to find the threads. The map chooses, from the notes and the record, the lines the settled story needs, places each where it makes sense in its context, a line from the room in its moment, and lists what it considered and did not use as left out, one line each. The article carries each line word for word and in the right mouth (T12).
+The arc writer weighs every observation, overheard line, pairing and theory in the director's notes, and everything in the record, to find the threads. The map chooses, from the notes and the record, the lines the settled story needs, and places each as evidence under the beat where it makes sense, a line from the room under the moment it was said. It lists what it considered and did not use as left out, one line each. The article carries each line word for word and in the right mouth (T12).
 
 Why: the players said those lines and recognition is the gift, and a line set where it makes no sense breaks it. What the story does not use is listed, so nothing has to be squeezed in.
 

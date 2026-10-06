@@ -99,6 +99,15 @@ const pointerIds = (text) => ruleIds(String(text).split('\n').filter((line) => !
 /** The tag names a loaded string carries, in order. */
 const tagsOf = (text) => (String(text).match(/^<([a-z-]+)>$/gm) || []).map((t) => t.slice(1, -1));
 const count = (haystack, needle) => haystack.split(needle).length - 1;
+/** One item's text in a real rule file: its heading line, through the line before the next heading. */
+const itemText = (name, id) => {
+  const file = path.join(RULES_ROOT, `${name}.md`);
+  const lines = (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').split('\n');
+  const start = lines.findIndex((line) => new RegExp(`^#{1,6} ${id}\\b`).test(line));
+  if (start < 0) return '';
+  const end = lines.findIndex((line, i) => i > start && /^#{1,6} /.test(line));
+  return lines.slice(start, end < 0 ? lines.length : end).join('\n');
+};
 
 /** A temporary copy of the stub root, to break one file in. */
 function tempStubRoot() {
@@ -345,25 +354,15 @@ describe('the rule files', () => {
  * Nova and nothing on the removed list.
  */
 describe('the items phase 4 rewrites (task 4.1)', () => {
-  const read = (name) => {
-    const file = path.join(RULES_ROOT, `${name}.md`);
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  };
-  /** One item's text: its heading line, through the line before the next heading. */
-  const itemText = (name, id) => {
-    const lines = read(name).split('\n');
-    const start = lines.findIndex((line) => new RegExp(`^#{1,6} ${id}\\b`).test(line));
-    if (start < 0) return '';
-    const end = lines.findIndex((line, i) => i > start && /^#{1,6} /.test(line));
-    return lines.slice(start, end < 0 ? lines.length : end).join('\n');
-  };
-
   it.each([
     ['C1', 'craft-story', 'The director settles the thesis at the meeting, and every later writer works from the settled story.'],
     ['C16', 'craft-story', "The arc writer weighs each thread by how it bears on the room's verdict, and that weight decides its role."],
     ['C2', 'craft-form', 'The map decides, from the settled story, which sections exist, their order and their headings.'],
     ['C4', 'craft-telling', "The article writer gives each beat the sentences its job needs, a supporting player's beat a line or two and a decisive scene more, and aims at the map's expected length: a session that gives less makes a shorter article, never a padded one."],
-    ['C8', 'craft-material', 'The map chooses, from the notes and the record, the lines the settled story needs, places each where it makes sense in its context, a line from the room in its moment, and lists what it considered and did not use as left out, one line each.'],
+    // Task 1A (phase 4b's read, 2026-10-05) rewrote the sentence this row pinned, on where
+    // the map places each line, and pins it in its own block below; this row pins the
+    // phase 4 read's sentence that stands.
+    ['C8', 'craft-material', 'The article carries each line word for word and in the right mouth (T12).'],
     ['C7', 'craft-material', 'The map places every player in a beat, through something the record shows they did or said, in the section where it matters, never as a roll call.'],
     ['C15', 'craft-questions', "The director answers each in its own box at the story meeting, and the answer travels with its question to every later writer as the director's words."],
     ['T1', 'truth-rules', "What happened or was said in the room, as the director's notes or their answers at the story meeting record it, Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
@@ -386,6 +385,26 @@ describe('the items phase 4 rewrites (task 4.1)', () => {
   // 1,500 words, and the C4 clause pinned above aims it at the map's expected length.
   it('C4 caps the article at about 1,500 words', () => {
     expect(itemText('craft-telling', 'C4')).toContain('The article runs to about 1,500 words at most.');
+  });
+});
+
+/**
+ * Phase 4b, piece 1, task 1A: the rule text the director approved on 2026-10-05
+ * (rule-text-read.md in the phase 4b workspace; the piece 1 spec's section 8). The weave
+ * and the map stay at the level of the story, with the evidence under each line: C16 sets
+ * that out for the threads, the connections and the convergence, C2 for the beats, C8 for
+ * the director's lines and C9 for the cards. Each changed item carries one of the read's
+ * new sentences inside its own item. The lint above holds the rest: each item once, every
+ * pointer, no em-dash, no gendered Nova and nothing on the removed list.
+ */
+describe('the items phase 4b rewrites (task 1A)', () => {
+  it.each([
+    ['C16', 'craft-story', "The story and its question, each thread, each connection, the convergence and every beat on the map are said in plain words, with people's names, and with no quotation from the record, no figure, no clock time and no document id."],
+    ['C2', 'craft-form', "A section's beats are the moves of its story, each said in a few plain words with its people, at the level of the story (C16)."],
+    ['C8', 'craft-material', 'The map chooses, from the notes and the record, the lines the settled story needs, and places each as evidence under the beat where it makes sense, a line from the room under the moment it was said.'],
+    ['C9', 'craft-cards', "The map chooses the cards with the story: it marks each beat whose evidence prints as a card, and names the card's document under that beat."]
+  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
+    expect(itemText(name, id)).toContain(sentence);
   });
 });
 
