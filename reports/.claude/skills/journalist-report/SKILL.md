@@ -119,7 +119,10 @@ What the director can do, and where it goes:
 
 The evidence is the writers', so a change is to the lines alone. A connection the director wants gone while both its threads stay in goes with a note, on a reweave or a send-back. List each change other than the pick and the answers in `directorChanges` (`references/schemas.md`, "The weave"). A change to a pitch or to which threads are in belongs to the angle the director sends: every other angle stays as the arc analyzer wrote it. Then:
 - **Approve**: go on to step 9 with the open angle as the director left it.
-- **Reweave**, once the director has changed the open angle or a thread, or written a note (a pick alone, or answers alone, have nothing to fit in): start `journalist-arc-analyzer` for a reweave, then hold this stop again on the same angle, with the lines the reweave changed marked.
+- **Reweave**, once the director has changed the open angle or a thread, or written a note (a pick alone, or answers alone, have nothing to fit in):
+  1. Keep a copy of `analysis/weave.json` as the director left it, and start `journalist-arc-analyzer` for a reweave.
+  2. A reweave works on the open angle alone, so the director can still switch to another. Compare its weave with the copy, by id, outside the open angle: every other angle, every thread that neither version of the open angle tells, and every connection that does not join two of the open angle's threads. Put back each one the reweave changed or dropped, as the copy holds it, and take out each one it added there.
+  3. Hold this stop again on the same angle, with the lines the reweave changed marked.
 - **Send back**, with a note: start it for a send-back, then hold this stop again, showing each of the director's changes the rework changed, with its reason. It opens on the angle the director had open when the rework kept it, otherwise on angle 1.
 
 ### 9. Lay out the map
