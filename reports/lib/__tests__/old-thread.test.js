@@ -206,7 +206,7 @@ describe("4.11 fix round 2: a thread with no weave that holds an evaluation or a
     expect(`fresh start: ${leftAfter(buildFreshStartState())}`).toBe('fresh start: ');
     // An old thread's rollback to the meeting writes the weave fresh: until the weave writer
     // succeeds, the thread holds none of them, so a failure there leaves it resumable.
-    const meeting = { ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection') };
+    const meeting = { ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection', { ...holdingAll, weave: null }) };
     expect(`an old thread's meeting: ${leftAfter(meeting)}`).toBe("an old thread's meeting: ");
     expect(oldThreadOf({ ...holdingAll, weave: null, ...meeting }, null)).toBeNull();
   });
@@ -243,16 +243,33 @@ describe("4.11: the refusal's body", () => {
 // stored threads, 0926262 holds arcRevisionCount 2 and 062126 humanArcRevisionCount 1), so
 // the weave it writes fresh starts them over, as a rollback before the meeting does.
 describe('4.11: an old thread rolled back to the meeting starts the arc counters over', () => {
+  /** A thread from before the meeting, as server.js passes its state: the old stages' outline and counters. */
+  const OLD_VALUES = { currentPhase: '2.36', theme: 'journalist', outline: OLD_OUTLINE, arcRevisionCount: 2, humanArcRevisionCount: 1 };
+
   it('the meeting point zeroes both arc counters, as the points before it do', () => {
-    expect(oldThreadRollbackState('arc-selection')).toEqual({ arcRevisionCount: 0, humanArcRevisionCount: 0 });
-    expect(ROLLBACK_COUNTER_RESETS['evidence-and-photos']).toMatchObject(oldThreadRollbackState('arc-selection'));
+    expect(oldThreadRollbackState('arc-selection', OLD_VALUES)).toEqual({ arcRevisionCount: 0, humanArcRevisionCount: 0 });
+    expect(ROLLBACK_COUNTER_RESETS['evidence-and-photos']).toMatchObject(oldThreadRollbackState('arc-selection', OLD_VALUES));
     expect(ROLLBACK_COUNTER_RESETS['arc-selection']).not.toHaveProperty('arcRevisionCount');
   });
 
   it('every point before the meeting already resets them, so it adds nothing there', () => {
     MEETING_AND_BEFORE.filter((point) => point !== 'arc-selection').forEach((point) => {
-      expect(`${point}: ${JSON.stringify(oldThreadRollbackState(point))}`).toBe(`${point}: {}`);
+      expect(`${point}: ${JSON.stringify(oldThreadRollbackState(point, OLD_VALUES))}`).toBe(`${point}: {}`);
     });
+  });
+
+  // Fix round 3 (Review focus 4): without the thread's state the rollback cannot tell phase 4's
+  // shapes, and would keep an old-shape weave for the new stages to replay on. So the state is
+  // required, at every point, and a call without it fails loud, naming the function.
+  it("throws, naming itself, when it is not given the thread's state, at every point", () => {
+    [undefined, null, 'state', 3, ['weave']].forEach((values) => {
+      [...MEETING_AND_BEFORE, ...PAST_THE_MEETING].forEach((point) => {
+        expect(() => oldThreadRollbackState(point, values)).toThrow(/^oldThreadRollbackState needs the thread's state values/);
+      });
+    });
+    // An old-shape weave the call could not see would have stayed: given the state, it goes.
+    const holding = { currentPhase: '3.25', theme: 'journalist', ...oldShapeMeetingChannels(), outline: oldShapeMap() };
+    expect(oldThreadRollbackState('arc-selection', holding)).toMatchObject({ weave: null });
   });
 });
 

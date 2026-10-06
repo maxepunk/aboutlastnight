@@ -223,15 +223,21 @@ function oldThreadRefusal(sessionId, oldThread) {
  * The director's notes and the photo stops' choices stay, as on any rollback to the meeting.
  * Every point before the meeting clears the weave and the map already, so it adds nothing there.
  *
+ * The thread's state is required (fix round 3): without it the rollback cannot tell phase 4's
+ * shapes, and would keep an old-shape weave for the new stages to replay on (Review focus 4).
+ * So a call without it throws, naming this function, at every point.
+ *
  * @param {string} rollbackTo
- * @param {Object} [values] - the thread's state values, which say whether it holds the old shapes
+ * @param {Object} values - the thread's state values, which say whether it holds the old shapes
  * @returns {Object}
  */
 function oldThreadRollbackState(rollbackTo, values) {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) {
+    throw new Error(`oldThreadRollbackState needs the thread's state values, to tell whether it holds phase 4's shapes; it was given ${Array.isArray(values) ? 'an array' : values === null ? 'null' : typeof values}.`);
+  }
   if (rollbackTo !== OLD_THREAD_ROLLBACK) return {};
   const counters = { arcRevisionCount: 0, humanArcRevisionCount: 0 };
-  const state = values || {};
-  if (!isWeave(state.weave) || !holdsOldShapes(state)) return counters;
+  if (!isWeave(values.weave) || !holdsOldShapes(values)) return counters;
   return { ...counters, ...Object.fromEntries(OLD_SHAPES_WEAVE_CHANNELS.map((channel) => [channel, null])) };
 }
 
