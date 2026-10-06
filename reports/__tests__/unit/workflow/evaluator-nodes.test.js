@@ -39,13 +39,9 @@ const { CHECKPOINT_TYPES } = require('../../../lib/workflow/checkpoint-helpers')
  * Phase 4 (brief 4.4): the arc stage's fact check judges the weave, scores the truth
  * criteria alone, marks the weave it judged and never escalates; its one fix per round is
  * counted on the mark. Its weighted criteria, its NPC and roster lists, its craft files
- * and the arc stage's detective judge went.
+ * and the arc stage's detective judge went. The weave is pitched as angles (phase 4b, piece 3).
  */
-const WEAVE = {
-  story: 'The room named Vic.', question: 'Why Vic?', headline: 'The Room Named Vic',
-  threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-  connections: [], convergence: 'The vote.', questions: []
-};
+const WEAVE = require('../../mocks/llm-client.mock').getDefaultWeave();
 const weaveState = (extra = {}) => ({ weave: JSON.parse(JSON.stringify(WEAVE)), ...extra });
 
 // Phase 2 final fix wave, item 13: this file's output carries no warnings. Its
@@ -208,7 +204,8 @@ describe('evaluator-nodes', () => {
         const prompt = buildEvaluationUserPrompt('arcs', state);
 
         expect(prompt).toContain('WEAVE:\n');
-        expect(prompt).toContain(WEAVE.story);
+        // Piece 3 (brief 3B): it judges every angle.
+        WEAVE.angles.forEach((angle) => expect(prompt).toContain(angle.story));
         // Phase 4b (brief 1B): each thread with its name, its line and its evidence underneath.
         expect(prompt).toContain(WEAVE.threads[0].line);
         expect(prompt).toContain(WEAVE.threads[0].evidence[0].shows);

@@ -22,6 +22,7 @@ const { setMockQuery, clearMockQuery } = require('@anthropic-ai/claude-agent-sdk
 const { sdkQueryImpl } = require('../llm/client');
 const { isTransientError } = require('../llm/retry');
 const { SdkRefusalError, refusalOf } = require('../llm/refusal');
+const { getDefaultWeave } = require('../../__tests__/mocks/llm-client.mock');
 
 const declined = (category = 'bio') =>
   new SdkRefusalError({ category, explanation: null, model: 'claude-opus-5-5', label: 'test call' });
@@ -143,11 +144,7 @@ describe('the paths that swallow errors into state keep "declined" and the categ
     const { evaluateArcs } = require('../workflow/nodes/evaluator-nodes');
     const sdk = jest.fn().mockRejectedValue(declined('reasoning_extraction'));
     const state = {
-      weave: {
-        story: 'The room named Alex.', question: 'Why Alex?', headline: 'H',
-        threads: [{ id: 't1', name: 'The verdict', line: 'The room named Alex.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-        connections: [], convergence: 'C', questions: []
-      },
+      weave: getDefaultWeave(),
       evaluationHistory: [],
       evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } },
       arcRevisionCount: 0,
@@ -170,11 +167,7 @@ describe('the paths that swallow errors into state keep "declined" and the categ
     const err = new SdkRefusalError({ category: 'cyber', explanation: 'timeout limit', model: 'claude-opus-5-5', label: 'Arc revision 1' });
     const sdk = jest.fn().mockRejectedValueOnce(err);
     const state = {
-      weave: {
-        story: 'The room named Test.', question: 'Why?', headline: 'H',
-        threads: [{ id: 't1', name: 'The verdict', line: 'The room named Test.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-        connections: [], convergence: 'C', questions: []
-      },
+      weave: getDefaultWeave(),
       arcRevisionCount: 1,
       humanArcRevisionCount: 1,
       _arcFeedback: 'fix it',

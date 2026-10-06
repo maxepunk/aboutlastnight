@@ -2,12 +2,8 @@ const { _testing } = require('../workflow/graph');
 const { incrementArcRevision, incrementOutlineRevision, incrementArticleRevision, routeAfterArcCheckpoint, routeArcValidation, routeArcEvaluation } = _testing;
 const { weaveKey } = require('../weave');
 
-/** A weave the checks and the fact check read (phase 4, brief 4.4). */
-const WEAVE = {
-  story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
-  threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-  connections: [], convergence: 'C', questions: []
-};
+/** A weave the checks and the fact check read (phase 4, brief 4.4), pitched as angles (phase 4b, piece 3). */
+const WEAVE = require('../../__tests__/mocks/llm-client.mock').getDefaultWeave();
 
 describe('incrementArcRevision', () => {
   // Phase 4 (brief 4.4): the fact check skips by its mark on the weave, so the increment

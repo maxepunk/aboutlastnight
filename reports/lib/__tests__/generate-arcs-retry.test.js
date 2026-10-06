@@ -25,11 +25,8 @@ jest.mock('../observability', () => ({
 
 const { analyzeArcsPlayerFocusGuided } = require('../workflow/nodes/arc-specialist-nodes');
 
-const WEAVE = {
-  story: 'The room named Alex.', question: 'Why Alex?', headline: 'The Room Named Alex',
-  threads: [{ id: 't1', name: 'The verdict', line: 'The room named Alex for the embezzlement.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-  connections: [], convergence: 'The money and the vote meet.', questions: []
-};
+/** The writer's weave, pitched as angles (phase 4b, piece 3). */
+const WEAVE = require('../../__tests__/mocks/llm-client.mock').getDefaultWeave();
 
 const makeState = () => ({
   weave: null,

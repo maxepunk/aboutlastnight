@@ -5,7 +5,7 @@
  * judged, never the evaluation history (phase 4, brief 4.4).
  */
 
-const { createMockSdkClient } = require('../../__tests__/mocks/llm-client.mock');
+const { createMockSdkClient, getDefaultWeave } = require('../../__tests__/mocks/llm-client.mock');
 
 // Mock the llm module before requiring evaluator-nodes
 jest.mock('../llm', () => ({
@@ -27,11 +27,7 @@ const { evaluateArcs } = require('../workflow/nodes/evaluator-nodes');
  * history says, and a marked weave is never judged again, whatever its verdict.
  */
 describe('evaluateArcs skip logic', () => {
-  const WEAVE = {
-    story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
-    threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-    connections: [], convergence: 'C', questions: []
-  };
+  const WEAVE = getDefaultWeave();
   const judged = (ready) => ({ ...WEAVE, _factCheck: { at: '2026-01-01', ready, fixes: 0 } });
   const session = {
     evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } },
@@ -106,11 +102,7 @@ describe('evaluateArcs skip logic', () => {
 // the meeting's approval, `meetingApproved`, through lib/weave.js isMeetingApproved, in
 // place of the old arc selection.
 describe("4.5: the fact check skips on the meeting's approval", () => {
-  const WEAVE = {
-    story: 'The room named Vic.', question: 'Why Vic?', headline: 'H',
-    threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-    connections: [], convergence: 'C', questions: []
-  };
+  const WEAVE = getDefaultWeave();
   const session = {
     evidenceBundle: { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: [], relationships: [] } },
     playerFocus: {},

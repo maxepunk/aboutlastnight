@@ -23,11 +23,8 @@ jest.mock('../observability', () => ({
 
 const { reviseArcs } = require('../workflow/nodes/arc-specialist-nodes');
 
-const WEAVE = {
-  story: 'The room named Vic.', question: 'Why Vic?', headline: 'The Room Named Vic',
-  threads: [{ id: 't1', name: 'The verdict', line: 'The room named Vic.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }],
-  connections: [], convergence: 'The vote.', questions: []
-};
+/** The weave, pitched as angles (phase 4b, piece 3). */
+const WEAVE = require('../../__tests__/mocks/llm-client.mock').getDefaultWeave();
 
 function makeState(overrides = {}) {
   return {

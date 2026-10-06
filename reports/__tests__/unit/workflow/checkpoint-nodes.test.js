@@ -23,6 +23,7 @@ const { checkpointInterrupt } = require('../../../lib/workflow/checkpoint-helper
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { getDefaultWeave } = require('../../mocks/llm-client.mock');
 const { _testing: { checkpointArticle } } = require('../../../lib/workflow/nodes/checkpoint-nodes');
 
 describe('checkpoint-nodes', () => {
@@ -77,7 +78,7 @@ describe('checkpoint-nodes', () => {
   // late-join, when this stop ran before arc analysis): the parse, the curation and the
   // photos are kept by a rollback to the story meeting, which writes the weave fresh.
   describe('checkpointCharacterIds: the guard reads the weave (brief 4.5)', () => {
-    const WEAVE = { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', name: 'The verdict', line: 'c', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }], connections: [], convergence: 'v', questions: [] };
+    const WEAVE = getDefaultWeave();
 
     it('throws when reached with no weave, telling the director to roll back to the story meeting', async () => {
       await expect(checkpointCharacterIds({ photoAnalyses: { analyses: [] }, roster: ['Vic'] }, {}))
@@ -107,7 +108,7 @@ describe('checkpoint-nodes', () => {
   // weave beside the session's other approved versions.
   describe('checkpointArcSelection: the story meeting (brief 4.5)', () => {
     const { _testing: { checkpointArcSelection } } = require('../../../lib/workflow/nodes/checkpoint-nodes');
-    const WEAVE = { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', name: 'The verdict', line: 'c', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }], connections: [], convergence: 'v', questions: [] };
+    const WEAVE = getDefaultWeave();
     let dataDir;
     beforeEach(() => { dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-meeting-')); });
     afterEach(() => fs.rmSync(dataDir, { recursive: true, force: true }));
@@ -251,7 +252,7 @@ describe('checkpointCharacterIds: the per-photo descriptions', () => {
     sessionId: '092026',
     photoAnalyses: { analyses: [{ filename: 'aln092026 (7 of 9).jpg' }] },
     roster: ['Alex', 'Sam'],
-    weave: { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', name: 'The verdict', line: 'c', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }], connections: [], convergence: 'v', questions: [] },
+    weave: getDefaultWeave(),
     characterIdMappings: null
   };
 
@@ -289,7 +290,7 @@ describe('checkpointCharacterIds: the leave-out choices', () => {
   const analysedState = {
     sessionId: null,
     photoAnalyses: { analyses: [{ filename: 'a.jpg' }, { filename: 'b.jpg' }] },
-    weave: { story: 's', question: 'q', headline: 'h', threads: [{ id: 't1', name: 'The verdict', line: 'c', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'A sale on the ledger.', stance: 'supports' }] }], connections: [], convergence: 'v', questions: [] },
+    weave: getDefaultWeave(),
     characterIdMappings: null
   };
 
