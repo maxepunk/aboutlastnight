@@ -809,6 +809,48 @@ function withoutDirectorsFindings(validationResults, edits, output) {
  *   previousOutput: state.weave
  * });
  */
+/** Words joined as a list is read: "a", "a and b", "a, b and c". */
+function listOfWords(words) {
+  return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words.join('');
+}
+
+/**
+ * The ids of the director's standing edits a reweave fits into the angle they have open (3 final,
+ * item 1; spec 2026-10-06 section 7, R3): each edit on that angle (a line of its pitch, a thread
+ * they flipped into or out of it), on "from your notes" when it is the first angle (R11), on one of its threads (a thread's name or line, a thread they
+ * added to it), or on a connection between two of its threads. Each edit is read by the element its
+ * place names first (lib/hand-edit-diff.js `at`).
+ *
+ * @param {Object[]} edits - the standing edits the version carries
+ * @param {Object} weave - the version the rework starts from
+ * @param {Object} open - the angle the director has open
+ * @returns {string[]}
+ */
+function openAngleEditIds(edits, weave, open) {
+  const idOf = (value) => (typeof value === 'string' ? value.trim() : '');
+  const openId = weaveIdOf(open);
+  const firstAngle = (Array.isArray(weave && weave.angles) ? weave.angles : []).find((angle) => angle && typeof angle === 'object');
+  const firstId = firstAngle ? weaveIdOf(firstAngle) : '';
+  const threadIds = new Set((Array.isArray(open.threads) ? open.threads : []).map(idOf).filter(Boolean));
+  const joins = new Map((Array.isArray(weave && weave.connections) ? weave.connections : [])
+    .filter((connection) => connection && typeof connection === 'object')
+    .map((connection) => [weaveIdOf(connection), Array.isArray(connection.joins) ? connection.joins.map(idOf) : []]));
+  return edits.filter((edit) => {
+    const at = Array.isArray(edit.at) ? edit.at : [];
+    const collection = at[0] && at[0].key;
+    if (collection === 'fromYourNotes') return firstId !== '' && firstId === openId;
+    const id = at[1] && at[1].match ? weaveIdOf(at[1].match) : '';
+    if (!id) return false;
+    if (collection === 'angles') return id === openId;
+    if (collection === 'threads') return threadIds.has(id);
+    if (collection === 'connections') {
+      const joined = joins.get(id) || [];
+      return joined.length === 2 && joined.every((thread) => threadIds.has(thread));
+    }
+    return false;
+  }).map((edit) => edit.id);
+}
+
 function buildRevisionContext(options) {
   const { phase, revisionCount, previousOutput, handEdits, round } = options;
   const outputName = typeof options.outputName === 'string' && options.outputName ? options.outputName : phase;
@@ -1147,21 +1189,30 @@ ${formatEditLines(standingEdits)}
   // Brief 4.5 (TH7, R23): the director's two rounds at the story meeting, each stated
   // once. A reweave fits the director's changes in and keeps every line no change needs;
   // a send-back takes the note as its task, with nothing found before the round to fix.
-  const reweaveAsks = [
-    standingEdits.length > 0 && 'each change in <HAND_EDITS>',
-    humanFeedback && 'each change the note above asks for'
-  ].filter(Boolean).join(', and ');
   // Piece 3 (brief 3C, R3; spec 2026-10-06 section 7): a reweave works on the angle the director
   // has open, named here in words, since the weave the rework reads carries no pick
   // (weaveForRework). Code puts back everything outside it (lib/weave.js holdOutsideOpenAngle), and
-  // the scope says so with its reason, so the rework spends no effort there.
+  // the scope says so with its reason, so the rework spends no effort there. <HAND_EDITS> lists
+  // every standing edit, those on other angles from earlier looks included, so the scope names by
+  // id the changes it fits in, those on the open angle and on its threads (3 final, item 1).
   const openAngle = meetingRound === 'reweave' ? pickedAngleOf(previousOutput) : null;
   const openAngleWords = openAngle ? `${weaveIdOf(openAngle)} ("${typeof openAngle.headline === 'string' ? openAngle.headline.trim() : ''}")` : '';
+  const openEditIds = openAngle ? openAngleEditIds(standingEdits, previousOutput, openAngle) : [];
+  const otherEditIds = openAngle ? standingEdits.map((edit) => edit.id).filter((id) => !openEditIds.includes(id)) : [];
+  const reweaveAsks = [
+    openAngle
+      ? openEditIds.length > 0 && `${listOfWords(openEditIds)} in <HAND_EDITS>`
+      : standingEdits.length > 0 && 'each change in <HAND_EDITS>',
+    humanFeedback && 'each change the note above asks for'
+  ].filter(Boolean).join(', and ');
+  const otherEditsLine = otherEditIds.length > 0
+    ? ` The director's other changes in <HAND_EDITS>, ${listOfWords(otherEditIds)}, are on other angles or on threads outside this one, and stand as they are.`
+    : '';
   let reweaveScope;
   if (!reweaveAsks) {
     reweaveScope = 'The director asked for a reweave at the story meeting with no change to fit in. This rework returns the weave with every line word for word.';
   } else if (openAngle) {
-    reweaveScope = `The director asked for a reweave at the story meeting of the angle they have open, ${openAngleWords}. This rework fits the director's changes into that angle: ${reweaveAsks}. It rewrites the lines of that angle a change needs, such as its story, its question or where it ends up, and the connections between the threads now in it, and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed. Every other angle, every thread outside the open angle and every connection that does not join two of its threads stay as written, because the director may still switch to another angle, and code puts back anything there that changes. A thread the open angle shares with another angle may be reworded, and the new words show in every angle that tells it.`;
+    reweaveScope = `The director asked for a reweave at the story meeting of the angle they have open, ${openAngleWords}. This rework fits the director's changes on that angle and on its threads into it: ${reweaveAsks}.${otherEditsLine} It rewrites the lines of that angle a change needs, such as its story, its question or where it ends up, and the connections between the threads now in it, and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed. Every other angle, every thread outside the open angle and every connection that does not join two of its threads stay as written, because the director may still switch to another angle, and code puts back anything there that changes. A thread the open angle shares with another angle may be reworded, and the new words show in every angle that tells it.`;
   } else {
     reweaveScope = `The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: ${reweaveAsks}. It rewrites the lines a change needs and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed.`;
   }

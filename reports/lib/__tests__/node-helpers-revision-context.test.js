@@ -1045,7 +1045,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     const text = context({ meetingRound: 'reweave', humanFeedback: null, validationResults: null });
     expect(text).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
     // Piece 3 (brief 3C, R3): the scope names the angle the director has open, and keeps the rest.
-    expect(text).toContain(`The director asked for a reweave at the story meeting of the angle they have open, a1 ("The Room Voted Overdose. The Ledger Kept Talking."). This rework fits the director's changes into that angle: each change in <HAND_EDITS>.`);
+    expect(text).toContain(`The director asked for a reweave at the story meeting of the angle they have open, a1 ("The Room Voted Overdose. The Ledger Kept Talking."). This rework fits the director's changes on that angle and on its threads into it: E1 and E2 in <HAND_EDITS>.`);
     expect(text).toMatch(/keeps every other line word for word/);
     expect(text).not.toContain('This rework fixes the must-fix items');
     expect(text).not.toContain('HUMAN FEEDBACK');
@@ -1056,7 +1056,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
   it("a reweave's note is part of what it fits in", () => {
     const text = context({ meetingRound: 'reweave', humanFeedback: 'Join the ledger thread to the vote.', validationResults: null });
     expect(text).toContain('HUMAN FEEDBACK (HIGHEST PRIORITY):\nJoin the ledger thread to the vote.');
-    expect(text).toContain("each change in <HAND_EDITS>, and each change the note above asks for.");
+    expect(text).toContain("E1 and E2 in <HAND_EDITS>, and each change the note above asks for.");
   });
 
   it("the director's changes are final through a reweave: its <HAND_EDITS> lists them by place, with the meeting's own rule", () => {
@@ -1096,6 +1096,51 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     });
     expect(text).toContain('WEAVE CHECK FAILURES:\n  - Thread "t2" gives the receipt "zzz".');
     ['EVALUATION SUMMARY', 'Confidence', 'Ready:', 'CRITERIA SCORES', 'no criteria scores'].forEach((gone) => expect(`${gone}: ${text.includes(gone)}`).toBe(`${gone}: false`));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Piece 3, final review: the Reweave fits only the open angle's changes
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// <HAND_EDITS> lists every standing edit, the director's edits on other angles from earlier looks
+// included. A Reweave works on the open angle (spec 2026-10-06 section 7; R3), so its scope names
+// the changes on that angle and on its threads by id, and says the rest stand as they are.
+describe("3 final: the Reweave's scope names only the open angle's changes", () => {
+  const { standingAtMeeting } = require('../hand-edit-diff');
+  const { WEAVE } = require('./fixtures/rework-state');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  // Look 1: the director rewrites angle 2's story and sends it on (E1). Look 2: they open angle 1,
+  // leave t4 out of it (E2) and rewrite t1's line (E3); t1 is in angle 1.
+  const looks = () => {
+    const first = clone(WEAVE);
+    first.picked = 'a2';
+    first.angles[1].story = 'Angle two, as the director rewrote it at the first look.';
+    const atFirst = standingAtMeeting(null, WEAVE, first);
+    const second = clone(first);
+    second.picked = 'a1';
+    second.angles[0].threads = second.angles[0].threads.filter((id) => id !== 't4');
+    second.threads[0].line = 'The room settled on an overdose, as the director put it.';
+    return { weave: second, handEdits: standingAtMeeting(atFirst, first, second) };
+  };
+  const scopeOf = (note = null) => {
+    const { weave, handEdits } = looks();
+    const text = buildRevisionContext({
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 3, previousOutput: weave,
+      handEdits, humanFeedback: note, meetingRound: 'reweave'
+    }).contextSection;
+    return text.slice(text.indexOf('WHAT THIS REWORK DOES:'));
+  };
+
+  it('fits in the changes on the open angle and on its threads, and says the changes on other angles stand', () => {
+    const scope = scopeOf();
+    expect(scope).toContain("This rework fits the director's changes on that angle and on its threads into it: E2 and E3 in <HAND_EDITS>.");
+    expect(scope).toContain("The director's other changes in <HAND_EDITS>, E1, are on other angles or on threads outside this one, and stand as they are.");
+    expect(scope).not.toContain('each change in <HAND_EDITS>');
+  });
+
+  it('with a note, fits in the note too', () => {
+    expect(scopeOf('Join the ledger to the vote.')).toContain('E2 and E3 in <HAND_EDITS>, and each change the note above asks for.');
   });
 });
 

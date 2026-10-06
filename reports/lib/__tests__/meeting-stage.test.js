@@ -126,7 +126,8 @@ describe('a reweave (brief 4.5)', () => {
     expect(systemPrompt.endsWith(arcRevisionRules('reweave', 'journalist'))).toBe(true);
     expect(jsonSchema).toBe(WEAVE_SCHEMA);
     expect(prompt).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
-    expect(prompt).toContain("This rework fits the director's changes into that angle: each change in <HAND_EDITS>.");
+    // 3 final, item 1: the scope names by id the changes on the open angle and its threads; every one here is.
+    expect(prompt).toContain("This rework fits the director's changes on that angle and on its threads into it: E1, E2, E3 and E4 in <HAND_EDITS>.");
     expect(prompt).toContain(`E2 (thread "t3", line): "${T3_LINE}"`);
     expect(prompt).not.toContain('a stale finding');
     expect(prompt).not.toContain('HUMAN FEEDBACK');
