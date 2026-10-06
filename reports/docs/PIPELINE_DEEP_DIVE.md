@@ -187,7 +187,8 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │              PHASE 2: THE WEAVE AND THE STORY MEETING (Opus)                │
 │  One call writes the weave: the story, the threads in their roles,          │
-│  the connections, the convergence and the questions                         │
+│  the connections, the convergence and the questions, each line in story     │
+│  terms with the evidence that tells it underneath                           │
 │  Code checks it; one fact check scores the truth rules                      │
 │  OUTPUT: the weave, settled by the director at the story meeting            │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -195,8 +196,8 @@ What the article can do with each layer is the rule set's, stated once: `world.m
             ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │              PHASE 3: THE MAP (Opus writer, code checks)                    │
-│  The settled weave laid across the theme's slots, in about 450 words        │
-│  Beats name their material; the article writer writes the prose             │
+│  The settled weave laid across the theme's slots, at most 450 words         │
+│  (aiming for 300); each beat a move in story terms, its evidence underneath │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -204,7 +205,7 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 │              PHASE 4: ARTICLE GENERATION (Opus)                             │
 │  Reads the whole rule set: the world, the truth rules, all 8 craft files    │
 │  Nova's voice: C12 in craft-voice.md; words that never print: T14           │
-│  Writes from the settled weave and the map; the fact check, then a          │
+│  Writes each beat of the map from its evidence; the fact check, then a      │
 │  truth-only judge; the director finishes the article at the desk            │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
@@ -331,7 +332,7 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 **Nodes**: `analyzeArcs` (graph name; the function `analyzeArcsPlayerFocusGuided`), `validateArcs` (`validateArcStructure`, the weave checks), `evaluateArcs` (the fact check), `checkpointArcSelection` (the story meeting), and the rework, `incrementArcRevision` then `reviseArcs` (phase 4, briefs 4.4 and 4.5; spec section 4)
 **Files**: `lib/workflow/nodes/arc-specialist-nodes.js`, `lib/weave.js` (the weave's shape and its checks), `lib/meeting.js` (the meeting's payloads and what it shows)
 
-**The arc writer** writes one weave in one call: the story the article will tell, which the director settles at the story meeting before anything is planned. When the director's notes end with their own read of the session, the story starts from it (C1); the record and everything else supply the threads, the receipts and what complicates the story. The lens work C16 sets out stays in the writer's reasoning, and reaches the weave as each thread's role.
+**The arc writer** writes one weave in one call: the story the article will tell, which the director settles at the story meeting before anything is planned. When the director's notes end with their own read of the session, the story starts from it (C1); the record and everything else supply the threads, their evidence and what complicates the story. Since phase 4b (piece 1; spec `docs/superpowers/specs/2026-10-05-story-level-and-evidence.md`) each thread and connection is a line in story terms, with the evidence that tells it underneath: the director reads the lines, and the evidence travels to the map writer and on to the article writer, which cites it. The lens work C16 sets out reaches the weave as each thread's role, and as its evidence, each piece marked as supporting the thread or cutting against it.
 
 **Prompt Structure** (recency bias: rules LAST). The system prompt is the theme's identity line, the mode block, the world and the truth rules (`systemPromptOpening`, from `loadRuleSet('arc', {theme})`), then the writer's role. The user prompt (`buildWeaveSections`):
 
@@ -345,31 +346,42 @@ SECTION 1: WHAT THE ROOM CONCLUDED
   - The investigation focus, the session roster, the character categories,
     the roster with pronouns and the character context
 SECTION 2: THE RECORD (every exposed document, then the morning timeline),
-  then the receipts a thread may give: the document ids, and "ledger"
+  then the Sources a piece of evidence may name: the document ids,
+  "ledger", "evidence-log" and "notes"
 SECTION 3: THE WEAVE (WEAVE_TASK: C1, C16 and C15, by pointer)
 SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions)
 <DIRECTOR_GUIDANCE> (the standing notes)
 ```
 
-**The weave** (`WEAVE_SCHEMA` in `lib/sdk-client/subagents.js`, built from `lib/weave.js`'s constants), about 400 words; the checks bound the writer's words at `WEAVE_WORD_BOUND`:
+**The weave** (`WEAVE_SCHEMA` in `lib/sdk-client/subagents.js`, built from `lib/weave.js`'s constants, with a piece of evidence from `lib/evidence.js`). The meeting's page shows the writer's lines in at most 300 words as it first opens (`MEETING_WORD_BOUND`), the evidence folded:
 
 ```javascript
 {
   story, question, headline,     // the thesis in one to three sentences, the question it carries, a working headline
   fromYourNotes,                 // the director's own words the story rests on, only when it starts from their read
-  threads: [{ id, claim, role, receipt, reason, verdict }],
+  threads: [{ id, name, line, role, verdict?, reason?, evidence }],
+    // a short name and one line in story terms
     // role: main-thread | grounds-it | complicates-it | mirrors-it | carries-it-forward | left-out
-    // receipt: a document id from the record, or "ledger"; verdict: true on the thread that carries the room's verdict
-  connections: [{ id, kind, joins, detail }],          // kind: person | moment | document | line
-  convergence,
+    // verdict: true on the thread that carries the room's verdict; reason: a left-out thread's one line on why
+  connections: [{ id, joins, line, kind, evidence }],  // kind: person | moment | document | line, kept underneath and never printed
+  convergence,                                         // where the threads converge, in a line or two of story terms
   strongerMainThread: { thread, reason },              // only when the writer sees one
   questions: [{ id, kind, about, question, changes }]  // kind: player | pronoun | figure (C15)
 }
+
+// A piece of evidence (EVIDENCE_PIECE_SCHEMA), under a thread, a connection or a beat:
+{ sources, shows, stance, card? }
+  // sources: document ids in the record (the record view's id rule), "ledger", "evidence-log" or "notes",
+  //   both sources when a piece sets two side by side
+  // shows: what it shows, with the words or figures that matter; a quotation is word for word in its source
+  // stance: supports | cuts-against; card: on a beat's piece only, the card's document
 ```
 
-**The checks and the fact check**, before the meeting (spec 4.5): code checks the weave, free (see Arc Validation Routing below), and a failed check sends it back for one rework in the round. Then one fact check (`evaluateArcs`, Opus) scores the truth criteria alone; a breach gets one automatic fix, and the meeting opens with no second judge call. No note on the writing and no score reaches the meeting.
+A thread the director adds at the meeting has no evidence: the map writer finds its evidence, or names the thread in its gap note, in story terms, when the record cannot carry it (spec 5.3). The evidence is never the director's edit (R6): `lib/hand-edit-diff.js` leaves it out of every diff and mark.
 
-**Checkpoint**: `arc-selection` (2.35) - The story meeting (brief 4.5): about 400 words, in the spec's order: the verdict; the story, its question and the working headline; "from your notes"; the threads with their roles and receipts; the connections and the convergence; the stronger main thread; the questions, each with its answer box. The director edits the words, changes a role, adds a thread, strikes a connection and answers each question, then approves, reweaves (the writer fits the changes in and keeps every line the director did not touch) or sends back (the writer rethinks the weave as the note asks). A connection that joins a left-out thread goes out of the story with it, and its line at the meeting says so; it comes back when the thread does (brief 4.14a). The director's edits are final: an automatic pass or a reweave never changes one, and a struck connection keeps its id, so a connection a rework adds under it takes an id of its own (brief 4.14a). Later prompts name the meeting's changes in the meeting's own form, M and the edit's number, apart from the map's and the desk's E ids. Approve writes `data/<id>/analysis/weave.approved.json`. Going back to the meeting reopens it as the director left it, with no model call (R9). The details are in `reports/CLAUDE.md`, **The story meeting**.
+**The checks and the fact check**, before the meeting (spec 4.5): code checks the weave, free (see Arc Validation Routing below), and a failed check sends it back for one rework in the round. Then one fact check (`evaluateArcs`, Opus) scores the truth criteria alone, reading each line against its evidence and each piece against the record: a line that says more than its evidence shows is an error of fact, and a finding about a piece is the writer's to fix (spec 6.2). A breach gets one automatic fix, and the meeting opens with no second judge call. No note on the writing and no score reaches the meeting.
+
+**Checkpoint**: `arc-selection` (2.35) - The story meeting (brief 4.5; phase 4b, piece 1): at most 300 words as the page first opens, counted by `wordsShown` with the folds closed, in the spec's order: the verdict; the story, its question and the working headline; "from your notes"; the threads in the story, each as its role, its name and its line, with a "What's behind it" fold holding its evidence; the threads left out, by name; the connections the story turns on, each its line with the names of the threads it joins; the convergence; the stronger main thread; the questions, each with its answer box. No line names a thread or a connection by its id. The fold of a thread the director added says the map writer finds its evidence. The director edits the words, changes a role, adds a thread with a name, a line and a role, strikes a connection and answers each question, then approves, reweaves (the writer fits the changes in and keeps every line the director did not touch) or sends back (the writer rethinks the weave as the note asks). A connection that joins a left-out thread goes out of the story with it, and its line at the meeting says so; it comes back when the thread does (brief 4.14a). The director's edits are final: an automatic pass or a reweave never changes one, and a struck connection keeps its id, so a connection a rework adds under it takes an id of its own (brief 4.14a). Later prompts name the meeting's changes in the meeting's own form, M and the edit's number, apart from the map's and the desk's E ids. Approve writes `data/<id>/analysis/weave.approved.json`. Going back to the meeting reopens it as the director left it, with no model call (R9). The details are in `reports/CLAUDE.md`, **The story meeting**.
 
 ### Phase 2.36: Photo Branch
 
@@ -383,7 +395,7 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 
 **Nodes**: `generateOutline` (the map writer, `lib/workflow/nodes/ai-nodes.js`), `checkMap` (`lib/workflow/nodes/map-nodes.js`), `checkpointOutline`, and the rework `incrementOutlineRevision` + `reviseOutline` (phase 4, brief 4.6; spec 5.1 to 5.4).
 
-**The map's shape** (`lib/schemas/outline.schema.json`; the theme's slots filled in by `lib/map.js` `mapSchemaFor`):
+**The map's shape** (`lib/schemas/outline.schema.json`; the theme's slots and the piece of evidence filled in by `lib/map.js` `mapSchemaFor`):
 
 ```javascript
 {
@@ -391,7 +403,10 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
   topPhoto,                       // the photo the article prints as its hero
   gapNote: { line, players },     // only when the record cannot carry part of the story
   sections: [{ slot, heading, job,
-    beats: [{ id, kind, material, players, card?, connection? }],   // kind: scene | receipt | line | figure
+    beats: [{ id, move, players, threads, connection?, card?, kind?, evidence }],
+      // move: the move of the story in a few plain words; threads: the ids of the settled weave's threads it carries
+      // card: true when its evidence prints as a card, with one piece flagged card: true, whose source is the card's document
+      // kind: scene | receipt | line | figure, a hint to the article writer, kept underneath and never printed
     photos: [{ filename, beat? }] }],
   dropped: [{ slot, reason }],
   leftOut: [/* beats considered and not used */],
@@ -400,17 +415,26 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 }
 ```
 
-**The writer** reads the settled weave first, as its task (`settledWeaveOf`), then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline', {theme})`), and the standing notes last. Code writes `heroImage` from the map's top photo.
+**The writer** reads the settled weave first, as its task (`settledWeaveOf`), each thread in the story with its evidence under it (R7), then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline', {theme})`), and the standing notes last. It writes each section's beats as moves in story terms, gives each its threads, its people and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words (`MAP_WORD_AIM`). Code writes `heroImage` from the map's top photo.
 
-**The checks** (`lib/map.js` `mapFindings`), free and in code: every roster player in a beat or raised in the gap note, every kept photo placed once, three to five cards from the record, every connection the settled weave keeps landed in a beat (none struck, and none that joins a left-out thread), each weave change named by its source, and no two beats under one id. A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLINE` is 1); a check still failing after it opens the stop, which shows it. A failure the director caused is a concern on their edit, never a rework. The director's send-back reads no check failure from before it, as the meeting's does: the checks run again on its map. No model judge reads the map.
+**The checks** (`lib/map.js` `mapFindings`), free and in code:
+- every roster player in a beat or raised in the gap note, and every kept photo placed once;
+- each beat marked as a card flags one piece, whose source is a document in the record, and the cards number three to five (`beatCardOf` reads a beat's card from its flagged piece);
+- every thread in the story lands in a beat that names it, and a thread the director added at the meeting may be named in the gap note instead, when the record cannot carry it; every connection the settled weave keeps lands in a beat (none struck, and none that joins a left-out thread);
+- each of the writer's beats carries a thread and has evidence, and every piece names a source the record holds, with each quotation word for word in its source (`lib/evidence.js` `evidenceProblems`);
+- the writer's lines are in story terms: a beat's move, a section's job, the gap note's line and each weave change hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the headline, the deck and the section headings are exempt, since the article prints them;
+- each weave change named by its source, and no two beats under one id;
+- the page's length, counted by `wordsShown` on the map as it first opens, the folds closed: the writer's own words are held to the larger of 300 and 450 less what the page prints that the writer did not write, such as the settled story, the director's photo descriptions and the counts (`MAP_WORD_AIM`, `MAP_WORD_BOUND`). So the writer may always use 300 words of its own, and more only while the whole page stays within 450.
 
-**Checkpoint**: `outline` (3.25) - The map: the director edits its beats, its photos and its top photo, and approves or sends it back. The approved map is saved as `data/<id>/analysis/map.approved.json`. To change the story itself, the director goes back to the story meeting; going back to the map reopens it as the director left it, with no model call (R9), and the rollback panel says so. A photo the director has left out since the map, such as one deleted at the desk, shows on the map as left out, with no move, and the gate refuses it as a top photo the director chose; the article leaves it out (`articleMapOf`). At approve and at send-back the gate stores a photo a strike freed by itself, and moves a section the director emptied (no beat and no photo left) to the dropped list, with the line "The director emptied this section on the map." (task 4.14b). The drop stands as the director's edit: an automatic pass that puts the section back has it taken out again when it holds nothing, and one it filled stays for the director to empty again, out of the dropped list (fix round 1).
+A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLINE` is 1); a check still failing after it opens the stop, which shows it beside its line, in story terms. The director's lines and the beats they added are never a check's failure: a failure the director caused is a concern on their edit, never a rework. The director's send-back reads no check failure from before it, as the meeting's does: the checks run again on its map. No model judge reads the map.
+
+**Checkpoint**: `outline` (3.25) - The map (phase 4b, piece 1: spec 4.2 and 9): each section's heading and job, its beats each as its move, its people and "(card)" where its evidence prints as a card, with a "What's behind it" fold holding its evidence, and its photos by the director's descriptions; no line names a beat by its id. The fold of a beat the director added says the article writer finds its evidence. The director edits its beats (a beat's move and its people), its photos and its top photo, and approves or sends it back. The approved map is saved as `data/<id>/analysis/map.approved.json`. To change the story itself, the director goes back to the story meeting; going back to the map reopens it as the director left it, with no model call (R9), and the rollback panel says so. A photo the director has left out since the map, such as one deleted at the desk, shows on the map as left out, with no move, and the gate refuses it as a top photo the director chose; the article leaves it out (`articleMapOf`). At approve and at send-back the gate stores a photo a strike freed by itself, and moves a section the director emptied (no beat and no photo left) to the dropped list, with the line "The director emptied this section on the map." (task 4.14b). The drop stands as the director's edit: an automatic pass that puts the section back has it taken out again when it holds nothing, and one it filled stays for the director to empty again, out of the dropped list (fix round 1).
 
 ### Phase 4: Article Generation
 
 **Nodes**: `generateContentBundle`, `evaluateArticle` (the fact check, then the article judge), `checkpointArticle` (the desk), and the rework, `incrementArticleRevision` then `reviseContentBundle` (`lib/workflow/nodes/ai-nodes.js` and `evaluator-nodes.js`; phase 4, briefs 4.7a and 4.7b; spec section 6)
 
-**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files and the standing notes last. It writes all the prose from the map's beats, and adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
+**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files and the standing notes last. It writes all the prose from the map's beats, each from the evidence the beat carries, citing its quotations, figures and times, and reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
 
 **The rules**: the article writer reads the whole rule set (`loadRuleSet('article', {theme})`): the world and the truth rules in its system prompt after the mode block, and all eight craft files last in its user prompt. Nova's voice is C12 in `craft-voice.md`; where Nova stood is the session's mode block (`mode-on-site.md` or `mode-remote.md`) and T8; the length and the house style are C4 in `craft-telling.md`; the fiction's own words are T14, buried memories T3, and characters, not players, T11, all in `truth-rules.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
 
@@ -565,20 +589,21 @@ A reweave or a send-back opens a new round and starts the budget over.
 
 ### The Weave in One Call (Commit 8.15; phase 4)
 
-**Why one call?** The room's conclusions guide everything: the story starts from the director's read and the room's verdict. Parallel specialists could not share that context (8.15), and since phase 4 the one call writes the weave alone: every later writer reads the record itself, so a write-up for each thread repeated what the next writer already had (spec 4.2).
+**Why one call?** The room's conclusions guide everything: the story starts from the director's read and the room's verdict. Parallel specialists could not share that context (8.15), and since phase 4 the one call writes the weave alone: every later writer reads the record itself, so a write-up for each thread repeated what the next writer already had (spec 4.2). Since phase 4b the same call attaches each thread's evidence, the pieces of the record that tell it, which the map writer hands on to the beats and the article writer cites.
 
 **The room's verdict is always one of the threads** (C16): the weave checks require a thread marked `verdict: true` that is not left out. The report must address what players actually concluded.
 
 ### Arc Validation Routing (Commit 8.27; the weave checks since phase 4)
 
 **Before the fact check:** `validateArcStructure` runs the weave checks in code (`lib/weave.js` `checkWeave`, no LLM), on the writer's text alone (a thread, a field or words the director added are never a check's failure):
-- each of the writer's threads has a receipt, and every receipt names a document in the record (`buildValidEvidenceIds`) or the ledger;
+- each of the writer's threads in the story has at least one piece of evidence that supports it, and every piece, under a thread or a connection, names a source the record holds (a document by the record view's id rule, the ledger, the evidence log or the director's notes), never a buried memory, with each quotation word for word in its source (`lib/evidence.js` `evidenceProblems`);
+- the writer's lines are in story terms: the story, the question, each thread's name, line and reason, each connection's line, the convergence and the stronger main thread's reason hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the director's lines, "from your notes", the verdict line, the working headline and the questions are exempt;
 - the room's verdict is one of the threads (`verdict: true`, not left out);
 - every live connection joins two threads the weave holds;
 - each left-out thread has its reason;
 - every thread, connection and question has an id of its own, and a stronger main thread names a thread the weave holds;
 - "from your notes" is the director's words, word for word (`isVerbatimIn`);
-- the writer's words come to no more than `WEAVE_WORD_BOUND`.
+- the meeting's page, built from the writer's share of the weave as it first opens and counted by `lib/stop-pages.js` `wordsShown`, comes to no more than 300 words (`MEETING_WORD_BOUND`). Only the writer's output is held to it: the director's version is never refused for its length.
 
 **Routing behavior:**
 - A failed check on a weave the fact check has not judged → one rework in the round (`routeArcValidation` → `incrementArcRevision` → `reviseArcs`), which reads the check's lines under their own label, `WEAVE CHECK FAILURES`
@@ -872,7 +897,7 @@ The published report goes to `outputs/report-{sessionId}.html`, with its photos 
 
 ---
 
-*Last updated: 2026-10-04 (phase 4: the weave and the story meeting, the map, the desk)*
-*Based on codebase analysis including Commits 8.11 (hybrid curation), 8.15 (player-focus arcs), 8.24 (momentum criteria), 8.25 (outline schema), 8.26 (SRP checkpoints), 8.27 (arc validation routing), ba3f534 (XML migration), 4193772 (arc architecture), 6ffeef8 (data wiring), and phase 4's briefs*
+*Last updated: 2026-10-05 (phase 4b, piece 1: the story level, with the evidence underneath)*
+*Based on codebase analysis including Commits 8.11 (hybrid curation), 8.15 (player-focus arcs), 8.24 (momentum criteria), 8.25 (outline schema), 8.26 (SRP checkpoints), 8.27 (arc validation routing), ba3f534 (XML migration), 4193772 (arc architecture), 6ffeef8 (data wiring), phase 4's briefs and phase 4b's piece 1*
 
 *Graph: 44 nodes total (see lib/workflow/graph.js for complete node list)*
