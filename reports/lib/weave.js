@@ -744,14 +744,16 @@ function canonicalJson(value) {
 }
 
 /**
- * The weave's version stamp: a short hash of its content, without its code-owned keys.
- * A check result and a fact check stamped with it say which weave they read.
+ * The weave's version stamp: a short hash of its content, without its code-owned keys or the
+ * director's pick (weaveForRework). A check result and a fact check stamped with it say which
+ * weave they read. The pick is no change (R1) and no check reads it, so a check run before a
+ * pick-only approve still shows when the director goes back to the meeting (R9; the final review).
  *
  * @param {Object} weave
  * @returns {string} 12 hex characters
  */
 function weaveKey(weave) {
-  return crypto.createHash('sha1').update(canonicalJson(weaveForPrompt(weave) || null)).digest('hex').slice(0, 12);
+  return crypto.createHash('sha1').update(canonicalJson(weaveForRework(weave) || null)).digest('hex').slice(0, 12);
 }
 
 /** The fact check's mark on a weave, or null when no fact check has judged it. */

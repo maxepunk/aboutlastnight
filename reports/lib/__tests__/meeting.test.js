@@ -286,6 +286,35 @@ describe('what the stop shows (brief 4.5)', () => {
     expect(meetingCheckFailures(atMeeting())).toEqual([]);
   });
 
+  // The final review: the pick is no change (R1), so a check run before a pick-only approve still
+  // shows after going back to the meeting (R9), and the fact check's mark still holds, so a replay
+  // judges nothing again and the route sends the weave on to the fact check's skip, never a rework.
+  it("a pick alone never hides a check, its concerns or the fact check's mark (R1)", () => {
+    const { _testing: graphTesting } = require('../workflow/graph');
+    const { isWeaveJudged } = require('../weave');
+    const failures = [{ type: 'evidence-not-in-record', message: 'The thread "The sale": piece 1 names "zzz", which is no document in <RECORD>.', place: 'threads[#t2]' }];
+    // A round kept the director's line of angle 1's pitch, and the checks ran on its weave.
+    const left = clone(FIXTURE_WEAVE);
+    left.angles[0].lands = 'Every player sat through the vote.';
+    const edits = standingAtMeeting(null, FIXTURE_WEAVE, left);
+    const concern = `${DIRECTOR_EDIT_PREFIX}E1: The line of the pitch reads as a figure.`;
+    const weave = withFactCheckMark(left, { at: 't', ready: true, fixes: 0 });
+    const before = atMeeting({ weave, _weaveBaseline: clone(left), _weaveHandEdits: edits, _arcValidation: { weaveKey: weaveKey(weave), passed: false, failures, concerns: [concern] } });
+    expect(meetingCheckFailures(before)).toEqual(failures);
+    expect(meetingConcerns(before).map((c) => c.text)).toEqual([concern]);
+    // The director picks angle 2 and approves with no other change, then goes back to the meeting.
+    const approved = meetingResume({ meeting: 'approve', weave: { ...clone(left), picked: 'a2' } }, before);
+    expect(approved.error).toBeNull();
+    expect(approved.stateUpdates._weaveHandEdits.edits.map((edit) => edit.id)).toEqual(['E1']);
+    const back = { ...before, ...approved.stateUpdates };
+    expect(back.weave.picked).toBe('a2');
+    expect(weaveKey(back.weave)).toBe(weaveKey(weave));
+    expect(meetingCheckFailures(back)).toEqual(failures);
+    expect(meetingConcerns(back).map((c) => c.text)).toEqual([concern]);
+    expect(isWeaveJudged(back.weave)).toBe(true);
+    expect(graphTesting.routeArcValidation(back)).toBe('evaluate');
+  });
+
   it("the concerns: the checks' and the fact check's, each beside the line of the edit it is about", () => {
     const left = leftByDirector();
     left.threads = left.threads.map((t) => (t.id === 't1' ? { ...t, line: 'The room argued for an hour.' } : t));

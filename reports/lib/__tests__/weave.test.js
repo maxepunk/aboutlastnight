@@ -302,6 +302,8 @@ describe('the weave helpers', () => {
     const reordered = Object.fromEntries(Object.entries(clone(WEAVE)).reverse());
     expect(weaveKey(reordered)).toBe(weaveKey(WEAVE));
     expect(weaveKey(withFactCheckMark(WEAVE, { at: 't', ready: false, fixes: 0 }))).toBe(weaveKey(WEAVE));
+    // The final review: the pick is no change (R1), so it leaves the stamp unchanged too.
+    expect(weaveKey({ ...clone(WEAVE), picked: 'a2' })).toBe(weaveKey(WEAVE));
     expect(weaveKey(withAngle('a1', (a) => ({ ...a, story: 'Another story.' })))).not.toBe(weaveKey(WEAVE));
     expect(weaveKey(WEAVE)).toMatch(/^[0-9a-f]{12}$/);
   });
