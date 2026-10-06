@@ -188,7 +188,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     expect(scripted.calls).toEqual(['Arc revision 0', 'fact check']);
     // The rework read the director's changes and no finding from before the round.
     expect(scripted.prompts[0]).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
-    expect(scripted.prompts[0]).toContain('(thread "t6", added)');
+    expect(scripted.prompts[0]).toContain('(thread "t6", added in angle "a1")');
 
     const { weave } = reopened.data;
     expect(weave.threads.find((t) => t.id === 't3').line).toBe(T3_LINE);

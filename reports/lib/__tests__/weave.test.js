@@ -110,7 +110,7 @@ const withThread = (id, change) => ({ ...clone(WEAVE), threads: clone(WEAVE).thr
 /** The weave with one angle changed. */
 const withAngle = (id, change) => ({ ...clone(WEAVE), angles: clone(WEAVE).angles.map((a) => (a.id === id ? change(a) : a)) });
 /** The director's share of the weave, as lib/hand-edit-diff.js weaveDirectorsShare reads it from the edits. */
-const share = (parts = {}) => ({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {}, ...parts });
+const share = (parts = {}) => ({ fields: {}, angleFields: {}, flippedIn: {}, flippedOut: {}, addedThreads: {}, threadFields: {}, addedConnections: {}, connectionFields: {}, ...parts });
 
 describe("the weave's shape (WEAVE_SCHEMA), on a weave in 100226's shape", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
@@ -699,16 +699,23 @@ describe("4.5: the checks read only the writer's text (R11, ruling 2)", () => {
 });
 
 // Review focus 3: only the writer's output is held to the bound. The node counts the page of the
-// writer's share (writersShareOf): the director's lines read empty, and the threads they added or
-// re-roled are left out, so a page the director lengthened never fails the check.
+// writer's share (writersShareOf): the director's lines read empty, the threads they added are left
+// out, and a thread they brought into an angle is off its list (piece 3, brief 3C), so a page the
+// director lengthened never fails the check.
 describe("the writer's share of the page (writersShareOf)", () => {
-  it("reads the director's rewritten lines empty, leaves out the threads they added or re-roled, and drops the answers", () => {
+  it("reads the director's rewritten lines empty, leaves out the threads they added and off the angle the threads they brought in, and drops the answers", () => {
     const weave = clone(WEAVE);
     weave.threads.push({ id: 't7', name: 'The guest list', line: 'A very long line the director typed.' });
     weave.threads[2] = { ...weave.threads[2], line: 'The director typed this line.' };
+    weave.angles[1].threads.push('t6', 't7');
+    weave.angles[1].ends = 'Where the director said it ends, at length.';
     weave.questions[0] = { ...weave.questions[0], answer: 'The director answered at length.' };
-    const writers = writersShareOf(weave, share({ threadFields: { 't3.line': 'E2' }, addedThreads: { t7: 'E3' }, reroledThreads: { t5: 'E4' } }));
-    expect(writers.threads.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4', 't6']);
+    const writers = writersShareOf(weave, share({
+      threadFields: { 't3.line': 'E2' }, addedThreads: { t7: 'E3' }, flippedIn: { 'a2.t6': 'E4' }, angleFields: { 'a2.ends': 'E5' }
+    }));
+    expect(writers.threads.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4', 't5', 't6']);
+    expect(writers.angles[1]).toMatchObject({ threads: ['t4', 't1', 't5', 't7'], ends: '' });
+    expect(writers.angles[0]).toEqual(WEAVE.angles[0]);
     expect(writers.threads[2].line).toBe('');
     expect(writers.questions[0]).not.toHaveProperty('answer');
     expect(weave.threads[2].line).toBe('The director typed this line.');
@@ -785,9 +792,9 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
     expect(concerns).toEqual([]);
   });
 
-  it("a repeat under the id of a thread the director re-roled or rewrote says the director changed one of them", () => {
+  it("a repeat under the id of a thread the director flipped or rewrote says the director changed one of them", () => {
     const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[2], name: 'A second bathroom' }] };
-    const { failures, concerns } = findings(weave, share({ reroledThreads: { t3: 'E2' }, threadFields: { 't3.line': 'E4' } }));
+    const { failures, concerns } = findings(weave, share({ flippedOut: { 'a1.t3': 'E2' }, threadFields: { 't3.line': 'E4' } }));
     expect(failures.map((f) => f.message)).toEqual([expect.stringMatching(/^Two threads share one id: "The bathroom" and "A second bathroom", and one of them is the thread the director changed\. Keep the id on the director's thread/)]);
     expect(failures[0].message).not.toMatch(/\bE\d\b|<HAND_EDITS>|\bt3\b/);
     expect(concerns).toEqual([]);
@@ -811,7 +818,7 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
 
   it("names the thread the director changed, and gives each of the writer's threads under its id an id of its own", () => {
     const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[2], name: 'A second bathroom' }, { ...clone(WEAVE).threads[2], name: 'A third bathroom' }] };
-    const { failures } = findings(weave, share({ reroledThreads: { t3: 'E2' }, threadIndexes: { t3: [2] } }));
+    const { failures } = findings(weave, share({ flippedIn: { 'a2.t3': 'E2' }, threadIndexes: { t3: [2] } }));
     expect(failures.map((f) => f.message)).toEqual([expect.stringContaining('and "The bathroom" is the thread the director changed. Keep the id on "The bathroom", since their edits find it by its id, and give "A second bathroom" and "A third bathroom" each an id of its own;')]);
     expect(failures[0].line).toBe('The writer gave the threads "A second bathroom" and "A third bathroom" the id of your thread "The bathroom", so the meeting cannot change them.');
   });

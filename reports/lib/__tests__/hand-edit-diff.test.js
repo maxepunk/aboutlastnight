@@ -1571,15 +1571,21 @@ describe('4.5: the meeting\'s edits', () => {
 
   it("weaveDirectorsShare reads the director's share of the weave from the edits", () => {
     const edits = D.standingAtMeeting(null, writers(), { ...directors(), threads: directors().threads.map((t) => (t.id === 't2' ? { ...t, line: 'A line the director typed.' } : t)) }).edits;
+    // Piece 3 (brief 3C): a thread has no role, so a field the fixture still calls `role` is one of
+    // the thread's fields like any other; no share is kept for re-roled threads.
     expect(D.weaveDirectorsShare(edits)).toEqual({
       addedThreads: { t7: 'E4' },
-      reroledThreads: { t3: 'E3' },
       fields: { fromYourNotes: 'E1' },
-      threadFields: { 't2.line': 'E2' },
+      angleFields: {},
+      flippedIn: {},
+      flippedOut: {},
+      threadFields: { 't2.line': 'E2', 't3.role': 'E3' },
       addedConnections: {},
       connectionFields: { 'c2.line': 'E5' }
     });
-    expect(D.weaveDirectorsShare(null)).toEqual({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {} });
+    expect(D.weaveDirectorsShare(null)).toEqual({
+      fields: {}, angleFields: {}, flippedIn: {}, flippedOut: {}, addedThreads: {}, threadFields: {}, addedConnections: {}, connectionFields: {}
+    });
   });
 
   // Fix round, fix 3: given the weave the edits are carried in, the share says where each thread
@@ -1742,7 +1748,7 @@ describe('4.5: the meeting\'s edits', () => {
       expect(second.edits.map((e) => [e.id, e.path])).toEqual([
         ['E1', 'fromYourNotes'], ['E2', 'threads[#t3].role'], ['E4', 'connections[#c2].line'], ['E5', 'threads[#t7].role']
       ]);
-      expect(D.weaveDirectorsShare(second.edits)).toMatchObject({ addedThreads: {}, reroledThreads: { t3: 'E2', t7: 'E5' } });
+      expect(D.weaveDirectorsShare(second.edits)).toMatchObject({ addedThreads: {}, threadFields: { 't3.role': 'E2', 't7.role': 'E5' } });
     });
   });
 

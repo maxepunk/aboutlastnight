@@ -368,7 +368,7 @@ describe("4.5b: who made a repeat, read from each id's count", () => {
 // told to keep every line word for word, then a second fact check: about ten minutes with
 // nothing to show.
 describe('4.5b: an empty reweave is refused, with its reason', () => {
-  const EMPTY = "A reweave fits the director's changes and note into the weave, and this one carries no change to the weave and no note. The answers travel as they are to every later writer: approve to send the weave on with them, or change the weave or write a note, then reweave.";
+  const EMPTY = "A reweave fits the director's changes and note into the angle, and this one carries no change to an angle or a thread and no note. The pick and the answers travel as they are to every later writer: approve to send the angle on with them, or change the angle or one of its threads, or write a note, then reweave.";
   const answered = () => ({ ...clone(FIXTURE_WEAVE), questions: FIXTURE_WEAVE.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar all morning.' })) });
 
   it.each([
@@ -489,16 +489,15 @@ describe('1B: where a meeting change sits, by the names the meeting shows', () =
     ]);
   });
 
-  it('names the reason and the verdict flag by the thread they belong to, and no place carries an id', () => {
+  // Piece 3 (brief 3C): a thread has no reason, so no place names one.
+  it('names the verdict flag by the thread it belongs to, and no place carries an id', () => {
     const left = clone(FIXTURE_WEAVE);
-    left.threads[4].reason = 'The director keeps it out.';
     delete left.threads[0].verdict;
     left.threads[1].verdict = true;
     const places = placesOf(left);
     expect(places).toEqual([
       'whether "The overdose vote" carries the room\'s verdict',
-      'whether "The sale" carries the room\'s verdict',
-      'the reason "The letter" is left out'
+      'whether "The sale" carries the room\'s verdict'
     ]);
     places.forEach((place) => expect(place).not.toMatch(/\b[tc]\d\b/));
   });

@@ -90,9 +90,11 @@
  * THE WEAVE (brief 4.5): the director's changes at the story meeting are edits through
  * the same machinery, with three differences. They are made at every approve, reweave
  * and send-back, against the writer's last weave (standingAtMeeting), and stand past
- * approve. Each is one place (weaveEditsBetween): a field rewritten, a thread's field (its
- * role among them), or a thread added whole. A whole element stays one edit when the director
- * later changes part of it (fix round 1, finding 1). Each look reads the director's version
+ * approve. Each is one place (weaveEditsBetween): a field rewritten, a line of an angle's pitch
+ * (found by the angle's id), a thread's field, a thread added whole with its place in the angle
+ * it went into, or a thread flipped into or out of an angle, which is that thread's place alone
+ * and owns no text (phase 4b, piece 3, brief 3C; R2). A whole element stays one edit when the
+ * director later changes part of it (fix round 1, finding 1). Each look reads the director's version
  * against what the meeting showed at the places their standing edits are (withShownEdits),
  * so a change there is theirs with or without a pass since. And a reweave is held to them as
  * an automatic pass is (REWEAVE_PASS). The answers are the director's words, kept by their
@@ -133,7 +135,7 @@ const {
   pairSectionBlocks, stayingInSection, blockText, blockKey, sectionKey
 } = require('../console/article-desk-logic');
 const {
-  isWeave, weaveIdOf, repeatedIds, occurrenceKeys, WEAVE_PRINTED_FIELDS, printedWeaveFields
+  isWeave, weaveIdOf, repeatedIds, occurrenceKeys, WEAVE_PRINTED_FIELDS, printedWeaveFields, pickedAngleOf
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, pairWeaveQuestions } = require('./writer-questions');
 // The one join key for a photo, its basename in lower case: the map's edits find a photo by
@@ -168,9 +170,11 @@ const EDIT_LINES_GUIDE = "An edit covers only the place its line names: a place 
 
 /**
  * How to read the weave's edit lines (brief 4.5; formatEditLines), for the weave's
- * reworks' <HAND_EDITS> block and the meeting's fact check alike.
+ * reworks' <HAND_EDITS> block and the meeting's fact check alike. Piece 3 (brief 3C, R2): a line
+ * of an angle's pitch, a thread added with the angle it went into, and a thread brought into an
+ * angle or left out of it, which is that thread's place alone, as a moved block is at the desk.
  */
-const WEAVE_EDIT_LINES_GUIDE = "Each line is one change by its id and place, with the director's text or value: a field they rewrote, a field of a thread they changed (its role among them), or a whole thread they added (marked added). A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+const WEAVE_EDIT_LINES_GUIDE = "Each line is one change by its id and place, with the director's text or value: a field they rewrote, such as a line of an angle's pitch or a thread's name or line; a whole thread they added (marked added, with the angle they put it in); or a thread they brought into an angle or left out of it (marked brought in or left out, with the thread's name), which is that thread's place in that angle alone, while the thread's own text is still the writer's. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
 
 /** The pass a report entry names when the rework of the director's send-back changed an edit. */
 const SEND_BACK_PASS = 'send-back';
@@ -247,7 +251,9 @@ const ELEMENT_KEYS = {
   entries: 'description',
   assessments: 'name',
   evidenceGroups: 'theme',
-  // The weave's collections (brief 4.5): each element names itself by its id.
+  // The weave's collections (brief 4.5): each element names itself by its id; an angle too
+  // (phase 4b, piece 3, brief 3C).
+  angles: 'id',
   threads: 'id',
   connections: 'id',
   questions: 'id',
@@ -261,8 +267,17 @@ const ELEMENT_KEYS = {
 /** The weave's text fields, each one place (brief 4.5): the weave's own printed fields (lib/weave.js WEAVE_PRINTED_FIELDS; brief 4.5b). */
 const WEAVE_FIELDS = WEAVE_PRINTED_FIELDS.weave;
 
-/** The weave's collections, by the word for one of their elements (brief 4.5). */
-const WEAVE_ELEMENTS = { threads: 'thread', connections: 'connection', questions: 'question' };
+/** The weave's collections, by the word for one of their elements (brief 4.5; the angles, piece 3, brief 3C). */
+const WEAVE_ELEMENTS = { angles: 'angle', threads: 'thread', connections: 'connection', questions: 'question' };
+
+/**
+ * The key of an angle's threads, the ids it tells in its order (lib/weave.js). The diff reads
+ * that list as one flip per thread brought in or left out (R2), never as one field.
+ */
+const ANGLE_THREADS = 'threads';
+
+/** The two ways a thread flips (R2): brought into an angle, or left out of it, each in the words a place names it by. */
+const FLIP_WORDS = Object.freeze({ in: 'brought in', out: 'left out' });
 
 /** The field a block's text is in, which a label leaves unsaid ("paragraph", not "paragraph, text"). */
 const MAIN_FIELD = { paragraph: 'text', quote: 'text', list: 'items' };
@@ -825,7 +840,8 @@ function pathOf(steps) {
     const collection = collectionAt(steps, i);
     const mapField = mapPathField(steps, i);
     const byId = mapField !== null || collection === 'sections' || (collection === 'evidenceCards' && i === 1)
-      || (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, collection) && i === 1);
+      || (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, collection) && i === 1)
+      || (collection === ANGLE_THREADS && i === 3 && steps[0].key === 'angles');
     if (byId) {
       const field = mapField || ELEMENT_KEYS[collection];
       out += `[#${step.match && step.match[field] != null ? step.match[field] : `index-${step.index}`}]`;
@@ -966,13 +982,90 @@ function isMoveWithin(edit) { return isMove(edit) && isObj(edit.between); }
 function isStrike(edit) { return Boolean(edit && edit.struck === true) && !isCut(edit); }
 
 /**
+ * A thread flipped into or out of an angle (phase 4b, piece 3, brief 3C; R2): one edit of its own
+ * kind, `{at: [angles, {match: {id: angle}}, threads, {match: {id: thread}}], before: null, after:
+ * <the thread's name>, flip: 'in' | 'out'}`, or null for any other edit. Its place is the thread's
+ * place in that angle, and its text the writer's: the thread's name rides on it only for the lines
+ * that name it.
+ *
+ * @param {Object} edit
+ * @returns {{angleId: string, threadId: string, flip: ('in'|'out')}|null}
+ */
+function flipOf(edit) {
+  if (!isObj(edit) || !Object.prototype.hasOwnProperty.call(FLIP_WORDS, edit.flip)) return null;
+  const steps = stepsOf(edit);
+  if (steps.length !== 4 || !('key' in steps[0]) || steps[0].key !== 'angles' || !isElementStep(steps[1])
+    || !('key' in steps[2]) || steps[2].key !== ANGLE_THREADS || !isElementStep(steps[3])) return null;
+  const angleId = weaveIdOf(steps[1].match);
+  const threadId = weaveIdOf(steps[3].match);
+  return angleId && threadId ? { angleId, threadId, flip: edit.flip } : null;
+}
+
+/** Is this edit a thread flipped into or out of an angle (flipOf)? */
+function isFlip(edit) { return flipOf(edit) !== null; }
+
+/**
+ * Where an edit puts a thread in an angle (R2), or null: a flip's place, or the place a thread the
+ * director added has in the angle they added it to (its edit's `angle`, `{id, flip}`: the thread
+ * and its place are one edit, and `flip` is 'out' once they leave it out of that angle).
+ *
+ * @param {Object} edit
+ * @returns {{angleId: string, threadId: string, flip: ('in'|'out')}|null}
+ */
+function membershipOf(edit) {
+  const flip = flipOf(edit);
+  if (flip) return flip;
+  if (!isObj(edit) || !isObj(edit.angle) || !Object.prototype.hasOwnProperty.call(FLIP_WORDS, edit.angle.flip)) return null;
+  const steps = stepsOf(edit);
+  if (steps.length !== 2 || !('key' in steps[0]) || steps[0].key !== 'threads' || !isElementStep(steps[1])) return null;
+  const angleId = weaveIdOf(edit.angle);
+  const threadId = weaveIdOf(steps[1].match);
+  return angleId && threadId ? { angleId, threadId, flip: edit.angle.flip } : null;
+}
+
+/** The one key of a thread's place in an angle, for telling two edits of one place apart. */
+function membershipKeyOf(membership) {
+  return membership ? `${membership.angleId}|${membership.threadId}` : null;
+}
+
+/** The ids of the threads an angle tells, trimmed, each once, in its order, as lib/weave.js reads its list. */
+function angleThreadIds(angle) {
+  const ids = (isObj(angle) && Array.isArray(angle[ANGLE_THREADS]) ? angle[ANGLE_THREADS] : [])
+    .map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean);
+  return [...new Set(ids)];
+}
+
+/** The first angle of a weave under an id, as the pick reads one (lib/weave.js pickedAngleOf), or null. */
+function angleUnder(weave, angleId) {
+  return (isObj(weave) && Array.isArray(weave.angles) ? weave.angles : []).find((angle) => isObj(angle) && weaveIdOf(angle) === angleId) || null;
+}
+
+/** Does the angle under an id tell the thread: true or false, or null when the weave holds no such angle. */
+function angleTells(weave, angleId, threadId) {
+  const angle = angleUnder(weave, angleId);
+  return angle ? angleThreadIds(angle).includes(threadId) : null;
+}
+
+/** Does a weave hold a thread where an edit puts it in an angle (membershipOf)? */
+function membershipCarried(weave, membership) {
+  const tells = angleTells(weave, membership.angleId, membership.threadId);
+  return tells !== null && tells === (membership.flip === 'in');
+}
+
+/** A thread as a flip names it: its name, else its line, else its id. */
+function threadLabelOf(thread) {
+  const text = (value) => (typeof value === 'string' ? value.trim() : '');
+  return text(thread && thread.name) || text(thread && thread.line) || weaveIdOf(thread);
+}
+
+/**
  * An edit of a place alone, which owns no text (task 4.5e): a block the director moved
- * (isMove). The place is theirs, and the text there is the writer's (fix round 1, finding 2).
- * The one rule for which edits own
- * no text: writerParts and locatingTexts read it, and the verdict guard reads a finding filed
+ * (isMove), and a thread they flipped into or out of an angle (isFlip; piece 3, R2). The place is
+ * theirs, and the text there is the writer's (fix round 1, finding 2). The one rule for which edits
+ * own no text: writerParts and locatingTexts read it, and the verdict guard reads a finding filed
  * under such edits alone by its quotes (evaluator-nodes.js guardDirectorEdits).
  */
-function ownsNoText(edit) { return isMove(edit); }
+function ownsNoText(edit) { return isMove(edit) || isFlip(edit); }
 
 function editNumber(id) {
   const m = /^E(\d+)$/.exec(String(id));
@@ -1211,7 +1304,11 @@ function editCarried(obj, edit) {
     if (movedBlockPlaces(obj, edit).length === 0) return false;
     return !isMoveWithin(edit) || inDirectorsOrder(moveContainer(obj, edit) || [], edit);
   }
-  return placeCarrying(obj, edit) !== undefined;
+  // Piece 3 (R2): a flip, while the angle's list holds (or lacks) the thread; a thread the
+  // director added, while the weave holds it and its angle holds it where they put it.
+  const membership = membershipOf(edit);
+  if (isFlip(edit)) return membershipCarried(obj, membership);
+  return placeCarrying(obj, edit) !== undefined && (!membership || membershipCarried(obj, membership));
 }
 
 /** An edit stored before FA, given its steps; one with steps, as it is. */
@@ -1241,6 +1338,10 @@ function completeEdit(edit, sentBackText, names) {
   if (edit.from) out.from = edit.from;
   if (isObj(edit.between)) out.between = edit.between;
   if (edit.struck === true) out.struck = true;
+  // Piece 3 (R2): a thread flipped into or out of an angle, and the place of a thread the
+  // director added in the angle they added it to.
+  if (Object.prototype.hasOwnProperty.call(FLIP_WORDS, edit.flip)) out.flip = edit.flip;
+  if (isObj(edit.angle)) out.angle = { ...edit.angle };
   const parts = sentBackText ? sentBackText.map((part) => ({ text: part.text })) : null;
   if (isCut(out)) {
     if (sentBackText) out.pieces = cutSentences(out).filter((sentence) => !partHolding(sentBackText, sentence));
@@ -1473,25 +1574,35 @@ function questionChanges(beforeList, afterList) {
 
 /**
  * The changes between two versions of a weave, one per place, in the order the meeting
- * prints them (brief 4.5): each text field (WEAVE_FIELDS) and the stronger main thread
- * whole; then the threads and the connections, each element found by its id, field by
- * field (a thread's role is one field); an element one version lacks is added whole or
- * cut whole. With `questions`, the questions too, each read against the question
- * it is by the carry's rule (questionChanges), never their answers, which are the
- * director's words and no edit. No element is read with its evidence (withoutEvidence;
- * phase 4b, brief 1B, R6): a difference in a thread's or a connection's evidence is no
- * change, and an element added or cut is one without it.
+ * prints them (brief 4.5; phase 4b, piece 3, brief 3C): "from your notes" (WEAVE_FIELDS); then
+ * each angle, found by its id, field by field (its pitch), and each thread flipped into or out of
+ * it (R2): an id its list gains is a thread brought in, `flip: 'in'`, and an id it loses a thread
+ * left out, `flip: 'out'`, each one change at `angles[#a1].threads[#t6]` whose `after` is the
+ * thread's name, so a flip keeps its own author and the writer's order and own threads stay the
+ * writer's; then the threads and the connections, each element found by its id, field by field;
+ * an element one version lacks is added whole or cut whole. A thread one version lacks is no flip:
+ * a thread added whole carries its place in the angle that tells it (`angle: {id, flip: 'in'}`,
+ * the picked angle first), so the thread and its place are one change, and a thread cut whole
+ * takes its places with it. With `questions`, the questions too, each read against the question
+ * it is by the carry's rule (questionChanges), never their answers, which are the director's
+ * words and no edit. The pick is no change (R1): it is the director's choice, which code keeps.
+ * No element is read with its evidence (withoutEvidence; phase 4b, brief 1B, R6): a difference in
+ * a thread's or a connection's evidence is no change, and an element added or cut is one without
+ * it.
  *
  * An id is read as the meeting's gate and the checks read it (lib/weave.js weaveIdOf), and
  * the elements under an id either version repeats (repeatedIds) pair in order (fix round
  * 1, finding 3): each change under such an id carries `repeatedId: true`, since no edit
- * can find its element by the id, and none is dropped.
+ * can find its element by the id, and none is dropped. An angle is the one exception: the first
+ * angle under a repeated id is the one the pick opens and the gate stores by that id (3B fix 7),
+ * so its changes carry no flag, and a later angle's do. A flip carries the flag under a thread's
+ * repeated id, or its angle's.
  *
  * @param {Object} before
  * @param {Object} after
  * @param {Object} [options]
  * @param {boolean} [options.questions] - read the questions as well (the marks do)
- * @returns {Array<{scope: string, at: Object[], before: *, after: *, repeatedId?: true}>}
+ * @returns {Array<{scope: string, at: Object[], before: *, after: *, repeatedId?: true, flip?: string, angle?: Object}>}
  */
 function weaveEditsBetween(before, after, { questions = false } = {}) {
   if (!isObj(before) || !isObj(after)) return [];
@@ -1499,18 +1610,60 @@ function weaveEditsBetween(before, after, { questions = false } = {}) {
   const change = (scope, at, b, a, extra = {}) => out.push({
     scope, at, before: b === undefined ? null : b, after: a === undefined ? null : a, ...extra
   });
-  [...WEAVE_FIELDS, 'strongerMainThread'].forEach((field) => {
+  WEAVE_FIELDS.forEach((field) => {
     if (!same(before[field], after[field])) change(field, [{ key: field }], before[field], after[field]);
   });
+  const threadsBefore = elementsById(before.threads);
+  const threadsAfter = elementsById(after.threads);
+  const heldIn = (threads, id) => threads.list.some((entry) => entry.id === id);
+  const threadRepeated = (id) => threadsBefore.repeated.has(id) || threadsAfter.repeated.has(id);
+  const anglesBefore = elementsById(before.angles);
+  const anglesAfter = elementsById(after.angles);
+  // An angle under an id the writer repeated is found as the pick finds it, the first under the
+  // id (lib/weave.js pickedAngleOf; 3B fix 7), so a change to that angle is the director's to
+  // make; a change to a later angle under the id is one no edit could find.
+  const angleFlag = (id, key) => ((anglesBefore.repeated.has(id) || anglesAfter.repeated.has(id)) && !key.startsWith('0:') ? { repeatedId: true } : {});
+  anglesAfter.list.forEach(({ id, key, element, index }) => {
+    const at = [{ key: 'angles' }, { index, match: { id } }];
+    const prior = anglesBefore.map.get(key);
+    if (!prior) {
+      change('angles', at, null, element, angleFlag(id, key));
+      return;
+    }
+    unionKeys(prior, element).filter((field) => field !== ANGLE_THREADS).forEach((field) => {
+      if (!same(prior[field], element[field])) change('angles', [...at, { key: field }], prior[field], element[field], angleFlag(id, key));
+    });
+    const was = angleThreadIds(prior);
+    const now = angleThreadIds(element);
+    const flip = (threadId, way, place) => {
+      const thread = threadsAfter.list.find((entry) => entry.id === threadId).element;
+      change('angles', [...at, { key: ANGLE_THREADS }, { index: place, match: { id: threadId } }], null, threadLabelOf(thread), {
+        flip: way, ...((angleFlag(id, key).repeatedId || threadRepeated(threadId)) && { repeatedId: true })
+      });
+    };
+    const both = (threadId) => heldIn(threadsBefore, threadId) && heldIn(threadsAfter, threadId);
+    now.forEach((threadId, place) => { if (!was.includes(threadId) && both(threadId)) flip(threadId, 'in', place); });
+    was.forEach((threadId) => { if (!now.includes(threadId) && both(threadId)) flip(threadId, 'out', null); });
+  });
+  anglesBefore.list.forEach(({ id, key, element }) => {
+    if (!anglesAfter.map.has(key)) change('angles', [{ key: 'angles' }, { index: null, match: { id } }], element, null, angleFlag(id, key));
+  });
+  /** The angle a thread added whole is told in, the picked angle first, as the place it was added to. */
+  const homeOf = (threadId) => {
+    const picked = pickedAngleOf(after);
+    const angles = [picked, ...(Array.isArray(after.angles) ? after.angles : [])];
+    const home = angles.find((angle) => isObj(angle) && angleThreadIds(angle).includes(threadId));
+    return home && weaveIdOf(home) ? { angle: { id: weaveIdOf(home), flip: 'in' } } : {};
+  };
   ['threads', 'connections'].forEach((collection) => {
-    const b = elementsById(before[collection]);
-    const a = elementsById(after[collection]);
+    const b = collection === 'threads' ? threadsBefore : elementsById(before[collection]);
+    const a = collection === 'threads' ? threadsAfter : elementsById(after[collection]);
     const flag = (id) => (b.repeated.has(id) || a.repeated.has(id) ? { repeatedId: true } : {});
     a.list.forEach(({ id, key, element, index }) => {
       const at = [{ key: collection }, { index, match: { id } }];
       const prior = b.map.get(key);
       if (!prior) {
-        change(collection, at, null, withoutEvidence(element), flag(id));
+        change(collection, at, null, withoutEvidence(element), { ...flag(id), ...(collection === 'threads' && homeOf(id)) });
         return;
       }
       const p = withoutEvidence(prior);
@@ -1571,11 +1724,20 @@ function wholeElementAsLeft(edit, shown, left) {
   const id = weaveIdOf(step.match);
   const now = elementsUnder(left, collection, id);
   const then = elementsUnder(shown, collection, id);
+  if (!id || now.length !== 1 || then.length !== 1) return null;
+  // Piece 3 (R2): a thread the director added keeps its place in the angle they added it to, in
+  // or left out as they now leave it there.
+  const membership = membershipOf(edit);
+  const tells = membership ? angleTells(left, membership.angleId, membership.threadId) : null;
+  const flip = tells === null ? (membership && membership.flip) : (tells ? 'in' : 'out');
   // Phase 4b (brief 1B; R6): read without the evidence, which a pass may have given the
   // element since; the element as the director left it is theirs, its evidence never.
-  if (!id || now.length !== 1 || then.length !== 1 || same(withoutEvidence(now[0].element), withoutEvidence(then[0].element))) return null;
+  if (same(withoutEvidence(now[0].element), withoutEvidence(then[0].element)) && (!membership || flip === membership.flip)) return null;
   const at = [{ key: collection }, { index: now[0].index, match: { id } }];
-  return { ...edit, at, path: pathOf(at), after: clone(withoutEvidence(now[0].element)) };
+  return {
+    ...edit, at, path: pathOf(at), after: clone(withoutEvidence(now[0].element)),
+    ...(membership && { angle: { ...edit.angle, flip } })
+  };
 }
 
 /**
@@ -1625,8 +1787,10 @@ function withPlaceAsShown(weave, shown, steps) {
  * last look (an approve, then back to the meeting; a round whose rework did not run), the
  * writer's last weave can hold the director's own earlier line where the meeting showed a
  * later edit of theirs, and read against it, setting that place back to what it holds was
- * no change: a role or a field set again. Read against what the meeting showed, every change the director makes at the place
- * of a standing edit is theirs, whether or not a pass ran since.
+ * no change: a field, or a thread's place in an angle, set again. Read against what the meeting
+ * showed, every change the director makes at the place of a standing edit is theirs, whether or
+ * not a pass ran since. A flip, and a thread the director added, read the thread's place in its
+ * angle as the meeting showed it (withMembershipAsShown; piece 3, R2).
  *
  * @param {Object} baseline - the writer's last weave
  * @param {Object[]} edits - the meeting's standing edits so far
@@ -1635,14 +1799,57 @@ function withPlaceAsShown(weave, shown, steps) {
  */
 function withShownEdits(baseline, edits, shown) {
   if (!isObj(shown)) return baseline;
-  return edits.filter((e) => editCarried(shown, e)).reduce((weave, e) => withPlaceAsShown(weave, shown, stepsOf(e)), baseline);
+  return edits.filter((e) => editCarried(shown, e)).reduce((weave, e) => {
+    const placed = isFlip(e) ? weave : withPlaceAsShown(weave, shown, stepsOf(e));
+    const membership = membershipOf(e);
+    return membership ? withMembershipAsShown(placed, shown, membership) : placed;
+  }, baseline);
+}
+
+/**
+ * A weave with a thread's place in an angle as `shown` holds it (piece 3, R2): told there, or left
+ * out, as `shown`'s angle under that id has it; the weave as it is when either holds no such angle.
+ *
+ * @param {Object} weave
+ * @param {Object} shown
+ * @param {{angleId: string, threadId: string}} membership
+ * @returns {Object}
+ */
+function withMembershipAsShown(weave, shown, { angleId, threadId }) {
+  const shownTells = angleTells(shown, angleId, threadId);
+  const tells = angleTells(weave, angleId, threadId);
+  if (shownTells === null || tells === null || shownTells === tells) return weave;
+  const angles = weave.angles.map((angle) => (angle === angleUnder(weave, angleId) ? tellingOrNot(angle, threadId, shownTells) : angle));
+  return { ...weave, angles };
+}
+
+/** An angle with a thread told, after its own threads, or left out of it. */
+function tellingOrNot(angle, threadId, tell) {
+  const ids = Array.isArray(angle[ANGLE_THREADS]) ? angle[ANGLE_THREADS] : [];
+  const kept = ids.filter((id) => (typeof id === 'string' ? id.trim() : id) !== threadId);
+  return { ...angle, [ANGLE_THREADS]: tell ? [...kept, threadId] : kept };
+}
+
+/**
+ * A flip with the thread's name as `weave` holds it (piece 3, R2): the name rides on the flip
+ * only for the lines that name it, so a name the director rewrote since is the one those lines
+ * print. Any other edit, or a flip whose thread the weave does not hold, as it is.
+ */
+function flipNamedIn(edit, weave) {
+  const flip = flipOf(edit);
+  if (!flip) return edit;
+  const held = elementsUnder(weave, 'threads', flip.threadId);
+  if (held.length === 0) return edit;
+  const name = threadLabelOf(held[0].element);
+  return name === edit.after ? edit : { ...edit, after: name };
 }
 
 /**
  * The director's edits at the story meeting after an approve, a reweave or a send-back
  * (brief 4.5; K3 of the plan review): the meeting's edits stand past approve, so each of
  * the three actions makes them, against the writer's last weave (`baseline`).
- * - A whole element the director put in (a thread or a connection they added)
+ * - A whole element the director put in (a thread or a connection they added; a thread with
+ *   its place in the angle they added it to, which their flip of it out of that angle changes)
  *   stays one edit under its id when they change part of it, its `after` the element as
  *   they left it now (fix round 1, finding 1). The baseline holds the element once a pass
  *   has kept it, so the change is never split into a field edit against it: the rest of
@@ -1658,7 +1865,10 @@ function withShownEdits(baseline, edits, shown) {
  * is never given a second id. At each place a standing edit is carried in the weave the
  * meeting showed, it reads as the meeting showed it (withShownEdits; brief 4.5c and its
  * review, finding 2), so a change there is the director's whether or not a pass ran since:
- * setting a role or a field the meeting showed as their edit back to the writer's is an edit.
+ * setting a field, or a thread's place in an angle, that the meeting showed as their edit back
+ * to the writer's is an edit. A thread flipped into or out of an angle is covered by a standing
+ * flip of that thread in that angle, or by the edit of a thread the director added to that angle
+ * (piece 3, R2), so each flip keeps its author and its id at every later look.
  *
  * Every edit finds its element by its id, so a difference under an id the weave repeats
  * (weaveEditsBetween's `repeatedId`) can be no edit (fix round 1, finding 3). The meeting's
@@ -1683,15 +1893,21 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
     ? prior.edits
       .map((e) => wholeElementAsLeft(e, shown, left) || (editCarried(left, e) ? stillRemoved(e, [left]) : null))
       .filter(Boolean)
+      .map((e) => flipNamedIn(e, left))
     : [];
-  const covered = (at) => {
-    const place = pathOf(at);
-    return kept.some((e) => placeOf(e) === place || (isWholeElementEdit(e) && place.startsWith(`${placeOf(e)}.`)));
+  // A change at a standing edit's place, or inside a whole element the director put in, is part
+  // of it; so is a thread's place in an angle that a standing edit puts it in (R2): a flip, or a
+  // thread the director added to that angle.
+  const covered = (raw) => {
+    const place = pathOf(raw.at);
+    const where = membershipKeyOf(membershipOf(raw));
+    return kept.some((e) => placeOf(e) === place || (isWholeElementEdit(e) && place.startsWith(`${placeOf(e)}.`))
+      || (where !== null && membershipKeyOf(membershipOf(e)) === where));
   };
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const leftText = versionText(left);
   const base = isObj(baseline) ? withShownEdits(baseline, prior ? prior.edits : [], shown) : left;
-  const changes = weaveEditsBetween(base, left).filter((raw) => !covered(raw.at));
+  const changes = weaveEditsBetween(base, left).filter((raw) => !covered(raw));
   const unfindable = changes.find((raw) => raw.repeatedId);
   if (unfindable) {
     throw new Error(`standingAtMeeting: the director's version changes ${editWhere(unfindable)}, under an id the weave repeats, so no edit could find that element by its id. The meeting's gate (lib/meeting.js directorWeaveProblems) refuses such a change first.`);
@@ -1702,12 +1918,15 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
 }
 
 /**
- * The director's share of the weave, read from their standing edits (brief 4.5), for the
- * code checks, which read only the writer's text (lib/weave.js weaveFindings): each map
- * from what the director changed to the id of the edit:
+ * The director's share of the weave, read from their standing edits (brief 4.5; phase 4b, piece 3,
+ * brief 3C), for the code checks, which read only the writer's text (lib/weave.js weaveFindings),
+ * the writer's page (lib/weave.js writersShareOf) and the settled weave's marks: each map from
+ * what the director changed to the id of the edit:
+ * - `fields`: a text field of the weave they rewrote (`fromYourNotes`);
+ * - `angleFields`: a line of an angle's pitch they rewrote, as `a1.story`;
+ * - `flippedIn` and `flippedOut`: a thread they brought into an angle or left out of it, as
+ *   `a1.t6` (R2);
  * - `addedThreads`: a thread they added, by its id;
- * - `reroledThreads`: a thread whose role they changed;
- * - `fields`: a text field of the weave they rewrote (`story`, `fromYourNotes`, ...);
  * - `threadFields`: a field of a thread they rewrote, as `t3.line`;
  * - `addedConnections`: a connection they added, by its id;
  * - `connectionFields`: a field of a connection they rewrote, as `c1.line` (phase 4b fix
@@ -1721,22 +1940,31 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
  *
  * @param {Object[]|null} edits - the standing edits the weave carries
  * @param {Object|null} [weave] - the weave they are carried in
- * @returns {{addedThreads: Object, reroledThreads: Object, fields: Object, threadFields: Object,
- *            addedConnections: Object, connectionFields: Object, threadIndexes?: Object<string, number[]>}}
+ * @returns {{fields: Object, angleFields: Object, flippedIn: Object, flippedOut: Object, addedThreads: Object,
+ *            threadFields: Object, addedConnections: Object, connectionFields: Object, threadIndexes?: Object<string, number[]>}}
  */
 function weaveDirectorsShare(edits, weave = null) {
-  const share = { addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {} };
+  const share = { fields: {}, angleFields: {}, flippedIn: {}, flippedOut: {}, addedThreads: {}, threadFields: {}, addedConnections: {}, connectionFields: {} };
   const threadIndexes = isWeave(weave) ? {} : null;
   (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).forEach((e) => {
     const steps = stepsOf(e);
     const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
-    if (steps.length === 1 && (WEAVE_FIELDS.includes(head) || head === 'strongerMainThread')) {
+    if (steps.length === 1 && WEAVE_FIELDS.includes(head)) {
       share.fields[head] = e.id;
       return;
     }
-    if (!['threads', 'connections'].includes(head) || !isElementStep(steps[1]) || !steps[1].match || steps[1].match.id == null) return;
+    const flip = flipOf(e);
+    if (flip) {
+      (flip.flip === 'in' ? share.flippedIn : share.flippedOut)[`${flip.angleId}.${flip.threadId}`] = e.id;
+      return;
+    }
+    if (!['angles', 'threads', 'connections'].includes(head) || !isElementStep(steps[1]) || !steps[1].match || steps[1].match.id == null) return;
     const id = String(steps[1].match.id);
     const added = !isCut(e) && (e.before === null || e.before === undefined);
+    if (head === 'angles') {
+      if (steps.length === 3 && 'key' in steps[2]) share.angleFields[`${id}.${steps[2].key}`] = e.id;
+      return;
+    }
     if (head === 'connections') {
       if (steps.length === 2) {
         if (added) share.addedConnections[id] = e.id;
@@ -1757,9 +1985,7 @@ function weaveDirectorsShare(edits, weave = null) {
       if (added) share.addedThreads[id] = e.id;
       return;
     }
-    const field = steps[2].key;
-    if (field === 'role') share.reroledThreads[id] = e.id;
-    else share.threadFields[`${id}.${field}`] = e.id;
+    share.threadFields[`${id}.${steps[2].key}`] = e.id;
   });
   if (threadIndexes) share.threadIndexes = threadIndexes;
   return share;
@@ -1774,9 +2000,11 @@ function weaveDirectorsShare(edits, weave = null) {
  * (brief 4.5c). The director's lines code kept and their answers are the same on both sides,
  * so they carry no mark. A mark under an id one of the two repeats
  * says so (`repeatedId`, fix round 1, finding 3): its place names more than one element. A
- * mark of a thread, a connection or a question the round took out whole carries the element
- * as `from` held it (`element`; brief 4.14a), so the meeting reads it by its words and its
- * role or kind, the element under a repeated id by its place under the id.
+ * mark of an angle, a thread, a connection or a question the round took out whole carries the
+ * element as `from` held it (`element`; brief 4.14a), so the meeting reads it by its words and a
+ * question by its kind, the element under a repeated id by its place under the id. A thread the round
+ * flipped into or out of an angle carries the flip (`flip`; piece 3, R2), its `after` the thread's
+ * name; an angle reads by its pitch, without the ids of its threads (weaveReportText).
  *
  * @param {Object} from - the weave as the director left it, which the round's rework started from
  * @param {Object} weave - the weave the round's passes left
@@ -1786,9 +2014,10 @@ function weaveMarks(from, weave) {
   return weaveEditsBetween(from, weave, { questions: true }).map((change) => ({
     path: pathOf(change.at),
     where: editWhere(change),
-    before: editValueText(change.before),
-    after: editValueText(change.after),
+    before: weaveReportText(change, change.before),
+    after: weaveReportText(change, change.after),
     ...(change.repeatedId && { repeatedId: true }),
+    ...(change.flip && { flip: change.flip }),
     ...(change.at.length === 2 && isCut(change) && isObj(change.before) && { element: clone(change.before) })
   }));
 }
@@ -1854,6 +2083,9 @@ function stepWords(steps) {
  */
 function editWhere(edit) {
   if (isObj(edit) && edit.scope === MAP_SCOPE) return mapEditWhere(edit);
+  // Piece 3 (R2): a thread flipped into or out of an angle, by the angle and the thread.
+  const flip = flipOf(edit);
+  if (flip) return `angle "${flip.angleId}", thread "${flip.threadId}", ${FLIP_WORDS[flip.flip]}`;
   const steps = stepsOf(edit);
   const value = isCut(edit) ? edit.before : edit.after;
   const parts = [];
@@ -1881,8 +2113,8 @@ function editWhere(edit) {
   } else if (head === 'financialTracker') {
     parts.push('financial tracker', ...stepWords(steps.slice(1)).map((w) => w.replace(/^entries /, 'entry ')));
   } else if (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, head) && isElementStep(steps[1])) {
-    // The weave (brief 4.5): `thread "t3", role`; a whole thread the director added is
-    // marked added.
+    // The weave (brief 4.5): `thread "t3", line`, `angle "a1", story`; a whole thread the director
+    // added is marked added.
     parts.push(`${WEAVE_ELEMENTS[head]} ${elementLabel(steps[1])}`, ...stepWords(steps.slice(2)));
     if (steps.length === 2 && (edit.before === null || edit.before === undefined) && !isCut(edit)) parts.push('added');
   } else if (head) {
@@ -1927,6 +2159,12 @@ function formatEditLines(edits) {
     // place; its own text is the writer's.
     if (e.scope === MAP_SCOPE && isMove(e)) return e.from === MAP_NONE ? `${e.id} (${editWhere(e)}): ${valueLine(e.after)}` : `${e.id} (${editWhere(e)})`;
     if (isMove(e)) return moveLine(e);
+    // Piece 3 (R2): a thread the director added names the angle they put it in, or left it out of.
+    const home = !isFlip(e) ? membershipOf(e) : null;
+    if (home) {
+      const place = `${editWhere(e)} ${home.flip === 'in' ? 'in' : 'and left out of'} angle "${home.angleId}"`;
+      return `${e.id} (${place}): ${valueLine(e.after)}`;
+    }
     return [
       `${e.id} (${editWhere(e)}): ${valueLine(isCut(e) ? e.before : e.after)}`,
       ...(Array.isArray(e.removed) ? e.removed : []).map((sentence) => `  removed: "${String(sentence).trim()}"`)
@@ -2548,10 +2786,11 @@ function mapReportText(edit, value, maps = []) {
  * A value of an edit on the weave as the report gives it to the meeting's page, the weave's
  * counterpart of mapReportText (fix round 4; spec 2026-10-05 sections 4.1 and 9: the evidence
  * stays behind the fold and the tags off the page): a thread or a connection whole without its
- * evidence, which is never the director's (R6), each other field as editValueText reads it, so
- * the meeting reads the element by its words and a thread's role by its label
- * (console/checkpoint-view-logic.js meetingWordsOf). Any other value, and every edit that is not on
- * the weave's threads, connections or questions, as editValueText reads it.
+ * evidence, which is never the director's (R6), an angle whole without the ids of its threads
+ * (piece 3, brief 3C), each other field as editValueText reads it, so the meeting reads the
+ * element by its words (console/checkpoint-view-logic.js meetingWordsOf); a flip's value is the
+ * thread's name. Any other value, and every edit that is not on the weave's angles, threads,
+ * connections or questions, as editValueText reads it.
  *
  * @param {Object} edit
  * @param {*} value - a value of the edit, or of the element it is about in a version
@@ -2560,6 +2799,9 @@ function mapReportText(edit, value, maps = []) {
 function weaveReportText(edit, value) {
   const steps = stepsOf(edit);
   const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
+  // Piece 3 (brief 3C): an angle whole by its pitch, without the ids of its threads, which the
+  // meeting never shows.
+  if (head === 'angles' && isObj(value)) return editValueText(without(value, ANGLE_THREADS));
   if (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, head) && isObj(value)) return editValueText(withoutEvidence(value));
   return editValueText(value);
 }
@@ -3645,6 +3887,44 @@ function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
   if (isMove(edit)) return restoreMove(edit, before, out);
+  // Piece 3 (R2): a flip goes back as that thread's place alone; a thread the director added goes
+  // back whole, then into its place in the angle.
+  const membership = membershipOf(edit);
+  if (isFlip(edit)) return restoreMembership(membership, before, out);
+  const written = restoreElement(edit, before, out, leavesOut);
+  return membership ? restoreMembership(membership, before, out) || written : written;
+}
+
+/**
+ * Put a thread back where an edit puts it in an angle (piece 3, R2), in `out`, changed in place:
+ * brought in, after the angle's own threads when its list lacks it, with the thread itself put back
+ * where it sat in `before` when the pass took it out of the weave, so the angle names a thread the
+ * weave holds; or left out, off the angle's list. The pass's own order and its own threads stay.
+ *
+ * @param {{angleId: string, threadId: string, flip: ('in'|'out')}} membership
+ * @param {Object} before - the version the pass started from
+ * @param {Object} out - the pass's output, changed in place
+ * @returns {boolean} whether the place now holds as the edit puts it
+ */
+function restoreMembership({ angleId, threadId, flip }, before, out) {
+  const angle = angleUnder(out, angleId);
+  if (!angle) return false;
+  const tells = angleThreadIds(angle).includes(threadId);
+  if (flip === 'out') {
+    if (tells) Object.assign(angle, tellingOrNot(angle, threadId, false));
+    return true;
+  }
+  if (elementsUnder(out, 'threads', threadId).length === 0) {
+    const sat = elementsUnder(before, 'threads', threadId)[0];
+    if (!sat || !Array.isArray(out.threads)) return false;
+    out.threads.splice(Math.min(sat.index, out.threads.length), 0, clone(sat.element));
+  }
+  if (!tells) Object.assign(angle, tellingOrNot(angle, threadId, true));
+  return true;
+}
+
+/** The element an edit is about, put back as restoreEdit sets out, with the director's value at its field. */
+function restoreElement(edit, before, out, leavesOut) {
   const place = placeCarrying(before, edit);
   if (!place) return false;
   let cur = out;
@@ -3956,7 +4236,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   const entry = (e, fields) => ({
     id: e.id, scope: e.scope, where: editWhere(e), cut: false, removed: false, moved: false,
     director: '', became: null, pass, automatic, reason: why.get(e.id) || null, restored: false,
-    ...(isStrike(e) && { struck: true }), ...fields
+    ...(isStrike(e) && { struck: true }), ...(isFlip(e) && { flip: e.flip }), ...fields
   });
   // Phase 4b, brief 1D: a value of an edit the map's page makes on its beats or photos as the page
   // reads it, never by a tag (mapReportText); fix round 4: a thread or a connection of the weave

@@ -1182,7 +1182,10 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     const meeting = [...block('SETTLED_WEAVE').matchAll(/\b([A-Z]\d+)\b(?=[:\]])/g)].map((m) => m[1]);
     const map = [...block('HAND_EDITS').matchAll(/^(E\d+) \(/gm)].map((m) => m[1]);
     // Piece 3 (brief 3B): the threads print in the angle's order, the director's after its own.
-    expect(meeting).toEqual(['M1', 'M2', 'M3']);
+    // Brief 3C: the connection's line the director rewrote is marked too, so every change the map
+    // may name (meetingEditIdsOf) is on a line.
+    expect(meeting).toEqual(['M1', 'M2', 'M3', 'M4']);
+    expect(meeting).toEqual(meetingEditIdsOf(state));
     expect(map).toEqual(['E1']);
   });
 });

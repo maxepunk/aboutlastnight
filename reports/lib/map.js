@@ -70,7 +70,7 @@ const {
 } = require('./hand-edit-diff');
 // Brief 4.14a: a meeting change by its id in the meeting's own form, and by its place as the
 // meeting names the line.
-const { meetingChangeId } = require('./prompt-renderers/settled-weave');
+const { meetingChangeId, settledChangesOf } = require('./prompt-renderers/settled-weave');
 const { meetingChangePlace } = require('./meeting');
 // Phase 4b (brief 1D; R10): the evidence check, the story-terms check and a piece's shape, which
 // the weave and the map share.
@@ -239,7 +239,7 @@ function allBeats(map) {
  * - `addedBeats`: a beat they added, by its id;
  * - `broughtBackBeats`: a beat they brought back from left out into a section, by its id (fix
  *   round 4): its text is the writer's, so the checks read it as the writer's, and the page's count
- *   leaves it out, as the meeting's leaves out a thread the director re-roled;
+ *   leaves it out, as the meeting's leaves out the line of a thread the director brought into an angle;
  * - `beatFields`: a field of a beat they rewrote (`b3.move`, `b3.players`);
  * - `sections`: a section they added whole, by its slot; `sectionFields`: a section's field they
  *   rewrote (`lede.job`);
@@ -1322,18 +1322,20 @@ function mapConcerns(state) {
 }
 
 /**
- * The director's changes at the story meeting that the weave carries, in the meeting's order,
- * each `{id, place}` (brief 4.14a): its id in the meeting's own form, M and the edit's number,
- * as the settled weave marks it (lib/prompt-renderers/settled-weave.js meetingChangeId), and
- * where it sits as the meeting names the line (lib/meeting.js meetingChangePlace), such as
- * `the role of "Morgan paid Riley at the bar"`.
+ * The director's changes at the story meeting that the settled weave shows, in the meeting's
+ * order, each `{id, place}` (brief 4.14a): its id in the meeting's own form, M and the edit's
+ * number, as the settled weave marks it (lib/prompt-renderers/settled-weave.js meetingChangeId),
+ * and where it sits as the meeting names the line (lib/meeting.js meetingChangePlace), such as
+ * `the line "Morgan paid Riley at the bar"`. A change the settled weave does not show, such as a
+ * line of an angle the director did not send, stays with the meeting (settledChangesOf; piece 3,
+ * brief 3C), so the map names only a change whose id it can find on a line.
  *
  * @param {Object} state
  * @returns {Array<{id: string, place: string}>}
  */
 function meetingChangesOf(state) {
   const weave = state && state.weave;
-  return carriedEdits(state && state._weaveHandEdits, weave)
+  return settledChangesOf(weave, carriedEdits(state && state._weaveHandEdits, weave))
     .map((edit) => ({ id: meetingChangeId(edit.id), place: meetingChangePlace(edit, weave) }));
 }
 

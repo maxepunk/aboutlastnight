@@ -577,6 +577,9 @@
    * meetingView, which names its places as its page heads them (task 4.8, fix round 1).
    * - A beat the director struck on the map (brief 4.6) that a pass brought back or took out;
    *   after an automatic pass, whether code struck it again.
+   * - A thread the director brought into an angle's story or left out of it (`flip`; piece 3,
+   *   R2) that a pass flipped the other way; after a pass held to the edits, whether code put it
+   *   back (`options.story` names the story, by default "the story").
    * - A field or element an automatic pass changed: code put it back (`restored`), and
    *   the line says so; an entry from before FA says the pass should have kept it.
    * - One on a photo the article cannot print (`unprintable`, task 4.5e), which a pass took out of
@@ -606,6 +609,7 @@
    * @param {function(Object): string} [options.thing] - what a moved element is called; by default a
    *   sidebar entry is an entry and anything else a block
    * @param {string} [options.stillIn] - where text that came back still is: by default 'in the article'
+   * @param {function(Object): string} [options.story] - the story a flipped thread's entry is about
    * @returns {string}
    */
   function changedEditLine(entry, options) {
@@ -628,6 +632,18 @@
       if (!held) return struck + ' ' + why;
       if (became === null) return struck;
       return struck + (entry.restored === true ? ' It was struck again.' : ' It could not be struck again.');
+    }
+    // Piece 3 (R2): a thread the director brought into an angle's story, or left out of it, which a
+    // pass flipped the other way; `options.story` names that story (the meeting's open angle, or
+    // another angle by its name).
+    if (entry.flip === 'in' || entry.flip === 'out') {
+      var story = typeof o.story === 'function' ? o.story(entry) : 'the story';
+      var flipped = label + ': ' + by + (entry.flip === 'in'
+        ? ' left it out of ' + story + ', which you brought it into.'
+        : ' put it in ' + story + ', which you left it out of.');
+      if (!held) return flipped + ' ' + why;
+      if (entry.restored === true) return flipped + (entry.flip === 'in' ? ' It was put back in.' : ' It was left out again.');
+      return flipped + (entry.flip === 'in' ? ' It could not be put back in.' : ' It could not be left out again.');
     }
     if (entry.cut === true && asString(entry.tokenId)) {
       var putBack = label + ': ' + by + ' put back the ' + thing + ' you deleted.';
@@ -1399,7 +1415,7 @@
   var REPEATED_ID_HINT = 'The writer gave one id to more than one thread or connection, so the meeting cannot change those lines: a reweave with a note, or a send-back, gives each its own id.';
 
   /** Why Reweave is not offered, while it is not (the integrator's ruling 5). */
-  var REWEAVE_HINT = 'Reweave fits your changes and your note into the weave: change the weave or write a note first.';
+  var REWEAVE_HINT = 'Reweave fits your changes and your note into the angle: change the angle or one of its threads, or write a note first.';
 
   /** What a rollback costs: the general warning, and going back to the meeting or the map (R9; the map's, task 4.14b). */
   var ROLLBACK_WARNING = 'This will clear all data from this point forward.';
@@ -1816,16 +1832,19 @@
 
   /**
    * The changes between two weaves, one per place, as lib/hand-edit-diff.js
-   * weaveEditsBetween finds them (a test holds the two equal): each text field and the
-   * stronger main thread whole; each thread and connection found by its id, field by
-   * field, added whole or taken out whole. The questions are not
+   * weaveEditsBetween finds them (a test holds the two equal): "from your notes" whole; each
+   * angle found by its id, field by field (its pitch), and each thread flipped into or out of it
+   * (`field` its `threads`, with the `thread` and which way, `flip`; piece 3, R2), a thread the
+   * weave lacks on either side being no flip; each thread and connection found by its id, field
+   * by field, added whole or taken out whole. The pick is no change (R1). The questions are not
    * read: an answer is the director's words, no edit. Nor is the evidence under a line, the
    * writers' (phase 4b, brief 1B; R6). Each change under an id either weave repeats carries
-   * `repeatedId`, since no edit can find its element by the id.
+   * `repeatedId`, since no edit can find its element by the id, but a change to the first angle
+   * under a repeated id, the one the pick opens.
    *
    * @param {*} before
    * @param {*} after
-   * @returns {Array<{scope: string, id: (string|null), field: (string|null), repeatedId: boolean}>}
+   * @returns {Array<{scope: string, id: (string|null), field: (string|null), repeatedId: boolean, thread?: string, flip?: string}>}
    */
   function meetingWeaveChanges(before, after) {
     if (!isPlainObject(before) || !isPlainObject(after)) return [];
@@ -1833,12 +1852,45 @@
     var change = function (scope, id, field, repeatedId) {
       out.push({ scope: scope, id: id, field: field, repeatedId: repeatedId });
     };
-    WEAVE_TEXT_FIELDS.concat(['strongerMainThread']).forEach(function (field) {
+    WEAVE_TEXT_FIELDS.forEach(function (field) {
       if (!sameValue(before[field], after[field])) change(field, null, null, false);
     });
+    var threadsBefore = elementsById(before.threads);
+    var threadsAfter = elementsById(after.threads);
+    var heldIn = function (threads, id) { return threads.list.some(function (entry) { return entry.id === id; }); };
+    var anglesBefore = elementsById(before.angles);
+    var anglesAfter = elementsById(after.angles);
+    // The first angle under an id the writer repeated is the one the pick opens, so only a later
+    // one is out of the director's reach.
+    var angleRepeated = function (entry) {
+      return (anglesBefore.repeated.has(entry.id) || anglesAfter.repeated.has(entry.id)) && entry.key.indexOf('0:') !== 0;
+    };
+    anglesAfter.list.forEach(function (entry) {
+      var repeated = angleRepeated(entry);
+      var prior = anglesBefore.map.get(entry.key);
+      if (!prior) {
+        change('angles', entry.id, null, repeated);
+        return;
+      }
+      unionKeys(prior, entry.element).forEach(function (field) {
+        if (field !== 'threads' && !sameValue(prior[field], entry.element[field])) change('angles', entry.id, field, repeated);
+      });
+      var was = angleIdsUnique(prior);
+      var now = angleIdsUnique(entry.element);
+      var both = function (id) { return heldIn(threadsBefore, id) && heldIn(threadsAfter, id); };
+      var flip = function (threadId, way) {
+        var flipRepeated = repeated || threadsBefore.repeated.has(threadId) || threadsAfter.repeated.has(threadId);
+        out.push({ scope: 'angles', id: entry.id, field: 'threads', repeatedId: flipRepeated, thread: threadId, flip: way });
+      };
+      now.forEach(function (id) { if (was.indexOf(id) === -1 && both(id)) flip(id, 'in'); });
+      was.forEach(function (id) { if (now.indexOf(id) === -1 && both(id)) flip(id, 'out'); });
+    });
+    anglesBefore.list.forEach(function (entry) {
+      if (!anglesAfter.map.has(entry.key)) change('angles', entry.id, null, angleRepeated(entry));
+    });
     ['threads', 'connections'].forEach(function (collection) {
-      var b = elementsById(before[collection]);
-      var a = elementsById(after[collection]);
+      var b = collection === 'threads' ? threadsBefore : elementsById(before[collection]);
+      var a = collection === 'threads' ? threadsAfter : elementsById(after[collection]);
       var repeated = function (id) { return b.repeated.has(id) || a.repeated.has(id); };
       a.list.forEach(function (entry) {
         var prior = b.map.get(entry.key);
@@ -1859,6 +1911,13 @@
       });
     });
     return out;
+  }
+
+  /** The ids of the threads an angle tells, trimmed, each once, in its order. */
+  function angleIdsUnique(angle) {
+    var ids = [];
+    angleThreadIdsOf(angle).forEach(function (id) { if (ids.indexOf(id) === -1) ids.push(id); });
+    return ids;
   }
 
   /** What a value lacks against its shape's type, or null. */
@@ -1906,7 +1965,7 @@
    * line's key on the page. A copy of lib/hand-edit-diff.js WEAVE_ELEMENTS; a test holds the
    * two equal (task 4.5c).
    */
-  var ELEMENT_WORDS = { threads: 'thread', connections: 'connection', questions: 'question' };
+  var ELEMENT_WORDS = { angles: 'angle', threads: 'thread', connections: 'connection', questions: 'question' };
 
   /**
    * What the gate would refuse in the weave as the director left it, as one reason, or
@@ -1943,7 +2002,10 @@
     }
     var touched = shownWeave ? meetingWeaveChanges(shownWeave, left).filter(function (c) { return c.repeatedId; }) : [];
     if (touched.length > 0) {
-      return 'The writer gave more than one ' + ELEMENT_WORDS[touched[0].scope] + ' the id "' + touched[0].id + '", so the meeting cannot tell which of them you changed. Put them back as the meeting showed them: a reweave with a note, or a send-back, gives each its own id.';
+      // A thread flipped under an id the writer repeated names the threads (piece 3, brief 3C).
+      var first = touched[0];
+      var threadRepeat = first.flip && repeatedIdsOf(shownWeave.threads).indexOf(first.thread) !== -1;
+      return 'The writer gave more than one ' + (threadRepeat ? 'thread' : ELEMENT_WORDS[first.scope]) + ' the id "' + (threadRepeat ? first.thread : first.id) + '", so the meeting cannot tell which of them you changed. Put them back as the meeting showed them: a reweave with a note, or a send-back, gives each its own id.';
     }
     return meetingAngleSetProblem(left, shownWeave) || meetingPickProblem(left, shownWeave);
   }
@@ -2288,13 +2350,28 @@
   var LINE_ELEMENTS = { angles: 'angle', threads: 'thread', connections: 'connection', questions: 'question' };
 
   /**
+   * A thread flipped into or out of an angle, as lib/hand-edit-diff.js writes its path
+   * (`angles[#a1].threads[#t6]`; piece 3, R2): the angle's id and the thread's.
+   */
+  var FLIP_PATH = /^angles\[#([^\]]*)\]\.threads\[#([^\]]*)\]$/;
+
+  /**
+   * A flip's place as lib/hand-edit-diff.js editWhere writes it (`angle "a1", thread "t6",
+   * brought in`): the angle's id, the thread's, and which way it flipped.
+   */
+  var FLIP_PLACE = /^angle "([^"]*)", thread "([^"]*)", (brought in|left out)$/;
+
+  /**
    * The line on the page a place in the weave sits on (a path as lib/hand-edit-diff.js and
    * lib/weave.js weaveFindings write it: `fromYourNotes`, `angles[#a2]`, `threads[#t3].line`,
    * `connections[#c2]`): `fromYourNotes`, `angle:a2`, `thread:t3`, `connection:c2`,
    * `question:q1`, or null for a place no line shows. An angle's key is its card's, and the
-   * pitch's while the angle is open.
+   * pitch's while the angle is open. A thread flipped into or out of an angle sits on the
+   * thread's line, which the page shows in the story or left out (piece 3, R2).
    */
   function lineKeyOf(path) {
+    var flip = FLIP_PATH.exec(asString(path));
+    if (flip) return /^index-\d+$/.test(flip[2]) ? null : 'thread:' + flip[2];
     var m = /^([A-Za-z]+)(?:\[#([^\]]*)\])?/.exec(asString(path));
     if (!m) return null;
     if (m[2] === undefined) return LINE_FIELDS.indexOf(m[1]) !== -1 ? m[1] : null;
@@ -2302,9 +2379,9 @@
     return LINE_ELEMENTS[m[1]] + ':' + m[2];
   }
 
-  /** Whether a path names a whole thread, connection or question. */
+  /** Whether a path names a whole angle, thread, connection or question. */
   function isElementPath(path) {
-    return /^(threads|connections|questions)\[#[^\]]*\]$/.test(asString(path));
+    return /^(angles|threads|connections|questions)\[#[^\]]*\]$/.test(asString(path));
   }
 
   /** The field a path ends on inside an element (`line` in `threads[#t3].line`), or ''. */
@@ -2315,13 +2392,20 @@
 
   /**
    * The words of a value the weave's diff wrote as an element's fields (lib/hand-edit-diff.js
-   * editValueText: `id: t6; name: …; line: …; role: grounds-it`, or the stronger main thread's
-   * `thread: t2; reason: …`), each field by its key, or null for any other text. The fields are
-   * found by the keys a weave's elements carry, so a value that is plain text reads as itself.
+   * weaveReportText: `id: t6; name: …; line: …`, an angle's `id: a2; headline: …; gist: …`), each
+   * field by its key, or null for any other text. The fields are found by the keys a weave's
+   * elements carry, so a value that is plain text reads as itself.
    */
-  var ELEMENT_FIELD_KEYS = ['id', 'name', 'line', 'role', 'verdict', 'reason', 'joins', 'kind', 'about', 'question', 'changes', 'answer', 'thread'];
+  var ELEMENT_FIELD_KEYS = ['id', 'headline', 'gist', 'story', 'question', 'lands', 'ends', 'name', 'line', 'verdict', 'joins', 'kind', 'about', 'changes', 'answer', 'thread'];
   var ELEMENT_FIELD_SPLIT = new RegExp('; (?=(?:' + ELEMENT_FIELD_KEYS.join('|') + '): )');
-  var ELEMENT_FIELD_START = /^(?:id|thread): /;
+  var ELEMENT_FIELD_START = /^id: /;
+
+  /**
+   * How a place names a line of an angle's pitch (piece 3, brief 3C): as the pitch heads it, in a
+   * phrase after the angle (`The angle "…", why it lands`), and the card's one sentence as its card
+   * line.
+   */
+  var ANGLE_FIELD_WORDS = { headline: 'headline', gist: 'card line', story: 'story', question: 'question it carries', lands: 'why it lands', ends: 'where it ends up' };
 
   function elementFieldsOf(text) {
     var value = asString(text);
@@ -2353,18 +2437,18 @@
    * each question by what it is about, read from the weave as the director has it, then the
    * weave the meeting showed, then the elements the round's marks carry (one the round took
    * out). No line or label of the meeting names an element by its id: a place the diff names
-   * by an id (`thread "t3", role`), and a value it writes as an element's fields, read through
+   * by an id (`thread "t3", line`), and a value it writes as an element's fields, read through
    * these words.
    *
    * @param {Object} weave - the weave as the director has it
    * @param {Object|null} shown - the weave the meeting showed
    * @param {Array} marks - the round's marks (data.marks.marks)
    * @returns {{threadName: function(string): string, joinsText: function(*): string,
-   *            place: function(string|null, string): string, value: function(*): string,
-   *            fieldValue: function(string, *): string}}
+   *            place: function(string|null, string): string, storyOf: function(string): string,
+   *            value: function(*): string, fieldValue: function(string, *): string}}
    */
   function meetingWordsOf(weave, shown, marks) {
-    var elements = { threads: new Map(), connections: new Map(), questions: new Map() };
+    var elements = { angles: new Map(), threads: new Map(), connections: new Map(), questions: new Map() };
     var remember = function (collection, element) {
       var id = weaveIdOf(element);
       if (id && !elements[collection].has(id)) elements[collection].set(id, element);
@@ -2397,8 +2481,25 @@
      * `fields`, the element as a report entry wrote it (one a send-back took out, which no weave
      * the stop holds keeps).
      */
+    var openAngle = openAngleOf(weave);
+    /** An angle by its headline, or its card line, as the meeting shows its card. */
+    var angleName = function (id, fields) {
+      var angle = elements.angles.get(asString(id).trim());
+      var own = angle || fields || {};
+      return asString(own.headline).trim() || asString(own.gist).trim();
+    };
+    /** The story a thread is flipped into or out of: the open angle's, or another angle's by its name. */
+    var storyOf = function (angleId) {
+      if (openAngle && weaveIdOf(openAngle) === asString(angleId).trim()) return 'the story';
+      var name = angleName(angleId);
+      return name ? 'the story of ' + quoted(name) : 'the story of another angle';
+    };
     var elementPlace = function (word, id, fields) {
       var own = fields || {};
+      if (word === 'angle') {
+        var headline = angleName(id, own);
+        return headline ? 'The angle ' + quoted(headline) : 'An angle';
+      }
       if (word === 'thread') {
         var name = threadName(id) || asString(own.name).trim() || asString(own.line).trim();
         return name ? 'Thread ' + quoted(name) : 'A thread';
@@ -2415,7 +2516,7 @@
     var value = function (text) {
       var fields = elementFieldsOf(text);
       if (!fields) return asString(text);
-      if (hasOwn(fields, 'thread')) return [threadName(fields.thread), asString(fields.reason)].filter(Boolean).join(': ');
+      if (hasOwn(fields, 'headline') || hasOwn(fields, 'gist')) return asString(fields.headline) || asString(fields.gist);
       if (hasOwn(fields, 'joins')) return asString(fields.line);
       if (hasOwn(fields, 'question')) return asString(fields.question);
       var said = [asString(fields.name), asString(fields.line)].filter(Boolean).join(': ');
@@ -2427,21 +2528,34 @@
       joinsText: function (joins) { return namesOf(joins, true); },
       /**
        * A place in the weave as the meeting names it: one of the weave's lines by its heading
-       * (MEETING_LINE_LABELS); an element by its words (`Thread "The envelope", role`), from
-       * the diff's `where` (`thread "t3", role`), read from `elementText` (a report entry's
+       * (MEETING_LINE_LABELS); an element by its words (`Thread "The envelope", line`), from
+       * the diff's `where` (`thread "t3", line`), read from `elementText` (a report entry's
        * element, as the diff wrote it) when no weave holds it; anything else by the diff's words.
        */
       place: function (field, where, elementText) {
         if (field !== null && hasOwn(MEETING_LINE_LABELS, field)) return MEETING_LINE_LABELS[field];
+        var flip = FLIP_PLACE.exec(asString(where));
+        if (flip) {
+          var flipped = threadName(flip[2]) || asString(elementText).trim();
+          var thread = flipped ? 'Thread ' + quoted(flipped) : 'A thread';
+          return storyOf(flip[1]) === 'the story' ? thread : thread + ', in ' + storyOf(flip[1]);
+        }
         var m = ELEMENT_PLACE.exec(asString(where));
         if (!m) return capitalized(asString(where));
-        return elementPlace(m[1], m[2], elementFieldsOf(elementText)) + (m[3] ? ', ' + m[3] : '');
+        var rest = m[1] === 'angle' && hasOwn(ANGLE_FIELD_WORDS, asString(m[3])) ? ANGLE_FIELD_WORDS[m[3]] : m[3];
+        return elementPlace(m[1], m[2], elementFieldsOf(elementText)) + (rest ? ', ' + rest : '');
       },
+      /** The story a thread was flipped into or out of, by the angle's id: the open angle's is "the story". */
+      storyOf: storyOf,
       /** A value as the meeting names it: an element by its words, any other text as it is. */
       value: value,
-      /** A field's value as a mark names it: the threads a connection joins by name; anything else as `value` names it. */
+      /**
+       * A field's value as a mark names it: the threads a connection joins by name, and the thread
+       * a question sits beside by its name; anything else as `value` names it.
+       */
       fieldValue: function (field, text) {
         if (field === 'joins') return namesOf(asString(text).split(' / ').filter(Boolean), false);
+        if (field === 'thread') return threadName(text) || (asString(text).trim() ? 'a thread the weave does not hold' : '');
         return value(text);
       }
     };
@@ -2466,7 +2580,11 @@
         return words.place(asString(entry.scope), asString(entry.where) || asString(entry.scope), asString(entry.director) || asString(entry.became));
       },
       valueText: words.value,
-      stillIn: 'in the weave'
+      stillIn: 'in the weave',
+      story: function (entry) {
+        var flip = FLIP_PLACE.exec(asString(entry.where));
+        return flip ? words.storyOf(flip[1]) : 'the story';
+      }
     };
   }
 
@@ -2498,9 +2616,14 @@
 
   /** The line beside a line of the page that the round's passes changed: what it was, as the meeting names it. */
   function markLine(mark, words) {
+    var flip = FLIP_PATH.exec(asString(mark.path));
+    if (flip && (mark.flip === 'in' || mark.flip === 'out')) {
+      return (mark.flip === 'in' ? 'Brought into ' : 'Left out of ') + words.storyOf(flip[1]) + ' this round.';
+    }
     var field = elementFieldOf(mark.path);
     if (field === VERDICT_FIELD) return verdictMarkLine(mark);
-    var which = field ? ' (' + field + ')' : '';
+    var angleField = /^angles\[/.test(asString(mark.path)) && hasOwn(ANGLE_FIELD_WORDS, field);
+    var which = field ? ' (' + (angleField ? ANGLE_FIELD_WORDS[field] : field) + ')' : '';
     var before = asString(mark.before);
     if (!before) return isElementPath(mark.path) ? 'New this round.' : 'Added this round' + which + '.';
     var was = words.fieldValue(field, before);
@@ -2510,8 +2633,8 @@
 
   /**
    * What an element the round took out whole held, as the meeting shows it (brief 4.14a; phase
-   * 4b, brief 1B): a thread by its line, a connection by its line, a question by its
-   * words and its kind; the place before it names the element (markPlace). Read from the element
+   * 4b, brief 1B): an angle by its headline (piece 3), a thread by its line, a connection by its
+   * line, a question by its words and its kind; the place before it names the element (markPlace). Read from the element
    * the mark carries (lib/hand-edit-diff.js weaveMarks); null for a mark that carries none.
    */
   function takenOutWords(mark) {
@@ -2523,6 +2646,7 @@
       var said = parts.filter(Boolean).join(', ');
       return said ? ' (' + said + ')' : '';
     };
+    if (collection === 'angles') return quoted(asString(element.headline) || asString(element.gist));
     if (collection === 'threads') return quoted(element.line);
     if (collection === 'connections') return quoted(element.line);
     var questionKind = asString(element.kind);
@@ -2546,7 +2670,7 @@
    *
    * @param {Object} mark - the round's mark that took the element out
    * @param {Array<{entry: Object, field: string}>} edits - the report's entries for the
-   *   director's edits of the element's fields, in the report's order, each with its field (`role`)
+   *   director's edits of the element's fields, in the report's order, each with its field (`line`)
    * @param {Object} words - meetingWordsOf's
    */
   function takenOutWithEditLine(mark, edits, words) {
@@ -2726,16 +2850,20 @@
    */
   var WHOLE_EDIT_WORDS = /(^|, )(added|cut)$/;
 
-  /** An element of the weave in a report entry's place, as editWhere writes it: `thread "t3", role`. */
+  /** An element of the weave in a report entry's place, as editWhere writes it: `thread "t3", line`, `angle "a1", story`. */
   var ELEMENT_PLACE = new RegExp('^(' + Object.keys(ELEMENT_WORDS).map(function (k) { return ELEMENT_WORDS[k]; }).join('|') + ') "([^"]*)"(?:, (.*))?$');
 
   /**
    * The line of the meeting's page an entry of the hand-edit report is on (lineKeyOf's key), and
    * the field of that line the edit is, '' for the whole line or element; read from the entry's
-   * place as editWhere writes it (`story`, `thread "t3", role`, `thread "t6", added`).
+   * place as editWhere writes it (`fromYourNotes`, `angle "a1", story`, `thread "t3", line`,
+   * `thread "t6", added`). A flip (`angle "a1", thread "t6", brought in`) is on its thread's line,
+   * as its mark is (lineKeyOf), its field the angle's `threads`.
    */
   function entryLineOf(entry) {
     var where = asString(entry.where);
+    var flip = FLIP_PLACE.exec(where);
+    if (flip) return { key: 'thread:' + flip[2], field: 'threads' };
     var m = ELEMENT_PLACE.exec(where);
     var parts = where.split(', ');
     var rest = m ? asString(m[3]) : parts.slice(1).join(', ');
@@ -2815,7 +2943,7 @@
    * - Several marks about one entry, such as two fields of a thread the director added: the
    *   entry's line stands in the first mark's place, and the other marks show nothing.
    * - A mark that took an element out whole, about the entries for its fields, such as the
-   *   line and the role the director gave a thread a send-back took out: one line says the
+   *   line and the name the director gave a thread a send-back took out: one line says the
    *   element went and names each field (takenOutWithEditLine; brief 4.10d).
    * A mark of a field the page never prints, a connection's kind, is no line (isUnprintedMark).
    * Every place is named in the meeting's words, never by an id (meetingWordsOf; phase 4b,
@@ -3612,9 +3740,10 @@
   /**
    * The words a change to the weave names its source by (task 4.14b): a change of the
    * director's at the meeting by the place the meeting names its line by, from the payload's
-   * `meetingChanges` (`{id, place}`: the meeting's changes the weave carries), as "Your change
-   * to the role of 'Morgan paid Riley at the bar'"; the meeting's note by its name; and any
-   * other source as a change at the meeting. Never by an id: the meeting shows none.
+   * `meetingChanges` (`{id, place}`: the meeting's changes the settled story shows), as "Your
+   * change to why it lands" or "Your change to whether 'The letter' is in the story"; the
+   * meeting's note by its name; and any other source as a change at the meeting. Never by an id:
+   * the meeting shows none.
    *
    * @param {*} source - the change's `source`
    * @param {*} meetingChanges - data.meetingChanges

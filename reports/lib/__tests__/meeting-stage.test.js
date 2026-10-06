@@ -473,7 +473,7 @@ describe("4.5b: a writer's repeat under the id of a thread the director added", 
     });
     const fixed = { ...pass, ...(await reviseArcs(pass, cfg(sdk))) };
     expect(sdk.calls[0].prompt).toContain(`WEAVE CHECK FAILURES:\n  - ${checked._arcValidation.failures[0].message}`);
-    expect(sdk.calls[0].prompt).toMatch(/E3 \(thread "t6", added\)/);
+    expect(sdk.calls[0].prompt).toMatch(/E3 \(thread "t6", added in angle "a1"\)/);
 
     const rechecked = validateArcStructure(fixed, {});
     expect(rechecked._arcValidation.failures).toEqual([]);

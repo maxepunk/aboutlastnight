@@ -1048,7 +1048,9 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // automatic pass and a reweave keep every change of the director's (code holds both to
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its
   // note needs it, saying why.
-  const WEAVE_EDITS_FINAL = 'the text they wrote stays exactly as written, each role they gave stays, each thread they added stays in the weave, and each removed sentence stays out of it.';
+  // Piece 3 (brief 3C, R2): the roles went; each thread the director flipped keeps its place in
+  // that angle, and each thread they added stays where they put it.
+  const WEAVE_EDITS_FINAL = 'the text they wrote stays exactly as written, each thread they brought into an angle stays in it and each they left out of one stays out, each thread they added stays in the weave where they put it, and each removed sentence stays out of it.';
   // Brief 4.6: the map's edits have their own wording, by the note's presence as the
   // outline's had: an automatic pass keeps every edit of the director's (code holds it to
   // them, lib/hand-edit-diff.js settleEdits), and a send-back may change one only where its

@@ -1061,7 +1061,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     const text = context({ meetingRound: 'reweave', humanFeedback: null, validationResults: null });
     const block = text.slice(text.indexOf('<HAND_EDITS>'), text.indexOf('</HAND_EDITS>'));
     expect(block).toContain("The director's changes to the weave at the story meeting.");
-    expect(block).toContain('each role they gave stays, each thread they added stays in the weave, and each removed sentence stays out of it.');
+    expect(block).toContain('each thread they brought into an angle stays in it and each they left out of one stays out, each thread they added stays in the weave where they put it, and each removed sentence stays out of it.');
     expect(block).toContain('E1 (thread "t3", role): "mirrors-it"');
     expect(block).toContain(`E2 (connection "c2", line): "${C2_LINE}"`);
     // R7: the strike went from the weave, and with it every line on a connection struck or brought back.
@@ -1323,7 +1323,7 @@ describe("the meeting's edits-are-final line, in each round's frame", () => {
   const { standingAtMeeting, carriedEdits } = require('../hand-edit-diff');
   const { WEAVE } = require('./fixtures/rework-state');
   const clone = (v) => JSON.parse(JSON.stringify(v));
-  const FINAL = "Each change of the director's is final: the text they wrote stays exactly as written, each role they gave stays, each thread they added stays in the weave, and each removed sentence stays out of it.";
+  const FINAL = "Each change of the director's is final: the text they wrote stays exactly as written, each thread they brought into an angle stays in it and each they left out of one stays out, each thread they added stays in the weave where they put it, and each removed sentence stays out of it.";
   /** The director rewrote t2's line: E1. */
   const left = () => {
     const weave = clone(WEAVE);

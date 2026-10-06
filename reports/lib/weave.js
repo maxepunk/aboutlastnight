@@ -202,26 +202,34 @@ function occurrenceKeys(elements) {
 }
 
 /**
- * The director's share of the weave, with each part present: `{addedThreads,
- * reroledThreads, fields, threadFields, addedConnections, connectionFields}`, each a map
- * from what the director changed to the id of their standing edit (lib/hand-edit-diff.js
- * weaveDirectorsShare builds it): a thread they added (`t7`), a thread they re-roled
- * (`t3`), a top-level field they rewrote (`story`), a field of a thread they rewrote
- * (`t3.line`), a connection they added (`c5`), a field of a connection they rewrote
+ * The director's share of the weave, with each part present (phase 4b, piece 3, brief 3C):
+ * `{fields, angleFields, flippedIn, flippedOut, addedThreads, threadFields, addedConnections,
+ * connectionFields}`, each a map from what the director changed to the id of their standing edit
+ * (lib/hand-edit-diff.js weaveDirectorsShare builds it): a field of the weave they rewrote
+ * (`fromYourNotes`), a line of an angle's pitch they rewrote (`a1.story`), a thread they brought
+ * into an angle or left out of it (`a1.t6`, R2), a thread they added (`t7`), a field of a thread
+ * they rewrote (`t3.line`), a connection they added (`c5`), a field of a connection they rewrote
  * (`c1.line`); and `threadIndexes`, where in the weave's threads each thread their edits find
  * sits, by its id, which tells their thread from the writer's under an id the writer repeated.
  */
 function shareOf(directorsShare) {
   const share = directorsShare && typeof directorsShare === 'object' ? directorsShare : {};
   return {
-    addedThreads: share.addedThreads || {},
-    reroledThreads: share.reroledThreads || {},
     fields: share.fields || {},
+    angleFields: share.angleFields || {},
+    flippedIn: share.flippedIn || {},
+    flippedOut: share.flippedOut || {},
+    addedThreads: share.addedThreads || {},
     threadFields: share.threadFields || {},
     addedConnections: share.addedConnections || {},
     connectionFields: share.connectionFields || {},
     threadIndexes: share.threadIndexes || {}
   };
+}
+
+/** The ids, under an element's id, of a share's map keyed `<id>.<part>` (`a1.story` and `a1.t6` under `a1`). */
+function partsUnder(map, id) {
+  return id ? Object.keys(map).filter((key) => key.startsWith(`${id}.`)).map((key) => key.slice(id.length + 1)) : [];
 }
 
 /** The ids of the threads an angle names, trimmed, each once, in its order. */
@@ -406,10 +414,13 @@ function printedWeaveFields(weave) {
  * The weave as the writer's share of it, for the meeting's page the check node counts
  * (Review focus 3: only the writer's output is held to the bound, never the director's
  * version). Read from the director's share (shareOf), it has:
- * - each line the director rewrote empty: a field of the weave, a field of a thread or of a
- *   connection;
- * - no thread the director added or re-roled, since whether a re-roled thread's line prints
- *   is the director's choice, and no connection they added;
+ * - each line the director rewrote empty: a field of the weave, a line of an angle's pitch, a
+ *   field of a thread or of a connection, so a pitch the director lengthened is never counted as
+ *   the writer's (piece 3, brief 3C);
+ * - each thread the director brought into an angle off that angle's list, so its line, which the
+ *   angle prints only by their choice, is not counted (R2); a thread they left out of one stays
+ *   out, since the page then prints less of the writer's;
+ * - no thread the director added, and no connection they added;
  * - no answer on any question, since the answers are the director's words.
  * "From your notes" stays as the page prints it: it quotes the director's notes, and an empty
  * one would print the page's thin-notes line in its place. The weave given is left as it was.
@@ -428,15 +439,20 @@ function writersShareOf(weave, directorsShare) {
   });
   /** The element with each text field the director rewrote (`<id>.<field>` in `fields`) empty. */
   const writersLines = (element, fields) => {
-    const id = weaveIdOf(element);
-    const typed = Object.keys(fields)
-      .filter((place) => id && place.startsWith(`${id}.`))
-      .map((place) => place.slice(id.length + 1))
-      .filter((field) => typeof element[field] === 'string');
+    if (!element || typeof element !== 'object') return element;
+    const typed = partsUnder(fields, weaveIdOf(element)).filter((field) => typeof element[field] === 'string');
     return typed.length === 0 ? element : { ...element, ...Object.fromEntries(typed.map((field) => [field, ''])) };
   };
+  if (Array.isArray(weave.angles)) {
+    out.angles = weave.angles.map((angle) => {
+      const lines = writersLines(angle, share.angleFields);
+      const broughtIn = partsUnder(share.flippedIn, weaveIdOf(angle));
+      if (broughtIn.length === 0 || !Array.isArray(lines.threads)) return lines;
+      return { ...lines, threads: lines.threads.filter((id) => !broughtIn.includes(textOf(id))) };
+    });
+  }
   out.threads = weave.threads
-    .filter((thread) => !(has(share.addedThreads, weaveIdOf(thread)) || has(share.reroledThreads, weaveIdOf(thread))))
+    .filter((thread) => !has(share.addedThreads, weaveIdOf(thread)))
     .map((thread) => writersLines(thread, share.threadFields));
   if (Array.isArray(weave.connections)) {
     out.connections = weave.connections
@@ -752,12 +768,14 @@ function elementPlace(collection, element) {
  *   line name that angle by its headline.
  *
  * The director's share of the weave is never a check's failure: a line they wrote is not held
- * to story terms (a field of a thread or of a connection they rewrote, and every line of a thread
- * or a connection they added), a thread they added may have no evidence, "from your notes" they
- * rewrote is not checked against the notes, and their words add nothing to the count. The
- * evidence is never theirs (R6), so every piece is the writer's, under the director's thread too.
- * A failure their change causes is a concern on their edit, beside its line: the verdict flag
- * they took off.
+ * to story terms (a line of an angle's pitch, a field of a thread or of a connection they
+ * rewrote, and every line of a thread or a connection they added), a thread they added may have
+ * no evidence, "from your notes" they rewrote is not checked against the notes, and their words,
+ * the line of a thread they brought into an angle among them, add nothing to the count
+ * (writersShareOf). A thread they brought in or left out is still the writer's text, held as the
+ * writer's. The evidence is never theirs (R6), so every piece is the writer's, under the
+ * director's thread too. A failure their change causes is a concern on their edit, beside its
+ * line: the verdict flag they took off, a line of the pitch they emptied.
  *
  * Player coverage is not checked here: the map places every player (spec 4.5).
  *
@@ -821,11 +839,20 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     const words = angleWords(angle);
     const place = elementPlace('angles', angle);
     const named = angleThreadIds(angle);
-    const lacking = ANGLE_FIELDS.filter((field) => !textOf(angle[field]));
+    // Piece 3 (brief 3C): a line of the pitch the director rewrote is theirs, never the writer's
+    // failure; one they emptied is a concern beside it.
+    const angleId = weaveIdOf(angle);
+    const theirs = (field) => has(share.angleFields, `${angleId}.${field}`);
+    const lacking = ANGLE_FIELDS.filter((field) => !textOf(angle[field]) && !theirs(field));
+    const emptied = ANGLE_FIELDS.filter((field) => !textOf(angle[field]) && theirs(field));
     if (named.length === 0) lacking.push('threads');
     if (lacking.length > 0) {
       fail('angle-incomplete', `${opening(words)} has no ${listOf(lacking)}. Give each angle every field of the OUTPUT FORMAT, its threads among them.`,
         `${opening(words)} is missing part of its pitch.`, place);
+    }
+    if (emptied.length > 0) {
+      concern('angle-incomplete', emptied.map((field) => share.angleFields[`${angleId}.${field}`]),
+        `${opening(words)} is missing ${listOf(emptied.map((field) => ELEMENT_FIELD_WORDS[field] || `its ${field}`))}.`);
     }
     const unknown = named.filter((id) => !threadIds.has(id));
     if (unknown.length > 0) {
@@ -838,7 +865,7 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
       fail('angle-without-verdict', `${opening(words)} leaves out ${verdictNames}, the thread that carries the room's verdict. Put it in every angle, as C16 (<craft-story>) sets out.`,
         `${opening(words)} leaves out ${verdictNames}, the thread that tells the room's verdict.`, place);
     }
-    elementTerms(words, place, angle, ANGLE_STORY_FIELDS);
+    elementTerms(words, place, angle, ANGLE_STORY_FIELDS.filter((field) => !theirs(field)));
   });
   repeatedIds(angles).forEach((id) => {
     const headlines = listOf(angles.filter((angle) => weaveIdOf(angle) === id).map((angle) => `"${textOf(angle.headline) || id}"`));
@@ -860,12 +887,11 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     const words = threadWords(thread);
     const place = elementPlace('threads', thread);
     const added = editOf(share.addedThreads, id);
-    const director = added || editOf(share.reroledThreads, id);
     if (!added) {
       const fields = ['name', 'line'].filter((field) => !has(share.threadFields, `${id}.${field}`));
       elementTerms(words, place, thread, fields);
     }
-    if (!director && !objectsOf(thread.evidence).some((piece) => piece.stance === 'supports')) {
+    if (!added && !objectsOf(thread.evidence).some((piece) => piece.stance === 'supports')) {
       fail('thread-without-evidence', `${opening(words)} has no piece of evidence that supports it. Give it the pieces of the record that tell it, at least one with the stance "supports".`,
         `${opening(words)} has nothing behind it: no piece of the record supports it.`, place);
     }
@@ -883,7 +909,8 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     const names = listOf(under.map(nameOf));
     const nameTheThread = 'make each angle, connection and question name the thread it means.';
     const added = editOf(share.addedThreads, id);
-    const changed = editOf(share.reroledThreads, id) || Object.keys(share.threadFields).some((place) => place.startsWith(`${id}.`));
+    const flipped = [...Object.keys(share.flippedIn), ...Object.keys(share.flippedOut)].some((place) => place.endsWith(`.${id}`));
+    const changed = flipped || partsUnder(share.threadFields, id).length > 0;
     const said = `The writer gave the threads ${names} one id, so the meeting cannot change them`;
     if (!added && !changed) {
       fail('duplicate-id', `Two threads share one id: ${names}. Give each thread an id of its own, and ${nameTheThread}`, `${said}.`, `threads[#${id}]`);

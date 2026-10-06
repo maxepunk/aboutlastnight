@@ -88,11 +88,13 @@ function idCount(elements, id) {
 }
 
 /**
- * The refusal for a reweave with nothing to fit in (brief 4.5b; spec 4.4): a reweave fits
- * the director's changes and note into the weave, and the answers travel as they are to
- * every later writer, so answers alone are no change to fit in.
+ * The refusal for a reweave with nothing to fit in (brief 4.5b; spec 4.4; piece 3, brief 3C): a
+ * reweave fits the director's changes and note in, and the pick and the answers travel as they
+ * are to every later writer, so a pick alone, or answers alone, is no change to fit in (spec
+ * 2026-10-06 section 7). meetingResume reads it from the edits the reweave would list: a line of
+ * an angle's pitch, a thread flipped, a thread's field or a thread added each counts.
  */
-const EMPTY_REWEAVE = "A reweave fits the director's changes and note into the weave, and this one carries no change to the weave and no note. The answers travel as they are to every later writer: approve to send the weave on with them, or change the weave or write a note, then reweave.";
+const EMPTY_REWEAVE = "A reweave fits the director's changes and note into the angle, and this one carries no change to an angle or a thread and no note. The pick and the answers travel as they are to every later writer: approve to send the angle on with them, or change the angle or one of its threads, or write a note, then reweave.";
 
 /**
  * What the director-side schema finds wrong with a weave, as one refusal that says where,
@@ -137,9 +139,16 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
     const text = theirs.join('; ');
     return `${text.charAt(0).toUpperCase()}${text.slice(1)}: the director's changes made ${theirs.length > 1 ? 'these repeats' : 'this repeat'}. Keep the ids the meeting showed, and give each one the director added an id of its own.`;
   }
+  // A thread flipped under an id the writer repeated names the threads (piece 3, brief 3C); any
+  // other change names its own collection.
   const touched = new Set((shownWeave ? weaveEditsBetween(shownWeave, weave) : [])
     .filter((change) => change.repeatedId)
-    .map((change) => `two ${change.scope} the id "${weaveIdOf(change.at[1].match)}"`));
+    .map((change) => {
+      const threadId = change.flip ? weaveIdOf(change.at[3].match) : '';
+      return threadId && repeatedIds(shownWeave.threads).includes(threadId)
+        ? `two threads the id "${threadId}"`
+        : `two ${change.scope} the id "${weaveIdOf(change.at[1].match)}"`;
+    }));
   if (touched.size > 0) {
     return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.`;
   }
@@ -369,12 +378,13 @@ function meetingConcerns(state) {
 /**
  * The threads the director put in the story at the meeting that the weave carries, in the
  * settled angle's order (lib/weave.js settledAngleOf), read from their standing edits: each one
- * they added (`added`). `broughtIn`, a thread the director flipped into the angle, is slice 3C's
- * to read from its own edits; until then it is false. The next writer finds the evidence for such
- * a thread (spec 2026-10-05 section 5.3): the meeting says so under one with none, at whatever
- * look the director put it there (the payload's `directorsThreads`), where a thread of the
- * writer's with none is a check's failure, shown beside it; and when the record cannot carry it,
- * the map names it in its gap note (lib/map.js mapFindings).
+ * they added (`added`), and each they brought into the settled angle (`broughtIn`; piece 3, R2),
+ * at whatever look they flipped it in, since each flip is an edit of its own that keeps its author.
+ * The next writer finds the evidence for such a thread (spec 2026-10-05 section 5.3): the meeting
+ * says so under one with none, at whatever look the director put it there (the payload's
+ * `directorsThreads`), where a thread of the writer's with none is a check's failure, shown beside
+ * it; and when the record cannot carry it, the map names it in its gap note (lib/map.js
+ * mapFindings).
  *
  * @param {Object} state
  * @returns {Array<{id: string, added: boolean, broughtIn: boolean}>}
@@ -382,11 +392,16 @@ function meetingConcerns(state) {
 function meetingDirectorsThreads(state) {
   const settled = state && isWeave(state.weave) ? settledAngleOf(state.weave) : null;
   if (!settled) return [];
-  const added = new Set(Object.keys(weaveDirectorsShare(carriedEdits(state._weaveHandEdits, state.weave)).addedThreads));
+  const share = weaveDirectorsShare(carriedEdits(state._weaveHandEdits, state.weave));
+  const added = new Set(Object.keys(share.addedThreads));
+  const angleId = weaveIdOf(settled.angle);
+  const broughtIn = new Set(Object.keys(share.flippedIn)
+    .filter((place) => angleId && place.startsWith(`${angleId}.`))
+    .map((place) => place.slice(angleId.length + 1)));
   return settled.threads
     .map((thread) => weaveIdOf(thread))
-    .filter((id, index, ids) => id && ids.indexOf(id) === index && added.has(id))
-    .map((id) => ({ id, added: true, broughtIn: false }));
+    .filter((id, index, ids) => id && ids.indexOf(id) === index && (added.has(id) || broughtIn.has(id)))
+    .map((id) => ({ id, added: added.has(id), broughtIn: broughtIn.has(id) }));
 }
 
 /**
@@ -417,17 +432,26 @@ function roundDidNotRunOf(state) {
 }
 
 /**
- * How the meeting names the line of a change to one of the weave's fields, for a later stop
+ * How the meeting names the line of a change to one of the weave's own fields, for a later stop
  * that names the change to the director (meetingChangePlace): the line as the meeting's page
  * heads it, in a phrase.
  */
 const MEETING_FIELD_PLACES = Object.freeze({
+  fromYourNotes: 'the words from your notes'
+});
+
+/**
+ * How the meeting names a change to one line of an angle's pitch (phase 4b, piece 3, brief 3C):
+ * the line as the pitch heads it, in a phrase. A later stop names only the changes the settled
+ * story shows, which are the sent angle's, so the line alone names it.
+ */
+const ANGLE_FIELD_PLACES = Object.freeze({
+  headline: 'the headline',
+  gist: 'the card line',
   story: 'the story',
   question: 'the question it carries',
-  headline: 'the working headline',
-  fromYourNotes: 'the words from your notes',
-  convergence: 'where they converge',
-  strongerMainThread: 'the stronger main thread'
+  lands: 'why it lands',
+  ends: 'where it ends up'
 });
 
 /**
@@ -436,10 +460,8 @@ const MEETING_FIELD_PLACES = Object.freeze({
  * Each takes the thread's name and its line, each quoted.
  */
 const THREAD_FIELD_PLACES = Object.freeze({
-  role: (name) => `the role of ${name}`,
   name: (name) => `the name ${name}`,
   line: (name, line) => `the line ${line}`,
-  reason: (name) => `the reason ${name} is left out`,
   verdict: (name) => `whether ${name} carries the room's verdict`
 });
 
@@ -450,12 +472,14 @@ function quotedLine(text) {
 
 /**
  * Where one of the director's changes at the meeting sits, as the meeting names the line
- * (brief 4.14a): a field of the weave by its line ("the story"), a thread by its name and a
- * connection by its line, as the meeting's page shows them ("the role of "The envelope"", "the
- * line "Morgan paid Riley at the bar""; phase 4b, brief 1B), never by an id, which the meeting
- * never shows. A later stop that names a meeting change to the director reads it (the map's
- * page, through lib/map.js meetingChangesOf). The element's words are read from `weave` under
- * the edit's id, or from the edit itself for an element the weave no longer holds.
+ * (brief 4.14a): a field of the weave by its line ("the words from your notes"), a line of an
+ * angle's pitch by its line ("why it lands"; piece 3, brief 3C), a thread by its name and a
+ * connection by its line, as the meeting's page shows them ("the line "Morgan paid Riley at the
+ * bar""; phase 4b, brief 1B), and a thread the director brought into the story or left out of it
+ * by whether it is in the story (R2), never by an id, which the meeting never shows. A later stop
+ * that names a meeting change to the director reads it (the map's page, through lib/map.js
+ * meetingChangesOf). The element's words are read from `weave` under the edit's id, or from the
+ * edit itself for an element the weave no longer holds.
  *
  * @param {Object} edit - one of the meeting's standing edits
  * @param {Object|null} weave - the weave as the director settled it
@@ -467,15 +491,25 @@ function meetingChangePlace(edit, weave) {
   if (steps.length === 1) return MEETING_FIELD_PLACES[head] || `the ${head}`;
   const id = steps[1] && steps[1].match ? weaveIdOf(steps[1].match) : '';
   const field = steps[2] && typeof steps[2].key === 'string' ? steps[2].key : '';
-  const held = (isWeave(weave) && Array.isArray(weave[head]) ? weave[head] : []).find((element) => weaveIdOf(element) === id);
+  const elementsOf = (collection) => (isWeave(weave) && Array.isArray(weave[collection]) ? weave[collection] : []);
+  if (head === 'angles') {
+    if (field === 'threads' && steps[3] && steps[3].match) {
+      const threadId = weaveIdOf(steps[3].match);
+      const thread = elementsOf('threads').find((element) => weaveIdOf(element) === threadId);
+      const name = thread && (thread.name || thread.line) ? quotedLine(thread.name || thread.line) : quotedLine(edit.after);
+      return `whether ${name} is in the story`;
+    }
+    return ANGLE_FIELD_PLACES[field] || 'the angle';
+  }
+  const held = elementsOf(head).find((element) => weaveIdOf(element) === id);
   const element = held || (edit.after && typeof edit.after === 'object' ? edit.after : edit.before) || {};
   const gone = edit.after === null || edit.after === undefined;
   if (head === 'threads') {
-    const name = element.name ? quotedLine(element.name) : `thread ${id}`;
+    const name = element.name ? quotedLine(element.name) : 'a thread';
     if (field) return (THREAD_FIELD_PLACES[field] || ((n) => `the ${field} of ${n}`))(name, element.line ? quotedLine(element.line) : name);
     return gone ? `the thread you took out, ${name}` : `the thread you added, ${name}`;
   }
-  const line = element.line ? quotedLine(element.line) : `connection ${id}`;
+  const line = element.line ? quotedLine(element.line) : 'a connection';
   if (field) return field === 'line' ? `the connection ${line}` : `the ${field} of the connection ${line}`;
   return gone ? `the connection you took out, ${line}` : `the connection you added, ${line}`;
 }

@@ -1354,8 +1354,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
 
   /**
    * A thread's line rewritten, a thread added, a question answered and the
-   * open angle's story edited, each as typed (piece 3: the pitch is stored as typed and is no edit
-   * until slice 3C).
+   * open angle's story edited, each as typed (piece 3, brief 3C: the pitch's line is an edit too).
    */
   const changed = (shown) => {
     let w = meetingWeaveOf(shown);
@@ -1375,7 +1374,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     expect(stateUpdates.weave.angles[0].threads).toEqual(['t1', 't2', 't3', 't4', 't6']);
     expect(stateUpdates.weave.questions[0].answer).toBe(' Sarah ran the bar all morning.');
     expect(stateUpdates.weave._factCheck).toEqual(MARK);
-    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].line', 'threads[#t6]']);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['angles[#a1].story', 'threads[#t3].line', 'threads[#t6]']);
     expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'arc-selection', kind: 'approval', text: 'Lead with the vote.' })]);
   });
 

@@ -69,8 +69,8 @@ const piece = (sources, shows, stance = 'supports') => ({ sources, shows, stance
 
 /**
  * The director's version: angle 1's story edited, t3's line rewritten, a thread added in angle 1's
- * story, q1 answered (piece 3: the pitch is no edit until slice 3C, so its edits are t3's line
- * and t6).
+ * story, q1 answered. Its edits, in the order the meeting prints them: angle 1's story (E1), t3's
+ * line (E2) and t6, added in angle 1 (E3) (piece 3, brief 3C).
  */
 function directorsVersion() {
   const left = clone(WEAVE);
@@ -220,12 +220,13 @@ describe('4.8: the console\'s copies of the server\'s meeting constants', () => 
 // The changes between two weaves, and the validator, held to the gate's decisions
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** The server's change in the console's shape: what it is at, and its flags. */
+/** The server's change in the console's shape: what it is at, and its flags; a flip with its thread and its way (piece 3, R2). */
 const serverChange = (c) => ({
   scope: c.scope,
   id: c.at[1] && c.at[1].match ? c.at[1].match.id : null,
   field: c.at[2] ? c.at[2].key : null,
-  repeatedId: c.repeatedId === true
+  repeatedId: c.repeatedId === true,
+  ...(c.flip && { thread: c.at[3].match.id, flip: c.flip })
 });
 
 /** A weave whose writer gave two threads and two connections one id each. */
@@ -241,8 +242,19 @@ const CHANGE_CASES = [
   ['the same weave', () => [clone(WEAVE), clone(WEAVE)]],
   ['a field changed only at its ends', () => { const a = clone(WEAVE); a.fromYourNotes = `  ${a.fromYourNotes}  `; return [clone(WEAVE), a]; }],
   ['"from your notes" rewritten', () => { const a = clone(WEAVE); a.fromYourNotes = 'Riley kept the ledger.'; return [clone(WEAVE), a]; }],
-  // Piece 3: the pitch, a flip and the pick are no change until slice 3C reads the angles.
+  // Piece 3 (brief 3C; R1, R2): a line of the pitch and each thread flipped are changes; the pick is none.
   ['an angle\'s pitch rewritten, a thread flipped in and another angle picked', () => { const a = clone(WEAVE); a.angles[0].story = 'x'; a.angles[0].threads.push('t5'); a.picked = 'a2'; return [clone(WEAVE), a]; }],
+  ['the pick alone', () => { const a = clone(WEAVE); a.picked = 'a3'; return [clone(WEAVE), a]; }],
+  ['an angle\'s headline and where it ends up rewritten', () => { const a = clone(WEAVE); a.angles[1].headline = 'Morgan Paid Riley'; a.angles[1].ends = 'The envelope stays closed.'; return [clone(WEAVE), a]; }],
+  ['a thread flipped out, and the angle told in another order', () => { const a = clone(WEAVE); a.angles[0].threads = ['t4', 't1', 't2']; return [clone(WEAVE), a]; }],
+  ['two threads flipped, in two angles', () => { const a = clone(WEAVE); a.angles[1].threads.push('t5'); a.angles[2].threads.push('t2'); return [clone(WEAVE), a]; }],
+  ['a thread added in the open angle, which is no flip beside it', () => { const a = clone(WEAVE); a.threads.push(clone(ADDED)); a.angles[0].threads.push('t6'); return [clone(WEAVE), a]; }],
+  ['a thread taken out, off the angles too, which is no flip beside it', () => { const a = clone(WEAVE); a.threads.splice(3, 1); a.angles.forEach((angle) => { angle.threads = angle.threads.filter((id) => id !== 't4'); }); return [clone(WEAVE), a]; }],
+  ['an angle taken out and one added, as a send-back pitches', () => { const a = clone(WEAVE); a.angles[2] = { ...clone(a.angles[2]), id: 'a4' }; return [clone(WEAVE), a]; }],
+  ['a thread flipped in under an id the writer repeated', () => { const b = writersRepeat(); const a = clone(b); a.angles[2].threads.push('t2'); return [b, a]; }],
+  // 3B fix 7: the first angle under an id the writer repeated is the one the pick opens.
+  ["the writer's repeated angle id, the first angle under it rewritten", () => { const b = clone(WEAVE); b.angles[1].id = 'a1'; const a = clone(b); a.angles[0].story = 'x'; return [b, a]; }],
+  ["the writer's repeated angle id, the second angle under it rewritten", () => { const b = clone(WEAVE); b.angles[1].id = 'a1'; const a = clone(b); a.angles[1].story = 'x'; return [b, a]; }],
   ['a thread\'s name and line rewritten', () => { const a = clone(WEAVE); a.threads[1].name = 'The brag'; a.threads[1].line = 'Marcus bragged.'; return [clone(WEAVE), a]; }],
   ['a thread added', () => { const a = clone(WEAVE); a.threads.push(clone(ADDED)); return [clone(WEAVE), a]; }],
   ['a thread taken out', () => { const a = clone(WEAVE); a.threads.pop(); return [clone(WEAVE), a]; }],
@@ -275,6 +287,17 @@ describe('4.8: meetingWeaveChanges reads two weaves as the server\'s diff does',
     expect(all.some((c) => c.scope === 'threads' && c.field === null)).toBe(true);
     expect(all.some((c) => c.scope === 'connections' && c.field === 'line')).toBe(true);
     expect(all.some((c) => c.repeatedId)).toBe(true);
+    // Piece 3 (brief 3C): a line of the pitch, a thread flipped each way, an angle whole.
+    expect(all.some((c) => c.scope === 'angles' && c.field === 'story')).toBe(true);
+    expect(all.some((c) => c.scope === 'angles' && c.flip === 'in')).toBe(true);
+    expect(all.some((c) => c.scope === 'angles' && c.flip === 'out')).toBe(true);
+    expect(all.some((c) => c.scope === 'angles' && c.field === null)).toBe(true);
+    expect(all.some((c) => c.flip && c.repeatedId)).toBe(true);
+  });
+
+  test('the pick alone is no change (R1)', () => {
+    const [before, after] = CHANGE_CASES.find(([n]) => n === 'the pick alone')[1]();
+    expect(meetingWeaveChanges(before, after)).toEqual([]);
   });
 
   // R6: no change of the director's is read from the evidence, on either side.
@@ -357,6 +380,11 @@ const DECISION_CASES = [
   ['the writer\'s repeat, a third added under it', false, () => { const w = writersRepeat(); w.threads.push({ id: 't2', name: 'x', line: 'x' }); return [w, writersRepeat()]; }],
   ['the writer\'s repeat, one taken out', false, () => { const w = writersRepeat(); w.threads.splice(1, 1); return [w, writersRepeat()]; }],
   ['the writer\'s repeated connection, one rewritten', false, () => { const w = writersRepeat(); w.connections[2].line = 'x'; return [w, writersRepeat()]; }],
+  // Piece 3 (brief 3C): a flip finds its thread by its id, and an angle under a repeated id is the
+  // first, the one the pick opens (3B fix 7).
+  ['the writer\'s repeat, a thread under it flipped into the open angle', false, () => { const w = writersRepeat(); w.angles[1].threads.push('t2'); w.picked = 'a2'; return [w, writersRepeat()]; }],
+  ['the writer\'s repeat left alone, another thread flipped into the open angle', true, () => { const w = writersRepeat(); w.angles[0].threads.push('t5'); return [w, writersRepeat()]; }],
+  ["the writer's repeated angle id, the first angle under it, the one open, rewritten", true, () => { const b = clone(WEAVE); b.angles[1].id = 'a1'; const w = clone(b); w.angles[0].story = 'x'; return [w, b]; }],
   ['a repeat with no weave shown, read as the director\'s', false, () => [writersRepeat(), null]]
 ];
 
@@ -528,7 +556,7 @@ describe('4.8: the meeting\'s payloads are 4.5\'s', () => {
     const idle = meetingButtons(data(), untouched(), '', false);
     expect(idle.approve.label).toBe('Approve');
     expect(idle.reweave).toMatchObject({ label: 'Reweave', disabled: true });
-    expect(idle.reweave.hint).toMatch(/change the weave or write a note/);
+    expect(idle.reweave.hint).toMatch(/change the angle or one of its threads, or write a note/);
     expect(idle.sendBack).toMatchObject({ label: 'Send back', disabled: true });
     expect(meetingButtons(data(), answeredOnly(), '', false).reweave.disabled).toBe(true);
     expect(meetingButtons(data(), picked(), '', false).reweave.disabled).toBe(true);
@@ -1056,7 +1084,7 @@ describe('4.8: after a reweave, a send-back, and a reweave that did not run', ()
     const edits = standingAtMeeting(null, WEAVE, left);
     const reworked = clone(left);
     reworked.threads[2].line = 'Morgan paid Riley in the back room.';
-    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asked to lead with the sale.' }] });
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E2', reason: 'The note asked to lead with the sale.' }] });
     const data = payloadOf(stateAt({
       weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
       _weaveMarks: { round: 'send-back', from: left }, humanArcRevisionCount: 1
@@ -1308,6 +1336,91 @@ describe("4.5c: the console's copies of the weave's fields and elements are the 
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Piece 3 (brief 3C; R1, R2; Review focus 1 and 3): the director's edits on angles at the meeting.
+// A line of the pitch and each thread flipped are the director's changes; the pick is none. The
+// round's marks and the edits a round changed name each by its words, never by an id.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("3C: the director's edits on angles at the meeting", () => {
+  const data = () => payloadOf(stateAt());
+  const untouched = () => meetingWeaveOf(data().weave);
+  /** The thread "The letter" (t5), which no angle tells, brought into the open angle. */
+  const flipped = () => flipMeetingThread(untouched(), 't5', true);
+  const pitched = () => setAngleField(untouched(), 'a1', 'lands', 'Every player watched the vote go to overdose.');
+
+  test('a flip or a line of the pitch is something to fit in; the pick alone, or answers alone, is not (Review focus 3)', () => {
+    expect(meetingButtons(data(), flipped(), '', false).reweave.disabled).toBe(false);
+    expect(meetingButtons(data(), pitched(), '', false).reweave.disabled).toBe(false);
+    expect(meetingButtons(data(), pickMeetingAngle(untouched(), 'a2'), '', false).reweave.disabled).toBe(true);
+    expect(meetingButtons(data(), setQuestionAnswer(untouched(), 0, 'Sarah ran the bar.'), '', false).reweave.disabled).toBe(true);
+    // The gate takes each reweave the console offers.
+    [flipped(), pitched()].forEach((weave) => {
+      expect(meetingResume(meetingPayload('reweave', data(), weave, ''), stateAt()).error).toBeNull();
+    });
+  });
+
+  test('after a reweave: a flip and a line of the pitch the round changed are marked beside their lines, by their words', () => {
+    const left = untouched();
+    const reworked = clone(left);
+    reworked.angles[0].lands = 'The players remember the deadlock.';
+    reworked.angles[0].threads.push('t5');
+    reworked.angles[1].threads = reworked.angles[1].threads.filter((id) => id !== 't3');
+    const view = meetingView(...((d) => [d, meetingDraftOf(d, undefined)])(payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveMarks: { round: 'reweave', from: left }, humanArcRevisionCount: 1
+    }))));
+    expect(view.pitch.marks).toEqual([`Changed this round (why it lands). Before: "${WEAVE.angles[0].lands}"`]);
+    expect(threadOf(view, 't5').marks).toEqual(['Brought into the story this round.']);
+    expect(threadOf(view, 't3').marks).toEqual([`Left out of the story of "${WEAVE.angles[1].headline}" this round.`]);
+    expect(viewTexts(view).filter((text) => TAG.test(text))).toEqual([]);
+  });
+
+  test("after a send-back that undid a flip and rewrote the director's line of the pitch: one line each, with its reason, and no id", () => {
+    const left = pitched();
+    left.angles[0].threads.push('t5');
+    const edits = standingAtMeeting(null, WEAVE, left);
+    expect(edits.edits.map((edit) => edit.path)).toEqual(['angles[#a1].lands', 'angles[#a1].threads[#t5]']);
+    const reworked = clone(left);
+    reworked.angles[0].lands = 'The deadlock is what the players remember.';
+    reworked.angles[0].threads = reworked.angles[0].threads.filter((id) => id !== 't5');
+    const report = reportAfterPass(null, {
+      edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS,
+      reasons: [{ id: 'E1', reason: 'The note asked to lead with the deadlock.' }, { id: 'E2', reason: 'The note kept the letter out' }]
+    });
+    const d = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
+      _weaveMarks: { round: 'send-back', from: left }, humanArcRevisionCount: 1
+    }));
+    const view = meetingView(d, meetingDraftOf(d, undefined));
+    expect(view.pitch.marks).toEqual([
+      `The angle "${WEAVE.angles[0].headline}", why it lands: your "Every player watched the vote go to overdose." became "The deadlock is what the players remember." (the rework of your send-back). Why: The note asked to lead with the deadlock.`
+    ]);
+    expect(threadOf(view, 't5').marks).toEqual([
+      'Thread "The letter": the rework of your send-back left it out of the story, which you brought it into. Why: The note kept the letter out.'
+    ]);
+    expect(view.changedEdits).toEqual([]);
+    expect(viewTexts(view).filter((text) => TAG.test(text))).toEqual([]);
+  });
+
+  test("a flip's entry and its mark are about one edit; a thread's own field is not the flip (markOfEntry)", () => {
+    const { markOfEntry } = ViewLogic;
+    const entry = { where: 'angle "a1", thread "t5", brought in', flip: 'in' };
+    expect(markOfEntry({ path: 'angles[#a1].threads[#t5]', before: '', after: 'The letter' }, entry)).toBe(true);
+    expect(markOfEntry({ path: 'threads[#t5]', before: 'x', after: '' }, entry)).toBe(true);
+    expect(markOfEntry({ path: 'threads[#t5].line', before: 'a', after: 'b' }, entry)).toBe(false);
+    expect(markOfEntry({ path: 'angles[#a1].threads[#t2]', before: '', after: 'The sale' }, entry)).toBe(false);
+  });
+
+  test("a question moved beside another thread reads by the threads' names, never as a stronger main thread", () => {
+    const left = untouched();
+    const reworked = clone(left);
+    reworked.questions[1].thread = 't3';
+    const view = meetingView(...((d) => [d, meetingDraftOf(d, undefined)])(payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveMarks: { round: 'reweave', from: left }, humanArcRevisionCount: 1
+    }))));
+    expect(view.questions.find((q) => q.id === 'q2').marks).toEqual(['Changed this round (thread). Before: "The sale"']);
+  });
+});
+
 describe('4.5c: after a round that did not run, the retry line and Approve read what the note box holds', () => {
   const NOTE_KEY = ViewLogic.noteSlotKey('arc-selection');
   const LINE = 'the writer timed out, and the weave is as you left it.';
@@ -1423,7 +1536,13 @@ describe('4.5c fix round 1: the gate takes every reweave the console offers, wit
     ['rewrite again "from your notes" set back at an approve, after a round kept it', () => acted(ranRound(acted(stateAt(), 'reweave', rewriteNotes)), 'approve', writersNotes), rewriteNotes, true],
     ["set back to the writer's a thread's line rewritten at an approve", () => acted(stateAt(), 'approve', rewriteT3), writersT3, true],
     ['leave the weave as the meeting showed it, with no edit standing', () => stateAt(), (w) => w, false],
-    ['only answer a question', () => stateAt(), (w) => setQuestionAnswer(w, 0, 'Sarah ran the bar.'), false]
+    ['only answer a question', () => stateAt(), (w) => setQuestionAnswer(w, 0, 'Sarah ran the bar.'), false],
+    // Piece 3 (brief 3C; R1, R2; Review focus 1 and 3): a line of the pitch and a flip are the
+    // director's to fit in, at any look; the pick alone is not.
+    ['only pick another angle', () => stateAt(), (w) => pickMeetingAngle(w, 'a3'), false],
+    ["rewrite a line of the open angle's pitch", () => stateAt(), (w) => setAngleField(w, 'a1', 'lands', 'The players remember the deadlock.'), true],
+    ['flip a thread into the open angle', () => stateAt(), (w) => flipMeetingThread(w, 't5', true), true],
+    ['flip again a thread flipped in, kept by a round, and flipped out at an approve', () => acted(ranRound(acted(stateAt(), 'reweave', (w) => flipMeetingThread(w, 't5', true))), 'approve', (w) => flipMeetingThread(w, 't5', false)), (w) => flipMeetingThread(w, 't5', true), true]
   ];
 
   test.each(CASES)('%s', (_name, build, change, offered) => {
@@ -1433,7 +1552,7 @@ describe('4.5c fix round 1: the gate takes every reweave the console offers, wit
     expect(meetingButtons(data, left, '', false).reweave.disabled).toBe(!offered);
     const gate = meetingResume({ meeting: 'reweave', weave: meetingWeaveOf(left) }, state);
     expect(gate.error === null).toBe(offered);
-    if (!offered) expect(gate.error).toMatch(/carries no change to the weave and no note/);
+    if (!offered) expect(gate.error).toMatch(/carries no change to an angle or a thread and no note/);
   });
 });
 
@@ -1524,14 +1643,14 @@ describe("4.10b: the meeting says when the director's edits stand", () => {
     const reworked = clone(left);
     reworked.threads[2].line = 'The reweave told it its own way.';
     const { output, report } = settleEdits(null, { edits: edits.edits, before: left, after: reworked, pass: REWEAVE_PASS });
-    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', pass: REWEAVE_PASS, restored: true })]);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E2', pass: REWEAVE_PASS, restored: true })]);
     const data = payloadOf(stateAt({
       weave: weaveLib.withFactCheckMark(output, MARK), _weaveHandEdits: edits, _weaveHandEditReport: report,
       _weaveMarks: { round: 'reweave', from: left }, humanArcRevisionCount: 1
     }));
     const view = viewOf(data);
     expect(view.changedEdits).toEqual([]);
-    expect(view.kept).toBe('Both of your edits stand.');
+    expect(view.kept).toBe('All 3 of your edits stand.');
   });
 
   test('one edit, two, and a round that changed none of them', () => {
@@ -1573,7 +1692,7 @@ describe('4.10b: one line per edit at the meeting', () => {
     const edits = standingAtMeeting(null, WEAVE, left);
     const reworked = clone(left);
     reworked.threads[2].line = 'Morgan paid Riley in the back room.';
-    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asked to lead with the sale.' }] });
+    const report = reportAfterPass(null, { edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E2', reason: 'The note asked to lead with the sale.' }] });
     const { data, view } = after('send-back', left, reworked, edits, report);
     expect(data.marks.marks.map((m) => m.path)).toEqual(['threads[#t3].line']);
     const line = `Thread "The envelope", line: your "${T3_LINE}" became "Morgan paid Riley in the back room." (the rework of your send-back). Why: The note asked to lead with the sale.`;
@@ -1696,9 +1815,9 @@ describe('4.10c: one line per edit at the meeting, where the round marks an edit
     reworked.threads = reworked.threads.filter((t) => t.id !== 't3');
     reworked.connections = reworked.connections.filter((c) => !(c.joins || []).includes('t3'));
     const report = reportAfterPass(null, {
-      edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note folded the payment into the sale.' }]
+      edits: edits.edits, before: left, after: reworked, pass: SEND_BACK_PASS, reasons: [{ id: 'E2', reason: 'The note folded the payment into the sale.' }]
     });
-    expect(report.changed.map((c) => [c.id, c.where, c.became])).toEqual([['E1', 'thread "t3", line', null]]);
+    expect(report.changed.map((c) => [c.id, c.where, c.became])).toEqual([['E2', 'thread "t3", line', null]]);
     const { data, view } = afterSendBack(left, reworked, edits, report);
     expect(data.marks.marks.map((m) => m.path)).toEqual(['threads[#t3]', 'connections[#c1]']);
     const line = `Thread "The envelope": taken out this round. Before: "${T3_LINE}". ` +
@@ -1715,18 +1834,22 @@ describe("4.10c: the meeting reads a report entry's place as lib/hand-edit-diff.
   const { editWhere, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
   const { markOfEntry } = ViewLogic;
   /** A weave that carries none of the director's edits, so the report holds an entry for each. */
-  const away = () => ({ ...clone(WEAVE), threads: [], connections: [] });
+  const away = () => ({ ...clone(WEAVE), angles: [], threads: [], connections: [] });
 
   test('each kind of edit the meeting makes, its place read back to its own line and field; a whole element read as every field of it', () => {
-    // A look: a thread's line rewritten and a thread added.
+    // A look: angle 1's story rewritten, a thread's line rewritten and a thread added.
     const left = directorsVersion();
     const firstLook = standingAtMeeting(null, WEAVE, left).edits;
     const entries = reportAfterPass(null, { edits: firstLook, before: left, after: away(), pass: SEND_BACK_PASS }).changed;
-    expect(firstLook.map((edit) => editWhere(edit))).toEqual(['thread "t3", line', 'thread "t6", added']);
+    expect(firstLook.map((edit) => editWhere(edit))).toEqual(['angle "a1", story', 'thread "t3", line', 'thread "t6", added']);
     expect(entries.map((entry) => entry.where)).toEqual(firstLook.map((edit) => editWhere(edit)));
     const about = (where, path) => markOfEntry({ path, before: 'before', after: 'after' }, entries.find((entry) => entry.where === where));
     // [the entry's place, a mark's path, whether the mark is about the entry]
     const CASES = [
+      ['angle "a1", story', 'angles[#a1].story', true],
+      ['angle "a1", story', 'angles[#a1]', true],
+      ['angle "a1", story', 'angles[#a1].ends', false],
+      ['angle "a1", story', 'angles[#a2].story', false],
       ['thread "t3", line', 'threads[#t3].line', true],
       ['thread "t3", line', 'threads[#t3]', true],
       ['thread "t3", line', 'threads[#t3].name', false],
