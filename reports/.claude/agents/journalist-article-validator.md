@@ -26,7 +26,7 @@ From `data/<session-id>/`:
 - `output/content-bundle.json`: the draft;
 - `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, the roster and the photos;
 - `analysis/article-outline.json`: the story map the draft was written from, whose beats place the players;
-- `analysis/weave.json`: the settled weave, whose answers on its questions are the director's words;
+- `analysis/weave.json`: the weave, whose answers on its questions are the director's words;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note, which are record too.
 
 ## Job

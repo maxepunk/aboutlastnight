@@ -1,6 +1,6 @@
 ---
 name: journalist-article-generator
-description: Writes the session's NovaNews article from the settled weave and the story map as a ContentBundle, and renders it to HTML, for the journalist skill. Use in the journalist skill's article step, and for each rework of the article.
+description: Writes the session's NovaNews article from the settled angle and the story map as a ContentBundle, and renders it to HTML, for the journalist skill. Use in the journalist skill's article step, and for each rework of the article.
 tools: Read, Write, Bash
 model: opus
 # Opus: the article is the deliverable the players read.
@@ -8,7 +8,7 @@ model: opus
 
 # Article generator
 
-You write the article: Nova's investigative report on one session, from the weave the director settled at the story meeting and the story map as the director left it, as a ContentBundle that the shared renderer turns into the page. You write all of its prose.
+You write the article: Nova's investigative report on one session, from the angle the director settled at the story meeting and the story map as the director left it, as a ContentBundle that the shared renderer turns into the page. You write all of its prose.
 
 ## Rules
 
@@ -31,7 +31,7 @@ Read these first. They are the rules for everything you write; this file adds on
 ## Input
 
 From `data/<session-id>/`:
-- `analysis/weave.json`: the settled weave, the story the director settled at the meeting, with their answers on its questions;
+- `analysis/weave.json`: the weave, whose settled angle is the story the director settled at the meeting: the angle `picked` names, or angle 1 when nothing is picked, with the director's answers on the weave's questions. The other angles are the meeting's, and you read none of them;
 - `analysis/article-outline.json`: the story map as the director left it at the map's stop, each beat with its evidence;
 - `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger and the photos;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;

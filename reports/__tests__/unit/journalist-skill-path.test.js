@@ -260,6 +260,43 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
   });
 });
 
+/**
+ * Phase 4b, piece 3 (brief 3F; spec docs/superpowers/specs/2026-10-06-meeting-as-angles.md
+ * sections 5 to 7 and 14): the story meeting pitches two or three angles over one set of threads,
+ * and the director picks one, flips threads in or out and approves, reweaves or sends back. The
+ * roles, the main thread, the stronger main thread and the strike on a connection went, and so
+ * did the meeting's page of 300 words.
+ */
+describe('the story meeting as angles (phase 4b, piece 3)', () => {
+  it.each(NAMES)('%s describes no role, no main thread and no strike on a connection', (name) => {
+    const old = {
+      mainThread: /\bmain thread\b/i,
+      roleLabel: /\b(?:grounds it|complicates it|mirrors it|carries it forward)\b/i,
+      threadRole: /\b(?:a thread's role|its role|their roles?|in a role)\b/i,
+      strike: /\bstruck connection|\bstrike a connection|\bconnections? (?:they|the director) struck\b/i,
+      oldPage: /\b300 words\b/
+    };
+    // schemas.md's weave section gives the pipeline's shape, which keeps `struck` until slice 3C
+    // takes the strike out of the code; its own test above holds it to WEAVE_SCHEMA.
+    const text = name === 'schemas.md'
+      ? FILES[name].replace(/\n## The weave\n[\s\S]*?\n## The map\n/, '\n## The map\n')
+      : FILES[name];
+    Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(text)}`).toBe(`${name}: ${what}: false`));
+  });
+
+  it("the story meeting's stop has the director pick an angle, flip a thread and press one of three buttons", () => {
+    const text = FILES['SKILL.md'];
+    const stop = text.slice(text.indexOf('**Stop: the story meeting.**'), text.indexOf('### 9.'));
+    ['angle', 'pick', 'flip'].forEach((word) => expect(`${word}: ${stop.toLowerCase().includes(word)}`).toBe(`${word}: true`));
+    ['Approve', 'Reweave', 'Send back'].forEach((button) => expect(`${button}: ${stop.includes(button)}`).toBe(`${button}: true`));
+  });
+
+  it('the arc analyzer pitches angles, and the outline generator reads the angle the director picked', () => {
+    expect(section(agent('arc-analyzer'), 'Job')).toMatch(/\btwo or three angles\b/);
+    expect(section(agent('outline-generator'), 'Input')).toContain('`picked`');
+  });
+});
+
 describe('the skill path carries no retired text', () => {
   it.each(NAMES)('%s has no em-dash', (name) => {
     expect(FILES[name]).not.toMatch(/—/);
