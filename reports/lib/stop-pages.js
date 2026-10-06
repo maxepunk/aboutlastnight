@@ -30,7 +30,7 @@
  *   ("Charge", "Job"). A title, and a line the page shows by its name alone (a photo, a heading
  *   the page does not print, a line in the component's own fixed words), carries only a label;
  * - `tone` is what kind of line it is: title, text, note (what happened this round), alert (a
- *   check still failing, a problem the console would refuse), concern, mark, struck or hint;
+ *   check still failing, a problem the console would refuse), concern, mark or hint;
  * - `folded` marks what the page folds away, as its component folds it: the standing notes, the
  *   map's left out (until a concern opens it), the trace, the desk's folds below the article, the
  *   input review's closed sections, what a character-IDs card shows only once opened, the
@@ -173,7 +173,6 @@ function pageOf(stop) {
     note: (text, label) => add('note', text, label),
     alert: (text, label) => add('alert', text, label),
     hint: (text) => add('hint', text, ''),
-    struck: (text, label) => add('struck', text, label),
     /** The concerns and the marks beside the line before them. */
     beside: (concerns, marks) => {
       (concerns || []).forEach((text) => add('concern', text, '', { beside: true }));
@@ -579,8 +578,7 @@ const MEETING_SECTIONS = {
   connections(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].connections);
     view.connections.forEach((connection) => {
-      if (connection.struck) page.struck(connection.line);
-      else page.text(connection.line);
+      page.text(connection.line);
       addBesideLine(page, connection);
       addEvidenceFold(page, view.evidenceTitle, connection.evidence, '');
     });

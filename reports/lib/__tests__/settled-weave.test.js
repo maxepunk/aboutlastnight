@@ -10,7 +10,6 @@
  *   brief 1B; R7): the map writer gives each beat the pieces that tell it; then the threads the
  *   angle leaves out, by name and nothing more (fix round, fix 5): the map writer adds no thread;
  * - the connections between its threads, each by its line and the names of the threads it joins;
- *   a struck connection is gone;
  * - every question with the thread it sits beside, the director's answer word for word, or marked
  *   unanswered, and what its answer changes;
  * - each change the director made at the meeting, marked by its edit's id.
@@ -63,13 +62,16 @@ const WRITERS = {
   ]
 };
 
-/** The director's version: angle 1 kept, t3's line rewritten, a thread added to it, c2 struck, q1 and q3 answered. */
+/** The director's line on c2. */
+const C2_LINE = 'The scoreboard put the money in front of every voter.';
+
+/** The director's version: angle 1 kept, t3's line rewritten, a thread added to it, c2's line rewritten, q1 and q3 answered. */
 function directors() {
   const weave = clone(WRITERS);
   weave.threads[2].line = 'Two allies split over the secret Rowan kept.';
   weave.threads.push({ id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.' });
   weave.angles[0].threads.push('t7');
-  weave.connections[1].struck = true;
+  weave.connections[1].line = C2_LINE;
   weave.questions[0].answer = 'Print it as the room said it, as their exaggeration.';
   weave.questions[2].answer = 'she/her';
   return weave;
@@ -133,10 +135,10 @@ describe('renderSettledWeave: the angle the director settled (briefs 4.5 and 3B)
     expect(lines[lines.findIndex((line) => line.startsWith('- t7 ')) + 1]).toBe('  - No evidence yet.');
   });
 
-  it('prints the live connections between its threads, each by its line and the names of the threads it joins; a struck one and one to a left-out thread are gone', () => {
+  it('prints the connections between its threads, each by its line and the names of the threads it joins; one to a left-out thread is gone', () => {
     const text = settled();
     expect(text).toContain('- c1, joining "The case against Rowan" and "The bathroom": Sloane turned the room against Rowan.');
-    expect(text).not.toContain('c2');
+    expect(text).toContain(`- c2, joining "The case against Rowan" and "The last two minutes": ${C2_LINE}`);
     expect(text).not.toContain(WRITERS.connections[1].line);
     expect(text).not.toContain(WRITERS.connections[2].line);
   });
@@ -155,11 +157,10 @@ describe('renderSettledWeave: the angle the director settled (briefs 4.5 and 3B)
 
   // Brief 4.14a: by its id in the meeting's own form, M and the edit's number (E1 is M1), so
   // no later prompt holds a meeting change and a later stop's edit under one id.
-  it("marks each change the director made at the meeting by its id in the meeting's own form; a strike leaves no line to mark", () => {
+  it("marks each change the director made at the meeting by its id in the meeting's own form", () => {
     const text = settled();
     expect(text.split('\n').find((line) => line.startsWith('- t3'))).toMatch(/\[the director's change M1: the line\]$/);
     expect(text.split('\n').find((line) => line.startsWith('- t7'))).toMatch(/\[the director's change M2: a thread they added\]$/);
-    expect(text).not.toContain('M3');
     expect(text).not.toMatch(/\bE\d+\b/);
   });
 
@@ -290,7 +291,7 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
 
   /**
    * The director's version: "from your notes" rewritten, t8 given a new name and a new line (two
-   * marks on one line), t7 added to the angle, c5 struck, and one question of each kind answered.
+   * marks on one line), t7 added to the angle, and one question of each kind answered.
    */
   const directors = () => {
     const weave = planted();
@@ -300,7 +301,6 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
     t8.line = 'A second account took the overflow, under a name no one claimed.';
     weave.threads.push({ id: 't7', name: 'The guest list', line: 'The guest list changed that morning.' });
     weave.angles[0].threads.push('t7');
-    weave.connections.find((connection) => connection.id === 'c5').struck = true;
     weave.questions.filter((q) => !q.id.endsWith('-open')).forEach((q) => { q.answer = `The director's answer about ${q.about}.`; });
     return weave;
   };
@@ -310,7 +310,7 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
     return renderSettledWeave(weave, carriedEdits(standingAtMeeting(null, planted(), weave), weave));
   };
 
-  it('the render prints every label: the pitch, an added thread, the evidence of each stance, the threads left out, live connections, each question kind both ways and beside its thread, and changes by their edit ids', () => {
+  it('the render prints every label: the pitch, an added thread, the evidence of each stance, the threads left out, the connections, each question kind both ways and beside its thread, and changes by their edit ids', () => {
     const text = render();
     const lines = text.split('\n');
     const labels = [
@@ -321,7 +321,6 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
       "  The director's answer, word for word: \"", '  Unanswered.', '</SETTLED_WEAVE>'
     ];
     labels.forEach((label) => expect(`${label}: ${text.includes(label)}`).toBe(`${label}: true`));
-    expect(text).not.toContain('c5,');
     WEAVE_QUESTION_KINDS.forEach((kind) => {
       expect(lines[lines.findIndex((line) => line.startsWith(`- q-${kind} `)) + 1]).toMatch(/^ {2}The director's answer, word for word: "/);
       expect(lines[lines.findIndex((line) => line.startsWith(`- q-${kind}-open `)) + 1]).toBe('  Unanswered.');

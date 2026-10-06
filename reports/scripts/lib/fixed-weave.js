@@ -11,8 +11,7 @@
  * at the meeting (the shapes lib/meeting.js DIRECTOR_WEAVE_SCHEMA allows). The director's
  * changes between them, which lib/hand-edit-diff.js standingAtMeeting reads as the
  * standing edits:
- * - a thread they added, t5, appended to the angle they picked;
- * - a struck connection: c2, `struck: true`.
+ * - a thread they added, t5, appended to the angle they picked.
  * Beside them, the director's pick (angle 1), a rewrite of angle 1's story, marked "[RENDER-DIFF
  * EDIT]", and t3 flipped into angle 1: until slice 3C makes an angle's pitch and its threads the
  * director's edits, these two change what the settled weave prints and make no edit.
@@ -70,7 +69,7 @@ const FIXED_BASELINE = Object.freeze({
       evidence: [piece(['notes', 'ledger'], 'RENDER-DIFF PIECE 6: the vote beside the last sale.')]
     },
     {
-      id: 'c2', joins: ['t2', 't4'], line: 'RENDER-DIFF CONNECTION 2: struck at the meeting.', kind: 'person',
+      id: 'c2', joins: ['t2', 't4'], line: 'RENDER-DIFF CONNECTION 2: one account in both threads.', kind: 'person',
       evidence: [piece(['ledger'], 'RENDER-DIFF PIECE 7: one account in both threads.')]
     }
   ],
@@ -96,7 +95,6 @@ const FIXED_WEAVE = Object.freeze({
     ? { ...a, story: `${a.story} [RENDER-DIFF EDIT]`, threads: [...a.threads, 't3', ADDED_THREAD.id] }
     : a)),
   threads: [...FIXED_BASELINE.threads, ADDED_THREAD],
-  connections: FIXED_BASELINE.connections.map((connection) => (connection.id === 'c2' ? { ...connection, struck: true } : connection)),
   questions: FIXED_BASELINE.questions.map((question) => (question.id === 'q1'
     ? { ...question, answer: 'RENDER-DIFF ANSWER: print it as the ledger gives it.' }
     : question))

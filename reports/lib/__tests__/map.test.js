@@ -1099,8 +1099,8 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     };
   }
   /**
-   * The director's four changes: "from your notes", t3's line, a thread added to the open angle, c2
-   * struck. Piece 3 (brief 3B): a change to an angle's pitch is no edit until slice 3C, so the
+   * The director's four changes: "from your notes", t3's line, a thread added to the open angle, c2's
+   * line. Piece 3 (brief 3B): a change to an angle's pitch is no edit until slice 3C, so the
    * story's change became the words from the director's notes, and the role's, the thread's line.
    */
   const fourChanges = (w) => {
@@ -1108,7 +1108,7 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     w.threads[2].line = 'Morgan paid Riley at the bar, in an envelope.';
     w.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger in the back room.' });
     w.angles[0].threads.push('t6');
-    w.connections[1].struck = true;
+    w.connections[1].line = 'The sale and the result came back the same night.';
   };
   /** The fixture's map with t3 kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
   const keepsT3Out = () => {
@@ -1160,7 +1160,7 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
       // Phase 4b (brief 1B): a thread by its name, as the meeting's page shows it.
       { id: 'M2', place: 'the line "Morgan paid Riley at the bar, in an envelope"' },
       { id: 'M3', place: 'the thread you added, "The second ledger"' },
-      { id: 'M4', place: 'the connection you struck, "The night of the sale is the night the result came back"' }
+      { id: 'M4', place: 'the connection "The sale and the result came back the same night"' }
     ]);
     expect(data.meetingChanges.map((change) => change.id)).toEqual(meetingEditIdsOf(state));
     expect(mapCheckpointData(approvedWith(() => {}), { keptPhotos: [], maxRevisions: 1 }).meetingChanges).toEqual([]);

@@ -5,7 +5,7 @@
  * The checks (lib/map.js mapFindings) read the map against the session: the roster, the
  * photos kept for the article, the record's document ids, the threads and the connections of
  * the angle the director settled (lib/weave.js settledAngleOf: its threads, and the connections
- * between them that the director did not strike; phase 4b, piece 3, brief 3B), and the
+ * between them; phase 4b, piece 3, brief 3B), and the
  * director's changes and note at the meeting. A failure the director caused on the map is a concern on their edit, never a
  * rework.
  *

@@ -72,8 +72,8 @@ describe('the paths the skill path names', () => {
  * analyzer writes the weave, which the director settles at the story meeting; the outline
  * generator lays it across the sections as the story map, which the director settles at the
  * map's stop; the article generator writes from both. The weave's shape in schemas.md is the
- * pipeline's (lib/sdk-client/subagents.js WEAVE_SCHEMA, with the director's answers and
- * strikes the meeting adds), so its roles and kinds cannot drift from lib/weave.js and
+ * pipeline's (lib/sdk-client/subagents.js WEAVE_SCHEMA, with the director's pick and answers
+ * the meeting adds), so its roles and kinds cannot drift from lib/weave.js and
  * lib/writer-questions.js. The map's shape is lib/schemas/outline.schema.json with the
  * theme's slots, which the path points at rather than copies.
  */
@@ -110,9 +110,10 @@ describe('the stages (phase 4)', () => {
     const kinds = [...block.matchAll(/"kind": "([^"<]+)"/g)].map((m) => m[1].split('|').map((s) => s.trim()));
     expect(kinds).toEqual([[...CONNECTION_KINDS], [...WEAVE_QUESTION_KINDS]]);
     const keys = new Set([...block.matchAll(/"([A-Za-z]+)":/g)].map((m) => m[1]));
-    ['role', 'reason', 'convergence', 'strongerMainThread'].forEach((key) => expect(`${key}: ${keys.has(key)}`).toBe(`${key}: false`));
+    // Piece 3 (brief 3C; R7): the strike on a connection went from the weave.
+    ['role', 'reason', 'convergence', 'strongerMainThread', 'struck'].forEach((key) => expect(`${key}: ${keys.has(key)}`).toBe(`${key}: false`));
     const items = (prop) => Object.keys(WEAVE_SCHEMA.properties[prop].items.properties);
-    [...Object.keys(WEAVE_SCHEMA.properties), ...items('angles'), ...items('threads'), ...items('connections'), ...items('questions'), WEAVE_ANSWER_KEY, PICKED_KEY, 'struck']
+    [...Object.keys(WEAVE_SCHEMA.properties), ...items('angles'), ...items('threads'), ...items('connections'), ...items('questions'), WEAVE_ANSWER_KEY, PICKED_KEY]
       .forEach((key) => expect(`${key}: ${keys.has(key)}`).toBe(`${key}: true`));
   });
 
@@ -218,7 +219,7 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
     const allowed = new Set([
       ...Object.keys(WEAVE_SCHEMA.properties), ...items('angles'), ...items('threads'), ...items('connections'), ...items('questions'),
       ...Object.keys(WEAVE_SCHEMA.properties.threads.items.properties.evidence.items.properties),
-      WEAVE_ANSWER_KEY, PICKED_KEY, 'struck', 'directorChanges', 'change'
+      WEAVE_ANSWER_KEY, PICKED_KEY, 'directorChanges', 'change'
     ]);
     keysOf(block).forEach((key) => expect(`${key}: ${allowed.has(key)}`).toBe(`${key}: true`));
     expect(listedIn(block, 'sources')).toEqual(SOURCES);

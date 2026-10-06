@@ -61,9 +61,9 @@ const { systemPromptOpening, buildDirectorGuidanceSection, filterGateNotes, rost
 const { loadRuleSet } = require('../../rule-set');
 const { WEAVE_QUESTIONS_PROPERTY, WEAVE_QUESTION_THREAD_KEY, weaveQuestionsOf, carriedWeaveQuestions, withoutAnswers } = require('../../writer-questions');
 const {
-  CONNECTION_KINDS, MEETING_WORD_BOUND, QUESTION_WORD_BOUND, PICKED_KEY, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS, STRUCK_KEY,
+  CONNECTION_KINDS, MEETING_WORD_BOUND, QUESTION_WORD_BOUND, PICKED_KEY, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS,
   isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
-  weaveFindings, withStruckConnections, withPickFrom, withHeldQuestionThreads, writersShareOf, weaveWritersTextBlank, meetingLengthOf, weaveIdOf
+  weaveFindings, withPickFrom, withHeldQuestionThreads, writersShareOf, weaveWritersTextBlank, meetingLengthOf, weaveIdOf
 } = require('../../weave');
 // Phase 4b (brief 1B; R10): the evidence under each line, the sources a piece may name, and what
 // the checks the weave and the map share read.
@@ -72,7 +72,7 @@ const { SOURCES_GLOSS, EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../
 const { meetingCheckpointData } = require('../../meeting');
 const { wordsShown } = require('../../stop-pages');
 const {
-  carriedEdits, settleEdits, weaveDirectorsShare, directorEditConcern, isStrike, SEND_BACK_PASS, REWEAVE_PASS
+  carriedEdits, settleEdits, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS
 } = require('../../hand-edit-diff');
 // Brief 4.5: a send-back that carries the director's edits asks for the list of those it
 // changed, as the outline's and the article's send-backs do (F1): one schema rule, one strip.
@@ -425,24 +425,14 @@ function evidenceCountOf(weave) {
     .reduce((n, element) => n + (element && Array.isArray(element.evidence) ? element.evidence.length : 0), 0);
 }
 
-/** Connections with no strike on any: the strike is the director's key alone (R12). */
-function withoutStrikes(connections) {
-  return connections.map((connection) => {
-    if (!connection || typeof connection !== 'object' || !(STRUCK_KEY in connection)) return connection;
-    const { [STRUCK_KEY]: _struck, ...live } = connection;
-    return live;
-  });
-}
-
 /**
  * The weave a writer or a rework returned, as the state stores it: its fields as the
  * model wrote them, with only the well-formed questions kept, and without the director's
- * keys (R12; brief 4.5b; piece 3, R1). The pick (`picked`), an `answer` on a question and
- * `struck` on a connection are written only by the director at the meeting: WEAVE_SCHEMA
- * leaves extra keys open, and a model-written answer would show at the meeting as answered and
- * print in the settled weave as the director's words, a model-written strike would take a
- * connection out of the story silently, and a model-written pick would send an angle on that
- * the director never chose.
+ * keys (R12; brief 4.5b; piece 3, R1). The pick (`picked`) and an `answer` on a question are
+ * written only by the director at the meeting: WEAVE_SCHEMA leaves extra keys open, and a
+ * model-written answer would show at the meeting as answered and print in the settled weave as
+ * the director's words, and a model-written pick would send an angle on that the director never
+ * chose.
  *
  * @param {Object} result - the model's output
  * @param {string} who - the call, for the error
@@ -456,7 +446,6 @@ function weaveFromOutput(result, who) {
   const { [PICKED_KEY]: _pick, ...weave } = weaveForPrompt(result);
   return {
     ...weave,
-    ...(Array.isArray(weave.connections) && { connections: withoutStrikes(weave.connections) }),
     questions: withoutAnswers(weaveQuestionsOf(result.questions))
   };
 }
@@ -602,14 +591,6 @@ const ARC_REWORK_TASK = `## YOUR TASK
 Rework the PREVIOUS WEAVE OUTPUT as the revision context above directs, and return the whole weave in the OUTPUT FORMAT at the top.`;
 
 /**
- * The task's line on a struck connection's id (brief 4.14a), printed when <HAND_EDITS> lists
- * a connection the director struck. The rework reads the weave without it (lib/weave.js
- * weaveForRework), so its id looks free; a connection the rework adds under it is another
- * connection, which code gives an id of its own (withStruckConnections).
- */
-const ARC_REWORK_STRUCK_IDS = 'Each connection <HAND_EDITS> marks struck keeps its id while it stays out of the story: give a connection you add an id that no connection in the PREVIOUS WEAVE OUTPUT or in <HAND_EDITS> holds.';
-
-/**
  * The arc rework's prompt (phase 2, 2.3): the arc writer's sections, then the revision
  * block (the revision context, the previous weave, the task), then the standing notes
  * (<DIRECTOR_GUIDANCE>) last.
@@ -617,12 +598,9 @@ const ARC_REWORK_STRUCK_IDS = 'Each connection <HAND_EDITS> marks struck keeps i
  * @param {Object} state - Current workflow state
  * @param {string} contextSection - the revision context (buildRevisionContext)
  * @param {string} previousOutputSection - the previous weave (buildRevisionContext)
- * @param {Object} [options]
- * @param {boolean} [options.struck] - whether the context's <HAND_EDITS> lists a connection
- *   the director struck, so the task says its id stays taken (brief 4.14a)
  * @returns {string}
  */
-function buildArcRevisionPrompt(state, contextSection, previousOutputSection, { struck = false } = {}) {
+function buildArcRevisionPrompt(state, contextSection, previousOutputSection) {
   return `${buildWeaveSections(state)}
 ---
 
@@ -636,21 +614,15 @@ ${previousOutputSection}
 
 ---
 
-${ARC_REWORK_TASK}${struck ? ` ${ARC_REWORK_STRUCK_IDS}` : ''}${buildArcStandingNotes(state)}`;
+${ARC_REWORK_TASK}${buildArcStandingNotes(state)}`;
 }
 
 /**
- * The weave a rework returned, as the state stores it (weaveFromOutput: no answer and no
- * strike the rework wrote):
+ * The weave a rework returned, as the state stores it (weaveFromOutput: no answer the rework
+ * wrote):
  * - the questions (carriedWeaveQuestions, briefs 4.5 and 4.5b): every answered question,
  *   its words and the director's answer kept (it may take a new id), and every question the
  *   rework did not answer, whatever kind of rework; an answer the rework wrote is no answer;
- * - the connections the director struck, which the rework never saw (they are out of its
- *   view), back where they sat, still struck (withStruckConnections). The struck connection
- *   itself, returned under its id, comes back live, and code strikes it again (settleEdits),
- *   except on a send-back, which may change an edit; any other connection the rework
- *   returned under a struck id keeps its words and joins under an id of its own, numbered
- *   after every connection id the round has used (brief 4.14a);
  * - the director's pick, carried over while its angle survives by id, so the meeting reopens on
  *   the angle the director had open, or on the first angle when the rework dropped it (piece 3,
  *   R1; lib/weave.js withPickFrom);
@@ -668,15 +640,13 @@ ${ARC_REWORK_TASK}${struck ? ` ${ARC_REWORK_STRUCK_IDS}` : ''}${buildArcStanding
  * @param {Object} previous - the weave the rework started from
  * @param {Object} options
  * @param {boolean} options.directorRound
- * @param {Object|null} [options.roundStart] - the weave the director's round started from
- *   (state `_weaveMarks.from`), when a round ran: its connection ids stay taken
  * @returns {Object}
  */
-function weaveFromRework(result, previous, { directorRound, roundStart = null }) {
-  const weave = withHeldQuestionThreads(withPickFrom(withStruckConnections({
+function weaveFromRework(result, previous, { directorRound }) {
+  const weave = withHeldQuestionThreads(withPickFrom({
     ...weaveFromOutput(result, 'arc rework'),
     questions: carriedWeaveQuestions(result && result.questions, previous.questions)
-  }, weaveForPrompt(previous), { roundStart }), previous), previous, result && result.questions);
+  }, previous), previous, result && result.questions);
   const mark = directorRound ? null : factCheckMarkOf(previous);
   return mark ? { ...weave, [FACT_CHECK_MARK_KEY]: { ...mark, fixes: (mark.fixes || 0) + 1 } } : weave;
 }
@@ -687,9 +657,7 @@ function weaveFromRework(result, previous, { directorRound, roundStart = null })
  * automatic pass, a reweave and a send-back alike. The round mark decides the rework's
  * system prompt, its scope (buildRevisionContext) and, on a send-back that carries the
  * director's edits, the schema that asks which edits it changed. A director's round reads
- * no finding from before the round. The version the rework starts from is read with the
- * connections the director struck, which <HAND_EDITS> lists and the rework's own view of
- * the weave leaves out.
+ * no finding from before the round.
  *
  * @param {Object} state - the weave, the findings, the round mark and its note, the
  *   director's standing edits
@@ -722,7 +690,7 @@ function arcReworkCall(state) {
     before,
     edits,
     asksForChangedEdits,
-    prompt: buildArcRevisionPrompt(state, contextSection, previousOutputSection, { struck: edits.some(isStrike) }),
+    prompt: buildArcRevisionPrompt(state, contextSection, previousOutputSection),
     systemPrompt: getArcRevisionSystemPrompt(meetingRound, state.sessionConfig, state.theme),
     jsonSchema: asksForChangedEdits ? reworkSchemaWithChangedEdits(WEAVE_SCHEMA) : WEAVE_SCHEMA,
     label: `Arc revision ${revisionCount}`
@@ -740,12 +708,8 @@ function arcReworkCall(state) {
  * finding from before the round.
  *
  * Every pass but a send-back is held to the director's standing edits: code puts back
- * each line it changed and strikes again, by id, each struck connection it brought back
- * (lib/hand-edit-diff.js settleEdits), and the round's report (`_weaveHandEditReport`)
- * records each change and each restore. On every pass, a connection the rework returned
- * under a struck connection's id that is not the struck connection keeps its words and
- * joins under an id of its own (weaveFromRework; brief 4.14a), and the task says each struck
- * connection's id stays taken (ARC_REWORK_STRUCK_IDS). The weave a pass leaves is the writer's last
+ * each line it changed (lib/hand-edit-diff.js settleEdits), and the round's report
+ * (`_weaveHandEditReport`) records each change and each restore. The weave a pass leaves is the writer's last
  * weave (`_weaveBaseline`), the meeting's next diffs start from it; a director's round
  * also keeps the version the director left (`_weaveMarks`), from which the meeting reads
  * what the round changed.
@@ -808,7 +772,7 @@ async function reviseArcs(state, config) {
       before: call.before,
       // Brief 4.14a: the weave the round started from keeps its connection ids taken, so a
       // connection the fix adds after a round is never marked as one the round changed.
-      after: weaveFromRework(output, previous, { directorRound, roundStart: (state._weaveMarks && state._weaveMarks.from) || null }),
+      after: weaveFromRework(output, previous, { directorRound }),
       pass,
       reasons: call.asksForChangedEdits ? reasons : []
     });
@@ -1055,7 +1019,6 @@ module.exports = {
     ARC_REWORK_CLAUSES,
     NOTE_CORRECTS_A_MECHANIC,
     ARC_REWORK_TASK,
-    ARC_REWORK_STRUCK_IDS,
     WEAVE_TASK,
     buildCharacterCategoriesBlock,
     buildArcStandingNotes,

@@ -66,7 +66,7 @@ const {
 const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../../writer-questions');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
 // the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
-// (no struck connection, no answer), and the director's answers, which it reads as record.
+// (no pick, no answer), and the director's answers, which it reads as record.
 const { isWeave, weaveForPrompt, weaveForJudge, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
 // Brief 4.7a: the article judge reads the settled weave as every later writer does.
 const { renderDirectorAnswers, settledWeaveOf } = require('../../prompt-renderers/settled-weave');
@@ -439,7 +439,7 @@ function truthIssueLines(failed, written) {
 /**
  * The output each judge scores: the one the director's edits are found in. The weave
  * without its code-owned keys (brief 4.5): the parts the guard reads of it leave out the
- * connections the director struck and the answers (lib/hand-edit-diff.js weaveParts).
+ * answers (lib/hand-edit-diff.js weaveParts).
  *
  * @param {'arcs'|'article'} phase
  * @param {Object} state
@@ -455,8 +455,7 @@ function judgedOutput(phase, state) {
  * The director's edits the judged output carries (F1; spec 2026-10-02 section 7), in id
  * order: the one list the judge's prompt prints, the verdict guard reads and the fact
  * check locates (createEvaluator, buildFactCheckArgs, scripts/lib/render-calls.js). At the
- * story meeting (brief 4.5), the director's changes the weave carries, each strike among
- * them.
+ * story meeting (brief 4.5), the director's changes the weave carries.
  *
  * @param {'arcs'|'article'} phase
  * @param {Object} state
@@ -517,9 +516,8 @@ function opensWithName(finding, key) {
  * - A judge's advisory that quotes the director's text is a concern in its place, never a
  *   suggestion for the rework (FA, requirement 6).
  * - A finding the judge filed under the prefix and edits that own no text alone (lib/
- *   hand-edit-diff.js ownsNoText: a block the director moved at the desk, a connection they
- *   brought back at the meeting) is read by its quotes (task 4.5e): a place holds only the
- *   writer's text. A quote of the director's text makes it a concern under the edits it
+ *   hand-edit-diff.js ownsNoText: a block the director moved at the desk) is read by its
+ *   quotes (task 4.5e): a place holds only the writer's text. A quote of the director's text makes it a concern under the edits it
  *   quotes, and a quote of the writer's words the writer's must-fix, whichever list the judge
  *   filed it in. One whose quotes locate nothing stays a concern beside the edits, as the
  *   judge filed it (task 4.5f): that is how a judge disagrees with the director's choice of a
@@ -1417,8 +1415,8 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // Phase 4b (brief 1B; spec 6.2): it opens by naming the evidence under each line, and
       // reads each line against its evidence and each piece against the record.
       //
-      // Brief 4.5: after a director's round it reads the weave as it judges it (no struck
-      // connection, no answer), the director's changes right after it, and their answers
+      // Brief 4.5: after a director's round it reads the weave as it judges it (no pick, no
+      // answer), the director's changes right after it, and their answers
       // after the notes, as the director's words (T1).
       //
       // Phase 4b, piece 3 (brief 3B; spec 9.2): it opens by naming the angles and the threads

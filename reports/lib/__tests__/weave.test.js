@@ -612,29 +612,10 @@ describe("each failure says what is wrong to the director in plain words (its li
 // 4.5: the meeting's plumbing (spec 4.3, 4.4; rulings 2 and 3)
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The director strikes a connection by marking it `struck: true`, so the meeting can show
-// it struck; every reader of the story reads the live connections alone. The checks read
-// only the writer's text (R11): the director's share of the weave, read from their
+// The checks read only the writer's text (R11): the director's share of the weave, read from their
 // standing edits, is never a check's failure.
-describe('4.5: struck connections, the round mark and the views of the weave', () => {
-  const {
-    MEETING_ROUNDS, STRUCK_KEY, isStruck, liveConnections, meetingRoundOf, weaveForRework, weaveForJudge, withStruckConnections, printedWeaveFields
-  } = require('../weave');
-  const struck = () => ({ ...clone(WEAVE), connections: clone(WEAVE).connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c)) });
-
-  it('a connection the director struck carries struck: true, and the live connections leave it out', () => {
-    expect(STRUCK_KEY).toBe('struck');
-    const weave = struck();
-    expect(isStruck(weave.connections[1])).toBe(true);
-    expect(isStruck(weave.connections[0])).toBe(false);
-    expect(liveConnections(weave).map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
-    expect(liveConnections(null)).toEqual([]);
-  });
-
-  it("a struck connection's line is no printed field of the weave's", () => {
-    expect(printedWeaveFields(struck()).map((entry) => entry.text)).not.toContain(WEAVE.connections[1].line);
-    expect(printedWeaveFields(WEAVE).map((entry) => entry.text)).toContain(WEAVE.connections[1].line);
-  });
+describe('4.5: the round mark and the views of the weave', () => {
+  const { MEETING_ROUNDS, meetingRoundOf, weaveForRework, weaveForJudge } = require('../weave');
 
   it('the round mark is the reweave or the send-back, and nothing else', () => {
     expect([...MEETING_ROUNDS]).toEqual(['reweave', 'send-back']);
@@ -645,47 +626,23 @@ describe('4.5: struck connections, the round mark and the views of the weave', (
     expect(meetingRoundOf({})).toBeNull();
   });
 
-  it('a rework reads the weave without its code-owned keys or its struck connections, answers and evidence kept', () => {
-    const weave = withFactCheckMark({ ...struck(), questions: [{ ...WEAVE.questions[0], answer: 'Print it as the room said it.' }] }, { at: 't', ready: true, fixes: 0 });
+  it('a rework reads the weave without its code-owned keys, every connection, answer and evidence kept', () => {
+    const weave = withFactCheckMark({ ...clone(WEAVE), questions: [{ ...WEAVE.questions[0], answer: 'Print it as the room said it.' }] }, { at: 't', ready: true, fixes: 0 });
     const view = weaveForRework(weave);
     expect(view).not.toHaveProperty('_factCheck');
-    expect(view.connections.map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
+    expect(view.connections.map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
     expect(view.questions[0].answer).toBe('Print it as the room said it.');
     expect(view.threads[2].evidence).toEqual(WEAVE.threads[2].evidence);
     expect(weave.connections).toHaveLength(4);
   });
 
-  it("the fact check reads the weave with no struck connection and no answer, and with every line's evidence", () => {
-    const weave = { ...struck(), questions: [{ ...WEAVE.questions[0], answer: 'Print it as the room said it.' }] };
+  it("the fact check reads the weave with every connection, no answer, and every line's evidence", () => {
+    const weave = { ...clone(WEAVE), questions: [{ ...WEAVE.questions[0], answer: 'Print it as the room said it.' }] };
     const view = weaveForJudge(weave);
-    expect(view.connections.map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
+    expect(view.connections.map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
     expect(view.questions[0]).not.toHaveProperty('answer');
     expect(view.questions[0].question).toBe(WEAVE.questions[0].question);
     expect(view.connections[0].evidence).toEqual(WEAVE.connections[0].evidence);
-  });
-
-  describe('withStruckConnections: the struck connections a rework never saw come back where they sat', () => {
-    it('puts each one the output lacks back in its place', () => {
-      const previous = struck();
-      const output = { ...clone(WEAVE), connections: clone(WEAVE).connections.filter((c) => c.id !== 'c2') };
-      const back = withStruckConnections(output, previous);
-      expect(back.connections.map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
-      expect(back.connections[1]).toEqual(previous.connections[1]);
-      expect(output.connections).toHaveLength(3);
-    });
-
-    // Brief 4.14a: the struck connection itself; another connection under its id takes an id
-    // of its own (the 4.14a block below).
-    it('leaves the struck connection the output returned under its id as the output has it', () => {
-      const previous = struck();
-      const output = clone(WEAVE);
-      expect(withStruckConnections(output, previous)).toEqual(output);
-    });
-
-    it('returns the output as it is when nothing was struck', () => {
-      const output = clone(WEAVE);
-      expect(withStruckConnections(output, clone(WEAVE))).toBe(output);
-    });
   });
 });
 
@@ -739,10 +696,6 @@ describe("4.5: the checks read only the writer's text (R11, ruling 2)", () => {
     expect(check(typed, { directorsShare: share({ fields: { fromYourNotes: 'E1' } }) })).toEqual([]);
   });
 
-  it('a struck connection is no failure, whatever it joins or holds', () => {
-    const weave = { ...clone(WEAVE), connections: [...clone(WEAVE).connections, { id: 'c9', joins: ['t1', 't99'], line: 'At 7:58, "x".', kind: 'person', evidence: [piece(['zzz999'], 'x')], struck: true }] };
-    expect(check(weave)).toEqual([]);
-  });
 });
 
 // Review focus 3: only the writer's output is held to the bound. The node counts the page of the
@@ -890,7 +843,7 @@ describe("4.5b: one list of the weave's printed fields", () => {
   const { WEAVE_PRINTED_FIELDS, printedWeaveFields } = require('../weave');
   const { _testing: { printedLeaves } } = require('../hand-edit-diff');
 
-  /** A weave whose every printed field holds a word of its own, its evidence, and a struck connection. */
+  /** A weave whose every printed field holds a word of its own, and its evidence. */
   function marked() {
     const word = (where) => `w-${where}`;
     const weave = Object.fromEntries(WEAVE_PRINTED_FIELDS.weave.map((field) => [field, word(field)]));
@@ -899,8 +852,7 @@ describe("4.5b: one list of the weave's printed fields", () => {
     weave.picked = 'a1';
     weave.threads = [0, 1].map((i) => ({ id: `t${i}`, ...element('threads', i), evidence: [piece(['ledger'], `unprinted evidence ${i}`)] }));
     weave.connections = [
-      { id: 'c0', joins: ['t0', 't1'], kind: 'person', ...element('connections', 0), evidence: [piece(['notes'], 'unprinted connection evidence')] },
-      { id: 'c1', joins: ['t0', 't1'], kind: 'line', line: 'struck words', struck: true, evidence: [] }
+      { id: 'c0', joins: ['t0', 't1'], kind: 'person', ...element('connections', 0), evidence: [piece(['notes'], 'unprinted connection evidence')] }
     ];
     weave.questions = [{ id: 'q0', kind: 'player', ...element('questions', 0) }];
     return weave;
@@ -919,7 +871,7 @@ describe("4.5b: one list of the weave's printed fields", () => {
     expect(Object.isFrozen(WEAVE_PRINTED_FIELDS)).toBe(true);
   });
 
-  it('the edits read every printed field, in the order the meeting prints it, and no struck connection and no evidence', () => {
+  it('the edits read every printed field, in the order the meeting prints it, and no evidence', () => {
     const weave = marked();
     const texts = printedWeaveFields(weave).map((entry) => entry.text);
     expect(printedLeaves(weave)).toEqual(texts);
@@ -952,19 +904,17 @@ describe("4.5b: an element's place under its id (occurrenceKeys)", () => {
 //
 // Meeting 2: a connection that joins a thread the director left out stayed in the story, so
 // the map check demanded it land in a beat and spent the map's one rework. It goes out of the
-// story with its thread, as a struck connection does, and comes back when the thread does;
-// the weave's own checks still read every connection the director did not strike.
+// story with its thread, and comes back when the thread does; the weave's own checks still read
+// every connection.
 describe('4.14a: a connection that joins a thread the settled angle leaves out goes out of the story with it', () => {
-  const { storyConnections, liveConnections } = require('../weave');
+  const { storyConnections } = require('../weave');
   /** WEAVE with angle 1 telling these threads. c1 joins t1 and t3; c3 joins t4 and t5. */
   const telling = (weave, ids) => ({ ...weave, angles: weave.angles.map((a) => (a.id === 'a1' ? { ...a, threads: ids } : a)) });
 
   // Piece 3 (brief 3B): the settled angle decides which threads are in the story.
-  it('leaves out a connection that joins a thread the angle leaves out, as it leaves out a struck one', () => {
+  it('leaves out a connection that joins a thread the angle leaves out', () => {
     const weave = telling(clone(WEAVE), ['t1', 't2', 't4', 't5']);
-    weave.connections[1].struck = true;
-    expect(storyConnections(weave).map((c) => c.id)).toEqual(['c3', 'c4']);
-    expect(liveConnections(weave).map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
+    expect(storyConnections(weave).map((c) => c.id)).toEqual(['c2', 'c3', 'c4']);
     expect(storyConnections(null)).toEqual([]);
   });
 
@@ -982,48 +932,5 @@ describe('4.14a: a connection that joins a thread the settled angle leaves out g
     const weave = telling(clone(WEAVE), ['t1', 't2', 't4', 't5']);
     weave.connections.push({ id: 'c5', joins: ['t3', 't9'], line: 'Someone the weave never names.', kind: 'person', evidence: [piece(['notes'], 'The bar.')] });
     expect(typesOf(check(weave))).toEqual(['connection-joins-unknown-thread']);
-  });
-});
-
-// Meeting 1: a rework shown the weave without its struck connections numbered a new connection
-// with a struck one's id, and code wrote the struck connection over it. Code strikes again only
-// the struck one; any other connection under a struck id keeps its words and joins under a
-// fresh id, numbered after every connection id in use, and the struck one goes back where it sat.
-describe("4.14a: a rework never takes a struck connection's id", () => {
-  const { withStruckConnections, isSameConnection, freshConnectionId } = require('../weave');
-  /** WEAVE with c2 (a moment joining t1 and t2) struck. */
-  const struck = () => ({ ...clone(WEAVE), connections: clone(WEAVE).connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c)) });
-  /** A rework's output: WEAVE without c2, with `added` where c2 sat. */
-  const reworkWith = (added) => ({ ...clone(WEAVE), connections: [WEAVE.connections[0], added, WEAVE.connections[2], WEAVE.connections[3]] });
-  const NEW = { id: 'c2', joins: ['t6', 't3'], line: 'Kai is at the coat check, then in the bathroom.', kind: 'person', evidence: [piece(['kai004'], 'Kai at the coat check.')] };
-
-  it('another connection under a struck id keeps its words and joins under a fresh id, and the struck one goes back where it sat', () => {
-    const previous = struck();
-    const output = reworkWith(NEW);
-    const back = withStruckConnections(output, previous);
-    expect(back.connections.map((c) => [c.id, c.struck === true])).toEqual([['c1', false], ['c2', true], ['c5', false], ['c3', false], ['c4', false]]);
-    expect(back.connections[1]).toEqual(previous.connections[1]);
-    expect(back.connections[2]).toEqual({ ...NEW, id: 'c5' });
-    expect(output.connections[1].id).toBe('c2');
-  });
-
-  it('another kind of connection between the same two threads is another connection too', () => {
-    const back = withStruckConnections(reworkWith({ ...NEW, joins: ['t1', 't2'], line: 'Sloane is at the scoreboard and at the bar.' }), struck());
-    expect(back.connections.map((c) => [c.id, c.struck === true])).toEqual([['c1', false], ['c2', true], ['c5', false], ['c3', false], ['c4', false]]);
-  });
-
-  it('the struck one brought back under its id, in other words or with its joins the other way round, stays as the rework wrote it: the restore strikes it again', () => {
-    const output = reworkWith({ ...WEAVE.connections[1], joins: ['t2', 't1'], line: 'The scoreboard: the sale reaches the vote.' });
-    expect(withStruckConnections(output, struck())).toEqual(output);
-    expect(isSameConnection(output.connections[1], struck().connections[1])).toBe(true);
-    expect(isSameConnection(NEW, struck().connections[1])).toBe(false);
-  });
-
-  it("the fresh id is numbered after every connection id in use: the output's, the version it started from and the weave the round started from", () => {
-    expect(freshConnectionId(new Set(['c1', 'c2', 'c4']))).toBe('c5');
-    expect(freshConnectionId(new Set(['link-a']))).toBe('c1');
-    const roundStart = { ...struck(), connections: [...struck().connections, { id: 'c7', joins: ['t1', 't5'], line: 'A line the round took out.', kind: 'line', evidence: [] }] };
-    const back = withStruckConnections(reworkWith(NEW), struck(), { roundStart });
-    expect(back.connections.find((c) => c.line === NEW.line).id).toBe('c8');
   });
 });

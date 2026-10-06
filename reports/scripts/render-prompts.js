@@ -42,7 +42,7 @@
  * lib/old-thread.js isOldShapeWeave), the fixed
  * story meeting of scripts/lib/fixed-weave.js is planted, as the fixed notes are:
  * invented text, the writer's weave as the baseline and the director's version with a
- * thread added, an answer, a struck connection and their pick, its changes the standing
+ * thread added, an answer and their pick, its changes the standing
  * edits; one piece of evidence naming a document the record does not hold gives the
  * automatic pass a check failure to fix. A thread whose weave carries no edits gets the fixed
  * edit on its first thread's line (an angle's pitch is no edit until slice 3C), as the outline

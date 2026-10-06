@@ -5,7 +5,7 @@
  * - THE DIRECTOR-SIDE SCHEMA (DIRECTOR_WEAVE_SCHEMA): the weave as the director leaves it,
  *   derived in code from the writer's (lib/sdk-client/subagents.js WEAVE_SCHEMA). It adds
  *   what no writer writes, the director's pick (`picked`, the angle they sent on; piece 3, R1),
- *   their `answer` on a question and `struck: true` on a connection they struck, and lets a
+ *   and their `answer` on a question, and lets a
  *   thread the director adds have only its id, name and line (phase 4b, briefs 1B and 3B): the
  *   evidence is never the director's (R6), so no thread or connection needs it here, and the
  *   next writer finds the evidence for a thread they added (spec 2026-10-05 section 5.3). The
@@ -14,7 +14,7 @@
  *   validator (console/checkpoint-view-logic.js meetingWeaveProblems, 4.8) applies the same
  *   rules, held to the gate's decisions by a corpus test. It is never sent to the SDK, and code
  *   strips the director's keys from what a writer or a rework returns (arc-specialist-nodes.js
- *   weaveFromOutput), so no model writes a pick, an answer or a strike.
+ *   weaveFromOutput), so no model writes a pick or an answer.
  * - THE PAYLOADS (meetingResume, which server.js buildResumePayload calls, and only while
  *   the thread is paused at the meeting does it take the meeting's arm alone): approve
  *   carries the weave as the director left it and an optional note; a reweave the same,
@@ -39,7 +39,7 @@
 const Ajv = require('ajv');
 const { WEAVE_SCHEMA } = require('./sdk-client/subagents');
 const {
-  STRUCK_KEY, MEETING_ROUNDS, PICKED_KEY, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
+  MEETING_ROUNDS, PICKED_KEY, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
   weaveIdOf, repeatedIds, pickedAngleOf, settledAngleOf
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
@@ -53,7 +53,7 @@ const MEETING_ACTIONS = Object.freeze(['approve', ...MEETING_ROUNDS]);
 
 /**
  * The weave as the director leaves it at the story meeting (R12): the writer's schema,
- * with the director's pick (R1), their answer on a question and the strike on a connection, and
+ * with the director's pick (R1) and their answer on a question, and
  * no thread or connection held to have its evidence (phase 4b, briefs 1B and 3B; R6): a thread
  * the director adds is its id, name and line.
  */
@@ -64,9 +64,6 @@ const DIRECTOR_WEAVE_SCHEMA = (() => {
   };
   schema.properties.questions.items.properties[WEAVE_ANSWER_KEY] = {
     type: 'string', description: "The director's answer, word for word"
-  };
-  schema.properties.connections.items.properties[STRUCK_KEY] = {
-    type: 'boolean', description: 'true on a connection the director struck'
   };
   ['threads', 'connections'].forEach((collection) => {
     const items = schema.properties[collection].items;
@@ -100,7 +97,7 @@ const EMPTY_REWEAVE = "A reweave fits the director's changes and note into the w
 /**
  * What the director-side schema finds wrong with a weave, as one refusal that says where,
  * or null for a weave it accepts. Past the schema, every thread, connection and question
- * has an id of its own (ruling 3): the edits, the strikes and the answers each find their
+ * has an id of its own (ruling 3): the edits and the answers each find their
  * element by its id, which a schema cannot hold an array of objects to. A repeat is read
  * by the rule the checks and the diff read (lib/weave.js repeatedIds; fix round 1,
  * finding 3), so "t6" and "t6 " are one id here as there. The refusal names who made the
@@ -480,8 +477,6 @@ function meetingChangePlace(edit, weave) {
   }
   const line = element.line ? quotedLine(element.line) : `connection ${id}`;
   if (field) return field === 'line' ? `the connection ${line}` : `the ${field} of the connection ${line}`;
-  if (edit.struck === true) return `the connection you struck, ${line}`;
-  if (edit.unstruck === true) return `the connection you brought back, ${line}`;
   return gone ? `the connection you took out, ${line}` : `the connection you added, ${line}`;
 }
 

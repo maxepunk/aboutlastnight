@@ -576,8 +576,7 @@ const ReportStateAnnotation = Annotation.Root({
 
   /**
    * What the passes of the meeting's current round did to the director's edits
-   * (lib/hand-edit-diff.js reportAfterPass): each restore, each connection struck again,
-   * and each edit a send-back's rework changed, with its reason. Reset at each director's
+   * (lib/hand-edit-diff.js reportAfterPass): each restore, and each edit a send-back's rework changed, with its reason. Reset at each director's
    * round, cleared at approve and at the meeting's rollback point.
    */
   _weaveHandEditReport: Annotation({

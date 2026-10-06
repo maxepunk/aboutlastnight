@@ -36,10 +36,9 @@
  * it back after a rework while its angle survives (arc-specialist-nodes.js), and no prompt prints
  * it (weaveForRework, weaveForJudge). With none, the first angle is open (pickedAngleOf). Every reader after the meeting reads the picked angle, its
  * threads in its order, the threads it leaves out and the connections between its threads
- * through settledAngleOf. Until slice 3C the director may still strike a connection
- * (`struck: true`, STRUCK_KEY), which prints nothing (liveConnections). The checks read only the
- * writer's text (R11): the director's share of the weave, read from their standing edits
- * (lib/hand-edit-diff.js weaveDirectorsShare), is never a check's failure. The evidence is never
+ * through settledAngleOf. The checks read only the writer's text (R11): the director's share of
+ * the weave, read from their standing edits (lib/hand-edit-diff.js weaveDirectorsShare), is never
+ * a check's failure. The evidence is never
  * the director's (R6), so every piece is the writer's to answer for.
  *
  * Generic: a weave is angles, threads, connections and questions, so nothing here names a theme.
@@ -81,10 +80,10 @@ const CONNECTION_KINDS = Object.freeze(['person', 'moment', 'document', 'line'])
  * too: the meeting's writer is held only to its own words, and may use
  * max(MEETING_WORD_FLOOR, MEETING_WORD_BOUND - overhead) of them (meetingLengthOf). The meeting's
  * overhead is what code prints: the verdict, its charge and its vote, the open angle's card line,
- * the verdict thread's lock, the thin-notes line and a struck connection's line (labels are no
- * words on the page). The check node counts it once with each angle open, with every field the
- * writer writes left blank (weaveWritersTextBlank; lib/workflow/nodes/arc-specialist-nodes.js
- * meetingPageWords), on the writer's share of the weave (writersShareOf). The writer's task asks
+ * the verdict thread's lock and the thin-notes line (labels are no words on the page). The check
+ * node counts it once with each angle open, with every field the writer writes left blank
+ * (weaveWritersTextBlank; lib/workflow/nodes/arc-specialist-nodes.js meetingPageWords), on the
+ * writer's share of the weave (writersShareOf). The writer's task asks
  * for the page and for its own share of it.
  */
 const MEETING_WORD_BOUND = 450;
@@ -118,9 +117,6 @@ const WEAVE_CHECKS_SOURCE = 'weave-checks';
  * the mark; a director's round writes a weave without it, so the fact check runs again.
  */
 const FACT_CHECK_MARK_KEY = '_factCheck';
-
-/** The key that marks a connection the director struck at the story meeting (`struck: true`). */
-const STRUCK_KEY = 'struck';
 
 /**
  * The director's two rounds at the story meeting: a reweave fits their changes in, a
@@ -228,20 +224,6 @@ function shareOf(directorsShare) {
   };
 }
 
-/** Whether the director struck this connection at the story meeting. */
-function isStruck(connection) {
-  return Boolean(connection && typeof connection === 'object' && connection[STRUCK_KEY] === true);
-}
-
-/**
- * The live connections: every one the director did not strike. The meeting prints them, a
- * connection that joins a left-out thread among them, and the weave's checks read them all,
- * so a connection that joins a thread the weave does not hold is still the writer's failure.
- */
-function liveConnections(weave) {
-  return objectsOf(weave && weave.connections).filter(connection => !isStruck(connection));
-}
-
 /** The ids of the threads an angle names, trimmed, each once, in its order. */
 function angleThreadIds(angle) {
   const ids = (angle && Array.isArray(angle.threads) ? angle.threads : []).map(textOf).filter(Boolean);
@@ -273,7 +255,7 @@ function pickedAngleOf(weave) {
  *   does not hold is skipped, and a thread the director added comes after the angle's own, since
  *   the meeting appends it;
  * - `leftOut`: every other thread, in the weave's order;
- * - `connections`: the live connections that join two of its threads.
+ * - `connections`: the connections that join two of its threads.
  *
  * @param {Object|null} weave
  * @returns {{angle: Object, threads: Object[], leftOut: Object[], connections: Object[]}|null}
@@ -291,7 +273,7 @@ function settledAngleOf(weave) {
     angle,
     threads: inStory,
     leftOut: threads.filter((thread) => !inStory.includes(thread)),
-    connections: liveConnections(weave).filter((connection) => {
+    connections: objectsOf(weave.connections).filter((connection) => {
       const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf) : [];
       return joins.length === 2 && joins[0] !== joins[1] && joins.every((id) => inIds.has(id));
     })
@@ -299,7 +281,7 @@ function settledAngleOf(weave) {
 }
 
 /**
- * The connections the settled story keeps (settledAngleOf): the live connections between two
+ * The connections the settled story keeps (settledAngleOf): the connections between two
  * threads of the picked angle. Every reader of the story's connections reads these: the settled
  * weave, and through it the map writer and the article writer, and the map check.
  *
@@ -377,7 +359,7 @@ function withHeldQuestionThreads(weave, previous = null, returned = undefined) {
  * them (brief 4.5b): the one list the edits read a weave's text by (lib/hand-edit-diff.js
  * weaveParts), so a field added to the weave is added here once. The parts are the weave's
  * own field, "from your notes", then each angle's pitch (ANGLE_FIELDS; phase 4b, brief 3B),
- * each thread's name and line, each live connection's line and each question's. The pick is no
+ * each thread's name and line, each connection's line and each question's. The pick is no
  * printed field (R1): it is the director's choice, which code keeps. The evidence under a line is
  * no printed field either: the page folds it, and it is never the director's (R6). A question's
  * answer is no printed field of the weave's: it is the director's words, kept with the question
@@ -401,7 +383,7 @@ const WEAVE_PRINTED_FIELDS = Object.freeze({
  * order the meeting prints them: `{part, field, text, element?, directorsWords?}`, where
  * `part` is the weave's part (`weave`, `angles`, `threads`, `connections`, `questions`),
  * `element` the angle, thread, connection or question the field belongs to, and `text` the
- * field's value. A struck connection prints nothing (liveConnections).
+ * field's value.
  *
  * @param {Object} weave
  * @returns {Array<{part: string, field: string, text: *, element?: Object, directorsWords?: true}>}
@@ -415,7 +397,7 @@ function printedWeaveFields(weave) {
     })),
     ...objectsOf(weave.angles).flatMap((angle) => fieldsOf('angles', angle)),
     ...objectsOf(weave.threads).flatMap((thread) => fieldsOf('threads', thread)),
-    ...liveConnections(weave).flatMap((connection) => fieldsOf('connections', connection)),
+    ...objectsOf(weave.connections).flatMap((connection) => fieldsOf('connections', connection)),
     ...objectsOf(weave.questions).flatMap((question) => fieldsOf('questions', question))
   ];
 }
@@ -479,10 +461,9 @@ const NO_WORDS = '-';
  * for the page the check node counts the meeting's overhead on: each of the fields the meeting
  * prints (WEAVE_PRINTED_FIELDS) that holds text, which are "from your notes" (the writer chooses
  * how much of the director's words to quote), each angle's pitch, each thread's name and line,
- * each live connection's line, and each question's text, what it changes and what it is about.
+ * each connection's line, and each question's text, what it changes and what it is about.
  * So the verdict, the open angle's card line, the verdict thread's lock and the thin-notes line
- * count as code's. A struck connection's line, which the director struck and code keeps, counts as
- * code's too. The pick stays, so the page opens the same angle. The weave given is left as it
+ * count as code's. The pick stays, so the page opens the same angle. The weave given is left as it
  * was.
  *
  * @param {Object} weave
@@ -547,9 +528,8 @@ function weaveForPrompt(weave) {
 }
 
 /**
- * The weave as a rework reads it (brief 4.5): without its code-owned keys, the director's
- * pick or the connections the director struck, which the rework's <HAND_EDITS> lists as
- * struck. The pick is code's (R1), put back after the rework while its angle survives
+ * The weave as a rework reads it (brief 4.5): without its code-owned keys or the director's
+ * pick. The pick is code's (R1), put back after the rework while its angle survives
  * (withPickFrom), so no prompt prints it. The answers stay on their questions, since a rework
  * works from them.
  *
@@ -560,8 +540,7 @@ function weaveForRework(weave) {
   const view = weaveForPrompt(weave);
   if (!view || typeof view !== 'object' || Array.isArray(view)) return view;
   const { [PICKED_KEY]: _pick, ...unpicked } = view;
-  if (!isWeave(unpicked) || !Array.isArray(unpicked.connections)) return unpicked;
-  return { ...unpicked, connections: unpicked.connections.filter(connection => !isStruck(connection)) };
+  return unpicked;
 }
 
 /**
@@ -583,94 +562,6 @@ function weaveForJudge(weave) {
       return asked;
     })
   };
-}
-
-/**
- * Whether two connections are one connection whatever their words (brief 4.14a): the same
- * kind, joining the same two threads in either order. A rework may reword a connection it
- * brings back; another kind of touch between the same threads, or a touch between other
- * threads, is another connection.
- *
- * @param {Object} a
- * @param {Object} b
- * @returns {boolean}
- */
-function isSameConnection(a, b) {
-  if (!a || typeof a !== 'object' || !b || typeof b !== 'object') return false;
-  const ends = (connection) => (Array.isArray(connection.joins) ? connection.joins.map(textOf) : []).sort().join('\n');
-  return textOf(a.kind) === textOf(b.kind) && ends(a) === ends(b);
-}
-
-/**
- * A connection id no connection holds (brief 4.14a): `c` and the number after the highest of
- * the `c<n>` ids in use, so a connection a rework added never takes an id the round has used.
- *
- * @param {Iterable<string>} taken - the connection ids in use
- * @returns {string}
- */
-function freshConnectionId(taken) {
-  let highest = 0;
-  [...taken].forEach((id) => {
-    const m = /^c(\d+)$/.exec(textOf(id));
-    if (m) highest = Math.max(highest, Number(m[1]));
-  });
-  return `c${highest + 1}`;
-}
-
-/**
- * A rework's weave with each connection the director struck as the weave it started from
- * holds it (briefs 4.5 and 4.14a). The rework never saw them (they are out of its view,
- * weaveForRework), so it may return another connection under a struck one's id:
- * - the struck connection itself, returned under its id, in its words or others, stays as
- *   the rework wrote it: putting the strike back on it is the restore's work
- *   (lib/hand-edit-diff.js settleEdits), which records it, and a send-back's rework that
- *   brings it back is a change of the director's edit, which it names with its reason;
- * - any other connection under a struck id keeps its words and joins under an id of its own
- *   (freshConnectionId), numbered after every connection id in use in the output, in the
- *   weave the rework started from and in the weave the round started from (`roundStart`), so
- *   the meeting's marks read it as new this round;
- * - a struck connection the output then lacks goes back where it sat, still struck.
- *
- * @param {Object} output - the rework's weave
- * @param {Object} previous - the weave the rework started from
- * @param {Object} [options]
- * @param {Object|null} [options.roundStart] - the weave the director's round started from, the
- *   version the meeting's marks are read against (state `_weaveMarks.from`), when a round ran
- * @returns {Object} `output` itself when it needs neither
- */
-function withStruckConnections(output, previous, { roundStart = null } = {}) {
-  if (!isWeave(output) || !isWeave(previous)) return output;
-  const struck = objectsOf(previous.connections)
-    .map((connection, index) => ({ connection, index }))
-    .filter(({ connection }) => isStruck(connection) && weaveIdOf(connection));
-  if (struck.length === 0) return output;
-  const taken = new Set([output, previous, roundStart]
-    .flatMap((weave) => objectsOf(isWeave(weave) ? weave.connections : []).map(connection => weaveIdOf(connection)))
-    .filter(Boolean));
-  let renamed = false;
-  let connections = Array.isArray(output.connections) ? [...output.connections] : [];
-  struck.forEach(({ connection: struckOne }) => {
-    const id = weaveIdOf(struckOne);
-    let kept = false;
-    connections = connections.map((connection) => {
-      if (weaveIdOf(connection) !== id) return connection;
-      if (!kept && isSameConnection(connection, struckOne)) {
-        kept = true;
-        return connection;
-      }
-      const fresh = freshConnectionId(taken);
-      taken.add(fresh);
-      renamed = true;
-      return { ...connection, id: fresh };
-    });
-  });
-  const present = new Set(objectsOf(connections).map(connection => weaveIdOf(connection)));
-  const missing = struck.filter(({ connection }) => !present.has(weaveIdOf(connection)));
-  if (!renamed && missing.length === 0) return output;
-  missing.forEach(({ connection, index }) => {
-    connections.splice(Math.min(index, connections.length), 0, JSON.parse(JSON.stringify(connection)));
-  });
-  return { ...output, connections };
 }
 
 /** JSON with every object's keys sorted, so equal content gives one text. */
@@ -834,13 +725,13 @@ function elementPlace(collection, element) {
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id, quotation, clock time or money figure): each angle's card
  *   line, story, question, why it lands and where it ends up, each thread's name and line, and
- *   each live connection's line. Exempt (R2): each angle's headline, the article's own printed
+ *   each connection's line. Exempt (R2): each angle's headline, the article's own printed
  *   line, "from your notes", the questions, and the verdict line, which code prints;
  * - every angle has an id of its own (`duplicate-id`);
  * - "from your notes" is word for word in the director's notes or corrections
  *   (`from-your-notes-not-verbatim`; lib/grounding.js isVerbatimIn);
  * - every thread the writer wrote, in an angle or in none, has a piece of evidence that supports
- *   it (`thread-without-evidence`), and every piece of a thread or a live connection passes the
+ *   it (`thread-without-evidence`), and every piece of a thread or a connection passes the
  *   evidence check (`evidence-not-in-record`; lib/evidence.js evidenceProblems);
  * - every thread, connection and question has an id of its own (`duplicate-id`), a repeat read by
  *   repeatedIds, the rule the meeting's gate and the diff read too. A repeat is the writer's
@@ -848,7 +739,7 @@ function elementPlace(collection, element) {
  *   the director's thread keeps the id (brief 4.5b);
  * - the room's verdict is one of the threads: a thread marked `verdict: true`
  *   (`no-verdict-thread`);
- * - every live connection joins two threads the weave holds (`connection-joins-unknown-thread`);
+ * - every connection joins two threads the weave holds (`connection-joins-unknown-thread`);
  * - each question comes to at most QUESTION_WORD_BOUND words across what it is about, the
  *   question and what its answer changes (`question-too-long`; R4), and a question that sits
  *   beside a thread names one the weave holds (`question-thread-unknown`). One question per
@@ -1018,7 +909,7 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     else fail('no-verdict-thread', 'No thread carries the room\'s verdict. Mark the thread that tells the verdict with "verdict": true, and put it in every angle (C16).', "No thread tells the room's verdict.");
   }
 
-  liveConnections(weave).forEach((connection) => {
+  objectsOf(weave.connections).forEach((connection) => {
     const words = connectionWords(connection);
     const place = elementPlace('connections', connection);
     const connectionId = weaveIdOf(connection);
@@ -1110,15 +1001,11 @@ module.exports = {
   meetingLengthOf,
   weaveWritersTextBlank,
   // Brief 4.5: the meeting's marks on a weave, the round mark and the views of the weave
-  STRUCK_KEY,
   MEETING_ROUNDS,
   isWeave,
-  isStruck,
-  liveConnections,
   weaveForPrompt,
   weaveForRework,
   weaveForJudge,
-  withStruckConnections,
   weaveKey,
   factCheckMarkOf,
   isWeaveJudged,
@@ -1139,8 +1026,6 @@ module.exports = {
   printedWeaveFields,
   occurrenceKeys,
   // Brief 4.14a: the connections the story keeps (since piece 3, those between the picked angle's
-  // threads), and the struck connection a rework returned, told from another under its id
-  storyConnections,
-  isSameConnection,
-  freshConnectionId
+  // threads)
+  storyConnections
 };

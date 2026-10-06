@@ -2,7 +2,7 @@
  * The story meeting's plumbing (phase 4, brief 4.5; spec 4.3 and 4.4; R12).
  *
  * - The director-side schema: the weave as the director leaves it, derived in code from
- *   the writer's, allowing answers and struck connections; never sent to the SDK.
+ *   the writer's, allowing the pick and answers; never sent to the SDK.
  * - The meeting's payloads: approve, reweave and send back, each validated against it,
  *   and what each writes: the director's version, the standing edits against the writer's
  *   last weave, the round mark, the note.
@@ -27,12 +27,15 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The writer's weave, judged, as the meeting shows it. */
 const shown = () => withFactCheckMark(clone(FIXTURE_WEAVE), { at: '2026-10-03T10:00:00.000Z', ready: true, fixes: 0 });
 
-/** The director's version: a role changed, a thread added with no evidence, a connection struck, a question answered. */
+/** The director's line on c2. */
+const C2_LINE = 'The sale and the result came back the same night.';
+
+/** The director's version: a role changed, a thread added with no evidence, a connection's line rewritten, a question answered. */
 function leftByDirector() {
   const weave = clone(FIXTURE_WEAVE);
   weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
   weave.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'grounds-it' });
-  weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
+  weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, line: C2_LINE } : c));
   weave.questions = weave.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar all morning.' }));
   return weave;
 }
@@ -44,13 +47,14 @@ describe("the director-side schema (R12)", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
   const validate = ajv.compile(DIRECTOR_WEAVE_SCHEMA);
 
-  it("is derived from the writer's schema: the same fields, with the pick, the answer and the strike the director adds, and no evidence required (R6)", () => {
+  it("is derived from the writer's schema: the same fields, with the pick and the answer the director adds, and no evidence required (R6)", () => {
     expect(DIRECTOR_WEAVE_SCHEMA).not.toBe(WEAVE_SCHEMA);
     expect(DIRECTOR_WEAVE_SCHEMA.required).toEqual(WEAVE_SCHEMA.required);
     // Piece 3 (brief 3B; R1): the director's pick, the angle they sent on.
     expect(Object.keys(DIRECTOR_WEAVE_SCHEMA.properties)).toEqual([...Object.keys(WEAVE_SCHEMA.properties), 'picked']);
     expect(DIRECTOR_WEAVE_SCHEMA.properties.questions.items.properties.answer).toMatchObject({ type: 'string' });
-    expect(DIRECTOR_WEAVE_SCHEMA.properties.connections.items.properties.struck).toMatchObject({ type: 'boolean' });
+    // R7: the strike went from the weave.
+    expect(DIRECTOR_WEAVE_SCHEMA.properties.connections.items.properties).not.toHaveProperty('struck');
     expect(Object.keys(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.properties)).toEqual(Object.keys(WEAVE_SCHEMA.properties.threads.items.properties));
     // Phase 4b (briefs 1B and 3B): a thread the director adds needs only its id, name and line.
     expect(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.required).toEqual(['id', 'name', 'line']);
@@ -58,12 +62,11 @@ describe("the director-side schema (R12)", () => {
     expect(WEAVE_SCHEMA.properties.threads.items.required).toContain('evidence');
   });
 
-  it("leaves the writer's schema as it is: no model writes an answer or a strike", () => {
+  it("leaves the writer's schema as it is: no model writes an answer", () => {
     expect(WEAVE_SCHEMA.properties.questions.items.properties).not.toHaveProperty('answer');
-    expect(WEAVE_SCHEMA.properties.connections.items.properties).not.toHaveProperty('struck');
   });
 
-  it('accepts the weave as the director left it: a thread added or re-roled with no evidence and no reason, a struck connection, an answer', () => {
+  it("accepts the weave as the director left it: a thread added or re-roled with no evidence and no reason, a connection's line rewritten, an answer", () => {
     const left = leftByDirector();
     left.threads = left.threads.map((t) => (t.id === 't2' ? { id: 't2', name: t.name, line: t.line, role: 'left-out' } : t));
     expect(validate(left)).toBe(true);
@@ -80,7 +83,6 @@ describe("the director-side schema (R12)", () => {
 
   it.each([
     ['an answer that is not text', (w) => { w.questions[0].answer = 42; }, /questions\/0\/answer/],
-    ['a strike that is not true or false', (w) => { w.connections[0].struck = 'yes'; }, /connections\/0\/struck/],
     ['a pick that is not text', (w) => { w.picked = 2; }, /\/picked/],
     ['no angles', (w) => { delete w.angles; }, /angles/],
     ['an angle with no ends', (w) => { delete w.angles[1].ends; }, /angles\/1.*ends/],
@@ -98,7 +100,7 @@ describe("the director-side schema (R12)", () => {
     expect(directorWeaveProblems({ story: 'x' })).toMatch(/threads/);
   });
 
-  // Ruling 3: every id join at the meeting (the edits, the strikes, the answers) reads ids,
+  // Ruling 3: every id join at the meeting (the edits and the answers) reads ids,
   // so the director's changes give each thread, connection and question an id of its own.
   // Fix round 1, finding 2: the refusal says who made the repeat.
   it("refuses the repeats the director's changes made, naming each and the director", () => {
@@ -206,7 +208,7 @@ describe("the meeting's payloads (brief 4.5)", () => {
     it("diffs the director's version against the writer's last weave, and the edits stand by id", () => {
       const { stateUpdates } = meetingResume({ meeting: 'approve', weave: leftByDirector() }, atMeeting());
       expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path])).toEqual([
-        ['E1', 'threads[#t3].role'], ['E2', 'threads[#t6]'], ['E3', 'connections[#c2]']
+        ['E1', 'threads[#t3].role'], ['E2', 'threads[#t6]'], ['E3', 'connections[#c2].line']
       ]);
     });
 
@@ -462,7 +464,7 @@ describe("1B: the evidence under a line is never the director's edit (R6)", () =
     const left = leftByDirector();
     left.threads[1].evidence = [];
     const { stateUpdates } = meetingResume({ meeting: 'approve', weave: left }, atMeeting());
-    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].role', 'threads[#t6]', 'connections[#c2]']);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].role', 'threads[#t6]', 'connections[#c2].line']);
     expect(stateUpdates._weaveHandEdits.edits[1].after).toEqual({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'grounds-it' });
     expect(JSON.stringify(stateUpdates._weaveHandEdits)).not.toMatch(/"evidence"/);
   });
@@ -483,7 +485,7 @@ describe('1B: where a meeting change sits, by the names the meeting shows', () =
       'the line "Marcus bragged about the sale at the bar"',
       'the role of "The envelope"',
       'the thread you added, "The second ledger"',
-      'the connection you struck, "The night of the sale is the night the result came back"'
+      'the connection "The sale and the result came back the same night"'
     ]);
   });
 

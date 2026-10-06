@@ -17,9 +17,8 @@
  *   no line, no evidence (phase 4b fix round, fix 5). The map writer adds no thread, so what a
  *   left-out thread carries is noise in its prompt;
  * - the connections between its threads, each by its line and the names of the threads it joins.
- *   A connection's kind stays underneath, unprinted. A connection the director struck is gone
- *   from it, and so is one that joins a thread the angle leaves out, so no later writer meets the
- *   link;
+ *   A connection's kind stays underneath, unprinted. A connection that joins a thread the angle
+ *   leaves out is gone from it, so no later writer meets the link;
  * - every question with what its answer changes, the thread it sits beside by name, and the
  *   director's answer word for word or the mark that it is unanswered;
  * - each change the director made at the meeting, marked on its line by its id in the

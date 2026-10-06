@@ -87,13 +87,16 @@ function scriptedSdk({ writer = writersWeave(), reworks = [], verdicts = [CLEAN]
   return sdk;
 }
 
-/** The director's changes at the meeting: a thread's line, a thread added to the open angle with no evidence (phase 4b, brief 1B), a strike, an answer. */
+/** The line the director gives connection c2 at the meeting. */
+const C2_LINE = 'The sale and the result came back the same night.';
+
+/** The director's changes at the meeting: a thread's line, a thread added to the open angle with no evidence (phase 4b, brief 1B), a connection's line, an answer. */
 function leftBy(weave) {
   const left = weaveForPrompt(clone(weave));
   left.threads = left.threads.map((t) => (t.id === 't3' ? { ...t, line: T3_LINE } : t));
   left.threads.push(clone(ADDED));
   left.angles[0].threads.push(ADDED.id);
-  left.connections = left.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
+  left.connections = left.connections.map((c) => (c.id === 'c2' ? { ...c, line: C2_LINE } : c));
   left.questions = left.questions.map((q) => (q.id === 'q1' ? { ...q, answer: ANSWER } : q));
   return left;
 }
@@ -159,9 +162,8 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
 
   it("the brief's verification: a reweave with no note reopens the meeting with the changes marked, the answers kept and the director's lines intact; approve settles it", async () => {
     // The reweave fits the changes in: it rewrites t2's line for the thread the director
-    // added, and it also paraphrases that thread, brings back the struck connection and
-    // returns no answer. Code puts back the director's lines, strikes c2 again and keeps
-    // the answer.
+    // added, and it also paraphrases that thread, puts back the writer's words on c2 and
+    // returns no answer. Code puts back the director's lines and keeps the answer.
     const rewoven = (shown) => {
       const weave = weaveForPrompt(clone(shown));
       weave.threads = weave.threads.map((t) => (t.id === 't2' ? { ...t, line: T2_REWOVEN } : t));
@@ -175,7 +177,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     expect(snapshot.next).toEqual(['checkpointArcSelection']);
     expect(sdk.calls).toEqual(['fact check']);
 
-    // At the meeting: a thread's line, a thread with no evidence, a strike and an answer; a reweave with no note.
+    // At the meeting: a thread's line, a thread with no evidence, a connection's line and an answer; a reweave with no note.
     const left = leftBy(snapshot.values.weave);
     const scripted = scriptedSdk({ reworks: [rewoven(left)], verdicts: [CLEAN] });
     thread.configurable.sdkClient = scripted;
@@ -191,7 +193,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     const { weave } = reopened.data;
     expect(weave.threads.find((t) => t.id === 't3').line).toBe(T3_LINE);
     expect(weave.threads.find((t) => t.id === 't6')).toEqual(ADDED);
-    expect(weave.connections.find((c) => c.id === 'c2').struck).toBe(true);
+    expect(weave.connections.find((c) => c.id === 'c2').line).toBe(C2_LINE);
     expect(reopened.data.questions.find((q) => q.id === 'q1').answer).toBe(ANSWER);
     expect(weave._factCheck).toMatchObject({ ready: true, fixes: 0 });
     // The marks: what the writer changed, from the director's version.
@@ -201,7 +203,7 @@ describe('the story meeting through the real graph (phase 4, brief 4.5)', () => 
     });
     // The restores, reported for the reweave.
     const restored = reopened.data.handEditReport.changed.map((c) => [c.where, c.restored, c.pass]);
-    expect(restored).toEqual(expect.arrayContaining([['thread "t6", added', true, 'reweave'], ['connection "c2", struck', true, 'reweave']]));
+    expect(restored).toEqual(expect.arrayContaining([['thread "t6", added', true, 'reweave'], ['connection "c2", line', true, 'reweave']]));
     // The checks read only the writer's text: the thread with no evidence is no failure.
     expect(reopened.data.checkFailures).toEqual([]);
     expect(reopened.data).toMatchObject({ humanRevisionCount: 1, revisionCount: 0, roundDidNotRun: null });

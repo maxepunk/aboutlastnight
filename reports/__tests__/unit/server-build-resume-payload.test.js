@@ -1339,7 +1339,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
   const { withFactCheckMark } = require('../../lib/weave');
   const { meetingCheckpointData } = require('../../lib/meeting');
   const {
-    meetingWeaveOf, meetingPayload, setAngleField, setThreadField, addMeetingThread, setConnectionStruck, setQuestionAnswer
+    meetingWeaveOf, meetingPayload, setAngleField, setThreadField, addMeetingThread, setQuestionAnswer
   } = require('../../console/checkpoint-view-logic');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const MARK = { at: 't', ready: true, fixes: 0 };
@@ -1353,7 +1353,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
   const dataOf = (state) => meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 });
 
   /**
-   * A thread's line rewritten, a thread added, a connection struck, a question answered and the
+   * A thread's line rewritten, a thread added, a question answered and the
    * open angle's story edited, each as typed (piece 3: the pitch is stored as typed and is no edit
    * until slice 3C).
    */
@@ -1362,7 +1362,6 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     w = setAngleField(w, 'a1', 'story', 'The room named an overdose; the ledger names a sale. ');
     w = setThreadField(w, 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
     w = addMeetingThread(w, 'The second ledger', 'Riley kept a second ledger.');
-    w = setConnectionStruck(w, 1, true);
     w = setQuestionAnswer(w, 0, ' Sarah ran the bar all morning.');
     return w;
   };
@@ -1375,9 +1374,8 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     expect(stateUpdates.weave.angles[0].story).toBe('The room named an overdose; the ledger names a sale. ');
     expect(stateUpdates.weave.angles[0].threads).toEqual(['t1', 't2', 't3', 't4', 't6']);
     expect(stateUpdates.weave.questions[0].answer).toBe(' Sarah ran the bar all morning.');
-    expect(stateUpdates.weave.connections[1].struck).toBe(true);
     expect(stateUpdates.weave._factCheck).toEqual(MARK);
-    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].line', 'threads[#t6]', 'connections[#c2]']);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].line', 'threads[#t6]']);
     expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'arc-selection', kind: 'approval', text: 'Lead with the vote.' })]);
   });
 
@@ -1524,7 +1522,7 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
   const { withFactCheckMark } = require('../../lib/weave');
   const { meetingCheckpointData } = require('../../lib/meeting');
   const {
-    meetingWeaveOf, meetingPayload, setThreadField, setConnectionStruck, setQuestionAnswer
+    meetingWeaveOf, meetingPayload, setThreadField, setQuestionAnswer
   } = require('../../console/checkpoint-view-logic');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const MARK = { at: 't', ready: true, fixes: 0 };
@@ -1646,33 +1644,6 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
     });
   });
 
-  describe('a reweave whose only change brings back a connection the director struck is taken', () => {
-    const struck = () => setConnectionStruck(clone(WEAVE), 1, true);
-    /** The director strikes c2 and approves: their strike is E1. */
-    const approvedWithStrike = () => take(meetingPayload('approve', dataOf(atMeeting()), struck(), ''), atMeeting());
-
-    it("after a round, whose weave holds the strike: the console sends the reweave, and the un-strike is the director's edit", () => {
-      const afterRound = atMeeting({
-        weave: withFactCheckMark(struck(), MARK), _weaveBaseline: struck(),
-        _weaveHandEdits: approvedWithStrike().stateUpdates._weaveHandEdits, humanArcRevisionCount: 1
-      });
-      const payload = meetingPayload('reweave', dataOf(afterRound), setConnectionStruck(shownOf(afterRound), 1, false), '');
-      expect(payload).not.toBeNull();
-      const { resume, stateUpdates, error } = take(payload, afterRound);
-      expect(error).toBeNull();
-      expect(resume).toEqual({ approved: false, round: 'reweave' });
-      expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.unstruck])).toEqual([['E2', 'connections[#c2]', true]]);
-    });
-
-    it('with no round since the strike (an approve, then back to the meeting, which reopens as the director left it)', () => {
-      const back = atMeeting({ ...approvedWithStrike().stateUpdates });
-      const payload = meetingPayload('reweave', dataOf(back), setConnectionStruck(shownOf(back), 1, false), '');
-      expect(payload).not.toBeNull();
-      const { stateUpdates, error } = take(payload, back);
-      expect(error).toBeNull();
-      expect(stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.unstruck])).toEqual([['E2', 'connections[#c2]', true]]);
-    });
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1680,10 +1651,8 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
 // whether or not a round ran since
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The review's probes (p4/4.5c-review/restrike-after-unstrike.js, role-back-and-forth.js):
-// a strike a round kept, brought back at an approve, then struck again with no round since,
-// was no edit, so the console offered Reweave and the gate refused it as empty; a role set
-// back and forth the same way did the same. The gate now reads each place a standing edit is
+// The review's probe (p4/4.5c-review/role-back-and-forth.js): a role set back and forth with no
+// round since was no edit, so the console offered Reweave and the gate refused it as empty. The gate now reads each place a standing edit is
 // carried in the weave the meeting showed as the meeting showed it (lib/hand-edit-diff.js
 // withShownEdits). Invented text.
 describe('4.5c fix round 1: a change at the place of a standing edit is the director\'s whether or not a round ran since', () => {
@@ -1692,7 +1661,7 @@ describe('4.5c fix round 1: a change at the place of a standing edit is the dire
   const { settleEdits, carriedEdits, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
   const { meetingCheckpointData } = require('../../lib/meeting');
   const {
-    meetingDraftOf, meetingPayload, meetingButtons, setThreadField, setConnectionStruck
+    meetingDraftOf, meetingPayload, meetingButtons, setThreadField
   } = require('../../console/checkpoint-view-logic');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const MARK = { at: 't', ready: true, fixes: 0 };
@@ -1720,21 +1689,6 @@ describe('4.5c fix round 1: a change at the place of a standing edit is the dire
       _meetingRound: null, _arcFeedback: null, humanArcRevisionCount: state.humanArcRevisionCount + 1
     };
   }
-
-  it('strike, a reweave that keeps it, bring it back and approve, back at the meeting, strike again: Reweave is offered, the gate takes it, and the strike is an edit', () => {
-    const struck = act(atMeeting(), 'reweave', (w) => setConnectionStruck(w, 1, true));
-    expect(struck.taken.error).toBeNull();
-    const afterRound = ranRound({ ...atMeeting(), ...struck.taken.stateUpdates });
-    const back = act(afterRound, 'approve', (w) => setConnectionStruck(w, 1, false));
-    expect(back.taken.error).toBeNull();
-    expect(back.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.unstruck === true])).toEqual([['E2', 'connections[#c2]', true]]);
-    // Back at the meeting (R9): as the director left it, with no pass since.
-    const again = act({ ...afterRound, ...back.taken.stateUpdates }, 'reweave', (w) => setConnectionStruck(w, 1, true));
-    expect(again.offered).toBe(true);
-    expect(again.taken.error).toBeNull();
-    expect(again.taken.resume).toEqual({ approved: false, round: 'reweave' });
-    expect(again.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.struck === true])).toEqual([['E3', 'connections[#c2]', true]]);
-  });
 
   it("a thread's line the same way: rewritten, kept by a reweave, set back and approved, then rewritten again with no round since", () => {
     const rewritten = act(atMeeting(), 'reweave', (w) => setThreadField(w, 2, 'line', 'Morgan paid Riley at the bar, where no one looked.'));

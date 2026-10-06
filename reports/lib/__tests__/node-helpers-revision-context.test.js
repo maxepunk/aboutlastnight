@@ -1029,9 +1029,10 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
   const left = () => {
     const weave = clone(WEAVE);
     weave.threads = weave.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
-    weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
+    weave.connections = weave.connections.map((c) => (c.id === 'c2' ? { ...c, line: C2_LINE } : c));
     return weave;
   };
+  const C2_LINE = 'The sale and the result came back the same night.';
   const edits = () => carriedEdits(standingAtMeeting(null, WEAVE, left()), left());
   const STALE = { phase: 'arcs', passed: false, structuralIssues: ['T3: "a stale finding" from before the round.'], criteriaScores: { evidenceTruth: { score: 0.3, notes: 'stale', fix: 'stale fix' } } };
   const context = (overrides) => buildRevisionContext({
@@ -1060,22 +1061,13 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     const text = context({ meetingRound: 'reweave', humanFeedback: null, validationResults: null });
     const block = text.slice(text.indexOf('<HAND_EDITS>'), text.indexOf('</HAND_EDITS>'));
     expect(block).toContain("The director's changes to the weave at the story meeting.");
-    // Task 4.5d: the rule names a connection the director brought back among what stays in the weave.
-    expect(block).toContain('each role they gave stays, each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.');
+    expect(block).toContain('each role they gave stays, each thread they added stays in the weave, and each removed sentence stays out of it.');
     expect(block).toContain('E1 (thread "t3", role): "mirrors-it"');
-    // Phase 4b (brief 1B): a struck connection by its line.
-    expect(block).toContain(`E2 (connection "c2", struck): "${WEAVE.connections[1].line}"`);
+    expect(block).toContain(`E2 (connection "c2", line): "${C2_LINE}"`);
+    // R7: the strike went from the weave, and with it every line on a connection struck or brought back.
+    expect(block).not.toMatch(/struck|brought back/);
     expect(block).not.toContain('changedDirectorEdits');
     expect(block).not.toMatch(/block they moved|marked moved/);
-  });
-
-  it('the previous weave prints as the rework reads it: the struck connection out, the strike listed in <HAND_EDITS>', () => {
-    const { previousOutputSection } = buildRevisionContext({
-      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
-      previousOutput: left(), handEdits: edits(), meetingRound: 'reweave', humanFeedback: null
-    });
-    expect(previousOutputSection).toContain('"c1"');
-    expect(previousOutputSection).not.toContain('"c2"');
   });
 
   it('a send-back rethinks the weave as the note asks, and may change an edit only where the note needs it, saying why', () => {
@@ -1092,8 +1084,7 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
     expect(text).toContain('automated pass 0');
     expect(text).toContain('This rework fixes the must-fix items');
     expect(text).not.toContain('HUMAN FEEDBACK');
-    // Task 4.5d: the automatic rule names the words of a connection the director brought back as the writer's.
-    expect(text).toContain('This automatic pass fixes the writer\'s text, in a connection the director brought back too.');
+    expect(text).toContain("This automatic pass fixes the writer's text. Each change of the director's is final:");
   });
 
   it("a code check's rework reads the check's lines alone: no confidence and no criteria scores (ruling 9)", () => {
@@ -1323,47 +1314,33 @@ describe('4.7c: one revision context for every theme (R1)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4.5d: the meeting's edits-are-final line names a connection the director brought back
+// The meeting's edits-are-final line, in each round's frame
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// The integrator's ruling 2 on run 4's follow-ups (progress.md, 2026-10-03): a connection the
-// director struck and later brought back is theirs by its place in the weave, and its words
-// are the writer's, as a block moved at the desk is. The meeting's rule named the threads they
-// added and the connections they struck, and not this one, so a rework read nothing that kept
-// it in the weave, and nothing that let an automatic pass fix a false link in its words.
-describe("4.5d: the meeting's edits-are-final line names a connection the director brought back", () => {
+// Task 4.5d gave the line a connection the director brought back; piece 3 (brief 3C; R7) took
+// the strike out of the weave, and the line with it.
+describe("the meeting's edits-are-final line, in each round's frame", () => {
   const { standingAtMeeting, carriedEdits } = require('../hand-edit-diff');
   const { WEAVE } = require('./fixtures/rework-state');
   const clone = (v) => JSON.parse(JSON.stringify(v));
-  const FINAL = "Each change of the director's is final: the text they wrote stays exactly as written, each role they gave stays, each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.";
-  /** The director struck c2 at one look and brought it back at the next: E2. */
-  const edits = () => {
-    const struck = clone(WEAVE);
-    struck.connections[1].struck = true;
-    return carriedEdits(standingAtMeeting(standingAtMeeting(null, clone(WEAVE), struck), struck, clone(WEAVE)), clone(WEAVE));
+  const FINAL = "Each change of the director's is final: the text they wrote stays exactly as written, each role they gave stays, each thread they added stays in the weave, and each removed sentence stays out of it.";
+  /** The director rewrote t2's line: E1. */
+  const left = () => {
+    const weave = clone(WEAVE);
+    weave.threads[1].line = 'The sale came at the bar, and the room never asked who paid.';
+    return weave;
   };
+  const edits = () => carriedEdits(standingAtMeeting(null, clone(WEAVE), left()), left());
   const handEdits = (overrides) => {
     const text = buildRevisionContext({
       phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, validationResults: null,
-      previousOutput: clone(WEAVE), handEdits: edits(), theme: 'journalist', humanFeedback: null, meetingRound: null, ...overrides
+      previousOutput: left(), handEdits: edits(), theme: 'journalist', humanFeedback: null, meetingRound: null, ...overrides
     }).contextSection;
     return text.slice(text.indexOf('<HAND_EDITS>'), text.indexOf('</HAND_EDITS>'));
   };
 
-  it.each([
-    ['an automatic pass', { meetingRound: null, revisionCount: 1, validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['The thread "The sale": piece 1 names "zzz", which is no document in the record.'] } }],
-    ['a reweave', { meetingRound: 'reweave' }],
-    ['a send-back', { meetingRound: 'send-back', humanFeedback: 'Rethink the money thread.' }]
-  ])('%s: the rule keeps it in the weave, and its line names it by its place', (_name, overrides) => {
-    const block = handEdits(overrides);
-    expect(block).toContain('each thread they added and each connection they brought back stay in the weave, and each connection they struck and each removed sentence stay out of it.');
-    expect(block).toContain("A line marked brought back names a connection they struck at an earlier look and brought back: its place in the story is the director's, and its wording, as the weave holds it, is still the writer's.");
-    expect(block).toContain('E2 (connection "c2", brought back)');
-    expect(block).not.toContain(WEAVE.connections[1].line);
-  });
-
-  it("an automatic pass fixes the writer's text in a connection the director brought back too; a reweave and a send-back keep their own frames", () => {
-    expect(handEdits({ meetingRound: null, revisionCount: 1 })).toContain(`This automatic pass fixes the writer's text, in a connection the director brought back too. ${FINAL}`);
+  it("an automatic pass fixes the writer's text; a reweave and a send-back keep their own frames", () => {
+    expect(handEdits({ meetingRound: null, revisionCount: 1 })).toContain(`This automatic pass fixes the writer's text. ${FINAL}`);
     expect(handEdits({ meetingRound: 'reweave' })).toContain(FINAL);
     expect(handEdits({ meetingRound: 'send-back', humanFeedback: 'Rethink it.' }))
       .toContain(`Each change of the director's is final unless the structural change their note asks for means it no longer fits: ${FINAL.replace("Each change of the director's is final: ", '')} List each change this rework alters, removes or brings back in changedDirectorEdits, with its id and one sentence on why.`);

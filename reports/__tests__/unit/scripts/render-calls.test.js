@@ -116,7 +116,7 @@ describe("4.5: the weave's fact check with the director's changes and answers se
   test('the arcs judge', async () => {
     const left = clone(WEAVE);
     left.threads = left.threads.map((t) => (t.id === 't3' ? { ...t, role: 'mirrors-it' } : t));
-    left.connections = left.connections.map((c) => (c.id === 'c2' ? { ...c, struck: true } : c));
+    left.connections = left.connections.map((c) => (c.id === 'c2' ? { ...c, line: 'The sale and the result came back the same night.' } : c));
     left.questions = left.questions.map((q) => ({ ...q, answer: 'Sarah ran the bar all morning.' }));
     const state = {
       ...reworkFixtureState('journalist'), weave: left, evaluationHistory: [], meetingApproved: false,

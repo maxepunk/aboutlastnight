@@ -644,9 +644,6 @@ describe('4.10: the changed-edit line says what each pass did', () => {
   });
 
   test("a reweave's entry is the reweave's, held to the director's edits as an automatic pass is", () => {
-    const CONNECTION = 'id: c2; kind: moment; joins: t2 / t4; detail: The night of the sale.';
-    const struck = { id: 'E5', scope: 'connections', where: 'connection "c2", struck', struck: true, director: CONNECTION, became: CONNECTION, pass: REWEAVE_PASS, automatic: false, reason: null, restored: false };
-    expect(changedEditLine(struck)).toBe('E5, connection "c2", struck: your reweave brought it back. It could not be struck again.');
     const removed = { id: 'E1', scope: 'story', where: 'story', removed: true, cut: false, moved: false, director: 'Who paid Riley?', became: 'Who gained? Who paid Riley?', pass: REWEAVE_PASS, automatic: false, reason: null, restored: false };
     expect(changedEditLine(removed, { stillIn: 'in the weave' })).toBe(
       'E1, story: a sentence you removed came back as "Who gained? Who paid Riley?" (your reweave). It is still in the weave: cut it again if it should go.'

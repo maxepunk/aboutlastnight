@@ -1957,7 +1957,6 @@ const TONE_COLORS = {
   alert: 'red',
   concern: 'yellow',
   mark: 'magenta',
-  struck: 'dim',
   hint: 'dim',
   break: 'dim'
 };

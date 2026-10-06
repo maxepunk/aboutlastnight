@@ -276,15 +276,6 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
     expect(wordsShown('arc-selection', noted)).toBe(wordsShown('arc-selection', plain));
   });
 
-  it('shows a struck connection struck, still on the page', () => {
-    const data = meetingData();
-    data.weave = clone(data.weave);
-    data.weave.connections[1].struck = true;
-    const view = View.meetingView(data, View.meetingDraftOf(data), '');
-    const line = stopPage('arc-selection', data).lines.find((l) => l.text === view.connections[1].line);
-    expect(line.tone).toBe('struck');
-    expect(line.folded).toBe(false);
-  });
 });
 
 describe('4.12a: the map\'s page is mapView\'s', () => {

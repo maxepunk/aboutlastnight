@@ -575,8 +575,8 @@
    * automatic pass's does, under its own name. Every stop phrases its report here: the desk
    * through steeringView and deskMarks, the map through mapView, the story meeting through
    * meetingView, which names its places as its page heads them (task 4.8, fix round 1).
-   * - A connection the director struck (brief 4.5) that a pass brought back or took out;
-   *   after an automatic pass or a reweave, whether code struck it again.
+   * - A beat the director struck on the map (brief 4.6) that a pass brought back or took out;
+   *   after an automatic pass, whether code struck it again.
    * - A field or element an automatic pass changed: code put it back (`restored`), and
    *   the line says so; an entry from before FA says the pass should have kept it.
    * - One on a photo the article cannot print (`unprintable`, task 4.5e), which a pass took out of
@@ -668,8 +668,8 @@
    * The entries of a hand-edit report a stop shows (the integrator's ruling 8 on 4.9's
    * minors): each change a send-back's rework made, which comes with its reason, and each
    * change any other pass made that code did not put back: a cut or a removed sentence that
-   * came back, a moved element a pass removed, a struck connection that could not be struck
-   * again. A block code put back in its section out of the director's order (`inOrder` false,
+   * came back, a moved element a pass removed, a struck beat that could not be struck again. A
+   * block code put back in its section out of the director's order (`inOrder` false,
    * task 4.3c) is shown too (brief 4.10b): its line asks the director to move it again. So is
    * an element the director put in whole that code put back without a photo the article cannot
    * print, which a pass took out of print (`unprintable` beside `restored`, task 4.5g): its line
@@ -1300,10 +1300,9 @@
   var CONNECTION_KINDS = ['person', 'moment', 'document', 'line'];
 
   /**
-   * Copies of lib/weave.js STRUCK_KEY and of lib/writer-questions.js WEAVE_ANSWER_KEY, which
-   * the browser cannot import; a test holds each equal.
+   * A copy of lib/writer-questions.js WEAVE_ANSWER_KEY, which the browser cannot import; a test
+   * holds the two equal.
    */
-  var STRUCK_KEY = 'struck';
   var WEAVE_ANSWER_KEY = 'answer';
 
   /** The key a line carries its evidence under: a copy of lib/hand-edit-diff.js EVIDENCE_KEY (a test holds the two equal). */
@@ -1370,7 +1369,7 @@
       } },
       connections: { list: {
         required: ['id', 'joins', 'line', 'kind'],
-        fields: { id: 'string', joins: 'strings', line: 'string', kind: CONNECTION_KINDS, evidence: EVIDENCE_PIECE_SHAPE, struck: 'boolean' }
+        fields: { id: 'string', joins: 'strings', line: 'string', kind: CONNECTION_KINDS, evidence: EVIDENCE_PIECE_SHAPE }
       } },
       questions: { list: {
         required: ['id', 'kind', 'about', 'question', 'changes'],
@@ -1729,15 +1728,6 @@
     return next;
   }
 
-  /** A connection struck (`struck: true`), or unstruck: the key comes off, and the writer's connection is back as it was. */
-  function setConnectionStruck(weave, index, struck) {
-    var next = editedWeave(weave, 'setConnectionStruck');
-    var connection = elementAt(next.connections, index, 'setConnectionStruck', 'connection');
-    if (struck) connection[STRUCK_KEY] = true;
-    else delete connection[STRUCK_KEY];
-    return next;
-  }
-
   /** The director's answer to a question, as typed; a blank box is no answer. */
   function setQuestionAnswer(weave, index, text) {
     var next = editedWeave(weave, 'setQuestionAnswer');
@@ -1824,32 +1814,27 @@
     return keys;
   }
 
-  function isStruckConnection(connection) {
-    return Boolean(connection && typeof connection === 'object' && connection[STRUCK_KEY] === true);
-  }
-
   /**
    * The changes between two weaves, one per place, as lib/hand-edit-diff.js
    * weaveEditsBetween finds them (a test holds the two equal): each text field and the
    * stronger main thread whole; each thread and connection found by its id, field by
-   * field, added whole or taken out whole; a connection struck as one change of the whole,
-   * and one brought back as one change of the whole too (task 4.5c). The questions are not
+   * field, added whole or taken out whole. The questions are not
    * read: an answer is the director's words, no edit. Nor is the evidence under a line, the
    * writers' (phase 4b, brief 1B; R6). Each change under an id either weave repeats carries
    * `repeatedId`, since no edit can find its element by the id.
    *
    * @param {*} before
    * @param {*} after
-   * @returns {Array<{scope: string, id: (string|null), field: (string|null), repeatedId: boolean, struck: boolean}>}
+   * @returns {Array<{scope: string, id: (string|null), field: (string|null), repeatedId: boolean}>}
    */
   function meetingWeaveChanges(before, after) {
     if (!isPlainObject(before) || !isPlainObject(after)) return [];
     var out = [];
-    var change = function (scope, id, field, repeatedId, struck) {
-      out.push({ scope: scope, id: id, field: field, repeatedId: repeatedId, struck: struck });
+    var change = function (scope, id, field, repeatedId) {
+      out.push({ scope: scope, id: id, field: field, repeatedId: repeatedId });
     };
     WEAVE_TEXT_FIELDS.concat(['strongerMainThread']).forEach(function (field) {
-      if (!sameValue(before[field], after[field])) change(field, null, null, false, false);
+      if (!sameValue(before[field], after[field])) change(field, null, null, false);
     });
     ['threads', 'connections'].forEach(function (collection) {
       var b = elementsById(before[collection]);
@@ -1858,23 +1843,19 @@
       a.list.forEach(function (entry) {
         var prior = b.map.get(entry.key);
         if (!prior) {
-          change(collection, entry.id, null, repeated(entry.id), false);
-          return;
-        }
-        if (collection === 'connections' && isStruckConnection(entry.element) !== isStruckConnection(prior)) {
-          change(collection, entry.id, null, repeated(entry.id), isStruckConnection(entry.element));
+          change(collection, entry.id, null, repeated(entry.id));
           return;
         }
         // Phase 4b (brief 1B; R6): the evidence is never the director's edit, so no change
         // reads it, as lib/hand-edit-diff.js withoutEvidence leaves it out.
-        var p = withoutKey(collection === 'connections' ? withoutKey(prior, STRUCK_KEY) : prior, EVIDENCE_KEY);
-        var e = withoutKey(collection === 'connections' ? withoutKey(entry.element, STRUCK_KEY) : entry.element, EVIDENCE_KEY);
+        var p = withoutKey(prior, EVIDENCE_KEY);
+        var e = withoutKey(entry.element, EVIDENCE_KEY);
         unionKeys(p, e).forEach(function (field) {
-          if (!sameValue(p[field], e[field])) change(collection, entry.id, field, repeated(entry.id), false);
+          if (!sameValue(p[field], e[field])) change(collection, entry.id, field, repeated(entry.id));
         });
       });
       b.list.forEach(function (entry) {
-        if (!a.map.has(entry.key)) change(collection, entry.id, null, repeated(entry.id), false);
+        if (!a.map.has(entry.key)) change(collection, entry.id, null, repeated(entry.id));
       });
     });
     return out;
@@ -2338,7 +2319,7 @@
    * `thread: t2; reason: …`), each field by its key, or null for any other text. The fields are
    * found by the keys a weave's elements carry, so a value that is plain text reads as itself.
    */
-  var ELEMENT_FIELD_KEYS = ['id', 'name', 'line', 'role', 'verdict', 'reason', 'joins', 'kind', 'struck', 'about', 'question', 'changes', 'answer', 'thread'];
+  var ELEMENT_FIELD_KEYS = ['id', 'name', 'line', 'role', 'verdict', 'reason', 'joins', 'kind', 'about', 'question', 'changes', 'answer', 'thread'];
   var ELEMENT_FIELD_SPLIT = new RegExp('; (?=(?:' + ELEMENT_FIELD_KEYS.join('|') + '): )');
   var ELEMENT_FIELD_START = /^(?:id|thread): /;
 
@@ -2654,8 +2635,7 @@
    * has it, so a flip moves a thread at once. Each thread keeps its place in the weave, by which
    * the operations change it, and an entry that is no object is no thread, as lib/weave.js reads
    * the list (objectsOf). The console's reading of lib/weave.js settledAngleOf, held equal by a
-   * test on one corpus, without the connections, which the page takes struck or not until the
-   * strike goes (slice 3C).
+   * test on one corpus, without the connections (openConnectionsOf).
    *
    * @param {Object} weave - the weave as the director has it
    * @returns {{angle: (Object|null), inStory: Array<{thread: Object, index: number}>, leftOut: Array<{thread: Object, index: number}>}}
@@ -2742,10 +2722,9 @@
   /**
    * The words lib/hand-edit-diff.js editWhere closes a place with when the edit is a whole element or
    * a cut. A test holds the meeting's reading of a place to editWhere, through markOfEntry, for the
-   * words that decide a mark (added, struck and brought back); a cut is matched by its text (brief
-   * 4.10c).
+   * words that decide a mark (added); a cut is matched by its text (brief 4.10c).
    */
-  var WHOLE_EDIT_WORDS = /(^|, )(added|cut|struck|brought back)$/;
+  var WHOLE_EDIT_WORDS = /(^|, )(added|cut)$/;
 
   /** An element of the weave in a report entry's place, as editWhere writes it: `thread "t3", role`. */
   var ELEMENT_PLACE = new RegExp('^(' + Object.keys(ELEMENT_WORDS).map(function (k) { return ELEMENT_WORDS[k]; }).join('|') + ') "([^"]*)"(?:, (.*))?$');
@@ -3111,7 +3090,6 @@
       var connection = c.connection;
       var id = weaveIdOf(connection);
       var b = id ? at('connection:' + id) : none;
-      var struck = isStruckConnection(connection);
       var joins = words.joinsText(connection.joins);
       var said = asString(connection.line).trim();
       var named = joins ? 'the connection between ' + joins : 'the connection "' + said + '"';
@@ -3123,10 +3101,8 @@
         joins: joins,
         label: said,
         labels: {
-          fold: evidenceFoldLabel(named),
-          strike: (struck ? 'Unstrike ' : 'Strike ') + named
+          fold: evidenceFoldLabel(named)
         },
-        struck: struck,
         repeatedId: id !== '' && connectionRepeats.has(id),
         evidence: evidenceFoldView(connection.evidence, d.evidenceIndex),
         concerns: b.concerns,
@@ -4715,7 +4691,6 @@
     CUTS_AGAINST_LABEL: CUTS_AGAINST_LABEL,
     MEETING_NO_EVIDENCE_LINE: MEETING_NO_EVIDENCE_LINE,
     evidenceFoldView: evidenceFoldView,
-    STRUCK_KEY: STRUCK_KEY,
     WEAVE_ANSWER_KEY: WEAVE_ANSWER_KEY,
     DIRECTOR_WEAVE_SHAPE: DIRECTOR_WEAVE_SHAPE,
     PICKED_KEY: PICKED_KEY,
@@ -4741,7 +4716,6 @@
     flipMeetingThread: flipMeetingThread,
     addMeetingThread: addMeetingThread,
     removeMeetingThread: removeMeetingThread,
-    setConnectionStruck: setConnectionStruck,
     setQuestionAnswer: setQuestionAnswer,
     meetingWeaveChanges: meetingWeaveChanges,
     meetingWeaveProblems: meetingWeaveProblems,
