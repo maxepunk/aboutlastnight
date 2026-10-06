@@ -469,9 +469,23 @@ describe("3E: piece 1's shape is old", () => {
     expect(isOldShapeWeave(noAngles)).toBe(true);
   });
 
+  // R6 tests a weave by its angles alone. 1G flagged a weave with one thread in phase 4's shape
+  // (a claim and no line) among new threads; under R6 a weave that has angles is in the new shape
+  // whatever its threads carry, so that mixed weave, and one with a thread in piece 1's shape (a
+  // role and a reason), flags nothing. The checks and the gate answer for such a thread, not the
+  // old-thread guard.
   it('a weave with its angles is not, whatever its threads carry, and with its pick', () => {
     expect(isOldShapeWeave(NEW_WEAVE)).toBe(false);
     expect(isOldShapeWeave({ ...NEW_WEAVE, picked: NEW_WEAVE.angles[1].id })).toBe(false);
+    const phaseFourThread = { ...OLD_SHAPE_WEAVE.threads[1], id: 't9' };
+    const pieceOneThread = { ...PIECE_ONE_WEAVE.threads[2], id: 't10' };
+    expect(phaseFourThread).not.toHaveProperty('line');
+    expect(pieceOneThread).toMatchObject({ role: 'left-out', reason: expect.any(String) });
+    [phaseFourThread, pieceOneThread].forEach((thread) => {
+      const mixed = { ...NEW_WEAVE, threads: [...NEW_WEAVE.threads, thread] };
+      expect(`${thread.id}: ${isOldShapeWeave(mixed)}`).toBe(`${thread.id}: false`);
+      expect(`${thread.id}: ${JSON.stringify(oldThreadOf({ currentPhase: '2.35', weave: mixed }, 'arc-selection'))}`).toBe(`${thread.id}: null`);
+    });
   });
 
   it("a thread paused at the meeting on piece 1's weave is flagged, with the one old-shape message", () => {
