@@ -3065,11 +3065,13 @@ textarea.input {
 }
 
 /* ── 4.9: the map ──
-   The outline stop's page (Outline.js): about 450 words to read and edit in minutes. Each
-   line keeps its concerns under it. The pencil hosts (.map__head, .map__gap,
-   .map__section-head, .map__beat, .map__length) carry `.article-block--editable-always`,
-   whose `padding-right` reserves the pencil's gutter, so they set their padding with the
-   longhands: a `padding` shorthand here comes later in the file and would cancel it. */
+   The outline stop's page (Outline.js): at most 450 words as it first opens, read and edited in
+   minutes (phase 4b, briefs 1D and 1F). Each line keeps under it what is about it, a check still
+   failing and its concerns, and each move what's behind it, folded. The pencil hosts
+   (.map__head, .map__gap, .map__section-head, .map__beat, .map__length) carry
+   `.article-block--editable-always`, whose `padding-right` reserves the pencil's gutter, so
+   they set their padding with the longhands: a `padding` shorthand here comes later in the
+   file and would cancel it. */
 .map__story,
 .map__section,
 .map__top,
@@ -3173,22 +3175,77 @@ textarea.input {
   opacity: 0.75;
 }
 
-.map__beat-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.map__id,
-.map__kind {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: var(--accent-cyan);
-}
-
-.map__material {
+/* A move: its words in story terms, the line the director reads and edits. */
+.map__move-words {
   margin: var(--space-xs) 0;
+  color: var(--text-primary);
+}
+
+/* "(card)": the move's evidence prints as a card. Quieter than the words, in the card's amber. */
+.map__card-mark {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--accent-amber);
+  white-space: nowrap;
+}
+
+/* What's behind a move: a small toggle under it that opens its evidence in place, quieter than
+   the move itself, so the page reads as the story and the evidence stays a click away. */
+.map__fold .collapsible-section {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.map__fold .collapsible-header {
+  width: auto;
+  padding: 2px 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.map__fold .collapsible-header:hover {
+  background: none;
+  color: var(--accent-amber);
+}
+
+.map__fold .collapsible-body {
+  padding: var(--space-xs) 0 0 var(--space-sm);
+}
+
+.map__pieces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* One piece of evidence: its sources by name, what it shows. */
+.map__piece {
+  padding-left: var(--space-sm);
+  border-left: 2px solid rgba(78, 205, 196, 0.3);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* A piece that cuts against its move: the move still stands, and the piece says where it gives. */
+.map__piece.map__cuts-against {
+  border-left-color: rgba(231, 76, 60, 0.6);
+  color: var(--text-primary);
+}
+
+.map__no-evidence {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
 }
 
 .map__photo {
@@ -3218,6 +3275,14 @@ textarea.input {
   display: none;
 }
 
+/* A photo by the director's description, beside its thumbnail: what they said it shows. */
+.map__photo-description {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+/* A photo the director gave no description, by its filename. */
 .map__filename {
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -3251,7 +3316,7 @@ textarea.input {
   flex-wrap: wrap;
 }
 
-.map__add-material {
+.map__add-move {
   flex: 2;
   min-width: 220px;
 }
@@ -3287,6 +3352,12 @@ textarea.input {
   border-left: 2px solid var(--accent-red);
   background: rgba(231, 76, 60, 0.06);
   font-size: 0.85rem;
+}
+
+/* A check still failing under the line it names: as compact as the concerns beside it. */
+.map__check--beside {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.8rem;
 }
 
 .map__changed {

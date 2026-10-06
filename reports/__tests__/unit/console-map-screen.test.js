@@ -166,3 +166,429 @@ describe("4.14b: Outline.js keys each beat row by the view's key, the beat's id"
     expect(src).not.toMatch(/key: (beat|item)\.index|'-beat-' \+/);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 4b, brief 1F: the map's page shows mapView as it is (spec 2026-10-05 sections 4.2, 6.3
+// and 9). Outline.js is run here with a React whose createElement builds a tree of its elements
+// and whose hooks keep their state between renders, so the tests read what the page renders from
+// each of the view model's fields and drive its real handlers: each move as its words, its people
+// and "(card)" where it has the marker, its evidence folded in place; each photo's description
+// beside its thumbnail; a check still failing under the line it names; no tag; the beat editor,
+// the add line, a fold and the beside picker. Invented text: the fixtures are
+// lib/__tests__/fixtures/story-level-map.js's.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ViewLogic = require('../../console/checkpoint-view-logic');
+const EditLogic = require('../../console/outline-edit-logic');
+const { mapCheckpointData } = require('../../lib/map');
+const { keptPhotoFilenames } = require('../../lib/workflow/nodes/ai-nodes');
+const { storyLevelMap, storyLevelMapState, PHOTO_DESCRIPTIONS } = require('../../lib/__tests__/fixtures/story-level-map');
+const { piece } = require('../../lib/__tests__/fixtures/story-level-weave');
+
+/** Each exposed document of the story-level record, as server.js buildEvidenceIndex names it. */
+const EVIDENCE_INDEX = {
+  jes002: { name: 'JES002 - The warning', owner: 'Jess Moreau', type: 'memory', firstLine: '' },
+  sam001: { name: 'SAM001 - The journal', owner: 'Sam Okafor', type: 'memory', firstLine: '' },
+  'p-email': { name: 'Email to Quinn', owner: 'Marcus Blackwood', type: 'paper', firstLine: '' }
+};
+
+/** The stop's payload for a state, as server.js getCheckpointData sends it (less the trace). */
+function mapPayloadOf(state = storyLevelMapState()) {
+  return { type: 'outline', ...mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, state.outline.topPhoto), evidenceIndex: EVIDENCE_INDEX, maxRevisions: 1 }) };
+}
+
+/** Every beat's id on a map, in the sections and in left out. */
+const beatIdsOf = (map) => [...map.sections.flatMap((s) => s.beats), ...map.leftOut].map((b) => b.id);
+
+/**
+ * Outline.js run with a React whose createElement returns `{type, props, children}` and whose
+ * useState keeps each value between renders, with the console's own modules for the globals the
+ * file reads. A component the page uses from utils (CollapsibleSection, TracePanel) stays a node,
+ * uncalled; an editor of the page's own (BeatEditor and the rest) is a node too, which `child`
+ * runs with hooks of its own. `render()` renders the page as it is now; `dispatched` holds every
+ * action the page sent.
+ */
+function mountMap(props) {
+  const src = read('components/checkpoints/Outline.js');
+  let hooks = null;
+  const React = {
+    Fragment: 'Fragment',
+    createElement: (type, p, ...children) => ({ type, props: p || {}, children }),
+    useState: (initial) => {
+      const store = hooks;
+      const n = store.i++;
+      if (!(n in store.states)) store.states[n] = typeof initial === 'function' ? initial() : initial;
+      return [store.states[n], (value) => { store.states[n] = typeof value === 'function' ? value(store.states[n]) : value; }];
+    },
+    useEffect: () => {}
+  };
+  const editBtn = (onClick, held) => ({
+    type: 'button', props: { className: 'article-block__edit-btn', onClick, disabled: !!held, 'aria-label': 'Edit', title: held || 'Edit' }, children: ['✎']
+  });
+  const window = {
+    Console: {
+      utils: {
+        Badge: 'Badge', CollapsibleSection: 'CollapsibleSection', TracePanel: 'TracePanel', editBtn,
+        CHECKPOINT_LABELS: { 'arc-selection': 'Story meeting', outline: 'Map', article: 'Article' }
+      },
+      outlineEditLogic: EditLogic,
+      checkpointViewLogic: ViewLogic,
+      unsavedInputLogic: require('../../console/unsaved-input-logic')
+    }
+  };
+  const Outline = new Function('window', 'React', `${src}\nreturn window.Console.checkpoints.Outline;`)(window, React);
+  const dispatched = [];
+  const page = { states: [], i: 0 };
+  const all = { onApprove: () => {}, onReject: () => {}, onRollback: () => {}, sessionId: '100226', theme: 'journalist', dispatch: (action) => dispatched.push(action), ...props };
+  const runWith = (store, fn) => {
+    const before = hooks;
+    hooks = store;
+    store.i = 0;
+    try { return fn(); } finally { hooks = before; }
+  };
+  return {
+    dispatched,
+    /** The map as the page last saved it to its pending slot. */
+    saved: () => dispatched[dispatched.length - 1].edits.map,
+    render: () => runWith(page, () => Outline(all)),
+    /** An editor node the page rendered, run with hooks of its own: `render()` renders it as it is now. */
+    child: (node) => {
+      const store = { states: [], i: 0 };
+      return { render: () => runWith(store, () => node.type(node.props)) };
+    }
+  };
+}
+
+const MAP_FOLD = 'CollapsibleSection';
+
+/** Every element of a tree that `test` takes, in document order, with whether a fold holds it. */
+function mapElementsOf(node, test, found = [], folded = false) {
+  if (Array.isArray(node)) node.forEach((child) => mapElementsOf(child, test, found, folded));
+  else if (node && typeof node === 'object') {
+    if (test(node, folded)) found.push(node);
+    mapElementsOf(node.children, test, found, folded || node.type === MAP_FOLD);
+  }
+  return found;
+}
+
+const mapClassesOf = (node) => String(node.props.className || '').split(/\s+/).filter(Boolean);
+const hasClass = (name) => (node) => mapClassesOf(node).includes(name);
+
+/** The text a node shows as the page first opens: its strings, a field's value, a select's chosen option, a fold's title, never what a fold holds. */
+function shownText(node) {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(shownText).join('');
+  if (!node || typeof node !== 'object') return '';
+  if (node.type === MAP_FOLD) return String(node.props.title || '');
+  if (node.type === 'Badge') return String(node.props.label || '');
+  if (node.type === 'textarea' || node.type === 'input') return String(node.props.value || '');
+  if (node.type === 'select') {
+    const chosen = mapElementsOf(node.children, (n) => n.type === 'option').find((o) => o.props.value === node.props.value);
+    return chosen ? shownText(chosen.children) : '';
+  }
+  return shownText(node.children);
+}
+
+/** The text a fold holds once opened, each of its items and lines apart. */
+const heldText = (fold) => mapElementsOf(fold.children, (n) => n.type === 'li' || n.type === 'p').map(shownText).join(' | ');
+
+/** The folds inside a node, outside any fold. */
+const foldsWithin = (node) => mapElementsOf(node.children, (n, folded) => n.type === MAP_FOLD && !folded);
+
+/** Each string the page prints or reads out: every text, a field's value, a fold's title, and each aria-label, title, placeholder and alt. */
+function stringsOf(tree) {
+  const strings = [];
+  mapElementsOf(tree, (node) => {
+    ['aria-label', 'title', 'placeholder', 'label', 'alt'].forEach((prop) => { if (typeof node.props[prop] === 'string') strings.push(node.props[prop]); });
+    if ((node.type === 'textarea' || node.type === 'input') && typeof node.props.value === 'string') strings.push(node.props.value);
+    node.children.forEach((child) => { if (typeof child === 'string') strings.push(child); });
+    return false;
+  });
+  return strings;
+}
+
+/** The view's beats in the sections, in order. */
+const viewBeats = (view) => view.sections.flatMap((s) => s.beats);
+
+/** The row of a beat in a section, found by the move it shows. */
+const beatRowOf = (tree, move) => mapElementsOf(tree, (n) => hasClass('map__beat')(n) && shownText(n).includes(move))[0];
+
+/** The lines the page shows for what holds its controls, in document order. */
+const heldLines = (tree) => mapElementsOf(tree, hasClass('held-line')).map(shownText);
+
+describe("1F: each move shows its words, its people and \"(card)\" where it has the marker, with what's behind it folded in place", () => {
+  const data = mapPayloadOf();
+  const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+  const tree = mountMap({ data }).render();
+  const rows = mapElementsOf(tree, hasClass('map__beat'));
+
+  it("renders each beat of the sections, in the view's order, as its move's words, then the card mark where the view sets `card`, then its people", () => {
+    expect(rows).toHaveLength(viewBeats(view).length);
+    rows.forEach((row, i) => {
+      const beat = viewBeats(view)[i];
+      const [words] = mapElementsOf(row, hasClass('map__move-words'));
+      expect(shownText(words)).toBe(beat.card ? `${beat.move} ${ViewLogic.MAP_CARD_MARK}` : beat.move);
+      expect(mapElementsOf(words, hasClass('map__card-mark')).map(shownText)).toEqual(beat.card ? [ViewLogic.MAP_CARD_MARK] : []);
+      expect(shownText(row)).toContain(`Shows: ${beat.players}`);
+    });
+    expect(viewBeats(view).filter((b) => b.card).map((b) => b.move)).toEqual([
+      'Marcus trying the batch on himself', 'Marcus asks Quinn for a higher dose', 'Jess warns Sarah'
+    ]);
+  });
+
+  it('folds each move\'s evidence under "What\'s behind it", each piece as the view words it, in a group the view names by the move', () => {
+    rows.forEach((row, i) => {
+      const beat = viewBeats(view)[i];
+      const folds = foldsWithin(row);
+      expect(folds.map((f) => f.props.title)).toEqual([view.evidenceTitle]);
+      const [group] = mapElementsOf(row, hasClass('map__fold'));
+      expect(group.props.role).toBe('group');
+      expect(group.props['aria-label']).toBe(beat.labels.fold);
+      expect(beat.labels.fold).toBe(`What's behind it: ${beat.move}`);
+      expect(mapElementsOf(group, (n) => n === folds[0])).toHaveLength(1);
+      expect(mapElementsOf(folds[0], hasClass('map__piece')).map(shownText)).toEqual(beat.evidence.map((p) => p.text));
+      beat.evidence.forEach((p) => expect(shownText(row)).not.toContain(p.shows));
+    });
+    expect(heldText(foldsWithin(beatRowOf(tree, 'Marcus asks Quinn for a higher dose'))[0]))
+      .toBe('Email to Quinn (Marcus Blackwood): Marcus asks Quinn to "raise the dose for the pilot"');
+  });
+
+  it('marks a piece that cuts against its move', () => {
+    const state = storyLevelMapState();
+    state.outline.sections[3].beats[0].evidence.push(piece(['notes'], 'The room never said so.', 'cuts-against'));
+    const page = mountMap({ data: mapPayloadOf(state) }).render();
+    const against = mapElementsOf(beatRowOf(page, 'The successors wait on the case'), hasClass('map__cuts-against'));
+    expect(against.map(shownText)).toEqual(['Cuts against · Your notes: The room never said so.']);
+    expect(against.every(hasClass('map__piece'))).toBe(true);
+  });
+
+  it('a move the director added folds the line that the article writer finds its evidence, and nothing of it shows until opened', () => {
+    const draft = EditLogic.addBeat(ViewLogic.mapDraftOf(data, undefined), 'closing', 'Remi walks out before the vote', 'Remi');
+    const page = mountMap({ data, pendingEdits: ViewLogic.mapPendingSlot(data, draft) }).render();
+    const row = beatRowOf(page, 'Remi walks out before the vote');
+    const [fold] = foldsWithin(row);
+    expect(mapElementsOf(fold, hasClass('map__no-evidence')).map(shownText)).toEqual([ViewLogic.MAP_NO_EVIDENCE_LINE]);
+    expect(shownText(row)).not.toContain(ViewLogic.MAP_NO_EVIDENCE_LINE);
+  });
+});
+
+describe("1F: each photo shows the director's description beside its thumbnail, and the beside picker names moves by their words", () => {
+  const data = mapPayloadOf();
+  const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+  const pickerOf = (tree, photo) => mapElementsOf(tree, (n) => n.type === 'select' && n.props['aria-label'] === photo.labels.beside)[0];
+
+  it("shows each photo's description in the row of its thumbnail, and a photo with none by its filename", () => {
+    const state = storyLevelMapState({ photoDescriptions: { 'top.jpg': PHOTO_DESCRIPTIONS['top.jpg'], 'board.jpg': PHOTO_DESCRIPTIONS['board.jpg'] } });
+    const tree = mountMap({ data: mapPayloadOf(state) }).render();
+    const rows = mapElementsOf(tree, hasClass('map__photo'));
+    expect(rows.map((row) => [
+      mapElementsOf(row, (n) => n.type === 'img')[0].props.src.split('/').pop(),
+      mapElementsOf(row, hasClass('map__photo-description')).map(shownText),
+      mapElementsOf(row, hasClass('map__filename')).map(shownText)
+    ])).toEqual([
+      ['top.jpg', [PHOTO_DESCRIPTIONS['top.jpg']], []],
+      ['board.jpg', [PHOTO_DESCRIPTIONS['board.jpg']], []],
+      ['bar.jpg', [], ['bar.jpg']]
+    ]);
+  });
+
+  it('offers, beside each photo of a section, the choices the view gives, each naming a move by its words', () => {
+    const photo = view.sections[1].photos[0];
+    const picker = pickerOf(mountMap({ data }).render(), photo);
+    expect(mapElementsOf(picker, (n) => n.type === 'option').map(shownText)).toEqual(photo.besideOptions.map((o) => o.label));
+    expect(shownText(picker)).toBe('Beside: Marcus trying the batch on himself');
+  });
+
+  it("a choice in the picker sets the photo beside that move on the director's map", () => {
+    const mounted = mountMap({ data });
+    const photo = view.sections[1].photos[0];
+    pickerOf(mounted.render(), photo).props.onChange({ target: { value: 'b5' } });
+    expect(mounted.dispatched[mounted.dispatched.length - 1]).toMatchObject({ type: 'SAVE_PENDING_EDITS', checkpoint: 'outline' });
+    expect(mounted.saved().sections[1].photos).toEqual([{ filename: 'board.jpg', beat: 'b5' }, { filename: 'bar.jpg' }]);
+    expect(shownText(pickerOf(mounted.render(), photo))).toBe('Beside: Jess warns Sarah');
+  });
+});
+
+describe('1F: a check still failing shows under the line it names (spec 6.3)', () => {
+  const map = storyLevelMap();
+  map.sections[2].beats[0].evidence = [piece(['zzz999'], 'A document no record holds.')];
+  const failures = [
+    { type: 'evidence-not-in-record', message: 'Beat b6: piece 1 names "zzz999".', line: 'The evidence behind the move cites a document the record does not hold.', place: 'sections[#followTheMoney].beats[#b6]' },
+    { type: 'story-terms', message: 'The job of lede holds a time.', line: 'This job gives the time 9:58.', place: 'sections[#lede]' },
+    { type: 'photo-placed-twice', message: 'board.jpg twice.', line: 'This photo is placed twice.', place: 'sections[#theStory].photos[#board.jpg]' },
+    { type: 'story-terms', message: 'The gap note holds a time.', line: 'The gap note gives the time 9:58.', place: 'gapNote' },
+    { type: 'player-not-placed', message: 'Players in no beat: Remi.', line: 'Remi is in no move and not in the gap note.' }
+  ];
+  const data = { ...mapPayloadOf(storyLevelMapState({ outline: map })), checkFailures: failures };
+  const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+  const tree = mountMap({ data }).render();
+  const checksIn = (node) => mapElementsOf(node, hasClass('map__check')).map(shownText);
+  const [round] = mapElementsOf(tree, hasClass('map__round'));
+
+  it("shows each failure the view sets beside a line under that line, in the director's words, styled as beside its line", () => {
+    expect(checksIn(beatRowOf(tree, 'The memories sold off'))).toEqual(viewBeats(view).find((b) => b.id === 'b6').failures);
+    const [lede] = mapElementsOf(tree, (n) => hasClass('map__section-head')(n) && shownText(n).includes('Opens on the vote'));
+    expect(checksIn(lede)).toEqual(view.sections[0].failures);
+    const [board] = mapElementsOf(tree, (n) => hasClass('map__photo')(n) && shownText(n).includes(PHOTO_DESCRIPTIONS['board.jpg']));
+    expect(checksIn(board)).toEqual(view.sections[1].photos[0].failures);
+    expect(view.sections[1].photos[0].failures).toEqual(['Check still failing: This photo is placed twice.']);
+    const [gap] = mapElementsOf(tree, hasClass('map__gap'));
+    expect(checksIn(gap)).toEqual(view.gapNote.failures);
+    const atTop = new Set(mapElementsOf(round, hasClass('map__check')));
+    const beside = mapElementsOf(tree, (n) => hasClass('map__check')(n) && !atTop.has(n));
+    expect(beside).toHaveLength(4);
+    beside.forEach((check) => {
+      expect(mapClassesOf(check)).toContain('map__check--beside');
+      expect(check.props.role).toBe('alert');
+    });
+  });
+
+  it("keeps a failure with no place at the top, in the round's lines", () => {
+    expect(checksIn(round)).toEqual(view.checkFailures);
+    expect(view.checkFailures).toEqual(['Check still failing: Remi is in no move and not in the gap note.']);
+    mapElementsOf(round, hasClass('map__check')).forEach((check) => expect(mapClassesOf(check)).not.toContain('map__check--beside'));
+  });
+});
+
+describe('1F: no tag on the page, and every aria-label names a move by its words', () => {
+  const data = mapPayloadOf();
+  const draft = EditLogic.addBeat(ViewLogic.mapDraftOf(data, undefined), 'closing', 'Remi walks out before the vote', 'Remi');
+  const pending = ViewLogic.mapPendingSlot(data, draft);
+  const view = ViewLogic.mapView(data, draft);
+  const TAG = new RegExp(`\\b(?:${[...beatIdsOf(draft), 't1', 't2', 't3', 't4', 't5', 't6', 't7', 'c1', 'c2', 'c3', 'c4'].join('|')})\\b`);
+
+  it("prints and reads out no beat's, thread's or connection's id, with a move's editor and the add line open", () => {
+    const mounted = mountMap({ data, pendingEdits: pending });
+    expect(stringsOf(mounted.render()).filter((s) => TAG.test(s))).toEqual([]);
+    // Open the editor on a move, and an add line holding a move, as the director would.
+    mapElementsOf(beatRowOf(mounted.render(), 'Marcus asks Quinn for a higher dose'), hasClass('article-block__edit-btn'))[0].props.onClick();
+    mapElementsOf(mounted.render(), (n) => n.type === 'button' && shownText(n) === '+ Add a beat')[0].props.onClick();
+    mapElementsOf(mounted.render(), hasClass('map__add-move'))[0].props.onChange({ target: { value: 'Kai counts the votes' } });
+    const open = mounted.render();
+    const strings = stringsOf(open);
+    expect(strings.length).toBeGreaterThan(40);
+    expect(strings.filter((s) => TAG.test(s))).toEqual([]);
+    // The lines under the add line and the open editor, and beside the held buttons, name the move by its words.
+    expect(heldLines(open)).toEqual([
+      'Before you add a beat in another section, add or cancel the new beat in "Lede".',
+      'Before you edit another line, save or cancel your edit to the move "Marcus asks Quinn for a higher dose".',
+      'Before you approve or send back: save or cancel your edit to the move "Marcus asks Quinn for a higher dose"; add or cancel the new beat in "Lede".'
+    ]);
+  });
+
+  it("names each move's controls and its fold by the move's words, as the view gives them", () => {
+    const tree = mountMap({ data, pendingEdits: pending }).render();
+    const inSections = viewBeats(view);
+    const all = [...inSections, ...view.leftOut.items];
+    all.forEach((beat) => expect(beat.labels).toEqual({
+      fold: `What's behind it: ${beat.move}`,
+      moveTo: `Move "${beat.move}" to another section`,
+      strike: `Strike "${beat.move}" into left out`,
+      takeOut: `Take out the move you added: ${beat.move}`,
+      bringBack: `Bring "${beat.move}" back into a section`
+    }));
+    const ariaLabels = mapElementsOf(tree, (n) => typeof n.props['aria-label'] === 'string').map((n) => n.props['aria-label']);
+    const used = (beat) => [
+      ...(beat.evidence.length > 0 || beat.noEvidence ? [beat.labels.fold] : []),
+      ...(inSections.includes(beat) ? [beat.labels.moveTo, beat.added ? beat.labels.takeOut : beat.labels.strike] : [beat.labels.bringBack])
+    ];
+    const expected = all.flatMap(used);
+    expect(ariaLabels.filter((label) => all.some((beat) => Object.values(beat.labels).includes(label)))).toEqual(
+      expect.arrayContaining(expected)
+    );
+    expect(ariaLabels.filter((label) => all.some((beat) => Object.values(beat.labels).includes(label)))).toHaveLength(expected.length);
+    expect(ariaLabels).toContain('Take out the move you added: Remi walks out before the vote');
+  });
+
+  it("names each photo's controls by the director's description, as the view gives them", () => {
+    const tree = mountMap({ data, pendingEdits: pending }).render();
+    const [board, bar] = view.sections[1].photos;
+    expect(board.labels).toEqual({
+      beside: `Where "${PHOTO_DESCRIPTIONS['board.jpg']}" sits in its section`,
+      moveTo: `Move "${PHOTO_DESCRIPTIONS['board.jpg']}" to the top or to another section`
+    });
+    expect(bar.labels.moveTo).toBe(`Move "${PHOTO_DESCRIPTIONS['bar.jpg']}" to the top or to another section`);
+    expect(view.topPhoto.labels).toEqual({ moveTo: `Move the top photo "${PHOTO_DESCRIPTIONS['top.jpg']}" into a section` });
+    [board.labels.beside, board.labels.moveTo, bar.labels.beside, bar.labels.moveTo, view.topPhoto.labels.moveTo]
+      .forEach((label) => expect(mapElementsOf(tree, (n) => n.props['aria-label'] === label)).toHaveLength(1));
+    const bare = ViewLogic.mapView({ ...data, photoDescriptions: {} }, draft);
+    expect(bare.sections[1].photos[1].labels).toEqual({ beside: 'Where bar.jpg sits in its section', moveTo: 'Move bar.jpg to the top or to another section' });
+    expect(bare.topPhoto.labels).toEqual({ moveTo: 'Move the top photo top.jpg into a section' });
+  });
+});
+
+describe("1F: the beat editor edits a move's words and its people, through initBeat and buildBeat", () => {
+  it("opens on the beat's move and people, and saves what the director typed into that beat, keeping the rest of it", () => {
+    const mounted = mountMap({ data: mapPayloadOf() });
+    mapElementsOf(beatRowOf(mounted.render(), 'Marcus asks Quinn for a higher dose'), hasClass('article-block__edit-btn'))[0].props.onClick();
+    const [host] = mapElementsOf(mounted.render(), (n) => hasClass('map__beat')(n) && hasClass('map__editing')(n));
+    const [editorNode] = host.children.filter((c) => c && typeof c.type === 'function');
+    expect(editorNode.type.name).toBe('BeatEditor');
+    const editor = mounted.child(editorNode);
+    const fields = () => mapElementsOf(editor.render(), (n) => typeof n.type === 'function' && n.type.name === 'TextField');
+    expect(fields().map((f) => [f.props.label, f.props.value])).toEqual([
+      ['The move', 'Marcus asks Quinn for a higher dose'],
+      ['Players it shows', 'Quinn']
+    ]);
+    fields()[0].props.onChange('Marcus wants a stronger dose');
+    fields()[1].props.onChange('Quinn, Sam');
+    mapElementsOf(editor.render(), (n) => n.type === 'button' && shownText(n) === 'Save')[0].props.onClick();
+    expect(mounted.saved().sections[1].beats[1]).toEqual({ ...storyLevelMap().sections[1].beats[1], move: 'Marcus wants a stronger dose', players: ['Quinn', 'Sam'] });
+    // The editor closes, and the row shows the move the director wrote.
+    const after = mounted.render();
+    expect(mapElementsOf(after, hasClass('map__editing'))).toHaveLength(0);
+    expect(shownText(mapElementsOf(beatRowOf(after, 'Marcus wants a stronger dose'), hasClass('map__move-words'))[0])).toBe('Marcus wants a stronger dose (card)');
+  });
+});
+
+describe("1F: the add line takes a move's words and its people, under `adding.move`", () => {
+  const src = read('components/checkpoints/Outline.js');
+
+  it('names its words `move` in its state, as console/unsaved-input-logic.js reads it', () => {
+    expect(src).toContain("setAdding({ slot: slot, move: '', players: '' })");
+    expect(src).toContain('EditLogic.addBeat(draft, adding.slot, adding.move, adding.players)');
+    expect(src).not.toMatch(/material/);
+  });
+
+  it('opens in its section, holds the buttons while it holds a move, and adds `{id, move, players}` through addBeat', () => {
+    const mounted = mountMap({ data: mapPayloadOf() });
+    const [closing] = mapElementsOf(mounted.render(), (n) => n.type === 'section' && n.props['aria-label'] === 'Closing');
+    mapElementsOf(closing, (n) => n.type === 'button' && shownText(n) === '+ Add a beat')[0].props.onClick();
+    const line = () => mapElementsOf(mounted.render(), hasClass('map__add'))[0];
+    const addButton = () => mapElementsOf(line(), (n) => n.type === 'button' && shownText(n) === 'Add the beat')[0];
+    const approve = () => mapElementsOf(mounted.render(), (n) => n.type === 'button' && shownText(n) === ViewLogic.mapButtons('', false).approve.label)[0];
+    expect([mapElementsOf(line(), hasClass('map__add-move'))[0].props['aria-label'], mapElementsOf(line(), hasClass('map__add-players'))[0].props['aria-label']])
+      .toEqual(['The move to add', 'The players the beat shows']);
+    expect(addButton().props.disabled).toBe(true);
+    expect(approve().props.disabled).toBe(false);
+    mapElementsOf(line(), hasClass('map__add-move'))[0].props.onChange({ target: { value: 'Remi walks out before the vote' } });
+    mapElementsOf(line(), hasClass('map__add-players'))[0].props.onChange({ target: { value: 'Remi, Kai' } });
+    expect(shownText(mapElementsOf(line(), hasClass('map__add-move'))[0])).toBe('Remi walks out before the vote');
+    expect(addButton().props.disabled).toBe(false);
+    expect(approve().props.disabled).toBe(true);
+    expect(heldLines(mounted.render())).toEqual([
+      'Before you add a beat in another section, add or cancel the new beat in "Closing".',
+      'Before you approve or send back, add or cancel the new beat in "Closing".'
+    ]);
+    addButton().props.onClick();
+    expect(mounted.saved().sections[3].beats[1]).toEqual({ id: 'b10', move: 'Remi walks out before the vote', players: ['Remi', 'Kai'] });
+    expect(mapElementsOf(mounted.render(), hasClass('map__add'))).toHaveLength(0);
+    expect(approve().props.disabled).toBe(false);
+  });
+});
+
+describe("1F: the map's styles", () => {
+  const css = read('console.css');
+  const map = css.slice(css.indexOf('/* ── 4.9: the map ──'), css.indexOf("/* ── 4.10: the desk's marks ──"));
+  const ruled = (rule) => new RegExp(`${rule.replace(/[.-]/g, '\\$&')}[\\s,{:]`).test(map);
+
+  it("styles the move's words, the card mark, the fold and its pieces, a piece that cuts against its move, a check beside its line, the photo's description and the add line's move", () => {
+    ['.map__move-words', '.map__card-mark', '.map__fold', '.map__pieces', '.map__piece', '.map__cuts-against', '.map__no-evidence',
+      '.map__check--beside', '.map__photo-description', '.map__add-move']
+      .forEach((rule) => expect(`${rule}: ${ruled(rule)}`).toBe(`${rule}: true`));
+  });
+
+  it('keeps no style for an id, a kind, the material or the header that held them', () => {
+    ['.map__id', '.map__kind', '.map__material', '.map__add-material', '.map__beat-head'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
+  });
+});

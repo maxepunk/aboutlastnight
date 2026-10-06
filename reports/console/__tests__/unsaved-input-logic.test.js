@@ -38,11 +38,15 @@ function deskBundle() {
   };
 }
 
-/** The map's sections as mapView lists them: each slot with the label the page heads it with. */
+/**
+ * The map's sections as mapView lists them: each slot with the label the page heads it with, and
+ * its beats, each with its id and its move (phase 4b, brief 1F: the line names a beat's editor by
+ * its move's words, since the page shows no tag).
+ */
 const MAP_SECTIONS = [
-  { slot: 'lede', label: 'Lede' },
-  { slot: 'theStory', label: 'The Story' },
-  { slot: 'followTheMoney', label: 'Follow the Money' }
+  { slot: 'lede', label: 'Lede', beats: [] },
+  { slot: 'theStory', label: 'The Story', beats: [{ id: 'b4', move: 'Morgan pays Riley at the bar' }] },
+  { slot: 'followTheMoney', label: 'Follow the Money', beats: [] }
 ];
 
 describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', () => {
@@ -82,7 +86,7 @@ describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', ()
   describe('the map (outline): an open editor or an add line holding text holds Approve and Send back', () => {
     it('holds nothing while no editor is open and no add line holds text', () => {
       expect(unsavedInputLine('outline', { editor: null, adding: null, sections: MAP_SECTIONS })).toBeNull();
-      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', material: '  ', players: '' }, sections: MAP_SECTIONS })).toBeNull();
+      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', move: '  ', players: '' }, sections: MAP_SECTIONS })).toBeNull();
     });
 
     it('names an open editor, and says to save or cancel it first', () => {
@@ -91,7 +95,7 @@ describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', ()
     });
 
     it.each([
-      ['a beat by its id', { line: 'beat', key: 'b4' }, 'beat b4'],
+      ['a beat by its move\'s words, never its id', { line: 'beat', key: 'b4' }, 'the move "Morgan pays Riley at the bar"'],
       ['a section by the label the page heads it with', { line: 'section', key: 'followTheMoney' }, 'the heading and job of "Follow the Money"'],
       ['the gap note', { line: 'gapNote', key: 'gap' }, 'the gap note'],
       ['the expected length', { line: 'length', key: 'length' }, 'the expected length']
@@ -100,18 +104,25 @@ describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', ()
         .toBe(`Before you approve or send back, save or cancel your edit to ${name}.`);
     });
 
+    it('holds the actions for the editor of a beat the sections do not hold, or one with no words, naming no id', () => {
+      const unnamed = 'Before you approve or send back, save or cancel the edit you have open.';
+      expect(unsavedInputLine('outline', { editor: { line: 'beat', key: 'b9' }, adding: null, sections: MAP_SECTIONS })).toBe(unnamed);
+      const wordless = [{ slot: 'lede', label: 'Lede', beats: [{ id: 'b1', move: '  ' }] }];
+      expect(unsavedInputLine('outline', { editor: { line: 'beat', key: 'b1' }, adding: null, sections: wordless })).toBe(unnamed);
+    });
+
     it('names an add line that holds a beat or only its players, by its section, and says to add or cancel it first', () => {
       const line = 'Before you approve or send back, add or cancel the new beat in "The Story".';
-      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', material: 'Morgan pays Riley at the bar', players: '' }, sections: MAP_SECTIONS })).toBe(line);
-      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', material: '', players: 'Morgan, Riley' }, sections: MAP_SECTIONS })).toBe(line);
+      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', move: 'Morgan pays Riley at the bar', players: '' }, sections: MAP_SECTIONS })).toBe(line);
+      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', move: '', players: 'Morgan, Riley' }, sections: MAP_SECTIONS })).toBe(line);
     });
 
     it('names both when an editor and an add line are open', () => {
       expect(unsavedInputLine('outline', {
         editor: { line: 'beat', key: 'b4' },
-        adding: { slot: 'followTheMoney', material: 'The ledger at 9:40', players: '' },
+        adding: { slot: 'followTheMoney', move: 'The ledger at 9:40', players: '' },
         sections: MAP_SECTIONS
-      })).toBe('Before you approve or send back: save or cancel your edit to beat b4; add or cancel the new beat in "Follow the Money".');
+      })).toBe('Before you approve or send back: save or cancel your edit to the move "Morgan pays Riley at the bar"; add or cancel the new beat in "Follow the Money".');
     });
   });
 
@@ -285,14 +296,14 @@ describe('4.14g: every control that would close or replace an open editor or add
 
   describe('the map: a pencil waits for an open editor, and "+ Add a beat" for an add line that holds text', () => {
     const HEAD = { line: 'head', key: 'head' };
-    const TYPED = { slot: 'theStory', material: 'Morgan pays Riley at the bar', players: '' };
+    const TYPED = { slot: 'theStory', move: 'Morgan pays Riley at the bar', players: '' };
     const ADD_LINE = 'Before you add a beat in another section, add or cancel the new beat in "The Story".';
 
     it('a pencil waits while an editor is open, and the line names the editor', () => {
       expect(unsavedInputLine('outline', { editor: HEAD, adding: null, sections: MAP_SECTIONS }, 'edit'))
         .toBe('Before you edit another line, save or cancel your edit to the headline and deck.');
       expect(unsavedInputLine('outline', { editor: { line: 'beat', key: 'b4' }, adding: TYPED, sections: MAP_SECTIONS }, 'edit'))
-        .toBe('Before you edit another line, save or cancel your edit to beat b4.');
+        .toBe('Before you edit another line, save or cancel your edit to the move "Morgan pays Riley at the bar".');
     });
 
     it('a pencil is free beside an add line holding text, which it does not close', () => {
@@ -301,11 +312,11 @@ describe('4.14g: every control that would close or replace an open editor or add
 
     it('"+ Add a beat" waits while the add line holds a beat or only its players, and the line names its section', () => {
       expect(unsavedInputLine('outline', { editor: null, adding: TYPED, sections: MAP_SECTIONS }, 'add')).toBe(ADD_LINE);
-      expect(unsavedInputLine('outline', { editor: HEAD, adding: { slot: 'theStory', material: ' ', players: 'Morgan' }, sections: MAP_SECTIONS }, 'add')).toBe(ADD_LINE);
+      expect(unsavedInputLine('outline', { editor: HEAD, adding: { slot: 'theStory', move: ' ', players: 'Morgan' }, sections: MAP_SECTIONS }, 'add')).toBe(ADD_LINE);
     });
 
     it('"+ Add a beat" is free while the add line is blank, since moving it loses nothing, and beside an open editor, which it does not close', () => {
-      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', material: '', players: '  ' }, sections: MAP_SECTIONS }, 'add')).toBeNull();
+      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', move: '', players: '  ' }, sections: MAP_SECTIONS }, 'add')).toBeNull();
       expect(unsavedInputLine('outline', { editor: HEAD, adding: null, sections: MAP_SECTIONS }, 'add')).toBeNull();
     });
   });

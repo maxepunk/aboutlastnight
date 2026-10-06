@@ -45,8 +45,9 @@
  *     is null while the editor is closed, since the editor takes the desk's text again when it opens.
  *   - 'article-json', the JSON editor's Save & Approve: the desk's { editor, bundle, json, deskVersion }.
  *   - 'outline', the map: { editor, adding, sections }. `editor` is Outline.js's editing, an open
- *     editor; `adding` its add-a-beat line, which holds the actions once it holds text; `sections`
- *     the page's sections as mapView lists them, whose labels name a section.
+ *     editor; `adding` its add-a-beat line, `{slot, move, players}`, which holds the actions once
+ *     its move or its players hold text; `sections` the page's sections as mapView lists them,
+ *     whose labels name a section and whose beats' moves name a beat (phase 4b, brief 1F).
  *   - 'arc-selection', the story meeting: { addLine }, the add-a-thread line's text, which holds
  *     the actions once it holds text. Every other change at the meeting is kept as it is typed.
  * `control`, when given, is a kind of control at the desk or on the map (CONTROLS below); without it,
@@ -278,12 +279,25 @@
     return quoted(found && holdsText(found.label) ? found.label : asString(slot));
   }
 
+  /**
+   * A beat as the line names its open editor: by its move's words, found by its id among the
+   * beats of the page's sections, since the page shows no tag (phase 4b, brief 1F; spec 9), or
+   * '' for a beat it cannot find or one with no words.
+   */
+  function mapBeatName(sections, id) {
+    var beat = (Array.isArray(sections) ? sections : []).reduce(function (found, section) {
+      if (found || !isPlainObject(section) || !Array.isArray(section.beats)) return found;
+      return section.beats.filter(function (b) { return isPlainObject(b) && b.id === id; })[0] || null;
+    }, null);
+    return beat && holdsText(beat.move) ? 'the move ' + quoted(beat.move.trim()) : '';
+  }
+
   /** What an open map editor edits (Outline.js's editing), or '' for one it cannot name. */
   function mapEditorName(editor, sections) {
     if (editor.line === 'head') return 'the headline and deck';
     if (editor.line === 'gapNote') return 'the gap note';
     if (editor.line === 'section') return 'the heading and job of ' + mapSectionName(sections, editor.key);
-    if (editor.line === 'beat') return holdsText(editor.key) ? 'beat ' + editor.key : '';
+    if (editor.line === 'beat') return holdsText(editor.key) ? mapBeatName(sections, editor.key) : '';
     if (editor.line === 'length') return 'the expected length';
     return '';
   }
@@ -293,10 +307,10 @@
     return isPlainObject(open.editor) ? [saveOrCancel(mapEditorName(open.editor, open.sections))] : [];
   }
 
-  /** The add line's instruction once it holds text: its two buttons, Add the beat and Cancel. */
+  /** The add line's instruction once it holds text, its move or its players: its two buttons, Add the beat and Cancel. */
   function mapAddLineInstructions(open) {
     var adding = open.adding;
-    if (!isPlainObject(adding) || !(holdsText(adding.material) || holdsText(adding.players))) return [];
+    if (!isPlainObject(adding) || !(holdsText(adding.move) || holdsText(adding.players))) return [];
     return ['add or cancel the new beat in ' + mapSectionName(open.sections, adding.slot)];
   }
 

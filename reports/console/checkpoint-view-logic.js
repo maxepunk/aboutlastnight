@@ -3361,6 +3361,31 @@
   }
 
   /**
+   * What a move's fold and controls say to a screen reader (phase 4b, brief 1F; spec 9: the tags
+   * leave the page): each names the move by its words, never its id, or as "a move" when it has
+   * none. The page renders them as given, so Outline.js builds no label of its own.
+   *
+   * @param {*} move - the beat's move
+   * @returns {{fold: string, moveTo: string, strike: string, takeOut: string, bringBack: string}}
+   */
+  function moveLabelsOf(move) {
+    var words = asString(move).trim();
+    var named = words ? '"' + words + '"' : 'a move';
+    return {
+      fold: EVIDENCE_FOLD_TITLE + ': ' + (words || 'a move'),
+      moveTo: 'Move ' + named + ' to another section',
+      strike: 'Strike ' + named + ' into left out',
+      takeOut: 'Take out the move you added: ' + (words || 'a move'),
+      bringBack: 'Bring ' + named + ' back into a section'
+    };
+  }
+
+  /** A photo as its controls name it to a screen reader: by the director's description, quoted, as the page shows it, or by its filename when there is none. */
+  function photoNameOf(filename, description) {
+    return description ? '"' + description + '"' : asString(filename);
+  }
+
+  /**
    * The words a change to the weave names its source by (task 4.14b): a change of the
    * director's at the meeting by the place the meeting names its line by, from the payload's
    * `meetingChanges` (`{id, place}`: the meeting's changes the weave carries), as "Your change
@@ -3407,6 +3432,10 @@
    *   - each photo with the director's description (`description`, photoDescriptionOf), or ''
    *     when there is none, and the beats it can sit beside, each named by its move. A photo sits
    *     beside the beat it names unless that beat is struck (photoBeatOf; task 4.14b);
+   *   - what each beat's fold and controls, and each photo's controls, say to a screen reader
+   *     (`labels`, phase 4b, brief 1F): a beat named by its move's words (moveLabelsOf), the
+   *     fold's group "What's behind it: <move>"; a photo, the top photo too, by the director's
+   *     description, or its filename when there is none (photoNameOf). The page builds none;
    * - a photo the map places that the director left out of the article since (the payload's
    *   `leftOutPhotos`), at the top or in a section, is `leftOut`: marked with
    *   LEFT_OUT_PHOTO_LINE before its concerns, its controls off, and no place to move to (task
@@ -3486,7 +3515,8 @@
         failures: id ? failuresAt('beat:' + id) : [],
         added: added,
         locked: id === '' || writers.beatIds.indexOf(id) !== -1,
-        moveTargets: slot === null ? targets : others(slot)
+        moveTargets: slot === null ? targets : others(slot),
+        labels: moveLabelsOf(b.move)
       };
     };
 
@@ -3502,12 +3532,18 @@
       if (beside && !options.some(function (o) { return o.value === beside; })) {
         options.push({ value: beside, label: 'Beside: ' + moveOf(editLogic.beatWithId(map, beside)) + ', which is not in this section' });
       }
+      var description = photoDescriptionOf(d.photoDescriptions, filename);
+      var named = photoNameOf(filename, description);
       return {
         key: section.slot + '-photo-' + index,
         slot: section.slot,
         index: index,
         filename: filename,
-        description: photoDescriptionOf(d.photoDescriptions, filename),
+        description: description,
+        labels: {
+          beside: 'Where ' + named + ' sits in its section',
+          moveTo: 'Move ' + named + ' to the top or to another section'
+        },
         beat: beside,
         besideOptions: options,
         moveTargets: leftOut ? [] : [{ value: editLogic.MAP_TOP_PHOTO, label: TOP_PHOTO_LABEL }].concat(others(section.slot)),
@@ -3520,10 +3556,12 @@
 
     var topName = asString(map.topPhoto);
     var topLeftOut = photoLeftOut(topName);
+    var topDescription = photoDescriptionOf(d.photoDescriptions, topName);
     var topPhoto = topName.trim()
       ? {
           filename: topName,
-          description: photoDescriptionOf(d.photoDescriptions, topName),
+          description: topDescription,
+          labels: { moveTo: 'Move the top photo ' + photoNameOf(topName, topDescription) + ' into a section' },
           concerns: (topLeftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('topPhoto')),
           failures: failuresAt('topPhoto'),
           moveTargets: topLeftOut ? [] : targets,

@@ -8,7 +8,10 @@
  * - the gap note; the headline, the deck and the top photo;
  * - the sections in the map's order, under the theme's slot labels, each with its job, beats
  *   and photos: every line editable, move and strike controls on each beat, move controls on
- *   each photo, and an "add a beat" line with its players;
+ *   each photo, and an "add a beat" line with its players. Each beat shows its move's words, its
+ *   people and "(card)" where it has the marker, with a "What's behind it" toggle that opens its
+ *   evidence in place; each photo shows the director's description beside its thumbnail; a check
+ *   still failing shows under the line it names (phase 4b, briefs 1D and 1F; spec 9);
  * - the dropped sections with their reasons; Everyone, the cards, the photos and the expected
  *   length, rebuilt from the map as edited; left out, folded, each item with "bring back to";
  *   the map's changes to the weave, each with its source;
@@ -16,12 +19,13 @@
  *   an automatic rework folded below.
  * Each concern sits beside the line of the edit it is about.
  *
- * Thin: the page is mapView's, every change goes through outline-edit-logic.js's editors
- * (init, build, merge) and moves, the payloads are mapPayload's (4.6's), each held first to
- * mapProblems (the gate's decisions), and the buttons are mapButtons'. The director's map and
- * note go to the map's pendingEdits slot on every change, under the map's version
- * (mapPendingSlot), so they survive a remount of that version and clear when a new one
- * arrives (pendingEditsAfterCheckpoint, in state.js).
+ * Thin: the page is mapView's, its labels among it (no tag and no label is built here: a move's
+ * controls and its fold, and a photo's controls, are named by mapView's `labels`), every change
+ * goes through outline-edit-logic.js's editors (init, build, merge) and moves, the payloads are
+ * mapPayload's (4.6's), each held first to mapProblems (the gate's decisions), and the buttons
+ * are mapButtons'. The director's map and note go to the map's pendingEdits slot on every
+ * change, under the map's version (mapPendingSlot), so they survive a remount of that version
+ * and clear when a new one arrives (pendingEditsAfterCheckpoint, in state.js).
  * An open editor, or an add line that holds text, holds both buttons, and a line beside them says
  * to save or discard it first (unsavedInputLine, task 4.14d). Nor does any other control drop it
  * (task 4.14g): while an editor is open every pencil waits, since a pencil opens its editor in the
@@ -34,7 +38,7 @@
 window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
-const { Badge, CollapsibleSection, TracePanel, editBtn, CHECKPOINT_LABELS } = window.Console.utils;
+const { CollapsibleSection, TracePanel, editBtn, CHECKPOINT_LABELS } = window.Console.utils;
 const EditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
 const { unsavedInputLine } = window.Console.unsavedInputLogic;
@@ -212,7 +216,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   /** "+ Add a beat": opens the add line in its section in place of the open one, so it waits while that holds text (task 4.14g). */
   function openAddLine(slot) {
     if (addHeld) return;
-    setAdding({ slot: slot, material: '', players: '' });
+    setAdding({ slot: slot, move: '', players: '' });
   }
 
   function cancel() { setEditing(null); }
@@ -225,7 +229,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
 
   function addTheBeat() {
     if (!adding) return;
-    change(EditLogic.addBeat(draft, adding.slot, adding.material, adding.players));
+    change(EditLogic.addBeat(draft, adding.slot, adding.move, adding.players));
     setAdding(null);
   }
 
@@ -267,10 +271,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     });
   }
 
-  /** The code checks still failing beside a line, in the director's words (phase 4b, brief 1D; spec 6.3). */
+  /** The code checks still failing under the line they name, in the director's words (phase 4b, briefs 1D and 1F; spec 6.3). */
   function failuresOf(failures) {
     return (failures || []).map(function (text, i) {
-      return React.createElement('p', { key: 'failure-' + i, className: 'map__check', role: 'alert' }, text);
+      return React.createElement('p', { key: 'failure-' + i, className: 'map__check map__check--beside', role: 'alert' }, text);
     });
   }
 
@@ -288,6 +292,13 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     );
   }
 
+  /** A photo as the page shows it beside its thumbnail: the director's description, or its filename when there is none (spec 9). */
+  function photoText(photo) {
+    return photo.description
+      ? React.createElement('p', { className: 'map__photo-description' }, photo.description)
+      : React.createElement('p', { className: 'map__filename' }, photo.filename);
+  }
+
   function thumb(filename) {
     const url = ViewLogic.mapPhotoUrl(sessionId, filename);
     return url && React.createElement('img', {
@@ -299,18 +310,37 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     });
   }
 
-  // Phase 4b (brief 1D; spec 9): a beat prints its move, its card mark and its people, with its
-  // evidence folded under "What's behind it"; its kind, its connection and its id stay underneath.
+  /**
+   * A move's evidence under it (phase 4b, briefs 1D and 1F; spec 5.4 and 9): a "What's behind it"
+   * toggle that opens it in place, each piece as evidenceFoldView words it, a piece that cuts
+   * against the move marked so, or, for a move the director added that has none, why
+   * (`noEvidence`). The group is named for a screen reader by the view (`labels.fold`).
+   */
+  function evidenceFold(beat) {
+    if (beat.evidence.length === 0 && !beat.noEvidence) return null;
+    return React.createElement('div', { className: 'map__fold', role: 'group', 'aria-label': beat.labels.fold },
+      React.createElement(CollapsibleSection, { title: view.evidenceTitle },
+        beat.evidence.length > 0 && React.createElement('ul', { className: 'map__pieces' },
+          beat.evidence.map(function (piece) {
+            return React.createElement('li', { key: piece.key, className: 'map__piece' + (piece.cutsAgainst ? ' map__cuts-against' : '') }, piece.text);
+          })
+        ),
+        beat.noEvidence && React.createElement('p', { className: 'map__no-evidence' }, beat.noEvidence)
+      )
+    );
+  }
+
+  // Phase 4b (briefs 1D and 1F; spec 9): a beat prints its move's words, "(card)" where it has the
+  // marker, and its people, with its evidence folded under "What's behind it"; its kind, its
+  // connection and its id stay underneath.
   function beatBody(beat) {
     return React.createElement(React.Fragment, null,
-      React.createElement('p', { className: 'map__material' }, beat.move,
-        beat.card && React.createElement(React.Fragment, null, ' ', React.createElement(Badge, { label: ViewLogic.MAP_CARD_MARK, color: 'var(--accent-amber)' }))),
+      React.createElement('p', { className: 'map__move-words' }, beat.move,
+        beat.card && React.createElement(React.Fragment, null, ' ', React.createElement('span', { className: 'map__card-mark' }, ViewLogic.MAP_CARD_MARK))),
       beat.players && React.createElement('p', { className: 'text-xs text-muted' }, 'Shows: ' + beat.players),
       failuresOf(beat.failures),
       concernsOf(beat.concerns),
-      (beat.evidence.length > 0 || beat.noEvidence) && React.createElement(CollapsibleSection, { title: view.evidenceTitle },
-        beat.evidence.map(function (piece) { return React.createElement('p', { key: piece.key, className: 'text-xs' }, piece.text); }),
-        beat.noEvidence && React.createElement('p', { className: 'text-xs text-muted' }, beat.noEvidence))
+      evidenceFold(beat)
     );
   }
 
@@ -331,21 +361,21 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       !beat.locked && editBtn(function () { open('beat', beat.id); }, editHeld),
       beatBody(beat),
       React.createElement('div', { className: 'map__controls' },
-        moveSelect('Move to…', beat.moveTargets, beat.locked, 'Move "' + beat.move + '" to another section',
+        moveSelect('Move to…', beat.moveTargets, beat.locked, beat.labels.moveTo,
           function (to) { change(EditLogic.moveBeat(draft, beat.id, to)); }),
         beat.added
           ? React.createElement('button', {
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               onClick: function () { change(EditLogic.removeBeat(draft, beat.id)); },
-              'aria-label': 'Take out the move you added: ' + beat.move
+              'aria-label': beat.labels.takeOut
             }, 'Take out')
           : React.createElement('button', {
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               disabled: beat.locked,
               onClick: function () { change(EditLogic.strikeBeat(draft, beat.id)); },
-              'aria-label': 'Strike "' + beat.move + '" into left out'
+              'aria-label': beat.labels.strike
             }, 'Strike')
       )
     );
@@ -355,7 +385,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     return React.createElement('li', { key: photo.key, className: 'map__photo' + (photo.locked ? ' map__photo--locked' : '') },
       thumb(photo.filename),
       React.createElement('div', { className: 'map__photo-body' },
-        React.createElement('p', { className: 'map__filename' }, photo.description || photo.filename),
+        photoText(photo),
         failuresOf(photo.failures),
         concernsOf(photo.concerns),
         React.createElement('div', { className: 'map__controls' },
@@ -364,11 +394,11 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
             value: photo.beat,
             disabled: photo.locked,
             onChange: function (e) { change(EditLogic.setPhotoBeside(draft, photo.slot, photo.index, e.target.value)); },
-            'aria-label': 'Where ' + photo.filename + ' sits in its section'
+            'aria-label': photo.labels.beside
           }, photo.besideOptions.map(function (o) {
             return React.createElement('option', { key: o.value || 'itself', value: o.value }, o.label);
           })),
-          moveSelect('Move to…', photo.moveTargets, photo.locked, 'Move ' + photo.filename + ' to the top or to another section',
+          moveSelect('Move to…', photo.moveTargets, photo.locked, photo.labels.moveTo,
             function (to) { movePhotoTo(photo.slot, photo.index, to); })
         )
       )
@@ -388,10 +418,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     return React.createElement('div', { className: 'map__add' },
       React.createElement('input', {
         type: 'text',
-        className: 'input map__add-material',
-        value: adding.material,
+        className: 'input map__add-move',
+        value: adding.move,
         placeholder: 'The move, in a few plain words',
-        onChange: function (e) { setAdding(Object.assign({}, adding, { material: e.target.value })); },
+        onChange: function (e) { setAdding(Object.assign({}, adding, { move: e.target.value })); },
         'aria-label': 'The move to add'
       }),
       React.createElement('input', {
@@ -402,7 +432,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         onChange: function (e) { setAdding(Object.assign({}, adding, { players: e.target.value })); },
         'aria-label': 'The players the beat shows'
       }),
-      React.createElement('button', { type: 'button', className: 'btn btn-secondary btn-sm', disabled: !adding.material.trim(), onClick: addTheBeat }, 'Add the beat'),
+      React.createElement('button', { type: 'button', className: 'btn btn-secondary btn-sm', disabled: !adding.move.trim(), onClick: addTheBeat }, 'Add the beat'),
       React.createElement('button', { type: 'button', className: 'btn btn-ghost btn-sm', onClick: function () { setAdding(null); } }, 'Cancel'),
       heldLine(addHeld)
     );
@@ -476,11 +506,11 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         thumb(view.topPhoto.filename),
         React.createElement('div', { className: 'map__photo-body' },
           React.createElement('p', { className: 'text-xs text-muted' }, 'Top photo, printed above the article'),
-          React.createElement('p', { className: 'map__filename' }, view.topPhoto.description || view.topPhoto.filename),
+          photoText(view.topPhoto),
           failuresOf(view.topPhoto.failures),
           concernsOf(view.topPhoto.concerns),
           React.createElement('div', { className: 'map__controls' },
-            moveSelect('Move into a section…', view.topPhoto.moveTargets, view.topPhoto.locked, 'Move the top photo ' + view.topPhoto.filename + ' into a section',
+            moveSelect('Move into a section…', view.topPhoto.moveTargets, view.topPhoto.locked, view.topPhoto.labels.moveTo,
               function (to) { movePhotoTo(EditLogic.MAP_TOP_PHOTO, 0, to); }))))
     ),
 
@@ -547,7 +577,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
               return React.createElement('li', { key: item.key, className: 'map__left-out' },
                 beatBody(item),
                 React.createElement('div', { className: 'map__controls' },
-                  moveSelect('Bring back to…', item.targets, item.locked, 'Bring "' + item.move + '" back into a section',
+                  moveSelect('Bring back to…', item.targets, item.locked, item.labels.bringBack,
                     function (to) { change(EditLogic.bringBackBeat(draft, item.id, to)); })));
             })
           )
