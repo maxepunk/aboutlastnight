@@ -183,7 +183,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
    * A line's evidence under it (phase 4b, briefs 1B and 1C; spec 5.4 and 9): a "What's behind it"
    * toggle that opens it in place, each piece as evidenceFoldView words it, a piece that cuts
    * against the line marked so, or, for a thread the director added that has none, why
-   * (`noEvidence`). The group is named for a screen reader by the line's `foldLabel`, which
+   * (`noEvidence`). The group is named for a screen reader by the line's `labels.fold`, which
    * meetingView gives it.
    */
   function evidenceFold(pieces, noEvidence, foldLabel) {
@@ -253,7 +253,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
           value: thread.role,
           disabled: thread.repeatedId,
           onChange: function (e) { editRole(thread.index, e.target.value); },
-          'aria-label': thread.roleAriaLabel
+          'aria-label': thread.labels.role
         }, roleOptions());
       }
 
@@ -267,13 +267,13 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               onClick: function () { removeThread(thread.index); },
-              'aria-label': thread.takeOutAriaLabel
+              'aria-label': thread.labels.takeOut
             }, 'Take out')
           ),
           React.createElement('p', { className: 'meeting__line' },
             thread.name && React.createElement('strong', { className: 'meeting__name' }, thread.name + (thread.line ? ': ' : '')), thread.line),
           beside(thread),
-          evidenceFold(thread.evidence, thread.noEvidence, thread.foldLabel)
+          evidenceFold(thread.evidence, thread.noEvidence, thread.labels.fold)
         );
       }
 
@@ -350,21 +350,21 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
               className: 'meeting__connection' + (connection.struck ? ' meeting__connection--struck' : '')
             },
               React.createElement('div', { className: 'meeting__head' },
-                React.createElement('span', { className: 'meeting__joins' }, connection.joins ? 'Joins ' + connection.joins : ''),
+                React.createElement('span', { className: 'meeting__joins' }, connection.label),
                 React.createElement('button', {
                   type: 'button',
                   className: 'btn btn-ghost btn-sm',
                   disabled: connection.repeatedId,
                   onClick: function () { strike(connection.index, !connection.struck); },
                   'aria-pressed': connection.struck,
-                  'aria-label': connection.strikeAriaLabel
+                  'aria-label': connection.labels.strike
                 }, connection.struck ? 'Unstrike' : 'Strike')
               ),
               React.createElement('p', { className: 'meeting__detail' }, connection.line),
               // Brief 4.14a: out of the story with a left-out thread, and why.
               connection.leftOut && React.createElement('p', { className: 'text-xs text-muted' }, connection.leftOut),
               beside(connection),
-              evidenceFold(connection.evidence, '', connection.foldLabel)
+              evidenceFold(connection.evidence, '', connection.labels.fold)
             );
           })
         ),

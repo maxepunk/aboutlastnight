@@ -199,19 +199,43 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
   });
 
   // Spec 9: the tags leave the page. A thread carries its verdict as a label, and a connection
-  // the names of the threads it joins; no line or label names an element by its id.
+  // prints the names of the threads it joins above its line, as ArcSelection.js does (its
+  // `label`; fix round 3); no line or label names an element by its id.
   it('labels no line with an id: the verdict\'s thread by its label, a connection by the names of the threads it joins', () => {
     const data = meetingData();
     const page = stopPage('arc-selection', data);
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const lineOf = (text) => page.lines.find((line) => line.text === text);
     expect(lineOf(threadLine(view.threads[0])).label).toBe("The room's verdict");
-    expect(lineOf(view.connections[0].line).label).toBe('Joins "The overdose vote" and "The envelope"');
+    const joins = page.lines.findIndex((line) => line.text === 'Joins "The overdose vote" and "The envelope"');
+    expect(page.lines[joins]).toMatchObject({ tone: 'text', label: '', folded: false });
+    expect(page.lines[joins + 1]).toMatchObject({ text: view.connections[0].line, label: '' });
     expect(page.lines.filter((line) => /\b[tcq]\d+\b/.test(`${line.label} ${line.text}`)).map((line) => line.label || line.text)).toEqual([]);
+    // A thread renamed everywhere the weave names it, its connections' joins too (whose names the
+    // page prints), shows as many words.
     const renamed = meetingData();
     renamed.weave = clone(renamed.weave);
+    const old = renamed.weave.threads[0].id;
     renamed.weave.threads[0].id = 'thread-with-a-much-longer-id';
+    renamed.weave.connections.forEach((connection) => {
+      connection.joins = connection.joins.map((id) => (id === old ? 'thread-with-a-much-longer-id' : id));
+    });
+    if (renamed.weave.strongerMainThread && renamed.weave.strongerMainThread.thread === old) renamed.weave.strongerMainThread.thread = 'thread-with-a-much-longer-id';
     expect(wordsShown('arc-selection', renamed)).toBe(wordsShown('arc-selection', data));
+  });
+
+  // Fix round 3: the names of the threads a connection joins are words the director reads on the
+  // page, so the meeting's count holds them, as it holds every line the page does not fold.
+  it("counts the names of the threads each connection joins among the words the meeting shows", () => {
+    const data = meetingData();
+    const view = View.meetingView(data, View.meetingDraftOf(data), '');
+    const joined = view.connections.map((connection) => connection.label).filter(Boolean);
+    expect(joined.length).toBeGreaterThan(0);
+    const unjoined = meetingData();
+    unjoined.weave = clone(unjoined.weave);
+    unjoined.weave.connections.forEach((connection) => { connection.joins = []; });
+    expect(wordsShown('arc-selection', data) - wordsShown('arc-selection', unjoined))
+      .toBe(joined.reduce((sum, label) => sum + wordCount(label), 0));
   });
 
   it('puts a check still failing, a concern and a mark right after the line they sit beside', () => {

@@ -583,8 +583,11 @@ describe('1C: the meeting\'s styles', () => {
 
 // Fix round 2: the page decides no label itself (the plan's Console rule). meetingView gives each
 // thread and connection the labels the page names it by, read from one name rule (threadLabelOf,
-// which the meeting's words read too), and ArcSelection.js reads them.
-describe('fix round 2: meetingView gives each thread and connection the labels the page reads, and the page builds none', () => {
+// which the meeting's words read too), and ArcSelection.js reads them. Fix round 3: one convention
+// for the meeting's and the map's pages, `label`, the element's name as the page prints it, and
+// `labels`, its aria-labels and fold title keyed by the control, the fold's from one builder
+// (evidenceFoldLabel); the connection's "Joins" line is its `label`.
+describe('fix rounds 2 and 3: meetingView gives each thread and connection the labels the page reads, and the page builds none', () => {
   /** The meeting with the envelope's name padded, and the heir named by its line alone. */
   function labelled() {
     const state = meetingState();
@@ -597,29 +600,35 @@ describe('fix round 2: meetingView gives each thread and connection the labels t
   it("each thread carries its label, its name trimmed or its line when it has none, and the fold's, the role picker's and the Take out's labels built from it", () => {
     const { view } = labelled();
     const envelope = view.threads.find((t) => t.id === 't3');
-    expect(envelope).toMatchObject({
-      label: 'The envelope',
-      foldLabel: "What's behind it: The envelope",
-      roleAriaLabel: 'Role of the thread The envelope',
-      takeOutAriaLabel: 'Take out the thread you added: The envelope'
+    expect(envelope.label).toBe('The envelope');
+    expect(envelope.labels).toEqual({
+      fold: "What's behind it: The envelope",
+      role: 'Role of the thread The envelope',
+      takeOut: 'Take out the thread you added: The envelope'
     });
+    expect(envelope.labels.fold).toBe(ViewLogic.evidenceFoldLabel(envelope.label));
     expect(view.threads.find((t) => t.id === 't4').label).toBe("A paternity result names Sarah as Marcus's heir.");
     expect(view.leftOut.threads.map((t) => t.label)).toEqual(['The letter']);
     expect(view.leftOut.names).toBe('The letter');
   });
 
-  it("each connection carries its label, by the threads it joins or its quoted line when it joins none, and the fold's and the strike's labels built from it", () => {
+  it("each connection carries its label, the Joins line the page prints, and the fold's and the strike's labels, naming it by the threads it joins or its quoted line when it joins none", () => {
     const { data, view } = labelled();
-    expect(view.connections[0]).toMatchObject({
-      label: 'the connection between "The overdose vote" and "The envelope"',
-      foldLabel: `What's behind it: the connection between "The overdose vote" and "The envelope"`,
-      strikeAriaLabel: 'Strike the connection between "The overdose vote" and "The envelope"'
+    expect(view.connections[0].label).toBe('Joins "The overdose vote" and "The envelope"');
+    expect(view.connections[0].labels).toEqual({
+      fold: `What's behind it: the connection between "The overdose vote" and "The envelope"`,
+      strike: 'Strike the connection between "The overdose vote" and "The envelope"'
     });
     const draft = ViewLogic.setConnectionStruck(ViewLogic.meetingDraftOf(data), 0, true);
     draft.connections[1].joins = [];
     const after = ViewLogic.meetingView(data, draft, '');
-    expect(after.connections[0].strikeAriaLabel).toBe('Unstrike the connection between "The overdose vote" and "The envelope"');
-    expect(after.connections[1].label).toBe('the connection "The night of the sale is the night the result came back."');
+    expect(after.connections[0].labels.strike).toBe('Unstrike the connection between "The overdose vote" and "The envelope"');
+    // A connection that joins no thread prints no Joins line, and its controls name it by its line.
+    expect(after.connections[1].label).toBe('');
+    expect(after.connections[1].labels).toEqual({
+      fold: `What's behind it: the connection "The night of the sale is the night the result came back."`,
+      strike: 'Strike the connection "The night of the sale is the night the result came back."'
+    });
   });
 
   it('the page names each thread and connection by those fields, its fold groups and aria-labels included', () => {
@@ -627,19 +636,32 @@ describe('fix round 2: meetingView gives each thread and connection the labels t
     const tree = renderMeeting({ data });
     const envelope = elementsOf(tree, withClass('meeting__thread')).find((row) => shown(row).includes('The envelope'));
     const thread = view.threads.find((t) => t.id === 't3');
-    expect(elementsOf(envelope, (n) => n.type === 'select').map((n) => n.props['aria-label'])).toEqual([thread.roleAriaLabel]);
-    expect(elementsOf(envelope, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([thread.foldLabel]);
+    expect(elementsOf(envelope, (n) => n.type === 'select').map((n) => n.props['aria-label'])).toEqual([thread.labels.role]);
+    expect(elementsOf(envelope, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([thread.labels.fold]);
     elementsOf(tree, withClass('meeting__connection')).forEach((row, i) => {
-      expect(elementsOf(row, (n) => n.type === 'button').map((n) => n.props['aria-label'])).toEqual([view.connections[i].strikeAriaLabel]);
-      expect(elementsOf(row, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([view.connections[i].foldLabel]);
+      expect(elementsOf(row, (n) => n.type === 'button').map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.strike]);
+      expect(elementsOf(row, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.fold]);
+      expect(elementsOf(row, withClass('meeting__joins')).map(shown)).toEqual([view.connections[i].label]);
     });
   });
 
   it('ArcSelection.js reads the labels and builds none of them', () => {
     const src = read('components/checkpoints/ArcSelection.js');
-    ['thread.label', 'thread.foldLabel', 'thread.roleAriaLabel', 'thread.takeOutAriaLabel', 'connection.foldLabel', 'connection.strikeAriaLabel']
+    ['thread.label', 'thread.labels.fold', 'thread.labels.role', 'thread.labels.takeOut', 'connection.label', 'connection.labels.fold', 'connection.labels.strike']
       .forEach((field) => expect(`${field}: ${src.includes(field)}`).toBe(`${field}: true`));
-    ['function threadName', 'function connectionName', "'Role of the thread ' +", "'Take out the thread you added: ' +", "'the connection between ' +", "view.evidenceTitle + ': '"]
+    ['function threadName', 'function connectionName', "'Role of the thread ' +", "'Take out the thread you added: ' +", "'the connection between ' +", "view.evidenceTitle + ': '", "'Joins '",
+      'foldLabel:', 'AriaLabel']
       .forEach((built) => expect(`${built}: ${src.includes(built)}`).toBe(`${built}: false`));
+  });
+
+  it("the meeting's and the map's folds name their group through one builder, and the view keeps none of the old flat fields", () => {
+    const view = read('checkpoint-view-logic.js');
+    expect(count(view, "EVIDENCE_FOLD_TITLE + ': '")).toBe(1);
+    ['foldLabel', 'roleAriaLabel', 'takeOutAriaLabel', 'strikeAriaLabel'].forEach((gone) => expect(`${gone}: ${view.includes(gone)}`).toBe(`${gone}: false`));
+    const start = view.indexOf('function meetingView(');
+    const meeting = view.slice(start, view.indexOf('\n  function ', start));
+    const moves = view.slice(view.indexOf('function moveLabelsOf('), view.indexOf('function photoNameOf('));
+    expect(count(meeting, 'evidenceFoldLabel(')).toBe(2);
+    expect(count(moves, 'evidenceFoldLabel(')).toBe(1);
   });
 });

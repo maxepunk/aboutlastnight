@@ -542,14 +542,15 @@ const MEETING_SECTIONS = {
     }
     page.hint(view.repeatedIdHint);
   },
-  // Each connection's line, with the names of the two threads it joins; its kind stays
+  // Each connection as the page prints it: the names of the two threads it joins, its `label`,
+  // a line the director reads and wordsShown counts (fix round 3), then its line; its kind stays
   // underneath, unprinted (R1), and its evidence folds under it.
   connections(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].connections);
     view.connections.forEach((connection) => {
-      const label = connection.joins ? `Joins ${connection.joins}` : '';
-      if (connection.struck) page.struck(connection.line, label);
-      else page.text(connection.line, label);
+      page.text(connection.label);
+      if (connection.struck) page.struck(connection.line);
+      else page.text(connection.line);
       // Brief 4.14a: out of the story with a left-out thread, said under the connection.
       page.note(connection.leftOut);
       addBesideLine(page, connection);

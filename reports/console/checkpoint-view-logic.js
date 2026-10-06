@@ -2036,6 +2036,18 @@
   /** The fold under each line of the story meeting and the map (spec 9). */
   var EVIDENCE_FOLD_TITLE = "What's behind it";
 
+  /**
+   * What a fold's group says to a screen reader: the fold's title and the line it sits under,
+   * "What's behind it: <name>". The one builder the meeting's threads and connections and the
+   * map's moves call (fix round 3).
+   *
+   * @param {string} name - the line, as its other labels name it
+   * @returns {string}
+   */
+  function evidenceFoldLabel(name) {
+    return EVIDENCE_FOLD_TITLE + ': ' + name;
+  }
+
   /** What the fold says of a piece that cuts against its line. */
   var CUTS_AGAINST_LABEL = 'Cuts against';
 
@@ -2732,15 +2744,17 @@
    *   at this look or an earlier one (`data.addedThreads`), the fold's one line (`noEvidence`,
    *   MEETING_NO_EVIDENCE_LINE). A thread of the writer's with none shows the check's failure
    *   beside it (`failures`) instead. Each thread carries the labels the page names it by (fix
-   *   round 2; the page decides none): `label`, its name or its line when it has none
-   *   (threadLabelOf), and from it `foldLabel` (its fold's group), `roleAriaLabel` and
-   *   `takeOutAriaLabel`.
+   *   round 2; the page decides none), as every element of the meeting's and the map's pages
+   *   does (fix round 3): `label`, its name as the page prints it, its name or its line when
+   *   it has none (threadLabelOf), and `labels`, keyed by the control, built from it: `fold`,
+   *   its fold's group (evidenceFoldLabel), `role` and `takeOut`.
    * - `leftOut`: the threads left out, by name (`names`, under its `title`), with their reasons
    *   folded under `reasonsTitle`.
    * - `connections`: each connection's line, with the names of the two threads it joins and its
-   *   evidence folded; its kind stays underneath, unprinted. Each carries `label`, by the threads
-   *   it joins or its line, quoted, when it joins none, and from it `foldLabel` and
-   *   `strikeAriaLabel` (fix round 2). One that joins a left-out thread,
+   *   evidence folded; its kind stays underneath, unprinted. Each carries `label`, the line the
+   *   page prints above it, "Joins" and the names of the threads it joins, or '' when it joins
+   *   none, and `labels`, `fold` and `strike`, naming it by the threads it joins or by its
+   *   line, quoted, when it joins none (fix rounds 2 and 3). One that joins a left-out thread,
    *   unstruck, carries `leftOut`, the line that says it is out of the story with that thread and
    *   comes back with it (leftOutThreadsOf; brief 4.14a), read from the weave as the director has
    *   it, so it follows their roles.
@@ -2810,9 +2824,11 @@
         name: asString(thread.name),
         line: asString(thread.line),
         label: label,
-        foldLabel: EVIDENCE_FOLD_TITLE + ': ' + label,
-        roleAriaLabel: 'Role of the thread ' + label,
-        takeOutAriaLabel: 'Take out the thread you added: ' + label,
+        labels: {
+          fold: evidenceFoldLabel(label),
+          role: 'Role of the thread ' + label,
+          takeOut: 'Take out the thread you added: ' + label
+        },
         role: role,
         roleLabel: roleWord(role),
         reason: asString(thread.reason),
@@ -2836,16 +2852,18 @@
       var b = id ? at('connection:' + id) : none;
       var struck = isStruckConnection(connection);
       var joins = words.joinsText(connection.joins);
-      var label = joins ? 'the connection between ' + joins : 'the connection "' + asString(connection.line) + '"';
+      var named = joins ? 'the connection between ' + joins : 'the connection "' + asString(connection.line) + '"';
       return {
         key: 'connection-' + index,
         index: index,
         id: id,
         line: asString(connection.line),
         joins: joins,
-        label: label,
-        foldLabel: EVIDENCE_FOLD_TITLE + ': ' + label,
-        strikeAriaLabel: (struck ? 'Unstrike ' : 'Strike ') + label,
+        label: joins ? 'Joins ' + joins : '',
+        labels: {
+          fold: evidenceFoldLabel(named),
+          strike: (struck ? 'Unstrike ' : 'Strike ') + named
+        },
         struck: struck,
         // Brief 4.14a: out of the story with a left-out thread, said under it; a strike already keeps it out.
         leftOut: struck ? '' : leftOutLine(leftOutThreadsOf(connection, weave), words),
@@ -3362,8 +3380,9 @@
 
   /**
    * What a move's fold and controls say to a screen reader (phase 4b, brief 1F; spec 9: the tags
-   * leave the page): each names the move by its words, never its id, or as "a move" when it has
-   * none. The page renders them as given, so Outline.js builds no label of its own.
+   * leave the page), keyed by the control as every element's `labels` are (fix round 3): each
+   * names the move by its words, never its id, or as "a move" when it has none. The page renders
+   * them as given, so Outline.js builds no label of its own.
    *
    * @param {*} move - the beat's move
    * @returns {{fold: string, moveTo: string, strike: string, takeOut: string, bringBack: string}}
@@ -3372,7 +3391,7 @@
     var words = asString(move).trim();
     var named = words ? '"' + words + '"' : 'a move';
     return {
-      fold: EVIDENCE_FOLD_TITLE + ': ' + (words || 'a move'),
+      fold: evidenceFoldLabel(words || 'a move'),
       moveTo: 'Move ' + named + ' to another section',
       strike: 'Strike ' + named + ' into left out',
       takeOut: 'Take out the move you added: ' + (words || 'a move'),
@@ -3433,9 +3452,11 @@
    *     when there is none, and the beats it can sit beside, each named by its move. A photo sits
    *     beside the beat it names unless that beat is struck (photoBeatOf; task 4.14b);
    *   - what each beat's fold and controls, and each photo's controls, say to a screen reader
-   *     (`labels`, phase 4b, brief 1F): a beat named by its move's words (moveLabelsOf), the
-   *     fold's group "What's behind it: <move>"; a photo, the top photo too, by the director's
-   *     description, or its filename when there is none (photoNameOf). The page builds none;
+   *     (`labels`, keyed by the control, as on the meeting's page; phase 4b, brief 1F, and fix
+   *     round 3): a beat named by its move's words (moveLabelsOf), the fold's group "What's
+   *     behind it: <move>" (evidenceFoldLabel); a photo, the top photo too, by the director's
+   *     description, or its filename when there is none (photoNameOf). A section's `label` is
+   *     its slot's name, as the page prints it. The page builds none;
    * - a photo the map places that the director left out of the article since (the payload's
    *   `leftOutPhotos`), at the top or in a section, is `leftOut`: marked with
    *   LEFT_OUT_PHOTO_LINE before its concerns, its controls off, and no place to move to (task
@@ -4460,6 +4481,7 @@
     EVIDENCE_STANCES: EVIDENCE_STANCES,
     EVIDENCE_KEY: EVIDENCE_KEY,
     EVIDENCE_FOLD_TITLE: EVIDENCE_FOLD_TITLE,
+    evidenceFoldLabel: evidenceFoldLabel,
     CUTS_AGAINST_LABEL: CUTS_AGAINST_LABEL,
     MEETING_NO_EVIDENCE_LINE: MEETING_NO_EVIDENCE_LINE,
     evidenceFoldView: evidenceFoldView,
