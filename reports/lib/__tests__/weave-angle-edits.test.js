@@ -5,7 +5,9 @@
  * Each field of an angle's pitch is one edit, found by the angle's id. A thread flipped into or out
  * of an angle is one edit of its own kind, carried while the angle's list holds (or lacks) that
  * thread and restored by adding or removing that thread alone (R2). A thread the director added is
- * one edit, the thread and its place in the angle together. The pick is no edit. The director's
+ * one edit, the thread and its place in the angle together, and stays theirs while the weave holds
+ * it in their words: its place is a membership of its own, which lapses alone when a send-back moves
+ * it (the final review). The pick is no edit. The director's
  * pitch lines and the threads they flipped in are their share: never held to the writer's rules,
  * never counted toward the writer's words, marked in the settled weave.
  *
@@ -278,6 +280,75 @@ describe('a thread the director added is one edit, with its place in the angle (
     const second = standingAtMeeting(first, withAdded(), later);
     expect(second.edits.map((edit) => [edit.id, edit.path, edit.angle])).toEqual([['E1', 'threads[#t8]', { id: 'a1', flip: 'out' }]]);
     expect(weaveDirectorsShare(second.edits).addedThreads).toEqual({ t8: 'E1' });
+  });
+
+  // The final review's important finding: the thread stays the director's while the weave holds it
+  // in their words, and its place in the angle is a membership of its own, as a flip is, which a
+  // send-back's rework may change alone ("lead with Jess" may ask for it in another angle).
+  describe("a send-back's rework that keeps the thread word for word and moves it out of its angle", () => {
+    const EVIDENCE = evidenceContextOf({ evidenceBundle: anglesRecord(), directorNotes: { rawProse: NOTES } });
+    const handEdits = () => standingAtMeeting(null, anglesWeave(), withAdded());
+    /** The send-back's weave: t8 as the director wrote it, told by angle 2, or by no angle. */
+    const sentBack = (where) => {
+      const weave = withAdded();
+      weave.angles[0].threads = weave.angles[0].threads.filter((id) => id !== 't8');
+      if (where === 'a2') weave.angles[1].threads.push('t8');
+      return weave;
+    };
+
+    ['a2', 'none'].forEach((where) => {
+      describe(`told by ${where === 'a2' ? 'another angle' : 'no angle'}`, () => {
+        test('the thread is still the director\'s edit, its place in angle 1 lapsed', () => {
+          const carried = carriedEdits(handEdits(), sentBack(where));
+          expect(carried.map((edit) => [edit.id, edit.path, edit.after])).toEqual([['E1', 'threads[#t8]', ADDED]]);
+          expect(carried[0]).not.toHaveProperty('angle');
+          expect(weaveDirectorsShare(carried).addedThreads).toEqual({ t8: 'E1' });
+        });
+
+        test('the checks do not hold it to the writer\'s evidence rule', () => {
+          const weave = sentBack(where);
+          const directorsShare = weaveDirectorsShare(carriedEdits(handEdits(), weave), weave);
+          const { failures } = weaveFindings(weave, { evidence: EVIDENCE, directorWords: [NOTES], directorsShare });
+          expect(failures.filter((failure) => failure.place === 'threads[#t8]')).toEqual([]);
+        });
+
+        test('an automatic pass that rewords it has its words put back, and leaves it where the send-back put it', () => {
+          const before = sentBack(where);
+          const pass = clone(before);
+          pass.threads.find((thread) => thread.id === 't8').line = 'A line the check rework wrote.';
+          const { output, report } = settleEdits(null, { edits: carriedEdits(handEdits(), before), before, after: pass, pass: 1 });
+          expect(output.threads.find((thread) => thread.id === 't8')).toEqual(ADDED);
+          expect(output.angles.map((angle) => angle.threads)).toEqual(before.angles.map((angle) => angle.threads));
+          expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+        });
+
+        test('at the next look it stands under its id, without the lapsed place, and a flip back into angle 1 is a new edit', () => {
+          const shown = sentBack(where);
+          const kept = standingAtMeeting(handEdits(), shown, clone(shown), { shown });
+          expect(kept.edits.map((edit) => [edit.id, edit.path, edit.angle])).toEqual([['E1', 'threads[#t8]', undefined]]);
+          const flippedBack = clone(shown);
+          flippedBack.angles[0].threads.push('t8');
+          const next = standingAtMeeting(handEdits(), shown, flippedBack, { shown });
+          expect(next.edits.map((edit) => [edit.id, edit.path, edit.flip])).toEqual([['E1', 'threads[#t8]', undefined], ['E2', 'angles[#a1].threads[#t8]', 'in']]);
+        });
+
+        test("the send-back's report reads the move as a flip of the thread out of angle 1, with the rework's reason", () => {
+          const before = withAdded();
+          const { report } = settleEdits(null, {
+            edits: carriedEdits(handEdits(), before), before, after: sentBack(where), pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asked to lead with Jess.' }]
+          });
+          expect(report.changed).toEqual([expect.objectContaining({
+            id: 'E1', flip: 'in', where: 'angle "a1", thread "t8", brought in', director: ADDED.name, reason: 'The note asked to lead with Jess.'
+          })]);
+        });
+      });
+    });
+
+    test('a send-back that rewords it as well makes it the writer\'s, as before', () => {
+      const weave = sentBack('a2');
+      weave.threads.find((thread) => thread.id === 't8').name = 'Jess and the meeting';
+      expect(carriedEdits(handEdits(), weave)).toEqual([]);
+    });
   });
 });
 

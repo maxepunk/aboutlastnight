@@ -71,7 +71,12 @@
  * (printedParts; known item 6), and a piece under six words is back only as a whole
  * sentence (known item 4). An element the director put in whole that code put back without
  * a photo the article cannot print stands without it from then on (standingAfterPass; task
- * 4.5g, fix round 1), so a version carries it while it holds the rest.
+ * 4.5g, fix round 1), so a version carries it while it holds the rest. A thread the director
+ * added at the story meeting is carried whole while the weave holds it under its id in their
+ * words and the angle they put it in still holds it there; its place in that angle is a
+ * membership of its own, as a flip is, so a version that holds the thread in their words and
+ * not in that place carries the thread alone, its place lapsed (editAsCarried; piece 3, the
+ * final review): the thread stays theirs while it exists.
  *
  * A MOVE WITHIN A SECTION STAYS WHILE ITS BLOCK DOES (task 4.3b). At a send-back where the
  * director's own move of a neighbour broke the order a move within the section recorded,
@@ -1324,6 +1329,39 @@ function editCarried(obj, edit) {
   return placeCarrying(obj, edit) !== undefined && (!membership || membershipCarried(obj, membership));
 }
 
+/**
+ * An edit as `obj` carries it, or null (piece 3, the final review; refines R2): the edit when `obj`
+ * carries it whole (editCarried); a thread the director added that `obj` holds under its id in
+ * their words, with its name and line, but not in the place they gave it in an angle, as the
+ * thread alone, its `angle` taken off. The thread stays theirs while it exists, and its place in
+ * an angle is a membership of its own, as a flip is: a send-back's rework that moves the thread to
+ * another angle, or out of every angle, changes the place alone, and the place lapses. Every
+ * reader of the standing edits takes them through here (carriedEdits): the checks hold the thread
+ * as the director's, an automatic pass that rewords it has its words put back and leaves it where
+ * the send-back put it, and the next look keeps it under its id (standingAtMeeting).
+ *
+ * @param {*} obj - the version in question
+ * @param {Object} edit
+ * @returns {Object|null}
+ */
+function editAsCarried(obj, edit) {
+  if (editCarried(obj, edit)) return edit;
+  const membership = membershipOf(edit);
+  if (!isEdit(edit) || !membership || isFlip(edit) || !isObj(obj) || placeCarrying(obj, edit) === undefined) return null;
+  const { angle: _lapsed, ...thread } = edit;
+  return thread;
+}
+
+/**
+ * A thread the director added that `obj` holds in their words, out of the place they gave it in
+ * an angle: that place (membershipOf), the one part of the edit `obj` no longer carries; null for
+ * any other edit, or one `obj` carries whole or not at all.
+ */
+function lapsedPlaceOf(obj, edit) {
+  const thread = editAsCarried(obj, edit);
+  return thread && thread !== edit ? membershipOf(edit) : null;
+}
+
 /** An edit stored before FA, given its steps; one with steps, as it is. */
 function normalizeEdit(edit) {
   if (Array.isArray(edit.at)) return edit;
@@ -1491,16 +1529,18 @@ function standingAfterSendBack(previous, shown, sentBack, kind, { names } = {}) 
 }
 
 /**
- * The standing edits `obj` carries, in id order.
+ * The standing edits `obj` carries, in id order, each as `obj` carries it (editAsCarried): a
+ * thread the director added that `obj` holds in their words out of the place they gave it in an
+ * angle comes without that place.
  *
  * @param {*} handEdits - standing edits, a list of edits, or a diff stored before ids
- * @param {*} obj - the outline or bundle in question
+ * @param {*} obj - the outline, the bundle or the weave in question
  * @returns {Object[]}
  */
 function carriedEdits(handEdits, obj) {
   if (!isObj(obj)) return [];
   const edits = Array.isArray(handEdits) ? handEdits.filter(isEdit).map(normalizeEdit) : ((standingEditsOf(handEdits) || {}).edits || []);
-  return edits.filter((e) => editCarried(obj, e));
+  return edits.map((e) => editAsCarried(obj, e)).filter(Boolean);
 }
 
 // ─── the weave (brief 4.5) ────────────────────────────────────────────────────
@@ -1812,7 +1852,7 @@ function withPlaceAsShown(weave, shown, steps) {
  */
 function withShownEdits(baseline, edits, shown) {
   if (!isObj(shown)) return baseline;
-  return edits.filter((e) => editCarried(shown, e)).reduce((weave, e) => {
+  return edits.map((e) => editAsCarried(shown, e)).filter(Boolean).reduce((weave, e) => {
     const placed = isFlip(e) ? weave : withPlaceAsShown(weave, shown, stepsOf(e));
     const membership = membershipOf(e);
     return membership ? withMembershipAsShown(placed, shown, membership) : placed;
@@ -1902,8 +1942,12 @@ function flipNamedIn(edit, weave) {
 function standingAtMeeting(previous, baseline, left, { names, shown = baseline } = {}) {
   const prior = standingEditsOf(previous);
   const issued = prior ? prior.issued : 0;
+  // A thread the director added whose place in its angle the weave the meeting showed no longer
+  // holds (a send-back's rework moved it) stands as the thread alone, its place lapsed
+  // (editAsCarried), so the place is read no further and a flip of the thread is an edit of its own.
   const kept = prior
     ? prior.edits
+      .map((e) => editAsCarried(shown, e) || e)
       .map((e) => wholeElementAsLeft(e, shown, left) || (editCarried(left, e) ? stillRemoved(e, [left]) : null))
       .filter(Boolean)
       .map((e) => flipNamedIn(e, left))
@@ -2098,7 +2142,7 @@ function editWhere(edit) {
   if (isObj(edit) && edit.scope === MAP_SCOPE) return mapEditWhere(edit);
   // Piece 3 (R2): a thread flipped into or out of an angle, by the angle and the thread.
   const flip = flipOf(edit);
-  if (flip) return `angle "${flip.angleId}", thread "${flip.threadId}", ${FLIP_WORDS[flip.flip]}`;
+  if (flip) return membershipWhere(flip);
   const steps = stepsOf(edit);
   const value = isCut(edit) ? edit.before : edit.after;
   const parts = [];
@@ -2139,6 +2183,11 @@ function editWhere(edit) {
   // Task 4.14c: a sidebar entry moves within the sidebar, a block within its section.
   if (edit.from) parts.push(isObj(edit.between) ? `moved within the ${head === SIDEBAR ? 'sidebar' : 'section'}` : `moved from section "${edit.from}"`);
   return parts.filter(Boolean).join(', ');
+}
+
+/** A thread's place in an angle as a place is named (`angle "a1", thread "t6", brought in`): a flip's, or the place of a thread the director added. */
+function membershipWhere({ angleId, threadId, flip }) {
+  return `angle "${angleId}", thread "${threadId}", ${FLIP_WORDS[flip]}`;
 }
 
 /** How many of its opening words name a moved block that no filename or tokenId names. */
@@ -4298,6 +4347,13 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
           ...(back && isMoveWithin(e) && { inOrder: editCarried(stored, e) })
         }));
       }
+      return;
+    }
+    // Piece 3 (the final review): a thread the director added that the pass kept in their words and
+    // moved out of the place they gave it in an angle is reported as that place alone, as a flip is.
+    const lapsed = lapsedPlaceOf(after, e);
+    if (lapsed) {
+      changed.push(entry(e, { where: membershipWhere(lapsed), flip: lapsed.flip, director: threadLabelOf(e.after), restored: putBack.has(e.id) }));
       return;
     }
     if (!editCarried(after, e)) {
