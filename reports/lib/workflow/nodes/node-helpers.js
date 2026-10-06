@@ -1195,10 +1195,11 @@ ${formatEditLines(standingEdits)}
   // the scope says so with its reason, so the rework spends no effort there. <HAND_EDITS> lists
   // every standing edit, those on other angles from earlier looks included, so the scope names by
   // id the changes it fits in, those on the open angle and on its threads (3 final, item 1).
-  const openAngle = meetingRound === 'reweave' ? pickedAngleOf(previousOutput) : null;
+  // 3 final, item 3: a send-back's scope names the open angle too, as context for its note.
+  const openAngle = MEETING_ROUNDS.includes(meetingRound) ? pickedAngleOf(previousOutput) : null;
   const openAngleWords = openAngle ? `${weaveIdOf(openAngle)} ("${typeof openAngle.headline === 'string' ? openAngle.headline.trim() : ''}")` : '';
-  const openEditIds = openAngle ? openAngleEditIds(standingEdits, previousOutput, openAngle) : [];
-  const otherEditIds = openAngle ? standingEdits.map((edit) => edit.id).filter((id) => !openEditIds.includes(id)) : [];
+  const openEditIds = openAngle && meetingRound === 'reweave' ? openAngleEditIds(standingEdits, previousOutput, openAngle) : [];
+  const otherEditIds = openAngle && meetingRound === 'reweave' ? standingEdits.map((edit) => edit.id).filter((id) => !openEditIds.includes(id)) : [];
   const reweaveAsks = [
     openAngle
       ? openEditIds.length > 0 && `${listOfWords(openEditIds)} in <HAND_EDITS>`
@@ -1211,7 +1212,7 @@ ${formatEditLines(standingEdits)}
   const openThreadIds = new Set(openAngle && Array.isArray(openAngle.threads)
     ? openAngle.threads.map((id) => (typeof id === 'string' ? id.trim() : ''))
     : []);
-  const addedThreadNames = openAngle
+  const addedThreadNames = openAngle && meetingRound === 'reweave'
     ? Object.keys(weaveDirectorsShare(standingEdits).addedThreads)
       .filter((id) => openThreadIds.has(id))
       .map((id) => {
@@ -1233,7 +1234,12 @@ ${formatEditLines(standingEdits)}
   } else {
     reweaveScope = `The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: ${reweaveAsks}. It rewrites the lines a change needs and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed.`;
   }
-  const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.`;
+  // 3 final, item 3: a note written against the angle the director had open ("angle 2, but less about
+  // Taylor") lands on that angle, so a send-back's scope names it, without limiting the rethink to it.
+  const sentBackAngleLine = openAngle && meetingRound === 'send-back'
+    ? ` The director had the angle ${openAngleWords} open when they sent the weave back, so a note about "this angle" or "the angle" is about that one; the rethink still reaches any angle, as far as the note asks.`
+    : '';
+  const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.${sentBackAngleLine}`;
   let scope;
   if (meetingRound === 'reweave') scope = reweaveScope;
   else if (directorsRound) scope = noteScope;

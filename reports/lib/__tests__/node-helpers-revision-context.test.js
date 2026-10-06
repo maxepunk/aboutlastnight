@@ -1157,6 +1157,20 @@ describe("3 final: the Reweave's scope names only the open angle's changes", () 
     expect(text).toContain('The director added "Jess turned in the meeting" to this angle: give it as its evidence the pieces of the record that tell it, when the record holds them, and no evidence when it holds none, because the meeting then tells the director the record cannot carry it.');
     expect(scopeOf()).not.toContain('The director added');
   });
+
+  // 3 final, item 3: a send-back's note is read against the angle the director had open ("angle 2,
+  // but less about Taylor"), so its scope names that angle as context, and the rethink may still
+  // reach any angle.
+  it("a send-back's scope names the angle the director had open, as context for the note", () => {
+    const { weave, handEdits } = looks();
+    weave.picked = 'a2';
+    const text = buildRevisionContext({
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 3, previousOutput: weave,
+      handEdits, humanFeedback: 'Less about Morgan.', meetingRound: 'send-back'
+    }).contextSection;
+    expect(text).toContain('The director had the angle a2 ("Morgan Paid Riley at the Bar While the Room Argued") open when they sent the weave back, so a note about "this angle" or "the angle" is about that one; the rethink still reaches any angle, as far as the note asks.');
+    expect(text).toContain("The director's note above is the task");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
