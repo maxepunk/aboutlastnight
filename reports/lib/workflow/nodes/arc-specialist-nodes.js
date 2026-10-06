@@ -656,7 +656,9 @@ ${ARC_REWORK_TASK}${struck ? ` ${ARC_REWORK_STRUCK_IDS}` : ''}${buildArcStanding
  *   R1; lib/weave.js withPickFrom);
  * - each question's thread, kept only while the weave holds it: a question whose thread the
  *   rework dropped or renumbered sits by the pitch, answered or not, with its answer (R10;
- *   lib/weave.js withHeldQuestionThreads);
+ *   lib/weave.js withHeldQuestionThreads); one whose thread came from the version the rework
+ *   started from (answered, or carried by code) keeps it only while the weave holds that same
+ *   thread under the id, by its name or its line (fix round 1, finding 4);
  * - the fact check's mark: the fix (an automatic pass on a weave the fact check judged)
  *   keeps it, counting the fix; a check rework starts from a weave not yet judged, so
  *   there is none to keep; a director's round writes the weave without it, so the
@@ -674,7 +676,7 @@ function weaveFromRework(result, previous, { directorRound, roundStart = null })
   const weave = withHeldQuestionThreads(withPickFrom(withStruckConnections({
     ...weaveFromOutput(result, 'arc rework'),
     questions: carriedWeaveQuestions(result && result.questions, previous.questions)
-  }, weaveForPrompt(previous), { roundStart }), previous));
+  }, weaveForPrompt(previous), { roundStart }), previous), previous, result && result.questions);
   const mark = directorRound ? null : factCheckMarkOf(previous);
   return mark ? { ...weave, [FACT_CHECK_MARK_KEY]: { ...mark, fixes: (mark.fixes || 0) + 1 } } : weave;
 }

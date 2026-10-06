@@ -48,7 +48,7 @@
 const crypto = require('crypto');
 const { isVerbatimIn } = require('./grounding');
 const { wordCount, pageLengthOf } = require('./word-count');
-const { WEAVE_ANSWER_KEY, WEAVE_QUESTION_THREAD_KEY, withoutAnswers } = require('./writer-questions');
+const { WEAVE_ANSWER_KEY, WEAVE_QUESTION_THREAD_KEY, isAnswered, withoutAnswers } = require('./writer-questions');
 // Phase 4b (brief 1B; R10): the evidence check and the story-terms check, which the map shares.
 const {
   evidenceProblems, describeEvidenceProblems, evidenceProblemsSaid, storyTermsProblems, describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX
@@ -332,17 +332,40 @@ function withPickFrom(weave, previous) {
  * question whose thread a rework dropped or renumbered sits by the pitch, answered or not, and
  * keeps its answer.
  *
+ * Given the version the rework started from and the questions the rework returned (fix round 1,
+ * finding 4), a question whose `thread` came from that version keeps it only while the weave
+ * holds the same thread under the id, by its name or its line: a rework may renumber the threads
+ * and give the id to another thread, and the director's answer must not then sit beside it. Such
+ * a question is one that is answered (code keeps an answered question whole, lib/writer-questions.js
+ * carriedWeaveQuestions), or one the rework did not return in any form, which code carried. A
+ * question the rework returned (unanswered, as the rework wrote it) names its thread in the
+ * rework's own numbering, so only the "still held" test reads it.
+ *
  * @param {Object} weave
+ * @param {Object|null} [previous] - the weave the rework started from
+ * @param {*} [returned] - the questions the rework returned
  * @returns {Object}
  */
-function withHeldQuestionThreads(weave) {
+function withHeldQuestionThreads(weave, previous = null, returned = undefined) {
   if (!isWeave(weave) || !Array.isArray(weave.questions)) return weave;
-  const held = new Set(objectsOf(weave.threads).map((thread) => weaveIdOf(thread)).filter(Boolean));
+  const threadsUnder = (version) => new Map(objectsOf(version && version.threads)
+    .filter((thread) => weaveIdOf(thread))
+    .map((thread) => [weaveIdOf(thread), thread]));
+  const now = threadsUnder(weave);
+  const before = threadsUnder(previous);
+  const wordsOf = (question) => JSON.stringify(['kind', 'about', 'question', 'changes', WEAVE_QUESTION_THREAD_KEY]
+    .map((field) => textOf(question[field])));
+  // Without the rework's list, every question is the one the rework started from.
+  const reworksOwn = Array.isArray(returned) ? new Set(objectsOf(returned).map(wordsOf)) : new Set();
+  const sameThread = (a, b) => (textOf(a.name) && textOf(a.name) === textOf(b.name)) || (textOf(a.line) && textOf(a.line) === textOf(b.line));
   return {
     ...weave,
     questions: weave.questions.map((question) => {
       if (!question || typeof question !== 'object' || !has(question, WEAVE_QUESTION_THREAD_KEY)) return question;
-      if (held.has(textOf(question[WEAVE_QUESTION_THREAD_KEY]))) return question;
+      const id = textOf(question[WEAVE_QUESTION_THREAD_KEY]);
+      const fromPrevious = isAnswered(question) || !reworksOwn.has(wordsOf(question));
+      const held = now.has(id) && (!fromPrevious || !before.has(id) || sameThread(before.get(id), now.get(id)));
+      if (held) return question;
       const { [WEAVE_QUESTION_THREAD_KEY]: _stale, ...byThePitch } = question;
       return byThePitch;
     })

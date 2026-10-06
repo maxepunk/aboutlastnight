@@ -372,6 +372,48 @@ describe('a question whose thread a rework drops sits by the pitch, with its ans
     expect(text).not.toContain('beside the thread');
   });
 
+  // Fix round 1, finding 4: a rework that renumbers the threads and gives a question's id to
+  // another thread. The answered question's thread came from the version the rework started
+  // from, so it stays only while the weave holds that same thread under the id (by its name or
+  // its line); here it does not, and the question sits by the pitch with its answer.
+  test("an answered question whose thread's id a rework gave to another thread sits by the pitch with its answer", () => {
+    const previous = anglesWeave();
+    previous.questions[1].answer = 'Yes, with the first sale.';
+    const output = anglesWeave();
+    output.threads[5].id = 't8';
+    output.threads[6].id = 't6';
+    output.angles[1].threads = ['t3', 't1', 't8'];
+    output.questions[1].thread = 't8';
+    const reworked = arcTesting.weaveFromRework(output, previous, { directorRound: false });
+    expect(reworked.threads.find((t) => t.id === 't6').name).toBe("Marcus's stolen code");
+    const q2 = reworked.questions.find((q) => q.answer);
+    expect(q2).not.toHaveProperty('thread');
+    expect(q2.answer).toBe('Yes, with the first sale.');
+    const text = renderSettledWeave(reworked, []);
+    expect(text).toContain('Yes, with the first sale.');
+    expect(text).not.toContain('beside the thread');
+  });
+
+  test("an answered question keeps its thread while the weave holds that thread under its id, by its name or its line", () => {
+    const previous = anglesWeave();
+    previous.questions[1].answer = 'Yes, with the first sale.';
+    const output = anglesWeave();
+    output.threads[5].name = 'Memories sold during the argument';
+    const reworked = arcTesting.weaveFromRework(output, previous, { directorRound: false });
+    expect(reworked.questions.find((q) => q.answer).thread).toBe('t6');
+  });
+
+  test("an unanswered question the rework put beside a thread under a reused id keeps it: its thread is in the rework's numbering", () => {
+    const previous = anglesWeave();
+    const output = anglesWeave();
+    output.threads[5].id = 't8';
+    output.threads[6].id = 't6';
+    output.angles[1].threads = ['t3', 't1', 't8'];
+    output.questions[1].thread = 't6';
+    const reworked = arcTesting.weaveFromRework(output, previous, { directorRound: false });
+    expect(reworked.questions.find((q) => q.id === 'q2').thread).toBe('t6');
+  });
+
   test("an unanswered question beside a thread the rework renumbered loses the stale thread", () => {
     const previous = anglesWeave();
     const output = anglesWeave();
