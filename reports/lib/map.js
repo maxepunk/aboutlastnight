@@ -79,7 +79,7 @@ const {
   describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX
 } = require('./evidence');
 const { isVerbatimIn } = require('./grounding');
-const { wordCount } = require('./word-count');
+const { wordCount, pageLengthOf } = require('./word-count');
 
 /** A beat's kind: what its move puts on the page, kept underneath as a hint to the article writer and never printed (R1). */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
@@ -89,23 +89,17 @@ const MAP_CARDS = Object.freeze({ min: 3, max: 5 });
 
 /**
  * The bound on the map's page, as it prints when it first opens (spec 2026-10-05 sections 4.2 and
- * 6.1; R5), counted by lib/stop-pages.js wordsShown, the count the stops log records.
- *
- * The length check holds the map writer only to the words it wrote (the integrator's ruling after
- * run 2). The page also prints words the writer never writes: the settled story with its question
- * and hint, the director's photo descriptions, the counts and every label code prints. Those are
- * the page's overhead, and the writer's own words are the page's words less it. The writer may use
- * max(MAP_WORD_AIM, MAP_WORD_BOUND - overhead) words of its own: always MAP_WORD_AIM, and more only
- * while the whole page stays within MAP_WORD_BOUND (mapLengthOf). The check (`over-length`) fails
- * when the writer's own words pass that allowance, so long photo descriptions never fail the
- * writer on words it cannot cut. The check node counts the overhead on the same first-look page
+ * 6.1; R5). The rule is lib/word-count.js pageLengthOf's, which the meeting keeps too: the map
+ * writer is held only to its own words, and may use max(MAP_WORD_AIM, MAP_WORD_BOUND - overhead)
+ * of them (mapLengthOf). The map's overhead is its settled story with its question and hint, the
+ * director's photo descriptions, the counts and every label code prints; the check node counts it
  * with every text field the writer writes left blank (mapWritersTextBlank;
- * lib/workflow/nodes/map-nodes.js mapPageWords), and counts only the writer's share of the map
- * (mapWritersShareOf), so the director's version is never held to it.
+ * lib/workflow/nodes/map-nodes.js mapPageWords), on the writer's share of the map
+ * (mapWritersShareOf).
  */
 const MAP_WORD_BOUND = 450;
 
-/** The words of its own the map writer aims for, and may always use (MAP_WORD_BOUND's rule; spec 4.2): its task asks for them. */
+/** The words of its own the map writer aims for, and may always use: the floor of pageLengthOf's rule (spec 4.2). Its task asks for them. */
 const MAP_WORD_AIM = 300;
 
 /**
@@ -329,7 +323,7 @@ function mapWritersShareOf(map, share) {
 }
 
 /**
- * The map with every text field the writer writes left blank (MAP_WORD_BOUND's rule), for the
+ * The map with every text field the writer writes left blank (pageLengthOf's rule), for the
  * page the check node counts the overhead on: the headline, the deck, the gap note's line, each
  * section's heading and job, each beat's move and players in the sections and in left out, each
  * change to the weave, and each dropped section's reason, but for the line the gate writes for a
@@ -361,15 +355,16 @@ function mapWritersTextBlank(map) {
 }
 
 /**
- * The map's length as the check reads it (MAP_WORD_BOUND's rule): the page's words, the writer's
- * own words on it (the page's less its overhead) and the words of its own the writer may use.
+ * The map's length as the check reads it, by pageLengthOf's rule with the map's bound and floor:
+ * the page's words, the writer's own words on it (the page's less its overhead) and the words of
+ * its own the writer may use.
  *
  * @param {number} pageWords - the map's page as it first opens, counted
  * @param {number} overheadWords - the words on that page the writer did not write
  * @returns {{page: number, writer: number, allowance: number}}
  */
 function mapLengthOf(pageWords, overheadWords) {
-  return { page: pageWords, writer: pageWords - overheadWords, allowance: Math.max(MAP_WORD_AIM, MAP_WORD_BOUND - overheadWords) };
+  return pageLengthOf(pageWords, overheadWords, { bound: MAP_WORD_BOUND, floor: MAP_WORD_AIM });
 }
 
 /**
@@ -763,7 +758,7 @@ function cardFault(beat, known) {
  *   when the director changed nothing and left no approval note at the meeting
  *   (`weave-change-unasked`; brief 4.6e);
  * - the writer's own words on the map's page as it first opens stay within the words it may use
- *   (`over-length`; R5; MAP_WORD_BOUND's rule): the check node counts the page of the writer's
+ *   (`over-length`; R5; pageLengthOf's rule): the check node counts the page of the writer's
  *   share (mapWritersShareOf) with lib/stop-pages.js wordsShown, and its overhead, and passes
  *   their length (mapLengthOf), which this module does not count.
  *
@@ -1024,7 +1019,7 @@ function mapFindings(map, inputs = {}) {
   }
 
   // The writer's own words on the page as it first opens stay within its allowance (R5;
-  // MAP_WORD_BOUND's rule).
+  // lib/word-count.js pageLengthOf's rule).
   const length = inputs.length;
   if (length && Number.isFinite(length.writer) && Number.isFinite(length.allowance) && length.writer > length.allowance) {
     const longest = writersLinesInPrint(map, share).slice(0, 3).map((line) => `${line.name} (${line.words} words)`);

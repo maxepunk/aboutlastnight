@@ -1035,7 +1035,9 @@ const ReportStateAnnotation = Annotation.Root({
 
   /**
    * The weave checks' last result (phase 4, brief 4.4): { weaveKey, passed, failures,
-   * words, checkedAt }, written by validateArcStructure on every outcome. `weaveKey`
+   * concerns, words, checkedAt }, `words` the length the check read, `{page, writer,
+   * allowance}` (lib/weave.js meetingLengthOf; fix round 4), written by validateArcStructure
+   * on every outcome. `weaveKey`
    * names the weave it checked (lib/weave.js), so a reader compares it with the current
    * weave before acting on a failure: routeArcValidation does, and the story meeting
    * shows a check still failing. It survives every rollback (ROLLBACK_CLEARS_EXEMPT); a

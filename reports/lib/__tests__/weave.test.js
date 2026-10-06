@@ -315,7 +315,7 @@ describe('the weave checks (checkWeave)', () => {
   it("a weave in 0926262's shape, and one in 100226's, pass every check", () => {
     expect(check(WEAVE)).toEqual([]);
     const state = story.storyLevelState();
-    expect(checkWeave(state.weave, { evidence: evidenceContextOf(state), directorWords: [story.NOTES, story.CORRECTION], pageWords: 280 })).toEqual([]);
+    expect(checkWeave(state.weave, { evidence: evidenceContextOf(state), directorWords: [story.NOTES, story.CORRECTION], length: { page: 280, writer: 242, allowance: 262 } })).toEqual([]);
   });
 
   it("each failure is one line that names the line it is about in the director's words, its fix, and its place", () => {
@@ -498,20 +498,21 @@ describe('the weave checks (checkWeave)', () => {
     });
   });
 
-  // Spec 4.1 and 6.1 (R5): the node counts the meeting's page as it first opens (lib/stop-pages.js
-  // wordsShown) and passes the count; the check holds it to the bound.
-  describe("the meeting's page comes to no more than its bound", () => {
-    it('fires past the bound, naming the count and the bound, with no place', () => {
-      const failures = check(WEAVE, { pageWords: MEETING_WORD_BOUND + 1 });
+  // Spec 4.1 and 6.1 (R5; fix round 4, lib/word-count.js pageLengthOf): the node counts the
+  // meeting's page as it first opens (lib/stop-pages.js wordsShown) and its overhead, and passes
+  // their length; the check holds the writer's own words to their allowance.
+  describe("the writer's own words on the meeting's page stay within their allowance", () => {
+    it('fires past the allowance, naming the counts, with no place', () => {
+      const failures = check(WEAVE, { length: { page: 301, writer: 263, allowance: 262 } });
       expect(failures).toEqual([{
         type: 'over-length',
-        message: expect.stringContaining(`${MEETING_WORD_BOUND + 1} words, past its bound of ${MEETING_WORD_BOUND}`),
-        line: `The writer's page runs to ${MEETING_WORD_BOUND + 1} words, past the meeting's ${MEETING_WORD_BOUND}.`
+        message: expect.stringContaining("The meeting's page runs to 301 words, 263 of them in the lines you write, past the 262 those lines may use (200, or more while the whole page stays within 300). Cut 1 words or more from your lines, starting with the longest: "),
+        line: "The writer's part of the meeting runs to 263 words, past the 262 it may use."
       }]);
     });
 
-    it('is silent at the bound, and with no count', () => {
-      expect(check(WEAVE, { pageWords: MEETING_WORD_BOUND })).toEqual([]);
+    it('is silent at the allowance, however long the page, and with no length', () => {
+      expect(check(WEAVE, { length: { page: 340, writer: 200, allowance: 200 } })).toEqual([]);
       expect(check(WEAVE)).toEqual([]);
     });
   });
@@ -540,7 +541,7 @@ describe("each failure says what is wrong to the director in plain words (its li
     weave.questions.push({ ...clone(WEAVE.questions[0]), question: 'Another question under the same id?' });
     return weave;
   }
-  const failures = () => check(brokenWeave(), { pageWords: MEETING_WORD_BOUND + 40 });
+  const failures = () => check(brokenWeave(), { length: { page: MEETING_WORD_BOUND + 40, writer: 300, allowance: 262 } });
   /** What no line the director reads holds: an id, a piece's number, a source's code, a rule item, a tag, a field's name. */
   const UNSAID = [
     /\b[tcq]\d+\b/, /\b(row001|vic002|zzz999)\b/i, /\bpiece \d/i, /evidence-log/, /"(ledger|notes)"/,
@@ -586,7 +587,7 @@ describe("each failure says what is wrong to the director in plain words (its li
     expect(lineOf('duplicate-id', 'connections[#c2]')).toBe('The writer gave the connections "The scoreboard brings the money into the vote." and "The scoreboard again." one id, so the meeting cannot change them.');
     expect(lineOf('duplicate-id', 'questions[#q1]')).toMatch(/^The writer gave the questions ".*" and "Another question under the same id\?" one id\.$/);
     expect(lineOf('stronger-main-thread-unknown', 'strongerMainThread')).toBe('The stronger main thread names a thread the weave does not hold.');
-    expect(lineOf('over-length', undefined)).toBe(`The writer's page runs to ${MEETING_WORD_BOUND + 40} words, past the meeting's ${MEETING_WORD_BOUND}.`);
+    expect(lineOf('over-length', undefined)).toBe("The writer's part of the meeting runs to 300 words, past the 262 it may use.");
   });
 
   it('a verdict thread left out, a weave with no threads, and a stronger main thread whose reason holds a figure each have their line', () => {

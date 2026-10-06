@@ -60,7 +60,7 @@ const { WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions, witho
 const {
   WEAVE_ROLES, CONNECTION_KINDS, MEETING_WORD_BOUND, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS, STRUCK_KEY,
   isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
-  weaveFindings, withStruckConnections, writersShareOf
+  weaveFindings, withStruckConnections, writersShareOf, weaveWritersTextBlank, meetingLengthOf
 } = require('../../weave');
 // Phase 4b (brief 1B; R10): the evidence under each line, the sources a piece may name, and what
 // the checks the weave and the map share read.
@@ -243,13 +243,16 @@ ${weaveQuestionsFormatLine()}`;
  * field holds what, and the page's bound. C1 states the story, its question and the stronger
  * main thread; C16 the threads, their roles, the connections, the convergence, the level of
  * the story every line keeps and the evidence under each line; C15 the questions. The task
- * points at them and states only what no rule says: the meeting's bound (MEETING_WORD_BOUND,
- * which the checks hold the writer's page to), where each lands in the weave's fields, the
- * words "from your notes" holds, the verdict flag, where a piece names its sources, and the
- * shape of the stronger main thread. The lens work C16 sets out reaches the weave as each
- * thread's role and its evidence's stances.
+ * points at them and states only what no rule says: what the director reads, the page with the
+ * labels code prints beside the writer's lines, at most MEETING_WORD_BOUND words in all, and so
+ * about 225 words of the writer's own (fix round 4: the checks hold the writer's own words to
+ * the allowance lib/word-count.js pageLengthOf's rule gives, about 260 on a story-level weave, so
+ * 225 leaves room for the thread names each connection prints again); where each lands in the
+ * weave's fields, the words "from your notes" holds, the verdict flag, where a piece names its
+ * sources, and the shape of the stronger main thread. The lens work C16 sets out reaches the
+ * weave as each thread's role and its evidence's stances.
  */
-const WEAVE_TASK = `Write one weave for the director to read in a few minutes at the story meeting: the page they read, your lines without the evidence under them, comes to at most ${MEETING_WORD_BOUND} words. C1 (<craft-story>) sets out the story, its question and the stronger main thread; C16 (<craft-story>) sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line. The fields hold them:
+const WEAVE_TASK = `Write one weave for the director to read in a few minutes at the story meeting. The page they read comes to at most ${MEETING_WORD_BOUND} words in all: your lines, without the evidence under them, and the labels code prints beside them (each thread's role, the names of the threads each connection joins, and the verdict). So your own lines come to about 225 words. C1 (<craft-story>) sets out the story, its question and the stronger main thread; C16 (<craft-story>) sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line. The fields hold them:
 
 - **story**, **question** and **headline**: the thesis, the question that carries it, and a working headline.
 - **fromYourNotes**: when the story starts from the director's read (C1), the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. A story from the record rests on no words of the director's, and the field stays out.
@@ -895,20 +898,25 @@ function extractEvidenceSummary(evidenceBundle) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The words of the story meeting's page as it first opens, of the writer's share of the weave
- * (phase 4b, brief 1B; spec 4.1 and 6.1; R5): the page of the weave, its questions and the
- * verdict, with no round's lines (lib/meeting.js meetingCheckpointData on a first look), counted
- * by lib/stop-pages.js wordsShown, the count the stops log records, which leaves the folded
- * evidence out. Only the writer's share is counted (lib/weave.js writersShareOf), so the
- * director's version is never held to the bound (Review focus 3).
+ * The length of the story meeting's page as it first opens, of the writer's share of the weave
+ * (phase 4b, brief 1B; spec 4.1 and 6.1; R5; fix round 4, lib/word-count.js pageLengthOf's rule):
+ * `{page, writer, allowance}` (lib/weave.js meetingLengthOf).
+ * - The page's words: the stop's page of the weave, its questions and the verdict, with no round's
+ *   lines (lib/meeting.js meetingCheckpointData on a first look), counted by lib/stop-pages.js
+ *   wordsShown, the count the stops log records, which leaves the folded evidence out. Only the
+ *   writer's share is counted (lib/weave.js writersShareOf), so the director's version is never
+ *   held to the bound (Review focus 3).
+ * - Its overhead, the words the writer did not write: the same page with every field the writer
+ *   writes holding no word (lib/weave.js weaveWritersTextBlank).
  *
  * @param {Object} state - the weave and the session's parse
  * @param {Object} directorsShare - the director's share of the weave (weaveDirectorsShare)
- * @returns {number}
+ * @returns {{page: number, writer: number, allowance: number}}
  */
 function meetingPageWords(state, directorsShare) {
-  const firstLook = { weave: writersShareOf(weaveForPrompt(state.weave), directorsShare), sessionConfig: state.sessionConfig };
-  return wordsShown(CHECKPOINT_TYPES.ARC_SELECTION, meetingCheckpointData(firstLook, { evidenceIndex: {}, maxRevisions: 0 }));
+  const share = writersShareOf(weaveForPrompt(state.weave), directorsShare);
+  const pageOf = (weave) => wordsShown(CHECKPOINT_TYPES.ARC_SELECTION, meetingCheckpointData({ weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
+  return meetingLengthOf(pageOf(share), pageOf(weaveWritersTextBlank(share)));
 }
 
 /**
@@ -929,8 +937,10 @@ function meetingPageWords(state, directorsShare) {
  *
  * Phase 4b (brief 1B; spec 2026-10-05 sections 4.1 and 6.1): the checks read the evidence
  * under each line against the record (lib/evidence.js evidenceContextOf), and the meeting's
- * page as it first opens, counted (meetingPageWords). Each failure carries its place, so the
- * meeting shows a check still failing beside its line.
+ * page as it first opens, counted with its overhead (meetingPageWords), so the writer's own
+ * words are held to the allowance lib/word-count.js pageLengthOf's rule gives (fix round 4),
+ * recorded on `_arcValidation.words` as `{page, writer, allowance}`. Each failure carries its
+ * place, so the meeting shows a check still failing beside its line.
  *
  * Once the meeting is approved it checks nothing and writes nothing, so a replay past
  * the meeting leaves a later stage's findings in validationResults as they were.
@@ -951,11 +961,12 @@ function validateArcStructure(state) {
     evidence: evidenceContextOf(state),
     directorWords: directorWordsOf(state),
     directorsShare,
-    pageWords: words
+    length: words
   });
   const key = weaveKey(weave);
   const passed = failures.length === 0;
-  console.log(`[validateArcs] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${words} words on the meeting's page, weave ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
+  const counted = words ? `${words.page} words on the meeting's page, ${words.writer} the writer's of ${words.allowance} it may use` : 'no page';
+  console.log(`[validateArcs] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${counted}, weave ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
 
   return {
     _arcValidation: {

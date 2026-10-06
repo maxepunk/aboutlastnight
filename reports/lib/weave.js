@@ -48,6 +48,7 @@
 
 const crypto = require('crypto');
 const { isVerbatimIn } = require('./grounding');
+const { wordCount, pageLengthOf } = require('./word-count');
 const { WEAVE_ANSWER_KEY, withoutAnswers } = require('./writer-questions');
 // Phase 4b (brief 1B; R10): the evidence check and the story-terms check, which the map shares.
 const {
@@ -64,11 +65,36 @@ const CONNECTION_KINDS = Object.freeze(['person', 'moment', 'document', 'line'])
 
 /**
  * The bound on the story meeting's page, as it prints when it first opens (spec 2026-10-05
- * section 4.1; R5): counted by lib/stop-pages.js wordsShown, the count the stops log records,
- * which the check node passes to weaveFindings. Stated once: the check holds the writer's
- * output to it, and the writer's task asks for it.
+ * sections 4.1 and 6.1; R5). The rule is lib/word-count.js pageLengthOf's, which the map keeps
+ * too: the meeting's writer is held only to its own words, and may use
+ * max(MEETING_WORD_FLOOR, MEETING_WORD_BOUND - overhead) of them (meetingLengthOf). The meeting's
+ * overhead is the verdict, its charge and its vote, each thread's role, the "Joins" and "and" of
+ * each connection's line above it, and the thin-notes line; the check node counts it with every
+ * field the writer writes left blank (weaveWritersTextBlank;
+ * lib/workflow/nodes/arc-specialist-nodes.js meetingPageWords), on the writer's share of the
+ * weave (writersShareOf). The writer's task asks for the page and for its own share of it.
  */
 const MEETING_WORD_BOUND = 300;
+
+/**
+ * The integrator's guard (fix round 4): the words of its own the meeting's writer may always use,
+ * the floor of pageLengthOf's rule, so that the lines code prints, such as a long split vote,
+ * never leave the writer fewer than 200 words.
+ */
+const MEETING_WORD_FLOOR = 200;
+
+/**
+ * The meeting's length as the check reads it, by pageLengthOf's rule with the meeting's bound
+ * and floor: the page's words, the writer's own words on it (the page's less its overhead) and
+ * the words of its own the writer may use.
+ *
+ * @param {number} pageWords - the meeting's page as it first opens, counted
+ * @param {number} overheadWords - the words on that page the writer did not write
+ * @returns {{page: number, writer: number, allowance: number}}
+ */
+function meetingLengthOf(pageWords, overheadWords) {
+  return pageLengthOf(pageWords, overheadWords, { bound: MEETING_WORD_BOUND, floor: MEETING_WORD_FLOOR });
+}
 
 /** The `source` the weave checks stamp on validationResults (node-helpers.js CODE_CHECKS). */
 const WEAVE_CHECKS_SOURCE = 'weave-checks';
@@ -331,6 +357,70 @@ function writersShareOf(weave, directorsShare) {
   }
   if (Array.isArray(weave.questions)) out.questions = withoutAnswers(weave.questions);
   return out;
+}
+
+/**
+ * What a field the writer writes holds on the page the meeting's overhead is counted on: a mark
+ * with no word in it (lib/word-count.js wordCount), so the page keeps every line and label it
+ * prints. A field left empty would change them: a thread with no name is named by its line, a
+ * connection that joins one by words the page never prints, and a question with no text is not
+ * asked.
+ */
+const NO_WORDS = '-';
+
+/**
+ * The weave with every field the writer writes holding no word (NO_WORDS; pageLengthOf's rule),
+ * for the page the check node counts the meeting's overhead on: each of the fields the meeting
+ * prints (WEAVE_PRINTED_FIELDS) that holds text, which are the story, the question, the working
+ * headline, "from your notes" (the writer chooses how much of the director's words to quote), the
+ * convergence, each thread's name, line and reason, each live connection's line, the stronger
+ * main thread's reason, and each question's text, what it changes and what it is about. So the
+ * names of the threads a connection joins, printed above its line, count as the writer's words,
+ * and the verdict, each thread's role, the "Joins" and "and" around those names and the thin-notes
+ * line count as code's. A struck connection's line, which the director struck and code keeps,
+ * counts as code's too. The weave given is left as it was.
+ *
+ * @param {Object} weave
+ * @returns {Object}
+ */
+function weaveWritersTextBlank(weave) {
+  if (!isWeave(weave)) return weave;
+  const out = JSON.parse(JSON.stringify(weave));
+  printedWeaveFields(out).forEach(({ part, field, element }) => {
+    const holder = part === 'weave' ? out : element;
+    if (holder && typeof holder === 'object' && typeof holder[field] === 'string' && holder[field].trim()) holder[field] = NO_WORDS;
+  });
+  return out;
+}
+
+/**
+ * The writer's lines on the meeting's page as it first opens, each with its words, the longest
+ * first: the story, the question, the working headline, "from your notes", each thread in the
+ * story (its name and its line), the left-out threads' names (the page folds their lines and
+ * reasons), each live connection's line, the convergence, the stronger main thread's reason and
+ * each question. Read from the writer's share of the weave (writersShareOf), so the director's
+ * lines hold no word. The over-length check names the longest to the rework.
+ *
+ * @param {Object} weave - the writer's share of the weave
+ * @returns {Array<{name: string, words: number}>}
+ */
+function writersLinesOnPage(weave) {
+  const lines = [];
+  const add = (name, ...texts) => {
+    const words = texts.reduce((sum, text) => sum + wordCount(textOf(text)), 0);
+    if (words > 0) lines.push({ name, words });
+  };
+  if (!isWeave(weave)) return lines;
+  [['story', 'the story'], ['question', 'the question'], ['headline', 'the headline'], ['fromYourNotes', 'fromYourNotes']]
+    .forEach(([field, name]) => add(name, weave[field]));
+  const threads = objectsOf(weave.threads);
+  threads.filter((thread) => thread.role !== LEFT_OUT_ROLE).forEach((thread) => add(`thread ${weaveIdOf(thread)}'s name and line`, thread.name, thread.line));
+  add("the left-out threads' names", ...threads.filter((thread) => thread.role === LEFT_OUT_ROLE).map((thread) => thread.name));
+  liveConnections(weave).forEach((connection) => add(`connection ${weaveIdOf(connection)}'s line`, connection.line));
+  add('the convergence', weave.convergence);
+  if (weave.strongerMainThread && typeof weave.strongerMainThread === 'object') add("the stronger main thread's reason", weave.strongerMainThread.reason);
+  objectsOf(weave.questions).forEach((question) => add(`question ${weaveIdOf(question)}`, question.about, question.question, question.changes));
+  return lines.sort((a, b) => b.words - a.words);
 }
 
 /**
@@ -623,9 +713,11 @@ function elementPlace(collection, element) {
  *   than left out (`no-verdict-thread`);
  * - every live connection joins two threads the weave holds (`connection-joins-unknown-thread`);
  * - a stronger main thread names a thread the weave holds (`stronger-main-thread-unknown`);
- * - the meeting's page as it first opens comes to no more than MEETING_WORD_BOUND words
- *   (`over-length`; R5): the check node counts the page of the writer's share (writersShareOf)
- *   with lib/stop-pages.js wordsShown and passes the count, which this module does not compute.
+ * - the writer's own words on the meeting's page as it first opens stay within the words it may
+ *   use (`over-length`; R5; lib/word-count.js pageLengthOf's rule): the check node counts the page
+ *   of the writer's share (writersShareOf) with lib/stop-pages.js wordsShown, and its overhead
+ *   (weaveWritersTextBlank), and passes their length (meetingLengthOf), which this module does
+ *   not count.
  *
  * The director's share of the weave is never a check's failure: a line they wrote is not held
  * to story terms (a field of the weave, of a thread or of a connection they rewrote, and every
@@ -645,12 +737,12 @@ function elementPlace(collection, element) {
  * @param {string[]} inputs.directorWords - the director's notes and corrections, which "from
  *   your notes" quotes
  * @param {Object} [inputs.directorsShare] - the director's share of the weave (shareOf)
- * @param {number|null} [inputs.pageWords] - the meeting's page as it first opens, counted;
- *   none, no length check
+ * @param {{page: number, writer: number, allowance: number}|null} [inputs.length] - the meeting's
+ *   page as it first opens, counted (meetingLengthOf); none, no length check
  * @returns {{failures: Array<{type: string, message: string, line: string, place?: string}>,
  *            concerns: Array<{type: string, editIds: string[], finding: string}>}}
  */
-function weaveFindings(weave, { evidence = null, directorWords = [], directorsShare, pageWords = null } = {}) {
+function weaveFindings(weave, { evidence = null, directorWords = [], directorsShare, length = null } = {}) {
   if (!isWeave(weave)) {
     return {
       failures: [{ type: 'no-weave', message: 'The output holds no threads. Write the whole weave in the OUTPUT FORMAT at the top.', line: 'The writer returned no threads.' }],
@@ -810,9 +902,12 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     fail('duplicate-id', `Two questions share one id: ${asked}. Give each question an id of its own.`, `The writer gave the questions ${asked} one id.`, `questions[#${id}]`);
   });
 
-  if (typeof pageWords === 'number' && Number.isFinite(pageWords) && pageWords > MEETING_WORD_BOUND) {
-    fail('over-length', `The meeting's page runs to ${pageWords} words, past its bound of ${MEETING_WORD_BOUND}. Bring it to ${MEETING_WORD_BOUND} words or fewer: keep each line short, and keep in the story only the threads and connections it turns on.`,
-      `The writer's page runs to ${pageWords} words, past the meeting's ${MEETING_WORD_BOUND}.`);
+  // The writer's own words on the page as it first opens stay within its allowance (R5;
+  // lib/word-count.js pageLengthOf's rule).
+  if (length && Number.isFinite(length.writer) && Number.isFinite(length.allowance) && length.writer > length.allowance) {
+    const longest = writersLinesOnPage(writersShareOf(weave, directorsShare)).slice(0, 3).map((line) => `${line.name} (${line.words} words)`);
+    fail('over-length', `The meeting's page runs to ${length.page} words, ${length.writer} of them in the lines you write, past the ${length.allowance} those lines may use (${MEETING_WORD_FLOOR}, or more while the whole page stays within ${MEETING_WORD_BOUND}). Cut ${length.writer - length.allowance} words or more from your lines${longest.length > 0 ? `, starting with the longest: ${listOf(longest)}` : ''}. Keep each line short, and keep in the story only the threads and connections it turns on; each thread's name prints again above each connection that joins it. The rest of the page (the verdict, each thread's role, and the "Joins" and "and" around the names above each connection) is printed by code.`,
+      `The writer's part of the meeting runs to ${length.writer} words, past the ${length.allowance} it may use.`);
   }
 
   return { failures, concerns };
@@ -837,8 +932,12 @@ module.exports = {
   CONNECTION_KINDS,
   WEAVE_CHECKS_SOURCE,
   FACT_CHECK_MARK_KEY,
-  // Phase 4b (brief 1B; R5): the meeting's page at most 300 words, as it first opens
+  // Phase 4b (brief 1B; R5): the meeting's page at most 300 words, as it first opens; fix round 4:
+  // the writer held to its own words, by lib/word-count.js pageLengthOf's rule
   MEETING_WORD_BOUND,
+  MEETING_WORD_FLOOR,
+  meetingLengthOf,
+  weaveWritersTextBlank,
   // Brief 4.5: the meeting's marks on a weave, the round mark and the views of the weave
   STRUCK_KEY,
   MEETING_ROUNDS,

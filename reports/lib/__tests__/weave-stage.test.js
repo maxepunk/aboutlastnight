@@ -244,7 +244,8 @@ describe('the weave checks (the check node)', () => {
 
   // Phase 4b (brief 1B; R5; Review focus 3): the node counts the meeting's page as it first
   // opens, by lib/stop-pages.js wordsShown, on the writer's share of the weave alone, and fails
-  // the writer's page past MEETING_WORD_BOUND. The director's version is never held to it.
+  // the writer's own words past their allowance (fix round 4, lib/word-count.js pageLengthOf).
+  // The director's version is never held to it.
   describe("the meeting's page, counted as it first opens", () => {
     const { wordsShown } = require('../stop-pages');
     const { meetingCheckpointData } = require('../meeting');
@@ -255,19 +256,21 @@ describe('the weave checks (the check node)', () => {
 
     it('records the words the page shows when it first opens, the folded evidence left out', () => {
       const state = pass();
-      expect(validateArcStructure(state, {})._arcValidation.words).toBe(firstLook(state));
+      expect(validateArcStructure(state, {})._arcValidation.words.page).toBe(firstLook(state));
       expect(firstLook(state)).toBeLessThan(MEETING_WORD_BOUND);
     });
 
-    it("fails the writer's page past the bound, in one line with no place, so it sits at the top of the meeting", () => {
+    it("fails the writer's own words past their allowance, in one line with no place, so it sits at the top of the meeting", () => {
       const state = pass();
       state.weave = longStory(state.weave);
       const { _arcValidation } = validateArcStructure(state, {});
-      expect(_arcValidation.words).toBeGreaterThan(MEETING_WORD_BOUND);
+      const { page, writer, allowance } = _arcValidation.words;
+      expect(page).toBeGreaterThan(MEETING_WORD_BOUND);
+      expect(writer).toBeGreaterThan(allowance);
       expect(_arcValidation.failures).toEqual([{
         type: 'over-length',
-        message: expect.stringContaining(`past its bound of ${MEETING_WORD_BOUND}`),
-        line: `The writer's page runs to ${_arcValidation.words} words, past the meeting's ${MEETING_WORD_BOUND}.`
+        message: expect.stringContaining(`${writer} of them in the lines you write, past the ${allowance} those lines may use`),
+        line: `The writer's part of the meeting runs to ${writer} words, past the ${allowance} it may use.`
       }]);
     });
 
@@ -278,7 +281,7 @@ describe('the weave checks (the check node)', () => {
       const { _arcValidation } = validateArcStructure(directors, {});
       expect(firstLook(directors)).toBeGreaterThan(MEETING_WORD_BOUND);
       expect(_arcValidation.failures).toEqual([]);
-      expect(_arcValidation.words).toBeLessThan(MEETING_WORD_BOUND);
+      expect(_arcValidation.words.page).toBeLessThan(MEETING_WORD_BOUND);
     });
 
     // Fix round 1, finding 2 (R11): a connection's line the director wrote, rewritten or on a
@@ -294,7 +297,80 @@ describe('the weave checks (the check node)', () => {
       expect(_arcValidation.failures).toEqual([]);
       expect(validationResults).toMatchObject({ passed: true, structuralIssues: [] });
       const writersPage = { ...state, weave: { ...clone(state.weave), connections: state.weave.connections.map((c, i) => (i === 0 ? { ...c, line: '' } : c)) } };
-      expect(_arcValidation.words).toBe(firstLook(writersPage));
+      expect(_arcValidation.words.page).toBe(firstLook(writersPage));
+    });
+  });
+
+  // Fix round 4, fix 1: one length rule for both stops (lib/word-count.js pageLengthOf). The
+  // meeting's writer is held only to the words it wrote, as the map's is: the verdict, each
+  // thread's role and the "Joins" and "and" of each connection's line are code's.
+  describe("fix round 4: the writer's own words on the meeting's page are held to its allowance", () => {
+    const { wordsShown } = require('../stop-pages');
+    const { meetingCheckpointData } = require('../meeting');
+    const { wordCount } = require('../word-count');
+    const { LEFT_OUT_ROLE } = require('../weave');
+    const { storyLevelState } = require('./fixtures/story-level-weave');
+    const firstLook = (state) => wordsShown('arc-selection', meetingCheckpointData({ weave: state.weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
+    /** The words the writer wrote that the meeting prints unfolded, each thread's name again above each connection that joins it. */
+    const writersWords = (weave) => {
+      const name = (id) => weave.threads.find((t) => t.id === id).name;
+      return ['story', 'question', 'headline', 'fromYourNotes', 'convergence'].reduce((n, f) => n + wordCount(weave[f]), 0)
+        + weave.threads.reduce((n, t) => n + wordCount(t.name) + (t.role === LEFT_OUT_ROLE ? 0 : wordCount(t.line)), 0)
+        + weave.connections.reduce((n, c) => n + wordCount(c.line) + wordCount(name(c.joins[0])) + wordCount(name(c.joins[1])), 0)
+        + weave.questions.reduce((n, q) => n + wordCount(q.about) + wordCount(q.question) + wordCount(q.changes), 0);
+    };
+    /** A split vote with `n` more options, each "Option <k> 1" on the verdict's vote line. */
+    const longVote = (state, n) => {
+      state.sessionConfig.accusation.votes.push(...Array.from({ length: n }, (_, k) => ({ option: `Option ${k}`, count: 1 })));
+      return state;
+    };
+
+    it('the bound is 300 and the floor 200: the writer may use 200 words of its own, and more only while the whole page stays within 300', () => {
+      const { pageLengthOf } = require('../word-count');
+      const { meetingLengthOf, MEETING_WORD_FLOOR } = require('../weave');
+      expect([MEETING_WORD_BOUND, MEETING_WORD_FLOOR]).toEqual([300, 200]);
+      expect(meetingLengthOf(281, 38)).toEqual({ page: 281, writer: 243, allowance: 262 });
+      expect(meetingLengthOf(330, 140)).toEqual({ page: 330, writer: 190, allowance: 200 });
+      expect(pageLengthOf(281, 38, { bound: 300, floor: 200 })).toEqual(meetingLengthOf(281, 38));
+    });
+
+    it("records the page, the writer's own words and the allowance on _arcValidation: the verdict, the roles and the connections' \"Joins\" are code's", () => {
+      const state = storyLevelState();
+      const { _arcValidation } = validateArcStructure(state, {});
+      expect(_arcValidation.words).toEqual({ page: 281, writer: 243, allowance: 262 });
+      expect(_arcValidation.words.page).toBe(firstLook(state));
+      expect(_arcValidation.words.writer).toBe(writersWords(state.weave));
+      expect(_arcValidation.passed).toBe(true);
+    });
+
+    it('a long split vote never fails a writer within its floor, though the page runs past 300', () => {
+      const state = longVote(storyLevelState(), 40);
+      // The writer's lines come to under 200 words: one connection, the convergence and the question fewer.
+      state.weave.connections = state.weave.connections.filter((c) => c.id !== 'c4');
+      delete state.weave.convergence;
+      state.weave.questions = [];
+      const { _arcValidation } = validateArcStructure(state, {});
+      expect(firstLook(state)).toBeGreaterThan(MEETING_WORD_BOUND);
+      expect(_arcValidation.words.writer).toBeLessThanOrEqual(200);
+      expect(_arcValidation.words.allowance).toBe(200);
+      expect(_arcValidation.failures).toEqual([]);
+    });
+
+    it("the writer's own words past its allowance fail: the director's line says so, and the rework's names the words to cut and its longest lines", () => {
+      const state = storyLevelState();
+      state.weave.story = `${state.weave.story} ${'The room kept arguing about the money. '.repeat(6).trim()}`;
+      const { _arcValidation } = validateArcStructure(state, {});
+      const { page, writer, allowance } = _arcValidation.words;
+      expect(writer).toBeGreaterThan(allowance);
+      expect(_arcValidation.failures.map((f) => f.type)).toEqual(['over-length']);
+      const [failure] = _arcValidation.failures;
+      expect(failure.line).toBe(`The writer's part of the meeting runs to ${writer} words, past the ${allowance} it may use.`);
+      expect(failure).not.toHaveProperty('place');
+      expect(failure.message).toBe(`The meeting's page runs to ${page} words, ${writer} of them in the lines you write, past the ${allowance} those lines may use (200, or more while the whole page stays within 300). Cut ${writer - allowance} words or more from your lines, starting with the longest: the story (${wordCount(state.weave.story)} words), question q1 (21 words) and the convergence (19 words). Keep each line short, and keep in the story only the threads and connections it turns on; each thread's name prints again above each connection that joins it. The rest of the page (the verdict, each thread's role, and the "Joins" and "and" around the names above each connection) is printed by code.`);
+    });
+
+    it("the writer's task says what the director reads: at most 300 words in all, the labels code prints among them, so about 225 of its own", () => {
+      expect(buildWeavePrompt(weaveState())).toContain("The page they read comes to at most 300 words in all: your lines, without the evidence under them, and the labels code prints beside them (each thread's role, the names of the threads each connection joins, and the verdict). So your own lines come to about 225 words.");
     });
   });
 });

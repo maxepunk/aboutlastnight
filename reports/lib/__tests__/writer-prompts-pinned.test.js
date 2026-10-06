@@ -370,11 +370,18 @@ const REPO = path.join(__dirname, '..', '..');
  *   writer write each beat from the evidence it carries and cite it, so the task's beats line
  *   drops its restatement and keeps what C16 lacks, a beat with no evidence told from the record
  *   and the pointers to T1 and C9 on citing (-45): article-journalist 34823 -> 34778.
+ * - Phase 4b (fix round 4, fix 1), one length rule for both stops (lib/word-count.js
+ *   pageLengthOf): the check holds the meeting's writer to its own words, as the map's is, so
+ *   the weave writer's task says what the director reads, the page with the labels code prints
+ *   beside its lines (each thread's role, the names of the threads each connection joins, the
+ *   verdict) at most 300 words in all, and so about 225 words of its own, where it said its
+ *   lines came to 300 (+176): arcs-journalist 11475 -> 11651. The outline and article pins do
+ *   not move.
  */
 const PINNED = {
   'outline-journalist': ['09bcdf1a6851ca6b44acede51d9f36af064d8f347a794d42ae6834cdd1a05ed4', 23474],
   'article-journalist': ['958bf97f4d1d11c7b687118faf09aa14500bff16b6fdd82ee57b850caaa870e4', 34778],
-  'arcs-journalist': ['0cc6d84aaa1d94a20080934235e0bfacbf9f9920627f6fdd9b881b6cfd43004c', 11475]
+  'arcs-journalist': ['aaf2c6c78d87157e6be1a0092eb47c53318e1f571843929ea901b9a63a1b745c', 11651]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

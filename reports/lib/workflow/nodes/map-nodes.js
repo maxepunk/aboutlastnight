@@ -12,7 +12,7 @@
  * Phase 4b (piece 1, brief 1D; spec 2026-10-05 sections 4.2 and 6.1): the checks also read the
  * evidence under each beat against the record (lib/evidence.js evidenceContextOf), and the map's
  * page as it first opens, counted with its overhead (mapPageWords), so the writer's own words
- * are held to the allowance lib/map.js MAP_WORD_BOUND's rule gives. Each failure carries its
+ * are held to the allowance lib/word-count.js pageLengthOf's rule gives. Each failure carries its
  * place, so the map shows a check still failing beside its line.
  *
  * They mark the map they checked (`_mapCheck`, stamped with its mapKey) and write
@@ -77,7 +77,7 @@ function wordsOfLines(data, keep) {
 
 /**
  * The length of the map's page as it first opens, of the writer's share of the map (phase 4b,
- * brief 1D; spec 4.2 and 6.1; R5, and lib/map.js MAP_WORD_BOUND's rule): `{page, writer,
+ * brief 1D; spec 4.2 and 6.1; R5, and lib/word-count.js pageLengthOf's rule): `{page, writer,
  * allowance}` (mapLengthOf).
  * - The page's words: the stop's page (lib/map.js mapCheckpointData) on a first look, counted by
  *   lib/stop-pages.js wordsShown, the count the stops log records, which leaves the folded
