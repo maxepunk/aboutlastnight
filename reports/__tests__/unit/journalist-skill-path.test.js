@@ -285,11 +285,19 @@ describe('the story meeting as angles (phase 4b, piece 3)', () => {
     Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(text)}`).toBe(`${name}: ${what}: false`));
   });
 
-  it("the story meeting's stop has the director pick an angle, flip a thread and press one of three buttons", () => {
+  // The stop's controls as SKILL.md writes them, each the bold name its list item opens with, so a
+  // word elsewhere in the stop ("`picked`") holds nothing: what the director can do, the console's
+  // operations at the meeting (pickMeetingAngle, the line edits, flipMeetingThread,
+  // addMeetingThread, setQuestionAnswer, the note box), then the three buttons, the console's
+  // MEETING_ACTIONS.
+  it("the story meeting's stop has the director pick an angle, rewrite a line, flip or add a thread, answer and note, then press one of three buttons", () => {
+    const { MEETING_ACTIONS } = require('../../console/checkpoint-view-logic');
     const text = FILES['SKILL.md'];
     const stop = text.slice(text.indexOf('**Stop: the story meeting.**'), text.indexOf('### 9.'));
-    ['angle', 'pick', 'flip'].forEach((word) => expect(`${word}: ${stop.toLowerCase().includes(word)}`).toBe(`${word}: true`));
-    ['Approve', 'Reweave', 'Send back'].forEach((button) => expect(`${button}: ${stop.includes(button)}`).toBe(`${button}: true`));
+    const controls = [...stop.matchAll(/^- \*\*([^*\n]+)\*\*/gm)].map((m) => m[1]);
+    const buttons = MEETING_ACTIONS.map((action) => action.charAt(0).toUpperCase() + action.slice(1).replace(/-/g, ' '));
+    expect(buttons).toEqual(['Approve', 'Reweave', 'Send back']);
+    expect(controls).toEqual(['Pick an angle', 'Rewrite a line', 'Flip a thread', 'Add a thread', 'Answer a question', 'Leave a note', ...buttons]);
   });
 
   it('the arc analyzer pitches angles, and the outline generator reads the angle the director picked', () => {
