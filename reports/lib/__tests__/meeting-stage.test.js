@@ -786,3 +786,31 @@ describe("4.14a: a rework never takes a struck connection's id", () => {
     expect(update._weaveHandEditReport.changed).toEqual([]);
   });
 });
+
+// 3B fix 5 (R1): the director's pick is code's, as an answer is. It rides on the weave between
+// the meeting and the round's passes, and no prompt prints it: neither the rework's PREVIOUS
+// WEAVE OUTPUT nor the fact check's WEAVE. (Slice 3C tells a Reweave's rework the open angle in
+// words.)
+describe("3B fix 5: the director's pick stays out of the prompts (R1)", () => {
+  it("neither the rework's previous output nor the fact check's weave carries the pick", async () => {
+    const left = leftByDirector();
+    left.picked = 'a2';
+    left.angles[0].threads.pop();
+    left.angles[1].threads.push('t6');
+    const state = await roundState('reweave', null, left);
+    expect(state.weave.picked).toBe('a2');
+
+    const sdk = recordingSdk(reworkOf(() => {}));
+    const update = await reviseArcs(state, cfg(sdk));
+    const previous = previousOf(sdk.calls[0].prompt);
+    expect(previous).toContain('"angles"');
+    expect(previous).not.toContain('"picked"');
+
+    const judged = { ...state, ...update };
+    expect(judged.weave.picked).toBe('a2');
+    const prompt = buildEvaluationUserPrompt('arcs', judged, { directorEdits: judgedEdits('arcs', judged) });
+    const weaveJson = prompt.slice(prompt.indexOf('WEAVE:'), prompt.indexOf("THE DIRECTOR'S EDITS"));
+    expect(weaveJson).toContain('"angles"');
+    expect(weaveJson).not.toContain('"picked"');
+  });
+});

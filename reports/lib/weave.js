@@ -33,8 +33,8 @@
  * At the story meeting the director leaves the weave with their changes in it and their pick,
  * `picked` (PICKED_KEY, R1): the id of the angle they sent on, written by the meeting's gate and
  * owned by code as an answer is, so code strips it from a writer's or a rework's output and puts
- * it back after a rework while its angle survives (arc-specialist-nodes.js). With none, the first
- * angle is open (pickedAngleOf). Every reader after the meeting reads the picked angle, its
+ * it back after a rework while its angle survives (arc-specialist-nodes.js), and no prompt prints
+ * it (weaveForRework, weaveForJudge). With none, the first angle is open (pickedAngleOf). Every reader after the meeting reads the picked angle, its
  * threads in its order, the threads it leaves out and the connections between its threads
  * through settledAngleOf. Until slice 3C the director may still strike a connection
  * (`struck: true`, STRUCK_KEY), which prints nothing (liveConnections). The checks read only the
@@ -547,22 +547,26 @@ function weaveForPrompt(weave) {
 }
 
 /**
- * The weave as a rework reads it (brief 4.5): without its code-owned keys or the
- * connections the director struck, which the rework's <HAND_EDITS> lists as struck. The
- * answers stay on their questions, since a rework works from them.
+ * The weave as a rework reads it (brief 4.5): without its code-owned keys, the director's
+ * pick or the connections the director struck, which the rework's <HAND_EDITS> lists as
+ * struck. The pick is code's (R1), put back after the rework while its angle survives
+ * (withPickFrom), so no prompt prints it. The answers stay on their questions, since a rework
+ * works from them.
  *
  * @param {Object|null} weave
  * @returns {Object|null}
  */
 function weaveForRework(weave) {
   const view = weaveForPrompt(weave);
-  if (!isWeave(view) || !Array.isArray(view.connections)) return view;
-  return { ...view, connections: view.connections.filter(connection => !isStruck(connection)) };
+  if (!view || typeof view !== 'object' || Array.isArray(view)) return view;
+  const { [PICKED_KEY]: _pick, ...unpicked } = view;
+  if (!isWeave(unpicked) || !Array.isArray(unpicked.connections)) return unpicked;
+  return { ...unpicked, connections: unpicked.connections.filter(connection => !isStruck(connection)) };
 }
 
 /**
- * The weave as the fact check judges it (brief 4.5): the rework's view with no answer on
- * any question. The answers are the director's words, which the fact check reads apart,
+ * The weave as the fact check judges it (brief 4.5): the rework's view, without the pick,
+ * with no answer on any question. The answers are the director's words, which the fact check reads apart,
  * as record (T1), never as the writer's text it judges.
  *
  * @param {Object|null} weave
