@@ -2052,9 +2052,10 @@
   var CUTS_AGAINST_LABEL = 'Cuts against';
 
   /**
-   * The fold of a thread the director added at the story meeting while it carries no evidence:
-   * the next writer finds its evidence (spec 5.3; Review focus 1). A thread of the writer's with
-   * none is a check's failure, which the page shows beside it instead.
+   * The fold of a thread the director added at the story meeting, or brought into the story from
+   * left out (fix round 4), while it carries no evidence: the next writer finds its evidence (spec
+   * 5.3; Review focus 1). A thread of the writer's with none is a check's failure, which the page
+   * shows beside it instead.
    */
   var MEETING_NO_EVIDENCE_LINE = 'Nothing yet: the map writer finds the evidence for it.';
 
@@ -2740,8 +2741,9 @@
    *   in it is left out.
    * - `threads`: the threads in the story, the main thread first and the others in the order of
    *   the roles (WEAVE_ROLE_LABELS), each as its role, its name and its line, with its evidence
-   *   folded (`evidence`, evidenceFoldView's) and, for a thread the director added that has none,
-   *   at this look or an earlier one (`data.addedThreads`), the fold's one line (`noEvidence`,
+   *   folded (`evidence`, evidenceFoldView's) and, for a thread the director added, or brought
+   *   into the story from left out, that has none, at this look or an earlier one
+   *   (`data.directorsThreads`; fix round 4), the fold's one line (`noEvidence`,
    *   MEETING_NO_EVIDENCE_LINE). A thread of the writer's with none shows the check's failure
    *   beside it (`failures`) instead. Each thread carries the labels the page names it by (fix
    *   round 2; the page decides none), as every element of the meeting's and the map's pages
@@ -2806,7 +2808,13 @@
       return { text: asString(text), concerns: b.concerns, marks: b.marks, failures: b.failures };
     };
     var shownThreads = shown ? asArray(shown.threads) : [];
-    var addedEarlier = new Set(asArray(d.addedThreads).map(function (id) { return asString(id).trim(); }).filter(Boolean));
+    var directorsEarlier = new Set(asArray(d.directorsThreads).map(function (id) { return asString(id).trim(); }).filter(Boolean));
+    /** Whether the director brings a thread the meeting showed left out into the story at this look. */
+    var broughtInNow = function (id, role) {
+      if (!id || role === LEFT_OUT_ROLE) return false;
+      var was = shownThreads.filter(function (t) { return weaveIdOf(t) === id; })[0];
+      return Boolean(was) && asString(was.role) === LEFT_OUT_ROLE;
+    };
     var threadRepeats = new Set(repeatedIdsOf(shownThreads));
     var connectionRepeats = new Set(repeatedIdsOf(shown ? shown.connections : []));
     var allThreads = asArray(weave.threads).map(function (element, index) {
@@ -2836,7 +2844,7 @@
         added: added,
         repeatedId: id !== '' && threadRepeats.has(id),
         evidence: evidence,
-        noEvidence: evidence.length === 0 && (added || addedEarlier.has(id)) ? MEETING_NO_EVIDENCE_LINE : '',
+        noEvidence: evidence.length === 0 && (added || broughtInNow(id, role) || directorsEarlier.has(id)) ? MEETING_NO_EVIDENCE_LINE : '',
         concerns: b.concerns,
         marks: b.marks,
         failures: b.failures

@@ -522,8 +522,9 @@ const MEETING_SECTIONS = {
     addWeaveLine(page, 'fromYourNotes', view.fromYourNotes);
   },
   // Phase 4b (brief 1B; spec 4.1 and 9): each thread in the story as its role, its name and its
-  // line, with its evidence folded under it; then the left-out threads by name, each reason
-  // folded. No line or label names a thread by its id.
+  // line, with its evidence folded under it, or, for a thread the director added or brought into
+  // the story with none, the fold's line that the map writer finds it (fix round 4); then the
+  // left-out threads by name, each reason folded. No line or label names a thread by its id.
   threads(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].threads);
     view.threads.forEach((thread) => {

@@ -792,8 +792,9 @@ describe('1B: a code check still failing sits beside the line it names', () => {
 
 // Fix round, fix 2 (spec 5.3 and 6.1; Review focus 1): "Nothing yet: the map writer finds the
 // evidence for it." belongs to a thread the director added, at this look or an earlier one, which
-// the stop names (`addedThreads`). A thread of the writer's with no evidence is a failing check,
-// and the page shows the check's line beside it instead.
+// the stop names (`directorsThreads` since fix round 4, which names a thread they brought into the
+// story too). A thread of the writer's with no evidence is a failing check, and the page shows the
+// check's line beside it instead.
 describe("1B fix 2: the fold says the map writer finds the evidence only for a thread the director added", () => {
   const NO_EVIDENCE = {
     type: 'thread-without-evidence',
@@ -817,7 +818,7 @@ describe("1B fix 2: the fold says the map writer finds the evidence only for a t
     left.threads.push(clone(ADDED));
     const edits = standingAtMeeting(null, WEAVE, left);
     const data = payloadOf(stateAt({ weave: weaveLib.withFactCheckMark(left, MARK), _weaveHandEdits: edits }));
-    expect(data.addedThreads).toEqual(['t6']);
+    expect(data.directorsThreads).toEqual(['t6']);
     expect(threadOf(meetingView(data, meetingDraftOf(data, undefined)), 't6')).toMatchObject({
       added: false, evidence: [], noEvidence: ViewLogic.MEETING_NO_EVIDENCE_LINE
     });
@@ -827,8 +828,8 @@ describe("1B fix 2: the fold says the map writer finds the evidence only for a t
     expect(threadOf(meetingView(later, meetingDraftOf(later, undefined)), 't6')).toMatchObject({ noEvidence: '', evidence: [expect.objectContaining({ shows: 'Two ledgers for one bar.' })] });
   });
 
-  test('the stop names no added thread when the director added none', () => {
-    expect(payloadOf(stateAt()).addedThreads).toEqual([]);
+  test('the stop names no thread of the director\'s when the director added none and brought none in', () => {
+    expect(payloadOf(stateAt()).directorsThreads).toEqual([]);
   });
 });
 
@@ -1974,5 +1975,49 @@ describe('fix round 4: a meeting line after a send-back shows no evidence and no
     view.changedEdits.forEach((line) => {
       expect(line).not.toMatch(/p-email|raise the dose|stance|supports|evidence|complicates-it/);
     });
+  });
+});
+
+// Fix round 4, fix 4 (spec 5.3): a left-out thread the director gives a role in the story carries
+// no evidence, and the map writer finds it, as for a thread they added. The stop names the
+// director's threads (`directorsThreads`: added, or brought into the story from left out), and
+// the meeting shows the fold's line under such a thread, at an earlier look or this one.
+describe('fix round 4: "Nothing yet" under a thread the director brought into the story', () => {
+  const { storyLevelWeave } = require('../../lib/__tests__/fixtures/story-level-weave');
+  const { stopPage } = require('../../lib/stop-pages');
+  /** The meeting's payload after the director's look that left `left`, against the writer's story-level weave. */
+  const payloadAfter = (left) => payloadOf(stateAt({
+    weave: weaveLib.withFactCheckMark(left, MARK),
+    _weaveBaseline: storyLevelWeave(),
+    _weaveHandEdits: standingAtMeeting(null, storyLevelWeave(), left)
+  }));
+  const broughtIn = () => {
+    const left = storyLevelWeave();
+    left.threads.find((t) => t.id === 't9').role = 'complicates-it';
+    return left;
+  };
+
+  test('at an earlier look: the stop names the thread, and the meeting shows the line under it, folded on the page', () => {
+    const data = payloadAfter(broughtIn());
+    expect(data.directorsThreads).toEqual(['t9']);
+    expect(data).not.toHaveProperty('addedThreads');
+    const view = meetingView(data, meetingDraftOf(data, undefined));
+    expect(threadOf(view, 't9')).toMatchObject({ role: 'complicates-it', evidence: [], noEvidence: ViewLogic.MEETING_NO_EVIDENCE_LINE });
+    expect(stopPage('arc-selection', data).lines.find((line) => line.text === ViewLogic.MEETING_NO_EVIDENCE_LINE)).toMatchObject({ folded: true });
+  });
+
+  test('at this look: the role the director gives a left-out thread brings the line before they send it', () => {
+    const data = payloadOf(stateAt({ weave: weaveLib.withFactCheckMark(storyLevelWeave(), MARK), _weaveBaseline: storyLevelWeave() }));
+    const draft = setThreadRole(meetingDraftOf(data, undefined), 8, 'mirrors-it');
+    expect(threadOf(meetingView(data, draft), 't9')).toMatchObject({ evidence: [], noEvidence: ViewLogic.MEETING_NO_EVIDENCE_LINE });
+  });
+
+  test("a thread the director moved between two roles in the story, or the writer's own, gets no line", () => {
+    const left = storyLevelWeave();
+    left.threads.find((t) => t.id === 't5').role = 'grounds-it';
+    left.threads.find((t) => t.id === 't5').evidence = [];
+    const data = payloadAfter(left);
+    expect(data.directorsThreads).toEqual([]);
+    expect(threadOf(meetingView(data, meetingDraftOf(data, undefined)), 't5')).toMatchObject({ noEvidence: '' });
   });
 });

@@ -255,25 +255,14 @@ function meetingConcerns(state) {
 }
 
 /**
- * The threads the director added at the meeting that the weave carries, by id (their standing
- * edits, lib/hand-edit-diff.js weaveDirectorsShare): the meeting says the map writer finds the
- * evidence for such a thread, at whatever look the director added it (spec 2026-10-05 section
- * 5.3), where a thread of the writer's with none is a check's failure, shown beside it.
- *
- * @param {Object} state
- * @returns {string[]}
- */
-function meetingAddedThreads(state) {
-  if (!state || !isWeave(state.weave)) return [];
-  return Object.keys(weaveDirectorsShare(carriedEdits(state._weaveHandEdits, state.weave)).addedThreads);
-}
-
-/**
  * The threads the director put in the story at the meeting that the weave carries, in the
  * weave's order (their standing edits): each one they added (`added`), and each one they brought
  * into the story from left out, giving it a role in the story (`broughtIn`; fix round 4). The
- * next writer finds the evidence for such a thread (spec 2026-10-05 section 5.3), and when the
- * record cannot carry it, the map names it in its gap note (lib/map.js mapFindings).
+ * next writer finds the evidence for such a thread (spec 2026-10-05 section 5.3): the meeting says
+ * so under one with none, at whatever look the director put it there (the payload's
+ * `directorsThreads`), where a thread of the writer's with none is a check's failure, shown beside
+ * it; and when the record cannot carry it, the map names it in its gap note (lib/map.js
+ * mapFindings).
  *
  * @param {Object} state
  * @returns {Array<{id: string, added: boolean, broughtIn: boolean}>}
@@ -433,7 +422,9 @@ function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
     questions: weaveQuestionsOf(s.weave && s.weave.questions),
     checkFailures: meetingCheckFailures(s),
     concerns: meetingConcerns(s),
-    addedThreads: meetingAddedThreads(s),
+    // Fix round 4: the threads the director added or brought into the story, whose fold says the
+    // map writer finds their evidence while they have none.
+    directorsThreads: meetingDirectorsThreads(s).map((thread) => thread.id),
     marks: meetingMarksOf(s),
     // The edits the round's passes changed, a send-back's with its reasons, and each
     // restore (lib/hand-edit-diff.js reportAfterPass).
@@ -455,7 +446,6 @@ module.exports = {
   meetingResume,
   meetingCheckFailures,
   meetingConcerns,
-  meetingAddedThreads,
   // Fix round 4: the threads the director added or brought into the story
   meetingDirectorsThreads,
   meetingMarksOf,

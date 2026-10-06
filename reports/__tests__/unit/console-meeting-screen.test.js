@@ -531,7 +531,7 @@ describe('1C: a weave the add line builds passes buildResumePayload on a state i
     expect(stateUpdates.weave.threads[5]).toEqual({ id: 't6', name: 'The second ledger', line: '', role: 'complicates-it' });
     // The rework keeps the thread and finds it no evidence: the meeting after shows it with the fold's line.
     const after = payloadOf({ ...state, ...stateUpdates, weave: weaveLib.withFactCheckMark(clone(stateUpdates.weave), MARK), _meetingRound: null });
-    expect(after.addedThreads).toEqual(['t6']);
+    expect(after.directorsThreads).toEqual(['t6']);
     const row = elementsOf(renderMeeting({ data: after }), withClass('meeting__thread')).find((r) => textOf(r).includes('The second ledger'));
     expect(textOf(elementsOf(row, withClass('meeting__line'))[0])).toBe('The second ledger');
     expect(held(foldsIn(row)[0])).toContain(ViewLogic.MEETING_NO_EVIDENCE_LINE);
