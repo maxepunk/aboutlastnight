@@ -352,8 +352,12 @@ describe("4.7e: the rework's task gives a card the director cut and a paragraph 
   const { standingAfterSendBack } = require('../hand-edit-diff');
   /** A paragraph the director inserts at the desk, from the letter the map left out (b9, p-rescued). */
   const DESK_PARAGRAPH = 'An unsigned letter warned Marcus about the Stanford patents a week before he died.';
-  /** The task's beats line: the director's edits first, as HAND_EDITS gives them, the map's beats otherwise. */
-  const BEATS_LINE = "- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article;";
+  /**
+   * The task's beats line: the director's edits first, as HAND_EDITS gives them, the map's beats
+   * otherwise. Phase 4b (brief 1E) adds each beat told from its evidence, and cited (the 1E
+   * describe below).
+   */
+  const BEATS_LINE = "- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; each beat told from the evidence it carries, or from the record where it carries none, and its evidence cited as T1 sets out for each source and C9 (`<craft-cards>`) for a card;";
   /** The task's words line: the director's edits first, the map's beats and the writer's words otherwise. */
   const WORDS_LINE = "- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats as C2 (`<craft-form>`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;";
   /** The precedence both lines open their body with. */
@@ -488,5 +492,107 @@ describe("4.7f: the director's desk edits, stated once", () => {
     const { user } = await cutCardRework({ round: 1 });
     expect(taskLines(user).filter((line) => line.includes('<HAND_EDITS>'))).toEqual([]);
     expect(instructionText(user)).toContain('Write the article as a ContentBundle');
+  });
+});
+
+// Phase 4b (brief 1E; spec 2026-10-05 sections 5.2, 5.3 and 7; R4): the article writer reads the
+// evidence. A beat on the map is a move with its people, the threads it carries and the pieces of
+// the record it is told from, one piece flagged as its card's document. The label above the map
+// says how to read that, the task's beats line has the writer tell each beat from its evidence and
+// cite it under the rules that say how, and the instruction's card line names each card's
+// document (prompt-builder-card-fields.test.js). The rework carries all three word for word.
+describe('1E: the article writer tells each beat from the evidence it carries', () => {
+  const { EVIDENCE_SOURCES } = require('../evidence');
+  /** The label: the line right after <STORY_MAP>. */
+  const labelOf = (prompt) => block(prompt, STORY_MAP_TAG).split('\n')[1];
+  /** The instruction's card line. */
+  const cardLineOf = (prompt) => prompt.split('\n').filter((line) => line.startsWith('     * {"type": "evidence-card"'));
+  /** What the beats line asks of each beat, after the beats it names. */
+  const BEATS_EVIDENCE = 'each beat told from the evidence it carries, or from the record where it carries none, and its evidence cited as T1 sets out for each source and C9 (`<craft-cards>`) for a card;';
+  /** The precedence the beats line and the card line open with. */
+  const FIRST = "the director's edits first, as HAND_EDITS gives them";
+
+  it("the map's label reads a beat as a move: its words, its people, its threads, its evidence and the card flag, and no material", async () => {
+    const { user } = await writerPrompt(articleState());
+    const label = labelOf(user);
+    expect(label).toContain('A beat is one move of the story: its "move" says it in a few plain words, "players" names the people in it, "threads" the ids of the settled weave\'s threads it carries, and "connection" the id of the weave\'s connection that lands in it.');
+    expect(label).toContain('Its "evidence" holds the pieces of the record the move is told from, each with its "sources"');
+    expect(label).toContain('what it "shows", and its "stance": whether it supports the move or cuts against it.');
+    expect(label).toContain('A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true.');
+    // A piece's sources besides a document, as lib/evidence.js names them.
+    Object.values(EVIDENCE_SOURCES).forEach((source) => expect(label).toContain(`"${source}"`));
+    expect(label).not.toMatch(/material|the id of the document it prints/);
+    // It names the record in words: the map prints above the record, whose first tag is the record.
+    expect(label).not.toContain('<RECORD>');
+
+    // Each field the label names is one the printed map carries, on a beat or on a piece.
+    const map = blockJson(user, STORY_MAP_TAG);
+    const beats = map.sections.flatMap((section) => section.beats);
+    ['move', 'players', 'threads', 'connection', 'evidence', 'card'].forEach((field) => {
+      expect(`${field}: ${beats.some((beat) => field in beat)}`).toBe(`${field}: true`);
+    });
+    const pieces = beats.flatMap((beat) => beat.evidence);
+    ['sources', 'shows', 'stance', 'card'].forEach((field) => {
+      expect(`${field}: ${pieces.some((piece) => field in piece)}`).toBe(`${field}: true`);
+    });
+  });
+
+  it('the beats line has the writer tell each beat from its evidence and cite it, pointing at rules the prompt holds', async () => {
+    const { user, system } = await writerPrompt(articleState());
+    const beatsLines = taskLines(user).filter((line) => line.startsWith('- the beats:'));
+    expect(beatsLines).toHaveLength(1);
+    expect(beatsLines[0].startsWith(`- the beats: ${FIRST};`)).toBe(true);
+    expect(beatsLines[0].endsWith(` ${BEATS_EVIDENCE}`)).toBe(true);
+    // The items it points at: T1 in the truth rules, which print in the system prompt alone, and
+    // C9 in the craft files.
+    expect(system).toMatch(/^<truth-rules>$[\s\S]*^## T1\. [\s\S]*^<\/truth-rules>$/m);
+    expect(user).not.toContain('<truth-rules>');
+    expect(user).toMatch(/^<craft-cards>\n## C9\./m);
+    // The writer still reads the record for each scene's detail.
+    expect(taskLines(user).filter((line) => line.includes("each scene's detail from the record"))).toHaveLength(1);
+  });
+
+  it('a beat the director added on the map, with no evidence, prints as they left it, and the beats line sends the writer to the record for it', async () => {
+    const map = clone(MAP);
+    map.sections[3].beats.push({ id: 'b7', move: 'Riley leaves by the back door', players: ['Riley'] });
+    const { user } = await writerPrompt(articleState({ outline: map }));
+    const printed = blockJson(user, STORY_MAP_TAG).sections[3].beats.find((beat) => beat.id === 'b7');
+    expect(printed).toEqual({ id: 'b7', move: 'Riley leaves by the back door', players: ['Riley'] });
+    expect(taskLines(user).filter((line) => line.includes('or from the record where it carries none'))).toHaveLength(1);
+  });
+
+  it('a send-back that cut a card at the desk: the card line still names the map\'s card, behind the director\'s edits', async () => {
+    const { standingAfterSendBack } = require('../hand-edit-diff');
+    const shown = clone(PREVIOUS_BUNDLE);
+    const cut = clone(shown);
+    cut.sections[0].content.splice(3, 1);
+    const sdk = recordingSdk(cut);
+    await reviseContentBundle(articleState({
+      _previousContentBundle: clone(cut), articleRevisionCount: 0, humanArticleRevisionCount: 1,
+      _articleFeedback: 'Tighten the closing.',
+      _articleHandEdits: standingAfterSendBack(null, shown, cut, 'bundle')
+    }), cfg(sdk));
+    const prompt = sdk.mock.calls[0][0].prompt;
+    expect(block(prompt, 'HAND_EDITS')).toContain('E1 (section "the-story", evidence-card p-dna, cut)');
+
+    const [line] = cardLineOf(prompt);
+    expect(line).toContain('"p-dna" for b4');
+    expect(line.indexOf(FIRST)).toBeGreaterThan(0);
+    expect(line.indexOf(FIRST)).toBeLessThan(line.indexOf('"ale003" for b2'));
+  });
+
+  it('the rework carries the label, the beats line and the card line as its writer prints them', async () => {
+    const state = articleState();
+    const { user: writer } = await writerPrompt(state);
+    const sdk = recordingSdk(PREVIOUS_BUNDLE);
+    await reviseContentBundle({ ...state, _previousContentBundle: clone(PREVIOUS_BUNDLE), articleRevisionCount: 1 }, cfg(sdk));
+    const rework = sdk.mock.calls[0][0].prompt;
+
+    expect(labelOf(rework)).toBe(labelOf(writer));
+    expect(taskLines(rework).filter((line) => line.startsWith('- the beats:')))
+      .toEqual(taskLines(writer).filter((line) => line.startsWith('- the beats:')));
+    expect(cardLineOf(rework)).toEqual(cardLineOf(writer));
+    expect(cardLineOf(writer)).toHaveLength(1);
+    expect(cardLineOf(writer)[0]).toContain('"ale003" for b2');
   });
 });

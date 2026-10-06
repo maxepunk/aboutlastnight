@@ -94,3 +94,64 @@ describe('content-bundle schema: sidebar content (slice 2.5)', () => {
     expect(description).not.toMatch(/nova|detective|journalist|anondono|reporter/i);
   });
 });
+
+// Phase 4b (brief 1E; spec 2026-10-05 sections 5.1 and 7; R4): the inline card line names the cards
+// the map flagged. A beat marked as a card flags one piece of its evidence, whose document the card
+// prints; beatCardOf (console/outline-edit-logic.js) reads it, the one reader of a beat's card, and
+// the line names each document beside its beat, after the director's edits.
+describe("the inline card line names each card the map flags (phase 4b, brief 1E)", () => {
+  const { beatCardOf } = require('../../console/outline-edit-logic');
+  const { MAP } = require('./fixtures/rework-state');
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  const OPENING = "The cards: the director's edits first, as HAND_EDITS gives them; otherwise the map's, and no other,";
+
+  /** The instruction's evidence-card line, from a journalist article prompt over `map`. */
+  async function cardLine(map) {
+    const themeLoader = { loadPhasePrompts: jest.fn().mockResolvedValue(PROMPTS), validate: jest.fn() };
+    const builder = new PromptBuilder(themeLoader, 'journalist', {}, { Vic: 'Vic Kingsley' });
+    const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+    const { WEAVE } = require('./fixtures/rework-state');
+    const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(WEAVE, null), map, [], null, null, null);
+    const lines = userPrompt.split('\n').filter((line) => line.startsWith('     * {"type": "evidence-card"'));
+    expect(lines).toHaveLength(1);
+    return lines[0];
+  }
+
+  it("names the document of each beat's flagged piece, in the map's order, as beatCardOf reads it", async () => {
+    const line = await cardLine(MAP);
+    expect(line).toContain(`${OPENING} each with the "tokenId" of the document its beat's flagged piece names: "ale003" for b2, "mor001" for b3 and "p-dna" for b4.`);
+    const named = MAP.sections.flatMap((section) => section.beats).filter((beat) => beatCardOf(beat)).map((beat) => `"${beatCardOf(beat)}" for ${beat.id}`);
+    expect(named).toEqual(['"ale003" for b2', '"mor001" for b3', '"p-dna" for b4']);
+    // It follows the block's own lines, so the card's content and owner still come from its document.
+    expect(line.indexOf(OPENING)).toBeGreaterThan(line.indexOf('"owner" is that document\'s owner as the record gives it.'));
+  });
+
+  it('names the document of a flagged piece that sets the ledger beside it', async () => {
+    const map = clone(MAP);
+    map.sections[1].beats[1].evidence[0].sources = ['ledger', 'mor001'];
+    expect(await cardLine(map)).toContain('"ale003" for b2, "mor001" for b3 and "p-dna" for b4.');
+  });
+
+  it('names no card for a marked beat that flags no piece, a beat carrying a document id as its card, or a beat left out', async () => {
+    const map = clone(MAP);
+    delete map.sections[1].beats[1].evidence[0].card;   // b3: marked, no piece flagged
+    map.sections[1].beats[2].card = 'p-dna';            // b4: an id on the beat, never read as one
+    delete map.sections[1].beats[2].evidence[0].card;
+    map.leftOut[0].card = true;                         // b9: left out, its piece flagged
+    map.leftOut[0].evidence[0].card = true;
+    const line = await cardLine(map);
+    expect(line).toContain(`${OPENING} each with the "tokenId" of the document its beat's flagged piece names: "ale003" for b2.`);
+    expect(line).not.toMatch(/mor001|p-dna|p-rescued|b9/);
+  });
+
+  it("says the map's sections name no card's document when no beat flags one", async () => {
+    const map = clone(MAP);
+    map.sections.forEach((section) => section.beats.forEach((beat) => {
+      delete beat.card;
+      beat.evidence.forEach((piece) => delete piece.card);
+    }));
+    const line = await cardLine(map);
+    expect(line).toContain(`${OPENING} and its sections name no card's document.`);
+    expect(line).not.toMatch(/ for b\d/);
+  });
+});

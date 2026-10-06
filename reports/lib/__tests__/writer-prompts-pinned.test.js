@@ -351,10 +351,20 @@ const REPO = path.join(__dirname, '..', '..');
  *   fixture's map (fixtures/rework-state.js MAP) is in the new shape, each beat with its move,
  *   threads and evidence, so the article writer's <STORY_MAP> grows (3033 -> 5206):
  *   article-journalist 31624 -> 33797. The arc pin does not move.
+ * - Phase 4b (brief 1E; spec 2026-10-05 sections 5.2 and 7; R4), the article writer reads the
+ *   evidence. The label over <STORY_MAP> reads a beat as a move with its people, its threads and
+ *   its evidence, each piece's sources, what it shows and its stance, and the card as the piece a
+ *   marked beat flags, where it read a beat's material and its card as a document id (460 -> 1002);
+ *   the task's beats line has the writer tell each beat from the evidence it carries, or from the
+ *   record where it carries none, and cite it as T1 and C9 set out (212 -> 390); and the
+ *   instruction's evidence-card line names the map's cards after the director's edits, each
+ *   flagged piece's document beside its beat as beatCardOf reads it (330 -> 555). A rework carries
+ *   all three word for word. article-journalist 33797 -> 34742. The outline and arc pins do not
+ *   move.
  */
 const PINNED = {
   'outline-journalist': ['09bcdf1a6851ca6b44acede51d9f36af064d8f347a794d42ae6834cdd1a05ed4', 23474],
-  'article-journalist': ['063b8ee5cb76dbfad3e34562408bd2b0aac6e5f604ac79f80f93b5210559221d', 33797],
+  'article-journalist': ['47d8f6f9d54e7c9b05d960af40f92e3325726deada6ee1a9ac98b9a2cbd5ea5d', 34742],
   'arcs-journalist': ['0cc6d84aaa1d94a20080934235e0bfacbf9f9920627f6fdd9b881b6cfd43004c', 11475]
 };
 

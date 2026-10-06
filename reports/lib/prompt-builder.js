@@ -19,6 +19,10 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // 4.6e: with the schema's one pointer at that note (MEETING_NOTE_POINTER).
 // Phase 4b (brief 1D): the bound on the map's page and the writer's aim, stated once there.
 const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER, MAP_WORD_BOUND, MAP_WORD_AIM } = require('./map');
+// Phase 4b (brief 1E; R4): the article writer reads a beat's card as the map's checks and counts
+// do, through the one reader of a beat's card, and names a piece's sources as lib/evidence.js does.
+const { beatCardOf } = require('../console/outline-edit-logic');
+const { EVIDENCE_SOURCES } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
@@ -431,9 +435,45 @@ function systemPromptOpening(theme, call, sessionConfig) {
 /**
  * The article writer's map block (brief 4.7b): the tag the story map prints in, right after
  * the settled weave, and the line that opens it.
+ *
+ * Phase 4b (brief 1E; spec 2026-10-05 sections 5.1 and 7; R1, R4): the line reads a beat as the
+ * map carries it, a move with its people, the threads it carries and its evidence underneath, each
+ * piece with its sources (lib/evidence.js EVIDENCE_SOURCES, named as the weave writer's Sources
+ * list names them), what it shows and its stance, and the card as a marker on the beat with its
+ * document on the piece flagged "card". The beat's `kind` stays unnamed, a hint the JSON carries.
+ * It names the record in words, never by its tag, as lib/evidence.js's piece descriptions do: the
+ * map prints above the record, and the prompt's readers take the first <RECORD> for the record.
  */
 const STORY_MAP_TAG = 'STORY_MAP';
-const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat names its material; its "card" is the id of the document it prints as an inline evidence card, and its "connection" the id of the weave\'s connection that lands in it. A photo\'s "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map\'s notes to the director.';
+const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move is told from, each with its "sources" (the id of a document in the record, "${EVIDENCE_SOURCES.LEDGER}" for a sale, the bonus or a transfer on the morning timeline, "${EVIDENCE_SOURCES.EVIDENCE_LOG}" for an exposure on it, or "${EVIDENCE_SOURCES.NOTES}" for the director's own words), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
+
+/**
+ * The instruction's line on which inline cards the article prints (phase 4b, brief 1E; spec
+ * 2026-10-05 sections 5.1 and 7; C9; R4): the map's, one for each beat in its sections that
+ * flags a card's document, each named by that document's id beside its beat, as beatCardOf reads
+ * it, so the writer never reads a card from the JSON by hand. A beat under leftOut prints none.
+ *
+ * The director's desk edits come first, as HAND_EDITS gives them, as on the task's beats line
+ * (briefs 4.7e and 4.7f): the map keeps the beat of a card the director deleted at the desk, so
+ * the line names that card too, and a rework that carries it reads the director's cut first. The
+ * rule for those edits is HAND_EDITS' alone, and this line restates none of it.
+ *
+ * @param {Object} map - the map as the article reads it
+ * @returns {string}
+ */
+function mapCardsLine(map) {
+  const cards = [];
+  (Array.isArray(map && map.sections) ? map.sections : []).forEach((section) => {
+    (Array.isArray(section && section.beats) ? section.beats : []).forEach((beat) => {
+      const document = beatCardOf(beat);
+      if (document) cards.push(`"${document}" for ${beat.id}`);
+    });
+  });
+  const opening = "The cards: the director's edits first, as HAND_EDITS gives them; otherwise the map's, and no other,";
+  if (cards.length === 0) return `${opening} and its sections name no card's document.`;
+  const listed = cards.length > 1 ? `${cards.slice(0, -1).join(', ')} and ${cards[cards.length - 1]}` : cards[0];
+  return `${opening} each with the "tokenId" of the document its beat's flagged piece names: ${listed}.`;
+}
 
 /**
  * The article writer's task (brief 4.7b; spec 6.1; the approved read's section D), right
@@ -463,6 +503,14 @@ const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s sto
  * first draft, the prompt carries no <HAND_EDITS>, and the lines ask for every beat in the map's
  * sections, and no other.
  *
+ * Phase 4b (brief 1E; spec 2026-10-05 sections 5.2, 5.3 and 7): the beats line has the writer
+ * tell each beat from the evidence the map gives it, and cite it, pointing at the items that say
+ * how for each source: T1 for a document, the ledger, the evidence log and the director's notes,
+ * and C9 for a card. It names T1 by its id alone, as the arc writer's notes label does: the truth
+ * rules print in the system prompt, and a user prompt carries no <truth-rules> tag
+ * (writers-rule-set.test.js). A beat the director added on the map carries no evidence, so the
+ * writer finds it in the record. The words line still gives each scene its detail from the record.
+ *
  * The lines name the block without its angle brackets, as the judges' questions name
  * FINANCIAL_SUMMARY, and the writer's prompts never say "desk". A rework carries the task above
  * its <HAND_EDITS> block, and the removed-phrase scan strips that block from the first
@@ -470,7 +518,7 @@ const STORY_MAP_LABEL = 'The story map as the director left it at the map\'s sto
  * bracketed name here would hide every line between the task and the block from it.
  */
 const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
-- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article;
+- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; each beat told from the evidence it carries, or from the record where it carries none, and its evidence cited as T1 sets out for each source and C9 (\`<craft-cards>\`) for a card;
 - the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats as C2 (\`<craft-form>\`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
 - each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
 - each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;
@@ -877,6 +925,10 @@ ${this._rosterSection()}`;
    *
    * Phase 4 (brief 4.6; R5): the arc packages went; the writer reads the record whole.
    *
+   * Phase 4b (brief 1E; R4): the map's beats carry their evidence in <STORY_MAP>, as its label
+   * says, and the evidence-card line names the map's cards, each flagged piece's document beside
+   * its beat (mapCardsLine).
+   *
    * @returns {string}
    */
   _journalistArticleUserSections(settledWeave, map, shellAccounts, sessionFacts, directorNotes, narrativeTensions, options, recordSection) {
@@ -942,7 +994,7 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
    - "content": an array of blocks, each one of these:
      * {"type": "paragraph", "text": "..."}
      * {"type": "quote", "text": "...", "attribution": "..."}: "attribution" is the speaker.
-     * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "...", "owner": "...", "significance": "critical" | "supporting" | "contextual"}: an inline card, printed whole in the body. "content" is copied from ${DOCUMENT_POINTER}, and "owner" is that document's owner as the record gives it.
+     * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "...", "owner": "...", "significance": "critical" | "supporting" | "contextual"}: an inline card, printed whole in the body. "content" is copied from ${DOCUMENT_POINTER}, and "owner" is that document's owner as the record gives it. ${mapCardsLine(map)}
      * {"type": "evidence-reference", "tokenId": "...", "caption": "..."}: a one-line caption naming a document, printed in the body with none of the document's text. Give it a caption; with none, the article prints the bare id.
      * {"type": "photo", "filename": "...", "caption": "..."}: an inline photo, by its exact filename.
      * {"type": "list", "items": ["..."], "ordered": false}
