@@ -36,7 +36,7 @@
 const Ajv = require('ajv');
 const { WEAVE_SCHEMA } = require('./sdk-client/subagents');
 const {
-  STRUCK_KEY, MEETING_ROUNDS, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
+  STRUCK_KEY, MEETING_ROUNDS, LEFT_OUT_ROLE, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
   weaveIdOf, repeatedIds
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
@@ -269,6 +269,30 @@ function meetingAddedThreads(state) {
 }
 
 /**
+ * The threads the director put in the story at the meeting that the weave carries, in the
+ * weave's order (their standing edits): each one they added (`added`), and each one they brought
+ * into the story from left out, giving it a role in the story (`broughtIn`; fix round 4). The
+ * next writer finds the evidence for such a thread (spec 2026-10-05 section 5.3), and when the
+ * record cannot carry it, the map names it in its gap note (lib/map.js mapFindings).
+ *
+ * @param {Object} state
+ * @returns {Array<{id: string, added: boolean, broughtIn: boolean}>}
+ */
+function meetingDirectorsThreads(state) {
+  if (!state || !isWeave(state.weave)) return [];
+  const edits = carriedEdits(state._weaveHandEdits, state.weave);
+  const added = new Set(Object.keys(weaveDirectorsShare(edits).addedThreads));
+  const broughtIn = new Set(edits
+    .filter((edit) => Array.isArray(edit.at) && edit.at.length === 3 && edit.at[0].key === 'threads' && edit.at[2].key === 'role'
+      && edit.at[1].match && edit.before === LEFT_OUT_ROLE && typeof edit.after === 'string' && edit.after !== LEFT_OUT_ROLE)
+    .map((edit) => String(edit.at[1].match.id).trim()));
+  return state.weave.threads
+    .map((thread) => weaveIdOf(thread))
+    .filter((id, index, ids) => id && ids.indexOf(id) === index && (added.has(id) || broughtIn.has(id)))
+    .map((id) => ({ id, added: added.has(id), broughtIn: broughtIn.has(id) }));
+}
+
+/**
  * The marks after a director's round (brief 4.5): what the round's passes changed in the
  * weave, from the version the director left, with the round.
  *
@@ -432,6 +456,8 @@ module.exports = {
   meetingCheckFailures,
   meetingConcerns,
   meetingAddedThreads,
+  // Fix round 4: the threads the director added or brought into the story
+  meetingDirectorsThreads,
   meetingMarksOf,
   roundDidNotRunOf,
   unrunRoundNoteIndex,

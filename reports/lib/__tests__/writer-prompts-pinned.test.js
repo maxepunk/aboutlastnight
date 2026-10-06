@@ -377,9 +377,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   verdict) at most 300 words in all, and so about 225 words of its own, where it said its
  *   lines came to 300 (+176): arcs-journalist 11475 -> 11651. The outline and article pins do
  *   not move.
+ * - Phase 4b (fix round 4, fix 3), the map's outlet for a thread the record cannot carry: the
+ *   map writer's task says a change the director made at the meeting goes in the gap note "such
+ *   as a thread they added or brought into the story, named by its name without quotation
+ *   marks" (+98), since the check matches the name loosely and leaves the director's thread
+ *   names out of the story-terms scan: outline-journalist 23474 -> 23572. The article and arc
+ *   pins do not move.
  */
 const PINNED = {
-  'outline-journalist': ['09bcdf1a6851ca6b44acede51d9f36af064d8f347a794d42ae6834cdd1a05ed4', 23474],
+  'outline-journalist': ['fd7e1ca979c3eaafa0eddffa4c123772d429c62d4fbf94c0d6f7b08be76eac9d', 23572],
   'article-journalist': ['958bf97f4d1d11c7b687118faf09aa14500bff16b6fdd82ee57b850caaa870e4', 34778],
   'arcs-journalist': ['aaf2c6c78d87157e6be1a0092eb47c53318e1f571843929ea901b9a63a1b745c', 11651]
 };

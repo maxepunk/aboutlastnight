@@ -204,7 +204,7 @@ describe('1D: every thread in the story lands in a beat that names it', () => {
   it('the inputs list the threads in the story, by id and name; a left-out thread is never asked for', () => {
     const { threads } = inputsOf(storyLevelMapState());
     expect(threads.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4', 't5', 't6', 't7']);
-    expect(threads[1]).toEqual({ id: 't2', name: "Marcus's own dosing", added: false });
+    expect(threads[1]).toEqual({ id: 't2', name: "Marcus's own dosing", added: false, broughtIn: false });
     expect(check(storyLevelMap())).toEqual({ failures: [], concerns: [] });
   });
 
@@ -228,9 +228,9 @@ describe('1D: every thread in the story lands in a beat that names it', () => {
     const state = storyLevelMapState();
     const meeting = added(state);
     const at = storyLevelMapState(meeting);
-    expect(inputsOf(at).threads.slice(-1)).toEqual([{ id: 't11', name: 'The second vial', added: true }]);
+    expect(inputsOf(at).threads.slice(-1)).toEqual([{ id: 't11', name: 'The second vial', added: true, broughtIn: false }]);
     const failure = mapFindings(at.outline, inputsOf(at)).failures.find((f) => f.type === 'thread-not-landed');
-    expect(failure.message).toMatch(/added at the meeting/);
+    expect(failure.message).toMatch(/added or brought into the story at the meeting/);
     expect(failure.message).toMatch(/gapNote/);
     const named = storyLevelMap();
     named.gapNote.line = 'The notes record nothing Remi did, and the record holds nothing of the second vial.';
@@ -244,6 +244,91 @@ describe('1D: every thread in the story lands in a beat that names it', () => {
     expect(findings.concerns.filter((c) => c.type === 'thread-not-landed')).toEqual([
       { type: 'thread-not-landed', editIds: ['E1'], finding: 'The thread "The memories sold" lands in no move.' }
     ]);
+  });
+});
+
+// Fix round 4, fix 3 (spec 5.3): the map's outlet for a thread the record cannot carry. A thread the
+// director put in the story at the meeting, added or brought in from left out, may be named in the
+// gap note instead of a beat. The gap note names it by its name, matched loosely (case, spacing
+// and quotation marks folded), and the director's thread names are their words, so the story-terms
+// scan of the gap note and the weave changes leaves them out. The cases are the final review's
+// (gapnote.js).
+describe("fix round 4: the gap note names a thread the director put in the story, in the director's words", () => {
+  const { standingAtMeeting } = require('../hand-edit-diff');
+  /** The state after the director's changes at the meeting, `change` applied to the settled weave. */
+  const afterMeeting = (change) => {
+    const state = storyLevelMapState();
+    const left = clone(state.weave);
+    change(left);
+    return storyLevelMapState({ weave: left, _weaveHandEdits: standingAtMeeting(null, state.weave, left) });
+  };
+  const addedThread = (name) => afterMeeting((weave) => {
+    weave.threads.push({ id: 't11', name, line: 'Vic got paid off.', role: 'complicates-it' });
+  });
+  /** The map's findings with the gap note's line set, the gap note's players kept. */
+  const withGapLine = (state, line, change = () => {}) => {
+    const map = clone(state.outline);
+    map.gapNote.line = line;
+    change(map);
+    return mapFindings(map, inputsOf({ ...state, outline: map }, map));
+  };
+  const typesOf = (findings) => findings.failures.map((f) => f.type);
+
+  it("passes a gap note that names the thread, in quotation marks or not, in any case or spacing", () => {
+    const state = addedThread("Vic's payoff");
+    expect(typesOf(withGapLine(state, "The record cannot carry Vic's payoff. The notes record nothing Remi did."))).toEqual([]);
+    expect(typesOf(withGapLine(state, 'The record cannot carry "Vic\'s payoff". The notes record nothing Remi did.'))).toEqual([]);
+    expect(typesOf(withGapLine(state, 'The record cannot carry “vic’s  PAYOFF”. The notes record nothing Remi did.'))).toEqual([]);
+  });
+
+  it('passes a thread name that holds a figure: the name is the director\'s words, never a story-terms failure', () => {
+    const state = addedThread('The $2M payoff to Vic');
+    expect(typesOf(withGapLine(state, 'The record cannot carry The $2M payoff to Vic. The notes record nothing Remi did.'))).toEqual([]);
+    // A change to the weave that names it, too.
+    const meetingEdit = mapFindings(state.outline, inputsOf(state)).failures; // the map lands no beat for it yet
+    expect(meetingEdit.map((f) => f.type)).toEqual(['thread-not-landed']);
+    const changed = withGapLine(state, 'The record cannot carry The $2M payoff to Vic.', (map) => {
+      map.weaveChanges = [{ source: 'M1', change: 'Named "The $2M payoff to Vic" in the gap note, since the record cannot carry it.' }];
+    });
+    expect(typesOf(changed)).toEqual([]);
+  });
+
+  it("still fails the writer's own figure or quotation beside the name, and a gap note that does not name the thread", () => {
+    const state = addedThread("Vic's payoff");
+    const terms = withGapLine(state, 'The record cannot carry Vic\'s payoff, the $2M Rich took at 9:58.');
+    expect(typesOf(terms)).toEqual(['story-terms']);
+    expect(terms.failures[0].line).toMatch(/gives the figure \$2M and the time 9:58/);
+    const unnamed = withGapLine(state, 'The record holds nothing on Vic being paid. The notes record nothing Remi did.');
+    expect(typesOf(unnamed)).toEqual(['thread-not-landed']);
+    expect(unnamed.failures[0].line).toBe('The thread "Vic\'s payoff" you added at the meeting lands in no move, and the gap note does not name it.');
+    expect(unnamed.failures[0].message).toMatch(/name it in gapNote's line by its name, without quotation marks/);
+  });
+
+  it('extends the outlet to a thread the director brought into the story from left out', () => {
+    const state = afterMeeting((weave) => { weave.threads.find((t) => t.id === 't9').role = 'complicates-it'; });
+    expect(inputsOf(state).threads.find((t) => t.id === 't9')).toEqual({ id: 't9', name: 'Protecting Sarah', added: false, broughtIn: true });
+    const unnamed = withGapLine(state, 'The notes record nothing Remi did in the room.');
+    expect(typesOf(unnamed)).toEqual(['thread-not-landed']);
+    expect(unnamed.failures[0].line).toBe('The thread "Protecting Sarah" you brought into the story at the meeting lands in no move, and the gap note does not name it.');
+    expect(unnamed.failures[0].message).toMatch(/^Threads the director added or brought into the story at the meeting that no beat carries and gapNote's line does not name: "Protecting Sarah" \(t9\)\./);
+    expect(typesOf(withGapLine(state, 'The record cannot carry protecting sarah. The notes record nothing Remi did in the room.'))).toEqual([]);
+  });
+
+  it("a thread of the writer's is no outlet: the gap note's naming it does not land it", () => {
+    const state = storyLevelMapState();
+    const map = clone(state.outline);
+    map.sections.forEach((s) => s.beats.forEach((b) => { b.threads = b.threads.filter((id) => id !== 't6'); }));
+    map.gapNote.line = 'The record cannot carry Reality is negotiable.';
+    expect(typesOf(mapFindings(map, inputsOf({ ...state, outline: map }, map)))).toContain('thread-not-landed');
+  });
+
+  it("the map writer's task says to name such a thread by its name, without quotation marks", async () => {
+    const { PromptBuilder } = require('../prompt-builder');
+    const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+    const { storyLevelWeave } = require('./fixtures/story-level-weave');
+    const builder = new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
+    const { userPrompt } = await builder.buildOutlinePrompt(renderSettledWeave(storyLevelWeave(), null), [], [], null, {});
+    expect(userPrompt).toContain('a change the director made at the meeting, such as a thread they added or brought into the story, named by its name without quotation marks.');
   });
 });
 

@@ -35,7 +35,7 @@ const {
   mapFindings, mapKey, mapRosterOf, meetingEditIdsOf, meetingNoteOf, topPhotoOf, mapCheckpointData,
   mapDirectorsShare, mapWritersShareOf, mapWritersTextBlank, mapLengthOf, MAP_CHECKS_SOURCE
 } = require('../../map');
-const { meetingAddedThreads } = require('../../meeting');
+const { meetingDirectorsThreads } = require('../../meeting');
 const { carriedEdits, directorEditConcern } = require('../../hand-edit-diff');
 const { storyConnections, weaveIdOf, isWeave, LEFT_OUT_ROLE } = require('../../weave');
 const { evidenceContextOf } = require('../../evidence');
@@ -104,19 +104,24 @@ function mapPageWords(state, map, edits) {
 
 /**
  * The threads in the story of the settled weave the session holds (state.weave), each `{id, name,
- * added}`, as lib/map.js mapFindings takes them: every thread whose role is not left out,
- * `added` on one the director added at the meeting (lib/meeting.js meetingAddedThreads), which
- * the map may name in its gap note instead of a beat when the record cannot carry it (spec 5.3).
+ * added, broughtIn}`, as lib/map.js mapFindings takes them: every thread whose role is not left
+ * out, `added` on one the director added at the meeting and `broughtIn` on one they brought into
+ * the story from left out (lib/meeting.js meetingDirectorsThreads; fix round 4), which the map may
+ * name in its gap note instead of a beat when the record cannot carry it (spec 5.3).
  *
  * @param {Object} state
- * @returns {Array<{id: string, name: string, added: boolean}>}
+ * @returns {Array<{id: string, name: string, added: boolean, broughtIn: boolean}>}
  */
 function settledWeaveThreadsOf(state) {
   if (!isWeave(state.weave)) return [];
-  const added = new Set(meetingAddedThreads(state));
+  const directors = new Map(meetingDirectorsThreads(state).map((thread) => [thread.id, thread]));
   return state.weave.threads
     .filter((thread) => thread && typeof thread === 'object' && thread.role !== LEFT_OUT_ROLE && weaveIdOf(thread))
-    .map((thread) => ({ id: weaveIdOf(thread), name: typeof thread.name === 'string' ? thread.name.trim() : '', added: added.has(weaveIdOf(thread)) }));
+    .map((thread) => {
+      const id = weaveIdOf(thread);
+      const theirs = directors.get(id);
+      return { id, name: typeof thread.name === 'string' ? thread.name.trim() : '', added: Boolean(theirs && theirs.added), broughtIn: Boolean(theirs && theirs.broughtIn) };
+    });
 }
 
 /**

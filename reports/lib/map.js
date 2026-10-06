@@ -78,7 +78,7 @@ const {
   EVIDENCE_PIECE_SCHEMA, evidenceProblems, describeEvidenceProblems, evidenceProblemsSaid, storyTermsProblems,
   describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX
 } = require('./evidence');
-const { isVerbatimIn } = require('./grounding');
+const { normalizeForGrounding } = require('./grounding');
 const { wordCount, pageLengthOf } = require('./word-count');
 
 /** A beat's kind: what its move puts on the page, kept underneath as a hint to the article writer and never printed (R1). */
@@ -647,11 +647,56 @@ function editsRemovingThread(entries, thread) {
   }).map(({ edit }) => edit.id);
 }
 
-/** The settled weave's threads in the story as the checks read them: `{id, name, added}`, each with an id. */
+/**
+ * The settled weave's threads in the story as the checks read them: `{id, name, added,
+ * broughtIn}`, each with an id; `added` and `broughtIn` mark the director's (fix round 4).
+ */
 function storyThreadsOf(threads) {
   return objectsOf(threads)
-    .map((thread) => ({ id: textOf(thread.id), name: textOf(thread.name), added: thread.added === true }))
+    .map((thread) => ({ id: textOf(thread.id), name: textOf(thread.name), added: thread.added === true, broughtIn: thread.broughtIn === true }))
     .filter((thread) => thread.id);
+}
+
+/** The quotation marks a thread's name is matched without, straight and curly, single and double. */
+const NAME_QUOTE_MARKS = '["\'“”‘’‚‛„‟`´]';
+
+/**
+ * A thread's name as a pattern, matched loosely (fix round 4): in any case, any spacing and any
+ * dash, with every quotation mark in it or around it left out, and as whole words. The gap note
+ * names a thread the director put in the story by it (spec 5.3), and the story-terms scan leaves
+ * it out. Null for a name with no letter or digit.
+ *
+ * @param {string} name
+ * @param {string} flags - the RegExp's flags beside `iu`, such as `g`
+ * @returns {RegExp|null}
+ */
+function threadNamePattern(name, flags = '') {
+  const folded = normalizeForGrounding(name).replace(new RegExp(NAME_QUOTE_MARKS, 'g'), '').trim().toLowerCase();
+  if (!/[\p{L}\p{N}]/u.test(folded)) return null;
+  const Q = `${NAME_QUOTE_MARKS}*`;
+  const body = [...folded].map((char) => {
+    if (/\s/.test(char)) return `${Q}\\s+${Q}`;
+    if (char === '-') return `[\u2013\u2014-]${Q}`;
+    return `${char.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}${Q}`;
+  }).join('');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${Q}${body}(?![\\p{L}\\p{N}])`, `iu${flags}`);
+}
+
+/**
+ * A line of the writer's with the names of the director's threads (threadNamePattern) taken out,
+ * for the story-terms scan: a name the director wrote is their words (fix round 4), so a figure or
+ * a quotation mark in it, or around it, is never the writer's failure.
+ *
+ * @param {*} text
+ * @param {string[]} names - the director's threads' names
+ * @returns {*} the text with each name taken out, or the value given when it holds no text
+ */
+function withoutNames(text, names) {
+  if (typeof text !== 'string') return text;
+  return names.reduce((line, name) => {
+    const pattern = threadNamePattern(name, 'g');
+    return pattern ? line.replace(pattern, ' ') : line;
+  }, text);
 }
 
 /** The connections the story keeps as the checks read them: `{id, line}`, each given as one or by its id alone. */
@@ -733,7 +778,9 @@ function cardFault(beat, known) {
  *   storyTermsProblems: no document id the record holds, quotation, clock time or money
  *   figure): the gap note's line, each section's job, each beat's move in a section or in left
  *   out, and each change to the weave. The headline, the deck and the section headings are
- *   exempt (R2): the article prints them;
+ *   exempt (R2): the article prints them. The names of the director's threads in the gap note
+ *   and the weave changes are their words, and the scan leaves them out (withoutNames; fix
+ *   round 4);
  * - each of the writer's beats in a section carries a thread of the settled weave
  *   (`beat-without-threads`) and has evidence (`beat-without-evidence`), and every piece of every
  *   beat passes the evidence check (`evidence-not-in-record`; lib/evidence.js evidenceProblems:
@@ -749,8 +796,9 @@ function cardFault(beat, known) {
  *   number three to five (`card-count`; C9). A beat's card is its flagged piece, read through
  *   beatCardOf by every reader;
  * - every thread in the settled weave's story lands in a section's beat that names it among its
- *   threads (`thread-not-landed`; R3). A thread the director added at the meeting may instead be
- *   named in the gap note's line, when the record cannot carry it (spec 5.3);
+ *   threads (`thread-not-landed`; R3). A thread the director added at the meeting, or brought
+ *   into the story from left out, may instead be named in the gap note's line, when the record
+ *   cannot carry it (spec 5.3), by its name matched loosely (threadNamePattern; fix round 4);
  * - every connection the settled weave keeps lands in a section's beat
  *   (`connection-not-landed`);
  * - each change to the weave names a meeting change's id, in the meeting's own form (M3;
@@ -780,8 +828,9 @@ function cardFault(beat, known) {
  * @param {Array} inputs.roster - mapRosterOf's roster
  * @param {string[]} inputs.keptPhotos - the filenames of the photos kept for the article
  * @param {Iterable<string>} inputs.recordIds - the ids a document in the record answers to
- * @param {Array<{id: string, name: string, added: boolean}>} [inputs.threads] - the settled weave's
- *   threads in the story (every role but left out), `added` on one the director added at the meeting
+ * @param {Array<{id: string, name: string, added: boolean, broughtIn: boolean}>} [inputs.threads] - the
+ *   settled weave's threads in the story (every role but left out), `added` on one the director
+ *   added at the meeting and `broughtIn` on one they brought into the story from left out
  * @param {Array<{id: string, line: string}|string>} inputs.connections - the connections the settled
  *   weave keeps (lib/weave.js storyConnections: none struck, and none that joins a left-out
  *   thread), each `{id, line}` or its id alone
@@ -838,8 +887,11 @@ function mapFindings(map, inputs = {}) {
     fail('story-terms', `${opening(writersWords)} ${describeStoryTerms(problems)}. ${STORY_TERMS_FIX}`,
       `${opening(directorsWords)} ${storyTermsSaid(problems)}. ${MAP_STORY_TERMS_LINE}`, place);
   };
+  // Fix round 4: the gap note and the weave changes name the director's threads in the director's
+  // words, which the scan leaves out (withoutNames).
+  const directorsNames = storyThreadsOf(inputs.threads).filter((thread) => (thread.added || thread.broughtIn) && thread.name).map((thread) => thread.name);
   if (map.gapNote && typeof map.gapNote === 'object' && !has(share.fields, 'gapNote') && !has(share.fields, 'gapNote.line')) {
-    terms('the line in gapNote', 'the gap note', map.gapNote.line, 'gapNote');
+    terms('the line in gapNote', 'the gap note', withoutNames(map.gapNote.line, directorsNames), 'gapNote');
   }
   objectsOf(map.sections).forEach((section) => {
     const slot = textOf(section.slot);
@@ -854,7 +906,7 @@ function mapFindings(map, inputs = {}) {
   });
   if (!has(share.fields, 'weaveChanges')) {
     objectsOf(map.weaveChanges).forEach((change) => {
-      terms(`the change to the weave "${textOf(change.change)}"`, 'a change the map made to the weave', change.change, 'weaveChanges');
+      terms(`the change to the weave "${textOf(change.change)}"`, 'a change the map made to the weave', withoutNames(change.change, directorsNames), 'weaveChanges');
     });
   }
 
@@ -955,17 +1007,24 @@ function mapFindings(map, inputs = {}) {
   }
 
   // Every thread in the story lands in a section's beat that names it (R3). One the director
-  // added at the meeting may be named in the gap note instead, when the record cannot carry it.
+  // put in the story at the meeting, added or brought in from left out, may be named in the gap
+  // note instead, when the record cannot carry it, by its name matched loosely (threadNamePattern;
+  // fix round 4).
   const carried = new Set(sectionBeats(map).flatMap(({ beat }) => stringsOf(beat.threads)));
   const gapLine = map.gapNote && typeof map.gapNote === 'object' ? textOf(map.gapNote.line) : '';
   const threadName = (thread) => `"${thread.name || thread.id}"`;
-  const unlanded = { writers: [], added: [] };
+  const namedInGapNote = (thread) => {
+    const pattern = thread.name && gapLine ? threadNamePattern(thread.name) : null;
+    return Boolean(pattern) && pattern.test(gapLine);
+  };
+  const unlanded = { writers: [], directors: [] };
   storyThreadsOf(inputs.threads).forEach((thread) => {
     if (carried.has(thread.id)) return;
-    if (thread.added && thread.name && gapLine && isVerbatimIn(thread.name.toLowerCase(), gapLine.toLowerCase())) return;
+    const directors = thread.added || thread.broughtIn;
+    if (directors && namedInGapNote(thread)) return;
     const ids = editsRemovingThread(entries, thread.id);
     if (ids.length > 0) concern('thread-not-landed', ids, `The thread ${threadName(thread)} lands in no move.`);
-    else unlanded[thread.added ? 'added' : 'writers'].push(thread);
+    else unlanded[directors ? 'directors' : 'writers'].push(thread);
   });
   const threadsWords = (threads) => `${threads.length > 1 ? 'The threads' : 'The thread'} ${listOf(threads.map(threadName))}`;
   const lands = (threads) => (threads.length > 1 ? 'land' : 'lands');
@@ -974,10 +1033,12 @@ function mapFindings(map, inputs = {}) {
     fail('thread-not-landed', `Threads in the story that no beat carries: ${named}. Land each in the beat that carries it, by its id in that beat's threads.`,
       `${threadsWords(unlanded.writers)} ${lands(unlanded.writers)} in no move.`);
   }
-  if (unlanded.added.length > 0) {
-    const named = listOf(unlanded.added.map((thread) => `${threadName(thread)} (${thread.id})`));
-    fail('thread-not-landed', `Threads the director added at the meeting that no beat carries and gapNote's line does not name: ${named}. Give each a beat with the evidence that tells it, or, when the record cannot carry it, name it in gapNote's line, as C16 (\`<craft-story>\`) sets out.`,
-      `${threadsWords(unlanded.added)} you added at the meeting ${lands(unlanded.added)} in no move, and the gap note does not name ${unlanded.added.length > 1 ? 'them' : 'it'}.`);
+  if (unlanded.directors.length > 0) {
+    const named = listOf(unlanded.directors.map((thread) => `${threadName(thread)} (${thread.id})`));
+    const how = unlanded.directors.every((thread) => thread.added) ? 'you added'
+      : unlanded.directors.every((thread) => !thread.added) ? 'you brought into the story' : 'you put in the story';
+    fail('thread-not-landed', `Threads the director added or brought into the story at the meeting that no beat carries and gapNote's line does not name: ${named}. Give each a beat with the evidence that tells it, or, when the record cannot carry it, name it in gapNote's line by its name, without quotation marks, as C16 (\`<craft-story>\`) sets out.`,
+      `${threadsWords(unlanded.directors)} ${how} at the meeting ${lands(unlanded.directors)} in no move, and the gap note does not name ${unlanded.directors.length > 1 ? 'them' : 'it'}.`);
   }
 
   // Every connection the settled weave keeps lands in a beat.

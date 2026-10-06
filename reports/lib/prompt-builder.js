@@ -69,7 +69,9 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
  * story terms, as C2 and C16 set them out, with its people, the threads it carries and its
  * evidence from those threads' evidence and the record; the card's document is flagged on a
  * piece (C9); and what the record cannot carry, a change of the director's among it, goes in the
- * gap note. On 100226 the map ran to 1,193 words of beats that quoted their material.
+ * gap note. On 100226 the map ran to 1,193 words of beats that quoted their material. Fix round 4:
+ * a thread the director added or brought into the story is named there by its name, without
+ * quotation marks, the outlet lib/map.js mapFindings reads.
  *
  * @param {boolean} heroMarked - whether <available-photos> marks a photo [hero image]
  * @param {boolean} meetingNote - whether <DIRECTOR_GUIDANCE> holds the director's approval
@@ -82,7 +84,7 @@ function mapTask(heroMarked, meetingNote) {
 - Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out: each beat a move of the story in story terms, as C16 sets them out, with its people, the ids of the threads it carries, and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat. Drop each slot the story does not use, with its reason.
 - Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces, as C9 (\`<craft-cards>\`) sets out.
 ${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
-- What the record cannot carry goes in gapNote, the one line at the top, in story terms: a part of the story, or a change the director made at the meeting. A player you cannot place and a link you see that the weave lacks go there too, as C7 (\`<craft-material>\`) and C16 set out.
+- What the record cannot carry goes in gapNote, the one line at the top, in story terms: a part of the story, or a change the director made at the meeting, such as a thread they added or brought into the story, named by its name without quotation marks. A player you cannot place and a link you see that the weave lacks go there too, as C7 (\`<craft-material>\`) and C16 set out.
 - Set expectedLength from what the map holds, as C4 (\`<craft-telling>\`) sets out.
 Code builds Everyone from each beat's players and counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, the story terms and the page's length. A player named among gapNote's players counts as raised.`;
 }
