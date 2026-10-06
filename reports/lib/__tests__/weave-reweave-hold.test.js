@@ -253,6 +253,36 @@ describe('holdOutsideOpenAngle', () => {
     expect(weave.threads.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4', 't5']);
   });
 
+  // Fix round 1, finding 3: the hold pairs each element by its occurrence under its id, as the diff
+  // does, so an element under an id the writer repeated outside the open angle is never lost.
+  it("puts back the writer's second thread under a repeated id outside the open angle, which the rework gave an id of its own", () => {
+    const b = before();
+    b.threads.push({ id: 't2', name: 'A second sale', line: 'Someone else sold a memory that morning.', evidence: [] });
+    const rework = clone(b);
+    rework.threads[5].id = 't6';
+    const { weave, held } = holdOutsideOpenAngle(rework, b);
+    expect(weave.threads).toEqual(b.threads);
+    expect(held.map((h) => [h.scope, h.id, h.change])).toEqual([['threads', 't6', 'added'], ['threads', 't2', 'dropped']]);
+  });
+
+  it('reads the open angle as the first under its id, as the pick does: another angle under an id the writer repeated keeps its own words', () => {
+    const b = before();
+    b.angles[2].id = 'a2';
+    const rework = clone(b);
+    rework.angles[1].ends = A2_ENDS;
+    rework.angles[2].story = 'The reweave rewrote the other angle under a2.';
+    const { weave, held } = holdOutsideOpenAngle(rework, b);
+    expect(weave.angles[1].ends).toBe(A2_ENDS);
+    expect(weave.angles[2]).toEqual(b.angles[2]);
+    expect(held).toEqual([{ scope: 'angles', id: 'a2', change: 'rewritten', became: rework.angles[2] }]);
+    // Dropped by the rework, the second angle under the id comes back too.
+    const dropping = clone(b);
+    dropping.angles.splice(2, 1);
+    const dropped = holdOutsideOpenAngle(dropping, b);
+    expect(dropped.weave.angles).toEqual(b.angles);
+    expect(dropped.held).toEqual([{ scope: 'angles', id: 'a2', change: 'dropped', became: null }]);
+  });
+
   it('returns a rework that is no weave, or holds no threads, as it came, for the rework to fail on', () => {
     expect(holdOutsideOpenAngle({ threads: [] }, before())).toEqual({ weave: { threads: [] }, held: [] });
     expect(holdOutsideOpenAngle(null, before())).toEqual({ weave: null, held: [] });

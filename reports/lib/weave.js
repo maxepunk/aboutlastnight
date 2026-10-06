@@ -322,9 +322,13 @@ function withPickFrom(weave, previous) {
  * Reweave works on the angle the director has open, its threads and the connections between them,
  * and code keeps the rest of the weave as the director left it, so the director can still switch
  * to another angle. Given the rework's weave and the version it started from (the director's, with
- * their pick), code puts back by id, from that version:
- * - every angle but the open one, in the order the director saw them, and the open one too when the
- *   rework dropped it; an angle the rework pitched of its own goes;
+ * their pick), code puts back by id, from that version, each element paired with its own version by
+ * its occurrence under its id (occurrenceKeys, as the diff pairs elements), so an element under an id
+ * the writer repeated comes back as itself and none is skipped for an id an earlier one holds (fix
+ * round 1, finding 3):
+ * - every angle but the open one, the first under the pick's id as the pick opens it, in the order
+ *   the director saw them, and the open one too when the rework dropped it; an angle the rework
+ *   pitched of its own goes;
  * - every thread outside the open angle (one neither the open angle nor the rework's version of it
  *   names), and a thread another angle names that the rework dropped, where it sat among the
  *   threads; a thread of the rework's own outside the open angle goes. A thread the open angle
@@ -350,64 +354,76 @@ function withPickFrom(weave, previous) {
 function holdOutsideOpenAngle(rework, before) {
   const open = pickedAngleOf(before);
   if (!isWeave(rework) || rework.threads.length === 0 || !isWeave(before) || !open) return { weave: rework, held: [] };
-  const openId = weaveIdOf(open);
   const held = [];
   const same = (a, b) => canonicalJson(a) === canonicalJson(b);
-  const firstById = (elements) => {
-    const byId = new Map();
-    elements.forEach((element) => { const id = weaveIdOf(element); if (id && !byId.has(id)) byId.set(id, element); });
-    return byId;
+  // Each element by its occurrence under its id (occurrenceKeys, as the diff pairs elements), so
+  // the writer's second element under a repeated id pairs with its own version, never the first's.
+  const byKey = (elements, keys) => {
+    const map = new Map();
+    elements.forEach((element, index) => { if (keys[index]) map.set(keys[index], element); });
+    return map;
   };
 
-  // The angles: the director's order, the open angle as the rework wrote it.
-  const reworkAngles = firstById(objectsOf(rework.angles));
+  // The angles: the director's order, the open angle as the rework wrote it. The open angle is the
+  // first under its id, as the pick opens it (pickedAngleOf); another angle under that id is not open.
+  const reworkAngleList = objectsOf(rework.angles);
+  const reworkAngleKeys = occurrenceKeys(reworkAngleList);
+  const reworkAngles = byKey(reworkAngleList, reworkAngleKeys);
   const beforeAngles = objectsOf(before.angles);
-  const angles = beforeAngles.map((angle) => {
-    const id = weaveIdOf(angle);
-    const theirs = reworkAngles.get(id);
-    if (id === openId && theirs) return theirs;
-    if (!theirs) held.push({ scope: 'angles', id, change: 'dropped', became: null });
-    else if (!same(theirs, angle)) held.push({ scope: 'angles', id, change: 'rewritten', became: theirs });
+  const beforeAngleKeys = occurrenceKeys(beforeAngles);
+  const openAt = beforeAngles.indexOf(open);
+  const reworkOpen = beforeAngleKeys[openAt] ? reworkAngles.get(beforeAngleKeys[openAt]) : undefined;
+  const angles = beforeAngles.map((angle, index) => {
+    const key = beforeAngleKeys[index];
+    const theirs = key ? reworkAngles.get(key) : undefined;
+    if (index === openAt && theirs) return theirs;
+    if (!key) return angle;
+    if (!theirs) held.push({ scope: 'angles', id: weaveIdOf(angle), change: 'dropped', became: null });
+    else if (!same(theirs, angle)) held.push({ scope: 'angles', id: weaveIdOf(angle), change: 'rewritten', became: theirs });
     return angle;
   });
-  const beforeAngleIds = new Set(beforeAngles.map(weaveIdOf));
-  reworkAngles.forEach((angle, id) => {
-    if (!beforeAngleIds.has(id)) held.push({ scope: 'angles', id, change: 'added', became: angle });
+  const beforeAngleKeySet = new Set(beforeAngleKeys.filter(Boolean));
+  reworkAngleList.forEach((angle, index) => {
+    const key = reworkAngleKeys[index];
+    if (key && !beforeAngleKeySet.has(key)) held.push({ scope: 'angles', id: weaveIdOf(angle), change: 'added', became: angle });
   });
 
   // The open angle's threads, as the director left it and as the rework wrote it; and the threads
   // the other angles name, which the weave must hold.
-  const inOpen = new Set([...angleThreadIds(open), ...angleThreadIds(reworkAngles.get(openId))]);
-  const namedElsewhere = new Set(angles.filter((angle) => weaveIdOf(angle) !== openId).flatMap(angleThreadIds));
+  const inOpen = new Set([...angleThreadIds(open), ...angleThreadIds(reworkOpen)]);
+  const namedElsewhere = new Set(angles.filter((_angle, index) => index !== openAt).flatMap(angleThreadIds));
 
   // One collection held: each element inside the open angle as the rework wrote it, the director's
-  // version of every other, and back where it sat each element the hold keeps that the rework dropped.
+  // version of every other, and back where it sat each element the hold keeps that the rework dropped,
+  // each paired with its own version by its occurrence under its id.
   const holdList = (scope, reworkList, beforeList, inside, keep) => {
-    const beforeById = firstById(beforeList);
+    const beforeKeys = occurrenceKeys(beforeList);
+    const reworkKeys = occurrenceKeys(reworkList);
+    const beforeByKey = byKey(beforeList, beforeKeys);
     const out = [];
     const placed = new Set();
-    reworkList.forEach((element) => {
-      const id = weaveIdOf(element);
-      const was = beforeById.get(id);
-      if (!id || placed.has(id) || inside(was || element)) {
-        if (id) placed.add(id);
-        out.push(element);
+    reworkList.forEach((element, index) => {
+      const key = reworkKeys[index];
+      const was = key ? beforeByKey.get(key) : undefined;
+      if (!key || inside(was || element)) {
+        if (key) placed.add(key);
+        out.push({ element, key });
         return;
       }
-      placed.add(id);
-      if (!was) { held.push({ scope, id, change: 'added', became: element }); return; }
-      if (!same(element, was)) held.push({ scope, id, change: 'rewritten', became: element });
-      out.push(was);
+      placed.add(key);
+      if (!was) { held.push({ scope, id: weaveIdOf(element), change: 'added', became: element }); return; }
+      if (!same(element, was)) held.push({ scope, id: weaveIdOf(element), change: 'rewritten', became: element });
+      out.push({ element: was, key });
     });
     beforeList.forEach((element, index) => {
-      const id = weaveIdOf(element);
-      if (!id || placed.has(id) || !keep(element)) return;
-      placed.add(id);
-      held.push({ scope, id, change: 'dropped', became: null });
-      const prior = beforeList.slice(0, index).reverse().map(weaveIdOf).find((priorId) => out.some((e) => weaveIdOf(e) === priorId));
-      out.splice(prior ? out.findIndex((e) => weaveIdOf(e) === prior) + 1 : 0, 0, element);
+      const key = beforeKeys[index];
+      if (!key || placed.has(key) || !keep(element)) return;
+      placed.add(key);
+      held.push({ scope, id: weaveIdOf(element), change: 'dropped', became: null });
+      const prior = beforeKeys.slice(0, index).reverse().find((priorKey) => priorKey && out.some((entry) => entry.key === priorKey));
+      out.splice(prior ? out.findIndex((entry) => entry.key === prior) + 1 : 0, 0, { element, key });
     });
-    return out;
+    return out.map((entry) => entry.element);
   };
 
   const threadInside = (thread) => inOpen.has(weaveIdOf(thread));
