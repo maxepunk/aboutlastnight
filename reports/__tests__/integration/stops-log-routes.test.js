@@ -262,4 +262,33 @@ describe('4.12c: a fresh start\'s first pause is marked, and a stop a rollback r
     expect(linesOf()[1].words).toBe(wordsShown('article', await checkpointPayload()));
     expect(linesOf().every((line) => !Object.prototype.hasOwnProperty.call(line, 'fresh'))).toBe(true);
   });
+
+  // Fix round 3: the rollback's seed, not the point's list, says what it cleared. An old-shape
+  // thread paused at the meeting in round 1 is rolled back to the meeting, whose seed writes the
+  // weave fresh beyond the point's list (lib/old-thread.js oldThreadRollbackState). The fresh
+  // meeting, in round 1 too, is a new return with its words, and the SSE names the weave's
+  // channels among what the rollback cleared.
+  it("an old-shape thread at the meeting in round 1, rolled back to the meeting: the fresh meeting's pause is a new line, and fieldsCleared names the weave", async () => {
+    const { progressEmitter } = require('../../lib/observability');
+    const { ROLLBACK_CLEARS } = require('../../lib/workflow/state');
+    const { OLD_SHAPES_WEAVE_CHANNELS } = require('../../lib/old-thread');
+    const { oldShapeMeetingChannels } = require('../../lib/__tests__/fixtures/old-shapes');
+    const emitted = jest.spyOn(progressEmitter, 'emitComplete');
+    // The log's last line: the meeting in round 1, paused there before the story level landed.
+    fs.mkdirSync(path.join(dir, SESSION), { recursive: true });
+    fs.writeFileSync(path.join(dir, SESSION, 'stops.jsonl'), `${JSON.stringify({ at: 'then', kind: 'pause', stop: 'arc-selection', round: 1, words: 280 })}\n`);
+    const old = pausedAt('arc-selection', { sessionId: SESSION, theme: 'journalist', ...oldShapeMeetingChannels(), humanArcRevisionCount: 0 }, { weave: oldShapeMeetingChannels().weave });
+    mockGraph = graphOf([old, atMeeting()]);
+    const res = await send('POST', `/api/session/${SESSION}/rollback`, { rollbackTo: 'arc-selection' });
+    expect(res.status).toBe(200);
+    await settle();
+    // The seed cleared the weave, so the meeting the run reached is new.
+    expect(mockGraph.invoke.mock.calls[0][0]).toMatchObject({ weave: null });
+    expect(summary()).toEqual([['pause', 'arc-selection', 1], ['pause', 'arc-selection', 1]]);
+    expect(linesOf()[1].words).toBe(wordsShown('arc-selection', await checkpointPayload()));
+    const [, payload] = emitted.mock.calls.find(([id]) => id === SESSION);
+    expect(payload.rolledBackTo).toBe('arc-selection');
+    expect([...payload.fieldsCleared].sort()).toEqual([...ROLLBACK_CLEARS['arc-selection'], ...OLD_SHAPES_WEAVE_CHANNELS].sort());
+    emitted.mockRestore();
+  });
 });

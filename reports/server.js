@@ -33,7 +33,7 @@ const {
 const { sanitizePath } = require('./lib/workflow/nodes/input-nodes');
 const { progressEmitter } = require('./lib/observability');
 const { createPromptBuilder } = require('./lib/prompt-builder');
-const { buildRollbackState, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, rollbackNotesUpdate } = require('./lib/api-helpers');
+const { buildRollbackState, rollbackSeedClears, buildFreshStartState, createGraphAndConfig, sendErrorResponse, confineToBase, rollbackNotesUpdate } = require('./lib/api-helpers');
 const { diffOutline, diffBundle, scopeKeys, standingAfterSendBack, handEditReportOf } = require('./lib/hand-edit-diff');
 // FA (requirement 9): the roster's names as the coverage check reads them, which each
 // send-back records a cut's or a rewrite's names against.
@@ -1931,6 +1931,11 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
             Object.assign(initialState, stateOverrides);
         }
 
+        // Fix round 3: what this seed clears, read once, for the SSE's fieldsCleared and the
+        // stops log (lib/api-helpers.js rollbackSeedClears): an old-shape thread's rollback to the
+        // meeting clears its weave beyond the point's list, so the fresh meeting is a new pause.
+        const fieldsCleared = rollbackSeedClears(initialState);
+
         // DEL-1: a rolled-back session's prior TERMINAL outcome is stale the moment we
         // commit the rollback — clear it synchronously so a dropped SSE mid-rollback can't
         // surface the pre-rollback outcome via GET /state. The rollback's own completion
@@ -1939,11 +1944,12 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
 
         // Non-blocking: rollback re-invokes from the rollback point. Usually re-pauses fast,
         // but a rollback upstream of a long node can exceed the proxy timeouts on a held POST.
-        // Task 4.12c: the stops log gets the point, so a stop the rollback wrote again (the
-        // article, written from the map in round 1 again) is a new return there.
+        // Task 4.12c: the stops log gets what the seed cleared, so a stop the rollback wrote
+        // again (the article, written from the map in round 1 again; an old-shape thread's
+        // meeting, its weave written fresh) is a new return there.
         runGraphInBackground({
             sessionId,
-            rolledBackTo: rollbackTo,
+            rollbackClears: fieldsCleared,
             invoke: () => graph.invoke(initialState, { ...config, durability: 'sync', recursionLimit: RECURSION_LIMIT }),
             getState: () => graph.getState(config),
             buildResponse: async (result, graphState) => {
@@ -1955,7 +1961,7 @@ app.post('/api/session/:id/rollback', requireAuth, async (req, res) => {
                         result.currentPhase
                       )
                     : buildCompletionResponse(result, sessionId);
-                return { ...base, rolledBackTo: rollbackTo, fieldsCleared: ROLLBACK_CLEARS[rollbackTo] };
+                return { ...base, rolledBackTo: rollbackTo, fieldsCleared };
             },
             res,
             inFlightTasks

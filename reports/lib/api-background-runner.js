@@ -39,14 +39,15 @@ const stopsLog = require('./stops-log');
  * @param {object}   [a.processingExtra]        - extra fields merged into the {status:'processing'} body
  * @param {{stop: string, state: object, resume: object}} [a.action] - the director's action at a
  *   stop (/approve), for the stops log
- * @param {string|null} [a.rolledBackTo]        - the point a /rollback rolled back to, for the
- *   stops log's pause (lib/stops-log.js rewritesStop)
+ * @param {string[]|null} [a.rollbackClears]    - the channels a /rollback's seed cleared
+ *   (lib/api-helpers.js rollbackSeedClears), for the stops log's pause (lib/stops-log.js
+ *   rewritesStop)
  * @param {object}   [a.deps]                   - injectable singletons for tests
  * @returns {{scheduled: boolean, task: Promise|null}}
  */
 function runGraphInBackground({
   sessionId, invoke, getState, buildResponse, res,
-  inFlightTasks, processingExtra = {}, action = null, rolledBackTo = null, deps = {}
+  inFlightTasks, processingExtra = {}, action = null, rollbackClears = null, deps = {}
 }) {
   const _acquire = deps.acquireSessionLock || acquireSessionLock;
   const _release = deps.releaseSessionLock || releaseSessionLock;
@@ -87,7 +88,7 @@ function runGraphInBackground({
           _record(sessionId, _buildOutcome(response));
           if (response && response.interrupted === true && response.checkpoint) {
             _stopsLog.recordPause(sessionId, {
-              stop: response.checkpoint.type, state: graphState && graphState.values, data: response.checkpoint, rolledBackTo
+              stop: response.checkpoint.type, state: graphState && graphState.values, data: response.checkpoint, rollbackClears
             });
           }
           _emitComplete(sessionId, response);

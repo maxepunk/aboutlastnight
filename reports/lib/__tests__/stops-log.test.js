@@ -313,12 +313,15 @@ describe('4.12c: a fresh start\'s first pause is marked', () => {
 // and starts its rounds over (R9), so the director's new article in round 1 got no line.
 describe('4.12c: a pause after a rollback that rewrote its stop is a new return', () => {
   const { ROLLBACK_CLEARS, VALID_ROLLBACK_POINTS } = require('../workflow/state');
+  const { buildRollbackState, rollbackSeedClears } = require('../api-helpers');
+  /** What a point's seed clears, for a thread on the new shapes: its list in the rollback table. */
+  const clearsOf = (point) => rollbackSeedClears(buildRollbackState(point));
   const deskState = (extra = {}) => ({ ...reworkFixtureState('journalist'), humanArticleRevisionCount: 0, ...extra });
   const deskData = () => ({ type: 'article', contentBundle: require('./fixtures/rework-state').PREVIOUS_BUNDLE, directorGateNotes: [], trace: [] });
 
   it('a rollback to the article writes the article again in round 1: its pause is a new line, though the last line is the article in round 1', () => {
     stopsLog.recordPause(SESSION, { stop: 'article', state: deskState(), data: deskData() });
-    stopsLog.recordPause(SESSION, { stop: 'article', state: deskState(), data: deskData(), rolledBackTo: 'article' });
+    stopsLog.recordPause(SESSION, { stop: 'article', state: deskState(), data: deskData(), rollbackClears: clearsOf('article') });
     expect(linesOf().map((line) => [line.kind, line.stop, line.round])).toEqual([['pause', 'article', 1], ['pause', 'article', 1]]);
     // Its line is a pause like any other: the words the new article shows.
     expect(linesOf()[1]).toEqual({ at: linesOf()[1].at, kind: 'pause', stop: 'article', round: 1, words: wordsShown('article', deskData()) });
@@ -327,25 +330,58 @@ describe('4.12c: a pause after a rollback that rewrote its stop is a new return'
   it('a rollback that reopens a stop as the director left it is no new line: the map, the story meeting (R9)', () => {
     const map = reworkFixtureState('journalist');
     stopsLog.recordPause(SESSION, { stop: 'outline', state: map, data: mapData(map) });
-    stopsLog.recordPause(SESSION, { stop: 'outline', state: map, data: mapData(map), rolledBackTo: 'outline' });
+    stopsLog.recordPause(SESSION, { stop: 'outline', state: map, data: mapData(map), rollbackClears: clearsOf('outline') });
     const meeting = meetingState();
     stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: meeting, data: meetingData(meeting) });
-    stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: meeting, data: meetingData(meeting), rolledBackTo: 'arc-selection' });
+    stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: meeting, data: meetingData(meeting), rollbackClears: clearsOf('arc-selection') });
     expect(linesOf().map((line) => [line.stop, line.round])).toEqual([['outline', 1], ['arc-selection', 1]]);
   });
 
-  it('a stop is rewritten when the rollback point clears the output it shows (rewritesStop, read from ROLLBACK_CLEARS)', () => {
+  it('a stop is rewritten when the rollback\'s seed clears the output it shows (rewritesStop, read from rollbackSeedClears)', () => {
     const { rewritesStop, STOP_OUTPUTS } = stopsLog;
-    expect(rewritesStop('article', 'article')).toBe(true);
-    expect(rewritesStop('evidence-and-photos', 'evidence-and-photos')).toBe(true);
+    expect(rewritesStop(clearsOf('article'), 'article')).toBe(true);
+    expect(rewritesStop(clearsOf('evidence-and-photos'), 'evidence-and-photos')).toBe(true);
     ['outline', 'arc-selection', 'input-review', 'character-ids', 'paper-evidence-selection', 'pre-curation'].forEach((point) => {
-      expect([point, rewritesStop(point, point)]).toEqual([point, false]);
+      expect([point, rewritesStop(clearsOf(point), point)]).toEqual([point, false]);
     });
     expect(rewritesStop(null, 'article')).toBe(false);
-    expect(rewritesStop('article', 'photos')).toBe(false);
-    VALID_ROLLBACK_POINTS.forEach((point) => Object.keys(STOP_OUTPUTS).forEach((stop) => {
-      expect([point, stop, rewritesStop(point, stop)]).toEqual([point, stop, ROLLBACK_CLEARS[point].includes(STOP_OUTPUTS[stop])]);
-    }));
+    expect(rewritesStop(clearsOf('article'), 'photos')).toBe(false);
+    // On a thread of the new shapes the seed clears its point's list, no more and no less.
+    VALID_ROLLBACK_POINTS.forEach((point) => {
+      expect([point, clearsOf(point)]).toEqual([point, ROLLBACK_CLEARS[point]]);
+      Object.keys(STOP_OUTPUTS).forEach((stop) => {
+        expect([point, stop, rewritesStop(clearsOf(point), stop)]).toEqual([point, stop, ROLLBACK_CLEARS[point].includes(STOP_OUTPUTS[stop])]);
+      });
+    });
+  });
+
+  // Fix round 3: an old-shape thread at the meeting in round 1, rolled back to the meeting,
+  // has its weave written fresh (lib/old-thread.js oldThreadRollbackState), beyond the
+  // meeting point's list. The fresh meeting is in round 1 too, so read from the list alone it
+  // matched the log's last line and was never written, and its words never recorded.
+  it("an old-shape thread's rollback to the meeting clears its weave, so the fresh meeting's pause is a new line", () => {
+    const { oldThreadRollbackState } = require('../old-thread');
+    const { oldShapeMeetingChannels } = require('./fixtures/old-shapes');
+    const old = { currentPhase: '2.35', theme: 'journalist', ...oldShapeMeetingChannels() };
+    const seed = { ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection', old) };
+    const cleared = rollbackSeedClears(seed);
+    expect(cleared).toEqual(expect.arrayContaining(['weave', '_weaveBaseline', '_weaveHandEdits', '_arcValidation', ...ROLLBACK_CLEARS['arc-selection']]));
+    expect(cleared).toHaveLength(ROLLBACK_CLEARS['arc-selection'].length + 4);
+    expect(stopsLog.rewritesStop(cleared, 'arc-selection')).toBe(true);
+
+    stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: { ...old, humanArcRevisionCount: 0 }, data: { type: 'arc-selection' } });
+    const meeting = meetingState();
+    stopsLog.recordPause(SESSION, { stop: 'arc-selection', state: meeting, data: meetingData(meeting), rollbackClears: cleared });
+    expect(linesOf().map((line) => [line.kind, line.stop, line.round])).toEqual([['pause', 'arc-selection', 1], ['pause', 'arc-selection', 1]]);
+    expect(linesOf()[1].words).toBe(wordsShown('arc-selection', meetingData(meeting)));
+  });
+
+  it("reads what a seed writes for the run as no clear: the phase it routes from, the stashes that pre-fill a stop", () => {
+    const seed = { ...buildRollbackState('photos'), _previousPhotosPath: null, _previousFullContext: null };
+    expect(seed.currentPhase).toBeNull();
+    expect(rollbackSeedClears(seed)).toEqual(ROLLBACK_CLEARS.photos);
+    // A channel the request's overrides set again is no longer cleared.
+    expect(rollbackSeedClears({ ...seed, photosPath: 'D:/shoots/1004' })).toEqual(ROLLBACK_CLEARS.photos.filter((channel) => channel !== 'photosPath'));
   });
 });
 

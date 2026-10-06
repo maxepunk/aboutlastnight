@@ -14,7 +14,8 @@
  *     `force` appends to the run it replaced and the readout measures the run from that line;
  *   - a pause after a rollback that wrote the stop's output again (rewritesStop): a rollback to
  *     the article writes a new article from the map and starts its rounds over (R9), so the
- *     director returns to a new article in round 1 again.
+ *     director returns to a new article in round 1 again, and an old-shape thread's rollback to
+ *     the meeting writes the weave fresh (brief 1G), so the director returns to a new meeting.
  * - an action, `{at, kind: 'action', stop, round, action}`, for each action the director takes:
  *   approve, reweave or send back, read from the resume the server builds (actionOf), in the
  *   round the stop was in when they took it.
@@ -24,7 +25,8 @@
  * time the director: the readout reports no time at a stop (spec, Decisions).
  *
  * The server writes it (server.js /start, and lib/api-background-runner.js for /approve, /resume
- * and /rollback, which hands the runner the point it rolled back to). As the call log does, it
+ * and /rollback, which hands the runner what its seed cleared, lib/api-helpers.js
+ * rollbackSeedClears). As the call log does, it
  * writes nothing under Jest until a test sets its root, and it never throws into a run: a line
  * it cannot write is warned once, and a page it cannot count is recorded with no words and
  * warned, since a missing line must never cost the director a stop.
@@ -33,7 +35,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { stopRoundOf, ROLLBACK_CLEARS } = require('./workflow/state');
+const { stopRoundOf } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const { MEETING_ROUNDS } = require('./weave');
 const { wordsShown } = require('./stop-pages');
@@ -56,19 +58,22 @@ const STOP_OUTPUTS = Object.freeze({
 });
 
 /**
- * Whether a rollback wrote a stop's output again: the rollback point clears the channel that
- * holds what the stop shows (ROLLBACK_CLEARS), so the run writes it anew. A rollback to the
- * article does; a rollback to the map or the story meeting reopens its stop as the director left
- * it (R9), and does not.
+ * Whether a rollback wrote a stop's output again: the rollback's seed cleared the channel that
+ * holds what the stop shows, so the run writes it anew. It reads what the seed actually cleared
+ * (lib/api-helpers.js rollbackSeedClears; fix round 3), never the point's list alone: a rollback
+ * to the article clears the article; a rollback to the map or the story meeting reopens its stop
+ * as the director left it (R9) and clears neither, but an old-shape thread's rollback to the
+ * meeting clears its weave beyond the point's list (lib/old-thread.js oldThreadRollbackState), and
+ * the meeting it reaches is new.
  *
- * @param {string|null} rollbackTo - the point the run rolled back to, or null for no rollback
+ * @param {string[]|null} cleared - the channels the rollback's seed cleared, or null for no rollback
  * @param {string} stop - the stop the run paused at
  * @returns {boolean}
  */
-function rewritesStop(rollbackTo, stop) {
-  if (!rollbackTo || !Object.prototype.hasOwnProperty.call(ROLLBACK_CLEARS, rollbackTo)) return false;
+function rewritesStop(cleared, stop) {
+  if (!Array.isArray(cleared)) return false;
   if (!Object.prototype.hasOwnProperty.call(STOP_OUTPUTS, stop)) return false;
-  return ROLLBACK_CLEARS[rollbackTo].includes(STOP_OUTPUTS[stop]);
+  return cleared.includes(STOP_OUTPUTS[stop]);
 }
 
 const DEFAULT_ROOT = path.resolve(__dirname, '..', 'data');
@@ -157,15 +162,15 @@ function wordsAt(stop, data, theme) {
  * @param {Object} pause.data - the stop's payload, as the server sends it
  * @param {boolean} [pause.fresh] - true for the first pause of a fresh start, which is always new
  *   and is marked `fresh: true` on its line
- * @param {string|null} [pause.rolledBackTo] - the point the run rolled back to, when it was a
- *   rollback's (rewritesStop decides whether it wrote the stop's output again)
+ * @param {string[]|null} [pause.rollbackClears] - the channels the rollback's seed cleared, when the
+ *   run was a rollback's (rewritesStop decides from them whether it wrote the stop's output again)
  */
-function recordPause(sessionId, { stop, state, data, fresh = false, rolledBackTo = null }) {
+function recordPause(sessionId, { stop, state, data, fresh = false, rollbackClears = null }) {
   if (!sessionId || !stop || !isEnabled()) return;
   const file = stopsLogPath(sessionId);
   try {
     const round = stopRoundOf(stop, state);
-    const last = fresh || rewritesStop(rolledBackTo, stop) ? null : lastLine(file);
+    const last = fresh || rewritesStop(rollbackClears, stop) ? null : lastLine(file);
     if (last && last.kind === 'pause' && last.stop === stop && last.round === round) return;
     const theme = (state && state.theme) || 'journalist';
     append(file, {

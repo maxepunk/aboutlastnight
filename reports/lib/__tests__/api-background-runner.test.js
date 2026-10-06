@@ -190,7 +190,7 @@ describe('4.12c: the stops log\'s lines the runner writes (deps.stopsLog)', () =
     });
     await out.task;
     expect(actions).toHaveLength(1);
-    expect(pauses).toEqual([{ id: 's8', stop: 'article', state: PAUSED.values, data: { type: 'article', map: {} }, rolledBackTo: null }]);
+    expect(pauses).toEqual([{ id: 's8', stop: 'article', state: PAUSED.values, data: { type: 'article', map: {} }, rollbackClears: null }]);
   });
 
   it('a run that ends complete writes no pause line', async () => {
@@ -205,16 +205,18 @@ describe('4.12c: the stops log\'s lines the runner writes (deps.stopsLog)', () =
     expect(pauses).toEqual([]);
   });
 
-  it('a rollback\'s run hands its pause the point it rolled back to, and writes no action', async () => {
+  // Fix round 3: the runner hands the stops log what the rollback's seed cleared
+  // (lib/api-helpers.js rollbackSeedClears), not the point's list.
+  it('a rollback\'s run hands its pause the channels its seed cleared, and writes no action', async () => {
     const { log, actions, pauses } = stubLog();
     const { deps } = makeDeps({ stopsLog: log });
     const out = runGraphInBackground({
-      sessionId: 's10', rolledBackTo: 'article',
+      sessionId: 's10', rollbackClears: ['contentBundle', 'articleApproved'],
       invoke: async () => ({}), getState: async () => PAUSED, buildResponse: pausedAt('article'),
       res: makeRes(), inFlightTasks: new Set(), deps
     });
     await out.task;
     expect(actions).toEqual([]);
-    expect(pauses.map((pause) => [pause.stop, pause.rolledBackTo])).toEqual([['article', 'article']]);
+    expect(pauses.map((pause) => [pause.stop, pause.rollbackClears])).toEqual([['article', ['contentBundle', 'articleApproved']]]);
   });
 });

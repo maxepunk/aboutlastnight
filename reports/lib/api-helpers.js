@@ -18,6 +18,7 @@ const {
   PHASES,
   STALE_VERDICT_REASONS
 } = require('./workflow/state');
+const { OLD_SHAPES_WEAVE_CHANNELS } = require('./old-thread');
 
 /**
  * Channels whose reducer needs `[]` (not null) to clear.
@@ -64,6 +65,37 @@ function buildRollbackState(rollbackPoint = 'input-review') {
     state.evaluationHistory = stubs;
   }
   return state;
+}
+
+/**
+ * The channels a rollback can clear: each point's own list (ROLLBACK_CLEARS), and the weave's
+ * channels an old-shape thread's rollback to the meeting clears beyond its point's list
+ * (lib/old-thread.js OLD_SHAPES_WEAVE_CHANNELS; brief 1G). A seed's other keys are what the
+ * rollback writes for the run, never a clear: `currentPhase`, which every seed nulls so the graph
+ * routes from the point, and the stashes that pre-fill a stop (`_previousFullContext`,
+ * `_previousPhotosPath`).
+ */
+const ROLLBACK_CLEARABLE = new Set([...Object.values(ROLLBACK_CLEARS).flat(), ...OLD_SHAPES_WEAVE_CHANNELS]);
+
+/**
+ * What a rollback's seed actually clears (fix round 3): each channel a rollback can clear that the
+ * seed sets to its cleared value (clearedValueFor), in the seed's order. The seed is all the
+ * rollback writes into the thread: buildRollbackState's, an old thread's own
+ * (oldThreadRollbackState) and the request's overrides. The SSE's `fieldsCleared` lists it, and the
+ * stops log reads from it whether the rollback wrote a stop's output again (lib/stops-log.js
+ * rewritesStop): an old-shape thread rolled back to the meeting has its weave cleared beyond the
+ * point's list, so the fresh meeting it reaches is a new pause, in round 1 again.
+ *
+ * @param {Object} seed - the rollback's initial state, as server.js invokes the graph with it
+ * @returns {string[]}
+ */
+function rollbackSeedClears(seed) {
+  const s = seed && typeof seed === 'object' ? seed : {};
+  return Object.keys(s).filter((field) => {
+    if (!ROLLBACK_CLEARABLE.has(field)) return false;
+    const cleared = clearedValueFor(field);
+    return Array.isArray(cleared) ? Array.isArray(s[field]) && s[field].length === 0 : s[field] === null;
+  });
 }
 
 /**
@@ -277,6 +309,7 @@ function rollbackNotesUpdate(rollbackTo, notes) {
 
 module.exports = {
   buildRollbackState,
+  rollbackSeedClears,
   buildFreshStartState,
   createGraphAndConfig,
   sendErrorResponse,
