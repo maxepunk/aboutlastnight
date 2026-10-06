@@ -399,11 +399,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   it sits beside. The fixture's weave (fixtures/rework-state.js WEAVE) holds three angles and a
  *   second question, beside a thread (its settled weave 2161 -> 2405): outline-journalist
  *   23572 -> 23816 and article-journalist 34778 -> 35022, each by the settled weave alone.
+ * - Phase 4b, piece 3 (brief 3B, fix round 1, finding 1), the page the task describes is the page
+ *   code builds: the open angle's card says only that it is open below, so only the other
+ *   angles' headlines and card lines print beside it; a connection prints its line alone, with no
+ *   names of the threads it joins; and code prints the verdict, the line marking the open angle,
+ *   the verdict thread's lock line, the labels and the thin-notes line (+156): arcs-journalist
+ *   11923 -> 12079. The outline and article pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['dccce5b2cff1893409f64f7aa7cbf33f8e510df96acb10150c2e20f871e9ea12', 23816],
   'article-journalist': ['d9052b4f293f038ca49d5aa63380b1c3a1de65aac9ff05ce7d2aa52fa9f9477f', 35022],
-  'arcs-journalist': ['f4bd61c1065b41fcd9dde4361d74d201553aedff08022f705856543784ae0b9c', 11923]
+  'arcs-journalist': ['d45be33a2d854c23404b412793a6a162f34797d48b91375f09cb0e838f58c8fa', 12079]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

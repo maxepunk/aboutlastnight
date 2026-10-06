@@ -254,11 +254,15 @@ ${weaveQuestionsFormatLine()}`;
  * what no rule says: what the director reads, the page with the labels code prints beside the
  * writer's lines, at most MEETING_WORD_BOUND words with any angle open, and so about 325 words of
  * the writer's own (R5: the checks hold the writer's own words to the allowance lib/word-count.js
- * pageLengthOf's rule gives, so 325 leaves room for the thread names each connection prints
- * again); where each lands in the weave's fields, the words "from your notes" holds, the verdict
- * flag, where a piece names its sources, and the bound on a question (R4: QUESTION_WORD_BOUND).
+ * pageLengthOf's rule gives, never less than MEETING_WORD_FLOOR, 350, so 325 holds with the angle
+ * whose page runs longest open, however many words the verdict and the labels code prints take);
+ * the page it describes is the one lib/stop-pages.js meetingPage prints (fix round 1, finding 1):
+ * the open angle's card says only that it is open below, every other angle its headline and card
+ * line, and each connection its line alone; where each lands in the weave's fields, the words
+ * "from your notes" holds, the verdict flag, where a piece names its sources, and the bound on a
+ * question (R4: QUESTION_WORD_BOUND).
  */
-const WEAVE_TASK = `Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The page they read comes to at most ${MEETING_WORD_BOUND} words with any one angle open: your lines, without the evidence under them (every angle's headline and card line; the open angle's pitch, its threads and the names of the threads it leaves out; the connections between its threads; the questions), and the labels code prints beside them (the verdict, and the names of the threads each connection joins). So your own lines come to about 325 words. C1 (<craft-story>) sets out the angles; C16 (<craft-story>) sets out the threads, the connections, where each angle ends up, the level of the story every line keeps and the evidence under each line. The fields hold them:
+const WEAVE_TASK = `Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The page they read comes to at most ${MEETING_WORD_BOUND} words with any one angle open: your lines, without the evidence under them (the headline and card line of each angle that is not open; the open angle's pitch, its threads and the names of the threads it leaves out; the line of each connection between its threads; the questions), and what code prints around them (the verdict, the line that says the open angle is open below, the line that keeps the verdict's thread in, the labels over your lines, and a line when the notes end without the director's read). So your own lines come to about 325 words. C1 (<craft-story>) sets out the angles; C16 (<craft-story>) sets out the threads, the connections, where each angle ends up, the level of the story every line keeps and the evidence under each line. The fields hold them:
 
 - **angles**: each angle's **headline**, the article's own printed line; its **gist**, one sentence that sums it up for its card; its **story**, its **question**, why it **lands** with the players and where it **ends** up; and its **threads**, the ids of the threads it tells, in the order it tells them.
 - **fromYourNotes**: when angle 1 is the director's read (C1), the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. When every angle is your own, the field stays out.
