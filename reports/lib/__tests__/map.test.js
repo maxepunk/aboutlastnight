@@ -4,6 +4,11 @@
  * record, every connection of the settled weave landed in a beat, and each change to the
  * weave named by its source. Each failure is one line with its own list; a failure the
  * director caused is a concern on their edit, never a rework. Invented text throughout.
+ *
+ * Phase 4b (brief 1D; R1, R4): each beat is a move with its people, the threads it carries and
+ * its evidence; a card is a marker on the beat and a flag on the piece whose document it prints
+ * (markCard), read through beatCardOf. The story-level checks (threads, evidence, story terms,
+ * the page's length) are lib/__tests__/map-story-level.test.js's.
  */
 const { mapFindings, mapKey, mapRosterOf, MAP_CHECKS_SOURCE, MAP_BEAT_KINDS } = require('../map');
 const { standingOnMap, carriedEdits } = require('../hand-edit-diff');
@@ -17,6 +22,21 @@ const ROSTER = [
 ];
 
 /** A map that passes every check: Kai is raised in the gap note, three cards, three photos. */
+/** A piece of evidence. */
+const piece = (sources, shows) => ({ sources, shows, stance: 'supports' });
+/** A beat's card fields: its marker, and the piece flagged as the card's document (R4). */
+const cardOf = (source) => ({ card: true, evidence: [{ ...piece([source], `The document ${source}.`), card: true }] });
+/** A beat given a card, as a writer marks one: the marker and the flagged piece. */
+const markCard = (beat, source) => Object.assign(beat, cardOf(source));
+/** A beat's card taken off, as a writer takes it off: the marker and the flag. */
+const clearCard = (beat) => {
+  delete beat.card;
+  beat.evidence = (beat.evidence || []).map(({ card: _flag, ...rest }) => rest);
+  return beat;
+};
+/** A move the writer gives its threads and evidence: the fields every check reads. */
+const move = (id, kind, text, players, extra = {}) => ({ id, kind, move: text, players, threads: ['t1'], evidence: [piece(['notes'], `${text}.`)], ...extra });
+
 const writers = () => ({
   headline: 'Ellis Reeve Pointed the Room at Rowan',
   deck: 'Money moved into an account named for a player in the last two minutes of selling.',
@@ -26,24 +46,24 @@ const writers = () => ({
     {
       slot: 'lede', heading: '', job: 'Open on the vote and ask what it will cost.',
       beats: [
-        { id: 'b1', kind: 'scene', material: 'The scoreboard goes up on the screen', players: ['Ellis', 'Rowan'] },
-        { id: 'b2', kind: 'line', material: 'Rowan: "Someone is framing me"', players: ['Rowan'], connection: 'c1' }
+        move('b1', 'scene', 'The scoreboard goes up on the screen', ['Ellis', 'Rowan']),
+        move('b2', 'line', 'Rowan says someone is framing him', ['Rowan'], { connection: 'c1' })
       ],
       photos: []
     },
     {
       slot: 'theStory', heading: 'The Story', job: 'How the room built its case.',
       beats: [
-        { id: 'b3', kind: 'receipt', material: 'row001, the fight in the hall', players: ['Sloane'], card: 'row001' },
-        { id: 'b4', kind: 'scene', material: 'The first vote, six to four', players: ['Mira', 'Vale'] },
-        { id: 'b5', kind: 'receipt', material: 'row002, the ledger page', players: ['Mira'], card: 'row002' },
-        { id: 'b6', kind: 'receipt', material: 'row003, the letter', players: ['Vale'], card: 'row003' }
+        move('b3', 'receipt', 'The fight in the hall', ['Sloane'], cardOf('row001')),
+        move('b4', 'scene', 'The first vote, six to four', ['Mira', 'Vale']),
+        move('b5', 'receipt', 'The ledger page', ['Mira'], cardOf('row002')),
+        move('b6', 'receipt', 'The letter', ['Vale'], cardOf('row003'))
       ],
       photos: [{ filename: 'theory.jpg', beat: 'b4' }, { filename: 'cards.jpg' }]
     }
   ],
   dropped: [{ slot: 'thePlayers', reason: 'Everyone appears above.' }],
-  leftOut: [{ id: 'b9', kind: 'scene', material: 'Kai at the coat check', players: ['Kai'] }],
+  leftOut: [move('b9', 'scene', 'Kai at the coat check', ['Kai'])],
   expectedLength: 1200,
   weaveChanges: []
 });
@@ -119,7 +139,7 @@ describe('the map checks (spec 5.4)', () => {
       map.leftOut.push(map.sections[0].beats.splice(0, 1)[0]);
       const { failures, concerns } = mapFindings(map, inputs({ edits: directorsEdits(map) }));
       expect(failures).toEqual([]);
-      expect(concerns).toEqual([{ type: 'player-not-placed', editIds: ['E1'], finding: expect.stringMatching(/Ellis is in no beat/) }]);
+      expect(concerns).toEqual([{ type: 'player-not-placed', editIds: ['E1'], finding: expect.stringMatching(/Ellis is in no move/) }]);
     });
   });
 
@@ -137,8 +157,10 @@ describe('the map checks (spec 5.4)', () => {
       map.sections[0].photos.push({ filename: 'theory.jpg' }, { filename: 'whiteboard.jpg' });
       const { failures } = mapFindings(map, inputs());
       expect(typesOf(failures)).toEqual(['photo-placed-twice', 'photo-not-offered']);
-      expect(failures[0].message).toMatch(/^Photos placed more than once: theory\.jpg\. /);
-      expect(failures[1].message).toMatch(/^Photos placed that are not among the photos offered: whiteboard\.jpg\. .*huddle\.jpg, theory\.jpg, cards\.jpg/);
+      expect(failures[0].message).toMatch(/^The photo theory\.jpg is placed more than once\. /);
+      expect(failures[1].message).toMatch(/^The photo whiteboard\.jpg is placed, and it is not among the photos offered\. .*huddle\.jpg, theory\.jpg, cards\.jpg/);
+      // Phase 4b (brief 1D): each sits beside the photo's line.
+      expect(failures.map((f) => f.place)).toEqual(['sections[#lede].photos[#theory.jpg]', 'sections[#lede].photos[#whiteboard.jpg]']);
     });
 
     it('a photo whose moment is outside the story, placed by itself with its people, is silent; the top photo counts as placed', () => {
@@ -166,27 +188,28 @@ describe('the map checks (spec 5.4)', () => {
   });
 
   describe('cards (C9)', () => {
-    it('a card naming no document in the record fails, with the valid ids', () => {
+    it('a card whose flagged piece names no document in the record fails, beside its beat, with the valid ids', () => {
       const map = writers();
-      map.sections[1].beats[0].card = 'zzz999';
+      markCard(map.sections[1].beats[0], 'zzz999');
       const { failures } = mapFindings(map, inputs());
       expect(typesOf(failures)).toEqual(['card-not-in-record']);
-      expect(failures[0].message).toMatch(/^Cards naming no document in <RECORD>: zzz999 \(beat b3\)\. .*row001, row002, row003, row004/);
+      expect(failures[0].message).toMatch(/^Beat b3's card piece names "zzz999", which is no document in <RECORD>\. .*row001, row002, row003, row004/);
+      expect(failures[0].place).toBe('sections[#theStory].beats[#b3]');
     });
 
     it('fewer than three cards or more than five fail; a card id matches in any case', () => {
       const two = writers();
-      delete two.sections[1].beats[3].card;
+      clearCard(two.sections[1].beats[3]);
       expect(mapFindings(two, inputs()).failures.map((f) => [f.type, f.message])).toEqual([
         ['card-count', expect.stringMatching(/^The map carries 2 cards\. /)]
       ]);
       const one = clone(two);
-      delete one.sections[1].beats[2].card;
+      clearCard(one.sections[1].beats[2]);
       expect(mapFindings(one, inputs()).failures.map((f) => f.message)).toEqual([expect.stringMatching(/^The map carries 1 card\. /)]);
       const six = writers();
-      six.sections[0].beats[0].card = 'ROW004';
-      six.sections[0].beats[1].card = 'row004';
-      six.sections[1].beats[1].card = 'row001';
+      markCard(six.sections[0].beats[0], 'ROW004');
+      markCard(six.sections[0].beats[1], 'row004');
+      markCard(six.sections[1].beats[1], 'row001');
       expect(typesOf(mapFindings(six, inputs()).failures)).toEqual(['card-count']);
     });
 
@@ -235,10 +258,13 @@ describe('the map checks (spec 5.4)', () => {
     });
   });
 
-  it('two beats under one id fail: the edits find a beat by its id', () => {
+  it('two beats under one id fail beside the first of them: the edits find a beat by its id', () => {
     const map = writers();
     map.leftOut[0].id = 'b4';
-    expect(typesOf(mapFindings(map, inputs()).failures)).toEqual(['duplicate-beat-id']);
+    const { failures } = mapFindings(map, inputs());
+    expect(typesOf(failures)).toEqual(['duplicate-beat-id']);
+    expect(failures[0]).toMatchObject({ place: 'sections[#theStory].beats[#b4]' });
+    expect(failures[0].line).not.toMatch(/\bb4\b/);
   });
 
   it('a value that is no map is one failure', () => {
@@ -276,7 +302,7 @@ describe('the map checks (spec 5.4)', () => {
 
       const asPassed = mapFindings(pass, inputs({ edits: carriedEdits(standing, pass) }));
       expect(typesOf(asPassed.failures)).toEqual(['photo-placed-twice']);
-      expect(asPassed.failures[0].message).toMatch(/^Photos placed more than once: cards\.jpg\. /);
+      expect(asPassed.failures[0].message).toMatch(/^The photo cards\.jpg is placed more than once\. /);
       expect(asPassed.concerns).toEqual([]);
 
       const { output } = settleEdits(null, { edits: carriedEdits(standing, moved), before: moved, after: pass, pass: 1 });
@@ -299,7 +325,7 @@ describe('the map checks (spec 5.4)', () => {
       const { failures } = mapFindings(padded, inputs());
       expect(failures.map((f) => [f.type, f.message])).toEqual([
         ['photo-not-placed', expect.stringMatching(/^Photos placed nowhere: cards\.jpg\. /)],
-        ['photo-not-offered', expect.stringMatching(/^Photos placed that are not among the photos offered:  cards\.jpg\. /)]
+        ['photo-not-offered', expect.stringMatching(/^The photo  cards\.jpg is placed, and it is not among the photos offered\. /)]
       ]);
       expect(mapTally(padded, { roster: ROSTER, keptPhotos: inputs().keptPhotos }).photos).toEqual({ placed: 2, of: 3 });
 
@@ -312,12 +338,12 @@ describe('the map checks (spec 5.4)', () => {
       expect(carriedEdits(edits, paddedMove)).toEqual([]);
     });
 
-    it("the check's card count is the tally's: a blank card is no card in either", () => {
+    it("the check's card count is the tally's: a card whose flagged piece names a blank source is no card in either", () => {
       const blank = writers();
-      delete blank.sections[1].beats[3].card;
-      blank.sections[0].beats[0].card = '  ';
+      clearCard(blank.sections[1].beats[3]);
+      markCard(blank.sections[0].beats[0], '  ');
       const four = writers();
-      four.sections[0].beats[1].card = 'row004';
+      markCard(four.sections[0].beats[1], 'row004');
       [writers(), blank, four].forEach((map) => {
         const { cards } = mapTally(map, { roster: ROSTER, keptPhotos: inputs().keptPhotos });
         const lines = mapFindings(map, inputs()).failures.filter((f) => f.type === 'card-count').map((f) => f.message);
@@ -373,12 +399,12 @@ describe("4.6: the map's schemas", () => {
     expect(text).not.toContain('writerQuestions');
   });
 
-  it("the director-side schema is the writer's, derived in code, with a beat needing only its id and its material", () => {
+  it("the director-side schema is the writer's, derived in code, with a beat needing only its id and its move", () => {
     const writer = mapSchemaFor('journalist');
     const director = directorMapSchemaFor('journalist');
-    expect(writer.properties.sections.items.properties.beats.items.required).toEqual(['id', 'kind', 'material', 'players']);
-    expect(director.properties.sections.items.properties.beats.items.required).toEqual(['id', 'material']);
-    expect(director.properties.leftOut.items.required).toEqual(['id', 'material']);
+    expect(writer.properties.sections.items.properties.beats.items.required).toEqual(['id', 'move', 'players', 'threads', 'evidence']);
+    expect(director.properties.sections.items.properties.beats.items.required).toEqual(['id', 'move']);
+    expect(director.properties.leftOut.items.required).toEqual(['id', 'move']);
     const withoutBeatRules = (schema) => {
       const copy = clone(schema);
       delete copy.properties.sections.items.properties.beats.items.required;
@@ -389,12 +415,12 @@ describe("4.6: the map's schemas", () => {
     expect(directorMapSchemaFor('journalist')).toBe(director);
   });
 
-  it("a map the writer's schema takes, the director's takes; a beat the director added with only its id and material, only the director's", () => {
+  it("a map the writer's schema takes, the director's takes; a beat the director added with only its id and move, only the director's", () => {
     const writerTakes = new Ajv({ allErrors: true, strict: true }).compile(mapSchemaFor('journalist'));
     expect(writerTakes(clone(MAP))).toBe(true);
     expect(directorMapProblems(clone(MAP), { theme: 'journalist' })).toBeNull();
     const added = clone(MAP);
-    added.sections[0].beats.push({ id: 'b11', material: 'Alex at the window' });
+    added.sections[0].beats.push({ id: 'b11', move: 'Alex at the window' });
     expect(writerTakes(added)).toBe(false);
     expect(directorMapProblems(added, { theme: 'journalist' })).toBeNull();
   });
@@ -411,9 +437,10 @@ describe("4.6: the map's schemas", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // A count that fails is the director's concern only when their edits change how many card
-// beats the sections hold: a card beat added, brought back, struck or cut, or a card added
-// to a beat or cleared from one. An edit that changes which document a card prints, or
-// moves a card beat between sections, leaves the count as the writer made it, so a count
+// beats the sections hold: a card beat added, brought back, struck or cut, or a card marker added
+// to a beat or cleared from one. A change of which document a card prints is the writer's
+// evidence and no edit (phase 4b, brief 1D; R6), and a card beat moved between sections
+// leaves the count as the writer made it, so a count
 // that fails then is the writer's, and the round's check rework fixes it (R11).
 describe("4.6b: the card count is the director's only when their edits change it", () => {
   /** The director's standing edits on `left`, made against the writer's `base`. */
@@ -421,14 +448,14 @@ describe("4.6b: the card count is the director's only when their edits change it
   /** The writer's map with five cards: b1 and b4 carry one too. */
   const fiveCards = () => {
     const map = writers();
-    map.sections[0].beats[0].card = 'row004';
-    map.sections[1].beats[1].card = 'row002';
+    markCard(map.sections[0].beats[0], 'row004');
+    markCard(map.sections[1].beats[1], 'row002');
     return map;
   };
   /** The writer's map with six cards, one over the count: b2 carries one too. */
   const sixCards = () => {
     const map = fiveCards();
-    map.sections[0].beats[1].card = 'row001';
+    markCard(map.sections[0].beats[1], 'row001');
     return map;
   };
   const cardCount = (findings) => ({
@@ -436,12 +463,12 @@ describe("4.6b: the card count is the director's only when their edits change it
     concerns: findings.concerns.filter((c) => c.type === 'card-count')
   });
 
-  it("an edit that swaps a card's document leaves the count the writer's: a failure, and no concern", () => {
+  it("a change of which document a card prints is the writer's evidence and no edit: the count stays the writer's, a failure, and no concern", () => {
     const base = sixCards();
     const left = clone(base);
-    left.sections[1].beats[0].card = 'row004';
+    markCard(left.sections[1].beats[0], 'row004');
     const edits = editsAgainst(base, left);
-    expect(edits.map((e) => e.path)).toEqual(['sections[#theStory].beats[#b3].card']);
+    expect(edits).toEqual([]);
     expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
       failures: [expect.stringMatching(/^The map carries 6 cards\. Mark 3 to 5 beats as cards/)],
       concerns: []
@@ -462,14 +489,14 @@ describe("4.6b: the card count is the director's only when their edits change it
 
   const broughtBackBase = () => {
     const map = fiveCards();
-    map.leftOut[0].card = 'row004';
+    markCard(map.leftOut[0], 'row004');
     return map;
   };
   it.each([
     ['a card beat cut', writers, (map) => { map.sections[1].beats.splice(3, 1); }, 2],
-    ['a card cleared from a beat', writers, (map) => { delete map.sections[1].beats[3].card; }, 2],
-    ['a card added to a beat', fiveCards, (map) => { map.sections[0].beats[1].card = 'row003'; }, 6],
-    ['a card beat added', fiveCards, (map) => { map.sections[1].beats.push({ id: 'b10', material: 'row004, the receipt', card: 'row004' }); }, 6],
+    ['a card marker cleared from a beat', writers, (map) => { delete map.sections[1].beats[3].card; }, 2],
+    ['a card marked on a beat', fiveCards, (map) => { markCard(map.sections[0].beats[1], 'row003'); }, 6],
+    ['a card beat added', fiveCards, (map) => { map.sections[1].beats.push({ id: 'b10', move: 'The receipt', ...cardOf('row004') }); }, 6],
     ['a card beat brought back from left out', broughtBackBase, (map) => { map.sections[0].beats.push(map.leftOut.splice(0, 1)[0]); }, 6]
   ])("%s makes the count the director's: a concern on that edit", (_name, baseOf, change, cards) => {
     const base = baseOf();
@@ -495,15 +522,15 @@ describe("4.6b: the card count is the director's only when their edits change it
     });
   });
 
-  it('the concern names only the edits that changed the count, not a card swap beside them', () => {
+  it('the concern names only the edits that changed the count, and a card swap beside them is no edit', () => {
     const base = writers();
     const left = clone(base);
-    left.sections[1].beats[0].card = 'row004';
+    markCard(left.sections[1].beats[0], 'row004');
     left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
     const edits = editsAgainst(base, left);
-    expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b3].card'], ['E2', 'leftOut[#b6]']]);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'leftOut[#b6]']]);
     expect(cardCount(mapFindings(left, inputs({ edits }))).concerns).toEqual([
-      { type: 'card-count', editIds: ['E2'], finding: 'The map carries 2 cards; the article carries 3 to 5.' }
+      { type: 'card-count', editIds: ['E1'], finding: 'The map carries 2 cards; the article carries 3 to 5.' }
     ]);
   });
 });
@@ -527,19 +554,19 @@ describe("4.6b fix round 1: a failing card count is the director's only where th
   /** The writer's map with four cards: b1 carries one too. */
   const fourCards = () => {
     const map = writers();
-    map.sections[0].beats[0].card = 'row004';
+    markCard(map.sections[0].beats[0], 'row004');
     return map;
   };
   /** The writer's map with five cards: b4 carries one too. */
   const fiveCards = () => {
     const map = fourCards();
-    map.sections[1].beats[1].card = 'row002';
+    markCard(map.sections[1].beats[1], 'row002');
     return map;
   };
   /** The writer's map with six cards, one over the count: b2 carries one too. */
   const sixCards = () => {
     const map = fiveCards();
-    map.sections[0].beats[1].card = 'row001';
+    markCard(map.sections[0].beats[1], 'row001');
     return map;
   };
 
@@ -549,9 +576,9 @@ describe("4.6b fix round 1: a failing card count is the director's only where th
     left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
     const standing = standingOnMap(null, shown, left);
     const rework = clone(left);
-    rework.sections[0].beats[1].card = 'row002';
-    rework.sections[1].beats[1].card = 'row003';
-    rework.sections[1].beats.push({ id: 'b10', kind: 'receipt', material: 'row001, the receipt', players: [], card: 'row001' });
+    markCard(rework.sections[0].beats[1], 'row002');
+    markCard(rework.sections[1].beats[1], 'row003');
+    rework.sections[1].beats.push(move('b10', 'receipt', 'The receipt', [], cardOf('row001')));
     const edits = carriedEdits(standing, rework);
     expect(edits.map((e) => [e.id, e.path, e.struck])).toEqual([['E1', 'leftOut[#b6]', true]]);
     expect(cardCount(mapFindings(rework, inputs({ edits })))).toEqual({
@@ -562,14 +589,14 @@ describe("4.6b fix round 1: a failing card count is the director's only where th
 
   it("a card beat struck and another brought back, then a rework that marks two more cards: the writer's failure, and no concern", () => {
     const shown = fourCards();
-    shown.leftOut[0].card = 'row002';
+    markCard(shown.leftOut[0], 'row002');
     const left = clone(shown);
     left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
     left.sections[1].beats.push(left.leftOut.splice(0, 1)[0]);
     const standing = standingOnMap(null, shown, left);
     const rework = clone(left);
-    rework.sections[0].beats[1].card = 'row003';
-    rework.sections[1].beats[1].card = 'row001';
+    markCard(rework.sections[0].beats[1], 'row003');
+    markCard(rework.sections[1].beats[1], 'row001');
     const edits = carriedEdits(standing, rework);
     expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b9]'], ['E2', 'leftOut[#b6]']]);
     expect(cardCount(mapFindings(rework, inputs({ edits })))).toEqual({
@@ -580,13 +607,13 @@ describe("4.6b fix round 1: a failing card count is the director's only where th
 
   it("a card beat brought back, then a rework that clears two cards: too few is the writer's failure, and no concern", () => {
     const shown = writers();
-    shown.leftOut[0].card = 'row004';
+    markCard(shown.leftOut[0], 'row004');
     const left = clone(shown);
     left.sections[1].beats.push(left.leftOut.splice(0, 1)[0]);
     const standing = standingOnMap(null, shown, left);
     const rework = clone(left);
-    delete rework.sections[1].beats[0].card;
-    delete rework.sections[1].beats[2].card;
+    clearCard(rework.sections[1].beats[0]);
+    clearCard(rework.sections[1].beats[2]);
     const edits = carriedEdits(standing, rework);
     expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b9]']]);
     expect(cardCount(mapFindings(rework, inputs({ edits })))).toEqual({
@@ -598,8 +625,8 @@ describe("4.6b fix round 1: a failing card count is the director's only where th
   it('the concern names only the edits that moved the count the way it fails, not a strike beside them', () => {
     const shown = fiveCards();
     const left = clone(shown);
-    left.sections[0].beats[1].card = 'row003';
-    left.sections[1].beats.push({ id: 'b10', material: 'row001, the receipt', card: 'row001' });
+    markCard(left.sections[0].beats[1], 'row003');
+    left.sections[1].beats.push({ id: 'b10', move: 'The receipt', ...cardOf('row001') });
     left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
     const edits = editsAgainst(shown, left);
     expect(edits.map((e) => [e.id, e.path])).toEqual([
@@ -614,7 +641,7 @@ describe("4.6b fix round 1: a failing card count is the director's only where th
   it("a card beat added to a map the writer already gave too many: the writer's part fails, and the director's is a concern", () => {
     const shown = sixCards();
     const left = clone(shown);
-    left.sections[1].beats.push({ id: 'b10', material: 'row004, the receipt', card: 'row004' });
+    left.sections[1].beats.push({ id: 'b10', move: 'The receipt', ...cardOf('row004') });
     const edits = editsAgainst(shown, left);
     expect(edits.map((e) => [e.id, e.path, e.from])).toEqual([['E1', 'sections[#theStory].beats[#b10]', 'none']]);
     expect(cardCount(mapFindings(left, inputs({ edits })))).toEqual({
@@ -625,7 +652,7 @@ describe("4.6b fix round 1: a failing card count is the director's only where th
 
   it("a card beat struck from a map the writer already gave too few: the writer's part fails, and the director's is a concern", () => {
     const shown = writers();
-    delete shown.sections[1].beats[2].card;
+    clearCard(shown.sections[1].beats[2]);
     const left = clone(shown);
     left.leftOut.push(left.sections[1].beats.splice(3, 1)[0]);
     const edits = editsAgainst(shown, left);
@@ -689,11 +716,11 @@ describe('4.6b fix round 1: the gate and the checks read a repeat by one rule', 
 
   it("two beat ids repeated are named in the map's order by both: the gate refuses them as the director's, the check fails them as the writer's", () => {
     const map = writers();
-    map.sections[0].beats.push({ id: 'b4', kind: 'scene', material: 'A second beat under b4', players: [] });
-    map.leftOut.push({ id: 'b2', kind: 'scene', material: 'A second beat under b2', players: [] });
+    map.sections[0].beats.push(move('b4', 'scene', 'A second beat under b4', []));
+    map.leftOut.push(move('b2', 'scene', 'A second beat under b2', []));
     expect(gate(map)).toBe("Two beats share the id \"b2\" and \"b4\": the director's changes made these repeats. Give each beat an id of its own.");
     expect(mapFindings(map, inputs()).failures.filter((f) => f.type === 'duplicate-beat-id').map((f) => f.message))
-      .toEqual([expect.stringMatching(/^Beats sharing an id: b2 and b4\. /)]);
+      .toEqual([expect.stringMatching(/^Beats sharing the id b2: /), expect.stringMatching(/^Beats sharing the id b4: /)]);
   });
 
   it("photos placed more than once, at the top and in any case of their names, are the same photos in the same order to both", () => {
@@ -702,7 +729,7 @@ describe('4.6b fix round 1: the gate and the checks read a repeat by one rule', 
     map.sections[0].photos.push({ filename: 'THEORY.JPG' });
     expect(gate(map)).toBe("\"Cards.jpg\" and \"THEORY.JPG\" are placed more than once: the director's changes made these repeats. Place each photo once: as the top photo, or in one section.");
     expect(mapFindings(map, inputs()).failures.filter((f) => f.type === 'photo-placed-twice').map((f) => f.message))
-      .toEqual([expect.stringMatching(/^Photos placed more than once: cards\.jpg, theory\.jpg\. /)]);
+      .toEqual([expect.stringMatching(/^The photo cards\.jpg is placed more than once\. /), expect.stringMatching(/^The photo theory\.jpg is placed more than once\. /)]);
   });
 });
 
@@ -711,7 +738,7 @@ describe('4.6b fix round 1: the gate and the checks read a repeat by one rule', 
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // A concern on the card count names an edit on a beat's place only when it took the beat
-// into the sections or out of them, and an edit on its card only when it added the card or
+// into the sections or out of them, and an edit on its card marker only when it added the card or
 // cleared it (the integrator's ruling 3 on the follow-ups). A beat moved between sections
 // still counts where it did, so its move changed nothing the count reads.
 describe("4.6c: a card count is the director's only for the edits that changed it", () => {
@@ -724,32 +751,32 @@ describe("4.6c: a card count is the director's only for the edits that changed i
   /** The writer's map with five cards: b1 and b2 carry one too, and b4 none. */
   const fiveCards = () => {
     const map = writers();
-    map.sections[0].beats[0].card = 'row004';
-    map.sections[0].beats[1].card = 'row001';
+    markCard(map.sections[0].beats[0], 'row004');
+    markCard(map.sections[0].beats[1], 'row001');
     return map;
   };
   /** The writer's map with six cards, one over the count: b4 carries one too. */
   const sixCards = () => {
     const map = fiveCards();
-    map.sections[1].beats[1].card = 'row003';
+    markCard(map.sections[1].beats[1], 'row003');
     return map;
   };
   /** The writer's map with two cards, one under the count: b6 carries none. */
   const twoCards = () => {
     const map = writers();
-    delete map.sections[1].beats[3].card;
+    clearCard(map.sections[1].beats[3]);
     return map;
   };
   /** A base map whose leftOut beat b9 is a card beat. */
   const withLeftOutCard = (baseOf) => () => {
     const map = baseOf();
-    map.leftOut[0].card = 'row004';
+    markCard(map.leftOut[0], 'row004');
     return map;
   };
 
   it.each([
-    ['moved to another section and given a card', fiveCards, 'b4', (beat) => { beat.card = 'row004'; }, 6],
-    ['moved to another section with its card cleared', writers, 'b5', (beat) => { delete beat.card; }, 2]
+    ['moved to another section and given a card', fiveCards, 'b4', (beat) => { markCard(beat, 'row004'); }, 6],
+    ['moved to another section with its card marker cleared', writers, 'b5', (beat) => { delete beat.card; }, 2]
   ])('a beat %s: the concern names the card edit, and not the move', (_name, baseOf, id, onCard, cards) => {
     const base = baseOf();
     const left = clone(base);
@@ -772,7 +799,7 @@ describe("4.6c: a card count is the director's only for the edits that changed i
     const base = fiveCards();
     const left = clone(base);
     const beat = left.leftOut.splice(0, 1)[0];
-    beat.card = 'row004';
+    markCard(beat, 'row004');
     left.sections[1].beats.push(beat);
     const edits = editsAgainst(base, left);
     expect(edits.map((e) => [e.id, e.path, e.from || ''])).toEqual([
@@ -789,10 +816,10 @@ describe("4.6c: a card count is the director's only for the edits that changed i
   // moves the count, and a count that fails is the writer's. Each row's base fails the way
   // its edit would push the count if leftOut counted: an added card over, a cleared one under.
   it.each([
-    ['a card added to a beat in leftOut', sixCards, (map) => { map.leftOut[0].card = 'row004'; }, [['leftOut[#b9].card', '']], 6],
-    ['a card cleared from a beat in leftOut', withLeftOutCard(twoCards), (map) => { delete map.leftOut[0].card; }, [['leftOut[#b9].card', '']], 2],
+    ['a card marked on a beat in leftOut', sixCards, (map) => { markCard(map.leftOut[0], 'row004'); }, [['leftOut[#b9].card', '']], 6],
+    ['a card marker cleared from a beat in leftOut', withLeftOutCard(twoCards), (map) => { delete map.leftOut[0].card; }, [['leftOut[#b9].card', '']], 2],
     ['a card beat added straight into leftOut', sixCards,
-      (map) => { map.leftOut.push({ id: 'b10', material: 'row004, the receipt', card: 'row004' }); }, [['leftOut[#b10]', 'none']], 6],
+      (map) => { map.leftOut.push({ id: 'b10', move: 'The receipt', ...cardOf('row004') }); }, [['leftOut[#b10]', 'none']], 6],
     ['a beat brought back with its card cleared', withLeftOutCard(twoCards),
       (map) => { const beat = map.leftOut.splice(0, 1)[0]; delete beat.card; map.sections[1].beats.push(beat); },
       [['sections[#theStory].beats[#b9]', 'leftOut'], ['sections[#theStory].beats[#b9].card', '']], 2]
@@ -809,35 +836,36 @@ describe("4.6c: a card count is the director's only for the edits that changed i
   });
 
   // The card check's attribution (editsOnCards) reads only the edits its one caller can meet:
-  // a card in a section, so the director gave it, or added or brought back its beat.
-  it('a card in a section that names no document is a concern on the edit that put it there: the card given, or the beat added or brought back with it', () => {
+  // a card in a section, so the director gave it its marker, or added or brought back its beat.
+  it('a card in a section whose piece names no document is a concern on the edit that put it there: the marker given, or the beat added or brought back with it', () => {
     const cards = (findings) => ({
       failures: findings.failures.filter((f) => f.type === 'card-not-in-record').map((f) => f.message),
       concerns: findings.concerns.filter((c) => c.type === 'card-not-in-record').map((c) => [c.editIds, c.finding])
     });
+    const NOT_HELD = "is marked as a card, and its card's document is not one the record holds.";
     const given = writers();
-    given.sections[1].beats[1].card = 'zzz001';
+    markCard(given.sections[1].beats[1], 'zzz001');
     expect(cards(mapFindings(given, inputs({ edits: directorsEdits(given) })))).toEqual({
-      failures: [], concerns: [[['E1'], 'The card zzz001 names no document in the record.']]
+      failures: [], concerns: [[['E1'], `The move "The first vote, six to four" ${NOT_HELD}`]]
     });
     const added = writers();
-    added.sections[0].beats.push({ id: 'b10', material: 'zzz002, a receipt', card: 'zzz002' });
+    added.sections[0].beats.push({ id: 'b10', move: 'A receipt', ...cardOf('zzz002') });
     expect(cards(mapFindings(added, inputs({ edits: directorsEdits(added) })))).toEqual({
-      failures: [], concerns: [[['E1'], 'The card zzz002 names no document in the record.']]
+      failures: [], concerns: [[['E1'], `The move "A receipt" ${NOT_HELD}`]]
     });
     const base = writers();
-    base.leftOut[0].card = 'zzz003';
+    markCard(base.leftOut[0], 'zzz003');
     const back = clone(base);
     back.sections[1].beats.push(back.leftOut.splice(0, 1)[0]);
     expect(cards(mapFindings(back, inputs({ edits: editsAgainst(base, back) })))).toEqual({
-      failures: [], concerns: [[['E1'], 'The card zzz003 names no document in the record.']]
+      failures: [], concerns: [[['E1'], `The move "Kai at the coat check" ${NOT_HELD}`]]
     });
     const moved = writers();
-    moved.sections[1].beats[0].card = 'zzz004';
+    markCard(moved.sections[1].beats[0], 'zzz004');
     const away = clone(moved);
     away.sections[0].beats.push(away.sections[1].beats.splice(0, 1)[0]);
     expect(cards(mapFindings(away, inputs({ edits: editsAgainst(moved, away) })))).toEqual({
-      failures: [expect.stringMatching(/^Cards naming no document in <RECORD>: zzz004 \(beat b3\)\. /)], concerns: []
+      failures: [expect.stringMatching(/^Beat b3's card piece names "zzz004", which is no document in <RECORD>\. /)], concerns: []
     });
   });
 });
@@ -967,7 +995,10 @@ describe('4.6e: "no note" means no approval note, and the note\'s pointer has on
   ])('with %s and no edit at the meeting, a change to the weave fails on the line that names the approval note', (_name, notes) => {
     const meetingNote = meetingNoteOf({ directorGateNotes: notes });
     expect(meetingNote).toBe(false);
-    expect(mapFindings(changed(), inputs({ meetingNote }))).toEqual({ failures: [{ type: 'weave-change-unasked', message: UNASKED }], concerns: [] });
+    expect(mapFindings(changed(), inputs({ meetingNote }))).toEqual({
+      failures: [{ type: 'weave-change-unasked', message: UNASKED, line: 'The map lists changes to the weave, and you changed nothing and left no approval note at the meeting.', place: 'weaveChanges' }],
+      concerns: []
+    });
   });
 
   it("with the meeting's approval note, the same change passes", () => {
@@ -1029,34 +1060,44 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     w.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger in the back room.', role: 'grounds-it' });
     w.connections[1].struck = true;
   };
-  /** The fixture's map with t3's material kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
+  /** The fixture's map with t3 kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
   const keepsT3Out = () => {
     const map = clone(MAP);
     delete map.sections[0].beats[0].connection;
     map.leftOut.push(map.sections[1].beats.splice(1, 1)[0]);
-    map.sections[1].beats.push({ id: 'b10', kind: 'receipt', material: 'p-rescued', players: ['Morgan', 'Riley'], card: 'p-rescued' });
+    map.sections[1].beats.push({
+      id: 'b10', kind: 'receipt', move: 'An unsigned letter threatens Marcus', players: ['Morgan', 'Riley'], threads: ['t1'], card: true,
+      evidence: [{ sources: ['p-rescued'], shows: 'A friend gives Marcus "until Friday".', stance: 'supports', card: true }]
+    });
     return map;
   };
 
   it('the map check passes on a map that keeps a left-out thread out, and wants its connection back when the thread comes back', () => {
     const out = approvedWith((w) => { w.threads[2].role = 'left-out'; });
     const map = keepsT3Out();
-    expect(mapCheckInputsOf(out, map).connections).toEqual(['c2']);
+    expect(mapCheckInputsOf(out, map).connections.map((c) => c.id)).toEqual(['c2']);
     expect(mapFindings(map, mapCheckInputsOf(out, map))).toEqual({ failures: [], concerns: [] });
     const back = approvedWith((w) => { w.threads[2].role = 'mirrors-it'; });
-    expect(mapCheckInputsOf(back, map).connections).toEqual(['c1', 'c2']);
+    expect(mapCheckInputsOf(back, map).connections.map((c) => c.id)).toEqual(['c1', 'c2']);
     expect(typesOf(mapFindings(map, mapCheckInputsOf(back, map)).failures)).toEqual(['connection-not-landed']);
   });
 
   it("a change's source names a meeting change in the meeting's own form, and the map check reads it", () => {
     const state = approvedWith(fourChanges);
     expect(meetingEditIdsOf(state)).toEqual(['M1', 'M2', 'M3', 'M4']);
-    const named = (source) => ({ ...clone(MAP), weaveChanges: [{ source, change: 'The envelope now closes the story.' }] });
+    // Phase 4b (brief 1D; R3): the map carries the thread the director added, t6, in the money's beat.
+    const named = (source) => {
+      const map = { ...clone(MAP), weaveChanges: [{ source, change: 'The envelope now closes the story.' }] };
+      map.sections[2].beats[0].threads.push('t6');
+      return map;
+    };
     expect(mapFindings(named('M2'), mapCheckInputsOf(state, named('M2'))).failures).toEqual([]);
     const { failures } = mapFindings(named('E2'), mapCheckInputsOf(state, named('E2')));
     expect(failures).toEqual([{
       type: 'weave-change-source',
-      message: 'Changes to the weave name sources the meeting does not hold: "E2". Name each change\'s source: M1, M2, M3 and M4.'
+      message: 'Changes to the weave name sources the meeting does not hold: "E2". Name each change\'s source: M1, M2, M3 and M4.',
+      line: 'A change the map made to the weave names no change of yours at the meeting.',
+      place: 'weaveChanges'
     }]);
   });
 

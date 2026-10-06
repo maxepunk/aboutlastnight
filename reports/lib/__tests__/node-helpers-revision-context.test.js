@@ -1155,7 +1155,7 @@ describe("4.6: the map's rework context", () => {
   /** The director's map: b6's line rewritten, and b4 struck. */
   function directorsMap() {
     const left = clone(MAP);
-    left.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    left.sections[3].beats[0].move = 'Riley keeps the books, and a second ledger';
     left.leftOut.push(left.sections[1].beats.splice(2, 1)[0]);
     return left;
   }
@@ -1171,7 +1171,7 @@ describe("4.6: the map's rework context", () => {
     const block = handEditsBlock(contextSection);
     expect(block).toContain(`The director's edits on the map, by id. ${MAP_EDIT_LINES_GUIDE}`);
     expect(block).toContain(`Each edit of the director's is final unless the structural change their note asks for means it no longer fits: ${MAP_EDITS_FINAL} List each edit this rework changes, removes or brings back in changedDirectorEdits, with its id and one sentence on why.`);
-    expect(block).toContain('E1 (section "closing", beat "b6", material): "Riley: "I kept the books, and the second ledger""\n  removed: "Riley: "I only kept the books""');
+    expect(block).toContain('E1 (section "closing", beat "b6", move): "Riley keeps the books, and a second ledger"\n  removed: "Riley says they only kept the books"');
     expect(block).toContain('E2 (left out, beat "b4", struck from section "theStory")');
   });
 
@@ -1235,7 +1235,7 @@ describe("4.6b: the map's rework context names no evaluator", () => {
   /** The director's map: b6's line rewritten, and b4 struck. */
   function directorsMap() {
     const left = clone(MAP);
-    left.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    left.sections[3].beats[0].move = 'Riley keeps the books, and a second ledger';
     left.leftOut.push(left.sections[1].beats.splice(2, 1)[0]);
     return left;
   }

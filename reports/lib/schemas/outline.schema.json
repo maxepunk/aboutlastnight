@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "outline",
   "title": "StoryMap",
-  "description": "The story map: the settled weave laid across the article's sections. Each beat names the material it uses; the map writes no prose.",
+  "description": "The story map: the settled weave laid across the article's sections. Each beat is a move of the story in a few plain words, with the evidence that tells it underneath; the map writes no prose.",
   "type": "object",
   "additionalProperties": false,
   "required": ["headline", "deck", "sections", "dropped", "leftOut", "expectedLength", "weaveChanges"],
@@ -24,7 +24,7 @@
     },
     "gapNote": {
       "type": "object",
-      "description": "The line at the top of the map, present only when the record cannot carry part of the story, a player cannot be placed, or a link the weave lacks was seen",
+      "description": "The line at the top of the map, present only when the record cannot carry part of the story or a change the director made at the meeting, a player cannot be placed, or a link the weave lacks was seen",
       "additionalProperties": false,
       "required": ["line", "players"],
       "properties": {
@@ -53,18 +53,28 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id", "kind", "material", "players"],
+              "required": ["id", "move", "players", "threads", "evidence"],
               "properties": {
                 "id": { "type": "string", "description": "The beat's id, its own across the whole map, such as b1" },
-                "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the beat puts on the page" },
-                "material": { "type": "string", "description": "The material the beat uses, named: the id of a document in <RECORD>; the speaker and the line; or the ledger entry" },
+                "move": { "type": "string", "description": "The move of the story, in a few plain words with its people" },
                 "players": {
                   "type": "array",
                   "description": "The roster players the beat shows, by name",
                   "items": { "type": "string" }
                 },
-                "card": { "type": "string", "description": "When the beat prints a document as a card: the document's id in <RECORD>" },
-                "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" }
+                "threads": {
+                  "type": "array",
+                  "description": "The ids of the settled weave's threads the move carries",
+                  "items": { "type": "string" }
+                },
+                "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" },
+                "card": { "type": "boolean", "description": "True when the move's evidence prints as a card; one of its pieces is then flagged as the card's document" },
+                "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the move puts on the page: a scene, a receipt, a line or a figure" },
+                "evidence": {
+                  "type": "array",
+                  "description": "The pieces of the record the article writer tells the move from",
+                  "items": { "type": "object" }
+                }
               }
             }
           },
@@ -99,22 +109,32 @@
     },
     "leftOut": {
       "type": "array",
-      "description": "The material considered and not used, each in a beat's shape",
+      "description": "The beats considered and not used, each in a beat's shape",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "kind", "material", "players"],
+        "required": ["id", "move", "players", "threads", "evidence"],
         "properties": {
           "id": { "type": "string", "description": "The beat's id, its own across the whole map, such as b1" },
-          "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the beat puts on the page" },
-          "material": { "type": "string", "description": "The material the beat uses, named: the id of a document in <RECORD>; the speaker and the line; or the ledger entry" },
+          "move": { "type": "string", "description": "The move of the story, in a few plain words with its people" },
           "players": {
             "type": "array",
             "description": "The roster players the beat shows, by name",
             "items": { "type": "string" }
           },
-          "card": { "type": "string", "description": "When the beat prints a document as a card: the document's id in <RECORD>" },
-          "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" }
+          "threads": {
+            "type": "array",
+            "description": "The ids of the settled weave's threads the move carries",
+            "items": { "type": "string" }
+          },
+          "connection": { "type": "string", "description": "The id of the settled weave's connection that lands in this beat; each live connection lands in one beat" },
+          "card": { "type": "boolean", "description": "True when the move's evidence prints as a card; one of its pieces is then flagged as the card's document" },
+          "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the move puts on the page: a scene, a receipt, a line or a figure" },
+          "evidence": {
+            "type": "array",
+            "description": "The pieces of the record the article writer tells the move from",
+            "items": { "type": "object" }
+          }
         }
       }
     },

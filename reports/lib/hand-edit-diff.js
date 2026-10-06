@@ -125,7 +125,10 @@
  * director emptied leaves the map as two edits, its dropped slot added and the section cut, and
  * after an automatic pass code holds the drop by its slot: a section the pass put back goes again
  * when it holds nothing, and one the pass filled stays, out of the dropped list (droppedSlotsOf;
- * task 4.14b, fix round 1).
+ * task 4.14b, fix round 1). The evidence under a beat's move is never the director's either
+ * (phase 4b, brief 1D; R6, survey Q1): the diff reads every beat without it (withoutEvidence),
+ * so no piece is an edit, and a restore of a beat the director placed keeps what a writer found
+ * for it (overWritersBeat).
  */
 'use strict';
 
@@ -2292,14 +2295,18 @@ function mapIdText(value) {
   return value === undefined || value === null ? '' : String(value).trim();
 }
 
-/** The map's text, part by part: the lines the stop prints. A left-out beat is not in the story. */
+/**
+ * The map's text, part by part: the lines the stop prints, each beat by its move (phase 4b,
+ * brief 1D). A left-out beat is not in the story, and the evidence under a move is no line of
+ * the map's: the page folds it, and it is never the director's (R6).
+ */
 function mapParts(map) {
   const objects = (list) => (Array.isArray(list) ? list.filter(isObj) : []);
   return [
     map.headline,
     map.deck,
     isObj(map.gapNote) ? map.gapNote.line : null,
-    ...objects(map.sections).flatMap((section) => [section.heading, section.job, ...objects(section.beats).map((beat) => beat.material)]),
+    ...objects(map.sections).flatMap((section) => [section.heading, section.job, ...objects(section.beats).map((beat) => beat.move)]),
     ...objects(map.dropped).map((slot) => slot.reason),
     ...objects(map.weaveChanges).map((change) => change.change)
   ].filter((text) => typeof text === 'string' && text.trim()).map((text) => ({ text, cardContent: false }));
@@ -2408,10 +2415,16 @@ function mapAddressOf(edit) {
  * nowhere is a cut. Its fields, changed where both versions hold it, are one change each
  * at its newer place. A beat's order within its section is the article writer's, and no
  * change.
+ *
+ * No beat is read with its evidence (withoutEvidence; phase 4b, brief 1D; R6, survey Q1): a
+ * difference in a beat's evidence is no change, so valueEdits never recurses into its pieces,
+ * and a beat added, struck, brought back or cut is one without it. A writer that finds new
+ * evidence for a move the director wrote has not changed that move.
  */
 function mapElementEdits(before, after, kind) {
-  const was = mapElements(before, kind);
-  const now = mapElements(after, kind);
+  const read = (places) => (kind === 'beat' ? places.map((place) => ({ ...place, element: withoutEvidence(place.element) })) : places);
+  const was = read(mapElements(before, kind));
+  const now = read(mapElements(after, kind));
   const firstOf = (places) => {
     const map = new Map();
     places.forEach((place) => { if (!map.has(place.key)) map.set(place.key, place); });
@@ -2527,7 +2540,7 @@ function mapCutReturned(obj, edit, address) {
   if (address.fieldSteps.length === 0) {
     if (places.length === 0) return null;
     const element = places[0].element;
-    return editValueText(address.kind === 'beat' ? element.material : element.filename) || editValueText(element);
+    return editValueText(address.kind === 'beat' ? element.move : element.filename) || editValueText(withoutEvidence(element));
   }
   for (const place of places) {
     const value = valueAtSteps(place.element, address.fieldSteps);
@@ -2574,7 +2587,8 @@ function mapContainerWords(container) {
 /**
  * What an edit on the map's beats or photos became in a pass's output, or null when it is
  * gone. For a beat or photo placed whole: the place a pass took it to, or put a copy of it
- * in (fix round 1, finding 1), else its fields where the director put it.
+ * in (fix round 1, finding 1), else its fields where the director put it, a beat's without its
+ * evidence, which is never the director's (phase 4b, brief 1D; R6).
  */
 function mapBecame(edit, address, after) {
   if (isCut(edit)) return mapCutReturned(after, edit, address);
@@ -2587,7 +2601,7 @@ function mapBecame(edit, address, after) {
   const pinned = places.find((place) => place.container === address.container);
   const other = places.find((place) => place !== pinned);
   if (other) return mapContainerWords(other.container);
-  return pinned ? editValueText(pinned.element) : null;
+  return pinned ? editValueText(address.kind === 'beat' ? withoutEvidence(pinned.element) : pinned.element) : null;
 }
 
 /**
@@ -2651,13 +2665,29 @@ function writeAtSteps(element, steps, value) {
 }
 
 /**
+ * A beat the director placed whole, as code puts it back (phase 4b, brief 1D; R6): the fields the
+ * director gave it, which the edit holds without its evidence, over the beat as a writer left it,
+ * from the first of `placesLists` that holds it (the pass's output, then the version the pass
+ * started from). So the restore puts back what the director wrote and keeps what a writer found
+ * for it: its evidence, the threads it carries and its card.
+ */
+function overWritersBeat(element, ...placesLists) {
+  if (!isObj(element)) return element;
+  for (const places of placesLists) {
+    const found = (Array.isArray(places) ? places : []).find((place) => isObj(place.element));
+    if (found) return { ...clone(found.element), ...element };
+  }
+  return element;
+}
+
+/**
  * Put one of the director's edits on the map's beats or photos back into `out`, the pass's
  * output (changed in place). A field goes back on the beat or photo wherever it sits now,
  * or, when the pass removed it, with the beat or photo where it sat in `before`. A move
  * takes the beat or photo out of every other place and puts it back where the director put
- * it, as the pass left it; one the director added goes back as they wrote it, and one the
- * pass removed comes back only as mapRestoresWhenGone says. So it prints once. A cut is never
- * put back.
+ * it, as the pass left it; one the director added goes back as they wrote it, a beat with what a
+ * writer found for it (overWritersBeat), and one the pass removed comes back only as
+ * mapRestoresWhenGone says. So it prints once. A cut is never put back.
  *
  * @returns {boolean} whether anything was written
  */
@@ -2677,9 +2707,10 @@ function restoreMapEdit(edit, address, before, out) {
   }
   const places = mapPlaces(out, address.kind, address.identity);
   let element;
-  if (edit.from === MAP_NONE) element = clone(edit.after);
+  const placedWhole = (lists) => (address.kind === 'beat' ? overWritersBeat(clone(edit.after), ...lists) : clone(edit.after));
+  if (edit.from === MAP_NONE) element = placedWhole([places, mapPlaces(before, address.kind, address.identity)]);
   else if (places.length > 0) element = clone((places.find((place) => place.container === address.container) || places[0]).element);
-  else if (mapRestoresWhenGone(edit)) element = clone(edit.after);
+  else if (mapRestoresWhenGone(edit)) element = placedWhole([mapPlaces(before, address.kind, address.identity)]);
   else return false;
   const placeable = address.container === MAP_TOP_PHOTO || address.container === MAP_LEFT_OUT
     || (Array.isArray(out.sections) && out.sections.some((s) => isObj(s) && mapIdText(s.slot) === address.container));

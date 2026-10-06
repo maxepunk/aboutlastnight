@@ -207,7 +207,7 @@ describe('the story map through the real graph (phase 4, brief 4.6)', () => {
 
     // The director rewrites Riley's line, strikes the paternity beat, and sends the map back.
     const left = clone(MAP);
-    left.sections[3].beats[0].material = RILEYS_LINE;
+    left.sections[3].beats[0].move = RILEYS_LINE;
     left.leftOut.push(left.sections[1].beats.splice(2, 1)[0]);
     // The send-back's rework keeps the director's edits and drops the lede's connection; the
     // check's rework lands it again, and also puts back the old line and the struck beat.
@@ -228,7 +228,7 @@ describe('the story map through the real graph (phase 4, brief 4.6)', () => {
     expect(scripted.prompts[1]).toContain('This automatic pass fixes the writer\'s lines.');
 
     const { outline } = reopened.values;
-    expect(outline.sections[3].beats[0].material).toBe(RILEYS_LINE);
+    expect(outline.sections[3].beats[0].move).toBe(RILEYS_LINE);
     expect(outline.sections[1].beats.map((b) => b.id)).toEqual(['b2', 'b3']);
     expect(outline.leftOut.map((b) => b.id)).toEqual(['b9', 'b4']);
     expect(outline.sections[0].beats[0].connection).toBe('c1');
@@ -236,7 +236,7 @@ describe('the story map through the real graph (phase 4, brief 4.6)', () => {
     // The report records each restore, from the automatic pass.
     const restored = reopened.data.handEditReport.changed.filter((c) => c.restored);
     expect(restored.map((c) => [c.where, c.automatic, c.pass])).toEqual(expect.arrayContaining([
-      ['section "closing", beat "b6", material', true, 1],
+      ['section "closing", beat "b6", move', true, 1],
       [expect.stringContaining('beat "b4"'), true, 1]
     ]));
     // The strike drops Sarah and a card: concerns on the director's edit, never a rework.

@@ -27,6 +27,10 @@ const DOCUMENT_TEXT = {
  * The map writer's story map (phase 4, brief 4.6) for this fixture's weave and record: every
  * roster player in a beat, three cards from the record, both kept photos placed (the hero at
  * the top), both connections landed, and no change to the weave, so every map check passes.
+ * Since phase 4b (brief 1D) it is at the level of the story: each beat a move with its people,
+ * the threads it carries and its evidence underneath, each piece naming a document of the
+ * record, the ledger or the director's notes and quoting its source word for word, and each card
+ * beat flagging the piece whose document it prints. Every thread in the story lands in a beat.
  * Invented text. Exported as OUTLINE too: the map is the outline stop's output.
  */
 const MAP = {
@@ -37,27 +41,49 @@ const MAP = {
     {
       slot: 'lede', heading: '', job: 'Open on the vote and ask who gained from the sale.',
       beats: [
-        { id: 'b1', kind: 'scene', material: 'The deadlock between Alex and Morgan, then six votes for an overdose', players: ['Alex', 'Morgan'], connection: 'c1' }
+        {
+          id: 'b1', move: 'The deadlock between Alex and Morgan, then the vote for an overdose', players: ['Alex', 'Morgan'], threads: ['t1', 't3'], connection: 'c1', kind: 'scene',
+          evidence: [{ sources: ['notes'], shows: 'Alex and Morgan argued at the bar.', stance: 'supports' }]
+        }
       ],
       photos: []
     },
     {
       slot: 'theStory', heading: 'The Story', job: 'How the sale and the envelope sat under the vote.',
       beats: [
-        { id: 'b2', kind: 'receipt', material: 'ale003', players: ['Alex'], card: 'ale003', connection: 'c2' },
-        { id: 'b3', kind: 'receipt', material: 'mor001', players: ['Morgan', 'Riley'], card: 'mor001' },
-        { id: 'b4', kind: 'receipt', material: 'p-dna', players: ['Sarah'], card: 'p-dna' }
+        {
+          id: 'b2', move: 'Marcus brags about the sale', players: ['Alex'], threads: ['t2', 't4'], connection: 'c2', card: true, kind: 'receipt',
+          evidence: [{ sources: ['ale003'], shows: 'Marcus on the sale: "Worth it. Finally worth it."', stance: 'supports', card: true }]
+        },
+        {
+          id: 'b3', move: 'Morgan pays Riley at the bar', players: ['Morgan', 'Riley'], threads: ['t3'], card: true, kind: 'receipt',
+          evidence: [{ sources: ['mor001'], shows: 'Morgan hands Riley an envelope by the bar, and Riley says "Not here."', stance: 'supports', card: true }]
+        },
+        {
+          id: 'b4', move: 'The paternity result names Sarah', players: ['Sarah'], threads: ['t4'], card: true, kind: 'receipt',
+          evidence: [{ sources: ['p-dna'], shows: 'The paternity test names Sarah Blackwood.', stance: 'supports', card: true }]
+        }
       ],
       photos: [{ filename: 'p2.jpg', beat: 'b2' }]
     },
     {
       slot: 'followTheMoney', heading: 'Follow the Money', job: 'What the sale paid, and to whom.',
-      beats: [{ id: 'b5', kind: 'figure', material: 'Melanie, $75,000 at 07:50 PM', players: [] }],
+      beats: [
+        {
+          id: 'b5', move: 'The sale pays into Melanie', players: [], threads: ['t2'], kind: 'figure',
+          evidence: [{ sources: ['ledger'], shows: 'Melanie, $75,000 at 07:50 PM', stance: 'supports' }]
+        }
+      ],
       photos: []
     },
     {
       slot: 'closing', heading: '', job: 'Who still gains from the sale.',
-      beats: [{ id: 'b6', kind: 'line', material: 'Riley: "I only kept the books"', players: ['Riley'] }],
+      beats: [
+        {
+          id: 'b6', move: 'Riley says they only kept the books', players: ['Riley'], threads: ['t3'], kind: 'line',
+          evidence: [{ sources: ['notes'], shows: 'Riley watched the ledger all morning.', stance: 'supports' }]
+        }
+      ],
       photos: []
     }
   ],
@@ -65,7 +91,12 @@ const MAP = {
     { slot: 'thePlayers', reason: 'Every player appears above.' },
     { slot: 'whatsMissing', reason: "Its question is the closing's." }
   ],
-  leftOut: [{ id: 'b9', kind: 'receipt', material: 'p-rescued', players: [] }],
+  leftOut: [
+    {
+      id: 'b9', move: 'An unsigned letter threatens Marcus', players: [], threads: ['t1'], kind: 'receipt',
+      evidence: [{ sources: ['p-rescued'], shows: 'A friend gives Marcus "until Friday".', stance: 'supports' }]
+    }
+  ],
   expectedLength: 1200,
   weaveChanges: []
 };

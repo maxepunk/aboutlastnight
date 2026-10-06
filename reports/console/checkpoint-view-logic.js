@@ -2578,25 +2578,31 @@
   var CHECK_FAILING_PREFIX = 'Check still failing: ';
 
   /**
-   * The code checks still failing on the weave in hand (lib/meeting.js meetingCheckFailures), by
-   * the line of the page their place names (phase 4b, brief 1B; spec 6.3): a failure about a
-   * thread, a connection, a question or a field of the weave sits beside that line, and one with
-   * no place, or a place the page does not show, stays at the top of the page. Each says what is
-   * wrong in the director's words, its `line` (lib/weave.js weaveFindings), never the rework's
-   * `message`, which a failure stored before the line existed is read by instead.
+   * The code checks still failing on the weave or the map in hand (lib/meeting.js
+   * meetingCheckFailures, lib/map.js mapCheckFailures), by the line of the page their place names
+   * (phase 4b, briefs 1B and 1D; spec 6.3): a failure about a thread, a connection, a question or
+   * a field of the weave, or about a beat, a section, a photo or a field of the map, sits beside
+   * that line, and one with no place, or a place the page does not show, stays at the top of the
+   * page. Each says what is wrong in the director's words, its `line` (lib/weave.js
+   * weaveFindings, lib/map.js mapFindings), never the rework's `message`, which a failure stored
+   * before the line existed is read by instead. One builder for the meeting and the map, as
+   * concernsBesideLines is.
    *
    * @param {Array} failures - the stop's `checkFailures`, each `{type, message, line?, place?}`
    * @param {Set<string>} onPage - the keys of the lines the page shows
+   * @param {function(string): (string|null)} [keyOf] - the line a place sits on: the meeting's
+   *   (lineKeyOf) unless the map's is given (mapLineKeyOf)
    * @returns {{byLine: Map<string, string[]>, top: string[]}}
    */
-  function failuresBesideLines(failures, onPage) {
+  function failuresBesideLines(failures, onPage, keyOf) {
+    var lineOf = typeof keyOf === 'function' ? keyOf : lineKeyOf;
     var byLine = new Map();
     var top = [];
     asArray(failures).filter(isPlainObject).forEach(function (failure) {
       var said = asString(failure.line).trim() || asString(failure.message).trim();
       if (!said) return;
       var line = CHECK_FAILING_PREFIX + said;
-      var key = lineKeyOf(failure.place);
+      var key = lineOf(failure.place);
       if (key === null || !onPage.has(key)) {
         top.push(line);
         return;
@@ -2933,8 +2939,15 @@
   /** How many cards the article carries (C9): a copy of lib/map.js MAP_CARDS (a test holds the two equal). */
   var MAP_CARDS = { min: 3, max: 5 };
 
-  /** What the page calls each of a beat's kinds. The keys are lib/map.js MAP_BEAT_KINDS (a test holds them equal). */
-  var BEAT_KIND_LABELS = { scene: 'Scene', receipt: 'Receipt', line: 'Line', figure: 'Figure' };
+  /** The mark beside a move whose evidence prints as a card (spec 4.2): the page prints no kind and no document id. */
+  var MAP_CARD_MARK = '(card)';
+
+  /**
+   * The fold of a beat the director added on the map while it carries no evidence: the article
+   * writer finds its evidence (spec 5.3). A beat of the writer's with none is a check's failure,
+   * which the page shows beside it instead.
+   */
+  var MAP_NO_EVIDENCE_LINE = 'Nothing yet: the article writer finds the evidence for it.';
 
   /** The line under the settled story: the story is the meeting's, and going back there costs no model call (R9). */
   var STORY_HINT = 'The story was settled at the story meeting. To change it, go back to the meeting: it reopens as you left it, with no model call.';
@@ -2946,7 +2959,7 @@
   var TOP_PHOTO_LABEL = 'The top of the article';
   var BY_ITSELF_LABEL = 'By itself, with its people';
 
-  /** How much of a beat's material a "beside" choice shows. */
+  /** How much of a beat's move a "beside" choice shows. */
   var BESIDE_TEXT_LENGTH = 60;
 
   /**
@@ -3049,7 +3062,11 @@
     var parts = asString(path).split('/').filter(Boolean);
     var m = isPlainObject(map) ? map : {};
     var tail = function (rest) { return rest.length > 0 ? ', ' + rest.join(', ') : ''; };
-    var beatName = function (beat, index) { return outlineEditLogic().beatIdOf(beat) || String(Number(index) + 1); };
+    // Phase 4b (brief 1D; spec 9): a beat by its move, never by its id.
+    var beatName = function (beat, index) {
+      var move = isPlainObject(beat) ? asString(beat.move).trim() : '';
+      return move ? '"' + shortText(move) + '"' : String(Number(index) + 1);
+    };
     var heads = {
       headline: 'the headline', deck: 'the deck', topPhoto: 'the top photo', expectedLength: 'the expected length',
       gapNote: 'the gap note', weaveChanges: "the map's changes to the weave"
@@ -3154,7 +3171,7 @@
 
   /**
    * The line on the map's page a place sits on (a path as lib/hand-edit-diff.js writes it:
-   * `sections[#theStory].beats[#b2].material`, `leftOut[#b4]`, `topPhoto`): `beat:<id>` (in a
+   * `sections[#theStory].beats[#b2].move`, `leftOut[#b4]`, `topPhoto`): `beat:<id>` (in a
    * section or in left out), `photo:<photoKey>`, `section:<slot>`, `dropped:<slot>`, one of the
    * map's own lines (`headline`, `deck`, `expectedLength`, `weaveChanges`, `gapNote`,
    * `topPhoto`), or null for a place no line shows.
@@ -3193,16 +3210,32 @@
   }
 
   /**
+   * A beat's place as a diff or a report names it (`beat "b4"`, `beat "b4", move`), in the words
+   * the map's page uses: the beat's move, found on the map (phase 4b, brief 1D; spec 9: the tags
+   * leave the page), which names the move field too, or "a move" for a beat the map no longer
+   * holds.
+   */
+  function beatWords(text, map) {
+    return asString(text).replace(/beat "([^"]*)"(?:, move\b)?/g, function (_, id) {
+      var beat = outlineEditLogic().beatWithId(map, id);
+      var move = isPlainObject(beat) ? asString(beat.move).trim() : '';
+      return move ? 'the move "' + shortText(move) + '"' : 'a move';
+    });
+  }
+
+  /**
    * How the map phrases an edit a rework changed (changedEditLine, every stop's builder): its
-   * place as the report names it, with each slot under its label and no edit id, since the map
-   * shows none; a moved element is a beat or a photo, and a section it went to reads by its
-   * label; text that came back is still on the map (task 4.10).
+   * place as the report names it, with each slot under its label, each beat by its move
+   * (beatWords) and no edit id, since the map shows none; a moved element is a beat or a photo,
+   * and a section it went to reads by its label; text that came back is still on the map (task
+   * 4.10).
    *
    * @param {Array} slots - slotsOf(data)
+   * @param {*} [map] - the map the page shows, which names each beat by its move
    */
-  function mapEditLineOptions(slots) {
+  function mapEditLineOptions(slots, map) {
     return {
-      place: function (entry) { return capitalized(slotWords(asString(entry.where) || scopeLabel(entry.scope), slots)); },
+      place: function (entry) { return capitalized(beatWords(slotWords(asString(entry.where) || scopeLabel(entry.scope), slots), map)); },
       valueText: function (text) {
         var m = /^section "([^"]*)"$/.exec(asString(text));
         return m ? slotLabelOf(m[1], slots) : text;
@@ -3247,11 +3280,12 @@
    *
    * @param {*} report - the stop's handEditReport
    * @param {Array} slots - slotsOf(data)
+   * @param {*} [map] - the map the page shows, which names each beat by its move
    * @returns {string[]}
    */
-  function mapChangedEditLines(report, slots) {
+  function mapChangedEditLines(report, slots, map) {
     var entries = changedEditsToShow(report);
-    var lineOptions = mapEditLineOptions(slots);
+    var lineOptions = mapEditLineOptions(slots, map);
     var keyOf = function (slot, entry) { return slot + '|' + String(entry.pass); };
     var cuts = {};
     entries.forEach(function (entry) {
@@ -3282,18 +3316,20 @@
   }
 
   /**
-   * A beat's material or card as the map's page prints it (task 4.6c): the document it names,
-   * by its name and owner, found through the stop's evidenceIndex as the story meeting finds a
-   * piece's document (receiptView); or the text as written when it names no document the index
-   * holds, such as a speaker and the line, or a ledger entry.
+   * The director's description of a photo (the payload's `photoDescriptions`, given at the
+   * character-IDs stop), found by the photo's one join key (photoKey) as the writers find it
+   * (lib/prompt-renderers/director-words-renderer.js renderPhotoEntry), or '' when there is none
+   * (phase 4b, brief 1D; spec 4.2 and 9).
    *
-   * @param {*} text - a beat's material, or its card
-   * @param {Object} evidenceIndex - data.evidenceIndex
+   * @param {*} descriptions - data.photoDescriptions, `{filename: text}`
+   * @param {string} filename
    * @returns {string}
    */
-  function mapDocumentText(text, evidenceIndex) {
-    var named = receiptView(text, evidenceIndex);
-    return named && named.known ? named.label : asString(text);
+  function photoDescriptionOf(descriptions, filename) {
+    if (!isPlainObject(descriptions) || !asString(filename).trim()) return '';
+    var key = outlineEditLogic().photoKey(filename);
+    var found = Object.keys(descriptions).filter(function (name) { return outlineEditLogic().photoKey(name) === key; })[0];
+    return found === undefined ? '' : asString(descriptions[found]).trim();
   }
 
   /**
@@ -3317,25 +3353,32 @@
   }
 
   /**
-   * The map's page (spec 5.2): the stop's payload (4.6's, lib/map.js mapCheckpointData) with the
-   * map as the director has it.
+   * The map's page (spec 5.2; spec 2026-10-05 sections 4.2 and 9): the stop's payload (4.6's,
+   * lib/map.js mapCheckpointData) with the map as the director has it.
    * - `settledStory` at the top, read-only, with `storyHint`, the way back to the meeting;
-   * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (one line
-   *   each), `changedEdits` (each edit a rework changed that a stop shows, changedEditsToShow,
-   *   by changedEditLine with the map's places: a send-back's with its reason, and what no pass
-   *   put back; task 4.10; a section the director emptied that a pass put back as one line, the
-   *   section's, mapChangedEditLines, task 4.14b fix round 1), `kept`, the line that says the
-   *   director's edits stand when none of theirs is listed (editsStandLine; brief 4.10b), and
-   *   `otherConcerns`, the concerns none of
-   *   whose places the page shows;
+   * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (the code
+   *   checks still failing whose place the page does not show, one line each, in the director's
+   *   words; failuresBesideLines), `changedEdits` (each edit a rework changed that a stop shows,
+   *   changedEditsToShow, by changedEditLine with the map's places: a send-back's with its reason,
+   *   and what no pass put back; task 4.10; a section the director emptied that a pass put back
+   *   as one line, the section's, mapChangedEditLines, task 4.14b fix round 1), `kept`, the line
+   *   that says the director's edits stand when none of theirs is listed (editsStandLine; brief
+   *   4.10b), and `otherConcerns`, the concerns none of whose places the page shows;
    * - `gapNote`, `headline`, `deck` and `topPhoto`;
    * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
-   *   and photos, each beat and photo with the places it can move to, and each beat's material
-   *   and card as the page prints them (`materialText`, `cardText`: the document named, through
-   *   the payload's evidenceIndex; mapDocumentText). Each beat row is keyed by its beat's id,
-   *   so an editor open on it survives a strike or a move above it; a beat whose id another beat
-   *   of its list holds, or with none, by its place (task 4.14b). A photo sits beside the beat
-   *   it names unless that beat is struck (photoBeatOf; task 4.14b);
+   *   and photos, each beat and photo with the places it can move to (phase 4b, brief 1D):
+   *   - each beat as its move, its people and its card mark (`card`, true where its evidence prints
+   *     as a card: the beat's flagged piece names its document, beatCardOf, the one reader of a
+   *     beat's card; the page shows MAP_CARD_MARK), with its evidence folded
+   *     (`evidence`, evidenceFoldView's, under `evidenceTitle`) and, for a beat the director
+   *     added that has none, at this look or an earlier one (`data.addedBeats`), the fold's one
+   *     line (`noEvidence`, MAP_NO_EVIDENCE_LINE). Its kind and its connection stay underneath,
+   *     unprinted. Each beat row is keyed by its beat's id, so an editor open on it survives a
+   *     strike or a move above it; a beat whose id another beat of its list holds, or with none,
+   *     by its place (task 4.14b);
+   *   - each photo with the director's description (`description`, photoDescriptionOf), or ''
+   *     when there is none, and the beats it can sit beside, each named by its move. A photo sits
+   *     beside the beat it names unless that beat is struck (photoBeatOf; task 4.14b);
    * - a photo the map places that the director left out of the article since (the payload's
    *   `leftOutPhotos`), at the top or in a section, is `leftOut`: marked with
    *   LEFT_OUT_PHOTO_LINE before its concerns, its controls off, and no place to move to (task
@@ -3344,9 +3387,13 @@
    *   `tally`, the lines of Everyone and the counts, rebuilt from the map as edited
    *   (mapTallyOf); `leftOut`, folded, each item with the sections it can come back to;
    *   `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
-   * - every concern beside the line of the edit it is about (concernsBesideLines), and a line
-   *   under a repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its
-   *   controls off, with `lockedHint`, which speaks of those repeats alone.
+   * - every concern beside the line of the edit it is about (concernsBesideLines), every code
+   *   check still failing beside the line its place names (`failures` on a beat, a section, a
+   *   photo and the gap note, `weaveChangesFailures`; failuresBesideLines with mapLineKeyOf;
+   *   spec 6.3), and a line under a repeat of the map the stop showed (mapRepeats, the writer's)
+   *   `locked`, its controls off, with `lockedHint`, which speaks of those repeats alone.
+   * No line or label names a beat, a thread or a connection by its id: the tags leave the page
+   * (spec 9). Each beat's `id` stays on its view for the controls, which change the map by it.
    *
    * The stop always holds a map (task 4.11): the map writer, its rework and the director's
    * gate each leave one, and only a thread from before the story meeting holds an outline
@@ -3368,10 +3415,14 @@
       : null;
     var shown = editLogic.shownMapOf(d.outline);
     var shownBeatIds = editLogic.mapBeatPlacements(shown).map(function (placement) { return placement.id; });
+    var addedEarlier = asArray(d.addedBeats).map(function (id) { return asString(id).trim(); }).filter(Boolean);
     var writers = editLogic.mapRepeats(shown);
     var leftOutKeys = asArray(d.leftOutPhotos).filter(function (name) { return asString(name).trim() !== ''; }).map(editLogic.photoKey);
-    var placed = concernsBesideLines(d.concerns, mapLinesOnPage(map), mapLineKeyOf);
+    var onPage = mapLinesOnPage(map);
+    var placed = concernsBesideLines(d.concerns, onPage, mapLineKeyOf);
+    var failing = failuresBesideLines(d.checkFailures, onPage, mapLineKeyOf);
     var at = function (key) { return placed.byLine.get(key) || []; };
+    var failuresAt = function (key) { return failing.byLine.get(key) || []; };
     var sections = asArray(map.sections).filter(isPlainObject);
     var targets = sections.map(function (s) { return { value: s.slot, label: slotLabelOf(s.slot, slots) }; });
     var others = function (slot) { return targets.filter(function (t) { return t.value !== slot; }); };
@@ -3385,25 +3436,27 @@
     };
     /** The ids of a list of beats, as the row keys read them. */
     var idsOf = function (beats) { return asArray(beats).map(function (b) { return editLogic.beatIdOf(isPlainObject(b) ? b : {}); }); };
+    /** A beat's move as a choice names it: up to BESIDE_TEXT_LENGTH characters. */
+    var moveOf = function (beat) { return shortText(isPlainObject(beat) ? beat.move : ''); };
 
     var beatView = function (beat, index, slot, ids) {
       var b = isPlainObject(beat) ? beat : {};
       var id = editLogic.beatIdOf(b);
-      var card = editLogic.beatCardOf(b);
       var ownId = id !== '' && ids.filter(function (other) { return other === id; }).length === 1;
+      var added = id !== '' && shownBeatIds.indexOf(id) === -1;
+      var evidence = evidenceFoldView(b.evidence, d.evidenceIndex);
       return {
         key: (slot === null ? 'leftOut' : slot) + (ownId ? '-beat-' + id : '-beat@' + index),
         id: id,
         index: index,
-        kindLabel: hasOwn(BEAT_KIND_LABELS, b.kind) ? BEAT_KIND_LABELS[b.kind] : '',
-        material: asString(b.material),
-        materialText: mapDocumentText(b.material, d.evidenceIndex),
+        move: asString(b.move),
         players: stringList(b.players).join(', '),
-        card: card,
-        cardText: mapDocumentText(card, d.evidenceIndex),
-        connection: asString(b.connection).trim(),
+        card: Boolean(editLogic.beatCardOf(b)),
+        evidence: evidence,
+        noEvidence: evidence.length === 0 && (added || addedEarlier.indexOf(id) !== -1) ? MAP_NO_EVIDENCE_LINE : '',
         concerns: id ? at('beat:' + id) : [],
-        added: id !== '' && shownBeatIds.indexOf(id) === -1,
+        failures: id ? failuresAt('beat:' + id) : [],
+        added: added,
         locked: id === '' || writers.beatIds.indexOf(id) !== -1,
         moveTargets: slot === null ? targets : others(slot)
       };
@@ -3417,19 +3470,21 @@
       var beside = editLogic.photoBeatOf(map, p);
       var options = [{ value: '', label: BY_ITSELF_LABEL }].concat(asArray(section.beats)
         .filter(function (b) { return editLogic.beatIdOf(b) !== ''; })
-        .map(function (b) { return { value: editLogic.beatIdOf(b), label: 'Beside ' + editLogic.beatIdOf(b) + ': ' + shortText(mapDocumentText(b.material, d.evidenceIndex)) }; }));
+        .map(function (b) { return { value: editLogic.beatIdOf(b), label: 'Beside: ' + moveOf(b) }; }));
       if (beside && !options.some(function (o) { return o.value === beside; })) {
-        options.push({ value: beside, label: 'Beside ' + beside + ', which is not in this section' });
+        options.push({ value: beside, label: 'Beside: ' + moveOf(editLogic.beatWithId(map, beside)) + ', which is not in this section' });
       }
       return {
         key: section.slot + '-photo-' + index,
         slot: section.slot,
         index: index,
         filename: filename,
+        description: photoDescriptionOf(d.photoDescriptions, filename),
         beat: beside,
         besideOptions: options,
         moveTargets: leftOut ? [] : [{ value: editLogic.MAP_TOP_PHOTO, label: TOP_PHOTO_LABEL }].concat(others(section.slot)),
         concerns: (leftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('photo:' + key)),
+        failures: failuresAt('photo:' + key),
         leftOut: leftOut,
         locked: leftOut || photoRepeated(filename)
       };
@@ -3440,7 +3495,9 @@
     var topPhoto = topName.trim()
       ? {
           filename: topName,
+          description: photoDescriptionOf(d.photoDescriptions, topName),
           concerns: (topLeftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('topPhoto')),
+          failures: failuresAt('topPhoto'),
           moveTargets: topLeftOut ? [] : targets,
           leftOut: topLeftOut,
           locked: topLeftOut || photoRepeated(topName)
@@ -3456,6 +3513,7 @@
         heading: asString(section.heading),
         job: asString(section.job),
         concerns: at('section:' + section.slot),
+        failures: failuresAt('section:' + section.slot),
         beats: asArray(section.beats).map(function (beat, j) { return beatView(beat, j, section.slot, ids); }),
         photos: asArray(section.photos).map(function (photo, j) { return photoView(photo, j, section); })
       };
@@ -3485,19 +3543,17 @@
       round: human > 0
         ? { label: roundsBanner(human, d.revisionCount, d.maxRevisions).roundLabel, note: feedback ? 'You sent the map back with: "' + feedback + '"' : '' }
         : null,
-      checkFailures: asArray(d.checkFailures).filter(isPlainObject)
-        .map(function (failure) { return asString(failure.message).trim(); })
-        .filter(Boolean)
-        .map(function (message) { return 'Check still failing: ' + message; }),
-      changedEdits: mapChangedEditLines(d.handEditReport, slots),
+      checkFailures: failing.top,
+      changedEdits: mapChangedEditLines(d.handEditReport, slots, map),
       kept: editsStandLine(d.handEditReport),
       otherConcerns: placed.other,
       gapNote: isPlainObject(map.gapNote)
-        ? { line: asString(map.gapNote.line), players: stringList(map.gapNote.players).join(', '), concerns: at('gapNote') }
+        ? { line: asString(map.gapNote.line), players: stringList(map.gapNote.players).join(', '), concerns: at('gapNote'), failures: failuresAt('gapNote') }
         : null,
       headline: { text: asString(map.headline), concerns: at('headline') },
       deck: { text: asString(map.deck), concerns: at('deck') },
       topPhoto: topPhoto,
+      evidenceTitle: EVIDENCE_FOLD_TITLE,
       sections: sectionViews,
       dropped: asArray(map.dropped).filter(isPlainObject).map(function (entry) {
         var reason = asString(entry.reason);
@@ -3522,7 +3578,7 @@
       },
       leftOut: {
         title: 'Left out (' + leftItems.length + ')',
-        open: leftItems.some(function (item) { return item.concerns.length > 0; }),
+        open: leftItems.some(function (item) { return item.concerns.length > 0 || item.failures.length > 0; }),
         items: leftItems
       },
       weaveChanges: asArray(map.weaveChanges).filter(isPlainObject).map(function (change, i) {
@@ -3533,6 +3589,7 @@
         };
       }),
       weaveChangesConcerns: at('weaveChanges'),
+      weaveChangesFailures: failuresAt('weaveChanges'),
       lockedHint: anyLocked ? MAP_LOCKED_HINT : ''
     };
   }
@@ -4380,7 +4437,10 @@
     MAP_ACTIONS: MAP_ACTIONS,
     MAP_NOTE_SOURCE: MAP_NOTE_SOURCE,
     MAP_CARDS: MAP_CARDS,
-    BEAT_KIND_LABELS: BEAT_KIND_LABELS,
+    // Phase 4b (brief 1D): the mark beside a move whose evidence prints as a card, and the fold of a
+    // beat the director added with no evidence yet
+    MAP_CARD_MARK: MAP_CARD_MARK,
+    MAP_NO_EVIDENCE_LINE: MAP_NO_EVIDENCE_LINE,
     stopVersion: stopVersion,
     mapVersion: mapVersion,
     mapPendingSlot: mapPendingSlot,

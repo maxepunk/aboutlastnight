@@ -3,10 +3,17 @@
  * writer or a rework returned, before the map's stop opens. No model judge reads the map.
  *
  * The checks (lib/map.js mapFindings) read the map against the session: the roster, the
- * photos kept for the article, the record's document ids, the connections the settled weave
- * keeps (lib/weave.js storyConnections: none the director struck, and none that joins a
- * thread left out; brief 4.14a), and the director's changes and note at the meeting. A
- * failure the director caused on the map is a concern on their edit, never a rework.
+ * photos kept for the article, the record's document ids, the threads and the connections the
+ * settled weave keeps in the story (lib/weave.js storyConnections: none the director struck,
+ * and none that joins a thread left out; brief 4.14a), and the director's changes and note at
+ * the meeting. A failure the director caused on the map is a concern on their edit, never a
+ * rework.
+ *
+ * Phase 4b (piece 1, brief 1D; spec 2026-10-05 sections 4.2 and 6.1): the checks also read the
+ * evidence under each beat against the record (lib/evidence.js evidenceContextOf), and the map's
+ * page as it first opens, counted (mapPageWords), so the writer's page is held to
+ * MAP_WORD_BOUND. Each failure carries its place, so the map shows a check still failing beside
+ * its line.
  *
  * They mark the map they checked (`_mapCheck`, stamped with its mapKey) and write
  * validationResults on every outcome, under their own source (lib/map.js MAP_CHECKS_SOURCE;
@@ -24,11 +31,64 @@
 
 const { PHASES } = require('../state');
 const { traceNode } = require('../../observability');
-const { mapFindings, mapKey, mapRosterOf, meetingEditIdsOf, meetingNoteOf, topPhotoOf, MAP_CHECKS_SOURCE } = require('../../map');
+const {
+  mapFindings, mapKey, mapRosterOf, meetingEditIdsOf, meetingNoteOf, topPhotoOf, mapCheckpointData,
+  mapDirectorsShare, mapWritersShareOf, MAP_CHECKS_SOURCE
+} = require('../../map');
+const { meetingAddedThreads } = require('../../meeting');
 const { carriedEdits, directorEditConcern } = require('../../hand-edit-diff');
-const { storyConnections, weaveIdOf } = require('../../weave');
+const { storyConnections, weaveIdOf, isWeave, LEFT_OUT_ROLE } = require('../../weave');
+const { evidenceContextOf } = require('../../evidence');
+const { wordsShown } = require('../../stop-pages');
+const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
 const { buildValidEvidenceIds } = require('./node-helpers');
 const { keptPhotoFilenames } = require('./ai-nodes');
+
+/**
+ * The words of the map's page as it first opens, of the writer's share of the map (phase 4b,
+ * brief 1D; spec 4.2 and 6.1; R5): the stop's page (lib/map.js mapCheckpointData) on a first
+ * look, with no round's lines, counted by lib/stop-pages.js wordsShown, the count the stops log
+ * records, which leaves the folded evidence out. Only the writer's share is counted (lib/map.js
+ * mapWritersShareOf), so the director's version is never held to the bound (Review focus 3).
+ *
+ * @param {Object} state - the session: the settled weave, the roster, the photos and their descriptions
+ * @param {Object} map - the map in hand
+ * @param {Object[]} edits - the director's standing edits the map carries
+ * @returns {number}
+ */
+function mapPageWords(state, map, edits) {
+  const share = mapWritersShareOf(map, mapDirectorsShare(edits));
+  const firstLook = {
+    ...state,
+    outline: share,
+    _mapCheck: null,
+    _outlineHandEdits: null,
+    _outlineHandEditReport: null,
+    _outlineRework: null,
+    directorGateNotes: [],
+    outlineRevisionCount: 0,
+    humanOutlineRevisionCount: 0
+  };
+  const data = mapCheckpointData(firstLook, { keptPhotos: keptPhotoFilenames(state, topPhotoOf(share)), evidenceIndex: {}, maxRevisions: 0 });
+  return wordsShown(CHECKPOINT_TYPES.OUTLINE, data);
+}
+
+/**
+ * The settled weave's threads in the story, each `{id, name, added}`: every thread whose role is
+ * not left out, `added` on one the director added at the meeting (lib/meeting.js
+ * meetingAddedThreads), which the map may name in its gap note instead of a beat when the record
+ * cannot carry it (spec 5.3).
+ *
+ * @param {Object} state
+ * @returns {Array<{id: string, name: string, added: boolean}>}
+ */
+function storyThreadsOf(state) {
+  if (!isWeave(state.weave)) return [];
+  const added = new Set(meetingAddedThreads(state));
+  return state.weave.threads
+    .filter((thread) => thread && typeof thread === 'object' && thread.role !== LEFT_OUT_ROLE && weaveIdOf(thread))
+    .map((thread) => ({ id: weaveIdOf(thread), name: typeof thread.name === 'string' ? thread.name.trim() : '', added: added.has(weaveIdOf(thread)) }));
+}
 
 /**
  * What the map checks read from the session, for the map in hand.
@@ -42,12 +102,18 @@ function mapCheckInputsOf(state, map) {
     roster: mapRosterOf(state.sessionConfig, state.canonicalCharacters),
     keptPhotos: keptPhotoFilenames(state, topPhotoOf(map)),
     recordIds: buildValidEvidenceIds(state.evidenceBundle),
+    // Phase 4b (brief 1D; R3): every thread in the story lands in a beat.
+    threads: storyThreadsOf(state),
     // Brief 4.14a: a connection that joins a left-out thread is out of the story with it, so
-    // no map is asked to land it.
-    connections: storyConnections(state.weave).map(weaveIdOf).filter(Boolean),
+    // no map is asked to land it. Each with its line, by which the director's line names it.
+    connections: storyConnections(state.weave)
+      .filter((connection) => weaveIdOf(connection))
+      .map((connection) => ({ id: weaveIdOf(connection), line: typeof connection.line === 'string' ? connection.line.trim() : '' })),
     meetingEdits: meetingEditIdsOf(state),
     meetingNote: meetingNoteOf(state),
-    edits: carriedEdits(state._outlineHandEdits, map)
+    edits: carriedEdits(state._outlineHandEdits, map),
+    // Phase 4b (brief 1D): what the evidence and story-terms checks read.
+    evidence: evidenceContextOf(state)
   };
 }
 
@@ -69,10 +135,12 @@ function checkMap(state) {
     return { currentPhase: PHASES.MAP_CHECKS };
   }
   const map = state.outline;
-  const { failures, concerns } = mapFindings(map, mapCheckInputsOf(state, map));
+  const inputs = mapCheckInputsOf(state, map);
+  const words = map && typeof map === 'object' && Array.isArray(map.sections) ? mapPageWords(state, map, inputs.edits) : null;
+  const { failures, concerns } = mapFindings(map, { ...inputs, pageWords: words });
   const key = mapKey(map);
   const passed = failures.length === 0;
-  console.log(`[checkMap] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (map ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
+  console.log(`[checkMap] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${words} words on the map's page, map ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
 
   return {
     _mapCheck: {
@@ -80,6 +148,7 @@ function checkMap(state) {
       passed,
       failures,
       concerns: concerns.map(c => directorEditConcern(c.editIds, c.finding)),
+      words,
       checkedAt: new Date().toISOString()
     },
     validationResults: {
@@ -97,5 +166,5 @@ function checkMap(state) {
 
 module.exports = {
   checkMap: traceNode(checkMap, 'checkMap', { stateFields: ['outline'] }),
-  _testing: { checkMap, mapCheckInputsOf }
+  _testing: { checkMap, mapCheckInputsOf, mapPageWords }
 };

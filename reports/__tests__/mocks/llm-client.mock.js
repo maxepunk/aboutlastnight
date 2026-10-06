@@ -68,9 +68,10 @@ function getDefaultWeave() {
 }
 
 /**
- * Default outline fixture: the story map (phase 4, brief 4.6), in its shape. Invented text;
- * its card names no document of any record, so on a test's own record the map checks may
- * fail it, and its one rework returns it again.
+ * Default outline fixture: the story map (phase 4, brief 4.6), in its story-level shape (phase
+ * 4b, brief 1D): one move carrying the default weave's one thread, its evidence from the
+ * director's notes with no quotation. Invented text; it marks no card, so on a test's own record
+ * the map checks may fail its card count, and its one rework returns it again.
  */
 function getDefaultOutline() {
   return {
@@ -79,7 +80,10 @@ function getDefaultOutline() {
     sections: [
       {
         slot: 'lede', heading: '', job: 'Test job: open on the verdict.',
-        beats: [{ id: 'b1', kind: 'scene', material: 'Test beat: the verdict', players: [] }],
+        beats: [{
+          id: 'b1', move: 'The room names its verdict', players: [], threads: ['t1'], kind: 'scene',
+          evidence: [{ sources: ['notes'], shows: 'The room argued its way to a split vote.', stance: 'supports' }]
+        }],
         photos: []
       }
     ],

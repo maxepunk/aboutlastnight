@@ -25,7 +25,7 @@
  *   stop, counted over it (wordsShown).
  *
  * A line is `{tone, text, label, folded, beside?, piece?, region?}`:
- * - `text` is the view models' own text: a thread's line, a beat's material, a paragraph, a mark;
+ * - `text` is the view models' own text: a thread's line, a beat's move, a paragraph, a mark;
  * - `label` names the line: an id, a piece of the desk, or the page's own heading for the line
  *   ("Charge", "Job"). A title, and a line the page shows by its name alone (a photo, a heading
  *   the page does not print, a line in the component's own fixed words), carries only a label;
@@ -33,9 +33,9 @@
  *   check still failing, a problem the console would refuse), concern, mark, struck or hint;
  * - `folded` marks what the page folds away, as its component folds it: the standing notes, the
  *   map's left out (until a concern opens it), the trace, the desk's folds below the article, the
- *   input review's closed sections, what a character-IDs card shows only once opened, and the
+ *   input review's closed sections, what a character-IDs card shows only once opened, the
  *   story meeting's evidence under each line and the left-out threads' reasons (phase 4b, brief
- *   1B);
+ *   1B), and the map's evidence under each move (phase 4b, brief 1D);
  * - `beside` marks a concern or a mark that sits beside the line before it;
  * - `piece` is the desk's key for the piece a line prints or sits beside (deskAnchorKey);
  * - `region` names the part of the screen a line sits in, where the component names that part
@@ -594,13 +594,23 @@ function meetingPage(data) {
 
 // ── The map (mapView; Outline.js renders the same view) ───────────────────────
 
-/** A beat as the map shows it: its material under its id and kind, the players it shows, its card and its connection. */
-function addBeat(page, beat) {
-  page.text(beat.materialText, beat.id + (beat.kindLabel ? ` · ${beat.kindLabel}` : ''));
+/**
+ * A beat as the map shows it (phase 4b, brief 1D; spec 4.2 and 9): its move, with the card mark
+ * where it has the marker, the people it shows, the checks still failing and the concerns beside
+ * it, and its evidence folded under it, or for a beat the director added with none, why. Its
+ * kind and its connection stay underneath, and no line names it by its id.
+ */
+function addBeat(page, view, beat) {
+  page.text(`${beat.move}${beat.card ? ` ${View.MAP_CARD_MARK}` : ''}`);
   page.text(beat.players, 'Shows');
-  page.text(beat.cardText, 'Card');
-  if (beat.connection) page.tag(`Connection ${beat.connection} lands here`);
-  page.beside(beat.concerns, []);
+  addBesideLine(page, beat);
+  addEvidenceFold(page, view.evidenceTitle, beat.evidence, beat.noEvidence);
+}
+
+/** A photo as the map shows it: the director's description of it, or its filename when there is none. */
+function addPhoto(page, photo, label) {
+  page.text(photo.description || photo.filename, label);
+  addBesideLine(page, photo);
 }
 
 /**
@@ -608,7 +618,11 @@ function addBeat(page, beat) {
  * the gap note, the headline, the deck and the top photo, the sections, what was dropped, the
  * counts, left out (folded unless a concern opens it), the map's changes to the weave, then the
  * standing notes and the trace, folded. The round, the headline's part and the counts are parts
- * Outline.js names only as an aria-label (PAGE_REGIONS).
+ * Outline.js names only as an aria-label (PAGE_REGIONS). Phase 4b (brief 1D; spec 2026-10-05
+ * sections 4.2 and 9): each move with its people and its evidence folded, each photo by the
+ * director's description, a check still failing beside the line its place names, and no tag.
+ * The check node counts the writer's page as it first opens through wordsShown
+ * (lib/workflow/nodes/map-nodes.js mapPageWords).
  */
 function mapPage(data, theme) {
   const H = PAGE_HEADINGS[OUTLINE];
@@ -650,7 +664,7 @@ function mapPage(data, theme) {
     page.title(H.gap);
     page.text(view.gapNote.line);
     page.text(view.gapNote.players, 'It raises');
-    page.beside(view.gapNote.concerns, []);
+    addBesideLine(page, view.gapNote);
   }
 
   page.inRegion(R.top, () => {
@@ -658,10 +672,7 @@ function mapPage(data, theme) {
     page.beside(view.headline.concerns, []);
     page.text(view.deck.text, 'Deck');
     page.beside(view.deck.concerns, []);
-    if (view.topPhoto) {
-      page.tag(`Top photo ${view.topPhoto.filename}`);
-      page.beside(view.topPhoto.concerns, []);
-    }
+    if (view.topPhoto) addPhoto(page, view.topPhoto, 'Top photo');
   });
 
   view.sections.forEach((section) => {
@@ -669,12 +680,9 @@ function mapPage(data, theme) {
     if (section.heading) page.text(section.heading, 'Heading');
     else page.tag('Heading: none printed');
     page.text(section.job, 'Job');
-    page.beside(section.concerns, []);
-    section.beats.forEach((beat) => addBeat(page, beat));
-    section.photos.forEach((photo) => {
-      page.tag(`Photo ${photo.filename}${photo.beat ? ` beside ${photo.beat}` : ''}`);
-      page.beside(photo.concerns, []);
-    });
+    addBesideLine(page, section);
+    section.beats.forEach((beat) => addBeat(page, view, beat));
+    section.photos.forEach((photo) => addPhoto(page, photo, 'Photo'));
   });
 
   if (view.dropped.length > 0) {
@@ -698,15 +706,15 @@ function mapPage(data, theme) {
 
   const addLeftOut = () => {
     page.title(view.leftOut.title);
-    view.leftOut.items.forEach((item) => addBeat(page, item));
+    view.leftOut.items.forEach((item) => addBeat(page, view, item));
   };
   if (view.leftOut.open) addLeftOut();
   else page.folded(addLeftOut);
 
-  if (view.weaveChanges.length > 0 || view.weaveChangesConcerns.length > 0) {
+  if (view.weaveChanges.length > 0 || view.weaveChangesConcerns.length > 0 || view.weaveChangesFailures.length > 0) {
     page.title(H.weaveChanges);
     view.weaveChanges.forEach((change) => page.text(change.change, change.source));
-    page.beside(view.weaveChangesConcerns, []);
+    addBesideLine(page, { failures: view.weaveChangesFailures, concerns: view.weaveChangesConcerns });
   }
 
   addStandingNotes(page, data.directorGateNotes);

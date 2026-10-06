@@ -17,7 +17,8 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // writer embeds the schema above; its slots are the theme's. Brief 4.6c: its task points
 // at the meeting's note by the rule the map checks read the note by (meetingNoteOf). Brief
 // 4.6e: with the schema's one pointer at that note (MEETING_NOTE_POINTER).
-const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER } = require('./map');
+// Phase 4b (brief 1D): the bound on the map's page and the writer's aim, stated once there.
+const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER, MAP_WORD_BOUND, MAP_WORD_AIM } = require('./map');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
@@ -59,19 +60,27 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
  * does not hold, the writer names "note" as a change's source, the check fails the change,
  * and the round's one rework goes on that failure (0926262).
  *
+ * Phase 4b (brief 1D; spec 2026-10-05 sections 4.2, 5 and 7): the map stays at the level of the
+ * story, a page of at most MAP_WORD_BOUND words aiming for MAP_WORD_AIM. Each beat is a move in
+ * story terms, as C2 and C16 set them out, with its people, the threads it carries and its
+ * evidence from those threads' evidence and the record; the card's document is flagged on a
+ * piece (C9); and what the record cannot carry, a change of the director's among it, goes in the
+ * gap note. On 100226 the map ran to 1,193 words of beats that quoted their material.
+ *
  * @param {boolean} heroMarked - whether <available-photos> marks a photo [hero image]
  * @param {boolean} meetingNote - whether <DIRECTOR_GUIDANCE> holds the director's approval
  *   note from the story meeting (lib/map.js meetingNoteOf)
  * @returns {string}
  */
 function mapTask(heroMarked, meetingNote) {
-  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map runs to about 450 words and writes no prose.
+  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. It writes no prose: the director reads it as a page of at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM}.
 - The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id${meetingNote ? MAP_TASK_NOTE_CHANGE : ''}. List each change you make to fit one in under weaveChanges, with its source: the edit's id${meetingNote ? MAP_TASK_NOTE_SOURCE : ''}.
-- Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out, each beat naming its material. Drop each slot the story does not use, with its reason.
+- Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out: each beat a move of the story in story terms, as C16 sets them out, with its people, the ids of the threads it carries, and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat. Drop each slot the story does not use, with its reason.
+- Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces, as C9 (\`<craft-cards>\`) sets out.
 ${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
-- A part of the story the record cannot carry, a player you cannot place, or a link you see that the weave lacks goes in gapNote, the one line at the top, as C7 (\`<craft-material>\`) and C16 set out.
+- What the record cannot carry goes in gapNote, the one line at the top, in story terms: a part of the story, or a change the director made at the meeting. A player you cannot place and a link you see that the weave lacks go there too, as C7 (\`<craft-material>\`) and C16 set out.
 - Set expectedLength from what the map holds, as C4 (\`<craft-telling>\`) sets out.
-Code builds Everyone from each beat's players, and checks the players, the photos, the cards and the connections. A player named among gapNote's players counts as raised.`;
+Code builds Everyone from each beat's players and counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, the story terms and the page's length. A player named among gapNote's players counts as raised.`;
 }
 
 /** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */

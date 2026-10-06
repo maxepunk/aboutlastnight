@@ -8,7 +8,10 @@
       "heading": "",
       "job": "Open on the vote that named Blake, and ask who the books protected.",
       "beats": [
-        { "id": "b1", "kind": "scene", "material": "The room names Blake after the ledger goes up", "players": ["Alice"] }
+        {
+          "id": "b1", "move": "The room names Blake after the ledger goes up", "players": ["Alice"], "threads": ["t1"], "connection": "c1", "kind": "scene",
+          "evidence": [{ "sources": ["notes"], "shows": "The room traced the transfers and named Blake.", "stance": "supports" }]
+        }
       ],
       "photos": []
     },
@@ -17,9 +20,18 @@
       "heading": "The Story",
       "job": "How the money trail and the audit cover-up met in the room's case.",
       "beats": [
-        { "id": "b2", "kind": "receipt", "material": "blk001", "players": ["Alice"], "card": "blk001" },
-        { "id": "b3", "kind": "receipt", "material": "page-ev-001", "players": ["Bob"], "card": "page-ev-001" },
-        { "id": "b4", "kind": "receipt", "material": "chr001", "players": ["Bob"], "card": "chr001" }
+        {
+          "id": "b2", "move": "Blake's own memory of the transfers", "players": ["Alice"], "threads": ["t1"], "card": true, "kind": "receipt",
+          "evidence": [{ "sources": ["blk001"], "shows": "Blake's memory of the transfers.", "stance": "supports", "card": true }]
+        },
+        {
+          "id": "b3", "move": "The altered audit reports", "players": ["Bob"], "threads": ["t2"], "card": true, "kind": "receipt",
+          "evidence": [{ "sources": ["page-ev-001"], "shows": "The audit reports Charlie altered.", "stance": "supports", "card": true }]
+        },
+        {
+          "id": "b4", "move": "Charlie's memory of the audit", "players": ["Bob"], "threads": ["t2", "t3"], "card": true, "kind": "receipt",
+          "evidence": [{ "sources": ["chr001"], "shows": "Charlie's memory of the audit.", "stance": "supports", "card": true }]
+        }
       ],
       "photos": []
     },
@@ -28,7 +40,10 @@
       "heading": "Follow the Money",
       "job": "What Phoenix Consulting Group took while the room argued.",
       "beats": [
-        { "id": "b5", "kind": "figure", "material": "Phoenix Consulting Group, $2,300,000", "players": [] }
+        {
+          "id": "b5", "move": "Phoenix Consulting Group takes the last sales", "players": [], "threads": ["t1"], "kind": "figure",
+          "evidence": [{ "sources": ["ledger"], "shows": "Phoenix Consulting Group, $2,300,000", "stance": "supports" }]
+        }
       ],
       "photos": []
     }
@@ -39,7 +54,10 @@
     { "slot": "closing", "reason": "The money section lands the story." }
   ],
   "leftOut": [
-    { "id": "b9", "kind": "scene", "material": "The second account's late sale", "players": [] }
+    {
+      "id": "b9", "move": "The second account's late sale", "players": [], "threads": ["t1"], "kind": "scene",
+      "evidence": [{ "sources": ["ledger"], "shows": "A late sale into a second account.", "stance": "supports" }]
+    }
   ],
   "expectedLength": 1100,
   "weaveChanges": []

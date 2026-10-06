@@ -134,8 +134,9 @@ describe('4.9: the map\'s styles', () => {
   });
 });
 
-// Brief 4.6c: Outline.js finds a section as the editors and moves find it, and prints each
-// beat's material and card as the view names them (through the stop's evidenceIndex).
+// Brief 4.6c: Outline.js finds a section as the editors and moves find it. Phase 4b (brief 1D;
+// spec 9): it prints each beat's move and card mark as the view gives them, with the evidence
+// folded, and no beat's material, kind, card id or connection id.
 describe('4.6c: Outline.js reads the map through the edit logic and names its documents through the view', () => {
   const src = read('components/checkpoints/Outline.js');
 
@@ -144,10 +145,11 @@ describe('4.6c: Outline.js reads the map through the edit logic and names its do
     expect(src).not.toMatch(/function sectionOf\(|\.sections\.filter\(/);
   });
 
-  it("prints each beat's material and card as the view names them", () => {
-    expect(count(src, 'beat.materialText')).toBe(2);
-    expect(count(src, "'Card: ' + beat.cardText")).toBe(1);
-    expect(src).not.toMatch(/beat\.material\b(?!Text)|'Card: ' \+ beat\.card\b(?!Text)/);
+  it("prints each beat's move and its card mark as the view gives them, and its evidence folded under the view's title", () => {
+    expect(count(src, 'beat.move')).toBeGreaterThan(0);
+    expect(count(src, 'ViewLogic.MAP_CARD_MARK')).toBe(1);
+    expect(count(src, 'React.createElement(CollapsibleSection, { title: view.evidenceTitle }')).toBe(1);
+    expect(src).not.toMatch(/materialText|cardText|kindLabel|beat\.connection|BEAT_KIND_LABELS/);
   });
 });
 

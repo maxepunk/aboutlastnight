@@ -679,10 +679,12 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     // Brief 4.6d: the count is the page's alone, so the payload sends no tally. Task 4.14b: the
     // photos the map places that the director left out, which the page marks. Task 4.14e: a
     // send-back whose rework did not run (roundDidNotRun). Brief 4.14a: the meeting's changes the
-    // weave carries, each by its id and its place.
+    // weave carries, each by its id and its place. Phase 4b (brief 1D): the director's photo
+    // descriptions, which the page names each photo by, and the beats the director added, whose
+    // fold says the article writer finds their evidence.
     expect(Object.keys(data).sort()).toEqual([
-      'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
-      'leftOutPhotos', 'mapSlots', 'maxRevisions', 'meetingChanges', 'outline', 'previousFeedback', 'revisionCount', 'roster',
+      'addedBeats', 'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
+      'leftOutPhotos', 'mapSlots', 'maxRevisions', 'meetingChanges', 'outline', 'photoDescriptions', 'previousFeedback', 'revisionCount', 'roster',
       'roundDidNotRun', 'settledStory', 'trace'
     ]);
   });

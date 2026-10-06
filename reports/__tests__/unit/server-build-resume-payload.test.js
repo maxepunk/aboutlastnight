@@ -472,10 +472,10 @@ describe('the director\'s edits stand across send-backs (F1)', () => {
   test('the map\'s edits stand the same way', () => {
     const shown = mapFixture();
     const edits = mapFixture();
-    edits.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    edits.sections[3].beats[0].move = 'Riley keeps the books, and a second ledger';
     const first = buildResumePayload({ outline: 'send-back', note: 'x', map: edits }, { outline: shown, _mapBaseline: shown });
     const standing = first.stateUpdates._outlineHandEdits;
-    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#closing].beats[#b6].material']]);
+    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#closing].beats[#b6].move']]);
     const second = buildResumePayload({ outline: 'send-back', note: 'y' }, { outline: edits, _mapBaseline: shown, _outlineHandEdits: standing });
     expect(second.stateUpdates._outlineHandEdits).toEqual(standing);
   });
@@ -1183,8 +1183,8 @@ describe('4.6: the map through buildResumePayload', () => {
    */
   function directorsMap() {
     const map = mapFixture();
-    map.sections[2].beats.push({ id: 'b10', material: 'The bonus at 07:52 PM' });
-    map.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    map.sections[2].beats.push({ id: 'b10', move: 'The bonus at 07:52 PM' });
+    map.sections[3].beats[0].move = 'Riley keeps the books, and a second ledger';
     map.leftOut.push(map.sections[1].beats.splice(2, 1)[0]);
     map.topPhoto = 'p2.jpg';
     map.sections[1].photos = [{ filename: 'hero.jpg' }];
@@ -1192,7 +1192,7 @@ describe('4.6: the map through buildResumePayload', () => {
   }
   const EDITS = [
     ['E1', 'sections[#followTheMoney].beats[#b10]'],
-    ['E2', 'sections[#closing].beats[#b6].material'],
+    ['E2', 'sections[#closing].beats[#b6].move'],
     ['E3', 'leftOut[#b4]'],
     ['E4', 'topPhoto'],
     ['E5', 'sections[#theStory].photos[#hero.jpg]']
@@ -1258,14 +1258,14 @@ describe('4.6: the map through buildResumePayload', () => {
     expect(stateUpdates.heroImage).toBeNull();
   });
 
-  it("allows a beat the director added or brought back with only its id and material, and refuses a malformed map with the schema's reason", () => {
+  it("allows a beat the director added or brought back with only its id and move, and refuses a malformed map with the schema's reason", () => {
     const added = mapFixture();
-    added.sections[0].beats.push({ id: 'b11', material: 'Alex at the window' });
-    added.leftOut.push({ id: 'b12', material: 'The second envelope' });
+    added.sections[0].beats.push({ id: 'b11', move: 'Alex at the window' });
+    added.leftOut.push({ id: 'b12', move: 'The second envelope' });
     expect(buildResumePayload({ outline: 'approve', map: added }, atMap(), 'journalist', 'outline').error).toBeNull();
 
     const cases = [
-      ['a beat with no material', (m) => { delete m.sections[0].beats[0].material; }, /beats\/0 must have required property 'material'/],
+      ['a beat with no move', (m) => { delete m.sections[0].beats[0].move; }, /beats\/0 must have required property 'move'/],
       ['a kind the map has none of', (m) => { m.sections[1].beats[0].kind = 'quote'; }, /kind must be equal to one of the allowed values/],
       ['a slot the theme has none of', (m) => { m.sections[3].slot = 'epilogue'; }, /slot must be equal to one of the allowed values/],
       ['a key the map has none of', (m) => { m.lede = { hook: 'x' }; }, /must NOT have additional properties/],
@@ -1282,11 +1282,11 @@ describe('4.6: the map through buildResumePayload', () => {
 
   it("refuses a beat id the director's changes repeat, and lets a repeat the writer made through to the checks", () => {
     const theirs = mapFixture();
-    theirs.sections[0].beats.push({ id: 'b2', material: 'A second b2' });
+    theirs.sections[0].beats.push({ id: 'b2', move: 'A second b2' });
     expect(buildResumePayload({ outline: 'approve', map: theirs }, atMap(), 'journalist', 'outline').error)
       .toBe('Two beats share the id "b2": the director\'s changes made this repeat. Give each beat an id of its own.');
     const writers = mapFixture();
-    writers.sections[0].beats.push({ id: 'b2', kind: 'scene', material: 'A second b2', players: [] });
+    writers.sections[0].beats.push({ id: 'b2', kind: 'scene', move: 'A second b2', players: [] });
     const result = buildResumePayload({ outline: 'approve', map: clone(writers) }, atMap({ outline: writers, _mapBaseline: writers }), 'journalist', 'outline');
     expect(result.error).toBeNull();
   });
@@ -1974,7 +1974,7 @@ describe('4.9: the map\'s payload builders through buildResumePayload', () => {
     m = EditLogic.bringBackBeat(m, 'b9', 'closing');
     m = EditLogic.addBeat(m, 'followTheMoney', 'The bonus at 07:52 PM', 'Riley');
     m = EditLogic.moveBeat(m, 'b3', 'closing');
-    m = EditLogic.mergeBeat(m, 'b6', EditLogic.buildBeat({ ...EditLogic.initBeat(beatOf(m, 'b6')), material: 'Riley: "I kept the books, and the second ledger"' }, beatOf(m, 'b6')));
+    m = EditLogic.mergeBeat(m, 'b6', EditLogic.buildBeat({ ...EditLogic.initBeat(beatOf(m, 'b6')), move: 'Riley keeps the books, and a second ledger' }, beatOf(m, 'b6')));
     return EditLogic.movePhoto(m, 'theStory', 0, EditLogic.MAP_TOP_PHOTO);
   }
 
@@ -1988,7 +1988,7 @@ describe('4.9: the map\'s payload builders through buildResumePayload', () => {
     expect(stateUpdates.heroImage).toBe('p2.jpg');
     expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.path, e.from || null])).toEqual([
       ['sections[#followTheMoney].beats[#b10]', 'none'],
-      ['sections[#closing].beats[#b6].material', null],
+      ['sections[#closing].beats[#b6].move', null],
       ['sections[#closing].beats[#b9]', 'leftOut'],
       ['sections[#closing].beats[#b3]', 'theStory'],
       ['leftOut[#b4]', 'theStory'],

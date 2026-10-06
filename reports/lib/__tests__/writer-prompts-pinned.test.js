@@ -339,10 +339,22 @@ const REPO = path.join(__dirname, '..', '..');
  *   the story and that a thread left out comes last, by its name and why (+78): the fixture's
  *   settled weave 2208 -> 2161, outline-journalist 18798 -> 18751 and article-journalist
  *   31671 -> 31624, each by the settled weave alone. The arc pin does not move.
+ * - Phase 4b (brief 1D; spec 2026-10-05 sections 4.2, 5 and 7; R1, R4, R5), the map at the level
+ *   of the story, with its evidence underneath. A beat is a move, {id, move, players, threads,
+ *   connection?, card?, kind?, evidence}: its material goes, its card is a marker with the card's
+ *   document flagged on a piece, and each piece is lib/evidence.js EVIDENCE_PIECE_SCHEMA, which
+ *   mapSchemaFor fills into the beat and the left-out beat. The map writer prints the schema in
+ *   <SCHEMA> (8540 -> 12671), and its task asks for a page of at most 450 words aiming for 300,
+ *   each beat a move in story terms with its people, threads and evidence, every thread in the
+ *   story in a beat, the card's document flagged on a piece, and a change of the director's the
+ *   record cannot carry in the gap note (1333 -> 1925): outline-journalist 18751 -> 23474. The
+ *   fixture's map (fixtures/rework-state.js MAP) is in the new shape, each beat with its move,
+ *   threads and evidence, so the article writer's <STORY_MAP> grows (3033 -> 5206):
+ *   article-journalist 31624 -> 33797. The arc pin does not move.
  */
 const PINNED = {
-  'outline-journalist': ['11044647f8e827954b6d366dcd8882ba992097b46bb9ecf6759ba2160c333ef9', 18751],
-  'article-journalist': ['97f0fc2890ed4e6cf61968a99c552f47ae4396282d0a46d417ad809ffb2b694d', 31624],
+  'outline-journalist': ['09bcdf1a6851ca6b44acede51d9f36af064d8f347a794d42ae6834cdd1a05ed4', 23474],
+  'article-journalist': ['063b8ee5cb76dbfad3e34562408bd2b0aac6e5f604ac79f80f93b5210559221d', 33797],
   'arcs-journalist': ['0cc6d84aaa1d94a20080934235e0bfacbf9f9920627f6fdd9b881b6cfd43004c', 11475]
 };
 

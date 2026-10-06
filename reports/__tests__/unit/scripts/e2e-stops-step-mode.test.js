@@ -111,7 +111,7 @@ describe('4.12a: step mode prints the three stops from the console\'s view model
     view.sections.forEach((section) => {
       expect(text).toContain(section.label);
       expect(text).toContain(`Job: ${section.job}`);
-      section.beats.forEach((beat) => expect(text).toContain(beat.materialText));
+      section.beats.forEach((beat) => expect(text).toContain(beat.move));
     });
     expect(text).toContain(view.tally.cards);
   });

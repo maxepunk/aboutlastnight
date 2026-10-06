@@ -112,26 +112,14 @@ function SectionEditor({ section, onSave, onCancel }) {
   );
 }
 
+// Phase 4b (brief 1D): a beat's editor takes its move's words and its people; the rest of the
+// beat, its evidence among it, is the writers' and stays as it is (EditLogic.buildBeat).
 function BeatEditor({ beat, onSave, onCancel }) {
   const [form, setForm] = React.useState(function () { return EditLogic.initBeat(beat); });
   const set = fieldSetter(setForm);
-  const kinds = Object.keys(ViewLogic.BEAT_KIND_LABELS);
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement('label', { className: 'flex flex-col gap-sm mb-sm' },
-      React.createElement('span', { className: 'text-xs text-muted' }, 'Kind'),
-      React.createElement('select', {
-        className: 'input',
-        value: form.kind,
-        onChange: function (e) { set('kind')(e.target.value); }
-      },
-        kinds.indexOf(form.kind) === -1 && React.createElement('option', { value: '' }, '(none)'),
-        kinds.map(function (kind) { return React.createElement('option', { key: kind, value: kind }, ViewLogic.BEAT_KIND_LABELS[kind]); })
-      )
-    ),
-    React.createElement(TextField, { label: 'Material', value: form.material, onChange: set('material'), multiline: true, rows: 2, hint: 'A document id, a speaker and the line, or a ledger entry.' }),
+    React.createElement(TextField, { label: 'The move', value: form.move, onChange: set('move'), multiline: true, rows: 2, hint: 'A few plain words of the story.' }),
     React.createElement(TextField, { label: 'Players it shows', value: form.players, onChange: set('players'), hint: 'Names, separated by commas.' }),
-    React.createElement(TextField, { label: 'Card', value: form.card, onChange: set('card'), hint: 'The id of the document it prints as a card; empty for none.' }),
-    React.createElement(TextField, { label: 'Connection', value: form.connection, onChange: set('connection'), hint: 'The id of the weave connection that lands here; empty for none.' }),
     actionsRow(function () { onSave(EditLogic.buildBeat(form, beat)); }, onCancel)
   );
 }
@@ -279,6 +267,13 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     });
   }
 
+  /** The code checks still failing beside a line, in the director's words (phase 4b, brief 1D; spec 6.3). */
+  function failuresOf(failures) {
+    return (failures || []).map(function (text, i) {
+      return React.createElement('p', { key: 'failure-' + i, className: 'map__check', role: 'alert' }, text);
+    });
+  }
+
   /** A move control: picking a place moves the line, and the control reads as itself again. */
   function moveSelect(placeholder, targets, disabled, ariaLabel, onPick) {
     return React.createElement('select', {
@@ -304,19 +299,18 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     });
   }
 
-  // A beat's material and card print as the view names them: the document by its name and
-  // owner, or the text as written (task 4.6c).
+  // Phase 4b (brief 1D; spec 9): a beat prints its move, its card mark and its people, with its
+  // evidence folded under "What's behind it"; its kind, its connection and its id stay underneath.
   function beatBody(beat) {
     return React.createElement(React.Fragment, null,
-      React.createElement('div', { className: 'map__beat-head' },
-        React.createElement('span', { className: 'map__id' }, beat.id),
-        beat.kindLabel && React.createElement('span', { className: 'map__kind' }, beat.kindLabel),
-        beat.card && React.createElement(Badge, { label: 'Card: ' + beat.cardText, color: 'var(--accent-amber)' }),
-        beat.connection && React.createElement(Badge, { label: 'Connection ' + beat.connection + ' lands here', color: 'var(--accent-cyan)' })
-      ),
-      React.createElement('p', { className: 'map__material' }, beat.materialText),
+      React.createElement('p', { className: 'map__material' }, beat.move,
+        beat.card && React.createElement(React.Fragment, null, ' ', React.createElement(Badge, { label: ViewLogic.MAP_CARD_MARK, color: 'var(--accent-amber)' }))),
       beat.players && React.createElement('p', { className: 'text-xs text-muted' }, 'Shows: ' + beat.players),
-      concernsOf(beat.concerns)
+      failuresOf(beat.failures),
+      concernsOf(beat.concerns),
+      (beat.evidence.length > 0 || beat.noEvidence) && React.createElement(CollapsibleSection, { title: view.evidenceTitle },
+        beat.evidence.map(function (piece) { return React.createElement('p', { key: piece.key, className: 'text-xs' }, piece.text); }),
+        beat.noEvidence && React.createElement('p', { className: 'text-xs text-muted' }, beat.noEvidence))
     );
   }
 
@@ -337,21 +331,21 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       !beat.locked && editBtn(function () { open('beat', beat.id); }, editHeld),
       beatBody(beat),
       React.createElement('div', { className: 'map__controls' },
-        moveSelect('Move to…', beat.moveTargets, beat.locked, 'Move beat ' + beat.id + ' to another section',
+        moveSelect('Move to…', beat.moveTargets, beat.locked, 'Move "' + beat.move + '" to another section',
           function (to) { change(EditLogic.moveBeat(draft, beat.id, to)); }),
         beat.added
           ? React.createElement('button', {
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               onClick: function () { change(EditLogic.removeBeat(draft, beat.id)); },
-              'aria-label': 'Take out the beat you added: ' + beat.materialText
+              'aria-label': 'Take out the move you added: ' + beat.move
             }, 'Take out')
           : React.createElement('button', {
               type: 'button',
               className: 'btn btn-ghost btn-sm',
               disabled: beat.locked,
               onClick: function () { change(EditLogic.strikeBeat(draft, beat.id)); },
-              'aria-label': 'Strike beat ' + beat.id + ' into left out'
+              'aria-label': 'Strike "' + beat.move + '" into left out'
             }, 'Strike')
       )
     );
@@ -361,7 +355,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     return React.createElement('li', { key: photo.key, className: 'map__photo' + (photo.locked ? ' map__photo--locked' : '') },
       thumb(photo.filename),
       React.createElement('div', { className: 'map__photo-body' },
-        React.createElement('p', { className: 'map__filename' }, photo.filename),
+        React.createElement('p', { className: 'map__filename' }, photo.description || photo.filename),
+        failuresOf(photo.failures),
         concernsOf(photo.concerns),
         React.createElement('div', { className: 'map__controls' },
           React.createElement('select', {
@@ -395,9 +390,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         type: 'text',
         className: 'input map__add-material',
         value: adding.material,
-        placeholder: 'The beat: a document id, a speaker and the line, or a ledger entry',
+        placeholder: 'The move, in a few plain words',
         onChange: function (e) { setAdding(Object.assign({}, adding, { material: e.target.value })); },
-        'aria-label': 'The beat to add, naming its material'
+        'aria-label': 'The move to add'
       }),
       React.createElement('input', {
         type: 'text',
@@ -462,6 +457,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           React.createElement('p', { className: 'map__label' }, 'The gap'),
           React.createElement('p', null, view.gapNote.line),
           view.gapNote.players && React.createElement('p', { className: 'text-xs text-muted' }, 'It raises: ' + view.gapNote.players),
+          failuresOf(view.gapNote.failures),
           concernsOf(view.gapNote.concerns))),
 
     // The headline, the deck and the top photo.
@@ -480,7 +476,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         thumb(view.topPhoto.filename),
         React.createElement('div', { className: 'map__photo-body' },
           React.createElement('p', { className: 'text-xs text-muted' }, 'Top photo, printed above the article'),
-          React.createElement('p', { className: 'map__filename' }, view.topPhoto.filename),
+          React.createElement('p', { className: 'map__filename' }, view.topPhoto.description || view.topPhoto.filename),
+          failuresOf(view.topPhoto.failures),
           concernsOf(view.topPhoto.concerns),
           React.createElement('div', { className: 'map__controls' },
             moveSelect('Move into a section…', view.topPhoto.moveTargets, view.topPhoto.locked, 'Move the top photo ' + view.topPhoto.filename + ' into a section',
@@ -505,6 +502,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
                 React.createElement('span', { className: 'text-muted' }, 'Heading: '), section.heading || 'none printed'),
               React.createElement('p', { className: 'text-sm' },
                 React.createElement('span', { className: 'text-muted' }, 'Job: '), section.job),
+              failuresOf(section.failures),
               concernsOf(section.concerns)),
         section.beats.length === 0 && React.createElement('p', { className: 'text-xs text-muted' }, 'No beats in this section.'),
         React.createElement('ul', { className: 'map__list' }, section.beats.map(beatRow)),
@@ -549,14 +547,14 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
               return React.createElement('li', { key: item.key, className: 'map__left-out' },
                 beatBody(item),
                 React.createElement('div', { className: 'map__controls' },
-                  moveSelect('Bring back to…', item.targets, item.locked, 'Bring beat ' + item.id + ' back into a section',
+                  moveSelect('Bring back to…', item.targets, item.locked, 'Bring "' + item.move + '" back into a section',
                     function (to) { change(EditLogic.bringBackBeat(draft, item.id, to)); })));
             })
           )
     ),
 
     // What the map changed in the weave to fit the director's meeting, each with its source.
-    (view.weaveChanges.length > 0 || view.weaveChangesConcerns.length > 0) && React.createElement('section', { className: 'map__changes', 'aria-label': 'The map\'s changes to the weave' },
+    (view.weaveChanges.length > 0 || view.weaveChangesConcerns.length > 0 || view.weaveChangesFailures.length > 0) && React.createElement('section', { className: 'map__changes', 'aria-label': 'The map\'s changes to the weave' },
       React.createElement('h4', { className: 'map__label' }, 'What the map changed to fit your meeting'),
       React.createElement('ul', { className: 'map__list' },
         view.weaveChanges.map(function (c) {
@@ -564,6 +562,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
             React.createElement('span', { className: 'text-muted' }, c.source + ': '), c.change);
         })
       ),
+      failuresOf(view.weaveChangesFailures),
       concernsOf(view.weaveChangesConcerns)
     ),
 

@@ -260,8 +260,8 @@ describe('4.12a: the map\'s page is mapView\'s', () => {
     expect(inOrder(textsOf(page), [
       view.settledStory.story, view.settledStory.question,
       view.headline.text, view.deck.text,
-      view.sections[0].job, view.sections[0].beats[0].materialText,
-      section.heading, section.job, section.beats[0].materialText, section.beats[0].players,
+      view.sections[0].job, view.sections[0].beats[0].move,
+      section.heading, section.job, `${section.beats[0].move} ${View.MAP_CARD_MARK}`, section.beats[0].players,
       view.dropped[0].reason,
       view.tally.everyone, view.tally.cards, view.tally.photos, view.tally.length
     ])).toBe('in order');
@@ -277,9 +277,9 @@ describe('4.12a: the map\'s page is mapView\'s', () => {
     expect(view.leftOut.open).toBe(false);
     const page = stopPage('outline', data);
     expect(textsOf(page, true)).toEqual(expect.arrayContaining([
-      view.leftOut.items[0].materialText, 'A beat names no document.', 'Keep the money beats together.'
+      view.leftOut.items[0].move, 'A beat names no document.', 'Keep the money beats together.'
     ]));
-    expect(textsOf(page)).not.toContain(view.leftOut.items[0].materialText);
+    expect(textsOf(page)).not.toContain(view.leftOut.items[0].move);
     expect(wordsShown('outline', data)).toBe(wordsShown('outline', mapData()));
   });
 });

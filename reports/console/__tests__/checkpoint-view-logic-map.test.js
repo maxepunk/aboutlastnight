@@ -11,7 +11,7 @@ const EditLogic = require('../outline-edit-logic');
 const ViewLogic = require('../checkpoint-view-logic');
 const { reworkFixtureState, MAP } = require('../../lib/__tests__/fixtures/rework-state');
 const {
-  mapCheckpointData, mapRosterOf, directorMapProblems, mapKey, MAP_ACTIONS, MAP_BEAT_KINDS, MAP_CARDS, MEETING_NOTE_SOURCE
+  mapCheckpointData, mapRosterOf, directorMapProblems, mapKey, MAP_ACTIONS, MAP_CARDS, MEETING_NOTE_SOURCE
 } = require('../../lib/map');
 const { keptPhotoFilenames } = require('../../lib/workflow/nodes/ai-nodes');
 const { mapSlotsOf } = require('../../lib/theme-config');
@@ -62,10 +62,10 @@ describe("4.9: the console's copies of the server's map constants", () => {
     expect(ViewLogic.MAP_NOTE_SOURCE).toBe(MEETING_NOTE_SOURCE);
   });
 
-  test("a beat's kind labels name the map's kinds, in their order, and the cards' range is the checks'", () => {
-    expect(Object.keys(ViewLogic.BEAT_KIND_LABELS)).toEqual([...MAP_BEAT_KINDS]);
-    expect(Object.values(ViewLogic.BEAT_KIND_LABELS)).toEqual(['Scene', 'Receipt', 'Line', 'Figure']);
+  // Phase 4b (brief 1D; spec 11): a beat's kind stays underneath, unprinted, so the page keeps no labels for it.
+  test("the cards' range is the checks'", () => {
     expect(ViewLogic.MAP_CARDS).toEqual({ ...MAP_CARDS });
+    expect(ViewLogic).not.toHaveProperty('BEAT_KIND_LABELS');
   });
 });
 
@@ -102,32 +102,33 @@ describe("4.9: the map's editors start from the line, build what the director ty
     expect(() => EditLogic.mergeMapSection(map, 'thePlayers', { heading: 'x', job: 'y' })).toThrow(/no section for the slot thePlayers/);
   });
 
-  test('a beat: its material as typed, its kind, players, card and connection; a cleared field leaves no key', () => {
+  // Phase 4b (brief 1D): a beat's editor edits its move and its people; every other field, its
+  // evidence among them, is the writer's and stays as it is.
+  test('a beat: its move as typed and its players; its kind, threads, card, connection and evidence stay as they are', () => {
     const map = opened();
     const b3 = beatOf(map, 'b3');
     const form = EditLogic.initBeat(b3);
-    expect(form).toEqual({ kind: 'receipt', material: 'mor001', players: 'Morgan, Riley', card: 'mor001', connection: '' });
-    const built = EditLogic.buildBeat({ ...form, material: ' The envelope at the bar ', kind: 'scene', players: 'Morgan,  Riley , Alex', card: '' }, b3);
-    expect(built).toEqual({ id: 'b3', kind: 'scene', material: ' The envelope at the bar ', players: ['Morgan', 'Riley', 'Alex'] });
+    expect(form).toEqual({ move: 'Morgan pays Riley at the bar', players: 'Morgan, Riley' });
+    const built = EditLogic.buildBeat({ ...form, move: ' The envelope at the bar ', players: 'Morgan,  Riley , Alex' }, b3);
+    expect(built).toEqual({ ...b3, move: ' The envelope at the bar ', players: ['Morgan', 'Riley', 'Alex'] });
     const next = EditLogic.mergeBeat(map, 'b3', built);
     expect(beatOf(next, 'b3')).toEqual(built);
     expect(beatPlaces(next)).toEqual(beatPlaces(map));
-    expect(EditLogic.buildBeat({ ...form, connection: ' c2 ' }, b3).connection).toBe('c2');
   });
 
-  test('a beat the director added with no players keeps none when none are typed, and a beat with no kind keeps none', () => {
-    const added = { id: 'b10', material: 'Alex at the window' };
-    expect(EditLogic.initBeat(added)).toEqual({ kind: '', material: 'Alex at the window', players: '', card: '', connection: '' });
+  test('a beat the director added with no players keeps none when none are typed', () => {
+    const added = { id: 'b10', move: 'Alex at the window' };
+    expect(EditLogic.initBeat(added)).toEqual({ move: 'Alex at the window', players: '' });
     expect(EditLogic.buildBeat(EditLogic.initBeat(added), added)).toEqual(added);
   });
 
   test("a beat's edit merges where the beat sits now: one struck since its editor opened is edited in left out", () => {
     const map = opened();
-    const form = { ...EditLogic.initBeat(beatOf(map, 'b4')), material: 'The paternity result' };
+    const form = { ...EditLogic.initBeat(beatOf(map, 'b4')), move: 'The paternity result' };
     const struck = EditLogic.strikeBeat(map, 'b4');
     const next = EditLogic.mergeBeat(struck, 'b4', EditLogic.buildBeat(form, beatOf(map, 'b4')));
     expect(beatPlaces(next).leftOut).toEqual(['b9', 'b4']);
-    expect(beatOf(next, 'b4').material).toBe('The paternity result');
+    expect(beatOf(next, 'b4').move).toBe('The paternity result');
     expect(() => EditLogic.mergeBeat(map, 'b77', {})).toThrow(/no beat b77/);
   });
 
@@ -188,8 +189,8 @@ describe("4.9: the map's moves, each leaving the map it was given as it was", ()
   test('a beat is added with its players, under an id no beat holds', () => {
     const map = opened();
     const next = EditLogic.addBeat(map, 'followTheMoney', 'The bonus at 07:52 PM', ' Riley, Morgan ');
-    expect(next.sections[2].beats[1]).toEqual({ id: 'b10', material: 'The bonus at 07:52 PM', players: ['Riley', 'Morgan'] });
-    expect(EditLogic.addBeat(next, 'lede', 'A second line', '').sections[0].beats[1]).toEqual({ id: 'b11', material: 'A second line', players: [] });
+    expect(next.sections[2].beats[1]).toEqual({ id: 'b10', move: 'The bonus at 07:52 PM', players: ['Riley', 'Morgan'] });
+    expect(EditLogic.addBeat(next, 'lede', 'A second line', '').sections[0].beats[1]).toEqual({ id: 'b11', move: 'A second line', players: [] });
     expect(EditLogic.addBeat(map, 'lede', '   ', 'Alex')).toBe(map);
     expect(EditLogic.freshBeatId({ sections: [{ slot: 'lede', beats: [{ id: 'x' }, { id: 'b2' }] }], leftOut: [{ id: 'b3' }] })).toBe('b4');
   });
@@ -314,7 +315,7 @@ describe('4.9: Everyone and the counts are rebuilt from the map as edited, throu
 /** A map whose writer gave two beats the id b2. */
 function writersRepeat() {
   const map = clone(MAP);
-  map.sections[3].beats.push({ id: 'b2', kind: 'line', material: 'A second beat under b2', players: [] });
+  map.sections[3].beats.push({ id: 'b2', kind: 'line', move: 'A second beat under b2', players: [] });
   return map;
 }
 
@@ -324,7 +325,7 @@ function everyChange(map) {
   m = EditLogic.bringBackBeat(m, 'b9', 'closing');
   m = EditLogic.addBeat(m, 'followTheMoney', 'The bonus at 07:52 PM', 'Riley');
   m = EditLogic.moveBeat(m, 'b3', 'closing');
-  m = EditLogic.mergeBeat(m, 'b6', EditLogic.buildBeat({ ...EditLogic.initBeat(beatOf(m, 'b6')), material: 'Riley: "I kept the books, and the second ledger"' }, beatOf(m, 'b6')));
+  m = EditLogic.mergeBeat(m, 'b6', EditLogic.buildBeat({ ...EditLogic.initBeat(beatOf(m, 'b6')), move: 'Riley keeps the books, and a second ledger' }, beatOf(m, 'b6')));
   m = EditLogic.mergeMapHead(m, EditLogic.buildMapHead({ headline: 'The Ledger Kept Talking', deck: 'A sale the room left out.' }));
   m = EditLogic.mergeMapSection(m, 'closing', EditLogic.buildMapSection({ heading: '', job: 'Who still gains.' }));
   m = EditLogic.mergeMapLength(m, 1100);
@@ -336,13 +337,15 @@ function everyChange(map) {
 const DECISION_CASES = [
   ['the map as shown', true, () => [clone(MAP), clone(MAP)]],
   ["every change the map's controls make", true, () => [everyChange(clone(MAP)), clone(MAP)]],
-  ['a beat the director added with only its id and its material', true, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'b11', material: 'x' }); return [m, clone(MAP)]; }],
-  ['a beat the director added under an id every object carries, once', true, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'toString', material: 'x' }); return [m, clone(MAP)]; }],
+  ['a beat the director added with only its id and its move', true, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'b11', move: 'x' }); return [m, clone(MAP)]; }],
+  ['a beat the director added under an id every object carries, once', true, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'toString', move: 'x' }); return [m, clone(MAP)]; }],
+  // Phase 4b (brief 1D): a beat that still names its material is the old shape, refused.
+  ['a beat that names its material', false, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'b11', material: 'x' }); return [m, clone(MAP)]; }],
   ['no top photo', true, () => { const m = clone(MAP); delete m.topPhoto; return [m, clone(MAP)]; }],
   ["the writer's repeated beat id, left as shown", true, () => [writersRepeat(), writersRepeat()]],
   ["the writer's repeat left alone, another beat struck", true, () => [EditLogic.strikeBeat(writersRepeat(), 'b4'), writersRepeat()]],
-  ['the director repeats a beat id', false, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'b3', material: 'x' }); return [m, clone(MAP)]; }],
-  ['the director repeats a beat id in left out, read trimmed', false, () => { const m = clone(MAP); m.leftOut.push({ id: ' b1 ', material: 'x' }); return [m, clone(MAP)]; }],
+  ['the director repeats a beat id', false, () => { const m = clone(MAP); m.sections[0].beats.push({ id: 'b3', move: 'x' }); return [m, clone(MAP)]; }],
+  ['the director repeats a beat id in left out, read trimmed', false, () => { const m = clone(MAP); m.leftOut.push({ id: ' b1 ', move: 'x' }); return [m, clone(MAP)]; }],
   ["a repeat with no map shown, read as the director's", false, () => [writersRepeat(), null]],
   // Task 4.6e: a shown value that is no map is no map shown, though its left out holds the
   // repeat, where the map shown's repeats would read it as the writer's.
@@ -372,9 +375,10 @@ describe("4.9: the console's validator decides as the gate does (ruling 3)", () 
     expect(ViewLogic.mapProblems(m, { outline: clone(MAP), mapSlots: SLOTS }))
       .toBe('The map cannot be sent yet: the headline must be 10 to 200 characters.');
     const r = clone(MAP);
-    r.sections[0].beats.push({ id: 'b3', material: 'x' });
+    r.sections[0].beats.push({ id: 'b3', move: 'Alex at the window' });
+    // Phase 4b (brief 1D; spec 9): a beat by its move, never by its id.
     expect(ViewLogic.mapProblems(r, { outline: clone(MAP), mapSlots: SLOTS }))
-      .toBe('The map cannot be sent yet: Lede, beat b3 shares its id with another beat: your changes made this repeat. Give each beat an id of its own.');
+      .toBe('The map cannot be sent yet: Lede, beat "Alex at the window" shares its id with another beat: your changes made this repeat. Give each beat an id of its own.');
   });
 });
 
@@ -412,8 +416,8 @@ describe('4.9: a photo the director\'s changes place more than once is refused (
  */
 function writersRepeats() {
   const map = clone(MAP);
-  map.sections[3].beats.push({ id: ' b2 ', kind: 'line', material: 'A second beat under b2', players: [] });
-  map.sections[0].beats.push({ id: 'toString', kind: 'scene', material: 'A beat under a name every object carries', players: [] });
+  map.sections[3].beats.push({ id: ' b2 ', kind: 'line', move: 'A second beat under b2', players: [] });
+  map.sections[0].beats.push({ id: 'toString', kind: 'scene', move: 'A beat under a name every object carries', players: [] });
   map.sections[3].photos.push({ filename: 'photos/P2.JPG' });
   map.sections[2].photos.push({ filename: 'constructor' });
   return map;
@@ -423,7 +427,7 @@ describe("4.9 fix round 1: the validator and the page read one rule for a repeat
   test('mapRepeats lists each beat id and each photo a map repeats, once, in the order of its first place', () => {
     expect(EditLogic.mapRepeats(writersRepeats())).toEqual({ beatIds: ['b2'], photoKeys: ['p2.jpg'] });
     const two = clone(MAP);
-    two.sections[3].beats.push({ id: 'b5', material: 'x' }, { id: 'b1', material: 'y' });
+    two.sections[3].beats.push({ id: 'b5', move: 'x' }, { id: 'b1', move: 'y' });
     two.sections[1].photos.push({ filename: 'HERO.jpg' });
     expect(EditLogic.mapRepeats(two)).toEqual({ beatIds: ['b1', 'b5'], photoKeys: ['hero.jpg'] });
     expect(EditLogic.mapRepeats(clone(MAP))).toEqual({ beatIds: [], photoKeys: [] });
@@ -432,7 +436,7 @@ describe("4.9 fix round 1: the validator and the page read one rule for a repeat
 
   test("each beat and photo is listed where the gate's paths name it; a beat with no id and a photo with no filename are not listed", () => {
     const map = clone(MAP);
-    map.leftOut.push({ material: 'A beat with no id' });
+    map.leftOut.push({ move: 'A beat with no id' });
     map.sections[2].photos.push({ beat: 'b5' });
     expect(EditLogic.mapBeatPlacements(map)).toEqual([
       { id: 'b1', at: 'lede', path: '/sections/0/beats/0' },
@@ -474,14 +478,15 @@ describe("4.9 fix round 1: the validator and the page read one rule for a repeat
     expect(EditLogic.beatWithId(null, 'b1')).toBeNull();
   });
 
+  // Phase 4b (brief 1D; R4): the card is the piece a beat flags, read through beatCardOf.
   test("a beat's card on the page is beatCardOf's, the one rule for which beats are cards", () => {
     const map = clone(MAP);
-    map.sections[1].beats[1].card = '  mor001  ';
-    map.sections[1].beats[2].card = '   ';
+    map.sections[1].beats[1].evidence[0].sources = ['  mor001  '];
+    map.sections[1].beats[2].evidence[0].sources = ['   '];
     const data = payloadOf(stateAt());
     const view = ViewLogic.mapView(data, map);
-    expect(view.sections[1].beats.map((b) => b.card)).toEqual(map.sections[1].beats.map(EditLogic.beatCardOf));
-    expect(view.sections[1].beats.map((b) => b.card)).toEqual(['ale003', 'mor001', '']);
+    expect(view.sections[1].beats.map((b) => b.card)).toEqual(map.sections[1].beats.map((b) => Boolean(EditLogic.beatCardOf(b))));
+    expect(view.sections[1].beats.map((b) => b.card)).toEqual([true, true, false]);
   });
 });
 
@@ -604,11 +609,15 @@ describe("4.9: the map's page before any round", () => {
     expect(view.sections[1].job).toBe('How the sale and the envelope sat under the vote.');
   });
 
-  test("each beat with its kind, material, players, card and connection, and the sections it can move to", () => {
+  // Phase 4b (brief 1D; spec 9): its move, its people and its card mark, with its evidence
+  // folded; its kind and its connection stay underneath.
+  test("each beat with its move, its players, its card mark and its evidence folded, and the sections it can move to", () => {
     expect(view.sections[1].beats[0]).toMatchObject({
-      id: 'b2', kindLabel: 'Receipt', material: 'ale003', players: 'Alex', card: 'ale003', connection: 'c2',
-      added: false, locked: false, concerns: []
+      id: 'b2', move: 'Marcus brags about the sale', players: 'Alex', card: true, noEvidence: '',
+      added: false, locked: false, concerns: [], failures: []
     });
+    expect(view.sections[1].beats[0].evidence.map((piece) => piece.shows)).toEqual(['Marcus on the sale: "Worth it. Finally worth it."']);
+    ['kindLabel', 'material', 'materialText', 'cardText', 'connection'].forEach((field) => expect(view.sections[1].beats[0]).not.toHaveProperty(field));
     expect(view.sections[1].beats[0].moveTargets.map((t) => t.value)).toEqual(['lede', 'followTheMoney', 'closing']);
   });
 
@@ -617,9 +626,9 @@ describe("4.9: the map's page before any round", () => {
     expect(photo).toMatchObject({ filename: 'p2.jpg', slot: 'theStory', index: 0, beat: 'b2', locked: false });
     expect(photo.besideOptions).toEqual([
       { value: '', label: 'By itself, with its people' },
-      { value: 'b2', label: 'Beside b2: ale003' },
-      { value: 'b3', label: 'Beside b3: mor001' },
-      { value: 'b4', label: 'Beside b4: p-dna' }
+      { value: 'b2', label: 'Beside: Marcus brags about the sale' },
+      { value: 'b3', label: 'Beside: Morgan pays Riley at the bar' },
+      { value: 'b4', label: 'Beside: The paternity result names Sarah' }
     ]);
     expect(photo.moveTargets.map((t) => t.value)).toEqual(['topPhoto', 'lede', 'followTheMoney', 'closing']);
     expect(photo.moveTargets[0].label).toBe('The top of the article');
@@ -631,7 +640,7 @@ describe("4.9: the map's page before any round", () => {
       { key: 'dropped-whatsMissing', slot: 'whatsMissing', label: "What's Missing", reason: "Its question is the closing's.", concerns: [] }
     ]);
     expect(view.leftOut).toMatchObject({ title: 'Left out (1)', open: false });
-    expect(view.leftOut.items[0]).toMatchObject({ id: 'b9', kindLabel: 'Receipt', material: 'p-rescued', players: '', concerns: [] });
+    expect(view.leftOut.items[0]).toMatchObject({ id: 'b9', move: 'An unsigned letter threatens Marcus', players: '', concerns: [] });
     expect(view.leftOut.items[0].targets.map((t) => t.value)).toEqual(['lede', 'theStory', 'followTheMoney', 'closing']);
   });
 
@@ -722,22 +731,23 @@ describe('4.9: after a send-back and an automatic pass', () => {
     expect(report.changed.map((c) => [c.automatic, c.restored])).toEqual([[true, true], [true, true]]);
     const d = payloadOf(stateAt({ outline: STRUCK, _outlineHandEditReport: report }));
     expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([]);
-    expect(report.changed.map((c) => ViewLogic.changedEditLine(c, ViewLogic.mapEditLineOptions(SLOTS.map((s) => ({ key: s.key, label: s.label })))))).toEqual([
-      'Closing, beat "b3", moved from The Story: automatic pass 1 moved the beat you placed here to The Story. It was put back.',
-      'Left out, beat "b4", struck from The Story: automatic pass 1 brought it back. It was struck again.'
+    // Phase 4b (brief 1D; spec 9): each beat by its move on the map, never by its id.
+    expect(report.changed.map((c) => ViewLogic.changedEditLine(c, ViewLogic.mapEditLineOptions(SLOTS.map((s) => ({ key: s.key, label: s.label })), STRUCK)))).toEqual([
+      'Closing, the move "Morgan pays Riley at the bar", moved from The Story: automatic pass 1 moved the beat you placed here to The Story. It was put back.',
+      'Left out, the move "The paternity result names Sarah", struck from The Story: automatic pass 1 brought it back. It was struck again.'
     ]);
   });
 
   test("a send-back's rework that changed one of the director's lines, with its reason", () => {
     const left = clone(MAP);
-    left.sections[3].beats[0].material = 'Riley: "I kept the books, and the second ledger"';
+    left.sections[3].beats[0].move = 'Riley keeps the books, and a second ledger';
     const edits = standingOnMap(null, clone(MAP), left).edits;
     const rework = clone(left);
-    rework.sections[3].beats[0].material = 'Riley: "I kept the books"';
+    rework.sections[3].beats[0].move = 'Riley keeps the books';
     const report = reportAfterPass(null, { edits, before: left, after: rework, pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asks for the plain line.' }] });
     const d = payloadOf(stateAt({ outline: rework, _outlineHandEditReport: report }));
     expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([
-      'Closing, beat "b6", material: your "Riley: "I kept the books, and the second ledger"" became "Riley: "I kept the books"" (the rework of your send-back). Why: The note asks for the plain line.'
+      'Closing, the move "Riley keeps the books": your "Riley keeps the books, and a second ledger" became "Riley keeps the books" (the rework of your send-back). Why: The note asks for the plain line.'
     ]);
   });
 
@@ -818,7 +828,7 @@ describe('4.9: the builders the map shares with the meeting and the desk', () =>
       'topPhoto', 'weaveChanges'
     ]);
     [
-      ['sections[#theStory].beats[#b2].material', 'beat:b2'],
+      ['sections[#theStory].beats[#b2].move', 'beat:b2'],
       ['leftOut[#b4]', 'beat:b4'],
       ['sections[#theStory].photos[#P2.JPG]', 'photo:p2.jpg'],
       ['sections[#closing].job', 'section:closing'],
@@ -853,36 +863,35 @@ const INDEX = (() => {
   };
 })();
 
-describe("4.6c: the map names each card's and each material's document in words, through receiptView", () => {
+// Phase 4b (brief 1D; spec 9): each move's fold names each piece's sources in words, a document
+// by its name and owner through the payload's evidenceIndex, as the story meeting's folds do
+// (evidenceFoldView), and the move itself prints as written.
+describe("4.6c: the map's folds name each piece's documents in words, through the evidence index", () => {
   const state = stateAt();
   const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, 'hero.jpg'), evidenceIndex: INDEX, maxRevisions: 1 });
 
-  test('a card and a material that name a document read as its name and owner; a material that names none prints as written', () => {
+  test("each piece names its document by its name and owner, the ledger and the director's notes in words, and a document the index lacks as written", () => {
     const map = opened(data);
-    map.sections[2].beats.push({ id: 'b7', kind: 'figure', material: 'ledger', players: [] });
-    map.sections[3].beats[0].card = 'zzz999';
+    map.sections[3].beats[0].evidence.push({ sources: ['zzz999'], shows: 'A document no record holds.', stance: 'cuts-against' });
     const view = ViewLogic.mapView(data, map);
-    expect(view.sections.flatMap((s) => s.beats).map((b) => [b.id, b.materialText, b.cardText])).toEqual([
-      ['b1', 'The deadlock between Alex and Morgan, then six votes for an overdose', ''],
-      ['b2', 'ALE003 - The sale (Alex Reeves)', 'ALE003 - The sale (Alex Reeves)'],
-      ['b3', 'MOR001 - The envelope (Morgan Reed)', 'MOR001 - The envelope (Morgan Reed)'],
-      ['b4', 'DNA test (Sarah Blackwood)', 'DNA test (Sarah Blackwood)'],
-      ['b5', 'Melanie, $75,000 at 07:50 PM', ''],
-      ['b7', 'ledger', ''],
-      ['b6', 'Riley: "I only kept the books"', 'zzz999']
+    expect(view.sections.flatMap((s) => s.beats).map((b) => [b.id, b.move, b.evidence.map((piece) => piece.text)])).toEqual([
+      ['b1', 'The deadlock between Alex and Morgan, then the vote for an overdose', ['Your notes: Alex and Morgan argued at the bar.']],
+      ['b2', 'Marcus brags about the sale', ['ALE003 - The sale (Alex Reeves): Marcus on the sale: "Worth it. Finally worth it."']],
+      ['b3', 'Morgan pays Riley at the bar', ['MOR001 - The envelope (Morgan Reed): Morgan hands Riley an envelope by the bar, and Riley says "Not here."']],
+      ['b4', 'The paternity result names Sarah', ['DNA test (Sarah Blackwood): The paternity test names Sarah Blackwood.']],
+      ['b5', 'The sale pays into Melanie', ['The ledger: Melanie, $75,000 at 07:50 PM']],
+      ['b6', 'Riley says they only kept the books', ['Your notes: Riley watched the ledger all morning.', 'Cuts against · zzz999: A document no record holds.']]
     ]);
-    expect(view.leftOut.items[0]).toMatchObject({ id: 'b9', material: 'p-rescued', materialText: 'Rescued letter', cardText: '' });
-    // The ids stay on the view for the editors, which edit what the map holds.
-    expect(view.sections[1].beats[0]).toMatchObject({ material: 'ale003', card: 'ale003' });
+    expect(view.leftOut.items[0].evidence.map((piece) => piece.text)).toEqual(['Rescued letter: A friend gives Marcus "until Friday".']);
   });
 
-  test("a photo's place beside a beat names the beat's material as the beat does", () => {
+  test("a photo's place beside a beat names the beat by its move", () => {
     const view = ViewLogic.mapView(data, opened(data));
     expect(view.sections[1].photos[0].besideOptions.map((o) => o.label)).toEqual([
       'By itself, with its people',
-      'Beside b2: ALE003 - The sale (Alex Reeves)',
-      'Beside b3: MOR001 - The envelope (Morgan Reed)',
-      'Beside b4: DNA test (Sarah Blackwood)'
+      'Beside: Marcus brags about the sale',
+      'Beside: Morgan pays Riley at the bar',
+      'Beside: The paternity result names Sarah'
     ]);
   });
 });
@@ -924,7 +933,7 @@ describe("4.6c: Everyone and the counts read mapTally's own inputs, which the pa
 
   test('a roster player whose name every object carries counts as any other, on the page and in the checks', () => {
     const roster = [{ name: 'constructor', fullName: null }, { name: 'toString', fullName: null }, { name: 'Alex', fullName: 'Alex Reeves' }];
-    const map = { sections: [{ slot: 'lede', heading: '', job: 'Open.', beats: [{ id: 'b1', kind: 'scene', material: 'x', players: ['constructor'] }], photos: [] }], leftOut: [] };
+    const map = { sections: [{ slot: 'lede', heading: '', job: 'Open.', beats: [{ id: 'b1', kind: 'scene', move: 'x', players: ['constructor'] }], photos: [] }], leftOut: [] };
     expect(EditLogic.mapTally(map, { roster })).toMatchObject({
       everyone: [{ slot: 'lede', heading: '', players: ['constructor'] }],
       unplaced: ['toString', 'Alex']
@@ -977,7 +986,7 @@ function prototypeNamed(times) {
   PROTOTYPE_NAMES.forEach((name) => {
     for (let n = 0; n < times; n += 1) {
       const section = map.sections[n % 2 === 0 ? 2 : 3];
-      section.beats.push({ id: name, kind: 'scene', material: `A beat under ${name}`, players: [] });
+      section.beats.push({ id: name, kind: 'scene', move: `A beat under ${name}`, players: [] });
       section.photos.push({ filename: name });
     }
   });
@@ -995,9 +1004,10 @@ describe('4.6c: the gate, the checks and the console find one set of repeats, un
     const [left, shown] = [prototypeNamed(2), prototypeNamed(2)];
     expect({ gate: gateTakes(left, shown), console: consoleTakes(left, shown) }).toEqual({ gate: true, console: true });
     expect(EditLogic.mapRepeats(left)).toEqual({ beatIds: PROTOTYPE_NAMES, photoKeys: PROTOTYPE_NAMES.map((name) => name.toLowerCase()) });
+    // Phase 4b (brief 1D): one failure for each repeat, beside its first place.
     expect(checksFind(left)).toEqual([
-      'Beats sharing an id: constructor, toString, __proto__, hasOwnProperty and valueOf',
-      'Photos placed more than once: constructor, toString, __proto__, hasOwnProperty, valueOf'
+      ...PROTOTYPE_NAMES.map((name) => `Beats sharing the id ${name}: "A beat under ${name}" and "A beat under ${name}"`),
+      ...PROTOTYPE_NAMES.map((name) => `The photo ${name} is placed more than once`)
     ]);
   });
 
@@ -1030,22 +1040,22 @@ describe('4.10: the map lists the changes no pass put back, and a send-back\'s w
   }
 
   test('an automatic change code put back is not listed', () => {
-    expect(linesFor([entry({ id: 'E1', scope: 'map', where: 'section "closing", beat "b6", material', director: 'Riley keeps the books.', became: 'Riley kept nothing.', pass: 1, automatic: true, restored: true })])).toEqual([]);
+    expect(linesFor([entry({ id: 'E1', scope: 'map', where: 'section "closing", beat "b6", move', director: 'Riley keeps the books.', became: 'Riley kept nothing.', pass: 1, automatic: true, restored: true })])).toEqual([]);
   });
 
   test('a cut that came back is listed, still on the map', () => {
-    expect(linesFor([entry({ id: 'E1', scope: 'map', where: 'section "closing", beat "b6", material', cut: true, director: 'and the second ledger', became: 'Riley: "I kept the books, and the second ledger"', pass: 1, automatic: true })]))
-      .toEqual(['Closing, beat "b6", material: the text you cut came back as "Riley: "I kept the books, and the second ledger"" (automatic pass 1). It is still on the map: cut it again if it should go.']);
+    expect(linesFor([entry({ id: 'E1', scope: 'map', where: 'section "closing", beat "b6", move', cut: true, director: 'and the second ledger', became: 'Riley says they only kept the books, and the second ledger', pass: 1, automatic: true })]))
+      .toEqual(['Closing, the move "Riley says they only kept the books": the text you cut came back as "Riley says they only kept the books, and the second ledger" (automatic pass 1). It is still on the map: cut it again if it should go.']);
   });
 
   test("a send-back's change is listed with its reason", () => {
-    expect(linesFor([entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", material', director: 'Riley keeps the books.', became: 'Riley kept nothing.', pass: SEND_BACK_PASS, automatic: false, reason: 'The note asks for the plain line.' })]))
-      .toEqual(['Closing, beat "b6", material: your "Riley keeps the books." became "Riley kept nothing." (the rework of your send-back). Why: The note asks for the plain line.']);
+    expect(linesFor([entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", move', director: 'Riley keeps the books.', became: 'Riley kept nothing.', pass: SEND_BACK_PASS, automatic: false, reason: 'The note asks for the plain line.' })]))
+      .toEqual(['Closing, the move "Riley says they only kept the books": your "Riley keeps the books." became "Riley kept nothing." (the rework of your send-back). Why: The note asks for the plain line.']);
   });
 
   test('a beat a pass removed is listed: only its place was the director\'s, so code did not put it back', () => {
     expect(linesFor([entry({ id: 'E3', scope: 'map', where: 'section "closing", beat "b3", moved from section "theStory"', moved: true, director: 'b3', became: null, pass: 1, automatic: true })]))
-      .toEqual(['Closing, beat "b3", moved from The Story: automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.']);
+      .toEqual(['Closing, the move "Morgan pays Riley at the bar", moved from The Story: automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.']);
   });
 });
 
@@ -1076,7 +1086,7 @@ describe('4.6d: the gate and the console read the map the stop showed by one rul
     expect([EditLogic.isMapValue(shown), EditLogic.mapRepeats(shown).beatIds]).toEqual([false, ['b9']]);
     const onScreen = ViewLogic.mapProblems(left, { outline: shown, mapSlots: SLOTS });
     expect(onScreen).toBe(ViewLogic.mapProblems(left, { outline: null, mapSlots: SLOTS }));
-    expect(onScreen).toMatch(/^The map cannot be sent yet: left out, beat b9 shares its id with another beat: your changes made this repeat\./);
+    expect(onScreen).toMatch(/^The map cannot be sent yet: left out, beat "An unsigned letter threatens Marcus" shares its id with another beat: your changes made this repeat\./);
     expect({ gate: gateTakes(left, shown), console: onScreen === null }).toEqual({ gate: false, console: false });
     expect(mapResume({ outline: 'approve', map: left }, { outline: shown }, { theme: 'journalist' }).error)
       .toBe(directorMapProblems(left, { theme: 'journalist', shown: null }));
@@ -1180,7 +1190,7 @@ describe("4.10b: the map lists a restore out of the director's order, and says w
 
   test('three edits, and a send-back entry to show', () => {
     expect(viewWith({ checked: ['E1', 'E2', 'E3'], changed: [] }).kept).toBe('All 3 of your edits stand.');
-    const sendBack = entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", material', director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false });
+    const sendBack = entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", move', director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false });
     expect(viewWith({ checked: ['E1', 'E2'], changed: [sendBack] }).kept).toBe('');
   });
 });
@@ -1301,7 +1311,7 @@ describe("4.14b: the map's beat rows are keyed by the beat's id, so an open edit
 
   test('a beat whose id another beat of its list holds, or with none, is keyed by its place, so no two rows of a list share a key', () => {
     const map = clone(MAP);
-    map.sections[1].beats.push({ id: 'b3', kind: 'line', material: 'A second beat under b3', players: [] }, { kind: 'scene', material: 'A beat with no id', players: [] });
+    map.sections[1].beats.push({ id: 'b3', kind: 'line', move: 'A second beat under b3', players: [] }, { kind: 'scene', move: 'A beat with no id', players: [] });
     const keys = ViewLogic.mapView(data, map).sections[1].beats.map((b) => b.key);
     expect(keys).toEqual(['theStory-beat-b2', 'theStory-beat@1', 'theStory-beat-b4', 'theStory-beat@3', 'theStory-beat@4']);
     expect(new Set(keys).size).toBe(keys.length);
@@ -1481,10 +1491,10 @@ describe('4.14b fix round 1: a section the director emptied that a pass put back
   });
 
   test('any other line reads as before, beside it', () => {
-    const other = entry({ id: 'E3', where: 'section "closing", beat "b6", material', cut: true, director: 'and the second ledger', became: 'Riley: "I kept the books, and the second ledger"', pass: 1, automatic: true });
+    const other = entry({ id: 'E3', where: 'section "closing", beat "b6", move', cut: true, director: 'and the second ledger', became: 'Riley says they only kept the books, and the second ledger', pass: 1, automatic: true });
     expect(linesFor([slotGone(1), sectionBack(1), other])).toEqual([
       AUTOMATIC_LINE,
-      'Closing, beat "b6", material: the text you cut came back as "Riley: "I kept the books, and the second ledger"" (automatic pass 1). It is still on the map: cut it again if it should go.'
+      'Closing, the move "Riley says they only kept the books": the text you cut came back as "Riley says they only kept the books, and the second ledger" (automatic pass 1). It is still on the map: cut it again if it should go.'
     ]);
   });
 
@@ -1493,7 +1503,7 @@ describe('4.14b fix round 1: a section the director emptied that a pass put back
     expect(error).toBeNull();
     const before = stateUpdates.outline;
     const pass = clone(before);
-    pass.sections.splice(2, 0, { ...clone(MAP.sections[2]), beats: [{ id: 'b7', kind: 'figure', material: 'The Melanie account took $75,000', players: [] }] });
+    pass.sections.splice(2, 0, { ...clone(MAP.sections[2]), beats: [{ id: 'b7', kind: 'figure', move: 'The Melanie account takes the sale', players: [] }] });
     pass.dropped = pass.dropped.filter((d) => d.slot !== 'followTheMoney');
     const edits = stateUpdates._outlineHandEdits.edits;
     const settled = settleEdits(null, { edits, before, after: pass, pass: 1 });

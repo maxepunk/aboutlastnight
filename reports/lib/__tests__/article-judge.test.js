@@ -29,6 +29,7 @@ const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
 const { settledWeaveOf, renderDirectorAnswers } = require('../prompt-renderers/settled-weave');
 const { REVISION_CAPS } = require('../workflow/state');
 const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('./fixtures/rework-state');
+const { beatCardOf } = require('../../console/outline-edit-logic');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const count = (text, part) => text.split(part).length - 1;
@@ -76,9 +77,14 @@ const ARTICLE_TRUTH = {
  * room's theory about Morgan, moved from THE STORY into leftOut. Invented text.
  */
 const THEORY = 'The room weighed whether Morgan would replace Marcus, not kill him';
+/** The theory's beat, a move at the level of the story with its evidence (phase 4b, brief 1D). */
+const THEORY_BEAT = {
+  id: 'b7', move: THEORY, players: ['Morgan'], threads: ['t1'], kind: 'line',
+  evidence: [{ sources: ['notes'], shows: 'Alex and Morgan argued at the bar.', stance: 'supports' }]
+};
 function struckTheoryState(extra = {}) {
   const baseline = clone(MAP);
-  baseline.sections[1].beats.push({ id: 'b7', kind: 'line', material: THEORY, players: ['Morgan'] });
+  baseline.sections[1].beats.push(clone(THEORY_BEAT));
   const left = clone(baseline);
   const [struck] = left.sections[1].beats.splice(3, 1);
   left.leftOut.push(struck);
@@ -344,7 +350,7 @@ describe('4.7a: a theory struck from the map stays out, through the judge', () =
     const { systemPrompt, prompt } = sdk.mock.calls[0][0];
     const map = mapIn(prompt);
     expect(map.sections.flatMap((s) => s.beats).map((b) => b.id)).not.toContain('b7');
-    expect(map.leftOut.find((b) => b.id === 'b7')).toEqual({ id: 'b7', kind: 'line', material: THEORY, players: ['Morgan'] });
+    expect(map.leftOut.find((b) => b.id === 'b7')).toEqual(THEORY_BEAT);
     expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
     // The question that asked for every theory the room debated, whatever the map said, is gone.
     expect(systemPrompt).not.toContain('with the alternative theories the room debated reported');
@@ -466,7 +472,7 @@ describe("4.7f: the judge reads the map as the director's edits leave it", () =>
   /** The writer's article prints b3's card in THE STORY, and the director cut it at the desk. */
   function cutTheoryCardState() {
     const map = clone(MAP);
-    map.sections[1].beats[1].material = CARD_THEORY;
+    map.sections[1].beats[1].move = CARD_THEORY;
     const writers = clone(PREVIOUS_BUNDLE);
     writers.sections[0].content.splice(2, 0, {
       type: 'evidence-card', tokenId: 'mor001', headline: 'The envelope', content: 'Morgan hands Riley an envelope by the bar.', owner: 'Morgan Reed', significance: 'supporting'
@@ -490,7 +496,8 @@ describe("4.7f: the judge reads the map as the director's edits leave it", () =>
     const sdk = judging(CLEAN);
     await evaluateArticle(atCap(cutTheoryCardState()), cfg(sdk));
     const { systemPrompt, prompt } = sdk.mock.calls[0][0];
-    expect(mapIn(prompt).sections[1].beats.filter((beat) => beat.card === 'mor001').map((beat) => beat.material)).toEqual([CARD_THEORY]);
+    // Phase 4b (brief 1D; R4): a beat's card is its flagged piece, read through beatCardOf.
+    expect(mapIn(prompt).sections[1].beats.filter((beat) => beatCardOf(beat) === 'mor001').map((beat) => beat.move)).toEqual([CARD_THEORY]);
     const edits = prompt.indexOf(TRUTH_MATERIAL.directorEdits);
     expect(edits).toBeGreaterThan(prompt.indexOf('CONTENT BUNDLE:'));
     expect(prompt.slice(edits)).toContain('E1 (section "the-story", evidence-card mor001, cut)');
@@ -506,7 +513,7 @@ describe("4.7f: the judge reads the map as the director's edits leave it", () =>
     const sdk = judging(CLEAN);
     await evaluateArticle(atCap(state), cfg(sdk));
     const { systemPrompt, prompt } = sdk.mock.calls[0][0];
-    expect(mapIn(prompt).leftOut.filter((beat) => beat.id === 'b7').map((beat) => beat.material)).toEqual([THEORY]);
+    expect(mapIn(prompt).leftOut.filter((beat) => beat.id === 'b7').map((beat) => beat.move)).toEqual([THEORY]);
     expect(prompt.slice(prompt.indexOf(TRUTH_MATERIAL.directorEdits))).toContain(`E1 (section "the-story", paragraph): "${DIRECTORS}"`);
     expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
   });

@@ -279,21 +279,23 @@ describe('4.6: Everyone and the counts, one function from the beats (mapTally)',
     { name: 'Ellis', fullName: 'Ellis Reeve' }, { name: 'Rowan', fullName: 'Rowan Vale' },
     { name: 'Sloane', fullName: 'Sloane Hart' }, { name: 'Mira', fullName: 'Mira Fenn' }, { name: 'Kai', fullName: 'Kai Lune' }
   ];
+  /** A piece flagged as its beat's card's document (phase 4b, brief 1D; R4). */
+  const cardPiece = (source) => ({ sources: [source], shows: 'The document.', stance: 'supports', card: true });
   const map = () => ({
     topPhoto: 'huddle.jpg',
     gapNote: { line: 'The record holds nothing Kai did.', players: ['kai'] },
     sections: [
-      { slot: 'lede', heading: '', job: 'Open.', beats: [{ id: 'b1', kind: 'scene', material: 'The scoreboard', players: ['Ellis Reeve', 'Rowan'] }], photos: [] },
+      { slot: 'lede', heading: '', job: 'Open.', beats: [{ id: 'b1', kind: 'scene', move: 'The scoreboard', players: ['Ellis Reeve', 'Rowan'] }], photos: [] },
       {
         slot: 'theStory', heading: 'The Story', job: 'The case.',
         beats: [
-          { id: 'b2', kind: 'receipt', material: 'row001', players: ['Rowan', 'Sloane'], card: 'row001' },
-          { id: 'b3', kind: 'line', material: 'Blake: "Pay up"', players: ['Blake'] }
+          { id: 'b2', kind: 'receipt', move: 'The fight in the hall', players: ['Rowan', 'Sloane'], card: true, evidence: [cardPiece('row001')] },
+          { id: 'b3', kind: 'line', move: 'Blake asks to be paid', players: ['Blake'] }
         ],
         photos: [{ filename: 'theory.jpg', beat: 'b2' }, { filename: 'theory.jpg' }]
       }
     ],
-    leftOut: [{ id: 'b9', kind: 'scene', material: 'Mira at the bar', players: ['Mira'], card: 'row002' }]
+    leftOut: [{ id: 'b9', kind: 'scene', move: 'Mira at the bar', players: ['Mira'], card: true, evidence: [cardPiece('row002')] }]
   });
 
   it('lists each roster player under the first section whose beat shows them, the players in no beat, those the gap note raises, the cards and the photos placed of those kept', () => {
@@ -359,8 +361,8 @@ describe("4.6: the map's client gate, held to the director-side schema", () => {
   /** Maps a writer or the director can leave, then maps the schema refuses. */
   const ACCEPTED = {
     'the fixture map': map,
-    'a beat the director added, with only its id and its material': () => edited((m) => { m.sections[0].beats.push({ id: 'b11', material: 'Alex at the window' }); }),
-    'a beat the director brought back, with only its id and its material': () => edited((m) => { m.leftOut.push({ id: 'b12', material: 'The second envelope' }); }),
+    'a beat the director added, with only its id and its move': () => edited((m) => { m.sections[0].beats.push({ id: 'b11', move: 'Alex at the window' }); }),
+    'a beat the director brought back, with only its id and its move': () => edited((m) => { m.leftOut.push({ id: 'b12', move: 'The second envelope' }); }),
     'a gap note raising a player': () => edited((m) => { m.gapNote = { line: 'The record holds nothing Sarah did.', players: ['Sarah'] }; }),
     'no top photo': () => edited((m) => { delete m.topPhoto; }),
     'no sections, nothing dropped, nothing left out': () => edited((m) => { m.sections = []; m.dropped = []; m.leftOut = []; }),
@@ -381,7 +383,9 @@ describe("4.6: the map's client gate, held to the director-side schema", () => {
     'a section with no job': () => edited((m) => { delete m.sections[0].job; }),
     'a slot the theme has none of': () => edited((m) => { m.sections[0].slot = 'epilogue'; }),
     'a dropped slot the theme has none of': () => edited((m) => { m.dropped[0].slot = 'epilogue'; }),
-    'a beat with no material': () => edited((m) => { delete m.sections[1].beats[0].material; }),
+    'a beat with no move': () => edited((m) => { delete m.sections[1].beats[0].move; }),
+    // Phase 4b (brief 1D): a beat that still names its material is the old shape.
+    'a beat that names its material': () => edited((m) => { m.sections[1].beats[0].material = 'mor001'; }),
     'a beat with no id': () => edited((m) => { delete m.leftOut[0].id; }),
     'a kind the map has none of': () => edited((m) => { m.sections[1].beats[0].kind = 'quote'; }),
     'a key a beat has none of': () => edited((m) => { m.sections[1].beats[0].excerpt = 'x'; }),

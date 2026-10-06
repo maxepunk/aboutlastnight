@@ -1,8 +1,11 @@
 /**
  * The story map (phase 4, brief 4.6; spec docs/superpowers/specs/2026-10-02-story-meeting-and-map.md
  * sections 5.1 to 5.4; CONTEXT.md "Story map"): the settled weave laid across the
- * article's sections in about 450 words. The map writer lays it out, the director edits it
- * at the map's stop, and the article writer writes the prose from it.
+ * article's sections. Since phase 4b (piece 1, brief 1D; spec
+ * docs/superpowers/specs/2026-10-05-story-level-and-evidence.md sections 4.2, 5 and 6) the map
+ * stays at the level of the story, a page of at most MAP_WORD_BOUND words that aims for
+ * MAP_WORD_AIM, and the evidence behind each move travels underneath it. The map writer lays it
+ * out, the director edits it at the map's stop, and the article writer writes the prose from it.
  *
  * A map holds:
  * - `headline` and `deck`, within the content bundle's limits;
@@ -11,9 +14,12 @@
  *   placed or a link the weave lacks was seen: `{line, players}`;
  * - `sections`, in order: `{slot, heading, job, beats, photos}`, each slot one of the
  *   theme's (lib/theme-config.js mapSlotsOf);
- * - each beat `{id, kind, material, players, card?, connection?}`: its kind
- *   (MAP_BEAT_KINDS), its material named, the roster players it shows, the id of the
- *   document it prints as a card, and the id of the weave's connection that lands in it;
+ * - each beat `{id, move, players, threads, connection?, card?, kind?, evidence}` (R1): its move
+ *   in a few plain words, the roster players it shows, the ids of the settled weave's threads it
+ *   carries, the id of the weave's connection that lands in it, its card marker, its kind
+ *   (MAP_BEAT_KINDS, a hint to the article writer the page never prints) and its evidence, the
+ *   pieces of the record that tell it (lib/evidence.js). On a beat marked as a card, one piece
+ *   is flagged as the card's document (R4; console/outline-edit-logic.js beatCardOf);
  * - each photo `{filename, beat?}`, beside the beat it belongs with, or by itself in the
  *   section where its people appear;
  * - `dropped`: `{slot, reason}` for each slot the story does not use;
@@ -27,7 +33,9 @@
  * - THE SCHEMAS: the writer's (mapSchemaFor, the map's shape with the theme's slots) and the
  *   director-side one derived from it (directorMapSchemaFor, R12), which allows a beat the
  *   director added or brought back and is never sent to the SDK;
- * - THE CHECKS (mapFindings), the map's version stamp (mapKey) and the roster they read;
+ * - THE CHECKS (mapFindings), the map's version stamp (mapKey) and the roster they read, and
+ *   the director's share of the map (mapDirectorsShare), which the checks never fail and the
+ *   page's count leaves out (mapWritersShareOf);
  * - THE STOP: its payloads (mapResume, which server.js buildResumePayload calls) and what it
  *   shows (mapCheckpointData).
  * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks and
@@ -51,24 +59,49 @@ const { mapSlotsOf } = require('./theme-config');
 const { roundNoteOf, roundDidNotRunAt } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const {
-  mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, isMapValue, shownMapOf,
+  mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, cardPiecesOf, beatWithId, isMapValue, shownMapOf,
   freeStruckBeatPhotos, dropEmptiedSections, leftOutTopPhoto
 } = require('../console/outline-edit-logic');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 const {
   mapEditAddress, isCut, isStrike, isMap, standingOnMap, carriedEdits, concernEditIds, editWhere,
-  handEditReportOf, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE
+  handEditReportOf, MAP_NONE, MAP_LEFT_OUT, MAP_SCOPE, MAP_TOP_PHOTO
 } = require('./hand-edit-diff');
 // Brief 4.14a: a meeting change by its id in the meeting's own form, and by its place as the
 // meeting names the line.
 const { meetingChangeId } = require('./prompt-renderers/settled-weave');
 const { meetingChangePlace } = require('./meeting');
+// Phase 4b (brief 1D; R10): the evidence check, the story-terms check and a piece's shape, which
+// the weave and the map share.
+const {
+  EVIDENCE_PIECE_SCHEMA, evidenceProblems, describeEvidenceProblems, evidenceProblemsSaid, storyTermsProblems,
+  describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX
+} = require('./evidence');
+const { isVerbatimIn } = require('./grounding');
 
-/** A beat's kind: what it puts on the page (C2). */
+/** A beat's kind: what its move puts on the page, kept underneath as a hint to the article writer and never printed (R1). */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
 
 /** How many inline cards the article carries (C9), which the map's cards are held to. */
 const MAP_CARDS = Object.freeze({ min: 3, max: 5 });
+
+/**
+ * The bound on the map's page, as it prints when it first opens (spec 2026-10-05 sections 4.2 and
+ * 6.1; R5): counted by lib/stop-pages.js wordsShown, the count the stops log records, which the
+ * check node passes to mapFindings. The check holds the writer's page to it, never the
+ * director's version.
+ */
+const MAP_WORD_BOUND = 450;
+
+/** The words the map writer aims for on that page (spec 4.2): its task asks for them. */
+const MAP_WORD_AIM = 300;
+
+/**
+ * Why a line that fails the story-terms check is wrong, said to the director after what it holds
+ * (lib/evidence.js storyTermsSaid): the map's lines tell the story, and the record's details
+ * travel under them.
+ */
+const MAP_STORY_TERMS_LINE = "The map tells the story in plain words; the record's quotations, times, figures and documents go in the evidence underneath.";
 
 /** The `source` the map checks stamp on validationResults (node-helpers.js CODE_CHECKS). */
 const MAP_CHECKS_SOURCE = 'map-checks';
@@ -101,6 +134,51 @@ function objectsOf(value) {
 /** Words joined as a list is read: "a", "a and b", "a, b and c". */
 function listOf(words) {
   return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words.join('');
+}
+
+/** The text items of a list, trimmed, or none. */
+function stringsOf(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim()) : [];
+}
+
+/** Does `object` hold `key` as its own property? */
+function has(object, key) {
+  return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
+}
+
+/** A phrase with its first letter up, to open a line. */
+function opening(text) {
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : text;
+}
+
+/** A beat's id as a check reads it: its text, trimmed. */
+function beatIdText(beat) {
+  return beat && beat.id !== undefined && beat.id !== null ? String(beat.id).trim() : '';
+}
+
+/**
+ * Where a beat sits on the map, as the map's page reads a place (console/checkpoint-view-logic.js
+ * mapLineKeyOf; lib/hand-edit-diff.js writes the same paths): `sections[#lede].beats[#b2]`, or
+ * `leftOut[#b9]` for a beat in left out; null for a beat with no id.
+ */
+function beatPlace(slot, beat) {
+  const id = beatIdText(beat);
+  if (!id) return null;
+  return slot === null ? `${MAP_LEFT_OUT}[#${id}]` : `sections[#${slot}].beats[#${id}]`;
+}
+
+/** A photo's place on the map, as the page reads it: `topPhoto`, or `sections[#lede].photos[#a.jpg]`. */
+function photoPlace(map, filename) {
+  const key = photoKey(filename);
+  const at = mapPhotoPlacements(map).find((placement) => photoKey(placement.filename) === key);
+  if (!at) return null;
+  return at.at === MAP_TOP_PHOTO ? MAP_TOP_PHOTO : `sections[#${at.at}].photos[#${at.filename}]`;
+}
+
+/** A beat's move as a director's line names it: `the move "..."`, or `a move` when it has none. */
+function moveWords(beat) {
+  const move = textOf(beat && beat.move);
+  return move ? `the move "${move}"` : 'a move';
 }
 
 /** JSON with every object's keys sorted, so equal content gives one text. */
@@ -144,6 +222,103 @@ function mapRosterOf(sessionConfig, canonicalCharacters) {
 /** The beats in the map's sections, each with the slot it sits in; a left-out beat is not among them. */
 function sectionBeats(map) {
   return objectsOf(map.sections).flatMap((section) => objectsOf(section.beats).map((beat) => ({ beat, slot: textOf(section.slot) })));
+}
+
+/** Every beat on the map, the sections' then left out's, each with its slot (null in left out). */
+function allBeats(map) {
+  return [...sectionBeats(map), ...objectsOf(map.leftOut).map((beat) => ({ beat, slot: null }))];
+}
+
+/**
+ * The director's share of the map, read from their standing edits on it (R11; phase 4b, brief
+ * 1D), as the weave's is (lib/hand-edit-diff.js weaveDirectorsShare): each a map from what the
+ * director changed to the id of their edit.
+ * - `addedBeats`: a beat they added, by its id;
+ * - `beatFields`: a field of a beat they rewrote (`b3.move`, `b3.players`);
+ * - `sections`: a section they added whole, by its slot; `sectionFields`: a section's field they
+ *   rewrote (`lede.job`);
+ * - `fields`: a field of the map they rewrote (`headline`, `deck`, `gapNote` whole, `gapNote.line`,
+ *   `weaveChanges`).
+ * A beat or a photo they moved or struck carries the writer's text, so it is no share of theirs,
+ * and the evidence is never theirs (R6). The checks never fail the director's share (a beat
+ * they added is never failed for having no threads or no evidence; a line they wrote is not held
+ * to story terms), and the page's count leaves it out (mapWritersShareOf).
+ *
+ * @param {Object[]} edits - the director's standing edits the map carries
+ * @returns {{addedBeats: Object, beatFields: Object, sections: Object, sectionFields: Object, fields: Object}}
+ */
+function mapDirectorsShare(edits) {
+  const share = { addedBeats: {}, beatFields: {}, sections: {}, sectionFields: {}, fields: {} };
+  (Array.isArray(edits) ? edits : []).filter((edit) => edit && edit.scope === MAP_SCOPE && !isCut(edit)).forEach((edit) => {
+    const address = mapEditAddress(edit);
+    if (address) {
+      if (address.kind !== 'beat') return;
+      const id = String(address.identity.id).trim();
+      if (address.fieldSteps.length === 0) {
+        if (edit.from === MAP_NONE) share.addedBeats[id] = edit.id;
+        return;
+      }
+      const field = address.fieldSteps[0] && address.fieldSteps[0].key;
+      if (field) share.beatFields[`${id}.${field}`] = edit.id;
+      return;
+    }
+    const steps = Array.isArray(edit.at) ? edit.at : [];
+    const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
+    if (head === 'sections' && steps[1] && steps[1].match && steps[1].match.slot !== undefined) {
+      const slot = String(steps[1].match.slot).trim();
+      if (steps.length === 2) share.sections[slot] = edit.id;
+      else if (steps[2] && 'key' in steps[2]) share.sectionFields[`${slot}.${steps[2].key}`] = edit.id;
+      return;
+    }
+    if (head) share.fields[`${head}${steps[1] && 'key' in steps[1] ? `.${steps[1].key}` : ''}`] = edit.id;
+  });
+  return share;
+}
+
+/**
+ * The map as the writer's share of it (Review focus 3; R5), for the page the check node counts:
+ * only the writer's output is held to MAP_WORD_BOUND, never the director's version. Read from
+ * the director's share (mapDirectorsShare), it has each line the director rewrote empty (the
+ * headline, the deck, the gap note's line, a section's heading or job, a beat's move), each list
+ * they rewrote empty (a beat's players or threads, the changes to the weave), and no beat, section
+ * or gap note they added. The map given is left as it was.
+ *
+ * @param {*} map
+ * @param {Object} share - mapDirectorsShare's
+ * @returns {*}
+ */
+function mapWritersShareOf(map, share) {
+  if (!isMapValue(map)) return map;
+  const s = share && typeof share === 'object' ? share : {};
+  const out = JSON.parse(JSON.stringify(map));
+  /** A field the director rewrote, written as the writer's share holds it: text empty, a list empty. */
+  const emptied = (element, field) => {
+    if (typeof element[field] === 'string') element[field] = '';
+    else if (Array.isArray(element[field])) element[field] = [];
+  };
+  ['headline', 'deck', 'weaveChanges'].forEach((field) => { if (has(s.fields, field)) emptied(out, field); });
+  if (out.gapNote && typeof out.gapNote === 'object') {
+    if (has(s.fields, 'gapNote')) delete out.gapNote;
+    else ['line', 'players'].forEach((field) => { if (has(s.fields, `gapNote.${field}`)) emptied(out.gapNote, field); });
+  }
+  const writersBeats = (beats) => (Array.isArray(beats) ? beats : [])
+    .filter((beat) => !has(s.addedBeats, beatIdText(beat)))
+    .map((beat) => {
+      if (!beat || typeof beat !== 'object') return beat;
+      const id = beatIdText(beat);
+      Object.keys(s.beatFields || {}).filter((place) => id && place.startsWith(`${id}.`)).forEach((place) => emptied(beat, place.slice(id.length + 1)));
+      return beat;
+    });
+  out.sections = out.sections
+    .filter((section) => !(section && typeof section === 'object' && has(s.sections, textOf(section.slot))))
+    .map((section) => {
+      if (!section || typeof section !== 'object') return section;
+      const slot = textOf(section.slot);
+      ['heading', 'job'].forEach((field) => { if (has(s.sectionFields, `${slot}.${field}`)) emptied(section, field); });
+      return { ...section, beats: writersBeats(section.beats) };
+    });
+  if (Array.isArray(out.leftOut)) out.leftOut = writersBeats(out.leftOut);
+  return out;
 }
 
 /**
@@ -252,15 +427,18 @@ function editsOnPhoto(entries, filename) {
 }
 
 /**
- * The ids of the director's edits on one beat's card, for a card in a section that names no
- * document in the record: a card they gave the beat, and the beat they added or brought back
- * with its card.
+ * The ids of the director's edits on one beat's card, for a card in a section whose flagged
+ * piece names no document in the record (phase 4b, brief 1D; R4): a card marker they gave the
+ * beat, and the beat they added or brought back from left out, card and all. Its one caller
+ * reads only a beat in a section that the map marks as a card or whose evidence flags one, so the
+ * beat as it stands is the card. The evidence under it is never the director's (R6), so their
+ * edits read no piece.
  */
 function editsOnCards(entries, beatId) {
   return entries.filter(({ edit, address }) => {
     if (!address || address.kind !== 'beat' || String(address.identity.id).trim() !== beatId) return false;
     if (address.fieldSteps.length > 0) return address.fieldSteps[0].key === 'card';
-    return (edit.from === MAP_NONE || edit.from === MAP_LEFT_OUT) && Boolean(beatCardOf(edit.after));
+    return edit.from === MAP_NONE || edit.from === MAP_LEFT_OUT;
   }).map(({ edit }) => edit.id);
 }
 
@@ -268,19 +446,24 @@ function editsOnCards(entries, beatId) {
  * How the director's edits moved the card count the card check reads (mapTally; briefs
  * 4.6b and 4.6c): one change for each beat their edits touch that is a card beat in a
  * section on one side only, read where it sat, with its card, before their edits and where
- * it sits now. `delta` is +1 for a card beat they added or brought back and a card they gave
- * a beat, and -1 for a card beat they struck or cut and a card they cleared. `editIds` are
- * the edits that made the change: the edit on the beat's place only when it took the beat
- * into the sections or out of them, and the edit on its card only when it added the card or
- * cleared it. So a beat moved between sections and given a card is a change of the card edit
- * alone, and one brought back from leftOut and given a card a change of both. An edit that
- * changes which document a card prints, or moves a card beat between sections, moves no
- * count.
+ * it sits now. `delta` is +1 for a card beat they added or brought back and a card marker they
+ * gave a beat, and -1 for a card beat they struck or cut and a card marker they cleared.
+ * `editIds` are the edits that made the change: the edit on the beat's place only when it took
+ * the beat into the sections or out of them, and the edit on its card only when it added the
+ * marker or cleared it. So a beat moved between sections and given a card is a change of the card
+ * edit alone, and one brought back from leftOut and given a card a change of both. A card beat
+ * moved between sections moves no count.
+ *
+ * Phase 4b (brief 1D; R4, R6): a beat's card is its flagged piece, read through beatCardOf on the
+ * beat as the map holds it now. The evidence is never the director's, so their edits carry none:
+ * the card the beat had before their edits is its flagged piece under the marker it had then,
+ * and a beat they cut, whose evidence went with it, was a card beat when it carried the marker.
  *
  * @param {Array<{edit: Object, address: Object|null}>} entries - the edits with what each is about (addressed)
+ * @param {*} map - the map the edits are read on
  * @returns {Array<{delta: number, editIds: string[]}>}
  */
-function cardCountChanges(entries) {
+function cardCountChanges(entries, map) {
   const beats = new Map();
   entries.forEach(({ edit, address }) => {
     if (!address || address.kind !== 'beat') return;
@@ -290,9 +473,8 @@ function cardCountChanges(entries) {
     beats.set(id, { ...beats.get(id), [onCard ? 'card' : 'place']: { edit, address } });
   });
   const inSections = (container) => container !== MAP_LEFT_OUT && container !== MAP_NONE;
-  const cardOf = (value) => Boolean(beatCardOf({ card: value }));
   const changes = [];
-  beats.forEach(({ place, card }) => {
+  beats.forEach(({ place, card }, id) => {
     // Whether the beat sat in a section and carried a card before the edits, and does now.
     let wasIn;
     let nowIn;
@@ -302,14 +484,15 @@ function cardCountChanges(entries) {
       // A cut takes the beat off the map whole: its place is what changed.
       wasIn = inSections(place.address.container);
       nowIn = false;
-      wasCard = Boolean(beatCardOf(place.edit.before));
+      wasCard = Boolean(place.edit.before && place.edit.before.card === true);
       nowCard = wasCard;
     } else {
       const sits = (place || card).address.container;
+      const beat = beatWithId(map, id) || {};
       nowIn = inSections(sits);
       wasIn = inSections(place && place.edit.from ? place.edit.from : sits);
-      nowCard = card ? cardOf(card.edit.after) : Boolean(beatCardOf(place.edit.after));
-      wasCard = card ? cardOf(card.edit.before) : nowCard;
+      nowCard = Boolean(beatCardOf(beat));
+      wasCard = card ? Boolean(beatCardOf({ ...beat, card: card.edit.before })) : nowCard;
     }
     const was = wasIn && wasCard;
     const now = nowIn && nowCard;
@@ -330,12 +513,13 @@ function cardCountChanges(entries) {
  *
  * @param {number} cards - the map's card count (mapTally), outside MAP_CARDS
  * @param {Array<{edit: Object, address: Object|null}>} entries - the edits with what each is about (addressed)
+ * @param {*} map - the map the count is read on
  * @returns {{editIds: string[], writers: boolean}} the director's edits the count is a
  *   concern on, and whether the writer's part fails
  */
-function cardCountOwners(cards, entries) {
+function cardCountOwners(cards, entries, map) {
   const way = cards > MAP_CARDS.max ? 1 : -1;
-  const changes = cardCountChanges(entries);
+  const changes = cardCountChanges(entries, map);
   const net = changes.reduce((sum, change) => sum + change.delta, 0);
   if (Math.sign(net) !== way) return { editIds: [], writers: true };
   const writersCount = cards - net;
@@ -356,57 +540,175 @@ function editsRemovingConnection(entries, connection) {
 }
 
 /**
- * The map's code checks (spec 5.4), each failure one line that names the defect and its
- * fix with its own list, in the order the stop prints the map:
+ * The ids of the director's edits that took a thread off the map's beats (phase 4b, brief 1D;
+ * R3): a beat they struck or cut that carried it, or a beat's threads they rewrote without it.
+ */
+function editsRemovingThread(entries, thread) {
+  const carries = (beat) => Boolean(beat) && typeof beat === 'object' && stringsOf(beat.threads).includes(thread);
+  return entries.filter(({ edit, address }) => {
+    if (!address || address.kind !== 'beat') return false;
+    if (address.fieldSteps.length > 0) return address.fieldSteps[0].key === 'threads' && stringsOf(edit.before).includes(thread) && !stringsOf(edit.after).includes(thread);
+    if (isCut(edit)) return carries(edit.before);
+    return isStrike(edit) && carries(edit.after);
+  }).map(({ edit }) => edit.id);
+}
+
+/** The settled weave's threads in the story as the checks read them: `{id, name, added}`, each with an id. */
+function storyThreadsOf(threads) {
+  return objectsOf(threads)
+    .map((thread) => ({ id: textOf(thread.id), name: textOf(thread.name), added: thread.added === true }))
+    .filter((thread) => thread.id);
+}
+
+/** The connections the story keeps as the checks read them: `{id, line}`, each given as one or by its id alone. */
+function storyConnectionsOf(connections) {
+  return (Array.isArray(connections) ? connections : [])
+    .map((connection) => (typeof connection === 'string' ? { id: textOf(connection), line: '' } : { id: textOf(connection && connection.id), line: textOf(connection && connection.line) }))
+    .filter((connection) => connection.id);
+}
+
+/**
+ * What is wrong with a beat's card, or null (phase 4b, brief 1D; R4; spec 6.1: a move marked
+ * as a card flags one piece, whose source is a document in the record): `{message, said}`, the
+ * rework's fix and the director's words, for a beat in a section that the map marks as a card or
+ * whose evidence flags a piece as one.
+ */
+function cardFault(beat, known, recordIds) {
+  const id = beatIdText(beat);
+  const flagged = cardPiecesOf(beat);
+  const marked = beat.card === true;
+  if (!marked && flagged.length === 0) return null;
+  const C9 = 'as C9 (`<craft-cards>`) sets out';
+  if (!marked) {
+    return {
+      message: `Beat ${id} flags a piece as a card's document and is not marked as a card. Mark the beat "card": true when its evidence prints as a card, or take the flag off the piece, ${C9}.`,
+      said: "flags a piece of its evidence as a card's document, and is not marked as a card"
+    };
+  }
+  if (flagged.length === 0) {
+    return {
+      message: `Beat ${id} is marked as a card and flags no piece as the card's document. Flag the one piece whose document prints as the card with "card": true, ${C9}.`,
+      said: "is marked as a card, and no piece of its evidence is the card's document"
+    };
+  }
+  if (flagged.length > 1) {
+    return {
+      message: `Beat ${id} flags ${flagged.length} pieces as the card's document. Flag one: the piece whose document prints as the card, ${C9}.`,
+      said: "is marked as a card, and its evidence names more than one card's document"
+    };
+  }
+  const card = beatCardOf(beat);
+  if (card && known.has(card.toLowerCase())) return null;
+  const sources = stringsOf(flagged[0].sources).map((source) => `"${source}"`);
+  return {
+    message: `Beat ${id}'s card piece names ${sources.length > 0 ? listOf(sources) : 'no source'}, which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: flag a piece whose source is one of ${recordIds.join(', ')}.`,
+    said: "is marked as a card, and its card's document is not one the record holds"
+  };
+}
+
+/**
+ * The map's code checks (spec 2026-10-02 section 5.4; spec 2026-10-05 sections 4.2 and 6.1),
+ * on the writer's text alone (R11), in the order the stop prints the map.
+ *
+ * Each failure is `{type, message, line, place?}`, the convention the weave's checks set out
+ * (lib/weave.js weaveFindings):
+ * - `message` is the rework's: the defect and its fix, in the writer's terms (a beat by its id, a
+ *   piece by its number, a source by its id, the rule item it breaks). The rework reads it,
+ *   through validationResults.
+ * - `line` is the director's (spec 6.3): what is wrong at that place in plain words, a move by
+ *   its words, never a beat's, a thread's or a connection's id, a piece's number or a rule item.
+ *   The map shows it when the check still fails after the rework
+ *   (console/checkpoint-view-logic.js mapView).
+ * - `place` is where the map shows it, beside the line it names: a beat's path
+ *   (`sections[#lede].beats[#b2]`, `leftOut[#b9]`), a section's (`sections[#lede]`), a photo's
+ *   (`sections[#lede].photos[#a.jpg]`, `topPhoto`), or a field of the map (`gapNote`,
+ *   `weaveChanges`). A failure about what the map lacks (a player, a photo placed nowhere, a
+ *   thread, a connection, the card count, the length) has no place and sits at the top.
+ *
+ * The checks:
  * - every beat has an id of its own, since the director's edits find a beat by its id
  *   (`duplicate-beat-id`);
+ * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
+ *   storyTermsProblems: no document id the record holds, quotation, clock time or money
+ *   figure): the gap note's line, each section's job, each beat's move in a section or in left
+ *   out, and each change to the weave. The headline, the deck and the section headings are
+ *   exempt (R2): the article prints them;
+ * - each of the writer's beats in a section carries a thread of the settled weave
+ *   (`beat-without-threads`) and has evidence (`beat-without-evidence`), and every piece of every
+ *   beat passes the evidence check (`evidence-not-in-record`; lib/evidence.js evidenceProblems:
+ *   each source a document in the record or the ledger, the evidence log or the notes, never a
+ *   buried memory, and each quotation word for word in its source);
  * - every roster player appears in a section's beat, or is among the gap note's players
  *   (`player-not-placed`; C7);
  * - every kept photo is placed once: as the top photo or among a section's photos
  *   (`photo-not-placed`, `photo-placed-twice`), and no photo outside the kept set is placed
  *   (`photo-not-offered`; T13);
- * - each card names a document in the record (`card-not-in-record`), and the cards number
- *   three to five (`card-count`; C9);
+ * - each beat in a section marked as a card flags one piece, whose source is a document in the
+ *   record, and no unmarked beat flags one (`card-not-in-record`; R4, cardFault), and the cards
+ *   number three to five (`card-count`; C9). A beat's card is its flagged piece, read through
+ *   beatCardOf by every reader;
+ * - every thread in the settled weave's story lands in a section's beat that names it among its
+ *   threads (`thread-not-landed`; R3). A thread the director added at the meeting may instead be
+ *   named in the gap note's line, when the record cannot carry it (spec 5.3);
  * - every connection the settled weave keeps lands in a section's beat
  *   (`connection-not-landed`);
  * - each change to the weave names a meeting change's id, in the meeting's own form (M3;
  *   brief 4.14a), or the meeting's approval note (`weave-change-source`), and there is none
  *   when the director changed nothing and left no approval note at the meeting
- *   (`weave-change-unasked`; brief 4.6e).
+ *   (`weave-change-unasked`; brief 4.6e);
+ * - the map's page as it first opens comes to no more than MAP_WORD_BOUND words
+ *   (`over-length`; R5): the check node counts the page of the writer's share
+ *   (mapWritersShareOf) with lib/stop-pages.js wordsShown and passes the count, which this
+ *   module does not compute.
  *
- * A failure the director caused is a concern on their edit, beside its line, never a
- * rework (R11): a beat they struck or cut that held the only place of a player or a
- * connection; a card or a photo they placed; the card count, when their edits, together,
- * moved it the way it fails (cardCountOwners; brief 4.6b); a beat they added under an id
- * the map holds. A failure partly theirs splits: the writer's part fails, the director's is
- * a concern. A card count is partly theirs when the count without their edits fails the
- * same way.
+ * The director's share of the map is never a check's failure (mapDirectorsShare): a line they
+ * wrote is not held to story terms, and a beat they added is never failed for having no threads
+ * or no evidence, which the article writer finds (spec 5.3). The evidence is never theirs (R6),
+ * so every piece is the writer's to answer for, under the director's beat too. A failure the
+ * director caused is a concern on their edit, beside its line, never a rework: a beat they
+ * struck or cut that held the only place of a player, a thread or a connection; a card or a
+ * photo they placed; the card count, when their edits, together, moved it the way it fails
+ * (cardCountOwners; brief 4.6b); a beat they added under an id the map holds. A failure partly
+ * theirs splits: the writer's part fails, the director's is a concern. A card count is partly
+ * theirs when the count without their edits fails the same way.
  *
  * @param {*} map
  * @param {Object} inputs
  * @param {Array} inputs.roster - mapRosterOf's roster
  * @param {string[]} inputs.keptPhotos - the filenames of the photos kept for the article
  * @param {Iterable<string>} inputs.recordIds - the ids a document in the record answers to
- * @param {string[]} inputs.connections - the ids of the connections the settled weave keeps
- *   (lib/weave.js storyConnections: none struck, and none that joins a left-out thread)
+ * @param {Array<{id: string, name: string, added: boolean}>} [inputs.threads] - the settled weave's
+ *   threads in the story (every role but left out), `added` on one the director added at the meeting
+ * @param {Array<{id: string, line: string}|string>} inputs.connections - the connections the settled
+ *   weave keeps (lib/weave.js storyConnections: none struck, and none that joins a left-out
+ *   thread), each `{id, line}` or its id alone
  * @param {string[]} inputs.meetingEdits - the ids of the director's changes at the meeting, in
  *   the meeting's own form (meetingEditIdsOf)
  * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
- * @returns {{failures: Array<{type: string, message: string}>,
+ * @param {Object} [inputs.evidence] - what the evidence and story-terms checks read (lib/evidence.js
+ *   evidenceContextOf); none, no evidence check
+ * @param {number|null} [inputs.pageWords] - the map's page as it first opens, counted; none, no
+ *   length check
+ * @returns {{failures: Array<{type: string, message: string, line: string, place?: string}>,
  *            concerns: Array<{type: string, editIds: string[], finding: string}>}}
  */
 function mapFindings(map, inputs = {}) {
   if (!isMapValue(map)) {
-    return { failures: [{ type: 'no-map', message: 'The output holds no sections. Write the whole map in the shape <SCHEMA> gives.' }], concerns: [] };
+    return {
+      failures: [{ type: 'no-map', message: 'The output holds no sections. Write the whole map in the shape <SCHEMA> gives.', line: 'The writer returned no map.' }],
+      concerns: []
+    };
   }
   const roster = Array.isArray(inputs.roster) ? inputs.roster : [];
   const kept = Array.isArray(inputs.keptPhotos) ? inputs.keptPhotos.filter((f) => typeof f === 'string' && f.trim()) : [];
   const edits = (Array.isArray(inputs.edits) ? inputs.edits : []).filter((edit) => edit && edit.scope === MAP_SCOPE);
   const entries = addressed(edits);
+  const share = mapDirectorsShare(edits);
+  const evidence = inputs.evidence || null;
   const failures = [];
   const concerns = [];
-  const fail = (type, message) => failures.push({ type, message });
+  const fail = (type, message, line, place) => failures.push(place ? { type, message, line, place } : { type, message, line });
   const concern = (type, editIds, finding) => concerns.push({ type, editIds: [...new Set(editIds)], finding });
 
   // Every beat has an id of its own (the edits find a beat by its id).
@@ -414,9 +716,68 @@ function mapFindings(map, inputs = {}) {
   if (repeated.length > 0) {
     const added = entries.filter(({ edit, address }) => address && address.kind === 'beat' && address.fieldSteps.length === 0
       && edit.from === MAP_NONE && repeated.includes(String(address.identity.id).trim()));
-    const writers = repeated.filter((id) => !added.some(({ address }) => String(address.identity.id).trim() === id));
-    if (added.length > 0) concern('duplicate-beat-id', added.map(({ edit }) => edit.id), `The beat you added shares its id with another beat (${listOf(repeated.filter((id) => !writers.includes(id)))}).`);
-    if (writers.length > 0) fail('duplicate-beat-id', `Beats sharing an id: ${listOf(writers)}. Give each beat, in the sections and in leftOut, an id of its own.`);
+    const theirs = added.map(({ address }) => String(address.identity.id).trim());
+    if (added.length > 0) concern('duplicate-beat-id', added.map(({ edit }) => edit.id), 'The move you added shares its id with another move.');
+    repeated.filter((id) => !theirs.includes(id)).forEach((id) => {
+      const under = allBeats(map).filter(({ beat }) => beatIdText(beat) === id);
+      fail('duplicate-beat-id', `Beats sharing the id ${id}: ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))}. Give each beat, in the sections and in leftOut, an id of its own.`,
+        `The writer gave the moves ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))} one id, so the map cannot move or edit them.`, beatPlace(under[0].slot, under[0].beat));
+    });
+  }
+
+  // Each of the writer's lines is in story terms (R8): the headline, the deck and the section
+  // headings are exempt, since the article prints them (R2).
+  const terms = (writersWords, directorsWords, text, place) => {
+    const problems = storyTermsProblems(text, evidence);
+    if (problems.length === 0) return;
+    fail('story-terms', `${opening(writersWords)} ${describeStoryTerms(problems)}. ${STORY_TERMS_FIX}`,
+      `${opening(directorsWords)} ${storyTermsSaid(problems)}. ${MAP_STORY_TERMS_LINE}`, place);
+  };
+  if (map.gapNote && typeof map.gapNote === 'object' && !has(share.fields, 'gapNote') && !has(share.fields, 'gapNote.line')) {
+    terms('the line in gapNote', 'the gap note', map.gapNote.line, 'gapNote');
+  }
+  objectsOf(map.sections).forEach((section) => {
+    const slot = textOf(section.slot);
+    if (!has(share.sections, slot) && !has(share.sectionFields, `${slot}.job`)) {
+      terms(`the job of section ${slot}`, "the section's job", section.job, `sections[#${slot}]`);
+    }
+  });
+  allBeats(map).forEach(({ beat, slot }) => {
+    const id = beatIdText(beat);
+    if (has(share.addedBeats, id) || has(share.beatFields, `${id}.move`)) return;
+    terms(`beat ${id}'s move`, moveWords(beat), beat.move, beatPlace(slot, beat));
+  });
+  if (!has(share.fields, 'weaveChanges')) {
+    objectsOf(map.weaveChanges).forEach((change) => {
+      terms(`the change to the weave "${textOf(change.change)}"`, 'a change the map made to the weave', change.change, 'weaveChanges');
+    });
+  }
+
+  // Each of the writer's beats in a section carries a thread and has evidence; every piece of
+  // every beat passes the evidence check. A beat the director added is theirs: the article
+  // writer finds its evidence (spec 5.3), and its pieces, once a writer gives it some, are the
+  // writer's (R6).
+  sectionBeats(map).forEach(({ beat, slot }) => {
+    const id = beatIdText(beat);
+    if (has(share.addedBeats, id)) return;
+    const place = beatPlace(slot, beat);
+    if (stringsOf(beat.threads).length === 0) {
+      fail('beat-without-threads', `Beat ${id} carries no thread. Name in its threads the ids of the settled weave's threads it carries.`,
+        `${opening(moveWords(beat))} carries none of the story's threads.`, place);
+    }
+    if (objectsOf(beat.evidence).length === 0) {
+      fail('beat-without-evidence', `Beat ${id} has no evidence. Give it the pieces of the record that tell it: from its threads' evidence in <SETTLED_WEAVE>, and anything else the record gives that moment.`,
+        `${opening(moveWords(beat))} has nothing behind it: no piece of the record tells it.`, place);
+    }
+  });
+  if (evidence) {
+    allBeats(map).forEach(({ beat, slot }) => {
+      const problems = evidenceProblems(beat.evidence, evidence);
+      if (problems.length === 0) return;
+      const { what, fix } = describeEvidenceProblems(problems);
+      fail('evidence-not-in-record', `Beat ${beatIdText(beat)}: ${what}. ${fix}`,
+        `The evidence behind ${moveWords(beat)} ${evidenceProblemsSaid(problems)}.`, beatPlace(slot, beat));
+    });
   }
 
   // Every roster player appears in a beat, or is raised in the gap note (C7).
@@ -426,68 +787,99 @@ function mapFindings(map, inputs = {}) {
   const writersMissing = [];
   missing.forEach((name) => {
     const ids = editsRemovingPlayer(edits, name, roster);
-    if (ids.length > 0) concern('player-not-placed', ids, `${name} is in no beat and not in the gap note.`);
+    if (ids.length > 0) concern('player-not-placed', ids, `${name} is in no move and not in the gap note.`);
     else writersMissing.push(name);
   });
   if (writersMissing.length > 0) {
-    fail('player-not-placed', `Players in no beat: ${writersMissing.join(', ')}. Place each in a section's beat, or name them among gapNote's players, as C7 (\`<craft-material>\`) sets out.`);
+    fail('player-not-placed', `Players in no beat: ${writersMissing.join(', ')}. Place each in a section's beat, or name them among gapNote's players, as C7 (\`<craft-material>\`) sets out.`,
+      `${listOf(writersMissing)} ${writersMissing.length > 1 ? 'are' : 'is'} in no move and not in the gap note.`);
   }
 
   // Every kept photo is placed once, and only kept photos are placed (T13).
   const keptKeys = kept.map(photoKey);
   const placed = placedPhotos(map);
-  const split = (type, filenames, writersLine, directorsFinding) => {
-    const theirs = [];
-    filenames.forEach((filename) => {
-      const ids = editsOnPhoto(entries, filename);
-      if (ids.length > 0) concern(type, ids, directorsFinding(filename));
-      else theirs.push(filename);
-    });
-    if (theirs.length > 0) fail(type, writersLine(theirs));
-  };
   const nameOfKey = (key) => (kept.find((f) => photoKey(f) === key) || placed.get(key));
-  split('photo-not-placed', kept.filter((filename) => !placed.has(photoKey(filename))),
-    (list) => `Photos placed nowhere: ${list.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people, as C2 (\`<craft-form>\`) sets out.`,
-    (filename) => `${filename} is placed nowhere.`);
-  split('photo-placed-twice', [...repeatedPhotos(map).keys()].filter((key) => keptKeys.includes(key)).map(nameOfKey),
-    (list) => `Photos placed more than once: ${list.join(', ')}. Place each photo once.`,
-    (filename) => `${filename} is placed more than once.`);
-  split('photo-not-offered', [...placed.keys()].filter((key) => !keptKeys.includes(key)).map(nameOfKey),
-    (list) => `Photos placed that are not among the photos offered: ${list.join(', ')}. Place only the photos offered: ${kept.join(', ') || 'none'}.`,
-    (filename) => `${filename} is not among the photos kept for the article.`);
-
-  // Each card names a document in the record, and the cards, as the tally counts them,
-  // number three to five (C9).
-  const known = new Set([...(inputs.recordIds || [])].filter((id) => typeof id === 'string').map((id) => id.trim().toLowerCase()));
-  const unknown = [];
-  sectionBeats(map).filter(({ beat }) => beatCardOf(beat)).forEach(({ beat }) => {
-    const card = beatCardOf(beat);
-    if (known.has(card.toLowerCase())) return;
-    const ids = editsOnCards(entries, textOf(String(beat.id)));
-    if (ids.length > 0) concern('card-not-in-record', ids, `The card ${card} names no document in the record.`);
-    else unknown.push(`${card} (beat ${textOf(String(beat.id))})`);
+  const writersPhotos = (type, filenames, directorsFinding) => filenames.filter((filename) => {
+    const ids = editsOnPhoto(entries, filename);
+    if (ids.length > 0) concern(type, ids, directorsFinding(filename));
+    return ids.length === 0;
   });
-  if (unknown.length > 0) {
-    fail('card-not-in-record', `Cards naming no document in <RECORD>: ${unknown.join(', ')}. A card names the id of a document in <RECORD>: ${[...(inputs.recordIds || [])].join(', ')}.`);
+  const nowhere = writersPhotos('photo-not-placed', kept.filter((filename) => !placed.has(photoKey(filename))), (filename) => `${filename} is placed nowhere.`);
+  if (nowhere.length > 0) {
+    fail('photo-not-placed', `Photos placed nowhere: ${nowhere.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people, as C2 (\`<craft-form>\`) sets out.`,
+      `${nowhere.length > 1 ? 'These photos are' : 'This photo is'} placed nowhere: ${listOf(nowhere)}.`);
   }
+  writersPhotos('photo-placed-twice', [...repeatedPhotos(map).keys()].filter((key) => keptKeys.includes(key)).map(nameOfKey), (filename) => `${filename} is placed more than once.`)
+    .forEach((filename) => {
+      fail('photo-placed-twice', `The photo ${filename} is placed more than once. Place each photo once.`, `The photo ${filename} is placed more than once.`, photoPlace(map, filename));
+    });
+  writersPhotos('photo-not-offered', [...placed.keys()].filter((key) => !keptKeys.includes(key)).map(nameOfKey), (filename) => `${filename} is not among the photos kept for the article.`)
+    .forEach((filename) => {
+      fail('photo-not-offered', `The photo ${filename} is placed, and it is not among the photos offered. Place only the photos offered: ${kept.join(', ') || 'none'}.`,
+        `The photo ${filename} is not among the photos kept for the article.`, photoPlace(map, filename));
+    });
+
+  // Each beat marked as a card flags one piece, whose source is a document in the record (R4),
+  // and the cards, as the tally counts them through beatCardOf, number three to five (C9).
+  const recordIds = [...(inputs.recordIds || [])].filter((id) => typeof id === 'string');
+  const known = new Set(recordIds.map((id) => id.trim().toLowerCase()));
+  sectionBeats(map).forEach(({ beat, slot }) => {
+    const fault = cardFault(beat, known, recordIds);
+    if (!fault) return;
+    const said = `${opening(moveWords(beat))} ${fault.said}.`;
+    const ids = editsOnCards(entries, beatIdText(beat));
+    if (ids.length > 0) concern('card-not-in-record', ids, said);
+    else fail('card-not-in-record', fault.message, said, beatPlace(slot, beat));
+  });
   if (tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max) {
-    const owners = cardCountOwners(tally.cards, entries);
+    const owners = cardCountOwners(tally.cards, entries, map);
     const carries = `The map carries ${tally.cards} card${tally.cards === 1 ? '' : 's'}`;
-    if (owners.editIds.length > 0) concern('card-count', owners.editIds, `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`);
-    if (owners.writers) fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each with the id of the document it prints, as C9 (\`<craft-cards>\`) sets out.`);
+    const said = `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`;
+    if (owners.editIds.length > 0) concern('card-count', owners.editIds, said);
+    if (owners.writers) {
+      fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each flagging the piece whose document it prints, as C9 (\`<craft-cards>\`) sets out.`, said);
+    }
+  }
+
+  // Every thread in the story lands in a section's beat that names it (R3). One the director
+  // added at the meeting may be named in the gap note instead, when the record cannot carry it.
+  const carried = new Set(sectionBeats(map).flatMap(({ beat }) => stringsOf(beat.threads)));
+  const gapLine = map.gapNote && typeof map.gapNote === 'object' ? textOf(map.gapNote.line) : '';
+  const threadName = (thread) => `"${thread.name || thread.id}"`;
+  const unlanded = { writers: [], added: [] };
+  storyThreadsOf(inputs.threads).forEach((thread) => {
+    if (carried.has(thread.id)) return;
+    if (thread.added && thread.name && gapLine && isVerbatimIn(thread.name.toLowerCase(), gapLine.toLowerCase())) return;
+    const ids = editsRemovingThread(entries, thread.id);
+    if (ids.length > 0) concern('thread-not-landed', ids, `The thread ${threadName(thread)} lands in no move.`);
+    else unlanded[thread.added ? 'added' : 'writers'].push(thread);
+  });
+  const threadsWords = (threads) => `${threads.length > 1 ? 'The threads' : 'The thread'} ${listOf(threads.map(threadName))}`;
+  const lands = (threads) => (threads.length > 1 ? 'land' : 'lands');
+  if (unlanded.writers.length > 0) {
+    const named = listOf(unlanded.writers.map((thread) => `${threadName(thread)} (${thread.id})`));
+    fail('thread-not-landed', `Threads in the story that no beat carries: ${named}. Land each in the beat that carries it, by its id in that beat's threads.`,
+      `${threadsWords(unlanded.writers)} ${lands(unlanded.writers)} in no move.`);
+  }
+  if (unlanded.added.length > 0) {
+    const named = listOf(unlanded.added.map((thread) => `${threadName(thread)} (${thread.id})`));
+    fail('thread-not-landed', `Threads the director added at the meeting that no beat carries and gapNote's line does not name: ${named}. Give each a beat with the evidence that tells it, or, when the record cannot carry it, name it in gapNote's line, as C16 (\`<craft-story>\`) sets out.`,
+      `${threadsWords(unlanded.added)} you added at the meeting ${lands(unlanded.added)} in no move, and the gap note does not name ${unlanded.added.length > 1 ? 'them' : 'it'}.`);
   }
 
   // Every connection the settled weave keeps lands in a beat.
   const landed = new Set(sectionBeats(map).map(({ beat }) => textOf(beat.connection)).filter(Boolean));
-  const unlanded = [];
-  (Array.isArray(inputs.connections) ? inputs.connections : []).map(textOf).filter(Boolean).forEach((connection) => {
-    if (landed.has(connection)) return;
-    const ids = editsRemovingConnection(entries, connection);
-    if (ids.length > 0) concern('connection-not-landed', ids, `The connection ${connection} lands in no beat.`);
-    else unlanded.push(connection);
+  const connectionName = (connection) => `"${connection.line || connection.id}"`;
+  const unlandedConnections = [];
+  storyConnectionsOf(inputs.connections).forEach((connection) => {
+    if (landed.has(connection.id)) return;
+    const ids = editsRemovingConnection(entries, connection.id);
+    if (ids.length > 0) concern('connection-not-landed', ids, `The connection ${connectionName(connection)} lands in no move.`);
+    else unlandedConnections.push(connection);
   });
-  if (unlanded.length > 0) {
-    fail('connection-not-landed', `Connections from the settled weave that land in no beat: ${unlanded.join(', ')}. Land each in the beat where it does its work, by its id in that beat's connection.`);
+  if (unlandedConnections.length > 0) {
+    fail('connection-not-landed', `Connections from the settled weave that land in no beat: ${unlandedConnections.map((c) => c.id).join(', ')}. Land each in the beat where it does its work, by its id in that beat's connection.`,
+      `${unlandedConnections.length > 1 ? 'The connections' : 'The connection'} ${listOf(unlandedConnections.map(connectionName))} ${unlandedConnections.length > 1 ? 'land' : 'lands'} in no move.`);
   }
 
   // Each change to the weave names its source, and there is none the director did not ask for.
@@ -497,14 +889,27 @@ function mapFindings(map, inputs = {}) {
   const directorsChanges = edits.filter((edit) => Array.isArray(edit.at) && edit.at[0] && edit.at[0].key === 'weaveChanges').map((edit) => edit.id);
   if (changes.length > 0 && sources.size === 0) {
     if (directorsChanges.length > 0) concern('weave-change-unasked', directorsChanges, 'The map lists changes to the weave the meeting did not ask for.');
-    else fail('weave-change-unasked', 'The map lists changes to the weave, and the director changed nothing and left no approval note at the meeting. Leave weaveChanges empty.');
+    else {
+      fail('weave-change-unasked', 'The map lists changes to the weave, and the director changed nothing and left no approval note at the meeting. Leave weaveChanges empty.',
+        'The map lists changes to the weave, and you changed nothing and left no approval note at the meeting.', 'weaveChanges');
+    }
   } else {
     const unnamed = changes.map((change) => textOf(change.source)).filter((source) => !sources.has(source));
     if (unnamed.length > 0) {
       const allowed = [...meetingEdits, ...(inputs.meetingNote ? [`"${MEETING_NOTE_SOURCE}"`] : [])];
-      if (directorsChanges.length > 0) concern('weave-change-source', directorsChanges, `A change to the weave names a source the meeting does not hold: ${unnamed.map((s) => `"${s}"`).join(', ')}.`);
-      else fail('weave-change-source', `Changes to the weave name sources the meeting does not hold: ${unnamed.map((s) => `"${s}"`).join(', ')}. Name each change's source: ${listOf(allowed)}.`);
+      if (directorsChanges.length > 0) concern('weave-change-source', directorsChanges, 'A change to the weave names a change the meeting does not hold.');
+      else {
+        fail('weave-change-source', `Changes to the weave name sources the meeting does not hold: ${unnamed.map((s) => `"${s}"`).join(', ')}. Name each change's source: ${listOf(allowed)}.`,
+          `${unnamed.length > 1 ? 'Changes' : 'A change'} the map made to the weave ${unnamed.length > 1 ? 'name' : 'names'} no change of yours at the meeting.`, 'weaveChanges');
+      }
     }
+  }
+
+  // The writer's page as it first opens is held to the bound (R5).
+  const words = inputs.pageWords;
+  if (typeof words === 'number' && Number.isFinite(words) && words > MAP_WORD_BOUND) {
+    fail('over-length', `The map's page runs to ${words} words, past its bound of ${MAP_WORD_BOUND}. Bring it to ${MAP_WORD_BOUND} words or fewer, aiming for ${MAP_WORD_AIM}: say each move in a few words, and keep in the sections only the beats the story needs.`,
+      `The writer's page runs to ${words} words, past the map's ${MAP_WORD_BOUND}.`);
   }
 
   return { failures, concerns };
@@ -523,7 +928,9 @@ const directorValidators = new Map();
  * with the theme's slots (lib/theme-config.js mapSlotsOf) as the only slots a section or a
  * dropped slot may name. The writer, its rework and the prompt's <SCHEMA> read it. The line
  * for a change's source ends on where the prompt holds the meeting's approval note
- * (MEETING_NOTE_POINTER), the pointer the map writer's task prints too (brief 4.6e).
+ * (MEETING_NOTE_POINTER), the pointer the map writer's task prints too (brief 4.6e). Each
+ * piece of a beat's evidence, in a section and in left out, is lib/evidence.js
+ * EVIDENCE_PIECE_SCHEMA, the shape the weave's evidence has too (phase 4b, brief 1D; R10).
  *
  * @param {string} theme
  * @returns {Object}
@@ -538,6 +945,8 @@ function mapSchemaFor(theme) {
     const schema = structuredClone(outlineSchema);
     schema.properties.sections.items.properties.slot.enum = slots;
     schema.properties.dropped.items.properties.slot.enum = slots;
+    [schema.properties.sections.items.properties.beats.items, schema.properties.leftOut.items]
+      .forEach((beat) => { beat.properties.evidence.items = structuredClone(EVIDENCE_PIECE_SCHEMA); });
     const source = schema.properties.weaveChanges.items.properties.source;
     source.description = `${source.description}: ${MEETING_NOTE_POINTER}`;
     writerSchemas.set(theme, schema);
@@ -548,7 +957,8 @@ function mapSchemaFor(theme) {
 /**
  * The map as the director leaves it (R12): the writer's schema for the theme, derived in
  * code, with a beat the director added or brought back allowed whole: a beat needs only its
- * id and its material, in a section and in leftOut. The payload gate validates against it
+ * id and its move, in a section and in leftOut (phase 4b, brief 1D), since the article writer
+ * finds the evidence for a move the director adds (spec 5.3). The payload gate validates against it
  * and the console's validator is held to it (console/outline-edit-logic.js
  * validateMapShape); it is never sent to the SDK, so no model writes to it.
  *
@@ -559,7 +969,7 @@ function directorMapSchemaFor(theme) {
   if (!directorSchemas.has(theme)) {
     const schema = structuredClone(mapSchemaFor(theme));
     [schema.properties.sections.items.properties.beats.items, schema.properties.leftOut.items]
-      .forEach((beat) => { beat.required = ['id', 'material']; });
+      .forEach((beat) => { beat.required = ['id', 'move']; });
     directorSchemas.set(theme, schema);
   }
   return directorSchemas.get(theme);
@@ -766,10 +1176,27 @@ function settledStoryOf(weave) {
 }
 
 /**
+ * The beats the director added on the map that the map carries, by id (their standing edits;
+ * mapDirectorsShare): the map's page says the article writer finds the evidence for such a beat,
+ * at whatever look the director added it (spec 2026-10-05 section 5.3), where a beat of the
+ * writer's with none is a check's failure, shown beside it.
+ *
+ * @param {Object} state
+ * @returns {string[]}
+ */
+function mapAddedBeats(state) {
+  if (!state || !isMapValue(state.outline)) return [];
+  return Object.keys(mapDirectorsShare(carriedEdits(state._outlineHandEdits, state.outline)).addedBeats);
+}
+
+/**
  * The payload the map's stop sends (brief 4.6; server.js getCheckpointData adds the trace):
  * the map; the theme's slots, for the screen; the settled story, which the map cannot
- * change; each exposed document by the id a card or a beat's material names (`evidenceIndex`,
- * which the page names them by, as the story meeting names each receipt's; brief 4.6c); the
+ * change; each exposed document by its id (`evidenceIndex`), by which the page names each
+ * piece's sources in a move's fold, as the story meeting's folds do (phase 4b, brief 1D); the
+ * director's photo descriptions (`photoDescriptions`), by which the page names each photo, and the
+ * beats the director added (`addedBeats`, mapAddedBeats), whose fold says the article writer finds
+ * their evidence (phase 4b, brief 1D; spec 9); the
  * roster and the kept photos, from which the console builds Everyone and the counts as the
  * director edits (checkpoint-view-logic.js mapTallyOf, through mapTally, the checks' count),
  * so the payload carries no count of its own (task 4.6d); the photos the map places that the
@@ -811,13 +1238,18 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
     humanRevisionCount: s.humanOutlineRevisionCount || 0,
     maxRevisions,
     roundDidNotRun: roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, s),
-    meetingChanges: meetingChangesOf(s)
+    meetingChanges: meetingChangesOf(s),
+    photoDescriptions: s.photoDescriptions && typeof s.photoDescriptions === 'object' && !Array.isArray(s.photoDescriptions) ? s.photoDescriptions : {},
+    addedBeats: mapAddedBeats(s)
   };
 }
 
 module.exports = {
   MAP_BEAT_KINDS,
   MAP_CARDS,
+  // Phase 4b (brief 1D; R5): the map's page at most 450 words as it first opens, aiming for 300
+  MAP_WORD_BOUND,
+  MAP_WORD_AIM,
   MAP_CHECKS_SOURCE,
   MEETING_NOTE_SOURCE,
   MEETING_NOTE_POINTER,
@@ -825,6 +1257,11 @@ module.exports = {
   mapKey,
   mapRosterOf,
   mapFindings,
+  // Phase 4b (brief 1D): the director's share of the map, which the checks never fail, and the
+  // writer's share, which the check node counts the page on; the beats the director added
+  mapDirectorsShare,
+  mapWritersShareOf,
+  mapAddedBeats,
   mapSchemaFor,
   directorMapSchemaFor,
   directorMapProblems,

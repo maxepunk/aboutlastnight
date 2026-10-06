@@ -218,35 +218,21 @@
     return next;
   }
 
-  // A beat: its material as typed, its kind, the players it shows (a list, typed with commas),
-  // the document it prints as a card and the connection that lands in it. A field left blank
-  // leaves no key, so a beat the director added keeps the shape they gave it.
+  // A beat (phase 4b, brief 1D): its move as typed and the players it shows (a list, typed with
+  // commas). Every other field of the beat (the threads it carries, its card marker, its
+  // connection, its kind and its evidence) is the writer's, and stays as it is: the evidence is
+  // never the director's edit (R6).
 
   function initBeat(beat) {
     var b = isPlainObject(beat) ? beat : {};
-    return {
-      kind: textOrEmpty(b.kind),
-      material: textOrEmpty(b.material),
-      players: joinCsv(b.players),
-      card: textOrEmpty(b.card),
-      connection: textOrEmpty(b.connection)
-    };
-  }
-
-  /** An id field: trimmed, or no key at all when blank. */
-  function setOrDeleteId(obj, key, value) {
-    var id = typeof value === 'string' ? value.trim() : '';
-    if (id) obj[key] = id; else delete obj[key];
+    return { move: textOrEmpty(b.move), players: joinCsv(b.players) };
   }
 
   function buildBeat(form, beat) {
     var out = isPlainObject(beat) ? deepClone(beat) : {};
-    out.material = textOrEmpty(form.material);
-    if (BEAT_KINDS.indexOf(form.kind) !== -1) out.kind = form.kind; else delete out.kind;
+    out.move = textOrEmpty(form.move);
     var players = splitCsv(form.players);
     if (players.length > 0 || Array.isArray(out.players)) out.players = players;
-    setOrDeleteId(out, 'card', form.card);
-    setOrDeleteId(out, 'connection', form.connection);
     return out;
   }
 
@@ -497,20 +483,20 @@
   }
 
   /**
-   * A beat the director adds to the end of the section `toSlot`: its material as typed and the
-   * players it shows (typed with commas, or a list), under an id no beat holds. The
-   * director-side schema asks a beat added for its id and its material alone. A blank line
-   * adds none.
+   * A beat the director adds to the end of the section `toSlot`: its move as typed and the
+   * players it shows (typed with commas, or a list), `{id, move, players}` under an id no beat
+   * holds. The director-side schema asks a beat added for its id and its move alone; the article
+   * writer finds its evidence (spec 5.3). A blank move adds none.
    */
-  function addBeat(map, toSlot, material, players) {
-    if (typeof material !== 'string' || !material.trim()) return map;
+  function addBeat(map, toSlot, move, players) {
+    if (typeof move !== 'string' || !move.trim()) return map;
     var next = editedMap(map, 'addBeat');
     var target = sectionAt(next, toSlot, 'addBeat');
     if (!Array.isArray(target.beats)) target.beats = [];
     var names = Array.isArray(players)
       ? players.filter(nonEmpty).map(function (name) { return name.trim(); })
       : splitCsv(players);
-    target.beats.push({ id: freshBeatId(next), material: material, players: names });
+    target.beats.push({ id: freshBeatId(next), move: move, players: names });
     return next;
   }
 
@@ -605,10 +591,18 @@
   // two lists equal).
   var BEAT_KINDS = ['scene', 'receipt', 'line', 'figure'];
   var SECTION_KEYS = ['slot', 'heading', 'job', 'beats', 'photos'];
-  var BEAT_KEYS = ['id', 'kind', 'material', 'players', 'card', 'connection'];
+  // A beat (phase 4b, brief 1D; R1): a move with its people, the threads it carries, the
+  // connection that lands in it, its card marker, its kind and its evidence.
+  var BEAT_KEYS = ['id', 'move', 'players', 'threads', 'connection', 'card', 'kind', 'evidence'];
   // A beat the director added or brought back needs only these (R12).
-  var BEAT_REQUIRED_KEYS = ['id', 'material'];
+  var BEAT_REQUIRED_KEYS = ['id', 'move'];
   var PHOTO_KEYS = ['filename', 'beat'];
+  // A piece of a beat's evidence (lib/evidence.js EVIDENCE_PIECE_SCHEMA, which the browser
+  // cannot import; a test holds each copy equal): the keys it needs, its stances, and the sources
+  // it may name besides a document (EVIDENCE_SOURCES' values).
+  var EVIDENCE_PIECE_REQUIRED = ['sources', 'shows', 'stance'];
+  var EVIDENCE_PIECE_STANCES = ['supports', 'cuts-against'];
+  var EVIDENCE_NAMED_SOURCES = ['ledger', 'evidence-log', 'notes'];
 
   /**
    * The headline and deck limits: the content bundle's, one constant
@@ -668,14 +662,33 @@
     if (slots && slots.indexOf(value) === -1) errors.push({ path: path, message: 'must be one of the slots: ' + slots.join(', ') });
   }
 
+  function booleanAt(errors, path, value) {
+    if (value !== undefined && typeof value !== 'boolean') errors.push({ path: path, message: 'must be true or false' });
+  }
+
+  /** A piece of a beat's evidence, as EVIDENCE_PIECE_SCHEMA holds it: any other key passes. */
+  function validatePiece(errors, piece, path) {
+    requiredKeys(errors, path, piece, EVIDENCE_PIECE_REQUIRED);
+    stringList(errors, path + '/sources', piece.sources);
+    if (Array.isArray(piece.sources) && piece.sources.length === 0) errors.push({ path: path + '/sources', message: 'must name at least one source' });
+    stringAt(errors, path + '/shows', piece.shows);
+    if (piece.stance !== undefined && EVIDENCE_PIECE_STANCES.indexOf(piece.stance) === -1) {
+      errors.push({ path: path + '/stance', message: 'must be one of ' + EVIDENCE_PIECE_STANCES.join(', ') });
+    }
+    booleanAt(errors, path + '/card', piece.card);
+  }
+
   function validateBeat(errors, beat, path) {
     onlyKeys(errors, path, beat, BEAT_KEYS);
     requiredKeys(errors, path, beat, BEAT_REQUIRED_KEYS);
-    ['id', 'material', 'card', 'connection'].forEach(function (k) { stringAt(errors, path + '/' + k, beat[k]); });
+    ['id', 'move', 'connection'].forEach(function (k) { stringAt(errors, path + '/' + k, beat[k]); });
     if (beat.kind !== undefined && BEAT_KINDS.indexOf(beat.kind) === -1) {
       errors.push({ path: path + '/kind', message: 'must be one of ' + BEAT_KINDS.join(', ') });
     }
     stringList(errors, path + '/players', beat.players);
+    stringList(errors, path + '/threads', beat.threads);
+    booleanAt(errors, path + '/card', beat.card);
+    objectList(errors, path + '/evidence', beat.evidence, function (piece, piecePath) { validatePiece(errors, piece, piecePath); });
   }
 
   /**
@@ -991,11 +1004,34 @@
   }
 
   /**
-   * The id of the document a beat prints as a card, trimmed, or '' for a beat that is no
-   * card: the one rule for which beats are cards, for the counts and the map checks.
+   * The pieces of a beat's evidence flagged as its card's document (`card: true`), in order
+   * (phase 4b, brief 1D; R4). A beat marked as a card flags one.
+   */
+  function cardPiecesOf(beat) {
+    var evidence = isPlainObject(beat) && Array.isArray(beat.evidence) ? beat.evidence : [];
+    return evidence.filter(function (piece) { return isPlainObject(piece) && piece.card === true; });
+  }
+
+  /**
+   * The document a beat prints as a card, or null (phase 4b, brief 1D; R4): on a beat marked as a
+   * card (`card: true`), the source of its first flagged piece (cardPiecesOf) that is a document,
+   * trimmed: the first that is none of EVIDENCE_NAMED_SOURCES, since a piece that sets the ledger
+   * beside a document cites both and prints the document. Null for a beat with no marker, one that
+   * flags no piece, and a piece that names no document. The one reader of a beat's card: the
+   * counts (mapTally), the map checks (lib/map.js) and the article writer's inline card line.
+   *
+   * @param {*} beat
+   * @returns {string|null}
    */
   function beatCardOf(beat) {
-    return isPlainObject(beat) && typeof beat.card === 'string' ? beat.card.trim() : '';
+    if (!isPlainObject(beat) || beat.card !== true) return null;
+    var flagged = cardPiecesOf(beat)[0];
+    if (!flagged) return null;
+    var sources = (Array.isArray(flagged.sources) ? flagged.sources : [])
+      .filter(function (source) { return typeof source === 'string' && source.trim(); })
+      .map(function (source) { return source.trim(); });
+    var document = sources.filter(function (source) { return EVIDENCE_NAMED_SOURCES.indexOf(source.toLowerCase()) === -1; })[0];
+    return document || null;
   }
 
   /**
@@ -1204,11 +1240,19 @@
     CONTENT_BLOCK_TYPES: CONTENT_BLOCK_TYPES,
     MAP_ROOT_KEYS: MAP_ROOT_KEYS,
     BEAT_KINDS: BEAT_KINDS,
+    // Phase 4b (brief 1D): the gate's copy of a beat's shape and of a piece's, which tests hold
+    // to the director-side schema and to lib/evidence.js
+    BEAT_KEYS: BEAT_KEYS,
+    BEAT_REQUIRED_KEYS: BEAT_REQUIRED_KEYS,
+    EVIDENCE_PIECE_REQUIRED: EVIDENCE_PIECE_REQUIRED,
+    EVIDENCE_PIECE_STANCES: EVIDENCE_PIECE_STANCES,
+    EVIDENCE_NAMED_SOURCES: EVIDENCE_NAMED_SOURCES,
 
     // Phase 4 (brief 4.6): Everyone and the counts, one function from the beats
     rosterMemberOf: rosterMemberOf,
     photoKey: photoKey,
     beatCardOf: beatCardOf,
+    cardPiecesOf: cardPiecesOf,
     mapPhotoPlacements: mapPhotoPlacements,
     mapTally: mapTally,
 

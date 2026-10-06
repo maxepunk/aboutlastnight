@@ -13,6 +13,7 @@ const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-
 const { generateContentBundle, reviseContentBundle, articleWriterInputs } = require('../workflow/nodes/ai-nodes');
 const { PromptBuilder, STORY_MAP_TAG } = require('../prompt-builder');
 const { settledWeaveOf } = require('../prompt-renderers/settled-weave');
+const { beatCardOf } = require('../../console/outline-edit-logic');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const cfg = (sdk) => ({ configurable: { sdkClient: sdk, theme: 'journalist' } });
@@ -379,8 +380,9 @@ describe("4.7e: the rework's task gives a card the director cut and a paragraph 
     expect(edits).toContain(`E2 (section "the-story", paragraph): "${DESK_PARAGRAPH}"`);
     // The map the rework reads still carries the cut card's beat, and the letter under leftOut.
     const map = blockJson(prompt, STORY_MAP_TAG);
-    expect(map.sections.flatMap((section) => section.beats).filter((beat) => beat.card === 'p-dna').map((beat) => beat.id)).toEqual(['b4']);
-    expect(map.leftOut.map((beat) => beat.material)).toEqual(['p-rescued']);
+    // Phase 4b (brief 1D; R4): a beat's card is its flagged piece, read through beatCardOf.
+    expect(map.sections.flatMap((section) => section.beats).filter((beat) => beatCardOf(beat) === 'p-dna').map((beat) => beat.id)).toEqual(['b4']);
+    expect(map.leftOut.map((beat) => beat.evidence[0].sources)).toEqual([['p-rescued']]);
 
     const lines = taskLines(prompt);
     expect(lines.filter((line) => line.startsWith('- the beats:'))).toEqual([BEATS_LINE]);

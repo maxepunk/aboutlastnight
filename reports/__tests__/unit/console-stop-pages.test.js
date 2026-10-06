@@ -83,9 +83,11 @@ describe('4.12c: each page folds what its component folds', () => {
     ]);
   });
 
-  it('the map folds left out (unless a concern opens it), the standing notes and the trace', () => {
+  // Phase 4b (brief 1D; spec 9): and each move's evidence, under the view's title.
+  it("the map folds each move's evidence, left out (unless a concern opens it), the standing notes and the trace", () => {
     const src = read(COMPONENTS.outline);
-    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(3);
+    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(4);
+    expect(src).toContain('React.createElement(CollapsibleSection, { title: view.evidenceTitle }');
     expect(src).toContain('React.createElement(CollapsibleSection, { title: view.leftOut.title, defaultOpen: view.leftOut.open }');
     expect(src).toContain('standing.any && React.createElement(CollapsibleSection, { title: standing.title }');
     expect(src).toContain('trace.any && React.createElement(CollapsibleSection, { title: trace.title }');
@@ -95,7 +97,11 @@ describe('4.12c: each page folds what its component folds', () => {
     const view = View.mapView(data, View.mapDraftOf(data));
     expect(view.leftOut.open).toBe(false);
     const trace = View.traceView(TRACE, 'journalist');
-    expect(titles(stopPage('outline', data), true)).toEqual([view.leftOut.title, View.standingNotesView(notes).title, trace.title, ...trace.passes.map((pass) => pass.heading)]);
+    const folds = (beats) => beats.filter((beat) => beat.evidence.length > 0 || beat.noEvidence).map(() => view.evidenceTitle);
+    expect(titles(stopPage('outline', data), true)).toEqual([
+      ...folds(view.sections.flatMap((section) => section.beats)), view.leftOut.title, ...folds(view.leftOut.items),
+      View.standingNotesView(notes).title, trace.title, ...trace.passes.map((pass) => pass.heading)
+    ]);
   });
 
   it('the desk folds the marks the edits may have resolved, the fact check\'s list, the trace and the round\'s record, below the article', () => {
