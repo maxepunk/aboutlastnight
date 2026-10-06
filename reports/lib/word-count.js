@@ -3,9 +3,10 @@
  * text between whitespace that holds a letter or a digit, so a lone dash or bullet is
  * not a word.
  *
- * Phase 4: the weave's bound (lib/weave.js, brief 4.4) and the article's length check
- * (content-bundle-fact-check.js, brief 4.7a) count by it, so the two lengths are counted
- * one way.
+ * The planning pages' length rule (pageLengthOf, the story meeting's and the map's, through
+ * lib/stop-pages.js wordsShown, the count the stops log records too) and the article's length
+ * check (content-bundle-fact-check.js, brief 4.7a) count by it, so every length is counted one
+ * way.
  */
 
 /**

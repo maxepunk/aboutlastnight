@@ -189,15 +189,18 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 │  One call writes the weave: the story, the threads in their roles,          │
 │  the connections, the convergence and the questions, each line in story     │
 │  terms with the evidence that tells it underneath                           │
-│  Code checks it; one fact check scores the truth rules                      │
+│  Code checks it; one fact check scores the truth rules. The page at most    │
+│  300 words: the writer's own words held to 300 less what code prints, never │
+│  under 200                                                                  │
 │  OUTPUT: the weave, settled by the director at the story meeting            │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │              PHASE 3: THE MAP (Opus writer, code checks)                    │
-│  The settled weave laid across the theme's slots, at most 450 words         │
-│  (aiming for 300); each beat a move in story terms, its evidence underneath │
+│  The settled weave laid across the theme's slots; each beat a move in story │
+│  terms, its evidence underneath. The page at most 450 words: the writer's   │
+│  own words held to 450 less what code prints, never under 300, its aim      │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -353,7 +356,7 @@ SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions)
 <DIRECTOR_GUIDANCE> (the standing notes)
 ```
 
-**The weave** (`WEAVE_SCHEMA` in `lib/sdk-client/subagents.js`, built from `lib/weave.js`'s constants, with a piece of evidence from `lib/evidence.js`). The meeting's page shows the writer's lines in at most 300 words as it first opens (`MEETING_WORD_BOUND`), the evidence folded:
+**The weave** (`WEAVE_SCHEMA` in `lib/sdk-client/subagents.js`, built from `lib/weave.js`'s constants, with a piece of evidence from `lib/evidence.js`). The meeting's page shows the writer's lines as it first opens, the evidence folded, in at most 300 words in all (`MEETING_WORD_BOUND`): the checks hold the writer's own words to 300 less what code prints on the page, and never to fewer than 200 (`MEETING_WORD_FLOOR`; `lib/word-count.js` `pageLengthOf`, the one rule the map keeps too):
 
 ```javascript
 {
@@ -381,7 +384,7 @@ A thread the director adds at the meeting has no evidence: the map writer finds 
 
 **The checks and the fact check**, before the meeting (spec 4.5): code checks the weave, free (see Arc Validation Routing below), and a failed check sends it back for one rework in the round. Then one fact check (`evaluateArcs`, Opus) scores the truth criteria alone, reading each line against its evidence and each piece against the record: a line that says more than its evidence shows is an error of fact, and a finding about a piece is the writer's to fix (spec 6.2). A breach gets one automatic fix, and the meeting opens with no second judge call. No note on the writing and no score reaches the meeting.
 
-**Checkpoint**: `arc-selection` (2.35) - The story meeting (brief 4.5; phase 4b, piece 1): at most 300 words as the page first opens, counted by `wordsShown` with the folds closed, in the spec's order: the verdict; the story, its question and the working headline; "from your notes"; the threads in the story, each as its role, its name and its line, with a "What's behind it" fold holding its evidence; the threads left out, by name; the connections the story turns on, each its line with the names of the threads it joins; the convergence; the stronger main thread; the questions, each with its answer box. No line names a thread or a connection by its id. The fold of a thread the director added, or brought into the story from left out, says the map writer finds its evidence while it has none. The director edits the words, changes a role, adds a thread with a name, a line and a role, strikes a connection and answers each question, then approves, reweaves (the writer fits the changes in and keeps every line the director did not touch) or sends back (the writer rethinks the weave as the note asks). A connection that joins a left-out thread goes out of the story with it, and its line at the meeting says so; it comes back when the thread does (brief 4.14a). The director's edits are final: an automatic pass or a reweave never changes one, and a struck connection keeps its id, so a connection a rework adds under it takes an id of its own (brief 4.14a). Later prompts name the meeting's changes in the meeting's own form, M and the edit's number, apart from the map's and the desk's E ids. Approve writes `data/<id>/analysis/weave.approved.json`. Going back to the meeting reopens it as the director left it, with no model call (R9). The details are in `reports/CLAUDE.md`, **The story meeting**.
+**Checkpoint**: `arc-selection` (2.35) - The story meeting (brief 4.5; phase 4b, piece 1): at most 300 words as the page first opens, counted by `wordsShown` with the folds closed (the writer's own words held to 300 less what code prints, never to fewer than 200: `pageLengthOf`), in the spec's order: the verdict; the story, its question and the working headline; "from your notes"; the threads in the story, each as its role, its name and its line, with a "What's behind it" fold holding its evidence; the threads left out, by name; the connections the story turns on, each its line with the names of the threads it joins; the convergence; the stronger main thread; the questions, each with its answer box. No line names a thread or a connection by its id. The fold of a thread the director added, or brought into the story from left out, says the map writer finds its evidence while it has none. The director edits the words, changes a role, adds a thread with a name, a line and a role, strikes a connection and answers each question, then approves, reweaves (the writer fits the changes in and keeps every line the director did not touch) or sends back (the writer rethinks the weave as the note asks). A connection that joins a left-out thread goes out of the story with it, and its line at the meeting says so; it comes back when the thread does (brief 4.14a). The director's edits are final: an automatic pass or a reweave never changes one, and a struck connection keeps its id, so a connection a rework adds under it takes an id of its own (brief 4.14a). Later prompts name the meeting's changes in the meeting's own form, M and the edit's number, apart from the map's and the desk's E ids. Approve writes `data/<id>/analysis/weave.approved.json`. Going back to the meeting reopens it as the director left it, with no model call (R9). The details are in `reports/CLAUDE.md`, **The story meeting**.
 
 ### Phase 2.36: Photo Branch
 
@@ -420,11 +423,11 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 **The checks** (`lib/map.js` `mapFindings`), free and in code:
 - every roster player in a beat or raised in the gap note, and every kept photo placed once;
 - each beat marked as a card flags one piece, whose source is a document in the record, and the cards number three to five (`beatCardOf` reads a beat's card from its flagged piece);
-- every thread in the story lands in a beat that names it, and a thread the director added at the meeting may be named in the gap note instead, when the record cannot carry it; every connection the settled weave keeps lands in a beat (none struck, and none that joins a left-out thread);
+- every thread in the story lands in a beat that names it, and a thread the director added at the meeting, or brought into the story from left out, may be named in the gap note instead, when the record cannot carry it, by its name, matched in any case and spacing and without its quotation marks, which the story-terms scan leaves out as the director's words; every connection the settled weave keeps lands in a beat (none struck, and none that joins a left-out thread);
 - each of the writer's beats carries a thread and has evidence, and every piece names a source the record holds, with each quotation word for word in its source (`lib/evidence.js` `evidenceProblems`);
 - the writer's lines are in story terms: a beat's move, a section's job, the gap note's line and each weave change hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the headline, the deck and the section headings are exempt, since the article prints them;
 - each weave change named by its source, and no two beats under one id;
-- the page's length, counted by `wordsShown` on the map as it first opens, the folds closed: the writer's own words are held to the larger of 300 and 450 less what the page prints that the writer did not write, such as the settled story, the director's photo descriptions and the counts (`MAP_WORD_AIM`, `MAP_WORD_BOUND`). So the writer may always use 300 words of its own, and more only while the whole page stays within 450.
+- the page's length, counted by `wordsShown` on the map as it first opens, the folds closed: the writer's own words are held to the larger of 300 and 450 less what the page prints that the writer did not write, such as the settled story, the director's photo descriptions and the counts (`MAP_WORD_AIM`, `MAP_WORD_BOUND`). So the writer may always use 300 words of its own, and more only while the whole page stays within 450. The rule is `lib/word-count.js` `pageLengthOf`, which the meeting keeps with its own bound and floor (300 and 200).
 
 A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLINE` is 1); a check still failing after it opens the stop, which shows it beside its line, in story terms. The director's lines and the beats they added are never a check's failure: a failure the director caused is a concern on their edit, never a rework. The director's send-back reads no check failure from before it, as the meeting's does: the checks run again on its map. No model judge reads the map.
 
@@ -603,7 +606,7 @@ A reweave or a send-back opens a new round and starts the budget over.
 - each left-out thread has its reason;
 - every thread, connection and question has an id of its own, and a stronger main thread names a thread the weave holds;
 - "from your notes" is the director's words, word for word (`isVerbatimIn`);
-- the meeting's page, built from the writer's share of the weave as it first opens and counted by `lib/stop-pages.js` `wordsShown`, comes to no more than 300 words (`MEETING_WORD_BOUND`). Only the writer's output is held to it: the director's version is never refused for its length.
+- the writer's own words on the meeting's page stay within what it may use, the map's rule (`lib/word-count.js` `pageLengthOf`): the page, built from the writer's share of the weave as it first opens and counted by `lib/stop-pages.js` `wordsShown`, less what code prints there (the verdict with its charge and vote, each thread's role, the "Joins" and "and" of each connection's line), is held to the larger of 200 and 300 less that overhead (`MEETING_WORD_FLOOR`, `MEETING_WORD_BOUND`), so a long split vote never fails the writer. Only the writer's output is held to it: the director's version is never refused for its length.
 
 **Routing behavior:**
 - A failed check on a weave the fact check has not judged → one rework in the round (`routeArcValidation` → `incrementArcRevision` → `reviseArcs`), which reads the check's lines under their own label, `WEAVE CHECK FAILURES`

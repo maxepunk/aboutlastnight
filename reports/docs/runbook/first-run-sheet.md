@@ -22,7 +22,7 @@ This session tests phase 4. Its readout counts what the pipeline asked of you: h
 - Going back to the story meeting or the map costs no model call: each reopens as you left it.
 
 ### The story meeting (the stepper's "Story meeting")
-The writer's page comes to at most 300 words as it first opens, in plain words with no quotations, figures, times or document ids in the writer's lines. In this order:
+The page comes to at most 300 words as it first opens. The checks hold the writer's own lines to 300 less the words code prints (the verdict, each thread's role, the "Joins" above each connection), and never to fewer than 200, so a long split vote can run the page past 300. The writer's lines are in plain words, with no quotations, figures, times or document ids. In this order:
 1. **The verdict**, from the parse: who the room named, the charge, a split final vote.
 2. **The story**, **The question it carries** and the **Working headline**.
 3. **From your notes**: your own words the story rests on. When your notes end without your read, the page says "Your notes end without your read of the session, so this story is the writer's proposal."
@@ -52,10 +52,10 @@ What each control does, and where your input goes:
 - **Character IDs** shows each photo with its AI Analysis, a **Your Description** box (who is in it and what moment it catches; the caption keeps it) and a **Leave this photo out** box. A photo left out appears nowhere: not on the map, the page or the published folder. **Submit Character IDs** sends your descriptions and the boxes; **Skip** sends no identifications, and the ticked photos are still left out.
 
 ### The map (the stepper's "Map")
-The writer's page comes to at most 450 words as it first opens, aiming for 300, in plain words with no quotations, figures, times or document ids in its moves. In this order:
+The page comes to at most 450 words as it first opens. The checks hold the writer's own lines to 450 less the words code prints (the settled story, your photo descriptions, the counts), and never to fewer than 300, which the writer aims for, so long photo descriptions can run the page past 450. The moves are in plain words, with no quotations, figures, times or document ids. In this order:
 1. **The settled story**, read-only, with **Back to the story meeting**, which reopens the meeting as you left it, with no model call. To change the story, go there.
 2. The round's lines: after a send-back, the round and the note it carried; your edits a rework changed, or that your edits stand. A check still failing sits under the line it is about, in plain words, or here when no one line holds it.
-3. **The gap**, when the map has one: one line on a part of the story the record cannot carry (a thread you added at the meeting among them), a player who cannot be placed, or a link the weave lacks, and "It raises:" the players it names.
+3. **The gap**, when the map has one: one line on a part of the story the record cannot carry (a thread you added at the meeting, or brought into the story, among them, named by its name), a player who cannot be placed, or a link the weave lacks, and "It raises:" the players it names.
 4. The headline, the deck and the **Top photo, printed above the article**.
 5. Each section under its label: **Heading:** ("none printed" for a section that prints none), **Job:**, its beats, each as its move, "Shows:" its players and "(card)" where its evidence prints as a card, and its photos, each by your description beside its thumbnail. Under each beat, **What's behind it** opens its evidence, as at the meeting, with the card's document among its pieces; a beat you added shows "Nothing yet: the article writer finds the evidence for it." No line names a beat by a tag such as b6.
 6. **Dropped**: each section the story does not use, with its reason.
