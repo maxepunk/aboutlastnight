@@ -146,19 +146,27 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
   if (touched.size > 0) {
     return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.`;
   }
-  return pickProblems(weave);
+  return pickProblems(weave, shownWeave);
 }
 
 /**
  * What the gate refuses in the director's pick (piece 3, brief 3B), or null: a pick that names no
- * angle the weave holds, and a picked angle without the thread that carries the room's verdict
- * (R8), which the article always reports (T2). The meeting locks that thread in the open angle,
- * so a version that lacks it came past the console, such as from the harness's approve file.
+ * angle the weave holds, and a version that does not carry the thread that carries the room's
+ * verdict (R8), which the article always reports (T2): the thread taken out of the weave, its
+ * verdict flag taken off (or moved to another thread), or the thread left out of the picked
+ * angle. The meeting locks that thread in the open angle, so a version that lacks it came past
+ * the console, such as from the harness's approve file.
+ *
+ * The verdict's thread is the one the weave the meeting showed flags, by id (fix round 1, finding
+ * 2): read from the director's own version, a version that clears the flag would leave no thread
+ * to hold. With no weave shown, or one that flags none (the checks' failure), the director's
+ * version's flags decide.
  *
  * @param {Object} weave - the weave as the director left it, which the schema has taken
+ * @param {Object|null} [shown] - the weave the meeting showed
  * @returns {string|null}
  */
-function pickProblems(weave) {
+function pickProblems(weave, shown = null) {
   const picked = typeof weave[PICKED_KEY] === 'string' ? weave[PICKED_KEY].trim() : '';
   if (picked && !weave.angles.some((angle) => weaveIdOf(angle) === picked)) {
     return `The pick names an angle the weave does not hold ("${picked}"). Pick one of the angles the meeting showed.`;
@@ -166,10 +174,21 @@ function pickProblems(weave) {
   const angle = pickedAngleOf(weave);
   if (!angle) return null;
   const named = new Set(angle.threads.map((id) => id.trim()));
-  const missing = weave.threads.filter((thread) => thread.verdict === true && weaveIdOf(thread) && !named.has(weaveIdOf(thread)));
-  if (missing.length === 0) return null;
-  const names = listOf(missing.map((thread) => `"${thread.name.trim() || weaveIdOf(thread)}"`));
-  return `The angle the director picked leaves out ${names}, the thread that carries the room's verdict. The article always reports the verdict, so that thread stays in the picked angle.`;
+  const flagged = (threads) => (Array.isArray(threads) ? threads : [])
+    .filter((thread) => thread && typeof thread === 'object' && thread.verdict === true && weaveIdOf(thread));
+  const shownVerdict = isWeave(shown) ? flagged(shown.threads) : [];
+  const verdictThreads = shownVerdict.length > 0 ? shownVerdict : flagged(weave.threads);
+  const problems = verdictThreads.map((thread) => {
+    const id = weaveIdOf(thread);
+    const name = `"${(typeof thread.name === 'string' && thread.name.trim()) || id}"`;
+    const held = weave.threads.filter((own) => weaveIdOf(own) === id);
+    if (held.length === 0) return `The director's version takes out ${name}, the thread that carries the room's verdict.`;
+    if (!held.some((own) => own.verdict === true)) return `The director's version takes the room's verdict off ${name}, the thread that carries it.`;
+    if (!named.has(id)) return `The angle the director picked leaves out ${name}, the thread that carries the room's verdict.`;
+    return null;
+  }).filter(Boolean);
+  if (problems.length === 0) return null;
+  return `${problems.join(' ')} The article always reports the verdict, so that thread keeps its verdict and stays in the picked angle.`;
 }
 
 /**

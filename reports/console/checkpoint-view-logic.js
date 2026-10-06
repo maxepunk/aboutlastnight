@@ -1964,20 +1964,23 @@
     if (touched.length > 0) {
       return 'The writer gave more than one ' + ELEMENT_WORDS[touched[0].scope] + ' the id "' + touched[0].id + '", so the meeting cannot tell which of them you changed. Put them back as the meeting showed them: a reweave with a note, or a send-back, gives each its own id.';
     }
-    return meetingPickProblem(left);
+    return meetingPickProblem(left, shownWeave);
   }
 
   /**
    * What the gate refuses in the director's pick, or null (lib/meeting.js pickProblems, whose
-   * decisions a test holds this to): a pick that names no angle the weave holds, and a picked
-   * angle (the one the pick names, else the first) without the thread that carries the room's
-   * verdict (R8). The page locks that thread in the open angle, so this holds a version from
-   * anywhere else to the gate's rule.
+   * decisions a test holds this to): a pick that names no angle the weave holds, and a version
+   * that does not carry the thread that carries the room's verdict (R8): the thread taken out,
+   * its verdict flag taken off or moved, or the thread left out of the picked angle (the one the
+   * pick names, else the first). The verdict's thread is the one the weave the meeting showed
+   * flags, by id, else the one the version flags (fix round 1, finding 2). The page locks that
+   * thread in the open angle, so this holds a version from anywhere else to the gate's rule.
    *
    * @param {Object} weave - the weave as the director left it, which the shape has taken
+   * @param {Object|null} [shown] - the weave the meeting showed, without its code-owned keys
    * @returns {string|null}
    */
-  function meetingPickProblem(weave) {
+  function meetingPickProblem(weave, shown) {
     var angles = asArray(weave.angles);
     var picked = asString(weave[PICKED_KEY]).trim();
     var byId = function (id) { return angles.filter(function (angle) { return weaveIdOf(angle) === id; })[0] || null; };
@@ -1985,11 +1988,20 @@
     var angle = openAngleOf(weave);
     if (!angle) return null;
     var named = angleThreadIdsOf(angle);
-    var missing = asArray(weave.threads).filter(function (thread) {
-      return thread && thread.verdict === true && weaveIdOf(thread) && named.indexOf(weaveIdOf(thread)) === -1;
-    });
-    if (missing.length === 0) return null;
-    return 'The angle you send must keep "' + (asString(missing[0].name).trim() || weaveIdOf(missing[0])) + '": it tells the room\'s verdict, which the article always reports.';
+    var flagged = function (threads) {
+      return asArray(threads).filter(function (thread) { return isPlainObject(thread) && thread.verdict === true && weaveIdOf(thread); });
+    };
+    var shownVerdict = isPlainObject(shown) ? flagged(shown.threads) : [];
+    var verdictThreads = shownVerdict.length > 0 ? shownVerdict : flagged(weave.threads);
+    for (var i = 0; i < verdictThreads.length; i += 1) {
+      var id = weaveIdOf(verdictThreads[i]);
+      var name = '"' + (asString(verdictThreads[i].name).trim() || id) + '"';
+      var held = asArray(weave.threads).filter(function (own) { return weaveIdOf(own) === id; });
+      if (held.length === 0) return 'Keep ' + name + " in the weave: it tells the room's verdict, which the article always reports.";
+      if (!held.some(function (own) { return own.verdict === true; })) return "Keep the room's verdict on " + name + ': the article always reports it.';
+      if (named.indexOf(id) === -1) return 'The angle you send must keep ' + name + ": it tells the room's verdict, which the article always reports.";
+    }
+    return null;
   }
 
   /** Whether the director changed the weave at this look: anything but an answer (ruling 5). */

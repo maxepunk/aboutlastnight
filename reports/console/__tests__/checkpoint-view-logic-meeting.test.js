@@ -254,6 +254,12 @@ const DECISION_CASES = [
   ['an angle the director did not pick lacks the verdict\'s thread', true, () => { const w = clone(WEAVE); w.picked = 'a2'; w.angles[2].threads = ['t4']; return [w, clone(WEAVE)]; }],
   ['the picked angle lacks the verdict\'s thread', false, () => { const w = clone(WEAVE); w.picked = 'a2'; w.angles[1].threads = ['t3']; return [w, clone(WEAVE)]; }],
   ['the first angle, open with no pick, lacks the verdict\'s thread', false, () => { const w = clone(WEAVE); w.angles[0].threads = ['t2', 't3']; return [w, clone(WEAVE)]; }],
+  // Fix round 1, finding 2: the verdict's thread is the one the meeting showed, by id (R8).
+  ["the verdict's flag taken off its thread, which stays in the picked angle", false, () => { const w = clone(WEAVE); delete w.threads[0].verdict; return [w, clone(WEAVE)]; }],
+  ["the verdict's flag set false and its thread left out of the picked angle", false, () => { const w = clone(WEAVE); w.threads[0].verdict = false; w.angles[0].threads = w.angles[0].threads.filter((id) => id !== 't1'); return [w, clone(WEAVE)]; }],
+  ["the verdict's flag moved to a thread in the picked angle", false, () => { const w = clone(WEAVE); delete w.threads[0].verdict; w.threads[1].verdict = true; w.angles[0].threads = w.angles[0].threads.filter((id) => id !== 't1'); return [w, clone(WEAVE)]; }],
+  ["the verdict's thread deleted from the weave and every angle", false, () => { const w = clone(WEAVE); w.threads.splice(0, 1); w.angles.forEach((a) => { a.threads = a.threads.filter((id) => id !== 't1'); }); return [w, clone(WEAVE)]; }],
+  ["the verdict's thread renamed, kept flagged in the picked angle", true, () => { const w = clone(WEAVE); w.threads[0].name = 'The vote the room settled'; return [w, clone(WEAVE)]; }],
   ['a pick that names no angle', false, () => { const w = clone(WEAVE); w.picked = 'a9'; return [w, clone(WEAVE)]; }],
   ['a pick that is not text', false, () => { const w = clone(WEAVE); w.picked = 3; return [w, clone(WEAVE)]; }],
   ['the director repeats an angle id', false, () => { const w = clone(WEAVE); w.angles.push({ ...w.angles[2] }); return [w, clone(WEAVE)]; }],

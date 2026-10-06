@@ -234,6 +234,26 @@ describe('the gate (R8, R9)', () => {
     expect(error).toContain('Morgan, named by her own memories');
   });
 
+  // Fix round 1, finding 2: the verdict's thread is read from the weave the meeting showed, by id,
+  // so a version that takes its flag off, moves the flag or deletes the thread cannot pass R8.
+  test.each([
+    ['clears its flag, though it stays in the picked angle', (left) => { delete left.threads[0].verdict; }],
+    ['clears its flag and leaves it out of the picked angle', (left) => { left.threads[0].verdict = false; left.angles[0].threads = ['t2', 't3', 't4', 't5']; }],
+    ['moves its flag to another thread in the picked angle', (left) => { delete left.threads[0].verdict; left.threads[2].verdict = true; left.angles[0].threads = ['t2', 't3', 't4', 't5']; }],
+    ['deletes the thread from the weave and every angle', (left) => { left.threads.splice(0, 1); left.angles.forEach((angle) => { angle.threads = angle.threads.filter((id) => id !== 't1'); }); }]
+  ])("refuses a version that %s, naming the verdict's thread as the meeting showed it", (_name, change) => {
+    const left = anglesWeave();
+    change(left);
+    expect(directorWeaveProblems(left, { shown: anglesWeave() })).toContain('Morgan, named by her own memories');
+    expect(meetingResume({ meeting: 'approve', weave: left }, stateAt()).error).toContain('Morgan, named by her own memories');
+  });
+
+  test("takes a version that keeps the verdict's thread flagged in the picked angle, the director's rename of it included", () => {
+    const left = anglesWeave();
+    left.threads[0].name = 'Morgan, named by the room';
+    expect(directorWeaveProblems(left, { shown: anglesWeave() })).toBeNull();
+  });
+
   test('refuses a pick that names no angle the weave holds', () => {
     const left = { ...anglesWeave(), picked: 'a9' };
     expect(directorWeaveProblems(left, { shown: anglesWeave() })).toMatch(/pick/i);
