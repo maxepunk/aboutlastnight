@@ -36,7 +36,7 @@
 'use strict';
 
 const { isVerbatimIn, normalizeForGrounding, QUOTED_SPANS, ELISION } = require('./grounding');
-const { recordIdOf, buildMorningTimeline, formatAmount } = require('./prompt-renderers/record-view');
+const { recordIdOf, buildMorningTimeline, timelineEventLine } = require('./prompt-renderers/record-view');
 const { directorAccusationText } = require('./accusation-verdict');
 const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('./writer-questions');
 
@@ -201,14 +201,6 @@ function buriedIdsOf(evidenceBundle) {
   return ids;
 }
 
-/** One event of the morning timeline as text: its fields, the amount as the record view prints it. */
-function timelineEventText(event) {
-  return Object.entries(event)
-    .filter(([key, value]) => !['kind', 'minute', 'sameMinute'].includes(key) && value !== null && value !== undefined && value !== '')
-    .map(([key, value]) => (key === 'amount' ? formatAmount(value) : String(value)))
-    .join(' | ');
-}
-
 /** The director's own words a piece names as "notes": the notes, the corrections, the accusation as written and the answers at the story meeting (T1). */
 function notesTextsOf(state) {
   return [
@@ -225,9 +217,10 @@ function notesTextsOf(state) {
  *   (documentTextsOf);
  * - `documentIds`: the ids a line may not name (documentIdsOf);
  * - `texts`: the text of each source besides a document: the ledger's rows (each sale, the
- *   first-burial bonus and each transfer, as the morning timeline holds them: account, amount
- *   and time), the evidence log's (each exposure: the document and the name on its turn-in) and
- *   the director's words (notesTextsOf);
+ *   first-burial bonus and each transfer) and the evidence log's (each exposure: the document and
+ *   the name on its turn-in, or "anonymous"), each as the writer reads it on the morning timeline
+ *   (lib/prompt-renderers/record-view.js timelineEventLine; fix round 4), and the director's words
+ *   (notesTextsOf);
  * - `buried`: the buried memories by their ids, which no piece names.
  * A buried memory's id, owner and text reach none of them but `buried`.
  *
@@ -242,8 +235,8 @@ function evidenceContextOf(state) {
     documents: documentTextsOf(bundle),
     documentIds: documentIdsOf(bundle),
     texts: {
-      [EVIDENCE_SOURCES.LEDGER]: events.filter((event) => event.kind !== 'exposure').map(timelineEventText),
-      [EVIDENCE_SOURCES.EVIDENCE_LOG]: events.filter((event) => event.kind === 'exposure').map(timelineEventText),
+      [EVIDENCE_SOURCES.LEDGER]: events.filter((event) => event.kind !== 'exposure').map(timelineEventLine),
+      [EVIDENCE_SOURCES.EVIDENCE_LOG]: events.filter((event) => event.kind === 'exposure').map(timelineEventLine),
       [EVIDENCE_SOURCES.NOTES]: notesTextsOf(s)
     },
     buried: buriedIdsOf(bundle)

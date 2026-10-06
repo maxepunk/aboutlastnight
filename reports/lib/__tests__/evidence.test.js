@@ -323,6 +323,37 @@ describe('evidenceContextOf: what the checks read a piece against', () => {
   });
 });
 
+// Fix round 4, fix 5: the evidence check reads the morning timeline as the writer sees it, one
+// text with the record view's lines (lib/prompt-renderers/record-view.js timelineEventLine), so a
+// piece that quotes the timeline's words as the writer read them passes.
+describe("fix round 4: the ledger's and the evidence log's texts are the record view's lines", () => {
+  const { renderMorningTimeline } = require('../prompt-renderers/record-view');
+  const withBonus = () => {
+    const s = state();
+    s.sessionConfig.adjustments = [{ kind: 'bonus', toAccount: 'Rich', amount: 50000, time: '09:30 PM' }];
+    return s;
+  };
+
+  it('passes a piece that quotes the words the writer read on the timeline: "anonymous", "first-burial bonus", "paid to: Rich"', () => {
+    const ctx = evidenceContextOf(withBonus());
+    expect(evidenceProblems([
+      piece(['evidence-log'], 'The warning was turned in "anonymous"'),
+      piece(['evidence-log'], 'The log reads "exposure | document: jes002 | anonymous"'),
+      piece(['ledger'], 'The ledger lists a "first-burial bonus"'),
+      piece(['ledger'], 'The bonus was "paid to: Rich"')
+    ], ctx)).toEqual([]);
+  });
+
+  it("holds each text to a line the writer's timeline prints", () => {
+    const s = withBonus();
+    const ctx = evidenceContextOf(s);
+    const timeline = renderMorningTimeline(s.evidenceBundle, s.sessionConfig);
+    [...ctx.texts.ledger, ...ctx.texts['evidence-log']].forEach((text) => expect(timeline).toContain(`- ${text}`));
+    // The session clock prints an evening's times as the morning's, as the writer reads them.
+    expect(ctx.texts['evidence-log']).toEqual(['09:56 AM | exposure | document: jes002 | anonymous']);
+  });
+});
+
 describe('documentIdsOf: the ids, never the names', () => {
   it('lists each id a document answers to, and leaves out its name', () => {
     expect([...documentIdsOf(bundle())].sort()).toEqual(['jes002', 'p-email', 'page-7731', 'sam001']);

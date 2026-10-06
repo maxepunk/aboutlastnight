@@ -319,6 +319,16 @@ function timelineEventText(event) {
   }
 }
 
+/**
+ * One event's line as the morning timeline prints it, its time first: the one text the writers
+ * read and the evidence check reads a piece's quotation of the ledger or the evidence log against
+ * (lib/evidence.js evidenceContextOf; fix round 4). An event in a shared minute prints its time on
+ * the minute's heading instead, and the check reads it with its time all the same.
+ */
+function timelineEventLine(event) {
+  return `${event.time} | ${timelineEventText(event)}`;
+}
+
 const TIMELINE_INTRO = 'The morning in time order: the ledger and the evidence log merged, each logged time on the morning clock. ' +
   'A sale is a buried memory\'s ledger line: the account paid, the amount and the time. ' +
   'An exposure names the memory\'s document id and the name on the turn-in. ' +
@@ -338,7 +348,7 @@ function renderMorningTimeline(evidenceBundle, sessionConfig) {
   const lines = [];
   events.forEach((event, i) => {
     if (!event.sameMinute) {
-      lines.push(`- ${event.time} | ${timelineEventText(event)}`);
+      lines.push(`- ${timelineEventLine(event)}`);
       return;
     }
     const previous = events[i - 1];
@@ -380,6 +390,8 @@ module.exports = {
   renderRecordDocuments,
   buildMorningTimeline,
   renderMorningTimeline,
+  // Fix round 4: an event's line as the timeline prints it, which the evidence check reads
+  timelineEventLine,
   buriedTransactionFields,
   isBuriedTransactionRow,
   formatAmount,
