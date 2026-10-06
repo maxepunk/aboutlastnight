@@ -64,7 +64,7 @@ const {
 } = require('../../weave');
 // Phase 4b (brief 1B; R10): the evidence under each line, the sources a piece may name, and what
 // the checks the weave and the map share read.
-const { EVIDENCE_SOURCES, EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../../evidence');
+const { SOURCES_GLOSS, EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../../evidence');
 // Phase 4b (brief 1B; R5): the meeting's page as it first opens, counted as the stops log counts it.
 const { meetingCheckpointData } = require('../../meeting');
 const { wordsShown } = require('../../stop-pages');
@@ -377,7 +377,7 @@ The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSumma
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 ### Sources
-A piece of evidence names each of its sources by one of these document ids, or as "${EVIDENCE_SOURCES.LEDGER}" for a sale, the bonus or a transfer on the morning timeline, "${EVIDENCE_SOURCES.EVIDENCE_LOG}" for an exposure on it, or "${EVIDENCE_SOURCES.NOTES}" for the director's own words: the notes, the corrections, the accusation and the answers at the story meeting.
+A piece of evidence names each of its sources by one of these document ids, or as ${SOURCES_GLOSS}.
 ${JSON.stringify(evidenceSummary.allEvidenceIds)}
 
 ---

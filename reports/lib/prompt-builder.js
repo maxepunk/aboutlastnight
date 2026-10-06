@@ -22,7 +22,7 @@ const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER, MAP_WORD_
 // Phase 4b (brief 1E; R4): the article writer reads a beat's card as the map's checks and counts
 // do, through the one reader of a beat's card, and names a piece's sources as lib/evidence.js does.
 const { beatCardOf } = require('../console/outline-edit-logic');
-const { EVIDENCE_SOURCES } = require('./evidence');
+const { SOURCES_GLOSS } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
@@ -438,14 +438,15 @@ function systemPromptOpening(theme, call, sessionConfig) {
  *
  * Phase 4b (brief 1E; spec 2026-10-05 sections 5.1 and 7; R1, R4): the line reads a beat as the
  * map carries it, a move with its people, the threads it carries and its evidence underneath, each
- * piece with its sources (lib/evidence.js EVIDENCE_SOURCES, named as the weave writer's Sources
- * list names them), what it shows and its stance, and the card as a marker on the beat with its
- * document on the piece flagged "card". The beat's `kind` stays unnamed, a hint the JSON carries.
+ * piece with its sources (each named source with what it holds, lib/evidence.js SOURCES_GLOSS,
+ * the gloss the weave writer's Sources line prints), what it shows and its stance, and the card
+ * as a marker on the beat with its document on the piece flagged "card". The beat's `kind` stays
+ * unnamed, a hint the JSON carries.
  * It names the record in words, never by its tag, as lib/evidence.js's piece descriptions do: the
  * map prints above the record, and the prompt's readers take the first <RECORD> for the record.
  */
 const STORY_MAP_TAG = 'STORY_MAP';
-const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move is told from, each with its "sources" (the id of a document in the record, "${EVIDENCE_SOURCES.LEDGER}" for a sale, the bonus or a transfer on the morning timeline, "${EVIDENCE_SOURCES.EVIDENCE_LOG}" for an exposure on it, or "${EVIDENCE_SOURCES.NOTES}" for the director's own words), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
+const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move is told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
 
 /**
  * The instruction's line on which inline cards the article prints (phase 4b, brief 1E; spec

@@ -14,6 +14,8 @@
  *
  * This module holds what the weave and the map share, so each rule is one function:
  * - EVIDENCE_PIECE_SCHEMA, the piece's shape, which both writers' schemas embed;
+ * - SOURCES_GLOSS, what each of EVIDENCE_SOURCES holds, which the weave writer's Sources line
+ *   and the article writer's map label print, and which evidenceContextOf reads in code;
  * - evidenceProblems, the evidence check: each source names a document in the record or one of
  *   EVIDENCE_SOURCES, never a buried memory, and each quotation in `shows` is word for word in one
  *   of its sources' texts (lib/grounding.js isVerbatimIn), whatever its quotation marks, case or
@@ -48,6 +50,27 @@ const EVIDENCE_STANCES = Object.freeze(['supports', 'cuts-against']);
 const NAMED_SOURCES = (() => {
   const quoted = Object.values(EVIDENCE_SOURCES).map((source) => `"${source}"`);
   return `${quoted.slice(0, -1).join(', ')} or ${quoted[quoted.length - 1]}`;
+})();
+
+/**
+ * What each source besides a document holds, as the writers read it. evidenceContextOf reads the
+ * same meanings in code: the ledger's rows and the evidence log's from the morning timeline, and
+ * the director's words through notesTextsOf. The evidence log's meaning follows the ledger's in
+ * EVIDENCE_SOURCES' order, so its "it" is the morning timeline.
+ */
+const SOURCE_MEANINGS = Object.freeze({
+  [EVIDENCE_SOURCES.LEDGER]: 'a sale, the bonus or a transfer on the morning timeline',
+  [EVIDENCE_SOURCES.EVIDENCE_LOG]: 'an exposure on it',
+  [EVIDENCE_SOURCES.NOTES]: "the director's own words: the notes, the corrections, the accusation and the answers at the story meeting"
+});
+
+/**
+ * The sources besides a document, each with what it holds, as a list reads them: the one gloss
+ * the weave writer's Sources line and the article writer's map label both print.
+ */
+const SOURCES_GLOSS = (() => {
+  const glossed = Object.values(EVIDENCE_SOURCES).map((source) => `"${source}" for ${SOURCE_MEANINGS[source]}`);
+  return `${glossed.slice(0, -1).join(', ')}, or ${glossed[glossed.length - 1]}`;
 })();
 
 /**
@@ -522,6 +545,7 @@ const STORY_TERMS_FIX = 'Say it in story terms, as C16 (<craft-story>) sets out:
 
 module.exports = {
   EVIDENCE_SOURCES,
+  SOURCES_GLOSS,
   EVIDENCE_STANCES,
   EVIDENCE_PIECE_SCHEMA,
   evidenceProblems,

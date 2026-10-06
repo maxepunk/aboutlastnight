@@ -361,10 +361,15 @@ const REPO = path.join(__dirname, '..', '..');
  *   flagged piece's document beside its beat as beatCardOf reads it (330 -> 555). A rework carries
  *   all three word for word. article-journalist 33797 -> 34742. The outline and arc pins do not
  *   move.
+ * - Phase 4b (fix round 3, fix 1), one gloss for the named sources: the map's label prints
+ *   lib/evidence.js SOURCES_GLOSS, the gloss the weave writer's Sources line prints, so its
+ *   "notes" now names the director's words as the evidence check reads them, the notes, the
+ *   corrections, the accusation and the answers at the story meeting (+81):
+ *   article-journalist 34742 -> 34823. The arc pin does not move: its wording is the gloss's.
  */
 const PINNED = {
   'outline-journalist': ['09bcdf1a6851ca6b44acede51d9f36af064d8f347a794d42ae6834cdd1a05ed4', 23474],
-  'article-journalist': ['47d8f6f9d54e7c9b05d960af40f92e3325726deada6ee1a9ac98b9a2cbd5ea5d', 34742],
+  'article-journalist': ['40187b645483a1ea263865b75dbd8935699b4854a79928132ddb3dc834535492', 34823],
   'arcs-journalist': ['0cc6d84aaa1d94a20080934235e0bfacbf9f9920627f6fdd9b881b6cfd43004c', 11475]
 };
 
