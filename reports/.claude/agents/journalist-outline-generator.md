@@ -47,7 +47,7 @@ The director reads the map as a page of at most 450 words, without the evidence 
 - What the record cannot carry goes in `gapNote`, the one line at the top, in story terms: a part of the story, or a change the director made at the meeting, such as a thread they added. A player you cannot place and a link you see that the weave lacks go there too, as C7 and C16 set out.
 - Set `expectedLength` from what the map holds, as C4 (`craft-telling.md`) sets out.
 
-The map is done when every roster player is in a beat or raised in `gapNote` (C7), every photo the director kept is placed once and none they left out (T13), the cards number as C9 sets out, every live connection lands in a beat, every thread in the story lands in a beat or, for a thread the director added that the record cannot carry, is named in `gapNote`, and the page comes to at most 450 words.
+The map is done when every roster player is in a beat or raised in `gapNote` (C7), every photo the director kept is placed once and none they left out (T13), the cards number as C9 sets out, every live connection lands in a beat, every thread in the story lands in a beat or, for a thread the director added that the record cannot carry, is named in `gapNote`, and the page keeps its bound.
 
 On a send-back, the latest send-back note for the map decides how much of the previous version you keep. Each line the director wrote into the map stays as they wrote it unless the structural change the note asks for means it no longer fits.
 
