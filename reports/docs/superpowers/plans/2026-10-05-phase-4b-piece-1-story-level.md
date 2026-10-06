@@ -154,7 +154,7 @@ None makes a live model call. The director's next new session is the live test (
 
 1. **The suite**, at the phase branch's head: exit 0, nothing skipped.
 2. **The prompt checks,** on the integrator's database copy.
-   - Render the weave writer, its automatic rework, the meeting's fact check, the map writer and its two reworks, the article writer and the article judge from 092026, 092626 and 0926262, with the fixed weave and map planted (1G's planting rule).
+   - Render the weave writer, its automatic rework, the meeting's fact check, the map writer and its two reworks, the article writer and the article judge from 092026, 092626 and 0926262. The copy's threads hold no weave or map, so the renderer plants the fixed ones; 1G's rule also plants over an old shape.
    - For every call: it builds; it reads exactly the rule files phase 4 spec section 11 gives it; no retired wording and no em-dash in any instruction text; `<DIRECTOR_GUIDANCE>` last where a writer has one; its size recorded beside phase 4's.
    - The settled weave in the map writer's render carries each thread's evidence. The article writer's `<STORY_MAP>` carries each beat's evidence and its card flags.
    - The record view and the director-words renderers print byte-identical text on `main` and on the branch (the integrator's renderer-level script, as in phase 4).
@@ -265,7 +265,7 @@ The gates prove the pipeline works. Whether the article improved is shown by the
 - The settled weave's lines; the edits leaving evidence out; the fold's view; `addMeetingThread`; the stop page's lines and count.
 - The survey's section 8 lists the tests this moves. `lib/__tests__/arc-specialist-prompts.test.js` 476-510 moves with C16's wording. Each pinned hash this moves is updated with the reason.
 
-**Verification.** Render the weave writer, its automatic rework, the fact check and the map writer from 092026 and 0926262 on the integrator's copy, with the fixed weave planted by hand in your scratch copy. Record each section and the sizes. Build the meeting's page from the fixed weave with `lib/stop-pages.js` and count it.
+**Verification.** Render the weave writer, its automatic rework, the fact check and the map writer from 092026 and 0926262 on the integrator's copy. Its threads hold no weave or map, so `scripts/render-prompts.js` plants the fixed ones from `scripts/lib/`, in the new shape once your fixtures are. Record each section and the sizes. Build the meeting's page from the fixed weave with `lib/stop-pages.js` and count it.
 
 **Done.** The full suite passes. The renders read as stated. The meeting's view model gives the story level with its folds.
 
@@ -353,7 +353,7 @@ The gates prove the pipeline works. Whether the article improved is shown by the
 - The editors' logic; photos by description; the stop page's lines and count.
 - The survey's section 8 lists the tests this moves. Each pinned hash this moves is updated with the reason.
 
-**Verification.** Render the map writer, its check rework and its send-back rework from 092026 and 0926262 on the integrator's copy, with the fixed weave and map planted by hand in your scratch copy. Record the sizes. Build the map's page from the fixed map and count it.
+**Verification.** Render the map writer, its check rework and its send-back rework from 092026 and 0926262 on the integrator's copy, where `scripts/render-prompts.js` plants the fixed weave and map. Record the sizes. Build the map's page from the fixed map and count it.
 
 **Done.** The full suite passes. The renders carry each beat's evidence and card flag. The map's view model gives the story level with its folds and the photos by description.
 
@@ -375,7 +375,7 @@ The gates prove the pipeline works. Whether the article improved is shown by the
 
 **Tests.** `lib/__tests__/article-writer-map.test.js`, `card-instructions.test.js` and `prompt-builder-card-fields.test.js` for the label, the task line and the card line. Each pinned hash this moves is updated with the reason.
 
-**Verification.** Render the article writer and its rework from 0926262 on the integrator's copy, with the fixed weave and map planted by hand in your scratch copy, and read the label, the task line and the card line in place.
+**Verification.** Render the article writer and its rework from 0926262 on the integrator's copy, where `scripts/render-prompts.js` plants the fixed weave and map, and read the label, the task line and the card line in place.
 
 **Done.** The full suite passes, and the renders read as stated.
 
