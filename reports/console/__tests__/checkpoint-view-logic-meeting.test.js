@@ -1013,9 +1013,9 @@ describe('1B: a code check still failing sits beside the line it names', () => {
 
 // Fix round, fix 2 (spec 5.3 and 6.1; Review focus 1): "Nothing yet: the map writer finds the
 // evidence for it." belongs to a thread the director added, at this look or an earlier one, which
-// the stop names (`directorsThreads` since fix round 4, which names a thread they brought into the
-// story too). A thread of the writer's with no evidence is a failing check, and the page shows the
-// check's line beside it instead.
+// the stop names (`directorsThreads` since fix round 4). A thread of the writer's with no evidence,
+// one the director flipped into the story included (3 fix A), is a failing check, and the page
+// shows the check's line beside it instead.
 describe("1B fix 2: the fold says the map writer finds the evidence only for a thread the director added", () => {
   const NO_EVIDENCE = {
     type: 'thread-without-evidence',
@@ -1052,6 +1052,34 @@ describe("1B fix 2: the fold says the map writer finds the evidence only for a t
 
   test('the stop names no thread of the director\'s when the director added none and brought none in', () => {
     expect(payloadOf(stateAt()).directorsThreads).toEqual([]);
+  });
+
+  // 3 fix A: a flip makes no thread the director's to find evidence for. A writer's thread with no
+  // evidence that the director flipped into the open angle shows the check's failure alone, while
+  // the map writer may still name it in the gap note (lib/meeting.js meetingDirectorsThreads).
+  test("a writer's thread with no evidence that the director flipped in shows the check's failure alone", () => {
+    const { meetingDirectorsThreads } = require('../../lib/meeting');
+    const writers = clone(WEAVE);
+    writers.threads[4].evidence = [];
+    const left = clone(writers);
+    left.angles[0].threads.push('t5');
+    const marked = weaveLib.withFactCheckMark(left, MARK);
+    const failure = {
+      type: 'thread-without-evidence',
+      message: 'The thread "The letter" has no piece of evidence that supports it.',
+      line: 'The thread "The letter" has nothing behind it: no piece of the record supports it.',
+      place: 'threads[#t5]'
+    };
+    const state = stateAt({
+      weave: marked, _weaveBaseline: writers, _weaveHandEdits: standingAtMeeting(null, writers, left),
+      _arcValidation: { weaveKey: weaveLib.weaveKey(marked), passed: false, failures: [failure], concerns: [] }
+    });
+    expect(meetingDirectorsThreads(state)).toEqual([{ id: 't5', added: false, broughtIn: true }]);
+    const data = payloadOf(state);
+    expect(data.directorsThreads).toEqual([]);
+    const t5 = threadOf(meetingView(data, meetingDraftOf(data, undefined)), 't5');
+    expect(t5).toMatchObject({ inStory: true, evidence: [], noEvidence: '' });
+    expect(t5.failures).toEqual([`Check still failing: ${failure.line}`]);
   });
 });
 
@@ -2254,8 +2282,8 @@ describe('fix round 4: a meeting line after a send-back shows no evidence', () =
 
 // Fix round 4, fix 4 (spec 5.3): the fold's line is the director's thread's alone. Since slice 3C
 // a flip is an edit, so lib/meeting.js meetingDirectorsThreads names a thread the director flipped
-// into the story beside the threads they added; a thread of the writer's that no edit of the
-// director's touches gets no line, and the stop names it nowhere.
+// into the story beside the threads they added, for the map writer's gap note; the stop names only
+// the threads they added (3 fix A), so a thread of the writer's gets no line, flipped in or not.
 describe('fix round 4: "Nothing yet" is never under a thread of the writer\'s', () => {
   const { storyLevelWeave } = require('../../lib/__tests__/fixtures/story-level-weave');
 

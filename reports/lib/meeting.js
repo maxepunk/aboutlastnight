@@ -381,10 +381,10 @@ function meetingConcerns(state) {
  * they added (`added`), and each they brought into the settled angle (`broughtIn`; piece 3, R2),
  * at whatever look they flipped it in, since each flip is an edit of its own that keeps its author.
  * The next writer finds the evidence for such a thread (spec 2026-10-05 section 5.3): the meeting
- * says so under one with none, at whatever look the director put it there (the payload's
- * `directorsThreads`), where a thread of the writer's with none is a check's failure, shown beside
- * it; and when the record cannot carry it, the map names it in its gap note (lib/map.js
- * mapFindings).
+ * says so under one the director added with none, at whatever look they added it (the payload's
+ * `directorsThreads`, the added ones alone), where a thread of the writer's with none, flipped in
+ * or not, is a check's failure, shown beside it (3 fix A); and when the record cannot carry either
+ * kind, the map names it in its gap note (lib/map.js mapFindings).
  *
  * @param {Object} state
  * @returns {Array<{id: string, added: boolean, broughtIn: boolean}>}
@@ -562,9 +562,10 @@ function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
     questions: weaveQuestionsOf(s.weave && s.weave.questions),
     checkFailures: meetingCheckFailures(s),
     concerns: meetingConcerns(s),
-    // Fix round 4: the threads the director added or brought into the story, whose fold says the
-    // map writer finds their evidence while they have none.
-    directorsThreads: meetingDirectorsThreads(s).map((thread) => thread.id),
+    // Fix round 4: the threads the director added, whose fold says the map writer finds their
+    // evidence while they have none. A writer's thread they flipped in stays the writer's to
+    // answer for: with no evidence, the check's failure shows beside it alone (3 fix A).
+    directorsThreads: meetingDirectorsThreads(s).filter((thread) => thread.added).map((thread) => thread.id),
     marks: meetingMarksOf(s),
     // The edits the round's passes changed, a send-back's with its reasons, and each
     // restore (lib/hand-edit-diff.js reportAfterPass).
