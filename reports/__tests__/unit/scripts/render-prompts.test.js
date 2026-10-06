@@ -25,7 +25,7 @@ const { loadCallModules, renderJudge } = require('../../../scripts/lib/render-ca
 const { createReportGraphWithCheckpointer } = require('../../../lib/workflow/graph');
 const { _testing: { TRUTH_MATERIAL } } = require('../../../lib/workflow/nodes/evaluator-nodes');
 const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('../../../lib/__tests__/fixtures/rework-state');
-const { oldShapeMapChannels, oldShapeWeave, oldShapeMap } = require('../../../lib/__tests__/fixtures/old-shapes');
+const { oldShapeMapChannels, oldShapeWeave, oldShapeMap, pieceOneWeave, pieceOneMapChannels } = require('../../../lib/__tests__/fixtures/old-shapes');
 const { isWeave } = require('../../../lib/weave');
 const { isMap } = require('../../../lib/hand-edit-diff');
 const { isOldShapeWeave, isOldShapeMap } = require('../../../lib/old-thread');
@@ -126,6 +126,10 @@ describe('4.11: the script renders every call, and checks every marker, from a s
     // Brief 1G: a thread paused at the map on phase 4's shapes, its weave and map with the
     // director's edits in those shapes. The script plants the fixed weave and map over them.
     await store('1004114', { ...reworkFixtureState('journalist'), ...oldShapeMapChannels(), contentBundle: clone(PREVIOUS_BUNDLE) });
+    // Piece 3, brief 3E: a thread paused at the map on piece 1's weave, one story with threads in
+    // roles and no angles, beside a map in the shape the map still has. The script plants the
+    // fixed weave over it and keeps the map.
+    await store('1004115', { ...reworkFixtureState('journalist'), ...pieceOneMapChannels(), contentBundle: clone(PREVIOUS_BUNDLE) });
   });
 
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -133,7 +137,8 @@ describe('4.11: the script renders every call, and checks every marker, from a s
   it.each([
     ['a thread holding the weave and the map', '1004112'],
     ['a thread from before phase 4, with the fixed weave and map planted', '1004113'],
-    ['a thread on the old shapes, with the fixed weave and map planted over them', '1004114']
+    ['a thread on the old shapes, with the fixed weave and map planted over them', '1004114'],
+    ["a thread on piece 1's weave, with the fixed weave planted over it", '1004115']
   ])('%s: every file written, every marker found (exit 0)', (_name, id) => {
     const run = render(id);
     expect(run.output).not.toMatch(/FAIL/);
@@ -156,6 +161,18 @@ describe('4.11: the script renders every call, and checks every marker, from a s
     const old = render('1004114').output;
     expect(old).toMatch(/the thread's weave is in the old shape: planted the fixed story meeting over it \(scripts\/lib\/fixed-weave\.js\)/);
     expect(old).toMatch(/the thread's map is in the old shape: planted the fixed map over it \(scripts\/lib\/fixed-map\.js\)/);
+  }, 60000);
+
+  // Piece 3, brief 3E: piece 1's weave has no angles, so the weave is planted over and said so;
+  // its map is in the current shape, so the map renders as it is.
+  it("plants the fixed weave over piece 1's weave and says why, and keeps the map", () => {
+    const pieceOne = render('1004115').output;
+    expect(pieceOne).toMatch(/the thread's weave is in the old shape: planted the fixed story meeting over it \(scripts\/lib\/fixed-weave\.js\)/);
+    expect(pieceOne).not.toMatch(/planted the fixed map/);
+    RENDERS.forEach((file) => {
+      const text = fs.readFileSync(path.join(render('1004115').out, file), 'utf8');
+      expect(`${file}: ${/PIECE-ONE/.test(text)}`).toBe(`${file}: false`);
+    });
   }, 60000);
 
   it("the renders on the old shapes read the fixed weave and map, and nothing of the old shapes", () => {
@@ -181,6 +198,7 @@ describe('1G: plantReason, which the script plants over and why', () => {
     expect(plantReason(null, isWeave, isOldShapeWeave)).toBe('none');
     expect(plantReason({ story: 'No threads.' }, isWeave, isOldShapeWeave)).toBe('none');
     expect(plantReason(oldShapeWeave(), isWeave, isOldShapeWeave)).toBe('old shape');
+    expect(plantReason(pieceOneWeave(), isWeave, isOldShapeWeave)).toBe('old shape');
     expect(plantReason(reworkFixtureState('journalist').weave, isWeave, isOldShapeWeave)).toBeNull();
   });
 

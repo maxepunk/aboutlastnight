@@ -27,10 +27,14 @@ const { ReportStateAnnotation, VALID_ROLLBACK_POINTS, ROLLBACK_COUNTER_RESETS, R
 const { buildRollbackState, buildFreshStartState } = require('../api-helpers');
 const { isWeave } = require('../weave');
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
-const { OLD_SHAPE_WEAVE, OLD_SHAPE_MAP, oldShapeWeave, oldShapeMap, oldShapeMeetingChannels, oldShapeMapChannels } = require('./fixtures/old-shapes');
+const {
+  OLD_SHAPE_WEAVE, OLD_SHAPE_MAP, oldShapeWeave, oldShapeMap, oldShapeMeetingChannels, oldShapeMapChannels,
+  PIECE_ONE_WEAVE, pieceOneMeetingChannels, pieceOneMapChannels
+} = require('./fixtures/old-shapes');
 
 const WEAVE = reworkFixtureState('journalist').weave;
 const MESSAGE = 'This session was started before the story meeting. Roll back to the story meeting to continue.';
+const SHAPES_MESSAGE = "This session's story meeting was written in an earlier form. Roll back to the story meeting to write it again.";
 const MEETING_AND_BEFORE = ['paper-evidence-selection', 'await-roster', 'await-full-context', 'input-review', 'pre-curation', 'evidence-and-photos', 'arc-selection'];
 const PAST_THE_MEETING = ['photos', 'character-ids', 'outline', 'article'];
 /** An outline and an article in the shapes the old stages wrote, before phase 4. Invented text. */
@@ -281,9 +285,8 @@ describe('4.11: an old thread rolled back to the meeting starts the arc counters
 describe('1G: the old shapes, one test each', () => {
   const NEW_WEAVE = reworkFixtureState('journalist').weave;
 
-  it('a weave whose threads have no line is in the old shape, and so is one with a single such thread', () => {
+  it("a weave in phase 4's shape, whose threads have no line, is in the old shape: it has no angles", () => {
     expect(isOldShapeWeave(OLD_SHAPE_WEAVE)).toBe(true);
-    expect(isOldShapeWeave({ ...NEW_WEAVE, threads: [...NEW_WEAVE.threads, OLD_SHAPE_WEAVE.threads[0]] })).toBe(true);
   });
 
   it('a weave in the new shape is not, a thread the director added with no evidence among its threads', () => {
@@ -324,8 +327,9 @@ describe('1G: which thread is on the old shapes', () => {
   const SHAPES_FLAG = { message: OLD_SHAPES_MESSAGE, rollbackTo: 'arc-selection', rollbackPoints: MEETING_AND_BEFORE };
   const FLAG = { message: MESSAGE, rollbackTo: 'arc-selection', rollbackPoints: MEETING_AND_BEFORE };
 
-  it("the message is the brief's, word for word, one constant beside the other", () => {
-    expect(OLD_SHAPES_MESSAGE).toBe("This session's story meeting was written before the story level. Roll back to the story meeting to write it again.");
+  it('the message names no shape (piece 3, R6): one message for every weave with no angles, beside the other constant', () => {
+    expect(OLD_SHAPES_MESSAGE).toBe(SHAPES_MESSAGE);
+    expect(OLD_SHAPES_MESSAGE).not.toMatch(/story level|angle|role|claim/i);
     expect(OLD_SHAPES_MESSAGE).not.toBe(OLD_THREAD_MESSAGE);
   });
 
@@ -447,5 +451,61 @@ describe("1G: the rollback to the meeting writes an old-shape thread's weave fre
   it('a fresh weave in the new shape leaves the thread alone; one in the old shape would not', () => {
     expect(oldThreadOf({ ...rolledBack(holding()), weave: reworkFixtureState('journalist').weave }, 'arc-selection')).toBeNull();
     expect(oldThreadOf({ ...rolledBack(holding()), weave: oldShapeWeave() }, 'arc-selection')).not.toBeNull();
+  });
+});
+
+// Piece 3, brief 3E (spec 2026-10-06 section 13; R6): a session paused on piece 1's shapes holds
+// a weave with one story, threads in roles and no angles. A weave with no angles is old, which
+// covers piece 1's shape and phase 4's, under one message that names neither. Its rollback to the
+// meeting clears the weave, and the pick with it (the pick lives on the weave, R1), so the angles
+// are written fresh. Its map is in the shape the map still has, and alone flags nothing.
+describe("3E: piece 1's shape is old", () => {
+  const NEW_WEAVE = reworkFixtureState('journalist').weave;
+  const SHAPES_FLAG = { message: OLD_SHAPES_MESSAGE, rollbackTo: 'arc-selection', rollbackPoints: MEETING_AND_BEFORE };
+
+  it("a weave with no angles is in the old shape: piece 1's, and one with threads in the new shape but no angles", () => {
+    expect(isOldShapeWeave(PIECE_ONE_WEAVE)).toBe(true);
+    const { angles: _angles, ...noAngles } = NEW_WEAVE;
+    expect(isOldShapeWeave(noAngles)).toBe(true);
+  });
+
+  it('a weave with its angles is not, whatever its threads carry, and with its pick', () => {
+    expect(isOldShapeWeave(NEW_WEAVE)).toBe(false);
+    expect(isOldShapeWeave({ ...NEW_WEAVE, picked: NEW_WEAVE.angles[1].id })).toBe(false);
+  });
+
+  it("a thread paused at the meeting on piece 1's weave is flagged, with the one old-shape message", () => {
+    expect(oldThreadOf({ currentPhase: '2.35', ...pieceOneMeetingChannels() }, 'arc-selection')).toEqual(SHAPES_FLAG);
+  });
+
+  it.each(PAST_THE_MEETING)("a thread paused at %s on piece 1's weave, beside a map in its current shape, is flagged", (stop) => {
+    expect(oldThreadOf({ currentPhase: '3.25', ...pieceOneMapChannels() }, stop)).toEqual(SHAPES_FLAG);
+  });
+
+  it("a complete thread on piece 1's weave is flagged, and so is one at no stop after an error", () => {
+    expect(oldThreadOf({ ...pieceOneMapChannels(), currentPhase: 'complete', contentBundle: PREVIOUS_BUNDLE }, null)).toEqual(SHAPES_FLAG);
+    expect(oldThreadOf({ ...pieceOneMapChannels(), currentPhase: 'error' }, null)).toEqual(SHAPES_FLAG);
+  });
+
+  it("phase 4's shape and piece 1's get the same flag", () => {
+    expect(oldThreadOf({ currentPhase: '2.35', ...oldShapeMeetingChannels() }, 'arc-selection'))
+      .toEqual(oldThreadOf({ currentPhase: '2.35', ...pieceOneMeetingChannels() }, 'arc-selection'));
+  });
+
+  it('the rollback to the meeting clears the weave, and with it the pick, its baseline, its edits and its checks, and starts the arc counters over', () => {
+    const values = { currentPhase: '3.25', ...pieceOneMapChannels(), arcRevisionCount: 1, humanArcRevisionCount: 1 };
+    expect(oldThreadRollbackState('arc-selection', values)).toEqual({
+      arcRevisionCount: 0, humanArcRevisionCount: 0, weave: null, _weaveBaseline: null, _weaveHandEdits: null, _arcValidation: null
+    });
+    const after = { ...values, ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection', values) };
+    expect(after.weave).toBeNull();
+    expect(after.outline).toBeNull();
+    expect(oldThreadOf(after, null)).toBeNull();
+  });
+
+  it('a fresh weave with angles leaves the rolled-back thread alone', () => {
+    const values = { currentPhase: '2.35', ...pieceOneMeetingChannels() };
+    const after = { ...values, ...buildRollbackState('arc-selection'), ...oldThreadRollbackState('arc-selection', values) };
+    expect(oldThreadOf({ ...after, weave: NEW_WEAVE }, 'arc-selection')).toBeNull();
   });
 });

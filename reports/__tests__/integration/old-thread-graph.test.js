@@ -7,7 +7,9 @@
  * outline, beside a thread of the new code whose weave writer failed, which is resumed.
  * Phase 4b (brief 1G) adds threads on phase 4's shapes, at the meeting, at the map and
  * complete, each refused and rolled back to the meeting, where the weave is written fresh in
- * the story level's shape, beside a thread on the new shapes, which is left alone.
+ * the story level's shape, beside a thread on the new shapes, which is left alone. Piece 3
+ * (brief 3E) adds threads on piece 1's shapes, a weave with no angles, the same three ways,
+ * each rolled back to the meeting, where the angles are written fresh.
  *
  * The thread is seeded as a thread from before phase 4 reaches the photos stop: the parse,
  * the curation and the photos' earlier stops answered, no weave, and the old arc stage's
@@ -41,7 +43,9 @@ const { CHECKPOINT_TYPES } = require('../../lib/workflow/checkpoint-helpers');
 const { isWeave, weaveForPrompt, weaveKey, withFactCheckMark } = require('../../lib/weave');
 const { isOldShapeWeave } = require('../../lib/old-thread');
 const { reworkFixtureState, MAP, PREVIOUS_BUNDLE } = require('../../lib/__tests__/fixtures/rework-state');
-const { oldShapeWeave, oldShapeMeetingChannels, oldShapeMapChannels } = require('../../lib/__tests__/fixtures/old-shapes');
+const {
+  oldShapeMeetingChannels, oldShapeMapChannels, pieceOneMeetingChannels, pieceOneMapChannels
+} = require('../../lib/__tests__/fixtures/old-shapes');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const SESSION = '1004111';
@@ -403,7 +407,7 @@ describe('4.11 fix round 2: a thread of the new code whose weave writer failed i
 // and the fact check judges it. Nothing replays on mixed shapes. A thread on the new shapes is
 // untouched: its rollback to the meeting reopens it as the director left it, with no call.
 describe('1G: a thread on the old shapes, through the real graph', () => {
-  const SHAPES_MESSAGE = "This session's story meeting was written before the story level. Roll back to the story meeting to write it again.";
+  const SHAPES_MESSAGE = "This session's story meeting was written in an earlier form. Roll back to the story meeting to write it again.";
   const graph = () => createReportGraphWithCheckpointer(saver);
   const threadOf = (id) => ({ configurable: { thread_id: id, sessionId: id, theme: 'journalist', dataDir } });
   /** The thread as one on the new code reaches the meeting, past every answered stop, with nothing written after the meeting. */
@@ -421,6 +425,14 @@ describe('1G: a thread on the old shapes, through the real graph', () => {
     ['paused at the map', '1004122', 'outline', (id) => ({ ...base(id), ...oldShapeMapChannels(), photosPath: null }), 'checkMap'],
     ['complete', '1004123', null, (id) => ({
       ...base(id), ...oldShapeMapChannels(), outlineApproved: true, photosPath: null,
+      contentBundle: clone(PREVIOUS_BUNDLE), articleApproved: true, currentPhase: 'complete'
+    }), 'assembleHtml'],
+    // Piece 3, brief 3E (spec 2026-10-06 section 13; R6): piece 1's weave, one story with threads
+    // in roles and no angles, beside a map in the shape the map still has.
+    ["on piece 1's weave, paused at the meeting", '1004125', 'arc-selection', (id) => ({ ...base(id), ...pieceOneMeetingChannels() }), 'evaluateArcs'],
+    ["on piece 1's weave, paused at the map", '1004126', 'outline', (id) => ({ ...base(id), ...pieceOneMapChannels(), photosPath: null }), 'checkMap'],
+    ["on piece 1's weave, complete", '1004127', null, (id) => ({
+      ...base(id), ...pieceOneMapChannels(), outlineApproved: true, photosPath: null,
       contentBundle: clone(PREVIOUS_BUNDLE), articleApproved: true, currentPhase: 'complete'
     }), 'assembleHtml']
   ];
@@ -441,7 +453,9 @@ describe('1G: a thread on the old shapes, through the real graph', () => {
     expect(checkpoint.body.checkpoint).toEqual(stop ? { type: stop, oldThread: checkpoint.body.oldThread } : null);
 
     // Approve, resume and every rollback past the meeting are refused, and nothing ran.
-    for (const [route, body] of [['approve', { meeting: 'approve', weave: oldShapeWeave() }], ['resume', {}], ['resume', { force: true }],
+    const heldWeave = clone(held.values.weave);
+    delete heldWeave._factCheck;
+    for (const [route, body] of [['approve', { meeting: 'approve', weave: heldWeave }], ['resume', {}], ['resume', { force: true }],
       ['rollback', { rollbackTo: 'outline' }], ['rollback', { rollbackTo: 'photos' }]]) {
       const res = await send('POST', `/api/session/${id}/${route}`, body);
       expect(`${route} ${res.status} ${res.body.error}`).toBe(`${route} 409 ${SHAPES_MESSAGE}`);
@@ -462,6 +476,9 @@ describe('1G: a thread on the old shapes, through the real graph', () => {
     expect(isOldShapeWeave(weave)).toBe(false);
     expect(isOldShapeWeave(baseline)).toBe(false);
     weave.threads.forEach((t) => expect(`${t.id}: ${typeof t.line} ${Array.isArray(t.evidence)}`).toBe(`${t.id}: string true`));
+    // The angles are written fresh, and no pick stands until the director sends one (R1).
+    expect(Array.isArray(weave.angles) && weave.angles.length >= 2).toBe(true);
+    expect(weave).not.toHaveProperty('picked');
     expect(weaveForPrompt(baseline)).toEqual(weaveForPrompt(weave));
     expect(meeting.values._arcValidation.weaveKey).toBe(weaveKey(weave));
     expect(meeting.values).toMatchObject({

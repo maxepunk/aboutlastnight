@@ -47,6 +47,13 @@
  * (OLD_SHAPES_MESSAGE). Every rollback point above the meeting clears the weave and the map,
  * so a thread paused before the meeting holds neither and is read as before.
  *
+ * Piece 3 (brief 3E; spec 2026-10-06 section 13; R6): a thread on piece 1's shapes is old too.
+ * Its weave tells one story, with threads in roles and no angles, where piece 3's pitches two or
+ * three angles the director picks among; nothing reads piece 1's weave as one angle. A weave with
+ * no angles is old, which covers piece 1's shape and phase 4's, under one message that names
+ * neither shape. Its rollback to the meeting clears the weave, and with it the director's pick,
+ * which lives on the weave (R1), so the angles are written fresh. The map's shape is unchanged.
+ *
  * server.js applies it: /approve, /resume and every /rollback past the meeting answer 409
  * with the flag's message, and GET /checkpoint carries the flag, which the console shows
  * before any stop renders (console/checkpoint-view-logic.js oldThreadView).
@@ -62,8 +69,11 @@ const { isMapValue } = require('../console/outline-edit-logic');
 /** What the director is told, on every refusal and in the flag, for a thread with no weave. */
 const OLD_THREAD_MESSAGE = 'This session was started before the story meeting. Roll back to the story meeting to continue.';
 
-/** What the director is told for a thread on phase 4's shapes (brief 1G), the director's line word for word. */
-const OLD_SHAPES_MESSAGE = "This session's story meeting was written before the story level. Roll back to the story meeting to write it again.";
+/**
+ * What the director is told for a thread on an earlier shape of the weave or the map: phase 4's
+ * (brief 1G) or piece 1's (brief 3E). One message names neither shape (R6).
+ */
+const OLD_SHAPES_MESSAGE = "This session's story meeting was written in an earlier form. Roll back to the story meeting to write it again.";
 
 /** The stop an old thread goes back to: the story meeting (the stop types keep their names, R3). */
 const OLD_THREAD_ROLLBACK = CHECKPOINT_TYPES.ARC_SELECTION;
@@ -105,16 +115,17 @@ function objectsOf(value) {
 }
 
 /**
- * Whether a weave is in phase 4's shape: a thread with no line. Phase 4's threads were claims
- * pinned to one receipt; every thread of the story level has its line, the writer's and the
- * director's alike (a thread the director adds has no evidence, so the evidence decides
- * nothing). A value that is no weave (lib/weave.js isWeave) is no weave in the old shape.
+ * Whether a weave is in an earlier shape: it has no angles (R6). Piece 3's writer pitches its
+ * story as angles, and every weave of piece 3 holds them, the director's version too, since the
+ * gate refuses a dropped angle. Piece 1's weave told one story with threads in roles, and phase
+ * 4's threads were claims pinned to one receipt; neither has angles. A value that is no weave
+ * (lib/weave.js isWeave) is no weave in an earlier shape.
  *
  * @param {*} weave
  * @returns {boolean}
  */
 function isOldShapeWeave(weave) {
-  return isWeave(weave) && objectsOf(weave.threads).some((thread) => typeof thread.line !== 'string');
+  return isWeave(weave) && !Array.isArray(weave.angles);
 }
 
 /**
@@ -134,7 +145,7 @@ function isOldShapeMap(map) {
 }
 
 /**
- * Whether a thread holds its weave, or its map, in phase 4's shape.
+ * Whether a thread holds its weave, or its map, in an earlier shape.
  *
  * @param {Object} state
  * @returns {boolean}
@@ -178,9 +189,10 @@ function flagOf(message) {
 }
 
 /**
- * The flag for a thread from before the story meeting, or for one on phase 4's shapes, or
- * null for any other thread. A thread with a weave is old only on the old shapes, wherever it
- * sits (brief 1G); one with no weave is old once the old stages took it past the arc writer.
+ * The flag for a thread from before the story meeting, or for one on an earlier shape (phase
+ * 4's or piece 1's), or null for any other thread. A thread with a weave is old only on the old
+ * shapes, wherever it sits (briefs 1G and 3E); one with no weave is old once the old stages took
+ * it past the arc writer.
  *
  * @param {Object|undefined} values - the thread's state values
  * @param {string|null} pausedAt - the stop the thread is paused at (its interrupt's type), or null
@@ -217,9 +229,10 @@ function oldThreadRefusal(sessionId, oldThread) {
  * them the thread holds nothing past the arc writer until the weave is written, so a weave
  * writer that fails leaves it resumable.
  *
- * A thread on phase 4's shapes holds a weave the meeting's point would keep, so its rollback
- * also clears the weave's channels (OLD_SHAPES_WEAVE_CHANNELS; brief 1G): the weave writer
- * then runs fresh, and the checks, the fact check and everything after them run on its weave.
+ * A thread on an earlier shape (phase 4's or piece 1's) holds a weave the meeting's point would
+ * keep, so its rollback also clears the weave's channels (OLD_SHAPES_WEAVE_CHANNELS; briefs 1G
+ * and 3E), the director's pick with the weave: the weave writer then writes the angles fresh,
+ * and the checks, the fact check and everything after them run on its weave.
  * The director's notes and the photo stops' choices stay, as on any rollback to the meeting.
  * Every point before the meeting clears the weave and the map already, so it adds nothing there.
  *

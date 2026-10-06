@@ -130,8 +130,9 @@ beforeEach(() => {
 
 // Task 4.11: the threads below are the new code's, so each holds a weave. A thread with
 // none, paused at the story meeting or later or complete, is from before the meeting and
-// is refused before these guards run (old-thread-guard.test.js).
-const WEAVE = { threads: [] };
+// is refused before these guards run (old-thread-guard.test.js). Piece 3 (brief 3E): a weave
+// of the new code holds its angles, so one with none is on an earlier shape and refused too.
+const WEAVE = { angles: [], threads: [] };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1.1 — B9: resuming a complete thread re-runs the whole paid pipeline

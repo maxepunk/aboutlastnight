@@ -38,7 +38,8 @@
  * (arcReworkCall), three ways: arc-revision.txt is its automatic pass after the weave
  * checks, arc-reweave.txt the director's reweave with no note, and arc-send-back.txt the
  * director's send-back with the fixed note. When the thread holds no weave, or holds one in
- * phase 4's shape (brief 1G: lib/old-thread.js isOldShapeWeave), the fixed
+ * an earlier shape, phase 4's or piece 1's, a weave with no angles (briefs 1G and 3E:
+ * lib/old-thread.js isOldShapeWeave), the fixed
  * story meeting of scripts/lib/fixed-weave.js is planted, as the fixed notes are:
  * invented text, the writer's weave as the baseline and the director's version with a
  * thread added, an answer, a struck connection and their pick, its changes the standing
@@ -169,13 +170,14 @@ const PLANTED_LINES = {
 };
 
 /**
- * Why the fixed weave or map is planted in place of what the thread holds (brief 1G): 'none'
- * when the thread holds none, 'old shape' when it holds one in phase 4's shape, or null when
- * it holds one in the story level's shape, which renders as it is.
+ * Why the fixed weave or map is planted in place of what the thread holds (briefs 1G and 3E):
+ * 'none' when the thread holds none, 'old shape' when it holds one in an earlier shape (a map in
+ * phase 4's, a weave in phase 4's or piece 1's), or null when it holds one in the current shape,
+ * which renders as it is.
  *
  * @param {*} value - the thread's weave or map
  * @param {Function} isShape - whether the value is one at all (lib/weave.js isWeave, lib/hand-edit-diff.js isMap)
- * @param {Function} isOldShape - whether it is in phase 4's shape (lib/old-thread.js isOldShapeWeave, isOldShapeMap)
+ * @param {Function} isOldShape - whether it is in an earlier shape (lib/old-thread.js isOldShapeWeave, isOldShapeMap)
  * @returns {'none'|'old shape'|null}
  */
 function plantReason(value, isShape, isOldShape) {
@@ -282,6 +284,7 @@ async function render() {
   requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits', 'isMap', 'standingOnMap', 'diffBundle']);
   // Brief 1G: a thread paused on phase 4's shapes holds a weave or a map that no builder of
   // the story level reads, so the fixed one is planted over it too, by the guard's own tests.
+  // Brief 3E: and so is a weave in piece 1's shape, which has no angles.
   const oldThread = req('lib/old-thread.js');
   requireExports('old-thread.js', oldThread, ['isOldShapeWeave', 'isOldShapeMap']);
   const weavePlanted = plantReason(state.weave, weaveModule.isWeave, oldThread.isOldShapeWeave);

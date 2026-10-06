@@ -57,7 +57,7 @@ describe("4.11: oldThreadView, the server's flag as the console shows it", () =>
 // The server decides the line once (lib/old-thread.js oldThreadOf), and the view shows the
 // flag's message as it shows the other.
 describe("1G: oldThreadView shows an old-shape thread's line, and a thread with no weave keeps its own", () => {
-  const SHAPES_LINE = "This session's story meeting was written before the story level. Roll back to the story meeting to write it again.";
+  const SHAPES_LINE = "This session's story meeting was written in an earlier form. Roll back to the story meeting to write it again.";
   const SHAPES_FLAG = oldThreadOf({ currentPhase: '3.25', ...oldShapeMapChannels() }, 'outline');
 
   it("an old-shape thread's notice reads the brief's line, with the rollback to the story meeting", () => {
