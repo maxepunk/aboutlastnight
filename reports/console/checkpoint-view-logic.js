@@ -2580,9 +2580,11 @@
    * The code checks still failing on the weave in hand (lib/meeting.js meetingCheckFailures), by
    * the line of the page their place names (phase 4b, brief 1B; spec 6.3): a failure about a
    * thread, a connection, a question or a field of the weave sits beside that line, and one with
-   * no place, or a place the page does not show, stays at the top of the page.
+   * no place, or a place the page does not show, stays at the top of the page. Each says what is
+   * wrong in the director's words, its `line` (lib/weave.js weaveFindings), never the rework's
+   * `message`, which a failure stored before the line existed is read by instead.
    *
-   * @param {Array} failures - the stop's `checkFailures`, each `{type, message, place?}`
+   * @param {Array} failures - the stop's `checkFailures`, each `{type, message, line?, place?}`
    * @param {Set<string>} onPage - the keys of the lines the page shows
    * @returns {{byLine: Map<string, string[]>, top: string[]}}
    */
@@ -2590,9 +2592,9 @@
     var byLine = new Map();
     var top = [];
     asArray(failures).filter(isPlainObject).forEach(function (failure) {
-      var message = asString(failure.message).trim();
-      if (!message) return;
-      var line = CHECK_FAILING_PREFIX + message;
+      var said = asString(failure.line).trim() || asString(failure.message).trim();
+      if (!said) return;
+      var line = CHECK_FAILING_PREFIX + said;
       var key = lineKeyOf(failure.place);
       if (key === null || !onPage.has(key)) {
         top.push(line);

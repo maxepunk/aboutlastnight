@@ -391,6 +391,7 @@ describe('4.5b: question repeats clear on a rework (carriedWeaveQuestions)', () 
   const REPEAT_FAILURE = {
     type: 'duplicate-id',
     message: `Two questions share one id: "${W_SARAH.question}" and "${MORGAN.question}". Give each question an id of its own.`,
+    line: `The writer gave the questions "${W_SARAH.question}" and "${MORGAN.question}" one id.`,
     place: 'questions[#q1]'
   };
 

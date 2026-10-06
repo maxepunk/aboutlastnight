@@ -299,10 +299,14 @@ function missingParts(piece, sources) {
 
 /**
  * The evidence check (spec 6.1; R1): one problem for each piece that fails it, `{index, kinds,
- * what, fix}`, where `index` is the piece's place in the list, `kinds` its faults in order
- * (`malformed`: it lacks its sources, what it shows or its stance; `source`: it names a source
- * the record lacks; `quotation`: a quotation in what it shows is word for word in none of its
- * sources), `what` says them in a phrase that follows "piece N", and `fix` says how to fix them.
+ * what, fix, unknownSources, quotations, lacks}`, where `index` is the piece's place in the list,
+ * `kinds` its faults in order (`malformed`: it lacks its sources, what it shows or its stance;
+ * `source`: it names a source the record lacks; `quotation`: a quotation in what it shows is word
+ * for word in none of its sources), `what` says them in a phrase that follows "piece N", and `fix`
+ * says how to fix them. The rest is what evidenceProblemsSaid says to the director: how many of
+ * its sources the record lacks (`unknownSources`), the quotations none of them holds
+ * (`quotations`, each as written) and the parts of its shape it lacks (`lacks`: `sources`, `shows`,
+ * `stance`).
  * A source the record lacks and a buried memory read alike, so the line names nothing the record
  * keeps of a buried memory. A quotation is read only against the sources the piece names that the
  * record holds, and is word for word whatever its quotation marks, case or spacing, each part of
@@ -310,7 +314,8 @@ function missingParts(piece, sources) {
  *
  * @param {*} pieces - a thread's, a connection's or a beat's evidence; anything but a list holds none
  * @param {Object} context - evidenceContextOf's
- * @returns {Array<{index: number, kinds: string[], what: string, fix: string}>}
+ * @returns {Array<{index: number, kinds: string[], what: string, fix: string, unknownSources: number,
+ *                  quotations: string[], lacks: string[]}>}
  */
 function evidenceProblems(pieces, context) {
   if (!Array.isArray(pieces)) return [];
@@ -332,13 +337,21 @@ function evidenceProblems(pieces, context) {
       faults.push({ kind: 'source', what: `names ${listOf(unknown)}, which ${unknown.length > 1 ? 'are no documents' : 'is no document'} in the record and none of ${NAMED_SOURCES}` });
     }
     const texts = read.filter((entry) => entry.texts !== null).flatMap((entry) => entry.texts);
-    if (read.some((entry) => entry.texts !== null)) {
-      const unheld = quotationsOf(textOf(piece.shows)).filter(({ parts }) => parts.some((part) => !heldIn(texts, part)));
-      if (unheld.length > 0) faults.push({ kind: 'quotation', what: `quotes ${listOf(unheld.map(({ span }) => span))}, which none of its sources holds word for word` });
-    }
+    const unheld = read.some((entry) => entry.texts !== null)
+      ? quotationsOf(textOf(piece.shows)).filter(({ parts }) => parts.some((part) => !heldIn(texts, part))).map(({ span }) => span)
+      : [];
+    if (unheld.length > 0) faults.push({ kind: 'quotation', what: `quotes ${listOf(unheld)}, which none of its sources holds word for word` });
     if (faults.length === 0) return null;
     const kinds = faults.map((fault) => fault.kind);
-    return { index, kinds, what: faults.map((fault) => fault.what).join('; and '), fix: kinds.map((kind) => PIECE_FIXES[kind]).join(' ') };
+    return {
+      index,
+      kinds,
+      what: faults.map((fault) => fault.what).join('; and '),
+      fix: kinds.map((kind) => PIECE_FIXES[kind]).join(' '),
+      unknownSources: unknown.length,
+      quotations: unheld,
+      lacks: [sources.length === 0 && 'sources', !textOf(piece.shows) && 'shows', !EVIDENCE_STANCES.includes(piece.stance) && 'stance'].filter(Boolean)
+    };
   }).filter(Boolean);
 }
 
@@ -360,6 +373,36 @@ function describeEvidenceProblems(problems) {
     what: list.map((problem) => `piece ${problem.index + 1} ${problem.what}`).join('; '),
     fix: kinds.map((kind) => PIECE_FIXES[kind]).filter(Boolean).join(' ')
   };
+}
+
+/** The parts of a piece's shape, as the director's line says a piece lacks them. */
+const LACKS_SAID = { sources: 'where it comes from', shows: 'what it shows', stance: 'whether it supports the line' };
+
+/**
+ * A line's evidence problems (evidenceProblems') said to the director, in a phrase that follows
+ * "the evidence behind" the line, for the whole line at once: `cites a document the record does
+ * not hold, and quotes "...", which its source does not say word for word`. It says each kind of
+ * fault once, the documents the record lacks first, then the quotations, then a piece's missing
+ * parts, and names no source's id and no piece's number, since the director reads the line and
+ * not its pieces. The weave's checks and the map's give it in a failure's `line` (lib/weave.js
+ * weaveFindings).
+ *
+ * @param {Array<{unknownSources: number, quotations: string[], lacks: string[]}>} problems
+ * @returns {string} '' for no problem
+ */
+function evidenceProblemsSaid(problems) {
+  const list = asArray(problems).filter(isObject);
+  const unknown = list.reduce((sum, problem) => sum + (Number(problem.unknownSources) || 0), 0);
+  const quotations = list.flatMap((problem) => asArray(problem.quotations));
+  const malformed = list.filter((problem) => asArray(problem.lacks).length > 0);
+  const lacks = Object.keys(LACKS_SAID).filter((part) => malformed.some((problem) => problem.lacks.includes(part))).map((part) => LACKS_SAID[part]);
+  const clauses = [
+    unknown > 0 && `cites ${unknown > 1 ? 'documents' : 'a document'} the record does not hold`,
+    quotations.length > 0 && `quotes ${listOf(quotations)}, which its ${quotations.length > 1 ? 'sources do' : 'source does'} not say word for word`,
+    lacks.length > 0 && `has ${malformed.length > 1 ? 'pieces that do' : 'a piece that does'} not say ${lacks.length > 1 ? `${lacks.slice(0, -1).join(', ')} or ${lacks[lacks.length - 1]}` : lacks[0]}`
+  ].filter(Boolean);
+  if (clauses.length < 3) return clauses.join(', and ');
+  return `${clauses.slice(0, -1).join('; ')}; and ${clauses[clauses.length - 1]}`;
 }
 
 // ── The story-terms check ────────────────────────────────────────────────────
@@ -442,6 +485,33 @@ function describeStoryTerms(problems) {
   return `holds ${listOf(items)}`;
 }
 
+/** What each kind of hit is called when a line is said to the director. A document's id is never shown. */
+const STORY_TERM_SAID = {
+  quotation: (excerpt) => `the quotation ${excerpt}`,
+  'clock-time': (excerpt) => `the time ${excerpt}`,
+  money: (excerpt) => `the figure ${excerpt}`
+};
+
+/**
+ * What a line holds that story terms leave to the evidence, said to the director, in a phrase
+ * that follows the line: `gives the time 9:58, the figure $450,000 and a document's id`. A
+ * quotation, a time and a figure are shown as the line holds them; a document's id is said,
+ * never shown, once however many the line holds. The weave's checks and the map's give it in a
+ * failure's `line` (lib/weave.js weaveFindings).
+ *
+ * @param {Array<{kind: string, excerpt: string}>} problems - storyTermsProblems'
+ * @returns {string}
+ */
+function storyTermsSaid(problems) {
+  const list = asArray(problems).filter(isObject);
+  const ids = list.filter(({ kind }) => kind === 'document-id').length;
+  const items = list
+    .filter(({ kind }) => kind !== 'document-id')
+    .map(({ kind, excerpt }) => (STORY_TERM_SAID[kind] ? STORY_TERM_SAID[kind](excerpt) : `"${excerpt}"`));
+  if (ids > 0) items.push(ids > 1 ? "documents' ids" : "a document's id");
+  return `gives ${listOf(items)}`;
+}
+
 /** The fix of a line that fails the story-terms check: the rule it keeps, and where what it holds belongs. */
 const STORY_TERMS_FIX = 'Say it in story terms, as C16 (<craft-story>) sets out: the evidence under the lines carries the record\'s quotations, figures, times and document ids.';
 
@@ -451,8 +521,10 @@ module.exports = {
   EVIDENCE_PIECE_SCHEMA,
   evidenceProblems,
   describeEvidenceProblems,
+  evidenceProblemsSaid,
   storyTermsProblems,
   describeStoryTerms,
+  storyTermsSaid,
   STORY_TERMS_FIX,
   documentTextsOf,
   documentIdsOf,

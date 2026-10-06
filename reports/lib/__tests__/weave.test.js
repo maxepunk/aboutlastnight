@@ -349,7 +349,12 @@ describe('the weave checks (checkWeave)', () => {
 
     it('fires on a piece naming a document the record lacks, on a thread, a left-out thread or a connection, naming the line and the piece', () => {
       const thread = check(withThread('t4', (t) => ({ ...t, evidence: [...t.evidence, piece(['zzz999'], 'A memory no one turned in.')] })));
-      expect(thread).toEqual([{ type: 'evidence-not-in-record', place: 'threads[#t4]', message: expect.stringMatching(/^The thread "The replacement plan": piece 2 names "zzz999", which is no document in the record/) }]);
+      expect(thread).toEqual([{
+        type: 'evidence-not-in-record',
+        place: 'threads[#t4]',
+        message: expect.stringMatching(/^The thread "The replacement plan": piece 2 names "zzz999", which is no document in the record/),
+        line: 'The evidence behind the thread "The replacement plan" cites a document the record does not hold.'
+      }]);
       expect(typesOf(check(withThread('t6', (t) => ({ ...t, evidence: [piece(['zzz999'], 'x')] }))))).toEqual(['evidence-not-in-record']);
       const connection = check({ ...clone(WEAVE), connections: clone(WEAVE).connections.map((c) => (c.id === 'c3' ? { ...c, evidence: [piece(['zzz999'], 'x')] } : c)) });
       expect(connection.map((f) => [f.type, f.place])).toEqual([['evidence-not-in-record', 'connections[#c3]']]);
@@ -498,13 +503,98 @@ describe('the weave checks (checkWeave)', () => {
   describe("the meeting's page comes to no more than its bound", () => {
     it('fires past the bound, naming the count and the bound, with no place', () => {
       const failures = check(WEAVE, { pageWords: MEETING_WORD_BOUND + 1 });
-      expect(failures).toEqual([{ type: 'over-length', message: expect.stringContaining(`${MEETING_WORD_BOUND + 1} words, past its bound of ${MEETING_WORD_BOUND}`) }]);
+      expect(failures).toEqual([{
+        type: 'over-length',
+        message: expect.stringContaining(`${MEETING_WORD_BOUND + 1} words, past its bound of ${MEETING_WORD_BOUND}`),
+        line: `The writer's page runs to ${MEETING_WORD_BOUND + 1} words, past the meeting's ${MEETING_WORD_BOUND}.`
+      }]);
     });
 
     it('is silent at the bound, and with no count', () => {
       expect(check(WEAVE, { pageWords: MEETING_WORD_BOUND })).toEqual([]);
       expect(check(WEAVE)).toEqual([]);
     });
+  });
+});
+
+// Fix round (the integrator's ruling on the review's minors, fix 1; spec 6.3): a check still
+// failing after the rework reaches the director in story terms. Each failure carries the
+// rework's `message`, unchanged, and the director's `line`: what is wrong at that place, in plain
+// words, naming a thread by its name and never an id, a piece's number, a source's code, a rule
+// item, a tag or a field's name.
+describe("each failure says what is wrong to the director in plain words (its line)", () => {
+  /** A weave that fails every check the writer's text can fail, each once. */
+  function brokenWeave() {
+    const weave = clone(WEAVE);
+    weave.story = 'Rowan took $90,000 at 7:58, as row001 shows.';
+    weave.fromYourNotes = 'words the director never wrote';
+    weave.threads[0].verdict = false;
+    weave.threads[1].evidence = [];
+    weave.threads[2].evidence = [piece(['zzz999', 'evidence-log'], 'Rowan to Sloane: "Not one word to Ellis."'), { sources: [], shows: '', stance: 'proves' }];
+    weave.threads[3].line = 'Vic\'s plan, in vic002, says "replace the founder" by 9 PM.';
+    delete weave.threads[5].reason;
+    weave.threads.push({ ...clone(WEAVE.threads[4]), name: 'A second winter' });
+    weave.connections[0].joins = ['t1', 't99'];
+    weave.connections.push({ ...clone(WEAVE.connections[1]), line: 'The scoreboard again.' });
+    weave.strongerMainThread = { thread: 't42', reason: 'It reaches $1.2 million.' };
+    weave.questions.push({ ...clone(WEAVE.questions[0]), question: 'Another question under the same id?' });
+    return weave;
+  }
+  const failures = () => check(brokenWeave(), { pageWords: MEETING_WORD_BOUND + 40 });
+  /** What no line the director reads holds: an id, a piece's number, a source's code, a rule item, a tag, a field's name. */
+  const UNSAID = [
+    /\b[tcq]\d+\b/, /\b(row001|vic002|zzz999)\b/i, /\bpiece \d/i, /evidence-log/, /"(ledger|notes)"/,
+    /\b[CT]\d+\b/, /[<>]/, /"verdict"|strongerMainThread|fromYourNotes|\bsupports"|"cuts-against"/, /OUTPUT FORMAT/
+  ];
+
+  it('gives every failure a line beside its message, the message unchanged for the rework', () => {
+    const found = failures();
+    expect(found.map((f) => f.type).sort()).toEqual([
+      'connection-joins-unknown-thread', 'duplicate-id', 'duplicate-id', 'duplicate-id', 'evidence-not-in-record',
+      'from-your-notes-not-verbatim', 'left-out-without-reason', 'no-verdict-thread', 'over-length',
+      'story-terms', 'story-terms', 'story-terms', 'stronger-main-thread-unknown', 'thread-without-evidence'
+    ]);
+    found.forEach((f) => {
+      expect(typeof f.line).toBe('string');
+      expect(f.line.length).toBeGreaterThan(20);
+      expect(f.line).not.toBe(f.message);
+      expect(f.line).not.toContain('\n');
+      expect(f.line).not.toMatch(/[–—]/);
+    });
+    expect(found.find((f) => f.type === 'evidence-not-in-record').message).toMatch(/piece 1 names "zzz999"/);
+  });
+
+  it.each(UNSAID.map((pattern) => [String(pattern), pattern]))('no line holds %s', (_name, pattern) => {
+    expect(failures().map((f) => f.line).filter((line) => pattern.test(line))).toEqual([]);
+  });
+
+  it('names each line as the meeting does, and says what is wrong there', () => {
+    const lineOf = (type, place) => failures().find((f) => f.type === type && f.place === place).line;
+    expect(lineOf('story-terms', 'story')).toBe(
+      "The story gives the figure $90,000, the time 7:58 and a document's id. The meeting tells the story in plain words; the record's quotations, times, figures and documents go in the evidence underneath."
+    );
+    expect(lineOf('story-terms', 'threads[#t4]')).toMatch(/^The thread "The replacement plan": its line gives the quotation "replace the founder", the time 9 PM and a document's id\. /);
+    expect(lineOf('evidence-not-in-record', 'threads[#t3]')).toBe(
+      'The evidence behind the thread "The bathroom" cites a document the record does not hold; quotes "Not one word to Ellis.", which its source does not say word for word; and has a piece that does not say where it comes from, what it shows or whether it supports the line.'
+    );
+    expect(lineOf('thread-without-evidence', 'threads[#t2]')).toBe('The thread "The last two minutes" is in the story with nothing behind it: no piece of the record supports it.');
+    expect(lineOf('left-out-without-reason', 'threads[#t6]')).toBe('The thread "The coat check" is left out with no reason given.');
+    expect(lineOf('from-your-notes-not-verbatim', 'fromYourNotes')).toBe('"From your notes" quotes words your notes and corrections do not hold word for word.');
+    expect(lineOf('no-verdict-thread', undefined)).toBe("No thread tells the room's verdict.");
+    expect(lineOf('connection-joins-unknown-thread', 'connections[#c1]')).toBe('The connection "Sloane, Rowan\'s ally, is the voice that turned the room." joins a thread the weave does not hold.');
+    expect(lineOf('duplicate-id', 'threads[#t5]')).toBe('The writer gave the threads "Last winter" and "A second winter" one id, so the meeting cannot change them.');
+    expect(lineOf('duplicate-id', 'connections[#c2]')).toBe('The writer gave the connections "The scoreboard brings the money into the vote." and "The scoreboard again." one id, so the meeting cannot change them.');
+    expect(lineOf('duplicate-id', 'questions[#q1]')).toMatch(/^The writer gave the questions ".*" and "Another question under the same id\?" one id\.$/);
+    expect(lineOf('stronger-main-thread-unknown', 'strongerMainThread')).toBe('The stronger main thread names a thread the weave does not hold.');
+    expect(lineOf('over-length', undefined)).toBe(`The writer's page runs to ${MEETING_WORD_BOUND + 40} words, past the meeting's ${MEETING_WORD_BOUND}.`);
+  });
+
+  it('a verdict thread left out, a weave with no threads, and a stronger main thread whose reason holds a figure each have their line', () => {
+    const leftOut = check(withThread('t1', (t) => ({ ...t, role: 'left-out', reason: 'Cut.' })));
+    expect(leftOut.find((f) => f.type === 'no-verdict-thread').line).toBe('The thread "The case against Rowan" tells the room\'s verdict and is left out.');
+    expect(check({ story: 'x' })).toEqual([{ type: 'no-weave', message: expect.any(String), line: 'The writer returned no threads.' }]);
+    const stronger = check({ ...clone(WEAVE), strongerMainThread: { thread: 't4', reason: 'It reaches $1.2 million.' } });
+    expect(stronger).toEqual([expect.objectContaining({ type: 'story-terms', place: 'strongerMainThread', line: expect.stringMatching(/^The stronger main thread: its reason gives the figure \$1\.2 million\. /) })]);
   });
 });
 
@@ -747,7 +837,8 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
     expect(failures).toEqual([{
       type: 'duplicate-id',
       place: 'threads[#t7]',
-      message: 'Two threads share one id: "The guest list" and "The writer\'s seventh", and one of them is the thread the director added. Keep the id on the director\'s thread, since their edits find it by its id, and give the other thread an id of its own; make each connection and the stronger main thread name the thread they mean.'
+      message: 'Two threads share one id: "The guest list" and "The writer\'s seventh", and one of them is the thread the director added. Keep the id on the director\'s thread, since their edits find it by its id, and give the other thread an id of its own; make each connection and the stronger main thread name the thread they mean.',
+      line: 'The writer gave the threads "The guest list" and "The writer\'s seventh" one id, so the meeting cannot change them, and one of them is yours.'
     }]);
     expect(concerns).toEqual([]);
   });
@@ -765,7 +856,8 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
     expect(findings(weave, share({ addedThreads: { t7: 'E1' } })).failures).toEqual([{
       type: 'duplicate-id',
       place: 'threads[#t2]',
-      message: 'Two threads share one id: "The last two minutes" and "The last two minutes". Give each thread an id of its own, and make each connection and the stronger main thread name the thread they mean.'
+      message: 'Two threads share one id: "The last two minutes" and "The last two minutes". Give each thread an id of its own, and make each connection and the stronger main thread name the thread they mean.',
+      line: 'The writer gave the threads "The last two minutes" and "The last two minutes" one id, so the meeting cannot change them.'
     }]);
   });
 });

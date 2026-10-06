@@ -50,7 +50,9 @@ const crypto = require('crypto');
 const { isVerbatimIn } = require('./grounding');
 const { WEAVE_ANSWER_KEY, withoutAnswers } = require('./writer-questions');
 // Phase 4b (brief 1B; R10): the evidence check and the story-terms check, which the map shares.
-const { evidenceProblems, describeEvidenceProblems, storyTermsProblems, describeStoryTerms, STORY_TERMS_FIX } = require('./evidence');
+const {
+  evidenceProblems, describeEvidenceProblems, evidenceProblemsSaid, storyTermsProblems, describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX
+} = require('./evidence');
 
 /** A thread's role toward the main thread, in the order the meeting lists them. */
 const WEAVE_ROLES = Object.freeze(['main-thread', 'grounds-it', 'complicates-it', 'mirrors-it', 'carries-it-forward', 'left-out']);
@@ -544,6 +546,15 @@ const FIELD_WORDS = Object.freeze({
   strongerMainThread: 'the stronger main thread'
 });
 
+/** How a failure's line names a field of an element to the director: as the meeting prints it. */
+const ELEMENT_FIELD_WORDS = Object.freeze({ name: 'its name', line: 'its line', reason: 'its reason' });
+
+/**
+ * Why a line that fails the story-terms check is wrong, said to the director after what it holds
+ * (storyTermsSaid): the meeting's lines tell the story, and the record's details travel under them.
+ */
+const STORY_TERMS_LINE = "The meeting tells the story in plain words; the record's quotations, times, figures and documents go in the evidence underneath.";
+
 /** A phrase with its first letter up, to open a line. */
 function opening(text) {
   return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : text;
@@ -572,14 +583,25 @@ function elementPlace(collection, element) {
 
 /**
  * The code checks on a weave (spec 2026-10-05 sections 4.1 and 6.1; spec 2026-10-02 section 4.5),
- * on the writer's text alone (R11, brief 4.5). Each failure is one line that names the line it is
- * about in the director's words for it (a thread by its name, a connection by its line, a field of
- * the weave as the meeting heads it, never an id) and its fix, with its `place`, where the meeting
- * shows a check still failing beside its line (spec 6.3): a thread's or a connection's path
- * (`threads[#t3]`, `connections[#c2]`, `questions[#q1]`) or a field of the weave (`story`,
- * `question`, `convergence`, `fromYourNotes`, `strongerMainThread`). A failure with no place, the
- * page's length and a verdict no thread carries, sits at the top of the page. In the order the
- * meeting prints the weave:
+ * on the writer's text alone (R11, brief 4.5).
+ *
+ * Each failure is `{type, message, line, place?}`, the convention the map's checks follow too:
+ * - `message` is the rework's: one line that names the line it is about (a thread by its name, a
+ *   connection by its line, a field of the weave as the meeting heads it, never an id) and its fix,
+ *   in the writer's terms: the piece of evidence by its number, a source by its id, the rule item
+ *   it breaks. The rework reads it, through validationResults.
+ * - `line` is the director's (spec 6.3): what is wrong at that place, in plain words, as the
+ *   meeting names things: a thread by its name, a document by what it is if at all, never an id, a
+ *   piece's number, a source's code, a rule item, a tag or a field's name. The meeting shows it
+ *   when the check still fails after the rework (console/checkpoint-view-logic.js
+ *   failuresBesideLines), and lib/evidence.js storyTermsSaid and evidenceProblemsSaid say the
+ *   shared checks' hits in these words.
+ * - `place` is where the meeting shows it, beside the line it names: a thread's or a connection's
+ *   path (`threads[#t3]`, `connections[#c2]`, `questions[#q1]`) or a field of the weave (`story`,
+ *   `question`, `convergence`, `fromYourNotes`, `strongerMainThread`). A failure with no place,
+ *   the page's length and a verdict no thread carries, sits at the top of the page.
+ *
+ * In the order the meeting prints the weave:
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id, quotation, clock time or money figure): the story and its
  *   question, each thread's name and line and a left-out thread's reason, each live connection's
@@ -623,17 +645,20 @@ function elementPlace(collection, element) {
  * @param {Object} [inputs.directorsShare] - the director's share of the weave (shareOf)
  * @param {number|null} [inputs.pageWords] - the meeting's page as it first opens, counted;
  *   none, no length check
- * @returns {{failures: Array<{type: string, message: string, place?: string}>,
+ * @returns {{failures: Array<{type: string, message: string, line: string, place?: string}>,
  *            concerns: Array<{type: string, editIds: string[], finding: string}>}}
  */
 function weaveFindings(weave, { evidence = null, directorWords = [], directorsShare, pageWords = null } = {}) {
   if (!isWeave(weave)) {
-    return { failures: [{ type: 'no-weave', message: 'The output holds no threads. Write the whole weave in the OUTPUT FORMAT at the top.' }], concerns: [] };
+    return {
+      failures: [{ type: 'no-weave', message: 'The output holds no threads. Write the whole weave in the OUTPUT FORMAT at the top.', line: 'The writer returned no threads.' }],
+      concerns: []
+    };
   }
   const share = shareOf(directorsShare);
   const failures = [];
   const concerns = [];
-  const fail = (type, message, place) => failures.push(place ? { type, message, place } : { type, message });
+  const fail = (type, message, line, place) => failures.push(place ? { type, message, line, place } : { type, message, line });
   const concern = (type, editIds, finding) => concerns.push({ type, editIds, finding });
   const editOf = (map, key) => (has(map, key) ? map[key] : null);
   const threads = objectsOf(weave.threads);
@@ -646,18 +671,22 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     const found = termsIn(element, fields);
     if (found.length === 0) return;
     const holds = found.map(({ field, problems }) => `its ${field} ${describeStoryTerms(problems)}`).join('; ');
-    fail('story-terms', `${opening(words)}: ${holds}. ${STORY_TERMS_FIX}`, place);
+    const said = found.map(({ field, problems }) => `${ELEMENT_FIELD_WORDS[field] || 'it'} ${storyTermsSaid(problems)}`).join('; ');
+    fail('story-terms', `${opening(words)}: ${holds}. ${STORY_TERMS_FIX}`, `${opening(words)}: ${said}. ${STORY_TERMS_LINE}`, place);
   };
   const fieldTerms = (field) => {
     if (has(share.fields, field)) return;
     const problems = storyTermsProblems(weave[field], evidence);
-    if (problems.length > 0) fail('story-terms', `${opening(FIELD_WORDS[field])} ${describeStoryTerms(problems)}. ${STORY_TERMS_FIX}`, field);
+    if (problems.length > 0) {
+      fail('story-terms', `${opening(FIELD_WORDS[field])} ${describeStoryTerms(problems)}. ${STORY_TERMS_FIX}`,
+        `${opening(FIELD_WORDS[field])} ${storyTermsSaid(problems)}. ${STORY_TERMS_LINE}`, field);
+    }
   };
   const piecesCheck = (words, place, pieces) => {
     const problems = evidenceProblems(pieces, evidence);
     if (problems.length === 0) return;
     const { what, fix } = describeEvidenceProblems(problems);
-    fail('evidence-not-in-record', `${opening(words)}: ${what}. ${fix}`, place);
+    fail('evidence-not-in-record', `${opening(words)}: ${what}. ${fix}`, `The evidence behind ${words} ${evidenceProblemsSaid(problems)}.`, place);
   };
 
   fieldTerms('story');
@@ -667,7 +696,8 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
   if (fromYourNotes && !has(share.fields, 'fromYourNotes')) {
     const words = (Array.isArray(directorWords) ? directorWords : []).filter(text => typeof text === 'string');
     if (!words.some(source => isVerbatimIn(fromYourNotes, source))) {
-      fail('from-your-notes-not-verbatim', `"From your notes" is not word for word in the director's notes or corrections: "${fromYourNotes}". Copy one unbroken passage of the director's own words exactly, or leave the field out when the story does not start from the director's read.`, 'fromYourNotes');
+      fail('from-your-notes-not-verbatim', `"From your notes" is not word for word in the director's notes or corrections: "${fromYourNotes}". Copy one unbroken passage of the director's own words exactly, or leave the field out when the story does not start from the director's read.`,
+        '"From your notes" quotes words your notes and corrections do not hold word for word.', 'fromYourNotes');
     }
   }
 
@@ -683,11 +713,13 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
       elementTerms(words, place, thread, fields);
     }
     if (!leftOut && !director && !objectsOf(thread.evidence).some((piece) => piece.stance === 'supports')) {
-      fail('thread-without-evidence', `${opening(words)} is in the story with no piece of evidence that supports it. Give it the pieces of the record that tell it, at least one with the stance "supports".`, place);
+      fail('thread-without-evidence', `${opening(words)} is in the story with no piece of evidence that supports it. Give it the pieces of the record that tell it, at least one with the stance "supports".`,
+        `${opening(words)} is in the story with nothing behind it: no piece of the record supports it.`, place);
     }
     piecesCheck(words, place, thread.evidence);
     if (leftOut && !textOf(thread.reason) && !director) {
-      fail('left-out-without-reason', `${opening(words)} is left out with no reason. Give the one line on why the story does not need it.`, place);
+      fail('left-out-without-reason', `${opening(words)} is left out with no reason. Give the one line on why the story does not need it.`,
+        `${opening(words)} is left out with no reason given.`, place);
     }
   });
   // A repeated thread id is the writer's failure (brief 4.5b). The director's share holds
@@ -700,25 +732,27 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     const nameTheThread = 'make each connection and the stronger main thread name the thread they mean.';
     const added = editOf(share.addedThreads, id);
     const changed = editOf(share.reroledThreads, id) || Object.keys(share.threadFields).some((place) => place.startsWith(`${id}.`));
+    const said = `The writer gave the threads ${names} one id, so the meeting cannot change them`;
     if (!added && !changed) {
-      fail('duplicate-id', `Two threads share one id: ${names}. Give each thread an id of its own, and ${nameTheThread}`, `threads[#${id}]`);
+      fail('duplicate-id', `Two threads share one id: ${names}. Give each thread an id of its own, and ${nameTheThread}`, `${said}.`, `threads[#${id}]`);
       return;
     }
-    fail('duplicate-id', `Two threads share one id: ${names}, and one of them is the thread the director ${added ? 'added' : 'changed'}. Keep the id on the director's thread, since their edits find it by its id, and give the other thread an id of its own; ${nameTheThread}`, `threads[#${id}]`);
+    fail('duplicate-id', `Two threads share one id: ${names}, and one of them is the thread the director ${added ? 'added' : 'changed'}. Keep the id on the director's thread, since their edits find it by its id, and give the other thread an id of its own; ${nameTheThread}`,
+      `${said}, and one of them is yours.`, `threads[#${id}]`);
   });
 
   const verdictThreads = threads.filter(thread => thread.verdict === true);
   if (verdictThreads.length === 0) {
     const flagEdits = threads.map(thread => editOf(share.threadFields, `${weaveIdOf(thread)}.verdict`)).filter(Boolean);
     if (flagEdits.length > 0) concern('no-verdict-thread', flagEdits, "No thread carries the room's verdict.");
-    else fail('no-verdict-thread', 'No thread carries the room\'s verdict. Mark the thread that tells the verdict with "verdict": true, and give it a role in the story (C16).');
+    else fail('no-verdict-thread', 'No thread carries the room\'s verdict. Mark the thread that tells the verdict with "verdict": true, and give it a role in the story (C16).', "No thread tells the room's verdict.");
   } else if (verdictThreads.every(thread => thread.role === LEFT_OUT_ROLE)) {
     const roleEdits = verdictThreads
       .map(thread => editOf(share.reroledThreads, weaveIdOf(thread)) || editOf(share.addedThreads, weaveIdOf(thread)))
       .filter(Boolean);
     const words = opening(threadWords(verdictThreads[0]));
     if (roleEdits.length > 0) concern('no-verdict-thread', roleEdits, `${words} carries the room's verdict and is left out.`);
-    else fail('no-verdict-thread', `${words} carries the room's verdict and is left out. Give it a role in the story (C16).`, elementPlace('threads', verdictThreads[0]));
+    else fail('no-verdict-thread', `${words} carries the room's verdict and is left out. Give it a role in the story (C16).`, `${words} tells the room's verdict and is left out.`, elementPlace('threads', verdictThreads[0]));
   }
 
   const threadIds = new Set(threads.map(thread => weaveIdOf(thread)).filter(Boolean));
@@ -731,15 +765,18 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     }
     const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf) : [];
     if (joins.length !== 2 || !joins[0] || !joins[1] || joins[0] === joins[1]) {
-      fail('connection-joins-unknown-thread', `${opening(words)} must join two different threads of the weave. Give the ids of the two threads it joins.`, place);
+      fail('connection-joins-unknown-thread', `${opening(words)} must join two different threads of the weave. Give the ids of the two threads it joins.`,
+        `${opening(words)} does not join two threads of the weave.`, place);
     } else if (joins.some(id => !threadIds.has(id))) {
-      fail('connection-joins-unknown-thread', `${opening(words)} joins a thread the weave does not hold. Make it join two threads of the weave, by their ids.`, place);
+      fail('connection-joins-unknown-thread', `${opening(words)} joins a thread the weave does not hold. Make it join two threads of the weave, by their ids.`,
+        `${opening(words)} joins a thread the weave does not hold.`, place);
     }
     piecesCheck(words, place, connection.evidence);
   });
   repeatedIds(objectsOf(weave.connections)).forEach((id) => {
     const lines = listOf(objectsOf(weave.connections).filter((connection) => weaveIdOf(connection) === id).map((connection) => `"${textOf(connection.line) || id}"`));
-    fail('duplicate-id', `Two connections share one id: ${lines}. Give each connection an id of its own.`, `connections[#${id}]`);
+    fail('duplicate-id', `Two connections share one id: ${lines}. Give each connection an id of its own.`,
+      `The writer gave the connections ${lines} one id, so the meeting cannot change them.`, `connections[#${id}]`);
   });
 
   fieldTerms('convergence');
@@ -747,30 +784,32 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
   const stronger = weave.strongerMainThread;
   if (stronger && typeof stronger === 'object') {
     if (!threadIds.has(textOf(stronger.thread))) {
-      fail('stronger-main-thread-unknown', "The stronger main thread names a thread the weave does not hold. Name one of the weave's threads by its id, or leave strongerMainThread out.", 'strongerMainThread');
+      fail('stronger-main-thread-unknown', "The stronger main thread names a thread the weave does not hold. Name one of the weave's threads by its id, or leave strongerMainThread out.",
+        'The stronger main thread names a thread the weave does not hold.', 'strongerMainThread');
     }
     if (!has(share.fields, 'strongerMainThread')) elementTerms(FIELD_WORDS.strongerMainThread, 'strongerMainThread', stronger, ['reason']);
   }
 
   repeatedIds(objectsOf(weave.questions)).forEach((id) => {
     const asked = listOf(objectsOf(weave.questions).filter((question) => weaveIdOf(question) === id).map((question) => `"${textOf(question.question) || id}"`));
-    fail('duplicate-id', `Two questions share one id: ${asked}. Give each question an id of its own.`, `questions[#${id}]`);
+    fail('duplicate-id', `Two questions share one id: ${asked}. Give each question an id of its own.`, `The writer gave the questions ${asked} one id.`, `questions[#${id}]`);
   });
 
   if (typeof pageWords === 'number' && Number.isFinite(pageWords) && pageWords > MEETING_WORD_BOUND) {
-    fail('over-length', `The meeting's page runs to ${pageWords} words, past its bound of ${MEETING_WORD_BOUND}. Bring it to ${MEETING_WORD_BOUND} words or fewer: keep each line short, and keep in the story only the threads and connections it turns on.`);
+    fail('over-length', `The meeting's page runs to ${pageWords} words, past its bound of ${MEETING_WORD_BOUND}. Bring it to ${MEETING_WORD_BOUND} words or fewer: keep each line short, and keep in the story only the threads and connections it turns on.`,
+      `The writer's page runs to ${pageWords} words, past the meeting's ${MEETING_WORD_BOUND}.`);
   }
 
   return { failures, concerns };
 }
 
 /**
- * The code checks' failures on the writer's text (weaveFindings), each one line that names
- * the line it is about and its fix, with its place: what a rework fixes.
+ * The code checks' failures on the writer's text (weaveFindings), each with the rework's
+ * message, the director's line and its place: what a rework fixes.
  *
  * @param {Object} weave
  * @param {Object} [inputs] - as weaveFindings
- * @returns {Array<{type: string, message: string, place?: string}>}
+ * @returns {Array<{type: string, message: string, line: string, place?: string}>}
  */
 function checkWeave(weave, inputs = {}) {
   return weaveFindings(weave, inputs).failures;

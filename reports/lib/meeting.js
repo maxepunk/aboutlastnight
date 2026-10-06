@@ -216,10 +216,11 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
 /**
  * A code check still failing on the weave the meeting shows (ruling 7): the checks' last
  * result survives every rollback, so its failures show only when its weaveKey names the
- * weave in hand.
+ * weave in hand. Each carries the rework's message and the director's line, which the meeting
+ * shows (lib/weave.js weaveFindings).
  *
  * @param {Object} state
- * @returns {Array<{type: string, message: string}>}
+ * @returns {Array<{type: string, message: string, line: string, place?: string}>}
  */
 function meetingCheckFailures(state) {
   const check = state && state._arcValidation;

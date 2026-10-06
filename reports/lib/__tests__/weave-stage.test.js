@@ -246,7 +246,11 @@ describe('the weave checks (the check node)', () => {
       state.weave = longStory(state.weave);
       const { _arcValidation } = validateArcStructure(state, {});
       expect(_arcValidation.words).toBeGreaterThan(MEETING_WORD_BOUND);
-      expect(_arcValidation.failures).toEqual([{ type: 'over-length', message: expect.stringContaining(`past its bound of ${MEETING_WORD_BOUND}`) }]);
+      expect(_arcValidation.failures).toEqual([{
+        type: 'over-length',
+        message: expect.stringContaining(`past its bound of ${MEETING_WORD_BOUND}`),
+        line: `The writer's page runs to ${_arcValidation.words} words, past the meeting's ${MEETING_WORD_BOUND}.`
+      }]);
     });
 
     it("never fails a page the director lengthened: their lines are not the writer's to count", () => {

@@ -763,6 +763,19 @@ describe('1B: a code check still failing sits beside the line it names', () => {
     expect(view.checkFailures).toEqual([]);
   });
 
+  // Fix round, fix 1 (spec 6.3): the page shows the director's line, never the rework's message;
+  // a failure stored before the line existed is read by its message.
+  test("shows the director's line, not the rework's message, and a stored failure with no line by its message", () => {
+    const view = withFailures([
+      { type: 'evidence-not-in-record', message: 'The connection "The night of the sale": piece 1 names "zzz999".', line: 'The evidence behind the connection "The night of the sale" cites a document the record does not hold.', place: 'connections[#c2]' },
+      { type: 'over-length', message: "The meeting's page runs to 340 words, past its bound of 300. Bring it to 300 words or fewer.", line: "The writer's page runs to 340 words, past the meeting's 300." },
+      { type: 'left-out-without-reason', message: 'The thread "The letter" is left out with no reason.', place: 'threads[#t5]' }
+    ]);
+    expect(view.connections[1].failures).toEqual(['Check still failing: The evidence behind the connection "The night of the sale" cites a document the record does not hold.']);
+    expect(view.checkFailures).toEqual(["Check still failing: The writer's page runs to 340 words, past the meeting's 300."]);
+    expect(threadOf(view, 't5').failures).toEqual(['Check still failing: The thread "The letter" is left out with no reason.']);
+  });
+
   test('a failure with no place, or one whose line the page does not show, stays at the top', () => {
     const weave = clone(WEAVE);
     delete weave.fromYourNotes;

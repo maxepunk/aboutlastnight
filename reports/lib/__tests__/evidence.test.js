@@ -15,6 +15,7 @@ const Ajv = require('ajv');
 const {
   EVIDENCE_SOURCES, EVIDENCE_STANCES, EVIDENCE_PIECE_SCHEMA,
   evidenceProblems, describeEvidenceProblems, storyTermsProblems, describeStoryTerms, STORY_TERMS_FIX,
+  evidenceProblemsSaid, storyTermsSaid,
   documentTextsOf, documentIdsOf, evidenceContextOf
 } = require('../evidence');
 
@@ -209,6 +210,27 @@ describe('the evidence check (evidenceProblems)', () => {
     expect(problemsOf({ sources: ['zzz999'] })).toEqual([]);
   });
 
+  // Fix round, fix 1 (spec 6.3): the director reads a line's evidence problems in plain words,
+  // with no piece's number and no source's id or code; the rework keeps reading `what` and `fix`.
+  it("says a line's failing pieces to the director in one phrase, with no piece's number and no source's id", () => {
+    const problems = problemsOf([
+      piece(['jes002'], 'Fine.'), piece(['zzz999'], 'x'), piece(['qqq111', 'kai009'], 'y'),
+      piece(['jes002'], 'Jess, "words Jess never said"'), piece(['jes002', 'ledger'], 'Jess, "more words never said"'),
+      { sources: [], stance: 'proves' }
+    ]);
+    expect(problems.map((p) => [p.unknownSources, p.quotations, p.lacks])).toEqual([
+      [1, [], []], [2, [], []], [0, ['"words Jess never said"'], []], [0, ['"more words never said"'], []], [0, [], ['sources', 'shows', 'stance']]
+    ]);
+    const said = evidenceProblemsSaid(problems);
+    expect(said).toBe('cites documents the record does not hold; quotes "words Jess never said" and "more words never said", which its sources do not say word for word; and has a piece that does not say where it comes from, what it shows or whether it supports the line');
+    expect(said).not.toMatch(/zzz999|qqq111|kai009|jes002|ledger|piece \d/i);
+    expect(evidenceProblemsSaid(problemsOf([piece(['zzz999'], 'x'), piece(['jes002'], 'Jess, "words Jess never said"')])))
+      .toBe('cites a document the record does not hold, and quotes "words Jess never said", which its source does not say word for word');
+    expect(evidenceProblemsSaid(problemsOf([{ sources: ['jes002'], stance: 'supports' }, { sources: [], shows: 'x', stance: 'supports' }])))
+      .toBe('has pieces that do not say where it comes from or what it shows');
+    expect(evidenceProblemsSaid([])).toBe('');
+  });
+
   it("says a line's failing pieces in one phrase, each by its place from one, and each kind of fix once", () => {
     const problems = problemsOf([piece(['jes002'], 'Fine.'), piece(['zzz999'], 'x'), piece(['jes002'], 'Jess, "words Jess never said"'), piece(['qqq111'], 'y')]);
     const { what, fix } = describeEvidenceProblems(problems);
@@ -260,6 +282,9 @@ describe('the story-terms check (storyTermsProblems)', () => {
   it('says what a line holds, and how to fix it, in one place for the weave and the map', () => {
     expect(describeStoryTerms(terms('At 9:58 Rich took $450,000 in jes002.'))).toBe('holds the clock time "9:58", the money figure "$450,000" and the document id "jes002"');
     expect(describeStoryTerms(terms('"Not here," said Quinn.'))).toBe('holds the quotation "Not here,"');
+    // Fix round, fix 1: the same hits said to the director, a document's id said and never shown.
+    expect(storyTermsSaid(terms('At 9:58 Rich took $450,000 in jes002 and sam001.'))).toBe("gives the time 9:58, the figure $450,000 and documents' ids");
+    expect(storyTermsSaid(terms('"Not here," said Quinn in jes002.'))).toBe('gives the quotation "Not here," and a document\'s id');
     expect(STORY_TERMS_FIX).toMatch(/story terms/);
     expect(STORY_TERMS_FIX).toMatch(/C16 \(<craft-story>\)/);
     expect(STORY_TERMS_FIX).not.toMatch(/[–—]/);
