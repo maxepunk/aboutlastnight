@@ -1184,7 +1184,10 @@ ${formatEditLines(standingEdits)}
     `This rework fixes the must-fix items: the ${issuesHeading}${hasFixLines ? ' and the fixes in CRITERIA SCORES' : ''}.`,
     suggestionSources && `Take up ${suggestionSources} only where it touches a line this rework is already changing for a must-fix item.`,
     `Everything else in the previous ${outputName} stays word for word.`,
-    'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.'
+    'Those lines passed the check or evaluation that ran before this pass, and in past reworks the new errors that reached the director were in lines rewritten with no finding behind them.',
+    // 3 final, item 4: the weave's automatic passes (the check rework and the fact-check fix) keep
+    // every id, which the director's edits and pick find their elements by.
+    meetingMode && "Every angle, thread, connection and question keeps its id, because the director's edits and pick find them by it."
   ].filter(Boolean).join(' ');
   // Brief 4.5 (TH7, R23): the director's two rounds at the story meeting, each stated
   // once. A reweave fits the director's changes in and keeps every line no change needs;

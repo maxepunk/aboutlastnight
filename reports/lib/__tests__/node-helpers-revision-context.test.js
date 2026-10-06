@@ -1171,6 +1171,26 @@ describe("3 final: the Reweave's scope names only the open angle's changes", () 
     expect(text).toContain('The director had the angle a2 ("Morgan Paid Riley at the Bar While the Room Argued") open when they sent the weave back, so a note about "this angle" or "the angle" is about that one; the rethink still reaches any angle, as far as the note asks.');
     expect(text).toContain("The director's note above is the task");
   });
+
+  // 3 final, item 4: the weave's automatic passes (the check rework and the fact-check fix) keep
+  // every id, since the director's edits and the pick find their elements by it. Stated once, in the
+  // automatic pass's scope, and only for the weave.
+  it("an automatic pass on the weave keeps every id; the director's rounds and other stops say nothing of ids", () => {
+    const { weave, handEdits } = looks();
+    const ids = "Every angle, thread, connection and question keeps its id, because the director's edits and pick find them by it.";
+    const auto = buildRevisionContext({
+      phase: 'arcs', outputName: 'weave', revisionCount: 1, previousOutput: weave, handEdits, meetingRound: null,
+      validationResults: { phase: 'arcs', source: 'weave-checks', passed: false, structuralIssues: ['A thread has no evidence.'] }
+    }).contextSection;
+    expect(auto.split(ids).length - 1).toBe(1);
+    const reweave = buildRevisionContext({ phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 3, previousOutput: weave, handEdits, meetingRound: 'reweave' }).contextSection;
+    expect(reweave).not.toContain(ids);
+    const article = buildRevisionContext({
+      phase: 'article', revisionCount: 1, previousOutput: { headline: 'x', sections: [] }, handEdits: null,
+      validationResults: { phase: 'article', passed: false, structuralIssues: ['T1: "x y z" breaks a rule.'] }
+    }).contextSection;
+    expect(article).not.toContain(ids);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
