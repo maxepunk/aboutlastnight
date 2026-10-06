@@ -135,6 +135,59 @@ describe('4.8: the console\'s copies of the server\'s meeting constants', () => 
     });
   });
 
+  // 3B fix 1: the page's open story and the settled story every later reader goes through tell the
+  // same threads, in the same order, and leave out the same ones. The connections are left out on
+  // purpose: the page still shows a struck connection between two of the angle's threads until
+  // slice 3C removes the strike, and the settled reading drops it.
+  test('the open angle\'s threads, in and left out, are lib/weave.js settledAngleOf\'s, on one corpus', () => {
+    const withAngle = (threads) => {
+      const weave = clone(WEAVE);
+      weave.angles[0].threads = threads;
+      return weave;
+    };
+    const added = () => {
+      const weave = clone(WEAVE);
+      weave.threads.push(clone(ADDED));
+      weave.angles[0].threads.push('t6');
+      return weave;
+    };
+    const corpus = [
+      ['no pick', clone(WEAVE)],
+      ['a pick of the second angle', { ...clone(WEAVE), picked: 'a2' }],
+      ['a pick of the second angle, with a thread the director added there', (() => {
+        const weave = { ...added(), picked: 'a2' };
+        weave.angles[0].threads.pop();
+        weave.angles[1].threads.push('t6');
+        return weave;
+      })()],
+      ['a repeated id in the angle\'s list', withAngle(['t1', 't2', 't1', 't3', 't2'])],
+      ['an id the weave lacks', withAngle(['t1', 't9', 't2'])],
+      ['an id with spaces round it', withAngle([' t2 ', 't1'])],
+      ['a thread the director added', added()],
+      ['an angle with an empty list', withAngle([])],
+      ['an angle with no list', withAngle(undefined)],
+      ['a thread id the weave repeats', (() => {
+        const weave = clone(WEAVE);
+        weave.threads.push({ ...clone(WEAVE.threads[1]), name: 'The second sale' });
+        return weave;
+      })()],
+      ['a thread that is not an object', (() => {
+        const weave = clone(WEAVE);
+        weave.threads.splice(2, 0, null, 'The letter', ['t5']);
+        return weave;
+      })()]
+    ];
+    const idsOf = (threads) => threads.map((thread) => thread.id);
+    corpus.forEach(([name, weave]) => {
+      const server = weaveLib.settledAngleOf(weave);
+      const page = ViewLogic.openStoryOf(weave);
+      expect([name, idsOf(page.inStory.map((t) => t.thread)), idsOf(page.leftOut.map((t) => t.thread))])
+        .toEqual([name, idsOf(server.threads), idsOf(server.leftOut)]);
+      // The page keeps each thread's place in the weave, by which the operations change it.
+      page.inStory.concat(page.leftOut).forEach((t) => expect([name, weave.threads[t.index]]).toEqual([name, t.thread]));
+    });
+  });
+
   test('the connection kinds, the strike and the answer keys, and the actions are the server\'s', () => {
     expect(ViewLogic.CONNECTION_KINDS).toEqual([...weaveLib.CONNECTION_KINDS]);
     expect(ViewLogic.STRUCK_KEY).toBe(weaveLib.STRUCK_KEY);

@@ -2644,16 +2644,21 @@
    * The open angle's story as the page prints it (spec 2026-10-06 section 5): the angle open
    * (openAngleOf), the threads it tells in its order, each once (an id the weave does not hold is
    * skipped), and every other thread of the weave, left out; read from the weave as the director
-   * has it, so a flip moves a thread at once. The console's reading of lib/weave.js
-   * settledAngleOf, without the connections, which the page takes struck or not until the strike
-   * goes (slice 3C).
+   * has it, so a flip moves a thread at once. Each thread keeps its place in the weave, by which
+   * the operations change it, and an entry that is no object is no thread, as lib/weave.js reads
+   * the list (objectsOf). The console's reading of lib/weave.js settledAngleOf, held equal by a
+   * test on one corpus, without the connections, which the page takes struck or not until the
+   * strike goes (slice 3C).
    *
    * @param {Object} weave - the weave as the director has it
    * @returns {{angle: (Object|null), inStory: Array<{thread: Object, index: number}>, leftOut: Array<{thread: Object, index: number}>}}
    */
   function openStoryOf(weave) {
     var angle = openAngleOf(weave);
-    var threads = asArray(weave.threads).map(function (thread, index) { return { thread: isPlainObject(thread) ? thread : {}, index: index }; });
+    var threads = [];
+    asArray(weave.threads).forEach(function (thread, index) {
+      if (thread !== null && typeof thread === 'object') threads.push({ thread: thread, index: index });
+    });
     var inStory = [];
     angleThreadIdsOf(angle).forEach(function (id) {
       var entry = threads.filter(function (t) { return weaveIdOf(t.thread) === id; })[0];
@@ -4721,6 +4726,7 @@
     // Phase 4b, piece 3 (brief 3B): the open angle (the console's copy of lib/weave.js
     // pickedAngleOf, held equal by a test) and the director's changes on angles
     openAngleOf: openAngleOf,
+    openStoryOf: openStoryOf,
     pickMeetingAngle: pickMeetingAngle,
     setAngleField: setAngleField,
     setThreadField: setThreadField,
