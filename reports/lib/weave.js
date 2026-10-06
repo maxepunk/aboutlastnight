@@ -471,8 +471,10 @@ function holdOutsideOpenAngle(rework, before, { places = [] } = {}) {
  *
  * Given the version the rework started from and the questions the rework returned (fix round 1,
  * finding 4), a question whose `thread` came from that version keeps it only while the weave
- * holds the same thread under the id, by its name or its line: a rework may renumber the threads
- * and give the id to another thread, and the director's answer must not then sit beside it. Such
+ * holds the same thread under the id: one with its name or its line, or one reworded in both
+ * while no other thread of the weave took its earlier name or line (the final review). A rework
+ * may renumber the threads and give the id to another thread, and the director's answer must not
+ * then sit beside it; a thread reworded in place is still the thread the answer is about. Such
  * a question is one that is answered (code keeps an answered question whole, lib/writer-questions.js
  * carriedWeaveQuestions), or one the rework did not return in any form, which code carried. A
  * question the rework returned (unanswered, as the rework wrote it) names its thread in the
@@ -495,13 +497,17 @@ function withHeldQuestionThreads(weave, previous = null, returned = undefined) {
   // Without the rework's list, every question is the one the rework started from.
   const reworksOwn = Array.isArray(returned) ? new Set(objectsOf(returned).map(wordsOf)) : new Set();
   const sameThread = (a, b) => (textOf(a.name) && textOf(a.name) === textOf(b.name)) || (textOf(a.line) && textOf(a.line) === textOf(b.line));
+  // A thread reworded in both its name and its line is still the thread under its id, unless
+  // another thread of the weave took its earlier words: then the id went to a new thread.
+  const keptUnder = (id) => sameThread(before.get(id), now.get(id))
+    || ![...now].some(([otherId, thread]) => otherId !== id && sameThread(before.get(id), thread));
   return {
     ...weave,
     questions: weave.questions.map((question) => {
       if (!question || typeof question !== 'object' || !has(question, WEAVE_QUESTION_THREAD_KEY)) return question;
       const id = textOf(question[WEAVE_QUESTION_THREAD_KEY]);
       const fromPrevious = isAnswered(question) || !reworksOwn.has(wordsOf(question));
-      const held = now.has(id) && (!fromPrevious || !before.has(id) || sameThread(before.get(id), now.get(id)));
+      const held = now.has(id) && (!fromPrevious || !before.has(id) || keptUnder(id));
       if (held) return question;
       const { [WEAVE_QUESTION_THREAD_KEY]: _stale, ...byThePitch } = question;
       return byThePitch;

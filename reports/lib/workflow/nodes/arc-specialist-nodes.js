@@ -632,7 +632,8 @@ ${ARC_REWORK_TASK}${buildArcStandingNotes(state)}`;
  *   rework dropped or renumbered sits by the pitch, answered or not, with its answer (R10;
  *   lib/weave.js withHeldQuestionThreads); one whose thread came from the version the rework
  *   started from (answered, or carried by code) keeps it only while the weave holds that same
- *   thread under the id, by its name or its line (fix round 1, finding 4);
+ *   thread under the id, by its name or its line, or reworded in both while no other thread took
+ *   its earlier words (fix round 1, finding 4; the final review);
  * - the fact check's mark: the fix (an automatic pass on a weave the fact check judged)
  *   keeps it, counting the fix; a check rework starts from a weave not yet judged, so
  *   there is none to keep; a director's round writes the weave without it, so the

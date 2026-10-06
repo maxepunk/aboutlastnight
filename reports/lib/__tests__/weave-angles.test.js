@@ -450,6 +450,25 @@ describe('a question whose thread a rework drops sits by the pitch, with its ans
     expect(reworked.questions.find((q) => q.answer).thread).toBe('t6');
   });
 
+  // The final review: a rework that rewords both the name and the line keeps the thread under its id,
+  // and no other thread took its earlier words, so it is the same thread, not a renumbering.
+  test("an answered question keeps its thread through a rewording of both its name and its line, while no other thread took its earlier words", () => {
+    const previous = anglesWeave();
+    previous.questions[1].answer = 'Yes, with the first sale.';
+    const output = anglesWeave();
+    output.threads[5].name = 'Memories sold during the argument';
+    output.threads[5].line = 'The buyer took memories while the room fought over Morgan.';
+    const reworked = arcTesting.weaveFromRework(output, previous, { directorRound: false });
+    const q2 = reworked.questions.find((q) => q.answer);
+    expect(q2.thread).toBe('t6');
+    expect(renderSettledWeave({ ...reworked, picked: 'a2' }, [])).toContain('beside the thread "Memories sold during the argument"');
+    // Its earlier line under another id is a renumbering: the question sits by the pitch.
+    const renumbered = clone(output);
+    renumbered.threads.push({ ...clone(anglesWeave().threads[5]), id: 't9', name: 'Another name' });
+    renumbered.angles[1].threads.push('t9');
+    expect(arcTesting.weaveFromRework(renumbered, previous, { directorRound: false }).questions.find((q) => q.answer)).not.toHaveProperty('thread');
+  });
+
   test("an unanswered question the rework put beside a thread under a reused id keeps it: its thread is in the rework's numbering", () => {
     const previous = anglesWeave();
     const output = anglesWeave();
