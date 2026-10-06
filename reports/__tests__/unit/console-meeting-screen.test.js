@@ -854,3 +854,29 @@ describe('3 fix A: an angle under an id the writer repeated cannot be picked', (
     expect(meetingResume(ViewLogic.meetingPayload('approve', data, back, ''), state).error).toBeNull();
   });
 });
+
+// 3 fix A: a flip names its thread by its id (flipMeetingThread throws on none), so a thread with no
+// id has its flip control off, as an angle card with no id is.
+describe('3 fix A: a thread with no id cannot be flipped', () => {
+  it('its flip control is off and flips nothing, whether its id is empty or blank', () => {
+    const state = meetingState();
+    // An angle names its threads by id, so a thread with none sits left out: t4, the heir, taken
+    // off the angles with its id, and t5, the letter, in no angle, under a blank id.
+    [state.weave, state._weaveBaseline].forEach((w) => {
+      w.threads.find((t) => t.id === 't4').id = '';
+      w.threads.find((t) => t.id === 't5').id = ' ';
+      w.angles.forEach((angle) => { angle.threads = angle.threads.filter((id) => id !== 't4'); });
+    });
+    const page = mountMeeting({ data: payloadOf(state) });
+    const tree = page.render();
+    const flips = elementsOf(tree, withClass('meeting__flip'));
+    const named = (label) => flips.find((b) => b.props['aria-label'] === label);
+    const heir = named('Bring into the story: The heir');
+    const letter = named('Bring into the story: The letter');
+    expect([heir.props.disabled, letter.props.disabled]).toEqual([true, true]);
+    expect(named('Leave out of the story: The envelope').props.disabled).toBe(false);
+    heir.props.onClick();
+    letter.props.onClick();
+    expect(page.actions).toEqual([]);
+  });
+});

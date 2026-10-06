@@ -97,7 +97,9 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   function pick(angle) { if (!angle.open && angle.id && !angle.repeatedId) keep(ViewLogic.pickMeetingAngle(draft, angle.id), note); }
   function editPitch(field, text) { keep(ViewLogic.setAngleField(draft, view.pitch.id, field, text), note); }
   function editThread(index, field, text) { keep(ViewLogic.setThreadField(draft, index, field, text), note); }
-  function flip(thread) { keep(ViewLogic.flipMeetingThread(draft, thread.id, !thread.inStory), note); }
+  // A flip names its thread by its id, so a thread with none, or under an id the writer repeated,
+  // flips nothing, as an angle card with no id picks nothing.
+  function flip(thread) { if (thread.id && !thread.repeatedId) keep(ViewLogic.flipMeetingThread(draft, thread.id, !thread.inStory), note); }
   function removeThread(index) { keep(ViewLogic.removeMeetingThread(draft, index), note); }
   function answer(index, text) { keep(ViewLogic.setQuestionAnswer(draft, index, text), note); }
   function editNote(text) { keep(draft, text); setSendBackArmed(false); setAskingApprove(false); }
@@ -240,7 +242,8 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
 
   /**
    * A thread's controls: its flip, out of the open angle's story or into it after the angle's own
-   * threads (flipMeetingThread), which the verdict's thread has none of (it is `locked`, R8); and,
+   * threads (flipMeetingThread), which the verdict's thread has none of (it is `locked`, R8), off
+   * for a thread with no id or under an id the writer repeated, since a flip names it by its id; and,
    * for a thread the director added at this look, the control that takes it out again.
    */
   function threadControls(thread) {
@@ -249,7 +252,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
       !thread.locked && React.createElement('button', {
         type: 'button',
         className: 'btn btn-ghost btn-sm meeting__flip',
-        disabled: thread.repeatedId,
+        disabled: !thread.id || thread.repeatedId,
         onClick: function () { flip(thread); },
         'aria-label': thread.labels.flip
       }, thread.inStory ? 'Leave out' : 'Bring in'),
