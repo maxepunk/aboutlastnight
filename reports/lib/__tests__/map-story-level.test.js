@@ -356,14 +356,28 @@ describe("1D: the evidence is never the director's edit", () => {
     expect(strike.after).toMatchObject({ id: 'b3', move: 'Marcus trying the batch on himself', card: true });
   });
 
-  it("a send-back's change to a beat the director added reads, in the report, without the evidence a writer gave it", () => {
+  it("a send-back's change to a beat the director added is a change of their text, read as its move and its people, with no tag and none of the evidence a writer gave it", () => {
     const left = addBeat(storyLevelMap(), 'closing', 'Remi walks out before the vote', 'Remi');
     const standing = standingOnMap(null, storyLevelMap(), left);
     const rework = clone(left);
-    Object.assign(beatOf(rework, 'b10'), { move: 'Remi leaves the room', threads: ['t1'], evidence: [piece(['notes'], 'The room votes for an accident.')] });
+    Object.assign(beatOf(rework, 'b10'), { move: 'Remi leaves the room', threads: ['t1'], kind: 'scene', connection: 'c2', evidence: [piece(['notes'], 'The room votes for an accident.')] });
     const { reportAfterPass, SEND_BACK_PASS } = require('../hand-edit-diff');
     const report = reportAfterPass(null, { edits: carriedEdits(standing, left), before: left, after: rework, pass: SEND_BACK_PASS });
-    expect(report.changed.map((entry) => entry.became)).toEqual(['id: b10; move: Remi leaves the room; players: Remi; threads: t1']);
+    expect(report.changed).toEqual([expect.objectContaining({
+      id: 'E1', moved: false, director: 'Remi walks out before the vote (shows Remi)', became: 'Remi leaves the room (shows Remi)'
+    })]);
+  });
+
+  it("a send-back that sits a photo beside another beat reads, in the report, as the moves it sat beside, never their tags", () => {
+    const { setPhotoBeside } = require('../../console/outline-edit-logic');
+    const left = setPhotoBeside(storyLevelMap(), 'theStory', 0, 'b4');
+    const standing = standingOnMap(null, storyLevelMap(), left);
+    const rework = setPhotoBeside(left, 'theStory', 0, 'b5');
+    const { reportAfterPass, SEND_BACK_PASS } = require('../hand-edit-diff');
+    const report = reportAfterPass(null, { edits: carriedEdits(standing, left), before: left, after: rework, pass: SEND_BACK_PASS });
+    expect(report.changed).toEqual([expect.objectContaining({
+      director: 'Marcus asks Quinn for a higher dose', became: 'Jess warns Sarah'
+    })]);
   });
 
   it("the map's printed text is its lines and its moves, never the evidence under them", () => {

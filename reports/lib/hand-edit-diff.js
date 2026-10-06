@@ -2532,15 +2532,14 @@ function inStory(place) {
 
 /**
  * Where a cut beat or photo, or a field of one the director removed, came back in `obj`:
- * the text it came back as, or null. Found by its id or filename: a beat in leftOut is
- * not back in the story.
+ * the text it came back as (a beat whole by its move and its people, mapReportText), or null.
+ * Found by its id or filename: a beat in leftOut is not back in the story.
  */
 function mapCutReturned(obj, edit, address) {
   const places = mapPlaces(obj, address.kind, address.identity).filter(inStory);
   if (address.fieldSteps.length === 0) {
     if (places.length === 0) return null;
-    const element = places[0].element;
-    return editValueText(address.kind === 'beat' ? element.move : element.filename) || editValueText(withoutEvidence(element));
+    return mapReportText(edit, places[0].element, [obj]);
   }
   for (const place of places) {
     const value = valueAtSteps(place.element, address.fieldSteps);
@@ -2584,11 +2583,77 @@ function mapContainerWords(container) {
   return `section "${container}"`;
 }
 
+/** What the report says of the beat a photo sits beside when no version of the map holds that beat. */
+const MAP_BEAT_NOT_ON_MAP = 'a move not on the map';
+
+/**
+ * A beat whole as the map's page reads it (phase 4b, brief 1D; spec 9: the tags leave the page):
+ * its move, with the people it shows. Its id, threads, connection, card, kind and evidence stay
+ * underneath, as they do on the page.
+ */
+function mapBeatText(beat) {
+  if (!isObj(beat)) return editValueText(beat);
+  const people = (Array.isArray(beat.players) ? beat.players : []).map(editValueText).filter(Boolean).join(', ');
+  return [editValueText(beat.move), people ? `(shows ${people})` : ''].filter(Boolean).join(' ');
+}
+
+/**
+ * A value of an edit on the map as the report gives it to the director's page (phase 4b, brief
+ * 1D; spec 9): a beat whole by its move and its people (mapBeatText); a photo whole by its
+ * filename and the move it sits beside; the beat a photo sits beside (its `beat` field) by that
+ * beat's move, found in `maps` in order; any other value as editValueText reads it. So no
+ * report entry on the map carries a beat's, a thread's or a connection's tag. An edit that is
+ * not on the map's beats or photos reads as editValueText reads it.
+ *
+ * @param {Object} edit
+ * @param {*} value - a value of the edit, or of the element it is about in a version
+ * @param {Object[]} [maps] - the versions a beat id is looked up in, in order
+ * @returns {string}
+ */
+function mapReportText(edit, value, maps = []) {
+  const address = mapAddressOf(edit);
+  if (!address) return editValueText(value);
+  const moveOf = (id) => {
+    for (const map of maps) {
+      const place = mapPlaces(map, 'beat', { id })[0];
+      if (place) return editValueText(place.element.move) || MAP_BEAT_NOT_ON_MAP;
+    }
+    return MAP_BEAT_NOT_ON_MAP;
+  };
+  if (address.fieldSteps.length === 0 && isObj(value)) {
+    if (address.kind === 'beat') return mapBeatText(value);
+    const beside = mapIdText(value.beat);
+    return [editValueText(value.filename), beside ? `beside ${moveOf(beside)}` : ''].filter(Boolean).join(', ');
+  }
+  const field = address.fieldSteps.length === 1 && 'key' in address.fieldSteps[0] ? address.fieldSteps[0].key : null;
+  if (address.kind === 'photo' && field === 'beat' && mapIdText(value)) return moveOf(mapIdText(value));
+  return editValueText(value);
+}
+
+/**
+ * Did a pass change, where the director put it, a beat or a photo they placed whole on the map
+ * (phase 4b, brief 1D)? It sits in their place and nowhere else, with a field of theirs changed:
+ * a beat they added whose move or people a pass rewrote. The report gives that as a change of
+ * their text, not as a move, since the beat did not move.
+ *
+ * @param {Object} edit - an edit placing a beat or a photo whole (isMove)
+ * @param {Object} after - the version the pass returned
+ * @returns {boolean}
+ */
+function mapChangedInPlace(edit, after) {
+  const address = mapAddressOf(edit);
+  if (!address || address.fieldSteps.length > 0 || !isObj(after)) return false;
+  const places = mapPlaces(after, address.kind, address.identity);
+  return places.length === 1 && places[0].container === address.container && !mapEditCarried(after, edit, address);
+}
+
 /**
  * What an edit on the map's beats or photos became in a pass's output, or null when it is
  * gone. For a beat or photo placed whole: the place a pass took it to, or put a copy of it
- * in (fix round 1, finding 1), else its fields where the director put it, a beat's without its
- * evidence, which is never the director's (phase 4b, brief 1D; R6).
+ * in (fix round 1, finding 1), else, where the director put it, its text as the page reads it
+ * (mapReportText: a beat by its move and its people, never its tags or its evidence, which is
+ * never the director's; phase 4b, brief 1D; R6). A field as its value, the beat a photo sits
+ * beside by that beat's move.
  */
 function mapBecame(edit, address, after) {
   if (isCut(edit)) return mapCutReturned(after, edit, address);
@@ -2596,12 +2661,12 @@ function mapBecame(edit, address, after) {
   if (address.fieldSteps.length > 0) {
     if (places.length === 0) return null;
     const value = valueAtSteps(places[0].element, address.fieldSteps);
-    return value === undefined || value === null ? null : editValueText(value);
+    return value === undefined || value === null ? null : mapReportText(edit, value, [after]);
   }
   const pinned = places.find((place) => place.container === address.container);
   const other = places.find((place) => place !== pinned);
   if (other) return mapContainerWords(other.container);
-  return pinned ? editValueText(address.kind === 'beat' ? withoutEvidence(pinned.element) : pinned.element) : null;
+  return pinned ? mapReportText(edit, pinned.element, [after]) : null;
 }
 
 /**
@@ -3891,7 +3956,10 @@ function cameBackStillIn(report, stored) {
  *   (`restored`); `unprintable` marks one that holds a photo the article cannot print, which
  *   the pass took out of print, code left out and the version stored prints nowhere (tasks
  *   4.5e to 4.5g): a caption left out with its photo, or, beside `restored`, an element the
- *   director put in whole that went back without that photo;
+ *   director put in whole that went back without that photo; on the map, a beat the director
+ *   added that a pass rewrote where they put it is such a change, not a move (mapChangedInPlace),
+ *   and every value on the map's beats and photos reads as the map's page reads it, a beat by its
+ *   move and its people, never by a tag (mapReportText; phase 4b, brief 1D);
  * - a block the director moved that the pass took to another section (`moved`, `became`
  *   that section) or removed (`became` null), and whether the block is back in the
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
@@ -3955,6 +4023,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     director: '', became: null, pass, automatic, reason: why.get(e.id) || null, restored: false,
     ...(isStrike(e) && { struck: true }), ...fields
   });
+  // Phase 4b, brief 1D: a value on the map's beats or photos as the map's page reads it, never by a
+  // tag (mapReportText); every other value as editValueText reads it.
+  const textOf = (e, value) => mapReportText(e, value, [before, after]);
   const changed = [];
   carried.forEach((e) => {
     if (isCut(e)) {
@@ -3972,14 +4043,20 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
         return;
       }
       const back = cutReturnedIn(stored, e);
-      if (back !== null) changed.push(entry(e, { cut: true, director: editValueText(e.before), became: back, ...returnedPieces(stored, cutPieces(e)) }));
+      if (back !== null) changed.push(entry(e, { cut: true, director: textOf(e, e.before), became: back, ...returnedPieces(stored, cutPieces(e)) }));
       return;
     }
     if (isMove(e)) {
       if (moveOutcome(e, before, after).outcome !== 'kept') {
         const back = putBack.has(e.id);
+        // Phase 4b, brief 1D: a beat the director added that sits where they put it, its move or its
+        // people rewritten, is a change of their text, not a move (mapChangedInPlace).
+        if (mapChangedInPlace(e, after)) {
+          changed.push(entry(e, { director: textOf(e, e.after), became: becameOf(e, before, after), restored: back }));
+          return;
+        }
         changed.push(entry(e, {
-          moved: true, director: editValueText(e.after), became: becameOf(e, before, after), restored: back,
+          moved: true, director: textOf(e, e.after), became: becameOf(e, before, after), restored: back,
           ...(back && isMoveWithin(e) && { inOrder: editCarried(stored, e) })
         }));
       }
@@ -3991,7 +4068,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       // to write it onto (passVersionOf), so it put the text back where it sat.
       const maybeCopies = putBack.has(e.id) && became === null ? maybeCopiesOf(e, before, after, stored) : [];
       changed.push(entry(e, {
-        director: editValueText(restoredValue(e, before)), became, restored: putBack.has(e.id),
+        director: textOf(e, restoredValue(e, before)), became, restored: putBack.has(e.id),
         ...(leftOut.has(e.id) && { unprintable: true }),
         ...(maybeCopies.length > 0 && { maybeCopies })
       }));

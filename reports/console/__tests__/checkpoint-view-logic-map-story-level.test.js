@@ -201,4 +201,22 @@ describe("1D: the map's view gives each beat its move, its people, its card mark
     walk(view);
     words.forEach((text) => expect(text).not.toMatch(/\b[btc]\d+\b/));
   });
+
+  test("a send-back's changes to a beat the director added and to the beat a photo sits beside read in story terms, with no tag", () => {
+    const { reportAfterPass, carriedEdits, SEND_BACK_PASS } = require('../../lib/hand-edit-diff');
+    const left = EditLogic.setPhotoBeside(EditLogic.addBeat(storyLevelMap(), 'closing', 'Remi walks out before the vote', 'Remi'), 'theStory', 0, 'b4');
+    const standing = standingOnMap(null, storyLevelMap(), left);
+    const rework = EditLogic.setPhotoBeside(clone(left), 'theStory', 0, 'b5');
+    Object.assign(beatOf(rework, 'b10'), { move: 'Remi leaves the room', threads: ['t1'], kind: 'scene', connection: 'c2', evidence: [piece(['notes'], 'The room votes for an accident.')] });
+    const report = reportAfterPass(null, { edits: carriedEdits(standing, left), before: left, after: rework, pass: SEND_BACK_PASS });
+    const data = payloadOf(storyLevelMapState({
+      outline: rework, _outlineHandEdits: standing, _outlineHandEditReport: report, humanOutlineRevisionCount: 1
+    }));
+    const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+    expect(view.changedEdits).toEqual([
+      'Closing, the move "Remi leaves the room", added: your "Remi walks out before the vote (shows Remi)" became "Remi leaves the room (shows Remi)" (the rework of your send-back). No reason given.',
+      'The Story, photo "board.jpg", beat: your "Marcus asks Quinn for a higher dose" became "Jess warns Sarah" (the rework of your send-back). No reason given.'
+    ]);
+    view.changedEdits.forEach((text) => expect(text).not.toMatch(/\b[btc]\d+\b/));
+  });
 });
