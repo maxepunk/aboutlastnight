@@ -234,4 +234,12 @@ describe('4.11: --compare is retired; --sections serves', () => {
     expect(header).not.toMatch(/--compare <dirA>/);
     expect(header).toMatch(/--sections <dirA> <dirB>/);
   });
+
+  // 3 final, item 9: slice 3C made an angle's pitch an edit, so the script's comments say what the
+  // fixed edit is now: a thread's line, which every angle that tells the thread shows.
+  it("the script's comments describe the fixed edit as the code makes it", () => {
+    const source = fs.readFileSync(SCRIPT, 'utf8');
+    expect(source).not.toMatch(/no edit until slice 3C/);
+    expect(source.split(/every angle that\s+(?:\/\/\s+)?tells the thread shows it/).length - 1).toBe(2);
+  });
 });

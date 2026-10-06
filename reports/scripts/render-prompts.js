@@ -45,7 +45,7 @@
  * thread added, an answer and their pick, its changes the standing
  * edits; one piece of evidence naming a document the record does not hold gives the
  * automatic pass a check failure to fix. A thread whose weave carries no edits gets the fixed
- * edit on its first thread's line (an angle's pitch is no edit until slice 3C), as the outline
+ * edit on its first thread's line (an edit of the thread, so every angle that tells the thread shows it), as the outline
  * and the article get theirs, so every arc rework render shows <HAND_EDITS>.
  * Every builder is awaited. The run fails (exit 1, naming the file) when a render's
  * system or user prompt is empty, when it contains "[object Promise]", or when no line
@@ -279,8 +279,8 @@ async function render() {
   // story meeting is planted, as the fixed notes are, for the arc reworks and the fact
   // check to read: the writer's weave as the baseline, the director's version, and their
   // changes as the standing edits. A thread whose weave carries no edits of the director's
-  // gets the fixed edit on its first thread's line (piece 3, brief 3B: the story is each
-  // angle's, and an angle's pitch is no edit until slice 3C).
+  // gets the fixed edit on its first thread's line: an edit of the thread, so every angle that
+  // tells the thread shows it, whichever angle the director picked (piece 3).
   requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits', 'isMap', 'standingOnMap', 'diffBundle']);
   // Brief 1G: a thread paused on phase 4's shapes holds a weave or a map that no builder of
   // the story level reads, so the fixed one is planted over it too, by the guard's own tests.
