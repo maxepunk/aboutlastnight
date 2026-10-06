@@ -321,6 +321,12 @@ const DECISION_CASES = [
   ['a pick that names no angle', false, () => { const w = clone(WEAVE); w.picked = 'a9'; return [w, clone(WEAVE)]; }],
   ['a pick that is not text', false, () => { const w = clone(WEAVE); w.picked = 3; return [w, clone(WEAVE)]; }],
   ['the director repeats an angle id', false, () => { const w = clone(WEAVE); w.angles.push({ ...w.angles[2] }); return [w, clone(WEAVE)]; }],
+  // 3B fix 7: the gate stores the angle sent by its id, so a pick of an id the writer repeated is
+  // refused; the angle the meeting opened, left open, and one under an id of its own pass.
+  ['the director picks an angle id the writer repeated', false, () => { const b = clone(WEAVE); b.angles[2].id = 'a2'; const w = clone(b); w.picked = 'a2'; return [w, b]; }],
+  ["the writer's repeated angle id, the angle the meeting opened left open", true, () => { const b = clone(WEAVE); b.angles[1].id = 'a1'; return [clone(b), b]; }],
+  ["the writer's repeated angle id, the meeting's own pick of it kept", true, () => { const b = clone(WEAVE); b.angles[2].id = 'a2'; b.picked = 'a2'; return [clone(b), b]; }],
+  ["the writer's repeated angle id, an angle under an id of its own picked", true, () => { const b = clone(WEAVE); b.angles[1].id = 'a1'; const w = clone(b); w.picked = 'a3'; return [w, b]; }],
   ['a missing required field', false, () => { const w = clone(WEAVE); delete w.angles; return [w, clone(WEAVE)]; }],
   ['an angle with no ends', false, () => { const w = clone(WEAVE); delete w.angles[1].ends; return [w, clone(WEAVE)]; }],
   ['an angle\'s story that is not text', false, () => { const w = clone(WEAVE); w.angles[0].story = 5; return [w, clone(WEAVE)]; }],

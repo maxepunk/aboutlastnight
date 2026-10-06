@@ -1992,8 +1992,10 @@
 
   /**
    * What the gate refuses in the director's pick, or null (lib/meeting.js pickProblems, whose
-   * decisions a test holds this to): a pick that names no angle the weave holds, and a version
-   * that does not carry the thread that carries the room's verdict (R8): the thread taken out,
+   * decisions a test holds this to): a pick that names no angle the weave holds; a pick of an
+   * angle id the writer repeated, other than the angle the meeting opened (3B fix 7), since the
+   * gate stores the angle sent by its id; and a version that does not carry the thread that
+   * carries the room's verdict (R8): the thread taken out,
    * its verdict flag taken off or moved, or the thread left out of the picked angle (the one the
    * pick names, else the first). The verdict's thread is the one the weave the meeting showed
    * flags, by id, else the one the version flags (fix round 1, finding 2). The page locks that
@@ -2010,6 +2012,11 @@
     if (picked && !byId(picked)) return 'Pick one of the angles the meeting showed.';
     var angle = openAngleOf(weave);
     if (!angle) return null;
+    var openId = weaveIdOf(angle);
+    var shownOpen = isPlainObject(shown) ? openAngleOf(shown) : null;
+    if (openId && isPlainObject(shown) && (idCounts(shown.angles).get(openId) || 0) > 1 && openId !== weaveIdOf(shownOpen)) {
+      return 'The writer gave more than one angle the id "' + openId + '", so the meeting cannot tell which of them you picked. Leave the pick as the meeting showed it, or pick an angle under an id of its own: a reweave with a note, or a send-back, gives each angle its own id.';
+    }
     var named = angleThreadIdsOf(angle);
     var flagged = function (threads) {
       return asArray(threads).filter(function (thread) { return isPlainObject(thread) && thread.verdict === true && weaveIdOf(thread); });

@@ -151,11 +151,14 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
 
 /**
  * What the gate refuses in the director's pick (piece 3, brief 3B), or null: a pick that names no
- * angle the weave holds, and a version that does not carry the thread that carries the room's
- * verdict (R8), which the article always reports (T2): the thread taken out of the weave, its
- * verdict flag taken off (or moved to another thread), or the thread left out of the picked
- * angle. The meeting locks that thread in the open angle, so a version that lacks it came past
- * the console, such as from the harness's approve file.
+ * angle the weave holds; a pick of an angle id the writer repeated (3B fix 7), since the gate
+ * stores the angle sent by its id and cannot tell which of them the director picked, while the
+ * angle the meeting opened, left open, passes as a writer's repeat left as shown does; and a
+ * version that does not carry the thread that carries the room's verdict (R8), which the article
+ * always reports (T2): the thread taken out of the weave, its verdict flag taken off (or moved to
+ * another thread), or the thread left out of the picked angle. The meeting locks that thread in
+ * the open angle, so a version that lacks it came past the console, such as from the harness's
+ * approve file.
  *
  * The verdict's thread is the one the weave the meeting showed flags, by id (fix round 1, finding
  * 2): read from the director's own version, a version that clears the flag would leave no thread
@@ -173,6 +176,11 @@ function pickProblems(weave, shown = null) {
   }
   const angle = pickedAngleOf(weave);
   if (!angle) return null;
+  const openId = weaveIdOf(angle);
+  const shownOpen = isWeave(shown) ? pickedAngleOf(shown) : null;
+  if (openId && isWeave(shown) && idCount(shown.angles, openId) > 1 && openId !== weaveIdOf(shownOpen)) {
+    return `The writer gave more than one angle the id "${openId}", so the meeting cannot tell which of them the director picked. Leave the pick as the meeting showed it, or pick an angle under an id of its own, and send the weave back or reweave it with a note: the rework gives each angle an id of its own.`;
+  }
   const named = new Set(angle.threads.map((id) => id.trim()));
   const flagged = (threads) => (Array.isArray(threads) ? threads : [])
     .filter((thread) => thread && typeof thread === 'object' && thread.verdict === true && weaveIdOf(thread));
@@ -226,7 +234,10 @@ function angleSetProblems(weave, shown) {
  * drops or adds an angle, angleSetProblems). A pick the director's order alone made, the first
  * angle of a version that names none, is written as their pick, so the angle they sent stays open.
  * A change to a thread's name or line is the thread's, which every angle that tells it shares, so
- * the threads are kept as the director left them.
+ * the threads are kept as the director left them. The angle sent takes one place, the first under
+ * its id, as the pick opens the first (pickedAngleOf): under an id the writer repeated, which the
+ * gate takes only for the angle the meeting opened (pickProblems), the writer's other angles keep
+ * theirs as the meeting showed them (3B fix 7).
  *
  * @param {Object} left - the weave as the director left it
  * @param {Object|null} shown - the weave the meeting showed
@@ -237,7 +248,8 @@ function withUnsentAnglesAsShown(left, shown) {
   const picked = pickedAngleOf(left);
   const pickedId = picked ? weaveIdOf(picked) : '';
   if (!pickedId) return left;
-  const angles = shown.angles.map((angle) => (weaveIdOf(angle) === pickedId ? picked : structuredClone(angle)));
+  const sentAt = shown.angles.findIndex((angle) => weaveIdOf(angle) === pickedId);
+  const angles = shown.angles.map((angle, index) => (index === sentAt ? picked : structuredClone(angle)));
   const stored = { ...left, angles };
   if (weaveIdOf(pickedAngleOf(stored)) !== pickedId) stored[PICKED_KEY] = pickedId;
   return stored;

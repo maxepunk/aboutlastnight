@@ -290,6 +290,42 @@ describe('the gate (R8, R9)', () => {
     expect(stored.angles[0]).toEqual(anglesWeave().angles[0]);
   });
 
+  // 3B fix 7: the gate stores the angle the director sends by its id (withUnsentAnglesAsShown),
+  // so under an id the writer repeated it cannot tell which angle the director picked. A pick of
+  // such an id is refused, with the rework as the remedy, as a change under a writer's repeated
+  // thread is; the angle the meeting opened, left open, passes, and the writer's other angle
+  // under its id is stored as the meeting showed it.
+  describe("an angle id the writer repeated", () => {
+    /** The weave the meeting showed, its angles under ids [a1, a2, a2] or [a1, a1, a3]. */
+    const repeating = (index, id) => { const shown = anglesWeave(); shown.angles[index].id = id; return shown; };
+
+    test("refuses the director's pick of it, naming the id, with the rework as the remedy", () => {
+      const shown = repeating(2, 'a2');
+      const left = { ...clone(shown), picked: 'a2' };
+      const refusal = directorWeaveProblems(left, { shown });
+      expect(refusal).toContain('more than one angle the id "a2"');
+      expect(refusal).toContain('send the weave back or reweave it with a note');
+      expect(meetingResume({ meeting: 'approve', weave: left }, { ...stateAt(), weave: shown }).error).toBe(refusal);
+    });
+
+    test('takes a pick of an angle under an id of its own beside it', () => {
+      const shown = repeating(1, 'a1');
+      expect(directorWeaveProblems({ ...clone(shown), picked: 'a3' }, { shown })).toBeNull();
+    });
+
+    test("takes the angle the meeting opened, left open, and stores the writer's other angle under its id as the meeting showed it", () => {
+      const shown = repeating(1, 'a1');
+      expect(directorWeaveProblems(clone(shown), { shown })).toBeNull();
+      const left = clone(shown);
+      left.angles[0].story = 'The story the director gave the angle they sent.';
+      const { error, stateUpdates } = meetingResume({ meeting: 'reweave', weave: left, note: 'Give each angle an id of its own.' }, { ...stateAt(), weave: shown, _weaveBaseline: shown });
+      expect(error).toBeNull();
+      expect(stateUpdates.weave.angles.map((angle) => angle.headline)).toEqual(shown.angles.map((angle) => angle.headline));
+      expect(stateUpdates.weave.angles[0].story).toBe('The story the director gave the angle they sent.');
+      expect(stateUpdates.weave.angles[1]).toEqual(shown.angles[1]);
+    });
+  });
+
   test('refuses a pick that names no angle the weave holds', () => {
     const left = { ...anglesWeave(), picked: 'a9' };
     expect(directorWeaveProblems(left, { shown: anglesWeave() })).toMatch(/pick/i);
