@@ -50,9 +50,10 @@ const ViewLogic = require('../console/checkpoint-view-logic');
 // Task 4.12a: the story meeting, the map and the desk as the console shows them, and the
 // payloads its builders make at those stops and at the character-IDs stop. Task 4.12c: every
 // stop with a page prints it, and the options say what they take (optionsRefusal). Task 4.12e: a
-// refused run exits OPTIONS_REFUSED_EXIT_CODE.
+// refused run exits OPTIONS_REFUSED_EXIT_CODE. Fix round B: --approve-file is read by its one
+// loader there, loadApprovalFile, which the harness's tests send a file through.
 const { stopPrint } = require('./lib/stop-print');
-const { stopApproval, STOP_ACTIONS, optionsRefusal, OPTIONS_REFUSED_EXIT_CODE } = require('./lib/stop-payloads');
+const { stopApproval, STOP_ACTIONS, optionsRefusal, OPTIONS_REFUSED_EXIT_CODE, loadApprovalFile } = require('./lib/stop-payloads');
 const { PAGE_STOPS } = require('../lib/stop-pages');
 
 // Configuration
@@ -787,21 +788,6 @@ function loadOverrideFile(filePath) {
     const content = fs.readFileSync(filePath, 'utf8');
     const data = JSON.parse(content);
     console.log(color(`  ✓ Loaded state overrides: ${Object.keys(data).join(', ')}`, 'green'));
-    return data;
-  } catch (error) {
-    console.error(color(`  ✗ Failed to load: ${error.message}`, 'red'));
-    throw error;
-  }
-}
-
-// Load custom approval payload from JSON file (--approve-file flag)
-function loadApprovalFile(filePath) {
-  console.log(color(`Loading approval payload from ${filePath}...`, 'dim'));
-
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const data = JSON.parse(content);
-    console.log(color(`  ✓ Loaded approval: ${Object.keys(data).join(', ')}`, 'green'));
     return data;
   } catch (error) {
     console.error(color(`  ✗ Failed to load: ${error.message}`, 'red'));
@@ -2435,7 +2421,9 @@ async function runWalkthrough() {
           // Approve this checkpoint - use custom file if provided, otherwise defaults
           let approvals;
           if (APPROVE_FILE) {
+            console.log(color(`Loading approval payload from ${APPROVE_FILE}...`, 'dim'));
             approvals = loadApprovalFile(APPROVE_FILE);
+            console.log(color(`  ✓ Loaded approval: ${Object.keys(approvals).join(', ')}`, 'green'));
           } else {
             // DRY: Use single source of truth for default approvals. Task 4.12a: at the story
             // meeting, the map, the desk and the character-IDs stop it is the console's own

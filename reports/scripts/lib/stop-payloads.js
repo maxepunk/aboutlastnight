@@ -25,6 +25,7 @@
  */
 'use strict';
 
+const fs = require('fs');
 const View = require('../../console/checkpoint-view-logic');
 
 /**
@@ -178,6 +179,29 @@ function stopApproval(stop, data, { action = 'approve', note = '', leaveOut = nu
   return payload ? { payload } : { refusal: SEND_BACK_NEEDS_A_NOTE };
 }
 
+/**
+ * The approval an --approve-file holds, which step mode sends at its stop as it is (task 4.12d):
+ * a weave, a map or an article the director changed, with the action, the note, the pick and the
+ * photos left out. This is the harness's one loader, so a test that reads a file through it sends
+ * what --approve-file sends (fix round B, review focus 5).
+ *
+ * @param {string} filePath - --approve-file as given
+ * @returns {Object} the file's JSON object
+ * @throws {Error} naming the option and the file, on a missing file, bad JSON, or anything but one object
+ */
+function loadApprovalFile(filePath) {
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    throw new Error(`--approve-file ${filePath}: ${error.message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`--approve-file ${filePath}: expected one JSON object, the approval step mode sends.`);
+  }
+  return parsed;
+}
+
 /** Where --action and --note go, read from STOP_ACTIONS: each stop, with the actions it takes. */
 const ACTION_NOTE_REFUSAL = `--action and --note go with --approve <stop> and --step, at a stop that takes them: ${
   Object.entries(STOP_ACTIONS).map(([stop, actions]) => `${inSentence(STOP_NAMES[stop])} (${stop}) takes ${listOf(actions)}`).join('; ')
@@ -244,4 +268,4 @@ function optionsRefusal({ approveType = null, stepMode = false, action = null, n
   return null;
 }
 
-module.exports = { STOP_ACTIONS, stopApproval, optionsRefusal, OPTIONS_REFUSED_EXIT_CODE };
+module.exports = { STOP_ACTIONS, stopApproval, loadApprovalFile, optionsRefusal, OPTIONS_REFUSED_EXIT_CODE };

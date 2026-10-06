@@ -152,8 +152,9 @@ describe('4.12a: the harness prints and approves the three stops through the sha
   });
 
   it('builds the default approval at those stops and at the character-IDs stop with stopApproval, from the run\'s options', () => {
-    // Task 4.12e: the import also takes the exit code a refused run exits with.
-    expect(SRC).toMatch(/const \{ stopApproval, STOP_ACTIONS(, optionsRefusal)?(, OPTIONS_REFUSED_EXIT_CODE)? \} = require\('\.\/lib\/stop-payloads'\);/);
+    // Task 4.12e: the import also takes the exit code a refused run exits with; fix round B, the
+    // --approve-file loader.
+    expect(SRC).toMatch(/const \{ stopApproval, STOP_ACTIONS(, optionsRefusal)?(, OPTIONS_REFUSED_EXIT_CODE)?(, loadApprovalFile)? \} = require\('\.\/lib\/stop-payloads'\);/);
     const fn = body('function defaultApproval(');
     expect(fn).toMatch(/stopApproval\(checkpointType, checkpointData, \{ action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS, angle: ANGLE \}\)/);
   });
@@ -589,12 +590,26 @@ describe("4.12e, the integrator's pins: the stop's refusals, and where the file 
   });
 
   it('reads --approve-file once, in step mode with --approve, where optionsRefusal says the run reads it', () => {
-    // The definition and its one call.
-    expect(SRC.match(/loadApprovalFile\(/g)).toHaveLength(2);
+    // Fix round B (review focus 5): the one loader is scripts/lib/stop-payloads.js's, which
+    // e2e-stop-payloads.test.js sends the meeting's file through; the harness has none of its own,
+    // and its one call is in step mode's branch.
+    expect(SRC).not.toMatch(/function loadApprovalFile\(/);
+    expect(SRC).toMatch(/const \{[^}]*\bloadApprovalFile\b[^}]*\} = require\('\.\/lib\/stop-payloads'\);/);
+    expect(SRC.match(/loadApprovalFile\(/g)).toHaveLength(1);
     const fn = body('async function runWalkthrough(');
     const before = fn.slice(0, fn.indexOf('approvals = loadApprovalFile(APPROVE_FILE);'));
     const stepBranch = before.slice(before.lastIndexOf('if (STEP_MODE) {'));
-    expect(stepBranch).toMatch(/^if \(STEP_MODE\) \{[\s\S]*\bif \(APPROVE_TYPE\) \{[\s\S]*\bif \(APPROVE_FILE\) \{\n\s*$/);
+    // The branch opens on the line that says which file it loads, then loads it.
+    expect(stepBranch).toMatch(/^if \(STEP_MODE\) \{[\s\S]*\bif \(APPROVE_TYPE\) \{[\s\S]*\bif \(APPROVE_FILE\) \{\n\s*console\.log\(color\(`Loading approval payload from \$\{APPROVE_FILE\}\.\.\.`, 'dim'\)\);\n\s*$/);
+  });
+
+  it('sends what the loader returns, with photo descriptions added at the character-IDs stop alone', () => {
+    const fn = body('async function runWalkthrough(');
+    const after = fn.slice(fn.indexOf('approvals = loadApprovalFile(APPROVE_FILE);'));
+    const sent = after.slice(0, after.indexOf('`/api/session/${sessionId}/approve`'));
+    expect(sent).toMatch(/\n\s*approvals = withPhotoDescriptions\(checkpointType, approvals, PHOTO_DESCRIPTIONS\);\n/);
+    expect(sent.match(/approvals = /g)).toHaveLength(3);
+    expect(after).toMatch(/^approvals = loadApprovalFile\(APPROVE_FILE\);[\s\S]*?`\/api\/session\/\$\{sessionId\}\/approve`,\n\s*approvals,\n/);
   });
 });
 

@@ -456,21 +456,42 @@ describe("3E: --angle picks the angle the story meeting sends on", () => {
   });
 
   // Review focus 5: a director's version whose picked angle lacks the verdict's thread, sent with
-  // --approve-file past the console's lock. The harness reads the file as JSON and sends it as it
-  // is (scripts/e2e-walkthrough.js loadApprovalFile), and the gate refuses it, naming the thread.
+  // --approve-file past the console's lock. Step mode reads the file through
+  // scripts/lib/stop-payloads.js loadApprovalFile, the harness's one loader (its source pin is in
+  // e2e-stops-step-mode.test.js), and sends what it returns, to which photo descriptions are added
+  // only at the character-IDs stop (withPhotoDescriptions). The gate refuses it, naming the thread.
   it("sends --approve-file's version as it is, and the gate refuses a picked angle without the verdict's thread, naming it", async () => {
+    const { loadApprovalFile } = require('../../../scripts/lib/stop-payloads');
+    const { withPhotoDescriptions } = require('../../../scripts/lib/photo-descriptions');
     const s = state();
     const data = await payloadAt('arc-selection', s);
     const weave = View.meetingDraftOf(data);
     const verdict = weave.threads.find((thread) => thread.verdict === true);
     const picked = weave.angles[1];
+    expect(picked.threads).toContain(verdict.id);
     picked.threads = picked.threads.filter((id) => id !== verdict.id);
     weave.picked = picked.id;
     const file = path.join(dataDir, 'weave.json');
-    fs.writeFileSync(file, JSON.stringify({ meeting: 'approve', weave }));
-    const sent = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const { error } = gate(sent, s, 'arc-selection');
+    fs.writeFileSync(file, JSON.stringify({ meeting: 'approve', weave }, null, 2));
+
+    // What step mode's --approve-file branch sends at the meeting, a --photo-descriptions given too.
+    const sent = withPhotoDescriptions('arc-selection', loadApprovalFile(file), { 'p2.jpg': 'Alex leans over the ledger.' });
+    expect(sent).toEqual({ meeting: 'approve', weave });
+    const { resume, error } = gate(sent, s, 'arc-selection');
+    expect(resume).toEqual({});
     expect(error).toEqual(expect.stringContaining(verdict.name));
     expect(error).toMatch(/verdict/);
+  });
+
+  it('refuses an --approve-file that is not one JSON object, naming the option and the file', () => {
+    const { loadApprovalFile } = require('../../../scripts/lib/stop-payloads');
+    const missing = path.join(dataDir, 'none.json');
+    expect(() => loadApprovalFile(missing)).toThrow(`--approve-file ${missing}:`);
+    const broken = path.join(dataDir, 'broken.json');
+    fs.writeFileSync(broken, '{"meeting": "approve",');
+    expect(() => loadApprovalFile(broken)).toThrow(`--approve-file ${broken}:`);
+    const list = path.join(dataDir, 'list.json');
+    fs.writeFileSync(list, '[]');
+    expect(() => loadApprovalFile(list)).toThrow(`--approve-file ${list}: expected one JSON object, the approval step mode sends.`);
   });
 });
