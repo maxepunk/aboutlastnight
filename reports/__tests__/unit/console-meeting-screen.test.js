@@ -830,6 +830,11 @@ describe('3 fix A: an angle under an id the writer repeated cannot be picked', (
     expect(viewOf(payloadOf(meetingState())).angles.map((a) => a.repeatedId)).toEqual([false, false, false]);
   });
 
+  it('the page says why a flagged angle cannot be picked', () => {
+    expect(viewOf(payloadOf(repeating('a2'))).repeatedIdHint).toMatch(/one id to more than one angle, thread or connection/);
+    expect(viewOf(payloadOf(meetingState())).repeatedIdHint).toBe('');
+  });
+
   it('a flagged angle\'s card is off and picks nothing', () => {
     const page = mountMeeting({ data: payloadOf(repeating('a2')) });
     const cards = elementsOf(page.render(), withClass('meeting__angle'));

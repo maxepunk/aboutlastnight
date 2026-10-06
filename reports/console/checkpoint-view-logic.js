@@ -1412,7 +1412,7 @@
   var VERDICT_LOCK_LINE = 'Always in: the article reports the verdict.';
 
   /** Why the controls of a line under a writer's repeated id are off, while they are. */
-  var REPEATED_ID_HINT = 'The writer gave one id to more than one thread or connection, so the meeting cannot change those lines: a reweave with a note, or a send-back, gives each its own id.';
+  var REPEATED_ID_HINT = 'The writer gave one id to more than one angle, thread or connection, so the meeting cannot pick or change those: a reweave with a note, or a send-back, gives each its own id.';
 
   /** Why Reweave is not offered, while it is not (the integrator's ruling 5). */
   var REWEAVE_HINT = 'Reweave fits your changes and your note into the angle: change the angle or one of its threads, or write a note first.';
@@ -3329,7 +3329,7 @@
       add: ADD_THREAD,
       connections: connections,
       questions: questions,
-      repeatedIdHint: threads.concat(leftOutThreads).some(function (t) { return t.repeatedId; }) || connections.some(function (c) { return c.repeatedId; }) ? REPEATED_ID_HINT : '',
+      repeatedIdHint: angles.some(function (a) { return a.repeatedId; }) || threads.concat(leftOutThreads).some(function (t) { return t.repeatedId; }) || connections.some(function (c) { return c.repeatedId; }) ? REPEATED_ID_HINT : '',
       checkFailures: failing.top,
       changedEdits: beside.edits,
       kept: editsStandLine(d.handEditReport),
