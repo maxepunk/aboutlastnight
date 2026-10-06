@@ -148,7 +148,10 @@ const PITCH_LINES = Object.freeze([
  * - each line of the sent angle's pitch they rewrote, and "from your notes" when it prints;
  * - each thread in the story they added, brought into the angle, or whose name or line they
  *   rewrote, with what they did to it;
- * - each thread the angle leaves out that they left out of it, added, or renamed;
+ * - each thread the angle leaves out that they left out of it, or renamed. A thread they added
+ *   that the angle leaves out carries no mark: the map writer places no thread the story leaves
+ *   out, so it is no change the map fits in, and a later stop never offers it as one (the final
+ *   review);
  * - each connection between its threads whose line they rewrote.
  * `byLine` maps each printed line (`fromYourNotes`, `pitch:<field>`, `thread:<id>`,
  * `leftOut:<id>`, `connection:<id>`) to its marks; `ids` holds every edit id marked.
@@ -178,9 +181,10 @@ function settledMarksOf(weave, edits) {
     mark(`thread:${id}`, share.flippedIn[`${angleId}.${id}`], 'brought into the story');
     threadFieldsOf(id).forEach(([place, editId]) => mark(`thread:${id}`, editId, `the ${place.slice(id.length + 1)}`));
   });
+  // A thread the director added that the sent angle leaves out carries no mark (the final review):
+  // it is no change the map fits in, since the map writer places no thread the story leaves out.
   settled.leftOut.forEach((thread) => {
     const id = textOf(thread.id);
-    mark(`leftOut:${id}`, share.addedThreads[id], 'a thread they added');
     mark(`leftOut:${id}`, share.flippedOut[`${angleId}.${id}`], 'left out of the story');
     mark(`leftOut:${id}`, share.threadFields[`${id}.name`], 'the name');
   });

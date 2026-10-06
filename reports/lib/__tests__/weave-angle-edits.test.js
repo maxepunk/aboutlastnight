@@ -424,6 +424,40 @@ describe('the changes a later stop names are the ones the settled story shows', 
     expect(meetingChangesOf(state)).toEqual([{ id: 'M2', place: 'where it ends up' }]);
   });
 
+  // The final review: a thread the director added that the angle they send leaves out is no change
+  // for the map to fit in. The settled weave names it among the threads left out, unmarked, and the
+  // map's sources and places leave it out; the writer's thread they left out stays marked.
+  test.each([
+    ['added to angle 1 and left out of it at a later look', () => {
+      const lookOne = anglesWeave();
+      lookOne.threads.push(clone(ADDED));
+      lookOne.angles[0].threads.push('t8');
+      const first = standingAtMeeting(null, anglesWeave(), lookOne);
+      const lookTwo = clone(lookOne);
+      lookTwo.angles[0].threads = lookTwo.angles[0].threads.filter((id) => id !== 't8' && id !== 't4');
+      return { weave: lookTwo, handEdits: standingAtMeeting(first, lookOne, lookTwo), flippedOut: 'M2' };
+    }],
+    ['added to angle 1, then angle 2 sent without it', () => {
+      const left = anglesWeave();
+      left.threads.push(clone(ADDED));
+      left.angles[0].threads.push('t8');
+      left[PICKED_KEY] = 'a2';
+      left.angles[1].threads = left.angles[1].threads.filter((id) => id !== 't6');
+      return { weave: left, handEdits: standingAtMeeting(null, anglesWeave(), left), flippedOut: 'M1' };
+    }]
+  ])('a thread the director added that the sent angle leaves out is not marked, nor offered to the map: %s', (_name, build) => {
+    const { weave, handEdits, flippedOut } = build();
+    const added = handEdits.edits.find((edit) => edit.path === 'threads[#t8]');
+    expect(added).toBeDefined();
+    const leftOut = renderSettledWeave(weave, carriedEdits(handEdits, weave)).split('\n').find((line) => line.startsWith('THREADS LEFT OUT: '));
+    expect(leftOut).toContain(ADDED.name);
+    expect(leftOut).not.toContain(`${ADDED.name} [`);
+    expect(leftOut).toContain(`[the director's change ${flippedOut}: left out of the story]`);
+    const state = { weave, _weaveHandEdits: handEdits };
+    expect(meetingEditIdsOf(state)).not.toContain(`M${added.id.slice(1)}`);
+    expect(meetingChangesOf(state).map((change) => change.id)).toEqual([flippedOut]);
+  });
+
   test("each place names an angle's line and a flipped thread by their words, never an id", () => {
     const left = anglesWeave();
     left.angles[0].lands = 'Every player remembers the two of them circling.';
