@@ -2436,12 +2436,24 @@
   var ELEMENT_FIELD_SPLIT = new RegExp('; (?=(?:' + ELEMENT_FIELD_KEYS.join('|') + '): )');
   var ELEMENT_FIELD_START = /^id: /;
 
+  /** The card's one sentence, which an angle's card shows and the pitch does not head. */
+  var CARD_LINE_WORDS = 'card line';
+
   /**
-   * How a place names a line of an angle's pitch (piece 3, brief 3C): as the pitch heads it, in a
-   * phrase after the angle (`The angle "…", why it lands`), and the card's one sentence as its card
-   * line.
+   * How a place names a line of an angle's pitch (piece 3, brief 3C): by the heading the pitch
+   * gives it (MEETING_LINE_LABELS), as a phrase after the angle (`The angle "…", why it lands`),
+   * and the card's one sentence as its card line. lib/meeting.js ANGLE_FIELD_PLACES names the same
+   * lines for a later stop, and a test holds the two equal.
    */
-  var ANGLE_FIELD_WORDS = { headline: 'headline', gist: 'card line', story: 'story', question: 'question it carries', lands: 'why it lands', ends: 'where it ends up' };
+  var ANGLE_FIELD_WORDS = (function () {
+    var words = {};
+    ANGLE_FIELDS.forEach(function (field) {
+      if (field === 'gist') { words[field] = CARD_LINE_WORDS; return; }
+      var heading = MEETING_LINE_LABELS[field];
+      words[field] = (heading.charAt(0).toLowerCase() + heading.slice(1)).replace(/^the /, '');
+    });
+    return words;
+  })();
 
   function elementFieldsOf(text) {
     var value = asString(text);
@@ -4861,6 +4873,9 @@
     PICKED_KEY: PICKED_KEY,
     THIN_NOTES_LINE: THIN_NOTES_LINE,
     MEETING_LINE_LABELS: MEETING_LINE_LABELS,
+    // 3 fix A: a line of an angle's pitch as a place names it, from MEETING_LINE_LABELS (held to
+    // lib/meeting.js ANGLE_FIELD_PLACES by a test)
+    ANGLE_FIELD_WORDS: ANGLE_FIELD_WORDS,
     ANGLE_OPEN_LINE: ANGLE_OPEN_LINE,
     VERDICT_LOCK_LINE: VERDICT_LOCK_LINE,
     MEETING_ROLLBACK_LINE: MEETING_ROLLBACK_LINE,

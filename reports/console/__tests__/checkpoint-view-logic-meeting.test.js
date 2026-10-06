@@ -1336,6 +1336,29 @@ describe("4.5c: the console's copies of the weave's fields and elements are the 
   });
 });
 
+describe("3 fix A: the console's words for a line of an angle's pitch are the meeting's", () => {
+  // One table names each line of the pitch: the page's headings (MEETING_LINE_LABELS), with the
+  // card line, which the pitch does not head. A later stop names the same lines through
+  // lib/meeting.js ANGLE_FIELD_PLACES, each as a phrase that may open on "the".
+  test('ANGLE_FIELD_WORDS names each angle field as ANGLE_FIELD_PLACES does, without its "the"', () => {
+    const { ANGLE_FIELD_PLACES } = require('../../lib/meeting');
+    expect(Object.keys(ViewLogic.ANGLE_FIELD_WORDS).sort()).toEqual(Object.keys(ANGLE_FIELD_PLACES).sort());
+    expect(Object.keys(ANGLE_FIELD_PLACES).sort()).toEqual([...weaveLib.ANGLE_FIELDS].sort());
+    for (const field of Object.keys(ANGLE_FIELD_PLACES)) {
+      expect(ViewLogic.ANGLE_FIELD_WORDS[field]).toBe(ANGLE_FIELD_PLACES[field].replace(/^the /, ''));
+    }
+  });
+
+  test('each pitch line the page heads is named by its heading', () => {
+    for (const field of Object.keys(ViewLogic.ANGLE_FIELD_WORDS)) {
+      if (!Object.prototype.hasOwnProperty.call(ViewLogic.MEETING_LINE_LABELS, field)) continue;
+      const heading = ViewLogic.MEETING_LINE_LABELS[field];
+      expect(ViewLogic.ANGLE_FIELD_WORDS[field]).toBe((heading.charAt(0).toLowerCase() + heading.slice(1)).replace(/^the /, ''));
+    }
+    expect(ViewLogic.ANGLE_FIELD_WORDS.gist).toBe('card line');
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Piece 3 (brief 3C; R1, R2; Review focus 1 and 3): the director's edits on angles at the meeting.
 // A line of the pitch and each thread flipped are the director's changes; the pick is none. The
