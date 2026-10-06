@@ -484,8 +484,9 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       .map(String);
     const { WEAVE_SCHEMA } = require('../sdk-client/subagents');
 
-    // Phase 4 (brief 4.4): the lens work C16 sets out stays in the writer's reasoning;
-    // the weave has no field for it, and its task points at C16 for the threads.
+    // Phase 4 (brief 4.4; phase 4b, brief 1B): the lens work C16 sets out reaches the weave as
+    // each thread's role and as evidence marked supporting the thread or cutting against it,
+    // through no field of its own, and the task points at C16 for the threads.
     it('the arc writer reads C16 in <craft-story> and restates none of it; the weave has no lens fields', () => {
       const prompt = buildWeaveSections(journalistState());
       const { craft } = loadRuleSet('arc');

@@ -23,8 +23,9 @@
  * links the arc cards hid, the director's read of the session was filed as a caveat, and
  * the arc judge ran three times. Phase 4 replaces them with the weave: the long
  * write-ups, the interweaving call and the every-player rule at this stage went, and the
- * lens work stays in the writer's reasoning (C16). The detective's arc branches went with
- * them (ruling R1): its theme starts no session until it has its own stages.
+ * lens work (C16) reaches the weave as each thread's role and as evidence marked supporting
+ * the thread or cutting against it (phase 4b, brief 1B). The detective's arc branches went
+ * with them (ruling R1): its theme starts no session until it has its own stages.
  *
  * The graph's node names stay (analyzeArcs, validateArcs, evaluateArcs, reviseArcs), so
  * a thread's stop types and checkpoints keep their names (R3).
