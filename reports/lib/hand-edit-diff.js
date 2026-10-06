@@ -1023,6 +1023,19 @@ function membershipOf(edit) {
   return angleId && threadId ? { angleId, threadId, flip: edit.angle.flip } : null;
 }
 
+/**
+ * Where the director's edits put a thread in an angle (R2; membershipOf): each flip's place, and
+ * each added thread's place in the angle they added it to. Code puts each back after every pass but
+ * a send-back (restoreMembership), so the Reweave's hold reads the open angle as these leave it
+ * (lib/weave.js holdOutsideOpenAngle; fix round 1, finding 4).
+ *
+ * @param {Object[]} edits - the director's standing edits
+ * @returns {Array<{angleId: string, threadId: string, flip: ('in'|'out')}>}
+ */
+function threadPlacesOf(edits) {
+  return (Array.isArray(edits) ? edits : []).filter(isEdit).map((edit) => membershipOf(normalizeEdit(edit))).filter(Boolean);
+}
+
 /** The one key of a thread's place in an angle, for telling two edits of one place apart. */
 function membershipKeyOf(membership) {
   return membership ? `${membership.angleId}|${membership.threadId}` : null;
@@ -4478,6 +4491,8 @@ module.exports = {
   reportAfterPass, settleEdits, handEditReportOf, sectionKey, namesPerson,
   // Piece 3 (brief 3C, R3): the Reweave's put-backs in the round's report
   reportWithHeld,
+  // Fix round 1, finding 4: where the director's edits put a thread in an angle, which the hold reads
+  threadPlacesOf,
   // Brief 4.5: the meeting's edits
   REWEAVE_PASS, WEAVE_EDIT_LINES_GUIDE, weaveEditsBetween, standingAtMeeting, weaveDirectorsShare, weaveMarks, editWhere,
   // Brief 4.6: the map's edits

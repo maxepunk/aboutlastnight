@@ -73,7 +73,7 @@ const { SOURCES_GLOSS, EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../
 const { meetingCheckpointData } = require('../../meeting');
 const { wordsShown } = require('../../stop-pages');
 const {
-  carriedEdits, settleEdits, reportWithHeld, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS
+  carriedEdits, settleEdits, reportWithHeld, threadPlacesOf, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS
 } = require('../../hand-edit-diff');
 // Brief 4.5: a send-back that carries the director's edits asks for the list of those it
 // changed, as the outline's and the article's send-backs do (F1): one schema rule, one strip.
@@ -773,7 +773,11 @@ async function reviseArcs(state, config) {
     // Piece 3 (brief 3C, R3): a Reweave works on the angle the director has open, and code puts
     // back everything outside it before the director's edits are settled, so a question beside a
     // thread the rework dropped from another angle keeps its thread.
-    const hold = meetingRound === 'reweave' ? holdOutsideOpenAngle(output, call.before) : { weave: output, held: [] };
+    // Fix round 1, finding 4: the hold reads the open angle as the director's standing flips leave
+    // it, since settleEdits puts each back after it.
+    const hold = meetingRound === 'reweave'
+      ? holdOutsideOpenAngle(output, call.before, { places: threadPlacesOf(call.edits) })
+      : { weave: output, held: [] };
     const settled = settleEdits(state._weaveHandEditReport, {
       edits: call.edits,
       before: call.before,

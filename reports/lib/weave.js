@@ -330,10 +330,11 @@ function withPickFrom(weave, previous) {
  *   the director saw them, and the open one too when the rework dropped it; an angle the rework
  *   pitched of its own goes;
  * - every thread outside the open angle (one neither the open angle nor the rework's version of it
- *   names), and a thread another angle names that the rework dropped, where it sat among the
- *   threads; a thread of the rework's own outside the open angle goes. A thread the open angle
- *   names stays as the rework wrote it, so a thread it shares with another angle may be reworded,
- *   and the new words show in both;
+ *   names, or one the director's standing edits leave out of it, `places`, since code puts their
+ *   place back after the hold), and a thread another angle names that the rework dropped, where it
+ *   sat among the threads; a thread of the rework's own outside the open angle goes. A thread the
+ *   open angle names stays as the rework wrote it, so a thread it shares with another angle may be
+ *   reworded, and the new words show in both;
  * - every connection that does not join two of the open angle's threads, judged by the joins of
  *   the version the rework started from; one of the rework's own outside them goes.
  * The questions are code's already (carriedWeaveQuestions), and the director's lines inside the
@@ -348,10 +349,13 @@ function withPickFrom(weave, previous) {
  *
  * @param {Object} rework - the weave the rework returned
  * @param {Object} before - the version the rework started from, with the director's pick
+ * @param {Object} [options]
+ * @param {Array<{angleId: string, threadId: string, flip: ('in'|'out')}>} [options.places] - where
+ *   the director's standing edits put a thread in an angle (lib/hand-edit-diff.js threadPlacesOf)
  * @returns {{weave: Object, held: Object[]}} the weave held, and each put-back; a rework that is no
  *   weave, or holds no threads, comes back as it came, for the rework's own check to refuse
  */
-function holdOutsideOpenAngle(rework, before) {
+function holdOutsideOpenAngle(rework, before, { places = [] } = {}) {
   const open = pickedAngleOf(before);
   if (!isWeave(rework) || rework.threads.length === 0 || !isWeave(before) || !open) return { weave: rework, held: [] };
   const held = [];
@@ -388,9 +392,17 @@ function holdOutsideOpenAngle(rework, before) {
     if (key && !beforeAngleKeySet.has(key)) held.push({ scope: 'angles', id: weaveIdOf(angle), change: 'added', became: angle });
   });
 
-  // The open angle's threads, as the director left it and as the rework wrote it; and the threads
-  // the other angles name, which the weave must hold.
-  const inOpen = new Set([...angleThreadIds(open), ...angleThreadIds(reworkOpen)]);
+  // The open angle's threads, as the director left it and as the rework wrote it, read as the
+  // director's standing places leave it: code puts each back after the hold (settleEdits), so a
+  // thread they left out of the open angle is outside it, whatever the rework did, and one they
+  // brought in is inside it (fix round 1, finding 4). And the threads the other angles name, which
+  // the weave must hold.
+  const openId = weaveIdOf(open);
+  const theirPlaces = (Array.isArray(places) ? places : [])
+    .filter((place) => place && openId && textOf(place.angleId) === openId && textOf(place.threadId));
+  const keptOut = new Set(theirPlaces.filter((place) => place.flip === 'out').map((place) => textOf(place.threadId)));
+  const keptIn = theirPlaces.filter((place) => place.flip === 'in').map((place) => textOf(place.threadId));
+  const inOpen = new Set([...angleThreadIds(open), ...angleThreadIds(reworkOpen), ...keptIn].filter((id) => !keptOut.has(id)));
   const namedElsewhere = new Set(angles.filter((_angle, index) => index !== openAt).flatMap(angleThreadIds));
 
   // One collection held: each element inside the open angle as the rework wrote it, the director's

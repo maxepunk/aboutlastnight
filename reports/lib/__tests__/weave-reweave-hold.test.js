@@ -197,6 +197,28 @@ describe('after a Reweave, code puts back everything outside the open angle (R3;
     const quiet = await reviseArcs(state, cfg(recordingSdk(reworkOf((w) => { w.angles[1].ends = A2_ENDS; }))));
     expect(quiet._weaveHandEditReport).not.toHaveProperty('held');
   });
+
+  // Fix round 1, finding 4: the open angle is read as the director's standing flips leave it, since
+  // code puts each flip back after the hold, so a thread they left out of it stays outside it.
+  it('a thread the director left out of the open angle that the rework brought back and reworded keeps its words, and so does a connection that joins it', async () => {
+    const left = clone(FIXTURE_WEAVE);
+    left[PICKED_KEY] = 'a2';
+    left.angles[1].threads = ['t1'];
+    const state = await roundState('reweave', null, left);
+    const update = await reviseArcs(state, cfg(recordingSdk(reworkOf((w) => {
+      w.angles[1].threads = ['t1', 't3'];
+      w.threads.find((t) => t.id === 't3').line = 'The envelope, as the reweave put it back into the angle.';
+      w.connections.find((c) => c.id === 'c1').line = 'The reweave joined the envelope to the vote again.';
+    }, left))));
+    expect(update.weave.angles[1].threads).toEqual(['t1']);
+    expect(update.weave.threads.find((t) => t.id === 't3')).toEqual(left.threads.find((t) => t.id === 't3'));
+    expect(update.weave.connections.find((c) => c.id === 'c1')).toEqual(left.connections.find((c) => c.id === 'c1'));
+    expect(update._weaveHandEditReport.held.map((h) => [h.scope, h.id, h.change])).toEqual([
+      ['threads', 't3', 'rewritten'],
+      ['connections', 'c1', 'rewritten']
+    ]);
+    expect(update._weaveHandEditReport.changed).toEqual([expect.objectContaining({ flip: 'out', restored: true })]);
+  });
 });
 
 describe('the hold is the Reweave\'s alone (R1, R3)', () => {
@@ -281,6 +303,20 @@ describe('holdOutsideOpenAngle', () => {
     const dropped = holdOutsideOpenAngle(dropping, b);
     expect(dropped.weave.angles).toEqual(b.angles);
     expect(dropped.held).toEqual([{ scope: 'angles', id: 'a2', change: 'dropped', became: null }]);
+  });
+
+  it("reads the open angle as the director's standing places leave it: a thread they left out of it is outside it, though the rework brought it in", () => {
+    const b = before();
+    b.angles[1].threads = ['t1', 't5'];
+    const rework = clone(b);
+    rework.angles[1].threads = ['t1', 't5', 't3'];
+    rework.threads.find((t) => t.id === 't3').line = 'The envelope, reworded by the reweave.';
+    const places = [{ angleId: 'a2', threadId: 't3', flip: 'out' }, { angleId: 'a1', threadId: 't4', flip: 'out' }];
+    const { weave, held } = holdOutsideOpenAngle(rework, b, { places });
+    expect(weave.threads.find((t) => t.id === 't3')).toEqual(b.threads.find((t) => t.id === 't3'));
+    expect(held).toEqual([{ scope: 'threads', id: 't3', change: 'rewritten', became: rework.threads.find((t) => t.id === 't3') }]);
+    // With no place of the director's on it, a thread the rework brought into the open angle is inside it.
+    expect(holdOutsideOpenAngle(rework, b).weave.threads.find((t) => t.id === 't3').line).toBe('The envelope, reworded by the reweave.');
   });
 
   it('returns a rework that is no weave, or holds no threads, as it came, for the rework to fail on', () => {
