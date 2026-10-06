@@ -835,38 +835,53 @@ describe("4.6c: a card count is the director's only for the edits that changed i
     });
   });
 
-  // The card check's attribution (editsOnCards) reads only the edits its one caller can meet:
-  // a card in a section, so the director gave it its marker, or added or brought back its beat.
-  it('a card in a section whose piece names no document is a concern on the edit that put it there: the marker given, or the beat added or brought back with it', () => {
-    const cards = (findings) => ({
-      failures: findings.failures.filter((f) => f.type === 'card-not-in-record').map((f) => f.message),
-      concerns: findings.concerns.filter((c) => c.type === 'card-not-in-record').map((c) => [c.editIds, c.finding])
-    });
-    const NOT_HELD = "is marked as a card, and its card's document is not one the record holds.";
+  const cards = (findings) => ({
+    failures: findings.failures.filter((f) => f.type === 'card-not-in-record').map((f) => f.message),
+    concerns: findings.concerns.filter((c) => c.type === 'card-not-in-record').map((c) => [c.editIds, c.finding])
+  });
+
+  // Fix round 2: the evidence is never the director's edit (R6), so a flagged piece that names no
+  // document in the record is the writer's failure on any beat, whichever edit put the card there.
+  it("a card whose flagged piece names no document is the writer's failure on any beat: the marker given, the beat added, brought back or moved", () => {
+    const notHeld = (id, source) => new RegExp(`^Beat ${id}'s card piece names "${source}", which is no document in <RECORD>\\. `);
     const given = writers();
     markCard(given.sections[1].beats[1], 'zzz001');
-    expect(cards(mapFindings(given, inputs({ edits: directorsEdits(given) })))).toEqual({
-      failures: [], concerns: [[['E1'], `The move "The first vote, six to four" ${NOT_HELD}`]]
-    });
+    expect(cards(mapFindings(given, inputs({ edits: directorsEdits(given) })))).toEqual({ failures: [expect.stringMatching(notHeld('b4', 'zzz001'))], concerns: [] });
     const added = writers();
     added.sections[0].beats.push({ id: 'b10', move: 'A receipt', ...cardOf('zzz002') });
-    expect(cards(mapFindings(added, inputs({ edits: directorsEdits(added) })))).toEqual({
-      failures: [], concerns: [[['E1'], `The move "A receipt" ${NOT_HELD}`]]
-    });
+    expect(cards(mapFindings(added, inputs({ edits: directorsEdits(added) })))).toEqual({ failures: [expect.stringMatching(notHeld('b10', 'zzz002'))], concerns: [] });
     const base = writers();
     markCard(base.leftOut[0], 'zzz003');
     const back = clone(base);
     back.sections[1].beats.push(back.leftOut.splice(0, 1)[0]);
-    expect(cards(mapFindings(back, inputs({ edits: editsAgainst(base, back) })))).toEqual({
-      failures: [], concerns: [[['E1'], `The move "Kai at the coat check" ${NOT_HELD}`]]
-    });
+    expect(cards(mapFindings(back, inputs({ edits: editsAgainst(base, back) })))).toEqual({ failures: [expect.stringMatching(notHeld('b9', 'zzz003'))], concerns: [] });
     const moved = writers();
     markCard(moved.sections[1].beats[0], 'zzz004');
     const away = clone(moved);
     away.sections[0].beats.push(away.sections[1].beats.splice(0, 1)[0]);
-    expect(cards(mapFindings(away, inputs({ edits: editsAgainst(moved, away) })))).toEqual({
-      failures: [expect.stringMatching(/^Beat b3's card piece names "zzz004", which is no document in <RECORD>\. /)], concerns: []
+    expect(cards(mapFindings(away, inputs({ edits: editsAgainst(moved, away) })))).toEqual({ failures: [expect.stringMatching(notHeld('b3', 'zzz004'))], concerns: [] });
+  });
+
+  // Fix round 2: a concern arises only from the card marker the director set or cleared.
+  it('a card fault the director\'s marker made is a concern on that edit: a marker set where no piece is flagged, or cleared where one is', () => {
+    const set = writers();
+    set.sections[1].beats[1].card = true;
+    expect(cards(mapFindings(set, inputs({ edits: directorsEdits(set) })))).toEqual({
+      failures: [], concerns: [[['E1'], "The move \"The first vote, six to four\" is marked as a card, and no piece of its evidence is the card's document."]]
     });
+    const added = writers();
+    added.sections[0].beats.push({ id: 'b10', move: 'A receipt', card: true });
+    expect(cards(mapFindings(added, inputs({ edits: directorsEdits(added) })))).toEqual({
+      failures: [], concerns: [[['E1'], "The move \"A receipt\" is marked as a card, and no piece of its evidence is the card's document."]]
+    });
+    const cleared = writers();
+    delete cleared.sections[1].beats[2].card;
+    expect(cards(mapFindings(cleared, inputs({ edits: directorsEdits(cleared) })))).toEqual({
+      failures: [], concerns: [[['E1'], "The move \"The ledger page\" flags a piece of its evidence as a card's document, and is not marked as a card."]]
+    });
+    // The same faults with no edit of the director's are the writer's.
+    expect(cards(mapFindings(set, inputs())).failures).toEqual([expect.stringMatching(/^Beat b4 is marked as a card and flags no piece/)]);
+    expect(cards(mapFindings(cleared, inputs())).failures).toEqual([expect.stringMatching(/^Beat b5 flags a piece as a card's document and is not marked/)]);
   });
 });
 

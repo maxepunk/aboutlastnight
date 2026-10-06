@@ -138,14 +138,16 @@ describe("1D: a beat's card is the piece it flags, read through beatCardOf by ev
       .toEqual([{ type: 'card-count', editIds: ['E1'], finding: 'The map carries 6 cards; the article carries 3 to 5.' }]);
   });
 
-  it("a card the director brought back from left out whose piece names no document is a concern on the bring-back (editsOnCards)", () => {
+  // Fix round 2: the evidence is never the director's edit (R6), so the bring-back leaves the
+  // flagged piece the writer's to fix; only a card marker the director set or cleared is theirs.
+  it("a card the director brought back from left out whose piece names no document is the writer's failure, beside it (editsOnCardMarker)", () => {
     const base = storyLevelMap();
     Object.assign(base.leftOut[0], { card: true, evidence: [cardPiece(['zzz003'], 'A document no record holds.')] });
     const back = bringBackBeat(base, 'b9', 'closing');
     const edits = editsAgainst(base, back);
     const findings = mapFindings(back, { ...inputsOf(storyLevelMapState(), back), edits });
-    expect(findings.failures.filter((f) => f.type === 'card-not-in-record')).toEqual([]);
-    expect(findings.concerns.filter((c) => c.type === 'card-not-in-record').map((c) => c.editIds)).toEqual([['E1']]);
+    expect(findings.concerns.filter((c) => c.type === 'card-not-in-record')).toEqual([]);
+    expect(findings.failures.filter((f) => f.type === 'card-not-in-record').map((f) => f.place)).toEqual(['sections[#closing].beats[#b9]']);
   });
 });
 

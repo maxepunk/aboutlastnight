@@ -522,18 +522,26 @@ function editsOnPhoto(entries, filename) {
 }
 
 /**
- * The ids of the director's edits on one beat's card, for a card in a section whose flagged
- * piece names no document in the record (phase 4b, brief 1D; R4): a card marker they gave the
- * beat, and the beat they added or brought back from left out, card and all. Its one caller
- * reads only a beat in a section that the map marks as a card or whose evidence flags one, so the
- * beat as it stands is the card. The evidence under it is never the director's (R6), so their
- * edits read no piece.
+ * The ids of the director's edits on one beat's card marker that caused a fault in its card
+ * (phase 4b, brief 1D; R4, R6; fix round 2): `set`, the marker they set on a beat whose evidence
+ * flags no piece as the card's document (an edit of its card to true, or a beat they added with
+ * the marker), and `cleared`, the marker they cleared from a beat whose evidence flags one. The
+ * evidence is never the director's edit (R6), so a fault in the flags (more than one piece
+ * flagged) or in the flagged piece's source (no document in the record) is always the writer's,
+ * on any beat, one the director added or brought back from left out included (cardFault's
+ * `marker` is null for those).
+ *
+ * @param {Array<{edit: Object, address: Object|null}>} entries - the edits with what each is about (addressed)
+ * @param {string} beatId
+ * @param {'set'|'cleared'} way - the marker change that caused the fault
+ * @returns {string[]}
  */
-function editsOnCards(entries, beatId) {
+function editsOnCardMarker(entries, beatId, way) {
   return entries.filter(({ edit, address }) => {
     if (!address || address.kind !== 'beat' || String(address.identity.id).trim() !== beatId) return false;
-    if (address.fieldSteps.length > 0) return address.fieldSteps[0].key === 'card';
-    return edit.from === MAP_NONE || edit.from === MAP_LEFT_OUT;
+    if (address.fieldSteps.length === 0) return way === 'set' && edit.from === MAP_NONE && Boolean(edit.after) && edit.after.card === true;
+    if (address.fieldSteps.length !== 1 || address.fieldSteps[0].key !== 'card') return false;
+    return way === 'set' ? edit.after === true : edit.before === true && edit.after !== true;
   }).map(({ edit }) => edit.id);
 }
 
@@ -664,9 +672,12 @@ function storyConnectionsOf(connections) {
 
 /**
  * What is wrong with a beat's card, or null (phase 4b, brief 1D; R4; spec 6.1: a move marked
- * as a card flags one piece, whose source is a document in the record): `{message, said}`, the
- * rework's fix and the director's words, for a beat in a section that the map marks as a card or
- * whose evidence flags a piece as one.
+ * as a card flags one piece, whose source is a document in the record): `{message, said,
+ * marker}`, the rework's fix, the director's words and the change of the card marker that made
+ * the fault (`set` for a marker on a beat that flags no piece, `cleared` for a flagged piece on a
+ * beat with no marker; null for a fault in the evidence), for a beat in a section that the map
+ * marks as a card or whose evidence flags a piece as one. Only a marker change can be the
+ * director's (editsOnCardMarker).
  */
 function cardFault(beat, known, recordIds) {
   const id = beatIdText(beat);
@@ -677,19 +688,22 @@ function cardFault(beat, known, recordIds) {
   if (!marked) {
     return {
       message: `Beat ${id} flags a piece as a card's document and is not marked as a card. Mark the beat "card": true when its evidence prints as a card, or take the flag off the piece, ${C9}.`,
-      said: "flags a piece of its evidence as a card's document, and is not marked as a card"
+      said: "flags a piece of its evidence as a card's document, and is not marked as a card",
+      marker: 'cleared'
     };
   }
   if (flagged.length === 0) {
     return {
       message: `Beat ${id} is marked as a card and flags no piece as the card's document. Flag the one piece whose document prints as the card with "card": true, ${C9}.`,
-      said: "is marked as a card, and no piece of its evidence is the card's document"
+      said: "is marked as a card, and no piece of its evidence is the card's document",
+      marker: 'set'
     };
   }
   if (flagged.length > 1) {
     return {
       message: `Beat ${id} flags ${flagged.length} pieces as the card's document. Flag one: the piece whose document prints as the card, ${C9}.`,
-      said: "is marked as a card, and its evidence names more than one card's document"
+      said: "is marked as a card, and its evidence names more than one card's document",
+      marker: null
     };
   }
   const card = beatCardOf(beat);
@@ -697,7 +711,8 @@ function cardFault(beat, known, recordIds) {
   const sources = stringsOf(flagged[0].sources).map((source) => `"${source}"`);
   return {
     message: `Beat ${id}'s card piece names ${sources.length > 0 ? listOf(sources) : 'no source'}, which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: flag a piece whose source is one of ${recordIds.join(', ')}.`,
-    said: "is marked as a card, and its card's document is not one the record holds"
+    said: "is marked as a card, and its card's document is not one the record holds",
+    marker: null
   };
 }
 
@@ -761,8 +776,10 @@ function cardFault(beat, known, recordIds) {
  * or no evidence, which the article writer finds (spec 5.3). The evidence is never theirs (R6),
  * so every piece is the writer's to answer for, under the director's beat too. A failure the
  * director caused is a concern on their edit, beside its line, never a rework: a beat they
- * struck or cut that held the only place of a player, a thread or a connection; a card or a
- * photo they placed; the card count, when their edits, together, moved it the way it fails
+ * struck or cut that held the only place of a player, a thread or a connection; a card fault the
+ * card marker they set or cleared made (editsOnCardMarker: a fault in the evidence under a card is
+ * the writer's, on any beat); a photo they placed; the card count, when their edits, together,
+ * moved it the way it fails
  * (cardCountOwners; brief 4.6b); a beat they added under an id the map holds. A failure partly
  * theirs splits: the writer's part fails, the director's is a concern. A card count is partly
  * theirs when the count without their edits fails the same way.
@@ -915,14 +932,16 @@ function mapFindings(map, inputs = {}) {
     });
 
   // Each beat marked as a card flags one piece, whose source is a document in the record (R4),
-  // and the cards, as the tally counts them through beatCardOf, number three to five (C9).
+  // and the cards, as the tally counts them through beatCardOf, number three to five (C9). A
+  // fault is the director's concern only when the card marker they set or cleared made it; the
+  // evidence is never their edit (R6).
   const recordIds = [...(inputs.recordIds || [])].filter((id) => typeof id === 'string');
   const known = new Set(recordIds.map((id) => id.trim().toLowerCase()));
   sectionBeats(map).forEach(({ beat, slot }) => {
     const fault = cardFault(beat, known, recordIds);
     if (!fault) return;
     const said = `${opening(moveWords(beat))} ${fault.said}.`;
-    const ids = editsOnCards(entries, beatIdText(beat));
+    const ids = fault.marker ? editsOnCardMarker(entries, beatIdText(beat), fault.marker) : [];
     if (ids.length > 0) concern('card-not-in-record', ids, said);
     else fail('card-not-in-record', fault.message, said, beatPlace(slot, beat));
   });
