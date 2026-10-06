@@ -202,7 +202,7 @@ A rework that completes clears its record, and each record clears at the rollbac
 ```
 server.js                           # Express server + session REST API
 lib/api-helpers.js                  # Shared API helpers (rollback, graph config, error responses)
-lib/old-thread.js                   # A thread from before the story meeting (task 4.11): oldThreadOf and the channels it reads (PAST_THE_ARC_WRITER), the 409's body, the rollback points open to it
+lib/old-thread.js                   # A thread from before the story meeting (task 4.11): oldThreadOf and the channels it reads (PAST_THE_ARC_WRITER), the 409's body, the rollback points open to it; since phase 4b (brief 1G) a thread on phase 4's shapes too (isOldShapeWeave, isOldShapeMap), with its own message (OLD_SHAPES_MESSAGE), and the rollback that writes such a thread's weave fresh (oldThreadRollbackState, OLD_SHAPES_WEAVE_CHANNELS)
 lib/llm/
 ├── index.js                        # Public API: traced sdkQuery, createProgressLogger
 ├── client.js                       # Raw SDK wrapper with timeouts, progress hooks, structured-output contract
