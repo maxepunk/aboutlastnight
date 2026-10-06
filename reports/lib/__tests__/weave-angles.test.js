@@ -319,6 +319,44 @@ describe('the gate (R8, R9)', () => {
     });
   });
 
+  // 3 final, item 5: R8 refuses only what the director did. An approve always sends an angle that
+  // tells the verdict; a reweave or a send-back is refused only when the director's version changed
+  // the verdict's thread or its place in the open angle, since its rework can fix the writer's fault,
+  // and a send-back carrying only a note must go through. Each refusal is worded for its action.
+  describe("3 final: R8 refuses only what the director did, worded for the action", () => {
+    // The writer's angle 2 leaves out the verdict's thread (t1); the director picks it unchanged.
+    const writersFault = () => {
+      const shown = anglesWeave();
+      shown.angles[1].threads = shown.angles[1].threads.filter((id) => id !== 't1');
+      return shown;
+    };
+    const atWritersFault = () => ({ ...stateAt(), weave: writersFault(), _weaveBaseline: writersFault() });
+
+    test("the writer's fault: an approve is refused, a reweave or a send-back goes through", () => {
+      const left = writersFault();
+      left.picked = 'a2';
+      const shown = writersFault();
+      expect(directorWeaveProblems(left, { shown, action: 'approve' })).toMatch(/Morgan, named by her own memories.*the angle the director approves/);
+      expect(directorWeaveProblems(left, { shown, action: 'reweave' })).toBeNull();
+      expect(directorWeaveProblems(left, { shown, action: 'send-back' })).toBeNull();
+      const atA2 = () => { const state = atWritersFault(); state.weave.picked = 'a2'; return state; };
+      expect(meetingResume({ meeting: 'approve', weave: left }, atA2()).error).toMatch(/Morgan, named by her own memories/);
+      expect(meetingResume({ meeting: 'send-back', note: 'Put the verdict in angle 2.' }, atA2()).error).toBeNull();
+      expect(meetingResume({ meeting: 'reweave', weave: left, note: 'Put the verdict in angle 2.' }, atA2()).error).toBeNull();
+    });
+
+    test("the director's change: a reweave or a send-back is refused, worded for its action", () => {
+      const left = anglesWeave();
+      left.angles[0].threads = left.angles[0].threads.filter((id) => id !== 't1');
+      expect(directorWeaveProblems(left, { shown: anglesWeave(), action: 'reweave' })).toMatch(/the angle the director asks to reweave/);
+      expect(directorWeaveProblems(left, { shown: anglesWeave(), action: 'send-back' })).toMatch(/the angle the director sends back/);
+      expect(meetingResume({ meeting: 'send-back', weave: left, note: 'Rethink.' }, stateAt()).error).toMatch(/Morgan, named by her own memories.*sends back/);
+      const unflagged = anglesWeave();
+      delete unflagged.threads[0].verdict;
+      expect(directorWeaveProblems(unflagged, { shown: anglesWeave(), action: 'reweave' })).toMatch(/takes the room's verdict off/);
+    });
+  });
+
   test("takes a version that keeps the verdict's thread flagged in the picked angle, the director's rename of it included", () => {
     const left = anglesWeave();
     left.threads[0].name = 'Morgan, named by the room';

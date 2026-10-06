@@ -1986,14 +1986,16 @@
    * - a change under an id the writer repeated: no edit could find its element by the id.
    *   A writer's repeat passes while the director leaves the elements under it as shown;
    * - a pick that names no angle, and a picked angle without the thread that carries the
-   *   room's verdict (R8; lib/meeting.js pickProblems).
+   *   room's verdict (R8; lib/meeting.js pickProblems), which a reweave or a send-back is refused
+   *   only when the director's version made (3 final, item 5).
    * Both weaves are read without their code-owned keys, as the gate reads them.
    *
    * @param {*} weave - the weave as the director left it
    * @param {*} shown - the weave the meeting showed (data.weave)
+   * @param {string} [action='approve'] - the action the director pressed (MEETING_ACTIONS)
    * @returns {string|null}
    */
-  function meetingWeaveProblems(weave, shown) {
+  function meetingWeaveProblems(weave, shown, action) {
     var left = isPlainObject(weave) ? withoutCodeOwned(weave) : null;
     if (!left) return 'The weave as you left it must be an object, with its threads.';
     var malformed = shapeProblem(left, DIRECTOR_WEAVE_SHAPE, '');
@@ -2016,7 +2018,7 @@
       var threadRepeat = first.flip && repeatedIdsOf(shownWeave.threads).indexOf(first.thread) !== -1;
       return 'The writer gave more than one ' + (threadRepeat ? 'thread' : ELEMENT_WORDS[first.scope]) + ' the id "' + (threadRepeat ? first.thread : first.id) + '", so the meeting cannot tell which of them you changed. Put them back as the meeting showed them: a reweave with a note, or a send-back, gives each its own id.';
     }
-    return meetingAngleSetProblem(left, shownWeave) || meetingPickProblem(left, shownWeave);
+    return meetingAngleSetProblem(left, shownWeave) || meetingPickProblem(left, shownWeave, action || 'approve');
   }
 
   /**
@@ -2042,6 +2044,9 @@
     return null;
   }
 
+  /** How a refusal of R8 names the angle the action sends (lib/meeting.js ANGLE_THE_ACTION_SENDS; 3 final, item 5). */
+  var MEETING_ANGLE_SENT = { approve: 'The angle you approve', reweave: 'The angle you reweave', 'send-back': 'The angle you send back' };
+
   /**
    * What the gate refuses in the director's pick, or null (lib/meeting.js pickProblems, whose
    * decisions a test holds this to): a pick that names no angle the weave holds; a pick of an
@@ -2052,12 +2057,16 @@
    * pick names, else the first). The verdict's thread is the one the weave the meeting showed
    * flags, by id, else the one the version flags (fix round 1, finding 2). The page locks that
    * thread in the open angle, so this holds a version from anywhere else to the gate's rule.
+   * As the gate does (3 final, item 5), an approve is refused whoever left the thread out, and a
+   * reweave or a send-back only when the director's version took the thread out, took its verdict
+   * off or left it out of an angle the meeting showed telling it; each line names the action.
    *
    * @param {Object} weave - the weave as the director left it, which the shape has taken
    * @param {Object|null} [shown] - the weave the meeting showed, without its code-owned keys
+   * @param {string} [action='approve'] - the action the director pressed
    * @returns {string|null}
    */
-  function meetingPickProblem(weave, shown) {
+  function meetingPickProblem(weave, shown, action) {
     var angles = asArray(weave.angles);
     var picked = asString(weave[PICKED_KEY]).trim();
     var byId = function (id) { return angles.filter(function (angle) { return weaveIdOf(angle) === id; })[0] || null; };
@@ -2075,13 +2084,19 @@
     };
     var shownVerdict = isPlainObject(shown) ? flagged(shown.threads) : [];
     var verdictThreads = shownVerdict.length > 0 ? shownVerdict : flagged(weave.threads);
+    var shownSame = isPlainObject(shown) ? asArray(shown.angles).filter(function (own) { return weaveIdOf(own) === openId; })[0] : null;
+    var shownNamed = shownSame ? angleThreadIdsOf(shownSame) : [];
+    var sends = MEETING_ANGLE_SENT[action] || MEETING_ANGLE_SENT.approve;
     for (var i = 0; i < verdictThreads.length; i += 1) {
       var id = weaveIdOf(verdictThreads[i]);
       var name = '"' + (asString(verdictThreads[i].name).trim() || id) + '"';
       var held = asArray(weave.threads).filter(function (own) { return weaveIdOf(own) === id; });
       if (held.length === 0) return 'Keep ' + name + " in the weave: it tells the room's verdict, which the article always reports.";
       if (!held.some(function (own) { return own.verdict === true; })) return "Keep the room's verdict on " + name + ': the article always reports it.';
-      if (named.indexOf(id) === -1) return 'The angle you send must keep ' + name + ": it tells the room's verdict, which the article always reports.";
+      if (named.indexOf(id) !== -1) continue;
+      var yours = !shownSame || shownNamed.indexOf(id) !== -1;
+      if (yours) return sends + ' must keep ' + name + ": it tells the room's verdict, which the article always reports.";
+      if (action === 'approve' || !action) return sends + ' must tell ' + name + ": it tells the room's verdict, which the article always reports. Bring it into the angle, or send the weave back with a note.";
     }
     return null;
   }

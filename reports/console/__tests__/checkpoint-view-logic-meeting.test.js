@@ -322,6 +322,11 @@ const DECISION_CASES = [
   ['the pick names angle 2', true, () => { const w = clone(WEAVE); w.picked = 'a2'; return [w, clone(WEAVE)]; }],
   ['an angle the director did not pick lacks the verdict\'s thread', true, () => { const w = clone(WEAVE); w.picked = 'a2'; w.angles[2].threads = ['t4']; return [w, clone(WEAVE)]; }],
   ['the picked angle lacks the verdict\'s thread', false, () => { const w = clone(WEAVE); w.picked = 'a2'; w.angles[1].threads = ['t3']; return [w, clone(WEAVE)]; }],
+  // 3 final, item 5: R8 refuses only what the director did. The writer's angle that lacks the
+  // verdict's thread, picked unchanged, is refused on approve and goes through on a reweave or a
+  // send-back, whose rework can fix it.
+  ["the writer's angle lacks the verdict's thread, picked unchanged", { approve: false, reweave: true, 'send-back': true }, () => { const b = clone(WEAVE); b.angles[1].threads = ['t3']; const w = clone(b); w.picked = 'a2'; return [w, b]; }],
+  ["the writer's angle lacks the verdict's thread, open with no pick", { approve: false, reweave: true, 'send-back': true }, () => { const b = clone(WEAVE); b.angles[0].threads = ['t2', 't3']; return [clone(b), b]; }],
   ['the first angle, open with no pick, lacks the verdict\'s thread', false, () => { const w = clone(WEAVE); w.angles[0].threads = ['t2', 't3']; return [w, clone(WEAVE)]; }],
   // Fix round 1, finding 2: the verdict's thread is the one the meeting showed, by id (R8).
   ["the verdict's flag taken off its thread, which stays in the picked angle", false, () => { const w = clone(WEAVE); delete w.threads[0].verdict; return [w, clone(WEAVE)]; }],
@@ -389,13 +394,26 @@ const DECISION_CASES = [
 ];
 
 describe('4.8: the console\'s validator reaches the gate\'s decisions (ruling 4)', () => {
+  // 3 final, item 5: each case for each action, since R8 decides by the action.
   test.each(DECISION_CASES)('%s', (_name, accepts, build) => {
-    const [left, shown] = build();
-    const gate = directorWeaveProblems(weaveLib.weaveForPrompt(left), { shown: weaveLib.weaveForPrompt(shown) });
-    const consoleSays = meetingWeaveProblems(left, shown);
-    expect({ gateAccepts: gate === null, consoleAccepts: consoleSays === null })
-      .toEqual({ gateAccepts: accepts, consoleAccepts: accepts });
-    if (!accepts) expect(typeof consoleSays === 'string' && consoleSays.length > 0).toBe(true);
+    MEETING_ACTIONS.forEach((action) => {
+      const [left, shown] = build();
+      const expected = typeof accepts === 'boolean' ? accepts : accepts[action];
+      const gate = directorWeaveProblems(weaveLib.weaveForPrompt(left), { shown: weaveLib.weaveForPrompt(shown), action });
+      const consoleSays = meetingWeaveProblems(left, shown, action);
+      expect({ action, gateAccepts: gate === null, consoleAccepts: consoleSays === null })
+        .toEqual({ action, gateAccepts: expected, consoleAccepts: expected });
+      if (!expected) expect(typeof consoleSays === 'string' && consoleSays.length > 0).toBe(true);
+    });
+  });
+
+  test("each R8 refusal names the action's angle, in the gate and the console", () => {
+    const left = clone(WEAVE);
+    left.angles[0].threads = ['t2', 't3', 't4'];
+    expect(meetingWeaveProblems(left, clone(WEAVE), 'approve')).toMatch(/^The angle you approve must keep "The overdose vote"/);
+    expect(meetingWeaveProblems(left, clone(WEAVE), 'reweave')).toMatch(/^The angle you reweave must keep/);
+    expect(meetingWeaveProblems(left, clone(WEAVE), 'send-back')).toMatch(/^The angle you send back must keep/);
+    expect(directorWeaveProblems(left, { shown: clone(WEAVE), action: 'send-back' })).toMatch(/stays in the angle the director sends back\.$/);
   });
 
   test('the fact check\'s mark on the weave the meeting showed is a code-owned key, read past as the gate reads it', () => {

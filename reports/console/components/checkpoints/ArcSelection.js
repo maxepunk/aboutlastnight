@@ -122,7 +122,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   function send(action, typed) {
     if (held) return;
     const sentNote = typeof typed === 'string' ? typed : note;
-    const problem = ViewLogic.meetingWeaveProblems(draft, shown);
+    const problem = ViewLogic.meetingWeaveProblems(draft, shown, action);
     if (problem) {
       setError(problem);
       setSendBackArmed(false);

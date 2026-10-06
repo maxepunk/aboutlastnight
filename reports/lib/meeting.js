@@ -121,9 +121,11 @@ const EMPTY_REWEAVE = "A reweave fits the director's changes and note into the a
  * @param {*} weave - the weave as the director left it, without its code-owned keys
  * @param {Object} [options]
  * @param {Object|null} [options.shown] - the weave the meeting showed, without its code-owned keys
+ * @param {string} [options.action='approve'] - the meeting's action, which decides what R8 refuses
+ *   (pickProblems; 3 final, item 5)
  * @returns {string|null}
  */
-function directorWeaveProblems(weave, { shown = null } = {}) {
+function directorWeaveProblems(weave, { shown = null, action = 'approve' } = {}) {
   if (!weave || typeof weave !== 'object' || Array.isArray(weave)) {
     return 'The weave must be an object: the weave as the director left it.';
   }
@@ -152,8 +154,15 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
   if (touched.size > 0) {
     return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.`;
   }
-  return angleSetProblems(weave, shownWeave) || pickProblems(weave, shownWeave);
+  return angleSetProblems(weave, shownWeave) || pickProblems(weave, shownWeave, action);
 }
+
+/** How a refusal of R8 names the angle the action sends (3 final, item 5). */
+const ANGLE_THE_ACTION_SENDS = Object.freeze({
+  approve: 'the angle the director approves',
+  reweave: 'the angle the director asks to reweave',
+  'send-back': 'the angle the director sends back'
+});
 
 /**
  * What the gate refuses in the director's pick (piece 3, brief 3B), or null: a pick that names no
@@ -171,11 +180,20 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
  * to hold. With no weave shown, or one that flags none (the checks' failure), the director's
  * version's flags decide.
  *
+ * R8 refuses only what the director did (3 final, item 5): an approve sends the angle on to the map,
+ * so it is refused whoever left the thread out; a reweave or a send-back is refused only when the
+ * director's version changed the verdict's thread (took it out, or took its verdict off) or its place
+ * in the open angle (the angle under that id, as the meeting showed it, tells the thread). The
+ * writer's fault goes through, since the rework can fix it, and a send-back carrying only a note
+ * always can. With no weave shown, every fault is read as the director's. Each refusal names the
+ * angle the action sends.
+ *
  * @param {Object} weave - the weave as the director left it, which the schema has taken
  * @param {Object|null} [shown] - the weave the meeting showed
+ * @param {string} [action='approve'] - the meeting's action
  * @returns {string|null}
  */
-function pickProblems(weave, shown = null) {
+function pickProblems(weave, shown = null, action = 'approve') {
   const picked = typeof weave[PICKED_KEY] === 'string' ? weave[PICKED_KEY].trim() : '';
   if (picked && !weave.angles.some((angle) => weaveIdOf(angle) === picked)) {
     return `The pick names an angle the weave does not hold ("${picked}"). Pick one of the angles the meeting showed.`;
@@ -192,17 +210,24 @@ function pickProblems(weave, shown = null) {
     .filter((thread) => thread && typeof thread === 'object' && thread.verdict === true && weaveIdOf(thread));
   const shownVerdict = isWeave(shown) ? flagged(shown.threads) : [];
   const verdictThreads = shownVerdict.length > 0 ? shownVerdict : flagged(weave.threads);
+  // The angle under the open id as the meeting showed it: whether the writer's angle told the thread.
+  const shownSame = isWeave(shown) ? shown.angles.find((own) => weaveIdOf(own) === openId) : null;
+  const shownNamed = new Set(shownSame && Array.isArray(shownSame.threads) ? shownSame.threads.map((id) => id.trim()) : []);
   const problems = verdictThreads.map((thread) => {
     const id = weaveIdOf(thread);
     const name = `"${(typeof thread.name === 'string' && thread.name.trim()) || id}"`;
     const held = weave.threads.filter((own) => weaveIdOf(own) === id);
     if (held.length === 0) return `The director's version takes out ${name}, the thread that carries the room's verdict.`;
     if (!held.some((own) => own.verdict === true)) return `The director's version takes the room's verdict off ${name}, the thread that carries it.`;
-    if (!named.has(id)) return `The angle the director picked leaves out ${name}, the thread that carries the room's verdict.`;
-    return null;
+    if (named.has(id)) return null;
+    const theirs = !shownSame || shownNamed.has(id);
+    if (!theirs && action !== 'approve') return null;
+    return theirs
+      ? `The director's version leaves ${name}, the thread that carries the room's verdict, out of the angle they picked.`
+      : `The angle the director picked leaves out ${name}, the thread that carries the room's verdict: bring it into the angle, or send the weave back with a note.`;
   }).filter(Boolean);
   if (problems.length === 0) return null;
-  return `${problems.join(' ')} The article always reports the verdict, so that thread keeps its verdict and stays in the picked angle.`;
+  return `${problems.join(' ')} The article always reports the verdict, so that thread keeps its verdict and stays in ${ANGLE_THE_ACTION_SENDS[action] || ANGLE_THE_ACTION_SENDS.approve}.`;
 }
 
 /**
@@ -304,7 +329,7 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
   }
   const shown = weaveForPrompt(currentState.weave);
   const sentVersion = weaveForPrompt(sent === undefined || sent === null ? currentState.weave : sent);
-  const problems = directorWeaveProblems(sentVersion, { shown });
+  const problems = directorWeaveProblems(sentVersion, { shown, action });
   if (problems) return refuse(problems);
   const left = withUnsentAnglesAsShown(sentVersion, shown);
   const idless = idlessRefusal(left, shown);
