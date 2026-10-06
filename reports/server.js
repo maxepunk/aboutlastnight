@@ -378,8 +378,9 @@ function ownerNameOf(item) {
  *
  * The arc cards rendered `keyEvidence` as bare ids, so the director was asked to
  * judge an arc by `85620c6f-befd-4799-a877-8fc25c040d8e`. Ids resolve here the
- * way the claim-side check resolves them (`lib/content-bundle-fact-check.js`
- * buildSourceMap: id, then tokenId, then notionId, then pageId, then name), so
+ * way the claim-side check resolves them (`lib/evidence.js` documentTextsOf, which
+ * was the fact check's buildSourceMap: id, then tokenId, then notionId, then pageId,
+ * then name), so
  * the console and the check agree on what an id means. First one wins, as there.
  *
  * A memory token keeps the fetched element under `rawData` and has no name of its

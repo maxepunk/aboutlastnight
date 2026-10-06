@@ -16,7 +16,9 @@ const { ReportStateAnnotation, getDefaultState, PHASES } = require('../workflow/
 const { _testing: { createGraphBuilder } } = require('../workflow/graph');
 const nodes = require('../workflow/nodes');
 const aiNodes = require('../workflow/nodes/ai-nodes');
-const { factCheckContentBundle, _testing: { buildSourceMap } } = require('../content-bundle-fact-check');
+const { factCheckContentBundle } = require('../content-bundle-fact-check');
+// Phase 4b (brief 1B; R10): the fact check's source map is lib/evidence.js documentTextsOf.
+const { documentTextsOf: buildSourceMap } = require('../evidence');
 const { buildFactCheckArgs } = require('../workflow/nodes/evaluator-nodes')._testing;
 const { renderWriters } = require('./fixtures/render-writers');
 const path = require('path');

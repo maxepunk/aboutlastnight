@@ -40,7 +40,7 @@ const NOT_RECORDED = '(not recorded)';
 /**
  * A document's id: `id`, else `tokenId`, else `notionId`.
  *
- * The fact check's source map (content-bundle-fact-check.js buildSourceMap) keys on
+ * The fact check's source map (lib/evidence.js documentTextsOf, phase 4b) keys on
  * the same fields in the same order, so the id a card cites names a document the
  * writer could see. A rescued paper item carries no `id`; it is named by its Notion
  * id.

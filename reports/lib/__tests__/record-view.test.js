@@ -13,7 +13,8 @@ const {
   recordIdOf,
   DOCUMENT_POINTER
 } = require('../prompt-renderers/record-view');
-const { _testing: { buildSourceMap } } = require('../content-bundle-fact-check');
+// Phase 4b (brief 1B; R10): the fact check's source map is lib/evidence.js documentTextsOf.
+const { documentTextsOf: buildSourceMap } = require('../evidence');
 
 const ALEX_TEXT = 'ALEX.3 - 11:32PM - MARCUS brags about the BizAI sale. Again. Worth it. Finally worth it.';
 const TEST_TEXT = 'DDC - DNA Diagnostics Center\nCertainty Non-Invasive Prenatal Paternity Test\nResult: 99.9% & "conclusive"';

@@ -1,0 +1,437 @@
+/**
+ * The evidence underneath (phase 4b, piece 1, brief 1B; spec
+ * docs/superpowers/specs/2026-10-05-story-level-and-evidence.md sections 3, 5 and 6.1; ruling R10).
+ *
+ * The story meeting and the map show the story in plain terms, and the evidence behind each line
+ * travels underneath it, so the article writer cites from it. A thread, a connection and a beat
+ * each carry `evidence`: the pieces of the record that tell it, each `{sources, shows, stance, card?}`:
+ * - `sources`: one or more of a document in the record by its id (the record view's id rule) and
+ *   EVIDENCE_SOURCES, the ledger, the evidence log and the director's notes. A piece that sets two
+ *   sources side by side names both;
+ * - `shows`: what the piece shows, in a short line with the words or figures that matter;
+ * - `stance`: whether it supports its line or cuts against it (EVIDENCE_STANCES);
+ * - `card`: on a beat's piece only, the one whose document prints as the beat's card (R4).
+ *
+ * This module holds what the weave and the map share, so each rule is one function:
+ * - EVIDENCE_PIECE_SCHEMA, the piece's shape, which both writers' schemas embed;
+ * - evidenceProblems, the evidence check: each source names a document in the record or one of
+ *   EVIDENCE_SOURCES, never a buried memory, and each quotation in `shows` is word for word in one
+ *   of its sources' texts (lib/grounding.js isVerbatimIn), whatever its quotation marks, case or
+ *   spacing;
+ * - storyTermsProblems, the story-terms check over one of the writer's lines: a document id the
+ *   record holds, a quotation in quotation marks (lib/grounding.js QUOTED_SPANS, so an apostrophe
+ *   in a name or a possessive is never one), a clock time and a money figure; describeStoryTerms
+ *   and STORY_TERMS_FIX give its line and its fix;
+ * - documentTextsOf, a document id to its quotable text, which the article fact check's card
+ *   fidelity reads too (it was that module's buildSourceMap);
+ * - evidenceContextOf, what both checks read from a thread's state.
+ *
+ * The evidence is never the director's edit (R6): lib/hand-edit-diff.js leaves it out of every
+ * diff, so no check finds a director's share of it.
+ *
+ * Pure: no I/O, no state, no input mutated. Generic: nothing here names a theme.
+ */
+'use strict';
+
+const { isVerbatimIn, QUOTED_SPANS } = require('./grounding');
+const { recordIdOf, buildMorningTimeline, formatAmount } = require('./prompt-renderers/record-view');
+const { directorAccusationText } = require('./accusation-verdict');
+const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('./writer-questions');
+
+/** The sources a piece may name besides a document in the record. */
+const EVIDENCE_SOURCES = Object.freeze({ LEDGER: 'ledger', EVIDENCE_LOG: 'evidence-log', NOTES: 'notes' });
+
+/** Whether a piece supports its line or cuts against it. */
+const EVIDENCE_STANCES = Object.freeze(['supports', 'cuts-against']);
+
+/** The sources besides a document, as a list reads them: "ledger", "evidence-log" or "notes". */
+const NAMED_SOURCES = (() => {
+  const quoted = Object.values(EVIDENCE_SOURCES).map((source) => `"${source}"`);
+  return `${quoted.slice(0, -1).join(', ')} or ${quoted[quoted.length - 1]}`;
+})();
+
+/**
+ * One piece of evidence, as the weave's schema and the map's embed it (R1). Every description
+ * says what its field holds; the rule items the writers read state the rest.
+ */
+const EVIDENCE_PIECE_SCHEMA = {
+  type: 'object',
+  description: 'One piece of the record the line rests on',
+  properties: {
+    sources: {
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 1,
+      description: `Where the piece comes from: a document in <RECORD> by its id, or ${NAMED_SOURCES}. A piece that sets two sources side by side names both`
+    },
+    shows: { type: 'string', description: 'What the piece shows, in a short line with the words or figures that matter; a quotation is word for word from its source' },
+    stance: { type: 'string', enum: [...EVIDENCE_STANCES], description: 'Whether the piece supports its line or cuts against it' },
+    card: { type: 'boolean', description: "On a beat of the map: true on the one piece whose document the article prints as the beat's card (C9)" }
+  },
+  required: ['sources', 'shows', 'stance']
+};
+
+/** A field as text: the string trimmed, or '' for anything else. */
+function textOf(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+/** Words joined as a list is read: "a", "a and b", "a, b and c". */
+function listOf(words) {
+  return words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words.join('');
+}
+
+// ── The record's documents ───────────────────────────────────────────────────
+
+/**
+ * The text fields a document may carry its quotable content in. `summary` is left out on
+ * purpose: it is a generated paraphrase, so reading it as quotable would bless the fabrication a
+ * card check exists to catch.
+ */
+function sourceTextOf(item) {
+  if (!isObject(item)) return '';
+  return String(item.fullContent || item.content || item.description || item.text || '');
+}
+
+/**
+ * The ids a document in the record answers to: its id, tokenId, notionId, pageId and name, in
+ * that order. A card or a piece cites a document by any of them: the record view names it by the
+ * first of id, tokenId and notionId (record-view.js recordIdOf), and the ids a card may name
+ * include a paper's pageId and name (node-helpers.js buildValidEvidenceIds).
+ */
+const SOURCE_ID_FIELDS = ['id', 'tokenId', 'notionId', 'pageId', 'name'];
+
+/**
+ * Each document in the record by every id it answers to (SOURCE_ID_FIELDS), with its quotable
+ * text: the evidence bundle's exposed documents, nested under `exposed.{tokens,paperEvidence}`
+ * (older callers pass a flat `exposedEvidence` array). The first document to claim an id keeps it.
+ * A buried memory is never a document.
+ *
+ * Phase 4 (brief 4.6; R5): the record alone, every source an arc package supplied still found.
+ * Phase 4b (brief 1B; R10): moved here from the article fact check (its buildSourceMap), which
+ * reads it for card fidelity, so the evidence check reads a piece's document the same way.
+ *
+ * @param {Object|null} evidenceBundle - the curated bundle
+ * @returns {Map<string, string>}
+ */
+function documentTextsOf(evidenceBundle) {
+  const map = new Map();
+  const add = (item) => {
+    if (!isObject(item)) return;
+    const text = sourceTextOf(item);
+    if (!text) return;
+    SOURCE_ID_FIELDS.forEach((field) => {
+      const id = item[field];
+      if (id && !map.has(String(id))) map.set(String(id), text);
+    });
+  };
+  const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
+  asArray(exposed.tokens).forEach(add);
+  asArray(exposed.paperEvidence).forEach(add);
+  asArray(evidenceBundle && evidenceBundle.exposedEvidence).forEach(add);
+  return map;
+}
+
+/** The shortest id the story-terms check looks for: a shorter one would match ordinary words. */
+const MIN_ID_LENGTH = 3;
+
+/**
+ * The ids the record's documents answer to, never their names: what the story-terms check finds
+ * in a line. A document's name is the writer's way to say what it is, and a line may say it; an id
+ * is a handle the director never needs (spec 4.1).
+ *
+ * @param {Object|null} evidenceBundle
+ * @returns {Set<string>}
+ */
+function documentIdsOf(evidenceBundle) {
+  const ids = new Set();
+  const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
+  const add = (...values) => values.forEach((value) => {
+    const id = textOf(value);
+    if (id.length >= MIN_ID_LENGTH) ids.add(id);
+  });
+  asArray(exposed.tokens).filter(isObject).forEach((token) => {
+    add(recordIdOf(token), token.tokenId, token.notionId, isObject(token.rawData) ? token.rawData.tokenId : null);
+  });
+  asArray(exposed.paperEvidence).filter(isObject).forEach((paper) => add(recordIdOf(paper), paper.notionId, paper.pageId, paper.tokenId));
+  return ids;
+}
+
+/** The buried memories by every id their rows carry, in lower case: never a piece's source. */
+function buriedIdsOf(evidenceBundle) {
+  const ids = new Set();
+  const rows = asArray(evidenceBundle && evidenceBundle.buried && evidenceBundle.buried.transactions).filter(isObject);
+  rows.forEach((row) => {
+    const raw = isObject(row.rawData) ? row.rawData : {};
+    [row.id, row.tokenId, row.notionId, raw.tokenId, raw.id].map(textOf).filter(Boolean).forEach((id) => ids.add(id.toLowerCase()));
+  });
+  return ids;
+}
+
+/** One event of the morning timeline as text: its fields, the amount as the record view prints it. */
+function timelineEventText(event) {
+  return Object.entries(event)
+    .filter(([key, value]) => !['kind', 'minute', 'sameMinute'].includes(key) && value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => (key === 'amount' ? formatAmount(value) : String(value)))
+    .join(' | ');
+}
+
+/** The director's own words a piece names as "notes": the notes, the corrections, the accusation as written and the answers at the story meeting (T1). */
+function notesTextsOf(state) {
+  return [
+    state.directorNotes && state.directorNotes.rawProse,
+    ...asArray(state.inputReviewCorrections),
+    directorAccusationText(state),
+    ...weaveQuestionsOf(state.weave && state.weave.questions).filter(isAnswered).map((question) => question[WEAVE_ANSWER_KEY])
+  ].filter((text) => textOf(text));
+}
+
+/**
+ * What the evidence check and the story-terms check read, from a thread's state:
+ * - `documents`: each document in the record by every id it answers to, with its text
+ *   (documentTextsOf);
+ * - `documentIds`: the ids a line may not name (documentIdsOf);
+ * - `texts`: the text of each source besides a document: the ledger's rows (each sale, the
+ *   first-burial bonus and each transfer, as the morning timeline holds them: account, amount
+ *   and time), the evidence log's (each exposure: the document and the name on its turn-in) and
+ *   the director's words (notesTextsOf);
+ * - `buried`: the buried memories by their ids, which no piece names.
+ * A buried memory's id, owner and text reach none of them but `buried`.
+ *
+ * @param {Object} state - the evidence bundle, the session's parse, the director's words, the weave's answers
+ * @returns {{documents: Map<string, string>, documentIds: Set<string>, texts: Object<string, string[]>, buried: Set<string>}}
+ */
+function evidenceContextOf(state) {
+  const s = isObject(state) ? state : {};
+  const bundle = s.evidenceBundle || null;
+  const { events } = buildMorningTimeline(bundle, s.sessionConfig || null);
+  return {
+    documents: documentTextsOf(bundle),
+    documentIds: documentIdsOf(bundle),
+    texts: {
+      [EVIDENCE_SOURCES.LEDGER]: events.filter((event) => event.kind !== 'exposure').map(timelineEventText),
+      [EVIDENCE_SOURCES.EVIDENCE_LOG]: events.filter((event) => event.kind === 'exposure').map(timelineEventText),
+      [EVIDENCE_SOURCES.NOTES]: notesTextsOf(s)
+    },
+    buried: buriedIdsOf(bundle)
+  };
+}
+
+/** A context as the checks read it: every part present. */
+function contextOf(context) {
+  const c = isObject(context) ? context : {};
+  return {
+    documents: c.documents instanceof Map ? c.documents : new Map(),
+    documentIds: c.documentIds instanceof Set ? c.documentIds : new Set(),
+    texts: isObject(c.texts) ? c.texts : {},
+    buried: c.buried instanceof Set ? c.buried : new Set()
+  };
+}
+
+// ── The evidence check ───────────────────────────────────────────────────────
+
+/** Where an elided quotation splits: "...", an ellipsis, either in brackets. */
+const ELISION = /\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3}|…)\s*/;
+
+/** Every quotation mark, curly or straight, single or double: the marks a quotation may differ in. */
+const QUOTATION_MARKS = /[‘’‚‛“”„‟"]/g;
+
+/** Text as a quotation is compared: every quotation mark one mark, and one case. */
+function folded(text) {
+  return String(text).replace(QUOTATION_MARKS, "'").toLowerCase();
+}
+
+/** A quotation's words without its own marks, or the punctuation and space at its ends. */
+function quotedWords(span) {
+  return span.replace(/^[\s'‘’"“”]+|[\s'‘’"“”]+$/g, '').replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/g, '');
+}
+
+/** The quotations a line holds (QUOTED_SPANS), each as written, with the parts its elisions leave. */
+function quotationsOf(text) {
+  return (String(text).match(QUOTED_SPANS) || []).map((span) => ({
+    span,
+    parts: quotedWords(span).split(ELISION).map(quotedWords).filter(Boolean)
+  }));
+}
+
+/** Whether one of `texts` holds `words` word for word, whatever their quotation marks, case or spacing. */
+function heldIn(texts, words) {
+  return texts.some((text) => isVerbatimIn(folded(words), folded(text)));
+}
+
+/**
+ * The texts a source names, or null for a source the record lacks: a buried memory (whatever the
+ * record lists), one of EVIDENCE_SOURCES, or a document by any id it answers to, in any case.
+ */
+function sourceTexts(source, ctx, documentsByLowerId) {
+  const lower = source.toLowerCase();
+  if (ctx.buried.has(lower)) return null;
+  const named = Object.values(EVIDENCE_SOURCES).find((name) => name === lower);
+  if (named) return asArray(ctx.texts[named]).filter((text) => typeof text === 'string');
+  return documentsByLowerId.has(lower) ? [documentsByLowerId.get(lower)] : null;
+}
+
+/** How to fix each kind of fault a piece can have, in the order a line gives them. */
+const PIECE_FIXES = {
+  malformed: 'Give each piece its sources, what it shows and its stance, "supports" or "cuts-against".',
+  source: `Name each source by the id of a document in <RECORD>, or as ${NAMED_SOURCES}.`,
+  quotation: 'Copy each quotation word for word from a source the piece names, or name the source that holds it.'
+};
+
+/** What a piece lacks of its shape, as a line names it, or none. */
+function missingParts(piece, sources) {
+  return [
+    sources.length === 0 && 'its sources',
+    !textOf(piece.shows) && 'what it shows',
+    !EVIDENCE_STANCES.includes(piece.stance) && `its stance, ${EVIDENCE_STANCES.map((stance) => `"${stance}"`).join(' or ')}`
+  ].filter(Boolean);
+}
+
+/**
+ * The evidence check (spec 6.1; R1): one problem for each piece that fails it, `{index, kinds,
+ * what, fix}`, where `index` is the piece's place in the list, `kinds` its faults in order
+ * (`malformed`: it lacks its sources, what it shows or its stance; `source`: it names a source
+ * the record lacks; `quotation`: a quotation in what it shows is word for word in none of its
+ * sources), `what` says them in a phrase that follows "piece N", and `fix` says how to fix them.
+ * A source the record lacks and a buried memory read alike, so the line names nothing the record
+ * keeps of a buried memory. A quotation is read only against the sources the piece names that the
+ * record holds, and is word for word whatever its quotation marks, case or spacing, each part of
+ * an elided one alike.
+ *
+ * @param {*} pieces - a thread's, a connection's or a beat's evidence; anything but a list holds none
+ * @param {Object} context - evidenceContextOf's
+ * @returns {Array<{index: number, kinds: string[], what: string, fix: string}>}
+ */
+function evidenceProblems(pieces, context) {
+  if (!Array.isArray(pieces)) return [];
+  const ctx = contextOf(context);
+  const documentsByLowerId = new Map();
+  ctx.documents.forEach((text, id) => {
+    const lower = String(id).toLowerCase();
+    if (!documentsByLowerId.has(lower)) documentsByLowerId.set(lower, text);
+  });
+  return pieces.map((element, index) => {
+    const piece = isObject(element) ? element : {};
+    const sources = asArray(piece.sources).map(textOf).filter(Boolean);
+    const faults = [];
+    const missing = missingParts(piece, sources);
+    if (missing.length > 0) faults.push({ kind: 'malformed', what: `lacks ${listOf(missing)}` });
+    const read = sources.map((source) => ({ source, texts: sourceTexts(source, ctx, documentsByLowerId) }));
+    const unknown = read.filter((entry) => entry.texts === null).map((entry) => `"${entry.source}"`);
+    if (unknown.length > 0) {
+      faults.push({ kind: 'source', what: `names ${listOf(unknown)}, which ${unknown.length > 1 ? 'are no documents' : 'is no document'} in <RECORD> and none of ${NAMED_SOURCES}` });
+    }
+    const texts = read.filter((entry) => entry.texts !== null).flatMap((entry) => entry.texts);
+    if (read.some((entry) => entry.texts !== null)) {
+      const unheld = quotationsOf(textOf(piece.shows)).filter(({ parts }) => parts.some((part) => !heldIn(texts, part)));
+      if (unheld.length > 0) faults.push({ kind: 'quotation', what: `quotes ${listOf(unheld.map(({ span }) => span))}, which none of its sources holds word for word` });
+    }
+    if (faults.length === 0) return null;
+    const kinds = faults.map((fault) => fault.kind);
+    return { index, kinds, what: faults.map((fault) => fault.what).join('; and '), fix: kinds.map((kind) => PIECE_FIXES[kind]).join(' ') };
+  }).filter(Boolean);
+}
+
+// ── The story-terms check ────────────────────────────────────────────────────
+
+/** A clock time's half of the day: "AM", "pm", "a.m."; a sentence's full stop after "AM" is not part of it. */
+const HALF_OF_DAY = '(?:[ap]\\.m\\.|[ap]m(?![a-z]))';
+
+/** A clock time: "9:58", "10:18 AM", "8 PM", "9 o'clock". */
+const CLOCK_TIME = new RegExp(`\\b\\d{1,2}:\\d{2}(?:\\s?${HALF_OF_DAY})?|\\b\\d{1,2}\\s?${HALF_OF_DAY}|\\b\\d{1,2}\\s?o['’]clock\\b`, 'gi');
+
+/** A money figure: "$450,000", "$1.2 million", "$75K", "450,000 dollars". */
+const MONEY = /(?:US)?[$£€]\s?\d+(?:,\d{3})*(?:\.\d+)?(?:\s?(?:k|m|bn|thousand|million|billion)\b)?|\b\d+(?:,\d{3})*(?:\.\d+)?\s?(?:dollars|bucks)\b/gi;
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** The record's document ids as one pattern, each a whole word in any case, the longest first. */
+function documentIdPattern(ids) {
+  const list = [...ids].map(textOf).filter((id) => id.length >= MIN_ID_LENGTH).sort((a, b) => b.length - a.length);
+  if (list.length === 0) return null;
+  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${list.map(escapeRegExp).join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+}
+
+/** What each kind of hit is called in a line. */
+const STORY_TERM_WORDS = {
+  'document-id': 'the document id',
+  quotation: 'the quotation',
+  'clock-time': 'the clock time',
+  money: 'the money figure'
+};
+
+/**
+ * The story-terms check over one of the writer's lines (spec 4.1 and 6.1; R8): each document id
+ * the record holds, each quotation in quotation marks, each clock time and each money figure the
+ * line holds, `{kind, excerpt}`, each excerpt once, in the order the line holds them. A name, a
+ * possessive and a number in words are story terms: the check reads quotation marks by
+ * QUOTED_SPANS, so an apostrophe in a word is no quotation, and a figure only with its currency
+ * and a time only with its colon or its half of the day. Which lines it reads, and which are
+ * exempt (the director's own, "from your notes", the headline, the questions), is its caller's.
+ *
+ * @param {*} text - one line
+ * @param {Object} context - evidenceContextOf's (its `documentIds`)
+ * @returns {Array<{kind: 'document-id'|'quotation'|'clock-time'|'money', excerpt: string}>}
+ */
+function storyTermsProblems(text, context) {
+  const line = typeof text === 'string' ? text : '';
+  if (!line.trim()) return [];
+  const ctx = contextOf(context);
+  const hits = [];
+  const scan = (pattern, kind) => {
+    if (!pattern) return;
+    for (const match of line.matchAll(pattern)) hits.push({ kind, excerpt: match[0].trim(), at: match.index });
+  };
+  scan(documentIdPattern(ctx.documentIds), 'document-id');
+  scan(QUOTED_SPANS, 'quotation');
+  scan(CLOCK_TIME, 'clock-time');
+  scan(MONEY, 'money');
+  const seen = new Set();
+  return hits
+    .sort((a, b) => a.at - b.at)
+    .filter((hit) => {
+      const key = `${hit.kind}\u0000${hit.excerpt}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(({ kind, excerpt }) => ({ kind, excerpt }));
+}
+
+/**
+ * What a line holds that story terms leave to the evidence, as a phrase: `holds the clock time
+ * "9:58" and the quotation "Not here"`. A quotation is shown with its own marks.
+ *
+ * @param {Array<{kind: string, excerpt: string}>} problems - storyTermsProblems'
+ * @returns {string}
+ */
+function describeStoryTerms(problems) {
+  const items = asArray(problems).map(({ kind, excerpt }) => `${STORY_TERM_WORDS[kind] || kind} ${kind === 'quotation' ? excerpt : `"${excerpt}"`}`);
+  return `holds ${listOf(items)}`;
+}
+
+/** The fix of a line that fails the story-terms check: the rule it keeps, and where what it holds belongs. */
+const STORY_TERMS_FIX = 'Say it in story terms, as C16 (<craft-story>) sets out: the evidence under the lines carries the record\'s quotations, figures, times and document ids.';
+
+module.exports = {
+  EVIDENCE_SOURCES,
+  EVIDENCE_STANCES,
+  EVIDENCE_PIECE_SCHEMA,
+  evidenceProblems,
+  storyTermsProblems,
+  describeStoryTerms,
+  STORY_TERMS_FIX,
+  documentTextsOf,
+  documentIdsOf,
+  evidenceContextOf
+};

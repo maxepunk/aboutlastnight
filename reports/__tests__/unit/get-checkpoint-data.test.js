@@ -303,7 +303,7 @@ describe('arc stop evidenceIndex (phase 1, brief 1.2)', () => {
   // The arc cards showed bare ids, so the director judged an arc by
   // `85620c6f-befd-4799-a877-8fc25c040d8e`. The index is what lets the card name
   // the document instead. Ids resolve the way the fact check resolves them
-  // (`buildSourceMap`: id, tokenId, notionId, pageId, name), so the console and the
+  // (`documentTextsOf`, lib/evidence.js: id, tokenId, notionId, pageId, name), so the console and the
   // check agree on what an id means.
   const BUNDLE = {
     exposed: {

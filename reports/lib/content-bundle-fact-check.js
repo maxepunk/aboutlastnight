@@ -41,8 +41,13 @@ const { editLocator, directorEditConcern, sectionKey, namesPerson, photoBasename
 // FA (requirement 12): the photos the page prints, the one rule the publish step and the
 // article approve read too (lib/publish-photos.js keeps the function's meaning).
 const { printedPhotos } = require('./publish-photos');
-// Brief 4.7a: the one word count, which the weave's bound reads too (lib/weave.js).
+// Brief 4.7a: the one word count, which the meeting's page count reads too (lib/stop-pages.js).
 const { wordCount } = require('./word-count');
+// Phase 4b (brief 1B): the one rule of what a quoted span is, which the story-terms check reads
+// too, and the one function from a document id to its text, which the evidence check reads too
+// (R10: it was this module's buildSourceMap).
+const { QUOTED_SPANS } = require('./grounding');
+const { documentTextsOf } = require('./evidence');
 
 /**
  * Normalise for substring comparison: every single and double quotation mark,
@@ -66,17 +71,6 @@ function normalize(value) {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
-}
-
-/**
- * The text fields a source item may carry its quotable content in.
- *
- * `summary` is deliberately ABSENT: it is a generated paraphrase, so treating it
- * as quotable would bless the exact fabrication this module exists to catch.
- */
-function sourceTextOf(item) {
-  if (!item || typeof item !== 'object') return '';
-  return String(item.fullContent || item.content || item.description || item.text || '');
 }
 
 /**
@@ -426,49 +420,17 @@ function gendersOf(pronouns) {
   return Object.keys(GENDERED_PRONOUNS).filter(gender => GENDERED_PRONOUNS[gender].some(p => words.includes(p)));
 }
 
-/** A letter or digit, accented Latin ones included (exposé's): what stands either side of an apostrophe in a word. */
-const LETTER_OR_DIGIT = '[0-9A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F]';
-/** Double quotation marks, straight or curly, each read as any other: a span runs from one to the next. */
-const DOUBLE_QUOTED = '["“”][^"“”\\n]*["“”]';
-/** A single mark that opens a span: after no letter or digit, before a non-space. A curly ’ never opens. */
-const SINGLE_OPENING = `(?<!${LETTER_OR_DIGIT})['‘](?=\\S)`;
-/** A single mark that can close a span: after a non-space, before no letter or digit. A curly ‘ never closes. */
-const SINGLE_CLOSING = `(?<=\\S)['’](?!${LETTER_OR_DIGIT})`;
-/** A single mark after a plural (the players' votes): an s before it, a word after it on its line. */
-const AFTER_PLURAL = `(?<=[sS])['’](?=[^\\S\\n]+${LETTER_OR_DIGIT})`;
-/** A closing mark the rule reads as a close: one not after a plural. */
-const SINGLE_ENDING = `(?!${AFTER_PLURAL})${SINGLE_CLOSING}`;
-/**
- * A single-quoted span: an opening mark, then its line up to the first ending mark, or, with none
- * on the line, up to the last mark after a plural. So a mark before a shortened word ('90s) with a
- * plural's mark later on its line masks every word between them, the narrator's included: a known
- * limit, in the module's direction, pinned by test.
- */
-const SINGLE_QUOTED = `${SINGLE_OPENING}(?:(?:(?!${SINGLE_ENDING})[^\\n])*${SINGLE_ENDING}|[^\\n]*${AFTER_PLURAL})`;
-
-/**
- * The one rule of what a quoted span is (briefs 4.10e and 4.10f): someone else's words, which a
- * narrator check never reads as the narrator's. Its readers:
- *   - stripQuotedSpans: the phase 3 narrator checks (the pronouns, em-dashes, production words
- *     and the head count);
- *   - maskQuotedSpans: the reporter-mode check and its excerpts (phraseExcerpt, acrossExcerpt),
- *     and the absence statements and their excerpts (findAbsenceStatements);
- *   - PRINTED_GAP: what a space in a folded copy may stand for when printedExcerpt finds a
- *     finding's excerpt in the printed text (the phase 3 narrator checks' hits, read in the
- *     stripped copy, and the leaked examples, read in normalize's).
- *
- * No span crosses a line's end. A span in double quotation marks, straight or curly, runs from
- * one mark to the next (DOUBLE_QUOTED). A span in single quotation marks, straight or curly
- * (SINGLE_QUOTED), is told from an apostrophe by where each mark stands, since the writers quote
- * speech in straight single marks too ('She means nothing to me.'):
- *   - in a word (Kai's, don't, o'clock) a mark is an apostrophe: it neither opens nor closes;
- *   - after a plural (the players' votes) a mark is an apostrophe while another mark on its line
- *     can close the span, and closes it when none can;
- *   - before a shortened word ('90s) a mark stands where an opening mark does, so it opens a span
- *     only when a closing mark follows on its line.
- * Where the rule cannot tell, it errs as the module does, toward not flagging: it reads the span.
- */
-const QUOTED_SPANS = new RegExp(`(?:${DOUBLE_QUOTED}|${SINGLE_QUOTED})`, 'g');
+// The one rule of what a quoted span is (briefs 4.10e and 4.10f), QUOTED_SPANS, is
+// lib/grounding.js's since phase 4b (brief 1B), so the story-terms check on a writer's line at
+// the story meeting and on the map (lib/evidence.js) reads quotation marks by it too. Its
+// readers here:
+//   - stripQuotedSpans: the phase 3 narrator checks (the pronouns, em-dashes, production words
+//     and the head count);
+//   - maskQuotedSpans: the reporter-mode check and its excerpts (phraseExcerpt, acrossExcerpt),
+//     and the absence statements and their excerpts (findAbsenceStatements);
+//   - PRINTED_GAP: what a space in a folded copy may stand for when printedExcerpt finds a
+//     finding's excerpt in the printed text (the phase 3 narrator checks' hits, read in the
+//     stripped copy, and the leaked examples, read in normalize's).
 
 /** A text with each of its quoted spans (QUOTED_SPANS) replaced, as String#replace takes `replacement`. */
 function replaceQuotedSpans(text, replacement) {
@@ -928,49 +890,6 @@ function escapeRegExp(s) {
 }
 
 /**
- * The ids a document in the record answers to: its id, tokenId, notionId, pageId and
- * name, in that order. A card cites a document by any of them: the record view names it
- * by the first of id, tokenId and notionId (record-view.js recordIdOf), and the ids a
- * receipt or a card may name include a paper's pageId and name (node-helpers.js
- * buildValidEvidenceIds).
- */
-const SOURCE_ID_FIELDS = ['id', 'tokenId', 'notionId', 'pageId', 'name'];
-
-/**
- * Build `id -> quotable source text` from the record: the evidence bundle's exposed
- * documents, nested under `exposed.{tokens,paperEvidence}` (older callers pass a flat
- * `exposedEvidence` array).
- *
- * Phase 4 (brief 4.6; R5): the record alone. The arc packages that came first went, and
- * each source a package supplied is still found: a package found its document by the
- * token's id or tokenId, or the paper's id, notionId, pageId or name, and each document
- * is entered under every one of them (SOURCE_ID_FIELDS). The first document to claim an
- * id keeps it, as before.
- *
- * @param {Object} evidenceBundle - the curated bundle
- * @returns {Map<string, string>}
- */
-function buildSourceMap(evidenceBundle) {
-  const map = new Map();
-  const add = (item) => {
-    if (!item || typeof item !== 'object') return;
-    const text = sourceTextOf(item);
-    if (!text) return;
-    for (const field of SOURCE_ID_FIELDS) {
-      const id = item[field];
-      if (id && !map.has(String(id))) map.set(String(id), text);
-    }
-  };
-
-  const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
-  asArray(exposed.tokens).forEach(add);
-  asArray(exposed.paperEvidence).forEach(add);
-  asArray(evidenceBundle && evidenceBundle.exposedEvidence).forEach(add);
-
-  return map;
-}
-
-/**
  * The printed text of one content block, per the block partials of each theme's
  * templates. A photo's `characters` never prints; an evidence card's `owner`
  * prints on the journalist page only. The dispatcher renders an unknown block
@@ -1292,7 +1211,7 @@ function factCheckContentBundle({
   const cardFidelity = [];
 
   const bundle = contentBundle || {};
-  const sources = buildSourceMap(evidenceBundle);
+  const sources = documentTextsOf(evidenceBundle);
 
   // ── 1. Card fidelity (BASELINE class 1) ───────────────────────────────────
   // Only printed text is checked. An inline evidence card prints its content, so
@@ -1903,7 +1822,6 @@ module.exports = {
     normalize,
     stripCardPrefix,
     isVerbatim,
-    buildSourceMap,
     scanNpcPronouns,
     visibleText,
     narratorText,
