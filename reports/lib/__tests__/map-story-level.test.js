@@ -534,6 +534,18 @@ describe("1D: the writer's own words on the page are held to its allowance under
     expect(result._mapCheck.failures[0].line).toBe(`The writer's part of the map runs to ${writer} words, past the ${allowance} it may use.`);
   });
 
+  // Fix round 4, fix 7: a beat the director brought back from left out is theirs, as a beat they
+  // added is and a thread they re-roled is at the meeting: its words never count against the writer.
+  it("a beat the director brings back from left out adds nothing to the writer's words", () => {
+    const state = storyLevelMapState();
+    const before = mapNodes.mapPageWords(state, state.outline, []);
+    const back = bringBackBeat(clone(state.outline), 'b9', 'closing');
+    const edits = carriedEdits(standingOnMap(null, state.outline, back), back);
+    const after = mapNodes.mapPageWords({ ...state, outline: back }, back, edits);
+    expect(after.writer).toBe(before.writer);
+    expect(after.page).toBe(before.page);
+  });
+
   it("the director's long lines add nothing to the count, and their version is never refused for its length", () => {
     const left = padded(50);
     expect(directorMapProblems(left, { theme: 'journalist', shown: storyLevelMap() })).toBeNull();

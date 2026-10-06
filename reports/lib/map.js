@@ -235,21 +235,24 @@ function allBeats(map) {
  * 1D), as the weave's is (lib/hand-edit-diff.js weaveDirectorsShare): each a map from what the
  * director changed to the id of their edit.
  * - `addedBeats`: a beat they added, by its id;
+ * - `broughtBackBeats`: a beat they brought back from left out into a section, by its id (fix
+ *   round 4): its text is the writer's, so the checks read it as the writer's, and the page's count
+ *   leaves it out, as the meeting's leaves out a thread the director re-roled;
  * - `beatFields`: a field of a beat they rewrote (`b3.move`, `b3.players`);
  * - `sections`: a section they added whole, by its slot; `sectionFields`: a section's field they
  *   rewrote (`lede.job`);
  * - `fields`: a field of the map they rewrote (`headline`, `deck`, `gapNote` whole, `gapNote.line`,
  *   `weaveChanges`).
- * A beat or a photo they moved or struck carries the writer's text, so it is no share of theirs,
- * and the evidence is never theirs (R6). The checks never fail the director's share (a beat
+ * A beat or a photo they moved or struck carries the writer's text, so it is no share of theirs
+ * but for the count, and the evidence is never theirs (R6). The checks never fail the director's share (a beat
  * they added is never failed for having no threads or no evidence; a line they wrote is not held
  * to story terms), and the page's count leaves it out (mapWritersShareOf).
  *
  * @param {Object[]} edits - the director's standing edits the map carries
- * @returns {{addedBeats: Object, beatFields: Object, sections: Object, sectionFields: Object, fields: Object}}
+ * @returns {{addedBeats: Object, broughtBackBeats: Object, beatFields: Object, sections: Object, sectionFields: Object, fields: Object}}
  */
 function mapDirectorsShare(edits) {
-  const share = { addedBeats: {}, beatFields: {}, sections: {}, sectionFields: {}, fields: {} };
+  const share = { addedBeats: {}, broughtBackBeats: {}, beatFields: {}, sections: {}, sectionFields: {}, fields: {} };
   (Array.isArray(edits) ? edits : []).filter((edit) => edit && edit.scope === MAP_SCOPE && !isCut(edit)).forEach((edit) => {
     const address = mapEditAddress(edit);
     if (address) {
@@ -257,6 +260,7 @@ function mapDirectorsShare(edits) {
       const id = String(address.identity.id).trim();
       if (address.fieldSteps.length === 0) {
         if (edit.from === MAP_NONE) share.addedBeats[id] = edit.id;
+        else if (edit.from === MAP_LEFT_OUT && address.container !== MAP_LEFT_OUT) share.broughtBackBeats[id] = edit.id;
         return;
       }
       const field = address.fieldSteps[0] && address.fieldSteps[0].key;
@@ -282,7 +286,8 @@ function mapDirectorsShare(edits) {
  * the director's share (mapDirectorsShare), it has each line the director rewrote empty (the
  * headline, the deck, the gap note's line, a section's heading or job, a beat's move), each list
  * they rewrote empty (a beat's players or threads, the changes to the weave), and no beat, section
- * or gap note they added. The map given is left as it was.
+ * or gap note they added and no beat they brought back from left out (fix round 4). The map given
+ * is left as it was.
  *
  * @param {*} map
  * @param {Object} share - mapDirectorsShare's
@@ -303,7 +308,7 @@ function mapWritersShareOf(map, share) {
     else ['line', 'players'].forEach((field) => { if (has(s.fields, `gapNote.${field}`)) emptied(out.gapNote, field); });
   }
   const writersBeats = (beats) => (Array.isArray(beats) ? beats : [])
-    .filter((beat) => !has(s.addedBeats, beatIdOf(beat)))
+    .filter((beat) => !has(s.addedBeats, beatIdOf(beat)) && !has(s.broughtBackBeats, beatIdOf(beat)))
     .map((beat) => {
       if (!beat || typeof beat !== 'object') return beat;
       const id = beatIdOf(beat);
@@ -393,7 +398,7 @@ function writersLinesInPrint(map, share) {
     if (!has(share.sectionFields, `${slot}.job`)) add(`the job of section ${slot}`, textOf(section.job));
     objectsOf(section.beats).forEach((beat) => {
       const id = beatIdOf(beat);
-      if (has(share.addedBeats, id)) return;
+      if (has(share.addedBeats, id) || has(share.broughtBackBeats, id)) return;
       add(`beat ${id}'s move and people`,
         has(share.beatFields, `${id}.move`) ? '' : textOf(beat.move),
         has(share.beatFields, `${id}.players`) ? '' : stringsOf(beat.players).join(', '));
