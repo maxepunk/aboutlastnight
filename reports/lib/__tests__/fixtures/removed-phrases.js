@@ -464,7 +464,14 @@ const REMOVED_PHRASES = [
   // Phase 4, 4.14a: the meeting's changes have an id form of their own (M) wherever a later
   // stage's prompt shows them, so no prompt holds two edits under one id.
   'such as E3, or',
-  "[the director's change E"
+  "[the director's change E",
+
+  // Phase 4b, piece 1 (slices 1A and 1B): the weave and the map stay at the level of the
+  // story, with the evidence underneath, so a connection is said in plain words rather than
+  // named exactly, and the article writer writes from each beat's evidence.
+  'named exactly',
+  'each named by its material',
+  'from the documents the map names'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
