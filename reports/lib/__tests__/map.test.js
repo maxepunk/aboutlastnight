@@ -188,12 +188,17 @@ describe('the map checks (spec 5.4)', () => {
   });
 
   describe('cards (C9)', () => {
-    it('a card whose flagged piece names no document in the record fails, beside its beat, with the valid ids', () => {
+    // Fix round 2: the rework reads the bad source and is pointed at <RECORD>, never handed the
+    // record's ids (over 100 on a real session).
+    it('a card whose flagged piece names no document in the record fails, beside its beat, naming the bad source and pointing at <RECORD>', () => {
       const map = writers();
       markCard(map.sections[1].beats[0], 'zzz999');
       const { failures } = mapFindings(map, inputs());
       expect(typesOf(failures)).toEqual(['card-not-in-record']);
-      expect(failures[0].message).toMatch(/^Beat b3's card piece names "zzz999", which is no document in <RECORD>\. .*row001, row002, row003, row004/);
+      expect(failures[0].message).toBe(
+        "Beat b3's card piece names \"zzz999\", which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: choose in <RECORD> the document the card prints, and flag the piece that names it by its id."
+      );
+      expect(failures[0].message).not.toMatch(/row00\d/);
       expect(failures[0].place).toBe('sections[#theStory].beats[#b3]');
     });
 

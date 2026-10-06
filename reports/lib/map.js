@@ -679,7 +679,7 @@ function storyConnectionsOf(connections) {
  * marks as a card or whose evidence flags a piece as one. Only a marker change can be the
  * director's (editsOnCardMarker).
  */
-function cardFault(beat, known, recordIds) {
+function cardFault(beat, known) {
   const id = beatIdText(beat);
   const flagged = cardPiecesOf(beat);
   const marked = beat.card === true;
@@ -710,7 +710,7 @@ function cardFault(beat, known, recordIds) {
   if (card && known.has(card.toLowerCase())) return null;
   const sources = stringsOf(flagged[0].sources).map((source) => `"${source}"`);
   return {
-    message: `Beat ${id}'s card piece names ${sources.length > 0 ? listOf(sources) : 'no source'}, which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: flag a piece whose source is one of ${recordIds.join(', ')}.`,
+    message: `Beat ${id}'s card piece names ${sources.length > 0 ? listOf(sources) : 'no source'}, which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: choose in <RECORD> the document the card prints, and flag the piece that names it by its id.`,
     said: "is marked as a card, and its card's document is not one the record holds",
     marker: null
   };
@@ -938,7 +938,7 @@ function mapFindings(map, inputs = {}) {
   const recordIds = [...(inputs.recordIds || [])].filter((id) => typeof id === 'string');
   const known = new Set(recordIds.map((id) => id.trim().toLowerCase()));
   sectionBeats(map).forEach(({ beat, slot }) => {
-    const fault = cardFault(beat, known, recordIds);
+    const fault = cardFault(beat, known);
     if (!fault) return;
     const said = `${opening(moveWords(beat))} ${fault.said}.`;
     const ids = fault.marker ? editsOnCardMarker(entries, beatIdText(beat), fault.marker) : [];
