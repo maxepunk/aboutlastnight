@@ -2238,6 +2238,25 @@ describe("4.14a: the round's marks say what changed in the meeting's words", () 
       'The connection between "The overdose vote" and "The envelope": taken out this round. Before: "Morgan sits on one side of the deadlock and pays at the bar."'
     ]);
   });
+
+  // 3 fix A: the place names an angle by its headline, so what it held reads as its card line, or
+  // its story when it has none, and the headline prints once.
+  test('an angle the round took out reads by its headline once, then its card line, or its story without one', () => {
+    const a3 = WEAVE.angles[2];
+    const reworked = clone(WEAVE);
+    reworked.angles = reworked.angles.filter((a) => a.id !== 'a3');
+    const line = afterReweave(reworked).removed.find((l) => l.startsWith('The angle'));
+    expect(line).toBe(`The angle "${a3.headline}": taken out this round. Before: "${a3.gist}"`);
+    expect(line.split(a3.headline)).toHaveLength(2);
+
+    const withoutGist = clone(WEAVE);
+    delete withoutGist.angles[2].gist;
+    const data = payloadOf(stateAt({
+      weave: weaveLib.withFactCheckMark(reworked, MARK), _weaveMarks: { round: 'reweave', from: withoutGist }, humanArcRevisionCount: 1
+    }));
+    expect(meetingView(data, meetingDraftOf(data, undefined)).removed.find((l) => l.startsWith('The angle')))
+      .toBe(`The angle "${a3.headline}": taken out this round. Before: "${a3.story}"`);
+  });
 });
 
 // Fix round 4, fix 2 (spec 4.1 and 9): the evidence stays behind the fold and the tags off the

@@ -2681,8 +2681,9 @@
 
   /**
    * What an element the round took out whole held, as the meeting shows it (brief 4.14a; phase
-   * 4b, brief 1B): an angle by its headline (piece 3), a thread by its line, a connection by its
-   * line, a question by its words and its kind; the place before it names the element (markPlace). Read from the element
+   * 4b, brief 1B): an angle by its card line, or its story without one (piece 3; 3 fix A: the
+   * place already names it by its headline), a thread by its line, a connection by its line, a
+   * question by its words and its kind; the place before it names the element (markPlace). Read from the element
    * the mark carries (lib/hand-edit-diff.js weaveMarks); null for a mark that carries none.
    */
   function takenOutWords(mark) {
@@ -2694,7 +2695,13 @@
       var said = parts.filter(Boolean).join(', ');
       return said ? ' (' + said + ')' : '';
     };
-    if (collection === 'angles') return quoted(asString(element.headline) || asString(element.gist));
+    // An angle's place names it by its headline, or its card line without one (angleName), so what
+    // it held reads as its card line, or its story when the place already used the card line or
+    // the angle has none (3 fix A).
+    if (collection === 'angles') {
+      var gist = asString(element.gist).trim();
+      return quoted(asString(element.headline).trim() && gist ? gist : asString(element.story));
+    }
     if (collection === 'threads') return quoted(element.line);
     if (collection === 'connections') return quoted(element.line);
     var questionKind = asString(element.kind);
