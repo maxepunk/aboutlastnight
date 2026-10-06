@@ -504,13 +504,15 @@ function mapCardsLine(map) {
  * first draft, the prompt carries no <HAND_EDITS>, and the lines ask for every beat in the map's
  * sections, and no other.
  *
- * Phase 4b (brief 1E; spec 2026-10-05 sections 5.2, 5.3 and 7): the beats line has the writer
- * tell each beat from the evidence the map gives it, and cite it, pointing at the items that say
- * how for each source: T1 for a document, the ledger, the evidence log and the director's notes,
- * and C9 for a card. It names T1 by its id alone, as the arc writer's notes label does: the truth
- * rules print in the system prompt, and a user prompt carries no <truth-rules> tag
- * (writers-rule-set.test.js). A beat the director added on the map carries no evidence, so the
- * writer finds it in the record. The words line still gives each scene its detail from the record.
+ * Phase 4b (brief 1E; spec 2026-10-05 sections 5.2, 5.3 and 7): C16 has the article writer
+ * write each beat from the evidence it carries and cite it, and the beats line says only what
+ * C16 does not (fix round 3: each rule is stated once, spec section 8): a beat that carries no
+ * evidence, such as one the director added on the map, is told from the record, and the items
+ * that say how to cite, T1 for each source (a document, the ledger, the evidence log and the
+ * director's notes) and C9 for a card. It names T1 by its id alone, as the arc writer's notes
+ * label does: the truth rules print in the system prompt, and a user prompt carries no
+ * <truth-rules> tag (writers-rule-set.test.js). The words line still gives each scene its detail
+ * from the record.
  *
  * The lines name the block without its angle brackets, as the judges' questions name
  * FINANCIAL_SUMMARY, and the writer's prompts never say "desk". A rework carries the task above
@@ -519,7 +521,7 @@ function mapCardsLine(map) {
  * bracketed name here would hide every line between the task and the block from it.
  */
 const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
-- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; each beat told from the evidence it carries, or from the record where it carries none, and its evidence cited as T1 sets out for each source and C9 (\`<craft-cards>\`) for a card;
+- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (\`<craft-cards>\`) sets out;
 - the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats as C2 (\`<craft-form>\`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
 - each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
 - each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;

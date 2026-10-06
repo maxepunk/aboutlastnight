@@ -366,10 +366,14 @@ const REPO = path.join(__dirname, '..', '..');
  *   "notes" now names the director's words as the evidence check reads them, the notes, the
  *   corrections, the accusation and the answers at the story meeting (+81):
  *   article-journalist 34742 -> 34823. The arc pin does not move: its wording is the gloss's.
+ * - Phase 4b (fix round 3, fix 2), each rule stated once (spec section 8): C16 has the article
+ *   writer write each beat from the evidence it carries and cite it, so the task's beats line
+ *   drops its restatement and keeps what C16 lacks, a beat with no evidence told from the record
+ *   and the pointers to T1 and C9 on citing (-45): article-journalist 34823 -> 34778.
  */
 const PINNED = {
   'outline-journalist': ['09bcdf1a6851ca6b44acede51d9f36af064d8f347a794d42ae6834cdd1a05ed4', 23474],
-  'article-journalist': ['40187b645483a1ea263865b75dbd8935699b4854a79928132ddb3dc834535492', 34823],
+  'article-journalist': ['958bf97f4d1d11c7b687118faf09aa14500bff16b6fdd82ee57b850caaa870e4', 34778],
   'arcs-journalist': ['0cc6d84aaa1d94a20080934235e0bfacbf9f9920627f6fdd9b881b6cfd43004c', 11475]
 };
 

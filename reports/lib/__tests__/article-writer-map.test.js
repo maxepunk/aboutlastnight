@@ -354,10 +354,10 @@ describe("4.7e: the rework's task gives a card the director cut and a paragraph 
   const DESK_PARAGRAPH = 'An unsigned letter warned Marcus about the Stanford patents a week before he died.';
   /**
    * The task's beats line: the director's edits first, as HAND_EDITS gives them, the map's beats
-   * otherwise. Phase 4b (brief 1E) adds each beat told from its evidence, and cited (the 1E
-   * describe below).
+   * otherwise. Phase 4b (brief 1E; fix round 3) adds what C16 does not say: a beat with no
+   * evidence told from the record, and the rules on citing (the 1E describe below).
    */
-  const BEATS_LINE = "- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; each beat told from the evidence it carries, or from the record where it carries none, and its evidence cited as T1 sets out for each source and C9 (`<craft-cards>`) for a card;";
+  const BEATS_LINE = "- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (`<craft-cards>`) sets out;";
   /** The task's words line: the director's edits first, the map's beats and the writer's words otherwise. */
   const WORDS_LINE = "- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats as C2 (`<craft-form>`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;";
   /** The precedence both lines open their body with. */
@@ -498,17 +498,18 @@ describe("4.7f: the director's desk edits, stated once", () => {
 // Phase 4b (brief 1E; spec 2026-10-05 sections 5.2, 5.3 and 7; R4): the article writer reads the
 // evidence. A beat on the map is a move with its people, the threads it carries and the pieces of
 // the record it is told from, one piece flagged as its card's document. The label above the map
-// says how to read that, the task's beats line has the writer tell each beat from its evidence and
-// cite it under the rules that say how, and the instruction's card line names each card's
-// document (prompt-builder-card-fields.test.js). The rework carries all three word for word.
+// says how to read that, C16 has the writer tell each beat from its evidence and cite it, the
+// task's beats line adds only what C16 does not say (a beat with no evidence and the rules on how
+// to cite), and the instruction's card line names each card's document
+// (prompt-builder-card-fields.test.js). The rework carries all three word for word.
 describe('1E: the article writer tells each beat from the evidence it carries', () => {
   const { EVIDENCE_SOURCES } = require('../evidence');
   /** The label: the line right after <STORY_MAP>. */
   const labelOf = (prompt) => block(prompt, STORY_MAP_TAG).split('\n')[1];
   /** The instruction's card line. */
   const cardLineOf = (prompt) => prompt.split('\n').filter((line) => line.startsWith('     * {"type": "evidence-card"'));
-  /** What the beats line asks of each beat, after the beats it names. */
-  const BEATS_EVIDENCE = 'each beat told from the evidence it carries, or from the record where it carries none, and its evidence cited as T1 sets out for each source and C9 (`<craft-cards>`) for a card;';
+  /** What the beats line adds to C16 on each beat, after the beats it names. */
+  const BEATS_EVIDENCE = 'a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (`<craft-cards>`) sets out;';
   /** The precedence the beats line and the card line open with. */
   const FIRST = "the director's edits first, as HAND_EDITS gives them";
 
@@ -548,12 +549,17 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     expect(buildWeaveSections(articleState())).toContain(`A piece of evidence names each of its sources by one of these document ids, or as ${SOURCES_GLOSS}.\n`);
   });
 
-  it('the beats line has the writer tell each beat from its evidence and cite it, pointing at rules the prompt holds', async () => {
+  it("the beats line leaves C16's sentence to C16, sends a beat with no evidence to the record and points at the rules on citing that the prompt holds", async () => {
     const { user, system } = await writerPrompt(articleState());
     const beatsLines = taskLines(user).filter((line) => line.startsWith('- the beats:'));
     expect(beatsLines).toHaveLength(1);
     expect(beatsLines[0].startsWith(`- the beats: ${FIRST};`)).toBe(true);
     expect(beatsLines[0].endsWith(` ${BEATS_EVIDENCE}`)).toBe(true);
+    // Each rule is stated once (spec section 8): C16, in the craft files the prompt holds, tells
+    // the article writer to write each beat from its evidence and cite it, and the line says it
+    // no second time.
+    expect(user).toMatch(/^<craft-story>$[\s\S]*It writes each beat from the evidence the beat carries, and cites it\.[\s\S]*^<\/craft-story>$/m);
+    expect(beatsLines[0]).not.toMatch(/from the evidence it carries|evidence cited/);
     // The items it points at: T1 in the truth rules, which print in the system prompt alone, and
     // C9 in the craft files.
     expect(system).toMatch(/^<truth-rules>$[\s\S]*^## T1\. [\s\S]*^<\/truth-rules>$/m);
