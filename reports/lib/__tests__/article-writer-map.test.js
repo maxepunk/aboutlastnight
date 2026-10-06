@@ -96,13 +96,17 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
     expect(user.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 
+  // Phase 4b (fix round 2): the director rewrites a move, the line a beat carries since brief 1D.
   it('prints the map as the director left it (state.outline), never the writer\'s last map', async () => {
+    const writers = MAP.sections[3].beats[0].move;
+    expect(writers).toBe('Riley says they only kept the books');
     const left = clone(MAP);
-    left.sections[3].beats[0].material = 'Riley at the door with the ledger, the last to leave';
+    left.sections[3].beats[0].move = 'Riley at the door with the ledger, the last to leave';
     const { user } = await writerPrompt(articleState({ outline: left, _mapBaseline: clone(MAP) }));
 
     expect(blockJson(user, STORY_MAP_TAG)).toEqual(left);
-    expect(block(user, STORY_MAP_TAG)).not.toContain('Riley: \\"I only kept the books\\"');
+    expect(block(user, STORY_MAP_TAG)).toContain('"move": "Riley at the door with the ledger, the last to leave"');
+    expect(block(user, STORY_MAP_TAG)).not.toContain(writers);
   });
 
   it('leaves off the map and out of PHOTOS a photo the director has left out since the map', async () => {

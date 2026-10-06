@@ -965,7 +965,8 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
 
   // Phase 3 (3.2): the <TEMPORAL_DISCIPLINE> block went (the world and T7 state the
   // stages). Phase 4 (brief 4.6): the outline's third-person line went with its task; the
-  // map writes no prose, and names each beat's material (C2).
+  // map writes no prose. Phase 4b (brief 1D): each beat is a move in story terms, with its
+  // evidence underneath (C2).
   it('the map writes no prose, and the prompt carries no first-person marker (integrator ruling, phase 1)', async () => {
     const { userPrompt } = await render({ directorNotes: null });
     const task = userPrompt.slice(userPrompt.indexOf('</SETTLED_WEAVE>'), userPrompt.indexOf('<SLOTS>'));

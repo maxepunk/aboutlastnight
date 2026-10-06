@@ -2897,7 +2897,7 @@ function mapMoveWords(edit, address) {
 
 /**
  * Where an edit on the map sits, as its line and the report name it: `section "lede", beat
- * "b4", material`, `left out, beat "b2", struck from section "lede"`, `the top photo, photo
+ * "b4", move`, `left out, beat "b2", struck from section "lede"`, `the top photo, photo
  * "a.jpg", moved from section "theStory"`, `headline`, `gap note, line`, `dropped slot
  * "thePlayers", reason`.
  */
