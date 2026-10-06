@@ -103,15 +103,15 @@ function mapPageWords(state, map, edits) {
 }
 
 /**
- * The settled weave's threads in the story, each `{id, name, added}`: every thread whose role is
- * not left out, `added` on one the director added at the meeting (lib/meeting.js
- * meetingAddedThreads), which the map may name in its gap note instead of a beat when the record
- * cannot carry it (spec 5.3).
+ * The threads in the story of the settled weave the session holds (state.weave), each `{id, name,
+ * added}`, as lib/map.js mapFindings takes them: every thread whose role is not left out,
+ * `added` on one the director added at the meeting (lib/meeting.js meetingAddedThreads), which
+ * the map may name in its gap note instead of a beat when the record cannot carry it (spec 5.3).
  *
  * @param {Object} state
  * @returns {Array<{id: string, name: string, added: boolean}>}
  */
-function storyThreadsOf(state) {
+function settledWeaveThreadsOf(state) {
   if (!isWeave(state.weave)) return [];
   const added = new Set(meetingAddedThreads(state));
   return state.weave.threads
@@ -132,7 +132,7 @@ function mapCheckInputsOf(state, map) {
     keptPhotos: keptPhotoFilenames(state, topPhotoOf(map)),
     recordIds: buildValidEvidenceIds(state.evidenceBundle),
     // Phase 4b (brief 1D; R3): every thread in the story lands in a beat.
-    threads: storyThreadsOf(state),
+    threads: settledWeaveThreadsOf(state),
     // Brief 4.14a: a connection that joins a left-out thread is out of the story with it, so
     // no map is asked to land it. Each with its line, by which the director's line names it.
     connections: storyConnections(state.weave)

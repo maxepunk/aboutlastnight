@@ -39,7 +39,8 @@
  * - THE STOP: its payloads (mapResume, which server.js buildResumePayload calls) and what it
  *   shows (mapCheckpointData).
  * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks and
- * the console share, with its rule for a beat's card (beatCardOf) and for a repeat
+ * the console share, with its rule for a beat's id (beatIdOf, which the checks read every beat
+ * by; fix round 2), for a beat's card (beatCardOf) and for a repeat
  * (mapRepeats, which the gate and the checks read through repeatedBeatIds and
  * repeatedPhotos; task 4.6c). What is a map is its rule too (isMapValue), and the map the
  * stop showed is read by one helper on it (shownMapOf), which the gate and the console's
@@ -59,7 +60,7 @@ const { mapSlotsOf } = require('./theme-config');
 const { roundNoteOf, roundDidNotRunAt } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const {
-  mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatCardOf, cardPiecesOf, beatWithId, isMapValue, shownMapOf,
+  mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatIdOf, beatCardOf, cardPiecesOf, beatWithId, isMapValue, shownMapOf,
   freeStruckBeatPhotos, dropEmptiedSections, leftOutTopPhoto, EMPTIED_SECTION_REASON
 } = require('../console/outline-edit-logic');
 const { photoKey, photoDescriptionFor } = require('./prompt-renderers/director-words-renderer');
@@ -162,18 +163,13 @@ function opening(text) {
   return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : text;
 }
 
-/** A beat's id as a check reads it: its text, trimmed. */
-function beatIdText(beat) {
-  return beat && beat.id !== undefined && beat.id !== null ? String(beat.id).trim() : '';
-}
-
 /**
  * Where a beat sits on the map, as the map's page reads a place (console/checkpoint-view-logic.js
  * mapLineKeyOf; lib/hand-edit-diff.js writes the same paths): `sections[#lede].beats[#b2]`, or
  * `leftOut[#b9]` for a beat in left out; null for a beat with no id.
  */
 function beatPlace(slot, beat) {
-  const id = beatIdText(beat);
+  const id = beatIdOf(beat);
   if (!id) return null;
   return slot === null ? `${MAP_LEFT_OUT}[#${id}]` : `sections[#${slot}].beats[#${id}]`;
 }
@@ -313,10 +309,10 @@ function mapWritersShareOf(map, share) {
     else ['line', 'players'].forEach((field) => { if (has(s.fields, `gapNote.${field}`)) emptied(out.gapNote, field); });
   }
   const writersBeats = (beats) => (Array.isArray(beats) ? beats : [])
-    .filter((beat) => !has(s.addedBeats, beatIdText(beat)))
+    .filter((beat) => !has(s.addedBeats, beatIdOf(beat)))
     .map((beat) => {
       if (!beat || typeof beat !== 'object') return beat;
-      const id = beatIdText(beat);
+      const id = beatIdOf(beat);
       Object.keys(s.beatFields || {}).filter((place) => id && place.startsWith(`${id}.`)).forEach((place) => emptied(beat, place.slice(id.length + 1)));
       return beat;
     });
@@ -401,7 +397,7 @@ function writersLinesInPrint(map, share) {
     if (has(share.sections, slot)) return;
     if (!has(share.sectionFields, `${slot}.job`)) add(`the job of section ${slot}`, textOf(section.job));
     objectsOf(section.beats).forEach((beat) => {
-      const id = beatIdText(beat);
+      const id = beatIdOf(beat);
       if (has(share.addedBeats, id)) return;
       add(`beat ${id}'s move and people`,
         has(share.beatFields, `${id}.move`) ? '' : textOf(beat.move),
@@ -680,7 +676,7 @@ function storyConnectionsOf(connections) {
  * director's (editsOnCardMarker).
  */
 function cardFault(beat, known) {
-  const id = beatIdText(beat);
+  const id = beatIdOf(beat);
   const flagged = cardPiecesOf(beat);
   const marked = beat.card === true;
   if (!marked && flagged.length === 0) return null;
@@ -833,7 +829,7 @@ function mapFindings(map, inputs = {}) {
     const theirs = added.map(({ address }) => String(address.identity.id).trim());
     if (added.length > 0) concern('duplicate-beat-id', added.map(({ edit }) => edit.id), 'The move you added shares its id with another move.');
     repeated.filter((id) => !theirs.includes(id)).forEach((id) => {
-      const under = allBeats(map).filter(({ beat }) => beatIdText(beat) === id);
+      const under = allBeats(map).filter(({ beat }) => beatIdOf(beat) === id);
       fail('duplicate-beat-id', `Beats sharing the id ${id}: ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))}. Give each beat, in the sections and in leftOut, an id of its own.`,
         `The writer gave the moves ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))} one id, so the map cannot move or edit them.`, beatPlace(under[0].slot, under[0].beat));
     });
@@ -857,7 +853,7 @@ function mapFindings(map, inputs = {}) {
     }
   });
   allBeats(map).forEach(({ beat, slot }) => {
-    const id = beatIdText(beat);
+    const id = beatIdOf(beat);
     if (has(share.addedBeats, id) || has(share.beatFields, `${id}.move`)) return;
     terms(`beat ${id}'s move`, moveWords(beat), beat.move, beatPlace(slot, beat));
   });
@@ -872,7 +868,7 @@ function mapFindings(map, inputs = {}) {
   // writer finds its evidence (spec 5.3), and its pieces, once a writer gives it some, are the
   // writer's (R6).
   sectionBeats(map).forEach(({ beat, slot }) => {
-    const id = beatIdText(beat);
+    const id = beatIdOf(beat);
     if (has(share.addedBeats, id)) return;
     const place = beatPlace(slot, beat);
     if (stringsOf(beat.threads).length === 0) {
@@ -889,7 +885,7 @@ function mapFindings(map, inputs = {}) {
       const problems = evidenceProblems(beat.evidence, evidence);
       if (problems.length === 0) return;
       const { what, fix } = describeEvidenceProblems(problems);
-      fail('evidence-not-in-record', `Beat ${beatIdText(beat)}: ${what}. ${fix}`,
+      fail('evidence-not-in-record', `Beat ${beatIdOf(beat)}: ${what}. ${fix}`,
         `The evidence behind ${moveWords(beat)} ${evidenceProblemsSaid(problems)}.`, beatPlace(slot, beat));
     });
   }
@@ -949,7 +945,7 @@ function mapFindings(map, inputs = {}) {
     const fault = cardFault(beat, known);
     if (!fault) return;
     const said = `${opening(moveWords(beat))} ${fault.said}.`;
-    const ids = fault.marker ? editsOnCardMarker(entries, beatIdText(beat), fault.marker) : [];
+    const ids = fault.marker ? editsOnCardMarker(entries, beatIdOf(beat), fault.marker) : [];
     if (ids.length > 0) concern('card-not-in-record', ids, said);
     else fail('card-not-in-record', fault.message, said, beatPlace(slot, beat));
   });

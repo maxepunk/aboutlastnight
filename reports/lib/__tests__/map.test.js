@@ -915,6 +915,20 @@ describe('4.6c: the gate and the checks find a repeat by mapRepeats, the rule th
     });
     expect(`placedPhotos: ${/count/i.test(body('placedPhotos'))}`).toBe('placedPhotos: false');
   });
+
+  // Fix round 2: one reader of a beat's id, the one repeatedBeatIds reads through mapRepeats.
+  it("the checks read every beat's id through the console's beatIdOf, and lib/map.js writes no reader of its own", () => {
+    expect(src).toMatch(/\bbeatIdOf\b[^;]*= require\('\.\.\/console\/outline-edit-logic'\)/);
+    expect(src).not.toMatch(/\bbeat\.id\b/);
+  });
+
+  // Fix round 2: a name means one function across the map's module and its check node.
+  it('no function is declared under one name in lib/map.js and in the map checks\' node', () => {
+    const declared = (text) => new Set([...text.matchAll(/^function (\w+)\(/gm)].map((m) => m[1]));
+    const node = fs.readFileSync(path.join(__dirname, '..', 'workflow', 'nodes', 'map-nodes.js'), 'utf8');
+    const both = [...declared(src)].filter((name) => declared(node).has(name));
+    expect(both).toEqual([]);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
