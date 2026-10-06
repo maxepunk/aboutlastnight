@@ -170,6 +170,27 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
     return found ? found[1] : '';
   }
   const keysOf = (block) => [...new Set([...block.matchAll(/"([A-Za-z]+)":/g)].map((m) => m[1]))];
+  /**
+   * A block split at the array under `key`: the array's text (`inside`) and the block with the
+   * array emptied (`outside`), read by bracket depth outside quoted strings. So the keys of the
+   * objects in the array are read apart from the keys around it.
+   */
+  function splitAtArray(block, key) {
+    const open = block.indexOf(`"${key}": [`);
+    if (open < 0) return { inside: '', outside: block };
+    const from = block.indexOf('[', open);
+    let depth = 0;
+    let quoted = false;
+    for (let i = from; i < block.length; i += 1) {
+      const c = block[i];
+      if (c === '"') quoted = !quoted;
+      else if (!quoted && c === '[') depth += 1;
+      else if (!quoted && c === ']' && (depth -= 1) === 0) {
+        return { inside: block.slice(from + 1, i), outside: block.slice(0, from + 1) + block.slice(i) };
+      }
+    }
+    return { inside: '', outside: block };
+  }
   /** The values a block lists for a key, as `"key": "a | b"` or `"key": ["a | b"]`, each kept as written. */
   function listedIn(block, key) {
     const found = block.match(new RegExp(`"${key}": \\[?"([^"]+)"`));
@@ -212,10 +233,13 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
   it("schemas.md gives a beat, and each piece of its evidence, the pipeline's shape", () => {
     const block = schemasBlock('### analysis/article-outline.json');
     expect(block).not.toBe('');
-    expect(keysOf(block).sort()).toEqual([...new Set([...Object.keys(BEAT), ...Object.keys(PIECE)])].sort());
-    expect(listedIn(block, 'kind')).toEqual([...MAP_BEAT_KINDS]);
-    expect(listedIn(block, 'sources')).toEqual(SOURCES);
-    expect(listedIn(block, 'stance')).toEqual([...EVIDENCE_STANCES]);
+    const { inside: piece, outside: beat } = splitAtArray(block, 'evidence');
+    expect(piece).not.toBe('');
+    expect(keysOf(beat).sort()).toEqual(Object.keys(BEAT).sort());
+    expect(keysOf(piece).sort()).toEqual(Object.keys(PIECE).sort());
+    expect(listedIn(beat, 'kind')).toEqual([...MAP_BEAT_KINDS]);
+    expect(listedIn(piece, 'sources')).toEqual(SOURCES);
+    expect(listedIn(piece, 'stance')).toEqual([...EVIDENCE_STANCES]);
   });
 
   it("the outline generator reads the beat's shape in schemas.md", () => {
@@ -224,8 +248,8 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
 
   it("the article generator writes each beat from its evidence, and prints a card from the flagged piece", () => {
     const job = section(agent('article-generator'), 'Job');
-    expect(job).toContain('`evidence`');
-    expect(job).toContain('`card`');
+    expect(job).toContain('each written from the pieces of its `evidence`');
+    expect(job).toContain('print an inline card of the document named by its piece flagged `card`');
   });
 
   it.each(NAMES)('%s describes no thread claim or receipt, no beat material, and none of the old bounds', (name) => {
