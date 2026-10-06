@@ -101,6 +101,10 @@ const ACTION_ARG = getArgValue('--action');
 const NOTE_ARG = getArgValue('--note');
 const ACTION = ACTION_ARG || 'approve';
 const NOTE = NOTE_ARG || '';
+// Piece 3, brief 3E: the angle the story meeting sends on, by its number counted from 1 in the
+// order the meeting shows the angles, picked through the console's own operation.
+const ANGLE_ARG = getArgValue('--angle');
+const ANGLE = ANGLE_ARG;
 // The integrator's ruling 1 (task 4.12a): the photos to leave out at the character-IDs stop,
 // sent through the console's builders. Task 4.12c: the boxes start from the photos the server
 // lists, as the console's do, and the option ticks the photos it names; the payload carries the
@@ -555,11 +559,16 @@ ${color('OPTIONS:', 'cyan')}
                      needs a note or a change, so it takes --note here
   --note <text>      With --approve and --step, at the same three stops: the note
                      sent with the action, as the stop's note box sends it
+  --angle <n>        With --approve arc-selection and --step: the angle the story
+                     meeting sends on, by its number, counted from 1 in the order
+                     the meeting shows the angles. Picked as the console's angle
+                     picker picks it, and sent with --action and --note. Without
+                     it the pick stays as the meeting showed it
   --approve-file <f> With --approve and --step, a custom JSON payload sent as
                      the approval, as it is: the way to send a weave, a map or
-                     an article you changed. It takes no --action, --note or
-                     --leave-out: put the action, the note and the photos left
-                     out in the file. Without --approve and --step the run
+                     an article you changed. It takes no --action, --note, --angle
+                     or --leave-out: put the action, the note, the pick and the
+                     photos left out in the file. Without --approve and --step the run
                      never reads the file, so it is refused
   --photo-descriptions <f>
                      JSON file of {"photo filename": "the director's description"}.
@@ -614,6 +623,7 @@ ${color('EXAMPLES:', 'cyan')}
   node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --approve-file mappings.json --step
   # 4. Ask the story meeting for a reweave, send the map back, leave a photo out:
   node scripts/e2e-walkthrough.js --session 1225 --approve arc-selection --action reweave --note "Make the ledger the main thread." --step
+  node scripts/e2e-walkthrough.js --session 1225 --approve arc-selection --angle 2 --step
   node scripts/e2e-walkthrough.js --session 1225 --approve outline --action send-back --note "Move the vote earlier." --step
   node scripts/e2e-walkthrough.js --session 1225 --approve character-ids --leave-out "p3.jpg" --step
 
@@ -622,6 +632,7 @@ ${color('STOPS:', 'cyan')}
   print as the console shows them, from the console's own view models: what the page
   folds is marked with ▸, and the desk lists what the console would refuse before an
   approve. At the story meeting, the map and the desk you can:
+  - [P]ick      - The story meeting only: the angle to send on, by its number
   - [A]pprove   - Send the weave, the map or the article as the stop shows it
   - [R]eweave   - The story meeting only: the writer fits your note into the weave
   - [S]end back - With your note: the writer reworks the weave, the map or the article
@@ -815,7 +826,7 @@ function loadApprovalFile(filePath) {
  *   or when an option names a photo the character-IDs stop does not show
  */
 function defaultApproval(checkpointType, checkpointData) {
-  const built = stopApproval(checkpointType, checkpointData, { action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS });
+  const built = stopApproval(checkpointType, checkpointData, { action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS, angle: ANGLE });
   if (built) {
     if (built.refusal) throw new Error(built.refusal);
     return built.payload;
@@ -1982,11 +1993,18 @@ async function handleDecisionStop(checkpoint, currentPhase) {
 
   const offered = [['a', 'approve', '[A]pprove'], ['r', 'reweave', '[R]eweave'], ['s', 'send-back', '[S]end back']]
     .filter(([, action]) => STOP_ACTIONS[stop].includes(action));
-  const menu = offered.map(([, , label]) => label).concat(['[N]ote', '[J]SON', '[Q]uit']).join(', ');
+  // Piece 3, brief 3E: at the story meeting the director picks the angle to send on, as --angle does.
+  const picks = stop === 'arc-selection' ? ['[P]ick an angle'] : [];
+  const menu = picks.concat(offered.map(([, , label]) => label), ['[N]ote', '[J]SON', '[Q]uit']).join(', ');
   let note = '';
+  let angle = null;
   while (true) {
     const choice = (await prompt(`\n${menu}? `)).toLowerCase();
     handleUserQuit(choice);
+    if (choice === 'p' && picks.length > 0) {
+      angle = (await prompt('The angle to send on, by its number from 1: ')).trim() || null;
+      continue;
+    }
     if (choice === 'n') {
       note = await promptMultiline(color('Your note to the writer, sent with the action you choose:', 'cyan'));
       continue;
@@ -2001,7 +2019,7 @@ async function handleDecisionStop(checkpoint, currentPhase) {
       continue;
     }
     const action = picked[1];
-    const built = stopApproval(stop, checkpoint, { action, note });
+    const built = stopApproval(stop, checkpoint, { action, note, angle });
     if (built.refusal) {
       console.log(color(built.refusal, 'yellow'));
       continue;
@@ -2166,7 +2184,7 @@ async function runWalkthrough() {
   // is, so none of the three goes with it. Task 4.12e: and the file goes with --approve and
   // --step, the one place the run reads it. A run whose options do not fit stops here, before
   // anything is posted, saying what each option takes (optionsRefusal), and main exits non-zero.
-  const refusal = optionsRefusal({ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN, approveFile: APPROVE_FILE });
+  const refusal = optionsRefusal({ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN, approveFile: APPROVE_FILE, angle: ANGLE_ARG });
   if (refusal) {
     console.error(color(refusal, 'red'));
     return { refused: true };

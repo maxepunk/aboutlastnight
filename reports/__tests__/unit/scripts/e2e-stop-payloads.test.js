@@ -345,9 +345,9 @@ describe('4.12d: --approve-file sends its file as it is, so the options it would
       // Each of these runs is taken without the file: the refusal is the file's alone.
       expect([given, optionsRefusal({ ...options, leaveOut: options.leaveOut && options.approveType === 'character-ids' })]).toEqual([given, null]);
       const refusal = optionsRefusal({ ...options, approveFile: FILE });
-      expect([given, refusal]).toEqual([given, expect.stringMatching(/^--approve-file sends its file as it is, so it takes no --action, --note or --leave-out/)]);
+      expect([given, refusal]).toEqual([given, expect.stringMatching(/^--approve-file sends its file as it is, so it takes no --action, --note, --angle or --leave-out/)]);
       expect([given, refusal.includes(`(got ${given})`)]).toEqual([given, true]);
-      expect(refusal).toMatch(/the action, the note and the photos left out/);
+      expect(refusal).toMatch(/the action, the note, the pick and the photos left out/);
     });
   });
 
@@ -390,6 +390,87 @@ describe('4.12e: --approve-file is refused where the run never reads it, with th
   it('with --approve and --step it reads the file, and refuses only the options the file replaces, as before', () => {
     expect(optionsRefusal({ approveType: 'outline', stepMode: true, approveFile: FILE })).toBeNull();
     expect(optionsRefusal({ approveType: 'outline', stepMode: true, approveFile: FILE, note: 'x' }))
-      .toMatch(/^--approve-file sends its file as it is, so it takes no --action, --note or --leave-out \(got --note\)/);
+      .toMatch(/^--approve-file sends its file as it is, so it takes no --action, --note, --angle or --leave-out \(got --note\)/);
+  });
+});
+
+// Piece 3, brief 3E (spec 2026-10-06 sections 6 and 17): the meeting pitches two or three angles,
+// and the harness picks one with --angle <n>, counted from 1 in the order the meeting shows
+// them. The pick goes through the console's own operation (pickMeetingAngle) and payload
+// builder (meetingPayload), so the harness sends what the console's pick would.
+describe("3E: --angle picks the angle the story meeting sends on", () => {
+  const { optionsRefusal } = require('../../../scripts/lib/stop-payloads');
+  const state = () => ({ ...reworkFixtureState('journalist'), meetingApproved: null });
+
+  it('sets the pick to the nth angle and sends the console\'s payload, which the gate takes and stores', async () => {
+    const s = state();
+    const data = await payloadAt('arc-selection', s);
+    const second = data.weave.angles[1].id;
+    const built = stopApproval('arc-selection', data, { action: 'approve', angle: 2 });
+    expect(built.payload).toEqual(View.meetingPayload('approve', data, View.pickMeetingAngle(View.meetingDraftOf(data), second), ''));
+    expect(built.payload.weave.picked).toBe(second);
+    const { resume, stateUpdates, error } = gate(built.payload, s, 'arc-selection');
+    expect(error).toBeNull();
+    expect(resume).toEqual({ approved: true });
+    expect(stateUpdates.weave.picked).toBe(second);
+  });
+
+  it('sends the pick with every action the meeting takes', async () => {
+    const data = await payloadAt('arc-selection', state());
+    const third = data.weave.angles[2].id;
+    expect(stopApproval('arc-selection', data, { action: 'reweave', note: 'Lead with the heir.', angle: 3 }).payload.weave.picked).toBe(third);
+    expect(stopApproval('arc-selection', data, { action: 'send-back', note: 'Rethink the heir.', angle: 3 }).payload.weave.picked).toBe(third);
+  });
+
+  it('without --angle the pick stays as the meeting showed it', async () => {
+    const data = await payloadAt('arc-selection', state());
+    expect(stopApproval('arc-selection', data, { action: 'approve' }).payload.weave).not.toHaveProperty('picked');
+  });
+
+  it('refuses an angle the meeting does not show, naming how many it shows', async () => {
+    const data = await payloadAt('arc-selection', state());
+    const count = data.weave.angles.length;
+    const built = stopApproval('arc-selection', data, { action: 'approve', angle: count + 1 });
+    expect(built.payload).toBeUndefined();
+    expect(built.refusal).toBe(`The story meeting shows ${count} angles, so --angle takes 1 to ${count} (got ${count + 1}).`);
+  });
+
+  it('goes with --approve arc-selection and --step alone, and with a whole number from 1', () => {
+    expect(optionsRefusal({ approveType: 'arc-selection', stepMode: true, angle: '2' })).toBeNull();
+    const elsewhere = /^--angle picks the angle the story meeting sends on, so it goes with --approve arc-selection and --step\./;
+    [
+      { approveType: 'outline', stepMode: true, angle: '2' },
+      { approveType: 'arc-selection', stepMode: false, angle: '2' },
+      { stepMode: true, angle: '2' },
+      { angle: '1' }
+    ].forEach((options) => expect([options, optionsRefusal(options)]).toEqual([options, expect.stringMatching(elsewhere)]));
+    ['0', '-1', '1.5', 'two', ''].forEach((angle) => {
+      expect([angle, optionsRefusal({ approveType: 'arc-selection', stepMode: true, angle })])
+        .toEqual([angle, `--angle takes an angle's number, counted from 1 in the order the story meeting shows them (got "${angle}").`]);
+    });
+  });
+
+  it('goes without --approve-file, which carries the pick itself', () => {
+    expect(optionsRefusal({ approveType: 'arc-selection', stepMode: true, angle: '2', approveFile: 'weave.json' }))
+      .toMatch(/^--approve-file sends its file as it is, so it takes no --action, --note, --angle or --leave-out \(got --angle\)/);
+  });
+
+  // Review focus 5: a director's version whose picked angle lacks the verdict's thread, sent with
+  // --approve-file past the console's lock. The harness reads the file as JSON and sends it as it
+  // is (scripts/e2e-walkthrough.js loadApprovalFile), and the gate refuses it, naming the thread.
+  it("sends --approve-file's version as it is, and the gate refuses a picked angle without the verdict's thread, naming it", async () => {
+    const s = state();
+    const data = await payloadAt('arc-selection', s);
+    const weave = View.meetingDraftOf(data);
+    const verdict = weave.threads.find((thread) => thread.verdict === true);
+    const picked = weave.angles[1];
+    picked.threads = picked.threads.filter((id) => id !== verdict.id);
+    weave.picked = picked.id;
+    const file = path.join(dataDir, 'weave.json');
+    fs.writeFileSync(file, JSON.stringify({ meeting: 'approve', weave }));
+    const sent = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const { error } = gate(sent, s, 'arc-selection');
+    expect(error).toEqual(expect.stringContaining(verdict.name));
+    expect(error).toMatch(/verdict/);
   });
 });

@@ -148,14 +148,14 @@ describe('4.12a: the harness prints and approves the three stops through the sha
     ['arc-selection', 'outline', 'article'].forEach((stop) => expect(SRC).toContain(`'${stop}': handleDecisionStop`));
     const fn = body('async function handleDecisionStop(');
     expect(fn).toMatch(/printStop\(stop, checkpoint, currentPhase\)/);
-    expect(fn).toMatch(/stopApproval\(stop, checkpoint, \{ action, note \}\)/);
+    expect(fn).toMatch(/stopApproval\(stop, checkpoint, \{ action, note, angle \}\)/);
   });
 
   it('builds the default approval at those stops and at the character-IDs stop with stopApproval, from the run\'s options', () => {
     // Task 4.12e: the import also takes the exit code a refused run exits with.
     expect(SRC).toMatch(/const \{ stopApproval, STOP_ACTIONS(, optionsRefusal)?(, OPTIONS_REFUSED_EXIT_CODE)? \} = require\('\.\/lib\/stop-payloads'\);/);
     const fn = body('function defaultApproval(');
-    expect(fn).toMatch(/stopApproval\(checkpointType, checkpointData, \{ action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS \}\)/);
+    expect(fn).toMatch(/stopApproval\(checkpointType, checkpointData, \{ action: ACTION, note: NOTE, leaveOut: LEAVE_OUT, photoDescriptions: PHOTO_DESCRIPTIONS, angle: ANGLE \}\)/);
   });
 
   it('takes --action, --note and --leave-out, and documents them in --help', () => {
@@ -232,7 +232,7 @@ describe('4.12c: the harness prints the input review and the character-IDs stop 
   // Task 4.12d: and --approve-file, which sends its file as it is, refuses the options it would drop.
   it('refuses a run whose options do not fit, through optionsRefusal, before anything is posted', () => {
     const fn = body('async function runWalkthrough(');
-    expect(fn).toMatch(/const refusal = optionsRefusal\(\{ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN, approveFile: APPROVE_FILE \}\);/);
+    expect(fn).toMatch(/const refusal = optionsRefusal\(\{ approveType: APPROVE_TYPE, stepMode: STEP_MODE, action: ACTION_ARG, note: NOTE_ARG, leaveOut: LEAVE_OUT_GIVEN, approveFile: APPROVE_FILE, angle: ANGLE_ARG \}\);/);
     expect(fn.indexOf('optionsRefusal(')).toBeLessThan(fn.indexOf('await login()'));
     expect(SRC).toMatch(/const LEAVE_OUT_GIVEN = args\.includes\('--leave-out'\);/);
     expect(SRC).not.toMatch(/--action and --note go with/);
@@ -413,10 +413,10 @@ describe('4.12d: --help says what --leave-out and --approve-file take', () => {
     expect(leaveOut).not.toMatch(/an empty one included/);
   });
 
-  it('--help says --approve-file takes no --action, --note or --leave-out', () => {
+  it('--help says --approve-file takes no --action, --note, --angle or --leave-out', () => {
     const help = body('function showHelp(').replace(/\s+/g, ' ');
     const file = help.slice(help.indexOf('--approve-file <f>'), help.indexOf('--photo-descriptions <f>'));
-    expect(file).toMatch(/takes no --action, --note or --leave-out/);
+    expect(file).toMatch(/takes no --action, --note, --angle or --leave-out/);
   });
 });
 
@@ -560,7 +560,9 @@ describe('4.12e: a run whose options are refused exits non-zero, before it posts
     ['--approve-file where step mode never reads it', ['--approve-file', 'map.json', '--step'], /^--approve-file goes with --approve <stop> and --step/],
     ['--approve-file outside step mode', ['--approve', 'outline', '--approve-file', 'map.json'], /^--approve-file goes with --approve <stop> and --step/],
     ['--note at a stop that takes no note', ['--approve', 'input-review', '--note', 'x', '--step'], /^--action and --note go with --approve <stop> and --step/],
-    ["--leave-out with another stop's --approve", ['--approve', 'outline', '--leave-out', 'p2.jpg', '--step'], /^--leave-out ticks/]
+    ["--leave-out with another stop's --approve", ['--approve', 'outline', '--leave-out', 'p2.jpg', '--step'], /^--leave-out ticks/],
+    ["--angle with another stop's --approve", ['--approve', 'outline', '--angle', '2', '--step'], /^--angle picks the angle the story meeting sends on/],
+    ['--angle that is no number', ['--approve', 'arc-selection', '--angle', 'two', '--step'], /^--angle takes an angle's number/]
   ])('%s', (name, args, refusal) => {
     const result = run(['--session', '100426', ...args]);
     expect([name, result.error, result.status]).toEqual([name, undefined, OPTIONS_REFUSED_EXIT_CODE]);
@@ -593,5 +595,30 @@ describe("4.12e, the integrator's pins: the stop's refusals, and where the file 
     const before = fn.slice(0, fn.indexOf('approvals = loadApprovalFile(APPROVE_FILE);'));
     const stepBranch = before.slice(before.lastIndexOf('if (STEP_MODE) {'));
     expect(stepBranch).toMatch(/^if \(STEP_MODE\) \{[\s\S]*\bif \(APPROVE_TYPE\) \{[\s\S]*\bif \(APPROVE_FILE\) \{\n\s*$/);
+  });
+});
+
+// Piece 3, brief 3E: the story meeting pitches angles, and the harness picks one with --angle <n>,
+// counted from 1 in the order the meeting shows them, through scripts/lib/stop-payloads.js. The
+// run's options say where it goes (optionsRefusal), the help says what it takes, and the
+// interactive meeting offers the same pick.
+describe("3E: --angle picks the story meeting's angle", () => {
+  it('reads --angle and hands it to optionsRefusal and the default approval', () => {
+    expect(SRC).toContain("getArgValue('--angle')");
+    expect(body('async function runWalkthrough(')).toMatch(/optionsRefusal\(\{[^}]*angle: ANGLE_ARG[^}]*\}\)/);
+  });
+
+  it('documents --angle in --help: with --approve arc-selection and --step, counted from 1, with an example', () => {
+    const help = body('function showHelp(').replace(/\s+/g, ' ');
+    const angle = help.slice(help.indexOf('--angle <n>'), help.indexOf('--approve-file <f>'));
+    expect(angle).toMatch(/--approve arc-selection and --step/);
+    expect(angle).toMatch(/counted from 1/);
+    expect(help).toMatch(/--approve arc-selection --angle 2 --step/);
+  });
+
+  it('offers the pick at the interactive story meeting, through the same builder', () => {
+    const fn = body('async function handleDecisionStop(');
+    expect(fn).toMatch(/\[P\]ick an angle/);
+    expect(fn).toMatch(/stop === 'arc-selection'/);
   });
 });
