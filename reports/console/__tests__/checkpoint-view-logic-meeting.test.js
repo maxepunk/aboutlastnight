@@ -1937,3 +1937,42 @@ describe("4.14a: the round's marks say what changed in the meeting's words", () 
     ]);
   });
 });
+
+// Fix round 4, fix 2 (spec 4.1 and 9): the evidence stays behind the fold and the tags off the
+// page. The director adds a thread and sends back; the rework rewrites it and gives it evidence.
+// The line "Your edits a rework changed" shows reads the thread by its name, its line and its
+// role's label, never the evidence the rework gave it (lib/hand-edit-diff.js weaveReportText).
+describe('fix round 4: a meeting line after a send-back shows no evidence and no role key', () => {
+  const H = require('../../lib/hand-edit-diff');
+  const { storyLevelWeave, storyLevelState } = require('../../lib/__tests__/fixtures/story-level-weave');
+
+  test("a thread the director added that the send-back's rework rewrote and gave evidence: its line holds no evidence", () => {
+    const shown = storyLevelWeave();
+    const left = clone(shown);
+    left.threads.push({ id: 't11', name: "Vic's payoff", line: 'Vic got paid to stay quiet.', role: 'complicates-it' });
+    const edits = H.standingAtMeeting(null, shown, left, { shown });
+    const after = clone(left);
+    after.threads[10] = {
+      id: 't11', name: "Vic's payoff", line: 'Someone paid Vic to stay quiet about the batch.', role: 'complicates-it',
+      evidence: [{ sources: ['p-email'], shows: 'Marcus asks Quinn to "raise the dose for the pilot"', stance: 'supports' }]
+    };
+    const settled = H.settleEdits(null, {
+      edits: H.carriedEdits(edits, left), before: left, after, pass: H.SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asked for who paid.' }]
+    });
+    expect(settled.report.changed[0].became).toBe("id: t11; name: Vic's payoff; line: Someone paid Vic to stay quiet about the batch.; role: complicates-it");
+    const data = {
+      weave: settled.output,
+      handEditReport: H.handEditReportOf(settled.report),
+      evidenceIndex: { 'p-email': { name: 'Email to Quinn', owner: 'Marcus', type: 'Document', firstLine: '' } },
+      questions: settled.output.questions,
+      accusation: storyLevelState().sessionConfig.accusation
+    };
+    const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data, null), '');
+    expect(view.changedEdits).toEqual([
+      'Thread "Vic\'s payoff", added: your "Vic\'s payoff: Vic got paid to stay quiet. (Complicates it)" became "Vic\'s payoff: Someone paid Vic to stay quiet about the batch. (Complicates it)" (the rework of your send-back). Why: The note asked for who paid.'
+    ]);
+    view.changedEdits.forEach((line) => {
+      expect(line).not.toMatch(/p-email|raise the dose|stance|supports|evidence|complicates-it/);
+    });
+  });
+});

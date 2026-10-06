@@ -2640,6 +2640,41 @@ function mapReportText(edit, value, maps = []) {
 }
 
 /**
+ * A value of an edit on the weave as the report gives it to the meeting's page, the weave's
+ * counterpart of mapReportText (fix round 4; spec 2026-10-05 sections 4.1 and 9: the evidence
+ * stays behind the fold and the tags off the page): a thread or a connection whole without its
+ * evidence, which is never the director's (R6), each other field as editValueText reads it, so
+ * the meeting reads the element by its words and a thread's role by its label
+ * (console/checkpoint-view-logic.js meetingWordsOf). Any other value, and every edit that is not on
+ * the weave's threads, connections or questions, as editValueText reads it.
+ *
+ * @param {Object} edit
+ * @param {*} value - a value of the edit, or of the element it is about in a version
+ * @returns {string}
+ */
+function weaveReportText(edit, value) {
+  const steps = stepsOf(edit);
+  const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
+  if (Object.prototype.hasOwnProperty.call(WEAVE_ELEMENTS, head) && isObj(value)) return editValueText(withoutEvidence(value));
+  return editValueText(value);
+}
+
+/**
+ * A value of an edit as the report gives it to a stop's page: an edit on the map's beats or
+ * photos as the map reads it (mapReportText, its beat ids looked up in `versions`), every other
+ * as the weave's counterpart reads it (weaveReportText), which reads a value off the weave as
+ * editValueText does.
+ *
+ * @param {Object} edit
+ * @param {*} value
+ * @param {Object[]} [versions]
+ * @returns {string}
+ */
+function reportValueText(edit, value, versions = []) {
+  return mapAddressOf(edit) ? mapReportText(edit, value, versions) : weaveReportText(edit, value);
+}
+
+/**
  * Did a pass change, where the director put it, a beat or a photo they placed whole on the map
  * (phase 4b, brief 1D)? It sits in their place and nowhere else, with a field of theirs changed:
  * a beat they added whose move or people a pass rewrote. The report gives that as a change of
@@ -3388,7 +3423,8 @@ function moveOutcome(edit, before, after) {
  * pass started from, to the pass's version of each block on the way, as the restore
  * follows it (passVersionOf; task 4.14c), so null where code cannot tell which block that
  * is; for a cut, the text where it came back; for a move, the section the pass took the
- * block to, or another place in the director's section (moveOutcome).
+ * block to, or another place in the director's section (moveOutcome). A thread or a connection
+ * reads without its evidence (weaveReportText; fix round 4).
  */
 function becameOf(edit, before, after) {
   if (!isObj(after)) return null;
@@ -3415,7 +3451,7 @@ function becameOf(edit, before, after) {
     if (version.section !== null) cur = after.sections[version.section].content;
     cur = cur[version.index];
   }
-  return cur === undefined || cur === null ? null : editValueText(cur);
+  return cur === undefined || cur === null ? null : weaveReportText(edit, cur);
 }
 
 /**
@@ -3969,7 +4005,8 @@ function cameBackStillIn(report, stored) {
  *   added that a pass rewrote where they put it is such a change, not a move (mapChangedInPlace),
  *   and every value of an edit the map's page makes on its beats and photos reads as the page
  *   reads it, a beat by its move and its people, never by a tag (mapReportText; phase 4b, brief
- *   1D);
+ *   1D), and every value of an edit on the weave's threads and connections without its evidence
+ *   (weaveReportText; fix round 4);
  * - a block the director moved that the pass took to another section (`moved`, `became`
  *   that section) or removed (`became` null), and whether the block is back in the
  *   director's section (`restored`); a change to its fields is the writer's and no entry;
@@ -4034,9 +4071,10 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     ...(isStrike(e) && { struck: true }), ...fields
   });
   // Phase 4b, brief 1D: a value of an edit the map's page makes on its beats or photos as the page
-  // reads it, never by a tag (mapReportText); every other value, a beat's threads among them, as
-  // editValueText reads it.
-  const textOf = (e, value) => mapReportText(e, value, [before, after]);
+  // reads it, never by a tag (mapReportText); fix round 4: a thread or a connection of the weave
+  // without its evidence (weaveReportText); every other value, a beat's threads among them, as
+  // editValueText reads it (reportValueText).
+  const textOf = (e, value) => reportValueText(e, value, [before, after]);
   const changed = [];
   carried.forEach((e) => {
     if (isCut(e)) {
