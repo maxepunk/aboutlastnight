@@ -1043,7 +1043,8 @@ describe("4.5: the story meeting's rounds in the revision context", () => {
   it("a reweave with no note gets the reweave's scope: fit the director's changes in, keep every other line", () => {
     const text = context({ meetingRound: 'reweave', humanFeedback: null, validationResults: null });
     expect(text).toContain("REVISION CONTEXT: WEAVE (round 2: the director's reweave)");
-    expect(text).toContain("The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: each change in <HAND_EDITS>.");
+    // Piece 3 (brief 3C, R3): the scope names the angle the director has open, and keeps the rest.
+    expect(text).toContain(`The director asked for a reweave at the story meeting of the angle they have open, a1 ("The Room Voted Overdose. The Ledger Kept Talking."). This rework fits the director's changes into that angle: each change in <HAND_EDITS>.`);
     expect(text).toMatch(/keeps every other line word for word/);
     expect(text).not.toContain('This rework fixes the must-fix items');
     expect(text).not.toContain('HUMAN FEEDBACK');

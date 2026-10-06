@@ -2175,7 +2175,7 @@
       reweave: {
         label: 'Reweave',
         disabled: !canReweave,
-        ariaLabel: 'Reweave: the writer fits your changes and your note into the weave, and the meeting reopens',
+        ariaLabel: 'Reweave: the writer fits your changes and your note into the angle you have open, and the meeting reopens',
         hint: canReweave ? '' : REWEAVE_HINT
       },
       sendBack: sendBackButton(sendBackArmed, note, 'weave')

@@ -4295,8 +4295,26 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   });
   return {
     checked: [...prior.checked, ...carried.map((e) => e.id).filter((id) => !prior.checked.includes(id))],
-    changed: [...prior.changed, ...changed]
+    changed: [...prior.changed, ...changed],
+    // Piece 3 (brief 3C, R3): what code put back after the round's Reweave stays in the round's report.
+    ...(isObj(current) && Array.isArray(current.held) && { held: current.held })
   };
+}
+
+/**
+ * The round's report with what code put back outside the open angle after a Reweave (piece 3,
+ * brief 3C, R3; lib/weave.js holdOutsideOpenAngle): `held`, each put-back `{scope, id, change,
+ * became}`, beside the director's edits the round checked. Each later pass of the round keeps it
+ * (reportAfterPass), and the next round's report starts over. A report that checked no edit still
+ * holds the list for the readout; the stop reads such a report as none (handEditReportOf).
+ *
+ * @param {Object|null} report - the round's report after the Reweave's settle
+ * @param {Object[]} held - the hold's put-backs
+ * @returns {Object|null} the report, with `held` when code put anything back
+ */
+function reportWithHeld(report, held) {
+  if (!Array.isArray(held) || held.length === 0) return report;
+  return { ...(isObj(report) ? report : { checked: [], changed: [] }), held };
 }
 
 /**
@@ -4458,6 +4476,8 @@ module.exports = {
   standingEditsOf, standingAfterSendBack, carriedEdits, formatEditLines, editValueText,
   locateQuotedText, directorEditConcern, concernEditIds, concernFinding, editLocator,
   reportAfterPass, settleEdits, handEditReportOf, sectionKey, namesPerson,
+  // Piece 3 (brief 3C, R3): the Reweave's put-backs in the round's report
+  reportWithHeld,
   // Brief 4.5: the meeting's edits
   REWEAVE_PASS, WEAVE_EDIT_LINES_GUIDE, weaveEditsBetween, standingAtMeeting, weaveDirectorsShare, weaveMarks, editWhere,
   // Brief 4.6: the map's edits

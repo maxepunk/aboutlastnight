@@ -378,8 +378,9 @@ async function render() {
   // director's reweave with no note, and the director's send-back with the fixed note,
   // each round's banner reading round FIXED_ROUND. The fixed notes stand in for the
   // director's, and the weave the thread holds (or the fixed one planted above) is the
-  // version each rework starts from, with the director's standing edits; the checks run
-  // on it as the check node runs them, with the meeting still open.
+  // version each rework starts from, with the director's standing edits and their pick, which
+  // the reweave's scope names as the angle the director has open (piece 3, brief 3C); the checks
+  // run on it as the check node runs them, with the meeting still open.
   const arcState = { ...state, directorGateNotes: FIXED_NOTES };
   write(ARC_FILES[0], await arcNodes.weaveSystemPrompt(state.sessionConfig || {}, theme), await arcNodes.buildWeavePrompt(arcState));
   const { validationResults: weaveChecks } = await arcModule.validateArcStructure({ ...state, meetingApproved: false }, {});

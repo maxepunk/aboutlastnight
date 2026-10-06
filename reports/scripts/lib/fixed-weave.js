@@ -10,13 +10,13 @@
  * FIXED_BASELINE is the writer's weave, and FIXED_WEAVE the weave as the director left it
  * at the meeting (the shapes lib/meeting.js DIRECTOR_WEAVE_SCHEMA allows). The director's
  * changes between them, which lib/hand-edit-diff.js standingAtMeeting reads as the
- * standing edits:
+ * standing edits (piece 3, brief 3C):
+ * - a rewrite of angle 1's story, marked "[RENDER-DIFF EDIT]";
+ * - t3 flipped into angle 1;
  * - a thread they added, t5, appended to the angle they picked.
- * Beside them, the director's pick (angle 1), a rewrite of angle 1's story, marked "[RENDER-DIFF
- * EDIT]", and t3 flipped into angle 1: until slice 3C makes an angle's pitch and its threads the
- * director's edits, these two change what the settled weave prints and make no edit.
- * Question q1 carries the director's answer (`answer`), which is no edit, and sits beside
- * thread t2; q2 sits by the pitch, unanswered.
+ * Beside them, the director's pick (angle 1), which is no edit, and which the reweave's render
+ * names as the angle the director has open. Question q1 carries the director's answer
+ * (`answer`), which is no edit, and sits beside thread t2; q2 sits by the pitch, unanswered.
  *
  * A piece of thread t4's evidence names a document no record holds, RENDER-DIFF-DOC, in both
  * versions, so the weave checks find one failure on every session and the arc rework's

@@ -11,8 +11,9 @@
  *
  * The story meeting (brief 4.5): the director's round, a reweave or a send-back, marked
  * explicitly (`_meetingRound`), is the rework's too. A reweave fits the director's changes
- * in and keeps every line they did not touch; a send-back rethinks the weave as the note
- * asks. Code holds every pass but a send-back to the director's edits, keeps every answer
+ * into the angle they have open and keeps every line they did not touch, and code puts back
+ * everything outside that angle (piece 3, brief 3C, R3); a send-back rethinks the weave as the
+ * note asks. Code holds every pass but a send-back to the director's edits, keeps every answer
  * with its question, and keeps the writer's last weave as the meeting's baseline. The
  * checks read only the writer's text (R11): the director's share of the weave is never a
  * check's failure, and a check that finds a fault in it files a concern for the meeting. The
@@ -63,7 +64,7 @@ const { WEAVE_QUESTIONS_PROPERTY, WEAVE_QUESTION_THREAD_KEY, weaveQuestionsOf, c
 const {
   CONNECTION_KINDS, MEETING_WORD_BOUND, QUESTION_WORD_BOUND, PICKED_KEY, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS,
   isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
-  weaveFindings, withPickFrom, withHeldQuestionThreads, writersShareOf, weaveWritersTextBlank, meetingLengthOf, weaveIdOf
+  weaveFindings, withPickFrom, withHeldQuestionThreads, holdOutsideOpenAngle, writersShareOf, weaveWritersTextBlank, meetingLengthOf, weaveIdOf
 } = require('../../weave');
 // Phase 4b (brief 1B; R10): the evidence under each line, the sources a piece may name, and what
 // the checks the weave and the map share read.
@@ -72,7 +73,7 @@ const { SOURCES_GLOSS, EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../
 const { meetingCheckpointData } = require('../../meeting');
 const { wordsShown } = require('../../stop-pages');
 const {
-  carriedEdits, settleEdits, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS
+  carriedEdits, settleEdits, reportWithHeld, weaveDirectorsShare, directorEditConcern, SEND_BACK_PASS, REWEAVE_PASS
 } = require('../../hand-edit-diff');
 // Brief 4.5: a send-back that carries the director's edits asks for the list of those it
 // changed, as the outline's and the article's send-backs do (F1): one schema rule, one strip.
@@ -543,7 +544,7 @@ const NOTE_CORRECTS_A_MECHANIC = 'The director knows the game, so a note that co
  */
 const ARC_REWORK_CLAUSES = {
   'send-back': ": the director sent it back, and the director's note in the revision context is the task.",
-  reweave: ': the director changed it at the story meeting and asked for a reweave, and the revision context lists the changes this rework fits in.',
+  reweave: ': the director changed the angle they have open at the story meeting and asked for a reweave, and the revision context names that angle and lists the changes this rework fits into it.',
   automatic: ' after an automatic check or fact check; the revision context lists what it found and what this rework fixes.'
 };
 
@@ -702,10 +703,12 @@ function arcReworkCall(state) {
  * weave's schema (arcReworkCall). An automatic pass runs after a failed check or after
  * the fact check found a breach, and fixes what it found in the writer's text. The
  * director's round (brief 4.5), marked `_meetingRound`, runs on a reweave or a send-back
- * at the story meeting: a reweave fits the director's changes in and keeps every other
- * line; a send-back rethinks the weave as the note asks (TH7) and may change one of the
- * director's edits, saying why (the changed-edits list its schema adds). Neither reads a
- * finding from before the round.
+ * at the story meeting: a reweave fits the director's changes into the angle they have open
+ * and keeps every other line, and code puts back by id everything outside that angle, each
+ * put-back in the round's report (lib/weave.js holdOutsideOpenAngle; piece 3, brief 3C, R3); a
+ * send-back rethinks the weave as the note asks (TH7) and may change one of the director's
+ * edits, saying why (the changed-edits list its schema adds). Neither reads a finding from
+ * before the round.
  *
  * Every pass but a send-back is held to the director's standing edits: code puts back
  * each line it changed (lib/hand-edit-diff.js settleEdits), and the round's report
@@ -767,12 +770,14 @@ async function reviseArcs(state, config) {
     let pass = revisionCount;
     if (meetingRound === 'send-back') pass = SEND_BACK_PASS;
     else if (meetingRound === 'reweave') pass = REWEAVE_PASS;
+    // Piece 3 (brief 3C, R3): a Reweave works on the angle the director has open, and code puts
+    // back everything outside it before the director's edits are settled, so a question beside a
+    // thread the rework dropped from another angle keeps its thread.
+    const hold = meetingRound === 'reweave' ? holdOutsideOpenAngle(output, call.before) : { weave: output, held: [] };
     const settled = settleEdits(state._weaveHandEditReport, {
       edits: call.edits,
       before: call.before,
-      // Brief 4.14a: the weave the round started from keeps its connection ids taken, so a
-      // connection the fix adds after a round is never marked as one the round changed.
-      after: weaveFromRework(output, previous, { directorRound }),
+      after: weaveFromRework(hold.weave, previous, { directorRound }),
       pass,
       reasons: call.asksForChangedEdits ? reasons : []
     });
@@ -781,7 +786,7 @@ async function reviseArcs(state, config) {
     return {
       weave,
       _weaveBaseline: weaveForPrompt(weave),
-      _weaveHandEditReport: settled.report,
+      _weaveHandEditReport: reportWithHeld(settled.report, hold.held),
       ...(directorRound && { _weaveMarks: { round: meetingRound, from: call.before, at: new Date().toISOString() } }),
       _meetingRound: null,
       _arcFeedback: null,

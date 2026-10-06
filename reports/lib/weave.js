@@ -318,6 +318,112 @@ function withPickFrom(weave, previous) {
 }
 
 /**
+ * The Reweave's hold (phase 4b, piece 3, brief 3C; spec 2026-10-06 section 7; R3; survey Q6): a
+ * Reweave works on the angle the director has open, its threads and the connections between them,
+ * and code keeps the rest of the weave as the director left it, so the director can still switch
+ * to another angle. Given the rework's weave and the version it started from (the director's, with
+ * their pick), code puts back by id, from that version:
+ * - every angle but the open one, in the order the director saw them, and the open one too when the
+ *   rework dropped it; an angle the rework pitched of its own goes;
+ * - every thread outside the open angle (one neither the open angle nor the rework's version of it
+ *   names), and a thread another angle names that the rework dropped, where it sat among the
+ *   threads; a thread of the rework's own outside the open angle goes. A thread the open angle
+ *   names stays as the rework wrote it, so a thread it shares with another angle may be reworded,
+ *   and the new words show in both;
+ * - every connection that does not join two of the open angle's threads, judged by the joins of
+ *   the version the rework started from; one of the rework's own outside them goes.
+ * The questions are code's already (carriedWeaveQuestions), and the director's lines inside the
+ * open angle are their edits, which settleEdits puts back after every pass.
+ *
+ * Each put-back is one entry of `held`, `{scope, id, change, became}`: the collection, the
+ * element's id, what the rework did (`rewritten`, `dropped`, or `added` for an element of its own
+ * code took out) and the element as the rework returned it (null when it dropped it). The round's
+ * report keeps the list (lib/hand-edit-diff.js reportAfterPass). The hold is the Reweave's alone:
+ * the round's check rework and fact-check fix are automatic passes, which change only what their
+ * findings name, in any angle (R3).
+ *
+ * @param {Object} rework - the weave the rework returned
+ * @param {Object} before - the version the rework started from, with the director's pick
+ * @returns {{weave: Object, held: Object[]}} the weave held, and each put-back; a rework that is no
+ *   weave, or holds no threads, comes back as it came, for the rework's own check to refuse
+ */
+function holdOutsideOpenAngle(rework, before) {
+  const open = pickedAngleOf(before);
+  if (!isWeave(rework) || rework.threads.length === 0 || !isWeave(before) || !open) return { weave: rework, held: [] };
+  const openId = weaveIdOf(open);
+  const held = [];
+  const same = (a, b) => canonicalJson(a) === canonicalJson(b);
+  const firstById = (elements) => {
+    const byId = new Map();
+    elements.forEach((element) => { const id = weaveIdOf(element); if (id && !byId.has(id)) byId.set(id, element); });
+    return byId;
+  };
+
+  // The angles: the director's order, the open angle as the rework wrote it.
+  const reworkAngles = firstById(objectsOf(rework.angles));
+  const beforeAngles = objectsOf(before.angles);
+  const angles = beforeAngles.map((angle) => {
+    const id = weaveIdOf(angle);
+    const theirs = reworkAngles.get(id);
+    if (id === openId && theirs) return theirs;
+    if (!theirs) held.push({ scope: 'angles', id, change: 'dropped', became: null });
+    else if (!same(theirs, angle)) held.push({ scope: 'angles', id, change: 'rewritten', became: theirs });
+    return angle;
+  });
+  const beforeAngleIds = new Set(beforeAngles.map(weaveIdOf));
+  reworkAngles.forEach((angle, id) => {
+    if (!beforeAngleIds.has(id)) held.push({ scope: 'angles', id, change: 'added', became: angle });
+  });
+
+  // The open angle's threads, as the director left it and as the rework wrote it; and the threads
+  // the other angles name, which the weave must hold.
+  const inOpen = new Set([...angleThreadIds(open), ...angleThreadIds(reworkAngles.get(openId))]);
+  const namedElsewhere = new Set(angles.filter((angle) => weaveIdOf(angle) !== openId).flatMap(angleThreadIds));
+
+  // One collection held: each element inside the open angle as the rework wrote it, the director's
+  // version of every other, and back where it sat each element the hold keeps that the rework dropped.
+  const holdList = (scope, reworkList, beforeList, inside, keep) => {
+    const beforeById = firstById(beforeList);
+    const out = [];
+    const placed = new Set();
+    reworkList.forEach((element) => {
+      const id = weaveIdOf(element);
+      const was = beforeById.get(id);
+      if (!id || placed.has(id) || inside(was || element)) {
+        if (id) placed.add(id);
+        out.push(element);
+        return;
+      }
+      placed.add(id);
+      if (!was) { held.push({ scope, id, change: 'added', became: element }); return; }
+      if (!same(element, was)) held.push({ scope, id, change: 'rewritten', became: element });
+      out.push(was);
+    });
+    beforeList.forEach((element, index) => {
+      const id = weaveIdOf(element);
+      if (!id || placed.has(id) || !keep(element)) return;
+      placed.add(id);
+      held.push({ scope, id, change: 'dropped', became: null });
+      const prior = beforeList.slice(0, index).reverse().map(weaveIdOf).find((priorId) => out.some((e) => weaveIdOf(e) === priorId));
+      out.splice(prior ? out.findIndex((e) => weaveIdOf(e) === prior) + 1 : 0, 0, element);
+    });
+    return out;
+  };
+
+  const threadInside = (thread) => inOpen.has(weaveIdOf(thread));
+  const threads = holdList('threads', objectsOf(rework.threads), objectsOf(before.threads), threadInside,
+    (thread) => !threadInside(thread) || namedElsewhere.has(weaveIdOf(thread)));
+  const connectionInside = (connection) => {
+    const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf) : [];
+    return joins.length === 2 && joins.every((id) => inOpen.has(id));
+  };
+  const connections = holdList('connections', objectsOf(rework.connections), objectsOf(before.connections), connectionInside,
+    (connection) => !connectionInside(connection));
+
+  return { weave: { ...rework, angles, threads, connections }, held };
+}
+
+/**
  * The weave with each question's `thread` kept only while the weave holds that thread (R10): a
  * question whose thread a rework dropped or renumbered sits by the pitch, answered or not, and
  * keeps its answer.
@@ -1018,6 +1124,8 @@ module.exports = {
   settledAngleOf,
   withPickFrom,
   withHeldQuestionThreads,
+  // Brief 3C (R3): the Reweave's hold on everything outside the open angle
+  holdOutsideOpenAngle,
   CONNECTION_KINDS,
   WEAVE_CHECKS_SOURCE,
   FACT_CHECK_MARK_KEY,

@@ -462,9 +462,10 @@ describe('the rework rules (phase 3, 3.3)', () => {
     const firstLine = (text) => text.split('\n')[0];
     expect(firstLine(arcRevisionRules('send-back'))).toMatch(/reworking the weave/);
     expect(firstLine(arcRevisionRules('send-back'))).toMatch(/director sent it back/);
-    // Brief 4.5: a reweave's first line names the changes the revision context lists.
+    // Brief 4.5: a reweave's first line names the changes the revision context lists; piece 3
+    // (brief 3C): on the angle the director has open, which the revision context names.
     expect(firstLine(arcRevisionRules('reweave'))).toMatch(/reworking the weave/);
-    expect(firstLine(arcRevisionRules('reweave'))).toMatch(/asked for a reweave, and the revision context lists the changes/);
+    expect(firstLine(arcRevisionRules('reweave'))).toMatch(/the angle they have open at the story meeting and asked for a reweave, and the revision context names that angle and lists the changes/);
     expect(firstLine(arcRevisionRules(null))).toMatch(/reworking the weave/);
     expect(firstLine(arcRevisionRules(null))).toMatch(/automatic check or fact check/);
     // Brief 4.6: the map's rework.

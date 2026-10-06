@@ -14,7 +14,7 @@ const {
   carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE,
   MAP_EDIT_LINES_GUIDE, isMap
 } = require('../../hand-edit-diff');
-const { WEAVE_CHECKS_SOURCE, MEETING_ROUNDS, weaveForRework } = require('../../weave');
+const { WEAVE_CHECKS_SOURCE, MEETING_ROUNDS, weaveForRework, pickedAngleOf, weaveIdOf } = require('../../weave');
 const { MAP_CHECKS_SOURCE } = require('../../map');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1151,9 +1151,20 @@ ${formatEditLines(standingEdits)}
     standingEdits.length > 0 && 'each change in <HAND_EDITS>',
     humanFeedback && 'each change the note above asks for'
   ].filter(Boolean).join(', and ');
-  const reweaveScope = reweaveAsks
-    ? `The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: ${reweaveAsks}. It rewrites the lines a change needs, such as the story, the question, the headline, a connection or the convergence once a thread takes a new role, and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed.`
-    : 'The director asked for a reweave at the story meeting with no change to fit in. This rework returns the weave with every line word for word.';
+  // Piece 3 (brief 3C, R3; spec 2026-10-06 section 7): a reweave works on the angle the director
+  // has open, named here in words, since the weave the rework reads carries no pick
+  // (weaveForRework). Code puts back everything outside it (lib/weave.js holdOutsideOpenAngle), and
+  // the scope says so with its reason, so the rework spends no effort there.
+  const openAngle = meetingRound === 'reweave' ? pickedAngleOf(previousOutput) : null;
+  const openAngleWords = openAngle ? `${weaveIdOf(openAngle)} ("${typeof openAngle.headline === 'string' ? openAngle.headline.trim() : ''}")` : '';
+  let reweaveScope;
+  if (!reweaveAsks) {
+    reweaveScope = 'The director asked for a reweave at the story meeting with no change to fit in. This rework returns the weave with every line word for word.';
+  } else if (openAngle) {
+    reweaveScope = `The director asked for a reweave at the story meeting of the angle they have open, ${openAngleWords}. This rework fits the director's changes into that angle: ${reweaveAsks}. It rewrites the lines of that angle a change needs, such as its story, its question or where it ends up, and the connections between the threads now in it, and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed. Every other angle, every thread outside the open angle and every connection that does not join two of its threads stay as written, because the director may still switch to another angle, and code puts back anything there that changes. A thread the open angle shares with another angle may be reworded, and the new words show in every angle that tells it.`;
+  } else {
+    reweaveScope = `The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: ${reweaveAsks}. It rewrites the lines a change needs and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed.`;
+  }
   const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.`;
   let scope;
   if (meetingRound === 'reweave') scope = reweaveScope;
