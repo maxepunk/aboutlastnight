@@ -576,10 +576,30 @@ describe("1F: the map's styles", () => {
   const map = css.slice(css.indexOf('/* ── 4.9: the map ──'), css.indexOf("/* ── 4.10: the desk's marks ──"));
   const ruled = (rule) => new RegExp(`${rule.replace(/[.-]/g, '\\$&')}[\\s,{:]`).test(map);
 
-  it("styles the move's words, the card mark, the fold and its pieces, a piece that cuts against its move, a check beside its line, the photo's description and the add line's move", () => {
-    ['.map__move-words', '.map__card-mark', '.map__fold', '.map__pieces', '.map__piece', '.map__cuts-against', '.map__no-evidence',
-      '.map__check--beside', '.map__photo-description', '.map__add-move']
+  it("styles the move's words, the card mark, a check beside its line, the photo's description and the add line's move", () => {
+    ['.map__move-words', '.map__card-mark', '.map__check--beside', '.map__photo-description', '.map__add-move']
       .forEach((rule) => expect(`${rule}: ${ruled(rule)}`).toBe(`${rule}: true`));
+  });
+
+  // Fix round 3: the map's fold copied the meeting's declaration for declaration. Each of its
+  // rules now names both pages' classes, once, under the meeting's section.
+  it("styles the fold, its pieces and a piece that cuts against its move in the meeting's rules, each grouped with its twin", () => {
+    const twins = [
+      ['.meeting__fold .collapsible-section', '.map__fold .collapsible-section'],
+      ['.meeting__fold .collapsible-header', '.map__fold .collapsible-header'],
+      ['.meeting__fold .collapsible-header:hover', '.map__fold .collapsible-header:hover'],
+      ['.meeting__fold .collapsible-body', '.map__fold .collapsible-body'],
+      ['.meeting__pieces', '.map__pieces'],
+      ['.meeting__piece', '.map__piece'],
+      ['.meeting__piece.meeting__cuts-against', '.map__piece.map__cuts-against'],
+      ['.meeting__no-evidence', '.map__no-evidence']
+    ];
+    twins.forEach(([meeting, ofMap]) => {
+      const grouped = `${meeting},\n${ofMap} {`;
+      expect(`${grouped}: ${css.split(grouped).length - 1}`).toBe(`${grouped}: 1`);
+    });
+    ['.map__fold', '.map__pieces', '.map__piece', '.map__cuts-against', '.map__no-evidence']
+      .forEach((rule) => expect(`${rule}: ${ruled(rule)}`).toBe(`${rule}: false`));
   });
 
   it('keeps no style for an id, a kind, the material or the header that held them', () => {

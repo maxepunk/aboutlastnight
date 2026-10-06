@@ -2874,15 +2874,19 @@ textarea.input {
 }
 
 /* What's behind a line: a small toggle under it that opens its evidence in place, quieter than
-   the line itself, so the page reads as the story and the evidence stays a click away. */
-.meeting__fold .collapsible-section {
+   the line itself, so the page reads as the story and the evidence stays a click away. The
+   story meeting's threads and connections and the map's moves (4.9 below) fold alike, so each
+   rule names both pages' classes. */
+.meeting__fold .collapsible-section,
+.map__fold .collapsible-section {
   margin: 0;
   border: none;
   border-radius: 0;
   overflow: visible;
 }
 
-.meeting__fold .collapsible-header {
+.meeting__fold .collapsible-header,
+.map__fold .collapsible-header {
   width: auto;
   padding: 2px 0;
   background: none;
@@ -2892,16 +2896,19 @@ textarea.input {
   color: var(--text-muted);
 }
 
-.meeting__fold .collapsible-header:hover {
+.meeting__fold .collapsible-header:hover,
+.map__fold .collapsible-header:hover {
   background: none;
   color: var(--accent-amber);
 }
 
-.meeting__fold .collapsible-body {
+.meeting__fold .collapsible-body,
+.map__fold .collapsible-body {
   padding: var(--space-xs) 0 0 var(--space-sm);
 }
 
-.meeting__pieces {
+.meeting__pieces,
+.map__pieces {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -2911,7 +2918,8 @@ textarea.input {
 }
 
 /* One piece of evidence: its sources by name, what it shows. */
-.meeting__piece {
+.meeting__piece,
+.map__piece {
   padding-left: var(--space-sm);
   border-left: 2px solid rgba(78, 205, 196, 0.3);
   color: var(--text-secondary);
@@ -2919,13 +2927,16 @@ textarea.input {
   line-height: 1.45;
 }
 
-/* A piece that cuts against its line: the line still stands, and the piece says where it gives. */
-.meeting__piece.meeting__cuts-against {
+/* A piece that cuts against its line or its move: the line still stands, and the piece says
+   where it gives. */
+.meeting__piece.meeting__cuts-against,
+.map__piece.map__cuts-against {
   border-left-color: rgba(231, 76, 60, 0.6);
   color: var(--text-primary);
 }
 
-.meeting__no-evidence {
+.meeting__no-evidence,
+.map__no-evidence {
   color: var(--text-muted);
   font-size: 0.8rem;
   font-style: italic;
@@ -3190,63 +3201,8 @@ textarea.input {
   white-space: nowrap;
 }
 
-/* What's behind a move: a small toggle under it that opens its evidence in place, quieter than
-   the move itself, so the page reads as the story and the evidence stays a click away. */
-.map__fold .collapsible-section {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  overflow: visible;
-}
-
-.map__fold .collapsible-header {
-  width: auto;
-  padding: 2px 0;
-  background: none;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  color: var(--text-muted);
-}
-
-.map__fold .collapsible-header:hover {
-  background: none;
-  color: var(--accent-amber);
-}
-
-.map__fold .collapsible-body {
-  padding: var(--space-xs) 0 0 var(--space-sm);
-}
-
-.map__pieces {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-/* One piece of evidence: its sources by name, what it shows. */
-.map__piece {
-  padding-left: var(--space-sm);
-  border-left: 2px solid rgba(78, 205, 196, 0.3);
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  line-height: 1.45;
-}
-
-/* A piece that cuts against its move: the move still stands, and the piece says where it gives. */
-.map__piece.map__cuts-against {
-  border-left-color: rgba(231, 76, 60, 0.6);
-  color: var(--text-primary);
-}
-
-.map__no-evidence {
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-style: italic;
-}
+/* What's behind a move folds as a line of the story meeting does: its rules name both pages'
+   classes, under 4.8 above. */
 
 .map__photo {
   display: flex;
@@ -3270,7 +3226,8 @@ textarea.input {
   flex-shrink: 0;
 }
 
-/* A photo the console cannot serve shows its filename alone. */
+/* A photo the console cannot serve shows the director's description alone, or its filename when
+   there is none. */
 .map__thumb--missing {
   display: none;
 }
