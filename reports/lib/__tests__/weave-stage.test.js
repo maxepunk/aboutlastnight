@@ -258,6 +258,22 @@ describe('the weave checks (the check node)', () => {
       expect(_arcValidation.failures).toEqual([]);
       expect(_arcValidation.words).toBeLessThan(MEETING_WORD_BOUND);
     });
+
+    // Fix round 1, finding 2 (R11): a connection's line the director wrote, rewritten or on a
+    // connection they added, is theirs. The checks never file a time or a quotation in it as
+    // the writer's, so it spends no rework, and the page counts none of its words as the writer's.
+    it("never fails a connection's line the director wrote, and counts none of its words as the writer's", () => {
+      const state = pass();
+      const left = clone(state.weave);
+      left.connections[0] = { ...left.connections[0], line: 'Morgan steered the deadlock at 9:58.' };
+      left.connections.push({ id: 'c3', joins: ['t1', 't2'], line: 'The 9:58 sale, "the rest", came at the bar.', kind: 'moment' });
+      const directors = { ...state, weave: left, _weaveHandEdits: standingAtMeeting(null, clone(state.weave), left) };
+      const { _arcValidation, validationResults } = validateArcStructure(directors, {});
+      expect(_arcValidation.failures).toEqual([]);
+      expect(validationResults).toMatchObject({ passed: true, structuralIssues: [] });
+      const writersPage = { ...state, weave: { ...clone(state.weave), connections: state.weave.connections.map((c, i) => (i === 0 ? { ...c, line: '' } : c)) } };
+      expect(_arcValidation.words).toBe(firstLook(writersPage));
+    });
   });
 });
 

@@ -1774,13 +1774,20 @@ function standingAtMeeting(previous, baseline, left, { names, shown = baseline }
  * - `addedThreads`: a thread they added, by its id;
  * - `reroledThreads`: a thread whose role they changed;
  * - `fields`: a text field of the weave they rewrote (`story`, `fromYourNotes`, ...);
- * - `threadFields`: a field of a thread they rewrote, as `t3.line`.
+ * - `threadFields`: a field of a thread they rewrote, as `t3.line`;
+ * - `addedConnections`: a connection they added, by its id;
+ * - `connectionFields`: a field of a connection they rewrote, as `c1.line` (phase 4b fix
+ *   round 1, finding 2: a connection's line is a line of theirs the story-terms check reads).
+ * A connection they struck, or brought back, is a whole-element edit of a connection the
+ * writer wrote, so it is in none of them: a struck connection prints nothing, and the words
+ * of one brought back are the writer's (task 4.5d).
  *
  * @param {Object[]|null} edits - the standing edits the weave carries
- * @returns {{addedThreads: Object, reroledThreads: Object, fields: Object, threadFields: Object}}
+ * @returns {{addedThreads: Object, reroledThreads: Object, fields: Object, threadFields: Object,
+ *            addedConnections: Object, connectionFields: Object}}
  */
 function weaveDirectorsShare(edits) {
-  const share = { addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {} };
+  const share = { addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {} };
   (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).forEach((e) => {
     const steps = stepsOf(e);
     const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
@@ -1788,10 +1795,19 @@ function weaveDirectorsShare(edits) {
       share.fields[head] = e.id;
       return;
     }
-    if (head !== 'threads' || !isElementStep(steps[1]) || !steps[1].match || steps[1].match.id == null) return;
+    if (!['threads', 'connections'].includes(head) || !isElementStep(steps[1]) || !steps[1].match || steps[1].match.id == null) return;
     const id = String(steps[1].match.id);
+    const added = !isCut(e) && (e.before === null || e.before === undefined);
+    if (head === 'connections') {
+      if (steps.length === 2) {
+        if (added) share.addedConnections[id] = e.id;
+      } else {
+        share.connectionFields[`${id}.${steps[2].key}`] = e.id;
+      }
+      return;
+    }
     if (steps.length === 2) {
-      if (!isCut(e) && (e.before === null || e.before === undefined)) share.addedThreads[id] = e.id;
+      if (added) share.addedThreads[id] = e.id;
       return;
     }
     const field = steps[2].key;

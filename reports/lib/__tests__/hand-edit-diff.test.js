@@ -1574,9 +1574,24 @@ describe('4.5: the meeting\'s edits', () => {
       addedThreads: { t7: 'E4' },
       reroledThreads: { t3: 'E3' },
       fields: { story: 'E1' },
-      threadFields: { 't2.line': 'E2' }
+      threadFields: { 't2.line': 'E2' },
+      addedConnections: {},
+      connectionFields: {}
     });
-    expect(D.weaveDirectorsShare(null)).toEqual({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {} });
+    expect(D.weaveDirectorsShare(null)).toEqual({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {} });
+  });
+
+  // Fix round 1, finding 2 (R11): a connection's line the director rewrote, and a connection
+  // they added, are the director's share too, which the story-terms check and the writer's page
+  // leave out. A strike is a whole-element edit of a connection the writer wrote, so it is
+  // neither: a struck connection prints nothing and is checked for nothing.
+  it("weaveDirectorsShare reads a connection's field the director rewrote and a connection they added; a strike is neither", () => {
+    const left = writers();
+    left.connections[0].line = 'Sloane steered the vote at 9:58.';
+    left.connections.push({ id: 'c3', joins: ['t2', 't3'], line: 'The split cost the account its last sale.', kind: 'moment' });
+    const share = D.weaveDirectorsShare(D.standingAtMeeting(null, writers(), left).edits);
+    expect(share).toMatchObject({ connectionFields: { 'c1.line': 'E1' }, addedConnections: { c3: 'E2' } });
+    expect(D.weaveDirectorsShare(D.standingAtMeeting(null, writers(), directors()).edits)).toMatchObject({ connectionFields: {}, addedConnections: {} });
   });
 
   it('carriedEdits: a weave carries each edit whose place holds the director\'s value', () => {

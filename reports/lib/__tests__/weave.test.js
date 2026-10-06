@@ -91,7 +91,7 @@ const typesOf = (failures) => failures.map((f) => f.type);
 /** The weave with one thread changed. */
 const withThread = (id, change) => ({ ...clone(WEAVE), threads: clone(WEAVE).threads.map((t) => (t.id === id ? change(t) : t)) });
 /** The director's share of the weave, as lib/hand-edit-diff.js weaveDirectorsShare reads it from the edits. */
-const share = (parts = {}) => ({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, ...parts });
+const share = (parts = {}) => ({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {}, ...parts });
 
 describe("the weave's shape (WEAVE_SCHEMA), on a weave in 100226's shape", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
@@ -405,6 +405,15 @@ describe('the weave checks (checkWeave)', () => {
       expect(typesOf(check(typed))).toEqual(['story-terms', 'story-terms', 'story-terms', 'thread-without-evidence']);
       expect(check(typed, { directorsShare: share({ fields: { story: 'E1' }, threadFields: { 't3.line': 'E2' }, addedThreads: { t7: 'E3' } }) })).toEqual([]);
     });
+
+    // Fix round 1, finding 2 (R11): a connection's line is the director's own line too when
+    // they rewrote it or added the connection, so a time or a quotation in it is no failure.
+    it("is silent on a connection's line the director rewrote and on a connection they added", () => {
+      const typed = { ...clone(WEAVE), connections: clone(WEAVE).connections.map((c) => (c.id === 'c2' ? { ...c, line: 'The scoreboard at 7:58 brings the money in.' } : c)) };
+      typed.connections.push({ id: 'c9', joins: ['t1', 't2'], line: 'RowanVale took "the rest" at 7:58.', kind: 'moment' });
+      expect(check(typed).map((f) => [f.type, f.place])).toEqual([['story-terms', 'connections[#c2]'], ['story-terms', 'connections[#c9]']]);
+      expect(check(typed, { directorsShare: share({ connectionFields: { 'c2.line': 'E1' }, addedConnections: { c9: 'E2' } }) })).toEqual([]);
+    });
   });
 
   describe("the room's verdict is one of the threads", () => {
@@ -671,6 +680,19 @@ describe("the writer's share of the page (writersShareOf)", () => {
     expect(writers.threads[2].line).toBe('');
     expect(writers.questions[0]).not.toHaveProperty('answer');
     expect(weave.story).toBe('The director wrote this story at length.');
+  });
+
+  // Fix round 1, finding 2: a connection's line the director rewrote reads empty, and a
+  // connection they added is left out, as their threads' lines and threads are.
+  it("reads a connection's line the director rewrote empty, and leaves out a connection they added", () => {
+    const weave = clone(WEAVE);
+    weave.connections[1] = { ...weave.connections[1], line: 'A connection line the director typed at length.' };
+    weave.connections.push({ id: 'c9', joins: ['t1', 't2'], line: 'A connection the director added.', kind: 'moment' });
+    const writers = writersShareOf(weave, share({ connectionFields: { 'c2.line': 'E1' }, addedConnections: { c9: 'E2' } }));
+    expect(writers.connections.map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
+    expect(writers.connections[1]).toEqual({ ...WEAVE.connections[1], line: '' });
+    expect(writers.connections[0]).toEqual(WEAVE.connections[0]);
+    expect(weave.connections[1].line).toBe('A connection line the director typed at length.');
   });
 
   it('keeps "from your notes" as the page prints it, since an empty one would print the thin-notes line', () => {

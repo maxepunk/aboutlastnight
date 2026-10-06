@@ -166,10 +166,12 @@ function occurrenceKeys(elements) {
 
 /**
  * The director's share of the weave, with each part present: `{addedThreads,
- * reroledThreads, fields, threadFields}`, each a map from what the director changed to
- * the id of their standing edit (lib/hand-edit-diff.js weaveDirectorsShare builds it):
- * a thread they added (`t7`), a thread they re-roled (`t3`), a top-level field they
- * rewrote (`story`), a field of a thread they rewrote (`t3.line`).
+ * reroledThreads, fields, threadFields, addedConnections, connectionFields}`, each a map
+ * from what the director changed to the id of their standing edit (lib/hand-edit-diff.js
+ * weaveDirectorsShare builds it): a thread they added (`t7`), a thread they re-roled
+ * (`t3`), a top-level field they rewrote (`story`), a field of a thread they rewrote
+ * (`t3.line`), a connection they added (`c5`), a field of a connection they rewrote
+ * (`c1.line`).
  */
 function shareOf(directorsShare) {
   const share = directorsShare && typeof directorsShare === 'object' ? directorsShare : {};
@@ -177,7 +179,9 @@ function shareOf(directorsShare) {
     addedThreads: share.addedThreads || {},
     reroledThreads: share.reroledThreads || {},
     fields: share.fields || {},
-    threadFields: share.threadFields || {}
+    threadFields: share.threadFields || {},
+    addedConnections: share.addedConnections || {},
+    connectionFields: share.connectionFields || {}
   };
 }
 
@@ -280,10 +284,10 @@ function printedWeaveFields(weave) {
  * The weave as the writer's share of it, for the meeting's page the check node counts
  * (Review focus 3: only the writer's output is held to the bound, never the director's
  * version). Read from the director's share (shareOf), it has:
- * - each line the director rewrote empty: a field of the weave, a field of a thread, the
- *   stronger main thread's reason;
+ * - each line the director rewrote empty: a field of the weave, a field of a thread or of a
+ *   connection, the stronger main thread's reason;
  * - no thread the director added or re-roled, since whether a re-roled thread's line prints
- *   is the director's choice;
+ *   is the director's choice, and no connection they added;
  * - no answer on any question, since the answers are the director's words.
  * "From your notes" stays as the page prints it: it quotes the director's notes, and an empty
  * one would print the page's thin-notes line in its place. The weave given is left as it was.
@@ -304,16 +308,23 @@ function writersShareOf(weave, directorsShare) {
     }
     if (typeof out[field] === 'string') out[field] = '';
   });
+  /** The element with each text field the director rewrote (`<id>.<field>` in `fields`) empty. */
+  const writersLines = (element, fields) => {
+    const id = weaveIdOf(element);
+    const typed = Object.keys(fields)
+      .filter((place) => id && place.startsWith(`${id}.`))
+      .map((place) => place.slice(id.length + 1))
+      .filter((field) => typeof element[field] === 'string');
+    return typed.length === 0 ? element : { ...element, ...Object.fromEntries(typed.map((field) => [field, ''])) };
+  };
   out.threads = weave.threads
     .filter((thread) => !(has(share.addedThreads, weaveIdOf(thread)) || has(share.reroledThreads, weaveIdOf(thread))))
-    .map((thread) => {
-      const id = weaveIdOf(thread);
-      const typed = Object.keys(share.threadFields)
-        .filter((place) => id && place.startsWith(`${id}.`))
-        .map((place) => place.slice(id.length + 1))
-        .filter((field) => typeof thread[field] === 'string');
-      return typed.length === 0 ? thread : { ...thread, ...Object.fromEntries(typed.map((field) => [field, ''])) };
-    });
+    .map((thread) => writersLines(thread, share.threadFields));
+  if (Array.isArray(weave.connections)) {
+    out.connections = weave.connections
+      .filter((connection) => !has(share.addedConnections, weaveIdOf(connection)))
+      .map((connection) => writersLines(connection, share.connectionFields));
+  }
   if (Array.isArray(weave.questions)) out.questions = withoutAnswers(weave.questions);
   return out;
 }
@@ -593,9 +604,11 @@ function elementPlace(collection, element) {
  *   with lib/stop-pages.js wordsShown and passes the count, which this module does not compute.
  *
  * The director's share of the weave is never a check's failure: a line they wrote is not held
- * to story terms, a thread they added or re-roled may have no evidence and no reason, a field
- * they rewrote is not checked against the notes, and their words add nothing to the count. The
- * evidence is never theirs (R6), so every piece is the writer's, under the director's thread too.
+ * to story terms (a field of the weave, of a thread or of a connection they rewrote, and every
+ * line of a thread or a connection they added), a thread they added or re-roled may have no
+ * evidence and no reason, a field they rewrote is not checked against the notes, and their
+ * words add nothing to the count. The evidence is never theirs (R6), so every piece is the
+ * writer's, under the director's thread too.
  * A failure their change causes is a concern on their edit, beside its line: the verdict thread
  * they left out, the verdict flag they took off.
  *
@@ -712,7 +725,10 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
   liveConnections(weave).forEach((connection) => {
     const words = connectionWords(connection);
     const place = elementPlace('connections', connection);
-    elementTerms(words, place, connection, ['line']);
+    const connectionId = weaveIdOf(connection);
+    if (!has(share.addedConnections, connectionId)) {
+      elementTerms(words, place, connection, ['line'].filter((field) => !has(share.connectionFields, `${connectionId}.${field}`)));
+    }
     const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf) : [];
     if (joins.length !== 2 || !joins[0] || !joins[1] || joins[0] === joins[1]) {
       fail('connection-joins-unknown-thread', `${opening(words)} must join two different threads of the weave. Give the ids of the two threads it joins.`, place);
