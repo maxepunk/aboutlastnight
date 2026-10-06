@@ -19,12 +19,16 @@ const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 const { SqliteSaver } = require('@langchain/langgraph-checkpoint-sqlite');
 
-const { REQUIRED_MARKERS } = require('../../../scripts/render-prompts');
+const { REQUIRED_MARKERS, plantReason } = require('../../../scripts/render-prompts');
 const { renderProblems } = require('../../../scripts/lib/prompt-sections');
 const { loadCallModules, renderJudge } = require('../../../scripts/lib/render-calls');
 const { createReportGraphWithCheckpointer } = require('../../../lib/workflow/graph');
 const { _testing: { TRUTH_MATERIAL } } = require('../../../lib/workflow/nodes/evaluator-nodes');
-const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
+const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('../../../lib/__tests__/fixtures/rework-state');
+const { oldShapeMapChannels, oldShapeWeave, oldShapeMap } = require('../../../lib/__tests__/fixtures/old-shapes');
+const { isWeave } = require('../../../lib/weave');
+const { isMap } = require('../../../lib/hand-edit-diff');
+const { isOldShapeWeave, isOldShapeMap } = require('../../../lib/old-thread');
 
 const REPO = path.join(__dirname, '..', '..', '..');
 const SCRIPT = path.join(REPO, 'scripts', 'render-prompts.js');
@@ -97,11 +101,15 @@ describe('4.11: the script renders every call, and checks every marker, from a s
     saver.db.close();
   }
 
-  /** Run the script on thread `id`, as the integrator does; its exit code and output. */
+  /** Run the script on thread `id`, as the integrator does, once; its exit code and output. */
+  const runs = {};
   function render(id) {
-    const out = path.join(dir, `render-${id}`);
-    const run = spawnSync(process.execPath, [SCRIPT, '--session', id, '--db', dbPath, '--out', out], { encoding: 'utf8' });
-    return { status: run.status, output: `${run.stdout}\n${run.stderr}`, out };
+    if (!runs[id]) {
+      const out = path.join(dir, `render-${id}`);
+      const run = spawnSync(process.execPath, [SCRIPT, '--session', id, '--db', dbPath, '--out', out], { encoding: 'utf8' });
+      runs[id] = { status: run.status, output: `${run.stdout}\n${run.stderr}`, out };
+    }
+    return runs[id];
   }
 
   beforeAll(async () => {
@@ -115,13 +123,17 @@ describe('4.11: the script renders every call, and checks every marker, from a s
       ...old, weave: null, outline: { lede: { hook: 'An old hook.' }, theStory: { arcs: [] }, writerQuestions: [] },
       _mapBaseline: null, _outlineHandEdits: null, contentBundle: { ...clone(PREVIOUS_BUNDLE), writerQuestions: [] }
     });
+    // Brief 1G: a thread paused at the map on phase 4's shapes, its weave and map with the
+    // director's edits in those shapes. The script plants the fixed weave and map over them.
+    await store('1004114', { ...reworkFixtureState('journalist'), ...oldShapeMapChannels(), contentBundle: clone(PREVIOUS_BUNDLE) });
   });
 
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   it.each([
     ['a thread holding the weave and the map', '1004112'],
-    ['a thread from before phase 4, with the fixed weave and map planted', '1004113']
+    ['a thread from before phase 4, with the fixed weave and map planted', '1004113'],
+    ['a thread on the old shapes, with the fixed weave and map planted over them', '1004114']
   ])('%s: every file written, every marker found (exit 0)', (_name, id) => {
     const run = render(id);
     expect(run.output).not.toMatch(/FAIL/);
@@ -133,6 +145,51 @@ describe('4.11: the script renders every call, and checks every marker, from a s
       });
     });
   }, 60000);
+
+  // Brief 1G: the planting rule. The script plants the fixed weave and map when the thread
+  // holds none, or holds one on phase 4's shapes, and says which it did.
+  it('says which it planted, and why: none held, the old shapes, or nothing planted on the new shapes', () => {
+    expect(render('1004112').output).not.toMatch(/planted the fixed/);
+    const none = render('1004113').output;
+    expect(none).toMatch(/the thread holds no weave: planted the fixed story meeting \(scripts\/lib\/fixed-weave\.js\)/);
+    expect(none).toMatch(/the thread holds no map: planted the fixed map \(scripts\/lib\/fixed-map\.js\)/);
+    const old = render('1004114').output;
+    expect(old).toMatch(/the thread's weave is in the old shape: planted the fixed story meeting over it \(scripts\/lib\/fixed-weave\.js\)/);
+    expect(old).toMatch(/the thread's map is in the old shape: planted the fixed map over it \(scripts\/lib\/fixed-map\.js\)/);
+  }, 60000);
+
+  it("the renders on the old shapes read the fixed weave and map, and nothing of the old shapes", () => {
+    const { out } = render('1004114');
+    RENDERS.forEach((file) => {
+      const text = fs.readFileSync(path.join(out, file), 'utf8');
+      expect(`${file}: ${/OLD-SHAPE/.test(text)}`).toBe(`${file}: false`);
+    });
+    ['judge-arc.txt', 'outline-generation.txt', 'arc-revision.txt'].forEach((file) => {
+      expect(fs.readFileSync(path.join(out, file), 'utf8')).toMatch(/RENDER-DIFF LINE 1/);
+    });
+    ['outline-revision.txt', 'article-generation.txt'].forEach((file) => {
+      expect(fs.readFileSync(path.join(out, file), 'utf8')).toMatch(/RENDER-DIFF/);
+    });
+  }, 60000);
+});
+
+// Brief 1G: the planting rule, one decision for the weave and one for the map, each through
+// the presence test the script reads (isWeave, isMap) and the old-shape test the guard reads
+// (lib/old-thread.js isOldShapeWeave, isOldShapeMap).
+describe('1G: plantReason, which the script plants over and why', () => {
+  it("the weave: planted when the thread holds none or one in the old shape, kept when it holds one in the new shape", () => {
+    expect(plantReason(null, isWeave, isOldShapeWeave)).toBe('none');
+    expect(plantReason({ story: 'No threads.' }, isWeave, isOldShapeWeave)).toBe('none');
+    expect(plantReason(oldShapeWeave(), isWeave, isOldShapeWeave)).toBe('old shape');
+    expect(plantReason(reworkFixtureState('journalist').weave, isWeave, isOldShapeWeave)).toBeNull();
+  });
+
+  it('the map: planted when the thread holds none, holds the outline from before phase 4, or holds one in the old shape', () => {
+    expect(plantReason(null, isMap, isOldShapeMap)).toBe('none');
+    expect(plantReason({ lede: { hook: 'An old hook.' }, theStory: { arcs: [] } }, isMap, isOldShapeMap)).toBe('none');
+    expect(plantReason(oldShapeMap(), isMap, isOldShapeMap)).toBe('old shape');
+    expect(plantReason(clone(MAP), isMap, isOldShapeMap)).toBeNull();
+  });
 });
 
 describe('4.11: --compare is retired; --sections serves', () => {

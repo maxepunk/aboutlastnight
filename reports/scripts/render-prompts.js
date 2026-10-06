@@ -37,7 +37,8 @@
  * render went. Brief 4.5: eleven files. The arc rework renders as reviseArcs sends it
  * (arcReworkCall), three ways: arc-revision.txt is its automatic pass after the weave
  * checks, arc-reweave.txt the director's reweave with no note, and arc-send-back.txt the
- * director's send-back with the fixed note. When the thread holds no weave, the fixed
+ * director's send-back with the fixed note. When the thread holds no weave, or holds one in
+ * phase 4's shape (brief 1G: lib/old-thread.js isOldShapeWeave), the fixed
  * story meeting of scripts/lib/fixed-weave.js is planted, as the fixed notes are:
  * invented text, the writer's weave as the baseline and the director's version with an
  * edit, an answer, a struck connection and a new main thread, its changes the standing
@@ -52,7 +53,8 @@
  * Phase 4 (brief 4.6): the outline is the story map. outline-generation.txt is the map
  * writer, and outline-revision.txt and outline-check-rework.txt its rework as reviseOutline
  * sends it (mapReworkCall): the director's send-back with the fixed note, and the automatic
- * pass after the map checks, with the checks' lines. When the thread holds no map, the
+ * pass after the map checks, with the checks' lines. When the thread holds no map, or holds
+ * one in phase 4's shape (brief 1G: lib/old-thread.js isOldShapeMap), the
  * fixed map of scripts/lib/fixed-map.js is planted, as the fixed story meeting is:
  * invented text, with a struck beat and a moved photo as the director's standing edits. A
  * thread whose map carries no edits gets the fixed edit on its headline. The outline
@@ -151,7 +153,36 @@ const FIXED_NOTES = [
   { gate: 'outline', kind: 'rejection', round: 1, text: 'RENDER-DIFF NOTE B', at: '2026-09-19T00:00:01.000Z' }
 ];
 
-// Run as a command; required (by its test), it only exports the marker table.
+/**
+ * What the script says it planted, by what the thread held: none, or one in phase 4's shape.
+ */
+const PLANTED_LINES = {
+  weave: {
+    none: 'the thread holds no weave: planted the fixed story meeting (scripts/lib/fixed-weave.js)',
+    'old shape': "the thread's weave is in the old shape: planted the fixed story meeting over it (scripts/lib/fixed-weave.js)"
+  },
+  map: {
+    none: 'the thread holds no map: planted the fixed map (scripts/lib/fixed-map.js)',
+    'old shape': "the thread's map is in the old shape: planted the fixed map over it (scripts/lib/fixed-map.js)"
+  }
+};
+
+/**
+ * Why the fixed weave or map is planted in place of what the thread holds (brief 1G): 'none'
+ * when the thread holds none, 'old shape' when it holds one in phase 4's shape, or null when
+ * it holds one in the story level's shape, which renders as it is.
+ *
+ * @param {*} value - the thread's weave or map
+ * @param {Function} isShape - whether the value is one at all (lib/weave.js isWeave, lib/hand-edit-diff.js isMap)
+ * @param {Function} isOldShape - whether it is in phase 4's shape (lib/old-thread.js isOldShapeWeave, isOldShapeMap)
+ * @returns {'none'|'old shape'|null}
+ */
+function plantReason(value, isShape, isOldShape) {
+  if (!isShape(value)) return 'none';
+  return isOldShape(value) ? 'old shape' : null;
+}
+
+// Run as a command; required (by its test), it only exports the marker table and the planting rule.
 if (require.main === module) {
   if (args.compare) {
     // Task 4.11: retired. It held a render to main's byte for byte, and every phase 4
@@ -247,11 +278,16 @@ async function render() {
   // changes as the standing edits. A thread whose weave carries no edits of the director's
   // gets the fixed edit on its story.
   requireExports('hand-edit-diff.js', diffMod, ['standingAtMeeting', 'carriedEdits', 'isMap', 'standingOnMap', 'diffBundle']);
-  if (!weaveModule.isWeave(state.weave)) {
+  // Brief 1G: a thread paused on phase 4's shapes holds a weave or a map that no builder of
+  // the story level reads, so the fixed one is planted over it too, by the guard's own tests.
+  const oldThread = req('lib/old-thread.js');
+  requireExports('old-thread.js', oldThread, ['isOldShapeWeave', 'isOldShapeMap']);
+  const weavePlanted = plantReason(state.weave, weaveModule.isWeave, oldThread.isOldShapeWeave);
+  if (weavePlanted) {
     state.weave = fixedWeave();
     state._weaveBaseline = fixedBaseline();
     state._weaveHandEdits = null;
-    console.log('the thread holds no weave: planted the fixed story meeting (scripts/lib/fixed-weave.js)');
+    console.log(PLANTED_LINES.weave[weavePlanted]);
   }
   if (diffMod.carriedEdits(state._weaveHandEdits, weaveModule.weaveForPrompt(state.weave)).length === 0) {
     const baseline = weaveModule.isWeave(state._weaveBaseline) ? state._weaveBaseline : weaveModule.weaveForPrompt(state.weave);
@@ -261,13 +297,15 @@ async function render() {
     state._weaveHandEdits = diffMod.standingAtMeeting(null, baseline, weaveModule.weaveForPrompt(state.weave));
   }
   // Brief 4.6: a thread from before the map holds none, so the fixed map is planted, with the
-  // director's struck beat and moved photo as the standing edits. A thread whose map carries
-  // no edits of the director's gets the fixed edit on its headline.
-  if (!diffMod.isMap(state.outline)) {
+  // director's struck beat and moved photo as the standing edits; brief 1G: and so is one whose
+  // map is in phase 4's shape. A thread whose map carries no edits of the director's gets the
+  // fixed edit on its headline.
+  const mapPlanted = plantReason(state.outline, diffMod.isMap, oldThread.isOldShapeMap);
+  if (mapPlanted) {
     state.outline = fixedMap();
     state._mapBaseline = fixedMapBaseline();
     state._outlineHandEdits = diffMod.standingOnMap(null, state._mapBaseline, state.outline);
-    console.log('the thread holds no map: planted the fixed map (scripts/lib/fixed-map.js)');
+    console.log(PLANTED_LINES.map[mapPlanted]);
   }
   if (diffMod.carriedEdits(state._outlineHandEdits, state.outline).length === 0) {
     const baseline = diffMod.isMap(state._mapBaseline) ? state._mapBaseline : JSON.parse(JSON.stringify(state.outline));
@@ -400,4 +438,4 @@ function sections(dirA, dirB) {
 }
 
 // Exported for its test (__tests__/unit/scripts/render-prompts.test.js); run, it renders.
-module.exports = { REQUIRED_MARKERS };
+module.exports = { REQUIRED_MARKERS, plantReason };
