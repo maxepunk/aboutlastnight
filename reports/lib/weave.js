@@ -336,12 +336,15 @@ function withPickFrom(weave, previous) {
  *   open angle names stays as the rework wrote it, so a thread it shares with another angle may be
  *   reworded, and the new words show in both;
  * - every connection that does not join two of the open angle's threads, judged by the joins of
- *   the version the rework started from; one of the rework's own outside them goes.
+ *   the version the rework started from; one of the rework's own outside them goes;
+ * - "from your notes" when the open angle is not the first, since it travels with the first angle
+ *   (R11): as the version the rework started from holds it, or left out when that version holds
+ *   none (3 fix A).
  * The questions are code's already (carriedWeaveQuestions), and the director's lines inside the
  * open angle are their edits, which settleEdits puts back after every pass.
  *
- * Each put-back is one entry of `held`, `{scope, id, change, became}`: the collection, the
- * element's id, what the rework did (`rewritten`, `dropped`, or `added` for an element of its own
+ * Each put-back is one entry of `held`, `{scope, id, change, became}`: the collection (or
+ * `fromYourNotes`, with no id), the element's id, what the rework did (`rewritten`, `dropped`, or `added` for an element of its own
  * code took out) and the element as the rework returned it (null when it dropped it). The round's
  * report keeps the list (lib/hand-edit-diff.js reportAfterPass). The hold is the Reweave's alone:
  * the round's check rework and fact-check fix are automatic passes, which change only what their
@@ -448,7 +451,17 @@ function holdOutsideOpenAngle(rework, before, { places = [] } = {}) {
   const connections = holdList('connections', objectsOf(rework.connections), objectsOf(before.connections), connectionInside,
     (connection) => !connectionInside(connection));
 
-  return { weave: { ...rework, angles, threads, connections }, held };
+  // "From your notes" travels with the first angle (R11; 3 fix A): a Reweave on any other angle
+  // leaves the director's read as the version the rework started from holds it.
+  const { fromYourNotes: reworkNotes, ...reworkRest } = rework;
+  let notes = reworkNotes === undefined ? {} : { fromYourNotes: reworkNotes };
+  if (openAt !== 0 && !same(reworkNotes ?? null, before.fromYourNotes ?? null)) {
+    const change = before.fromYourNotes === undefined ? 'added' : reworkNotes === undefined ? 'dropped' : 'rewritten';
+    held.push({ scope: 'fromYourNotes', id: null, change, became: reworkNotes === undefined ? null : reworkNotes });
+    notes = before.fromYourNotes === undefined ? {} : { fromYourNotes: before.fromYourNotes };
+  }
+
+  return { weave: { ...reworkRest, ...notes, angles, threads, connections }, held };
 }
 
 /**

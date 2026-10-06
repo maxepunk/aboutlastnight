@@ -337,6 +337,51 @@ describe('holdOutsideOpenAngle', () => {
     expect(holdOutsideOpenAngle(rework, b).weave.threads.find((t) => t.id === 't3').line).toBe('The envelope, reworded by the reweave.');
   });
 
+  // 3 fix A: "from your notes" travels with the first angle (R11), so a Reweave on any other angle
+  // leaves it as the director left it, and code puts it back like any other line outside the angle.
+  describe('"from your notes", which travels with the first angle (R11)', () => {
+    const REWORDED = 'Riley kept an eye on the ledger.';
+
+    it('when the open angle is not the first, puts back the words the rework rewrote, dropped or added, each in held', () => {
+      const rewritten = clone(before());
+      rewritten.fromYourNotes = REWORDED;
+      const r = holdOutsideOpenAngle(rewritten, before());
+      expect(r.weave.fromYourNotes).toBe(before().fromYourNotes);
+      expect(r.held).toEqual([{ scope: 'fromYourNotes', id: null, change: 'rewritten', became: REWORDED }]);
+
+      const dropped = clone(before());
+      delete dropped.fromYourNotes;
+      const d = holdOutsideOpenAngle(dropped, before());
+      expect(d.weave.fromYourNotes).toBe(before().fromYourNotes);
+      expect(d.held).toEqual([{ scope: 'fromYourNotes', id: null, change: 'dropped', became: null }]);
+
+      const none = before();
+      delete none.fromYourNotes;
+      const added = clone(none);
+      added.fromYourNotes = REWORDED;
+      const a = holdOutsideOpenAngle(added, none);
+      expect(a.weave).not.toHaveProperty('fromYourNotes');
+      expect(a.held).toEqual([{ scope: 'fromYourNotes', id: null, change: 'added', became: REWORDED }]);
+    });
+
+    it('when the open angle is the first, leaves the words as the rework wrote them', () => {
+      const b = before();
+      b[PICKED_KEY] = 'a1';
+      const rework = clone(b);
+      rework.fromYourNotes = REWORDED;
+      const { weave, held } = holdOutsideOpenAngle(rework, b);
+      expect(weave.fromYourNotes).toBe(REWORDED);
+      expect(held).toEqual([]);
+    });
+
+    it("a Reweave on angle 2 keeps them through the rework, recorded in the round's report", async () => {
+      const state = await roundState('reweave');
+      const update = await reviseArcs(state, cfg(recordingSdk(reworkOf((w) => { w.fromYourNotes = REWORDED; }))));
+      expect(update.weave.fromYourNotes).toBe(leftByDirector().fromYourNotes);
+      expect(update._weaveHandEditReport.held).toEqual([{ scope: 'fromYourNotes', id: null, change: 'rewritten', became: REWORDED }]);
+    });
+  });
+
   it('returns a rework that is no weave, or holds no threads, as it came, for the rework to fail on', () => {
     expect(holdOutsideOpenAngle({ threads: [] }, before())).toEqual({ weave: { threads: [] }, held: [] });
     expect(holdOutsideOpenAngle(null, before())).toEqual({ weave: null, held: [] });
