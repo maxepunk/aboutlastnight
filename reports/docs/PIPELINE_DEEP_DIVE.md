@@ -377,7 +377,7 @@ SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions)
   // stance: supports | cuts-against; card: on a beat's piece only, the card's document
 ```
 
-A thread the director adds at the meeting has no evidence: the map writer finds its evidence, or names the thread in its gap note, in story terms, when the record cannot carry it (spec 5.3). The evidence is never the director's edit (R6): `lib/hand-edit-diff.js` leaves it out of every diff and mark.
+A thread the director adds at the meeting has no evidence: the map writer finds its evidence, or names the thread in its gap note, in story terms, when the record cannot carry it (spec 5.3). The evidence is never the director's edit: `lib/hand-edit-diff.js` leaves it out of every diff and mark.
 
 **The checks and the fact check**, before the meeting (spec 4.5): code checks the weave, free (see Arc Validation Routing below), and a failed check sends it back for one rework in the round. Then one fact check (`evaluateArcs`, Opus) scores the truth criteria alone, reading each line against its evidence and each piece against the record: a line that says more than its evidence shows is an error of fact, and a finding about a piece is the writer's to fix (spec 6.2). A breach gets one automatic fix, and the meeting opens with no second judge call. No note on the writing and no score reaches the meeting.
 
@@ -415,7 +415,7 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 }
 ```
 
-**The writer** reads the settled weave first, as its task (`settledWeaveOf`), each thread in the story with its evidence under it (R7), then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline', {theme})`), and the standing notes last. It writes each section's beats as moves in story terms, gives each its threads, its people and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words (`MAP_WORD_AIM`). Code writes `heroImage` from the map's top photo.
+**The writer** reads the settled weave first, as its task (`settledWeaveOf`), each thread in the story with its evidence under it, then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline', {theme})`), and the standing notes last. It writes each section's beats as moves in story terms, gives each its threads, its people and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words (`MAP_WORD_AIM`). Code writes `heroImage` from the map's top photo.
 
 **The checks** (`lib/map.js` `mapFindings`), free and in code:
 - every roster player in a beat or raised in the gap note, and every kept photo placed once;
