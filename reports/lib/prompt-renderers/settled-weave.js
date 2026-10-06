@@ -1,44 +1,44 @@
 /**
- * The settled weave (phase 4, brief 4.5; spec 4.4 and 5.1): the one renderer that prints
- * the weave as the director left it at the story meeting, for every later writer. The map
- * writer reads it first, as its task (4.6), and the article writer reads it first (4.7).
+ * The settled weave (phase 4, brief 4.5; phase 4b, piece 3, brief 3B; spec 2026-10-06 section
+ * 8): the one renderer that prints the story the director settled at the story meeting, for every
+ * later writer. The map writer reads it first, as its task (4.6), and the article writer and the
+ * article judge read it first (4.7).
  *
- * It prints:
- * - the story, its question and the working headline, and the director's words the story
- *   rests on;
- * - every thread in the story by its id, its role, its name and its line, the main thread
- *   first, a thread the director added among them; and under each, its evidence, one piece a
- *   line: its stance, its sources and what it shows (phase 4b, brief 1B; R7), for the map
- *   writer to give each beat the pieces that tell it. A thread with none yet, such as one the
- *   director added, says so;
- * - each thread left out, last, by its name and why it is left out, and nothing more: no id,
+ * It prints the angle the director picked, as they left it, read through lib/weave.js
+ * settledAngleOf (the pick, else the first angle):
+ * - its headline, story, question, why it lands and where it ends up, and the director's words
+ *   it rests on ("from your notes") only when the picked angle is the first, the one that rests
+ *   on the director's read (R11);
+ * - the threads it tells, in its order, a thread the director added after the angle's own, each
+ *   by its id, its name and its line; and under each, its evidence, one piece a line: its stance,
+ *   its sources and what it shows (phase 4b, brief 1B; R7), for the map writer to give each beat
+ *   the pieces that tell it. A thread with none yet, such as one the director added, says so;
+ * - the threads the angle leaves out, last among the threads, by name and nothing more: no id,
  *   no line, no evidence (phase 4b fix round, fix 5). The map writer adds no thread, so what a
  *   left-out thread carries is noise in its prompt;
- * - the connections the story keeps, each by its line and the names of the threads it joins,
- *   and the convergence (lib/weave.js storyConnections). A connection's kind stays underneath,
- *   unprinted. A connection the director struck is gone from it, and since brief 4.14a so is
- *   one that joins a thread left out, so no later writer meets the link;
- * - every question with what its answer changes, and the director's answer word for word
- *   or the mark that it is unanswered;
+ * - the connections between its threads, each by its line and the names of the threads it joins.
+ *   A connection's kind stays underneath, unprinted. A connection the director struck is gone
+ *   from it, and so is one that joins a thread the angle leaves out, so no later writer meets the
+ *   link;
+ * - every question with what its answer changes, the thread it sits beside by name, and the
+ *   director's answer word for word or the mark that it is unanswered;
  * - each change the director made at the meeting, marked on its line by its id in the
  *   meeting's own form, M and the edit's number (meetingChangeId; brief 4.14a; the edits
  *   are read by lib/hand-edit-diff.js weaveDirectorsShare): the map names what it fits in by
  *   those ids, and no later prompt holds a meeting change and a map's or a desk's edit under
  *   one id.
  *
- * The writer's stronger-main-thread proposal stays out: the roles say which thread the
- * director made the main thread.
+ * The other angles stay with the meeting, for going back to it (R9): no later writer reads them.
  *
  * renderDirectorAnswers prints the answers alone, for the meeting's fact check after a
  * director's round, which reads them as the director's words (T1).
  *
- * Generic: a weave is a story, threads, connections and questions, so nothing here names a
- * theme.
+ * Generic: a weave is angles, threads, connections and questions, so nothing here names a theme.
  */
 'use strict';
 
-const { isWeave, storyConnections, WEAVE_ROLES, LEFT_OUT_ROLE } = require('../weave');
-const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../writer-questions');
+const { isWeave, settledAngleOf, weaveIdOf } = require('../weave');
+const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY, WEAVE_QUESTION_THREAD_KEY } = require('../writer-questions');
 const { weaveDirectorsShare, carriedEdits } = require('../hand-edit-diff');
 
 /** The settled weave's tag, the marker a later writer's render carries. */
@@ -86,11 +86,6 @@ function objectsOf(value) {
   return Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
 }
 
-/** A role in words: `main-thread` is "main thread". */
-function roleWords(role) {
-  return textOf(role).replace(/-/g, ' ');
-}
-
 /** The mark at the end of a line the director changed, or '' for a line that is the writer's. */
 function changeMark(parts) {
   if (parts.length === 0) return '';
@@ -119,86 +114,80 @@ function evidenceLines(thread) {
 
 /**
  * One question, as the settled weave and the answers print it: its id, kind and what it is
- * about, the question and what its answer changes, then the answer word for word.
+ * about, the thread it sits beside by name when the weave holds it (`threadNames`), the question
+ * and what its answer changes, then the answer word for word.
  */
-function questionLines(question, { unansweredLine }) {
+function questionLines(question, { unansweredLine, threadNames = new Map() }) {
   const kind = QUESTION_KIND_WORDS[question.kind] || question.kind;
-  const lines = [`- ${question.id} (${kind}; about: ${question.about}): ${question.question} Its answer changes: ${question.changes}`];
+  const beside = threadNames.get(question[WEAVE_QUESTION_THREAD_KEY]);
+  const place = beside ? `; beside the thread "${beside}"` : '';
+  const lines = [`- ${question.id} (${kind}; about: ${question.about}${place}): ${question.question} Its answer changes: ${question.changes}`];
   if (isAnswered(question)) lines.push(`  The director's answer, word for word: "${question[WEAVE_ANSWER_KEY].trim()}"`);
   else if (unansweredLine) lines.push('  Unanswered.');
   return lines;
 }
 
 /**
- * The weave as the director left it at the story meeting, for every later writer.
+ * The story the director settled at the story meeting, for every later writer: the angle they
+ * picked, as they left it (lib/weave.js settledAngleOf).
  *
  * @param {Object|null} weave - the weave as the director left it (state.weave)
  * @param {Object[]} edits - the director's standing edits the weave carries
  *   (lib/hand-edit-diff.js carriedEdits)
- * @returns {string} the tagged block, or '' when there is no weave
+ * @returns {string} the tagged block, or '' when there is no weave or it holds no angle
  */
 function renderSettledWeave(weave, edits) {
-  if (!isWeave(weave)) return '';
+  const settled = isWeave(weave) ? settledAngleOf(weave) : null;
+  if (!settled) return '';
+  const { angle } = settled;
   const share = weaveDirectorsShare(edits);
   const fieldMark = (field) => changeMark(share.fields[field] ? [meetingChangeId(share.fields[field])] : []);
+  const threadNames = new Map(weave.threads.filter((thread) => thread && weaveIdOf(thread)).map((thread) => [weaveIdOf(thread), textOf(thread.name) || textOf(thread.line)]));
+  const isFirst = weave.angles[0] === angle;
 
   const lines = [
     `<${SETTLED_WEAVE_TAG}>`,
-    "The weave as the director settled it at the story meeting, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. Under each thread in the story is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows. A thread left out comes last, by its name and why it is left out.",
+    "The story the director settled at the story meeting: the angle they picked, as they left it, with the director's answers to the questions. A line that ends in [the director's change ...] holds a change the director made at the meeting, named by its id. Each answer is the director's words, word for word. The threads in the story come in the order the angle tells them, and under each is its evidence, one piece a line: whether it supports the thread or cuts against it, its sources, and what it shows. The threads the angle leaves out come after them, by name.",
     '',
-    `STORY: ${textOf(weave.story)}${fieldMark('story')}`,
-    `QUESTION: ${textOf(weave.question)}${fieldMark('question')}`,
-    `WORKING HEADLINE: ${textOf(weave.headline)}${fieldMark('headline')}`
+    `HEADLINE: ${textOf(angle.headline)}`,
+    `STORY: ${textOf(angle.story)}`,
+    `QUESTION: ${textOf(angle.question)}`,
+    `WHY IT LANDS: ${textOf(angle.lands)}`,
+    `WHERE IT ENDS UP: ${textOf(angle.ends)}`
   ];
-  if (textOf(weave.fromYourNotes)) {
+  if (isFirst && textOf(weave.fromYourNotes)) {
     lines.push(`FROM THE DIRECTOR'S NOTES: "${textOf(weave.fromYourNotes)}"${fieldMark('fromYourNotes')}`);
   }
 
-  const rank = (thread) => {
-    const index = WEAVE_ROLES.indexOf(thread.role);
-    return index === -1 ? WEAVE_ROLES.length : index;
-  };
-  const threads = objectsOf(weave.threads)
-    .map((thread, order) => ({ thread, order }))
-    .sort((a, b) => rank(a.thread) - rank(b.thread) || a.order - b.order)
-    .map(({ thread }) => thread);
-  lines.push('', 'THREADS:');
-  threads.forEach((thread) => {
+  lines.push('', 'THREADS IN THE STORY:');
+  settled.threads.forEach((thread) => {
     const id = textOf(thread.id);
     const parts = [];
     if (share.addedThreads[id]) parts.push(`${meetingChangeId(share.addedThreads[id])}: a thread they added`);
-    if (share.reroledThreads[id]) parts.push(`${meetingChangeId(share.reroledThreads[id])}: the role`);
     Object.entries(share.threadFields)
       .filter(([place]) => place.startsWith(`${id}.`))
       .forEach(([place, editId]) => parts.push(`${meetingChangeId(editId)}: the ${place.slice(id.length + 1)}`));
-    if (thread.role === LEFT_OUT_ROLE) {
-      const reason = textOf(thread.reason) ? ` Why it is left out: ${textOf(thread.reason)}` : '';
-      lines.push(`- (${roleWords(thread.role)}) ${textOf(thread.name) || textOf(thread.line)}.${reason}${changeMark(parts)}`);
-      return;
-    }
     const verdict = thread.verdict === true ? " It carries the room's verdict." : '';
-    lines.push(`- ${id} (${roleWords(thread.role)}) ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${changeMark(parts)}`);
+    lines.push(`- ${id} ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${changeMark(parts)}`);
     lines.push(...evidenceLines(thread));
   });
+  if (settled.leftOut.length > 0) {
+    lines.push('', `THREADS LEFT OUT: ${settled.leftOut.map((thread) => textOf(thread.name) || textOf(thread.line)).join('; ')}`);
+  }
 
-  const connections = storyConnections(weave);
-  if (connections.length > 0) {
-    const nameOf = (id) => {
-      const named = objectsOf(weave.threads).find((thread) => textOf(thread.id) === id);
-      return named && textOf(named.name) ? `"${textOf(named.name)}"` : id;
-    };
+  if (settled.connections.length > 0) {
+    const nameOf = (id) => (threadNames.get(id) ? `"${threadNames.get(id)}"` : id);
     lines.push('', 'CONNECTIONS:');
-    connections.forEach((connection) => {
+    settled.connections.forEach((connection) => {
       const joins = Array.isArray(connection.joins) ? connection.joins.map(textOf).filter(Boolean) : [];
       lines.push(`- ${textOf(connection.id)}, joining ${joins.map(nameOf).join(' and ')}: ${textOf(connection.line)}`);
     });
   }
-  lines.push('', `CONVERGENCE: ${textOf(weave.convergence)}${fieldMark('convergence')}`);
 
   const questions = weaveQuestionsOf(weave.questions);
   if (questions.length > 0) {
     lines.push('', "QUESTIONS TO THE DIRECTOR, WITH THE DIRECTOR'S ANSWERS:");
-    questions.forEach((question) => lines.push(...questionLines(question, { unansweredLine: true })));
+    questions.forEach((question) => lines.push(...questionLines(question, { unansweredLine: true, threadNames })));
   }
   lines.push(`</${SETTLED_WEAVE_TAG}>`);
   return lines.join('\n');

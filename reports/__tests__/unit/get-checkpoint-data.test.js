@@ -695,7 +695,7 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     expect(data.outline).toEqual(state.outline);
     expect(data.mapSlots).toEqual(mapSlotsOf('journalist'));
     expect(data.mapSlots.map((slot) => slot.key)).toEqual(['lede', 'theStory', 'followTheMoney', 'thePlayers', 'whatsMissing', 'closing']);
-    expect(data.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+    expect(data.settledStory).toEqual({ story: WEAVE.angles[0].story, question: WEAVE.angles[0].question });
     expect(data).toMatchObject({
       previousFeedback: 'Strike the paternity card.', revisionCount: 1, humanRevisionCount: 1, maxRevisions: REVISION_CAPS.OUTLINE,
       handEditReport: { checked: ['E1'], changed: [] }, directorGateNotes: state.directorGateNotes, trace: []
@@ -759,7 +759,7 @@ describe('4.7b: the settled story at the article stop', () => {
   it("sends the story and the question the director settled at the meeting, as the map's stop does, and no outline thesis", async () => {
     const article = await getCheckpointData(CHECKPOINT_TYPES.ARTICLE, atArticle());
     const map = await getCheckpointData(CHECKPOINT_TYPES.OUTLINE, atArticle());
-    expect(article.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+    expect(article.settledStory).toEqual({ story: WEAVE.angles[0].story, question: WEAVE.angles[0].question });
     expect(article.settledStory).toEqual(map.settledStory);
     expect(article).not.toHaveProperty('outlineThesis');
   });
@@ -772,7 +772,7 @@ describe('4.7b: the settled story at the article stop', () => {
   it('survives the merge with the interrupt payload', async () => {
     const state = atArticle();
     const merged = await buildCompleteCheckpointData({ type: CHECKPOINT_TYPES.ARTICLE, contentBundle: null }, state);
-    expect(merged.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+    expect(merged.settledStory).toEqual({ story: WEAVE.angles[0].story, question: WEAVE.angles[0].question });
   });
 });
 

@@ -4,23 +4,26 @@
  *
  * - THE DIRECTOR-SIDE SCHEMA (DIRECTOR_WEAVE_SCHEMA): the weave as the director leaves it,
  *   derived in code from the writer's (lib/sdk-client/subagents.js WEAVE_SCHEMA). It adds
- *   what no writer writes, the director's `answer` on a question and `struck: true` on a
- *   connection they struck, and lets a thread the director adds have only its id, name, line
- *   and role (phase 4b, brief 1B): the evidence is never the director's (R6), so no thread or
- *   connection needs it here, and the next writer finds the evidence for a thread they added
- *   (spec 2026-10-05 section 5.3). The payload gate validates against it. The
- *   console's validator (console/checkpoint-view-logic.js meetingWeaveProblems, 4.8) applies the
- *   same rules, held to the gate's decisions by a corpus test. It is
- *   never sent to the SDK, and code strips both keys from what a writer or a rework returns
- *   (arc-specialist-nodes.js weaveFromOutput), so no model writes an answer or a strike.
+ *   what no writer writes, the director's pick (`picked`, the angle they sent on; piece 3, R1),
+ *   their `answer` on a question and `struck: true` on a connection they struck, and lets a
+ *   thread the director adds have only its id, name and line (phase 4b, briefs 1B and 3B): the
+ *   evidence is never the director's (R6), so no thread or connection needs it here, and the
+ *   next writer finds the evidence for a thread they added (spec 2026-10-05 section 5.3). The
+ *   payload gate validates against it, and past it refuses a pick that names no angle and a
+ *   picked angle without the thread that carries the room's verdict (R8). The console's
+ *   validator (console/checkpoint-view-logic.js meetingWeaveProblems, 4.8) applies the same
+ *   rules, held to the gate's decisions by a corpus test. It is never sent to the SDK, and code
+ *   strips the director's keys from what a writer or a rework returns (arc-specialist-nodes.js
+ *   weaveFromOutput), so no model writes a pick, an answer or a strike.
  * - THE PAYLOADS (meetingResume, which server.js buildResumePayload calls, and only while
  *   the thread is paused at the meeting does it take the meeting's arm alone): approve
  *   carries the weave as the director left it and an optional note; a reweave the same,
  *   and it carries a change to the weave or a note, since answers alone are nothing to fit
  *   in; a send-back a note, and the weave when the director edited it. Each writes the
- *   director's version (with the fact check's mark of the weave the meeting showed) and
- *   the standing edits against the writer's last weave (lib/hand-edit-diff.js
- *   standingAtMeeting). A reweave and a send-back are the director's round, marked
+ *   director's version (with the fact check's mark of the weave the meeting showed), every
+ *   angle but the picked one as the meeting showed it (R9), and the standing edits against the
+ *   writer's last weave (lib/hand-edit-diff.js standingAtMeeting). A reweave and a send-back
+ *   are the director's round, marked
  *   explicitly (`_meetingRound`), which opens a new round: the report and the marks start
  *   over. The approval itself is the stop's to set (checkpoint-nodes.js
  *   checkpointArcSelection).
@@ -36,8 +39,8 @@
 const Ajv = require('ajv');
 const { WEAVE_SCHEMA } = require('./sdk-client/subagents');
 const {
-  STRUCK_KEY, MEETING_ROUNDS, LEFT_OUT_ROLE, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
-  weaveIdOf, repeatedIds
+  STRUCK_KEY, MEETING_ROUNDS, PICKED_KEY, isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, withFactCheckMark,
+  weaveIdOf, repeatedIds, pickedAngleOf, settledAngleOf
 } = require('./weave');
 const { WEAVE_ANSWER_KEY, weaveQuestionsOf } = require('./writer-questions');
 const { stopRoundOf, isNoteOf } = require('./workflow/state');
@@ -50,12 +53,15 @@ const MEETING_ACTIONS = Object.freeze(['approve', ...MEETING_ROUNDS]);
 
 /**
  * The weave as the director leaves it at the story meeting (R12): the writer's schema,
- * with the director's answer on a question and the strike on a connection, and no thread or
- * connection held to have its evidence (phase 4b, brief 1B; R6): a thread the director adds
- * is its id, name, line and role.
+ * with the director's pick (R1), their answer on a question and the strike on a connection, and
+ * no thread or connection held to have its evidence (phase 4b, briefs 1B and 3B; R6): a thread
+ * the director adds is its id, name and line.
  */
 const DIRECTOR_WEAVE_SCHEMA = (() => {
   const schema = structuredClone(WEAVE_SCHEMA);
+  schema.properties[PICKED_KEY] = {
+    type: 'string', description: 'The id of the angle the director picked'
+  };
   schema.properties.questions.items.properties[WEAVE_ANSWER_KEY] = {
     type: 'string', description: "The director's answer, word for word"
   };
@@ -72,7 +78,7 @@ const DIRECTOR_WEAVE_SCHEMA = (() => {
 const validateDirectorWeave = new Ajv({ allErrors: true, strict: true }).compile(DIRECTOR_WEAVE_SCHEMA);
 
 /** The weave's collections whose elements name themselves by an id. */
-const ID_COLLECTIONS = ['threads', 'connections', 'questions'];
+const ID_COLLECTIONS = ['angles', 'threads', 'connections', 'questions'];
 
 /** Words joined as a list is read: "a", "a and b", "a, b and c". */
 function listOf(words) {
@@ -137,8 +143,57 @@ function directorWeaveProblems(weave, { shown = null } = {}) {
   const touched = new Set((shownWeave ? weaveEditsBetween(shownWeave, weave) : [])
     .filter((change) => change.repeatedId)
     .map((change) => `two ${change.scope} the id "${weaveIdOf(change.at[1].match)}"`));
-  if (touched.size === 0) return null;
-  return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.`;
+  if (touched.size > 0) {
+    return `The writer gave ${listOf([...touched])}, so the meeting cannot tell which of them the director changed. Leave them as the meeting showed them, and send the weave back or reweave it with a note: the rework gives each an id of its own.`;
+  }
+  return pickProblems(weave);
+}
+
+/**
+ * What the gate refuses in the director's pick (piece 3, brief 3B), or null: a pick that names no
+ * angle the weave holds, and a picked angle without the thread that carries the room's verdict
+ * (R8), which the article always reports (T2). The meeting locks that thread in the open angle,
+ * so a version that lacks it came past the console, such as from the harness's approve file.
+ *
+ * @param {Object} weave - the weave as the director left it, which the schema has taken
+ * @returns {string|null}
+ */
+function pickProblems(weave) {
+  const picked = typeof weave[PICKED_KEY] === 'string' ? weave[PICKED_KEY].trim() : '';
+  if (picked && !weave.angles.some((angle) => weaveIdOf(angle) === picked)) {
+    return `The pick names an angle the weave does not hold ("${picked}"). Pick one of the angles the meeting showed.`;
+  }
+  const angle = pickedAngleOf(weave);
+  if (!angle) return null;
+  const named = new Set(angle.threads.map((id) => id.trim()));
+  const missing = weave.threads.filter((thread) => thread.verdict === true && weaveIdOf(thread) && !named.has(weaveIdOf(thread)));
+  if (missing.length === 0) return null;
+  const names = listOf(missing.map((thread) => `"${thread.name.trim() || weaveIdOf(thread)}"`));
+  return `The angle the director picked leaves out ${names}, the thread that carries the room's verdict. The article always reports the verdict, so that thread stays in the picked angle.`;
+}
+
+/**
+ * The director's version as the gate stores it (R9): the angle they picked as they left it, and
+ * every other angle as the meeting showed it, by id, since only the angle the director sends goes
+ * on and a change to another is not kept. A change to a thread's name or line is the thread's,
+ * which every angle that tells it shares, so the threads are kept as the director left them.
+ *
+ * @param {Object} left - the weave as the director left it
+ * @param {Object|null} shown - the weave the meeting showed
+ * @returns {Object}
+ */
+function withUnsentAnglesAsShown(left, shown) {
+  if (!isWeave(shown) || !Array.isArray(shown.angles)) return left;
+  const picked = pickedAngleOf(left);
+  const pickedId = picked ? weaveIdOf(picked) : '';
+  const asShown = new Map(shown.angles.filter((angle) => weaveIdOf(angle)).map((angle) => [weaveIdOf(angle), angle]));
+  return {
+    ...left,
+    angles: left.angles.map((angle) => {
+      const id = weaveIdOf(angle);
+      return id && id !== pickedId && asShown.has(id) ? structuredClone(asShown.get(id)) : angle;
+    })
+  };
 }
 
 /**
@@ -183,9 +238,10 @@ function meetingResume(approvals, currentState = {}, { names } = {}) {
     return refuse(`${action === 'approve' ? 'An approve' : 'A reweave'} carries the weave as the director left it.`);
   }
   const shown = weaveForPrompt(currentState.weave);
-  const left = weaveForPrompt(sent === undefined || sent === null ? currentState.weave : sent);
-  const problems = directorWeaveProblems(left, { shown });
+  const sentVersion = weaveForPrompt(sent === undefined || sent === null ? currentState.weave : sent);
+  const problems = directorWeaveProblems(sentVersion, { shown });
   if (problems) return refuse(problems);
+  const left = withUnsentAnglesAsShown(sentVersion, shown);
 
   const mark = factCheckMarkOf(currentState.weave);
   const baseline = isWeave(currentState._weaveBaseline) ? currentState._weaveBaseline : shown;
@@ -256,29 +312,25 @@ function meetingConcerns(state) {
 
 /**
  * The threads the director put in the story at the meeting that the weave carries, in the
- * weave's order (their standing edits): each one they added (`added`), and each one they brought
- * into the story from left out, giving it a role in the story (`broughtIn`; fix round 4). The
- * next writer finds the evidence for such a thread (spec 2026-10-05 section 5.3): the meeting says
- * so under one with none, at whatever look the director put it there (the payload's
- * `directorsThreads`), where a thread of the writer's with none is a check's failure, shown beside
- * it; and when the record cannot carry it, the map names it in its gap note (lib/map.js
- * mapFindings).
+ * settled angle's order (lib/weave.js settledAngleOf), read from their standing edits: each one
+ * they added (`added`). `broughtIn`, a thread the director flipped into the angle, is slice 3C's
+ * to read from its own edits; until then it is false. The next writer finds the evidence for such
+ * a thread (spec 2026-10-05 section 5.3): the meeting says so under one with none, at whatever
+ * look the director put it there (the payload's `directorsThreads`), where a thread of the
+ * writer's with none is a check's failure, shown beside it; and when the record cannot carry it,
+ * the map names it in its gap note (lib/map.js mapFindings).
  *
  * @param {Object} state
  * @returns {Array<{id: string, added: boolean, broughtIn: boolean}>}
  */
 function meetingDirectorsThreads(state) {
-  if (!state || !isWeave(state.weave)) return [];
-  const edits = carriedEdits(state._weaveHandEdits, state.weave);
-  const added = new Set(Object.keys(weaveDirectorsShare(edits).addedThreads));
-  const broughtIn = new Set(edits
-    .filter((edit) => Array.isArray(edit.at) && edit.at.length === 3 && edit.at[0].key === 'threads' && edit.at[2].key === 'role'
-      && edit.at[1].match && edit.before === LEFT_OUT_ROLE && typeof edit.after === 'string' && edit.after !== LEFT_OUT_ROLE)
-    .map((edit) => String(edit.at[1].match.id).trim()));
-  return state.weave.threads
+  const settled = state && isWeave(state.weave) ? settledAngleOf(state.weave) : null;
+  if (!settled) return [];
+  const added = new Set(Object.keys(weaveDirectorsShare(carriedEdits(state._weaveHandEdits, state.weave)).addedThreads));
+  return settled.threads
     .map((thread) => weaveIdOf(thread))
-    .filter((id, index, ids) => id && ids.indexOf(id) === index && (added.has(id) || broughtIn.has(id)))
-    .map((id) => ({ id, added: added.has(id), broughtIn: broughtIn.has(id) }));
+    .filter((id, index, ids) => id && ids.indexOf(id) === index && added.has(id))
+    .map((id) => ({ id, added: true, broughtIn: false }));
 }
 
 /**

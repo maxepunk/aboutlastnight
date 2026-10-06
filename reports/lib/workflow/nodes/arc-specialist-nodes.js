@@ -2,12 +2,12 @@
  * The arc stage's nodes (phase 4, brief 4.4; spec
  * docs/superpowers/specs/2026-10-02-story-meeting-and-map.md sections 4.1, 4.2, 4.5 and 10).
  *
- * The arc writer writes one weave, the story the article will tell, in one call
- * (analyzeArcsPlayerFocusGuided); code checks it (validateArcStructure, lib/weave.js
- * checkWeave); the fact check scores the truth criteria and marks the weave it judged
- * (evaluator-nodes.js); and the arc rework (reviseArcs) fixes what a check or the fact
- * check found. The director settles the weave at the story meeting, and every later
- * writer works from it.
+ * The arc writer pitches two or three angles over one shared set of threads, in one call
+ * (analyzeArcsPlayerFocusGuided; phase 4b, piece 3, brief 3B); code checks the weave
+ * (validateArcStructure, lib/weave.js checkWeave); the fact check scores the truth criteria on
+ * every angle and marks the weave it judged (evaluator-nodes.js); and the arc rework
+ * (reviseArcs) fixes what a check or the fact check found. The director picks an angle and
+ * settles it at the story meeting, and every later writer works from the settled angle.
  *
  * The story meeting (brief 4.5): the director's round, a reweave or a send-back, marked
  * explicitly (`_meetingRound`), is the rework's too. A reweave fits the director's changes
@@ -15,16 +15,19 @@
  * asks. Code holds every pass but a send-back to the director's edits, keeps every answer
  * with its question, and keeps the writer's last weave as the meeting's baseline. The
  * checks read only the writer's text (R11): the director's share of the weave is never a
- * check's failure, and a check that finds a fault in it files a concern for the meeting.
+ * check's failure, and a check that finds a fault in it files a concern for the meeting. The
+ * director's pick (`picked`, R1) is code's, as an answer is: stripped from a writer's or a
+ * rework's output and carried over after every rework while its angle survives.
  *
  * History: the arcs came from parallel specialists (8.12), then one player-focus-guided
  * call (8.15), then a split into the arc call and an interweaving call (8.28). On
  * 0926262 the five arcs ran to 1,300 to 2,100 words each, the interweaving call wrote
  * links the arc cards hid, the director's read of the session was filed as a caveat, and
  * the arc judge ran three times. Phase 4 replaces them with the weave: the long
- * write-ups, the interweaving call and the every-player rule at this stage went, and the
- * lens work (C16) reaches the weave as each thread's role and as evidence marked supporting
- * the thread or cutting against it (phase 4b, brief 1B). The detective's arc branches went
+ * write-ups, the interweaving call and the every-player rule at this stage went. Since phase
+ * 4b, piece 3, the lens work (C16) reaches the meeting as the angles, each a different way the
+ * threads make a story, and as evidence marked supporting its thread or cutting against it; the
+ * roles, the main thread and the stronger main thread went. The detective's arc branches went
  * with them (ruling R1): its theme starts no session until it has its own stages.
  *
  * The graph's node names stay (analyzeArcs, validateArcs, evaluateArcs, reviseArcs), so
@@ -56,11 +59,11 @@ const { directorAccusationText } = require('../../accusation-verdict');
 // opening every writer's and judge's system prompt shares (brief 4.13b).
 const { systemPromptOpening, buildDirectorGuidanceSection, filterGateNotes, rosterWithPronounsSection } = require('../../prompt-builder');
 const { loadRuleSet } = require('../../rule-set');
-const { WEAVE_QUESTIONS_PROPERTY, weaveQuestionsOf, carriedWeaveQuestions, withoutAnswers } = require('../../writer-questions');
+const { WEAVE_QUESTIONS_PROPERTY, WEAVE_QUESTION_THREAD_KEY, weaveQuestionsOf, carriedWeaveQuestions, withoutAnswers } = require('../../writer-questions');
 const {
-  WEAVE_ROLES, CONNECTION_KINDS, MEETING_WORD_BOUND, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS, STRUCK_KEY,
+  CONNECTION_KINDS, MEETING_WORD_BOUND, QUESTION_WORD_BOUND, PICKED_KEY, WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY, MEETING_ROUNDS, STRUCK_KEY,
   isWeave, weaveForPrompt, weaveKey, factCheckMarkOf, isMeetingApproved, meetingRoundOf,
-  weaveFindings, withStruckConnections, writersShareOf, weaveWritersTextBlank, meetingLengthOf
+  weaveFindings, withStruckConnections, withPickFrom, withHeldQuestionThreads, writersShareOf, weaveWritersTextBlank, meetingLengthOf, weaveIdOf
 } = require('../../weave');
 // Phase 4b (brief 1B; R10): the evidence under each line, the sources a piece may name, and what
 // the checks the weave and the map share read.
@@ -163,17 +166,17 @@ const ARC_NOTES_LABEL = `The Director's Notes (the record for the room, under T1
 Backstory in the notes, what the director knows about the characters beyond what the session showed, is what Nova knows but the record cannot back: T1's third point.`;
 
 /**
- * The OUTPUT FORMAT line for the weave's questions: the list stays empty unless the
- * record leaves something only the director can settle (C15), then one entry's shape,
- * its kinds and its `about` in the schema's own wording (WEAVE_QUESTIONS_PROPERTY), so
- * the format and the schema say one thing.
+ * The OUTPUT FORMAT line for the weave's questions: the list stays empty unless the record
+ * leaves something only the director can settle (C15), then one entry's shape, its kinds, its
+ * `about` and its `thread` in the schema's own wording (WEAVE_QUESTIONS_PROPERTY), so the format
+ * and the schema say one thing.
  *
  * @returns {string}
  */
 function weaveQuestionsFormatLine() {
-  const { kind, about } = WEAVE_QUESTIONS_PROPERTY.items.properties;
+  const { kind, about, [WEAVE_QUESTION_THREAD_KEY]: thread } = WEAVE_QUESTIONS_PROPERTY.items.properties;
   return `"questions" stays [] unless the record leaves something only the director can settle (C15). Each entry:
-{ "id": "q1", "kind": ${kind.enum.map(value => JSON.stringify(value)).join(' | ')}, "about": ${JSON.stringify(about.description)}, "question": "The question for the director", "changes": "What its answer changes in print" }`;
+{ "id": "q1", "kind": ${kind.enum.map(value => JSON.stringify(value)).join(' | ')}, "about": ${JSON.stringify(about.description)}, "question": "The question for the director", "changes": "What its answer changes in print", "${WEAVE_QUESTION_THREAD_KEY}": ${JSON.stringify(thread.description)} }`;
 }
 
 /**
@@ -190,9 +193,9 @@ function evidencePieceFormat() {
 }
 
 /**
- * The arc writer's OUTPUT FORMAT: the weave's shape with a placeholder in each field, its
- * roles and kinds listed from the schema's constants (lib/weave.js), each thread and each
- * connection with its evidence underneath (phase 4b, brief 1B).
+ * The arc writer's OUTPUT FORMAT: the weave's shape with a placeholder in each field, its kinds
+ * listed from the schema's constants (lib/weave.js), its angles first, each thread and each
+ * connection with its evidence underneath (phase 4b, briefs 1B and 3B).
  *
  * @returns {string}
  */
@@ -202,18 +205,25 @@ function weaveOutputFormat() {
 
 Return one JSON object in this shape:
 {
-  "story": "The story in one to three plain sentences, in the third person",
-  "question": "The question the story carries through the article",
-  "headline": "A working headline",
-  "fromYourNotes": "The director's own words the story rests on, copied exactly",
+  "angles": [
+    {
+      "id": "a1",
+      "headline": "The headline the article would print for this angle",
+      "gist": "One sentence that sums the angle up, for its card",
+      "story": "The story in two or three plain sentences, in the third person",
+      "question": "The question the story carries through the article",
+      "lands": "Why it lands with the players, in one line",
+      "ends": "Where it ends up, in one line",
+      "threads": ["t1", "t2"]
+    }
+  ],
+  "fromYourNotes": "The director's own words angle 1 rests on, copied exactly",
   "threads": [
     {
       "id": "t1",
-      "name": "A short name for the thread, in a few words",
+      "name": "What happened, with its people, in a few plain words",
       "line": "The thread in one plain line, in the third person",
-      "role": ${alternatives(WEAVE_ROLES)},
       "verdict": true,
-      "reason": "For a left-out thread: one line on why the story does not need it",
       "evidence": [
         ${evidencePieceFormat()}
       ]
@@ -230,8 +240,6 @@ Return one JSON object in this shape:
       ]
     }
   ],
-  "convergence": "Where the threads converge and the story lands, in a line or two",
-  "strongerMainThread": { "thread": "t2", "reason": "Why it would carry a stronger story, in one line" },
   "questions": []
 }
 
@@ -239,29 +247,25 @@ ${weaveQuestionsFormatLine()}`;
 }
 
 /**
- * The arc writer's task (phase 4, briefs 4.4 and 4.5; ruling 10; phase 4b, brief 1B): which
- * field holds what, and the page's bound. C1 states the story, its question and the stronger
- * main thread; C16 the threads, their roles, the connections, the convergence, the level of
- * the story every line keeps and the evidence under each line; C15 the questions. The task
- * points at them and states only what no rule says: what the director reads, the page with the
- * labels code prints beside the writer's lines, at most MEETING_WORD_BOUND words in all, and so
- * about 225 words of the writer's own (fix round 4: the checks hold the writer's own words to
- * the allowance lib/word-count.js pageLengthOf's rule gives, about 260 on a story-level weave, so
- * 225 leaves room for the thread names each connection prints again); where each lands in the
- * weave's fields, the words "from your notes" holds, the verdict flag, where a piece names its
- * sources, and the shape of the stronger main thread. The lens work C16 sets out reaches the
- * weave as each thread's role and its evidence's stances.
+ * The arc writer's task (phase 4, briefs 4.4 and 4.5; phase 4b, briefs 1B and 3B; spec 2026-10-06
+ * sections 4, 5 and 9): which field holds what, and the page's bound. C1 states the angles; C16
+ * the threads, the connections, where each angle ends up, the level of the story every line keeps
+ * and the evidence under each line; C15 the questions. The task points at them and states only
+ * what no rule says: what the director reads, the page with the labels code prints beside the
+ * writer's lines, at most MEETING_WORD_BOUND words with any angle open, and so about 325 words of
+ * the writer's own (R5: the checks hold the writer's own words to the allowance lib/word-count.js
+ * pageLengthOf's rule gives, so 325 leaves room for the thread names each connection prints
+ * again); where each lands in the weave's fields, the words "from your notes" holds, the verdict
+ * flag, where a piece names its sources, and the bound on a question (R4: QUESTION_WORD_BOUND).
  */
-const WEAVE_TASK = `Write one weave for the director to read in a few minutes at the story meeting. The page they read comes to at most ${MEETING_WORD_BOUND} words in all: your lines, without the evidence under them, and the labels code prints beside them (each thread's role, the names of the threads each connection joins, and the verdict). So your own lines come to about 225 words. C1 (<craft-story>) sets out the story, its question and the stronger main thread; C16 (<craft-story>) sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line. The fields hold them:
+const WEAVE_TASK = `Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The page they read comes to at most ${MEETING_WORD_BOUND} words with any one angle open: your lines, without the evidence under them (every angle's headline and card line; the open angle's pitch, its threads and the names of the threads it leaves out; the connections between its threads; the questions), and the labels code prints beside them (the verdict, and the names of the threads each connection joins). So your own lines come to about 325 words. C1 (<craft-story>) sets out the angles; C16 (<craft-story>) sets out the threads, the connections, where each angle ends up, the level of the story every line keeps and the evidence under each line. The fields hold them:
 
-- **story**, **question** and **headline**: the thesis, the question that carries it, and a working headline.
-- **fromYourNotes**: when the story starts from the director's read (C1), the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. A story from the record rests on no words of the director's, and the field stays out.
-- **threads**: every thread you find, each a short **name** and one **line**, in its role. The thread that carries the room's verdict has "verdict": true. The page shows a left-out thread by its name, with its one line on why in **reason**.
-- **evidence**: under each thread, the pieces of the record that tell it, and under each connection, the pieces that show the two threads touch; each piece with its **sources** from the Sources list, what it **shows**, and its **stance**. Each thread in the story has at least one piece that supports it, so the map writer can tell it from the record.
-- **connections**: the ones the story turns on (C16), each one **line**, with the ids of the two threads it **joins** and its **kind**.
-- **convergence**: as C16 names it.
-- **strongerMainThread**: when you see a stronger main thread (C1), its id as "thread" and your one-line reason as "reason".
-- **questions**: C15's (<craft-questions>), each with what its answer changes in print as "changes".`;
+- **angles**: each angle's **headline**, the article's own printed line; its **gist**, one sentence that sums it up for its card; its **story**, its **question**, why it **lands** with the players and where it **ends** up; and its **threads**, the ids of the threads it tells, in the order it tells them.
+- **fromYourNotes**: when angle 1 is the director's read (C1), the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. When every angle is your own, the field stays out.
+- **threads**: the one set of threads the angles draw on, each a **name** and one **line**. The thread that carries the room's verdict has "verdict": true.
+- **evidence**: under each thread, the pieces of the record that tell it, and under each connection, the pieces that show the two threads touch; each piece with its **sources** from the Sources list, what it **shows**, and its **stance**. Each thread has at least one piece that supports it, so the map writer can tell it from the record.
+- **connections**: each one **line**, with the ids of the two threads it **joins** and its **kind**.
+- **questions**: C15's (<craft-questions>), each with what its answer changes in print as "changes", and the id of the thread it sits beside as "thread". Each comes to ${QUESTION_WORD_BOUND} words or fewer across its about, question and changes, so the director reads it in a glance.`;
 
 /**
  * The three-category character block: the roster, the theme's NPCs, and the game's
@@ -429,11 +433,12 @@ function withoutStrikes(connections) {
 /**
  * The weave a writer or a rework returned, as the state stores it: its fields as the
  * model wrote them, with only the well-formed questions kept, and without the director's
- * keys (R12; brief 4.5b). An `answer` on a question and `struck` on a connection are
- * written only by the director at the meeting: WEAVE_SCHEMA leaves extra keys open, and a
- * model-written answer would show at the meeting as answered and print in the settled
- * weave as the director's words, and a model-written strike would take a connection out
- * of the story silently.
+ * keys (R12; brief 4.5b; piece 3, R1). The pick (`picked`), an `answer` on a question and
+ * `struck` on a connection are written only by the director at the meeting: WEAVE_SCHEMA
+ * leaves extra keys open, and a model-written answer would show at the meeting as answered and
+ * print in the settled weave as the director's words, a model-written strike would take a
+ * connection out of the story silently, and a model-written pick would send an angle on that
+ * the director never chose.
  *
  * @param {Object} result - the model's output
  * @param {string} who - the call, for the error
@@ -444,7 +449,7 @@ function weaveFromOutput(result, who) {
   if (!isWeave(result) || result.threads.length === 0) {
     throw new Error(`The ${who} returned no threads: its output is not a weave.`);
   }
-  const weave = weaveForPrompt(result);
+  const { [PICKED_KEY]: _pick, ...weave } = weaveForPrompt(result);
   return {
     ...weave,
     ...(Array.isArray(weave.connections) && { connections: withoutStrikes(weave.connections) }),
@@ -642,6 +647,12 @@ ${ARC_REWORK_TASK}${struck ? ` ${ARC_REWORK_STRUCK_IDS}` : ''}${buildArcStanding
  *   except on a send-back, which may change an edit; any other connection the rework
  *   returned under a struck id keeps its words and joins under an id of its own, numbered
  *   after every connection id the round has used (brief 4.14a);
+ * - the director's pick, carried over while its angle survives by id, so the meeting reopens on
+ *   the angle the director had open, or on the first angle when the rework dropped it (piece 3,
+ *   R1; lib/weave.js withPickFrom);
+ * - each question's thread, kept only while the weave holds it: a question whose thread the
+ *   rework dropped or renumbered sits by the pitch, answered or not, with its answer (R10;
+ *   lib/weave.js withHeldQuestionThreads);
  * - the fact check's mark: the fix (an automatic pass on a weave the fact check judged)
  *   keeps it, counting the fix; a check rework starts from a weave not yet judged, so
  *   there is none to keep; a director's round writes the weave without it, so the
@@ -656,10 +667,10 @@ ${ARC_REWORK_TASK}${struck ? ` ${ARC_REWORK_STRUCK_IDS}` : ''}${buildArcStanding
  * @returns {Object}
  */
 function weaveFromRework(result, previous, { directorRound, roundStart = null }) {
-  const weave = withStruckConnections({
+  const weave = withHeldQuestionThreads(withPickFrom(withStruckConnections({
     ...weaveFromOutput(result, 'arc rework'),
     questions: carriedWeaveQuestions(result && result.questions, previous.questions)
-  }, weaveForPrompt(previous), { roundStart });
+  }, weaveForPrompt(previous), { roundStart }), previous));
   const mark = directorRound ? null : factCheckMarkOf(previous);
   return mark ? { ...weave, [FACT_CHECK_MARK_KEY]: { ...mark, fixes: (mark.fixes || 0) + 1 } } : weave;
 }
@@ -898,25 +909,34 @@ function extractEvidenceSummary(evidenceBundle) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The length of the story meeting's page as it first opens, of the writer's share of the weave
- * (phase 4b, brief 1B; spec 4.1 and 6.1; R5; fix round 4, lib/word-count.js pageLengthOf's rule):
- * `{page, writer, allowance}` (lib/weave.js meetingLengthOf).
- * - The page's words: the stop's page of the weave, its questions and the verdict, with no round's
- *   lines (lib/meeting.js meetingCheckpointData on a first look), counted by lib/stop-pages.js
- *   wordsShown, the count the stops log records, which leaves the folded evidence out. Only the
- *   writer's share is counted (lib/weave.js writersShareOf), so the director's version is never
- *   held to the bound (Review focus 3).
+ * The length of the story meeting's page with each angle open, of the writer's share of the weave
+ * (phase 4b, brief 1B; piece 3, R5; fix round 4, lib/word-count.js pageLengthOf's rule): the worst
+ * angle's `{page, writer, allowance}` (lib/weave.js meetingLengthOf), with `angle`, its id.
+ * - Each angle's page: the stop's page of the weave, its questions and the verdict, with that
+ *   angle picked and no round's lines (lib/meeting.js meetingCheckpointData on a first look),
+ *   counted by lib/stop-pages.js wordsShown, the count the stops log records, which leaves the
+ *   folded evidence out. Only the writer's share is counted (lib/weave.js writersShareOf), so the
+ *   director's version is never held to the bound (Review focus 3).
  * - Its overhead, the words the writer did not write: the same page with every field the writer
- *   writes holding no word (lib/weave.js weaveWritersTextBlank).
+ *   writes holding no word (lib/weave.js weaveWritersTextBlank). The connections and the cards on
+ *   the page change with the angle open, so each angle has its own.
+ * - The worst angle is the one whose writer's words run furthest past its allowance (or least
+ *   within it); the first such angle, on a tie. A weave with no angle id is counted once, as it
+ *   opens, with `angle` null.
  *
  * @param {Object} state - the weave and the session's parse
  * @param {Object} directorsShare - the director's share of the weave (weaveDirectorsShare)
- * @returns {{page: number, writer: number, allowance: number}}
+ * @returns {{page: number, writer: number, allowance: number, angle: (string|null)}}
  */
 function meetingPageWords(state, directorsShare) {
   const share = writersShareOf(weaveForPrompt(state.weave), directorsShare);
   const pageOf = (weave) => wordsShown(CHECKPOINT_TYPES.ARC_SELECTION, meetingCheckpointData({ weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
-  return meetingLengthOf(pageOf(share), pageOf(weaveWritersTextBlank(share)));
+  const lengthWith = (weave) => meetingLengthOf(pageOf(weave), pageOf(weaveWritersTextBlank(weave)));
+  const ids = [...new Set((Array.isArray(share.angles) ? share.angles : []).map((angle) => weaveIdOf(angle)).filter(Boolean))];
+  if (ids.length === 0) return { ...lengthWith(share), angle: null };
+  return ids
+    .map((angle) => ({ ...lengthWith({ ...share, [PICKED_KEY]: angle }), angle }))
+    .reduce((worst, length) => (length.writer - length.allowance > worst.writer - worst.allowance ? length : worst));
 }
 
 /**
@@ -937,10 +957,11 @@ function meetingPageWords(state, directorsShare) {
  *
  * Phase 4b (brief 1B; spec 2026-10-05 sections 4.1 and 6.1): the checks read the evidence
  * under each line against the record (lib/evidence.js evidenceContextOf), and the meeting's
- * page as it first opens, counted with its overhead (meetingPageWords), so the writer's own
- * words are held to the allowance lib/word-count.js pageLengthOf's rule gives (fix round 4),
- * recorded on `_arcValidation.words` as `{page, writer, allowance}`. Each failure carries its
- * place, so the meeting shows a check still failing beside its line.
+ * page with each angle open, counted with its overhead (meetingPageWords), so the writer's own
+ * words are held to the allowance lib/word-count.js pageLengthOf's rule gives (fix round 4; piece
+ * 3, R5), recorded on `_arcValidation.words` as the worst angle's `{page, writer, allowance,
+ * angle}`. Each failure carries its place, so the meeting shows a check still failing beside its
+ * line.
  *
  * Once the meeting is approved it checks nothing and writes nothing, so a replay past
  * the meeting leaves a later stage's findings in validationResults as they were.
@@ -965,7 +986,7 @@ function validateArcStructure(state) {
   });
   const key = weaveKey(weave);
   const passed = failures.length === 0;
-  const counted = words ? `${words.page} words on the meeting's page, ${words.writer} the writer's of ${words.allowance} it may use` : 'no page';
+  const counted = words ? `${words.page} words on the meeting's page${words.angle ? ` with angle ${words.angle} open` : ''}, ${words.writer} the writer's of ${words.allowance} it may use` : 'no page';
   console.log(`[validateArcs] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${counted}, weave ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
 
   return {

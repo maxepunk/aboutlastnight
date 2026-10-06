@@ -383,11 +383,27 @@ const REPO = path.join(__dirname, '..', '..');
  *   marks" (+98), since the check matches the name loosely and leaves the director's thread
  *   names out of the story-terms scan: outline-journalist 23474 -> 23572. The article and arc
  *   pins do not move.
+ * - Phase 4b, piece 3 (brief 3B; spec 2026-10-06 sections 4, 8 and 17; R4, R5, R10, R11), the
+ *   weave as angles. The arc writer pitches two or three angles over one shared set of threads:
+ *   its identity line (lib/theme-config.js `arc`, +7) and its system prompt's own text
+ *   (WEAVE_SYSTEM_PROMPT, +67) say it pitches the angles; its OUTPUT FORMAT gives each angle its
+ *   headline, card line, story, question, why it lands, where it ends up and its threads, a
+ *   thread no role and no reason, and a question the thread it sits beside, and drops the single
+ *   story, the convergence and the stronger main thread (+34); and its task asks for the page
+ *   within 450 words with any angle open, about 325 of the writer's own, each field as C1, C15 and
+ *   C16 name it, and a question within 40 words (+164): arcs-journalist 11651 -> 11923. The
+ *   settled weave the map writer and the article writer read prints the angle the director
+ *   picked (its headline, story, question, why it lands and where it ends up, and "from your
+ *   notes" for angle 1), its threads in its order with their evidence, the threads it leaves out
+ *   by name on one line, the connections between its threads, and each question with the thread
+ *   it sits beside. The fixture's weave (fixtures/rework-state.js WEAVE) holds three angles and a
+ *   second question, beside a thread (its settled weave 2161 -> 2405): outline-journalist
+ *   23572 -> 23816 and article-journalist 34778 -> 35022, each by the settled weave alone.
  */
 const PINNED = {
-  'outline-journalist': ['fd7e1ca979c3eaafa0eddffa4c123772d429c62d4fbf94c0d6f7b08be76eac9d', 23572],
-  'article-journalist': ['958bf97f4d1d11c7b687118faf09aa14500bff16b6fdd82ee57b850caaa870e4', 34778],
-  'arcs-journalist': ['aaf2c6c78d87157e6be1a0092eb47c53318e1f571843929ea901b9a63a1b745c', 11651]
+  'outline-journalist': ['dccce5b2cff1893409f64f7aa7cbf33f8e510df96acb10150c2e20f871e9ea12', 23816],
+  'article-journalist': ['d9052b4f293f038ca49d5aa63380b1c3a1de65aac9ff05ce7d2aa52fa9f9477f', 35022],
+  'arcs-journalist': ['f4bd61c1065b41fcd9dde4361d74d201553aedff08022f705856543784ae0b9c', 11923]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

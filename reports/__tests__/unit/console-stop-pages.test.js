@@ -65,20 +65,20 @@ describe('4.12c: each page heads its parts in its component\'s words', () => {
 });
 
 describe('4.12c: each page folds what its component folds', () => {
-  // Phase 4b (brief 1B; spec 9): the meeting folds each line's evidence under it and the
-  // left-out threads' reasons, beside the standing notes.
-  it('the story meeting folds the evidence under each line, the left-out threads\' reasons and the standing notes', () => {
+  // Phase 4b (brief 1B; spec 9; piece 3, spec 2026-10-06 section 5): the meeting folds each line's
+  // evidence under it and each left-out thread's line under its name, beside the standing notes.
+  it('the story meeting folds the evidence under each line, each left-out thread\'s line and the standing notes', () => {
     const src = read(COMPONENTS['arc-selection']);
     expect(count(src, 'React.createElement(CollapsibleSection')).toBe(3);
     expect(src).toContain('standing.any && React.createElement(CollapsibleSection, { title: standing.title }');
     expect(src).toContain('React.createElement(CollapsibleSection, { title: view.evidenceTitle }');
-    expect(src).toContain('React.createElement(CollapsibleSection, { title: leftOut.reasonsTitle }');
+    expect(src).toContain('React.createElement(CollapsibleSection, { title: thread.label }');
     const state = { ...reworkFixtureState('journalist'), meetingApproved: null };
     const data = { type: 'arc-selection', ...meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 }), directorGateNotes: NOTE };
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const page = stopPage('arc-selection', data);
     expect(titles(page, true)).toEqual([
-      ...view.threads.map(() => view.evidenceTitle), view.leftOut.reasonsTitle, ...view.connections.map(() => view.evidenceTitle),
+      ...view.threads.map(() => view.evidenceTitle), ...view.leftOut.threads.map((thread) => thread.label), ...view.connections.map(() => view.evidenceTitle),
       View.standingNotesView(NOTE).title
     ]);
   });

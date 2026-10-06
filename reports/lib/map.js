@@ -80,6 +80,8 @@ const {
 } = require('./evidence');
 const { normalizeForGrounding } = require('./grounding');
 const { wordCount, pageLengthOf } = require('./word-count');
+// Phase 4b, piece 3 (brief 3B): the one reading of the settled story, the angle the director picked.
+const { settledAngleOf } = require('./weave');
 
 /** A beat's kind: what its move puts on the page, kept underneath as a hint to the article writer and never printed (R1). */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
@@ -833,11 +835,11 @@ function cardFault(beat, evidence) {
  * @param {Array} inputs.roster - mapRosterOf's roster
  * @param {string[]} inputs.keptPhotos - the filenames of the photos kept for the article
  * @param {Array<{id: string, name: string, added: boolean, broughtIn: boolean}>} [inputs.threads] - the
- *   settled weave's threads in the story (every role but left out), `added` on one the director
- *   added at the meeting and `broughtIn` on one they brought into the story from left out
+ *   settled angle's threads, in its order (lib/weave.js settledAngleOf), `added` on one the
+ *   director added at the meeting and `broughtIn` on one they brought into the story
  * @param {Array<{id: string, line: string}|string>} inputs.connections - the connections the settled
- *   weave keeps (lib/weave.js storyConnections: none struck, and none that joins a left-out
- *   thread), each `{id, line}` or its id alone
+ *   angle keeps (lib/weave.js settledAngleOf: those between two of its threads, none struck),
+ *   each `{id, line}` or its id alone
  * @param {string[]} inputs.meetingEdits - the ids of the director's changes at the meeting, in
  *   the meeting's own form (meetingEditIdsOf)
  * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
@@ -1349,10 +1351,15 @@ function meetingNoteOf(state) {
     .some((note) => note && note.gate === MEETING_GATE && note.kind === 'approval' && textOf(note.text));
 }
 
-/** The story the director settled at the meeting, as the map's stop prints it: the story and its question. */
+/**
+ * The story the director settled at the meeting, as the map's stop prints it: the picked angle's
+ * story and its question (lib/weave.js settledAngleOf; phase 4b, piece 3, brief 3B), or null for
+ * a weave with no angle.
+ */
 function settledStoryOf(weave) {
-  if (!weave || typeof weave !== 'object') return null;
-  return { story: textOf(weave.story), question: textOf(weave.question) };
+  const settled = settledAngleOf(weave);
+  if (!settled) return null;
+  return { story: textOf(settled.angle.story), question: textOf(settled.angle.question) };
 }
 
 /**

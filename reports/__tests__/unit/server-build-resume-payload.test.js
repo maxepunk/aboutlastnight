@@ -1069,10 +1069,11 @@ describe('4.5: the story meeting through buildResumePayload', () => {
   });
 
   it('refuses a malformed weave with the schema\'s reason, and writes nothing', () => {
+    // Piece 3 (brief 3B): an angle's threads are a list of ids.
     const bad = left();
-    bad.threads[0].role = 'hero';
+    bad.angles[0].threads = 't1';
     const result = buildResumePayload({ meeting: 'approve', weave: bad }, shown(), 'journalist', 'arc-selection');
-    expect(result.error).toMatch(/director-side schema: \/threads\/0\/role must be equal to one of the allowed values/);
+    expect(result.error).toMatch(/director-side schema: \/angles\/0\/threads must be array/);
     expect(result.stateUpdates).toEqual({});
     expect(result.resume).toEqual({});
   });
@@ -1338,7 +1339,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
   const { withFactCheckMark } = require('../../lib/weave');
   const { meetingCheckpointData } = require('../../lib/meeting');
   const {
-    meetingWeaveOf, meetingPayload, setMeetingField, setThreadRole, addMeetingThread, setConnectionStruck, setQuestionAnswer
+    meetingWeaveOf, meetingPayload, setAngleField, setThreadField, addMeetingThread, setConnectionStruck, setQuestionAnswer
   } = require('../../console/checkpoint-view-logic');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const MARK = { at: 't', ready: true, fixes: 0 };
@@ -1351,12 +1352,16 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
   /** The stop's payload at a state, which the console's builders read (server.js getCheckpointData's arm). */
   const dataOf = (state) => meetingCheckpointData(state, { evidenceIndex: {}, maxRevisions: 1 });
 
-  /** A role changed, a thread added, a connection struck, a question answered and the story edited, each as typed. */
+  /**
+   * A thread's line rewritten, a thread added, a connection struck, a question answered and the
+   * open angle's story edited, each as typed (piece 3: the pitch is stored as typed and is no edit
+   * until slice 3C).
+   */
   const changed = (shown) => {
     let w = meetingWeaveOf(shown);
-    w = setMeetingField(w, 'story', 'The room named an overdose; the ledger names a sale. ');
-    w = setThreadRole(w, 2, 'mirrors-it');
-    w = addMeetingThread(w, 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
+    w = setAngleField(w, 'a1', 'story', 'The room named an overdose; the ledger names a sale. ');
+    w = setThreadField(w, 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
+    w = addMeetingThread(w, 'The second ledger', 'Riley kept a second ledger.');
     w = setConnectionStruck(w, 1, true);
     w = setQuestionAnswer(w, 0, ' Sarah ran the bar all morning.');
     return w;
@@ -1367,11 +1372,12 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     const { resume, stateUpdates, error } = take(meetingPayload('approve', dataOf(state), changed(state.weave), 'Lead with the vote.'), state);
     expect(error).toBeNull();
     expect(resume).toEqual({ approved: true });
-    expect(stateUpdates.weave.story).toBe('The room named an overdose; the ledger names a sale. ');
+    expect(stateUpdates.weave.angles[0].story).toBe('The room named an overdose; the ledger names a sale. ');
+    expect(stateUpdates.weave.angles[0].threads).toEqual(['t1', 't2', 't3', 't4', 't6']);
     expect(stateUpdates.weave.questions[0].answer).toBe(' Sarah ran the bar all morning.');
     expect(stateUpdates.weave.connections[1].struck).toBe(true);
     expect(stateUpdates.weave._factCheck).toEqual(MARK);
-    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['story', 'threads[#t3].role', 'threads[#t6]', 'connections[#c2]']);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].line', 'threads[#t6]', 'connections[#c2]']);
     expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'arc-selection', kind: 'approval', text: 'Lead with the vote.' })]);
   });
 
@@ -1385,12 +1391,12 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
 
   test('a reweave with a change and no note is the director\'s round, marked', () => {
     const state = atMeeting();
-    const payload = meetingPayload('reweave', dataOf(state), setThreadRole(meetingWeaveOf(state.weave), 4, 'grounds-it'), '');
+    const payload = meetingPayload('reweave', dataOf(state), setThreadField(meetingWeaveOf(state.weave), 4, 'line', 'The letter came the morning of the vote.'), '');
     const { resume, stateUpdates, error } = take(payload, state);
     expect(error).toBeNull();
     expect(resume).toEqual({ approved: false, round: 'reweave' });
     expect(stateUpdates._meetingRound).toBe('reweave');
-    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t5].role']);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t5].line']);
   });
 
   // Fix round 1, finding 1: a reweave whose rework timed out reopens the meeting on the
@@ -1399,7 +1405,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
   // carrying the changes as the director's standing edits.
   test('the retry of a reweave that did not run, sent with nothing new typed, is a payload the gate takes', () => {
     const state = atMeeting();
-    const first = take(meetingPayload('reweave', dataOf(state), setThreadRole(meetingWeaveOf(state.weave), 4, 'grounds-it'), ''), state);
+    const first = take(meetingPayload('reweave', dataOf(state), setThreadField(meetingWeaveOf(state.weave), 4, 'line', 'The letter came the morning of the vote.'), ''), state);
     expect(first.error).toBeNull();
     const reopened = {
       ...state, ...first.stateUpdates, _meetingRound: null, _arcFeedback: null,
@@ -1411,7 +1417,7 @@ describe('4.8: the meeting\'s payload builders through buildResumePayload', () =
     const { resume, stateUpdates, error } = take(retry, reopened);
     expect(error).toBeNull();
     expect(resume).toEqual({ approved: false, round: 'reweave' });
-    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t5].role']);
+    expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t5].line']);
   });
 
   test('a send-back with only a note leaves the weave as shown; one with an answer stores the answer', () => {
@@ -1518,7 +1524,7 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
   const { withFactCheckMark } = require('../../lib/weave');
   const { meetingCheckpointData } = require('../../lib/meeting');
   const {
-    meetingWeaveOf, meetingPayload, setThreadRole, setConnectionStruck, setQuestionAnswer
+    meetingWeaveOf, meetingPayload, setThreadField, setConnectionStruck, setQuestionAnswer
   } = require('../../console/checkpoint-view-logic');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const MARK = { at: 't', ready: true, fixes: 0 };
@@ -1549,7 +1555,7 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
     it("takes every payload the console builds, each carrying only the meeting's keys, and the photos folder beside the meeting's own action", () => {
       const state = atMeeting();
       const data = dataOf(state);
-      const reroled = setThreadRole(shownOf(state), 2, 'mirrors-it');
+      const reroled = setThreadField(shownOf(state), 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
       const payloads = [
         meetingPayload('approve', data, shownOf(state), ''),
         meetingPayload('approve', data, reroled, 'Lead with the vote.'),
@@ -1626,16 +1632,16 @@ describe('4.5c: the meeting takes only its own keys, and a note sent again in it
       expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'arc-selection', kind: 'rejection', text: 'Make the sale the main thread.' })]);
     });
 
-    it('a send-back that carries a role change: the role stored as the director left it, its edit standing, and the note as the round\'s', () => {
+    it('a send-back that carries a thread rewritten: the line stored as the director left it, its edit standing, and the note as the round\'s', () => {
       const state = atMeeting();
-      const reroled = setThreadRole(shownOf(state), 2, 'mirrors-it');
+      const reroled = setThreadField(shownOf(state), 2, 'line', 'Morgan paid Riley at the bar, where no one looked.');
       const payload = meetingPayload('send-back', dataOf(state), reroled, 'Rethink the money thread.');
       expect(payload).toEqual({ meeting: 'send-back', note: 'Rethink the money thread.', weave: reroled });
       const { resume, stateUpdates, error } = take(payload, state);
       expect(error).toBeNull();
       expect(resume).toEqual({ approved: false, round: 'send-back', feedback: 'Rethink the money thread.' });
-      expect(stateUpdates.weave.threads[2].role).toBe('mirrors-it');
-      expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].role']);
+      expect(stateUpdates.weave.threads[2].line).toBe('Morgan paid Riley at the bar, where no one looked.');
+      expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t3].line']);
       expect(stateUpdates).toMatchObject({ _meetingRound: 'send-back', _arcFeedback: 'Rethink the money thread.' });
     });
   });
@@ -1686,7 +1692,7 @@ describe('4.5c fix round 1: a change at the place of a standing edit is the dire
   const { settleEdits, carriedEdits, REWEAVE_PASS } = require('../../lib/hand-edit-diff');
   const { meetingCheckpointData } = require('../../lib/meeting');
   const {
-    meetingDraftOf, meetingPayload, meetingButtons, setThreadRole, setConnectionStruck
+    meetingDraftOf, meetingPayload, meetingButtons, setThreadField, setConnectionStruck
   } = require('../../console/checkpoint-view-logic');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const MARK = { at: 't', ready: true, fixes: 0 };
@@ -1730,25 +1736,25 @@ describe('4.5c fix round 1: a change at the place of a standing edit is the dire
     expect(again.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.struck === true])).toEqual([['E3', 'connections[#c2]', true]]);
   });
 
-  it('a role the same way: set, kept by a reweave, set back and approved, then set again with no round since', () => {
-    const reroled = act(atMeeting(), 'reweave', (w) => setThreadRole(w, 2, 'mirrors-it'));
-    const afterRound = ranRound({ ...atMeeting(), ...reroled.taken.stateUpdates });
-    const back = act(afterRound, 'approve', (w) => setThreadRole(w, 2, 'complicates-it'));
+  it("a thread's line the same way: rewritten, kept by a reweave, set back and approved, then rewritten again with no round since", () => {
+    const rewritten = act(atMeeting(), 'reweave', (w) => setThreadField(w, 2, 'line', 'Morgan paid Riley at the bar, where no one looked.'));
+    const afterRound = ranRound({ ...atMeeting(), ...rewritten.taken.stateUpdates });
+    const back = act(afterRound, 'approve', (w) => setThreadField(w, 2, 'line', WEAVE.threads[2].line));
     expect(back.taken.error).toBeNull();
-    const again = act({ ...afterRound, ...back.taken.stateUpdates }, 'reweave', (w) => setThreadRole(w, 2, 'mirrors-it'));
+    const again = act({ ...afterRound, ...back.taken.stateUpdates }, 'reweave', (w) => setThreadField(w, 2, 'line', 'Morgan paid Riley at the bar, where no one looked.'));
     expect(again.offered).toBe(true);
     expect(again.taken.error).toBeNull();
     expect(again.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.before, e.after]))
-      .toEqual([['E3', 'threads[#t3].role', 'complicates-it', 'mirrors-it']]);
+      .toEqual([['E3', 'threads[#t3].line', WEAVE.threads[2].line, 'Morgan paid Riley at the bar, where no one looked.']]);
   });
 
   it('with no round since an approve, setting the place of an edit back to the writer\'s is a reweave the gate takes, as after a round', () => {
-    const approved = act(atMeeting(), 'approve', (w) => setThreadRole(w, 2, 'mirrors-it'));
-    const back = act({ ...atMeeting(), ...approved.taken.stateUpdates }, 'reweave', (w) => setThreadRole(w, 2, 'complicates-it'));
+    const approved = act(atMeeting(), 'approve', (w) => setThreadField(w, 2, 'line', 'Morgan paid Riley at the bar, where no one looked.'));
+    const back = act({ ...atMeeting(), ...approved.taken.stateUpdates }, 'reweave', (w) => setThreadField(w, 2, 'line', WEAVE.threads[2].line));
     expect(back.offered).toBe(true);
     expect(back.taken.error).toBeNull();
     expect(back.taken.stateUpdates._weaveHandEdits.edits.map((e) => [e.id, e.path, e.before, e.after]))
-      .toEqual([['E2', 'threads[#t3].role', 'mirrors-it', 'complicates-it']]);
+      .toEqual([['E2', 'threads[#t3].line', 'Morgan paid Riley at the bar, where no one looked.', WEAVE.threads[2].line]]);
   });
 });
 

@@ -1005,18 +1005,18 @@ const JUDGED_WRITERS = { arcs: 'arc writer', article: 'article writer' };
 
 /** What a truth criterion's notes hold, per judge, as its OUTPUT FORMAT asks for them. */
 const BREACH_NOTES = {
-  arcs: 'the breach: the text at fault, the thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts',
+  arcs: 'the breach: the text at fault, the angle, thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts',
   article: 'the breach: the sentence at fault, its section, and the record it contradicts'
 };
 
 /**
  * How a truth finding quotes the text at fault, per judge. A breach in the weave names
- * the thread it is in (phase 4, brief 4.4), so the fix and the meeting find its line, and
- * the piece of evidence where one is at fault (phase 4b, brief 1B; spec 6.2), so the fix can
- * cite something else.
+ * the angle, thread or connection it is in (phase 4, brief 4.4; phase 4b, piece 3, brief 3B), so
+ * the fix and the meeting find its line, and the piece of evidence where one is at fault (phase
+ * 4b, brief 1B; spec 6.2), so the fix can cite something else.
  */
 const TRUTH_FINDING_QUOTE = {
-  arcs: 'quotes the text at fault, names the thread or connection it is in by its id (or the field, for the story, the question, the headline or the convergence) and, where a piece of evidence is at fault, the piece by its sources',
+  arcs: "quotes the text at fault, names the angle, thread or connection it is in by its id (for an angle, with its line: the headline, its card line, the story, the question, why it lands or where it ends up) and, where a piece of evidence is at fault, the piece by its sources",
   article: 'quotes the sentence and names its section'
 };
 
@@ -1420,8 +1420,11 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // Brief 4.5: after a director's round it reads the weave as it judges it (no struck
       // connection, no answer), the director's changes right after it, and their answers
       // after the notes, as the director's words (T1).
+      //
+      // Phase 4b, piece 3 (brief 3B; spec 9.2): it opens by naming the angles and the threads
+      // they draw on, and judges every angle, since the director may pick any of them.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
-      return `Check this weave against the record and the director's words. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
+      return `Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
 WEAVE:
 ${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
@@ -2147,7 +2150,7 @@ if (require.main === module) {
 
   const mockState = {
     sessionId: 'self-test',
-    weave: { story: 'Test story.', threads: [{ id: 't1', name: 'Test thread', line: 'Test line.', role: 'main-thread', verdict: true, evidence: [{ sources: ['ledger'], shows: 'Test sale.', stance: 'supports' }] }], connections: [], questions: [] },
+    weave: { angles: [{ id: 'a1', headline: 'Test', gist: 'Test gist.', story: 'Test story.', question: 'Test question?', lands: 'Test lands.', ends: 'Test ends.', threads: ['t1'] }], threads: [{ id: 't1', name: 'Test thread', line: 'Test line.', verdict: true, evidence: [{ sources: ['ledger'], shows: 'Test sale.', stance: 'supports' }] }], connections: [], questions: [] },
     playerFocus: { primaryInvestigation: 'Who is the Valet?' },
     evidenceBundle: { exposed: [{ id: 'e1' }], buried: [] },
     contentBundle: { headline: { main: 'Test' }, sections: [] }

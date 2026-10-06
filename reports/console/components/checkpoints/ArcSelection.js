@@ -1,21 +1,22 @@
 /**
- * The story meeting (phase 4, task 4.8; spec 4.3 and 4.4): the arc stop, where the
- * director settles the weave before anything is planned. A page of at most 300 words, in
- * the spec's order (phase 4b, briefs 1B and 1C; spec 2026-10-05 sections 4.1 and 9): the
- * verdict; the story, the question and the working headline; "from your notes"; the threads
- * in the story, each as its role, its name and its line, with a "What's behind it" toggle that
- * opens its evidence in place, then the left-out threads by name, their reasons behind one
- * toggle; the connections, each its line with the names of the threads it joins, and where
- * they converge; the optional stronger main thread; the questions, each with its answer box.
- * Beside them: a code check still failing under the line it names, a concern beside its line,
- * the marks after a round, the edits a send-back changed with their reasons, a round that did
- * not run, the note box with the standing notes folded under it, and the three buttons. No
- * tag on the page: a thread is named by its name, a connection by the threads it joins, in
- * every line and every aria-label.
+ * The story meeting (phase 4, task 4.8; phase 4b, piece 3, brief 3B; spec 2026-10-06 sections 5
+ * and 6): the arc stop, where the director settles the story before anything is planned. A memo
+ * of at most 450 words with any angle open, in the spec's order: the verdict; "from your notes",
+ * or the line that says the notes end without the director's read; the angles side by side, the
+ * open one saying it is open below; the open angle's pitch, its headline, story, question, why it
+ * lands and where it ends up, with the questions that sit by it; its threads in the story, each its
+ * name and its line, the verdict's always in, with the questions beside it and a "What's behind
+ * it" toggle that opens its evidence in place; the threads left out, each opening in place to its
+ * line; where the threads in the story meet. Beside them: a code check still failing under the line
+ * it names, a concern beside its line, the marks after a round, the edits a send-back changed with
+ * their reasons, a round that did not run, the note box with the standing notes folded under it,
+ * and the three buttons. No tag on the page: every line and every aria-label names an element by
+ * its words.
  *
- * The director edits the story, the question, the headline and the convergence in place,
- * changes a thread's role, adds a thread with a name, a line and a role, strikes a
- * connection and answers each question; then approves, reweaves or sends back.
+ * Until slice 3D rebuilds this page (brief 3B gave it only the least change for the angles), the
+ * director rewrites the open angle's pitch in place, adds a thread with a name and a line, strikes
+ * a connection and answers each question; then approves, reweaves or sends back. Picking another
+ * angle, flipping a thread and rewriting a thread are the view logic's operations, which 3D wires.
  *
  * Thin: every decision is in checkpoint-view-logic.js. The page is meetingView's, the
  * changes are its operations, the payloads are meetingPayload's (4.5's), each held first
@@ -43,7 +44,6 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
   const [note, setNote] = React.useState(function () { return ViewLogic.meetingNoteOf(data, pendingEdits, pendingNote); });
   const [newName, setNewName] = React.useState('');
   const [newLine, setNewLine] = React.useState('');
-  const [newRole, setNewRole] = React.useState('grounds-it');
   // Send back takes two clicks, as at the map and the desk: this flag says the first one
   // happened, and ViewLogic.sendBackButton decides what it means on screen.
   const [sendBackArmed, setSendBackArmed] = React.useState(false);
@@ -91,15 +91,14 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     }
   }
 
-  function editField(field, text) { keep(ViewLogic.setMeetingField(draft, field, text), note); }
-  function editRole(index, role) { keep(ViewLogic.setThreadRole(draft, index, role), note); }
+  function editPitch(field, text) { keep(ViewLogic.setAngleField(draft, view.pitch.id, field, text), note); }
   function removeThread(index) { keep(ViewLogic.removeMeetingThread(draft, index), note); }
   function strike(index, struck) { keep(ViewLogic.setConnectionStruck(draft, index, struck), note); }
   function answer(index, text) { keep(ViewLogic.setQuestionAnswer(draft, index, text), note); }
   function editNote(text) { keep(draft, text); setSendBackArmed(false); setAskingApprove(false); }
 
   function addThread() {
-    const next = ViewLogic.addMeetingThread(draft, newName, newLine, newRole);
+    const next = ViewLogic.addMeetingThread(draft, newName, newLine);
     if (next === draft) return;
     keep(next, note);
     setNewName('');
@@ -173,12 +172,6 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     );
   }
 
-  function roleOptions() {
-    return view.roles.map(function (role) {
-      return React.createElement('option', { key: role.value, value: role.value }, role.label);
-    });
-  }
-
   /**
    * A line's evidence under it (phase 4b, briefs 1B and 1C; spec 5.4 and 9): a "What's behind it"
    * toggle that opens it in place, each piece as evidenceFoldView words it, a piece that cuts
@@ -200,6 +193,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     );
   }
 
+  /** A line of the open angle's pitch, rewritten in place (setAngleField). */
   function fieldEditor(field, label, line, rows) {
     return React.createElement('div', { key: field, className: 'meeting__field' },
       React.createElement('label', { className: 'meeting__label', htmlFor: 'meeting-' + field }, label),
@@ -208,9 +202,30 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
         className: 'input meeting__input',
         rows: rows,
         value: line.text,
-        onChange: function (e) { editField(field, e.target.value); }
+        onChange: function (e) { editPitch(field, e.target.value); }
       }),
       beside(line)
+    );
+  }
+
+  /** A question where it sits, beside a thread or by the pitch: what it asks, what its answer changes, and its answer box. */
+  function questionBlock(question) {
+    return React.createElement('div', { key: question.key, className: 'meeting__question' },
+      React.createElement('p', null,
+        question.kindLabel && React.createElement('span', { className: 'meeting__kind' }, question.kindLabel),
+        React.createElement('strong', null, question.about), ': ', question.question),
+      React.createElement('p', { className: 'text-xs text-muted' }, 'Its answer changes: ' + question.changes),
+      React.createElement('textarea', {
+        className: 'input meeting__answer',
+        rows: 2,
+        value: question.answer,
+        disabled: question.index === -1,
+        placeholder: 'Your answer',
+        onChange: function (e) { answer(question.index, e.target.value); },
+        'aria-label': question.labels.answer
+      }),
+      // A check still failing on the question, and the marks of what the round changed on it.
+      beside(question)
     );
   }
 
@@ -228,40 +243,52 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
       );
     },
 
-    story: function () {
-      return React.createElement('section', { key: 'story', className: 'meeting__section' },
-        fieldEditor('story', LABELS.story, view.story, 3),
-        view.thinNotes && React.createElement('p', { className: 'meeting__thin-notes' }, view.thinNotes),
-        fieldEditor('question', LABELS.question, view.question, 2),
-        fieldEditor('headline', LABELS.headline, view.headline, 1)
+    fromYourNotes: function () {
+      return React.createElement('section', { key: 'fromYourNotes', className: 'meeting__section' },
+        view.fromYourNotes
+          ? React.createElement(React.Fragment, null,
+              React.createElement('h4', { className: 'meeting__label' }, LABELS.fromYourNotes),
+              React.createElement('blockquote', { className: 'meeting__quote' }, '"' + view.fromYourNotes.text + '"'),
+              beside(view.fromYourNotes))
+          : React.createElement('p', { className: 'meeting__thin-notes' }, view.thinNotes)
       );
     },
 
-    fromYourNotes: function () {
-      return React.createElement('section', { key: 'fromYourNotes', className: 'meeting__section' },
-        React.createElement('h4', { className: 'meeting__label' }, LABELS.fromYourNotes),
-        React.createElement('blockquote', { className: 'meeting__quote' }, '"' + view.fromYourNotes.text + '"'),
-        beside(view.fromYourNotes)
+    angles: function () {
+      return React.createElement('section', { key: 'angles', className: 'meeting__section' },
+        React.createElement('h4', { className: 'meeting__label' }, 'The angles'),
+        React.createElement('ul', { className: 'meeting__list' },
+          view.angles.map(function (angle) {
+            return React.createElement('li', { key: angle.key, className: 'meeting__angle' },
+              React.createElement('strong', null, angle.number + ' · '),
+              angle.open
+                ? view.angleOpenLine
+                : React.createElement(React.Fragment, null, angle.headline, ' ', React.createElement('span', { className: 'text-muted' }, angle.gist)),
+              beside(angle)
+            );
+          })
+        )
+      );
+    },
+
+    pitch: function () {
+      const pitch = view.pitch;
+      return React.createElement('section', { key: 'pitch', className: 'meeting__section' },
+        fieldEditor('headline', LABELS.headline, pitch.headline, 1),
+        fieldEditor('story', LABELS.story, pitch.story, 3),
+        fieldEditor('question', LABELS.question, pitch.question, 2),
+        fieldEditor('lands', LABELS.lands, pitch.lands, 2),
+        fieldEditor('ends', LABELS.ends, pitch.ends, 2),
+        beside(pitch),
+        pitch.questions.map(questionBlock)
       );
     },
 
     threads: function () {
-      /** A thread's role picker, named by the thread's name; a line under an id the writer repeated has it off. */
-      function rolePicker(thread) {
-        return React.createElement('select', {
-          className: 'meeting__role',
-          value: thread.role,
-          disabled: thread.repeatedId,
-          onChange: function (e) { editRole(thread.index, e.target.value); },
-          'aria-label': thread.labels.role
-        }, roleOptions());
-      }
-
-      /** One thread in the story: its role picker, its name and its line, what sits under it, and what's behind it. */
+      /** One thread in the story: its name and its line, the verdict's lock, what sits under it, its questions, and what's behind it. */
       function threadRow(thread) {
         return React.createElement('li', { key: thread.key, className: 'meeting__thread' },
           React.createElement('div', { className: 'meeting__head' },
-            rolePicker(thread),
             thread.verdict && React.createElement(Badge, { label: "the room's verdict", color: 'var(--accent-cyan)' }),
             thread.added && React.createElement('button', {
               type: 'button',
@@ -272,77 +299,67 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
           ),
           React.createElement('p', { className: 'meeting__line' },
             thread.name && React.createElement('strong', { className: 'meeting__name' }, thread.name + (thread.line ? ': ' : '')), thread.line),
+          thread.lockedLine && React.createElement('p', { className: 'text-xs text-muted' }, thread.lockedLine),
           beside(thread),
+          thread.questions.map(questionBlock),
           evidenceFold(thread.evidence, thread.noEvidence, thread.labels.fold)
         );
       }
 
       const leftOut = view.leftOut;
       return React.createElement('section', { key: 'threads', className: 'meeting__section' },
-        React.createElement('h4', { className: 'meeting__label' }, 'The threads'),
+        React.createElement('h4', { className: 'meeting__label' }, 'In the story'),
         React.createElement('ul', { className: 'meeting__list' }, view.threads.map(threadRow)),
-        // The threads left out, by name, each with its role picker to bring it into the story;
-        // what sits under one, under its name; their reasons a click away (spec 4.1).
+        // The threads left out, each by its name, opening in place to its line; what sits under
+        // one, under its name; the questions beside them.
         leftOut.threads.length > 0 && React.createElement('div', { className: 'meeting__left-out' },
           React.createElement('p', { className: 'meeting__label' }, leftOut.title),
           React.createElement('ul', { className: 'meeting__left-out-names' },
             leftOut.threads.map(function (thread) {
               return React.createElement('li', { key: thread.key, className: 'meeting__left-out-name' },
-                React.createElement('span', null, thread.label),
-                rolePicker(thread)
+                React.createElement(CollapsibleSection, { title: thread.label },
+                  React.createElement('p', { className: 'text-sm' }, thread.line)
+                )
               );
             })
           ),
           leftOut.threads.map(function (thread) {
             return React.createElement(React.Fragment, { key: thread.key }, beside(thread, thread.label));
           }),
-          React.createElement(CollapsibleSection, { title: leftOut.reasonsTitle },
-            React.createElement('ul', { className: 'meeting__list' },
-              leftOut.threads.map(function (thread) {
-                return React.createElement('li', { key: thread.key, className: 'text-sm' },
-                  React.createElement('span', { className: 'text-muted' }, thread.label + ': '), thread.reason);
-              })
-            )
-          )
+          leftOut.questions.map(questionBlock)
         ),
         view.repeatedIdHint && React.createElement('p', { className: 'meeting__hint' }, view.repeatedIdHint),
-        // Add a thread the writer missed: its name, its line and its role (addMeetingThread).
+        // Add a thread the writer missed: its name and its line, in the open angle's story (addMeetingThread).
         React.createElement('div', { className: 'meeting__add' },
           React.createElement('input', {
             type: 'text',
             className: 'input meeting__add-name',
             value: newName,
-            placeholder: 'A short name for the thread',
+            placeholder: view.add.placeholders.name,
             onChange: function (e) { setNewName(e.target.value); },
-            'aria-label': 'The name of a thread to add'
+            'aria-label': view.add.labels.name
           }),
           React.createElement('input', {
             type: 'text',
             className: 'input meeting__add-line',
             value: newLine,
-            placeholder: 'The thread in one line',
+            placeholder: view.add.placeholders.line,
             onChange: function (e) { setNewLine(e.target.value); },
-            'aria-label': 'A thread to add, in one line'
+            'aria-label': view.add.labels.line
           }),
-          React.createElement('select', {
-            className: 'meeting__role',
-            value: newRole,
-            onChange: function (e) { setNewRole(e.target.value); },
-            'aria-label': 'Role of the thread to add'
-          }, roleOptions()),
           React.createElement('button', {
             type: 'button',
             className: 'btn btn-secondary btn-sm',
             disabled: !newName.trim() && !newLine.trim(),
             onClick: addThread
-          }, 'Add a thread')
+          }, view.add.button)
         )
       );
     },
 
     connections: function () {
       return React.createElement('section', { key: 'connections', className: 'meeting__section' },
-        React.createElement('h4', { className: 'meeting__label' }, 'Where they touch'),
+        React.createElement('h4', { className: 'meeting__label' }, 'Where they meet'),
         React.createElement('ul', { className: 'meeting__list' },
           view.connections.map(function (connection) {
             return React.createElement('li', {
@@ -350,7 +367,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
               className: 'meeting__connection' + (connection.struck ? ' meeting__connection--struck' : '')
             },
               React.createElement('div', { className: 'meeting__head' },
-                React.createElement('span', { className: 'meeting__joins' }, connection.label),
+                React.createElement('p', { className: 'meeting__detail' }, connection.line),
                 React.createElement('button', {
                   type: 'button',
                   className: 'btn btn-ghost btn-sm',
@@ -360,50 +377,11 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
                   'aria-label': connection.labels.strike
                 }, connection.struck ? 'Unstrike' : 'Strike')
               ),
-              React.createElement('p', { className: 'meeting__detail' }, connection.line),
-              // Brief 4.14a: out of the story with a left-out thread, and why.
-              connection.leftOut && React.createElement('p', { className: 'text-xs text-muted' }, connection.leftOut),
               beside(connection),
               evidenceFold(connection.evidence, '', connection.labels.fold)
             );
           })
-        ),
-        fieldEditor('convergence', LABELS.convergence, view.convergence, 2)
-      );
-    },
-
-    strongerMainThread: function () {
-      const stronger = view.strongerMainThread;
-      return React.createElement('section', { key: 'strongerMainThread', className: 'meeting__section' },
-        React.createElement('h4', { className: 'meeting__label' }, LABELS.strongerMainThread),
-        React.createElement('p', null, stronger.name),
-        React.createElement('p', { className: 'text-sm text-secondary' }, stronger.reason),
-        beside(stronger)
-      );
-    },
-
-    questions: function () {
-      return React.createElement('section', { key: 'questions', className: 'meeting__section' },
-        React.createElement('h4', { className: 'meeting__label' }, 'Questions'),
-        view.questions.map(function (question) {
-          return React.createElement('div', { key: question.key, className: 'meeting__question' },
-            React.createElement('p', null,
-              question.kindLabel && React.createElement('span', { className: 'meeting__kind' }, question.kindLabel),
-              React.createElement('strong', null, question.about), ': ', question.question),
-            React.createElement('p', { className: 'text-xs text-muted' }, 'Its answer changes: ' + question.changes),
-            React.createElement('textarea', {
-              className: 'input meeting__answer',
-              rows: 2,
-              value: question.answer,
-              disabled: question.index === -1,
-              placeholder: 'Your answer',
-              onChange: function (e) { answer(question.index, e.target.value); },
-              'aria-label': 'Your answer: ' + question.question
-            }),
-            // A check still failing on the question, and the marks of what the round changed on it.
-            beside(question)
-          );
-        })
+        )
       );
     }
   };

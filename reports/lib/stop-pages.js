@@ -85,9 +85,9 @@ const PAGE_HEADINGS = Object.freeze({
   [ARC_SELECTION]: Object.freeze({
     changedEdits: 'Your edits a rework changed',
     verdict: 'The verdict',
-    threads: 'The threads',
-    connections: 'Where they touch',
-    questions: 'Questions'
+    angles: 'The angles',
+    threads: 'In the story',
+    connections: 'Where they meet'
   }),
   [CHARACTER_IDS]: Object.freeze({}),
   [OUTLINE]: Object.freeze({
@@ -501,6 +501,16 @@ function addWeaveLine(page, key, line) {
   addBesideLine(page, line);
 }
 
+/** A question as the meeting asks it: what it is about and the question, what its answer changes, the director's answer. */
+function addQuestion(page, question) {
+  page.text(`${question.about}: ${question.question}`, question.kindLabel);
+  page.text(question.changes, 'Its answer changes');
+  page.text(question.answer, 'Your answer');
+  addBesideLine(page, question);
+}
+
+// Phase 4b, piece 3 (brief 3B; spec 2026-10-06 section 5): the memo of angles, in meetingView's
+// order. No line or label names an element by its id.
 const MEETING_SECTIONS = {
   verdict(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].verdict);
@@ -512,76 +522,78 @@ const MEETING_SECTIONS = {
     page.text(view.verdict.charge, 'Charge');
     page.text(view.verdict.vote, 'Final vote');
   },
-  story(page, view) {
-    addWeaveLine(page, 'story', view.story);
-    page.note(view.thinNotes);
-    addWeaveLine(page, 'question', view.question);
-    addWeaveLine(page, 'headline', view.headline);
-  },
+  // "From your notes", or the one line that says the notes end without the director's read.
   fromYourNotes(page, view) {
-    addWeaveLine(page, 'fromYourNotes', view.fromYourNotes);
+    if (view.fromYourNotes) addWeaveLine(page, 'fromYourNotes', view.fromYourNotes);
+    else page.note(view.thinNotes);
   },
-  // Phase 4b (brief 1B; spec 4.1 and 9): each thread in the story as its role, its name and its
-  // line, with its evidence folded under it, or, for a thread the director added or brought into
-  // the story with none, the fold's line that the map writer finds it (fix round 4); then the
-  // left-out threads by name, each reason folded. No line or label names a thread by its id.
+  // The angles side by side, each by its number: the open one says it is open below, where its
+  // pitch prints its headline; every other one its headline and its card line.
+  angles(page, view) {
+    page.title(PAGE_HEADINGS[ARC_SELECTION].angles);
+    view.angles.forEach((angle) => {
+      const number = String(angle.number);
+      if (angle.open) {
+        page.text(view.angleOpenLine, number);
+        return;
+      }
+      page.text(angle.headline, number);
+      page.text(angle.gist);
+      addBesideLine(page, angle);
+    });
+  },
+  // The open angle's pitch, each line under its heading, then the questions that sit by it.
+  pitch(page, view) {
+    const pitch = view.pitch;
+    ['headline', 'story', 'question', 'lands', 'ends'].forEach((field) => addWeaveLine(page, field, pitch[field]));
+    addBesideLine(page, pitch);
+    pitch.questions.forEach((question) => addQuestion(page, question));
+  },
+  // The threads in the story, in the angle's order, each its name and its line, the verdict's
+  // locked, with the questions beside it and its evidence folded; then the threads left out, by
+  // name, each opening in place to its line, and the questions beside them.
   threads(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].threads);
     view.threads.forEach((thread) => {
-      page.text(`${thread.roleLabel} · ${[thread.name, thread.line].filter(Boolean).join(': ')}`, thread.verdict ? "The room's verdict" : '');
+      page.text([thread.name, thread.line].filter(Boolean).join(': '), thread.verdict ? "The room's verdict" : '');
+      page.note(thread.lockedLine);
       addBesideLine(page, thread);
+      thread.questions.forEach((question) => addQuestion(page, question));
       addEvidenceFold(page, view.evidenceTitle, thread.evidence, thread.noEvidence);
     });
     const leftOut = view.leftOut;
     if (leftOut.threads.length > 0) {
       page.text(leftOut.names, leftOut.title);
       leftOut.threads.forEach((thread) => addBesideLine(page, thread, thread.label));
-      page.folded(() => {
-        page.title(leftOut.reasonsTitle);
-        leftOut.threads.forEach((thread) => page.text(thread.reason, thread.label));
-      });
+      // Each name opens in place to its line, as ArcSelection.js folds it under the name.
+      page.folded(() => leftOut.threads.forEach((thread) => {
+        page.title(thread.label);
+        page.text(thread.line);
+      }));
+      leftOut.questions.forEach((question) => addQuestion(page, question));
     }
     page.hint(view.repeatedIdHint);
   },
-  // Each connection as the page prints it: the names of the two threads it joins, its `label`,
-  // a line the director reads and wordsShown counts (fix round 3), then its line; its kind stays
-  // underneath, unprinted (R1), and its evidence folds under it.
+  // Where the threads in the story meet: each connection its line, its kind underneath and
+  // unprinted (R1), its evidence folded under it.
   connections(page, view) {
     page.title(PAGE_HEADINGS[ARC_SELECTION].connections);
     view.connections.forEach((connection) => {
-      page.text(connection.label);
       if (connection.struck) page.struck(connection.line);
       else page.text(connection.line);
-      // Brief 4.14a: out of the story with a left-out thread, said under the connection.
-      page.note(connection.leftOut);
       addBesideLine(page, connection);
       addEvidenceFold(page, view.evidenceTitle, connection.evidence, '');
-    });
-    addWeaveLine(page, 'convergence', view.convergence);
-  },
-  strongerMainThread(page, view) {
-    const stronger = view.strongerMainThread;
-    page.text(stronger.name, View.MEETING_LINE_LABELS.strongerMainThread);
-    page.text(stronger.reason);
-    addBesideLine(page, stronger);
-  },
-  questions(page, view) {
-    page.title(PAGE_HEADINGS[ARC_SELECTION].questions);
-    view.questions.forEach((question) => {
-      page.text(`${question.about}: ${question.question}`, question.kindLabel);
-      page.text(question.changes, 'Its answer changes');
-      page.text(question.answer, 'Your answer');
-      addBesideLine(page, question);
     });
   }
 };
 
 /**
- * The story meeting's page (spec 4.3; phase 4b, brief 1B, spec 2026-10-05 sections 4.1 and 9):
- * what happened since the director last looked, then meetingView's sections in the spec's order,
- * the evidence under each line and the left-out threads' reasons folded, then the standing notes,
- * folded. The check node counts the writer's page as it first opens through wordsShown
- * (lib/workflow/nodes/arc-specialist-nodes.js meetingPageWords).
+ * The story meeting's page (spec 2026-10-06 sections 5 and 9.1): what happened since the director
+ * last looked, then meetingView's sections in the spec's order, with the angle the payload's weave
+ * picks open (the first when it picks none), the evidence under each line and each left-out
+ * thread's line folded, then the standing notes, folded. The check node counts the writer's page
+ * once with each angle open through wordsShown (lib/workflow/nodes/arc-specialist-nodes.js
+ * meetingPageWords), and the stops log as it opens.
  */
 function meetingPage(data) {
   const weave = View.meetingDraftOf(data);

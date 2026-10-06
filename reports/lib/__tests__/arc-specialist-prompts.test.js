@@ -496,16 +496,19 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       const section = prompt.slice(prompt.indexOf('## SECTION 3: THE WEAVE'), prompt.indexOf('## SECTION 4'));
       // Brief 4.5 (ruling 10): the task names the fields and points at C1 and C16 for the rest.
       // Phase 4b (brief 1B): C16 sets out the level of the story and the evidence under each line too.
-      expect(section).toContain('C1 (<craft-story>) sets out the story, its question and the stronger main thread');
-      expect(section).toContain('C16 (<craft-story>) sets out the threads, their roles, the connections, the convergence, the level of the story every line keeps and the evidence under each line');
+      // Piece 3 (brief 3B): C1 sets out the angles, and C16 where each angle ends up.
+      expect(section).toContain('C1 (<craft-story>) sets out the angles');
+      expect(section).toContain('C16 (<craft-story>) sets out the threads, the connections, where each angle ends up, the level of the story every line keeps and the evidence under each line');
       expect(prompt.replace(craft, '')).not.toMatch(/analysisNotes|"financial"|"behavioral"|"victimization"/);
     });
 
     // Phase 4 (brief 4.4): the weave's schema names C16 for its threads, connections and
     // convergence, and restates none of it.
+    // Piece 3 (brief 3B): the convergence is each angle's `ends`.
     it('the schema descriptions refer to C16 for the threads and the convergence, and restate neither', () => {
-      const { threads, connections, convergence } = WEAVE_SCHEMA.properties;
-      for (const field of [threads, connections, convergence]) {
+      const { threads, connections } = WEAVE_SCHEMA.properties;
+      const { ends } = WEAVE_SCHEMA.properties.angles.items.properties;
+      for (const field of [threads, connections, ends]) {
         expect(field.description).toMatch(/\(C16\)/);
         expect(field.description).not.toMatch(/verdict|culmination|thesis|near (its|the) end|end of the article/);
       }

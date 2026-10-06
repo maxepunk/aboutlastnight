@@ -46,23 +46,31 @@ function getDefaultArcAnalysis() {
 }
 
 /**
- * Default weave fixture (phase 4, brief 4.4; phase 4b, brief 1B): one thread, the room's
- * verdict, in the story-level shape, its evidence from the director's notes with no quotation,
- * so it passes the weave checks on any record.
+ * Default weave fixture (phase 4, brief 4.4; phase 4b, briefs 1B and 3B): two angles over one
+ * thread, the room's verdict, in the story-level shape, its evidence from the director's notes
+ * with no quotation, so it passes the weave checks on any record.
  */
 function getDefaultWeave() {
   return {
-    story: 'The room settled on its verdict, and the ledger tells a second story.',
-    question: 'What did the money buy this morning?',
-    headline: 'Test Headline for the Weave',
+    angles: [
+      {
+        id: 'a1', headline: 'Test Headline for the Weave', gist: 'The room settled on its verdict.',
+        story: 'The room settled on its verdict, and the ledger tells a second story.', question: 'What did the money buy this morning?',
+        lands: 'Every player argued the vote.', ends: 'The verdict and the ledger meet at the last sale.', threads: ['t1']
+      },
+      {
+        id: 'a2', headline: 'A Second Test Headline', gist: 'The vote split the room.',
+        story: 'The vote split the room, and the split decided the story.', question: 'Who carried the room?',
+        lands: 'Every player cast a vote.', ends: 'The split vote stands as the record of the morning.', threads: ['t1']
+      }
+    ],
     threads: [
       {
-        id: 't1', name: 'The verdict', line: 'The room named its culprit after a split vote.', role: 'main-thread', verdict: true,
+        id: 't1', name: 'The verdict', line: 'The room named its culprit after a split vote.', verdict: true,
         evidence: [{ sources: ['notes'], shows: 'The room argued its way to a split vote.', stance: 'supports' }]
       }
     ],
     connections: [],
-    convergence: 'The verdict and the ledger meet at the last sale.',
     questions: []
   };
 }

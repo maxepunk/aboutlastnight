@@ -574,8 +574,7 @@
    * reweave is held to the director's edits as an automatic pass is, so its line reads as an
    * automatic pass's does, under its own name. Every stop phrases its report here: the desk
    * through steeringView and deskMarks, the map through mapView, the story meeting through
-   * meetingView, which names its places as its page heads them and a role as its picker
-   * names it (task 4.8, fix round 1).
+   * meetingView, which names its places as its page heads them (task 4.8, fix round 1).
    * - A connection the director struck (brief 4.5) that a pass brought back or took out;
    *   after an automatic pass or a reweave, whether code struck it again.
    * - A field or element an automatic pass changed: code put it back (`restored`), and
@@ -1268,14 +1267,15 @@
 
   // ── The story meeting (phase 4, task 4.8; spec 4.3 and 4.4) ────────────────
   //
-  // The arc stop is the story meeting: a page of at most 300 words, at the level of the
-  // story, that the director reads and settles in minutes (phase 4b, brief 1B; spec
-  // 2026-10-05 section 4.1). ArcSelection.js renders it from meetingView and changes the
-  // weave only through the operations below; it sends only meetingPayload's payloads,
-  // 4.5's `{meeting: 'approve' | 'reweave' | 'send-back', weave, note}` (lib/meeting.js
-  // meetingResume), each held first to meetingWeaveProblems, the gate's decisions. What
-  // the director types is sent as typed. The evidence under each line is the writers', so the
-  // page folds it, and no change of the director's touches it (R6).
+  // The arc stop is the story meeting: a memo of two or three pitched angles over one shared set
+  // of threads, at most 450 words with any angle open (phase 4b, piece 3, brief 3B; spec
+  // 2026-10-06 sections 5 and 6), that the director reads and settles in minutes. ArcSelection.js
+  // renders it from meetingView and changes the weave only through the operations below; it sends
+  // only meetingPayload's payloads, 4.5's `{meeting: 'approve' | 'reweave' | 'send-back', weave,
+  // note}` (lib/meeting.js meetingResume), the weave with the director's pick on it, each held
+  // first to meetingWeaveProblems, the gate's decisions. What the director types is sent as typed.
+  // The evidence under each line is the writers', so the page folds it, and no change of the
+  // director's touches it (R6).
 
   /** The meeting's stop type: the stop types keep their names (R3). */
   var MEETING_STOP = 'arc-selection';
@@ -1284,26 +1284,20 @@
   var MEETING_ACTIONS = ['approve', 'reweave', 'send-back'];
 
   /**
-   * Each role a thread can take, in the meeting's order, with the word the role picker
-   * shows. The keys are lib/weave.js WEAVE_ROLES (a test holds them equal).
+   * An angle's printed fields, in the order the pitch prints them: a copy of lib/weave.js
+   * ANGLE_FIELDS, which the browser cannot import (a test holds the two equal). The director
+   * rewrites any of them in place on the open angle (setAngleField).
    */
-  var WEAVE_ROLE_LABELS = {
-    'main-thread': 'Main thread',
-    'grounds-it': 'Grounds it',
-    'complicates-it': 'Complicates it',
-    'mirrors-it': 'Mirrors it',
-    'carries-it-forward': 'Carries it forward',
-    'left-out': 'Left out'
-  };
+  var ANGLE_FIELDS = ['headline', 'gist', 'story', 'question', 'lands', 'ends'];
+
+  /** The fields of a thread the director rewrites in place (setThreadField): its name and its line. */
+  var THREAD_TEXT_FIELDS = ['name', 'line'];
 
   /**
    * What two threads share at a connection: a copy of lib/weave.js CONNECTION_KINDS (a test
    * holds the two equal). The kind stays underneath, unprinted (R1): the gate's shape reads it.
    */
   var CONNECTION_KINDS = ['person', 'moment', 'document', 'line'];
-
-  /** The role of a thread the story does not need: a copy of lib/weave.js LEFT_OUT_ROLE (a test holds the two equal). */
-  var LEFT_OUT_ROLE = 'left-out';
 
   /**
    * Copies of lib/weave.js STRUCK_KEY and of lib/writer-questions.js WEAVE_ANSWER_KEY, which
@@ -1333,10 +1327,7 @@
    * reads them: a copy of its WEAVE_FIELDS, which the browser cannot import; a test holds
    * the two equal (task 4.5c).
    */
-  var WEAVE_TEXT_FIELDS = ['story', 'question', 'headline', 'fromYourNotes', 'convergence'];
-
-  /** The fields the director edits in place (spec 4.4). */
-  var MEETING_EDITABLE_FIELDS = ['story', 'question', 'headline', 'convergence'];
+  var WEAVE_TEXT_FIELDS = ['fromYourNotes'];
 
   /**
    * One piece of evidence, as the gate's director-side schema holds it (lib/evidence.js
@@ -1348,41 +1339,62 @@
   } };
 
   /**
+   * The key the weave carries the director's pick under, the id of the angle they sent on: a
+   * copy of lib/weave.js PICKED_KEY, which the browser cannot import (a test holds the two
+   * equal; phase 4b, piece 3, R1).
+   */
+  var PICKED_KEY = 'picked';
+
+  /**
    * The weave as the director leaves it, as the gate's director-side schema holds it
    * (lib/meeting.js DIRECTOR_WEAVE_SCHEMA, which the browser cannot import): each
    * property's type ('string', 'boolean', 'strings' for a list of text, 'nonEmptyStrings'
    * for one that holds at least one, an enum's values, or a list's or an object's own
-   * shape) and the names required. A thread the director adds is its id, name, line and
-   * role; the evidence, the writers', is held to its shape wherever a line carries it
-   * (phase 4b, brief 1B). A test builds this shape from DIRECTOR_WEAVE_SCHEMA and holds the
-   * two equal.
+   * shape) and the names required. An angle is its id, its pitch and the ids of its threads,
+   * and the director's pick names one (phase 4b, piece 3). A thread the director adds is its
+   * id, name and line; the evidence, the writers', is held to its shape wherever a line
+   * carries it (phase 4b, brief 1B). A test builds this shape from DIRECTOR_WEAVE_SCHEMA and
+   * holds the two equal.
    */
   var DIRECTOR_WEAVE_SHAPE = {
-    required: ['story', 'question', 'headline', 'threads', 'connections', 'convergence', 'questions'],
+    required: ['angles', 'threads', 'connections', 'questions'],
     fields: {
-      story: 'string',
-      question: 'string',
-      headline: 'string',
+      angles: { list: {
+        required: ['id', 'headline', 'gist', 'story', 'question', 'lands', 'ends', 'threads'],
+        fields: { id: 'string', headline: 'string', gist: 'string', story: 'string', question: 'string', lands: 'string', ends: 'string', threads: 'strings' }
+      } },
       fromYourNotes: 'string',
       threads: { list: {
-        required: ['id', 'name', 'line', 'role'],
-        fields: { id: 'string', name: 'string', line: 'string', role: Object.keys(WEAVE_ROLE_LABELS), verdict: 'boolean', reason: 'string', evidence: EVIDENCE_PIECE_SHAPE }
+        required: ['id', 'name', 'line'],
+        fields: { id: 'string', name: 'string', line: 'string', verdict: 'boolean', evidence: EVIDENCE_PIECE_SHAPE }
       } },
       connections: { list: {
         required: ['id', 'joins', 'line', 'kind'],
         fields: { id: 'string', joins: 'strings', line: 'string', kind: CONNECTION_KINDS, evidence: EVIDENCE_PIECE_SHAPE, struck: 'boolean' }
       } },
-      convergence: 'string',
-      strongerMainThread: { object: { required: ['thread', 'reason'], fields: { thread: 'string', reason: 'string' } } },
       questions: { list: {
         required: ['id', 'kind', 'about', 'question', 'changes'],
-        fields: { id: 'string', kind: Object.keys(WRITER_QUESTION_KIND_LABELS), about: 'string', question: 'string', changes: 'string', answer: 'string' }
-      } }
+        fields: { id: 'string', kind: Object.keys(WRITER_QUESTION_KIND_LABELS), about: 'string', question: 'string', changes: 'string', thread: 'string', answer: 'string' }
+      } },
+      picked: 'string'
     }
   };
 
-  /** The line beside the story when the weave has no "from your notes" (the director, 2026-10-03, on thin notes). */
-  var THIN_NOTES_LINE = "Your notes end without your read of the session, so this story is the writer's proposal.";
+  /**
+   * The line in place of "from your notes" when the weave has none (the director, 2026-10-03, on
+   * thin notes; spec 2026-10-06 section 5): the notes end without the director's read, so every
+   * angle is the writer's.
+   */
+  var THIN_NOTES_LINE = "Your notes end without your read of the session, so every angle is the writer's.";
+
+  /** What the open angle's card says in place of its headline, which its pitch prints below (spec 5). */
+  var ANGLE_OPEN_LINE = 'Open below';
+
+  /**
+   * The line beside the thread that carries the room's verdict, which stays in every angle (R8;
+   * spec 6): the page offers no way to take it out.
+   */
+  var VERDICT_LOCK_LINE = 'Always in: the article reports the verdict.';
 
   /** Why the controls of a line under a writer's repeated id are off, while they are. */
   var REPEATED_ID_HINT = 'The writer gave one id to more than one thread or connection, so the meeting cannot change those lines: a reweave with a note, or a send-back, gives each its own id.';
@@ -1549,28 +1561,122 @@
     return list[index];
   }
 
-  function checkedRole(role, operation) {
-    if (!hasOwn(WEAVE_ROLE_LABELS, role)) {
-      throw new Error(operation + ': a thread takes one of the meeting\'s roles (' + Object.keys(WEAVE_ROLE_LABELS).join(', ') + '), not ' + String(role));
-    }
-    return role;
+  /**
+   * The angle open at the meeting (R1): the angle the weave's pick names, else the first, else
+   * null for a weave with no angle. A copy of lib/weave.js pickedAngleOf, which the browser cannot
+   * import; a test holds the two equal on one corpus. The page opens it, the operations change it,
+   * and the validator holds it to the verdict's thread (meetingPickProblem).
+   *
+   * @param {*} weave
+   * @returns {Object|null}
+   */
+  function openAngleOf(weave) {
+    var angles = asArray(isPlainObject(weave) ? weave.angles : null).filter(isPlainObject);
+    if (angles.length === 0) return null;
+    var picked = asString(weave[PICKED_KEY]).trim();
+    var named = picked ? angles.filter(function (angle) { return weaveIdOf(angle) === picked; })[0] : null;
+    return named || angles[0];
   }
 
-  /** The story, the question, the headline or the convergence, as typed. */
-  function setMeetingField(weave, field, text) {
-    if (MEETING_EDITABLE_FIELDS.indexOf(field) === -1) {
-      throw new Error('setMeetingField: the meeting edits the story, question, headline or convergence in place, not ' + String(field));
+  /** The open angle of a weave the meeting is changing, which it must hold. */
+  function openAngleIn(weave, operation) {
+    var angle = openAngleOf(weave);
+    if (!angle) throw new Error(operation + ': the weave holds no angle to open');
+    return angle;
+  }
+
+  /** The ids of the threads an angle tells, trimmed, in its order. */
+  function angleThreadIdsOf(angle) {
+    return asArray(isPlainObject(angle) ? angle.threads : null).map(function (id) { return asString(id).trim(); }).filter(Boolean);
+  }
+
+  /** Whether a weave's thread under an id carries the room's verdict. */
+  function isVerdictThreadId(weave, id) {
+    return asArray(weave.threads).some(function (thread) { return isPlainObject(thread) && weaveIdOf(thread) === id && thread.verdict === true; });
+  }
+
+  /**
+   * The angle the director opens (R1): the pick, `picked`, set to its id. Switching angles keeps
+   * every change the director made on each (spec 6), and a pick is no change of the weave's.
+   *
+   * @param {Object} weave - the weave as the director has it
+   * @param {string} angleId - an angle the weave holds
+   * @returns {Object}
+   */
+  function pickMeetingAngle(weave, angleId) {
+    var next = editedWeave(weave, 'pickMeetingAngle');
+    var id = asString(angleId).trim();
+    if (!id || !asArray(next.angles).some(function (angle) { return weaveIdOf(angle) === id; })) {
+      throw new Error('pickMeetingAngle: the weave holds no angle ' + String(angleId));
     }
-    var next = editedWeave(weave, 'setMeetingField');
-    next[field] = typeof text === 'string' ? text : '';
+    next[PICKED_KEY] = id;
     return next;
   }
 
-  /** A thread's role, from the list. */
-  function setThreadRole(weave, index, role) {
-    checkedRole(role, 'setThreadRole');
-    var next = editedWeave(weave, 'setThreadRole');
-    elementAt(next.threads, index, 'setThreadRole', 'thread').role = role;
+  /**
+   * A line of an angle's pitch (ANGLE_FIELDS), as typed. The page rewrites the open angle's; a
+   * change belongs to the angle it was made on (spec 6).
+   *
+   * @param {Object} weave
+   * @param {string} angleId - the angle the line is on
+   * @param {string} field - one of ANGLE_FIELDS
+   * @param {string} text
+   * @returns {Object}
+   */
+  function setAngleField(weave, angleId, field, text) {
+    if (ANGLE_FIELDS.indexOf(field) === -1) {
+      throw new Error("setAngleField: the meeting rewrites an angle's " + ANGLE_FIELDS.join(', ') + ' in place, not ' + String(field));
+    }
+    var next = editedWeave(weave, 'setAngleField');
+    var id = asString(angleId).trim();
+    var angle = asArray(next.angles).filter(function (a) { return isPlainObject(a) && weaveIdOf(a) === id; })[0];
+    if (!angle) throw new Error('setAngleField: the weave holds no angle ' + String(angleId));
+    angle[field] = typeof text === 'string' ? text : '';
+    return next;
+  }
+
+  /**
+   * A thread's name or its line, as typed. The thread is shared, so the change shows in every
+   * angle that tells it (R9; spec 6).
+   *
+   * @param {Object} weave
+   * @param {number} index - the thread's place in the weave's threads
+   * @param {string} field - 'name' or 'line'
+   * @param {string} text
+   * @returns {Object}
+   */
+  function setThreadField(weave, index, field, text) {
+    if (THREAD_TEXT_FIELDS.indexOf(field) === -1) {
+      throw new Error("setThreadField: the meeting rewrites a thread's name or line in place, not " + String(field));
+    }
+    var next = editedWeave(weave, 'setThreadField');
+    elementAt(next.threads, index, 'setThreadField', 'thread')[field] = typeof text === 'string' ? text : '';
+    return next;
+  }
+
+  /**
+   * A thread flipped into the open angle, after the angle's own threads, or out of it (spec 6).
+   * The thread that carries the room's verdict stays in, whatever is asked (R8). A thread flipped
+   * to where it already is leaves the angle as it was.
+   *
+   * @param {Object} weave
+   * @param {string} threadId - a thread the weave holds
+   * @param {boolean} isIn - true to bring it into the story, false to leave it out
+   * @returns {Object}
+   */
+  function flipMeetingThread(weave, threadId, isIn) {
+    var next = editedWeave(weave, 'flipMeetingThread');
+    var id = asString(threadId).trim();
+    if (!id || !asArray(next.threads).some(function (thread) { return weaveIdOf(thread) === id; })) {
+      throw new Error('flipMeetingThread: the weave holds no thread ' + String(threadId));
+    }
+    var angle = openAngleIn(next, 'flipMeetingThread');
+    var ids = asArray(angle.threads);
+    var holds = angleThreadIdsOf(angle).indexOf(id) !== -1;
+    if (isIn && !holds) angle.threads = ids.concat([id]);
+    if (!isIn && holds && !isVerdictThreadId(next, id)) {
+      angle.threads = ids.filter(function (entry) { return asString(entry).trim() !== id; });
+    }
     return next;
   }
 
@@ -1583,32 +1689,43 @@
   }
 
   /**
-   * A thread the writer missed (phase 4b, brief 1B): its name, its line and its role, under an
-   * id of its own, `{id, name, line, role}`, as typed. It carries no evidence and no reason,
-   * which the director-side schema allows: the map writer finds its evidence (spec 5.3). With
-   * no name and no line it adds none; either alone is kept as typed, the other left blank.
+   * A thread the writer missed (spec 6; phase 4b, brief 1B): its name and its line under an id of
+   * its own, `{id, name, line}`, as typed, in the story of the open angle, after its own threads.
+   * It carries no evidence, which the director-side schema allows: the map writer finds it (piece
+   * 1, spec 5.3). With no name and no line it adds none; either alone is kept as typed, the other
+   * left blank.
    *
    * @param {Object} weave - the weave as the director has it
    * @param {string} name - the thread's short name
    * @param {string} line - the thread in one line
-   * @param {string} role - one of the meeting's roles
    * @returns {Object} the weave with the thread, or the weave given when there is nothing to add
    */
-  function addMeetingThread(weave, name, line, role) {
-    checkedRole(role, 'addMeetingThread');
+  function addMeetingThread(weave, name, line) {
     var typedName = typeof name === 'string' ? name : '';
     var typedLine = typeof line === 'string' ? line : '';
     if (!typedName.trim() && !typedLine.trim()) return weave;
     var next = editedWeave(weave, 'addMeetingThread');
-    next.threads.push({ id: freshThreadId(next.threads), name: typedName, line: typedLine, role: role });
+    var angle = openAngleIn(next, 'addMeetingThread');
+    var id = freshThreadId(next.threads);
+    next.threads.push({ id: id, name: typedName, line: typedLine });
+    angle.threads = asArray(angle.threads).concat([id]);
     return next;
   }
 
-  /** A thread taken out again: the meeting offers it only for a thread added at this look. */
+  /**
+   * A thread taken out again: the meeting offers it only for a thread added at this look. It goes
+   * off every angle that tells it too, so no angle names a thread the weave does not hold.
+   */
   function removeMeetingThread(weave, index) {
     var next = editedWeave(weave, 'removeMeetingThread');
-    elementAt(next.threads, index, 'removeMeetingThread', 'thread');
+    var id = weaveIdOf(elementAt(next.threads, index, 'removeMeetingThread', 'thread'));
     next.threads.splice(index, 1);
+    var stillHeld = next.threads.some(function (thread) { return weaveIdOf(thread) === id; });
+    if (id && !stillHeld) {
+      asArray(next.angles).filter(isPlainObject).forEach(function (angle) {
+        if (Array.isArray(angle.threads)) angle.threads = angle.threads.filter(function (entry) { return asString(entry).trim() !== id; });
+      });
+    }
     return next;
   }
 
@@ -1709,45 +1826,6 @@
 
   function isStruckConnection(connection) {
     return Boolean(connection && typeof connection === 'object' && connection[STRUCK_KEY] === true);
-  }
-
-  /**
-   * The left-out threads a connection joins (brief 4.14a): each id it joins under which the weave
-   * holds threads and every one of them is left out, in the order it names them, each once. A copy
-   * of lib/weave.js leftOutThreadsJoined, which the browser cannot import; a test holds the two
-   * equal on one corpus. Such a connection is out of the story with its thread, and comes back
-   * when the thread does.
-   *
-   * @param {Object} connection
-   * @param {Object} weave - the weave as the director has it
-   * @returns {string[]}
-   */
-  function leftOutThreadsOf(connection, weave) {
-    var joins = isPlainObject(connection) && Array.isArray(connection.joins) ? connection.joins : [];
-    var threads = asArray(isPlainObject(weave) ? weave.threads : null).filter(isPlainObject);
-    var out = [];
-    joins.map(function (id) { return asString(id).trim(); }).forEach(function (id) {
-      if (!id || out.indexOf(id) !== -1) return;
-      var under = threads.filter(function (thread) { return weaveIdOf(thread) === id; });
-      if (under.length > 0 && under.every(function (thread) { return thread.role === LEFT_OUT_ROLE; })) out.push(id);
-    });
-    return out;
-  }
-
-  /**
-   * The line under a connection that goes out of the story with a left-out thread (brief 4.14a),
-   * or '' for a connection in the story: which threads it goes with, by their names (phase 4b,
-   * brief 1B), and that bringing them in brings it back.
-   *
-   * @param {string[]} threads - the left-out threads it joins (leftOutThreadsOf)
-   * @param {Object} words - meetingWordsOf's, which names them
-   * @returns {string}
-   */
-  function leftOutLine(threads, words) {
-    if (threads.length === 0) return '';
-    var named = words.joinsText(threads);
-    if (threads.length === 1) return 'Out of the story with ' + named + ', which is left out. Bring it in and this connection comes back.';
-    return 'Out of the story with ' + named + ', which are left out. Bring ' + (threads.length === 2 ? 'both' : 'all of them') + ' in and this connection comes back.';
   }
 
   /**
@@ -1857,7 +1935,9 @@
    * - an id the director's version carries more often than the weave the meeting showed:
    *   the director's repeat;
    * - a change under an id the writer repeated: no edit could find its element by the id.
-   *   A writer's repeat passes while the director leaves the elements under it as shown.
+   *   A writer's repeat passes while the director leaves the elements under it as shown;
+   * - a pick that names no angle, and a picked angle without the thread that carries the
+   *   room's verdict (R8; lib/meeting.js pickProblems).
    * Both weaves are read without their code-owned keys, as the gate reads them.
    *
    * @param {*} weave - the weave as the director left it
@@ -1871,7 +1951,7 @@
     if (malformed) return 'The weave as you left it is malformed: ' + malformed + '.';
     var shownWeave = isWeaveValue(shown) ? withoutCodeOwned(shown) : null;
     var repeats = [];
-    ['threads', 'connections', 'questions'].forEach(function (collection) {
+    ['angles', 'threads', 'connections', 'questions'].forEach(function (collection) {
       var theirs = shownWeave ? idCounts(shownWeave[collection]) : new Map();
       idCounts(left[collection]).forEach(function (n, id) {
         if (n >= 2 && n > (theirs.get(id) || 0)) repeats.push(collection + ' share the id "' + id + '"');
@@ -1884,7 +1964,32 @@
     if (touched.length > 0) {
       return 'The writer gave more than one ' + ELEMENT_WORDS[touched[0].scope] + ' the id "' + touched[0].id + '", so the meeting cannot tell which of them you changed. Put them back as the meeting showed them: a reweave with a note, or a send-back, gives each its own id.';
     }
-    return null;
+    return meetingPickProblem(left);
+  }
+
+  /**
+   * What the gate refuses in the director's pick, or null (lib/meeting.js pickProblems, whose
+   * decisions a test holds this to): a pick that names no angle the weave holds, and a picked
+   * angle (the one the pick names, else the first) without the thread that carries the room's
+   * verdict (R8). The page locks that thread in the open angle, so this holds a version from
+   * anywhere else to the gate's rule.
+   *
+   * @param {Object} weave - the weave as the director left it, which the shape has taken
+   * @returns {string|null}
+   */
+  function meetingPickProblem(weave) {
+    var angles = asArray(weave.angles);
+    var picked = asString(weave[PICKED_KEY]).trim();
+    var byId = function (id) { return angles.filter(function (angle) { return weaveIdOf(angle) === id; })[0] || null; };
+    if (picked && !byId(picked)) return 'Pick one of the angles the meeting showed.';
+    var angle = openAngleOf(weave);
+    if (!angle) return null;
+    var named = angleThreadIdsOf(angle);
+    var missing = asArray(weave.threads).filter(function (thread) {
+      return thread && thread.verdict === true && weaveIdOf(thread) && named.indexOf(weaveIdOf(thread)) === -1;
+    });
+    if (missing.length === 0) return null;
+    return 'The angle you send must keep "' + (asString(missing[0].name).trim() || weaveIdOf(missing[0])) + '": it tells the room\'s verdict, which the article always reports.';
   }
 
   /** Whether the director changed the weave at this look: anything but an answer (ruling 5). */
@@ -2140,32 +2245,38 @@
   }
 
   /**
-   * What the page calls each of the weave's lines: ArcSelection.js heads each line with it,
-   * and a mark whose line the page does not show is listed under it.
+   * What the page calls each of its lines: "from your notes", and each line of the open angle's
+   * pitch (ANGLE_FIELDS; spec 2026-10-06 section 5). ArcSelection.js heads each line with it, and
+   * a mark whose line the page does not show is listed under it.
    */
   var MEETING_LINE_LABELS = {
+    fromYourNotes: 'From your notes',
+    headline: 'Headline',
     story: 'The story',
     question: 'The question it carries',
-    headline: 'Working headline',
-    fromYourNotes: 'From your notes',
-    convergence: 'Where they converge',
-    strongerMainThread: 'A stronger main thread'
+    lands: 'Why it lands',
+    ends: 'Where it ends up'
   };
 
-  /** The weave's fields that each have a line on the page. */
-  var LINE_FIELDS = Object.keys(MEETING_LINE_LABELS);
+  /** The weave's own fields that have a line on the page: "from your notes". The pitch's lines are an angle's. */
+  var LINE_FIELDS = ['fromYourNotes'];
+
+  /** The collections a place in the weave may name, each with the key of its line on the page. */
+  var LINE_ELEMENTS = { angles: 'angle', threads: 'thread', connections: 'connection', questions: 'question' };
 
   /**
-   * The line on the page a place in the weave sits on (a path as lib/hand-edit-diff.js
-   * writes it: `story`, `threads[#t3].role`, `connections[#c2]`): `story`, `thread:t3`,
-   * `connection:c2`, `question:q1`, or null for a place no line shows.
+   * The line on the page a place in the weave sits on (a path as lib/hand-edit-diff.js and
+   * lib/weave.js weaveFindings write it: `fromYourNotes`, `angles[#a2]`, `threads[#t3].line`,
+   * `connections[#c2]`): `fromYourNotes`, `angle:a2`, `thread:t3`, `connection:c2`,
+   * `question:q1`, or null for a place no line shows. An angle's key is its card's, and the
+   * pitch's while the angle is open.
    */
   function lineKeyOf(path) {
     var m = /^([A-Za-z]+)(?:\[#([^\]]*)\])?/.exec(asString(path));
     if (!m) return null;
     if (m[2] === undefined) return LINE_FIELDS.indexOf(m[1]) !== -1 ? m[1] : null;
-    if (!hasOwn(ELEMENT_WORDS, m[1]) || /^index-\d+$/.test(m[2])) return null;
-    return ELEMENT_WORDS[m[1]] + ':' + m[2];
+    if (!hasOwn(LINE_ELEMENTS, m[1]) || /^index-\d+$/.test(m[2])) return null;
+    return LINE_ELEMENTS[m[1]] + ':' + m[2];
   }
 
   /** Whether a path names a whole thread, connection or question. */
@@ -2173,16 +2284,10 @@
     return /^(threads|connections|questions)\[#[^\]]*\]$/.test(asString(path));
   }
 
-  /** The field a path ends on inside an element (`role` in `threads[#t3].role`), or ''. */
+  /** The field a path ends on inside an element (`line` in `threads[#t3].line`), or ''. */
   function elementFieldOf(path) {
     var m = /^[A-Za-z]+\[#[^\]]*\]\.([A-Za-z]+)/.exec(asString(path));
     return m ? m[1] : '';
-  }
-
-  /** A role's value as the role picker names it; any other text as it is. */
-  function roleWord(text) {
-    var t = asString(text);
-    return hasOwn(WEAVE_ROLE_LABELS, t) ? WEAVE_ROLE_LABELS[t] : t;
   }
 
   /**
@@ -2286,12 +2391,12 @@
     };
     var value = function (text) {
       var fields = elementFieldsOf(text);
-      if (!fields) return roleWord(text);
+      if (!fields) return asString(text);
       if (hasOwn(fields, 'thread')) return [threadName(fields.thread), asString(fields.reason)].filter(Boolean).join(': ');
       if (hasOwn(fields, 'joins')) return asString(fields.line);
       if (hasOwn(fields, 'question')) return asString(fields.question);
       var said = [asString(fields.name), asString(fields.line)].filter(Boolean).join(': ');
-      return said + (fields.role ? ' (' + roleWord(fields.role) + ')' : '');
+      return said;
     };
     return {
       threadName: threadName,
@@ -2309,7 +2414,7 @@
         if (!m) return capitalized(asString(where));
         return elementPlace(m[1], m[2], elementFieldsOf(elementText)) + (m[3] ? ', ' + m[3] : '');
       },
-      /** A value as the meeting names it: an element by its words, a role as the role picker names it, any other text as it is. */
+      /** A value as the meeting names it: an element by its words, any other text as it is. */
       value: value,
       /** A field's value as a mark names it: the threads a connection joins by name; anything else as `value` names it. */
       fieldValue: function (field, text) {
@@ -2327,8 +2432,8 @@
   /**
    * How the meeting phrases an edit a round changed (changedEditLine, every stop's builder):
    * its place as the page heads it (an element by its words), with no edit id, since the
-   * meeting shows none; a value as the meeting names it, an element by its words and a role as
-   * the role picker names it; and text that came back as still in the weave.
+   * meeting shows none; a value as the meeting names it, an element by its words; and text that
+   * came back as still in the weave.
    *
    * @param {Object} words - meetingWordsOf's
    */
@@ -2382,7 +2487,7 @@
 
   /**
    * What an element the round took out whole held, as the meeting shows it (brief 4.14a; phase
-   * 4b, brief 1B): a thread by its line and its role, a connection by its line, a question by its
+   * 4b, brief 1B): a thread by its line, a connection by its line, a question by its
    * words and its kind; the place before it names the element (markPlace). Read from the element
    * the mark carries (lib/hand-edit-diff.js weaveMarks); null for a mark that carries none.
    */
@@ -2395,7 +2500,7 @@
       var said = parts.filter(Boolean).join(', ');
       return said ? ' (' + said + ')' : '';
     };
-    if (collection === 'threads') return quoted(element.line) + about([roleWord(asString(element.role))]);
+    if (collection === 'threads') return quoted(element.line);
     if (collection === 'connections') return quoted(element.line);
     var questionKind = asString(element.kind);
     return quoted(element.question) + about([hasOwn(WRITER_QUESTION_KIND_LABELS, questionKind) ? WRITER_QUESTION_KIND_LABELS[questionKind] : '']);
@@ -2501,30 +2606,59 @@
   }
 
   /**
-   * The lines the page shows, by their keys (lineKeyOf), for the weave as the director has
-   * it and the questions the stop asks: the story, the question, the headline and the
-   * convergence always; "from your notes" and the stronger main thread while the weave holds
-   * them; each thread and connection by its id; each question the stop asks. meetingView
-   * shows exactly these, and a mark or a concern sits beside one of them or is listed apart.
+   * The open angle's story as the page prints it (spec 2026-10-06 section 5): the angle open
+   * (openAngleOf), the threads it tells in its order, each once (an id the weave does not hold is
+   * skipped), and every other thread of the weave, left out; read from the weave as the director
+   * has it, so a flip moves a thread at once. The console's reading of lib/weave.js
+   * settledAngleOf, without the connections, which the page takes struck or not until the strike
+   * goes (slice 3C).
+   *
+   * @param {Object} weave - the weave as the director has it
+   * @returns {{angle: (Object|null), inStory: Array<{thread: Object, index: number}>, leftOut: Array<{thread: Object, index: number}>}}
+   */
+  function openStoryOf(weave) {
+    var angle = openAngleOf(weave);
+    var threads = asArray(weave.threads).map(function (thread, index) { return { thread: isPlainObject(thread) ? thread : {}, index: index }; });
+    var inStory = [];
+    angleThreadIdsOf(angle).forEach(function (id) {
+      var entry = threads.filter(function (t) { return weaveIdOf(t.thread) === id; })[0];
+      if (entry && inStory.indexOf(entry) === -1) inStory.push(entry);
+    });
+    return { angle: angle, inStory: inStory, leftOut: threads.filter(function (t) { return inStory.indexOf(t) === -1; }) };
+  }
+
+  /** The connections the page shows: each that joins two different threads of the open angle's story, in the weave's order. */
+  function openConnectionsOf(weave, story) {
+    var ids = new Set(story.inStory.map(function (t) { return weaveIdOf(t.thread); }).filter(Boolean));
+    return asArray(weave.connections).map(function (connection, index) { return { connection: isPlainObject(connection) ? connection : {}, index: index }; })
+      .filter(function (c) {
+        var joins = asArray(c.connection.joins).map(function (id) { return asString(id).trim(); });
+        return joins.length === 2 && joins[0] !== joins[1] && ids.has(joins[0]) && ids.has(joins[1]);
+      });
+  }
+
+  /**
+   * The lines the page shows, by their keys (lineKeyOf), for the weave as the director has it
+   * and the questions the stop asks: "from your notes" while the weave holds it; each angle (its
+   * card, and its pitch while it is open); each thread, in the story or left out by name; each
+   * connection the page shows (openConnectionsOf); each question the stop asks. meetingView shows
+   * exactly these, and a mark, a concern or a failure sits beside one of them or is listed apart.
    *
    * @param {Object} weave - the weave as the director has it
    * @param {Object[]} questions - the stop's questions (data.questions)
    * @returns {Set<string>}
    */
   function linesOnPage(weave, questions) {
-    var keys = new Set(['story', 'question', 'headline', 'convergence']);
+    var keys = new Set();
     if (asString(weave.fromYourNotes).trim()) keys.add('fromYourNotes');
-    if (isPlainObject(weave.strongerMainThread)) keys.add('strongerMainThread');
-    [['threads', 'thread'], ['connections', 'connection']].forEach(function (pair) {
-      asArray(weave[pair[0]]).forEach(function (element) {
-        var id = weaveIdOf(element);
-        if (id) keys.add(pair[1] + ':' + id);
-      });
-    });
-    questions.forEach(function (q) {
-      var id = asString(q.id).trim();
-      if (id) keys.add('question:' + id);
-    });
+    var add = function (word, element) {
+      var id = weaveIdOf(element);
+      if (id) keys.add(word + ':' + id);
+    };
+    asArray(weave.angles).forEach(function (angle) { add('angle', angle); });
+    asArray(weave.threads).forEach(function (thread) { add('thread', thread); });
+    openConnectionsOf(weave, openStoryOf(weave)).forEach(function (c) { add('connection', c.connection); });
+    questions.forEach(function (q) { add('question', q); });
     return keys;
   }
 
@@ -2720,70 +2854,63 @@
     });
   }
 
-  /** The fold that holds each left-out thread's reason, a click away (spec 4.1). */
-  var LEFT_OUT_REASONS_TITLE = 'Why each is left out';
+  /** The meeting's sections, in the spec's order (2026-10-06 section 5). */
+  var MEETING_SECTIONS = ['verdict', 'fromYourNotes', 'angles', 'pitch', 'threads', 'connections'];
 
-  /** The meeting's sections, in the spec's order (4.1). */
-  var MEETING_SECTIONS = ['verdict', 'story', 'fromYourNotes', 'threads', 'connections', 'strongerMainThread', 'questions'];
+  /** The heading over the names of the threads the open angle leaves out (spec 5). */
+  var LEFT_OUT_TITLE = 'Left out';
 
-  /** A thread's place in the meeting's order of roles: the main thread first, then WEAVE_ROLES' order, a role the meeting does not know last. */
-  function roleRank(role) {
-    var rank = Object.keys(WEAVE_ROLE_LABELS).indexOf(role);
-    return rank === -1 ? Object.keys(WEAVE_ROLE_LABELS).length : rank;
-  }
+  /** The line to add a thread the writer missed (spec 6): its button, and its two boxes' labels and hints. */
+  var ADD_THREAD = {
+    button: 'Add a thread',
+    labels: { name: 'The name of a thread to add', line: 'A thread to add, in one line' },
+    placeholders: { name: 'What happened, with its people', line: 'The thread in one line' }
+  };
 
   /**
-   * The story meeting's page (spec 2026-10-05 sections 4.1 and 9; phase 4b, brief 1B): the stop's
-   * payload (4.5's, lib/meeting.js meetingCheckpointData) with the director's weave as they have it.
-   * - `order`: the sections to show, in the spec's order: the verdict; the story, the
-   *   question and the working headline; "from your notes"; the threads; the connections
-   *   and the convergence; the stronger main thread; the questions. A section with nothing
-   *   in it is left out.
-   * - `threads`: the threads in the story, the main thread first and the others in the order of
-   *   the roles (WEAVE_ROLE_LABELS), each as its role, its name and its line, with its evidence
-   *   folded (`evidence`, evidenceFoldView's) and, for a thread the director added, or brought
-   *   into the story from left out, that has none, at this look or an earlier one
-   *   (`data.directorsThreads`; fix round 4), the fold's one line (`noEvidence`,
-   *   MEETING_NO_EVIDENCE_LINE). A thread of the writer's with none shows the check's failure
-   *   beside it (`failures`) instead. Each thread carries the labels the page names it by (fix
-   *   round 2; the page decides none), as every element of the meeting's and the map's pages
-   *   does (fix round 3): `label`, its name as the page prints it, its name or its line when
-   *   it has none (threadLabelOf), and `labels`, keyed by the control, built from it: `fold`,
-   *   its fold's group (evidenceFoldLabel), `role` and `takeOut`.
-   * - `leftOut`: the threads left out, by name (`names`, under its `title`), with their reasons
-   *   folded under `reasonsTitle`.
-   * - `connections`: each connection's line, with the names of the two threads it joins and its
-   *   evidence folded; its kind stays underneath, unprinted. Each carries `label`, the line the
-   *   page prints above it, "Joins" and the names of the threads it joins, or '' when it joins
-   *   none, and `labels`, `fold` and `strike`, naming it by the threads it joins or by its
-   *   line, quoted, when it joins none (fix rounds 2 and 3). One that joins a left-out thread,
-   *   unstruck, carries `leftOut`, the line that says it is out of the story with that thread and
-   *   comes back with it (leftOutThreadsOf; brief 4.14a), read from the weave as the director has
-   *   it, so it follows their roles.
-   * - each line the page shows (linesOnPage) carries the concerns about the director's edit
-   *   on it, the marks of what the round's passes changed on it, and the code checks still
-   *   failing whose place it is (`failures`, failuresBesideLines; spec 6.3).
-   * - `thinNotes`: the one line beside the story when the weave has no "from your notes",
-   *   unless the round took it out: then the director's notes held a read the rework
-   *   dropped, and the mark of it is listed instead.
-   * - the round's lines: `didNotRun` (by what the note box holds; task 4.5c),
-   *   `checkFailures` (the failures with no place on the page, one line each), `changedEdits`
-   *   (the edits a round changed that a stop shows, changedEditsToShow: a send-back's with their
-   *   reasons, and what no pass put back; task 4.10), `kept`, the line that says the director's
-   *   edits stand when none of theirs is shown (editsStandLine; brief 4.10b), `marked` and the
-   *   marks no line shows (`removed`, `otherMarks`), and the concerns no line shows
-   *   (`otherConcerns`). One line per edit (briefs 4.10b and 4.10c): a changed edit that a mark
-   *   of the round is about stands in that mark's place, the first mark's when several are about
-   *   it, beside its line or listed with the marks no line shows, and `changedEdits` lists the
-   *   rest (besideLines).
-   * No line or label names an element by its id (meetingWordsOf): the tags leave the page (spec
-   * 9). Each element's `id` stays on its view for the controls, which change the weave by it.
-   * The questions are the stop's (`data.questions`), each paired with its place in the
-   * director's weave, whose answer the box shows and sets.
+   * The story meeting's page (spec 2026-10-06 sections 5 and 6; phase 4b, piece 3, brief 3B): the
+   * stop's payload (4.5's, lib/meeting.js meetingCheckpointData) with the director's weave as they
+   * have it, the angle their pick names open (openAngleOf), the first when they have picked none.
+   * - `order`: the sections to show, in the spec's order: the verdict; "from your notes" or the
+   *   thin-notes line; the angles; the open angle's pitch; its threads; where they meet. A section
+   *   with nothing in it is left out.
+   * - `fromYourNotes`: the line, while the weave holds it; `thinNotes`, the one line in its place
+   *   when it does not, unless the round took it out: then the director's notes held a read the
+   *   rework dropped, and the mark of it is listed instead.
+   * - `angles`: every angle, as its card: `number`, `headline` and `gist`, `open` on the open one,
+   *   whose card says `angleOpenLine` in place of its headline, which its pitch prints. `label` is
+   *   its headline, or its card line when it has none, and `labels.pick` its pick control's name.
+   * - `pitch`: the open angle's pitch, each of `headline`, `story`, `question`, `lands` and `ends`
+   *   a line under MEETING_LINE_LABELS' heading, with `questions`, those that sit by the pitch: a
+   *   question beside no thread, or beside a thread the weave does not hold (R10).
+   * - `threads`: the threads in the story, in the angle's order, each its name and its line with
+   *   its evidence folded (`evidence`, evidenceFoldView's) and the questions that sit beside it;
+   *   the thread that carries the room's verdict `locked`, with `lockedLine` (R8). A thread the
+   *   director added, at this look or an earlier one (`data.directorsThreads`), that has no
+   *   evidence carries the fold's one line (`noEvidence`, MEETING_NO_EVIDENCE_LINE); a thread of
+   *   the writer's with none shows the check's failure beside it (`failures`) instead.
+   * - `leftOut`: every other thread, by name (`names`, under its `title`), each opening in place to
+   *   its line, with the questions that sit beside them.
+   * - `add`: the line to add a thread (ADD_THREAD).
+   * - `connections`: each connection between two threads in the story, its line, its evidence
+   *   folded; its kind stays underneath, unprinted.
+   * - `questions`: every question the stop asks, in its order, each the same object it sits as.
+   * - each line the page shows (linesOnPage) carries the concerns about the director's edit on
+   *   it, the marks of what the round's passes changed on it, and the code checks still failing
+   *   whose place it is (`failures`, failuresBesideLines; spec 9.3); an angle's sit on its card,
+   *   or on the pitch while it is open.
+   * - the round's lines: `didNotRun` (by what the note box holds; task 4.5c), `checkFailures`
+   *   (the failures with no place on the page), `changedEdits` (changedEditsToShow's entries no
+   *   mark stands for; task 4.10), `kept` (editsStandLine; brief 4.10b), `marked` and the marks no
+   *   line shows (`removed`, `otherMarks`), and the concerns no line shows (`otherConcerns`).
+   * Every element keeps piece 1's convention: `label`, its words as the page prints them, and
+   * `labels`, its controls' names and its fold's title, keyed by the control. No line or label
+   * names an element by its id (meetingWordsOf); each element's `id` and `index` stay on its view
+   * for the operations, which change the weave by them.
    *
    * The stop always holds a weave (the integrator, at 4.11's merge): the arc writer writes one
-   * or throws, and only a thread from before the story meeting holds none, which the server
-   * refuses wherever it sits and the console shows the server's message for (oldThreadView).
+   * or throws, and only a thread on an old shape holds none, which the server refuses wherever it
+   * sits and the console shows the server's message for (oldThreadView).
    *
    * @param {Object} data - the stop's payload
    * @param {Object} weave - the weave as the director has it (meetingDraftOf, then their changes)
@@ -2804,91 +2931,14 @@
     };
     var none = { concerns: [], marks: [], failures: [] };
     var line = function (key, text) {
-      var b = at(key);
+      var b = key ? at(key) : none;
       return { text: asString(text), concerns: b.concerns, marks: b.marks, failures: b.failures };
     };
-    var shownThreads = shown ? asArray(shown.threads) : [];
-    var directorsEarlier = new Set(asArray(d.directorsThreads).map(function (id) { return asString(id).trim(); }).filter(Boolean));
-    /** Whether the director brings a thread the meeting showed left out into the story at this look. */
-    var broughtInNow = function (id, role) {
-      if (!id || role === LEFT_OUT_ROLE) return false;
-      var was = shownThreads.filter(function (t) { return weaveIdOf(t) === id; })[0];
-      return Boolean(was) && asString(was.role) === LEFT_OUT_ROLE;
-    };
-    var threadRepeats = new Set(repeatedIdsOf(shownThreads));
-    var connectionRepeats = new Set(repeatedIdsOf(shown ? shown.connections : []));
-    var allThreads = asArray(weave.threads).map(function (element, index) {
-      var thread = isPlainObject(element) ? element : {};
-      var id = weaveIdOf(thread);
-      var role = asString(thread.role);
-      var b = id ? at('thread:' + id) : none;
-      var evidence = evidenceFoldView(thread.evidence, d.evidenceIndex);
-      var added = index >= shownThreads.length;
-      var label = threadLabelOf(thread);
-      return {
-        key: 'thread-' + index,
-        index: index,
-        id: id,
-        name: asString(thread.name),
-        line: asString(thread.line),
-        label: label,
-        labels: {
-          fold: evidenceFoldLabel(label),
-          role: 'Role of the thread ' + label,
-          takeOut: 'Take out the thread you added: ' + label
-        },
-        role: role,
-        roleLabel: roleWord(role),
-        reason: asString(thread.reason),
-        verdict: thread.verdict === true,
-        added: added,
-        repeatedId: id !== '' && threadRepeats.has(id),
-        evidence: evidence,
-        noEvidence: evidence.length === 0 && (added || broughtInNow(id, role) || directorsEarlier.has(id)) ? MEETING_NO_EVIDENCE_LINE : '',
-        concerns: b.concerns,
-        marks: b.marks,
-        failures: b.failures
-      };
-    });
-    var threads = allThreads
-      .filter(function (t) { return t.role !== LEFT_OUT_ROLE; })
-      .sort(function (a, b) { return roleRank(a.role) - roleRank(b.role) || a.index - b.index; });
-    var leftOutThreads = allThreads.filter(function (t) { return t.role === LEFT_OUT_ROLE; });
-    var connections = asArray(weave.connections).map(function (element, index) {
-      var connection = isPlainObject(element) ? element : {};
-      var id = weaveIdOf(connection);
-      var b = id ? at('connection:' + id) : none;
-      var struck = isStruckConnection(connection);
-      var joins = words.joinsText(connection.joins);
-      var named = joins ? 'the connection between ' + joins : 'the connection "' + asString(connection.line) + '"';
-      return {
-        key: 'connection-' + index,
-        index: index,
-        id: id,
-        line: asString(connection.line),
-        joins: joins,
-        label: joins ? 'Joins ' + joins : '',
-        labels: {
-          fold: evidenceFoldLabel(named),
-          strike: (struck ? 'Unstrike ' : 'Strike ') + named
-        },
-        struck: struck,
-        // Brief 4.14a: out of the story with a left-out thread, said under it; a strike already keeps it out.
-        leftOut: struck ? '' : leftOutLine(leftOutThreadsOf(connection, weave), words),
-        repeatedId: id !== '' && connectionRepeats.has(id),
-        evidence: evidenceFoldView(connection.evidence, d.evidenceIndex),
-        concerns: b.concerns,
-        marks: b.marks,
-        failures: b.failures
-      };
-    });
-    var stronger = onPage.has('strongerMainThread') ? weave.strongerMainThread : null;
-    var strongerView = null;
-    if (stronger) {
-      var strongerId = asString(stronger.thread).trim();
-      var sb = at('strongerMainThread');
-      strongerView = { thread: strongerId, name: words.threadName(strongerId), reason: asString(stronger.reason), concerns: sb.concerns, marks: sb.marks, failures: sb.failures };
-    }
+    var story = openStoryOf(weave);
+    var open = story.angle;
+    var openId = open ? weaveIdOf(open) : '';
+    var held = new Set(asArray(weave.threads).map(weaveIdOf).filter(Boolean));
+
     var draftQuestions = asArray(weave.questions);
     var cursor = 0;
     var questions = stopQuestions.map(function (q, n) {
@@ -2897,8 +2947,10 @@
         if (sameQuestion(draftQuestions[i], q)) { index = i; break; }
       }
       if (index !== -1) cursor = index + 1;
+      var asked = index !== -1 ? draftQuestions[index] : q;
       var id = asString(q.id).trim();
       var kind = asString(q.kind);
+      var about = asString(q.about);
       var b = id ? at('question:' + id) : none;
       return {
         key: 'question-' + n,
@@ -2906,42 +2958,164 @@
         id: id,
         kind: kind,
         kindLabel: hasOwn(WRITER_QUESTION_KIND_LABELS, kind) ? WRITER_QUESTION_KIND_LABELS[kind] : '',
-        about: asString(q.about),
+        about: about,
         question: asString(q.question),
         changes: asString(q.changes),
-        answer: asString((index !== -1 ? draftQuestions[index] : q)[WEAVE_ANSWER_KEY]),
+        answer: asString(asked[WEAVE_ANSWER_KEY]),
+        // R10: beside a thread the weave holds, or by the pitch.
+        thread: held.has(asString(asked.thread).trim()) ? asString(asked.thread).trim() : '',
+        label: 'Question about ' + about.trim(),
+        labels: { answer: 'Your answer: ' + asString(q.question) },
         marks: b.marks,
         failures: b.failures
       };
     });
+    var questionsBeside = function (id) {
+      return questions.filter(function (q) { return id !== '' && q.thread === id; });
+    };
+
+    var shownThreads = shown ? asArray(shown.threads) : [];
+    var directorsEarlier = new Set(asArray(d.directorsThreads).map(function (id) { return asString(id).trim(); }).filter(Boolean));
+    var threadRepeats = new Set(repeatedIdsOf(shownThreads));
+    var connectionRepeats = new Set(repeatedIdsOf(shown ? shown.connections : []));
+    var threadView = function (entry, inStory) {
+      var thread = entry.thread;
+      var id = weaveIdOf(thread);
+      var b = id ? at('thread:' + id) : none;
+      var evidence = evidenceFoldView(thread.evidence, d.evidenceIndex);
+      var added = entry.index >= shownThreads.length;
+      var label = threadLabelOf(thread);
+      var locked = inStory && thread.verdict === true;
+      return {
+        key: 'thread-' + entry.index,
+        index: entry.index,
+        id: id,
+        name: asString(thread.name),
+        line: asString(thread.line),
+        label: label,
+        labels: {
+          fold: evidenceFoldLabel(label),
+          flip: (inStory ? 'Leave out of the story: ' : 'Bring into the story: ') + label,
+          name: 'The name of the thread ' + label,
+          line: 'The line of the thread ' + label,
+          takeOut: 'Take out the thread you added: ' + label
+        },
+        inStory: inStory,
+        verdict: thread.verdict === true,
+        locked: locked,
+        lockedLine: locked ? VERDICT_LOCK_LINE : '',
+        added: added,
+        repeatedId: id !== '' && threadRepeats.has(id),
+        evidence: evidence,
+        noEvidence: evidence.length === 0 && (added || directorsEarlier.has(id)) ? MEETING_NO_EVIDENCE_LINE : '',
+        questions: questionsBeside(id),
+        concerns: b.concerns,
+        marks: b.marks,
+        failures: b.failures
+      };
+    };
+    var threads = story.inStory.map(function (entry) { return threadView(entry, true); });
+    var leftOutThreads = story.leftOut.map(function (entry) { return threadView(entry, false); });
+    var besideAThread = new Set(threads.concat(leftOutThreads).map(function (t) { return t.id; }).filter(Boolean));
+
+    var angles = asArray(weave.angles).map(function (element, index) {
+      var angle = isPlainObject(element) ? element : {};
+      var id = weaveIdOf(angle);
+      var isOpen = element === open;
+      var label = asString(angle.headline).trim() || asString(angle.gist).trim();
+      var b = id && !isOpen ? at('angle:' + id) : none;
+      return {
+        key: 'angle-' + index,
+        index: index,
+        id: id,
+        number: index + 1,
+        headline: asString(angle.headline),
+        gist: asString(angle.gist),
+        label: label,
+        labels: { pick: 'Open the angle ' + (label ? '"' + label + '"' : String(index + 1)) },
+        open: isOpen,
+        concerns: b.concerns,
+        marks: b.marks,
+        failures: b.failures
+      };
+    });
+    var pitch = null;
+    if (open) {
+      var pb = openId ? at('angle:' + openId) : none;
+      var openCard = angles.filter(function (a) { return a.open; })[0];
+      pitch = {
+        id: openId,
+        index: openCard.index,
+        number: openCard.number,
+        label: openCard.label,
+        headline: line(null, open.headline),
+        story: line(null, open.story),
+        question: line(null, open.question),
+        lands: line(null, open.lands),
+        ends: line(null, open.ends),
+        questions: questions.filter(function (q) { return !besideAThread.has(q.thread); }),
+        concerns: pb.concerns,
+        marks: pb.marks,
+        failures: pb.failures
+      };
+    }
+
+    var connections = openConnectionsOf(weave, story).map(function (c) {
+      var connection = c.connection;
+      var id = weaveIdOf(connection);
+      var b = id ? at('connection:' + id) : none;
+      var struck = isStruckConnection(connection);
+      var joins = words.joinsText(connection.joins);
+      var said = asString(connection.line).trim();
+      var named = joins ? 'the connection between ' + joins : 'the connection "' + said + '"';
+      return {
+        key: 'connection-' + c.index,
+        index: c.index,
+        id: id,
+        line: asString(connection.line),
+        joins: joins,
+        label: said,
+        labels: {
+          fold: evidenceFoldLabel(named),
+          strike: (struck ? 'Unstrike ' : 'Strike ') + named
+        },
+        struck: struck,
+        repeatedId: id !== '' && connectionRepeats.has(id),
+        evidence: evidenceFoldView(connection.evidence, d.evidenceIndex),
+        concerns: b.concerns,
+        marks: b.marks,
+        failures: b.failures
+      };
+    });
+
     var fromYourNotes = onPage.has('fromYourNotes') ? line('fromYourNotes', weave.fromYourNotes) : null;
+    var thinNotes = fromYourNotes || beside.takenOut.has('fromYourNotes') ? '' : THIN_NOTES_LINE;
     var present = {
-      fromYourNotes: fromYourNotes !== null,
-      strongerMainThread: strongerView !== null,
-      questions: questions.length > 0
+      fromYourNotes: fromYourNotes !== null || thinNotes !== '',
+      angles: angles.length > 0,
+      pitch: pitch !== null,
+      connections: connections.length > 0
     };
     return {
       order: MEETING_SECTIONS.filter(function (section) { return !hasOwn(present, section) || present[section]; }),
       verdict: meetingVerdictView(d.accusation),
-      story: line('story', weave.story),
-      question: line('question', weave.question),
-      headline: line('headline', weave.headline),
-      thinNotes: fromYourNotes || beside.takenOut.has('fromYourNotes') ? '' : THIN_NOTES_LINE,
       fromYourNotes: fromYourNotes,
+      thinNotes: thinNotes,
+      angles: angles,
+      angleOpenLine: ANGLE_OPEN_LINE,
+      pitch: pitch,
       evidenceTitle: EVIDENCE_FOLD_TITLE,
       threads: threads,
       leftOut: {
-        title: 'Left out (' + leftOutThreads.length + ')',
+        title: LEFT_OUT_TITLE,
         names: leftOutThreads.map(function (t) { return t.label; }).filter(Boolean).join(' · '),
-        reasonsTitle: LEFT_OUT_REASONS_TITLE,
-        threads: leftOutThreads
+        threads: leftOutThreads,
+        questions: questions.filter(function (q) { return leftOutThreads.some(function (t) { return t.id !== '' && t.id === q.thread; }); })
       },
-      roles: Object.keys(WEAVE_ROLE_LABELS).map(function (value) { return { value: value, label: WEAVE_ROLE_LABELS[value] }; }),
+      add: ADD_THREAD,
       connections: connections,
-      convergence: line('convergence', weave.convergence),
-      strongerMainThread: strongerView,
       questions: questions,
-      repeatedIdHint: allThreads.some(function (t) { return t.repeatedId; }) || connections.some(function (c) { return c.repeatedId; }) ? REPEATED_ID_HINT : '',
+      repeatedIdHint: threads.concat(leftOutThreads).some(function (t) { return t.repeatedId; }) || connections.some(function (c) { return c.repeatedId; }) ? REPEATED_ID_HINT : '',
       checkFailures: failing.top,
       changedEdits: beside.edits,
       kept: editsStandLine(d.handEditReport),
@@ -4480,7 +4654,8 @@
     // Phase 4, task 4.8: the story meeting on screen
     MEETING_STOP: MEETING_STOP,
     MEETING_ACTIONS: MEETING_ACTIONS,
-    WEAVE_ROLE_LABELS: WEAVE_ROLE_LABELS,
+    // Phase 4b, piece 3 (brief 3B): the console's copy of lib/weave.js ANGLE_FIELDS, held equal by a test
+    ANGLE_FIELDS: ANGLE_FIELDS,
     CONNECTION_KINDS: CONNECTION_KINDS,
     // Phase 4b (brief 1B): the evidence under each line, folded (the map reuses the fold's view),
     // and the console's copies of lib/evidence.js's sources and stances and of the evidence's key
@@ -4496,20 +4671,25 @@
     STRUCK_KEY: STRUCK_KEY,
     WEAVE_ANSWER_KEY: WEAVE_ANSWER_KEY,
     DIRECTOR_WEAVE_SHAPE: DIRECTOR_WEAVE_SHAPE,
+    PICKED_KEY: PICKED_KEY,
     THIN_NOTES_LINE: THIN_NOTES_LINE,
     MEETING_LINE_LABELS: MEETING_LINE_LABELS,
+    ANGLE_OPEN_LINE: ANGLE_OPEN_LINE,
+    VERDICT_LOCK_LINE: VERDICT_LOCK_LINE,
     MEETING_ROLLBACK_LINE: MEETING_ROLLBACK_LINE,
-    // Brief 4.14a: the console's copy of lib/weave.js's left-out rule, held equal by a test
-    LEFT_OUT_ROLE: LEFT_OUT_ROLE,
-    leftOutThreadsOf: leftOutThreadsOf,
     meetingWeaveOf: meetingWeaveOf,
     meetingVersion: meetingVersion,
     meetingPendingSlot: meetingPendingSlot,
     meetingDraftOf: meetingDraftOf,
     meetingNoteOf: meetingNoteOf,
     pendingEditsAfterCheckpoint: pendingEditsAfterCheckpoint,
-    setMeetingField: setMeetingField,
-    setThreadRole: setThreadRole,
+    // Phase 4b, piece 3 (brief 3B): the open angle (the console's copy of lib/weave.js
+    // pickedAngleOf, held equal by a test) and the director's changes on angles
+    openAngleOf: openAngleOf,
+    pickMeetingAngle: pickMeetingAngle,
+    setAngleField: setAngleField,
+    setThreadField: setThreadField,
+    flipMeetingThread: flipMeetingThread,
     addMeetingThread: addMeetingThread,
     removeMeetingThread: removeMeetingThread,
     setConnectionStruck: setConnectionStruck,

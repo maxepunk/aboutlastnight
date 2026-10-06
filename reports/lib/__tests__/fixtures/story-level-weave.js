@@ -1,10 +1,10 @@
 /**
  * A weave at the story level, with its evidence underneath, in session 100226's shape (phase 4b,
- * piece 1, brief 1B; spec 2026-10-05 sections 4.1 and 5): the story, its question and headline,
- * the director's words it rests on; seven threads in the story, the main thread carrying the
- * room's verdict, and three left out by name with their reasons; four connections; the
- * convergence; a question about a player. Each line is in story terms, and each piece names a
- * source the record below holds, its quotations word for word.
+ * piece 1, brief 1B; spec 2026-10-05 sections 4.1 and 5), pitched as angles since piece 3 (brief
+ * 3B): three angles over ten threads, angle 1 telling seven of them and resting on the director's
+ * words, the verdict's thread in every angle, and three threads no angle uses; four connections;
+ * a question about a player. Each line is in story terms, and each piece names a source the
+ * record below holds, its quotations word for word.
  *
  * The record: two exposed memories, a paper email, a sale into an account and an exposure on the
  * evidence log, and one buried memory, which no piece names. Invented text: the repo is public.
@@ -48,48 +48,77 @@ const piece = (sources, shows, stance = 'supports') => ({ sources, shows, stance
 
 /** The writer's weave, at the story level. */
 const STORY_LEVEL_WEAVE = {
-  story: "The room called Marcus's death an accident, a verdict that left every hand clean, though its own evidence describes a trial run.",
-  question: 'If Marcus died of his own dose, whose trial was it?',
-  headline: 'Ten Votes Call the Trial Run an Accident',
+  angles: [
+    {
+      id: 'a1',
+      headline: 'Ten Votes Call the Trial Run an Accident',
+      gist: "The room called Marcus's death an accident, and its own evidence describes a trial run.",
+      story: "The room called Marcus's death an accident, a verdict that left every hand clean, though its own evidence describes a trial run.",
+      question: 'If Marcus died of his own dose, whose trial was it?',
+      lands: 'Every player voted on the accident.',
+      ends: 'An overdose closes the case on the one man who cannot answer. Does the trial run become the launch?',
+      threads: ['t1', 't2', 't3', 't4', 't5', 't6', 't7']
+    },
+    {
+      id: 'a2',
+      headline: 'Quinn Was Asked to Raise the Dose',
+      gist: 'The email asked Quinn to raise the dose, and Quinn spoke first at the count.',
+      story: 'Quinn was asked to raise the dose for the pilot, and Quinn led the room to an accident.',
+      question: 'What did Quinn know when the room voted?',
+      lands: 'The players heard Quinn speak first.',
+      ends: 'The man who was asked to raise the dose steered the verdict.',
+      threads: ['t4', 't1', 't3']
+    },
+    {
+      id: 'a3',
+      headline: 'Memories Sold While the Room Argued',
+      gist: 'While the room argued over the dose, the memories went to the buyer.',
+      story: 'While the room argued about an accident, memories went to the buyer one by one.',
+      question: 'Who was selling while the room voted?',
+      lands: 'The players never watched the sales.',
+      ends: 'The verdict closed the case, and the sales closed the morning.',
+      threads: ['t5', 't1', 't7']
+    }
+  ],
   fromYourNotes: 'it was the pilot run for a bigger launch',
   threads: [
     {
-      id: 't1', name: 'An accident', line: "The room's verdict, which cleared every hand.", role: 'main-thread', verdict: true,
+      id: 't1', name: 'An accident', line: "The room's verdict, which cleared every hand.", verdict: true,
       evidence: [
         piece(['notes'], 'Alex asks the room if Marcus had dosed them all, and the room votes for an accident.'),
         piece(['ledger', 'evidence-log'], 'A sale into Rich two minutes after the warning was turned in.', 'cuts-against')
       ]
     },
     {
-      id: 't2', name: "Marcus's own dosing", line: 'He had been trying the batch on himself.', role: 'grounds-it',
+      id: 't2', name: "Marcus's own dosing", line: 'He had been trying the batch on himself.',
       evidence: [
         piece(['sam001'], 'Sam writes, "I think he is trying the new batch on himself"'),
         piece(['jes002'], 'Jess warns Sarah, "You know he tests every batch on himself first."')
       ]
     },
     {
-      id: 't3', name: 'The trial run', line: 'The night tried the batch on its guests, and someone wanted it tried.', role: 'complicates-it',
+      id: 't3', name: 'The trial run', line: 'The night tried the batch on its guests, and someone wanted it tried.',
       evidence: [piece(['p-email'], 'Marcus asks Quinn to "raise the dose for the pilot"')]
     },
     {
-      id: 't4', name: "Quinn's two stories", line: 'What Quinn told the room does not match what Quinn was asked to do.', role: 'complicates-it',
+      id: 't4', name: "Quinn's two stories", line: 'What Quinn told the room does not match what Quinn was asked to do.',
       evidence: [piece(['notes', 'p-email'], 'Quinn spoke first at the count, and the email asks Quinn to raise the dose.')]
     },
     {
-      id: 't5', name: 'The memories sold', line: 'Sold off while the room argued.', role: 'mirrors-it',
+      id: 't5', name: 'The memories sold', line: 'Sold off while the room argued.',
       evidence: [piece(['ledger'], 'A sale into Rich while the room argued.')]
     },
     {
-      id: 't6', name: 'Reality is negotiable', line: 'The truth around Marcus has been bent before.', role: 'mirrors-it',
+      id: 't6', name: 'Reality is negotiable', line: 'The truth around Marcus has been bent before.',
       evidence: [piece(['p-email'], 'The board wants results by a date, whatever the batch does.')]
     },
     {
-      id: 't7', name: 'The successors', line: 'The company waits to name Quinn and Alex until the case closes.', role: 'carries-it-forward',
+      id: 't7', name: 'The successors', line: 'The company waits to name Quinn and Alex until the case closes.',
       evidence: [piece(['notes'], 'The pilot run was for a bigger launch.')]
     },
-    { id: 't8', name: 'The other suspects', line: 'The room weighed three others and let them go.', role: 'left-out', reason: 'The room set them aside early.', evidence: [] },
-    { id: 't9', name: 'Protecting Sarah', line: 'Jess kept Sarah out of the vote.', role: 'left-out', reason: 'It touches no thread the story follows.', evidence: [] },
-    { id: 't10', name: "Remi's and Kai's quarrels", line: 'Two old grudges flared at the bar.', role: 'left-out', reason: 'They stayed private.', evidence: [] }
+    { id: 't8', name: 'The other suspects', line: 'The room weighed three others and let them go.', evidence: [piece(['notes'], 'Alex asked the room if Marcus had dosed them all.')] },
+    { id: 't9', name: 'Protecting Sarah', line: 'Jess kept Sarah out of the vote.', evidence: [piece(['jes002'], 'Jess warns Sarah about the batch.')] },
+    { id: 't10', name: "Remi's and Kai's quarrels", line: 'Two old grudges flared at the bar.', evidence: [piece(['notes'], 'The room argued before the vote.')] }
   ],
   connections: [
     { id: 'c1', joins: ['t4', 't7'], line: 'Quinn and Alex steered the verdict, and they are the successors.', kind: 'person', evidence: [piece(['notes'], 'Quinn spoke first at the count.')] },
@@ -97,7 +126,6 @@ const STORY_LEVEL_WEAVE = {
     { id: 'c3', joins: ['t5', 't3'], line: 'The sales spiked as the trial run came to light.', kind: 'moment', evidence: [piece(['ledger', 'evidence-log'], 'The sale into Rich follows the warning turned in.')] },
     { id: 'c4', joins: ['t1', 't6'], line: 'A negotiated verdict, beside Reality is negotiable.', kind: 'line', evidence: [piece(['notes'], 'The room votes for an accident.')] }
   ],
-  convergence: 'An overdose closes the case on the one man who cannot answer. Does the trial run become the launch?',
   questions: [
     { id: 'q1', kind: 'player', about: 'Remi', question: 'The notes record nothing Remi did in the room. What did Remi do?', changes: 'Gives Remi a moment in the article.' }
   ]

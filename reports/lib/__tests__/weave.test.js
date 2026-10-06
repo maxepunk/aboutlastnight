@@ -2,24 +2,24 @@
  * The weave (phase 4, brief 4.4; spec 2026-10-02 sections 4.2 and 4.5; phase 4b, piece 1, brief
  * 1B; spec 2026-10-05 sections 4.1, 5 and 6.1).
  *
- * The arc writer writes one weave at the level of the story: the story, its question and a
- * working headline; the director's words it rests on; the threads, each a role, a short name and
- * one line in story terms, with its evidence underneath; the connections, each one line with its
- * evidence; the convergence; an optional stronger main thread; and the questions for the director.
- * Code checks it (checkWeave): the evidence, the story terms, the structure, and the meeting's
- * page at most 300 words as it first opens (the count its node passes). The fact check marks the
+ * The arc writer writes one weave at the level of the story: since phase 4b, piece 3 (brief 3B),
+ * two or three angles, each a pitch told through the threads it names; the director's words angle
+ * 1 rests on; the threads, each a short name and one line in story terms, with its evidence
+ * underneath; the connections, each one line with its evidence; and the questions for the
+ * director. Code checks it (checkWeave): the angles, the evidence, the story terms, the structure,
+ * and the meeting's page within its bound (the count its node passes). The fact check marks the
  * weave it judged.
  *
  * Two weaves below, each in a real session's shape with invented text (the repo is public): the
  * shape and the story level are held on a weave in 100226's shape (fixtures/story-level-weave.js),
- * and the rest on one in 0926262's shape (five threads in five roles, four connections of four
- * kinds, a figure question).
+ * and the rest on one in 0926262's shape (two angles over six threads, one thread no angle uses,
+ * four connections of four kinds, a figure question).
  */
 
 const Ajv = require('ajv');
 const weaveLib = require('../weave');
 const {
-  WEAVE_ROLES, MAIN_THREAD_ROLE, LEFT_OUT_ROLE, CONNECTION_KINDS, MEETING_WORD_BOUND,
+  ANGLE_FIELDS, CONNECTION_KINDS, MEETING_WORD_BOUND, MEETING_WORD_FLOOR,
   WEAVE_CHECKS_SOURCE, FACT_CHECK_MARK_KEY,
   isWeave, weaveKey, weaveForPrompt, factCheckMarkOf, isWeaveJudged, withFactCheckMark,
   isMeetingApproved, checkWeave, weaveFindings, writersShareOf
@@ -54,19 +54,38 @@ const RECORD = {
 };
 const EVIDENCE = evidenceContextOf({ evidenceBundle: RECORD, directorNotes: { rawProse: NOTES }, inputReviewCorrections: [CORRECTION] });
 
-/** 0926262's shape, invented text. */
+/** 0926262's shape, invented text: two angles over six threads, t6 in no angle. */
 const WEAVE = {
-  story: 'Someone built a case to pin the death on Rowan Vale. It failed in the room and landed on Ellis Marr, and the people with the money are already writing the next version.',
-  question: 'Will the verdict cost Ellis anything?',
-  headline: 'Ellis Marr Pointed the Room at Rowan Vale. It Named Him Instead.',
+  angles: [
+    {
+      id: 'a1',
+      headline: 'Ellis Marr Pointed the Room at Rowan Vale. It Named Him Instead.',
+      gist: 'The case built against Rowan landed on Ellis.',
+      story: 'Someone built a case to pin the death on Rowan Vale. It failed in the room and landed on Ellis Marr, and the people with the money are already writing the next version.',
+      question: 'Will the verdict cost Ellis anything?',
+      lands: 'Every player watched the case turn.',
+      ends: 'Near the end the retainer, the empty chair and the flight abroad meet the old sign-off.',
+      threads: ['t1', 't2', 't3', 't4', 't5']
+    },
+    {
+      id: 'a2',
+      headline: 'The Plan to Replace the Founder Outlives the Verdict',
+      gist: 'While the room named Ellis, a plan to replace the founder went on.',
+      story: 'The room named Ellis, and a plan drafted before the board met goes on without him.',
+      question: 'Who takes the empty chair?',
+      lands: 'The players argued the verdict and never saw the plan.',
+      ends: 'The verdict closes the morning, and the plan opens the next one.',
+      threads: ['t4', 't1', 't5']
+    }
+  ],
   fromYourNotes: 'the frame this morning did not land the way it was meant to',
   threads: [
-    { id: 't1', name: 'The case against Rowan', line: 'The case against Rowan held at four votes, and the room named Ellis.', role: 'main-thread', verdict: true, evidence: [piece(['notes'], 'Rowan argued with Ellis at the bar.')] },
-    { id: 't2', name: 'The last two minutes', line: 'The RowanVale account took most of the last two minutes of selling.', role: 'grounds-it', evidence: [piece(['ledger'], 'The sales into RowanVale at the close.')] },
-    { id: 't3', name: 'The bathroom', line: 'Two allies split over the same secret in the bathroom.', role: 'complicates-it', evidence: [piece(['row001'], 'Rowan to Sloane: "Not a word to Ellis."')] },
-    { id: 't4', name: 'The replacement plan', line: 'A plan to replace the founder may outlive the verdict.', role: 'carries-it-forward', evidence: [piece(['vic002'], 'Vic drafts the plan before the board meets.')] },
-    { id: 't5', name: 'Last winter', line: 'Last winter a story about the company vanished the same way.', role: 'mirrors-it', evidence: [piece(['p-email'], 'The firm "asks for the story to come down."')] },
-    { id: 't6', name: 'The coat check', line: 'A side deal at the coat check.', role: 'left-out', reason: 'It touches no thread the story follows.', evidence: [piece(['kai004'], 'Kai trades a favour.')] }
+    { id: 't1', name: 'The case against Rowan', line: 'The case against Rowan held at four votes, and the room named Ellis.', verdict: true, evidence: [piece(['notes'], 'Rowan argued with Ellis at the bar.')] },
+    { id: 't2', name: 'The last two minutes', line: 'The RowanVale account took most of the last two minutes of selling.', evidence: [piece(['ledger'], 'The sales into RowanVale at the close.')] },
+    { id: 't3', name: 'The bathroom', line: 'Two allies split over the same secret in the bathroom.', evidence: [piece(['row001'], 'Rowan to Sloane: "Not a word to Ellis."')] },
+    { id: 't4', name: 'The replacement plan', line: 'A plan to replace the founder may outlive the verdict.', evidence: [piece(['vic002'], 'Vic drafts the plan before the board meets.')] },
+    { id: 't5', name: 'Last winter', line: 'Last winter a story about the company vanished the same way.', evidence: [piece(['p-email'], 'The firm "asks for the story to come down."')] },
+    { id: 't6', name: 'The coat check', line: 'A side deal at the coat check.', evidence: [piece(['kai004'], 'Kai trades a favour.')] }
   ],
   connections: [
     { id: 'c1', joins: ['t1', 't3'], line: "Sloane, Rowan's ally, is the voice that turned the room.", kind: 'person', evidence: [piece(['row001'], 'Sloane is in the bathroom with Rowan.')] },
@@ -74,8 +93,6 @@ const WEAVE = {
     { id: 'c3', joins: ['t4', 't5'], line: 'The firm that wrote the January demand is the firm on retainer now.', kind: 'document', evidence: [piece(['p-email'], 'The same firm is on retainer now.')] },
     { id: 'c4', joins: ['t5', 't1'], line: 'Truth is a negotiation, planted early and paid off at the end.', kind: 'line', evidence: [piece(['notes'], 'The room turned on Ellis.')] }
   ],
-  convergence: 'Near the end the retainer, the empty chair and the flight abroad meet the old sign-off.',
-  strongerMainThread: { thread: 't4', reason: 'The replacement plan reaches past the morning.' },
   questions: [
     {
       id: 'q1', kind: 'figure', about: 'RowanVale, "more than double the second"',
@@ -90,6 +107,8 @@ const check = (weave, overrides = {}) => checkWeave(weave, { evidence: EVIDENCE,
 const typesOf = (failures) => failures.map((f) => f.type);
 /** The weave with one thread changed. */
 const withThread = (id, change) => ({ ...clone(WEAVE), threads: clone(WEAVE).threads.map((t) => (t.id === id ? change(t) : t)) });
+/** The weave with one angle changed. */
+const withAngle = (id, change) => ({ ...clone(WEAVE), angles: clone(WEAVE).angles.map((a) => (a.id === id ? change(a) : a)) });
 /** The director's share of the weave, as lib/hand-edit-diff.js weaveDirectorsShare reads it from the edits. */
 const share = (parts = {}) => ({ addedThreads: {}, reroledThreads: {}, fields: {}, threadFields: {}, addedConnections: {}, connectionFields: {}, ...parts });
 
@@ -107,34 +126,30 @@ describe("the weave's shape (WEAVE_SCHEMA), on a weave in 100226's shape", () =>
     expect(valid(WEAVE)).toBe('valid');
   });
 
-  it('requires the story, its question, the headline, the threads, the connections, the convergence and the questions', () => {
-    expect(WEAVE_SCHEMA.required).toEqual(['story', 'question', 'headline', 'threads', 'connections', 'convergence', 'questions']);
+  it('requires the angles, the threads, the connections and the questions', () => {
+    expect(WEAVE_SCHEMA.required).toEqual(['angles', 'threads', 'connections', 'questions']);
     for (const field of WEAVE_SCHEMA.required) {
       const { [field]: _gone, ...rest } = clone(STORY);
       expect(`${field}: ${valid(rest)}`).not.toBe(`${field}: valid`);
     }
   });
 
-  it('holds "from your notes" and a stronger main thread only when the writer has them', () => {
+  it('holds "from your notes" only when the writer has it', () => {
     const { fromYourNotes: _f, ...plain } = clone(STORY);
     expect(valid(plain)).toBe('valid');
     expect(WEAVE_SCHEMA.properties.fromYourNotes.type).toBe('string');
-    expect(WEAVE_SCHEMA.properties.strongerMainThread.required).toEqual(['thread', 'reason']);
-    expect(valid({ ...plain, strongerMainThread: { thread: 't4' } })).not.toBe('valid');
   });
 
-  it('gives each thread an id, a short name, its line, its role and its evidence; the verdict flag and a reason when it has them', () => {
+  it('gives each thread an id, a short name, its line and its evidence; the verdict flag when it has it', () => {
     const thread = WEAVE_SCHEMA.properties.threads.items;
-    expect(Object.keys(thread.properties)).toEqual(['id', 'name', 'line', 'role', 'verdict', 'reason', 'evidence']);
-    expect(thread.required).toEqual(['id', 'name', 'line', 'role', 'evidence']);
-    expect(thread.properties.role.enum).toEqual([...WEAVE_ROLES]);
+    expect(Object.keys(thread.properties)).toEqual(['id', 'name', 'line', 'verdict', 'evidence']);
+    expect(thread.required).toEqual(['id', 'name', 'line', 'evidence']);
     expect(thread.properties.verdict.type).toBe('boolean');
     expect(thread.properties.evidence).toEqual({ type: 'array', items: EVIDENCE_PIECE_SCHEMA, description: expect.any(String) });
     ['name', 'line', 'evidence'].forEach((field) => {
       const without = { ...clone(STORY), threads: clone(STORY).threads.map((t, i) => (i === 1 ? (({ [field]: _gone, ...rest }) => rest)(t) : t)) };
       expect(`${field}: ${valid(without)}`).not.toBe(`${field}: valid`);
     });
-    expect(valid({ ...clone(STORY), threads: clone(STORY).threads.map((t) => (t.id === 't2' ? { ...t, role: 'supports-it' } : t)) })).not.toBe('valid');
   });
 
   it('gives each connection an id, the two threads it joins, its line, its kind underneath and its evidence', () => {
@@ -156,10 +171,13 @@ describe("the weave's shape (WEAVE_SCHEMA), on a weave in 100226's shape", () =>
     expect('detail' in connection).toBe(false);
   });
 
-  it('the roles are the main thread, the four roles toward it, and left out', () => {
-    expect([...WEAVE_ROLES]).toEqual(['main-thread', 'grounds-it', 'complicates-it', 'mirrors-it', 'carries-it-forward', 'left-out']);
-    expect(MAIN_THREAD_ROLE).toBe('main-thread');
-    expect(LEFT_OUT_ROLE).toBe('left-out');
+  // Piece 3 (brief 3B): the angles took the roles' place, and the single story's fields.
+  it('an angle is its id, its pitch and the ids of its threads, each required; the roles went', () => {
+    const angle = WEAVE_SCHEMA.properties.angles.items;
+    expect(Object.keys(angle.properties)).toEqual(['id', ...ANGLE_FIELDS, 'threads']);
+    expect(angle.required).toEqual(['id', ...ANGLE_FIELDS, 'threads']);
+    ['WEAVE_ROLES', 'MAIN_THREAD_ROLE', 'LEFT_OUT_ROLE', 'leftOutThreadsJoined'].forEach((name) => expect(weaveLib).not.toHaveProperty(name));
+    ['story', 'question', 'headline', 'convergence', 'strongerMainThread'].forEach((field) => expect(WEAVE_SCHEMA.properties).not.toHaveProperty(field));
   });
 
   it('carries the questions in their own property, the one writer-questions.js defines', () => {
@@ -269,10 +287,12 @@ describe('the weave helpers', () => {
     expect(isWeave([WEAVE])).toBe(false);
   });
 
-  // Spec 4.1 (R5): the meeting's page at most 300 words, as it first opens; the old bound on the
-  // writer's own fields and the receipt that named the ledger went with their last readers.
-  it("states the meeting's bound once: 300 words of the page as it first opens", () => {
-    expect(MEETING_WORD_BOUND).toBe(300);
+  // Spec 4.1 (R5): the meeting's page within its bound; piece 3 (R5): 450 words with any angle
+  // open, and a floor of 350. The old bound on the writer's own fields and the receipt that named
+  // the ledger went with their last readers.
+  it("states the meeting's bound once: 450 words of the page with any angle open", () => {
+    expect(MEETING_WORD_BOUND).toBe(450);
+    expect(MEETING_WORD_FLOOR).toBe(350);
     expect(weaveLib).not.toHaveProperty('WEAVE_WORD_BOUND');
     expect(weaveLib).not.toHaveProperty('weaveWordCount');
     expect(weaveLib).not.toHaveProperty('LEDGER_RECEIPT');
@@ -282,7 +302,7 @@ describe('the weave helpers', () => {
     const reordered = Object.fromEntries(Object.entries(clone(WEAVE)).reverse());
     expect(weaveKey(reordered)).toBe(weaveKey(WEAVE));
     expect(weaveKey(withFactCheckMark(WEAVE, { at: 't', ready: false, fixes: 0 }))).toBe(weaveKey(WEAVE));
-    expect(weaveKey({ ...clone(WEAVE), story: 'Another story.' })).not.toBe(weaveKey(WEAVE));
+    expect(weaveKey(withAngle('a1', (a) => ({ ...a, story: 'Another story.' })))).not.toBe(weaveKey(WEAVE));
     expect(weaveKey(WEAVE)).toMatch(/^[0-9a-f]{12}$/);
   });
 
@@ -343,8 +363,9 @@ describe('the weave checks (checkWeave)', () => {
       expect(typesOf(check(withThread('t3', ({ evidence: _e, ...t }) => t)))).toEqual(['thread-without-evidence']);
     });
 
-    it('is silent on a left-out thread with no evidence', () => {
-      expect(check(withThread('t6', (t) => ({ ...t, evidence: [] })))).toEqual([]);
+    // Piece 3 (spec 9.1): every thread the writer wrote, a thread no angle uses among them.
+    it('fires on a thread no angle uses with no evidence, at its place', () => {
+      expect(check(withThread('t6', (t) => ({ ...t, evidence: [] }))).map((f) => [f.type, f.place])).toEqual([['thread-without-evidence', 'threads[#t6]']]);
     });
 
     it('fires on a piece naming a document the record lacks, on a thread, a left-out thread or a connection, naming the line and the piece', () => {
@@ -373,12 +394,12 @@ describe('the weave checks (checkWeave)', () => {
     it.each([
       ['a thread\'s line', () => withThread('t2', (t) => ({ ...t, line: 'RowanVale took $90,000 at 7:58.' })), 'threads[#t2]', /^The thread "The last two minutes": its line holds the money figure "\$90,000" and the clock time "7:58"\./],
       ['a thread\'s name', () => withThread('t3', (t) => ({ ...t, name: 'row001' })), 'threads[#t3]', /its name holds the document id "row001"/],
-      ['a left-out reason', () => withThread('t6', (t) => ({ ...t, reason: 'Kai said "never mind" and left.' })), 'threads[#t6]', /its reason holds the quotation "never mind"/],
       ['a connection\'s line', () => ({ ...clone(WEAVE), connections: clone(WEAVE).connections.map((c) => (c.id === 'c2' ? { ...c, line: 'The scoreboard at 7:58 brings the money in.' } : c)) }), 'connections[#c2]', /^The connection ".*": its line holds the clock time "7:58"/],
-      ['the story', () => ({ ...clone(WEAVE), story: `${WEAVE.story} The account took $90,000.` }), 'story', /^The story holds the money figure "\$90,000"\./],
-      ['the question', () => ({ ...clone(WEAVE), question: 'Will "the frame" cost Ellis anything?' }), 'question', /^The question it carries holds the quotation "the frame"\./],
-      ['the convergence', () => ({ ...clone(WEAVE), convergence: `${WEAVE.convergence} It lands at 9 PM.` }), 'convergence', /^Where they converge holds the clock time "9 PM"\./],
-      ['the stronger main thread\'s reason', () => ({ ...clone(WEAVE), strongerMainThread: { thread: 't4', reason: 'It reaches past vic002.' } }), 'strongerMainThread', /^The stronger main thread: its reason holds the document id "vic002"\./]
+      ['an angle\'s story', () => withAngle('a1', (a) => ({ ...a, story: `${a.story} The account took $90,000.` })), 'angles[#a1]', /^The angle "Ellis Marr Pointed the Room at Rowan Vale\. It Named Him Instead\.": its story holds the money figure "\$90,000"\./],
+      ['an angle\'s question', () => withAngle('a2', (a) => ({ ...a, question: 'Who takes "the empty chair"?' })), 'angles[#a2]', /^The angle "The Plan to Replace the Founder Outlives the Verdict": its question holds the quotation "the empty chair"\./],
+      ['an angle\'s card line', () => withAngle('a2', (a) => ({ ...a, gist: 'A plan in vic002 went on.' })), 'angles[#a2]', /its gist holds the document id "vic002"\./],
+      ['why an angle lands', () => withAngle('a2', (a) => ({ ...a, lands: 'The players argued until 9 PM.' })), 'angles[#a2]', /its lands holds the clock time "9 PM"\./],
+      ['where an angle ends up', () => withAngle('a1', (a) => ({ ...a, ends: `${a.ends} It lands at 9 PM.` })), 'angles[#a1]', /its ends holds the clock time "9 PM"\./]
     ])('fires on %s that holds an id, a quotation, a time or a figure, with its place and C16\'s fix', (_name, change, place, message) => {
       const failures = check(change());
       expect(failures.map((f) => [f.type, f.place])).toEqual([['story-terms', place]]);
@@ -386,29 +407,24 @@ describe('the weave checks (checkWeave)', () => {
       expect(failures[0].message).toMatch(/Say it in story terms, as C16 \(<craft-story>\) sets out/);
     });
 
-    it('reads the headline, "from your notes" and the questions as exempt (R2)', () => {
-      expect(check({ ...clone(WEAVE), headline: 'RowanVale Took $90,000 at 7:58' })).toEqual([]);
+    it('reads an angle\'s headline, "from your notes" and the questions as exempt (R2)', () => {
+      expect(check(withAngle('a2', (a) => ({ ...a, headline: 'RowanVale Took $90,000 at 7:58' })))).toEqual([]);
       expect(WEAVE.questions[0].about).toMatch(/"more than double the second"/);
       expect(check(WEAVE)).toEqual([]);
     });
 
     // Review focus 2.
     it('is silent on possessives, names and numbers in words', () => {
-      const plain = {
-        ...withThread('t5', (t) => ({ ...t, name: 'Reality is negotiable', line: "Ellis's ten votes and Kai's five to four on the count." })),
-        story: "Marcus's death, by ten votes, five to four on the second count."
-      };
+      const plain = withThread('t5', (t) => ({ ...t, name: 'Reality is negotiable', line: "Ellis's ten votes and Kai's five to four on the count." }));
+      plain.angles[0].story = "Marcus's death, by ten votes, five to four on the second count.";
       expect(check(plain)).toEqual([]);
     });
 
-    it("is silent on the director's own lines: a field they rewrote, a thread's line they typed, a thread they added", () => {
-      const typed = {
-        ...withThread('t3', (t) => ({ ...t, line: 'The bathroom deal at 10:40 PM.' })),
-        story: 'The account took $90,000.'
-      };
-      typed.threads.push({ id: 't7', name: 'The 7:58 sale', line: 'RowanVale took "the rest".', role: 'grounds-it' });
-      expect(typesOf(check(typed))).toEqual(['story-terms', 'story-terms', 'story-terms', 'thread-without-evidence']);
-      expect(check(typed, { directorsShare: share({ fields: { story: 'E1' }, threadFields: { 't3.line': 'E2' }, addedThreads: { t7: 'E3' } }) })).toEqual([]);
+    it("is silent on the director's own lines: a thread's line they typed, a thread they added", () => {
+      const typed = withThread('t3', (t) => ({ ...t, line: 'The bathroom deal at 10:40 PM.' }));
+      typed.threads.push({ id: 't7', name: 'The 7:58 sale', line: 'RowanVale took "the rest".' });
+      expect(typesOf(check(typed))).toEqual(['story-terms', 'story-terms', 'thread-without-evidence']);
+      expect(check(typed, { directorsShare: share({ threadFields: { 't3.line': 'E2' }, addedThreads: { t7: 'E3' } }) })).toEqual([]);
     });
 
     // Fix round 1, finding 2 (R11): a connection's line is the director's own line too when
@@ -429,15 +445,15 @@ describe('the weave checks (checkWeave)', () => {
       expect(failures[0]).not.toHaveProperty('place');
     });
 
-    it('fires when the thread that carries it is left out, at its place', () => {
-      const failures = check(withThread('t1', (t) => ({ ...t, role: 'left-out', reason: 'Not needed.' })));
-      expect(failures.map((f) => [f.type, f.place])).toEqual([['no-verdict-thread', 'threads[#t1]']]);
-      expect(failures[0].message).toMatch(/^The thread "The case against Rowan" carries the room's verdict and is left out/);
+    // Piece 3 (spec 9.1; C16): the verdict's thread is in every angle.
+    it("fires on an angle that leaves out the verdict's thread, at that angle's place", () => {
+      const failures = check(withAngle('a2', (a) => ({ ...a, threads: ['t4', 't5'] })));
+      expect(failures.map((f) => [f.type, f.place])).toEqual([['angle-without-verdict', 'angles[#a2]']]);
+      expect(failures[0].message).toMatch(/^The angle "The Plan to Replace the Founder Outlives the Verdict" leaves out "The case against Rowan", the thread that carries the room's verdict/);
     });
 
-    it('is silent when the verdict is a thread in any role but left out', () => {
-      const moved = withThread('t1', (t) => ({ ...t, role: 'grounds-it' }));
-      expect(check(moved)).toEqual([]);
+    it("is silent when every angle tells the verdict's thread, wherever it falls", () => {
+      expect(check(withAngle('a2', (a) => ({ ...a, threads: ['t1', 't4', 't5'] })))).toEqual([]);
     });
   });
 
@@ -459,21 +475,8 @@ describe('the weave checks (checkWeave)', () => {
       expect(typesOf(check(withConnection({ ...C9, joins })))).toEqual(['connection-joins-unknown-thread']);
     });
 
-    it('is silent on a connection between two threads of the weave, a left-out one included', () => {
+    it('is silent on a connection between two threads of the weave, one no angle uses included', () => {
       expect(check(withConnection({ ...C9, joins: ['t6', 't1'] }))).toEqual([]);
-    });
-  });
-
-  describe('each left-out thread has its reason', () => {
-    it('fires on a left-out thread with no reason', () => {
-      const failures = check(withThread('t6', ({ reason: _r, ...t }) => t));
-      expect(failures.map((f) => [f.type, f.place])).toEqual([['left-out-without-reason', 'threads[#t6]']]);
-      expect(failures[0].message).toMatch(/^The thread "The coat check" is left out with no reason/);
-    });
-
-    it('fires on a blank reason, and is silent on a thread in the story with none', () => {
-      expect(typesOf(check(withThread('t6', (t) => ({ ...t, reason: '  ' }))))).toEqual(['left-out-without-reason']);
-      expect(check(withThread('t2', (t) => ({ ...t, reason: undefined })))).toEqual([]);
     });
   });
 
@@ -502,13 +505,22 @@ describe('the weave checks (checkWeave)', () => {
   // meeting's page as it first opens (lib/stop-pages.js wordsShown) and its overhead, and passes
   // their length; the check holds the writer's own words to their allowance.
   describe("the writer's own words on the meeting's page stay within their allowance", () => {
-    it('fires past the allowance, naming the counts, with no place', () => {
-      const failures = check(WEAVE, { length: { page: 301, writer: 263, allowance: 262 } });
+    // Piece 3 (R5): the count is the worst angle's, and the check names that angle by its headline.
+    it('fires past the allowance, naming the angle open and the counts, with no place', () => {
+      const failures = check(WEAVE, { length: { page: 301, writer: 263, allowance: 262, angle: 'a2' } });
+      const open = `With the angle "${WEAVE.angles.find((angle) => angle.id === 'a2').headline}" open, the`;
       expect(failures).toEqual([{
         type: 'over-length',
-        message: expect.stringContaining("The meeting's page runs to 301 words, 263 of them in the lines you write, past the 262 those lines may use (200, or more while the whole page stays within 300). Cut 1 words or more from your lines, starting with the longest: "),
-        line: "The writer's part of the meeting runs to 263 words, past the 262 it may use."
+        message: expect.stringContaining(`${open} meeting's page runs to 301 words, 263 of them in the lines you write, past the 262 those lines may use (350, or more while the whole page stays within 450). Cut 1 words or more from your lines on that page, starting with the longest: `),
+        line: `${open} writer's part of the meeting runs to 263 words, past the 262 it may use.`
       }]);
+      expect(failures[0].message).toContain("angle a2's pitch (");
+    });
+
+    it('names no angle when the count names none', () => {
+      const [failure] = check(WEAVE, { length: { page: 301, writer: 263, allowance: 262, angle: null } });
+      expect(failure.line).toBe("The writer's part of the meeting runs to 263 words, past the 262 it may use.");
+      expect(failure.message).toMatch(/^The meeting's page runs to 301 words/);
     });
 
     it('is silent at the allowance, however long the page, and with no length', () => {
@@ -527,33 +539,32 @@ describe("each failure says what is wrong to the director in plain words (its li
   /** A weave that fails every check the writer's text can fail, each once. */
   function brokenWeave() {
     const weave = clone(WEAVE);
-    weave.story = 'Rowan took $90,000 at 7:58, as row001 shows.';
+    weave.angles[0].story = 'Rowan took $90,000 at 7:58, as row001 shows.';
+    weave.angles[1].threads.push('t77');
     weave.fromYourNotes = 'words the director never wrote';
     weave.threads[0].verdict = false;
     weave.threads[1].evidence = [];
     weave.threads[2].evidence = [piece(['zzz999', 'evidence-log'], 'Rowan to Sloane: "Not one word to Ellis."'), { sources: [], shows: '', stance: 'proves' }];
     weave.threads[3].line = 'Vic\'s plan, in vic002, says "replace the founder" by 9 PM.';
-    delete weave.threads[5].reason;
     weave.threads.push({ ...clone(WEAVE.threads[4]), name: 'A second winter' });
     weave.connections[0].joins = ['t1', 't99'];
     weave.connections.push({ ...clone(WEAVE.connections[1]), line: 'The scoreboard again.' });
-    weave.strongerMainThread = { thread: 't42', reason: 'It reaches $1.2 million.' };
     weave.questions.push({ ...clone(WEAVE.questions[0]), question: 'Another question under the same id?' });
     return weave;
   }
   const failures = () => check(brokenWeave(), { length: { page: MEETING_WORD_BOUND + 40, writer: 300, allowance: 262 } });
   /** What no line the director reads holds: an id, a piece's number, a source's code, a rule item, a tag, a field's name. */
   const UNSAID = [
-    /\b[tcq]\d+\b/, /\b(row001|vic002|zzz999)\b/i, /\bpiece \d/i, /evidence-log/, /"(ledger|notes)"/,
+    /\b[tcqa]\d+\b/, /\b(row001|vic002|zzz999)\b/i, /\bpiece \d/i, /evidence-log/, /"(ledger|notes)"/,
     /\b[CT]\d+\b/, /[<>]/, /"verdict"|strongerMainThread|fromYourNotes|\bsupports"|"cuts-against"/, /OUTPUT FORMAT/
   ];
 
   it('gives every failure a line beside its message, the message unchanged for the rework', () => {
     const found = failures();
     expect(found.map((f) => f.type).sort()).toEqual([
-      'connection-joins-unknown-thread', 'duplicate-id', 'duplicate-id', 'duplicate-id', 'evidence-not-in-record',
-      'from-your-notes-not-verbatim', 'left-out-without-reason', 'no-verdict-thread', 'over-length',
-      'story-terms', 'story-terms', 'story-terms', 'stronger-main-thread-unknown', 'thread-without-evidence'
+      'angle-names-unknown-thread', 'connection-joins-unknown-thread', 'duplicate-id', 'duplicate-id', 'duplicate-id',
+      'evidence-not-in-record', 'from-your-notes-not-verbatim', 'no-verdict-thread', 'over-length',
+      'story-terms', 'story-terms', 'thread-without-evidence'
     ]);
     found.forEach((f) => {
       expect(typeof f.line).toBe('string');
@@ -571,31 +582,29 @@ describe("each failure says what is wrong to the director in plain words (its li
 
   it('names each line as the meeting does, and says what is wrong there', () => {
     const lineOf = (type, place) => failures().find((f) => f.type === type && f.place === place).line;
-    expect(lineOf('story-terms', 'story')).toBe(
-      "The story gives the figure $90,000, the time 7:58 and a document's id. The meeting tells the story in plain words; the record's quotations, times, figures and documents go in the evidence underneath."
+    expect(lineOf('story-terms', 'angles[#a1]')).toBe(
+      "The angle \"Ellis Marr Pointed the Room at Rowan Vale. It Named Him Instead.\": its story gives the figure $90,000, the time 7:58 and a document's id. The meeting tells the story in plain words; the record's quotations, times, figures and documents go in the evidence underneath."
     );
+    expect(lineOf('angle-names-unknown-thread', 'angles[#a2]')).toBe('The angle "The Plan to Replace the Founder Outlives the Verdict" names a thread the weave does not hold.');
     expect(lineOf('story-terms', 'threads[#t4]')).toMatch(/^The thread "The replacement plan": its line gives the quotation "replace the founder", the time 9 PM and a document's id\. /);
     expect(lineOf('evidence-not-in-record', 'threads[#t3]')).toBe(
       'The evidence behind the thread "The bathroom" cites a document the record does not hold; has a piece that quotes words its source does not hold; and has a piece that does not say where it comes from, what it shows or whether it supports the line.'
     );
-    expect(lineOf('thread-without-evidence', 'threads[#t2]')).toBe('The thread "The last two minutes" is in the story with nothing behind it: no piece of the record supports it.');
-    expect(lineOf('left-out-without-reason', 'threads[#t6]')).toBe('The thread "The coat check" is left out with no reason given.');
+    expect(lineOf('thread-without-evidence', 'threads[#t2]')).toBe('The thread "The last two minutes" has nothing behind it: no piece of the record supports it.');
     expect(lineOf('from-your-notes-not-verbatim', 'fromYourNotes')).toBe('"From your notes" quotes words your notes and corrections do not hold word for word.');
     expect(lineOf('no-verdict-thread', undefined)).toBe("No thread tells the room's verdict.");
     expect(lineOf('connection-joins-unknown-thread', 'connections[#c1]')).toBe('The connection "Sloane, Rowan\'s ally, is the voice that turned the room." joins a thread the weave does not hold.');
     expect(lineOf('duplicate-id', 'threads[#t5]')).toBe('The writer gave the threads "Last winter" and "A second winter" one id, so the meeting cannot change them.');
     expect(lineOf('duplicate-id', 'connections[#c2]')).toBe('The writer gave the connections "The scoreboard brings the money into the vote." and "The scoreboard again." one id, so the meeting cannot change them.');
     expect(lineOf('duplicate-id', 'questions[#q1]')).toMatch(/^The writer gave the questions ".*" and "Another question under the same id\?" one id\.$/);
-    expect(lineOf('stronger-main-thread-unknown', 'strongerMainThread')).toBe('The stronger main thread names a thread the weave does not hold.');
     expect(lineOf('over-length', undefined)).toBe("The writer's part of the meeting runs to 300 words, past the 262 it may use.");
   });
 
-  it('a verdict thread left out, a weave with no threads, and a stronger main thread whose reason holds a figure each have their line', () => {
-    const leftOut = check(withThread('t1', (t) => ({ ...t, role: 'left-out', reason: 'Cut.' })));
-    expect(leftOut.find((f) => f.type === 'no-verdict-thread').line).toBe('The thread "The case against Rowan" tells the room\'s verdict and is left out.');
+  it("an angle without the verdict's thread, an angle count outside two or three, and a weave with no threads each have their line", () => {
+    const without = check(withAngle('a2', (a) => ({ ...a, threads: ['t4', 't5'] })));
+    expect(without.find((f) => f.type === 'angle-without-verdict').line).toBe('The angle "The Plan to Replace the Founder Outlives the Verdict" leaves out "The case against Rowan", the thread that tells the room\'s verdict.');
+    expect(check({ ...clone(WEAVE), angles: [clone(WEAVE).angles[0]] }).find((f) => f.type === 'angle-count').line).toBe('The writer pitched 1 angle, and the meeting reads two or three.');
     expect(check({ story: 'x' })).toEqual([{ type: 'no-weave', message: expect.any(String), line: 'The writer returned no threads.' }]);
-    const stronger = check({ ...clone(WEAVE), strongerMainThread: { thread: 't4', reason: 'It reaches $1.2 million.' } });
-    expect(stronger).toEqual([expect.objectContaining({ type: 'story-terms', place: 'strongerMainThread', line: expect.stringMatching(/^The stronger main thread: its reason gives the figure \$1\.2 million\. /) })]);
   });
 });
 
@@ -680,12 +689,12 @@ describe('4.5: struck connections, the round mark and the views of the weave', (
   });
 });
 
-describe('4.5: every id is unique, and the stronger main thread names a thread (ruling 3)', () => {
+describe('4.5: every id is unique (ruling 3)', () => {
   it('fires on two threads that share an id, naming both by their names and the fix', () => {
     const doubled = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(WEAVE).threads[1], name: 'The second count' }] };
     const failures = check(doubled);
     expect(failures.map((f) => [f.type, f.place])).toEqual([['duplicate-id', 'threads[#t2]']]);
-    expect(failures[0].message).toBe('Two threads share one id: "The last two minutes" and "The second count". Give each thread an id of its own, and make each connection and the stronger main thread name the thread they mean.');
+    expect(failures[0].message).toBe('Two threads share one id: "The last two minutes" and "The second count". Give each thread an id of its own, and make each angle, connection and question name the thread it means.');
   });
 
   it('fires on two connections, and on two questions, that share an id', () => {
@@ -695,11 +704,6 @@ describe('4.5: every id is unique, and the stronger main thread names a thread (
     expect(check(questions).map((f) => [f.place, f.message])).toEqual([['questions[#q1]', expect.stringMatching(/^Two questions share one id: ".*" and "Again\?"\. Give each question an id of its own\.$/)]]);
   });
 
-  it('fires on a stronger main thread that names no thread of the weave', () => {
-    const failures = check({ ...clone(WEAVE), strongerMainThread: { thread: 't9', reason: 'A stronger story.' } });
-    expect(failures.map((f) => [f.type, f.place])).toEqual([['stronger-main-thread-unknown', 'strongerMainThread']]);
-  });
-
   it('is silent on the weave as written', () => {
     expect(check(WEAVE)).toEqual([]);
   });
@@ -707,34 +711,19 @@ describe('4.5: every id is unique, and the stronger main thread names a thread (
 
 describe("4.5: the checks read only the writer's text (R11, ruling 2)", () => {
   const concerns = (weave, directorsShare) => weaveFindings(weave, { evidence: EVIDENCE, directorWords: DIRECTOR_WORDS, directorsShare }).concerns;
-  const ADDED = { id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.', role: 'grounds-it' };
+  const ADDED = { id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.' };
 
-  // Review focus 1: a thread the director adds needs only its id, name, line and role; the map
-  // writer finds its evidence.
-  it('a thread the director added, with no evidence and no reason, is no failure', () => {
-    const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, clone(ADDED), { ...clone(ADDED), id: 't8', role: 'left-out' }] };
-    expect(typesOf(check(added))).toEqual(['thread-without-evidence', 'left-out-without-reason']);
+  // Review focus 1: a thread the director adds needs only its id, name and line; the map writer
+  // finds its evidence.
+  it('a thread the director added, with no evidence, is no failure', () => {
+    const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, clone(ADDED), { ...clone(ADDED), id: 't8' }] };
+    expect(typesOf(check(added))).toEqual(['thread-without-evidence', 'thread-without-evidence']);
     expect(check(added, { directorsShare: share({ addedThreads: { t7: 'E1', t8: 'E2' } }) })).toEqual([]);
-  });
-
-  it('a thread the director re-roled may have no reason, and no evidence that supports it', () => {
-    const reroled = withThread('t6', ({ reason: _r, ...t }) => ({ ...t, role: 'grounds-it', evidence: [] }));
-    expect(typesOf(check(reroled))).toEqual(['thread-without-evidence']);
-    expect(check(reroled, { directorsShare: share({ reroledThreads: { t6: 'E2' } }) })).toEqual([]);
-    const left = withThread('t2', ({ reason: _r, ...t }) => ({ ...t, role: 'left-out' }));
-    expect(check(left, { directorsShare: share({ reroledThreads: { t2: 'E2' } }) })).toEqual([]);
   });
 
   it("the writer's pieces under a director's thread are still checked: the evidence is never the director's", () => {
     const added = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, { ...clone(ADDED), evidence: [piece(['zzz999'], 'x')] }] };
     expect(check(added, { directorsShare: share({ addedThreads: { t7: 'E1' } }) }).map((f) => [f.type, f.place])).toEqual([['evidence-not-in-record', 'threads[#t7]']]);
-  });
-
-  it("a verdict thread the director left out is a concern on that edit, not the writer's failure", () => {
-    const leftOut = withThread('t1', (t) => ({ ...t, role: 'left-out', reason: 'The director cut it.' }));
-    const directorsShare = share({ reroledThreads: { t1: 'E2' } });
-    expect(check(leftOut, { directorsShare })).toEqual([]);
-    expect(concerns(leftOut, directorsShare)).toEqual([{ type: 'no-verdict-thread', editIds: ['E2'], finding: 'The thread "The case against Rowan" carries the room\'s verdict and is left out.' }]);
   });
 
   it('a verdict flag the director took off is a concern on that edit', () => {
@@ -761,16 +750,15 @@ describe("4.5: the checks read only the writer's text (R11, ruling 2)", () => {
 // re-roled are left out, so a page the director lengthened never fails the check.
 describe("the writer's share of the page (writersShareOf)", () => {
   it("reads the director's rewritten lines empty, leaves out the threads they added or re-roled, and drops the answers", () => {
-    const weave = { ...clone(WEAVE), story: 'The director wrote this story at length.' };
-    weave.threads.push({ id: 't7', name: 'The guest list', line: 'A very long line the director typed.', role: 'grounds-it' });
+    const weave = clone(WEAVE);
+    weave.threads.push({ id: 't7', name: 'The guest list', line: 'A very long line the director typed.' });
     weave.threads[2] = { ...weave.threads[2], line: 'The director typed this line.' };
     weave.questions[0] = { ...weave.questions[0], answer: 'The director answered at length.' };
-    const writers = writersShareOf(weave, share({ fields: { story: 'E1' }, threadFields: { 't3.line': 'E2' }, addedThreads: { t7: 'E3' }, reroledThreads: { t5: 'E4' } }));
-    expect(writers.story).toBe('');
+    const writers = writersShareOf(weave, share({ threadFields: { 't3.line': 'E2' }, addedThreads: { t7: 'E3' }, reroledThreads: { t5: 'E4' } }));
     expect(writers.threads.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4', 't6']);
     expect(writers.threads[2].line).toBe('');
     expect(writers.questions[0]).not.toHaveProperty('answer');
-    expect(weave.story).toBe('The director wrote this story at length.');
+    expect(weave.threads[2].line).toBe('The director typed this line.');
   });
 
   // Fix round 1, finding 2: a connection's line the director rewrote reads empty, and a
@@ -829,8 +817,8 @@ describe('4.5 fix round 1: one reading of an id, one rule for a repeated id (fin
 // director knows them, never by their id or the edits' ids.
 describe("4.5b: a writer's repeat is the writer's failure", () => {
   const findings = (weave, directorsShare) => weaveFindings(weave, { evidence: EVIDENCE, directorWords: DIRECTOR_WORDS, directorsShare });
-  const ADDED = { id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.', role: 'grounds-it' };
-  const WRITERS_T7 = { id: 't7', name: 'The writer\'s seventh', line: 'A thread the writer put under the same id.', role: 'grounds-it', evidence: [piece(['ledger'], 'A sale.')] };
+  const ADDED = { id: 't7', name: 'The guest list', line: 'The guest list was rewritten that morning.' };
+  const WRITERS_T7 = { id: 't7', name: 'The writer\'s seventh', line: 'A thread the writer put under the same id.', evidence: [piece(['ledger'], 'A sale.')] };
 
   it("a repeat under the id of a thread the director added is a failure, not a concern, and says which thread keeps the id", () => {
     const weave = { ...clone(WEAVE), threads: [...clone(WEAVE).threads, clone(ADDED), clone(WRITERS_T7)] };
@@ -838,7 +826,7 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
     expect(failures).toEqual([{
       type: 'duplicate-id',
       place: 'threads[#t7]',
-      message: 'Two threads share one id: "The guest list" and "The writer\'s seventh", and one of them is the thread the director added. Keep the id on the director\'s thread, since their edits find it by its id, and give the other thread an id of its own; make each connection and the stronger main thread name the thread they mean.',
+      message: 'Two threads share one id: "The guest list" and "The writer\'s seventh", and one of them is the thread the director added. Keep the id on the director\'s thread, since their edits find it by its id, and give the other thread an id of its own; make each angle, connection and question name the thread it means.',
       line: 'The writer gave the threads "The guest list" and "The writer\'s seventh" one id, so the meeting cannot change them, and one of them is yours.'
     }]);
     expect(concerns).toEqual([]);
@@ -862,7 +850,7 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
       expect(failures).toEqual([{
         type: 'duplicate-id',
         place: 'threads[#t7]',
-        message: expect.stringContaining('and "The guest list" is the thread the director added. Keep the id on "The guest list", since their edits find it by its id, and give "The writer\'s seventh" an id of its own; make each connection and the stronger main thread name the thread they mean.'),
+        message: expect.stringContaining('and "The guest list" is the thread the director added. Keep the id on "The guest list", since their edits find it by its id, and give "The writer\'s seventh" an id of its own; make each angle, connection and question name the thread it means.'),
         line: 'The writer gave the thread "The writer\'s seventh" the id of your thread "The guest list", so the meeting cannot change them.'
       }]);
     });
@@ -888,7 +876,7 @@ describe("4.5b: a writer's repeat is the writer's failure", () => {
     expect(findings(weave, share({ addedThreads: { t7: 'E1' } })).failures).toEqual([{
       type: 'duplicate-id',
       place: 'threads[#t2]',
-      message: 'Two threads share one id: "The last two minutes" and "The last two minutes". Give each thread an id of its own, and make each connection and the stronger main thread name the thread they mean.',
+      message: 'Two threads share one id: "The last two minutes" and "The last two minutes". Give each thread an id of its own, and make each angle, connection and question name the thread it means.',
       line: 'The writer gave the threads "The last two minutes" and "The last two minutes" one id, so the meeting cannot change them.'
     }]);
   });
@@ -907,22 +895,24 @@ describe("4.5b: one list of the weave's printed fields", () => {
     const word = (where) => `w-${where}`;
     const weave = Object.fromEntries(WEAVE_PRINTED_FIELDS.weave.map((field) => [field, word(field)]));
     const element = (part, i) => Object.fromEntries(WEAVE_PRINTED_FIELDS[part].map((field) => [field, word(`${part}${i}-${field}`)]));
-    weave.threads = [0, 1].map((i) => ({ id: `t${i}`, role: 'grounds-it', ...element('threads', i), evidence: [piece(['ledger'], `unprinted evidence ${i}`)] }));
+    weave.angles = [0, 1].map((i) => ({ id: `a${i}`, ...element('angles', i), threads: ['t0', 't1'] }));
+    weave.picked = 'a1';
+    weave.threads = [0, 1].map((i) => ({ id: `t${i}`, ...element('threads', i), evidence: [piece(['ledger'], `unprinted evidence ${i}`)] }));
     weave.connections = [
       { id: 'c0', joins: ['t0', 't1'], kind: 'person', ...element('connections', 0), evidence: [piece(['notes'], 'unprinted connection evidence')] },
       { id: 'c1', joins: ['t0', 't1'], kind: 'line', line: 'struck words', struck: true, evidence: [] }
     ];
-    weave.strongerMainThread = { thread: 't1', ...element('strongerMainThread', 0) };
     weave.questions = [{ id: 'q0', kind: 'player', ...element('questions', 0) }];
     return weave;
   }
 
   it('names each part of the weave and its fields, and flags "from your notes" as the director\'s words', () => {
+    // Piece 3 (brief 3B): each angle's pitch; the pick is no printed field (R1).
     expect(WEAVE_PRINTED_FIELDS).toEqual({
-      weave: ['story', 'question', 'headline', 'fromYourNotes', 'convergence'],
-      threads: ['name', 'line', 'reason'],
+      weave: ['fromYourNotes'],
+      angles: [...ANGLE_FIELDS],
+      threads: ['name', 'line'],
       connections: ['line'],
-      strongerMainThread: ['reason'],
       questions: ['about', 'question', 'changes'],
       directorsWords: ['fromYourNotes']
     });
@@ -934,12 +924,13 @@ describe("4.5b: one list of the weave's printed fields", () => {
     const texts = printedWeaveFields(weave).map((entry) => entry.text);
     expect(printedLeaves(weave)).toEqual(texts);
     expect(texts).toEqual([
-      'w-story', 'w-question', 'w-headline', 'w-fromYourNotes', 'w-convergence',
-      'w-threads0-name', 'w-threads0-line', 'w-threads0-reason', 'w-threads1-name', 'w-threads1-line', 'w-threads1-reason',
-      'w-connections0-line', 'w-strongerMainThread0-reason',
+      'w-fromYourNotes',
+      ...[0, 1].flatMap((i) => ANGLE_FIELDS.map((field) => `w-angles${i}-${field}`)),
+      'w-threads0-name', 'w-threads0-line', 'w-threads1-name', 'w-threads1-line',
+      'w-connections0-line',
       'w-questions0-about', 'w-questions0-question', 'w-questions0-changes'
     ]);
-    expect(texts.join(' ')).not.toMatch(/unprinted/);
+    expect(texts.join(' ')).not.toMatch(/unprinted|a1\b/);
   });
 });
 
@@ -963,38 +954,32 @@ describe("4.5b: an element's place under its id (occurrenceKeys)", () => {
 // the map check demanded it land in a beat and spent the map's one rework. It goes out of the
 // story with its thread, as a struck connection does, and comes back when the thread does;
 // the weave's own checks still read every connection the director did not strike.
-describe('4.14a: a connection that joins a left-out thread goes out of the story with it', () => {
-  const { storyConnections, liveConnections, leftOutThreadsJoined } = require('../weave');
-  /** WEAVE with one thread's role set. c1 joins t1 and t3; c3 joins t4 and t5. */
-  const withRole = (weave, id, role) => ({ ...weave, threads: weave.threads.map((t) => (t.id === id ? { ...t, role } : t)) });
+describe('4.14a: a connection that joins a thread the settled angle leaves out goes out of the story with it', () => {
+  const { storyConnections, liveConnections } = require('../weave');
+  /** WEAVE with angle 1 telling these threads. c1 joins t1 and t3; c3 joins t4 and t5. */
+  const telling = (weave, ids) => ({ ...weave, angles: weave.angles.map((a) => (a.id === 'a1' ? { ...a, threads: ids } : a)) });
 
-  it('leaves out a connection that joins a left-out thread, as it leaves out a struck one, and names the thread it goes with', () => {
-    const weave = withRole(clone(WEAVE), 't3', 'left-out');
+  // Piece 3 (brief 3B): the settled angle decides which threads are in the story.
+  it('leaves out a connection that joins a thread the angle leaves out, as it leaves out a struck one', () => {
+    const weave = telling(clone(WEAVE), ['t1', 't2', 't4', 't5']);
     weave.connections[1].struck = true;
     expect(storyConnections(weave).map((c) => c.id)).toEqual(['c3', 'c4']);
     expect(liveConnections(weave).map((c) => c.id)).toEqual(['c1', 'c3', 'c4']);
-    expect(leftOutThreadsJoined(weave.connections[0], weave)).toEqual(['t3']);
-    expect(leftOutThreadsJoined(weave.connections[2], weave)).toEqual([]);
-    const both = withRole(withRole(clone(WEAVE), 't4', 'left-out'), 't5', 'left-out');
-    expect(leftOutThreadsJoined(both.connections[2], both)).toEqual(['t4', 't5']);
     expect(storyConnections(null)).toEqual([]);
   });
 
-  it('a connection to the thread comes back when the thread does', () => {
-    const out = withRole(clone(WEAVE), 't3', 'left-out');
+  it('a connection to the thread comes back when the angle tells the thread', () => {
+    const out = telling(clone(WEAVE), ['t1', 't2', 't4', 't5']);
     expect(storyConnections(out).map((c) => c.id)).not.toContain('c1');
-    expect(storyConnections(withRole(out, 't3', 'mirrors-it')).map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
+    expect(storyConnections(telling(out, ['t1', 't2', 't3', 't4', 't5'])).map((c) => c.id)).toEqual(['c1', 'c2', 'c3', 'c4']);
   });
 
-  it("a thread id that also names a thread in the story keeps the connection in it: the writer's repeat is the checks' to name", () => {
-    const weave = withRole(clone(WEAVE), 't3', 'left-out');
-    weave.threads.push({ id: 't3', name: 'A second bathroom', line: 'A second thread under the same id.', role: 'grounds-it', evidence: [piece(['ledger'], 'A sale.')] });
-    expect(storyConnections(weave).map((c) => c.id)).toContain('c1');
+  it('the picked angle decides: angle 2 keeps the connections between its own threads', () => {
+    expect(storyConnections({ ...clone(WEAVE), picked: 'a2' }).map((c) => c.id)).toEqual(['c3', 'c4']);
   });
 
   it("the weave's own checks still read it: a connection that joins a thread the weave does not hold is the writer's failure", () => {
-    const weave = withRole(clone(WEAVE), 't3', 'left-out');
-    weave.threads[2].reason = 'The director left it out.';
+    const weave = telling(clone(WEAVE), ['t1', 't2', 't4', 't5']);
     weave.connections.push({ id: 'c5', joins: ['t3', 't9'], line: 'Someone the weave never names.', kind: 'person', evidence: [piece(['notes'], 'The bar.')] });
     expect(typesOf(check(weave))).toEqual(['connection-joins-unknown-thread']);
   });

@@ -45,15 +45,22 @@ const Q_LEDGER = { kind: 'ledger', about: 'The 10:02 AM sale of $250,000 into Em
 const W_ZIA = { id: 'q1', kind: 'player', about: 'Zia', question: Q_ZIA.question, changes: 'Whether Zia prints in the story.' };
 const W_FIGURE = { id: 'q2', kind: 'figure', about: Q_LEDGER.about, question: Q_LEDGER.question, changes: "The money section's total." };
 const WEAVE = {
-  story: 'The room accused Vic, and the ledger tells another story.',
-  question: 'Why Vic?',
-  headline: 'The Room Named Vic',
+  // Piece 3 (brief 3B): two angles over the one thread.
+  angles: [
+    {
+      id: 'a1', headline: 'The Room Named Vic', gist: 'The room accused Vic.', story: 'The room accused Vic, and the ledger tells another story.',
+      question: 'Why Vic?', lands: 'Every player voted.', ends: 'The vote and the ledger meet at the end.', threads: ['t1']
+    },
+    {
+      id: 'a2', headline: 'The Vote Against Vic', gist: 'The vote went against Vic.', story: 'The vote went against Vic, and the room never looked back.',
+      question: 'Who turned the room?', lands: 'Every player cast a vote.', ends: 'The vote stands.', threads: ['t1']
+    }
+  ],
   threads: [{
-    id: 't1', name: 'The accusation', line: 'The room accused Vic of the murder.', role: 'main-thread', verdict: true,
+    id: 't1', name: 'The accusation', line: 'The room accused Vic of the murder.', verdict: true,
     evidence: [{ sources: ['notes'], shows: 'The room voted for Vic.', stance: 'supports' }]
   }],
   connections: [],
-  convergence: 'The vote and the ledger meet at the end.',
   questions: [W_ZIA, W_FIGURE]
 };
 

@@ -1,30 +1,104 @@
 {
-  "story": "The room named Blake for the money trail, and the audit records show who hid it.",
-  "question": "Who covered the trail the room followed?",
-  "headline": "The Room Followed the Money to Blake",
-  "threads": [
+  "angles": [
     {
-      "id": "t1", "name": "The money trail", "line": "The room named Blake after tracing the offshore transfers.", "role": "main-thread", "verdict": true,
-      "evidence": [
-        { "sources": ["notes"], "shows": "The room traced the transfers and named Blake.", "stance": "supports" },
-        { "sources": ["ledger"], "shows": "The sales the room traced ran into one account.", "stance": "supports" }
+      "id": "a1",
+      "headline": "The Room Followed the Money to Blake",
+      "gist": "The room traced the money and named Blake.",
+      "story": "The room named Blake for the money trail, and the audit records show who hid it.",
+      "question": "Who covered the trail the room followed?",
+      "lands": "Every player chased the transfers.",
+      "ends": "The audit and the transfers meet at the account the room traced.",
+      "threads": [
+        "t1",
+        "t2",
+        "t3"
       ]
     },
     {
-      "id": "t2", "name": "The altered audit", "line": "Charlie altered the audit reports that would have shown the transfers.", "role": "complicates-it",
-      "evidence": [{ "sources": ["notes"], "shows": "The room read Charlie's audit reports against Blake.", "stance": "supports" }]
+      "id": "a2",
+      "headline": "Charlie Altered the Audit the Room Read",
+      "gist": "The reports the room trusted were changed.",
+      "story": "Charlie altered the audit reports, and the room read them against Blake.",
+      "question": "What did the room miss in the reports?",
+      "lands": "The players built their case on the audit.",
+      "ends": "The altered reports shaped the verdict.",
+      "threads": [
+        "t2",
+        "t1"
+      ]
+    }
+  ],
+  "threads": [
+    {
+      "id": "t1",
+      "name": "The room traced the money to Blake",
+      "line": "The room named Blake after tracing the offshore transfers.",
+      "verdict": true,
+      "evidence": [
+        {
+          "sources": [
+            "notes"
+          ],
+          "shows": "The room traced the transfers and named Blake.",
+          "stance": "supports"
+        },
+        {
+          "sources": [
+            "ledger"
+          ],
+          "shows": "The sales the room traced ran into one account.",
+          "stance": "supports"
+        }
+      ]
     },
     {
-      "id": "t3", "name": "The early warning", "line": "The transfers were discussed before the party began.", "role": "grounds-it",
-      "evidence": [{ "sources": ["notes"], "shows": "The room found the transfers had been planned before the party.", "stance": "supports" }]
+      "id": "t2",
+      "name": "Charlie altered the audit",
+      "line": "Charlie altered the audit reports that would have shown the transfers.",
+      "evidence": [
+        {
+          "sources": [
+            "notes"
+          ],
+          "shows": "The room read Charlie's audit reports against Blake.",
+          "stance": "supports"
+        }
+      ]
+    },
+    {
+      "id": "t3",
+      "name": "The transfers were planned early",
+      "line": "The transfers were discussed before the party began.",
+      "evidence": [
+        {
+          "sources": [
+            "notes"
+          ],
+          "shows": "The room found the transfers had been planned before the party.",
+          "stance": "supports"
+        }
+      ]
     }
   ],
   "connections": [
     {
-      "id": "c1", "joins": ["t1", "t2"], "line": "Charlie audited the accounts the room traced to Blake.", "kind": "person",
-      "evidence": [{ "sources": ["notes"], "shows": "Charlie's reports were the ones the room read against Blake.", "stance": "supports" }]
+      "id": "c1",
+      "joins": [
+        "t1",
+        "t2"
+      ],
+      "line": "Charlie audited the accounts the room traced to Blake.",
+      "kind": "person",
+      "evidence": [
+        {
+          "sources": [
+            "notes"
+          ],
+          "shows": "Charlie's reports were the ones the room read against Blake.",
+          "stance": "supports"
+        }
+      ]
     }
   ],
-  "convergence": "The audit and the transfers meet at the account the room traced.",
   "questions": []
 }

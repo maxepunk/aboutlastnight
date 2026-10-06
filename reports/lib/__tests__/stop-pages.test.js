@@ -139,42 +139,67 @@ describe('4.12a: the pages the decision stops show (lib/stop-pages.js)', () => {
 });
 
 describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
-  /** A thread's line as the page prints it: its role, its name and its line (phase 4b, brief 1B). */
-  const threadLine = (t) => `${t.roleLabel} · ${t.name}: ${t.line}`;
+  /** A thread's line as the page prints it: its name and its line (phase 4b, piece 3: no role). */
+  const threadLine = (t) => `${t.name}: ${t.line}`;
+  /** A question as the page prints it: what it is about and the question. */
+  const questionLine = (q) => `${q.about}: ${q.question}`;
 
-  it('shows the weave in the spec\'s order: the verdict, the story, the question, the headline, from your notes, the threads, the left-out threads by name, the connections and the convergence, the questions', () => {
+  // Piece 3 (brief 3B; spec 2026-10-06 section 5): the memo of angles.
+  it('shows the memo in the spec\'s order: the verdict, from your notes, the angles, the open pitch with its questions, the threads in the story with theirs, the left-out names, where they meet', () => {
     const data = meetingData();
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const page = stopPage('arc-selection', data);
     const t = (i) => view.threads[i];
+    const byThePitch = view.pitch.questions[0];
+    const besideTheSale = t(1).questions[0];
     expect(inOrder(textsOf(page), [
       view.verdict.who, view.verdict.charge,
-      view.story.text, view.question.text, view.headline.text,
       view.fromYourNotes.text,
-      threadLine(t(0)), threadLine(t(1)), threadLine(t(2)), threadLine(t(3)),
+      view.angleOpenLine, view.angles[1].headline, view.angles[1].gist, view.angles[2].headline, view.angles[2].gist,
+      view.pitch.headline.text, view.pitch.story.text, view.pitch.question.text, view.pitch.lands.text, view.pitch.ends.text,
+      questionLine(byThePitch), byThePitch.changes,
+      threadLine(t(0)), View.VERDICT_LOCK_LINE,
+      threadLine(t(1)), questionLine(besideTheSale), besideTheSale.changes,
+      threadLine(t(2)), threadLine(t(3)),
       view.leftOut.names,
       view.connections[0].line,
-      view.connections[1].line,
-      view.convergence.text,
-      `${view.questions[0].about}: ${view.questions[0].question}`, view.questions[0].changes
+      view.connections[1].line
     ])).toBe('in order');
     expect(view.leftOut.names).toBe('The letter');
+    // The open angle's card says it is open below, by its number; the others print their headline and card line.
+    const lines = page.lines;
+    expect(lines.find((line) => line.text === view.angleOpenLine)).toMatchObject({ label: '1', folded: false });
+    expect(lines.find((line) => line.text === view.angles[1].headline)).toMatchObject({ label: '2' });
+    expect(textsOf(page)).not.toContain(view.angles[0].gist);
   });
 
-  // Phase 4b (brief 1B; spec 9): the evidence under each line, and the left-out threads'
-  // reasons, are folded, so the stops log does not count them.
-  it('folds the evidence under each thread and connection, and the left-out threads\' reasons, by the view\'s titles', () => {
+  it('opens the angle the weave picks, and prints only the connections between its threads', () => {
+    const data = meetingData();
+    data.weave = { ...clone(data.weave), picked: 'a2' };
+    const view = View.meetingView(data, View.meetingDraftOf(data), '');
+    const texts = textsOf(stopPage('arc-selection', data));
+    expect(view.pitch.headline.text).toBe(data.weave.angles[1].headline);
+    expect(view.threads.map((t) => t.id)).toEqual(['t3', 't1']);
+    expect(view.connections.map((c) => c.id)).toEqual(['c1']);
+    expect(texts).toContain(data.weave.angles[0].headline);
+    expect(texts).not.toContain(data.weave.connections[1].line);
+    expect(view.leftOut.names).toBe('The sale · The heir · The letter');
+  });
+
+  // Phase 4b (brief 1B; spec 9): the evidence under each line, and each left-out thread's line,
+  // are folded, so the stops log does not count them.
+  it('folds the evidence under each thread and connection, and each left-out thread\'s line, by the view\'s titles', () => {
     const data = meetingData();
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const page = stopPage('arc-selection', data);
     const folded = textsOf(page, true);
     view.threads.concat(view.connections).forEach((line) => line.evidence.forEach((piece) => expect(folded).toContain(piece.text)));
     expect(folded).toContain('ALE003 - The sale (Alex Reeves): Marcus on the sale: "Worth it. Finally worth it."');
-    expect(folded).toContain(view.leftOut.threads[0].reason);
-    expect(textsOf(page)).not.toContain(view.leftOut.threads[0].reason);
+    expect(folded).toContain(view.leftOut.threads[0].line);
+    expect(textsOf(page)).not.toContain(view.leftOut.threads[0].line);
     const foldedTitles = page.lines.filter((line) => line.tone === 'title' && line.folded).map((line) => line.label);
     expect(foldedTitles).toEqual([
-      ...view.threads.map(() => view.evidenceTitle), view.leftOut.reasonsTitle, ...view.connections.map(() => view.evidenceTitle)
+      ...view.threads.map(() => view.evidenceTitle), ...view.leftOut.threads.map((thread) => thread.label), ...view.connections.map(() => view.evidenceTitle)
     ]);
     // The folds count for nothing: a page with more evidence under its lines shows as many words.
     const more = meetingData();
@@ -189,7 +214,7 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
   // names it (`directorsThreads`; fix round, fix 2; fix round 4).
   it('folds the line that a thread the director added, with no evidence yet, gets it from the map writer', () => {
     const data = meetingData();
-    const draft = View.addMeetingThread(View.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
+    const draft = View.addMeetingThread(View.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.');
     const view = View.meetingView(data, draft, '');
     const added = view.threads.find((t) => t.id === 't6');
     expect(added.noEvidence).toBe(View.MEETING_NO_EVIDENCE_LINE);
@@ -199,58 +224,45 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
   });
 
   // Spec 9: the tags leave the page. A thread carries its verdict as a label, and a connection
-  // prints the names of the threads it joins above its line, as ArcSelection.js does (its
-  // `label`; fix round 3); no line or label names an element by its id.
-  it('labels no line with an id: the verdict\'s thread by its label, a connection by the names of the threads it joins', () => {
+  // prints its line alone (spec 2026-10-06 section 5); no line or label names an element by its id.
+  it('labels no line with an id: the verdict\'s thread by its label, an angle by its number', () => {
     const data = meetingData();
     const page = stopPage('arc-selection', data);
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const lineOf = (text) => page.lines.find((line) => line.text === text);
     expect(lineOf(threadLine(view.threads[0])).label).toBe("The room's verdict");
-    const joins = page.lines.findIndex((line) => line.text === 'Joins "The overdose vote" and "The envelope"');
-    expect(page.lines[joins]).toMatchObject({ tone: 'text', label: '', folded: false });
-    expect(page.lines[joins + 1]).toMatchObject({ text: view.connections[0].line, label: '' });
-    expect(page.lines.filter((line) => /\b[tcq]\d+\b/.test(`${line.label} ${line.text}`)).map((line) => line.label || line.text)).toEqual([]);
-    // A thread renamed everywhere the weave names it, its connections' joins too (whose names the
-    // page prints), shows as many words.
+    expect(lineOf(view.connections[0].line)).toMatchObject({ tone: 'text', label: '', folded: false });
+    expect(page.lines.filter((line) => /\b[tcqa]\d+\b/.test(`${line.label} ${line.text}`)).map((line) => line.label || line.text)).toEqual([]);
+    // A thread renamed everywhere the weave names it shows as many words.
     const renamed = meetingData();
     renamed.weave = clone(renamed.weave);
     const old = renamed.weave.threads[0].id;
-    renamed.weave.threads[0].id = 'thread-with-a-much-longer-id';
-    renamed.weave.connections.forEach((connection) => {
-      connection.joins = connection.joins.map((id) => (id === old ? 'thread-with-a-much-longer-id' : id));
-    });
-    if (renamed.weave.strongerMainThread && renamed.weave.strongerMainThread.thread === old) renamed.weave.strongerMainThread.thread = 'thread-with-a-much-longer-id';
+    const longer = 'thread-with-a-much-longer-id';
+    renamed.weave.threads[0].id = longer;
+    renamed.weave.angles.forEach((angle) => { angle.threads = angle.threads.map((id) => (id === old ? longer : id)); });
+    renamed.weave.connections.forEach((connection) => { connection.joins = connection.joins.map((id) => (id === old ? longer : id)); });
     expect(wordsShown('arc-selection', renamed)).toBe(wordsShown('arc-selection', data));
-  });
-
-  // Fix round 3: the names of the threads a connection joins are words the director reads on the
-  // page, so the meeting's count holds them, as it holds every line the page does not fold.
-  it("counts the names of the threads each connection joins among the words the meeting shows", () => {
-    const data = meetingData();
-    const view = View.meetingView(data, View.meetingDraftOf(data), '');
-    const joined = view.connections.map((connection) => connection.label).filter(Boolean);
-    expect(joined.length).toBeGreaterThan(0);
-    const unjoined = meetingData();
-    unjoined.weave = clone(unjoined.weave);
-    unjoined.weave.connections.forEach((connection) => { connection.joins = []; });
-    expect(wordsShown('arc-selection', data) - wordsShown('arc-selection', unjoined))
-      .toBe(joined.reduce((sum, label) => sum + wordCount(label), 0));
   });
 
   it('puts a check still failing, a concern and a mark right after the line they sit beside', () => {
     const data = meetingData({
-      checkFailures: [{ type: 'story-terms', message: 'The thread "The sale": its line holds the clock time "9:58".', place: 'threads[#t2]' }],
-      concerns: [{ text: "Director's edit E1: T1: the story names a motive the record does not give.", places: [{ path: 'story' }] }],
+      checkFailures: [
+        { type: 'story-terms', message: 'The thread "The sale": its line holds the clock time "9:58".', line: 'The thread "The sale": its line holds a clock time.', place: 'threads[#t2]' },
+        { type: 'angle-incomplete', message: 'The angle "x" has no lands.', line: 'The angle "Sarah Inherits What the Room Never Weighed" is missing part of its pitch.', place: 'angles[#a3]' }
+      ],
+      concerns: [{ text: "Director's edit E1: T1: the quote names a motive the notes do not give.", places: [{ path: 'fromYourNotes' }] }],
       marks: { round: 'reweave', marks: [{ path: 'threads[#t2].line', before: 'The old line.', after: 'Marcus bragged about the BizAI sale the night he died.', where: 'thread "t2", line' }] }
     });
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const texts = textsOf(stopPage('arc-selection', data));
-    const story = texts.indexOf(view.story.text);
-    expect(texts[story + 1]).toBe(view.story.concerns[0]);
+    const notes = texts.indexOf(view.fromYourNotes.text);
+    expect(texts[notes + 1]).toBe(view.fromYourNotes.concerns[0]);
     const thread = texts.indexOf(threadLine(view.threads[1]));
     expect(texts.slice(thread + 1, thread + 3)).toEqual([view.threads[1].failures[0], view.threads[1].marks[0]]);
-    expect(view.threads[1].failures).toEqual(['Check still failing: The thread "The sale": its line holds the clock time "9:58".']);
+    expect(view.threads[1].failures).toEqual(['Check still failing: The thread "The sale": its line holds a clock time.']);
+    // An angle's failure sits beside its card while another angle is open.
+    const card = texts.indexOf(view.angles[2].gist);
+    expect(texts[card + 1]).toBe('Check still failing: The angle "Sarah Inherits What the Room Never Weighed" is missing part of its pitch.');
     // The round's banner sits above the page, where the meeting shows what changed since the director last looked.
     expect(texts.indexOf(view.marked)).toBeLessThan(texts.indexOf(view.verdict.who));
   });
@@ -695,20 +707,15 @@ describe('4.12d: the input review\'s page counts what the ruling counts', () => 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 4.14a: a connection that goes with a left-out thread says so on the page (the final review,
-// ruling 1): the line meetingView gives it sits right after the connection, as ArcSelection.js
-// shows it under the connection's words.
-// ═══════════════════════════════════════════════════════════════════════════
-describe('4.14a: the story meeting\'s page says which connections go out with a left-out thread', () => {
-  it('prints the line right after the connection it is about, and none once the thread is back in the story', () => {
+// Spec 2026-10-06 section 6: a connection shows only while both its threads are in the open
+// angle's story, so taking a thread out takes its connections with it.
+describe('piece 3: the meeting prints a connection only while both its threads are in the story', () => {
+  it('a thread flipped out takes its connection off the page, and flipped back in brings it back', () => {
     const data = meetingData();
-    data.weave = clone(data.weave);
-    data.weave.threads[2].role = 'left-out';
-    const view = View.meetingView(data, View.meetingDraftOf(data), '');
-    expect(view.connections[0].leftOut).toMatch(/^Out of the story with "The envelope"/);
-    const lines = stopPage('arc-selection', data).lines;
-    const at = lines.findIndex((line) => line.text === view.connections[0].line);
-    expect(lines[at + 1]).toMatchObject({ text: view.connections[0].leftOut, folded: false });
-    expect(textsOf(stopPage('arc-selection', meetingData()))).not.toContainEqual(expect.stringMatching(/^Out of the story/));
+    const out = View.flipMeetingThread(View.meetingDraftOf(data), 't3', false);
+    const page = (weave) => textsOf(stopPage('arc-selection', { ...data, weave }));
+    expect(page(out)).not.toContain(data.weave.connections[0].line);
+    expect(page(out)).toContain(data.weave.connections[1].line);
+    expect(page(View.flipMeetingThread(out, 't3', true))).toContain(data.weave.connections[0].line);
   });
 });

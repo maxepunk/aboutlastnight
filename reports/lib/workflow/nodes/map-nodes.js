@@ -3,10 +3,10 @@
  * writer or a rework returned, before the map's stop opens. No model judge reads the map.
  *
  * The checks (lib/map.js mapFindings) read the map against the session: the roster, the
- * photos kept for the article, the record's document ids, the threads and the connections the
- * settled weave keeps in the story (lib/weave.js storyConnections: none the director struck,
- * and none that joins a thread left out; brief 4.14a), and the director's changes and note at
- * the meeting. A failure the director caused on the map is a concern on their edit, never a
+ * photos kept for the article, the record's document ids, the threads and the connections of
+ * the angle the director settled (lib/weave.js settledAngleOf: its threads, and the connections
+ * between them that the director did not strike; phase 4b, piece 3, brief 3B), and the
+ * director's changes and note at the meeting. A failure the director caused on the map is a concern on their edit, never a
  * rework.
  *
  * Phase 4b (piece 1, brief 1D; spec 2026-10-05 sections 4.2 and 6.1): the checks also read the
@@ -37,7 +37,7 @@ const {
 } = require('../../map');
 const { meetingDirectorsThreads } = require('../../meeting');
 const { carriedEdits, directorEditConcern } = require('../../hand-edit-diff');
-const { storyConnections, weaveIdOf, isWeave, LEFT_OUT_ROLE } = require('../../weave');
+const { weaveIdOf, settledAngleOf } = require('../../weave');
 const { evidenceContextOf } = require('../../evidence');
 const { stopPage, wordsShown, PAGE_REGIONS } = require('../../stop-pages');
 const { wordCount } = require('../../word-count');
@@ -102,20 +102,22 @@ function mapPageWords(state, map, edits) {
 }
 
 /**
- * The threads in the story of the settled weave the session holds (state.weave), each `{id, name,
- * added, broughtIn}`, as lib/map.js mapFindings takes them: every thread whose role is not left
- * out, `added` on one the director added at the meeting and `broughtIn` on one they brought into
- * the story from left out (lib/meeting.js meetingDirectorsThreads; fix round 4), which the map may
- * name in its gap note instead of a beat when the record cannot carry it (spec 5.3).
+ * The threads in the story the director settled (state.weave), each `{id, name, added,
+ * broughtIn}`, as lib/map.js mapFindings takes them: the picked angle's threads, in its order
+ * (lib/weave.js settledAngleOf; phase 4b, piece 3, brief 3B), `added` on one the director added
+ * at the meeting and `broughtIn` on one they brought into the story (lib/meeting.js
+ * meetingDirectorsThreads; fix round 4), which the map may name in its gap note instead of a beat
+ * when the record cannot carry it (spec 5.3).
  *
  * @param {Object} state
  * @returns {Array<{id: string, name: string, added: boolean, broughtIn: boolean}>}
  */
 function settledWeaveThreadsOf(state) {
-  if (!isWeave(state.weave)) return [];
+  const settled = settledAngleOf(state.weave);
+  if (!settled) return [];
   const directors = new Map(meetingDirectorsThreads(state).map((thread) => [thread.id, thread]));
-  return state.weave.threads
-    .filter((thread) => thread && typeof thread === 'object' && thread.role !== LEFT_OUT_ROLE && weaveIdOf(thread))
+  return settled.threads
+    .filter((thread) => weaveIdOf(thread))
     .map((thread) => {
       const id = weaveIdOf(thread);
       const theirs = directors.get(id);
@@ -136,9 +138,10 @@ function mapCheckInputsOf(state, map) {
     keptPhotos: keptPhotoFilenames(state, topPhotoOf(map)),
     // Phase 4b (brief 1D; R3): every thread in the story lands in a beat.
     threads: settledWeaveThreadsOf(state),
-    // Brief 4.14a: a connection that joins a left-out thread is out of the story with it, so
-    // no map is asked to land it. Each with its line, by which the director's line names it.
-    connections: storyConnections(state.weave)
+    // Brief 4.14a; piece 3: only the connections between the settled angle's threads are in the
+    // story, so no map is asked to land another. Each with its line, by which the director's
+    // line names it.
+    connections: (settledAngleOf(state.weave) || { connections: [] }).connections
       .filter((connection) => weaveIdOf(connection))
       .map((connection) => ({ id: weaveIdOf(connection), line: typeof connection.line === 'string' ? connection.line.trim() : '' })),
     meetingEdits: meetingEditIdsOf(state),

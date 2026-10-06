@@ -79,21 +79,23 @@ function deskData() {
 }
 
 describe('4.12a: step mode prints the three stops from the console\'s view models (scripts/lib/stop-print.js)', () => {
-  // Phase 4b (brief 1B; spec 9): each thread as its role, its name and its line, the verdict's
-  // thread under its label, and its evidence folded; no line names a thread by its id.
-  it('prints the story meeting\'s page: the verdict, each line under the label the meeting gives it, each thread with its role, name and line, its evidence folded, the questions', () => {
+  // Phase 4b (brief 1B; spec 9; piece 3, spec 2026-10-06 section 5): the open angle's pitch under
+  // the labels the meeting gives it, each thread as its name and its line, the verdict's under its
+  // label, and its evidence folded; no line names an element by its id.
+  it("prints the story meeting's page: the verdict, the angles, the open pitch under the meeting's labels, each thread with its name and line, its evidence folded, the questions", () => {
     const data = meetingData();
     const view = View.meetingView(data, View.meetingDraftOf(data), '');
     const printed = stopPrint('arc-selection', data);
     const text = textOf(printed);
     expect(text).toContain(view.verdict.who);
-    expect(text).toContain(`${View.MEETING_LINE_LABELS.story}: ${view.story.text}`);
-    expect(text).toContain(`${View.MEETING_LINE_LABELS.headline}: ${view.headline.text}`);
-    expect(text).toContain(`The room's verdict: ${view.threads[0].roleLabel} · ${view.threads[0].name}: ${view.threads[0].line}`);
+    expect(text).toContain(`2: ${view.angles[1].headline}`);
+    expect(text).toContain(`${View.MEETING_LINE_LABELS.story}: ${view.pitch.story.text}`);
+    expect(text).toContain(`${View.MEETING_LINE_LABELS.headline}: ${view.pitch.headline.text}`);
+    expect(text).toContain(`The room's verdict: ${view.threads[0].name}: ${view.threads[0].line}`);
     const piece = printed.find((line) => line.text.includes(view.threads[0].evidence[0].text));
     expect(piece.folded).toBe(true);
     expect(text).toContain(`${view.questions[0].about}: ${view.questions[0].question}`);
-    expect(text).not.toMatch(/\bt1\b/);
+    expect(text).not.toMatch(/\b[tcqa]1\b/);
   });
 
   it('prints what the page folds as folded', () => {

@@ -103,35 +103,66 @@ const MAP = {
 const OUTLINE = MAP;
 
 /**
- * The arc writer's weave (phase 4, brief 4.4; phase 4b, brief 1B), for this fixture's record:
- * each thread a short name and one line in story terms, with its evidence underneath, every piece
- * naming one of the record's documents, the ledger or the director's notes and quoting its source
- * word for word; "from your notes" is the notes' own words, and every check passes. Invented text.
+ * The arc writer's weave (phase 4, brief 4.4; phase 4b, briefs 1B and 3B), for this fixture's
+ * record: three angles over five threads, the verdict's thread in each and one thread no angle
+ * uses; each thread a short name and one line in story terms, with its evidence underneath, every
+ * piece naming one of the record's documents, the ledger or the director's notes and quoting its
+ * source word for word; "from your notes" is the notes' own words, which angle 1 rests on; one
+ * question by the pitch and one beside a thread; and every check passes. Invented text.
  */
 const WEAVE = {
-  story: 'The room called it an accidental overdose, and the record points at a sale Marcus made the night he died.',
-  question: 'Who gained from the sale the room left out of its statement?',
-  headline: 'The Room Voted Overdose. The Ledger Kept Talking.',
+  angles: [
+    {
+      id: 'a1',
+      headline: 'The Room Voted Overdose. The Ledger Kept Talking.',
+      gist: 'The room called it an overdose, and the ledger points at a sale.',
+      story: 'The room called it an accidental overdose, and the record points at a sale Marcus made the night he died.',
+      question: 'Who gained from the sale the room left out of its statement?',
+      lands: 'Every player sat through the deadlock that ended in the vote.',
+      ends: 'The verdict closes the night; the sale and the heir keep it open.',
+      threads: ['t1', 't2', 't3', 't4']
+    },
+    {
+      id: 'a2',
+      headline: 'Morgan Paid Riley at the Bar While the Room Argued',
+      gist: 'Morgan argued for the overdose and paid Riley out of sight.',
+      story: 'Morgan held one side of the deadlock and paid Riley at the bar. The room never asked why.',
+      question: 'What did the envelope buy?',
+      lands: 'The players watched Morgan argue and never saw the envelope.',
+      ends: 'The vote went Morgan\'s way, and the envelope stayed out of the statement.',
+      threads: ['t3', 't1']
+    },
+    {
+      id: 'a3',
+      headline: 'Sarah Inherits What the Room Never Weighed',
+      gist: 'A paternity result names Sarah as the heir the room never discussed.',
+      story: 'The room settled on an overdose, and a paternity result makes Sarah the heir to everything Marcus left.',
+      question: 'Who gains from a death the room called an accident?',
+      lands: 'The players never weighed the heir.',
+      ends: 'The verdict stands, and Sarah inherits.',
+      threads: ['t4', 't1']
+    }
+  ],
   fromYourNotes: 'Riley watched the ledger all morning',
   threads: [
     {
-      id: 't1', name: 'The overdose vote', line: 'The room settled on an accidental overdose after a deadlock between Alex and Morgan.', role: 'main-thread', verdict: true,
+      id: 't1', name: 'The overdose vote', line: 'The room settled on an accidental overdose after a deadlock between Alex and Morgan.', verdict: true,
       evidence: [{ sources: ['notes'], shows: 'Alex and Morgan argued at the bar.', stance: 'supports' }]
     },
     {
-      id: 't2', name: 'The sale', line: 'Marcus bragged about the BizAI sale the night he died.', role: 'grounds-it',
+      id: 't2', name: 'The sale', line: 'Marcus bragged about the BizAI sale the night he died.',
       evidence: [{ sources: ['ale003'], shows: 'Marcus on the sale: "Worth it. Finally worth it."', stance: 'supports' }]
     },
     {
-      id: 't3', name: 'The envelope', line: 'Morgan paid Riley at the bar, out of sight.', role: 'complicates-it',
+      id: 't3', name: 'The envelope', line: 'Morgan paid Riley at the bar, out of sight.',
       evidence: [{ sources: ['mor001'], shows: 'Morgan hands Riley an envelope by the bar, and Riley says "Not here."', stance: 'supports' }]
     },
     {
-      id: 't4', name: 'The heir', line: "A paternity result names Sarah as Marcus's heir.", role: 'carries-it-forward',
+      id: 't4', name: 'The heir', line: "A paternity result names Sarah as Marcus's heir.",
       evidence: [{ sources: ['p-dna'], shows: 'The paternity test names Sarah Blackwood.', stance: 'supports' }]
     },
     {
-      id: 't5', name: 'The letter', line: 'An unsigned letter threatened Marcus over the patents.', role: 'left-out', reason: 'No one in the room took it up.',
+      id: 't5', name: 'The letter', line: 'An unsigned letter threatened Marcus over the patents.',
       evidence: [{ sources: ['p-rescued'], shows: 'A friend gives Marcus "until Friday".', stance: 'supports' }]
     }
   ],
@@ -145,9 +176,9 @@ const WEAVE = {
       evidence: [{ sources: ['ale003', 'p-dna'], shows: 'The brag and the test result come from the same night.', stance: 'supports' }]
     }
   ],
-  convergence: 'The verdict closes the night; the sale and the heir keep it open.',
   questions: [
-    { id: 'q1', kind: 'player', about: 'Sarah', question: 'The record holds nothing Sarah did this morning: what did Sarah do?', changes: 'Where Sarah appears in the article.' }
+    { id: 'q1', kind: 'player', about: 'Sarah', question: 'The record holds nothing Sarah did this morning: what did Sarah do?', changes: 'Where Sarah appears in the article.' },
+    { id: 'q2', kind: 'figure', about: 'The BizAI sale', question: 'Did the BizAI sale go through the night Marcus died?', changes: 'Whether the article calls it a sale.', thread: 't2' }
   ]
 };
 

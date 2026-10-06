@@ -98,7 +98,7 @@ function writersDraft() {
 
 /**
  * A scripted SDK: the meeting's fact check by its system prompt, the reweave by its label (the
- * weave it was given, its convergence reworded), the map writer and the article writer by their
+ * weave it was given, where its first angle ends reworded), the map writer and the article writer by their
  * schemas, the article's rework by its label (the article it was given), and every other call
  * (the article's judge) a clean verdict.
  */
@@ -114,7 +114,7 @@ function scriptedSdk() {
     if (/^Arc revision/.test(label)) {
       calls.push('reweave');
       const weave = clone(reworkFixtureState('journalist').weave);
-      weave.convergence = 'The verdict closes the night; the ledger keeps it open.';
+      weave.angles[0].ends = 'The verdict closes the night; the ledger keeps it open.';
       return weave;
     }
     if (schemaId === 'outline') {
@@ -238,7 +238,7 @@ describe('4.12a: a run through the story meeting, the map and the desk writes th
     const shown = {};
     await postAndWait('resume', {});
     shown.meeting1 = await stopNow();
-    await act('arc-selection', { action: 'reweave', note: 'Bring the ledger into the convergence.' });
+    await act('arc-selection', { action: 'reweave', note: 'Bring the ledger into where the story ends up.' });
     shown.meeting2 = await stopNow();
     await act('arc-selection', { action: 'approve' });
     // The map, approved as it stands.

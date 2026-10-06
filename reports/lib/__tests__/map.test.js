@@ -1098,11 +1098,16 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
       _outlineHandEdits: null
     };
   }
-  /** The director's four changes: the story, t3's role, a thread added, c2 struck. */
+  /**
+   * The director's four changes: "from your notes", t3's line, a thread added to the open angle, c2
+   * struck. Piece 3 (brief 3B): a change to an angle's pitch is no edit until slice 3C, so the
+   * story's change became the words from the director's notes, and the role's, the thread's line.
+   */
   const fourChanges = (w) => {
-    w.story = 'The room called it an overdose, and the envelope says the money moved first.';
-    w.threads[2].role = 'mirrors-it';
-    w.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger in the back room.', role: 'grounds-it' });
+    w.fromYourNotes = 'Riley watched the ledger';
+    w.threads[2].line = 'Morgan paid Riley at the bar, in an envelope.';
+    w.threads.push({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger in the back room.' });
+    w.angles[0].threads.push('t6');
     w.connections[1].struck = true;
   };
   /** The fixture's map with t3 kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
@@ -1117,12 +1122,13 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     return map;
   };
 
+  // Piece 3 (brief 3B): a thread the settled angle leaves out takes its connections with it.
   it('the map check passes on a map that keeps a left-out thread out, and wants its connection back when the thread comes back', () => {
-    const out = approvedWith((w) => { w.threads[2].role = 'left-out'; });
+    const out = approvedWith((w) => { w.angles[0].threads = w.angles[0].threads.filter((id) => id !== 't3'); });
     const map = keepsT3Out();
     expect(mapCheckInputsOf(out, map).connections.map((c) => c.id)).toEqual(['c2']);
     expect(mapFindings(map, mapCheckInputsOf(out, map))).toEqual({ failures: [], concerns: [] });
-    const back = approvedWith((w) => { w.threads[2].role = 'mirrors-it'; });
+    const back = approvedWith(() => {});
     expect(mapCheckInputsOf(back, map).connections.map((c) => c.id)).toEqual(['c1', 'c2']);
     expect(typesOf(mapFindings(map, mapCheckInputsOf(back, map)).failures)).toEqual(['connection-not-landed']);
   });
@@ -1150,9 +1156,9 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     const state = approvedWith(fourChanges);
     const data = mapCheckpointData(state, { keptPhotos: ['hero.jpg', 'p2.jpg'], evidenceIndex: {}, maxRevisions: 1 });
     expect(data.meetingChanges).toEqual([
-      { id: 'M1', place: 'the story' },
+      { id: 'M1', place: 'the words from your notes' },
       // Phase 4b (brief 1B): a thread by its name, as the meeting's page shows it.
-      { id: 'M2', place: 'the role of "The envelope"' },
+      { id: 'M2', place: 'the line "Morgan paid Riley at the bar, in an envelope"' },
       { id: 'M3', place: 'the thread you added, "The second ledger"' },
       { id: 'M4', place: 'the connection you struck, "The night of the sale is the night the result came back"' }
     ]);
@@ -1175,7 +1181,8 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     const block = (tag) => prompt.slice(prompt.indexOf(`<${tag}>`), prompt.indexOf(`</${tag}>`));
     const meeting = [...block('SETTLED_WEAVE').matchAll(/\b([A-Z]\d+)\b(?=[:\]])/g)].map((m) => m[1]);
     const map = [...block('HAND_EDITS').matchAll(/^(E\d+) \(/gm)].map((m) => m[1]);
-    expect(meeting).toEqual(['M1', 'M3', 'M2']);
+    // Piece 3 (brief 3B): the threads print in the angle's order, the director's after its own.
+    expect(meeting).toEqual(['M1', 'M2', 'M3']);
     expect(map).toEqual(['E1']);
   });
 });

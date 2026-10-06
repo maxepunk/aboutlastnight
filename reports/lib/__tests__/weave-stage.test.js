@@ -104,7 +104,8 @@ describe('the arc writer writes one weave in one call', () => {
     const system = weaveSystemPrompt(state.sessionConfig, 'journalist');
     // Brief 4.13: the identity line is the theme's, and the prompt's own text follows the rules.
     expect(system.split('\n')[0]).toBe(identityLineOf('journalist', 'arc'));
-    expect(system.split('\n')[0]).toMatch(/you write the weave/);
+    // Piece 3 (brief 3B): the writer pitches the angles.
+    expect(system.split('\n')[0]).toMatch(/you pitch the angles/);
     expect(system.endsWith(`\n\n${WEAVE_SYSTEM_PROMPT}`)).toBe(true);
     expect(system.indexOf(loadModeBlock('remote'))).toBeLessThan(system.indexOf('<world>'));
     expect(count(system, loadRuleSet('arc').core)).toBe(1);
@@ -119,10 +120,11 @@ describe('the arc writer writes one weave in one call', () => {
     const format = prompt.slice(prompt.indexOf('## OUTPUT FORMAT'), prompt.indexOf('## SECTION 1'));
     // Phase 4b (brief 1B; R1): each thread a name and a line, and each thread and connection
     // its evidence, each piece its sources, what it shows and its stance.
-    ['"story"', '"question"', '"headline"', '"fromYourNotes"', '"threads"', '"name"', '"line"', '"role"', '"reason"', '"verdict"', '"evidence"',
-      '"sources"', '"shows"', '"stance"', '"connections"', '"kind"', '"joins"', '"convergence"', '"strongerMainThread"', '"questions"', '"changes"']
+    // Piece 3 (brief 3B): the angles, each its pitch and its threads; a question's thread.
+    ['"angles"', '"headline"', '"gist"', '"story"', '"question"', '"lands"', '"ends"', '"fromYourNotes"', '"threads"', '"name"', '"line"', '"verdict"', '"evidence"',
+      '"sources"', '"shows"', '"stance"', '"connections"', '"kind"', '"joins"', '"questions"', '"changes"', '"thread"']
       .forEach((field) => expect(format).toContain(field));
-    expect(format).toContain('"main-thread" | "grounds-it" | "complicates-it" | "mirrors-it" | "carries-it-forward" | "left-out"');
+    ['"role"', '"reason"', '"convergence"', '"strongerMainThread"', 'main-thread'].forEach((field) => expect(format).not.toContain(field));
     expect(format).toContain('"person" | "moment" | "document" | "line"');
     expect(format).toContain('"supports" | "cuts-against"');
     expect(format).toContain('"player" | "pronoun" | "figure"');
@@ -234,7 +236,14 @@ describe('the weave checks (the check node)', () => {
 
   it('counts no roster coverage at this stage: a weave that names one player passes', () => {
     const state = weaveState();
-    state.weave = { ...clone(state.weave), threads: [state.weave.threads[0]], connections: [] };
+    // Piece 3 (brief 3B): every angle tells the one thread, and no question sits beside another.
+    state.weave = {
+      ...clone(state.weave),
+      angles: state.weave.angles.map((angle) => ({ ...angle, threads: ['t1'] })),
+      threads: [state.weave.threads[0]],
+      connections: [],
+      questions: state.weave.questions.filter((question) => !question.thread)
+    };
     expect(validateArcStructure(state, {})._arcValidation.passed).toBe(true);
   });
 
@@ -242,41 +251,61 @@ describe('the weave checks (the check node)', () => {
     expect(validateArcStructure(weaveState({ meetingApproved: true }), {})).toEqual({});
   });
 
-  // Phase 4b (brief 1B; R5; Review focus 3): the node counts the meeting's page as it first
-  // opens, by lib/stop-pages.js wordsShown, on the writer's share of the weave alone, and fails
-  // the writer's own words past their allowance (fix round 4, lib/word-count.js pageLengthOf).
-  // The director's version is never held to it.
-  describe("the meeting's page, counted as it first opens", () => {
+  // Phase 4b (brief 1B; R5; Review focus 3; piece 3, brief 3B): the node counts the meeting's
+  // page once with each angle open, by lib/stop-pages.js wordsShown, on the writer's share of the
+  // weave alone, and fails the writer's own words past their allowance on any angle's page (fix
+  // round 4, lib/word-count.js pageLengthOf). The director's version is never held to it.
+  describe("the meeting's page, counted with each angle open", () => {
     const { wordsShown } = require('../stop-pages');
     const { meetingCheckpointData } = require('../meeting');
     const { standingAtMeeting } = require('../hand-edit-diff');
-    const firstLook = (state) => wordsShown('arc-selection', meetingCheckpointData({ weave: state.weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
-    /** The fixture's weave, its story run long. */
-    const longStory = (weave) => ({ ...clone(weave), story: `${weave.story} ${'The room kept arguing about the money. '.repeat(30).trim()}` });
-
-    it('records the words the page shows when it first opens, the folded evidence left out', () => {
-      const state = pass();
-      expect(validateArcStructure(state, {})._arcValidation.words.page).toBe(firstLook(state));
-      expect(firstLook(state)).toBeLessThan(MEETING_WORD_BOUND);
+    const { weaveWritersTextBlank, meetingLengthOf } = require('../weave');
+    const pageOf = (state, weave) => wordsShown('arc-selection', meetingCheckpointData({ weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
+    const firstLook = (state) => pageOf(state, state.weave);
+    /** One angle's length, with that angle open on the writer's weave. */
+    const angleLength = (state, id) => {
+      const open = { ...clone(state.weave), picked: id };
+      return { ...meetingLengthOf(pageOf(state, open), pageOf(state, weaveWritersTextBlank(open))), angle: id };
+    };
+    /** The weave with one angle's story run long. */
+    const longAngle = (weave, id) => ({
+      ...clone(weave),
+      angles: weave.angles.map((angle) => (angle.id === id ? { ...angle, story: `${angle.story} ${'The room kept arguing about the money. '.repeat(40).trim()}` } : angle))
     });
 
-    it("fails the writer's own words past their allowance, in one line with no place, so it sits at the top of the meeting", () => {
+    it("records the worst angle's count with its id, each angle counted open, the folded evidence left out", () => {
       const state = pass();
-      state.weave = longStory(state.weave);
+      const lengths = state.weave.angles.map((angle) => angleLength(state, angle.id));
+      const worst = lengths.reduce((w, l) => (l.writer - l.allowance > w.writer - w.allowance ? l : w));
+      expect(validateArcStructure(state, {})._arcValidation.words).toEqual(worst);
+      // The page changes with the angle open: its pitch, its threads and the connections between them.
+      expect(new Set(lengths.map((l) => l.page)).size).toBeGreaterThan(1);
+      lengths.forEach((l) => expect(l.page).toBeLessThan(MEETING_WORD_BOUND));
+      expect(lengths[0].page).toBe(firstLook(state));
+    });
+
+    it("fails the longest angle's page alone, naming that angle, in one line with no place, so it sits at the top of the meeting", () => {
+      const state = pass();
+      state.weave = longAngle(state.weave, 'a2');
       const { _arcValidation } = validateArcStructure(state, {});
-      const { page, writer, allowance } = _arcValidation.words;
+      const { page, writer, allowance, angle } = _arcValidation.words;
+      expect(angle).toBe('a2');
       expect(page).toBeGreaterThan(MEETING_WORD_BOUND);
       expect(writer).toBeGreaterThan(allowance);
+      // The page as it first opens, angle 1's, is within the bound: angle 2 prints only its card there.
+      expect(firstLook(state)).toBeLessThan(MEETING_WORD_BOUND);
+      const open = `With the angle "${state.weave.angles[1].headline}" open, the`;
       expect(_arcValidation.failures).toEqual([{
         type: 'over-length',
-        message: expect.stringContaining(`${writer} of them in the lines you write, past the ${allowance} those lines may use`),
-        line: `The writer's part of the meeting runs to ${writer} words, past the ${allowance} it may use.`
+        message: expect.stringContaining(`${open} meeting's page runs to ${page} words, ${writer} of them in the lines you write, past the ${allowance} those lines may use`),
+        line: `${open} writer's part of the meeting runs to ${writer} words, past the ${allowance} it may use.`
       }]);
     });
 
     it("never fails a page the director lengthened: their lines are not the writer's to count", () => {
       const state = pass();
-      const left = longStory(state.weave);
+      const left = clone(state.weave);
+      left.threads[1].line = `${left.threads[1].line} ${'The room kept arguing about the money. '.repeat(40).trim()}`;
       const directors = { ...state, weave: left, _weaveHandEdits: standingAtMeeting(null, clone(state.weave), left) };
       const { _arcValidation } = validateArcStructure(directors, {});
       expect(firstLook(directors)).toBeGreaterThan(MEETING_WORD_BOUND);
@@ -302,22 +331,30 @@ describe('the weave checks (the check node)', () => {
   });
 
   // Fix round 4, fix 1: one length rule for both stops (lib/word-count.js pageLengthOf). The
-  // meeting's writer is held only to the words it wrote, as the map's is: the verdict, each
-  // thread's role and the "Joins" and "and" of each connection's line are code's.
+  // meeting's writer is held only to the words it wrote, as the map's is: the verdict, the open
+  // angle's card line and the verdict thread's lock are code's (piece 3, R5).
   describe("fix round 4: the writer's own words on the meeting's page are held to its allowance", () => {
     const { wordsShown } = require('../stop-pages');
     const { meetingCheckpointData } = require('../meeting');
     const { wordCount } = require('../word-count');
-    const { LEFT_OUT_ROLE } = require('../weave');
     const { storyLevelState } = require('./fixtures/story-level-weave');
-    const firstLook = (state) => wordsShown('arc-selection', meetingCheckpointData({ weave: state.weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
-    /** The words the writer wrote that the meeting prints unfolded, each thread's name again above each connection that joins it. */
-    const writersWords = (weave) => {
-      const name = (id) => weave.threads.find((t) => t.id === id).name;
-      return ['story', 'question', 'headline', 'fromYourNotes', 'convergence'].reduce((n, f) => n + wordCount(weave[f]), 0)
-        + weave.threads.reduce((n, t) => n + wordCount(t.name) + (t.role === LEFT_OUT_ROLE ? 0 : wordCount(t.line)), 0)
-        + weave.connections.reduce((n, c) => n + wordCount(c.line) + wordCount(name(c.joins[0])) + wordCount(name(c.joins[1])), 0)
-        + weave.questions.reduce((n, q) => n + wordCount(q.about) + wordCount(q.question) + wordCount(q.changes), 0);
+    const pageOf = (state, weave) => wordsShown('arc-selection', meetingCheckpointData({ weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
+    /**
+     * The words the writer wrote that the meeting prints unfolded with one angle open: "from your
+     * notes", every other angle's headline and card line, the open angle's pitch, its threads' names
+     * and lines, the names of the threads it leaves out, the lines of the connections between its
+     * threads, and the questions.
+     */
+    const writersWords = (weave, id) => {
+      const angle = weave.angles.find((a) => a.id === id);
+      const inStory = new Set(angle.threads);
+      const words = (...texts) => texts.reduce((n, text) => n + wordCount(text), 0);
+      return words(weave.fromYourNotes)
+        + weave.angles.filter((a) => a.id !== id).reduce((n, a) => n + words(a.headline, a.gist), 0)
+        + words(angle.headline, angle.story, angle.question, angle.lands, angle.ends)
+        + weave.threads.reduce((n, t) => n + words(t.name) + (inStory.has(t.id) ? words(t.line) : 0), 0)
+        + weave.connections.filter((c) => inStory.has(c.joins[0]) && inStory.has(c.joins[1])).reduce((n, c) => n + words(c.line), 0)
+        + weave.questions.reduce((n, q) => n + words(q.about, q.question, q.changes), 0);
     };
     /** A split vote with `n` more options, each "Option <k> 1" on the verdict's vote line. */
     const longVote = (state, n) => {
@@ -325,52 +362,60 @@ describe('the weave checks (the check node)', () => {
       return state;
     };
 
-    it('the bound is 300 and the floor 200: the writer may use 200 words of its own, and more only while the whole page stays within 300', () => {
+    // Piece 3 (R5): the bound 450 and the floor 350.
+    it('the bound is 450 and the floor 350: the writer may use 350 words of its own, and more only while the whole page stays within 450', () => {
       const { pageLengthOf } = require('../word-count');
       const { meetingLengthOf, MEETING_WORD_FLOOR } = require('../weave');
-      expect([MEETING_WORD_BOUND, MEETING_WORD_FLOOR]).toEqual([300, 200]);
-      expect(meetingLengthOf(281, 38)).toEqual({ page: 281, writer: 243, allowance: 262 });
-      expect(meetingLengthOf(330, 140)).toEqual({ page: 330, writer: 190, allowance: 200 });
-      expect(pageLengthOf(281, 38, { bound: 300, floor: 200 })).toEqual(meetingLengthOf(281, 38));
+      expect([MEETING_WORD_BOUND, MEETING_WORD_FLOOR]).toEqual([450, 350]);
+      expect(meetingLengthOf(281, 38)).toEqual({ page: 281, writer: 243, allowance: 412 });
+      expect(meetingLengthOf(430, 140)).toEqual({ page: 430, writer: 290, allowance: 350 });
+      expect(pageLengthOf(281, 38, { bound: 450, floor: 350 })).toEqual(meetingLengthOf(281, 38));
     });
 
-    it("records the page, the writer's own words and the allowance on _arcValidation: the verdict, the roles and the connections' \"Joins\" are code's", () => {
+    it("records the worst angle's page, the writer's own words and the allowance on _arcValidation: the verdict, the open card's line and the lock are code's", () => {
       const state = storyLevelState();
       const { _arcValidation } = validateArcStructure(state, {});
-      expect(_arcValidation.words).toEqual({ page: 281, writer: 243, allowance: 262 });
-      expect(_arcValidation.words.page).toBe(firstLook(state));
-      expect(_arcValidation.words.writer).toBe(writersWords(state.weave));
+      const { page, writer, allowance, angle } = _arcValidation.words;
+      expect({ page, writer, allowance, angle }).toEqual({ page: 292, writer: 268, allowance: 426, angle: 'a1' });
+      expect(page).toBe(pageOf(state, { ...state.weave, picked: angle }));
+      state.weave.angles.forEach((a) => {
+        const open = { ...state.weave, picked: a.id };
+        expect([a.id, pageOf(state, open) - writersWords(state.weave, a.id)]).toEqual([a.id, page - writer]);
+      });
+      expect(writer).toBe(writersWords(state.weave, angle));
       expect(_arcValidation.passed).toBe(true);
     });
 
-    it('a long split vote never fails a writer within its floor, though the page runs past 300', () => {
-      const state = longVote(storyLevelState(), 40);
-      // The writer's lines come to under 200 words: one connection, the convergence and the question fewer.
-      state.weave.connections = state.weave.connections.filter((c) => c.id !== 'c4');
-      delete state.weave.convergence;
-      state.weave.questions = [];
+    it('a long split vote never fails a writer within its floor, though the page runs past 450', () => {
+      const state = longVote(storyLevelState(), 70);
       const { _arcValidation } = validateArcStructure(state, {});
-      expect(firstLook(state)).toBeGreaterThan(MEETING_WORD_BOUND);
-      expect(_arcValidation.words.writer).toBeLessThanOrEqual(200);
-      expect(_arcValidation.words.allowance).toBe(200);
+      expect(pageOf(state, state.weave)).toBeGreaterThan(MEETING_WORD_BOUND);
+      expect(_arcValidation.words.writer).toBeLessThanOrEqual(350);
+      expect(_arcValidation.words.allowance).toBe(350);
       expect(_arcValidation.failures).toEqual([]);
     });
 
-    it("the writer's own words past its allowance fail: the director's line says so, and the rework's names the words to cut and its longest lines", () => {
+    it("the writer's own words past its allowance fail: the director's line names the angle open, and the rework's names the words to cut and its longest lines", () => {
       const state = storyLevelState();
-      state.weave.story = `${state.weave.story} ${'The room kept arguing about the money. '.repeat(6).trim()}`;
+      state.weave.angles[2].story = `${state.weave.angles[2].story} ${'The room kept arguing about the money. '.repeat(40).trim()}`;
       const { _arcValidation } = validateArcStructure(state, {});
-      const { page, writer, allowance } = _arcValidation.words;
+      const { page, writer, allowance, angle } = _arcValidation.words;
+      expect(angle).toBe('a3');
       expect(writer).toBeGreaterThan(allowance);
       expect(_arcValidation.failures.map((f) => f.type)).toEqual(['over-length']);
       const [failure] = _arcValidation.failures;
-      expect(failure.line).toBe(`The writer's part of the meeting runs to ${writer} words, past the ${allowance} it may use.`);
+      const open = 'With the angle "Memories Sold While the Room Argued" open, the';
+      expect(failure.line).toBe(`${open} writer's part of the meeting runs to ${writer} words, past the ${allowance} it may use.`);
       expect(failure).not.toHaveProperty('place');
-      expect(failure.message).toBe(`The meeting's page runs to ${page} words, ${writer} of them in the lines you write, past the ${allowance} those lines may use (200, or more while the whole page stays within 300). Cut ${writer - allowance} words or more from your lines, starting with the longest: the story (${wordCount(state.weave.story)} words), question q1 (21 words) and the convergence (19 words). Keep each line short, and keep in the story only the threads and connections it turns on; each thread's name prints again above each connection that joins it. The rest of the page (the verdict, each thread's role, and the "Joins" and "and" around the names above each connection) is printed by code.`);
+      const a3 = state.weave.angles[2];
+      const card = (i) => wordCount(state.weave.angles[i].headline) + wordCount(state.weave.angles[i].gist);
+      const pitch = wordCount(a3.headline) + wordCount(a3.story) + wordCount(a3.question) + wordCount(a3.lands) + wordCount(a3.ends);
+      expect(failure.message).toBe(`${open} meeting's page runs to ${page} words, ${writer} of them in the lines you write, past the ${allowance} those lines may use (350, or more while the whole page stays within 450). Cut ${writer - allowance} words or more from your lines on that page, starting with the longest: angle a3's pitch (${pitch} words), angle a1's headline and card line (${card(0)} words) and angle a2's headline and card line (${card(1)} words). Keep each line short, and keep in each angle only the threads its story turns on: every angle's headline and card line print whichever angle is open. The rest of the page (the verdict and the lines beside yours) is printed by code.`);
     });
 
-    it("the writer's task says what the director reads: at most 300 words in all, the labels code prints among them, so about 225 of its own", () => {
-      expect(buildWeavePrompt(weaveState())).toContain("The page they read comes to at most 300 words in all: your lines, without the evidence under them, and the labels code prints beside them (each thread's role, the names of the threads each connection joins, and the verdict). So your own lines come to about 225 words.");
+    // Piece 3 (brief 3B; R5): 450 words with any angle open, so about 325 of the writer's own.
+    it("the writer's task says what the director reads: at most 450 words with any angle open, the labels code prints among them, so about 325 of its own", () => {
+      expect(buildWeavePrompt(weaveState())).toContain("The page they read comes to at most 450 words with any one angle open: your lines, without the evidence under them (every angle's headline and card line; the open angle's pitch, its threads and the names of the threads it leaves out; the connections between its threads; the questions), and the labels code prints beside them (the verdict, and the names of the threads each connection joins). So your own lines come to about 325 words.");
     });
   });
 });
@@ -411,8 +456,9 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
     expect(TRUTH_ONLY_EVALUATION_RULES).not.toMatch(/weighted average/);
     ['STRUCTURAL CRITERIA', 'ADVISORY CRITERIA', 'CRAFT FINDINGS', 'rosterCoverage', 'characterPlacements', 'KNOWN NPCs', 'arcSource', 'evidenceIdValidity']
       .forEach((gone) => expect(`${gone}: ${system.includes(gone)}`).toBe(`${gone}: false`));
-    // Phase 4b (brief 1B; spec 6.2): a breach names the line it is in and the piece of evidence at fault.
-    expect(system).toMatch(/names the thread or connection it is in/);
+    // Phase 4b (brief 1B; spec 6.2): a breach names the line it is in and the piece of evidence at fault;
+    // piece 3 (brief 3B): an angle's line among them.
+    expect(system).toMatch(/names the angle, thread or connection it is in/);
     expect(system).toMatch(/where a piece of evidence is at fault, the piece by its sources/);
   });
 
@@ -441,7 +487,8 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
   // piece against the record; the weave it prints carries the evidence under each line.
   it('its user prompt opens by naming the evidence under each line, and prints it with the weave', () => {
     const prompt = buildEvaluationUserPrompt('arcs', weaveState());
-    expect(prompt.split('\n')[0]).toBe("Check this weave against the record and the director's words. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.");
+    // Piece 3 (brief 3B; spec 9.2): it names the angles and checks every one.
+    expect(prompt.split('\n')[0]).toBe("Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.");
     const weave = prompt.slice(prompt.indexOf('WEAVE:'), prompt.indexOf('THE ACCUSATION'));
     expect(weave).toContain('"evidence": [');
     expect(weave).toContain('"shows": "Marcus on the sale: \\"Worth it. Finally worth it.\\""');
@@ -488,7 +535,7 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
 // seam that chose between them went, with the tests that compared the two contracts.
 describe('the fact check writes to the truth-only contract (fix round 1)', () => {
   const { truthOnlyOutputFormat, TRUTH_ONLY_ADVISORY_WARNINGS, TRUTH_ONLY_EVALUATION_JSON_SCHEMA } = evalTesting;
-  const NOTES = 'the breach: the text at fault, the thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts';
+  const NOTES = 'the breach: the text at fault, the angle, thread or connection it is in, the piece of evidence where one is at fault, and the record it contradicts';
   const systemFor = (phase, theme = 'journalist') => buildEvaluationSystemPrompt(
     phase, getPhaseCriteria(phase, theme), theme, { sessionConfig: weaveState().sessionConfig }
   );
@@ -809,8 +856,8 @@ describe('the arc rework\'s prompt', () => {
   it('the bound reaches the rework through the writer\'s task', () => {
     const state = weaveState();
     const prompt = buildArcRevisionPrompt(state, '', '');
-    // Phase 4b (brief 1B; R5): the meeting's page, at most 300 words.
+    // Phase 4b (brief 1B; R5): the meeting's page within its bound, 450 words since piece 3.
     expect(prompt).toContain(`comes to at most ${MEETING_WORD_BOUND} words`);
-    expect(MEETING_WORD_BOUND).toBe(300);
+    expect(MEETING_WORD_BOUND).toBe(450);
   });
 });

@@ -79,7 +79,7 @@ describe('the paths the skill path names', () => {
  */
 describe('the stages (phase 4)', () => {
   const { WEAVE_SCHEMA } = require('../../lib/sdk-client/subagents');
-  const { WEAVE_ROLES, CONNECTION_KINDS } = require('../../lib/weave');
+  const { PICKED_KEY, CONNECTION_KINDS } = require('../../lib/weave');
   const { WEAVE_QUESTION_KINDS, WEAVE_ANSWER_KEY } = require('../../lib/writer-questions');
 
   it('the arc analyzer writes the weave, and reads it back for a round at the story meeting', () => {
@@ -100,23 +100,19 @@ describe('the stages (phase 4)', () => {
     expect(filesIn(section(agent('article-validator'), 'Input'))).toEqual(expect.arrayContaining(['analysis/weave.json', 'analysis/article-outline.json']));
   });
 
-  it('schemas.md gives the weave the pipeline\'s shape, roles and kinds', () => {
+  // Piece 3 (brief 3B): the weave is its angles over one set of threads, with the director's pick;
+  // a thread has no role and no reason, and the single story went into each angle.
+  it('schemas.md gives the weave the pipeline\'s shape and kinds, its angles and the pick', () => {
     const doc = FILES['schemas.md'];
     const at = doc.indexOf('### analysis/weave.json');
     expect(at).toBeGreaterThan(-1);
     const block = doc.slice(at).match(/```\n([\s\S]*?)\n```/)[1];
-    const listed = (key) => {
-      const m = block.match(new RegExp(`"${key}": "([^"<]+)"`));
-      return m ? m[1].split('|').map((s) => s.trim()) : null;
-    };
-    expect(listed('role')).toEqual([...WEAVE_ROLES]);
     const kinds = [...block.matchAll(/"kind": "([^"<]+)"/g)].map((m) => m[1].split('|').map((s) => s.trim()));
     expect(kinds).toEqual([[...CONNECTION_KINDS], [...WEAVE_QUESTION_KINDS]]);
     const keys = new Set([...block.matchAll(/"([A-Za-z]+)":/g)].map((m) => m[1]));
+    ['role', 'reason', 'convergence', 'strongerMainThread'].forEach((key) => expect(`${key}: ${keys.has(key)}`).toBe(`${key}: false`));
     const items = (prop) => Object.keys(WEAVE_SCHEMA.properties[prop].items.properties);
-    // The integrator, on the review of 4.12b: the stronger main thread's own fields too.
-    const own = (prop) => Object.keys(WEAVE_SCHEMA.properties[prop].properties);
-    [...Object.keys(WEAVE_SCHEMA.properties), ...items('threads'), ...items('connections'), ...items('questions'), ...own('strongerMainThread'), WEAVE_ANSWER_KEY, 'struck']
+    [...Object.keys(WEAVE_SCHEMA.properties), ...items('angles'), ...items('threads'), ...items('connections'), ...items('questions'), WEAVE_ANSWER_KEY, PICKED_KEY, 'struck']
       .forEach((key) => expect(`${key}: ${keys.has(key)}`).toBe(`${key}: true`));
   });
 
@@ -147,7 +143,7 @@ describe('the stages (phase 4)', () => {
  */
 describe('the story level, with the evidence underneath (phase 4b, piece 1)', () => {
   const { WEAVE_SCHEMA } = require('../../lib/sdk-client/subagents');
-  const { MEETING_WORD_BOUND } = require('../../lib/weave');
+  const { MEETING_WORD_BOUND, PICKED_KEY } = require('../../lib/weave');
   const { MAP_WORD_BOUND, MAP_WORD_AIM, MAP_BEAT_KINDS } = require('../../lib/map');
   const { EVIDENCE_PIECE_SCHEMA, EVIDENCE_SOURCES, EVIDENCE_STANCES } = require('../../lib/evidence');
   const { WEAVE_ANSWER_KEY } = require('../../lib/writer-questions');
@@ -220,10 +216,9 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
     const block = schemasBlock('### analysis/weave.json');
     const items = (prop) => Object.keys(WEAVE_SCHEMA.properties[prop].items.properties);
     const allowed = new Set([
-      ...Object.keys(WEAVE_SCHEMA.properties), ...items('threads'), ...items('connections'), ...items('questions'),
-      ...Object.keys(WEAVE_SCHEMA.properties.strongerMainThread.properties),
+      ...Object.keys(WEAVE_SCHEMA.properties), ...items('angles'), ...items('threads'), ...items('connections'), ...items('questions'),
       ...Object.keys(WEAVE_SCHEMA.properties.threads.items.properties.evidence.items.properties),
-      WEAVE_ANSWER_KEY, 'struck', 'directorChanges', 'change'
+      WEAVE_ANSWER_KEY, PICKED_KEY, 'struck', 'directorChanges', 'change'
     ]);
     keysOf(block).forEach((key) => expect(`${key}: ${allowed.has(key)}`).toBe(`${key}: true`));
     expect(listedIn(block, 'sources')).toEqual(SOURCES);

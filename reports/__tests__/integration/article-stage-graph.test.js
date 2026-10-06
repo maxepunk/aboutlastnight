@@ -153,7 +153,7 @@ describe('the article stage through the real graph (phase 4, brief 4.7b)', () =>
     ]);
 
     // The stop shows the story the director settled at the meeting, as the map's stop did.
-    expect(stop.data.settledStory).toEqual({ story: WEAVE.story, question: WEAVE.question });
+    expect(stop.data.settledStory).toEqual({ story: WEAVE.angles[0].story, question: WEAVE.angles[0].question });
     expect(stop.data).not.toHaveProperty('outlineThesis');
   });
 

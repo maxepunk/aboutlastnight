@@ -44,15 +44,16 @@ describe("the director-side schema (R12)", () => {
   const ajv = new Ajv({ allErrors: true, strict: true });
   const validate = ajv.compile(DIRECTOR_WEAVE_SCHEMA);
 
-  it("is derived from the writer's schema: the same fields, with the answer and the strike the director adds, and no evidence required (R6)", () => {
+  it("is derived from the writer's schema: the same fields, with the pick, the answer and the strike the director adds, and no evidence required (R6)", () => {
     expect(DIRECTOR_WEAVE_SCHEMA).not.toBe(WEAVE_SCHEMA);
     expect(DIRECTOR_WEAVE_SCHEMA.required).toEqual(WEAVE_SCHEMA.required);
-    expect(Object.keys(DIRECTOR_WEAVE_SCHEMA.properties)).toEqual(Object.keys(WEAVE_SCHEMA.properties));
+    // Piece 3 (brief 3B; R1): the director's pick, the angle they sent on.
+    expect(Object.keys(DIRECTOR_WEAVE_SCHEMA.properties)).toEqual([...Object.keys(WEAVE_SCHEMA.properties), 'picked']);
     expect(DIRECTOR_WEAVE_SCHEMA.properties.questions.items.properties.answer).toMatchObject({ type: 'string' });
     expect(DIRECTOR_WEAVE_SCHEMA.properties.connections.items.properties.struck).toMatchObject({ type: 'boolean' });
     expect(Object.keys(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.properties)).toEqual(Object.keys(WEAVE_SCHEMA.properties.threads.items.properties));
-    // Phase 4b (brief 1B): a thread the director adds needs only its id, name, line and role.
-    expect(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.required).toEqual(['id', 'name', 'line', 'role']);
+    // Phase 4b (briefs 1B and 3B): a thread the director adds needs only its id, name and line.
+    expect(DIRECTOR_WEAVE_SCHEMA.properties.threads.items.required).toEqual(['id', 'name', 'line']);
     expect(DIRECTOR_WEAVE_SCHEMA.properties.connections.items.required).toEqual(['id', 'joins', 'line', 'kind']);
     expect(WEAVE_SCHEMA.properties.threads.items.required).toContain('evidence');
   });
@@ -80,8 +81,9 @@ describe("the director-side schema (R12)", () => {
   it.each([
     ['an answer that is not text', (w) => { w.questions[0].answer = 42; }, /questions\/0\/answer/],
     ['a strike that is not true or false', (w) => { w.connections[0].struck = 'yes'; }, /connections\/0\/struck/],
-    ['a role the weave does not have', (w) => { w.threads[0].role = 'supports-it'; }, /threads\/0\/role/],
-    ['no story', (w) => { delete w.story; }, /story/],
+    ['a pick that is not text', (w) => { w.picked = 2; }, /\/picked/],
+    ['no angles', (w) => { delete w.angles; }, /angles/],
+    ['an angle with no ends', (w) => { delete w.angles[1].ends; }, /angles\/1.*ends/],
     ['a thread with no line', (w) => { delete w.threads[1].line; }, /threads\/1.*line/],
     ['a thread with no name', (w) => { delete w.threads[1].name; }, /threads\/1.*name/],
     ['a piece of evidence with no sources', (w) => { w.threads[1].evidence[0].sources = []; }, /threads\/1\/evidence\/0\/sources/]
@@ -300,9 +302,10 @@ describe('what the stop shows (brief 4.5)', () => {
   });
 
   it("the marks after a round: what the rework changed from the director's version, and the round", () => {
-    const rewoven = { ...leftByDirector(), headline: 'A headline the reweave wrote.' };
+    // Piece 3 (brief 3B): "from your notes" is the weave's one text field of its own; the pitch is each angle's.
+    const rewoven = { ...leftByDirector(), fromYourNotes: 'Riley watched the ledger' };
     const marks = meetingMarksOf(atMeeting({ weave: rewoven, _weaveMarks: { round: 'reweave', from: leftByDirector(), at: 't' } }));
-    expect(marks).toEqual({ round: 'reweave', marks: [{ path: 'headline', where: 'headline', before: FIXTURE_WEAVE.headline, after: 'A headline the reweave wrote.' }] });
+    expect(marks).toEqual({ round: 'reweave', marks: [{ path: 'fromYourNotes', where: 'fromYourNotes', before: FIXTURE_WEAVE.fromYourNotes, after: 'Riley watched the ledger' }] });
     expect(meetingMarksOf(atMeeting())).toBeNull();
   });
 
@@ -410,11 +413,11 @@ describe("4.14a: each mark of an element a round took out carries the element", 
     const reworked = clone(left);
     reworked.threads = reworked.threads.filter((t) => t.id !== 't5');
     reworked.connections = reworked.connections.filter((c) => c.id !== 'c1');
-    reworked.headline = 'A headline the reweave wrote.';
+    reworked.fromYourNotes = 'Riley watched the ledger';
     const { marks } = meetingMarksOf(atMeeting({ weave: reworked, _weaveMarks: { round: 'reweave', from: left, at: 't' } }));
     const withoutEvidence = ({ evidence: _evidence, ...rest }) => rest;
     expect(marks.map((m) => [m.path, m.element])).toEqual([
-      ['headline', undefined],
+      ['fromYourNotes', undefined],
       ['threads[#t5]', withoutEvidence(left.threads.find((t) => t.id === 't5'))],
       ['connections[#c1]', withoutEvidence(left.connections.find((c) => c.id === 'c1'))]
     ]);

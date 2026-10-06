@@ -102,7 +102,7 @@ const THEME_CONFIGS = {
     // automatic check ..."), so it ends where that task begins (identityLineOf refuses one
     // that ends a sentence; brief 4.13b).
     identities: {
-      arc: 'You are the arc writer for an investigative article about one session of the game: you write the weave, the story the article will tell, for the director to settle at the story meeting.',
+      arc: 'You are the arc writer for an investigative article about one session of the game: you pitch the angles the article could take, for the director to pick one and settle it at the story meeting.',
       'arc-rework': 'You are reworking the weave you wrote',
       outline: 'You are laying out the story map of a NovaNews investigative article.',
       'outline-rework': 'You are reworking the story map you wrote',

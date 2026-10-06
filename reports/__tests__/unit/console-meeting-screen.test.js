@@ -10,10 +10,12 @@
  *
  * Phase 4b, brief 1C (spec 2026-10-05 sections 4.1 and 9): the page shows meetingView as it is.
  * ArcSelection.js is run here with a React whose createElement builds a tree of its elements, so
- * the tests read what the page renders from each of the view model's fields: each thread as its
- * role, its name and its line with its evidence folded under "What's behind it", the left-out
- * threads by name with their reasons folded, each connection's line with the names of the threads
- * it joins, a check still failing under the line it names, and no tag anywhere.
+ * the tests read what the page renders from each of the view model's fields. Since piece 3 (brief
+ * 3B; spec 2026-10-06 section 5): the open angle's pitch, each thread in its story as its name and
+ * its line with its evidence folded under "What's behind it", the left-out threads by name, each
+ * opening in place to its line, each connection between the threads in as its line, a check still
+ * failing under the line it names, and no tag anywhere. Slice 3D adds the pick, the flips and the
+ * thread editors next run.
  */
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used-for-signing-in-tests';
 const fs = require('fs');
@@ -62,8 +64,8 @@ describe('4.8: ArcSelection.js is the story meeting', () => {
     Object.values(MEETING_LINE_LABELS).forEach((label) => expect(`${label}: ${src.includes(`'${label}'`)}`).toBe(`${label}: false`));
   });
 
-  it('edits the weave only through the view logic\'s operations: the four fields, a role, an added thread, a strike, an answer', () => {
-    ['setMeetingField(', 'setThreadRole(', 'addMeetingThread(', 'removeMeetingThread(', 'setConnectionStruck(', 'setQuestionAnswer('].forEach((op) => {
+  it('edits the weave only through the view logic\'s operations: the open angle\'s pitch, an added thread, a strike, an answer', () => {
+    ['setAngleField(', 'addMeetingThread(', 'removeMeetingThread(', 'setConnectionStruck(', 'setQuestionAnswer('].forEach((op) => {
       expect(count(src, `ViewLogic.${op}`)).toBe(1);
     });
   });
@@ -281,17 +283,16 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
   const tree = renderMeeting({ data });
   const rows = elementsOf(tree, withClass('meeting__thread'));
 
-  it('shows the threads in the story in meetingView\'s order, the main thread first, each as its role, its name and its line', () => {
-    expect(view.threads[0].role).toBe('main-thread');
+  it('shows the threads in the story in meetingView\'s order, the open angle\'s, each as its name and its line, the verdict\'s with its lock', () => {
+    expect(view.threads[0].id).toBe('t1');
     expect(view.threads[0].index).toBe(1);
     expect(rows).toHaveLength(view.threads.length);
     rows.forEach((row, i) => {
       const thread = view.threads[i];
-      const [picker] = elementsOf(row, (n) => n.type === 'select');
-      expect(picker.props.value).toBe(thread.role);
-      expect(textOf(picker)).toBe(thread.roleLabel);
+      expect(elementsOf(row, (n) => n.type === 'select')).toEqual([]);
       const [line] = elementsOf(row, withClass('meeting__line'));
       expect(textOf(line)).toBe(`${thread.name}: ${thread.line}`);
+      expect(textOf(row).includes(ViewLogic.VERDICT_LOCK_LINE)).toBe(thread.locked);
     });
   });
 
@@ -321,7 +322,7 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
   });
 
   it('a thread the director added shows, folded under it, that the map writer finds its evidence, and its Take out names it', () => {
-    const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
+    const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.');
     const page = renderMeeting({ data, pendingEdits: ViewLogic.meetingPendingSlot(data, draft) });
     const row = elementsOf(page, withClass('meeting__thread')).find((r) => textOf(r).includes('The second ledger'));
     const folds = foldsIn(row);
@@ -332,40 +333,33 @@ describe('1C: the meeting\'s page renders meetingView\'s threads as it gives the
     expect(takeOut.map((b) => b.props['aria-label'])).toEqual(['Take out the thread you added: The second ledger']);
   });
 
-  it('shows the left-out threads by name, each with its role picker, and folds their reasons under "Why each is left out"', () => {
+  it('shows the left-out threads by name, each opening in place to its line', () => {
     const [leftOut] = elementsOf(tree, withClass('meeting__left-out'));
     expect(view.leftOut.threads.map((t) => t.name)).toEqual(['The letter']);
     expect(textOf(leftOut)).toContain(view.leftOut.title);
     const names = elementsOf(leftOut, withClass('meeting__left-out-name'));
     expect(names).toHaveLength(view.leftOut.threads.length);
-    names.forEach((name, i) => {
-      const thread = view.leftOut.threads[i];
-      expect(textOf(name)).toContain(thread.name);
-      const [picker] = elementsOf(name, (n) => n.type === 'select');
-      expect(picker.props.value).toBe('left-out');
-      expect(picker.props['aria-label']).toBe(`Role of the thread ${thread.name}`);
-    });
     const folds = foldsIn(leftOut);
-    expect(folds.map((f) => f.props.title)).toEqual([view.leftOut.reasonsTitle]);
-    view.leftOut.threads.forEach((thread) => {
-      expect(held(folds[0])).toContain(`${thread.name}: ${thread.reason}`);
-      expect(textOf(leftOut)).not.toContain(thread.reason);
+    expect(folds.map((f) => f.props.title)).toEqual(view.leftOut.threads.map((t) => t.label));
+    view.leftOut.threads.forEach((thread, i) => {
+      expect(held(folds[i])).toContain(thread.line);
+      expect(textOf(leftOut)).not.toContain(thread.line);
     });
   });
 });
 
-describe('1C: each connection shows its line and the names of the threads it joins, with its strike control', () => {
+describe('1C: each connection between the threads in the story shows its line, with its strike control', () => {
   const data = payloadOf(meetingState());
   const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
   const rows = elementsOf(renderMeeting({ data }), withClass('meeting__connection'));
 
-  it('shows each connection\'s line and the threads it joins by name, and folds its evidence', () => {
+  it('shows each connection\'s line alone, and folds its evidence', () => {
     expect(rows).toHaveLength(view.connections.length);
     expect(view.connections[0].joins).toBe('"The overdose vote" and "The envelope"');
     rows.forEach((row, i) => {
       const connection = view.connections[i];
       expect(textOf(row)).toContain(connection.line);
-      expect(textOf(row)).toContain(`Joins ${connection.joins}`);
+      expect(textOf(row)).not.toContain('Joins');
       const folds = foldsIn(row);
       expect(folds.map((f) => f.props.title)).toEqual([view.evidenceTitle]);
       connection.evidence.forEach((piece) => expect(held(folds[0])).toContain(piece.text));
@@ -387,10 +381,10 @@ describe('1C: a check still failing shows under the line it names (spec 6.3)', (
   const data = withFailures([
     { type: 'story-terms', message: 'rework: t3 holds a clock time', line: 'The line of "The envelope" holds a clock time.', place: 'threads[#t3]' },
     { type: 'evidence-not-in-record', message: 'rework: c2 piece 1', line: 'The evidence behind a connection cites a document the record does not hold.', place: 'connections[#c2]' },
-    { type: 'story-terms', message: 'rework: story figure', line: 'The story holds a money figure.', place: 'story' },
-    { type: 'left-out-without-reason', message: 'rework: t5 reason', line: 'The thread "The letter" is left out with no reason.', place: 'threads[#t5]' },
+    { type: 'story-terms', message: 'rework: a1 story figure', line: 'The angle\'s story holds a money figure.', place: 'angles[#a1]' },
+    { type: 'story-terms', message: 'rework: t5 clock time', line: 'The line of "The letter" holds a clock time.', place: 'threads[#t5]' },
     { type: 'duplicate-id', message: 'rework: q1 repeated', line: 'Two questions share one id.', place: 'questions[#q1]' },
-    { type: 'over-length', message: 'rework: 340 words', line: "The writer's page runs to 340 words, past the meeting's 300." }
+    { type: 'over-length', message: 'rework: 470 words', line: "The writer's part of the meeting runs to 400 words, past the 350 it may use." }
   ]);
   const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
   const tree = renderMeeting({ data });
@@ -402,8 +396,9 @@ describe('1C: a check still failing shows under the line it names (spec 6.3)', (
     expect(checksIn(thread)).toEqual(view.threads.find((t) => t.id === 't3').failures);
     const connection = elementsOf(tree, withClass('meeting__connection'))[1];
     expect(checksIn(connection)).toEqual(view.connections[1].failures);
-    const [story] = elementsOf(tree, (n) => withClass('meeting__field')(n) && elementsOf(n, (c) => c.props.id === 'meeting-story').length === 1);
-    expect(checksIn(story)).toEqual(view.story.failures);
+    const [pitch] = elementsOf(tree, (n) => n.type === 'section' && n.props.key === 'pitch');
+    expect(view.pitch.failures).toEqual(["Check still failing: The angle's story holds a money figure."]);
+    expect(checksIn(pitch)).toEqual([...view.pitch.failures, ...view.questions[0].failures]);
     const [question] = elementsOf(tree, withClass('meeting__question'));
     expect(view.questions[0].failures).toEqual(['Check still failing: Two questions share one id.']);
     expect(checksIn(question)).toEqual(view.questions[0].failures);
@@ -422,38 +417,34 @@ describe('1C: a check still failing shows under the line it names (spec 6.3)', (
 
   it('keeps a failure with no place at the top, in the round\'s lines', () => {
     expect(checksIn(round)).toEqual(view.checkFailures);
-    expect(view.checkFailures).toEqual(["Check still failing: The writer's page runs to 340 words, past the meeting's 300."]);
+    expect(view.checkFailures).toEqual(["Check still failing: The writer's part of the meeting runs to 400 words, past the 350 it may use."]);
   });
 });
 
 describe('1C: no tag on the page, and every aria-label names a thread by its name', () => {
   const state = meetingState();
   const data = payloadOf(state);
-  const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
+  const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.');
   const tree = renderMeeting({ data, pendingEdits: ViewLogic.meetingPendingSlot(data, draft) });
-  const ids = [...draft.threads, ...draft.connections, ...draft.questions].map((element) => element.id);
+  const ids = [...draft.angles, ...draft.threads, ...draft.connections, ...draft.questions].map((element) => element.id);
 
-  it('prints and reads out no thread\'s, connection\'s or question\'s id', () => {
-    expect(ids).toEqual(['t2', 't1', 't3', 't4', 't5', 't6', 'c1', 'c2', 'q1']);
+  it('prints and reads out no angle\'s, thread\'s, connection\'s or question\'s id', () => {
+    expect(ids).toEqual(['a1', 'a2', 'a3', 't2', 't1', 't3', 't4', 't5', 't6', 'c1', 'c2', 'q1', 'q2']);
     const tag = new RegExp(`\\b(?:${ids.join('|')})\\b`);
     const strings = everyString(tree);
     expect(strings.length).toBeGreaterThan(20);
     expect(strings.filter((s) => tag.test(s))).toEqual([]);
   });
 
-  it('each role picker names its thread by its name', () => {
-    const view = ViewLogic.meetingView(data, draft, '');
-    const [add] = elementsOf(tree, withClass('meeting__add'));
-    const pickers = elementsOf(tree, (n) => n.type === 'select' && elementsOf(add, (a) => a === n).length === 0);
-    expect(pickers.map((p) => p.props['aria-label'])).toEqual(
-      [...view.threads, ...view.leftOut.threads].map((t) => `Role of the thread ${t.name}`)
-    );
+  // Piece 3 (spec 14): the role picker goes, the add line's included.
+  it('shows no role picker', () => {
+    expect(elementsOf(tree, (n) => n.type === 'select')).toEqual([]);
   });
 });
 
 // The page's other controls behave as today: each changes the weave the director has through the
 // view logic's operations, by the element's place in the weave, never its place on the page.
-describe('1C: the role picker, the strike and the answer change the director\'s weave as before', () => {
+describe('1C: the pitch\'s editors, the strike and the answer change the director\'s weave', () => {
   const data = payloadOf(meetingState());
   const view = ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
   const saved = () => {
@@ -462,14 +453,13 @@ describe('1C: the role picker, the strike and the answer change the director\'s 
     return { tree, last: () => calls[calls.length - 1] };
   };
 
-  it('the main thread\'s role picker, first on the page and second in the weave, changes the second thread', () => {
+  it('the pitch\'s story editor rewrites the open angle\'s story', () => {
     const { tree, last } = saved();
-    const [picker] = elementsOf(tree, (n) => n.type === 'select' && n.props['aria-label'] === `Role of the thread ${view.threads[0].name}`);
-    picker.props.onChange({ target: { value: 'mirrors-it' } });
+    const [story] = elementsOf(tree, (n) => n.type === 'textarea' && n.props.id === 'meeting-story');
+    expect(story.props.value).toBe(view.pitch.story.text);
+    story.props.onChange({ target: { value: 'The room voted, and the ledger kept talking.' } });
     expect(last()).toMatchObject({ type: 'SAVE_PENDING_EDITS', checkpoint: 'arc-selection' });
-    expect(last().edits.weave.threads.map((t) => [t.id, t.role])).toEqual([
-      ['t2', 'grounds-it'], ['t1', 'mirrors-it'], ['t3', 'complicates-it'], ['t4', 'carries-it-forward'], ['t5', 'left-out']
-    ]);
+    expect(last().edits.weave.angles.map((a) => a.story)).toEqual(['The room voted, and the ledger kept talking.', WEAVE.angles[1].story, WEAVE.angles[2].story]);
   });
 
   it('a strike strikes its connection, and an answer answers its question', () => {
@@ -483,16 +473,16 @@ describe('1C: the role picker, the strike and the answer change the director\'s 
   });
 });
 
-describe('1C: the add-a-thread line takes a name, a line and a role, through addMeetingThread', () => {
+describe('1C: the add-a-thread line takes a name and a line, through addMeetingThread', () => {
   const src = read('components/checkpoints/ArcSelection.js');
   const tree = renderMeeting({ data: payloadOf(meetingState()) });
   const [add] = elementsOf(tree, withClass('meeting__add'));
 
-  it('holds a name, a line and a role, each in its own control, and adds them through addMeetingThread', () => {
+  it('holds a name and a line, each in its own control, and adds them through addMeetingThread', () => {
     expect(elementsOf(add, withClass('meeting__add-name')).map((n) => n.props['aria-label'])).toEqual(['The name of a thread to add']);
     expect(elementsOf(add, withClass('meeting__add-line')).map((n) => n.props['aria-label'])).toEqual(['A thread to add, in one line']);
-    expect(elementsOf(add, (n) => n.type === 'select').map((n) => n.props['aria-label'])).toEqual(['Role of the thread to add']);
-    expect(src).toContain('ViewLogic.addMeetingThread(draft, newName, newLine, newRole)');
+    expect(elementsOf(add, (n) => n.type === 'select')).toEqual([]);
+    expect(src).toContain('ViewLogic.addMeetingThread(draft, newName, newLine)');
   });
 
   it('holds the thread\'s line in classes named for the line, never the claim', () => {
@@ -501,8 +491,8 @@ describe('1C: the add-a-thread line takes a name, a line and a role, through add
 });
 
 // A weave the add line builds is a payload the gate takes, at each of the three actions, on a state
-// in the story-level shape: the thread is stored as typed, `{id, name, line, role}`, with no evidence
-// (the map writer finds it; spec 5.3), as one edit of the director's.
+// in the story-level shape: the thread is stored as typed, `{id, name, line}`, with no evidence (the
+// map writer finds it; spec 5.3), in the open angle's story, as one edit of the director's.
 describe('1C: a weave the add line builds passes buildResumePayload on a state in the new shape', () => {
   const { buildResumePayload } = require('../../server.js');
 
@@ -513,22 +503,23 @@ describe('1C: a weave the add line builds passes buildResumePayload on a state i
   ])('%s', (action, note) => {
     const state = meetingState();
     const data = payloadOf(state);
-    const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.', 'grounds-it');
+    const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', 'Riley kept a second ledger.');
     expect(ViewLogic.meetingWeaveProblems(draft, data.weave)).toBeNull();
     const payload = ViewLogic.meetingPayload(action, data, draft, note);
     const { error, stateUpdates } = buildResumePayload(payload, state, 'journalist', 'arc-selection');
     expect(error).toBeNull();
-    expect(stateUpdates.weave.threads[5]).toEqual({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.', role: 'grounds-it' });
+    expect(stateUpdates.weave.threads[5]).toEqual({ id: 't6', name: 'The second ledger', line: 'Riley kept a second ledger.' });
+    expect(stateUpdates.weave.angles[0].threads).toEqual(['t1', 't2', 't3', 't4', 't6']);
     expect(stateUpdates._weaveHandEdits.edits.map((e) => e.path)).toEqual(['threads[#t6]']);
   });
 
   test('a thread typed with its name alone is taken too, and the meeting after shows it with the fold\'s line', () => {
     const state = meetingState();
     const data = payloadOf(state);
-    const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', '', 'complicates-it');
+    const draft = ViewLogic.addMeetingThread(ViewLogic.meetingDraftOf(data), 'The second ledger', '');
     const { error, stateUpdates } = buildResumePayload(ViewLogic.meetingPayload('reweave', data, draft, ''), state, 'journalist', 'arc-selection');
     expect(error).toBeNull();
-    expect(stateUpdates.weave.threads[5]).toEqual({ id: 't6', name: 'The second ledger', line: '', role: 'complicates-it' });
+    expect(stateUpdates.weave.threads[5]).toEqual({ id: 't6', name: 'The second ledger', line: '' });
     // The rework keeps the thread and finds it no evidence: the meeting after shows it with the fold's line.
     const after = payloadOf({ ...state, ...stateUpdates, weave: weaveLib.withFactCheckMark(clone(stateUpdates.weave), MARK), _meetingRound: null });
     expect(after.directorsThreads).toEqual(['t6']);
@@ -558,7 +549,7 @@ describe('1C: the meeting\'s styles', () => {
 // which the meeting's words read too), and ArcSelection.js reads them. Fix round 3: one convention
 // for the meeting's and the map's pages, `label`, the element's name as the page prints it, and
 // `labels`, its aria-labels and fold title keyed by the control, the fold's from one builder
-// (evidenceFoldLabel); the connection's "Joins" line is its `label`.
+// (evidenceFoldLabel). Since piece 3 a connection prints its line alone, which is its `label`.
 describe('fix rounds 2 and 3: meetingView gives each thread and connection the labels the page reads, and the page builds none', () => {
   /** The meeting with the envelope's name padded, and the heir named by its line alone. */
   function labelled() {
@@ -569,13 +560,15 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
     return { data, view: ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '') };
   }
 
-  it("each thread carries its label, its name trimmed or its line when it has none, and the fold's, the role picker's and the Take out's labels built from it", () => {
+  it("each thread carries its label, its name trimmed or its line when it has none, and its controls' labels built from it", () => {
     const { view } = labelled();
     const envelope = view.threads.find((t) => t.id === 't3');
     expect(envelope.label).toBe('The envelope');
     expect(envelope.labels).toEqual({
       fold: "What's behind it: The envelope",
-      role: 'Role of the thread The envelope',
+      flip: 'Leave out of the story: The envelope',
+      name: 'The name of the thread The envelope',
+      line: 'The line of the thread The envelope',
       takeOut: 'Take out the thread you added: The envelope'
     });
     expect(envelope.labels.fold).toBe(ViewLogic.evidenceFoldLabel(envelope.label));
@@ -584,23 +577,15 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
     expect(view.leftOut.names).toBe('The letter');
   });
 
-  it("each connection carries its label, the Joins line the page prints, and the fold's and the strike's labels, naming it by the threads it joins or its quoted line when it joins none", () => {
+  it("each connection carries its label, the line the page prints, and the fold's and the strike's labels, naming it by the threads it joins", () => {
     const { data, view } = labelled();
-    expect(view.connections[0].label).toBe('Joins "The overdose vote" and "The envelope"');
+    expect(view.connections[0].label).toBe(WEAVE.connections[0].line);
     expect(view.connections[0].labels).toEqual({
       fold: `What's behind it: the connection between "The overdose vote" and "The envelope"`,
       strike: 'Strike the connection between "The overdose vote" and "The envelope"'
     });
-    const draft = ViewLogic.setConnectionStruck(ViewLogic.meetingDraftOf(data), 0, true);
-    draft.connections[1].joins = [];
-    const after = ViewLogic.meetingView(data, draft, '');
+    const after = ViewLogic.meetingView(data, ViewLogic.setConnectionStruck(ViewLogic.meetingDraftOf(data), 0, true), '');
     expect(after.connections[0].labels.strike).toBe('Unstrike the connection between "The overdose vote" and "The envelope"');
-    // A connection that joins no thread prints no Joins line, and its controls name it by its line.
-    expect(after.connections[1].label).toBe('');
-    expect(after.connections[1].labels).toEqual({
-      fold: `What's behind it: the connection "The night of the sale is the night the result came back."`,
-      strike: 'Strike the connection "The night of the sale is the night the result came back."'
-    });
   });
 
   it('the page names each thread and connection by those fields, its fold groups and aria-labels included', () => {
@@ -608,18 +593,17 @@ describe('fix rounds 2 and 3: meetingView gives each thread and connection the l
     const tree = renderMeeting({ data });
     const envelope = elementsOf(tree, withClass('meeting__thread')).find((row) => textOf(row).includes('The envelope'));
     const thread = view.threads.find((t) => t.id === 't3');
-    expect(elementsOf(envelope, (n) => n.type === 'select').map((n) => n.props['aria-label'])).toEqual([thread.labels.role]);
     expect(elementsOf(envelope, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([thread.labels.fold]);
     elementsOf(tree, withClass('meeting__connection')).forEach((row, i) => {
       expect(elementsOf(row, (n) => n.type === 'button').map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.strike]);
       expect(elementsOf(row, withClass('meeting__fold')).map((n) => n.props['aria-label'])).toEqual([view.connections[i].labels.fold]);
-      expect(elementsOf(row, withClass('meeting__joins')).map(textOf)).toEqual([view.connections[i].label]);
+      expect(elementsOf(row, withClass('meeting__detail')).map(textOf)).toEqual([view.connections[i].label]);
     });
   });
 
   it('ArcSelection.js reads the labels and builds none of them', () => {
     const src = read('components/checkpoints/ArcSelection.js');
-    ['thread.label', 'thread.labels.fold', 'thread.labels.role', 'thread.labels.takeOut', 'connection.label', 'connection.labels.fold', 'connection.labels.strike']
+    ['thread.label', 'thread.labels.fold', 'thread.labels.takeOut', 'connection.line', 'connection.labels.fold', 'connection.labels.strike']
       .forEach((field) => expect(`${field}: ${src.includes(field)}`).toBe(`${field}: true`));
     ['function threadName', 'function connectionName', "'Role of the thread ' +", "'Take out the thread you added: ' +", "'the connection between ' +", "view.evidenceTitle + ': '", "'Joins '",
       'foldLabel:', 'AriaLabel']

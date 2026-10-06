@@ -630,7 +630,8 @@ describe('instructionText: the pipeline\'s own instructions only', () => {
     const state = reworkFixtureState('journalist');
     // Phase 4 (brief 4.4): the weave the arc reworker and the fact check print back, and
     // (brief 4.6) the map writer prints first as the settled weave. The old arcs went (R4).
-    state.weave = { ...state.weave, story: `${MODEL} story` };
+    // Piece 3 (brief 3B): the story is the first angle's, the angle the settled weave prints.
+    state.weave = { ...state.weave, angles: state.weave.angles.map((angle, i) => (i === 0 ? { ...angle, story: `${MODEL} story` } : angle)) };
     // Brief 4.6: the map, which the article writer prints back
     state.outline = { ...state.outline, headline: `${MODEL} headline of the map` };
     state.contentBundle = { headline: { main: `${MODEL} headline` }, sections: [] };

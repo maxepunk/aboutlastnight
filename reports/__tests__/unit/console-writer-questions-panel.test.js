@@ -44,8 +44,11 @@ describe('4.8: the story meeting shows its questions through its own view', () =
     expect(src).not.toMatch(/data\.writerQuestions/);
   });
 
-  it('renders each question of the meeting\'s view with an answer box that sets the answer on its question', () => {
-    expect(src).toMatch(/view\.questions\.map\(/);
+  // Piece 3 (brief 3B; spec 5): each question sits beside the thread its answer changes, or by the
+  // pitch, so the page renders each where the view puts it, through one block with its answer box.
+  it('renders each question of the meeting\'s view where it sits, with an answer box that sets the answer on its question', () => {
+    ['pitch.questions.map(questionBlock)', 'thread.questions.map(questionBlock)', 'leftOut.questions.map(questionBlock)']
+      .forEach((where) => expect(src).toContain(where));
     expect(count(src, 'ViewLogic.setQuestionAnswer(')).toBe(1);
   });
 });

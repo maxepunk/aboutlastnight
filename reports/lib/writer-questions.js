@@ -7,7 +7,9 @@
  * them in its own property, `questions` (WEAVE_QUESTIONS_PROPERTY below), each
  * `{id, kind, about, question, changes}`, with C15's three cases as the story meeting asks
  * them (a player, a pronoun, a figure that looks wrong) and what each answer changes in
- * print. The outline's `writerQuestions` went with the map (brief 4.6), and the
+ * print. Since phase 4b, piece 3 (brief 3B; R10), a question may name the thread it sits beside,
+ * `thread` (WEAVE_QUESTION_THREAD_KEY): the thread its answer changes. One with none sits by the
+ * pitch, its answer changing who appears in the story. The outline's `writerQuestions` went with the map (brief 4.6), and the
  * article's with brief 4.7b, their carry through a rework (carriedWriterQuestions) and
  * their normalizer with them. Their strip from what prints (withoutWriterQuestions) went
  * with task 4.11: the field rode only on an outline or an article written before phase 4,
@@ -59,10 +61,17 @@ const WEAVE_QUESTIONS_KEY = 'questions';
 const WEAVE_QUESTION_KINDS = Object.freeze(['player', 'pronoun', 'figure']);
 
 /**
+ * The key a weave question names the thread it sits beside under (phase 4b, piece 3, brief 3B;
+ * C15, R10): the id of the thread its answer changes. Optional: a question with none sits by the
+ * pitch.
+ */
+const WEAVE_QUESTION_THREAD_KEY = 'thread';
+
+/**
  * The weave's `questions`, as the weave's schema carries it (lib/sdk-client/subagents.js
  * WEAVE_SCHEMA): each question with its id, its kind, what it is about, the question and
- * what its answer changes in print. The arc writer's OUTPUT FORMAT shows `about` in this
- * wording.
+ * what its answer changes in print, and the thread it sits beside when its answer changes a
+ * thread. The arc writer's OUTPUT FORMAT shows `about` and `thread` in this wording.
  */
 const WEAVE_QUESTIONS_PROPERTY = Object.freeze({
   type: 'array',
@@ -74,7 +83,8 @@ const WEAVE_QUESTIONS_PROPERTY = Object.freeze({
       kind: { type: 'string', enum: [...WEAVE_QUESTION_KINDS], description: 'The C15 case the question raises' },
       about: { type: 'string', description: "The player's name; for a figure, the ledger entry's time and amount or the words said in the room" },
       question: { type: 'string', description: 'The question for the director' },
-      changes: { type: 'string', description: 'What its answer changes in print' }
+      changes: { type: 'string', description: 'What its answer changes in print' },
+      [WEAVE_QUESTION_THREAD_KEY]: { type: 'string', description: 'The id of the thread its answer changes; left out when its answer changes who appears in the story (C15)' }
     },
     required: ['id', 'kind', 'about', 'question', 'changes']
   }
@@ -88,12 +98,14 @@ const WEAVE_ANSWER_KEY = 'answer';
 
 /**
  * The weave's questions in a list, as `{id, kind, about, question, changes}` with each
- * string trimmed at the ends, and the director's `answer` when there is one, trimmed at
- * the ends only (brief 4.5). An entry that lacks one of the five, or whose kind is not
- * one of WEAVE_QUESTION_KINDS, is not a question the meeting can ask, and is left out.
+ * string trimmed at the ends, then the thread it sits beside when it names one (piece 3,
+ * brief 3B), trimmed, and the director's `answer` when there is one, trimmed at the ends only
+ * (brief 4.5). An entry that lacks one of the five, or whose kind is not one of
+ * WEAVE_QUESTION_KINDS, is not a question the meeting can ask, and is left out. The thread is
+ * read beside the answer and never required, so a question by the pitch stays.
  *
  * @param {*} value - a weave's questions
- * @returns {Array<{id: string, kind: string, about: string, question: string, changes: string, answer?: string}>}
+ * @returns {Array<{id: string, kind: string, about: string, question: string, changes: string, thread?: string, answer?: string}>}
  */
 function weaveQuestionsOf(value) {
   if (!Array.isArray(value)) return [];
@@ -101,8 +113,13 @@ function weaveQuestionsOf(value) {
     .filter((q) => q && typeof q === 'object')
     .map((q) => {
       const question = Object.fromEntries(WEAVE_QUESTION_FIELDS.map((field) => [field, typeof q[field] === 'string' ? q[field].trim() : '']));
+      const thread = typeof q[WEAVE_QUESTION_THREAD_KEY] === 'string' ? q[WEAVE_QUESTION_THREAD_KEY].trim() : '';
       const answer = typeof q[WEAVE_ANSWER_KEY] === 'string' ? q[WEAVE_ANSWER_KEY].trim() : '';
-      return answer ? { ...question, [WEAVE_ANSWER_KEY]: answer } : question;
+      return {
+        ...question,
+        ...(thread && { [WEAVE_QUESTION_THREAD_KEY]: thread }),
+        ...(answer && { [WEAVE_ANSWER_KEY]: answer })
+      };
     })
     .filter((q) => WEAVE_QUESTION_FIELDS.every((field) => q[field]) && WEAVE_QUESTION_KINDS.includes(q.kind));
 }
@@ -307,6 +324,8 @@ module.exports = {
   WEAVE_QUESTION_KINDS,
   WEAVE_QUESTIONS_PROPERTY,
   WEAVE_ANSWER_KEY,
+  // Phase 4b, piece 3 (brief 3B): the thread a question sits beside
+  WEAVE_QUESTION_THREAD_KEY,
   weaveQuestionsOf,
   isAnswered,
   withoutAnswers,
