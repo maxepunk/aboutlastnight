@@ -3682,7 +3682,7 @@
       .filter(Boolean);
   }
 
-  /** An elision inside a quoted passage, where the passage is split (lib/hand-edit-diff.js ELLIPSIS). */
+  /** An elision inside a quoted passage, where the passage is split (lib/grounding.js ELISION). */
   var ELISION = /\s*(?:\[\s*(?:\.{3}|\u2026)\s*\]|\.{3}|\u2026)\s*/;
 
   /** The fewest words a quoted passage needs to locate anything (lib/hand-edit-diff.js MIN_LOCATING_WORDS; a test holds the two equal). */

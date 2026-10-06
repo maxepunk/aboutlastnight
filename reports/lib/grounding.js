@@ -1,8 +1,10 @@
 /**
  * Grounding: whether a piece of text is the director's words, word for word, and
- * whether the director's words name a quote's speaker; and the one rule of what a quoted
+ * whether the director's words name a quote's speaker; the one rule of what a quoted
  * span is (QUOTED_SPANS, phase 4b brief 1B), which the article fact check and the
- * evidence module (lib/evidence.js) both read.
+ * evidence module (lib/evidence.js) both read; and the one rule of where a quoted passage
+ * splits at an elision (ELISION), which the evidence module and the edits' guard
+ * (lib/hand-edit-diff.js) both read.
  *
  * Shared by the notes step (lib/director-enricher.js), which keeps a quote, a context, a
  * correction, an epilogue item or a link's observation only when the director's words
@@ -135,6 +137,17 @@ const SINGLE_QUOTED = `${SINGLE_OPENING}(?:(?:(?!${SINGLE_ENDING})[^\\n])*${SING
 const QUOTED_SPANS = new RegExp(`(?:${DOUBLE_QUOTED}|${SINGLE_QUOTED})`, 'g');
 
 /**
+ * Where a quoted passage splits at an elision: "...", an ellipsis, either in brackets, with the
+ * space around it. A passage with words left out is read as its parts, each word for word on its
+ * own. The one rule for every reader that splits a quotation so (phase 4b fix round, fix 4): the
+ * guard's locating of a finding's quotes (lib/hand-edit-diff.js locateQuotedText) and the evidence
+ * check's reading of a quotation in a piece (lib/evidence.js). The console, which cannot require
+ * this module, keeps a copy (console/checkpoint-view-logic.js ELISION), held to the guard by a
+ * test on a corpus of findings.
+ */
+const ELISION = /\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3}|…)\s*/;
+
+/**
  * The fewest words in a sentence that can name a line (task 3.11, fix round 1). A name
  * or a vote word the line says whole ("Blake.", "No.") has fewer, and corrections quote
  * names and vote words as often as lines.
@@ -264,4 +277,4 @@ function groundQuote(quote, rawProse, corrections) {
   return { context, correction, correctionFailed, speaker: recorded(q.speaker), addressee: recorded(q.addressee) };
 }
 
-module.exports = { normalizeForGrounding, isVerbatimIn, namedOutsideQuote, quotedPassages, groundQuote, QUOTED_SPANS };
+module.exports = { normalizeForGrounding, isVerbatimIn, namedOutsideQuote, quotedPassages, groundQuote, QUOTED_SPANS, ELISION };

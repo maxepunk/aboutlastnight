@@ -33,7 +33,7 @@
  */
 'use strict';
 
-const { isVerbatimIn, QUOTED_SPANS } = require('./grounding');
+const { isVerbatimIn, normalizeForGrounding, QUOTED_SPANS, ELISION } = require('./grounding');
 const { recordIdOf, buildMorningTimeline, formatAmount } = require('./prompt-renderers/record-view');
 const { directorAccusationText } = require('./accusation-verdict');
 const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('./writer-questions');
@@ -240,15 +240,20 @@ function contextOf(context) {
 
 // ── The evidence check ───────────────────────────────────────────────────────
 
-/** Where an elided quotation splits: "...", an ellipsis, either in brackets. */
-const ELISION = /\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3}|…)\s*/;
+/**
+ * The quotation marks the grounding module's fold leaves apart from a straight single mark: the
+ * straight double mark, and the low and the reversed ones.
+ */
+const OTHER_QUOTATION_MARKS = /[‚‛„‟"]/g;
 
-/** Every quotation mark, curly or straight, single or double: the marks a quotation may differ in. */
-const QUOTATION_MARKS = /[‘’‚‛“”„‟"]/g;
-
-/** Text as a quotation is compared: every quotation mark one mark, and one case. */
+/**
+ * Text as a quotation is compared: the grounding module's fold (lib/grounding.js
+ * normalizeForGrounding: curly marks straight, every dash a hyphen, runs of space one space), then
+ * every quotation mark one mark, single or double, and one case. A quotation that differs from
+ * its source only in its marks, case or spacing is word for word (Review focus 5).
+ */
 function folded(text) {
-  return String(text).replace(QUOTATION_MARKS, "'").toLowerCase();
+  return normalizeForGrounding(text).replace(OTHER_QUOTATION_MARKS, "'").toLowerCase();
 }
 
 /** A quotation's words without its own marks, or the punctuation and space at its ends. */

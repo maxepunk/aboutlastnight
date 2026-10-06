@@ -129,7 +129,7 @@
  */
 'use strict';
 
-const { isVerbatimIn, normalizeForGrounding, quotedPassages } = require('./grounding');
+const { isVerbatimIn, normalizeForGrounding, quotedPassages, ELISION } = require('./grounding');
 // The desk's naming rule (task 4.3b): how a section's blocks pair across two versions and
 // which of them the director moved, one rule for the desk's change report and these edits.
 // A dual-export console module, required here as server.js requires outline-edit-logic.js.
@@ -2059,9 +2059,6 @@ function locatingTexts(edit) {
   ];
 }
 
-/** An elision inside a quoted passage. */
-const ELLIPSIS = /\s*(?:\[\s*(?:\.{3}|…)\s*\]|\.{3}|…)\s*/;
-
 /** The record's texts, each folded once, by the list they came in (locateQuotedText). */
 const FOLDED_RECORDS = new WeakMap();
 
@@ -2107,7 +2104,7 @@ function locateQuotedText(text, edits, output, { record = [] } = {}) {
   const list = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
   const headings = sectionHeadings(output);
   const passages = quotedPassages(text)
-    .flatMap((p) => p.split(ELLIPSIS))
+    .flatMap((p) => p.split(ELISION))
     .map((p) => p.trim())
     .filter((p) => wordsIn(p) >= MIN_LOCATING_WORDS && !headings.has(fold(p)));
   if (passages.length === 0) return { editIds: [], writer: false };

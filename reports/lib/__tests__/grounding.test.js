@@ -74,6 +74,22 @@ describe('who asks the question', () => {
     expect(enricher).not.toMatch(/function (normalizeForGrounding|isVerbatimIn|namedOutsideQuote)\b/);
   });
 
+  // Fix round, fix 4: one rule says where a quoted passage splits at an elision, which the
+  // guard's locating of a finding's quotes and the evidence check's reading of a quotation both
+  // read; and the evidence check folds a quotation with the grounding module's fold. Neither
+  // module keeps a copy of either.
+  it('the elision rule is the grounding module\'s, and the guard and the evidence check import it', () => {
+    const { ELISION } = require('../grounding');
+    ['a ... b', 'a … b', 'a [...] b', 'a [ … ] b', 'a...b'].forEach((text) => expect([text, text.split(ELISION)]).toEqual([text, ['a', 'b']]));
+    expect('a. b, c'.split(ELISION)).toEqual(['a. b, c']);
+    for (const file of ['evidence.js', 'hand-edit-diff.js']) {
+      const source = read(file);
+      expect([file, source]).toEqual([file, expect.stringMatching(/const \{[^}]*\bELISION\b[^}]*\} = require\('\.\/grounding'\);/)]);
+      expect([file, source]).toEqual([file, expect.not.stringMatching(/const (ELISION|ELLIPSIS) = /)]);
+    }
+    expect(read('evidence.js')).toMatch(/normalizeForGrounding\(text\)/);
+  });
+
   // Final review (data-harness-docs[1]): one rule decides a quote's speaker and
   // addressee, groundQuote, which the notes step's groundQuotes and the renderer's
   // quoteEntry both call; neither keeps a matcher of its own.
