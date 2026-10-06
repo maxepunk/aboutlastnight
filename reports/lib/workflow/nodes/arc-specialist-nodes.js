@@ -536,15 +536,16 @@ const NOTE_CORRECTS_A_MECHANIC = 'The director knows the game, so a note that co
  * Each kind of arc rework's task, the clause its first line gives after the theme's rework
  * identity (lib/theme-config.js identityLineOf, the call `arc-rework`; brief 4.13): why the
  * rework runs and where its task is (phase 3, brief 3.3; TH7; brief 4.5). On a send-back,
- * the director's note in the revision context; on a reweave, the director's changes the
- * revision context lists; on an automatic pass, after a weave check or the fact check, what
- * the revision context says it found. How much of the previous weave a rework keeps is the
+ * the director's note in the revision context; on a reweave, the angle the director has open,
+ * with the revision context saying what the rework fits into it (their changes, their note, or
+ * both, since a reweave can be a note alone; 3 fix A); on an automatic pass, after a weave check
+ * or the fact check, what the revision context says it found. How much of the previous weave a rework keeps is the
  * revision context's to say (buildRevisionContext), once. Each clause opens with the mark
  * that joins it to the identity.
  */
 const ARC_REWORK_CLAUSES = {
   'send-back': ": the director sent it back, and the director's note in the revision context is the task.",
-  reweave: ': the director changed the angle they have open at the story meeting and asked for a reweave, and the revision context names that angle and lists the changes this rework fits into it.',
+  reweave: ': the director asked at the story meeting for a reweave of the angle they have open, and the revision context names that angle and says what this rework fits into it.',
   automatic: ' after an automatic check or fact check; the revision context lists what it found and what this rework fixes.'
 };
 
