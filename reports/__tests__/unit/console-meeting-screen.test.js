@@ -808,3 +808,49 @@ describe('3D: an answer, in its box beside what it changes', () => {
     expect(page.last().edits.weave.questions.map((q) => q.answer)).toEqual(['Sarah ran the bar all morning.', undefined]);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3 fix A: a pick names an angle by its id, so it opens the first angle under that id, and the
+// gate refuses a pick of an id the writer repeated unless it is the angle the meeting opened
+// (lib/meeting.js pickProblems). meetingView flags every other angle under such an id
+// (`repeatedId`), and its card is off from the start, before the director edits anything.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('3 fix A: an angle under an id the writer repeated cannot be picked', () => {
+  /** The meeting with the writer's third angle under `id`. */
+  const repeating = (id) => {
+    const state = meetingState();
+    [state.weave, state._weaveBaseline].forEach((w) => { w.angles[2].id = id; });
+    return state;
+  };
+  const viewOf = (data) => ViewLogic.meetingView(data, ViewLogic.meetingDraftOf(data), '');
+
+  it('meetingView flags every angle under a repeated id but the one the meeting opened', () => {
+    expect(viewOf(payloadOf(repeating('a2'))).angles.map((a) => a.repeatedId)).toEqual([false, true, true]);
+    expect(viewOf(payloadOf(repeating('a1'))).angles.map((a) => a.repeatedId)).toEqual([false, false, true]);
+    expect(viewOf(payloadOf(meetingState())).angles.map((a) => a.repeatedId)).toEqual([false, false, false]);
+  });
+
+  it('a flagged angle\'s card is off and picks nothing', () => {
+    const page = mountMeeting({ data: payloadOf(repeating('a2')) });
+    const cards = elementsOf(page.render(), withClass('meeting__angle'));
+    expect(cards.map((c) => c.props.disabled)).toEqual([false, true, true]);
+    cards[1].props.onClick();
+    cards[2].props.onClick();
+    expect(page.actions).toEqual([]);
+  });
+
+  it('the angle the meeting opened stays pickable under a repeated id, so the director can come back to it, and the gate takes that pick', () => {
+    const { meetingResume } = require('../../lib/meeting');
+    const state = repeating('a1');
+    const data = payloadOf(state);
+    const page = mountMeeting({ data });
+    elementsOf(page.render(), withClass('meeting__angle'))[1].props.onClick();
+    expect(page.last().edits.weave.picked).toBe('a2');
+    const cards = elementsOf(page.render(), withClass('meeting__angle'));
+    expect(cards.map((c) => c.props.disabled)).toEqual([false, false, true]);
+    cards[0].props.onClick();
+    const back = page.last().edits.weave;
+    expect(back.picked).toBe('a1');
+    expect(meetingResume(ViewLogic.meetingPayload('approve', data, back, ''), state).error).toBeNull();
+  });
+});

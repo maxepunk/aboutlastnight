@@ -3227,6 +3227,13 @@
     var leftOutThreads = story.leftOut.map(function (entry) { return threadView(entry, false); });
     var besideAThread = new Set(threads.concat(leftOutThreads).map(function (t) { return t.id; }).filter(Boolean));
 
+    // A pick names an angle by its id, so it opens the first angle under that id, and the gate
+    // refuses a pick of an id the writer repeated unless it is the angle the meeting opened
+    // (meetingPickProblem, lib/meeting.js pickProblems). Every other angle under such an id is
+    // `repeatedId`, and its card picks nothing (3 fix A).
+    var shownAngles = shown ? asArray(shown.angles) : [];
+    var angleRepeats = new Set(repeatedIdsOf(shownAngles));
+    var shownOpenAt = shown ? shownAngles.indexOf(openAngleOf(shown)) : -1;
     var angles = asArray(weave.angles).map(function (element, index) {
       var angle = isPlainObject(element) ? element : {};
       var id = weaveIdOf(angle);
@@ -3243,6 +3250,7 @@
         label: label,
         labels: { pick: 'Open the angle ' + (label ? '"' + label + '"' : String(index + 1)) },
         open: isOpen,
+        repeatedId: id !== '' && angleRepeats.has(id) && index !== shownOpenAt,
         concerns: b.concerns,
         marks: b.marks,
         failures: b.failures

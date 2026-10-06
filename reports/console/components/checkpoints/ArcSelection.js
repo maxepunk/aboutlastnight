@@ -92,8 +92,9 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
     }
   }
 
-  // The open angle's card opens nothing new, and an angle with no id cannot be named by a pick.
-  function pick(angle) { if (!angle.open && angle.id) keep(ViewLogic.pickMeetingAngle(draft, angle.id), note); }
+  // The open angle's card opens nothing new, and an angle with no id, or under an id the writer
+  // repeated (`repeatedId`), cannot be named by a pick.
+  function pick(angle) { if (!angle.open && angle.id && !angle.repeatedId) keep(ViewLogic.pickMeetingAngle(draft, angle.id), note); }
   function editPitch(field, text) { keep(ViewLogic.setAngleField(draft, view.pitch.id, field, text), note); }
   function editThread(index, field, text) { keep(ViewLogic.setThreadField(draft, index, field, text), note); }
   function flip(thread) { keep(ViewLogic.flipMeetingThread(draft, thread.id, !thread.inStory), note); }
@@ -318,7 +319,7 @@ function ArcSelection({ data, onApprove, onReject, onRollback, dispatch, pending
               React.createElement('button', {
                 type: 'button',
                 className: 'meeting__angle' + (angle.open ? ' meeting__angle--open' : ''),
-                disabled: !angle.id,
+                disabled: !angle.id || angle.repeatedId,
                 onClick: function () { pick(angle); },
                 'aria-pressed': angle.open,
                 'aria-label': angle.labels.pick
