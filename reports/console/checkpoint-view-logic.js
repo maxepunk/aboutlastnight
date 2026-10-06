@@ -2295,6 +2295,14 @@
   var MEETING_NO_EVIDENCE_LINE = 'Nothing yet: the map writer finds the evidence for it.';
 
   /**
+   * The fold of a thread the director added that a writer has since returned (the payload's
+   * `reworkedThreads`; lib/meeting.js meetingReworkedThreads) while it still carries no evidence: a
+   * Reweave finds the evidence for such a thread, or leaves it with none when the record cannot carry
+   * it (spec 2026-10-06 section 7; 3 final, item 2). The map's gap note says so after.
+   */
+  var MEETING_NOTHING_FOUND_LINE = 'The writer found nothing in the record for it.';
+
+  /**
    * One of a piece's sources as the fold names it: the ledger, the evidence log or the
    * director's notes in EVIDENCE_SOURCE_LABELS' words, read in any case as the evidence check
    * reads them, and a document by its name and owner (receiptView), or as written when the
@@ -3105,7 +3113,8 @@
    *   its evidence folded (`evidence`, evidenceFoldView's) and the questions that sit beside it;
    *   the thread that carries the room's verdict `locked`, with `lockedLine` (R8). A thread the
    *   director added, at this look or an earlier one (`data.directorsThreads`), that has no
-   *   evidence carries the fold's one line (`noEvidence`, MEETING_NO_EVIDENCE_LINE); a thread of
+   *   evidence carries the fold's one line (`noEvidence`, MEETING_NO_EVIDENCE_LINE, or, once a writer
+   *   has returned it, `data.reworkedThreads`, MEETING_NOTHING_FOUND_LINE); a thread of
    *   the writer's with none shows the check's failure beside it (`failures`) instead.
    * - `leftOut`: every other thread, by name (`names`, under its `title`), each opening in place to
    *   its line, with the questions that sit beside them.
@@ -3194,6 +3203,7 @@
 
     var shownThreads = shown ? asArray(shown.threads) : [];
     var directorsEarlier = new Set(asArray(d.directorsThreads).map(function (id) { return asString(id).trim(); }).filter(Boolean));
+    var reworked = new Set(asArray(d.reworkedThreads).map(function (id) { return asString(id).trim(); }).filter(Boolean));
     var threadRepeats = new Set(repeatedIdsOf(shownThreads));
     var connectionRepeats = new Set(repeatedIdsOf(shown ? shown.connections : []));
     var threadView = function (entry, inStory) {
@@ -3225,7 +3235,9 @@
         added: added,
         repeatedId: id !== '' && threadRepeats.has(id),
         evidence: evidence,
-        noEvidence: evidence.length === 0 && (added || directorsEarlier.has(id)) ? MEETING_NO_EVIDENCE_LINE : '',
+        noEvidence: evidence.length === 0 && (added || directorsEarlier.has(id))
+          ? (!added && reworked.has(id) ? MEETING_NOTHING_FOUND_LINE : MEETING_NO_EVIDENCE_LINE)
+          : '',
         questions: questionsBeside(id),
         concerns: b.concerns,
         marks: b.marks,
@@ -4891,6 +4903,7 @@
     evidenceFoldLabel: evidenceFoldLabel,
     CUTS_AGAINST_LABEL: CUTS_AGAINST_LABEL,
     MEETING_NO_EVIDENCE_LINE: MEETING_NO_EVIDENCE_LINE,
+    MEETING_NOTHING_FOUND_LINE: MEETING_NOTHING_FOUND_LINE,
     evidenceFoldView: evidenceFoldView,
     WEAVE_ANSWER_KEY: WEAVE_ANSWER_KEY,
     DIRECTOR_WEAVE_SHAPE: DIRECTOR_WEAVE_SHAPE,

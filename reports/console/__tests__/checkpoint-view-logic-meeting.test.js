@@ -1050,6 +1050,26 @@ describe("1B fix 2: the fold says the map writer finds the evidence only for a t
     expect(threadOf(meetingView(later, meetingDraftOf(later, undefined)), 't6')).toMatchObject({ noEvidence: '', evidence: [expect.objectContaining({ shows: 'Two ledgers for one bar.' })] });
   });
 
+  // 3 final, item 2 (spec 2026-10-06 section 7): a Reweave finds the evidence for a thread the
+  // director added, or leaves it with none. Once a round's writer has returned the thread (the
+  // writer's last weave holds it, `reworkedThreads`) and it still has none, the meeting says the
+  // writer found nothing in the record for it; the map's gap note says so after.
+  test("a thread the director added that a round has since reworked, still with no evidence, says the writer found nothing for it", () => {
+    const left = clone(WEAVE);
+    left.threads.push(clone(ADDED));
+    left.angles[0].threads.push('t6');
+    const edits = standingAtMeeting(null, WEAVE, left);
+    const before = payloadOf(stateAt({ weave: weaveLib.withFactCheckMark(left, MARK), _weaveHandEdits: edits }));
+    expect(before.reworkedThreads).toEqual([]);
+    expect(threadOf(meetingView(before, meetingDraftOf(before, undefined)), 't6').noEvidence).toBe(ViewLogic.MEETING_NO_EVIDENCE_LINE);
+    const after = payloadOf(stateAt({ weave: left, _weaveBaseline: clone(left), _weaveHandEdits: edits }));
+    expect(after.reworkedThreads).toEqual(['t6']);
+    expect(threadOf(meetingView(after, meetingDraftOf(after, undefined)), 't6')).toMatchObject({
+      evidence: [], noEvidence: 'The writer found nothing in the record for it.'
+    });
+    expect(ViewLogic.MEETING_NOTHING_FOUND_LINE).toBe('The writer found nothing in the record for it.');
+  });
+
   test('the stop names no thread of the director\'s when the director added none and brought none in', () => {
     expect(payloadOf(stateAt()).directorsThreads).toEqual([]);
   });

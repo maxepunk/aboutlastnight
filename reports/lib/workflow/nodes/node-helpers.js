@@ -12,7 +12,7 @@ const { createBatches, processWithConcurrency, pairRepliesWithBatch } = require(
 const { getCanonicalName, getThemeNPCs } = require('../../theme-config');
 const {
   carriedEdits, formatEditLines, locateQuotedText, CHANGED_EDITS_KEY, DIRECTOR_EDIT_PREFIX, EDIT_LINES_GUIDE, WEAVE_EDIT_LINES_GUIDE,
-  MAP_EDIT_LINES_GUIDE, isMap
+  MAP_EDIT_LINES_GUIDE, isMap, weaveDirectorsShare
 } = require('../../hand-edit-diff');
 const { WEAVE_CHECKS_SOURCE, MEETING_ROUNDS, weaveForRework, pickedAngleOf, weaveIdOf } = require('../../weave');
 const { MAP_CHECKS_SOURCE } = require('../../map');
@@ -1205,6 +1205,23 @@ ${formatEditLines(standingEdits)}
       : standingEdits.length > 0 && 'each change in <HAND_EDITS>',
     humanFeedback && 'each change the note above asks for'
   ].filter(Boolean).join(', and ');
+  // 3 final, item 2 (spec 2026-10-06 section 7): a thread the director added to the open angle gets
+  // the pieces of the record that tell it, or none, which the meeting then reads as the record
+  // holding nothing for it (console/checkpoint-view-logic.js meetingView).
+  const openThreadIds = new Set(openAngle && Array.isArray(openAngle.threads)
+    ? openAngle.threads.map((id) => (typeof id === 'string' ? id.trim() : ''))
+    : []);
+  const addedThreadNames = openAngle
+    ? Object.keys(weaveDirectorsShare(standingEdits).addedThreads)
+      .filter((id) => openThreadIds.has(id))
+      .map((id) => {
+        const thread = (Array.isArray(previousOutput.threads) ? previousOutput.threads : []).find((each) => weaveIdOf(each) === id);
+        return `"${(thread && typeof thread.name === 'string' && thread.name.trim()) || id}"`;
+      })
+    : [];
+  const addedThreadsLine = addedThreadNames.length > 0
+    ? ` The director added ${listOfWords(addedThreadNames)} to this angle: give ${addedThreadNames.length > 1 ? 'each' : 'it'} as its evidence the pieces of the record that tell it, when the record holds them, and no evidence when it holds none, because the meeting then tells the director the record cannot carry it.`
+    : '';
   const otherEditsLine = otherEditIds.length > 0
     ? ` The director's other changes in <HAND_EDITS>, ${listOfWords(otherEditIds)}, are on other angles or on threads outside this one, and stand as they are.`
     : '';
@@ -1212,7 +1229,7 @@ ${formatEditLines(standingEdits)}
   if (!reweaveAsks) {
     reweaveScope = 'The director asked for a reweave at the story meeting with no change to fit in. This rework returns the weave with every line word for word.';
   } else if (openAngle) {
-    reweaveScope = `The director asked for a reweave at the story meeting of the angle they have open, ${openAngleWords}. This rework fits the director's changes on that angle and on its threads into it: ${reweaveAsks}.${otherEditsLine} It rewrites the lines of that angle a change needs, such as its story, its question or where it ends up, and the connections between the threads now in it, and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed. Every other angle, every thread outside the open angle and every connection that does not join two of its threads stay as written, because the director may still switch to another angle, and code puts back anything there that changes. A thread the open angle shares with another angle may be reworded, and the new words show in every angle that tells it.`;
+    reweaveScope = `The director asked for a reweave at the story meeting of the angle they have open, ${openAngleWords}. This rework fits the director's changes on that angle and on its threads into it: ${reweaveAsks}.${otherEditsLine}${addedThreadsLine} It rewrites the lines of that angle a change needs, such as its story, its question or where it ends up, and the connections between the threads now in it, and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed. Every other angle, every thread outside the open angle and every connection that does not join two of its threads stay as written, because the director may still switch to another angle, and code puts back anything there that changes. A thread the open angle shares with another angle may be reworded, and the new words show in every angle that tells it.`;
   } else {
     reweaveScope = `The director asked for a reweave at the story meeting. This rework fits the director's changes into the weave: ${reweaveAsks}. It rewrites the lines a change needs and keeps every other line word for word, because the director reads the reweave against their own version and checks each line it changed.`;
   }

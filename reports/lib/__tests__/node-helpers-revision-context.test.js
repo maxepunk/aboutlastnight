@@ -1142,6 +1142,21 @@ describe("3 final: the Reweave's scope names only the open angle's changes", () 
   it('with a note, fits in the note too', () => {
     expect(scopeOf('Join the ledger to the vote.')).toContain('E2 and E3 in <HAND_EDITS>, and each change the note above asks for.');
   });
+
+  // 3 final, item 2 (spec 2026-10-06 section 7): a Reweave finds evidence for a thread the director
+  // added to the open angle, or leaves it with none when the record cannot carry it.
+  it('asks for the evidence of a thread the director added to the open angle, and none when the record holds none', () => {
+    const { weave, handEdits } = looks();
+    weave.threads.push({ id: 't6', name: 'Jess turned in the meeting', line: 'Jess turned in the record of the meeting.' });
+    weave.angles[0].threads.push('t6');
+    const withAdded = standingAtMeeting(handEdits, WEAVE, weave);
+    const text = buildRevisionContext({
+      phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 3, previousOutput: weave,
+      handEdits: withAdded, humanFeedback: null, meetingRound: 'reweave'
+    }).contextSection;
+    expect(text).toContain('The director added "Jess turned in the meeting" to this angle: give it as its evidence the pieces of the record that tell it, when the record holds them, and no evidence when it holds none, because the meeting then tells the director the record cannot carry it.');
+    expect(scopeOf()).not.toContain('The director added');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

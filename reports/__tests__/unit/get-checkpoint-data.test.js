@@ -571,7 +571,7 @@ describe('4.5: the story meeting\'s payload at arc-selection', () => {
     const data = await getCheckpointData(CHECKPOINT_TYPES.ARC_SELECTION, atMeeting());
     expect(Object.keys(data).sort()).toEqual([
       'accusation', 'checkFailures', 'concerns', 'directorGateNotes', 'directorsThreads', 'evidenceIndex', 'handEditReport',
-      'humanRevisionCount', 'marks', 'maxRevisions', 'questions', 'revisionCount', 'roundDidNotRun', 'weave'
+      'humanRevisionCount', 'marks', 'maxRevisions', 'questions', 'revisionCount', 'reworkedThreads', 'roundDidNotRun', 'weave'
     ]);
     ['narrativeArcs', 'lastEvaluation', 'writerQuestions', 'previousFeedback'].forEach((key) => expect(`${key}: ${key in data}`).toBe(`${key}: false`));
   });

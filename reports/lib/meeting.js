@@ -430,6 +430,26 @@ function meetingDirectorsThreads(state) {
 }
 
 /**
+ * The threads the director added that a writer has since returned (3 final, item 2; spec 2026-10-06
+ * section 7): each of the payload's added threads that the writer's last weave (`_weaveBaseline`)
+ * holds, by id. A round's rework, and every automatic pass after it, reads the record and writes
+ * the baseline, so such a thread with no evidence is one the writer found nothing in the record for,
+ * which the meeting says (console/checkpoint-view-logic.js meetingView). One added at an earlier look
+ * that no writer has returned since (an approve, then back; a round that did not run) is still the
+ * map writer's to find.
+ *
+ * @param {Object} state
+ * @param {string[]} added - the ids of the threads the director added that the weave carries
+ * @returns {string[]}
+ */
+function meetingReworkedThreads(state, added) {
+  const baseline = state && isWeave(state._weaveBaseline) ? state._weaveBaseline : null;
+  if (!baseline) return [];
+  const held = new Set(baseline.threads.map((thread) => weaveIdOf(thread)).filter(Boolean));
+  return added.filter((id) => held.has(id));
+}
+
+/**
  * The marks after a director's round (brief 4.5): what the round's passes changed in the
  * weave, from the version the director left, with the round.
  *
@@ -579,6 +599,7 @@ function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
   const s = state || {};
   const notes = Array.isArray(s.directorGateNotes) ? s.directorGateNotes : [];
   const unrunNote = unrunRoundNoteIndex(s);
+  const directorsThreads = meetingDirectorsThreads(s).filter((thread) => thread.added).map((thread) => thread.id);
   return {
     weave: s.weave || null,
     evidenceIndex,
@@ -590,7 +611,10 @@ function meetingCheckpointData(state, { evidenceIndex, maxRevisions }) {
     // Fix round 4: the threads the director added, whose fold says the map writer finds their
     // evidence while they have none. A writer's thread they flipped in stays the writer's to
     // answer for: with no evidence, the check's failure shows beside it alone (3 fix A).
-    directorsThreads: meetingDirectorsThreads(s).filter((thread) => thread.added).map((thread) => thread.id),
+    directorsThreads,
+    // 3 final, item 2: those of them a writer has since returned, whose fold, while they have no
+    // evidence, says the writer found nothing in the record for them.
+    reworkedThreads: meetingReworkedThreads(s, directorsThreads),
     marks: meetingMarksOf(s),
     // The edits the round's passes changed, a send-back's with its reasons, and each
     // restore (lib/hand-edit-diff.js reportAfterPass).
