@@ -64,6 +64,33 @@ describe('workflow integration', () => {
     if (fs.existsSync(analysis) && fs.readdirSync(analysis).length === 0) fs.rmdirSync(analysis);
   });
 
+  // Phase 4b (brief 1B; R1): the weave these states plant is in the story-level shape, its
+  // pieces from the ledger and the notes with no quotation, so it passes the weave checks on
+  // any record and no later reader is built against a claim, a receipt or a detail.
+  describe('the planted weave', () => {
+    const Ajv = require('ajv');
+    const { WEAVE_SCHEMA } = require('../../lib/sdk-client/subagents');
+    const { checkWeave } = require('../../lib/weave');
+    const { evidenceContextOf } = require('../../lib/evidence');
+
+    it('is in the story-level shape', () => {
+      const validate = new Ajv({ allErrors: true, strict: true }).compile(WEAVE_SCHEMA);
+      expect(validate(mockWeave)).toBe(true);
+      expect(validate.errors).toBeNull();
+      [...mockWeave.threads, ...mockWeave.connections].forEach((element) => {
+        expect(element).not.toHaveProperty('claim');
+        expect(element).not.toHaveProperty('receipt');
+        expect(element).not.toHaveProperty('detail');
+      });
+    });
+
+    it('passes the weave checks on an empty record and on the record these tests plant', () => {
+      [{}, { evidenceBundle: mockEvidenceBundle }].forEach((state) => {
+        expect(checkWeave(mockWeave, { evidence: evidenceContextOf(state), pageWords: 0 })).toEqual([]);
+      });
+    });
+  });
+
   describe('routing functions', () => {
     // NOTE: routeEvidenceApproval tests removed in interrupt() migration
     // Checkpoints now use native LangGraph interrupt() in nodes themselves

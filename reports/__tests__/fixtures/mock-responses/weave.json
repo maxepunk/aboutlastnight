@@ -3,12 +3,27 @@
   "question": "Who covered the trail the room followed?",
   "headline": "The Room Followed the Money to Blake",
   "threads": [
-    { "id": "t1", "claim": "The room named Blake after tracing the offshore transfers.", "role": "main-thread", "receipt": "page-ev-001", "verdict": true },
-    { "id": "t2", "claim": "Charlie altered the audit reports that would have shown the transfers.", "role": "complicates-it", "receipt": "chr001" },
-    { "id": "t3", "claim": "An email thread shows the transfers were discussed before the party.", "role": "grounds-it", "receipt": "page-ev-003" }
+    {
+      "id": "t1", "name": "The money trail", "line": "The room named Blake after tracing the offshore transfers.", "role": "main-thread", "verdict": true,
+      "evidence": [
+        { "sources": ["notes"], "shows": "The room traced the transfers and named Blake.", "stance": "supports" },
+        { "sources": ["ledger"], "shows": "The sales the room traced ran into one account.", "stance": "supports" }
+      ]
+    },
+    {
+      "id": "t2", "name": "The altered audit", "line": "Charlie altered the audit reports that would have shown the transfers.", "role": "complicates-it",
+      "evidence": [{ "sources": ["notes"], "shows": "The room read Charlie's audit reports against Blake.", "stance": "supports" }]
+    },
+    {
+      "id": "t3", "name": "The early warning", "line": "The transfers were discussed before the party began.", "role": "grounds-it",
+      "evidence": [{ "sources": ["notes"], "shows": "The room found the transfers had been planned before the party.", "stance": "supports" }]
+    }
   ],
   "connections": [
-    { "id": "c1", "kind": "person", "joins": ["t1", "t2"], "detail": "Charlie: the auditor whose reports the room read against Blake." }
+    {
+      "id": "c1", "joins": ["t1", "t2"], "line": "Charlie audited the accounts the room traced to Blake.", "kind": "person",
+      "evidence": [{ "sources": ["notes"], "shows": "Charlie's reports were the ones the room read against Blake.", "stance": "supports" }]
+    }
   ],
   "convergence": "The audit and the transfers meet at the account the room traced.",
   "questions": []
