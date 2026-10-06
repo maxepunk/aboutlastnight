@@ -24,8 +24,12 @@
  *   record holds, a quotation in quotation marks (lib/grounding.js QUOTED_SPANS, so an apostrophe
  *   in a name or a possessive is never one), a clock time and a money figure; describeStoryTerms
  *   and STORY_TERMS_FIX give its line and its fix;
- * - documentTextsOf, a document id to its quotable text, which the article fact check's card
- *   fidelity reads too (it was that module's buildSourceMap);
+ * - documentTextsOf, a document id to its quotable text (it was the article fact check's
+ *   buildSourceMap);
+ * - recordDocumentOf and documentResolverOf, the one rule for "this document is in the record"
+ *   (fix round 4): an id in any case to the record's own id and text, which the evidence check,
+ *   the map's card check, the article writer's card line and the article fact check's card
+ *   fidelity read;
  * - evidenceContextOf, what both checks read from a thread's state.
  *
  * The evidence is never the director's edit (R6): lib/hand-edit-diff.js leaves it out of every
@@ -165,6 +169,56 @@ function documentTextsOf(evidenceBundle) {
   return map;
 }
 
+/**
+ * The one rule for "this document is in the record" (fix round 4), over documentTextsOf's
+ * documents, the exposed documents with quotable text: an id in any case, any of the ids a
+ * document answers to (SOURCE_ID_FIELDS), resolves to `{id, text}`, the record's own id, as the
+ * record view names the document (record-view.js recordIdOf, else its pageId or name), and its
+ * text. The first document to claim an id keeps it. Null for an id no such document answers to.
+ *
+ * The evidence check reads it for a piece's source (evidenceProblems), the map's card check for a
+ * card's document (lib/map.js), the article writer's card line to print the record's spelling
+ * (lib/prompt-builder.js mapCardsLine) and the article fact check's card fidelity for a card's
+ * source, so a card cited as "SAM001" for sam001 passes every reader alike.
+ *
+ * @param {Object|null} evidenceBundle - the curated bundle
+ * @returns {function(*): ({id: string, text: string}|null)}
+ */
+function documentResolverOf(evidenceBundle) {
+  const byLowerId = new Map();
+  const add = (item) => {
+    if (!isObject(item)) return;
+    const text = sourceTextOf(item);
+    if (!text) return;
+    const own = recordIdOf(item) || textOf(item.pageId) || textOf(item.name);
+    SOURCE_ID_FIELDS.forEach((field) => {
+      const id = item[field] ? String(item[field]).trim().toLowerCase() : '';
+      if (id && !byLowerId.has(id)) byLowerId.set(id, { id: own, text });
+    });
+  };
+  const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
+  asArray(exposed.tokens).forEach(add);
+  asArray(exposed.paperEvidence).forEach(add);
+  asArray(evidenceBundle && evidenceBundle.exposedEvidence).forEach(add);
+  return (id) => {
+    const key = typeof id === 'string' || typeof id === 'number' ? String(id).trim().toLowerCase() : '';
+    return (key && byLowerId.get(key)) || null;
+  };
+}
+
+/** The resolver a context built by hand gives: each id of its `documents` in any case, the id as the map holds it. */
+function resolverOfTexts(documents) {
+  const byLowerId = new Map();
+  documents.forEach((text, id) => {
+    const lower = String(id).trim().toLowerCase();
+    if (!byLowerId.has(lower)) byLowerId.set(lower, { id: String(id), text });
+  });
+  return (id) => {
+    const key = typeof id === 'string' || typeof id === 'number' ? String(id).trim().toLowerCase() : '';
+    return (key && byLowerId.get(key)) || null;
+  };
+}
+
 /** The shortest id the story-terms check looks for: a shorter one would match ordinary words. */
 const MIN_ID_LENGTH = 3;
 
@@ -215,6 +269,8 @@ function notesTextsOf(state) {
  * What the evidence check and the story-terms check read, from a thread's state:
  * - `documents`: each document in the record by every id it answers to, with its text
  *   (documentTextsOf);
+ * - `resolveDocument`: an id in any case to the record's own id and text (documentResolverOf;
+ *   fix round 4);
  * - `documentIds`: the ids a line may not name (documentIdsOf);
  * - `texts`: the text of each source besides a document: the ledger's rows (each sale, the
  *   first-burial bonus and each transfer) and the evidence log's (each exposure: the document and
@@ -225,7 +281,8 @@ function notesTextsOf(state) {
  * A buried memory's id, owner and text reach none of them but `buried`.
  *
  * @param {Object} state - the evidence bundle, the session's parse, the director's words, the weave's answers
- * @returns {{documents: Map<string, string>, documentIds: Set<string>, texts: Object<string, string[]>, buried: Set<string>}}
+ * @returns {{documents: Map<string, string>, resolveDocument: function(*): ({id: string, text: string}|null),
+ *            documentIds: Set<string>, texts: Object<string, string[]>, buried: Set<string>}}
  */
 function evidenceContextOf(state) {
   const s = isObject(state) ? state : {};
@@ -233,6 +290,7 @@ function evidenceContextOf(state) {
   const { events } = buildMorningTimeline(bundle, s.sessionConfig || null);
   return {
     documents: documentTextsOf(bundle),
+    resolveDocument: documentResolverOf(bundle),
     documentIds: documentIdsOf(bundle),
     texts: {
       [EVIDENCE_SOURCES.LEDGER]: events.filter((event) => event.kind !== 'exposure').map(timelineEventLine),
@@ -246,8 +304,10 @@ function evidenceContextOf(state) {
 /** A context as the checks read it: every part present. */
 function contextOf(context) {
   const c = isObject(context) ? context : {};
+  const documents = c.documents instanceof Map ? c.documents : new Map();
   return {
-    documents: c.documents instanceof Map ? c.documents : new Map(),
+    documents,
+    resolveDocument: typeof c.resolveDocument === 'function' ? c.resolveDocument : resolverOfTexts(documents),
     documentIds: c.documentIds instanceof Set ? c.documentIds : new Set(),
     texts: isObject(c.texts) ? c.texts : {},
     buried: c.buried instanceof Set ? c.buried : new Set()
@@ -292,14 +352,28 @@ function heldIn(texts, words) {
 
 /**
  * The texts a source names, or null for a source the record lacks: a buried memory (whatever the
- * record lists), one of EVIDENCE_SOURCES, or a document by any id it answers to, in any case.
+ * record lists), one of EVIDENCE_SOURCES, or a document by any id it answers to, in any case
+ * (the context's resolveDocument, documentResolverOf's rule).
  */
-function sourceTexts(source, ctx, documentsByLowerId) {
+function sourceTexts(source, ctx) {
   const lower = source.toLowerCase();
   if (ctx.buried.has(lower)) return null;
   const named = Object.values(EVIDENCE_SOURCES).find((name) => name === lower);
   if (named) return asArray(ctx.texts[named]).filter((text) => typeof text === 'string');
-  return documentsByLowerId.has(lower) ? [documentsByLowerId.get(lower)] : null;
+  const document = ctx.resolveDocument(source);
+  return document ? [document.text] : null;
+}
+
+/**
+ * The document in the record an id names, in any case, as the evidence check reads a source:
+ * `{id, text}`, the record's own id and its text, or null (documentResolverOf's rule).
+ *
+ * @param {*} id
+ * @param {Object} context - evidenceContextOf's
+ * @returns {{id: string, text: string}|null}
+ */
+function recordDocumentOf(id, context) {
+  return contextOf(context).resolveDocument(id);
 }
 
 /** How to fix each kind of fault a piece can have, in the order a line gives them. */
@@ -341,18 +415,13 @@ function missingParts(piece, sources) {
 function evidenceProblems(pieces, context) {
   if (!Array.isArray(pieces)) return [];
   const ctx = contextOf(context);
-  const documentsByLowerId = new Map();
-  ctx.documents.forEach((text, id) => {
-    const lower = String(id).toLowerCase();
-    if (!documentsByLowerId.has(lower)) documentsByLowerId.set(lower, text);
-  });
   return pieces.map((element, index) => {
     const piece = isObject(element) ? element : {};
     const sources = asArray(piece.sources).map(textOf).filter(Boolean);
     const faults = [];
     const missing = missingParts(piece, sources);
     if (missing.length > 0) faults.push({ kind: 'malformed', what: `lacks ${listOf(missing)}` });
-    const read = sources.map((source) => ({ source, texts: sourceTexts(source, ctx, documentsByLowerId) }));
+    const read = sources.map((source) => ({ source, texts: sourceTexts(source, ctx) }));
     const unknown = read.filter((entry) => entry.texts === null).map((entry) => `"${entry.source}"`);
     if (unknown.length > 0) {
       faults.push({ kind: 'source', what: `names ${listOf(unknown)}, which ${unknown.length > 1 ? 'are no documents' : 'is no document'} in the record and none of ${NAMED_SOURCES}` });
@@ -550,5 +619,8 @@ module.exports = {
   STORY_TERMS_FIX,
   documentTextsOf,
   documentIdsOf,
-  evidenceContextOf
+  evidenceContextOf,
+  // Fix round 4: the one rule for "this document is in the record"
+  documentResolverOf,
+  recordDocumentOf
 };

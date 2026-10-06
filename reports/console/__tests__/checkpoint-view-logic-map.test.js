@@ -996,7 +996,7 @@ function prototypeNamed(times) {
 describe('4.6c: the gate, the checks and the console find one set of repeats, under names every object carries', () => {
   const kept = ['hero.jpg', 'p2.jpg', ...PROTOTYPE_NAMES];
   const checksFind = (map) => {
-    const { failures } = require('../../lib/map').mapFindings(map, { keptPhotos: kept, recordIds: ['ale003', 'mor001', 'p-dna'] });
+    const { failures } = require('../../lib/map').mapFindings(map, { keptPhotos: kept });
     return failures.filter((f) => f.type === 'duplicate-beat-id' || f.type === 'photo-placed-twice').map((f) => f.message.split('. ')[0]);
   };
 

@@ -76,7 +76,7 @@ const { meetingChangePlace } = require('./meeting');
 // the weave and the map share.
 const {
   EVIDENCE_PIECE_SCHEMA, evidenceProblems, describeEvidenceProblems, evidenceProblemsSaid, storyTermsProblems,
-  describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX
+  describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX, recordDocumentOf
 } = require('./evidence');
 const { normalizeForGrounding } = require('./grounding');
 const { wordCount, pageLengthOf } = require('./word-count');
@@ -715,7 +715,7 @@ function storyConnectionsOf(connections) {
  * marks as a card or whose evidence flags a piece as one. Only a marker change can be the
  * director's (editsOnCardMarker).
  */
-function cardFault(beat, known) {
+function cardFault(beat, evidence) {
   const id = beatIdOf(beat);
   const flagged = cardPiecesOf(beat);
   const marked = beat.card === true;
@@ -743,7 +743,7 @@ function cardFault(beat, known) {
     };
   }
   const card = beatCardOf(beat);
-  if (card && known.has(card.toLowerCase())) return null;
+  if (card && recordDocumentOf(card, evidence)) return null;
   const sources = stringsOf(flagged[0].sources).map((source) => `"${source}"`);
   return {
     message: `Beat ${id}'s card piece names ${sources.length > 0 ? listOf(sources) : 'no source'}, which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: choose in <RECORD> the document the card prints, and flag the piece that names it by its id.`,
@@ -827,7 +827,6 @@ function cardFault(beat, known) {
  * @param {Object} inputs
  * @param {Array} inputs.roster - mapRosterOf's roster
  * @param {string[]} inputs.keptPhotos - the filenames of the photos kept for the article
- * @param {Iterable<string>} inputs.recordIds - the ids a document in the record answers to
  * @param {Array<{id: string, name: string, added: boolean, broughtIn: boolean}>} [inputs.threads] - the
  *   settled weave's threads in the story (every role but left out), `added` on one the director
  *   added at the meeting and `broughtIn` on one they brought into the story from left out
@@ -840,8 +839,10 @@ function cardFault(beat, known) {
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
  * @param {Object} [inputs.photoDescriptions] - the director's description of each photo, `{filename: text}`,
  *   by which the director's words name a photo (a failure's `line`, a concern's finding)
- * @param {Object} [inputs.evidence] - what the evidence and story-terms checks read (lib/evidence.js
- *   evidenceContextOf); none, no evidence check
+ * @param {Object} [inputs.evidence] - what the evidence, story-terms and card checks read
+ *   (lib/evidence.js evidenceContextOf); none, no evidence check, and no card's document is in the
+ *   record (fix round 4: a card's document is one recordDocumentOf finds, a document with text,
+ *   by any id in any case)
  * @param {{page: number, writer: number, allowance: number}|null} [inputs.length] - the map's page
  *   as it first opens, counted (mapLengthOf); none, no length check
  * @returns {{failures: Array<{type: string, message: string, line: string, place?: string}>,
@@ -986,10 +987,8 @@ function mapFindings(map, inputs = {}) {
   // and the cards, as the tally counts them through beatCardOf, number three to five (C9). A
   // fault is the director's concern only when the card marker they set or cleared made it; the
   // evidence is never their edit (R6).
-  const recordIds = [...(inputs.recordIds || [])].filter((id) => typeof id === 'string');
-  const known = new Set(recordIds.map((id) => id.trim().toLowerCase()));
   sectionBeats(map).forEach(({ beat, slot }) => {
-    const fault = cardFault(beat, known);
+    const fault = cardFault(beat, evidence);
     if (!fault) return;
     const said = `${opening(moveWords(beat))} ${fault.said}.`;
     const ids = fault.marker ? editsOnCardMarker(entries, beatIdOf(beat), fault.marker) : [];

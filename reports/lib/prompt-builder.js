@@ -22,7 +22,7 @@ const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER, MAP_WORD_
 // Phase 4b (brief 1E; R4): the article writer reads a beat's card as the map's checks and counts
 // do, through the one reader of a beat's card, and names a piece's sources as lib/evidence.js does.
 const { beatCardOf } = require('../console/outline-edit-logic');
-const { SOURCES_GLOSS } = require('./evidence');
+const { SOURCES_GLOSS, documentResolverOf } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
@@ -461,14 +461,22 @@ const STORY_MAP_LABEL = `The story map as the director left it at the map's stop
  * the line names that card too, and a rework that carries it reads the director's cut first. The
  * rule for those edits is HAND_EDITS' alone, and this line restates none of it.
  *
+ * Fix round 4: each document by the record's own spelling of its id (lib/evidence.js
+ * documentResolverOf, the rule the map's card check and the article's card fidelity read), so a
+ * card the map cites as "SAM001" reaches the writer as sam001; one the record does not hold, or a
+ * prompt built with no record, as the map writes it.
+ *
  * @param {Object} map - the map as the article reads it
+ * @param {Object|null} [evidenceBundle] - the record the documents are named from
  * @returns {string}
  */
-function mapCardsLine(map) {
+function mapCardsLine(map, evidenceBundle = null) {
+  const resolve = documentResolverOf(evidenceBundle);
   const cards = [];
   (Array.isArray(map && map.sections) ? map.sections : []).forEach((section) => {
     (Array.isArray(section && section.beats) ? section.beats : []).forEach((beat) => {
-      const document = beatCardOf(beat);
+      const cited = beatCardOf(beat);
+      const document = cited && resolve(cited) ? resolve(cited).id : cited;
       if (document) cards.push(`"${document}" for ${beat.id}`);
     });
   });
@@ -999,7 +1007,7 @@ Write the article as a ContentBundle: JSON in the shape of the schema at the end
    - "content": an array of blocks, each one of these:
      * {"type": "paragraph", "text": "..."}
      * {"type": "quote", "text": "...", "attribution": "..."}: "attribution" is the speaker.
-     * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "...", "owner": "...", "significance": "critical" | "supporting" | "contextual"}: an inline card, printed whole in the body. "content" is copied from ${DOCUMENT_POINTER}, and "owner" is that document's owner as the record gives it. ${mapCardsLine(map)}
+     * {"type": "evidence-card", "tokenId": "...", "headline": "...", "content": "...", "owner": "...", "significance": "critical" | "supporting" | "contextual"}: an inline card, printed whole in the body. "content" is copied from ${DOCUMENT_POINTER}, and "owner" is that document's owner as the record gives it. ${mapCardsLine(map, options.evidenceBundle)}
      * {"type": "evidence-reference", "tokenId": "...", "caption": "..."}: a one-line caption naming a document, printed in the body with none of the document's text. Give it a caption; with none, the article prints the bare id.
      * {"type": "photo", "filename": "...", "caption": "..."}: an inline photo, by its exact filename.
      * {"type": "list", "items": ["..."], "ordered": false}

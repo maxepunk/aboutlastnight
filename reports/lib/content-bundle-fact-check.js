@@ -44,10 +44,10 @@ const { printedPhotos } = require('./publish-photos');
 // Brief 4.7a: the one word count, which the meeting's page count reads too (lib/stop-pages.js).
 const { wordCount } = require('./word-count');
 // Phase 4b (brief 1B): the one rule of what a quoted span is, which the story-terms check reads
-// too, and the one function from a document id to its text, which the evidence check reads too
-// (R10: it was this module's buildSourceMap).
+// too; fix round 4: the one rule for a document in the record, an id in any case to its text,
+// which the evidence check and the map's card check read too.
 const { QUOTED_SPANS } = require('./grounding');
-const { documentTextsOf } = require('./evidence');
+const { documentResolverOf } = require('./evidence');
 
 /**
  * Normalise for substring comparison: every single and double quotation mark,
@@ -1211,7 +1211,9 @@ function factCheckContentBundle({
   const cardFidelity = [];
 
   const bundle = contentBundle || {};
-  const sources = documentTextsOf(evidenceBundle);
+  // Fix round 4: a card's source by the one rule for a document in the record, its id in any
+  // case (lib/evidence.js documentResolverOf), the rule the map's card check reads.
+  const resolveSource = documentResolverOf(evidenceBundle);
 
   // ── 1. Card fidelity (BASELINE class 1) ───────────────────────────────────
   // Only printed text is checked. An inline evidence card prints its content, so
@@ -1267,7 +1269,8 @@ function factCheckContentBundle({
         `This card holds ${quoted(shown)}, an example line from the writer's instructions; check that ${DOCUMENT_SLOT} says it.`);
     }
 
-    const source = sources.get(tokenId);
+    const document = resolveSource(tokenId);
+    const source = document ? document.text : undefined;
     if (!source) note(tokenId, 'unknown source', location, inline ? edits.blockEdited(key, card) : edits.sidebarCard(card), card);
     else if (!inline || isVerbatim(content, source)) note(tokenId, null, location, null, card);
     else note(tokenId, 'not verbatim', location, edits.blockField(key, card, 'content'), card);

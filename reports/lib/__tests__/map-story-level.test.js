@@ -332,6 +332,54 @@ describe("fix round 4: the gap note names a thread the director put in the story
   });
 });
 
+// Fix round 4, fix 6: one rule for "this document is in the record" (lib/evidence.js
+// recordDocumentOf): an id in any case resolves to the record's own id, over the documents with
+// quotable text. The map's card check, the line that names the cards to the article writer and
+// the article's card fidelity all read it, so a card the map cites as "SAM001" for sam001 passes
+// the map, reaches the article writer as sam001, and the fact check finds its document.
+describe('fix round 4: one rule for a document in the record, from the map to the article', () => {
+  const { PromptBuilder } = require('../prompt-builder');
+  const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
+  const { factCheckContentBundle } = require('../content-bundle-fact-check');
+  const { storyLevelWeave, SAM } = require('./fixtures/story-level-weave');
+  const cardTypes = (findings) => findings.failures.filter((f) => f.type === 'card-not-in-record' || f.type === 'evidence-not-in-record').map((f) => f.place);
+  /** The map with b3's card piece citing sam001 as `cited`. */
+  const citing = (cited) => {
+    const map = storyLevelMap();
+    beatOf(map, 'b3').evidence[0].sources = [cited];
+    return map;
+  };
+
+  it('"SAM001": the map passes, the card line names sam001, and card fidelity finds the document', async () => {
+    const state = storyLevelMapState();
+    const map = citing('SAM001');
+    expect(cardTypes(mapFindings(map, inputsOf({ ...state, outline: map }, map)))).toEqual([]);
+
+    const builder = new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() }, 'journalist');
+    const { userPrompt } = await builder.buildArticlePrompt(renderSettledWeave(storyLevelWeave(), null), map, [], null, null, null, { evidenceBundle: state.evidenceBundle });
+    const line = userPrompt.split('\n').find((l) => l.startsWith('     * {"type": "evidence-card"'));
+    expect(line).toContain('"sam001" for b3');
+    expect(line).not.toContain('SAM001');
+
+    const result = factCheckContentBundle({
+      contentBundle: { sections: [{ id: 'theStory', content: [{ type: 'evidence-card', tokenId: 'SAM001', headline: 'The journal', content: SAM }] }] },
+      evidenceBundle: state.evidenceBundle,
+      theme: 'journalist'
+    });
+    expect(result.cardFidelity).toEqual([expect.objectContaining({ tokenId: 'SAM001', ok: true, reason: null })]);
+  });
+
+  it("the card check reads a document with text: a paper with none is no card's document, and a token by its Notion id is one", () => {
+    const state = storyLevelMapState();
+    state.evidenceBundle.exposed.paperEvidence.push({ notionId: 'p-blank', id: 'p-blank', name: 'A blank page', owners: [] });
+    state.evidenceBundle.exposed.tokens[1].notionId = 'notion-sam';
+    const blank = citing('p-blank');
+    expect(cardTypes(mapFindings(blank, inputsOf({ ...state, outline: blank }, blank)))).toEqual(['sections[#theStory].beats[#b3]', 'sections[#theStory].beats[#b3]']);
+    const byNotionId = citing('notion-sam');
+    expect(cardTypes(mapFindings(byNotionId, inputsOf({ ...state, outline: byNotionId }, byNotionId)))).toEqual([]);
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // The writer's beats and lines: evidence and story terms (lib/evidence.js)
 // ═══════════════════════════════════════════════════════════════════════════

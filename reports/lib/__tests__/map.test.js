@@ -12,6 +12,12 @@
  */
 const { mapFindings, mapKey, mapRosterOf, MAP_CHECKS_SOURCE, MAP_BEAT_KINDS } = require('../map');
 const { standingOnMap, carriedEdits } = require('../hand-edit-diff');
+const { evidenceContextOf } = require('../evidence');
+
+/** The record the cards cite: four documents, each with its text. */
+const RECORD = evidenceContextOf({
+  evidenceBundle: { exposed: { tokens: ['row001', 'row002', 'row003', 'row004'].map((id) => ({ id, tokenId: id, fullContent: `The text of ${id}.` })) } }
+});
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
@@ -71,7 +77,9 @@ const writers = () => ({
 const inputs = (over = {}) => ({
   roster: ROSTER,
   keptPhotos: ['huddle.jpg', 'theory.jpg', 'cards.jpg'],
-  recordIds: ['row001', 'row002', 'row003', 'row004'],
+  // Fix round 4: a card's document is one the record holds with text, read through the evidence
+  // context (lib/evidence.js recordDocumentOf).
+  evidence: RECORD,
   connections: ['c1'],
   meetingEdits: [],
   meetingNote: false,
@@ -193,8 +201,11 @@ describe('the map checks (spec 5.4)', () => {
     it('a card whose flagged piece names no document in the record fails, beside its beat, naming the bad source and pointing at <RECORD>', () => {
       const map = writers();
       markCard(map.sections[1].beats[0], 'zzz999');
-      const { failures } = mapFindings(map, inputs());
-      expect(typesOf(failures)).toEqual(['card-not-in-record']);
+      // Fix round 4: the card check reads the record through the evidence context, so the evidence
+      // check reads the piece too, and fails it for its source.
+      const all = mapFindings(map, inputs()).failures;
+      expect(typesOf(all)).toEqual(['evidence-not-in-record', 'card-not-in-record']);
+      const failures = all.filter((f) => f.type === 'card-not-in-record');
       expect(failures[0].message).toBe(
         "Beat b3's card piece names \"zzz999\", which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: choose in <RECORD> the document the card prints, and flag the piece that names it by its id."
       );

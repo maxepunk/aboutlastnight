@@ -42,7 +42,6 @@ const { evidenceContextOf } = require('../../evidence');
 const { stopPage, wordsShown, PAGE_REGIONS } = require('../../stop-pages');
 const { wordCount } = require('../../word-count');
 const { CHECKPOINT_TYPES } = require('../checkpoint-helpers');
-const { buildValidEvidenceIds } = require('./node-helpers');
 const { keptPhotoFilenames } = require('./ai-nodes');
 
 /** The map's stop type, whose page the check counts. */
@@ -135,7 +134,6 @@ function mapCheckInputsOf(state, map) {
   return {
     roster: mapRosterOf(state.sessionConfig, state.canonicalCharacters),
     keptPhotos: keptPhotoFilenames(state, topPhotoOf(map)),
-    recordIds: buildValidEvidenceIds(state.evidenceBundle),
     // Phase 4b (brief 1D; R3): every thread in the story lands in a beat.
     threads: settledWeaveThreadsOf(state),
     // Brief 4.14a: a connection that joins a left-out thread is out of the story with it, so
