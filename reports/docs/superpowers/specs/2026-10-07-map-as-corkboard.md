@@ -247,7 +247,7 @@ This section is where the design meets the code. The footprint survey, kept loca
   - A photo prints no words on the page. Its line in `lib/stop-pages.js` is folded (its description, for the harness's print). The console shows the thumbnail, with the description in its `title` and on selection.
   - The summaries and the thread lines are folded lines.
   - `stopPage` and `wordsShown` take an option that opens the summaries. The map's two pages differ by a fold, not by a value in the payload as the meeting's angles do (survey B).
-  - The per-card toggles and the board's toggle are controlled state in `Outline.js`, not `CollapsibleSection`, which reads `defaultOpen` once. The four `CollapsibleSection`s that `console-stop-pages.test.js` pins stay.
+  - The per-card toggles and the board's toggle are controlled state in `Outline.js`, not `CollapsibleSection`, which reads `defaultOpen` once. The tray is always open and the evidence shows on the selected card, so `Outline.js` keeps two `CollapsibleSection`s, the standing notes and the trace, and `console-stop-pages.test.js`'s count of four follows (amended with the plan).
 - **The length.**
   - `MAP_WORD_BOUND` (450) and `MAP_WORD_AIM` (300) stand for the page as it opens. `MAP_OPEN_WORD_BOUND` (750) and `MAP_SYNOPSIS_AIM` (250) join them. The open page's floor is their sum, 550.
   - `mapPageWords` counts both pages on the writer's share, each with its own overhead. The blanked page blanks `synopsis` too.
