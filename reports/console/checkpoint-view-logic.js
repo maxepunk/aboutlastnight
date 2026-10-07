@@ -3478,6 +3478,12 @@
   var MAP_CARD_MARK = 'Card';
 
   /**
+   * The mark on the piece of a move's evidence that prints as its card, in what's behind a selected
+   * card (piece 4; spec 2026-10-07 section 5): the flagged piece of a move marked as a card.
+   */
+  var MAP_PRINTS_AS_CARD = 'Prints as a card';
+
+  /**
    * The map's page in the spec's order (piece 4; spec 2026-10-07 section 4), as mapView's `order`
    * names its parts, which lib/stop-pages.js and Outline.js both follow: the round's lines, the
    * counts (`tally`), the settled story with the gap note, the threads (`legend`), the top of the
@@ -3981,12 +3987,21 @@
    */
   function mapLegendView(legend) {
     var l = isPlainObject(legend) ? legend : {};
+    /** A move's thread ids, trimmed, each once, in its own order. */
+    var ownIds = function (ids) {
+      var seen = [];
+      return stringList(ids).map(function (id) { return id.trim(); }).filter(function (id) {
+        if (!id || seen.indexOf(id) !== -1) return false;
+        seen.push(id);
+        return true;
+      });
+    };
     var dots = new Map();
     var threads = asArray(l.threads).filter(isPlainObject).map(function (thread, i) {
       var tone = (i % MAP_TONES) + 1;
       var name = asString(thread.name).trim();
       var id = asString(thread.id).trim();
-      if (id && !dots.has(id)) dots.set(id, { tone: tone, name: name });
+      if (id && !dots.has(id)) dots.set(id, { tone: tone, name: name, key: 'thread-' + i });
       return { key: 'thread-' + i, tone: tone, label: name, name: name, line: asString(thread.line).trim(), labels: { pick: 'Follow the thread "' + name + '" across the board' } };
     });
     asArray(l.others).filter(isPlainObject).forEach(function (thread) {
@@ -4001,12 +4016,15 @@
     return {
       view: { title: MAP_LEGEND_TITLE, showAll: MAP_SHOW_ALL, threads: threads },
       dotsOf: function (ids) {
-        var seen = [];
-        return stringList(ids).map(function (id) { return id.trim(); }).filter(function (id) {
-          if (!id || seen.indexOf(id) !== -1) return false;
-          seen.push(id);
-          return true;
-        }).map(function (id) { return dots.get(id) || { tone: 0, name: '' }; });
+        return ownIds(ids).map(function (id) {
+          var dot = dots.get(id);
+          return dot ? { tone: dot.tone, name: dot.name } : { tone: 0, name: '' };
+        });
+      },
+      // Piece 4 (brief 4D): the keys of the legend's threads a move carries, in its own order, by
+      // which the board outlines the cards of a thread picked; a thread outside the story has none.
+      keysOf: function (ids) {
+        return ownIds(ids).map(function (id) { return dots.has(id) ? dots.get(id).key || '' : ''; }).filter(Boolean);
       },
       meetsOf: function (id) { return meets.get(asString(id).trim()) || ''; }
     };
@@ -4081,12 +4099,17 @@
    *     them), its people, its `synopsis` ('' for none, as on a map
    *     from before piece 4), its `dots` (`{tone, name}` for each thread it carries: a story
    *     thread's tone, the grey tone 0 with its name for a thread outside the story, and 0 with no
-   *     name for an id the weave does not hold), its `photos` (the photos beside it), its card
+   *     name for an id the weave does not hold), its `legendKeys` (the keys of the legend's threads
+   *     it carries, by which the board follows a thread picked; brief 4D), its `photos` (the photos
+   *     beside it), its `photoChoices` (each photo a control can find that is not beside it, the top
+   *     photo first, `{value, label, slot, index}` by its description and its place, for "Put a
+   *     photo beside it" through placePhotoBeside; brief 4D), its card
    *     mark (`card`, true where its evidence prints as a card: the beat's flagged piece names its
    *     document, beatCardOf, the one reader of a beat's card; `cardMark`, MAP_CARD_MARK or ''),
    *     `meets`, the line of the connection that lands in it, `canMoveUp` and `canMoveDown` within
    *     its column, and its `changed` lines, with its evidence folded
-   *     (`evidence`, evidenceFoldView's, under `evidenceTitle`) and, for a beat the director
+   *     (`evidence`, evidenceFoldView's, under `evidenceTitle`, the piece that prints as its card
+   *     `printsAsCard`, marked MAP_PRINTS_AS_CARD; brief 4D) and, for a beat the director
    *     added that has none, at this look or an earlier one (`data.addedBeats`), the fold's one
    *     line (`noEvidence`, MAP_NO_EVIDENCE_LINE). Its kind stays underneath, unprinted. Each beat row is keyed by its beat's id, so an editor open on it survives a
    *     strike or a move above it; a beat whose id another beat of its list holds, or with none,
@@ -4102,7 +4125,9 @@
    *     round 3): a beat named by its move's words (moveLabelsOf: its fold's group "What's behind
    *     it: <move>", evidenceFoldLabel, and since piece 4 its selection, its summary's toggle, Move
    *     up, Move down and the photo beside it); a photo, the top photo too, by the director's
-   *     description, or its filename when there is none (photoNameOf). A section's `label` is
+   *     description, or its filename when there is none (photoNameOf), its selection (`select`)
+   *     and its place beside a move in any section (`placeBeside`) among them (brief 4D). A
+   *     section's `label` is
    *     its slot's name, as the page prints it. The page builds none;
    * - a photo the map places that the director left out of the article since (the payload's
    *   `leftOutPhotos`), at the top or in a section, is `leftOut`: marked with
@@ -4261,7 +4286,13 @@
       var id = editLogic.beatIdOf(b);
       var ownId = id !== '' && ids.filter(function (other) { return other === id; }).length === 1;
       var added = id !== '' && shownBeatIds.indexOf(id) === -1;
-      var evidence = evidenceFoldView(b.evidence, d.evidenceIndex);
+      // Piece 4 (brief 4D; spec 5): the piece a move marked as a card prints as its card, marked so in
+      // what's behind the selected card (beatCardOf and cardPiecesOf, the readers of a beat's card).
+      var cardPiece = editLogic.beatCardOf(b) ? editLogic.cardPiecesOf(b)[0] : null;
+      var printed = asArray(b.evidence).filter(isPlainObject).indexOf(cardPiece);
+      var evidence = evidenceFoldView(b.evidence, d.evidenceIndex).map(function (piece, n) {
+        return Object.assign(piece, { printsAsCard: n === printed });
+      });
       return {
         key: (slot === null ? 'leftOut' : slot) + (ownId ? '-beat-' + id : '-beat@' + index),
         id: id,
@@ -4271,9 +4302,11 @@
         players: stringList(b.players).join(', '),
         synopsis: asString(b.synopsis).trim(),
         dots: legend.dotsOf(b.threads),
+        legendKeys: legend.keysOf(b.threads),
         card: Boolean(editLogic.beatCardOf(b)),
         cardMark: editLogic.beatCardOf(b) ? MAP_CARD_MARK : '',
         photos: [],
+        photoChoices: [],
         evidence: evidence,
         meets: legend.meetsOf(b.connection),
         noEvidence: evidence.length === 0 && (added || addedEarlier.indexOf(id) !== -1) ? MAP_NO_EVIDENCE_LINE : '',
@@ -4311,7 +4344,9 @@
         description: description,
         labels: {
           beside: 'Where ' + named + ' sits in its section',
-          moveTo: 'Move ' + named + ' to the top or to another section'
+          moveTo: 'Move ' + named + ' to the top or to another section',
+          select: 'Select the photo ' + named,
+          placeBeside: 'Put ' + named + ' beside a move'
         },
         beat: beside,
         besideOptions: options,
@@ -4331,7 +4366,11 @@
       ? {
           filename: topName,
           description: topDescription,
-          labels: { moveTo: 'Move the top photo ' + photoNameOf(topName, topDescription) + ' into a section' },
+          labels: {
+            moveTo: 'Move the top photo ' + photoNameOf(topName, topDescription) + ' into a section',
+            select: 'Select the top photo ' + photoNameOf(topName, topDescription),
+            placeBeside: 'Put the top photo ' + photoNameOf(topName, topDescription) + ' beside a move'
+          },
           concerns: (topLeftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('topPhoto')),
           failures: failuresAt('topPhoto'),
           besideTargets: topLeftOut ? [] : targetsBeside,
@@ -4369,6 +4408,29 @@
         byThemselves: byThemselves,
         emptied: emptied ? MAP_EMPTIED_COLUMN_LINE : ''
       };
+    });
+
+    // Piece 4 (brief 4D; spec 5): "Put a photo beside it" on a selected card offers every photo on
+    // the board that a control can find and that is not beside the move already, the top photo
+    // first, each by its description and its place, with the place placePhotoBeside takes it from.
+    var choosable = (topPhoto && !topPhoto.locked ? [{ photo: topPhoto, slot: editLogic.MAP_TOP_PHOTO, index: 0, place: TOP_PHOTO_LABEL }] : [])
+      .concat(sectionViews.reduce(function (all, section) {
+        return all.concat(section.photos.filter(function (photo) { return !photo.locked; }).map(function (photo) {
+          return { photo: photo, slot: section.slot, index: photo.index, place: section.label };
+        }));
+      }, []));
+    sectionViews.forEach(function (section) {
+      section.beats.forEach(function (card) {
+        if (card.locked) return;
+        card.photoChoices = choosable.filter(function (c) { return !c.photo.beat || c.photo.beat !== card.id; }).map(function (c) {
+          return {
+            value: c.slot + '#' + c.index,
+            label: photoNameOf(c.photo.filename, c.photo.description) + ' (' + c.place + ')',
+            slot: c.slot,
+            index: c.index
+          };
+        });
+      });
     });
 
     var leftIds = idsOf(map.leftOut);
@@ -5326,6 +5388,7 @@
     // beat the director added with no evidence yet
     MAP_CARD_MARK: MAP_CARD_MARK,
     MAP_SECTIONS: MAP_SECTIONS,
+    MAP_PRINTS_AS_CARD: MAP_PRINTS_AS_CARD,
     MAP_LEGEND_TITLE: MAP_LEGEND_TITLE,
     MAP_TONES: MAP_TONES,
     MAP_NO_HEADING_LINE: MAP_NO_HEADING_LINE,

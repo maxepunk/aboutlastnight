@@ -558,15 +558,21 @@ describe('1F: no tag on the page, and every aria-label names a move by its words
     const [board, bar] = view.sections[1].photos;
     expect(board.labels).toEqual({
       beside: `Where "${PHOTO_DESCRIPTIONS['board.jpg']}" sits in its section`,
-      moveTo: `Move "${PHOTO_DESCRIPTIONS['board.jpg']}" to the top or to another section`
+      moveTo: `Move "${PHOTO_DESCRIPTIONS['board.jpg']}" to the top or to another section`,
+      select: `Select the photo "${PHOTO_DESCRIPTIONS['board.jpg']}"`,
+      placeBeside: `Put "${PHOTO_DESCRIPTIONS['board.jpg']}" beside a move`
     });
     expect(bar.labels.moveTo).toBe(`Move "${PHOTO_DESCRIPTIONS['bar.jpg']}" to the top or to another section`);
-    expect(view.topPhoto.labels).toEqual({ moveTo: `Move the top photo "${PHOTO_DESCRIPTIONS['top.jpg']}" into a section` });
+    expect(view.topPhoto.labels).toEqual({
+      moveTo: `Move the top photo "${PHOTO_DESCRIPTIONS['top.jpg']}" into a section`,
+      select: `Select the top photo "${PHOTO_DESCRIPTIONS['top.jpg']}"`,
+      placeBeside: `Put the top photo "${PHOTO_DESCRIPTIONS['top.jpg']}" beside a move`
+    });
     [board.labels.beside, board.labels.moveTo, bar.labels.beside, bar.labels.moveTo, view.topPhoto.labels.moveTo]
       .forEach((label) => expect(elementsOf(tree, (n) => n.props['aria-label'] === label)).toHaveLength(1));
     const bare = ViewLogic.mapView({ ...data, photoDescriptions: {} }, draft);
-    expect(bare.sections[1].photos[1].labels).toEqual({ beside: 'Where bar.jpg sits in its section', moveTo: 'Move bar.jpg to the top or to another section' });
-    expect(bare.topPhoto.labels).toEqual({ moveTo: 'Move the top photo top.jpg into a section' });
+    expect(bare.sections[1].photos[1].labels).toMatchObject({ beside: 'Where bar.jpg sits in its section', moveTo: 'Move bar.jpg to the top or to another section', select: 'Select the photo bar.jpg' });
+    expect(bare.topPhoto.labels).toMatchObject({ moveTo: 'Move the top photo top.jpg into a section', select: 'Select the top photo top.jpg' });
   });
 });
 
