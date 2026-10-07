@@ -18,7 +18,12 @@ describe('4.14e: the map and the desk show the line for a send-back that did not
   it("Outline.js builds the line from the payload and the map's note box, and shows it among the round's lines", () => {
     const src = read('console/components/checkpoints/Outline.js');
     expect(src).toContain("const didNotRun = ViewLogic.reworkDidNotRunLine(data && data.roundDidNotRun, note, 'map');");
-    expect(src).toMatch(/const roundLines = didNotRun \|\| view\.round/);
+    // Piece 4 (brief 4D): the page renders mapView's parts in its order, whose round part the view
+    // includes whenever the payload carries roundDidNotRun (mapView's `present.round`).
+    expect(src).toContain('view.order.map(function (part) { return PARTS[part](); })');
+    const ViewLogic = require('../../console/checkpoint-view-logic');
+    const data = { outline: { headline: '', deck: '', sections: [], dropped: [], leftOut: [], expectedLength: 1, weaveChanges: [] }, roundDidNotRun: { round: 2, at: null, note: 'Tighten it.' } };
+    expect(ViewLogic.mapView(data, data.outline).order[0]).toBe('round');
     expect(src).toContain("didNotRun && React.createElement('p', { className: 'map__did-not-run', role: 'status' }, didNotRun)");
   });
 

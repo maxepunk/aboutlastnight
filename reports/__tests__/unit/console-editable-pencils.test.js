@@ -111,10 +111,13 @@ describe('Outline.js opts in at every pencil host', () => {
     expect(count(src, `const ALWAYS = '${BASE} ${ALWAYS}';`)).toBe(1);
   });
 
-  it('routes every pencil host of the map through it: the head, the gap note, each section, each beat and the length', () => {
-    ["'map__head ' + ALWAYS", "'map__gap ' + ALWAYS", "'map__section-head ' + ALWAYS", "'map__beat ' + ALWAYS", "'map__length ' + ALWAYS"]
+  // Piece 4 (brief 4D): a move is a card on the board, whose words open from Edit the words when it
+  // is selected, so it is no pencil host.
+  it('routes every pencil host of the map through it: the head, the gap note, each section and the length', () => {
+    ["'map__head ' + ALWAYS", "'map__gap ' + ALWAYS", "'map__section-head ' + ALWAYS", "'map__length ' + ALWAYS"]
       .forEach((host) => expect(`${host} ${count(src, host)}`).toBe(`${host} 1`));
-    expect(hosts).toBe(5);
+    expect(`'map__beat ' + ALWAYS ${count(src, "'map__beat ' + ALWAYS")}`).toBe("'map__beat ' + ALWAYS 0");
+    expect(hosts).toBe(4);
   });
 
   it('has one editable host per editBtn call site', () => {

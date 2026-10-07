@@ -281,8 +281,13 @@ describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a bea
   });
 
   it('holds every pencil and every "+ Add a beat" while its answer holds', () => {
-    expect(count(src, 'editBtn(')).toBe(5);
-    expect(count(src, '); }, editHeld)')).toBe(5);
+    // Piece 4 (brief 4D): four pencils, the head, the gap note, each column's head and the length;
+    // a move's words open from Edit the words on its selected card, which waits the same way.
+    expect(count(src, 'editBtn(')).toBe(4);
+    expect(count(src, '); }, editHeld)')).toBe(4);
+    const editTheWords = buttonProps(src, "'Edit the words'");
+    expect(editTheWords).toMatch(/disabled: !!editHeld\b/);
+    expect(editTheWords).toContain("open('beat', beat.id)");
     const add = buttonProps(src, "'+ Add a beat'");
     expect(add).toMatch(/disabled: !!addHeld\b/);
     expect(add).toContain('title: addHeld || undefined');

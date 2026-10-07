@@ -83,13 +83,15 @@ describe('4.12c: each page folds what its component folds', () => {
     ]);
   });
 
-  // Phase 4b (brief 1D; spec 9): and each move's evidence, under the view's title. Piece 4 (R8):
-  // the tray is always open, so left out is no fold; three CollapsibleSections stay until 4D's
-  // board shows the evidence on the selected card, which leaves two.
+  // Phase 4b (brief 1D; spec 9): and each move's evidence, under the view's title. Piece 4 (R8;
+  // brief 4D): the tray is always open, and a move's evidence shows on its card once the director
+  // selects it, so the board keeps two CollapsibleSections, the standing notes and the trace. The
+  // page folds the evidence still: it shows only on selection, which the page as it opens never has.
   it("the map folds each move's evidence, the standing notes and the trace, and the tray is always open", () => {
     const src = read(COMPONENTS.outline);
-    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(3);
-    expect(src).toContain('React.createElement(CollapsibleSection, { title: view.evidenceTitle }');
+    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(2);
+    expect(src).not.toContain('CollapsibleSection, { title: view.evidenceTitle');
+    expect(src).toContain("React.createElement('p', { className: 'map__label' }, view.evidenceTitle)");
     expect(src).not.toContain('CollapsibleSection, { title: view.leftOut.title');
     expect(src).toContain('standing.any && React.createElement(CollapsibleSection, { title: standing.title }');
     expect(src).toContain('trace.any && React.createElement(CollapsibleSection, { title: trace.title }');
