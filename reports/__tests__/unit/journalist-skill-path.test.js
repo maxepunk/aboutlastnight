@@ -306,6 +306,77 @@ describe('the story meeting as angles (phase 4b, piece 3)', () => {
   });
 });
 
+/**
+ * Phase 4b, piece 4 (brief 4E; spec docs/superpowers/specs/2026-10-07-map-as-corkboard.md
+ * sections 3, 4, 8, 11 and 14): each move carries a summary (the beat's `synopsis`), the order of
+ * a section's moves is the map's, and the page is counted twice, as it opens and with every
+ * summary open. The map's page as one column, its Everyone list, "(card)" and the article
+ * writer's own order within a section went, here and in the docs that describe the map.
+ */
+describe('the map as a corkboard (phase 4b, piece 4)', () => {
+  const { MAP_WORD_BOUND, MAP_OPEN_WORD_BOUND, MAP_SYNOPSIS_AIM } = require('../../lib/map');
+  const atMost = (words) => new RegExp(`\\bat most ${words} words\\b`);
+  const mapStop = () => {
+    const text = FILES['SKILL.md'];
+    return text.slice(text.indexOf('**Stop: the map.**'), text.indexOf('### 10.'));
+  };
+  const DOCS = {
+    'CONTEXT.md': read(path.join(REPO, 'CONTEXT.md')),
+    'PIPELINE_DEEP_DIVE.md': read(path.join(REPO, 'docs', 'PIPELINE_DEEP_DIVE.md')),
+    'first-run-sheet.md': read(path.join(REPO, 'docs', 'runbook', 'first-run-sheet.md'))
+  };
+  const ALL = { ...FILES, ...DOCS };
+
+  it("the map's stop and the outline generator hold both pages' bounds, and the summaries' aim", () => {
+    for (const text of [mapStop(), section(agent('outline-generator'), 'Job')]) {
+      expect(text).toMatch(atMost(MAP_WORD_BOUND));
+      expect(text).toMatch(atMost(MAP_OPEN_WORD_BOUND));
+      expect(text).toMatch(new RegExp(`\\babout ${MAP_SYNOPSIS_AIM} words\\b`));
+    }
+  });
+
+  it("the outline generator writes each move's synopsis and orders each section's moves as the article tells them", () => {
+    const job = section(agent('outline-generator'), 'Job');
+    expect(job).toContain('`synopsis`');
+    expect(job).toMatch(/in the order the article (?:will )?tells? them/);
+  });
+
+  it("the article generator tells each section's beats in the map's order, each as its synopsis says", () => {
+    const job = section(agent('article-generator'), 'Job');
+    expect(job).toMatch(/in the map's order/);
+    expect(job).toContain('as its `synopsis` says');
+  });
+
+  it("the map's stop shows each move with its summary, in the article's order, with both counts", () => {
+    const stop = mapStop();
+    expect(stop).toMatch(/\bsummary\b/);
+    expect(stop).toMatch(/order the article tells them/);
+    expect(stop).toMatch(/\bIn no move\b/);
+    expect(stop).toMatch(/"Card"/);
+  });
+
+  it("CONTEXT.md gives a beat its sentence and the map's order, and the map its corkboard", () => {
+    const entry = (term) => {
+      const at = DOCS['CONTEXT.md'].indexOf(`**${term}**:`);
+      return at < 0 ? '' : DOCS['CONTEXT.md'].slice(at, DOCS['CONTEXT.md'].indexOf('_Avoid_', at));
+    };
+    expect(entry('Beat')).toContain('one sentence on what the article tells there');
+    expect(entry('Beat')).toContain("tells every beat in the map's order, as its sentence says");
+    expect(entry('Story map')).toContain('its beats in the order the article tells them');
+    expect(entry('Story map')).toContain('On screen it is a corkboard');
+  });
+
+  it.each(Object.keys(ALL))("%s describes none of the map's retired page or the article writer's own order", (name) => {
+    const old = {
+      cardInBrackets: /\(card\)/,
+      inNoBeat: /\bIn no beat\b/,
+      everyoneList: /\bEveryone(?::| line| list)/,
+      writersOrder: /the order of the beats within/i
+    };
+    Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(ALL[name])}`).toBe(`${name}: ${what}: false`));
+  });
+});
+
 describe('the skill path carries no retired text', () => {
   it.each(NAMES)('%s has no em-dash', (name) => {
     expect(FILES[name]).not.toMatch(/—/);

@@ -89,7 +89,7 @@ The model pass that produces the arcs, the outline or the article.
 _Avoid_: generator, agent, model, Nova (the reporter persona, not the pass)
 
 **Beat**:
-One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, and the evidence under it. The article writer writes every beat from its evidence and adds none.
+One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, one sentence on what the article tells there, and the evidence under it. On the map's page it is a move, and its words are its title. The article writer tells every beat in the map's order, as its sentence says, from its evidence, and adds none.
 _Avoid_: point, item, paragraph plan
 
 **Photo description**:
@@ -137,7 +137,7 @@ The arc stop, where the director picks one of the angles the arc writer pitches 
 _Avoid_: story memo, arc cards, arc analysis
 
 **Story map**:
-The outline: the settled angle laid across the article's sections, in story terms, with each beat's evidence underneath. Under the headline, the deck and the settled story, each section has its job, its beats and its photos; sections the story does not need are dropped, and the beats left out are listed. Length comes from what is on the map, not from a budget per section.
+The outline: the settled angle laid across the article's sections, in story terms, with each beat's evidence underneath. Under the headline, the deck and the settled story, each section has its job, its beats in the order the article tells them, and its photos; sections the story does not need are dropped, and the beats left out are listed. On screen it is a corkboard: a column for each section and a card for each beat. Length comes from what is on the map, not from a budget per section.
 _Avoid_: outline structure, allocation, section plan, script
 
 **Reweave**:

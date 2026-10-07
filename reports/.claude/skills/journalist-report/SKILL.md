@@ -129,26 +129,26 @@ The evidence is the writers', so a change is to the lines alone. A connection th
 
 Start `journalist-outline-generator`.
 
-**Stop: the map.** Show the map as one page at the level of the story, in this order:
-1. the settled story: the story and question of the angle the director sent on, read-only;
-2. the gap line, when the map has one;
-3. the headline, the deck and the top photo;
-4. each section in the map's order, under its slot's label: its heading, its job, its beats, each as its move and its people with "(card)" after a beat marked as a card, and its photos;
-5. the dropped sections, each with its reason;
-6. Everyone: where each roster player appears, from the beats' players; then the cards, the photos placed of those the director kept, and the expected length;
-7. left out, when the director asks;
+**Stop: the map.** Show the map as the console's corkboard does, in chat: a block for each section, and a move for each beat, in this order:
+1. the counts: "Everyone placed", or "In no move:" and the roster players no move names, then any the gap line raises; the cards, with the 3 to 5 the article carries when they leave it; the photos placed, of those the director kept; and the expected length;
+2. the settled story: the story and question of the angle the director sent on, read-only, with the gap line beside it when the map has one;
+3. the settled story's threads, in its order, each by its name;
+4. the headline, the deck and the top photo;
+5. each section in the map's order, under its slot's label: its heading, its job, then its moves in the order the article tells them, each its title (the beat's `move`), its people, the threads it carries by name, "Card" when its evidence prints as a card, and the photos beside it; then the section's photos that sit by themselves;
+6. Left out: each move the map leaves out, by its title;
+7. the dropped sections, each with its reason;
 8. what the map changed to fit the meeting's changes, each with its source.
 
-The page names a beat by its move, and shows no ids. Each photo goes by the director's description in `inputs/character-ids.json`, or its filename when there is none. Each beat's evidence stays off the page, as at the story meeting, with the card's document marked among its pieces. A beat the director added has none yet: the article generator finds its evidence. Counted without the evidence, the outline generator's page comes to at most 450 words, aiming for 300; the director's own additions may take it past.
+Each move's summary, its `synopsis`, is folded under its title: show one when the director asks for it, or every summary at once. A move with no summary shows its title alone. The page names a move by its title, and shows no ids. Each photo goes by the director's description in `inputs/character-ids.json`, or its filename when there is none. Each move's evidence stays off the page, as at the story meeting, with the card's document marked among its pieces; show it when the director asks about a move. A move the director added has none yet: the article generator finds its evidence. Counted without the evidence, the outline generator's page comes to at most 450 words as it opens, with every summary folded, aiming for 300; with every summary open it comes to at most 750 words, the summaries about 250 words between them. The director's own additions may take either page past its bound.
 
-The director can edit any line, a beat's move and its people among them; move a beat to another section, or a photo to another section or the top; strike a beat into left out; bring a beat back from left out into a section they pick; add a beat with its move and its people; and leave a note. Write each change into `analysis/article-outline.json` (`references/schemas.md`, "The map"). Then:
+The director can edit any line, a move's title, summary and people among them; move a move up or down in its section, or to the foot of another section, the photos beside it going with it; put a photo beside a move, by itself in a section, or at the top; leave a move out, into Left out; bring a move back from left out into a section they pick; add a move with its title and its people, its summary theirs to write or leave empty; and leave a note. The order of a section's beats is the order the director leaves them in. Write each change into `analysis/article-outline.json` (`references/schemas.md`, "The map"). Then:
 - **Approve**: go on to step 10.
 - **Send back**, with a note: start `journalist-outline-generator` again, then hold this stop again.
 - **Back to the story meeting**, to change the story itself: hold step 8's stop again on the weave as the director left it, the angle they sent on open, with no agent run. After its approval, step 9 writes the map again.
 
 ### 10. Write the article
 
-Start `journalist-article-generator`. It writes from the settled angle and the map as the director left them, each beat from the evidence it carries, and renders `output/article.html`.
+Start `journalist-article-generator`. It writes from the settled angle and the map as the director left them, each section's beats in the map's order, each as its summary says, from the evidence it carries, and renders `output/article.html`.
 
 ### 11. Check the article
 

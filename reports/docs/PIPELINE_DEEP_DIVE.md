@@ -198,9 +198,10 @@ What the article can do with each layer is the rule set's, stated once: `world.m
             ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │              PHASE 3: THE MAP (Opus writer, code checks)                    │
-│  The settled angle laid across the theme's slots; each beat a move in story │
-│  terms, its evidence underneath. The page at most 450 words: the writer's   │
-│  own words held to 450 less what code prints, never under 300, its aim      │
+│  The settled angle laid across the theme's slots, each section's beats in   │
+│  the article's order; each beat a move in story terms with a one-sentence   │
+│  summary, its evidence underneath. A corkboard of at most 450 words as it   │
+│  opens and 750 with every summary open, the writer held to each             │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -208,8 +209,9 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 │              PHASE 4: ARTICLE GENERATION (Opus)                             │
 │  Reads the whole rule set: the world, the truth rules, all 8 craft files    │
 │  Nova's voice: C12 in craft-voice.md; words that never print: T14           │
-│  Writes each beat of the map from its evidence; the fact check, then a      │
-│  truth-only judge; the director finishes the article at the desk            │
+│  Writes each beat in the map's order, as its summary says, from its         │
+│  evidence; the fact check, then a truth-only judge; the director finishes   │
+│  the article at the desk                                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -415,8 +417,9 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
   topPhoto,                       // the photo the article prints as its hero
   gapNote: { line, players },     // only when the record cannot carry part of the story
   sections: [{ slot, heading, job,
-    beats: [{ id, move, players, threads, connection?, card?, kind?, evidence }],
-      // move: the move of the story in a few plain words; threads: the ids of the settled weave's threads it carries
+    beats: [{ id, move, players, synopsis, threads, connection?, card?, kind?, evidence }],   // in the order the article tells them
+      // move: the move of the story in a few plain words, its title on the map's page; threads: the ids of the settled weave's threads it carries
+      // synopsis: one sentence in story terms on what the article tells at this move, folded under the title on the page; required of the writer, optional on a beat the director adds
       // card: true when its evidence prints as a card, with one piece flagged card: true, whose source is the card's document
       // kind: scene | receipt | line | figure, a hint to the article writer, kept underneath and never printed
     photos: [{ filename, beat? }] }],
@@ -427,26 +430,26 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 }
 ```
 
-**The writer** reads the settled weave first, as its task (`settledWeaveOf`): the angle the director sent on, its headline, story, question, why it lands and where it ends up, each of its threads in its order with its evidence under it, the threads it leaves out by name, and the connections between its threads, then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline', {theme})`), and the standing notes last. It writes each section's beats as moves in story terms, gives each its threads, its people and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words (`MAP_WORD_AIM`). Code writes `heroImage` from the map's top photo.
+**The writer** reads the settled weave first, as its task (`settledWeaveOf`): the angle the director sent on, its headline, story, question, why it lands and where it ends up, each of its threads in its order with its evidence under it, the threads it leaves out by name, and the connections between its threads, then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline', {theme})`), and the standing notes last. It writes each section's beats as moves in story terms, in the order the article will tell them (C2, C6), gives each its people, a synopsis of about 20 words, its threads and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words of its own as the page opens (`MAP_WORD_AIM`) and about 250 between the synopses (`MAP_SYNOPSIS_AIM`). Code writes `heroImage` from the map's top photo.
 
 **The checks** (`lib/map.js` `mapFindings`), free and in code:
 - every roster player in a beat or raised in the gap note, and every kept photo placed once;
 - each beat marked as a card flags one piece, whose source is a document in the record, and the cards number three to five (`beatCardOf` reads a beat's card from its flagged piece);
 - every thread in the settled angle lands in a beat that names it, and a thread the director added at the meeting, or flipped into the angle, may be named in the gap note instead, when the record cannot carry it, by its name, matched in any case and spacing and without its quotation marks, which the story-terms scan leaves out as the director's words; every connection between the settled angle's threads lands in a beat;
-- each of the writer's beats carries a thread and has evidence, and every piece names a source the record holds, with each quotation word for word in its source (`lib/evidence.js` `evidenceProblems`);
-- the writer's lines are in story terms: a beat's move, a section's job, the gap note's line and each weave change hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the headline, the deck and the section headings are exempt, since the article prints them;
+- each of the writer's beats carries a thread, and in a section only threads the settled angle tells (`thread-outside-story`; a beat the director added or brought back is never held to it), and has evidence, and every piece names a source the record holds, with each quotation word for word in its source (`lib/evidence.js` `evidenceProblems`);
+- the writer's lines are in story terms: a beat's move and its synopsis, a section's job, the gap note's line and each weave change hold no document id the record holds, no quotation in quotation marks, no clock time and no money figure (`storyTermsProblems`); the headline, the deck and the section headings are exempt, since the article prints them;
 - each weave change named by its source, and no two beats under one id;
-- the page's length, counted by `wordsShown` on the map as it first opens, the folds closed: the writer's own words are held to the larger of 300 and 450 less what the page prints that the writer did not write, such as the settled story, the director's photo descriptions and the counts (`MAP_WORD_AIM`, `MAP_WORD_BOUND`). So the writer may always use 300 words of its own, and more only while the whole page stays within 450. The rule is `lib/word-count.js` `pageLengthOf`, which the meeting keeps with its own bound and floor (450 and 350).
+- the page's length, counted by `wordsShown` on two pages (`MAP_PAGES`): as it opens, every synopsis and every other fold closed, the writer's own words are held to the larger of 300 and 450 less what the page prints that the writer did not write, such as the settled story and the counts (`MAP_WORD_AIM`, `MAP_WORD_BOUND`); with every synopsis open, to the larger of 550 and 750 less that page's overhead (`MAP_SYNOPSIS_AIM`, `MAP_OPEN_WORD_BOUND`). A photo prints no words on the page, so its description is in neither. Each page past its allowance is its own failure, saying which page ran long. The rule is `lib/word-count.js` `pageLengthOf`, which the meeting keeps with its own bound and floor (450 and 350).
 
 A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLINE` is 1); a check still failing after it opens the stop, which shows it beside its line, in story terms. The director's lines and the beats they added are never a check's failure: a failure the director caused is a concern on their edit, never a rework. The director's send-back reads no check failure from before it, as the meeting's does: the checks run again on its map. No model judge reads the map.
 
-**Checkpoint**: `outline` (3.25) - The map (phase 4b, piece 1: spec 4.2 and 9): each section's heading and job, its beats each as its move, its people and "(card)" where its evidence prints as a card, with a "What's behind it" fold holding its evidence, and its photos by the director's descriptions; no line names a beat by its id. The fold of a beat the director added says the article writer finds its evidence. The director edits its beats (a beat's move and its people), its photos and its top photo, and approves or sends it back. The approved map is saved as `data/<id>/analysis/map.approved.json`. To change the story itself, the director goes back to the story meeting; going back to the map reopens it as the director left it, with no model call (R9), and the rollback panel says so. A photo the director has left out since the map, such as one deleted at the desk, shows on the map as left out, with no move, and the gate refuses it as a top photo the director chose; the article leaves it out (`articleMapOf`). At approve and at send-back the gate stores a photo a strike freed by itself, and moves a section the director emptied (no beat and no photo left) to the dropped list, with the line "The director emptied this section on the map." (task 4.14b). The drop stands as the director's edit: an automatic pass that puts the section back has it taken out again when it holds nothing, and one it filled stays for the director to empty again, out of the dropped list (fix round 1).
+**Checkpoint**: `outline` (3.25) - The map (phase 4b, pieces 1 and 4: spec 2026-10-07 sections 4 to 6): a corkboard. Under the counts (everyone placed, or "In no move" with who is not; the cards; the photos placed of those kept; the expected length), the settled story with the gap note and the settled story's threads, each a coloured dot and its name, come the top of the article and a column for each section, headed by its slot, its heading and its job. Each move is a card in the order the article tells them: its title, its people, a dot for each thread it carries, "Card" where its evidence prints as a card, its photos as thumbnails, and its summary folded behind an arrow. Selecting a card opens it in place, with its threads by name, its photos with the director's descriptions, its controls and what's behind it, its evidence; the fold of a move the director added says the article writer finds its evidence. Left out is a tray under the board. No line names a move by its id. The director edits a move's title, summary and people, moves it up, down or to another section, leaves it out or brings it back, places its photos and the top photo, by the selected card's controls or by dragging, and approves or sends the map back. The order they leave a section's moves in is the article's. The approved map is saved as `data/<id>/analysis/map.approved.json`. To change the story itself, the director goes back to the story meeting; going back to the map reopens it as the director left it, with no model call (R9), and the rollback panel says so. A photo the director has left out since the map, such as one deleted at the desk, shows on the map as left out, with no move, and the gate refuses it as a top photo the director chose; the article leaves it out (`articleMapOf`). At approve and at send-back the gate stores a photo a strike freed by itself, and moves a section the director emptied (no beat and no photo left) to the dropped list, with the line "The director emptied this section on the map." (task 4.14b). The drop stands as the director's edit: an automatic pass that puts the section back has it taken out again when it holds nothing, and one it filled stays for the director to empty again, out of the dropped list (fix round 1).
 
 ### Phase 4: Article Generation
 
 **Nodes**: `generateContentBundle`, `evaluateArticle` (the fact check, then the article judge), `checkpointArticle` (the desk), and the rework, `incrementArticleRevision` then `reviseContentBundle` (`lib/workflow/nodes/ai-nodes.js` and `evaluator-nodes.js`; phase 4, briefs 4.7a and 4.7b; spec section 6)
 
-**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files and the standing notes last. It writes all the prose from the map's beats, each from the evidence the beat carries, citing its quotations, figures and times, and reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
+**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files and the standing notes last. It writes all the prose from the map's beats, each section's beats in the map's order and each as its synopsis says (C2, C16), each from the evidence the beat carries, citing its quotations, figures and times, and reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
 
 **The rules**: the article writer reads the whole rule set (`loadRuleSet('article', {theme})`): the world and the truth rules in its system prompt after the mode block, and all eight craft files last in its user prompt. Nova's voice is C12 in `craft-voice.md`; where Nova stood is the session's mode block (`mode-on-site.md` or `mode-remote.md`) and T8; the length and the house style are C4 in `craft-telling.md`; the fiction's own words are T14, buried memories T3, and characters, not players, T11, all in `truth-rules.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
 
@@ -640,7 +643,7 @@ So no fact check is paid for on a weave the code has already found at fault and 
 - **Prevents false positives**: NPCs like "Marcus" never count as players
 - **Prevents hallucinations**: a name the record does not show is no one the article can name
 
-**Implementation**: the weave writer reads the three categories in its prompt (`buildCharacterCategoriesBlock` in `arc-specialist-nodes.js`, with `getNonRosterPCs` in `node-helpers.js`: every known game character less the roster and the theme's NPCs). Coverage is the map's: its checks and its Everyone line read each beat's players against the roster (`mapTally` in `console/outline-edit-logic.js`, over `mapRosterOf` in `lib/map.js`), and the article's fact check covers the players the map places (`placedPlayers`). A player the director leaves off the map, by an unanswered question or a strike, is the director's decision: a concern on their edit at the map, and no finding at the article.
+**Implementation**: the weave writer reads the three categories in its prompt (`buildCharacterCategoriesBlock` in `arc-specialist-nodes.js`, with `getNonRosterPCs` in `node-helpers.js`: every known game character less the roster and the theme's NPCs). Coverage is the map's: its checks and its counts read each beat's players against the roster (`mapTally` in `console/outline-edit-logic.js`, over `mapRosterOf` in `lib/map.js`), and the article's fact check covers the players the map places (`placedPlayers`). A player the director leaves off the map, by an unanswered question or a strike, is the director's decision: a concern on their edit at the map, and no finding at the article.
 
 ### Canonical Name Preservation (Commit 4193772)
 
@@ -744,7 +747,7 @@ The party, the investigation and Nova's day, and the clock every logged time is 
 
 ## Common Debugging Scenarios
 
-### "A player is in no beat on the map"
+### "A player is in no move on the map" (the counts' "In no move:")
 
 **Check**:
 1. Is the roster correctly parsed in `sessionConfig.roster`?

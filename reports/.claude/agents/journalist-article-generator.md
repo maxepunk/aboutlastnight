@@ -41,7 +41,7 @@ And `lib/schemas/content-bundle.schema.json`, the bundle's shape.
 
 ## Job
 
-Write the map as C16 (`craft-story.md`) sets out the article writer's part: the beats in the map's `sections`, none from its `leftOut`, each written from the pieces of its `evidence`, citing their quotations, figures and times, with the order of the beats within a section, the words, the transitions and each scene's detail from the record yours. A beat the director added has no evidence yet: tell it from the record. For each beat marked `card`, print an inline card of the document named by its piece flagged `card`, as C9 (`craft-cards.md`) sets out. Aim at the map's `expectedLength`, as C4 (`craft-telling.md`) sets out.
+Write the map as C16 (`craft-story.md`) sets out the article writer's part: the beats in the map's `sections`, none from its `leftOut`, each section's beats in the map's order, each told as its `synopsis` says, each written from the pieces of its `evidence`, citing their quotations, figures and times, with the words, the transitions and each scene's detail from the record yours. A beat the director added has no evidence yet: tell it from the record. For each beat marked `card`, print an inline card of the document named by its piece flagged `card`, as C9 (`craft-cards.md`) sets out. Aim at the map's `expectedLength`, as C4 (`craft-telling.md`) sets out.
 
 Write `output/content-bundle.json` with the fields the page prints. Every object takes only the fields the schema lists for it.
 

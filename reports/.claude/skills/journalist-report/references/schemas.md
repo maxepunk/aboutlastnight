@@ -157,13 +157,13 @@ An angle's `threads` are the threads it tells, in the order it tells them, the v
 
 ### analysis/article-outline.json
 
-The story map, in the shape of `lib/schemas/outline.schema.json`. Each section's `slot`, and each dropped slot, is one of the journalist theme's slots, `map.slots` in `lib/theme-config.js`. The schema leaves a piece of evidence open; a beat, in a section's `beats` or in `leftOut`, is:
+The story map, in the shape of `lib/schemas/outline.schema.json`. Each section's `slot`, and each dropped slot, is one of the journalist theme's slots, `map.slots` in `lib/theme-config.js`. A section's `beats` are in the order the article tells them. The schema leaves a piece of evidence open; a beat, in a section's `beats` or in `leftOut`, is:
 
 ```
 {"id": "<beat id, its own across the map, such as b1>", "move": "<the move of the story, in a few plain words with its people>", "players": ["<roster player's name>"], "synopsis": "<one sentence, in story terms, saying what the article tells at this move>", "threads": ["<id of a settled angle's thread the move carries>"], "connection": "<id of the connection between two of the settled angle's threads that lands here>", "card": true, "kind": "scene | receipt | line | figure", "evidence": [{"sources": ["<document id> | ledger | evidence-log | notes"], "shows": "<what the piece shows, with the words or figures that matter>", "stance": "supports | cuts-against", "card": true}]}
 ```
 
-`connection` is there only on the beat where a connection between two of the settled angle's threads lands. `card` marks a beat whose evidence prints as a card, and then one of its pieces, whose source is the card's document. `kind` is a hint for the article generator; the map's page never prints it. A beat the director adds has an id, a move and its people, and no evidence yet: the article generator finds its evidence. The director's changes at the map's stop are written into the map: a struck beat moves to `leftOut`, and a beat brought back moves into the section the director picks.
+`connection` is there only on the beat where a connection between two of the settled angle's threads lands. `card` marks a beat whose evidence prints as a card, and then one of its pieces, whose source is the card's document. `kind` is a hint for the article generator; the map's page never prints it. `synopsis` is the move's summary, folded under its title on the map's page. A beat the director adds has an id, a move and its people, a `synopsis` only when they write one, and no evidence yet: the article generator finds its evidence. The director's changes at the map's stop are written into the map: a struck beat moves to `leftOut`, a beat brought back moves into the section the director picks, and a beat moved within its section, or to the foot of another, takes its place in that section's `beats`.
 
 ## The article
 
