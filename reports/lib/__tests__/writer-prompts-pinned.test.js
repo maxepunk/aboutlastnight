@@ -423,10 +423,12 @@ const REPO = path.join(__dirname, '..', '..');
  *   builds Everyone from them (+1): outline-journalist 24800 -> 24801.
  *   Then the run 1 follow-ups to 4B: the map writer's task says the moves under leftOut print on
  *   the page by their titles (F1, +47), since the tray is always open and its titles count toward
- *   the page's words: outline-journalist 24801 -> 24848.
+ *   the page's words: outline-journalist 24801 -> 24848. Its line that a beat in a section
+ *   carries only threads of the story gives R5's reason, which no rule file states: the director
+ *   settled the other threads out of it at the meeting (F3, +71): 24848 -> 24919.
  */
 const PINNED = {
-  'outline-journalist': ['bee0d132dd3b139261b467f413de2e04f9697ecabb1becb8915e4ff7c923e393', 24848],
+  'outline-journalist': ['cccaf9981018185f7462af4f5b11d00dea0e890a97c27f3c1cd88f0cfed524d6', 24919],
   'article-journalist': ['f9449f999fce14c6ebc82d1a72bcea0cecdf7111ccd34e2c7cda33ce87cb5e49', 35835],
   'arcs-journalist': ['d45be33a2d854c23404b412793a6a162f34797d48b91375f09cb0e838f58c8fa', 12079]
 };
