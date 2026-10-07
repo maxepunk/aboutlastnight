@@ -399,8 +399,8 @@ describe('the items phase 4 rewrites (task 4.1)', () => {
  */
 describe('the items phase 4b rewrites (task 1A)', () => {
   it.each([
-    // Task 3A rewrote the C16 sentence this row pinned, for the angles; its block below pins it.
-    ['C2', 'craft-form', "A section's beats are the moves of its story, each said in a few plain words with its people, at the level of the story (C16)."],
+    // Task 3A rewrote the C16 sentence this row pinned, for the angles, and task 4A the C2
+    // sentence, for the summary and the order; their blocks below pin them.
     ['C8', 'craft-material', 'The map chooses, from the notes and the record, the lines the settled story needs, and places each as evidence under the beat where it makes sense, a line from the room under the moment it was said.'],
     ['C9', 'craft-cards', "The map chooses the cards with the story: it marks each beat whose evidence prints as a card, and names the card's document under that beat."]
   ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
@@ -436,6 +436,31 @@ describe('the items phase 4b piece 3 rewrites (task 3A)', () => {
     const text = `${itemText('craft-story', 'C1')}
 ${itemText('craft-story', 'C16')}`.toLowerCase();
     expect(text).not.toContain(phrase);
+  });
+});
+
+/**
+ * Phase 4b, piece 4, task 4A: the rule text the director approved on 2026-10-07
+ * (rule-text-read.md in the piece 4 workspace; the piece 4 spec's section 12). Each beat on
+ * the map is also summed up in one sentence saying what the article tells there, and the
+ * order of a section's beats is the map's: C2 says what a beat is, and C16 how the article
+ * writer tells the beats, in the map's order, each as its sentence says. Each changed item
+ * carries one of the read's new sentences inside its own item. The lint above holds the
+ * rest: each item once, every pointer, no em-dash, no gendered Nova and nothing on the
+ * removed list.
+ */
+describe('the items phase 4b piece 4 rewrites (task 4A)', () => {
+  it.each([
+    ['C2', 'craft-form', "A section's beats are the moves of its story, in the order the article tells them."],
+    ['C2', 'craft-form', 'The article writer tells each beat as its sentence says, from its evidence, in its own words.'],
+    ['C16', 'craft-story', "It tells each beat as the beat's sentence says, from the evidence the beat carries, and cites it."]
+  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
+    expect(itemText(name, id)).toContain(sentence);
+  });
+
+  // The read takes the order of the beats out of the article writer's list: the order is the map's.
+  it('C16 no longer gives the article writer the order of the beats within each section', () => {
+    expect(itemText('craft-story', 'C16')).not.toContain('the order of the beats within each section');
   });
 });
 

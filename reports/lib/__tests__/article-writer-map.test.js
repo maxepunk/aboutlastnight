@@ -557,8 +557,8 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     expect(beatsLines[0].endsWith(` ${BEATS_EVIDENCE}`)).toBe(true);
     // Each rule is stated once (spec section 8): C16, in the craft files the prompt holds, tells
     // the article writer to write each beat from its evidence and cite it, and the line says it
-    // no second time.
-    expect(user).toMatch(/^<craft-story>$[\s\S]*It writes each beat from the evidence the beat carries, and cites it\.[\s\S]*^<\/craft-story>$/m);
+    // no second time. Task 4A's rule text has C16 tell each beat as the beat's sentence says.
+    expect(user).toMatch(/^<craft-story>$[\s\S]*It tells each beat as the beat's sentence says, from the evidence the beat carries, and cites it\.[\s\S]*^<\/craft-story>$/m);
     expect(beatsLines[0]).not.toMatch(/from the evidence it carries|evidence cited/);
     // The items it points at: T1 in the truth rules, which print in the system prompt alone, and
     // C9 in the craft files.
