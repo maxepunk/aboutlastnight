@@ -127,11 +127,11 @@ const MAP_SYNOPSIS_AIM = 250;
 const MAP_PAGES = Object.freeze([
   {
     key: 'folded', open: false, page: 'As the map opens', said: 'As the map opens', bound: MAP_WORD_BOUND, floor: MAP_WORD_AIM,
-    fix: 'Say each move in a few words, and move into leftOut the beats the story does not need.'
+    fix: 'The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: say each move, in a section or in leftOut, in a few words, and keep leftOut to one line for each thing considered, as C8 sets out.'
   },
   {
     key: 'unfolded', open: true, page: 'With every synopsis open', said: 'With every summary open', bound: MAP_OPEN_WORD_BOUND, floor: MAP_WORD_AIM + MAP_SYNOPSIS_AIM,
-    fix: 'Keep each synopsis to one sentence of about 20 words, and move into leftOut the beats the story does not need.'
+    fix: 'The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: shorter titles, and each synopsis one sentence only as long as its move needs, about 20 words at most.'
   }
 ]);
 

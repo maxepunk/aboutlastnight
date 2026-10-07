@@ -148,6 +148,10 @@ describe('4B: the length is counted as the page opens and with every synopsis op
     expect(failures[0].message).toMatch(/^With every synopsis open, the map's page runs to \d+ words/);
     expect(failures[0].message).toMatch(/starting with the longest: beat b\d+'s synopsis \(\d+ words\)/);
     expect(failures[0].message).not.toMatch(/photos' descriptions/);
+    // The tray prints each left-out move's title on both pages, so the saving is in fewer and
+    // shorter lines, never in moving a beat into leftOut (run 1 follow-up F1).
+    expect(failures[0].message).toContain('The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: shorter titles, and each synopsis one sentence only as long as its move needs');
+    expect(failures[0].message).not.toMatch(/move into leftOut/);
   });
 
   test('long titles fail the page as it opens, its line saying so', () => {
@@ -159,6 +163,8 @@ describe('4B: the length is counted as the page opens and with every synopsis op
     expect(failures[0].message).toMatch(/^As the map opens, the map's page runs to \d+ words/);
     expect(failures[0].message).toMatch(/beat b\d+'s move and people/);
     expect(failures[0].message).not.toMatch(/synopsis \(/);
+    expect(failures[0].message).toContain('The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: say each move, in a section or in leftOut, in a few words, and keep leftOut to one line for each thing considered, as C8 sets out.');
+    expect(failures[0].message).not.toMatch(/move into leftOut/);
   });
 
   test('long photo descriptions count on neither page', () => {

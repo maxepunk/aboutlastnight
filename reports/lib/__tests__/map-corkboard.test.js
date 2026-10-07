@@ -263,4 +263,8 @@ describe("4B: the map writer's task asks for a synopsis on every move, the artic
   it('asks that a beat in a section carry only the threads of the story', async () => {
     expect(await taskOf()).toMatch(/only threads of the story/);
   });
+
+  it('says the left-out moves print on the page by their titles (run 1 follow-up F1)', async () => {
+    expect(await taskOf()).toContain('under leftOut, as C8 (`<craft-material>`) sets out. Those moves print on the page by their titles.');
+  });
 });
