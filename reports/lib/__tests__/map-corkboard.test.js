@@ -157,6 +157,21 @@ describe("4B: a writer's beat in a section carries only threads the settled stor
     failures.forEach((f) => expect(f.line).not.toMatch(/\b[btc]\d+\b/));
   });
 
+  it('a left-out thread with no name is said without a quoted name, never as "unnamed" (run 1 follow-up F2)', () => {
+    const map = storyLevelMap();
+    beatOf(map, 'b2').threads = ['t1', 't8'];
+    const inputs = inputsOf(storyLevelMapState(), map);
+    const otherThreads = inputs.otherThreads.map((t) => (t.id === 't8' ? { ...t, name: '' } : t));
+    const failure = mapFindings(map, { ...inputs, otherThreads }).failures.find((f) => f.type === 'thread-outside-story');
+    expect(failure.line).toBe('The move "The quick vote for an accident" carries a thread the story leaves out.');
+    expect(failure.message).toMatch(/\bt8\b/);
+    expect(failure.message).not.toMatch(/"t8"|unnamed/);
+
+    beatOf(map, 'b2').threads = ['t1', 't8', 't9'];
+    const both = mapFindings(map, { ...inputs, otherThreads }).failures.find((f) => f.type === 'thread-outside-story');
+    expect(both.line).toBe('The move "The quick vote for an accident" carries the thread "Protecting Sarah", which the story leaves out, and another thread the story leaves out.');
+  });
+
   it('a beat in left out may carry any thread', () => {
     const map = storyLevelMap();
     map.leftOut[0].threads = ['t8'];

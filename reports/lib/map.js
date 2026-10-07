@@ -1016,12 +1016,18 @@ function mapFindings(map, inputs = {}) {
       if (outside.length === 0) return;
       const leftOut = outside.filter((thread) => otherNames.has(thread));
       const unknown = outside.filter((thread) => !otherNames.has(thread));
+      // A left-out thread with no name is said as one the story leaves out, never by a name it lacks.
+      const leftOutNamed = leftOut.filter((thread) => otherNames.get(thread));
+      const leftOutUnnamed = leftOut.length - leftOutNamed.length;
       const named = [
-        ...leftOut.map((thread) => `"${otherNames.get(thread) || thread}" (${thread})`),
+        ...leftOut.map((thread) => (otherNames.get(thread) ? `"${otherNames.get(thread)}" (${thread})` : thread)),
         ...unknown.map((thread) => `${thread}, which no thread of the weave holds`)
       ];
+      const other = leftOutNamed.length > 0;
       const said = [
-        ...(leftOut.length > 0 ? [`${leftOut.length > 1 ? 'the threads' : 'the thread'} ${listOf(leftOut.map((thread) => `"${otherNames.get(thread) || 'unnamed'}"`))}, which the story leaves out`] : []),
+        ...(leftOutNamed.length > 0 ? [`${leftOutNamed.length > 1 ? 'the threads' : 'the thread'} ${listOf(leftOutNamed.map((thread) => `"${otherNames.get(thread)}"`))}, which the story leaves out`] : []),
+        ...(leftOutUnnamed > 1 ? [`${other ? 'other ' : ''}threads the story leaves out`] : []),
+        ...(leftOutUnnamed === 1 ? [`${other ? 'another' : 'a'} thread the story leaves out`] : []),
         ...(unknown.length > 0 ? ['a thread the weave does not hold'] : [])
       ];
       fail('thread-outside-story', `Beat ${id}'s threads name ${listOf(named)}, outside the settled story. A beat in a section carries only the threads of the story in <SETTLED_WEAVE>: take ${outside.length > 1 ? 'them' : 'it'} off the beat's threads, or move the beat into leftOut.`,
