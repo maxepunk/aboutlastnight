@@ -4040,7 +4040,8 @@
    *   - each photo with the director's description (`description`, photoDescriptionOf), or ''
    *     when there is none, the beats of its section it can sit beside (`besideOptions`), and
    *     every move it can be put beside in any section (`besideTargets`, for placePhotoBeside),
-   *     each named by its move. A photo sits beside the beat it names unless that beat is struck
+   *     each named by its move; the top photo carries the same `besideTargets`, empty while it
+   *     is left out. A photo sits beside the beat it names unless that beat is struck
    *     (photoBeatOf; task 4.14b);
    *   - what each beat's fold and controls, and each photo's controls, say to a screen reader
    *     (`labels`, keyed by the control, as on the meeting's page; phase 4b, brief 1F, and fix
@@ -4212,6 +4213,7 @@
           labels: { moveTo: 'Move the top photo ' + photoNameOf(topName, topDescription) + ' into a section' },
           concerns: (topLeftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('topPhoto')),
           failures: failuresAt('topPhoto'),
+          besideTargets: topLeftOut ? [] : targetsBeside,
           moveTargets: topLeftOut ? [] : targets,
           leftOut: topLeftOut,
           locked: topLeftOut || photoRepeated(topName)

@@ -234,4 +234,20 @@ describe('4B: the columns, the counts and the tray', () => {
     expect(photo.besideTargets).toHaveLength(16);
     expect(photo.besideTargets[0]).toEqual({ slot: 'lede', value: 'b1', label: 'Beside: The room settles on an accident (Lede)' });
   });
+
+  test('the top photo can go beside any move too, as a section photo can, and nowhere while it is left out (run 1 follow-up F6)', () => {
+    const data = payloadOf();
+    const map = ViewLogic.mapDraftOf(data, undefined);
+    const view = ViewLogic.mapView(data, map);
+    expect(view.topPhoto.filename).toBe('p01.jpg');
+    expect(view.topPhoto.besideTargets).toEqual(view.sections[2].byThemselves[0].besideTargets);
+    expect(view.topPhoto.besideTargets).toHaveLength(16);
+    // placePhotoBeside takes the top as its fromSlot: the target puts the top photo beside that move.
+    const target = view.topPhoto.besideTargets[0];
+    const placed = EditLogic.placePhotoBeside(map, EditLogic.MAP_TOP_PHOTO, 0, target.slot, target.value);
+    expect(placed.sections[0].photos.some((p) => p.filename === 'p01.jpg' && p.beat === 'b1')).toBe(true);
+
+    const leftOut = ViewLogic.mapView({ ...data, leftOutPhotos: ['p01.jpg'] }, map);
+    expect(leftOut.topPhoto).toMatchObject({ leftOut: true, besideTargets: [], moveTargets: [] });
+  });
 });
