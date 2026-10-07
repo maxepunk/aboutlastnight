@@ -94,14 +94,14 @@ const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
 const MAP_CARDS = Object.freeze({ min: 3, max: 5 });
 
 /**
- * The bound on the map's page, as it prints when it first opens (spec 2026-10-05 sections 4.2 and
- * 6.1; R5). The rule is lib/word-count.js pageLengthOf's, which the meeting keeps too: the map
- * writer is held only to its own words, and may use max(MAP_WORD_AIM, MAP_WORD_BOUND - overhead)
- * of them (mapLengthOf). The map's overhead is its settled story with its question and hint, the
- * director's photo descriptions, the counts and every label code prints; the check node counts it
- * with every text field the writer writes left blank (mapWritersTextBlank;
- * lib/workflow/nodes/map-nodes.js mapPageWords), on the writer's share of the map
- * (mapWritersShareOf).
+ * The bound on the map's page as it opens, every synopsis folded (spec 2026-10-05 sections 4.2
+ * and 6.1; R5; piece 4, spec 2026-10-07 section 8). The rule is lib/word-count.js pageLengthOf's,
+ * which the meeting keeps too: the map writer is held only to its own words, and may use
+ * max(MAP_WORD_AIM, MAP_WORD_BOUND - overhead) of them (mapLengthOf). The map's overhead is its
+ * settled story with its question and hint, the threads' names, the counts and every label code
+ * prints; a photo prints no words (R7). The check node counts it with every text field the writer
+ * writes left blank (mapWritersTextBlank; lib/workflow/nodes/map-nodes.js mapPageWords), on the
+ * writer's share of the map (mapWritersShareOf).
  */
 const MAP_WORD_BOUND = 450;
 
@@ -117,6 +117,23 @@ const MAP_OPEN_WORD_BOUND = 750;
 
 /** The words the synopses aim for between them, about 20 for each move (spec 8). The map writer's task asks for them. */
 const MAP_SYNOPSIS_AIM = 250;
+
+/**
+ * The map's two pages as the length check reads them (piece 4, R6), keyed as `_mapCheck.words`
+ * keys their counts: `folded`, the page as it opens, and `unfolded`, the page with every synopsis
+ * open. Each says which page it is to the rework (`page`) and to the director (`said`, in the
+ * page's words, where a synopsis is a summary; R11), its bound and floor, and how to cut it.
+ */
+const MAP_PAGES = Object.freeze([
+  {
+    key: 'folded', open: false, page: 'As the map opens', said: 'As the map opens', bound: MAP_WORD_BOUND, floor: MAP_WORD_AIM,
+    fix: 'Say each move in a few words, and move into leftOut the beats the story does not need.'
+  },
+  {
+    key: 'unfolded', open: true, page: 'With every synopsis open', said: 'With every summary open', bound: MAP_OPEN_WORD_BOUND, floor: MAP_WORD_AIM + MAP_SYNOPSIS_AIM,
+    fix: 'Keep each synopsis to one sentence of about 20 words, and move into leftOut the beats the story does not need.'
+  }
+]);
 
 /**
  * Why a line that fails the story-terms check is wrong, said to the director after what it holds
@@ -346,8 +363,8 @@ function mapWritersShareOf(map, share) {
 /**
  * The map with every text field the writer writes left blank (pageLengthOf's rule), for the
  * page the check node counts the overhead on: the headline, the deck, the gap note's line, each
- * section's heading and job, each beat's move and players in the sections and in left out, each
- * change to the weave, and each dropped section's reason, but for the line the gate writes for a
+ * section's heading and job, each beat's move, players and synopsis (piece 4) in the sections and
+ * in left out, each change to the weave, and each dropped section's reason, but for the line the gate writes for a
  * section the director emptied (EMPTIED_SECTION_REASON), which is theirs. Everything else stays
  * as it was, the card markers and the evidence among it. The map given is left as it was.
  *
@@ -363,7 +380,7 @@ function mapWritersTextBlank(map) {
   };
   ['headline', 'deck'].forEach((field) => blank(out, field));
   blank(out.gapNote, 'line');
-  const beats = (list) => objectsOf(list).forEach((beat) => { blank(beat, 'move'); blank(beat, 'players'); });
+  const beats = (list) => objectsOf(list).forEach((beat) => { blank(beat, 'move'); blank(beat, 'players'); blank(beat, 'synopsis'); });
   objectsOf(out.sections).forEach((section) => {
     blank(section, 'heading');
     blank(section, 'job');
@@ -376,30 +393,39 @@ function mapWritersTextBlank(map) {
 }
 
 /**
- * The map's length as the check reads it, by pageLengthOf's rule with the map's bound and floor:
- * the page's words, the writer's own words on it (the page's less its overhead) and the words of
- * its own the writer may use.
+ * The map's length on one of its two pages as the check reads it (piece 4, R6), by pageLengthOf's
+ * rule with that page's bound and floor: the page's words, the writer's own words on it (the
+ * page's less its overhead) and the words of its own the writer may use. The page as it opens is
+ * held to MAP_WORD_BOUND with the floor MAP_WORD_AIM; the page with every synopsis open to
+ * MAP_OPEN_WORD_BOUND with the floor MAP_WORD_AIM + MAP_SYNOPSIS_AIM.
  *
- * @param {number} pageWords - the map's page as it first opens, counted
+ * @param {number} pageWords - the page, counted
  * @param {number} overheadWords - the words on that page the writer did not write
+ * @param {Object} [options]
+ * @param {boolean} [options.open=false] - the page with every synopsis open
  * @returns {{page: number, writer: number, allowance: number}}
  */
-function mapLengthOf(pageWords, overheadWords) {
-  return pageLengthOf(pageWords, overheadWords, { bound: MAP_WORD_BOUND, floor: MAP_WORD_AIM });
+function mapLengthOf(pageWords, overheadWords, { open = false } = {}) {
+  return open
+    ? pageLengthOf(pageWords, overheadWords, { bound: MAP_OPEN_WORD_BOUND, floor: MAP_WORD_AIM + MAP_SYNOPSIS_AIM })
+    : pageLengthOf(pageWords, overheadWords, { bound: MAP_WORD_BOUND, floor: MAP_WORD_AIM });
 }
 
 /**
- * The writer's lines on the map's page as it first opens, each with its words, the longest first:
- * each beat in a section (its move and its people), each section's job, the gap note's line, each
- * change to the weave and each dropped section's reason. The lines the director wrote
+ * The writer's lines on one of the map's two pages, each with its words, the longest first: each
+ * beat in a section (its move and its people), with its synopsis on the page with every synopsis
+ * open (piece 4, R6), each move in the tray by its title, each section's job, the gap note's line,
+ * each change to the weave and each dropped section's reason. The lines the director wrote
  * (mapDirectorsShare) are left out, and so are the headline, the deck and the section headings,
  * the article's own printed lines. The over-length check names the longest to the rework.
  *
  * @param {Object} map
  * @param {Object} share - mapDirectorsShare's
+ * @param {Object} [options]
+ * @param {boolean} [options.open=false] - the page with every synopsis open
  * @returns {Array<{name: string, words: number}>}
  */
-function writersLinesInPrint(map, share) {
+function writersLinesInPrint(map, share, { open = false } = {}) {
   const lines = [];
   const add = (name, ...texts) => {
     const words = texts.reduce((sum, text) => sum + wordCount(text), 0);
@@ -418,7 +444,14 @@ function writersLinesInPrint(map, share) {
       add(`beat ${id}'s move and people`,
         has(share.beatFields, `${id}.move`) ? '' : textOf(beat.move),
         has(share.beatFields, `${id}.players`) ? '' : stringsOf(beat.players).join(', '));
+      if (open && !has(share.beatFields, `${id}.synopsis`)) add(`beat ${id}'s synopsis`, textOf(beat.synopsis));
     });
+  });
+  // The tray is always open (R8): each move there prints its title.
+  objectsOf(map.leftOut).forEach((beat) => {
+    const id = beatIdOf(beat);
+    if (has(share.addedBeats, id) || has(share.beatFields, `${id}.move`)) return;
+    add(`left-out beat ${id}'s move`, textOf(beat.move));
   });
   if (!has(share.fields, 'weaveChanges')) {
     objectsOf(map.weaveChanges).forEach((change) => add(`the change to the weave "${textOf(change.change)}"`, textOf(change.change)));
@@ -837,10 +870,12 @@ function cardFault(beat, evidence) {
  *   brief 4.14a), or the meeting's approval note (`weave-change-source`), and there is none
  *   when the director changed nothing and left no approval note at the meeting
  *   (`weave-change-unasked`; brief 4.6e);
- * - the writer's own words on the map's page as it first opens stay within the words it may use
- *   (`over-length`; R5; pageLengthOf's rule): the check node counts the page of the writer's
- *   share (mapWritersShareOf) with lib/stop-pages.js wordsShown, and its overhead, and passes
- *   their length (mapLengthOf), which this module does not count.
+ * - the writer's own words on each of the map's two pages stay within the words it may use there
+ *   (`over-length`, one failure for each page past its allowance, saying which page; R5; piece 4,
+ *   R6; pageLengthOf's rule): the check node counts each page of the writer's share
+ *   (mapWritersShareOf) with lib/stop-pages.js wordsShown, as it opens and with every synopsis
+ *   open, and its overhead, and passes their lengths (mapLengthOf), which this module does not
+ *   count.
  *
  * The director's share of the map is never a check's failure (mapDirectorsShare): a line they
  * wrote is not held to story terms, and a beat they added is never failed for having no threads
@@ -878,8 +913,9 @@ function cardFault(beat, evidence) {
  *   (lib/evidence.js evidenceContextOf); none, no evidence check, and no card's document is in the
  *   record (fix round 4: a card's document is one recordDocumentOf finds, a document with text,
  *   by any id in any case)
- * @param {{page: number, writer: number, allowance: number}|null} [inputs.length] - the map's page
- *   as it first opens, counted (mapLengthOf); none, no length check
+ * @param {{folded?: {page: number, writer: number, allowance: number}, unfolded?: {page: number, writer: number, allowance: number}}|null} [inputs.length] -
+ *   the map's two pages, counted (mapLengthOf; MAP_PAGES): `folded` as it opens, `unfolded` with
+ *   every synopsis open; a page with no count, no length check on it
  * @returns {{failures: Array<{type: string, message: string, line: string, place?: string}>,
  *            concerns: Array<{type: string, editIds: string[], finding: string}>}}
  */
@@ -1143,14 +1179,17 @@ function mapFindings(map, inputs = {}) {
     }
   }
 
-  // The writer's own words on the page as it first opens stay within its allowance (R5;
-  // lib/word-count.js pageLengthOf's rule).
-  const length = inputs.length;
-  if (length && Number.isFinite(length.writer) && Number.isFinite(length.allowance) && length.writer > length.allowance) {
-    const longest = writersLinesInPrint(map, share).slice(0, 3).map((line) => `${line.name} (${line.words} words)`);
-    fail('over-length', `The map's page runs to ${length.page} words, ${length.writer} of them in the lines you write, past the ${length.allowance} those lines may use (${MAP_WORD_AIM}, or more while the whole page stays within ${MAP_WORD_BOUND}). Cut ${length.writer - length.allowance} words or more from your lines${longest.length > 0 ? `, starting with the longest: ${listOf(longest)}` : ''}. Say each move in a few words, and move into leftOut the beats the story does not need. The rest of the page (the settled story, the photos' descriptions and the counts) is printed by code.`,
-      `The writer's part of the map runs to ${length.writer} words, past the ${length.allowance} it may use.`);
-  }
+  // The writer's own words stay within its allowance on each of the map's two pages (R5; piece 4,
+  // R6; lib/word-count.js pageLengthOf's rule): the page as it opens, and the page with every
+  // synopsis open. Each page past its allowance is a failure of its own, which says which page.
+  const lengths = inputs.length || {};
+  MAP_PAGES.forEach((p) => {
+    const length = lengths[p.key];
+    if (!length || !Number.isFinite(length.writer) || !Number.isFinite(length.allowance) || length.writer <= length.allowance) return;
+    const longest = writersLinesInPrint(map, share, { open: p.open }).slice(0, 3).map((line) => `${line.name} (${line.words} words)`);
+    fail('over-length', `${p.page}, the map's page runs to ${length.page} words, ${length.writer} of them in the lines you write, past the ${length.allowance} those lines may use (${p.floor}, or more while the whole page stays within ${p.bound}). Cut ${length.writer - length.allowance} words or more from your lines${longest.length > 0 ? `, starting with the longest: ${listOf(longest)}` : ''}. ${p.fix} The rest of the page (the settled story, the threads' names and the counts) is printed by code.`,
+      `${p.said}, the writer's part of the map runs to ${length.writer} words, past the ${length.allowance} it may use.`);
+  });
 
   return { failures, concerns };
 }
@@ -1469,7 +1508,7 @@ function mapAddedBeats(state) {
  * director's photo descriptions (`photoDescriptions`), by which the page names each photo, and the
  * beats the director added (`addedBeats`, mapAddedBeats), whose fold says the article writer finds
  * their evidence (phase 4b, brief 1D; spec 9); the
- * roster and the kept photos, from which the console builds Everyone and the counts as the
+ * roster and the kept photos, from which the console builds the counts as the
  * director edits (checkpoint-view-logic.js mapTallyOf, through mapTally, the checks' count),
  * so the payload carries no count of its own (task 4.6d); the photos the map places that the
  * director has left out since (`leftOutPhotos`, mapLeftOutPhotos), which the page marks as left
@@ -1522,7 +1561,7 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
 module.exports = {
   MAP_BEAT_KINDS,
   MAP_CARDS,
-  // Phase 4b (brief 1D; R5): the map's page at most 450 words as it first opens, aiming for 300
+  // Phase 4b (brief 1D; R5): the map's page at most 450 words as it opens, aiming for 300
   MAP_WORD_BOUND,
   MAP_WORD_AIM,
   // Phase 4b, piece 4 (R6): the page with every synopsis open at most 750 words, the synopses about 250

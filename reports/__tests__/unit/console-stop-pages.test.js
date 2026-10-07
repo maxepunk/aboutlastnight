@@ -83,23 +83,25 @@ describe('4.12c: each page folds what its component folds', () => {
     ]);
   });
 
-  // Phase 4b (brief 1D; spec 9): and each move's evidence, under the view's title.
-  it("the map folds each move's evidence, left out (unless a concern opens it), the standing notes and the trace", () => {
+  // Phase 4b (brief 1D; spec 9): and each move's evidence, under the view's title. Piece 4 (R8):
+  // the tray is always open, so left out is no fold; three CollapsibleSections stay until 4D's
+  // board shows the evidence on the selected card, which leaves two.
+  it("the map folds each move's evidence, the standing notes and the trace, and the tray is always open", () => {
     const src = read(COMPONENTS.outline);
-    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(4);
+    expect(count(src, 'React.createElement(CollapsibleSection')).toBe(3);
     expect(src).toContain('React.createElement(CollapsibleSection, { title: view.evidenceTitle }');
-    expect(src).toContain('React.createElement(CollapsibleSection, { title: view.leftOut.title, defaultOpen: view.leftOut.open }');
+    expect(src).not.toContain('CollapsibleSection, { title: view.leftOut.title');
     expect(src).toContain('standing.any && React.createElement(CollapsibleSection, { title: standing.title }');
     expect(src).toContain('trace.any && React.createElement(CollapsibleSection, { title: trace.title }');
     const state = reworkFixtureState('journalist');
     const notes = [{ ...NOTE[0], gate: 'outline' }];
     const data = { type: 'outline', ...mapCheckpointData(state, { keptPhotos: ['hero.jpg', 'p2.jpg'], evidenceIndex: {}, maxRevisions: 1 }), trace: TRACE, directorGateNotes: notes };
     const view = View.mapView(data, View.mapDraftOf(data));
-    expect(view.leftOut.open).toBe(false);
     const trace = View.traceView(TRACE, 'journalist');
     const folds = (beats) => beats.filter((beat) => beat.evidence.length > 0 || beat.noEvidence).map(() => view.evidenceTitle);
+    expect(titles(stopPage('outline', data), false)).toContain(view.leftOut.title);
     expect(titles(stopPage('outline', data), true)).toEqual([
-      ...folds(view.sections.flatMap((section) => section.beats)), view.leftOut.title, ...folds(view.leftOut.items),
+      ...folds(view.sections.flatMap((section) => section.beats)), ...folds(view.leftOut.items),
       View.standingNotesView(notes).title, trace.title, ...trace.passes.map((pass) => pass.heading)
     ]);
   });
@@ -173,7 +175,7 @@ describe('4.12d: a part its component names only as an aria-label is a label the
   it('names three parts, each an aria-label its component gives and no heading it renders, and none among the page\'s headings', () => {
     expect(PAGE_REGIONS).toEqual({
       'arc-selection': { round: 'Since you last looked' },
-      outline: { round: 'Since you last looked', top: 'The headline, the deck and the top photo', tally: 'Everyone and the counts' }
+      outline: { round: 'Since you last looked', top: 'The headline, the deck and the top photo', counts: 'The counts' }
     });
     Object.entries(PAGE_REGIONS).forEach(([stop, regions]) => {
       const src = read(COMPONENTS[stop]);
@@ -197,7 +199,7 @@ describe('4.12d: a part its component names only as an aria-label is a label the
     const inRegion = (name) => mapPage.lines.filter((line) => line.region === name).map((line) => line.text || line.label);
     expect(inRegion(R.round)).toEqual([mapView.round.label, mapView.round.note]);
     expect(inRegion(R.top).slice(0, 2)).toEqual([mapView.headline.text, mapView.deck.text]);
-    expect(inRegion(R.tally)).toEqual(expect.arrayContaining([mapView.tally.everyone, mapView.tally.cards, mapView.tally.photos, mapView.tally.length]));
+    expect(inRegion(R.counts)).toEqual(expect.arrayContaining([mapView.tally.placed, mapView.tally.cards, mapView.tally.photos, mapView.tally.length]));
 
     [['arc-selection', meeting, meetingPage], ['outline', map, mapPage]].forEach(([stop, data, page]) => {
       const names = Object.values(PAGE_REGIONS[stop]);

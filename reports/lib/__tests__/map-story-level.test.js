@@ -482,50 +482,63 @@ describe("1D: the writer's own words on the page are held to its allowance under
     expect(mapLengthOf(450, 150)).toEqual({ page: 450, writer: 300, allowance: 300 });
   });
 
+  // Piece 4 (R6): the page as it opens is `folded`, one of the two pages the check reads; its
+  // line and message say which page ran long, and the photos' descriptions are no longer on it.
   it("the writer's own words past its allowance fail, and words within it pass, however long the page", () => {
     const state = storyLevelMapState();
-    expect(mapFindings(storyLevelMap(), { ...inputsOf(state), length: { page: 520, writer: 290, allowance: 300 } }).failures).toEqual([]);
-    expect(mapFindings(storyLevelMap(), { ...inputsOf(state), length: { page: 450, writer: 349, allowance: 349 } }).failures).toEqual([]);
-    const over = mapFindings(storyLevelMap(), { ...inputsOf(state), length: { page: 452, writer: 351, allowance: 349 } }).failures;
+    const folded = (length) => ({ ...inputsOf(state), length: { folded: length } });
+    expect(mapFindings(storyLevelMap(), folded({ page: 520, writer: 290, allowance: 300 })).failures).toEqual([]);
+    expect(mapFindings(storyLevelMap(), folded({ page: 450, writer: 349, allowance: 349 })).failures).toEqual([]);
+    const over = mapFindings(storyLevelMap(), folded({ page: 452, writer: 351, allowance: 349 })).failures;
     expect(typesOf({ failures: over })).toEqual(['over-length']);
-    expect(over[0].line).toBe("The writer's part of the map runs to 351 words, past the 349 it may use.");
+    expect(over[0].line).toBe("As the map opens, the writer's part of the map runs to 351 words, past the 349 it may use.");
     expect(over[0].line).not.toMatch(/\bb\d+\b/);
     // The rework reads which of its lines to cut, the longest first, and that code prints the rest.
-    expect(over[0].message).toMatch(/^The map's page runs to 452 words, 351 of them in the lines you write, past the 349 those lines may use \(300, or more while the whole page stays within 450\)\. Cut 2 words or more from your lines, starting with the longest: /);
+    expect(over[0].message).toMatch(/^As the map opens, the map's page runs to 452 words, 351 of them in the lines you write, past the 349 those lines may use \(300, or more while the whole page stays within 450\)\. Cut 2 words or more from your lines, starting with the longest: /);
     expect(over[0].message).toContain("beat b6's move and people (10 words)");
-    expect(over[0].message).toContain("The rest of the page (the settled story, the photos' descriptions and the counts) is printed by code.");
+    expect(over[0].message).toContain("The rest of the page (the settled story, the threads' names and the counts) is printed by code.");
   });
 
-  it("the node counts the page by wordsShown and its overhead on the page with the writer's text blank, and records the three on _mapCheck", () => {
+  // Piece 4 (R6, R8): the page as it opens (`folded`) prints the tray's titles too, and the page
+  // with every synopsis open (`unfolded`) each synopsis of a move in a section besides.
+  it("the node counts the page by wordsShown and its overhead on the page with the writer's text blank, and records both pages on _mapCheck", () => {
     const state = storyLevelMapState();
-    const words = mapNodes.mapPageWords(state, state.outline, []);
+    const { folded: words, unfolded } = mapNodes.mapPageWords(state, state.outline, []);
     expect(words.page).toBe(wordsShown(CHECKPOINT_TYPES.OUTLINE, mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, 'top.jpg'), maxRevisions: 0 })));
     // The writer's own words: the lines it wrote that the page prints unfolded.
     const map = state.outline;
     const writers = wordCount(map.headline) + wordCount(map.deck) + wordCount(map.gapNote.line)
       + map.sections.reduce((n, s) => n + wordCount(s.heading) + wordCount(s.job)
         + s.beats.reduce((m, b) => m + wordCount(b.move) + wordCount(b.players.join(', ')), 0), 0)
+      + map.leftOut.reduce((n, b) => n + wordCount(b.move), 0)
       + map.dropped.reduce((n, d) => n + wordCount(d.reason), 0);
     expect(words.writer).toBe(writers);
     expect(words.allowance).toBe(Math.max(MAP_WORD_AIM, MAP_WORD_BOUND - (words.page - words.writer)));
+    const synopses = map.sections.reduce((n, s) => n + s.beats.reduce((m, b) => m + wordCount(b.synopsis), 0), 0);
+    expect(unfolded.writer).toBe(writers + synopses);
     const result = mapNodes.checkMap(state);
-    expect(result._mapCheck).toMatchObject({ passed: true, words });
+    expect(result._mapCheck).toMatchObject({ passed: true, words: { folded: words, unfolded } });
   });
 
-  it("long photo descriptions push the page past 450, and a writer within its own 300 passes", () => {
+  // Piece 4 (R7): a photo prints no words, so its description is on neither page; before piece 4
+  // long descriptions pushed the page past 450.
+  it("long photo descriptions count on neither page, and a writer within its own 300 passes", () => {
     const long = (word) => Array.from({ length: 90 }, () => word).join(' ');
     const state = storyLevelMapState({ photoDescriptions: { 'top.jpg': long('crowd'), 'board.jpg': long('board'), 'bar.jpg': long('bar') } });
     const result = mapNodes.checkMap(state);
     expect(result._mapCheck.failures).toEqual([]);
-    expect(result._mapCheck.words.page).toBeGreaterThan(MAP_WORD_BOUND);
-    expect(result._mapCheck.words.writer).toBeLessThanOrEqual(MAP_WORD_AIM);
+    expect(result._mapCheck.words).toEqual(mapNodes.mapPageWords(storyLevelMapState(), storyLevelMap(), []));
+    expect(result._mapCheck.words.folded.writer).toBeLessThanOrEqual(MAP_WORD_AIM);
   });
 
-  it("the writer's own words past its allowance fail at the node, in story terms", () => {
-    const result = mapNodes.checkMap(storyLevelMapState({ outline: padded(50) }));
-    expect(result._mapCheck.failures.map((f) => f.type)).toEqual(['over-length']);
-    const { writer, allowance } = result._mapCheck.words;
-    expect(result._mapCheck.failures[0].line).toBe(`The writer's part of the map runs to ${writer} words, past the ${allowance} it may use.`);
+  it("the writer's own words past its allowance fail at the node, in story terms, on each page", () => {
+    const result = mapNodes.checkMap(storyLevelMapState({ outline: padded(80) }));
+    expect(result._mapCheck.failures.map((f) => f.type)).toEqual(['over-length', 'over-length']);
+    const { folded, unfolded } = result._mapCheck.words;
+    expect(result._mapCheck.failures.map((f) => f.line)).toEqual([
+      `As the map opens, the writer's part of the map runs to ${folded.writer} words, past the ${folded.allowance} it may use.`,
+      `With every summary open, the writer's part of the map runs to ${unfolded.writer} words, past the ${unfolded.allowance} it may use.`
+    ]);
   });
 
   // Fix round 4, fix 7: a beat the director brought back from left out is theirs, as a beat they
@@ -536,8 +549,12 @@ describe("1D: the writer's own words on the page are held to its allowance under
     const back = bringBackBeat(clone(state.outline), 'b9', 'closing');
     const edits = carriedEdits(standingOnMap(null, state.outline, back), back);
     const after = mapNodes.mapPageWords({ ...state, outline: back }, back, edits);
-    expect(after.writer).toBe(before.writer);
-    expect(after.page).toBe(before.page);
+    // Piece 4 (R8): the tray is open, so the beat's title counted there as the writer's before.
+    const title = wordCount(beatOf(state.outline, 'b9').move);
+    ['folded', 'unfolded'].forEach((p) => {
+      expect(after[p].writer).toBe(before[p].writer - title);
+      expect(after[p].page).toBe(before[p].page - title);
+    });
   });
 
   it("the director's long lines add nothing to the count, and their version is never refused for its length", () => {
@@ -656,10 +673,12 @@ describe("1D: the map's stop carries the director's photo descriptions and the b
 describe("1D: the map's page prints each move with its people, the evidence folded, the photos by the director's descriptions, and no tag", () => {
   const payload = (state = storyLevelMapState()) => mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, 'top.jpg'), evidenceIndex: {}, maxRevisions: 1 });
 
-  it('each move prints its words, "(card)" where it has the marker, and its people; its evidence is folded', () => {
+  // Piece 4 (R11): the "Card" mark is a line of its own, in place of "(card)" after the move.
+  it('each move prints its words, the "Card" mark where it has the marker, and its people; its evidence is folded', () => {
     const { lines } = stopPage(CHECKPOINT_TYPES.OUTLINE, payload());
     const shown = lines.filter((l) => !l.folded).map((l) => l.text);
-    expect(shown).toContain('Marcus asks Quinn for a higher dose (card)');
+    const move = shown.indexOf('Marcus asks Quinn for a higher dose');
+    expect(shown.slice(move, move + 3)).toEqual(['Marcus asks Quinn for a higher dose', 'Quinn', 'Card']);
     expect(shown).toContain("Alex's late theory that Marcus dosed everyone");
     expect(shown).toContain('Quinn, Kai');
     const folded = lines.filter((l) => l.folded).map((l) => l.text);
@@ -667,11 +686,13 @@ describe("1D: the map's page prints each move with its people, the evidence fold
     expect(shown.join('\n')).not.toMatch(/raise the dose for the pilot/);
   });
 
-  it("each photo prints the director's description, or its filename when there is none", () => {
+  // Piece 4 (R7): a photo prints no words; its line, folded, is for the harness's print.
+  it("each photo's line is the director's description, or its filename when there is none, folded", () => {
     const state = storyLevelMapState({ photoDescriptions: { 'board.jpg': PHOTO_DESCRIPTIONS['board.jpg'] } });
-    const shown = stopPage(CHECKPOINT_TYPES.OUTLINE, payload(state)).lines.filter((l) => !l.folded).map((l) => l.text);
-    expect(shown).toContain('Sam reading the journal by the board');
-    expect(shown).toContain('bar.jpg');
+    const { lines } = stopPage(CHECKPOINT_TYPES.OUTLINE, payload(state));
+    const folded = lines.filter((l) => l.folded).map((l) => l.text);
+    expect(folded).toEqual(expect.arrayContaining(['Sam reading the journal by the board', 'bar.jpg']));
+    expect(lines.filter((l) => !l.folded).map((l) => l.text)).not.toEqual(expect.arrayContaining(['Sam reading the journal by the board']));
   });
 
   it("no line or label carries a beat's, a thread's or a connection's tag", () => {

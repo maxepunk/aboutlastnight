@@ -98,7 +98,7 @@ function mapTask(heroMarked, meetingNote) {
 ${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
 - What the record cannot carry goes in gapNote, the one line at the top, in story terms: a part of the story, or a change the director made at the meeting, such as a thread they added or brought into the story, named by its name without quotation marks. A player you cannot place and a link you see that the weave lacks go there too, as C7 (\`<craft-material>\`) and C16 set out.
 - Set expectedLength from what the map holds, as C4 (\`<craft-telling>\`) sets out.
-Code builds Everyone from each beat's players and counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, the story terms and the page's length on both counts. A player named among gapNote's players counts as raised.`;
+Code reads who is placed from each beat's players, counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, the story terms and the page's length on both counts. A player named among gapNote's players counts as raised.`;
 }
 
 /** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */

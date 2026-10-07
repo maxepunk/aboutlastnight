@@ -491,20 +491,22 @@ describe('4.12e: the print breaks where the part of the screen changes, and name
   /** The story meeting after a round that left the director's edit standing: its round's line shows, first on the page. */
   const meetingAfterARound = () => ({ ...meetingData(), handEditReport: { checked: ['E1'], changed: [] } });
 
-  it("breaks before the map's round, before its headline, deck and top photo, and before its counts, so none falls under the heading before it", () => {
+  // Piece 4 (spec 2026-10-07 section 4): the round opens the page, so nothing sits above it, and
+  // the counts follow it.
+  it("breaks before the map's counts and before its headline, deck and top photo, so none falls under the heading or the part before it", () => {
     const data = mapInRound2();
     const view = View.mapView(data, View.mapDraftOf(data));
     const printed = stopPrint('outline', data);
     const at = (text) => printed.findIndex((line) => line.text.trim() === text);
-    const parts = [view.round.label, `Headline: ${view.headline.text}`, `Everyone: ${view.tally.everyone}`];
+    const counts = [view.tally.placed, view.tally.unplaced, view.tally.cards].find(Boolean);
+    const parts = [counts, `Headline: ${view.headline.text}`];
     parts.forEach((first) => {
       const i = at(first);
       expect([first, i > 0 && printed[i - 1]]).toEqual([first, BREAK]);
     });
-    // Each part runs to the next break or heading: the round holds its label and the note.
-    const round = at(view.round.label);
-    expect(printed.slice(round, at(`Headline: ${view.headline.text}`) - 1).map((line) => line.text.trim()))
-      .toEqual([view.round.label, view.round.note]);
+    // The round opens the page and runs to the break before the counts: its label and the note.
+    expect(at(view.round.label)).toBe(0);
+    expect(printed.slice(0, at(counts) - 1).map((line) => line.text.trim())).toEqual([view.round.label, view.round.note]);
   });
 
   it("breaks exactly where a line's part of the screen differs from the line before it, unless the line is a heading", () => {

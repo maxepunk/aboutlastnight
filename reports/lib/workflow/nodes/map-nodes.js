@@ -12,8 +12,9 @@
  *
  * Phase 4b (piece 1, brief 1D; spec 2026-10-05 sections 4.2 and 6.1): the checks also read the
  * evidence under each beat against the record (lib/evidence.js evidenceContextOf), and the map's
- * page as it first opens, counted with its overhead (mapPageWords), so the writer's own words
- * are held to the allowance lib/word-count.js pageLengthOf's rule gives. Each failure carries its
+ * page counted with its overhead (mapPageWords), so the writer's own words are held to the
+ * allowance lib/word-count.js pageLengthOf's rule gives: since piece 4 (R6), on two pages, as it
+ * opens and with every synopsis open. Each failure carries its
  * place, so the map shows a check still failing beside its line.
  *
  * They mark the map they checked (`_mapCheck`, stamped with its mapKey) and write
@@ -48,8 +49,8 @@ const { keptPhotoFilenames } = require('./ai-nodes');
 /** The map's stop type, whose page the check counts. */
 const MAP_STOP = CHECKPOINT_TYPES.OUTLINE;
 
-/** The page's region of Everyone and the counts, which code prints from the map as it is. */
-const TALLY_REGION = PAGE_REGIONS[MAP_STOP].tally;
+/** The page's region of the counts, which code prints from the map as it is. */
+const COUNTS_REGION = PAGE_REGIONS[MAP_STOP].counts;
 
 /**
  * The map stop's payload on a first look at a map: no round's lines, no check's mark, no
@@ -72,35 +73,41 @@ function firstLookData(state, map) {
 }
 
 /** The words of a page's lines that `keep` takes and no fold holds, as wordsShown counts them. */
-function wordsOfLines(data, keep) {
-  return stopPage(MAP_STOP, data).lines.filter((line) => !line.folded && keep(line)).reduce((sum, line) => sum + wordCount(line.text), 0);
+function wordsOfLines(data, keep, options) {
+  return stopPage(MAP_STOP, data, options).lines.filter((line) => !line.folded && keep(line)).reduce((sum, line) => sum + wordCount(line.text), 0);
 }
 
 /**
- * The length of the map's page as it first opens, of the writer's share of the map (phase 4b,
- * brief 1D; spec 4.2 and 6.1; R5, and lib/word-count.js pageLengthOf's rule): `{page, writer,
- * allowance}` (mapLengthOf).
- * - The page's words: the stop's page (lib/map.js mapCheckpointData) on a first look, counted by
- *   lib/stop-pages.js wordsShown, the count the stops log records, which leaves the folded
- *   evidence out. Only the writer's share is counted (mapWritersShareOf), so the director's
- *   version is never held to the bound (Review focus 3).
- * - Its overhead, the words the writer did not write: the same page with every text field the
- *   writer writes left blank (mapWritersTextBlank). Everyone and the counts are read from the page
- *   as it is, since a beat's players left blank would empty Everyone and list every player as in
- *   no beat, a line the page does not print.
+ * The length of the map's two pages, of the writer's share of the map (phase 4b, brief 1D; spec
+ * 4.2 and 6.1; R5; piece 4, R6, and lib/word-count.js pageLengthOf's rule): `{folded, unfolded}`,
+ * each `{page, writer, allowance}` (mapLengthOf), `folded` the page as it opens and `unfolded`
+ * the page with every synopsis open.
+ * - Each page's words: the stop's page (lib/map.js mapCheckpointData) on a first look, counted by
+ *   lib/stop-pages.js wordsShown, the count the stops log records, which leaves the folds out:
+ *   the evidence, the threads' lines and the photos' descriptions on both pages, the synopses on
+ *   the page as it opens. Only the writer's share is counted (mapWritersShareOf), so the
+ *   director's version is never held to either bound (Review focus 3).
+ * - Each page's overhead, the words the writer did not write: the same page with every text
+ *   field the writer writes left blank (mapWritersTextBlank), each synopsis among them. The counts
+ *   are read from the page as it is, since a beat's players left blank would leave every player
+ *   in no move, a line the page does not print.
  *
  * @param {Object} state - the session: the settled weave, the roster, the photos and their descriptions
  * @param {Object} map - the map in hand
  * @param {Object[]} edits - the director's standing edits the map carries
- * @returns {{page: number, writer: number, allowance: number}}
+ * @returns {{folded: {page: number, writer: number, allowance: number}, unfolded: {page: number, writer: number, allowance: number}}}
  */
 function mapPageWords(state, map, edits) {
   const share = mapWritersShareOf(map, mapDirectorsShare(edits));
   const page = firstLookData(state, share);
   const blank = firstLookData(state, mapWritersTextBlank(share));
-  const inTally = (line) => line.region === TALLY_REGION;
-  const overhead = wordsOfLines(blank, (line) => !inTally(line)) + wordsOfLines(page, inTally);
-  return mapLengthOf(wordsShown(MAP_STOP, page), overhead);
+  const inCounts = (line) => line.region === COUNTS_REGION;
+  const countPage = (open) => {
+    const options = { synopsesOpen: open };
+    const overhead = wordsOfLines(blank, (line) => !inCounts(line), options) + wordsOfLines(page, inCounts, options);
+    return mapLengthOf(wordsShown(MAP_STOP, page, options), overhead, { open });
+  };
+  return { folded: countPage(false), unfolded: countPage(true) };
 }
 
 /**
@@ -182,7 +189,8 @@ function checkMap(state) {
   const { failures, concerns } = mapFindings(map, { ...inputs, length: words });
   const key = mapKey(map);
   const passed = failures.length === 0;
-  const counted = words ? `${words.page} words on the map's page, ${words.writer} the writer's of ${words.allowance} it may use` : 'no page';
+  const said = (w) => `${w.page} words, ${w.writer} the writer's of ${w.allowance} it may use`;
+  const counted = words ? `the map's page ${said(words.folded)} as it opens, ${said(words.unfolded)} with every synopsis open` : 'no page';
   console.log(`[checkMap] ${passed ? 'Passed' : `Failed: ${failures.map(f => f.type).join(', ')}`} (${counted}, map ${key})${concerns.length > 0 ? `, ${concerns.length} concern(s) about the director's changes` : ''}`);
 
   return {

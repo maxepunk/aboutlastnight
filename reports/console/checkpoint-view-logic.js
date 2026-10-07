@@ -3471,8 +3471,40 @@
   /** How many cards the article carries (C9): a copy of lib/map.js MAP_CARDS (a test holds the two equal). */
   var MAP_CARDS = { min: 3, max: 5 };
 
-  /** The mark beside a move whose evidence prints as a card (spec 4.2): the page prints no kind and no document id. */
-  var MAP_CARD_MARK = '(card)';
+  /**
+   * The mark on a move's card whose evidence prints as a card (spec 4.2; piece 4, R11: "Card" in
+   * place of "(card)"): the page prints no kind and no document id.
+   */
+  var MAP_CARD_MARK = 'Card';
+
+  /**
+   * The map's page in the spec's order (piece 4; spec 2026-10-07 section 4), as mapView's `order`
+   * names its parts, which lib/stop-pages.js and Outline.js both follow: the round's lines, the
+   * counts (`tally`), the settled story with the gap note, the threads (`legend`), the top of the
+   * article, the board's columns (`sections`), the tray (`leftOut`), the dropped sections and the
+   * map's changes to fit the meeting. The note box, the standing notes and the trace follow them.
+   */
+  var MAP_SECTIONS = ['round', 'tally', 'settledStory', 'legend', 'top', 'sections', 'leftOut', 'dropped', 'weaveChanges'];
+
+  /** The legend's title and its control that clears a thread picked (spec 4). */
+  var MAP_LEGEND_TITLE = 'The threads';
+  var MAP_SHOW_ALL = 'Show all';
+
+  /**
+   * How many tones the dots cycle through (R4): a thread's tone is its place in the legend, 1 to
+   * MAP_TONES and repeating; 0 is the grey tone, for a thread outside the story. The console's
+   * light and dark tokens give each tone its colour.
+   */
+  var MAP_TONES = 8;
+
+  /** A column whose section prints no heading. */
+  var MAP_NO_HEADING_LINE = 'No heading printed';
+
+  /** A column the director emptied: the gate drops it when the map is sent (outline-edit-logic.js dropEmptiedSections). */
+  var MAP_EMPTIED_COLUMN_LINE = 'Empty: this section drops from the article when you send the map.';
+
+  /** The board's one control that opens or closes every summary (spec 4). */
+  var MAP_SUMMARY_TOGGLE = { open: 'Open every summary', close: 'Close every summary' };
 
   /**
    * The fold of a beat the director added on the map while it carries no evidence: the article
@@ -3684,11 +3716,11 @@
   }
 
   /**
-   * Everyone and the counts of the map as the director has it, rebuilt through mapTally
+   * The counts of the map as the director has it, rebuilt through mapTally
    * (console/outline-edit-logic.js), the function the map checks count with, on the inputs the
    * stop's payload carries (task 4.6c; it sends no count of its own, task 4.6d): the session's
    * roster with the canon's full names (`roster`, lib/map.js mapRosterOf) and the photos kept
-   * for the article (`keptPhotos`). So "In no beat" lists the players in roster order whatever
+   * for the article (`keptPhotos`). So "In no move" lists the players in roster order whatever
    * the director moved, and a beat that names a player by a full name places them as on the
    * server.
    *
@@ -3870,8 +3902,11 @@
    * names the move by its words, never its id, or as "a move" when it has none. The page renders
    * them as given, so Outline.js builds no label of its own.
    *
+   * Piece 4 (spec 2026-10-07 sections 5 and 6): the card's own controls too, each by the move's
+   * title: selecting it, its summary's toggle, Move up and Move down, and putting a photo beside it.
+   *
    * @param {*} move - the beat's move
-   * @returns {{fold: string, moveTo: string, strike: string, takeOut: string, bringBack: string}}
+   * @returns {{fold: string, moveTo: string, strike: string, takeOut: string, bringBack: string, select: string, showSummary: string, hideSummary: string, moveUp: string, moveDown: string, photoBeside: string}}
    */
   function moveLabelsOf(move) {
     var words = asString(move).trim();
@@ -3881,7 +3916,53 @@
       moveTo: 'Move ' + named + ' to another section',
       strike: 'Strike ' + named + ' into left out',
       takeOut: 'Take out the move you added: ' + (words || 'a move'),
-      bringBack: 'Bring ' + named + ' back into a section'
+      bringBack: 'Bring ' + named + ' back into a section',
+      select: words ? 'Select the move ' + named : 'Select a move',
+      showSummary: 'Show the summary of ' + named,
+      hideSummary: 'Hide the summary of ' + named,
+      moveUp: 'Move ' + named + ' up',
+      moveDown: 'Move ' + named + ' down',
+      photoBeside: 'Put a photo beside ' + named
+    };
+  }
+
+  /**
+   * The legend of the map's page (piece 4, R4; spec 4): the settled story's threads, in the
+   * angle's order, from the payload's `legend` (lib/map.js mapLegendOf), each with its `tone` by
+   * its place (1 to MAP_TONES, repeating), its name and its line, and its pick control's name; and
+   * `toneOf`, each thread id the weave holds to its dot, `{tone, name}`: a story thread's tone, or
+   * the grey tone 0 with its name for a thread outside the story. The ids are keys only.
+   */
+  function mapLegendView(legend) {
+    var l = isPlainObject(legend) ? legend : {};
+    var dots = new Map();
+    var threads = asArray(l.threads).filter(isPlainObject).map(function (thread, i) {
+      var tone = (i % MAP_TONES) + 1;
+      var name = asString(thread.name).trim();
+      var id = asString(thread.id).trim();
+      if (id && !dots.has(id)) dots.set(id, { tone: tone, name: name });
+      return { key: 'thread-' + i, tone: tone, name: name, line: asString(thread.line).trim(), labels: { pick: 'Follow the thread "' + name + '" across the board' } };
+    });
+    asArray(l.others).filter(isPlainObject).forEach(function (thread) {
+      var id = asString(thread.id).trim();
+      if (id && !dots.has(id)) dots.set(id, { tone: 0, name: asString(thread.name).trim() });
+    });
+    var meets = new Map();
+    asArray(l.connections).filter(isPlainObject).forEach(function (connection) {
+      var id = asString(connection.id).trim();
+      if (id && !meets.has(id)) meets.set(id, asString(connection.line).trim());
+    });
+    return {
+      view: { title: MAP_LEGEND_TITLE, showAll: MAP_SHOW_ALL, threads: threads },
+      dotsOf: function (ids) {
+        var seen = [];
+        return stringList(ids).map(function (id) { return id.trim(); }).filter(function (id) {
+          if (!id || seen.indexOf(id) !== -1) return false;
+          seen.push(id);
+          return true;
+        }).map(function (id) { return dots.get(id) || { tone: 0, name: '' }; });
+      },
+      meetsOf: function (id) { return meets.get(asString(id).trim()) || ''; }
     };
   }
 
@@ -3914,7 +3995,16 @@
   /**
    * The map's page (spec 5.2; spec 2026-10-05 sections 4.2 and 9): the stop's payload (4.6's,
    * lib/map.js mapCheckpointData) with the map as the director has it.
-   * - `settledStory` at the top, read-only, with `storyHint`, the way back to the meeting;
+   * Piece 4 (spec 2026-10-07 sections 4 to 7; R4, R7, R8, R11): the page is a corkboard.
+   * `order` names the parts to show, in the spec's order (MAP_SECTIONS: `round`, `tally`,
+   * `settledStory`, `legend`, `top`, `sections`, `leftOut`, `dropped`, `weaveChanges`), a part with
+   * nothing in it left out; lib/stop-pages.js and Outline.js follow it. Then:
+   * - `settledStory`, read-only, with `storyHint`, the way back to the meeting, and the gap note
+   *   beside it;
+   * - `legend` (mapLegendView, from the payload's `legend`): `title`, `showAll` and `threads`, the
+   *   settled story's threads in the angle's order, each `{key, tone, name, line, labels: {pick}}`,
+   *   its `tone` its place, 1 to MAP_TONES and repeating, its line shown only once it is picked;
+   * - `summaries`, the board's one toggle's two labels (MAP_SUMMARY_TOGGLE);
    * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (the code
    *   checks still failing whose place the page does not show, one line each, in the director's
    *   words; failuresBesideLines), `changedEdits` (each edit a rework changed that a stop shows,
@@ -3922,26 +4012,40 @@
    *   and what no pass put back; task 4.10; a section the director emptied that a pass put back
    *   as one line, the section's, mapChangedEditLines, task 4.14b fix round 1), `kept`, the line
    *   that says the director's edits stand when none of theirs is listed (editsStandLine; brief
-   *   4.10b), and `otherConcerns`, the concerns none of whose places the page shows;
+   *   4.10b), and `otherConcerns`, the concerns none of whose places the page shows. An edit a
+   *   rework changed that is about a move the map holds sits on that move's card instead
+   *   (`changed`; spec 7);
    * - `gapNote`, `headline`, `deck` and `topPhoto`;
-   * - `sections`, in the map's order, each under its slot's label with its heading, job, beats
-   *   and photos, each beat and photo with the places it can move to (phase 4b, brief 1D):
-   *   - each beat as its move, its people and its card mark (`card`, true where its evidence prints
-   *     as a card: the beat's flagged piece names its document, beatCardOf, the one reader of a
-   *     beat's card; the page shows MAP_CARD_MARK), with its evidence folded
+   * - `sections`, the board's columns in the map's order, each under its slot's label with its
+   *   heading ('' when it prints none: the page says MAP_NO_HEADING_LINE), job, cards (`beats`)
+   *   and photos (`photos`, every photo of the section in its order, for the controls that place
+   *   one by its index; `byThemselves`, those beside no move of the section, at the column's
+   *   foot), and `emptied`, MAP_EMPTIED_COLUMN_LINE on a column the director emptied, which the
+   *   gate drops when the map is sent (dropEmptiedSections), each beat and photo with the places
+   *   it can move to (phase 4b, brief 1D):
+   *   - each card as its move (its title), its people, its `synopsis` ('' for none, as on a map
+   *     from before piece 4), its `dots` (`{tone, name}` for each thread it carries: a story
+   *     thread's tone, the grey tone 0 with its name for a thread outside the story, and 0 with no
+   *     name for an id the weave does not hold), its `photos` (the photos beside it), its card
+   *     mark (`card`, true where its evidence prints as a card: the beat's flagged piece names its
+   *     document, beatCardOf, the one reader of a beat's card; `cardMark`, MAP_CARD_MARK or ''),
+   *     `meets`, the line of the connection that lands in it, `canMoveUp` and `canMoveDown` within
+   *     its column, and its `changed` lines, with its evidence folded
    *     (`evidence`, evidenceFoldView's, under `evidenceTitle`) and, for a beat the director
    *     added that has none, at this look or an earlier one (`data.addedBeats`), the fold's one
-   *     line (`noEvidence`, MAP_NO_EVIDENCE_LINE). Its kind and its connection stay underneath,
-   *     unprinted. Each beat row is keyed by its beat's id, so an editor open on it survives a
+   *     line (`noEvidence`, MAP_NO_EVIDENCE_LINE). Its kind stays underneath, unprinted. Each beat row is keyed by its beat's id, so an editor open on it survives a
    *     strike or a move above it; a beat whose id another beat of its list holds, or with none,
    *     by its place (task 4.14b);
    *   - each photo with the director's description (`description`, photoDescriptionOf), or ''
-   *     when there is none, and the beats it can sit beside, each named by its move. A photo sits
-   *     beside the beat it names unless that beat is struck (photoBeatOf; task 4.14b);
+   *     when there is none, the beats of its section it can sit beside (`besideOptions`), and
+   *     every move it can be put beside in any section (`besideTargets`, for placePhotoBeside),
+   *     each named by its move. A photo sits beside the beat it names unless that beat is struck
+   *     (photoBeatOf; task 4.14b);
    *   - what each beat's fold and controls, and each photo's controls, say to a screen reader
    *     (`labels`, keyed by the control, as on the meeting's page; phase 4b, brief 1F, and fix
-   *     round 3): a beat named by its move's words (moveLabelsOf), the fold's group "What's
-   *     behind it: <move>" (evidenceFoldLabel); a photo, the top photo too, by the director's
+   *     round 3): a beat named by its move's words (moveLabelsOf: its fold's group "What's behind
+   *     it: <move>", evidenceFoldLabel, and since piece 4 its selection, its summary's toggle, Move
+   *     up, Move down and the photo beside it); a photo, the top photo too, by the director's
    *     description, or its filename when there is none (photoNameOf). A section's `label` is
    *     its slot's name, as the page prints it. The page builds none;
    * - a photo the map places that the director left out of the article since (the payload's
@@ -3949,8 +4053,10 @@
    *   LEFT_OUT_PHOTO_LINE before its concerns, its controls off, and no place to move to (task
    *   4.14b);
    * - `dropped`, each with its reason, a section the director emptied with EMPTIED_SECTION_LINE;
-   *   `tally`, the lines of Everyone and the counts, rebuilt from the map as edited
-   *   (mapTallyOf); `leftOut`, folded, each item with the sections it can come back to;
+   *   `tally`, the counts, rebuilt from the map as edited (mapTallyOf): `placed`, "Everyone
+   *   placed" when every roster player is in a move, else `unplaced` and `raised`, then `cards`,
+   *   `photos` and `length`; `leftOut`, the tray, always open, each move by its title and its dots,
+   *   with the sections it can come back to;
    *   `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
    * - every concern beside the line of the edit it is about (concernsBesideLines), every code
    *   check still failing beside the line its place names (`failures` on a beat, a section, a
@@ -4003,6 +4109,29 @@
     var idsOf = function (beats) { return asArray(beats).map(function (b) { return editLogic.beatIdOf(isPlainObject(b) ? b : {}); }); };
     /** A beat's move as a choice names it: up to BESIDE_TEXT_LENGTH characters. */
     var moveOf = function (beat) { return shortText(isPlainObject(beat) ? beat.move : ''); };
+    // Piece 4 (R4): the legend, each card's dots and the line where its threads meet.
+    var legend = mapLegendView(d.legend);
+    // Piece 4 (spec 7): an edit a rework changed sits on the card of the move it is about, in the
+    // words changedEditLine gives it; every other one stays among the round's lines.
+    var lineOptions = mapEditLineOptions(slots, map);
+    var placedBeatIds = editLogic.mapBeatPlacements(map).map(function (placement) { return placement.id; });
+    var beatOfEntry = function (entry) {
+      var m = /beat "([^"]*)"/.exec(asString(entry.where));
+      return m && placedBeatIds.indexOf(m[1]) !== -1 ? m[1] : null;
+    };
+    var report = isPlainObject(d.handEditReport) ? d.handEditReport : null;
+    var onCards = changedEditsToShow(report).filter(function (entry) { return beatOfEntry(entry) !== null; });
+    var changedOn = function (id) {
+      return onCards.filter(function (entry) { return beatOfEntry(entry) === id; }).map(function (entry) { return changedEditLine(entry, lineOptions); });
+    };
+    var restOfReport = report && onCards.length > 0
+      ? Object.assign({}, report, { changed: asArray(report.changed).filter(function (entry) { return onCards.indexOf(entry) === -1; }) })
+      : report;
+    var targetsBeside = sections.reduce(function (all, section) {
+      return all.concat(asArray(section.beats).filter(function (b) { return editLogic.beatIdOf(isPlainObject(b) ? b : {}) !== ''; }).map(function (b) {
+        return { slot: section.slot, value: editLogic.beatIdOf(b), label: 'Beside: ' + moveOf(b) + ' (' + slotLabelOf(section.slot, slots) + ')' };
+      }));
+    }, []);
 
     var beatView = function (beat, index, slot, ids) {
       var b = isPlainObject(beat) ? beat : {};
@@ -4016,13 +4145,21 @@
         index: index,
         move: asString(b.move),
         players: stringList(b.players).join(', '),
+        synopsis: asString(b.synopsis).trim(),
+        dots: legend.dotsOf(b.threads),
         card: Boolean(editLogic.beatCardOf(b)),
+        cardMark: editLogic.beatCardOf(b) ? MAP_CARD_MARK : '',
+        photos: [],
         evidence: evidence,
+        meets: legend.meetsOf(b.connection),
         noEvidence: evidence.length === 0 && (added || addedEarlier.indexOf(id) !== -1) ? MAP_NO_EVIDENCE_LINE : '',
         concerns: id ? at('beat:' + id) : [],
         failures: id ? failuresAt('beat:' + id) : [],
+        changed: id ? changedOn(id) : [],
         added: added,
         locked: id === '' || writers.beatIds.indexOf(id) !== -1,
+        canMoveUp: slot !== null && index > 0,
+        canMoveDown: slot !== null && index < ids.length - 1,
         moveTargets: slot === null ? targets : others(slot),
         labels: moveLabelsOf(b.move)
       };
@@ -4054,6 +4191,7 @@
         },
         beat: beside,
         besideOptions: options,
+        besideTargets: leftOut ? [] : targetsBeside,
         moveTargets: leftOut ? [] : [{ value: editLogic.MAP_TOP_PHOTO, label: TOP_PHOTO_LABEL }].concat(others(section.slot)),
         concerns: (leftOut ? [LEFT_OUT_PHOTO_LINE] : []).concat(at('photo:' + key)),
         failures: failuresAt('photo:' + key),
@@ -4080,6 +4218,18 @@
 
     var sectionViews = sections.map(function (section, i) {
       var ids = idsOf(section.beats);
+      var beats = asArray(section.beats).map(function (beat, j) { return beatView(beat, j, section.slot, ids); });
+      var photos = asArray(section.photos).map(function (photo, j) { return photoView(photo, j, section); });
+      // Piece 4 (spec 4): each photo beside a move of its own section sits on that move's card,
+      // and the rest sit at the column's foot by themselves.
+      var byThemselves = photos.filter(function (photo) {
+        var card = photo.beat ? beats.filter(function (b) { return b.id === photo.beat; })[0] : null;
+        if (card) card.photos.push(photo);
+        return !card;
+      });
+      var before = editLogic.sectionWithSlot(shown, section.slot);
+      var emptied = beats.length === 0 && photos.length === 0 && Boolean(before)
+        && (asArray(before.beats).length > 0 || asArray(before.photos).length > 0);
       return {
         key: 'section-' + i,
         slot: section.slot,
@@ -4088,8 +4238,10 @@
         job: asString(section.job),
         concerns: at('section:' + section.slot),
         failures: failuresAt('section:' + section.slot),
-        beats: asArray(section.beats).map(function (beat, j) { return beatView(beat, j, section.slot, ids); }),
-        photos: asArray(section.photos).map(function (photo, j) { return photoView(photo, j, section); })
+        beats: beats,
+        photos: photos,
+        byThemselves: byThemselves,
+        emptied: emptied ? MAP_EMPTIED_COLUMN_LINE : ''
       };
     });
 
@@ -4102,6 +4254,7 @@
 
     var tally = mapTallyOf(d, map);
     var unplaced = tally.unplaced.filter(function (name) { return tally.raised.indexOf(name) === -1; });
+    var cardsWord = tally.cards === 1 ? ' card' : ' cards';
     var cardsOff = tally.cards < MAP_CARDS.min || tally.cards > MAP_CARDS.max;
     var length = map.expectedLength;
     var human = Number(d.humanRevisionCount) || 0;
@@ -4111,16 +4264,31 @@
       return s.beats.some(function (b) { return b.locked; }) || s.photos.some(function (p) { return photoRepeated(p.filename); });
     }) || leftItems.some(function (b) { return b.locked; }) || Boolean(topPhoto && photoRepeated(topPhoto.filename));
 
+    var round = human > 0
+      ? { label: roundsBanner(human, d.revisionCount, d.maxRevisions).roundLabel, note: feedback ? 'You sent the map back with: "' + feedback + '"' : '' }
+      : null;
+    var changedEdits = mapChangedEditLines(restOfReport, slots, map);
+    var kept = editsStandLine(d.handEditReport);
+    var dropped = asArray(map.dropped).filter(isPlainObject);
+    var weaveChanges = asArray(map.weaveChanges).filter(isPlainObject);
+    var present = {
+      round: Boolean(d.roundDidNotRun) || Boolean(round) || failing.top.length > 0 || changedEdits.length > 0 || Boolean(kept) || placed.other.length > 0,
+      legend: legend.view.threads.length > 0,
+      dropped: dropped.length > 0,
+      weaveChanges: weaveChanges.length > 0 || at('weaveChanges').length > 0 || failuresAt('weaveChanges').length > 0
+    };
+
     return {
+      order: MAP_SECTIONS.filter(function (part) { return !hasOwn(present, part) || present[part]; }),
       settledStory: story,
       storyHint: STORY_HINT,
-      round: human > 0
-        ? { label: roundsBanner(human, d.revisionCount, d.maxRevisions).roundLabel, note: feedback ? 'You sent the map back with: "' + feedback + '"' : '' }
-        : null,
+      round: round,
       checkFailures: failing.top,
-      changedEdits: mapChangedEditLines(d.handEditReport, slots, map),
-      kept: editsStandLine(d.handEditReport),
+      changedEdits: changedEdits,
+      kept: kept,
       otherConcerns: placed.other,
+      legend: legend.view,
+      summaries: { open: MAP_SUMMARY_TOGGLE.open, close: MAP_SUMMARY_TOGGLE.close },
       gapNote: isPlainObject(map.gapNote)
         ? { line: asString(map.gapNote.line), players: stringList(map.gapNote.players).join(', '), concerns: at('gapNote'), failures: failuresAt('gapNote') }
         : null,
@@ -4129,7 +4297,7 @@
       topPhoto: topPhoto,
       evidenceTitle: EVIDENCE_FOLD_TITLE,
       sections: sectionViews,
-      dropped: asArray(map.dropped).filter(isPlainObject).map(function (entry) {
+      dropped: dropped.map(function (entry) {
         var reason = asString(entry.reason);
         return {
           key: 'dropped-' + entry.slot,
@@ -4140,22 +4308,21 @@
         };
       }),
       tally: {
-        everyone: tally.everyone.map(function (entry) { return entry.players.join(', ') + ' (' + slotLabelOf(entry.slot, slots) + ')'; }).join(' · '),
-        unplaced: unplaced.length > 0 ? 'In no beat: ' + unplaced.join(', ') : '',
+        placed: tally.unplaced.length === 0 ? 'Everyone placed' : '',
+        unplaced: unplaced.length > 0 ? 'In no move: ' + unplaced.join(', ') : '',
         raised: tally.raised.length > 0 ? 'Raised in the gap note: ' + tally.raised.join(', ') : '',
-        cards: 'Cards: ' + tally.cards + (cardsOff ? ', ' + (tally.cards < MAP_CARDS.min ? 'under' : 'over') + ' the ' + MAP_CARDS.min + ' to ' + MAP_CARDS.max + ' the article carries' : ''),
-        photos: 'Photos: ' + tally.photos.placed + ' of ' + tally.photos.of,
+        cards: tally.cards + cardsWord + (cardsOff ? ', ' + (tally.cards < MAP_CARDS.min ? 'under' : 'over') + ' the ' + MAP_CARDS.min + ' to ' + MAP_CARDS.max + ' the article carries' : ''),
+        photos: tally.photos.placed + ' of ' + tally.photos.of + ' photos',
         length: Number.isInteger(length)
-          ? 'Expected length: about ' + withCommas(length) + ' words'
-          : 'Expected length: not set',
+          ? 'About ' + withCommas(length) + ' words'
+          : 'Length not set',
         lengthConcerns: at('expectedLength')
       },
       leftOut: {
         title: 'Left out (' + leftItems.length + ')',
-        open: leftItems.some(function (item) { return item.concerns.length > 0 || item.failures.length > 0; }),
         items: leftItems
       },
-      weaveChanges: asArray(map.weaveChanges).filter(isPlainObject).map(function (change, i) {
+      weaveChanges: weaveChanges.map(function (change, i) {
         return {
           key: 'change-' + i,
           source: weaveChangeSource(change.source, d.meetingChanges),
@@ -5030,6 +5197,12 @@
     // Phase 4b (brief 1D): the mark beside a move whose evidence prints as a card, and the fold of a
     // beat the director added with no evidence yet
     MAP_CARD_MARK: MAP_CARD_MARK,
+    MAP_SECTIONS: MAP_SECTIONS,
+    MAP_LEGEND_TITLE: MAP_LEGEND_TITLE,
+    MAP_TONES: MAP_TONES,
+    MAP_NO_HEADING_LINE: MAP_NO_HEADING_LINE,
+    MAP_EMPTIED_COLUMN_LINE: MAP_EMPTIED_COLUMN_LINE,
+    MAP_SUMMARY_TOGGLE: MAP_SUMMARY_TOGGLE,
     MAP_NO_EVIDENCE_LINE: MAP_NO_EVIDENCE_LINE,
     stopVersion: stopVersion,
     mapVersion: mapVersion,

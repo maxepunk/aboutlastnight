@@ -279,34 +279,33 @@ describe('4.12a: the story meeting\'s page is meetingView\'s', () => {
 });
 
 describe('4.12a: the map\'s page is mapView\'s', () => {
-  it('shows the settled story, the headline and deck, each section\'s job and beats under its slot\'s label, what was dropped, and the counts', () => {
+  // Piece 4 (spec 2026-10-07 section 4): the board's order, the counts first; a card prints its
+  // title, its people and the "Card" mark, each a line of its own.
+  it('shows the counts, the settled story, the headline and deck, each section\'s job and moves under its slot\'s label, and what was dropped', () => {
     const data = mapData();
     const view = View.mapView(data, View.mapDraftOf(data));
     const page = stopPage('outline', data);
     const section = view.sections[1];
     expect(inOrder(textsOf(page), [
+      view.tally.cards, view.tally.photos, view.tally.length,
       view.settledStory.story, view.settledStory.question,
       view.headline.text, view.deck.text,
       view.sections[0].job, view.sections[0].beats[0].move,
-      section.heading, section.job, `${section.beats[0].move} ${View.MAP_CARD_MARK}`, section.beats[0].players,
-      view.dropped[0].reason,
-      view.tally.everyone, view.tally.cards, view.tally.photos, view.tally.length
+      section.heading, section.job, section.beats[0].move, section.beats[0].players, View.MAP_CARD_MARK,
+      view.dropped[0].reason
     ])).toBe('in order');
     expect(page.lines.find((line) => line.tone === 'title' && line.label === section.label)).toBeTruthy();
   });
 
-  it('folds left out unless a concern opens it, and folds the trace and the standing notes', () => {
+  it('shows the tray always open (R8), and folds the trace and the standing notes', () => {
     const data = mapData({
       trace: [{ pass: 1, round: 1, trigger: 'check', findings: { structuralIssues: ['A beat names no document.'] }, at: null, diff: null, changedScopes: ['sections'] }],
       directorGateNotes: [{ gate: 'outline', kind: 'approval', round: 1, text: 'Keep the money beats together.' }]
     });
     const view = View.mapView(data, View.mapDraftOf(data));
-    expect(view.leftOut.open).toBe(false);
     const page = stopPage('outline', data);
-    expect(textsOf(page, true)).toEqual(expect.arrayContaining([
-      view.leftOut.items[0].move, 'A beat names no document.', 'Keep the money beats together.'
-    ]));
-    expect(textsOf(page)).not.toContain(view.leftOut.items[0].move);
+    expect(textsOf(page)).toContain(view.leftOut.items[0].move);
+    expect(textsOf(page, true)).toEqual(expect.arrayContaining(['A beat names no document.', 'Keep the money beats together.']));
     expect(wordsShown('outline', data)).toBe(wordsShown('outline', mapData()));
   });
 });

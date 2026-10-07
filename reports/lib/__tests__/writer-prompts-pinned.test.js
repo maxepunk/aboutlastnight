@@ -418,9 +418,12 @@ const REPO = path.join(__dirname, '..', '..');
  *   the order of the beats within a section; and the fixture map (fixtures/rework-state.js MAP)
  *   carries a synopsis on every beat, printed in <STORY_MAP> (+813): article-journalist
  *   35022 -> 35835. The arc pin does not move.
+ *   Then the map's page leaves out the Everyone list (spec 2026-10-07 sections 4 and 14), so the
+ *   map writer's task says code reads who is placed from each beat's players, where it said code
+ *   builds Everyone from them (+1): outline-journalist 24800 -> 24801.
  */
 const PINNED = {
-  'outline-journalist': ['42f5353690222e08e58f84f64c4a1b0321b1c4245289c24b96f1704acea5315e', 24800],
+  'outline-journalist': ['5c3439be516b8ee81681ef3a394e15332c5c9c2c0466d603fbc89af6ed7f3261', 24801],
   'article-journalist': ['f9449f999fce14c6ebc82d1a72bcea0cecdf7111ccd34e2c7cda33ce87cb5e49', 35835],
   'arcs-journalist': ['d45be33a2d854c23404b412793a6a162f34797d48b91375f09cb0e838f58c8fa', 12079]
 };

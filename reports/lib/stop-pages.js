@@ -32,10 +32,12 @@
  * - `tone` is what kind of line it is: title, text, note (what happened this round), alert (a
  *   check still failing, a problem the console would refuse), concern, mark or hint;
  * - `folded` marks what the page folds away, as its component folds it: the standing notes, the
- *   map's left out (until a concern opens it), the trace, the desk's folds below the article, the
- *   input review's closed sections, what a character-IDs card shows only once opened, the
- *   story meeting's evidence under each line and the left-out threads' reasons (phase 4b, brief
- *   1B), and the map's evidence under each move (phase 4b, brief 1D);
+ *   trace, the desk's folds below the article, the input review's closed sections, what a
+ *   character-IDs card shows only once opened, the story meeting's evidence under each line and
+ *   the left-out threads' reasons (phase 4b, brief 1B), and on the map each move's evidence (phase
+ *   4b, brief 1D), its synopsis, its threads, each thread's line and each photo's description
+ *   (piece 4, R7 and R8). The map's tray is always open. The map's synopses unfold on the page
+ *   stopPage builds with `synopsesOpen`;
  * - `beside` marks a concern or a mark that sits beside the line before it;
  * - `piece` is the desk's key for the piece a line prints or sits beside (deskAnchorKey);
  * - `region` names the part of the screen a line sits in, where the component names that part
@@ -115,7 +117,7 @@ const PAGE_REGIONS = Object.freeze({
   [OUTLINE]: Object.freeze({
     round: 'Since you last looked',
     top: 'The headline, the deck and the top photo',
-    tally: 'Everyone and the counts'
+    counts: 'The counts'
   })
 });
 
@@ -607,56 +609,68 @@ function meetingPage(data) {
 // ── The map (mapView; Outline.js renders the same view) ───────────────────────
 
 /**
- * A beat as the map shows it (phase 4b, brief 1D; spec 4.2 and 9): its move, with the card mark
- * where it has the marker, the people it shows, the checks still failing and the concerns beside
- * it, and its evidence folded under it, or for a beat the director added with none, why. Its
- * kind and its connection stay underneath, and no line names it by its id.
+ * A photo as the map's page holds it (piece 4, R7): it prints no words. Its description, or its
+ * filename when there is none, is a folded line, for the harness's print; the screen shows the
+ * photo and gives the description on hover, on selection, and in place of a picture that cannot
+ * load. What a check or a concern says of the photo sits beside it, unfolded.
  */
-function addBeat(page, view, beat) {
-  page.text(`${beat.move}${beat.card ? ` ${View.MAP_CARD_MARK}` : ''}`);
-  page.text(beat.players, 'Shows');
-  addBesideLine(page, beat);
-  addEvidenceFold(page, view.evidenceTitle, beat.evidence, beat.noEvidence);
-}
-
-/** A photo as the map shows it: the director's description of it, or its filename when there is none. */
 function addPhoto(page, photo, label) {
-  page.text(photo.description || photo.filename, label);
+  page.folded(() => page.text(photo.description || photo.filename, label));
   addBesideLine(page, photo);
 }
 
+/** The threads a move carries, as its dots name them on hover: a folded line, for the harness's print. */
+function addDots(page, beat) {
+  const names = beat.dots.map((dot) => dot.name).filter(Boolean);
+  if (names.length > 0) page.folded(() => page.text(names.join(' · '), 'Threads'));
+}
+
 /**
- * The map's page (spec 5.2): the settled story, what happened since the director last looked,
- * the gap note, the headline, the deck and the top photo, the sections, what was dropped, the
- * counts, left out (folded unless a concern opens it), the map's changes to the weave, then the
- * standing notes and the trace, folded. The round, the headline's part and the counts are parts
- * Outline.js names only as an aria-label (PAGE_REGIONS). Phase 4b (brief 1D; spec 2026-10-05
- * sections 4.2 and 9): each move with its people and its evidence folded, each photo by the
- * director's description, a check still failing beside the line its place names, and no tag.
- * The check node counts the writer's page as it first opens through wordsShown
- * (lib/workflow/nodes/map-nodes.js mapPageWords).
+ * A move's evidence, folded under it (phase 4b, brief 1D): each piece, where its threads meet by
+ * the connection's line (piece 4; spec 5), and, for a move the director added with none, why.
  */
-function mapPage(data, theme) {
-  const H = PAGE_HEADINGS[OUTLINE];
-  const R = PAGE_REGIONS[OUTLINE];
-  const map = View.mapDraftOf(data);
-  if (!map) throw new Error("The map's payload holds no map to page: every map's stop holds one since task 4.11.");
-  const view = View.mapView(data, map);
-  const page = pageOf(OUTLINE);
+function addMoveFold(page, view, beat) {
+  if (beat.evidence.length === 0 && !beat.noEvidence) return;
+  page.folded(() => {
+    page.title(view.evidenceTitle);
+    beat.evidence.forEach((piece) => page.text(piece.text));
+    page.text(beat.meets, 'Where its threads meet');
+    page.text(beat.noEvidence);
+  });
+}
 
-  page.title(H.settledStory);
-  if (view.settledStory) {
-    page.text(view.settledStory.story);
-    page.text(view.settledStory.question, 'The question it carries');
-  }
-  page.hint(view.storyHint);
+/** What the round has to say about a line, beside it (spec 7): a check still failing, a concern, an edit of the director's a rework changed. */
+function addMargin(page, line) {
+  addBesideLine(page, line);
+  (line.changed || []).forEach((text) => page.besideMark('mark', text, ''));
+}
 
-  // Task 4.14e: a send-back whose rework did not run, as Outline.js shows it; the harness has no
-  // note box, so the line gives the note back.
-  const didNotRun = View.reworkDidNotRunLine(data.roundDidNotRun, '', 'map');
-  if (didNotRun || view.round || view.checkFailures.length > 0 || view.changedEdits.length > 0 || view.kept || view.otherConcerns.length > 0) {
-    page.inRegion(R.round, () => {
-      page.note(didNotRun);
+/**
+ * A move's card (piece 4; spec 4): its title, its people and the "Card" mark where its evidence
+ * prints as a card; its threads, its synopsis and its evidence folded, the synopsis unfolded on the
+ * page with every synopsis open; what the round says of it beside it; its photos.
+ */
+function addCard(page, view, beat, synopsesOpen) {
+  page.text(beat.move);
+  page.text(beat.players, 'Shows');
+  page.text(beat.cardMark);
+  addDots(page, beat);
+  if (synopsesOpen) page.text(beat.synopsis, 'Summary');
+  else page.folded(() => page.text(beat.synopsis, 'Summary'));
+  addMargin(page, beat);
+  beat.photos.forEach((photo) => addPhoto(page, photo, 'Photo'));
+  addMoveFold(page, view, beat);
+}
+
+// The map's page in mapView's order (piece 4; spec 2026-10-07 section 4). The round, the top of
+// the article and the counts are parts Outline.js names only as an aria-label (PAGE_REGIONS).
+const MAP_PARTS = {
+  round(page, view, data) {
+    // Task 4.14e: a send-back whose rework did not run, as Outline.js shows it; the harness has
+    // no note box, so the line gives the note back.
+    const H = PAGE_HEADINGS[OUTLINE];
+    page.inRegion(PAGE_REGIONS[OUTLINE].round, () => {
+      page.note(View.reworkDidNotRunLine(data.roundDidNotRun, '', 'map'));
       if (view.round) {
         page.tag(view.round.label, 'note');
         page.note(view.round.note);
@@ -669,66 +683,105 @@ function mapPage(data, theme) {
       page.note(view.kept);
       view.otherConcerns.forEach((text) => page.toned('concern', text));
     });
-  }
-  page.hint(view.lockedHint);
-
-  if (view.gapNote) {
-    page.title(H.gap);
-    page.text(view.gapNote.line);
-    page.text(view.gapNote.players, 'It raises');
-    addBesideLine(page, view.gapNote);
-  }
-
-  page.inRegion(R.top, () => {
-    page.text(view.headline.text, 'Headline');
-    page.beside(view.headline.concerns, []);
-    page.text(view.deck.text, 'Deck');
-    page.beside(view.deck.concerns, []);
-    if (view.topPhoto) addPhoto(page, view.topPhoto, 'Top photo');
-  });
-
-  view.sections.forEach((section) => {
-    page.title(section.label);
-    if (section.heading) page.text(section.heading, 'Heading');
-    else page.tag('Heading: none printed');
-    page.text(section.job, 'Job');
-    addBesideLine(page, section);
-    section.beats.forEach((beat) => addBeat(page, view, beat));
-    section.photos.forEach((photo) => addPhoto(page, photo, 'Photo'));
-  });
-
-  if (view.dropped.length > 0) {
-    page.title(H.dropped);
+  },
+  // The counts (spec 4): everyone placed or who is not, the cards, the photos, the expected length.
+  tally(page, view) {
+    page.inRegion(PAGE_REGIONS[OUTLINE].counts, () => {
+      page.text(view.tally.placed);
+      page.alert(view.tally.unplaced);
+      page.text(view.tally.raised);
+      page.text(view.tally.cards);
+      page.text(view.tally.photos);
+      page.text(view.tally.length);
+      page.beside(view.tally.lengthConcerns, []);
+    });
+  },
+  // The settled story, with the way back to the meeting, and the gap note beside it.
+  settledStory(page, view) {
+    const H = PAGE_HEADINGS[OUTLINE];
+    page.title(H.settledStory);
+    if (view.settledStory) {
+      page.text(view.settledStory.story);
+      page.text(view.settledStory.question, 'The question it carries');
+    }
+    page.hint(view.storyHint);
+    if (view.gapNote) {
+      page.title(H.gap);
+      page.text(view.gapNote.line);
+      page.text(view.gapNote.players, 'It raises');
+      addBesideLine(page, view.gapNote);
+    }
+  },
+  // The threads (R4): each by its name, its line folded until it is picked.
+  legend(page, view) {
+    page.title(view.legend.title);
+    view.legend.threads.forEach((thread) => {
+      page.text(thread.name);
+      page.folded(() => page.text(thread.line));
+    });
+  },
+  // The top of the article: the headline, the deck and the top photo.
+  top(page, view) {
+    page.inRegion(PAGE_REGIONS[OUTLINE].top, () => {
+      page.text(view.headline.text, 'Headline');
+      page.beside(view.headline.concerns, []);
+      page.text(view.deck.text, 'Deck');
+      page.beside(view.deck.concerns, []);
+      if (view.topPhoto) addPhoto(page, view.topPhoto, 'Top photo');
+    });
+  },
+  // The board: a column per section, its cards in order, its photos by themselves at its foot.
+  sections(page, view, data, synopsesOpen) {
+    page.hint(view.lockedHint);
+    view.sections.forEach((section) => {
+      page.title(section.label);
+      if (section.heading) page.text(section.heading, 'Heading');
+      else page.tag(View.MAP_NO_HEADING_LINE);
+      page.text(section.job, 'Job');
+      addBesideLine(page, section);
+      section.beats.forEach((beat) => addCard(page, view, beat, synopsesOpen));
+      section.byThemselves.forEach((photo) => addPhoto(page, photo, 'Photo, by itself'));
+      page.hint(section.emptied);
+    });
+  },
+  // The tray, always open (R8): each move by its title, its threads and its evidence folded.
+  leftOut(page, view) {
+    page.title(view.leftOut.title);
+    view.leftOut.items.forEach((beat) => {
+      page.text(beat.move);
+      addDots(page, beat);
+      addMargin(page, beat);
+      addMoveFold(page, view, beat);
+    });
+  },
+  dropped(page, view) {
+    page.title(PAGE_HEADINGS[OUTLINE].dropped);
     view.dropped.forEach((entry) => {
       page.text(entry.reason, entry.label);
       page.beside(entry.concerns, []);
     });
-  }
-
-  page.inRegion(R.tally, () => {
-    if (view.tally.everyone) page.text(view.tally.everyone, 'Everyone');
-    else page.tag('Everyone: no roster player is in a beat');
-    page.alert(view.tally.unplaced);
-    page.text(view.tally.raised);
-    page.text(view.tally.cards);
-    page.text(view.tally.photos);
-    page.text(view.tally.length);
-    page.beside(view.tally.lengthConcerns, []);
-  });
-
-  const addLeftOut = () => {
-    page.title(view.leftOut.title);
-    view.leftOut.items.forEach((item) => addBeat(page, view, item));
-  };
-  if (view.leftOut.open) addLeftOut();
-  else page.folded(addLeftOut);
-
-  if (view.weaveChanges.length > 0 || view.weaveChangesConcerns.length > 0 || view.weaveChangesFailures.length > 0) {
-    page.title(H.weaveChanges);
+  },
+  weaveChanges(page, view) {
+    page.title(PAGE_HEADINGS[OUTLINE].weaveChanges);
     view.weaveChanges.forEach((change) => page.text(change.change, change.source));
     addBesideLine(page, { failures: view.weaveChangesFailures, concerns: view.weaveChangesConcerns });
   }
+};
 
+/**
+ * The map's page (piece 4; spec 2026-10-07 sections 4 and 8; R6 to R8): mapView's parts in its
+ * order, then the standing notes and the trace, folded. Folded too: each move's synopsis (unless
+ * `synopsesOpen`), each thread's line, each move's threads and evidence, and each photo's
+ * description. The check node counts the writer's page twice through wordsShown, as it opens and
+ * with every synopsis open (lib/workflow/nodes/map-nodes.js mapPageWords), and the stops log
+ * records both.
+ */
+function mapPage(data, { theme, synopsesOpen = false }) {
+  const map = View.mapDraftOf(data);
+  if (!map) throw new Error("The map's payload holds no map to page: every map's stop holds one since task 4.11.");
+  const view = View.mapView(data, map);
+  const page = pageOf(OUTLINE);
+  view.order.forEach((part) => MAP_PARTS[part](page, view, data, synopsesOpen));
   addStandingNotes(page, data.directorGateNotes);
   addTrace(page, data.trace, theme);
   return page.done();
@@ -861,8 +914,8 @@ const PAGES = {
   [INPUT_REVIEW]: (data) => inputReviewPage(data),
   [ARC_SELECTION]: (data) => meetingPage(data),
   [CHARACTER_IDS]: (data) => characterIdsPage(data),
-  [OUTLINE]: mapPage,
-  [ARTICLE]: deskPage
+  [OUTLINE]: (data, options) => mapPage(data, options),
+  [ARTICLE]: (data, { theme }) => deskPage(data, theme)
 };
 
 /**
@@ -878,12 +931,14 @@ const PAGE_STOPS = Object.freeze(Object.keys(PAGES));
  * @param {Object} data - the stop's payload: getCheckpointData's keys merged with the interrupt's
  * @param {Object} [options]
  * @param {string} [options.theme='journalist'] - the session's theme, which words the trace's guidance (traceView)
+ * @param {boolean} [options.synopsesOpen=false] - the map's page with every move's synopsis open
+ *   (piece 4, R6); every other fold stays folded, and no other stop reads it
  * @returns {{stop: string, lines: Array<Object>}|null}
  * @throws when a decision stop's payload holds nothing to page
  */
-function stopPage(stop, data, { theme = 'journalist' } = {}) {
+function stopPage(stop, data, { theme = 'journalist', synopsesOpen = false } = {}) {
   if (!Object.prototype.hasOwnProperty.call(PAGES, stop)) return null;
-  return PAGES[stop](isPlainObject(data) ? data : {}, theme);
+  return PAGES[stop](isPlainObject(data) ? data : {}, { theme, synopsesOpen });
 }
 
 /**
@@ -892,7 +947,8 @@ function stopPage(stop, data, { theme = 'journalist' } = {}) {
  *
  * @param {string} stop
  * @param {Object} data - the stop's payload
- * @param {Object} [options] - stopPage's
+ * @param {Object} [options] - stopPage's: the theme, and `synopsesOpen` for the map's page with
+ *   every synopsis open
  * @returns {number|null}
  */
 function wordsShown(stop, data, options) {

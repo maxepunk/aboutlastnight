@@ -7,8 +7,10 @@
  * Two kinds of line:
  * - a pause, `{at, kind: 'pause', stop, round, words}`, each time a run pauses at a new stop or
  *   at a new round of one. `words` is what the stop shows, counted over its view models' page
- *   (lib/stop-pages.js wordsShown), or null at a stop with no page. A run that arrives where the
- *   log's last line already has the director, the same stop in the same round (a /resume replay,
+ *   (lib/stop-pages.js wordsShown), or null at a stop with no page. At the map, `wordsOpen`
+ *   follows it: the page with every move's synopsis open (piece 4, R6), where `words` is the page
+ *   as it opens. A run that arrives where the log's last line already has the director, the same
+ *   stop in the same round (a /resume replay,
  *   a rollback that reopens the stop they are at), is no new pause. Two pauses always are:
  *   - the first pause of a fresh start, whose line also carries `fresh: true`, since /start with
  *     `force` appends to the run it replaced and the readout measures the run from that line;
@@ -39,6 +41,9 @@ const { stopRoundOf } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const { MEETING_ROUNDS } = require('./weave');
 const { wordsShown } = require('./stop-pages');
+
+/** The map's stop, whose pause line also counts its page with every synopsis open (piece 4, R6). */
+const MAP_STOP = CHECKPOINT_TYPES.OUTLINE;
 
 /**
  * The channel that holds what each stop shows of a run's work: the parse, the paper evidence,
@@ -141,10 +146,13 @@ function append(file, line) {
   fs.appendFileSync(file, `${JSON.stringify(line)}\n`);
 }
 
-/** The words a stop shows, or null when it has no page or its page could not be built (said, not thrown). */
-function wordsAt(stop, data, theme) {
+/**
+ * The words a stop shows, or null when it has no page or its page could not be built (said, not
+ * thrown). `synopsesOpen` counts the map's page with every synopsis open (piece 4, R6).
+ */
+function wordsAt(stop, data, theme, synopsesOpen = false) {
   try {
-    return wordsShown(stop, data, { theme });
+    return wordsShown(stop, data, { theme, synopsesOpen });
   } catch (err) {
     console.warn(`[stops-log] the words at ${stop} were not counted: ${err.message}`);
     return null;
@@ -175,6 +183,8 @@ function recordPause(sessionId, { stop, state, data, fresh = false, rollbackClea
     const theme = (state && state.theme) || 'journalist';
     append(file, {
       at: new Date().toISOString(), kind: 'pause', stop, round, words: wordsAt(stop, data, theme),
+      // Piece 4 (R6): at the map, the page with every synopsis open too.
+      ...(stop === MAP_STOP && { wordsOpen: wordsAt(stop, data, theme, true) }),
       ...(fresh && { fresh: true })
     });
   } catch (err) {

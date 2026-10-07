@@ -9,11 +9,12 @@
  * - the sections in the map's order, under the theme's slot labels, each with its job, beats
  *   and photos: every line editable, move and strike controls on each beat, move controls on
  *   each photo, and an "add a beat" line with its players. Each beat shows its move's words, its
- *   people and "(card)" where it has the marker, with a "What's behind it" toggle that opens its
+ *   people and the "Card" mark where it has the marker, with a "What's behind it" toggle that opens its
  *   evidence in place; each photo shows the director's description beside its thumbnail; a check
  *   still failing shows under the line it names (phase 4b, briefs 1D and 1F; spec 9);
- * - the dropped sections with their reasons; Everyone, the cards, the photos and the expected
- *   length, rebuilt from the map as edited; left out, folded, each item with "bring back to";
+ * - the dropped sections with their reasons; the counts (everyone placed or who is not, the cards,
+ *   the photos and the expected length), rebuilt from the map as edited; left out, always open
+ *   (piece 4, R8), each item with "bring back to";
  *   the map's changes to the weave, each with its source;
  * - the note box with the standing notes folded under it, the two buttons, and the trace of
  *   an automatic rework folded below.
@@ -330,7 +331,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     );
   }
 
-  // Phase 4b (briefs 1D and 1F; spec 9): a beat prints its move's words, "(card)" where it has the
+  // Phase 4b (briefs 1D and 1F; spec 9): a beat prints its move's words, the "Card" mark where it has the
   // marker, and its people, with its evidence folded under "What's behind it"; its kind, its
   // connection and its id stay underneath.
   function beatBody(beat) {
@@ -340,6 +341,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       beat.players && React.createElement('p', { className: 'text-xs text-muted' }, 'Shows: ' + beat.players),
       failuresOf(beat.failures),
       concernsOf(beat.concerns),
+      // Piece 4 (spec 2026-10-07 section 7): an edit a rework changed that is about this move sits on it.
+      beat.changed.map(function (text, i) { return React.createElement('p', { key: 'changed-' + i, className: 'map__changed' }, text); }),
       evidenceFold(beat)
     );
   }
@@ -552,9 +555,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       )
     ),
 
-    // Everyone, the cards, the photos and the expected length, from the map as edited.
-    React.createElement('section', { className: 'map__tally', 'aria-label': 'Everyone and the counts' },
-      React.createElement('p', null, React.createElement('span', { className: 'text-muted' }, 'Everyone: '), view.tally.everyone || 'no roster player is in a beat'),
+    // The counts, from the map as edited: everyone placed or who is not, the cards, the photos and the expected length.
+    React.createElement('section', { className: 'map__tally', 'aria-label': 'The counts' },
+      view.tally.placed && React.createElement('p', null, view.tally.placed),
       view.tally.unplaced && React.createElement('p', { className: 'map__unplaced' }, view.tally.unplaced),
       view.tally.raised && React.createElement('p', { className: 'text-sm text-muted' }, view.tally.raised),
       React.createElement('p', null, view.tally.cards + ' · ' + view.tally.photos),
@@ -568,8 +571,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
             concernsOf(view.tally.lengthConcerns))
     ),
 
-    // Left out, folded: each item whole, with the sections it can come back to.
-    React.createElement(CollapsibleSection, { title: view.leftOut.title, defaultOpen: view.leftOut.open },
+    // Left out, always open (piece 4, R8): each item whole, with the sections it can come back to.
+    React.createElement('section', { className: 'map__tray', 'aria-label': view.leftOut.title },
+      React.createElement('h4', { className: 'map__label' }, view.leftOut.title),
       view.leftOut.items.length === 0
         ? React.createElement('p', { className: 'text-xs text-muted' }, 'Nothing was left out.')
         : React.createElement('ul', { className: 'map__list' },

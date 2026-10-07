@@ -35,6 +35,12 @@ function payloadOf(state) {
 /** The map the screen opens on, before any change. */
 const opened = (data = payloadOf(stateAt())) => ViewLogic.mapDraftOf(data, undefined);
 
+/**
+ * Every edit a rework changed that the page shows (piece 4; spec 2026-10-07 section 7): those
+ * among the round's lines, then those on each move's card, in the sections and in the tray.
+ */
+const changedLinesOf = (view) => [...view.changedEdits, ...[...view.sections.flatMap((s) => s.beats), ...view.leftOut.items].flatMap((b) => b.changed)];
+
 /** A beat of a map, wherever it sits. */
 function beatOf(map, id) {
   return [...map.sections.flatMap((s) => s.beats), ...map.leftOut].find((b) => b.id === id);
@@ -286,26 +292,28 @@ describe('4.9: Everyone and the counts are rebuilt from the map as edited, throu
     expect(ViewLogic.mapTallyOf(data, map)).toEqual(serverTally(map));
   });
 
-  test('the lines: Everyone by section label, the players in no beat, the cards, the photos and the expected length', () => {
+  // Piece 4 (spec 2026-10-07 sections 4 and 14): the Everyone list goes; the counts say whether
+  // everyone is placed and name anyone who is not, in the board's words.
+  test('the lines: everyone placed or the players in no move, the cards, the photos and the expected length', () => {
     const view = ViewLogic.mapView(data, EditLogic.strikeBeat(opened(data), 'b4'));
     expect(view.tally).toEqual({
-      everyone: 'Alex, Morgan (Lede) · Riley (The Story)',
-      unplaced: 'In no beat: Sarah',
+      placed: '',
+      unplaced: 'In no move: Sarah',
       raised: '',
-      cards: 'Cards: 2, under the 3 to 5 the article carries',
-      photos: 'Photos: 2 of 2',
-      length: 'Expected length: about 1,200 words',
+      cards: '2 cards, under the 3 to 5 the article carries',
+      photos: '2 of 2 photos',
+      length: 'About 1,200 words',
       lengthConcerns: []
     });
     const full = ViewLogic.mapView(data, opened(data)).tally;
-    expect([full.unplaced, full.cards]).toEqual(['', 'Cards: 3']);
+    expect([full.placed, full.unplaced, full.cards]).toEqual(['Everyone placed', '', '3 cards']);
   });
 
   test('a player the gap note raises is named as raised, not as in no beat; the length reads as the map now holds it', () => {
     let map = { ...EditLogic.strikeBeat(opened(data), 'b4'), gapNote: { line: 'The record holds nothing Sarah did.', players: ['Sarah'] } };
     map = EditLogic.mergeMapLength(map, 900);
     const view = ViewLogic.mapView(data, map);
-    expect([view.tally.unplaced, view.tally.raised, view.tally.length]).toEqual(['', 'Raised in the gap note: Sarah', 'Expected length: about 900 words']);
+    expect([view.tally.unplaced, view.tally.raised, view.tally.length]).toEqual(['', 'Raised in the gap note: Sarah', 'About 900 words']);
   });
 });
 
@@ -635,12 +643,13 @@ describe("4.9: the map's page before any round", () => {
     expect(photo.moveTargets[0].label).toBe('The top of the article');
   });
 
-  test('the dropped sections with their reasons, and left out folded, each item with the sections to bring it back to', () => {
+  test('the dropped sections with their reasons, and the tray, always open (R8), each item with the sections to bring it back to', () => {
     expect(view.dropped).toEqual([
       { key: 'dropped-thePlayers', slot: 'thePlayers', label: 'The Players', reason: 'Every player appears above.', concerns: [] },
       { key: 'dropped-whatsMissing', slot: 'whatsMissing', label: "What's Missing", reason: "Its question is the closing's.", concerns: [] }
     ]);
-    expect(view.leftOut).toMatchObject({ title: 'Left out (1)', open: false });
+    expect(view.leftOut).toMatchObject({ title: 'Left out (1)' });
+    expect(view.leftOut).not.toHaveProperty('open');
     expect(view.leftOut.items[0]).toMatchObject({ id: 'b9', move: 'An unsigned letter threatens Marcus', players: '', concerns: [] });
     expect(view.leftOut.items[0].targets.map((t) => t.value)).toEqual(['lede', 'theStory', 'followTheMoney', 'closing']);
   });
@@ -695,12 +704,11 @@ describe('4.9: with a check still failing and with a concern', () => {
     expect(view.checkFailures).toEqual(['Check still failing: Connections from the settled weave that land in no beat: c3.']);
   });
 
-  test('the concern sits beside the line of the edit it is about, and left out opens to show it', () => {
+  test('the concern sits beside the line of the edit it is about, in the tray, which is always open', () => {
     expect(view.leftOut.items.map((i) => [i.id, i.concerns])).toEqual([
       ['b9', []],
       ['b4', ['Concern: Sarah is in no beat and not in the gap note.']]
     ]);
-    expect(view.leftOut.open).toBe(true);
     expect(view.otherConcerns).toEqual([]);
   });
 
@@ -747,7 +755,7 @@ describe('4.9: after a send-back and an automatic pass', () => {
     rework.sections[3].beats[0].move = 'Riley keeps the books';
     const report = reportAfterPass(null, { edits, before: left, after: rework, pass: SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asks for the plain line.' }] });
     const d = payloadOf(stateAt({ outline: rework, _outlineHandEditReport: report }));
-    expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([
+    expect(changedLinesOf(ViewLogic.mapView(d, opened(d)))).toEqual([
       'Closing, the move "Riley keeps the books": your "Riley keeps the books, and a second ledger" became "Riley keeps the books" (the rework of your send-back). Why: The note asks for the plain line.'
     ]);
   });
@@ -912,7 +920,7 @@ describe("4.6c: Everyone and the counts read mapTally's own inputs, which the pa
     map = EditLogic.strikeBeat(map, 'b6');
     expect(stateAt().sessionConfig.roster).toEqual(['Alex', 'Morgan', 'Sarah', 'Riley']);
     expect(ViewLogic.mapTallyOf(data, map).unplaced).toEqual(['Sarah', 'Riley']);
-    expect(ViewLogic.mapView(data, map).tally.unplaced).toBe('In no beat: Sarah, Riley');
+    expect(ViewLogic.mapView(data, map).tally.unplaced).toBe('In no move: Sarah, Riley');
   });
 
   test('a beat that names a player by a full name not opening with the first name places them, as the map checks do', () => {
@@ -1037,7 +1045,7 @@ describe('4.10: the map lists the changes no pass put back, and a send-back\'s w
   /** The map's changed lines for a report holding these entries. */
   function linesFor(changed) {
     const d = { ...payloadOf(stateAt()), handEditReport: { checked: changed.map((c) => c.id), changed } };
-    return ViewLogic.mapView(d, opened(d)).changedEdits;
+    return changedLinesOf(ViewLogic.mapView(d, opened(d)));
   }
 
   test('an automatic change code put back is not listed', () => {
@@ -1413,7 +1421,7 @@ describe('4.14b: a photo on the leave-out list shows as left out on the map, and
     expect(view.topPhoto).toMatchObject({ filename: 'hero.jpg', leftOut: false, locked: false, concerns: [] });
     expect(view.topPhoto.moveTargets).toHaveLength(4);
     expect(view.lockedHint).toBe('');
-    expect(view.tally.photos).toBe('Photos: 1 of 1');
+    expect(view.tally.photos).toBe('1 of 1 photos');
   });
 
   test('moved to the top all the same, the console and the gate refuse it, saying why', () => {
@@ -1475,7 +1483,7 @@ describe('4.14b fix round 1: a section the director emptied that a pass put back
   /** The map's changed lines for a report holding these entries. */
   function linesFor(changed) {
     const d = { ...payloadOf(stateAt()), handEditReport: { checked: ['E1', 'E2', 'E3'], changed } };
-    return ViewLogic.mapView(d, opened(d)).changedEdits;
+    return changedLinesOf(ViewLogic.mapView(d, opened(d)));
   }
   const AUTOMATIC_LINE = 'Follow the Money: automatic pass 1 put back the section you emptied. It is still on the map: empty it again if it should go.';
 

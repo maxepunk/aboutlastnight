@@ -291,6 +291,21 @@ const beatRowOf = (tree, move) => elementsOf(tree, (n) => hasClass('map__beat')(
 /** The lines the page shows for what holds its controls, in document order. */
 const heldLines = (tree) => elementsOf(tree, hasClass('held-line')).map(textOf);
 
+// Piece 4 (brief 4B; spec 2026-10-07 section 7): an edit of the director's a rework changed that
+// is about a move sits on that move's card in the view, so Outline.js shows it in the move's row,
+// where it no longer shows among the round's lines.
+describe("4B: an edit a rework changed shows on its move's row", () => {
+  it("renders the card's changed line in the move's row", () => {
+    const report = { checked: ['E1'], changed: [{ id: 'E1', scope: 'outline', where: 'section \"theStory\", beat \"b5\", move', cut: false, removed: false, moved: false, director: 'Jess pulls Sarah aside', became: 'Jess warns Sarah', pass: 'send-back', automatic: false, reason: 'The note asked for the warning.', restored: false }] };
+    const data = mapPayloadOf(storyLevelMapState({ _outlineHandEditReport: report, humanOutlineRevisionCount: 1 }));
+    const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+    const [line] = viewBeats(view).find((b) => b.id === 'b5').changed;
+    expect(line).toContain('Jess pulls Sarah aside');
+    const row = beatRowOf(mountMap({ data }).render(), 'Jess warns Sarah');
+    expect(elementsOf(row, hasClass('map__changed')).map(textOf)).toEqual([line]);
+  });
+});
+
 describe("1F: each move shows its words, its people and \"(card)\" where it has the marker, with what's behind it folded in place", () => {
   const data = mapPayloadOf();
   const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
@@ -460,7 +475,14 @@ describe('1F: no tag on the page, and every aria-label names a move by its words
       moveTo: `Move "${beat.move}" to another section`,
       strike: `Strike "${beat.move}" into left out`,
       takeOut: `Take out the move you added: ${beat.move}`,
-      bringBack: `Bring "${beat.move}" back into a section`
+      bringBack: `Bring "${beat.move}" back into a section`,
+      // Piece 4 (brief 4B): the card's own controls, for 4D's board, each by the move's title.
+      select: `Select the move "${beat.move}"`,
+      showSummary: `Show the summary of "${beat.move}"`,
+      hideSummary: `Hide the summary of "${beat.move}"`,
+      moveUp: `Move "${beat.move}" up`,
+      moveDown: `Move "${beat.move}" down`,
+      photoBeside: `Put a photo beside "${beat.move}"`
     }));
     const ariaLabels = elementsOf(tree, (n) => typeof n.props['aria-label'] === 'string').map((n) => n.props['aria-label']);
     const used = (beat) => [
@@ -488,7 +510,13 @@ describe('1F: no tag on the page, and every aria-label names a move by its words
       moveTo: 'Move a move to another section',
       strike: 'Strike a move into left out',
       takeOut: 'Take out the move you added: a move',
-      bringBack: 'Bring a move back into a section'
+      bringBack: 'Bring a move back into a section',
+      select: 'Select a move',
+      showSummary: 'Show the summary of a move',
+      hideSummary: 'Hide the summary of a move',
+      moveUp: 'Move a move up',
+      moveDown: 'Move a move down',
+      photoBeside: 'Put a photo beside a move'
     });
     expect(blankBeat.labels.fold).toBe(ViewLogic.evidenceFoldLabel('a move'));
     expect(Object.values(blankBeat.labels).filter((label) => label.includes(blankBeat.id))).toEqual([]);
@@ -531,7 +559,7 @@ describe("1F: the beat editor edits a move's words and its people, through initB
     // The editor closes, and the row shows the move the director wrote.
     const after = mounted.render();
     expect(elementsOf(after, hasClass('map__editing'))).toHaveLength(0);
-    expect(textOf(elementsOf(beatRowOf(after, 'Marcus wants a stronger dose'), hasClass('map__move-words'))[0])).toBe('Marcus wants a stronger dose (card)');
+    expect(textOf(elementsOf(beatRowOf(after, 'Marcus wants a stronger dose'), hasClass('map__move-words'))[0])).toBe('Marcus wants a stronger dose Card');
   });
 });
 
