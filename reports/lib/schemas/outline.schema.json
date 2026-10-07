@@ -49,11 +49,11 @@
           "job": { "type": "string", "description": "What the section does to the question, in one sentence" },
           "beats": {
             "type": "array",
-            "description": "The section's beats",
+            "description": "The section's beats, in the order the article tells them",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["id", "move", "players", "threads", "evidence"],
+              "required": ["id", "move", "players", "synopsis", "threads", "evidence"],
               "properties": {
                 "id": { "type": "string", "description": "The beat's id, its own across the whole map, such as b1" },
                 "move": { "type": "string", "description": "The move of the story, in a few plain words with its people" },
@@ -62,6 +62,7 @@
                   "description": "The roster players the beat shows, by name",
                   "items": { "type": "string" }
                 },
+                "synopsis": { "type": "string", "description": "One sentence, in the same story terms as the move, saying what the article tells at this move: what happens there, which the article writer tells in its own words" },
                 "threads": {
                   "type": "array",
                   "description": "The ids of the settled weave's threads the move carries",
@@ -113,7 +114,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "move", "players", "threads", "evidence"],
+        "required": ["id", "move", "players", "synopsis", "threads", "evidence"],
         "properties": {
           "id": { "type": "string", "description": "The beat's id, its own across the whole map, such as b1" },
           "move": { "type": "string", "description": "The move of the story, in a few plain words with its people" },
@@ -122,6 +123,7 @@
             "description": "The roster players the beat shows, by name",
             "items": { "type": "string" }
           },
+          "synopsis": { "type": "string", "description": "One sentence, in the same story terms as the move, saying what the article tells at this move: what happens there, which the article writer tells in its own words" },
           "threads": {
             "type": "array",
             "description": "The ids of the settled weave's threads the move carries",

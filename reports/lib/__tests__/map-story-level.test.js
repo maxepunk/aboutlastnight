@@ -47,9 +47,11 @@ describe("1D: a beat is a move, with its threads, its people and its evidence", 
   const writer = mapSchemaFor('journalist');
   const beat = writer.properties.sections.items.properties.beats.items;
 
-  it("the writer's beat is {id, move, players, threads, connection?, card?, kind?, evidence}, its material gone", () => {
-    expect(Object.keys(beat.properties)).toEqual(['id', 'move', 'players', 'threads', 'connection', 'card', 'kind', 'evidence']);
-    expect(beat.required).toEqual(['id', 'move', 'players', 'threads', 'evidence']);
+  // Phase 4b, piece 4 (brief 4B; R1): the beat gains its summary, synopsis, after players, which
+  // the writer's schema requires.
+  it("the writer's beat is {id, move, players, synopsis, threads, connection?, card?, kind?, evidence}, its material gone", () => {
+    expect(Object.keys(beat.properties)).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'connection', 'card', 'kind', 'evidence']);
+    expect(beat.required).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'evidence']);
     expect(beat.properties.card.type).toBe('boolean');
     expect(beat.properties.threads).toMatchObject({ type: 'array', items: { type: 'string' } });
     expect(JSON.stringify(writer)).not.toMatch(/material/);

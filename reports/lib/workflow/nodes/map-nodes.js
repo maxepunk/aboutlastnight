@@ -5,7 +5,8 @@
  * The checks (lib/map.js mapFindings) read the map against the session: the roster, the
  * photos kept for the article, the record's document ids, the threads and the connections of
  * the angle the director settled (lib/weave.js settledAngleOf: its threads, and the connections
- * between them; phase 4b, piece 3, brief 3B), and the
+ * between them; phase 4b, piece 3, brief 3B), the threads it leaves out, by which a writer's beat
+ * that carries one is named (piece 4, R5), and the
  * director's changes and note at the meeting. A failure the director caused on the map is a concern on their edit, never a
  * rework.
  *
@@ -33,7 +34,7 @@ const { PHASES } = require('../state');
 const { traceNode } = require('../../observability');
 const {
   mapFindings, mapKey, mapRosterOf, meetingEditIdsOf, meetingNoteOf, topPhotoOf, mapCheckpointData,
-  mapDirectorsShare, mapWritersShareOf, mapWritersTextBlank, mapLengthOf, MAP_CHECKS_SOURCE
+  mapDirectorsShare, mapWritersShareOf, mapWritersTextBlank, mapLengthOf, mapLegendOf, MAP_CHECKS_SOURCE
 } = require('../../map');
 const { meetingDirectorsThreads } = require('../../meeting');
 const { carriedEdits, directorEditConcern } = require('../../hand-edit-diff');
@@ -52,7 +53,8 @@ const TALLY_REGION = PAGE_REGIONS[MAP_STOP].tally;
 
 /**
  * The map stop's payload on a first look at a map: no round's lines, no check's mark, no
- * concern and no standing note, so its page is the one the writer's map opens on.
+ * concern and no standing note, so its page is the one the writer's map opens on. It carries
+ * the legend the stop sends (piece 4, R4), since the page the check counts is the stop's.
  */
 function firstLookData(state, map) {
   const firstLook = {
@@ -138,6 +140,9 @@ function mapCheckInputsOf(state, map) {
     keptPhotos: keptPhotoFilenames(state, topPhotoOf(map)),
     // Phase 4b (brief 1D; R3): every thread in the story lands in a beat.
     threads: settledWeaveThreadsOf(state),
+    // Piece 4 (R5): a writer's beat in a section carries no thread the story leaves out, named by
+    // its name, as the legend names it (lib/map.js mapLegendOf).
+    otherThreads: mapLegendOf(state.weave).others,
     // Brief 4.14a; piece 3: only the connections between the settled angle's threads are in the
     // story, so no map is asked to land another. Each with its line, by which the director's
     // line names it.
@@ -204,5 +209,5 @@ function checkMap(state) {
 
 module.exports = {
   checkMap: traceNode(checkMap, 'checkMap', { stateFields: ['outline'] }),
-  _testing: { checkMap, mapCheckInputsOf, mapPageWords }
+  _testing: { checkMap, mapCheckInputsOf, mapPageWords, firstLookData }
 };

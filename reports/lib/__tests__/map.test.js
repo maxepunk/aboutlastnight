@@ -418,7 +418,8 @@ describe("4.6: the map's schemas", () => {
   it("the director-side schema is the writer's, derived in code, with a beat needing only its id and its move", () => {
     const writer = mapSchemaFor('journalist');
     const director = directorMapSchemaFor('journalist');
-    expect(writer.properties.sections.items.properties.beats.items.required).toEqual(['id', 'move', 'players', 'threads', 'evidence']);
+    // Piece 4 (brief 4B; R1): the writer's beat requires its synopsis, and the director's does not.
+    expect(writer.properties.sections.items.properties.beats.items.required).toEqual(['id', 'move', 'players', 'synopsis', 'threads', 'evidence']);
     expect(director.properties.sections.items.properties.beats.items.required).toEqual(['id', 'move']);
     expect(director.properties.leftOut.items.required).toEqual(['id', 'move']);
     const withoutBeatRules = (schema) => {
@@ -1110,10 +1111,16 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     w.angles[0].threads.push('t6');
     w.connections[1].line = 'The sale and the result came back the same night.';
   };
-  /** The fixture's map with t3 kept out: c1's beat no longer names c1, and Morgan's envelope card is left out. */
+  /**
+   * The fixture's map with t3 kept out: c1's beat no longer names c1, and Morgan's envelope card is
+   * left out. Piece 4 (brief 4B; R5): a writer's beat in a section carries only the story's threads,
+   * so b1 and b6 no longer carry t3.
+   */
   const keepsT3Out = () => {
     const map = clone(MAP);
     delete map.sections[0].beats[0].connection;
+    map.sections[0].beats[0].threads = ['t1'];
+    map.sections[3].beats[0].threads = ['t1'];
     map.leftOut.push(map.sections[1].beats.splice(1, 1)[0]);
     map.sections[1].beats.push({
       id: 'b10', kind: 'receipt', move: 'An unsigned letter threatens Marcus', players: ['Morgan', 'Riley'], threads: ['t1'], card: true,
@@ -1130,7 +1137,8 @@ describe('4.14a: the map reads the meeting as the director settled it', () => {
     expect(mapFindings(map, mapCheckInputsOf(out, map))).toEqual({ failures: [], concerns: [] });
     const back = approvedWith(() => {});
     expect(mapCheckInputsOf(back, map).connections.map((c) => c.id)).toEqual(['c1', 'c2']);
-    expect(typesOf(mapFindings(map, mapCheckInputsOf(back, map)).failures)).toEqual(['connection-not-landed']);
+    // With t3 back in the story, no beat carries it, and its connection lands nowhere.
+    expect(typesOf(mapFindings(map, mapCheckInputsOf(back, map)).failures)).toEqual(['thread-not-landed', 'connection-not-landed']);
   });
 
   it("a change's source names a meeting change in the meeting's own form, and the map check reads it", () => {

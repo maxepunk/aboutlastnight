@@ -359,7 +359,9 @@ describe("4.7e: the rework's task gives a card the director cut and a paragraph 
    */
   const BEATS_LINE = "- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (`<craft-cards>`) sets out;";
   /** The task's words line: the director's edits first, the map's beats and the writer's words otherwise. */
-  const WORDS_LINE = "- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats as C2 (`<craft-form>`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;";
+  // Phase 4b, piece 4 (brief 4B; R2): the order of a section's beats is the map's, so the line
+  // gives the writer the beats in the map's order, and the words, the transitions and the detail.
+  const WORDS_LINE = "- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order, as C2 (`<craft-form>`) sets them out, and the words, the transitions and each scene's detail from the record are yours;";
   /** The precedence both lines open their body with. */
   const FIRST = "the director's edits first, as HAND_EDITS gives them";
 
@@ -416,6 +418,8 @@ describe("4.7e: the rework's task gives a card the director cut and a paragraph 
     expect(lines.filter((line) => line.startsWith('- the beats:'))).toEqual([BEATS_LINE]);
     expect(lines.filter((line) => line.startsWith("- the map's sections in its order"))).toEqual([WORDS_LINE]);
     expect(lines.filter((line) => line.includes("otherwise every beat in the map's sections, and no other,"))).toEqual([BEATS_LINE]);
+    // Phase 4b, piece 4 (R2): no task line gives the writer the order of a section's beats.
+    expect(lines.filter((line) => /order of the beats/.test(line))).toEqual([]);
   });
 });
 
@@ -516,7 +520,9 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
   it("the map's label reads a beat as a move: its words, its people, its threads, its evidence and the card flag, and no material", async () => {
     const { user } = await writerPrompt(articleState());
     const label = labelOf(user);
-    expect(label).toContain('A beat is one move of the story: its "move" says it in a few plain words, "players" names the people in it, "threads" the ids of the settled weave\'s threads it carries, and "connection" the id of the weave\'s connection that lands in it.');
+    // Phase 4b, piece 4 (brief 4B; R1): the label names the beat's summary, its synopsis, which a
+    // map from before piece 4 and a move the director added may lack.
+    expect(label).toContain('A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave\'s threads it carries, and "connection" the id of the weave\'s connection that lands in it.');
     expect(label).toContain('Its "evidence" holds the pieces of the record the move is told from, each with its "sources"');
     expect(label).toContain('what it "shows", and its "stance": whether it supports the move or cuts against it.');
     expect(label).toContain('A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true.');
@@ -529,7 +535,7 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     // Each field the label names is one the printed map carries, on a beat or on a piece.
     const map = blockJson(user, STORY_MAP_TAG);
     const beats = map.sections.flatMap((section) => section.beats);
-    ['move', 'players', 'threads', 'connection', 'evidence', 'card'].forEach((field) => {
+    ['move', 'synopsis', 'players', 'threads', 'connection', 'evidence', 'card'].forEach((field) => {
       expect(`${field}: ${beats.some((beat) => field in beat)}`).toBe(`${field}: true`);
     });
     const pieces = beats.flatMap((beat) => beat.evidence);

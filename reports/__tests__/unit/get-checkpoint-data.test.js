@@ -681,10 +681,11 @@ describe('4.6: the map\'s payload at the outline stop', () => {
     // send-back whose rework did not run (roundDidNotRun). Brief 4.14a: the meeting's changes the
     // weave carries, each by its id and its place. Phase 4b (brief 1D): the director's photo
     // descriptions, which the page names each photo by, and the beats the director added, whose
-    // fold says the article writer finds their evidence.
+    // fold says the article writer finds their evidence. Piece 4 (brief 4B; R4): the legend, the
+    // settled story's threads in the angle's order, from which the page gives each move its dots.
     expect(Object.keys(data).sort()).toEqual([
       'addedBeats', 'checkFailures', 'concerns', 'directorGateNotes', 'evidenceIndex', 'handEditReport', 'humanRevisionCount', 'keptPhotos',
-      'leftOutPhotos', 'mapSlots', 'maxRevisions', 'meetingChanges', 'outline', 'photoDescriptions', 'previousFeedback', 'revisionCount', 'roster',
+      'leftOutPhotos', 'legend', 'mapSlots', 'maxRevisions', 'meetingChanges', 'outline', 'photoDescriptions', 'previousFeedback', 'revisionCount', 'roster',
       'roundDidNotRun', 'settledStory', 'trace'
     ]);
   });

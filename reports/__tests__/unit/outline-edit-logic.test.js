@@ -363,6 +363,11 @@ describe("4.6: the map's client gate, held to the director-side schema", () => {
     'the fixture map': map,
     'a beat the director added, with only its id and its move': () => edited((m) => { m.sections[0].beats.push({ id: 'b11', move: 'Alex at the window' }); }),
     'a beat the director brought back, with only its id and its move': () => edited((m) => { m.leftOut.push({ id: 'b12', move: 'The second envelope' }); }),
+    // Phase 4b, piece 4 (brief 4B; R1): a beat's summary, which a map from before piece 4 lacks.
+    'a beat with its summary': () => edited((m) => { m.sections[0].beats.push({ id: 'b11', move: 'Alex at the window', synopsis: 'Alex watches the street before the vote.' }); }),
+    'no summary on any beat, as a map from before piece 4': () => edited((m) => {
+      [...m.sections.flatMap((s) => s.beats), ...m.leftOut].forEach((b) => { delete b.synopsis; });
+    }),
     'a gap note raising a player': () => edited((m) => { m.gapNote = { line: 'The record holds nothing Sarah did.', players: ['Sarah'] }; }),
     'no top photo': () => edited((m) => { delete m.topPhoto; }),
     'no sections, nothing dropped, nothing left out': () => edited((m) => { m.sections = []; m.dropped = []; m.leftOut = []; }),
@@ -390,6 +395,7 @@ describe("4.6: the map's client gate, held to the director-side schema", () => {
     'a kind the map has none of': () => edited((m) => { m.sections[1].beats[0].kind = 'quote'; }),
     'a key a beat has none of': () => edited((m) => { m.sections[1].beats[0].excerpt = 'x'; }),
     'players that are not a list': () => edited((m) => { m.sections[0].beats[0].players = 'Alex'; }),
+    'a summary that is not text': () => edited((m) => { m.sections[0].beats[0].synopsis = ['Alex']; }),
     'a photo with no filename': () => edited((m) => { m.sections[1].photos = [{ beat: 'b2' }]; }),
     'a length that is not a whole number': () => edited((m) => { m.expectedLength = 1200.5; }),
     'a weave change with no source': () => edited((m) => { m.weaveChanges = [{ change: 'x' }]; }),

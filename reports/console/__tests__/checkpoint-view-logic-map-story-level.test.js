@@ -61,18 +61,24 @@ describe("1D: the client gate's copy of a beat's shape and of a piece's is the s
 // The beat's editors and the add line
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("1D: the beat's editor edits a move's words and its people, and keeps the rest of the beat", () => {
-  test('initBeat opens on the move and the people', () => {
-    expect(EditLogic.initBeat(beatOf(storyLevelMap(), 'b4'))).toEqual({ move: 'Marcus asks Quinn for a higher dose', players: 'Quinn' });
-    expect(EditLogic.initBeat({ id: 'b10', move: 'Remi walks out' })).toEqual({ move: 'Remi walks out', players: '' });
+// Phase 4b, piece 4 (brief 4B; R1): the editor edits the move's summary too, its synopsis.
+describe("1D: the beat's editor edits a move's words, its summary and its people, and keeps the rest of the beat", () => {
+  test('initBeat opens on the move, the summary and the people', () => {
+    const b4 = beatOf(storyLevelMap(), 'b4');
+    expect(EditLogic.initBeat(b4)).toEqual({ move: 'Marcus asks Quinn for a higher dose', synopsis: b4.synopsis, players: 'Quinn' });
+    expect(EditLogic.initBeat({ id: 'b10', move: 'Remi walks out' })).toEqual({ move: 'Remi walks out', synopsis: '', players: '' });
   });
 
-  test('buildBeat writes the move as typed and the people as a list, and keeps the threads, the card, the connection, the kind and the evidence', () => {
+  test('buildBeat writes the move and the summary as typed and the people as a list, and keeps the threads, the card, the connection, the kind and the evidence', () => {
     const b4 = beatOf(storyLevelMap(), 'b4');
-    const built = EditLogic.buildBeat({ move: ' Marcus wants a stronger dose ', players: 'Quinn,  Sam ' }, b4);
-    expect(built).toEqual({ ...b4, move: ' Marcus wants a stronger dose ', players: ['Quinn', 'Sam'] });
+    const built = EditLogic.buildBeat({ move: ' Marcus wants a stronger dose ', synopsis: ' Marcus asks Quinn to raise it. ', players: 'Quinn,  Sam ' }, b4);
+    expect(built).toEqual({ ...b4, move: ' Marcus wants a stronger dose ', synopsis: ' Marcus asks Quinn to raise it. ', players: ['Quinn', 'Sam'] });
     const added = { id: 'b10', move: 'Remi walks out' };
     expect(EditLogic.buildBeat(EditLogic.initBeat(added), added)).toEqual(added);
+    // A move with no summary gains one only when the director writes it; a summary they empty stays empty.
+    expect(EditLogic.buildBeat({ move: 'Remi walks out', synopsis: 'Remi leaves before the count.', players: '' }, added))
+      .toEqual({ ...added, synopsis: 'Remi leaves before the count.' });
+    expect(EditLogic.buildBeat({ ...EditLogic.initBeat(b4), synopsis: '' }, b4)).toEqual({ ...b4, synopsis: '' });
   });
 
   test('addBeat builds {id, move, players} under an id no beat holds; a blank move adds none', () => {
@@ -98,6 +104,8 @@ describe('1D: the client gate decides as lib/map.js directorMapProblems does on 
     ['the writer\'s story-level map', storyLevelMap()],
     ['a beat the director added: its id and move', withBeat({ id: 'b10', move: 'Remi walks out' })],
     ['a beat the director added with its people', withBeat({ id: 'b10', move: 'Remi walks out', players: ['Remi'] })],
+    ['a beat the director added with its summary', withBeat({ id: 'b10', move: 'Remi walks out', synopsis: 'Remi leaves before the count.' })],
+    ['a summary that is no text', withBeat({ id: 'b10', move: 'Remi walks out', synopsis: ['Remi leaves'] })],
     ['a beat added straight into left out', withBeat({ id: 'b10', move: 'Remi walks out' }, 'leftOut')],
     ['a beat that names its material', withBeat({ id: 'b10', material: 'Remi walks out', players: [] })],
     ['a beat with no move', withBeat({ id: 'b10', players: ['Remi'] })],

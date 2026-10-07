@@ -18,7 +18,10 @@ const contentBundleSchema = require('./schemas/content-bundle.schema.json');
 // at the meeting's note by the rule the map checks read the note by (meetingNoteOf). Brief
 // 4.6e: with the schema's one pointer at that note (MEETING_NOTE_POINTER).
 // Phase 4b (brief 1D): the bound on the map's page and the writer's aim, stated once there.
-const { mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER, MAP_WORD_BOUND, MAP_WORD_AIM } = require('./map');
+// Phase 4b, piece 4 (R6): the page with every synopsis open, and the synopses' aim.
+const {
+  mapSchemaFor, topPhotoOf, meetingNoteOf, MEETING_NOTE_POINTER, MAP_WORD_BOUND, MAP_WORD_AIM, MAP_OPEN_WORD_BOUND, MAP_SYNOPSIS_AIM
+} = require('./map');
 // Phase 4b (brief 1E; R4): the article writer reads a beat's card as the map's checks and counts
 // do, through the one reader of a beat's card, and names a piece's sources as lib/evidence.js does.
 const { beatCardOf } = require('../console/outline-edit-logic');
@@ -73,20 +76,29 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
  * a thread the director added or brought into the story is named there by its name, without
  * quotation marks, the outlet lib/map.js mapFindings reads.
  *
+ * Phase 4b, piece 4 (spec 2026-10-07 sections 3, 8 and 11; R2, R5, R6): the director reads the
+ * map as a board whose synopses are folded when it opens, so the task asks for each beat's
+ * synopsis, of about 20 words, and for both pages: at most MAP_WORD_BOUND words as it opens,
+ * aiming for MAP_WORD_AIM of the writer's own, and at most MAP_OPEN_WORD_BOUND with every synopsis
+ * open, the synopses about MAP_SYNOPSIS_AIM between them. Each section's beats are in the order the
+ * article will tell them, which C2 and C6 set out; and a beat in a section carries only threads of
+ * the story, which the checks hold it to. The schema's description of the field says what a
+ * synopsis is, and C2 why.
+ *
  * @param {boolean} heroMarked - whether <available-photos> marks a photo [hero image]
  * @param {boolean} meetingNote - whether <DIRECTOR_GUIDANCE> holds the director's approval
  *   note from the story meeting (lib/map.js meetingNoteOf)
  * @returns {string}
  */
 function mapTask(heroMarked, meetingNote) {
-  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. It writes no prose: the director reads it as a page of at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM}.
+  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. It writes no prose. The director reads it as a board whose synopses are folded when it opens: that page holds at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM} of your own; with every synopsis open it holds at most ${MAP_OPEN_WORD_BOUND}, so give the synopses about ${MAP_SYNOPSIS_AIM} words between them.
 - The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id${meetingNote ? MAP_TASK_NOTE_CHANGE : ''}. List each change you make to fit one in under weaveChanges, with its source: the edit's id${meetingNote ? MAP_TASK_NOTE_SOURCE : ''}.
-- Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out: each beat a move of the story in story terms, as C16 sets them out, with its people, the ids of the threads it carries, and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat. Drop each slot the story does not use, with its reason.
+- Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out, its beats in the order the article will tell them, as C6 (\`<craft-form>\`) sets out: each beat a move of the story in story terms, as C16 sets them out, with its people, its synopsis of about 20 words, the ids of the threads it carries, and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat, and a beat in a section carries only threads of the story. Drop each slot the story does not use, with its reason.
 - Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces, as C9 (\`<craft-cards>\`) sets out.
 ${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out.
 - What the record cannot carry goes in gapNote, the one line at the top, in story terms: a part of the story, or a change the director made at the meeting, such as a thread they added or brought into the story, named by its name without quotation marks. A player you cannot place and a link you see that the weave lacks go there too, as C7 (\`<craft-material>\`) and C16 set out.
 - Set expectedLength from what the map holds, as C4 (\`<craft-telling>\`) sets out.
-Code builds Everyone from each beat's players and counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, the story terms and the page's length. A player named among gapNote's players counts as raised.`;
+Code builds Everyone from each beat's players and counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, the story terms and the page's length on both counts. A player named among gapNote's players counts as raised.`;
 }
 
 /** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */
@@ -444,11 +456,15 @@ function systemPromptOpening(theme, call, sessionConfig) {
  * the gloss the weave writer's Sources line prints), what it shows and its stance, and the card
  * as a marker on the beat with its document on the piece flagged "card". The beat's `kind` stays
  * unnamed, a hint the JSON carries.
+ * Phase 4b, piece 4 (spec 2026-10-07 sections 3 and 9; R1): the line names the beat's "synopsis",
+ * the one sentence saying what the article tells there, which C16 has the article writer tell the
+ * beat as. A map from before piece 4, and a move the director added, may carry none, so the line
+ * says "where the beat has one".
  * It names the record in words, never by its tag, as lib/evidence.js's piece descriptions do: the
  * map prints above the record, and the prompt's readers take the first <RECORD> for the record.
  */
 const STORY_MAP_TAG = 'STORY_MAP';
-const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move is told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
+const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move is told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
 
 /**
  * The instruction's line on which inline cards the article prints (phase 4b, brief 1E; spec
@@ -524,6 +540,10 @@ function mapCardsLine(map, evidenceBundle = null) {
  * <truth-rules> tag (writers-rule-set.test.js). The words line still gives each scene its detail
  * from the record.
  *
+ * Phase 4b, piece 4 (spec 2026-10-07 sections 3 and 9; R2): the order of a section's beats is the
+ * map's, where the director sees it and can change it, so the words line gives the writer the
+ * beats in the map's order and keeps the words, the transitions and the detail as the writer's.
+ *
  * The lines name the block without its angle brackets, as the judges' questions name
  * FINANCIAL_SUMMARY, and the writer's prompts never say "desk". A rework carries the task above
  * its <HAND_EDITS> block, and the removed-phrase scan strips that block from the first
@@ -532,7 +552,7 @@ function mapCardsLine(map, evidenceBundle = null) {
  */
 const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
 - the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (\`<craft-cards>\`) sets out;
-- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats as C2 (\`<craft-form>\`) sets them out, and the order of the beats within a section, the words, the transitions and each scene's detail from the record are yours;
+- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order, as C2 (\`<craft-form>\`) sets them out, and the words, the transitions and each scene's detail from the record are yours;
 - each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
 - each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;
 - the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;

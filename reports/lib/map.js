@@ -13,9 +13,13 @@
  * - `gapNote`, only when the record cannot carry part of the story, a player cannot be
  *   placed or a link the weave lacks was seen: `{line, players}`;
  * - `sections`, in order: `{slot, heading, job, beats, photos}`, each slot one of the
- *   theme's (lib/theme-config.js mapSlotsOf);
- * - each beat `{id, move, players, threads, connection?, card?, kind?, evidence}` (R1): its move
- *   in a few plain words, the roster players it shows, the ids of the settled weave's threads it
+ *   theme's (lib/theme-config.js mapSlotsOf), its beats in the order the article tells them
+ *   (piece 4, R2);
+ * - each beat `{id, move, players, synopsis, threads, connection?, card?, kind?, evidence}` (R1):
+ *   its move in a few plain words, its title on the map's page; the roster players it shows; its
+ *   synopsis, one sentence in story terms saying what the article tells there (phase 4b, piece 4;
+ *   spec 2026-10-07 section 3), which the writer's schema requires and the director's does not, so
+ *   a map from before piece 4 still reads; the ids of the settled weave's threads it
  *   carries, the id of the weave's connection that lands in it, its card marker, its kind
  *   (MAP_BEAT_KINDS, a hint to the article writer the page never prints) and its evidence, the
  *   pieces of the record that tell it (lib/evidence.js). On a beat marked as a card, one piece
@@ -81,7 +85,7 @@ const {
 const { normalizeForGrounding } = require('./grounding');
 const { wordCount, pageLengthOf } = require('./word-count');
 // Phase 4b, piece 3 (brief 3B): the one reading of the settled story, the angle the director picked.
-const { settledAngleOf } = require('./weave');
+const { settledAngleOf, weaveIdOf } = require('./weave');
 
 /** A beat's kind: what its move puts on the page, kept underneath as a hint to the article writer and never printed (R1). */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
@@ -103,6 +107,16 @@ const MAP_WORD_BOUND = 450;
 
 /** The words of its own the map writer aims for, and may always use: the floor of pageLengthOf's rule (spec 4.2). Its task asks for them. */
 const MAP_WORD_AIM = 300;
+
+/**
+ * The bound on the map's page with every synopsis open (phase 4b, piece 4; spec 2026-10-07
+ * section 8; R6): the page as it opens is held to MAP_WORD_BOUND, and the same page with each
+ * move's synopsis unfolded to this. The open page's floor is MAP_WORD_AIM + MAP_SYNOPSIS_AIM.
+ */
+const MAP_OPEN_WORD_BOUND = 750;
+
+/** The words the synopses aim for between them, about 20 for each move (spec 8). The map writer's task asks for them. */
+const MAP_SYNOPSIS_AIM = 250;
 
 /**
  * Why a line that fails the story-terms check is wrong, said to the director after what it holds
@@ -664,6 +678,16 @@ function storyThreadsOf(threads) {
     .filter((thread) => thread.id);
 }
 
+/**
+ * The weave's threads outside the settled story as the checks read them (piece 4, R5): `{id,
+ * name}`, each with an id, by which a beat that carries one is named in the director's words.
+ */
+function otherThreadsOf(threads) {
+  return objectsOf(threads)
+    .map((thread) => ({ id: textOf(thread.id), name: textOf(thread.name) }))
+    .filter((thread) => thread.id);
+}
+
 /** The quotation marks a thread's name is matched without, straight and curly, single and double. */
 const NAME_QUOTE_MARKS = '["\'“”‘’‚‛„‟`´]';
 
@@ -783,13 +807,14 @@ function cardFault(beat, evidence) {
  *   (`duplicate-beat-id`);
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id the record holds, quotation, clock time or money
- *   figure): the gap note's line, each section's job, each beat's move in a section or in left
- *   out, and each change to the weave. The headline, the deck and the section headings are
- *   exempt (R2): the article prints them. The names of the director's threads in the gap note
+ *   figure): the gap note's line, each section's job, each beat's move and its synopsis in a
+ *   section or in left out (piece 4), and each change to the weave. The headline, the deck and
+ *   the section headings are exempt (R2): the article prints them. The names of the director's threads in the gap note
  *   and the weave changes are their words, and the scan leaves them out (withoutNames; fix
  *   round 4);
  * - each of the writer's beats in a section carries a thread of the settled weave
- *   (`beat-without-threads`) and has evidence (`beat-without-evidence`), and every piece of every
+ *   (`beat-without-threads`), and only threads the settled story tells (`thread-outside-story`;
+ *   piece 4, R5), and has evidence (`beat-without-evidence`), and every piece of every
  *   beat passes the evidence check (`evidence-not-in-record`; lib/evidence.js evidenceProblems:
  *   each source a document in the record or the ledger, the evidence log or the notes, never a
  *   buried memory, and each quotation word for word in its source);
@@ -837,6 +862,9 @@ function cardFault(beat, evidence) {
  * @param {Array<{id: string, name: string, added: boolean, broughtIn: boolean}>} [inputs.threads] - the
  *   settled angle's threads, in its order (lib/weave.js settledAngleOf), `added` on one the
  *   director added at the meeting and `broughtIn` on one they brought into the story
+ * @param {Array<{id: string, name: string}>} [inputs.otherThreads] - the weave's threads the settled
+ *   story leaves out (lib/weave.js settledAngleOf's leftOut), by which a beat that carries one is
+ *   named (piece 4, R5)
  * @param {Array<{id: string, line: string}|string>} inputs.connections - the connections the settled
  *   angle keeps (lib/weave.js settledAngleOf: those between two of its threads, none struck),
  *   each `{id, line}` or its id alone
@@ -907,10 +935,13 @@ function mapFindings(map, inputs = {}) {
       terms(`the job of section ${slot}`, "the section's job", section.job, `sections[#${slot}]`);
     }
   });
+  // A beat's synopsis is held as its move is (piece 4; spec 2026-10-07 section 10), the director's
+  // line naming the move by its title (R11).
   allBeats(map).forEach(({ beat, slot }) => {
     const id = beatIdOf(beat);
-    if (has(share.addedBeats, id) || has(share.beatFields, `${id}.move`)) return;
-    terms(`beat ${id}'s move`, moveWords(beat), beat.move, beatPlace(slot, beat));
+    if (has(share.addedBeats, id)) return;
+    if (!has(share.beatFields, `${id}.move`)) terms(`beat ${id}'s move`, moveWords(beat), beat.move, beatPlace(slot, beat));
+    if (!has(share.beatFields, `${id}.synopsis`)) terms(`beat ${id}'s synopsis`, `the summary of ${moveWords(beat)}`, beat.synopsis, beatPlace(slot, beat));
   });
   if (!has(share.fields, 'weaveChanges')) {
     objectsOf(map.weaveChanges).forEach((change) => {
@@ -935,6 +966,33 @@ function mapFindings(map, inputs = {}) {
         `${opening(moveWords(beat))} has nothing behind it: no piece of the record tells it.`, place);
     }
   });
+  // Each of the writer's beats in a section carries only threads the settled story tells (piece 4,
+  // R5): a thread the story leaves out, or an id the weave does not hold, would put on the page a
+  // line the director settled out of the story. A beat the director added or brought back from left
+  // out is theirs, and never fails. With no settled story in hand there is nothing to read it by.
+  const storyIds = new Set(storyThreadsOf(inputs.threads).map((thread) => thread.id));
+  if (storyIds.size > 0) {
+    const otherNames = new Map(otherThreadsOf(inputs.otherThreads).map((thread) => [thread.id, thread.name]));
+    sectionBeats(map).forEach(({ beat, slot }) => {
+      const id = beatIdOf(beat);
+      if (has(share.addedBeats, id) || has(share.broughtBackBeats, id)) return;
+      const outside = [...new Set(stringsOf(beat.threads).filter((thread) => !storyIds.has(thread)))];
+      if (outside.length === 0) return;
+      const leftOut = outside.filter((thread) => otherNames.has(thread));
+      const unknown = outside.filter((thread) => !otherNames.has(thread));
+      const named = [
+        ...leftOut.map((thread) => `"${otherNames.get(thread) || thread}" (${thread})`),
+        ...unknown.map((thread) => `${thread}, which no thread of the weave holds`)
+      ];
+      const said = [
+        ...(leftOut.length > 0 ? [`${leftOut.length > 1 ? 'the threads' : 'the thread'} ${listOf(leftOut.map((thread) => `"${otherNames.get(thread) || 'unnamed'}"`))}, which the story leaves out`] : []),
+        ...(unknown.length > 0 ? ['a thread the weave does not hold'] : [])
+      ];
+      fail('thread-outside-story', `Beat ${id}'s threads name ${listOf(named)}, outside the settled story. A beat in a section carries only the threads of the story in <SETTLED_WEAVE>: take ${outside.length > 1 ? 'them' : 'it'} off the beat's threads, or move the beat into leftOut.`,
+        `${opening(moveWords(beat))} carries ${said.join(', and ')}.`, beatPlace(slot, beat));
+    });
+  }
+
   if (evidence) {
     allBeats(map).forEach(({ beat, slot }) => {
       const problems = evidenceProblems(beat.evidence, evidence);
@@ -1365,6 +1423,31 @@ function settledStoryOf(weave) {
 }
 
 /**
+ * The legend of the map's page (phase 4b, piece 4; spec 2026-10-07 sections 4 and 17; R4): the
+ * settled story's threads, by which the page gives each move its dots and lets the director follow
+ * a thread across the board, read through the one reading of the settled story (lib/weave.js
+ * settledAngleOf):
+ * - `threads`: the threads the story tells, in the angle's order, each `{id, name, line}`;
+ * - `connections`: the connections between two of them, each `{id, joins, line}`;
+ * - `others`: every other thread the weave holds, `{id, name}`, in the weave's order, so a move
+ *   that carries a thread outside the story (one the director brought back from left out) is named.
+ * The ids are the page's keys only: the page never shows one. Empty lists for a weave with no angle.
+ *
+ * @param {Object|null} weave
+ * @returns {{threads: Array<{id: string, name: string, line: string}>, connections: Array<{id: string, joins: string[], line: string}>, others: Array<{id: string, name: string}>}}
+ */
+function mapLegendOf(weave) {
+  const settled = settledAngleOf(weave);
+  if (!settled) return { threads: [], connections: [], others: [] };
+  const withId = (list) => list.filter((element) => weaveIdOf(element));
+  return {
+    threads: withId(settled.threads).map((thread) => ({ id: weaveIdOf(thread), name: textOf(thread.name), line: textOf(thread.line) })),
+    connections: withId(settled.connections).map((connection) => ({ id: weaveIdOf(connection), joins: connection.joins.map(textOf), line: textOf(connection.line) })),
+    others: withId(settled.leftOut).map((thread) => ({ id: weaveIdOf(thread), name: textOf(thread.name) }))
+  };
+}
+
+/**
  * The beats the director added on the map that the map carries, by id (their standing edits;
  * mapDirectorsShare): the map's page says the article writer finds the evidence for such a beat,
  * at whatever look the director added it (spec 2026-10-05 section 5.3), where a beat of the
@@ -1398,7 +1481,9 @@ function mapAddedBeats(state) {
  * a send-back whose rework did not run, with its note (lib/workflow/state.js roundDidNotRunAt;
  * task 4.14e). `meetingChanges` (brief 4.14a) lists each change of the director's at the story
  * meeting that the weave carries, `{id, place}` (meetingChangesOf), so the page names a map
- * change's source by its place, as the meeting names the line.
+ * change's source by its place, as the meeting names the line. `legend` (phase 4b, piece 4; R4) is
+ * the settled story's threads in the angle's order, the connections between them and the weave's
+ * other threads by name (mapLegendOf), from which the page gives each move its dots.
  *
  * @param {Object} state
  * @param {Object} options
@@ -1429,7 +1514,8 @@ function mapCheckpointData(state, { keptPhotos = [], evidenceIndex = {}, maxRevi
     roundDidNotRun: roundDidNotRunAt(CHECKPOINT_TYPES.OUTLINE, s),
     meetingChanges: meetingChangesOf(s),
     photoDescriptions: s.photoDescriptions && typeof s.photoDescriptions === 'object' && !Array.isArray(s.photoDescriptions) ? s.photoDescriptions : {},
-    addedBeats: mapAddedBeats(s)
+    addedBeats: mapAddedBeats(s),
+    legend: mapLegendOf(s.weave)
   };
 }
 
@@ -1439,6 +1525,9 @@ module.exports = {
   // Phase 4b (brief 1D; R5): the map's page at most 450 words as it first opens, aiming for 300
   MAP_WORD_BOUND,
   MAP_WORD_AIM,
+  // Phase 4b, piece 4 (R6): the page with every synopsis open at most 750 words, the synopses about 250
+  MAP_OPEN_WORD_BOUND,
+  MAP_SYNOPSIS_AIM,
   MAP_CHECKS_SOURCE,
   MEETING_NOTE_SOURCE,
   MEETING_NOTE_POINTER,
@@ -1467,5 +1556,6 @@ module.exports = {
   meetingEditIdsOf,
   meetingNoteOf,
   settledStoryOf,
+  mapLegendOf,
   mapCheckpointData
 };

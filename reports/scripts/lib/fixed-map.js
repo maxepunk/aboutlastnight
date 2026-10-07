@@ -4,7 +4,7 @@
  * 4.6), as it plants the fixed story meeting (fixed-weave.js): invented text, so a render
  * shows where each part of a map lands in the map's rework prompt, whatever the session.
  * Since phase 4b (brief 1D) it is in the story-level shape: each beat a move with its people,
- * the threads it carries and its evidence underneath, one beat marked as a card with the card's
+ * its synopsis (piece 4, brief 4B), the threads it carries and its evidence underneath, one beat marked as a card with the card's
  * document flagged on a piece.
  *
  * FIXED_MAP_BASELINE is the writer's map, and FIXED_MAP the map as the director left it at
@@ -40,11 +40,11 @@ const FIXED_MAP_BASELINE = Object.freeze({
       job: 'RENDER-DIFF JOB 1: open on the vote and ask the question.',
       beats: [
         {
-          id: 'b1', move: 'RENDER-DIFF MOVE 1: the vote', players: [], threads: ['t1', 't2'], connection: 'c1', kind: 'scene',
+          id: 'b1', move: 'RENDER-DIFF MOVE 1: the vote', players: [], synopsis: 'RENDER-DIFF SYNOPSIS 1: the room settles on its verdict by a vote.', threads: ['t1', 't2'], connection: 'c1', kind: 'scene',
           evidence: [piece(['notes'], 'RENDER-DIFF PIECE 1: the notes record the vote.')]
         },
         {
-          id: 'b2', move: 'RENDER-DIFF MOVE 2: a line from the room', players: [], threads: ['t2'], kind: 'line',
+          id: 'b2', move: 'RENDER-DIFF MOVE 2: a line from the room', players: [], synopsis: 'RENDER-DIFF SYNOPSIS 2: one player says what the room would not.', threads: ['t2'], kind: 'line',
           evidence: [piece(['notes'], 'RENDER-DIFF PIECE 2: a line the notes record.')]
         }
       ],
@@ -56,7 +56,7 @@ const FIXED_MAP_BASELINE = Object.freeze({
       job: 'RENDER-DIFF JOB 2: how the room built its case.',
       beats: [
         {
-          id: 'b3', move: 'RENDER-DIFF MOVE 3: a document', players: [], threads: ['t4'], card: true, kind: 'receipt',
+          id: 'b3', move: 'RENDER-DIFF MOVE 3: a document', players: [], synopsis: 'RENDER-DIFF SYNOPSIS 3: a document tells a second account of the night.', threads: ['t4'], card: true, kind: 'receipt',
           evidence: [{ ...piece(['RENDER-DIFF-DOC'], 'RENDER-DIFF PIECE 3: a document no record holds.'), card: true }]
         }
       ],
@@ -66,7 +66,7 @@ const FIXED_MAP_BASELINE = Object.freeze({
   dropped: [{ slot: 'thePlayers', reason: 'RENDER-DIFF REASON: everyone appears above.' }],
   leftOut: [
     {
-      id: 'b9', move: 'RENDER-DIFF LEFT OUT: a scene the story does not need', players: [], threads: ['t1'], kind: 'scene',
+      id: 'b9', move: 'RENDER-DIFF LEFT OUT: a scene the story does not need', players: [], synopsis: 'RENDER-DIFF SYNOPSIS 4: a scene the story does not need.', threads: ['t1'], kind: 'scene',
       evidence: [piece(['ledger'], 'RENDER-DIFF PIECE 4: one sale.')]
     }
   ],

@@ -2,7 +2,8 @@
  * A story map at the level of the story, with its evidence underneath, for the story-level weave
  * (phase 4b, piece 1, brief 1D; spec 2026-10-05 sections 4.2 and 5): each section's job; each
  * beat a move in a few plain words with its people, the threads it carries and the pieces of the
- * record that tell it; three moves marked as cards, each flagging the piece whose document it
+ * record that tell it, and its synopsis, one sentence in story terms (piece 4, brief 4B); three
+ * moves marked as cards, each flagging the piece whose document it
  * prints; every thread in the story carried, every connection landed, every roster player placed
  * or raised in the gap note, and every kept photo placed once. Every line is in story terms, and
  * every piece names a source the story-level record holds, its quotations word for word, so
@@ -31,11 +32,11 @@ const STORY_LEVEL_MAP = {
       slot: 'lede', heading: '', job: 'Opens on the vote and asks the question.',
       beats: [
         {
-          id: 'b1', move: "Alex's late theory that Marcus dosed everyone", players: ['Alex'], threads: ['t1', 't6'], connection: 'c4', kind: 'scene',
+          id: 'b1', move: "Alex's late theory that Marcus dosed everyone", players: ['Alex'], synopsis: 'Late in the count, Alex asks whether Marcus dosed everyone, and the room moves past it.', threads: ['t1', 't6'], connection: 'c4', kind: 'scene',
           evidence: [piece(['notes'], 'Alex asks the room if Marcus had dosed them all.')]
         },
         {
-          id: 'b2', move: 'The quick vote for an accident', players: ['Quinn', 'Kai'], threads: ['t1'], kind: 'scene',
+          id: 'b2', move: 'The quick vote for an accident', players: ['Quinn', 'Kai'], synopsis: 'Quinn and Kai lead a quick vote that calls the death an accident.', threads: ['t1'], kind: 'scene',
           evidence: [piece(['notes'], 'The room votes for an accident.')]
         }
       ],
@@ -45,15 +46,15 @@ const STORY_LEVEL_MAP = {
       slot: 'theStory', heading: 'The Story', job: "The room's case for an accident, then the turn.",
       beats: [
         {
-          id: 'b3', move: 'Marcus trying the batch on himself', players: ['Sam'], threads: ['t2'], card: true, kind: 'receipt',
+          id: 'b3', move: 'Marcus trying the batch on himself', players: ['Sam'], synopsis: "Sam's journal shows Marcus trying the batch on himself before the party.", threads: ['t2'], card: true, kind: 'receipt',
           evidence: [cardPiece(['sam001'], 'Sam writes, "I think he is trying the new batch on himself"'), piece(['jes002'], 'Jess warns Sarah he tests every batch on himself.')]
         },
         {
-          id: 'b4', move: 'Marcus asks Quinn for a higher dose', players: ['Quinn'], threads: ['t3', 't4'], connection: 'c2', card: true, kind: 'receipt',
+          id: 'b4', move: 'Marcus asks Quinn for a higher dose', players: ['Quinn'], synopsis: "Marcus asks Quinn to raise the dose, which sits badly beside Quinn's story.", threads: ['t3', 't4'], connection: 'c2', card: true, kind: 'receipt',
           evidence: [cardPiece(['p-email'], 'Marcus asks Quinn to "raise the dose for the pilot"')]
         },
         {
-          id: 'b5', move: 'Jess warns Sarah', players: ['Jess', 'Sarah'], threads: ['t2'], card: true, kind: 'receipt',
+          id: 'b5', move: 'Jess warns Sarah', players: ['Jess', 'Sarah'], synopsis: 'Jess warns Sarah that Marcus tests every batch on himself first.', threads: ['t2'], card: true, kind: 'receipt',
           evidence: [cardPiece(['jes002'], 'Jess warns Sarah, "You know he tests every batch on himself first."')]
         }
       ],
@@ -63,7 +64,7 @@ const STORY_LEVEL_MAP = {
       slot: 'followTheMoney', heading: 'Follow the Money', job: 'What was sold while the room argued.',
       beats: [
         {
-          id: 'b6', move: 'The memories sold off as the trial run surfaced', players: ['Kai'], threads: ['t5', 't3'], connection: 'c3', kind: 'figure',
+          id: 'b6', move: 'The memories sold off as the trial run surfaced', players: ['Kai'], synopsis: 'Memories sell off one after another as the trial run comes to light.', threads: ['t5', 't3'], connection: 'c3', kind: 'figure',
           evidence: [piece(['ledger', 'evidence-log'], 'The sale into Rich follows the warning turned in.')]
         }
       ],
@@ -73,7 +74,7 @@ const STORY_LEVEL_MAP = {
       slot: 'closing', heading: '', job: 'Where the threads meet.',
       beats: [
         {
-          id: 'b7', move: 'The successors wait on the case', players: ['Quinn', 'Alex'], threads: ['t7', 't4'], connection: 'c1', kind: 'scene',
+          id: 'b7', move: 'The successors wait on the case', players: ['Quinn', 'Alex'], synopsis: 'The company waits for the case to close before naming Quinn and Alex as successors.', threads: ['t7', 't4'], connection: 'c1', kind: 'scene',
           evidence: [piece(['notes'], 'The pilot run was for a bigger launch.')]
         }
       ],
@@ -86,7 +87,7 @@ const STORY_LEVEL_MAP = {
   ],
   leftOut: [
     {
-      id: 'b9', move: 'The other suspects let go', players: [], threads: ['t1'], kind: 'scene',
+      id: 'b9', move: 'The other suspects let go', players: [], synopsis: 'The room weighs three other suspects and lets each of them go.', threads: ['t1'], kind: 'scene',
       evidence: [piece(['notes'], 'Alex asks the room if Marcus had dosed them all.')]
     }
   ],

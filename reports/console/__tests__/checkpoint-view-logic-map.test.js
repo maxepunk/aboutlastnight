@@ -108,7 +108,8 @@ describe("4.9: the map's editors start from the line, build what the director ty
     const map = opened();
     const b3 = beatOf(map, 'b3');
     const form = EditLogic.initBeat(b3);
-    expect(form).toEqual({ move: 'Morgan pays Riley at the bar', players: 'Morgan, Riley' });
+    // Piece 4 (brief 4B; R1): the editor opens on the move's summary too, its synopsis.
+    expect(form).toEqual({ move: 'Morgan pays Riley at the bar', synopsis: b3.synopsis, players: 'Morgan, Riley' });
     const built = EditLogic.buildBeat({ ...form, move: ' The envelope at the bar ', players: 'Morgan,  Riley , Alex' }, b3);
     expect(built).toEqual({ ...b3, move: ' The envelope at the bar ', players: ['Morgan', 'Riley', 'Alex'] });
     const next = EditLogic.mergeBeat(map, 'b3', built);
@@ -118,7 +119,7 @@ describe("4.9: the map's editors start from the line, build what the director ty
 
   test('a beat the director added with no players keeps none when none are typed', () => {
     const added = { id: 'b10', move: 'Alex at the window' };
-    expect(EditLogic.initBeat(added)).toEqual({ move: 'Alex at the window', players: '' });
+    expect(EditLogic.initBeat(added)).toEqual({ move: 'Alex at the window', synopsis: '', players: '' });
     expect(EditLogic.buildBeat(EditLogic.initBeat(added), added)).toEqual(added);
   });
 

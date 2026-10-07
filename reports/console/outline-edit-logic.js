@@ -218,19 +218,23 @@
     return next;
   }
 
-  // A beat (phase 4b, brief 1D): its move as typed and the players it shows (a list, typed with
-  // commas). Every other field of the beat (the threads it carries, its card marker, its
-  // connection, its kind and its evidence) is the writer's, and stays as it is: the evidence is
-  // never the director's edit (R6).
+  // A beat (phase 4b, brief 1D): its move as typed, its summary as typed (its synopsis; piece 4,
+  // R1) and the players it shows (a list, typed with commas). Every other field of the beat (the
+  // threads it carries, its card marker, its connection, its kind and its evidence) is the
+  // writer's, and stays as it is: the evidence is never the director's edit (R6). A beat with no
+  // summary, such as one the director added or one on a map from before piece 4, gains one only
+  // when the director writes it.
 
   function initBeat(beat) {
     var b = isPlainObject(beat) ? beat : {};
-    return { move: textOrEmpty(b.move), players: joinCsv(b.players) };
+    return { move: textOrEmpty(b.move), synopsis: textOrEmpty(b.synopsis), players: joinCsv(b.players) };
   }
 
   function buildBeat(form, beat) {
     var out = isPlainObject(beat) ? deepClone(beat) : {};
     out.move = textOrEmpty(form.move);
+    var synopsis = textOrEmpty(form.synopsis);
+    if (synopsis || typeof out.synopsis === 'string') out.synopsis = synopsis;
     var players = splitCsv(form.players);
     if (players.length > 0 || Array.isArray(out.players)) out.players = players;
     return out;
@@ -591,9 +595,10 @@
   // two lists equal).
   var BEAT_KINDS = ['scene', 'receipt', 'line', 'figure'];
   var SECTION_KEYS = ['slot', 'heading', 'job', 'beats', 'photos'];
-  // A beat (phase 4b, brief 1D; R1): a move with its people, the threads it carries, the
-  // connection that lands in it, its card marker, its kind and its evidence.
-  var BEAT_KEYS = ['id', 'move', 'players', 'threads', 'connection', 'card', 'kind', 'evidence'];
+  // A beat (phase 4b, brief 1D; R1): a move with its people, its summary (its synopsis; piece 4),
+  // the threads it carries, the connection that lands in it, its card marker, its kind and its
+  // evidence, in the schema's key order (a test holds the two equal).
+  var BEAT_KEYS = ['id', 'move', 'players', 'synopsis', 'threads', 'connection', 'card', 'kind', 'evidence'];
   // A beat the director added or brought back needs only these (R12).
   var BEAT_REQUIRED_KEYS = ['id', 'move'];
   var PHOTO_KEYS = ['filename', 'beat'];
@@ -681,7 +686,7 @@
   function validateBeat(errors, beat, path) {
     onlyKeys(errors, path, beat, BEAT_KEYS);
     requiredKeys(errors, path, beat, BEAT_REQUIRED_KEYS);
-    ['id', 'move', 'connection'].forEach(function (k) { stringAt(errors, path + '/' + k, beat[k]); });
+    ['id', 'move', 'synopsis', 'connection'].forEach(function (k) { stringAt(errors, path + '/' + k, beat[k]); });
     if (beat.kind !== undefined && BEAT_KINDS.indexOf(beat.kind) === -1) {
       errors.push({ path: path + '/kind', message: 'must be one of ' + BEAT_KINDS.join(', ') });
     }

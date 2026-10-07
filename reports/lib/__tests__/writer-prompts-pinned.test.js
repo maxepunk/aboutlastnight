@@ -405,10 +405,23 @@ const REPO = path.join(__dirname, '..', '..');
  *   names of the threads it joins; and code prints the verdict, the line marking the open angle,
  *   the verdict thread's lock line, the labels and the thin-notes line (+156): arcs-journalist
  *   11923 -> 12079. The outline and article pins do not move.
+ * - Phase 4b, piece 4 (brief 4B; spec 2026-10-07 sections 3, 8, 9 and 11; R1, R2, R5, R6), the
+ *   move's summary and the map's order. The map writer's <SCHEMA> gives each beat, in a section
+ *   and in left out, its required synopsis with its description, and a section's beats "in the
+ *   order the article tells them"; its task asks for both pages (at most 450 words as the board
+ *   opens, aiming for 300, and at most 750 with every synopsis open, the synopses about 250), each
+ *   section's beats in the order the article will tell them as C6 sets out, each beat's synopsis
+ *   of about 20 words, a beat in a section carrying only the story's threads, and the length
+ *   checked on both counts (+984): outline-journalist 23816 -> 24800. The article writer's map
+ *   label names "synopsis", where the beat has one, as the sentence saying what the article tells
+ *   there; its task's words line gives the beats in the map's order and no longer gives the writer
+ *   the order of the beats within a section; and the fixture map (fixtures/rework-state.js MAP)
+ *   carries a synopsis on every beat, printed in <STORY_MAP> (+813): article-journalist
+ *   35022 -> 35835. The arc pin does not move.
  */
 const PINNED = {
-  'outline-journalist': ['dccce5b2cff1893409f64f7aa7cbf33f8e510df96acb10150c2e20f871e9ea12', 23816],
-  'article-journalist': ['d9052b4f293f038ca49d5aa63380b1c3a1de65aac9ff05ce7d2aa52fa9f9477f', 35022],
+  'outline-journalist': ['42f5353690222e08e58f84f64c4a1b0321b1c4245289c24b96f1704acea5315e', 24800],
+  'article-journalist': ['f9449f999fce14c6ebc82d1a72bcea0cecdf7111ccd34e2c7cda33ce87cb5e49', 35835],
   'arcs-journalist': ['d45be33a2d854c23404b412793a6a162f34797d48b91375f09cb0e838f58c8fa', 12079]
 };
 
