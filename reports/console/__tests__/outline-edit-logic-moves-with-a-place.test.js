@@ -54,6 +54,11 @@ describe('4B: the moves with a place', () => {
     expect(() => EditLogic.moveBeatBy(map, 'b99', 1)).toThrow(/moveBeatBy/);
   });
 
+  test('Move up and Move down move by -1 or +1 alone: any other delta leaves the map as it was (run 1 follow-up F7)', () => {
+    const map = boardMap();
+    [0, 2, -2, 0.5, '1', undefined, NaN].forEach((delta) => expect(EditLogic.moveBeatBy(map, 'b5', delta)).toBe(map));
+  });
+
   test('a photo onto a move in another section lands in that section beside the move, in one op', () => {
     const next = EditLogic.placePhotoBeside(boardMap(), 'followTheMoney', 0, 'lede', 'b2');
     expect(next.sections[2].photos).toEqual([]);

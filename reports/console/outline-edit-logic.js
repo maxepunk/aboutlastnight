@@ -463,13 +463,14 @@
 
   /**
    * Move up (`delta` -1) or Move down (`delta` +1): a beat one place up or down within its section
-   * (piece 4), through moveBeat. At the head or the foot of its section, and for a beat in left
-   * out, whose order the article does not tell, the map is left as it was.
+   * (piece 4), through moveBeat. At the head or the foot of its section, for a beat in left out,
+   * whose order the article does not tell, and for any `delta` but -1 or +1, the map is left as it
+   * was.
    */
   function moveBeatBy(map, id, delta) {
     var place = beatAt(editedMap(map, 'moveBeatBy'), id, 'moveBeatBy');
-    if (!place.section) return map;
-    var to = place.index + (delta < 0 ? -1 : 1);
+    if (!place.section || (delta !== -1 && delta !== 1)) return map;
+    var to = place.index + delta;
     if (to < 0 || to >= place.list.length) return map;
     return moveBeat(map, id, place.section.slot, to);
   }
