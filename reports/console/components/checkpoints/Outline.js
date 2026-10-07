@@ -3,8 +3,10 @@
  * the story map in minutes and edits any line. The page, in order:
  * - the settled story, read-only, with the way back to the story meeting;
  * - what happened since the director last looked: a send-back whose rework did not run (task
- *   4.14e), the round and its note, a check still failing, the edits a rework changed (a
- *   send-back's with its reasons), the concerns no line shows;
+ *   4.14e), the round and its note, a check still failing, the edits a rework changed that no
+ *   move, section or the top of the article shows (a send-back's with its reasons; each other one
+ *   sits on its move, under its section's head or at the top: spec 2026-10-07 section 7), the
+ *   concerns no line shows;
  * - the gap note; the headline, the deck and the top photo;
  * - the sections in the map's order, under the theme's slot labels, each with its job, beats
  *   and photos: every line editable, move and strike controls on each beat, move controls on
@@ -514,7 +516,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           concernsOf(view.topPhoto.concerns),
           React.createElement('div', { className: 'map__controls' },
             moveSelect('Move into a section…', view.topPhoto.moveTargets, view.topPhoto.locked, view.topPhoto.labels.moveTo,
-              function (to) { movePhotoTo(EditLogic.MAP_TOP_PHOTO, 0, to); }))))
+              function (to) { movePhotoTo(EditLogic.MAP_TOP_PHOTO, 0, to); })))),
+      // Spec 2026-10-07 section 7: an edit a rework changed that is about the headline, the deck or the top photo sits here.
+      view.top.changed.map(function (text, i) { return React.createElement('p', { key: 'changed-' + i, className: 'map__changed' }, text); })
     ),
 
     // The sections, in the map's order.
@@ -536,7 +540,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
               React.createElement('p', { className: 'text-sm' },
                 React.createElement('span', { className: 'text-muted' }, 'Job: '), section.job),
               failuresOf(section.failures),
-              concernsOf(section.concerns)),
+              concernsOf(section.concerns),
+              // Spec 2026-10-07 section 7: an edit a rework changed that is about this section sits under its head.
+              section.changed.map(function (text, i) { return React.createElement('p', { key: 'changed-' + i, className: 'map__changed' }, text); })),
         section.beats.length === 0 && React.createElement('p', { className: 'text-xs text-muted' }, 'No beats in this section.'),
         React.createElement('ul', { className: 'map__list' }, section.beats.map(beatRow)),
         section.photos.length > 0 && React.createElement('ul', { className: 'map__list' }, section.photos.map(photoRow)),

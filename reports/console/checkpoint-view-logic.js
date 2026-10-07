@@ -4014,8 +4014,11 @@
    *   that says the director's edits stand when none of theirs is listed (editsStandLine; brief
    *   4.10b), and `otherConcerns`, the concerns none of whose places the page shows. An edit a
    *   rework changed that is about a move the map holds sits on that move's card instead
-   *   (`changed`; spec 7);
-   * - `gapNote`, `headline`, `deck` and `topPhoto`;
+   *   (`changed`; spec 7), one about a section the board shows under that section's head (its
+   *   `changed`), and one about the headline, the deck or the top photo at the top of the article
+   *   (`top.changed`; run 1 follow-up F8): only one with no place on the page stays here;
+   * - `gapNote`, `headline`, `deck` and `topPhoto`, and `top`, the top of the article's
+   *   `{changed}`;
    * - `sections`, the board's columns in the map's order, each under its slot's label with its
    *   heading ('' when it prints none: the page says MAP_NO_HEADING_LINE), job, cards (`beats`)
    *   and photos (`photos`, every photo of the section in its order, for the controls that place
@@ -4114,20 +4117,43 @@
     // Piece 4 (R4): the legend, each card's dots and the line where its threads meet.
     var legend = mapLegendView(d.legend);
     // Piece 4 (spec 7): an edit a rework changed sits on the card of the move it is about, in the
-    // words changedEditLine gives it; every other one stays among the round's lines.
+    // words changedEditLine gives it; one about a section the board shows under that section's
+    // head, and one about the headline, the deck or the top photo at the top of the article
+    // (sectionOfEntry, onTop; run 1 follow-up F8), each in mapChangedEditLines' words; only one with
+    // no place on the page stays among the round's lines.
     var lineOptions = mapEditLineOptions(slots, map);
     var placedBeatIds = editLogic.mapBeatPlacements(map).map(function (placement) { return placement.id; });
     var beatOfEntry = function (entry) {
       var m = /beat "([^"]*)"/.exec(asString(entry.where));
       return m && placedBeatIds.indexOf(m[1]) !== -1 ? m[1] : null;
     };
+    var boardSlots = sections.map(function (section) { return asString(section.slot); });
+    /** The slot of the section on the board an entry is about (a field of it, a photo in it, its cut or its drop), or null. */
+    var sectionOfEntry = function (entry) {
+      var m = /^(?:section|dropped slot) "([^"]*)"/.exec(asString(entry.where));
+      return m && boardSlots.indexOf(m[1]) !== -1 ? m[1] : null;
+    };
+    /** Whether an entry is about the top of the article: the headline, the deck or the top photo. */
+    var onTop = function (entry) { return /^(?:headline|deck|the top photo|topPhoto)(?:,|$)/.test(asString(entry.where)); };
     var report = isPlainObject(d.handEditReport) ? d.handEditReport : null;
-    var onCards = changedEditsToShow(report).filter(function (entry) { return beatOfEntry(entry) !== null; });
+    var toShow = changedEditsToShow(report);
+    var onCards = toShow.filter(function (entry) { return beatOfEntry(entry) !== null; });
+    var onSections = toShow.filter(function (entry) { return onCards.indexOf(entry) === -1 && sectionOfEntry(entry) !== null; });
+    var atTop = toShow.filter(function (entry) { return onCards.indexOf(entry) === -1 && onSections.indexOf(entry) === -1 && onTop(entry); });
     var changedOn = function (id) {
       return onCards.filter(function (entry) { return beatOfEntry(entry) === id; }).map(function (entry) { return changedEditLine(entry, lineOptions); });
     };
-    var restOfReport = report && onCards.length > 0
-      ? Object.assign({}, report, { changed: asArray(report.changed).filter(function (entry) { return onCards.indexOf(entry) === -1; }) })
+    /** The report with only the entries `keep` holds, for mapChangedEditLines, which pairs a section's cut with its drop. */
+    var reportOf = function (keep) {
+      return Object.assign({}, report, { changed: asArray(report.changed).filter(function (entry) { return keep(entry); }) });
+    };
+    var changedUnderHead = function (slot) {
+      var here = onSections.filter(function (entry) { return sectionOfEntry(entry) === slot; });
+      return here.length > 0 ? mapChangedEditLines(reportOf(function (entry) { return here.indexOf(entry) !== -1; }), slots, map) : [];
+    };
+    var placedEntries = onCards.concat(onSections, atTop);
+    var restOfReport = report && placedEntries.length > 0
+      ? reportOf(function (entry) { return placedEntries.indexOf(entry) === -1; })
       : report;
     var targetsBeside = sections.reduce(function (all, section) {
       return all.concat(asArray(section.beats).filter(function (b) { return editLogic.beatIdOf(isPlainObject(b) ? b : {}) !== ''; }).map(function (b) {
@@ -4242,6 +4268,7 @@
         job: asString(section.job),
         concerns: at('section:' + section.slot),
         failures: failuresAt('section:' + section.slot),
+        changed: changedUnderHead(section.slot),
         beats: beats,
         photos: photos,
         byThemselves: byThemselves,
@@ -4299,6 +4326,7 @@
       headline: { text: asString(map.headline), concerns: at('headline') },
       deck: { text: asString(map.deck), concerns: at('deck') },
       topPhoto: topPhoto,
+      top: { changed: atTop.length > 0 ? mapChangedEditLines(reportOf(function (entry) { return atTop.indexOf(entry) !== -1; }), slots, map) : [] },
       evidenceTitle: EVIDENCE_FOLD_TITLE,
       sections: sectionViews,
       dropped: dropped.map(function (entry) {

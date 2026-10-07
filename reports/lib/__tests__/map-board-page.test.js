@@ -61,6 +61,29 @@ describe("4B: the map's page prints the board in the view's order", () => {
     expect(at('The other suspects let go')).toBeLessThan(at("Its questions land in the closing."));
   });
 
+  test("an edit a rework changed prints under its section's head or at the top of the article, and one with no place among the round's lines (run 1 follow-up F8)", () => {
+    const entry = (id, where, director) => ({ id, scope: 'outline', where, cut: false, removed: false, moved: false, director, became: 'Something else', pass: 'send-back', automatic: false, reason: 'The note asked for it.', restored: false });
+    const state = boardMapState({
+      humanOutlineRevisionCount: 1,
+      _outlineHandEditReport: { checked: ['E1', 'E2', 'E3'], changed: [
+        entry('E1', 'section "followTheMoney", job', 'Sets the sales beside the case.'),
+        entry('E2', 'deck', 'The room called it an accident.'),
+        entry('E3', 'section "whatsMissing", added', 'Missing')
+      ] }
+    });
+    const data = payloadOf(state);
+    const view = View.mapView(data, View.mapDraftOf(data, undefined));
+    const lines = stopPage(OUTLINE, data).lines;
+    const indexOf = (text) => lines.findIndex((l) => l.text === text);
+    const [sectionLine] = view.sections.find((s) => s.slot === 'followTheMoney').changed;
+    const [deckLine] = view.top.changed;
+    const [roundLine] = view.changedEdits;
+    expect(lines[indexOf(deckLine)].region).toBe(PAGE_REGIONS[OUTLINE].top);
+    expect(lines[indexOf(roundLine)].region).toBe(PAGE_REGIONS[OUTLINE].round);
+    expect(indexOf(sectionLine)).toBeGreaterThan(indexOf('Sets what was sold against the case.'));
+    expect(indexOf(sectionLine)).toBeLessThan(indexOf('The first memories go early'));
+  });
+
   test('the counts are a part the page names only by its aria-label', () => {
     expect(PAGE_REGIONS[OUTLINE].counts).toBe('The counts');
     const counts = stopPage(OUTLINE, payloadOf()).lines.filter((l) => l.region === PAGE_REGIONS[OUTLINE].counts).map((l) => l.text);

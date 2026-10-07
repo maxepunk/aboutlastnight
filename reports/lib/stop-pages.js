@@ -728,6 +728,8 @@ const MAP_PARTS = {
       page.text(view.deck.text, 'Deck');
       page.beside(view.deck.concerns, []);
       if (view.topPhoto) addPhoto(page, view.topPhoto, 'Top photo');
+      // Spec 7: what the round says of the headline, the deck or the top photo sits here.
+      view.top.changed.forEach((text) => page.toned('mark', text));
     });
   },
   // The board: a column per section, its cards in order, its photos by themselves at its foot.
@@ -738,7 +740,7 @@ const MAP_PARTS = {
       if (section.heading) page.text(section.heading, 'Heading');
       else page.tag(View.MAP_NO_HEADING_LINE);
       page.text(section.job, 'Job');
-      addBesideLine(page, section);
+      addMargin(page, section);
       section.beats.forEach((beat) => addCard(page, view, beat, synopsesOpen));
       section.byThemselves.forEach((photo) => addPhoto(page, photo, 'Photo, by itself'));
       page.hint(section.emptied);

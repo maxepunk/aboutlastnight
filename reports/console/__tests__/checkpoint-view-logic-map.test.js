@@ -39,7 +39,17 @@ const opened = (data = payloadOf(stateAt())) => ViewLogic.mapDraftOf(data, undef
  * Every edit a rework changed that the page shows (piece 4; spec 2026-10-07 section 7): those
  * among the round's lines, then those on each move's card, in the sections and in the tray.
  */
-const changedLinesOf = (view) => [...view.changedEdits, ...[...view.sections.flatMap((s) => s.beats), ...view.leftOut.items].flatMap((b) => b.changed)];
+/**
+ * Every changed line the map's page shows, wherever it sits (spec 2026-10-07 section 7): the
+ * round's, the top of the article's, then each section's under its head with its cards', then the
+ * tray's.
+ */
+const changedLinesOf = (view) => [
+  ...view.changedEdits,
+  ...view.top.changed,
+  ...view.sections.flatMap((s) => [...s.changed, ...s.beats.flatMap((b) => b.changed)]),
+  ...view.leftOut.items.flatMap((b) => b.changed)
+];
 
 /** A beat of a map, wherever it sits. */
 function beatOf(map, id) {
@@ -913,7 +923,7 @@ describe("4.6c: Everyone and the counts read mapTally's own inputs, which the pa
     expect(data.keptPhotos).toEqual(['hero.jpg', 'p2.jpg']);
   });
 
-  test('"In no beat" lists the players in roster order after an edit', () => {
+  test('"In no move" lists the players in roster order after an edit', () => {
     const data = payloadOf(stateAt());
     let map = EditLogic.strikeBeat(opened(data), 'b3');
     map = EditLogic.strikeBeat(map, 'b4');
@@ -1174,13 +1184,14 @@ describe("4.10b: the map lists a restore out of the director's order, and says w
       director: 'filename: p2.jpg', became: 'section "theStory"', pass: 1, automatic: true, restored: true, inOrder: false
     });
     const view = viewWith({ checked: ['E1'], changed: [outOfOrder] });
-    expect(view.changedEdits).toEqual([
+    // It sits under the head of the section the photo is in (run 1 follow-up F8).
+    expect(view.sections.find((s) => s.slot === 'closing').changed).toEqual([
       'Closing, photo "p2.jpg", moved from The Story: automatic pass 1 moved the photo you placed here to The Story. It was put back in its section, but not in the order you left it: move it again if the order matters.'
     ]);
     expect(view.kept).toBe('');
     // Put back in the director's order, it asks nothing, and the edit stands.
     const inOrder = viewWith({ checked: ['E1'], changed: [{ ...outOfOrder, inOrder: true }] });
-    expect([inOrder.changedEdits, inOrder.kept]).toEqual([[], 'Your edit stands.']);
+    expect([changedLinesOf(inOrder), inOrder.kept]).toEqual([[], 'Your edit stands.']);
   });
 
   test("an automatic pass whose changes code put back: the map lists no changed line, and says the director's edits stand", () => {
@@ -1520,6 +1531,9 @@ describe('4.14b fix round 1: a section the director emptied that a pass put back
     const view = ViewLogic.mapView(d, opened(d));
     expect(view.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'followTheMoney', 'closing']);
     expect(view.dropped.map((x) => x.slot)).toEqual(['thePlayers', 'whatsMissing']);
-    expect([view.changedEdits, view.kept]).toEqual([[AUTOMATIC_LINE], '']);
+    expect([changedLinesOf(view), view.kept]).toEqual([[AUTOMATIC_LINE], '']);
+    // The section's line sits under its head, not among the round's lines (run 1 follow-up F8).
+    expect(view.sections.find((s) => s.slot === 'followTheMoney').changed).toEqual([AUTOMATIC_LINE]);
+    expect(view.changedEdits).toEqual([]);
   });
 });

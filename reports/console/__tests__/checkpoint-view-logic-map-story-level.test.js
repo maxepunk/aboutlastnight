@@ -221,15 +221,17 @@ describe("1D: the map's view gives each beat its move, its people, its card mark
       outline: rework, _outlineHandEdits: standing, _outlineHandEditReport: report, humanOutlineRevisionCount: 1
     }));
     const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
-    // Piece 4 (spec 2026-10-07 section 7): the change to the move sits on its card; the photo's
-    // place stays among the round's lines.
+    // Piece 4 (spec 2026-10-07 section 7): the change to the move sits on its card, and the
+    // photo's place under the head of the section it sits in (run 1 follow-up F8), so none stays
+    // among the round's lines.
     expect(beatView(view, 'b10').changed).toEqual([
       'Closing, the move "Remi leaves the room", added: your "Remi walks out before the vote (shows Remi)" became "Remi leaves the room (shows Remi)" (the rework of your send-back). No reason given.'
     ]);
-    expect(view.changedEdits).toEqual([
+    expect(view.sections.find((s) => s.slot === 'theStory').changed).toEqual([
       'The Story, photo "board.jpg", beat: your "Marcus asks Quinn for a higher dose" became "Jess warns Sarah" (the rework of your send-back). No reason given.'
     ]);
-    [...view.changedEdits, ...beatView(view, 'b10').changed].forEach((text) => expect(text).not.toMatch(/\b[btc]\d+\b/));
+    expect(view.changedEdits).toEqual([]);
+    [...view.sections.flatMap((s) => s.changed), ...beatView(view, 'b10').changed].forEach((text) => expect(text).not.toMatch(/\b[btc]\d+\b/));
   });
 
   test("a photo the director took from beside its beat that a pass sat beside another beat reads as the move it came back beside, with no tag", () => {
@@ -241,7 +243,10 @@ describe("1D: the map's view gives each beat its move, its people, its card mark
       const data = payloadOf(storyLevelMapState({
         outline: pass, _outlineHandEdits: standing, _outlineHandEditReport: report, humanOutlineRevisionCount: 1
       }));
-      return ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined)).changedEdits;
+      const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+      // The photo's line sits under the head of its section (run 1 follow-up F8).
+      expect(view.changedEdits).toEqual([]);
+      return view.sections.find((s) => s.slot === 'theStory').changed;
     };
 
     const sendBack = linesOf(reportAfterPass(null, { edits: carriedEdits(standing, left), before: left, after: pass, pass: SEND_BACK_PASS }));

@@ -158,8 +158,34 @@ describe('4B: each card gives its title, people, dots, mark, photos, synopsis, e
     });
     const view = viewOf(state);
     expect(cardOf(view, 'b5').changed).toEqual([expect.stringContaining('Jess pulls Sarah aside')]);
-    expect(view.changedEdits).toEqual([expect.stringContaining('An Accident, Says the Room')]);
+    // The headline's sits at the top of the article (run 1 follow-up F8).
+    expect(view.top.changed).toEqual([expect.stringContaining('An Accident, Says the Room')]);
+    expect(view.changedEdits).toEqual([]);
     expect(cardOf(view, 'b4').changed).toEqual([]);
+  });
+
+  test("an edit about a section sits under its head, one about the deck or the top photo at the top of the article, and one with no place among the round's lines (spec 7; run 1 follow-up F8)", () => {
+    const sendBack = { pass: 'send-back', automatic: false };
+    const state = boardMapState({
+      _outlineHandEditReport: {
+        checked: ['E1', 'E2', 'E3', 'E4'],
+        changed: [
+          { id: 'E1', scope: 'outline', where: 'section "theStory", job', director: 'Builds the case slowly.', became: "Builds the room's case, then turns it.", ...sendBack, reason: 'The note asked for the turn.' },
+          { id: 'E2', scope: 'outline', where: 'deck', director: 'The room called it an accident.', became: 'Ten votes, one accident.', ...sendBack, reason: 'The note asked for the count.' },
+          { id: 'E3', scope: 'outline', where: 'the top photo, photo "p01.jpg"', director: { filename: 'p02.jpg' }, became: { filename: 'p01.jpg' }, ...sendBack, reason: 'The note asked for the vote.' },
+          { id: 'E4', scope: 'outline', where: 'section "whatsMissing", added', director: { slot: 'whatsMissing', heading: 'Missing', job: 'Asks what is missing.', beats: [], photos: [] }, became: null, ...sendBack, reason: 'The note folded it into the closing.' }
+        ]
+      }
+    });
+    const view = viewOf(state);
+    const story = view.sections.find((s) => s.slot === 'theStory');
+    expect(story.changed).toEqual([expect.stringContaining('Builds the case slowly.')]);
+    view.sections.filter((s) => s.slot !== 'theStory').forEach((s) => expect(s.changed).toEqual([]));
+    expect(view.top.changed).toEqual([expect.stringContaining('The room called it an accident.'), expect.stringContaining('The note asked for the vote.')]);
+    expect(view.changedEdits).toEqual([expect.stringContaining('The note folded it into the closing.')]);
+    cardsOf(view).forEach((card) => expect(card.changed).toEqual([]));
+    // Every line the round had still shows, once.
+    expect([...story.changed, ...view.top.changed, ...view.changedEdits]).toHaveLength(4);
   });
 
   test('no card, photo or legend label or line carries an id: ids are keys and control values only', () => {

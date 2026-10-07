@@ -306,6 +306,37 @@ describe("4B: an edit a rework changed shows on its move's row", () => {
   });
 });
 
+// Run 1 follow-up F8 (spec 2026-10-07 section 7): an edit about a section shows under its head, one
+// about the headline, the deck or the top photo at the top of the article, and only one with no
+// place among the round's lines.
+describe("4B follow-up F8: an edit a rework changed shows under its section's head or at the top of the article", () => {
+  const entry = (id, where, director, reason) => ({ id, scope: 'outline', where, cut: false, removed: false, moved: false, director, became: 'Something else', pass: 'send-back', automatic: false, reason, restored: false });
+  const report = {
+    checked: ['E1', 'E2', 'E3'],
+    changed: [
+      entry('E1', 'section "theStory", job', 'The case, slowly.', 'The note asked for the turn.'),
+      entry('E2', 'deck', 'The room called it an accident.', 'The note asked for the count.'),
+      entry('E3', 'section "thePlayers", added', 'The successors', 'The note folded it into the closing.')
+    ]
+  };
+  const data = mapPayloadOf(storyLevelMapState({ _outlineHandEditReport: report, humanOutlineRevisionCount: 1 }));
+  const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+  const tree = mountMap({ data }).render();
+  const changedIn = (node) => elementsOf(node, hasClass('map__changed')).map(textOf);
+
+  it("renders the section's line in its head, the deck's at the top, and the one with no place among the round's lines", () => {
+    const [sectionLine] = view.sections.find((s) => s.slot === 'theStory').changed;
+    const [deckLine] = view.top.changed;
+    const [roundLine] = view.changedEdits;
+    expect([sectionLine, deckLine, roundLine].every(Boolean)).toBe(true);
+    const head = elementsOf(tree, (n) => hasClass('map__section-head')(n) && textOf(n).includes("The room's case for an accident"))[0];
+    expect(changedIn(head)).toEqual([sectionLine]);
+    const top = elementsOf(tree, hasClass('map__top'))[0];
+    expect(changedIn(top)).toEqual([deckLine]);
+    expect(changedIn(tree)).toEqual([roundLine, deckLine, sectionLine]);
+  });
+});
+
 describe("1F: each move shows its words, its people and \"(card)\" where it has the marker, with what's behind it folded in place", () => {
   const data = mapPayloadOf();
   const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
