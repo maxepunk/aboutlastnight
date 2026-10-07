@@ -431,20 +431,24 @@
   }
 
   /**
-   * A beat moved to the end of the section `toSlot`, from a section or from left out. A photo
-   * beside it goes with it, beside it still, so the photo stays with its moment: from the beat's
-   * section, or, for a beat brought back from left out, from the section its strike left the
-   * photo in, still naming the beat (strikeBeat; task 4.14b). The order of the beats within a
-   * section is the article writer's, so the end is as good as any place.
+   * A beat moved into the section `toSlot`, from a section or from left out, at the place `index`
+   * among that section's beats (0 its head), or at its foot when `index` is undefined or past the
+   * last place (piece 4; R2: the order of a section's beats is the order the article tells them).
+   * Within its own section, a beat with no place, or moved to the place it holds, leaves the map as
+   * it was. A photo beside it goes with it, beside it still, so the photo stays with its moment:
+   * from the beat's section, or, for a beat brought back from left out, from the section its strike
+   * left the photo in, still naming the beat (strikeBeat; task 4.14b).
    */
-  function moveBeat(map, id, toSlot) {
+  function moveBeat(map, id, toSlot, index) {
     var next = editedMap(map, 'moveBeat');
     var place = beatAt(next, id, 'moveBeat');
     var target = sectionAt(next, toSlot, 'moveBeat');
-    if (place.section === target) return map;
+    var placed = typeof index === 'number' && isFinite(index);
+    if (place.section === target && (!placed || Math.min(Math.max(0, Math.floor(index)), place.list.length - 1) === place.index)) return map;
     var beat = place.list.splice(place.index, 1)[0];
     if (!Array.isArray(target.beats)) target.beats = [];
-    target.beats.push(beat);
+    var at = placed ? Math.min(Math.max(0, Math.floor(index)), target.beats.length) : target.beats.length;
+    target.beats.splice(at, 0, beat);
     var from = place.section ? [place.section] : next.sections.filter(isPlainObject);
     from.forEach(function (section) {
       if (section === target) return;
@@ -455,6 +459,19 @@
       target.photos.push.apply(target.photos, going);
     });
     return next;
+  }
+
+  /**
+   * Move up (`delta` -1) or Move down (`delta` +1): a beat one place up or down within its section
+   * (piece 4), through moveBeat. At the head or the foot of its section, and for a beat in left
+   * out, whose order the article does not tell, the map is left as it was.
+   */
+  function moveBeatBy(map, id, delta) {
+    var place = beatAt(editedMap(map, 'moveBeatBy'), id, 'moveBeatBy');
+    if (!place.section) return map;
+    var to = place.index + (delta < 0 ? -1 : 1);
+    if (to < 0 || to >= place.list.length) return map;
+    return moveBeat(map, id, place.section.slot, to);
   }
 
   /**
@@ -476,14 +493,15 @@
   }
 
   /**
-   * A beat brought back from left out, whole, into the end of the section `toSlot`, with the
-   * photos its strike freed beside it again (moveBeat; task 4.14b).
+   * A beat brought back from left out, whole, into the section `toSlot` at the place `index`, or at
+   * its foot with none (moveBeat; piece 4), with the photos its strike freed beside it again (task
+   * 4.14b).
    */
-  function bringBackBeat(map, id, toSlot) {
+  function bringBackBeat(map, id, toSlot, index) {
     if (beatAt(editedMap(map, 'bringBackBeat'), id, 'bringBackBeat').section) {
       throw new Error('bringBackBeat: ' + String(id) + ' is not in left out');
     }
-    return moveBeat(map, id, toSlot);
+    return moveBeat(map, id, toSlot, index);
   }
 
   /**
@@ -576,6 +594,27 @@
     var held = (Array.isArray(section.beats) ? section.beats : []).some(function (beat) { return beatIdOf(beat) === id; });
     if (!held) throw new Error('setPhotoBeside: the section ' + String(slot) + ' holds no beat ' + id);
     photo.beat = id;
+    return next;
+  }
+
+  /**
+   * A photo put beside a beat of any section (piece 4; R10), in one op: from its place (`fromSlot`
+   * a section, with the photo's `fromIndex` there, or MAP_TOP_PHOTO) into the section `toSlot`,
+   * beside the beat `beatId` that section holds. A photo already in that section is set beside the
+   * beat where it sits (setPhotoBeside); one from elsewhere goes to the foot of the section's
+   * photos (movePhoto), so every photo stays placed once (T13), and the top photo moved this way
+   * leaves the map with no top photo. A beat the section does not hold is refused, and the map is
+   * left as it was.
+   */
+  function placePhotoBeside(map, fromSlot, fromIndex, toSlot, beatId) {
+    var id = typeof beatId === 'string' ? beatId.trim() : '';
+    var section = sectionAt(editedMap(map, 'placePhotoBeside'), toSlot, 'placePhotoBeside');
+    var held = id !== '' && (Array.isArray(section.beats) ? section.beats : []).some(function (beat) { return beatIdOf(beat) === id; });
+    if (!held) throw new Error('placePhotoBeside: the section ' + String(toSlot) + ' holds no beat ' + id);
+    if (fromSlot === toSlot) return setPhotoBeside(map, toSlot, fromIndex, id);
+    var next = movePhoto(map, fromSlot, fromIndex, toSlot);
+    var photos = sectionAt(next, toSlot, 'placePhotoBeside').photos;
+    photos[photos.length - 1].beat = id;
     return next;
   }
 
@@ -1223,12 +1262,14 @@
     mergeMapLength: mergeMapLength,
     freshBeatId: freshBeatId,
     moveBeat: moveBeat,
+    moveBeatBy: moveBeatBy,
     strikeBeat: strikeBeat,
     bringBackBeat: bringBackBeat,
     addBeat: addBeat,
     removeBeat: removeBeat,
     movePhoto: movePhoto,
     setPhotoBeside: setPhotoBeside,
+    placePhotoBeside: placePhotoBeside,
     // Task 4.14b: a struck beat's photos, read as by itself and stored so; the sections the
     // director emptied, dropped; and a left-out photo the director put at the top
     isStruckBeat: isStruckBeat,
