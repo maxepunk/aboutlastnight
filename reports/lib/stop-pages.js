@@ -109,7 +109,7 @@ const PAGE_HEADINGS = Object.freeze({
 /**
  * The parts of a page its component names only as an aria-label (task 4.12d): the round since
  * the director last looked, at the story meeting and on the map, and the map's headline, deck and
- * top photo and its count of everyone. The screen prints no heading over them, so the page prints
+ * top photo and its counts. The screen prints no heading over them, so the page prints
  * none: each line of the part carries its name as the line's `region`.
  */
 const PAGE_REGIONS = Object.freeze({

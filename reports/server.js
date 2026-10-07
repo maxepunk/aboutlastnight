@@ -48,7 +48,7 @@ const { photoKey } = require('./lib/prompt-renderers/director-words-renderer');
 // Brief 4.5: the story meeting's payloads and what its stop sends.
 const { meetingResume, meetingCheckpointData, unrunRoundNoteIndex } = require('./lib/meeting');
 // Phase 4 (brief 4.6): the map's payloads and what its stop shows; the photos kept for the
-// article, which Everyone and the counts read.
+// article, which the counts read.
 const { mapResume, mapCheckpointData, settledStoryOf } = require('./lib/map');
 const { keptPhotoFilenames } = require('./lib/workflow/nodes/ai-nodes');
 const { isWeave } = require('./lib/weave');
@@ -474,7 +474,7 @@ async function getCheckpointData(checkpointType, state) {
             // sends no evaluation and no questions.
             // Brief 4.6c: evidenceIndex names each card's and each beat's document, as at the
             // meeting, and the roster and the kept photos go with them, so the page builds
-            // Everyone and the counts (task 4.6d: the payload sends no count).
+            // its counts (task 4.6d: the payload sends no count).
             // Brief 2.7: the automatic passes of this round, with what each changed. Task 4.12c:
             // the round is the stop's, the one rule (stopRoundOf).
             return {

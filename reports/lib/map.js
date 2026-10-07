@@ -42,8 +42,8 @@
  *   page's count leaves out (mapWritersShareOf);
  * - THE STOP: its payloads (mapResume, which server.js buildResumePayload calls) and what it
  *   shows (mapCheckpointData).
- * Everyone and the counts are console/outline-edit-logic.js's mapTally, which the checks and
- * the console share, with its rule for a beat's id (beatIdOf, which the checks read every beat
+ * The counts (who is placed, the cards and the photos) are console/outline-edit-logic.js's
+ * mapTally, which the checks and the console share, with its rule for a beat's id (beatIdOf, which the checks read every beat
  * by; fix round 2), for a beat's card (beatCardOf) and for a repeat
  * (mapRepeats, which the gate and the checks read through repeatedBeatIds and
  * repeatedPhotos; task 4.6c). What is a map is its rule too (isMapValue), and the map the
@@ -237,7 +237,7 @@ function mapKey(map) {
 }
 
 /**
- * The session's roster as the checks and Everyone read it: each player's name as the
+ * The session's roster as the checks and the counts read it: each player's name as the
  * roster stop gave it, with the full name the canon gives.
  *
  * @param {Object|null} sessionConfig - its roster

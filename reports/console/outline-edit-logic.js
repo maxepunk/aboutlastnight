@@ -12,8 +12,8 @@
  *   - the map's client gate, validateMapShape (I): the gate's decisions, held to the
  *     director-side map schema and to lib/map.js directorMapProblems by tests (brief 4.6;
  *     task 4.9, ruling 3), so the server refuses nothing the console sends;
- *   - Everyone and the counts, mapTally (K), which the stop's payload, the map checks
- *     (lib/map.js) and the map on screen read alike;
+ *   - the counts, mapTally (K): who is placed, the cards and the photos, which the stop's
+ *     payload, the map checks (lib/map.js) and the map on screen read alike;
  *   - the map's editors (D, task 4.9; spec 5.3): each line's init, build and merge, and the
  *     map's moves. Each returns a new map and leaves the one it was given as it was, and what
  *     the director types is kept as typed;
@@ -982,7 +982,7 @@
   // (checkpoint-view-logic.js, task 4.9) take each of these from here, so the lines the page
   // locks sit under exactly the repeats the client gate takes as the writer's.
   //
-  // Everyone, the cards and the photos are built by one function from the beats, so the map
+  // The counts (who is placed, the cards and the photos) are built by one function from the beats, so the map
   // on screen as the director edits it (task 4.9) and the map checks (lib/map.js) count alike,
   // on the roster and the kept photos the stop's payload carries (task 4.6d: the payload sends
   // no count of its own). A name in a beat counts for the roster member it names.
@@ -1167,8 +1167,9 @@
   }
 
   /**
-   * Everyone and the counts (spec 5.2): where each roster player appears, each under the
-   * first section whose beat shows them; the roster players in no section's beat
+   * The counts (spec 2026-10-07 section 4), which the map's page prints, and what they are built
+   * from: where each roster player appears, each under the first section whose beat shows them
+   * (`everyone`, which the page no longer prints); the roster players in no section's beat
    * (`unplaced`), in roster order, and those the gap note raises (`raised`); the cards in the
    * sections; and how many of the photos kept for the article the map places, the top photo
    * included. A left-out beat places no one and carries no card. A roster name counts
@@ -1294,7 +1295,7 @@
     EVIDENCE_PIECE_STANCES: EVIDENCE_PIECE_STANCES,
     EVIDENCE_NAMED_SOURCES: EVIDENCE_NAMED_SOURCES,
 
-    // Phase 4 (brief 4.6): Everyone and the counts, one function from the beats
+    // Phase 4 (brief 4.6): the counts, one function from the beats
     rosterMemberOf: rosterMemberOf,
     photoKey: photoKey,
     beatCardOf: beatCardOf,

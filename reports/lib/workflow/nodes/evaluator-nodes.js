@@ -70,7 +70,7 @@ const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../../writer
 const { isWeave, weaveForPrompt, weaveForJudge, weaveKey, withFactCheckMark, isWeaveJudged, isMeetingApproved } = require('../../weave');
 // Brief 4.7a: the article judge reads the settled weave as every later writer does.
 const { renderDirectorAnswers, settledWeaveOf } = require('../../prompt-renderers/settled-weave');
-// Brief 4.7a: the players the map places, for the fact check's roster check: Everyone's one
+// Brief 4.7a: the players the map places, for the fact check's roster check: the counts' one
 // function (console/outline-edit-logic.js mapTally) over the map's roster (lib/map.js).
 const { mapTally } = require('../../../console/outline-edit-logic');
 const { mapRosterOf } = require('../../map');
@@ -753,7 +753,7 @@ function directorWords(state) {
 
 /**
  * The roster players the map, as the director left it, places in a beat (brief 4.7a):
- * Everyone, from the map's one function for it (console/outline-edit-logic.js mapTally)
+ * who is placed, from the map's one function for it (console/outline-edit-logic.js mapTally)
  * over the map's roster (lib/map.js mapRosterOf). The fact check's roster check covers
  * these alone; a state holding no map gives none, and every roster player is checked.
  *
