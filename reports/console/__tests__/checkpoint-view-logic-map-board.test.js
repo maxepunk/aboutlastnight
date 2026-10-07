@@ -119,6 +119,14 @@ describe('4B: each card gives its title, people, dots, mark, photos, synopsis, e
     expect(cardOf(view, 'b9').meets).toBe('');
   });
 
+  test("each card's label and each legend thread's label are its words as the page prints them (run 1 follow-up F4)", () => {
+    const view = viewOf();
+    expect(cardOf(view, 'b5')).toMatchObject({ label: 'Jess warns Sarah away', move: 'Jess warns Sarah away' });
+    expect(cardOf(view, 'b17').label).toBe('The other suspects let go');
+    expect(view.legend.threads.map((t) => t.label)).toEqual(view.legend.threads.map((t) => t.name));
+    expect(view.legend.threads[0]).toMatchObject({ label: 'An accident', name: 'An accident' });
+  });
+
   test("its controls' labels name the move by its title, never by an id", () => {
     const labels = cardOf(viewOf(), 'b5').labels;
     expect(labels).toMatchObject({

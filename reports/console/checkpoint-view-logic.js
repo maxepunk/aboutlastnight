@@ -3941,7 +3941,7 @@
       var name = asString(thread.name).trim();
       var id = asString(thread.id).trim();
       if (id && !dots.has(id)) dots.set(id, { tone: tone, name: name });
-      return { key: 'thread-' + i, tone: tone, name: name, line: asString(thread.line).trim(), labels: { pick: 'Follow the thread "' + name + '" across the board' } };
+      return { key: 'thread-' + i, tone: tone, label: name, name: name, line: asString(thread.line).trim(), labels: { pick: 'Follow the thread "' + name + '" across the board' } };
     });
     asArray(l.others).filter(isPlainObject).forEach(function (thread) {
       var id = asString(thread.id).trim();
@@ -4002,7 +4002,7 @@
    * - `settledStory`, read-only, with `storyHint`, the way back to the meeting, and the gap note
    *   beside it;
    * - `legend` (mapLegendView, from the payload's `legend`): `title`, `showAll` and `threads`, the
-   *   settled story's threads in the angle's order, each `{key, tone, name, line, labels: {pick}}`,
+   *   settled story's threads in the angle's order, each `{key, tone, label, name, line, labels: {pick}}`, its `label` its name as the page prints it,
    *   its `tone` its place, 1 to MAP_TONES and repeating, its line shown only once it is picked;
    * - `summaries`, the board's one toggle's two labels (MAP_SUMMARY_TOGGLE);
    * - the round's lines: `round` (after a send-back, with its note), `checkFailures` (the code
@@ -4023,7 +4023,8 @@
    *   foot), and `emptied`, MAP_EMPTIED_COLUMN_LINE on a column the director emptied, which the
    *   gate drops when the map is sent (dropEmptiedSections), each beat and photo with the places
    *   it can move to (phase 4b, brief 1D):
-   *   - each card as its move (its title), its people, its `synopsis` ('' for none, as on a map
+   *   - each card as its move (its title, which is also its `label`, its words as the page prints
+   *     them), its people, its `synopsis` ('' for none, as on a map
    *     from before piece 4), its `dots` (`{tone, name}` for each thread it carries: a story
    *     thread's tone, the grey tone 0 with its name for a thread outside the story, and 0 with no
    *     name for an id the weave does not hold), its `photos` (the photos beside it), its card
@@ -4143,6 +4144,7 @@
         key: (slot === null ? 'leftOut' : slot) + (ownId ? '-beat-' + id : '-beat@' + index),
         id: id,
         index: index,
+        label: asString(b.move),
         move: asString(b.move),
         players: stringList(b.players).join(', '),
         synopsis: asString(b.synopsis).trim(),
