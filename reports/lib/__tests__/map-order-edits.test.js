@@ -203,10 +203,12 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
     const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
     expect(settled.output).toEqual(pass);
     expect(settled.report.changed).toEqual([]);
-    // A later pass that swaps two of the rest has them put back, around the strike.
+    // A later pass that swaps two of the rest has them put back, and the struck beat with them:
+    // the order's restore puts each beat it names back into the section (fix A).
     const swapped = EditLogic.moveBeatBy(pass, 'b4', -1);
     const again = D.settleEdits(null, { edits, before: pass, after: swapped, pass: 2 });
-    expect(idsIn(again.output, 'theStory')).toEqual(['b5', 'b4', 'b6', 'b7', 'b8']);
+    expect(idsIn(again.output, 'theStory')).toEqual(['b5', 'b3', 'b4', 'b6', 'b7', 'b8']);
+    expect(again.output.leftOut.map((b) => b.id)).not.toContain('b3');
   });
 
   it('a card dropped in the middle of another column: the move edit and that section\'s order edit, both put back', () => {
@@ -252,7 +254,8 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
     };
 
     it('the pass moves the card back to the lede and strikes the beat above it', () => {
-      holdsOut(setUp((pass, closing) => { pass.leftOut.push(closing.beats.shift()); }), ['b2', 'b16']);
+      // The order's restore brings the struck beat back with the card (fix A).
+      holdsOut(setUp((pass, closing) => { pass.leftOut.push(closing.beats.shift()); }), ['b15', 'b2', 'b16']);
     });
 
     it('the pass moves the card back to the lede and puts a beat of its own at the head of the column', () => {
@@ -319,6 +322,59 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
     expect(afterCheck._outlineHandEditReport.changed).toEqual([expect.objectContaining({
       id: 'E1', where: 'section "theStory", the order of its moves', automatic: true, restored: true
     })]);
+  });
+});
+
+// Fix A (the integrator's ruling: the spec's section 17 wins): code puts the director's order back
+// by putting each beat it names back into the section, at its place in that order, from wherever
+// the pass put it, so it prints once; a beat the pass removed from the map comes from the version
+// the pass started from. Each beat the pass added keeps its place relative to the others.
+describe("Fix A: the order's restore puts each beat it names back into the section, from wherever the pass put it", () => {
+  /** The director's map: Jess moved above Marcus's request, in The Story. */
+  const directors = () => EditLogic.moveBeatBy(boardMap(), 'b5', -1);
+  const DIRECTORS_STORY = ['b3', 'b5', 'b4', 'b6', 'b7', 'b8'];
+  const placesOf = (map, id) => [
+    ...map.sections.flatMap((s) => s.beats.filter((b) => b.id === id).map(() => s.slot)),
+    ...map.leftOut.filter((b) => b.id === id).map(() => 'leftOut')
+  ];
+  /** The pass swaps two of the story's beats and adds one of its own, then `out` does the rest. */
+  const passOf = (before, out) => {
+    const pass = clone(before);
+    const story = pass.sections.find((s) => s.slot === 'theStory');
+    const byId = (id) => story.beats.find((b) => b.id === id);
+    story.beats = [byId('b3'), byId('b5'), byId('b4'), byId('b7'), passBeat('b20', 'Kai counts the votes'), byId('b6'), byId('b8')];
+    out(pass, story);
+    return pass;
+  };
+  const settle = (before, pass) => D.settleEdits(null, { edits: editsOf(boardMap(), before), before, after: pass, pass: 1 });
+
+  it('a beat the pass moved to another section comes back at its place, and prints once', () => {
+    const before = directors();
+    const pass = passOf(before, (map, story) => {
+      map.sections.find((s) => s.slot === 'closing').beats.push(story.beats.splice(1, 1)[0]);
+    });
+    const { output, report } = settle(before, pass);
+    expect(idsIn(output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b20', 'b7', 'b8']);
+    expect(placesOf(output, 'b5')).toEqual(['theStory']);
+    expect(idsIn(output, 'closing')).toEqual(['b15', 'b16']);
+    expect(report.changed).toEqual([expect.objectContaining({ id: 'E1', automatic: true, restored: true })]);
+  });
+
+  it('a beat the pass struck into left out comes back at its place, and leaves left out', () => {
+    const before = directors();
+    const pass = passOf(before, (map, story) => { map.leftOut.push(story.beats.splice(2, 1)[0]); });
+    const { output } = settle(before, pass);
+    expect(idsIn(output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b20', 'b7', 'b8']);
+    expect(placesOf(output, 'b4')).toEqual(['theStory']);
+  });
+
+  it('a beat the pass removed from the map comes back from the version the pass started from, evidence and all', () => {
+    const before = directors();
+    const pass = passOf(before, (map, story) => { story.beats.splice(2, 1); });
+    const { output } = settle(before, pass);
+    expect(idsIn(output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b20', 'b7', 'b8']);
+    expect(beatOf(output, 'b4')).toEqual(beatOf(before, 'b4'));
+    expect(DIRECTORS_STORY.every((id) => placesOf(output, id).length === 1)).toBe(true);
   });
 });
 

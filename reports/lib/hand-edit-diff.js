@@ -133,9 +133,10 @@
  * beat ids in their order (mapOrderOf): made unless their version holds the beats the section kept
  * in their order, followed by at most one beat that arrived in it, at its foot; carried while the
  * beats it names that the section still holds sit in that order; replaced under its id by a later
- * reorder of the section; and put back after an automatic pass on the beats it names, in the
- * places they hold, last of the restores. A beat's summary (its synopsis) is a line like any other,
- * named as the summary of the move (R11).
+ * reorder of the section; and put back after an automatic pass, last of the restores, with each
+ * beat it names back in the section at its place in that order, taken from wherever the pass put
+ * it, or from the version the pass started from when the pass removed it (fix A). A beat's summary
+ * (its synopsis) is a line like any other, named as the summary of the move (R11).
  */
 'use strict';
 
@@ -2741,25 +2742,85 @@ function narrowedOrder(edit, map) {
 }
 
 /**
- * Put the director's order back into `out`, the pass's output (changed in place; R3): the beats
- * it names go back into that order in the places they hold, and every other beat stays where the
- * pass put it, so a beat the pass added keeps its place.
+ * Put the director's order back into `out`, the pass's output (changed in place; R3, fix A: the
+ * spec's section 17). Each beat it names goes back into the section, so it prints once there:
+ * - the beats the section holds go into the director's order in the places they hold, a second
+ *   copy of one in the section taken out;
+ * - a beat the pass took out of the section comes from wherever the pass put it (another section,
+ *   or left out), and one the pass removed from the map from `before`, the version the pass started
+ *   from; it goes right after the beat before it in the director's order, or right before the beat
+ *   after it when it opens that order, and where the section holds none of them, at the place it
+ *   held in `before`.
+ * Every other beat stays where the pass put it, so a beat the pass added keeps its place relative
+ * to the others. Nothing goes back into a section the pass removed.
  *
- * @returns {boolean} whether a beat moved
+ * @param {{slot: string, ids: string[]}} order - mapOrderOf's
+ * @param {Object} before - the version the pass started from
+ * @param {Object} out - the pass's output, changed in place
+ * @returns {boolean} whether anything was written
  */
-function restoreMapOrder(order, out) {
+function restoreMapOrder(order, before, out) {
   const section = sectionOfSlot(out, order.slot);
-  if (!section || !Array.isArray(section.beats)) return false;
-  const rank = (beat) => order.ids.indexOf(isObj(beat) ? mapIdText(beat.id) : '');
-  const places = [];
-  section.beats.forEach((beat, i) => { if (rank(beat) !== -1) places.push(i); });
-  const inOrder = places.map((i) => section.beats[i]).sort((a, b) => rank(a) - rank(b));
-  let moved = false;
-  places.forEach((at, k) => {
-    if (section.beats[at] !== inOrder[k]) moved = true;
-    section.beats[at] = inOrder[k];
+  if (!section) return false;
+  const was = Array.isArray(section.beats) ? section.beats : [];
+  const idOf = (beat) => (isObj(beat) ? mapIdText(beat.id) : '');
+  const rank = (id) => order.ids.indexOf(id);
+  // The beat each id names: the section's own, else the one the pass put elsewhere on the map,
+  // else the one `before` held, in this section where it can.
+  const held = new Map();
+  was.forEach((beat) => { if (rank(idOf(beat)) !== -1 && !held.has(idOf(beat))) held.set(idOf(beat), beat); });
+  const elementOf = (id) => {
+    if (held.has(id)) return held.get(id);
+    const elsewhere = mapPlaces(out, 'beat', { id })[0];
+    if (elsewhere) return elsewhere.element;
+    const places = mapPlaces(before, 'beat', { id });
+    const place = places.find((p) => p.container === order.slot) || places[0];
+    return place ? clone(place.element) : null;
+  };
+  const elements = new Map(order.ids.map((id) => [id, elementOf(id)]).filter(([, element]) => element));
+  let written = false;
+  // Every other place of a beat the order names goes, so the beat prints once.
+  (Array.isArray(out.sections) ? out.sections : []).forEach((other) => {
+    if (!isObj(other) || other === section || !Array.isArray(other.beats)) return;
+    const kept = other.beats.filter((beat) => !elements.has(idOf(beat)));
+    if (kept.length !== other.beats.length) { other.beats = kept; written = true; }
   });
-  return moved;
+  if (Array.isArray(out.leftOut)) {
+    const kept = out.leftOut.filter((beat) => !elements.has(idOf(beat)));
+    if (kept.length !== out.leftOut.length) { out.leftOut = kept; written = true; }
+  }
+  // The section's beats: each named one the section holds in one of the places they hold, sorted
+  // into the director's order; every other beat where the pass put it.
+  const beats = [];
+  const placed = [];
+  was.forEach((beat) => {
+    const id = idOf(beat);
+    if (rank(id) === -1) { beats.push(beat); return; }
+    if (held.get(id) !== beat) return;
+    beats.push(null);
+    placed.push(id);
+  });
+  placed.sort((a, b) => rank(a) - rank(b));
+  let next = 0;
+  beats.forEach((beat, i) => { if (beat === null) beats[i] = held.get(placed[next++]); });
+  // Each beat that comes back, at its place in the director's order.
+  const at = (id) => beats.findIndex((beat) => idOf(beat) === id);
+  order.ids.forEach((id, k) => {
+    if (held.has(id) || !elements.has(id)) return;
+    const prior = order.ids.slice(0, k).reverse().find((other) => at(other) !== -1);
+    const later = order.ids.slice(k + 1).find((other) => at(other) !== -1);
+    let index;
+    if (prior) index = at(prior) + 1;
+    else if (later) index = at(later);
+    else {
+      const place = mapPlaces(before, 'beat', { id }).find((p) => p.container === order.slot);
+      index = place ? Math.min(place.index, beats.length) : beats.length;
+    }
+    beats.splice(index, 0, elements.get(id));
+  });
+  if (beats.length !== was.length || beats.some((beat, i) => beat !== was[i])) written = true;
+  section.beats = beats;
+  return written;
 }
 
 /**
@@ -4174,7 +4235,8 @@ function blocksOf(collection, element) {
  * a block holding fewer of its words, such as a paragraph the pass inserted right before its
  * copy, which stays the writer's (fix round 1). Where code cannot tell which block is the
  * pass's version, it goes back where it sat. The director's order of a section on the map goes
- * back on the beats it names, in the places they hold (restoreMapOrder; piece 4, R3).
+ * back with each beat it names in the section, at its place in that order (restoreMapOrder; piece
+ * 4, R3; fix A).
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
@@ -4186,9 +4248,9 @@ function blocksOf(collection, element) {
 function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
   if (!isObj(out)) return false;
   if (isCut(edit)) return takeOutDeletedEntry(edit, out);
-  // Piece 4 (R3): the director's order of a section, back on the beats it names where they sit.
+  // Piece 4 (R3; fix A): the director's order of a section, each beat it names back in it.
   const order = mapOrderOf(edit);
-  if (order) return restoreMapOrder(order, out);
+  if (order) return restoreMapOrder(order, before, out);
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
   if (isMove(edit)) return restoreMove(edit, before, out);
@@ -4666,9 +4728,9 @@ function reportWithHeld(report, held) {
  * round 1). A send-back's rework is left as it is: the director's note may
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed. On the map, once the
- * other edits are back, code puts the director's order of each section back on the beats it names,
- * in the places they hold, so a beat the pass added keeps its place (restoreMapOrder; piece 4, R3):
- * every order the output no longer carries, the ones the pass changed and the ones code's own
+ * other edits are back, code puts the director's order of each section back, each beat it names in
+ * the section at its place in that order, from wherever the pass put it, so a beat the pass added
+ * keeps its place (restoreMapOrder; piece 4, R3; fix A): every order the output no longer carries, the ones the pass changed and the ones code's own
  * restores broke by putting a beat back at its place (fix round 1, findings 1 and 2); the report
  * records only an order the pass changed. Code also holds each section the director dropped by its slot (droppedSlotsOf,
  * console/outline-edit-logic.js holdDroppedSections; task 4.14b, fix round 1): a section the pass
