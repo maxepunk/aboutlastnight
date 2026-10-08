@@ -65,7 +65,7 @@ const { roundNoteOf, roundDidNotRunAt } = require('./workflow/state');
 const { CHECKPOINT_TYPES } = require('./workflow/checkpoint-helpers');
 const {
   mapTally, mapPhotoPlacements, mapRepeats, rosterMemberOf, beatIdOf, beatCardOf, cardPiecesOf, beatWithId, isMapValue, shownMapOf,
-  freeStruckBeatPhotos, dropEmptiedSections, leftOutTopPhoto, EMPTIED_SECTION_REASON
+  freeStruckBeatPhotos, dropEmptiedSections, leftOutTopPhoto, initBeat, EMPTIED_SECTION_REASON
 } = require('../console/outline-edit-logic');
 const { photoKey, photoDescriptionFor } = require('./prompt-renderers/director-words-renderer');
 const {
@@ -545,40 +545,29 @@ function beatFieldAt(beat, steps) {
 }
 
 /**
- * The id of the beat a photo edit of the director's sets the photo beside (fix F, third round): a
- * photo they moved or placed whole, by the `beat` it carries; the photo's `beat` field they set, by
- * its value. '' for a photo by itself and for any other field of a photo.
- *
- * @param {Object} edit
- * @param {Object} address - the edit's (mapEditAddress), a photo's
- * @returns {string}
+ * A beat's lines, the fields the director writes on its card (fix G1): its title, its summary and
+ * its people, the beat editor's three fields, read from the editor itself (initBeat).
  */
-function photoBesideOf(edit, address) {
-  const steps = address.fieldSteps;
-  let beside;
-  if (steps.length === 0) beside = edit.after && typeof edit.after === 'object' ? edit.after.beat : undefined;
-  else if (steps.length === 1 && steps[0] && steps[0].key === 'beat') beside = edit.after;
-  return typeof beside === 'string' ? beside.trim() : '';
-}
+const BEAT_LINES = Object.freeze(Object.keys(initBeat(null)));
 
 /**
- * Which beat under a repeated id keeps the id (fix F3): the one the director's edits find by that
- * id, else the first in the map's order. An edit finds a beat in one of two ways:
- * - by its place: the beat under the id that sits in the column the edit names. An edit of a beat's
- *   place (a beat they moved, struck, brought back or added) names the place it puts the beat; the
- *   order of a column (R3) that names the id names its column, where restoreMapOrder keeps the beat
- *   (lib/hand-edit-diff.js); a photo they set beside the move, moved or placed whole beside it or
- *   by its `beat` field, names the photo's column (photoBesideOf; fix F, third round);
- * - by its field: the beat whose field holds the director's value (a line they rewrote).
- * An edit that finds more than one beat, such as a line of theirs a pass copied onto its own beat,
- * names none. The edits of a place decide first, since a copy can carry the director's words but
- * sits elsewhere; the field edits decide when no edit of a place names a beat. The keeper is the
- * one beat the deciding edits name; when they name none or two, it is the first. It reads the
- * director's standing edits, carried or not (fix F, second round): the map carries an edit of a
- * beat's place, and the order of a column, only while no beat it names prints anywhere else
- * (lib/hand-edit-diff.js mapEditCarried, mapOrderCarried), so a repeat leaves it uncarried, and
- * the beat it finds is still theirs, since a copy a pass left in another place is the pass's (fix
- * round 1).
+ * Which beat under a repeated id keeps the id (fix G1): one rule, in this order.
+ * 1. A line: the beat the director's line edits (BEAT_LINES: a move's title, summary or people)
+ *    find, the beat whose field holds their value. A line goes back by id after the check rework,
+ *    so the id stays on the beat holding their words.
+ * 2. A place: otherwise, the beat their edits of a beat's place (a beat they moved between
+ *    sections, struck, brought back or added) or the order of a column (R3) that names the id find,
+ *    the beat under the id that sits in the column the edit names, where restoreMapOrder keeps it
+ *    (lib/hand-edit-diff.js).
+ * 3. The first: otherwise, the first beat with the id in the map's order.
+ * An edit finds a beat only when it finds exactly one, so a line of theirs a pass copied onto its
+ * own beat finds none; the lines, or the places, decide when the beats they find are exactly one.
+ * No other edit finds a beat: a photo set beside the move holds the move's id as the director
+ * placed it, which none of their later changes refreshes. It reads the director's standing edits,
+ * carried or not (fix F, second round): the map carries an edit of a beat's place, and the order
+ * of a column, only while no beat it names prints anywhere else (lib/hand-edit-diff.js
+ * mapEditCarried, mapOrderCarried), so a repeat leaves it uncarried, and the beat it finds is still
+ * theirs, since a copy a pass left in another place is the pass's (fix round 1).
  *
  * @param {string} id
  * @param {Array<{beat: Object, slot: string|null}>} under - the beats under the id, in the map's order (allBeats)
@@ -590,7 +579,7 @@ function keeperOfRepeatedId(id, under, entries) {
     ? value.trim() === after.trim()
     : canonicalJson(value) === canonicalJson(after));
   const inColumn = (container) => under.filter((each) => (each.slot === null ? MAP_LEFT_OUT : each.slot) === container);
-  const named = { place: new Set(), field: new Set() };
+  const named = { line: new Set(), place: new Set() };
   const name = (way, finds) => { if (finds.length === 1) named[way].add(finds[0]); };
   entries.forEach(({ edit, address }) => {
     const order = mapOrderOf(edit);
@@ -598,17 +587,13 @@ function keeperOfRepeatedId(id, under, entries) {
       if (order.ids.includes(id)) name('place', inColumn(order.slot));
       return;
     }
-    if (!address || isCut(edit)) return;
-    if (address.kind === 'photo') {
-      if (photoBesideOf(edit, address) === id) name('place', inColumn(address.container));
-      return;
-    }
-    if (String(address.identity.id).trim() !== id) return;
-    if (address.fieldSteps.length === 0) name('place', inColumn(address.container));
-    else name('field', under.filter((each) => holds(beatFieldAt(each.beat, address.fieldSteps), edit.after)));
+    if (!address || address.kind !== 'beat' || isCut(edit) || String(address.identity.id).trim() !== id) return;
+    const field = address.fieldSteps[0];
+    if (!field) name('place', inColumn(address.container));
+    else if (BEAT_LINES.includes(field.key)) name('line', under.filter((each) => holds(beatFieldAt(each.beat, address.fieldSteps), edit.after)));
   });
-  const deciding = named.place.size > 0 ? named.place : named.field;
-  return deciding.size === 1 ? { keeper: [...deciding][0], found: true } : { keeper: under[0], found: false };
+  const deciding = [named.line, named.place].find((beats) => beats.size === 1);
+  return deciding ? { keeper: [...deciding][0], found: true } : { keeper: under[0], found: false };
 }
 
 /** The players a beat, a gap note or a players list names. */
@@ -918,9 +903,9 @@ function cardFault(beat, evidence) {
  * The checks:
  * - every beat has an id of its own, since the director's edits find a beat by its id
  *   (`duplicate-beat-id`); its message says which beat keeps the id, the one the director's
- *   standing edits find by it, carried or not (an edit of its place, the order of its column or a
- *   photo set beside it, before a line of theirs), or else the first, and gives the others new ids
- *   (keeperOfRepeatedId; fix F3 and its second and third rounds);
+ *   standing edits find by it, carried or not (a line of theirs, else an edit of its place or the
+ *   order of its column), or else the first, and gives the others new ids (keeperOfRepeatedId;
+ *   fix F3 and its rounds, and fix G1);
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id the record holds, quotation, clock time or money
  *   figure): the gap note's line, each section's job, each beat's move and its synopsis in a

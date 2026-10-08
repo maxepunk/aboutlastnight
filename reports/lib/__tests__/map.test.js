@@ -364,9 +364,9 @@ describe('the map checks (spec 5.4)', () => {
       });
 
       // Fix F3, finished: the keeper is the one beat the director's edits find. An edit that finds
-      // more than one beat, such as a line of theirs a pass copied onto its own beat, names none,
-      // and an edit of the beat's place decides before a line, since a copy can carry their words
-      // but sits elsewhere.
+      // more than one beat, such as a line of theirs a pass copied onto its own beat, names none.
+      // Fix G1: here the line finds both beats, theirs and the pass's copy holding their words, so
+      // the lines name no beat, and the edit of the beat's place decides.
       it('a move and a rewrite: a send-back\'s rework put a copy of the director\'s beat, their words and all, back where it sat; the beat they moved keeps the id', () => {
         const left = EditLogic.moveBeat(writers(), 'b1', 'theStory');
         left.sections[1].beats.find((beat) => beat.id === 'b1').move = 'The scoreboard lights the room';
@@ -379,12 +379,13 @@ describe('the map checks (spec 5.4)', () => {
           + `Keep b1 on "The scoreboard lights the room" (in section "theStory"), the beat the director's edits find by that id, and give "The scoreboard lights the room" (in section "lede") ${NEW_ID}`);
       });
 
-      // Fix F, third round: two edits of the director's find a beat by its id in a place without
-      // being addressed to the beat. The order of a column (R3) finds the beat under the id that
-      // sits in that column, the copy restoreMapOrder keeps; a photo set beside a move finds the
-      // beat under the id in the photo's column. Each through the check node, from the standing
-      // edits in state, as the rework reads it.
-      describe('an edit that finds the beat by its id in a column, without being addressed to it', () => {
+      // Fix F, third round: the order of a column (R3) finds a beat by its id in a place without
+      // being addressed to the beat: the beat under the id that sits in that column, the copy
+      // restoreMapOrder keeps. Fix G1 takes the photo out of the keeper: a photo the director set
+      // beside a move finds no beat, since a photo move's `after.beat` is not refreshed after the
+      // director's later changes and can name the wrong beat. Each through the check node, from the
+      // standing edits in state, as the rework reads it.
+      describe('the order of a column finds the beat by its id; a photo beside it finds none', () => {
         const { boardMap, boardMapState } = require('./fixtures/board-map');
         const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
         const repeatsOf = (pass, standing) => checkMap(boardMapState({ outline: pass, _outlineHandEdits: standing }))
@@ -409,27 +410,120 @@ describe('the map checks (spec 5.4)', () => {
           ]);
         });
 
-        it('a photo set beside a move: the director dropped a photo on a move in The Story; the beat beside it keeps the id', () => {
+        // Fix G1 rewrote these two from "the beat beside it keeps the id": the photo is no longer
+        // the keeper's, so with no line or place edit on the id, the first keeps it.
+        it('a photo set beside a move: the director dropped a photo on a move in The Story; the photo finds no beat, and the first keeps the id', () => {
           const left = EditLogic.placePhotoBeside(boardMap(), 'followTheMoney', 0, 'theStory', 'b5');
           const standing = standingOnMap(null, boardMap(), left);
           expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].photos[#p06.jpg]'], ['E2', 'sections[#theStory].photos[#p06.jpg].beat']]);
           const pass = repeatInLede(left, 'theStory', 'b5');
           expect(repeatsOf(pass, standing)).toEqual([
             'Beats sharing the id b5: "A new beat under b5" and "Jess warns Sarah away". '
-              + `Keep b5 on "Jess warns Sarah away" (in section "theStory"), the beat the director's edits find by that id, and give "A new beat under b5" (in section "lede") ${NEW_ID}`
+              + `Keep b5 on the first, "A new beat under b5" (in section "lede"), and give "Jess warns Sarah away" (in section "theStory") ${NEW_ID}`
           ]);
         });
 
-        it("the top photo set beside a move: the photo's move is its one edit, and the beat it sits beside keeps the id", () => {
+        it("the top photo set beside a move: the photo's move is its one edit, which finds no beat, and the first keeps the id", () => {
           const left = EditLogic.placePhotoBeside(boardMap(), 'topPhoto', 0, 'theStory', 'b5');
           const standing = standingOnMap(null, boardMap(), left);
           expect(standing.edits.map((e) => [e.id, e.from, e.after])).toEqual([['E1', 'topPhoto', { filename: 'p01.jpg', beat: 'b5' }]]);
           const pass = repeatInLede(left, 'theStory', 'b5');
           expect(repeatsOf(pass, standing)).toEqual([
             'Beats sharing the id b5: "A new beat under b5" and "Jess warns Sarah away". '
-              + `Keep b5 on "Jess warns Sarah away" (in section "theStory"), the beat the director's edits find by that id, and give "A new beat under b5" (in section "lede") ${NEW_ID}`
+              + `Keep b5 on the first, "A new beat under b5" (in section "lede"), and give "Jess warns Sarah away" (in section "theStory") ${NEW_ID}`
           ]);
         });
+      });
+    });
+
+    // Fix G1: one rule for the keeper, in this order. A line: the beat the director's standing
+    // line edits (a move's title, summary or people) find, when they find exactly one, since a line
+    // goes back by id after the check rework, so the id must stay on the beat holding their words.
+    // A place: otherwise the beat their edits of a beat's place (a move between sections, a
+    // strike, a bring-back) or a column's order find, when they find exactly one. The first:
+    // otherwise the first beat with the id in the map's order. Each through the check node, from
+    // the standing edits in state, after a send-back's rework that left another beat under the id.
+    describe('fix G1: a line, then a place, then the first', () => {
+      const EditLogic = require('../../console/outline-edit-logic');
+      const { boardMap, boardMapState } = require('./fixtures/board-map');
+      const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
+      const repeatsOf = (pass, standing) => checkMap(boardMapState({ outline: pass, _outlineHandEdits: standing }))
+        .validationResults.structuralIssues.filter((m) => m.startsWith('Beats sharing'));
+      const sectionOf = (map, slot) => map.sections.find((s) => s.slot === slot);
+      const beatOf = (map, slot, id) => sectionOf(map, slot).beats.find((beat) => beat.id === id);
+      /** Takes the beat under `id` out of `slot` and returns it. */
+      const takeOut = (map, slot, id) => {
+        const beats = sectionOf(map, slot).beats;
+        return beats.splice(beats.findIndex((beat) => beat.id === id), 1)[0];
+      };
+      /** A beat the rework wrote under the id, in its own words. */
+      const newBeat = (theirs, id) => ({ ...clone(theirs), move: `A new beat under ${id}`, synopsis: 'A new beat, and the room moves on.', players: ['Alex'] });
+
+      it("a line decides over the order of a column: the rework moved the director's rewritten move into The Successors and wrote another at the head of The Story; theirs keeps the id", () => {
+        const left = EditLogic.moveBeat(boardMap(), 'b6', 'theStory', 0);
+        beatOf(left, 'theStory', 'b6').move = 'Quinn says it again';
+        const standing = standingOnMap(null, boardMap(), left);
+        expect(standing.edits.map((e) => [e.id, e.path, Boolean(e.order)])).toEqual([
+          ['E1', 'sections[#theStory].beats[#b6].move', false], ['E2', 'sections[#theStory].beats', true]
+        ]);
+        const pass = clone(left);
+        const theirs = takeOut(pass, 'theStory', 'b6');
+        sectionOf(pass, 'thePlayers').beats.push(theirs);
+        sectionOf(pass, 'theStory').beats.unshift(newBeat(theirs, 'b6'));
+        expect(repeatsOf(pass, standing)).toEqual([
+          'Beats sharing the id b6: "A new beat under b6" and "Quinn says it again". '
+            + `Keep b6 on "Quinn says it again" (in section "thePlayers"), the beat the director's edits find by that id, and give "A new beat under b6" (in section "theStory") ${NEW_ID}`
+        ]);
+      });
+
+      it.each([
+        ['summary', 'synopsis', 'The first memories go before the room has a theory.'],
+        ['people', 'players', ['Kai', 'Remi']]
+      ])("a line decides over the move's own move edit, its %s: the rework put the director's move back where it sat and wrote another in the section they moved it to; theirs keeps the id", (_words, field, value) => {
+        const left = EditLogic.moveBeat(boardMap(), 'b9', 'lede');
+        beatOf(left, 'lede', 'b9')[field] = value;
+        const standing = standingOnMap(null, boardMap(), left);
+        expect(standing.edits.map((e) => [e.id, e.path, e.from || null])).toEqual([
+          ['E1', 'sections[#lede].beats[#b9]', 'followTheMoney'], ['E2', `sections[#lede].beats[#b9].${field}`, null]
+        ]);
+        const pass = clone(left);
+        const theirs = takeOut(pass, 'lede', 'b9');
+        sectionOf(pass, 'followTheMoney').beats.unshift(theirs);
+        sectionOf(pass, 'lede').beats.push(newBeat(theirs, 'b9'));
+        expect(repeatsOf(pass, standing)).toEqual([
+          'Beats sharing the id b9: "A new beat under b9" and "The first memories go early". '
+            + `Keep b9 on "The first memories go early" (in section "followTheMoney"), the beat the director's edits find by that id, and give "A new beat under b9" (in section "lede") ${NEW_ID}`
+        ]);
+      });
+
+      it("a place decides when no line edit finds a beat: the rework rewrote the director's summary and wrote another move under its id in the lede; the beat their order puts at the head of The Story keeps the id", () => {
+        const left = EditLogic.moveBeat(boardMap(), 'b6', 'theStory', 0);
+        beatOf(left, 'theStory', 'b6').synopsis = 'Quinn leaves the dose out, and the room lets it pass.';
+        const standing = standingOnMap(null, boardMap(), left);
+        expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b6].synopsis'], ['E2', 'sections[#theStory].beats']]);
+        const pass = clone(left);
+        beatOf(pass, 'theStory', 'b6').synopsis = "Quinn's account skips the dose.";
+        sectionOf(pass, 'lede').beats.unshift(newBeat(beatOf(pass, 'theStory', 'b6'), 'b6'));
+        expect(repeatsOf(pass, standing)).toEqual([
+          'Beats sharing the id b6: "A new beat under b6" and "Quinn tells the room another story". '
+            + `Keep b6 on "Quinn tells the room another story" (in section "theStory"), the beat the director's edits find by that id, and give "A new beat under b6" (in section "lede") ${NEW_ID}`
+        ]);
+      });
+
+      it("the first keeps the id when neither does: the rework rewrote the director's title, and their photo beside the move finds no beat", () => {
+        const left = EditLogic.placePhotoBeside(boardMap(), 'followTheMoney', 0, 'theStory', 'b5');
+        beatOf(left, 'theStory', 'b5').move = 'Jess warns Sarah off the batch';
+        const standing = standingOnMap(null, boardMap(), left);
+        expect(standing.edits.map((e) => e.path)).toEqual([
+          'sections[#theStory].beats[#b5].move', 'sections[#theStory].photos[#p06.jpg]', 'sections[#theStory].photos[#p06.jpg].beat'
+        ]);
+        const pass = clone(left);
+        beatOf(pass, 'theStory', 'b5').move = 'Jess keeps Sarah clear';
+        sectionOf(pass, 'lede').beats.unshift(newBeat(beatOf(pass, 'theStory', 'b5'), 'b5'));
+        expect(repeatsOf(pass, standing)).toEqual([
+          'Beats sharing the id b5: "A new beat under b5" and "Jess keeps Sarah clear". '
+            + `Keep b5 on the first, "A new beat under b5" (in section "lede"), and give "Jess keeps Sarah clear" (in section "theStory") ${NEW_ID}`
+        ]);
       });
     });
   });
