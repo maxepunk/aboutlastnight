@@ -889,6 +889,22 @@ describe('4D: each drop reaches the same op as its button, once', () => {
     expect(ids(foot.saved(), 'closing')).toEqual(['b15', 'b16', 'b4']);
   });
 
+  // Fix round 1: a drop on a card lands just before it, so the column's foot is the one place that
+  // takes a card to the last place in its own column.
+  it("a card dropped on its own column's foot goes to the last place there, and the card already last shows no landing", () => {
+    const mounted = mountMap({ data });
+    const { over, landing } = drag(mounted, card('Marcus tests the batch on himself'), column('The Story'));
+    expect(over.preventDefault).toHaveBeenCalled();
+    expect(mapClassesOf(column('The Story')(landing))).toContain('map__column--drop');
+    calledOnly(mounted, 'moveBeat');
+    expect(ids(mounted.saved(), 'theStory')).toEqual(['b4', 'b5', 'b6', 'b7', 'b8', 'b3']);
+    const last = mountMap({ data });
+    const lastDrag = drag(last, card('Remi presses Quinn and backs off'), column('The Story'));
+    expect(lastDrag.over.preventDefault).not.toHaveBeenCalled();
+    expect(mapClassesOf(column('The Story')(lastDrag.landing))).not.toContain('map__column--drop');
+    MOVE_OPS.forEach((op) => expect(`${op} ${last.ops[op].mock.calls.length}`).toBe(`${op} 0`));
+  });
+
   it('a card dropped in the tray is left out, and a move the director added is taken out, as their buttons do', () => {
     const mounted = mountMap({ data });
     const { landing } = drag(mounted, card('Jess warns Sarah away'), tray);

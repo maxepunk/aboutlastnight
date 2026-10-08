@@ -518,11 +518,19 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     };
   }
 
-  /** A column as a drop target: a move lands at its foot, and a photo stands there by itself. */
+  /**
+   * A column as a drop target: a move lands at its foot, and a photo stands there by itself. A move
+   * of the column itself goes to its last place there, which no card's drop gives, since a card takes
+   * a move just before it; the move already last there is not taken, as that drop would change nothing.
+   */
   function landOnColumn(section) {
     return function (what) {
       if (what.kind === 'beat') {
-        if (what.from === section.slot) return null;
+        if (what.from === section.slot) {
+          const last = section.beats[section.beats.length - 1];
+          if (!last || last.id === what.id) return null;
+          return function () { moveCard(what.id, section.slot, section.beats.length - 1); };
+        }
         return what.from === null
           ? function () { bringBack(what.id, section.slot); }
           : function () { moveCard(what.id, section.slot); };
