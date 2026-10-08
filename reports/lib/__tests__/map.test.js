@@ -283,6 +283,42 @@ describe('the map checks (spec 5.4)', () => {
     expect(failures[0].line).not.toMatch(/\bb4\b/);
   });
 
+  // Fix F3: the check rework reads this message beside C5's "Every beat keeps its id"
+  // (node-helpers.js buildRevisionContext), so the message says which beat keeps the id: the one
+  // the director's edits find by it, else the first; the others take new ids. Each beat is named
+  // by its move and its place, since a pass's copy of a beat shares its move.
+  describe("fix F3: the repeat's message says which beat keeps the id", () => {
+    const messageOf = (map, over) => mapFindings(map, inputs(over)).failures.find((f) => f.type === 'duplicate-beat-id').message;
+    const NEW_ID = 'a new id that no other beat, in the sections or in leftOut, carries.';
+
+    it('with no edit of the director\'s on the id, the first beat keeps it', () => {
+      const map = writers();
+      map.leftOut[0].id = 'b4';
+      expect(messageOf(map)).toBe(`Beats sharing the id b4: "The first vote, six to four" and "Kai at the coat check". Keep b4 on the first, "The first vote, six to four" (in section "theStory"), and give "Kai at the coat check" (in leftOut) ${NEW_ID}`);
+    });
+
+    it("the beat whose move the director rewrote keeps the id, though a rework wrote another beat under it earlier on the map", () => {
+      const left = writers();
+      left.sections[1].beats[1].move = 'The first vote goes six to four';
+      const standing = standingOnMap(null, writers(), left);
+      const pass = clone(left);
+      pass.sections[0].beats.push(move('b4', 'scene', 'A second beat under b4', ['Ellis']));
+      pass.leftOut.push(move('b4', 'scene', 'A third beat under b4', ['Kai']));
+      expect(messageOf(pass, { edits: carriedEdits(standing, pass) })).toBe('Beats sharing the id b4: "A second beat under b4", "The first vote goes six to four" and "A third beat under b4". '
+        + `Keep b4 on "The first vote goes six to four" (in section "theStory"), the beat the director's edits find by that id, and give "A second beat under b4" (in section "lede") and "A third beat under b4" (in leftOut) each ${NEW_ID}`);
+    });
+
+    it('when the director\'s edit finds two of the beats, the first keeps the id', () => {
+      const left = writers();
+      left.sections[1].beats[1].move = 'The first vote goes six to four';
+      const standing = standingOnMap(null, writers(), left);
+      const pass = clone(left);
+      pass.leftOut.push(clone(pass.sections[1].beats[1]));
+      expect(messageOf(pass, { edits: carriedEdits(standing, pass) })).toBe('Beats sharing the id b4: "The first vote goes six to four" and "The first vote goes six to four". '
+        + `Keep b4 on the first, "The first vote goes six to four" (in section "theStory"), and give "The first vote goes six to four" (in leftOut) ${NEW_ID}`);
+    });
+  });
+
   it('a value that is no map is one failure', () => {
     expect(mapFindings(null, inputs()).failures.map((f) => f.type)).toEqual(['no-map']);
   });

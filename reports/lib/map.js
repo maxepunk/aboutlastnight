@@ -531,6 +531,45 @@ function addressed(edits) {
     .map((edit) => ({ edit, address: mapEditAddress(edit) }));
 }
 
+/** A field of a beat at an edit's field steps, or undefined. */
+function beatFieldAt(beat, steps) {
+  let cur = beat;
+  for (const step of steps) {
+    if (!step || !('key' in step) || !cur || typeof cur !== 'object') return undefined;
+    cur = cur[step.key];
+  }
+  return cur;
+}
+
+/**
+ * Which beat under a repeated id keeps the id (fix F3): the one the director's edits find by that
+ * id, when they find exactly one, else the first in the map's order. A field edit finds the beat
+ * whose field holds the director's value; an edit of a beat's place finds the beat that sits where
+ * the edit puts it. The checks read the edits the map carries (lib/hand-edit-diff.js carriedEdits),
+ * and a beat in two places carries no edit of its place, so a field edit is the usual find.
+ *
+ * @param {string} id
+ * @param {Array<{beat: Object, slot: string|null}>} under - the beats under the id, in the map's order (allBeats)
+ * @param {Array<{edit: Object, address: Object|null}>} entries - the director's edits on the map (addressed)
+ * @returns {{keeper: {beat: Object, slot: string|null}, found: boolean}} `found` when the director's edits found it
+ */
+function keeperOfRepeatedId(id, under, entries) {
+  const holds = (value, after) => (typeof value === 'string' && typeof after === 'string'
+    ? value.trim() === after.trim()
+    : canonicalJson(value) === canonicalJson(after));
+  const found = new Set();
+  entries.forEach(({ edit, address }) => {
+    if (!address || address.kind !== 'beat' || isCut(edit) || String(address.identity.id).trim() !== id) return;
+    under.forEach((each) => {
+      const finds = address.fieldSteps.length > 0
+        ? holds(beatFieldAt(each.beat, address.fieldSteps), edit.after)
+        : (each.slot === null ? MAP_LEFT_OUT : each.slot) === address.container;
+      if (finds) found.add(each);
+    });
+  });
+  return found.size === 1 ? { keeper: [...found][0], found: true } : { keeper: under[0], found: false };
+}
+
 /** The players a beat, a gap note or a players list names. */
 function playersIn(value) {
   if (Array.isArray(value)) return value;
@@ -837,7 +876,8 @@ function cardFault(beat, evidence) {
  *
  * The checks:
  * - every beat has an id of its own, since the director's edits find a beat by its id
- *   (`duplicate-beat-id`);
+ *   (`duplicate-beat-id`); its message says which beat keeps the id, the one the director's edits
+ *   find by it or else the first, and gives the others new ids (keeperOfRepeatedId; fix F3);
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id the record holds, quotation, clock time or money
  *   figure): the gap note's line, each section's job, each beat's move and its synopsis in a
@@ -946,7 +986,13 @@ function mapFindings(map, inputs = {}) {
     if (added.length > 0) concern('duplicate-beat-id', added.map(({ edit }) => edit.id), 'The move you added shares its id with another move.');
     repeated.filter((id) => !theirs.includes(id)).forEach((id) => {
       const under = allBeats(map).filter(({ beat }) => beatIdOf(beat) === id);
-      fail('duplicate-beat-id', `Beats sharing the id ${id}: ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))}. Give each beat, in the sections and in leftOut, an id of its own.`,
+      // Fix F3: the check rework also reads "Every beat keeps its id" (node-helpers.js
+      // buildRevisionContext), so the message says which beat keeps it, as the weave's does.
+      const { keeper, found } = keeperOfRepeatedId(id, under, entries);
+      const others = under.filter((each) => each !== keeper);
+      const named = (each) => `"${textOf(each.beat.move)}" (${each.slot === null ? 'in leftOut' : `in section "${each.slot}"`})`;
+      const keep = found ? `Keep ${id} on ${named(keeper)}, the beat the director's edits find by that id` : `Keep ${id} on the first, ${named(keeper)}`;
+      fail('duplicate-beat-id', `Beats sharing the id ${id}: ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))}. ${keep}, and give ${listOf(others.map(named))} ${others.length > 1 ? 'each ' : ''}a new id that no other beat, in the sections or in leftOut, carries.`,
         `The writer gave the moves ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))} one id, so the map cannot move or edit them.`, beatPlace(under[0].slot, under[0].beat));
     });
   }
