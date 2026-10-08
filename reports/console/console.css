@@ -3220,6 +3220,15 @@ textarea.input {
    `.article-block--editable-always`, whose `padding-right` reserves the pencil's gutter, so they set
    their padding with the longhands: a `padding` shorthand here comes later in the file and would
    cancel it. Each thread's dot takes its tone's colour from the tokens on :root. */
+
+/* The map's stop takes the screen's width (fix E1; spec 2026-10-07 section 1: the article's shape
+   at a glance). Every other stop keeps .console-main's 960px. Five columns at their narrowest need
+   about 1,180px, so on a screen that wide every column shows with no sideways scroll; below it the
+   columns scroll sideways, and on a phone they stack. The stop's root is `.map` (Outline.js). */
+.console-main:has(.map) {
+  max-width: none;
+}
+
 .map__story,
 .map__top,
 .map__tally,

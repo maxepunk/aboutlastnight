@@ -1651,3 +1651,53 @@ describe("Fix B7: the run sheet names the board's controls as the board shows th
     expect(mapPart).toContain(advice);
   });
 });
+
+// Fix E1: the board fits a desktop screen (spec 2026-10-07 section 1: the director sees the
+// article's shape at a glance). Every stop sits in `.console-main`, 960px wide at most, where five
+// columns scrolled sideways and the Closing column was off a 1440px screen. The map's stop alone
+// takes the screen's width (the stop's root is `.map`, which `.console-main:has(.map)` reads), so
+// on a screen wide enough for every column, every column shows with no sideways scroll. The other
+// stops keep 960px, the columns still scroll below that width, and on a phone they still stack.
+describe('Fix E1: the board fits a desktop screen', () => {
+  const css = read('console.css');
+  const map = css.slice(css.indexOf('/* ── 4.9: the map ──'), css.indexOf("/* ── 4.10: the desk's marks ──"));
+  const src = read('components/checkpoints/Outline.js');
+  const ruleIn = (sheet, selector) => {
+    const at = sheet.indexOf(`\n${selector} {`);
+    return at === -1 ? '' : sheet.slice(at, sheet.indexOf('}', at));
+  };
+  const px = (body, property) => {
+    const m = new RegExp(`(?:^|[\\s;{])${property}:\\s*([^;]+);`).exec(body);
+    return m ? m[1].trim() : null;
+  };
+  const token = (name) => Number(new RegExp(`--${name}:\\s*(\\d+)px;`).exec(css)[1]);
+
+  it("keeps every other stop at 960px, and lets the map's stop take the screen's width", () => {
+    expect(px(ruleIn(css, '.console-main'), 'max-width')).toBe('960px');
+    expect(px(ruleIn(map, '.console-main:has(.map)'), 'max-width')).toBe('none');
+    // The rule finds the map's stop by its root, which no other screen of the console carries.
+    expect(src).toContain("React.createElement('div', { className: 'map flex flex-col gap-md' }");
+    const screens = ['app.js', ...fs.readdirSync(path.join(CONSOLE_DIR, 'components')).filter((f) => f.endsWith('.js')).map((f) => `components/${f}`),
+      ...fs.readdirSync(path.join(CONSOLE_DIR, 'components', 'checkpoints')).filter((f) => f.endsWith('.js') && f !== 'Outline.js').map((f) => `components/checkpoints/${f}`)];
+    screens.forEach((file) => expect(`${file}: ${/className: '(?:[^']* )?map(?: [^']*)?'/.test(read(file))}`).toBe(`${file}: false`));
+  });
+
+  it('on a 1440px screen, five columns at their narrowest fit inside the page with no sideways scroll', () => {
+    const columns = ruleIn(map, '.map__columns');
+    const narrowest = Number(/grid-auto-columns:\s*minmax\((\d+)px,/.exec(columns)[1]);
+    const gap = token(px(columns, 'gap').replace(/^var\(--|\)$/g, ''));
+    const board = narrowest * 5 + gap * 4;
+    // The page's padding: .console-main's on each side, then the stop's panel (.glass-panel) on each side.
+    const pagePadding = 2 * token(px(ruleIn(css, '.console-main'), 'padding').split(/\s+/)[1].replace(/^var\(--|\)$/g, ''))
+      + 2 * token(px(ruleIn(css, '.glass-panel'), 'padding').replace(/^var\(--|\)$/g, ''));
+    const scrollbar = 17;
+    expect(board).toBeGreaterThan(960);
+    expect(board + pagePadding).toBeLessThanOrEqual(1440 - scrollbar);
+  });
+
+  it('below that width the columns still scroll sideways, and on a phone they still stack', () => {
+    expect(px(ruleIn(map, '.map__columns'), 'overflow-x')).toBe('auto');
+    const narrow = map.slice(map.indexOf('@media (max-width: 768px)'));
+    expect(narrow).toMatch(/\.map__columns \{[^}]*grid-auto-flow:\s*row/);
+  });
+});
