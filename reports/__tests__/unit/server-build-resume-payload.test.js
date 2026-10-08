@@ -1952,8 +1952,12 @@ describe('4.9: the map\'s payload builders through buildResumePayload', () => {
       ['sections[#closing].beats[#b3]', 'theStory'],
       ['leftOut[#b4]', 'theStory'],
       ['topPhoto', 'theStory'],
-      ['sections[#theStory].photos[#hero.jpg]', 'topPhoto']
+      ['sections[#theStory].photos[#hero.jpg]', 'topPhoto'],
+      // Two beats arrived in Closing, b9 and b3, so its order is the director's too (piece 4, R3;
+      // 4C fix round 1, finding 3: only one arrival may sit at a section's foot without one).
+      ['sections[#closing].beats', null]
     ]);
+    expect(stateUpdates._outlineHandEdits.edits[7]).toMatchObject({ order: true, after: ['b6', 'b9', 'b3'] });
     expect(stateUpdates._outlineHandEdits.edits[4].struck).toBe(true);
     expect(stateUpdates.directorGateNotes).toEqual([expect.objectContaining({ gate: 'outline', kind: 'approval', text: 'Keep the bonus beat.' })]);
   });

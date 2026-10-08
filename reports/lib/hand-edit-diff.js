@@ -130,8 +130,8 @@
  * so no piece is an edit, and a restore of a beat the director placed keeps what a writer found
  * for it (overWritersBeat). Since phase 4b, piece 4 (R3), the order of a section's beats is the
  * order the article tells them, and the director's order is one edit per section, the section's
- * beat ids in their order (mapOrderOf): made where their version puts a beat that arrived in the
- * section anywhere but its foot, or holds two of its beats in another order; carried while the
+ * beat ids in their order (mapOrderOf): made unless their version holds the beats the section kept
+ * in their order, followed by at most one beat that arrived in it, at its foot; carried while the
  * beats it names that the section still holds sit in that order; replaced under its id by a later
  * reorder of the section; and put back after an automatic pass on the beats it names, in the
  * places they hold, last of the restores. A beat's summary (its synopsis) is a line like any other,
@@ -2689,10 +2689,13 @@ function sectionBeatIds(section) {
 
 /**
  * The director's order of each section where it is theirs (R3), one change per section, against
- * the map the director's version is read against: a section carries one when the director's
- * version puts a beat that arrived in it (moved, brought back or added) at a place other than its
- * foot, or holds two of the beats it held in that map in another order. A beat moved to the foot
- * of another section makes only its move. A section that map lacks carries none.
+ * the map the director's version is read against. A section carries none only when it holds the
+ * beats it kept from that map in their order there, followed by at most one beat that arrived in
+ * it (moved, brought back or added), which is then its last: R3's "a beat moved to the foot" is one
+ * beat. Every other placement makes the section's order edit: a beat that arrived anywhere but the
+ * foot, two of the beats it kept in another order, or a second arrival, above the first or below
+ * it, since the diff reads only versions and cannot tell a card dropped above an earlier arrival
+ * from two plain moves to the foot (fix round 1, finding 3). A section that map lacks carries none.
  *
  * @param {Object} before
  * @param {Object} after
@@ -2708,7 +2711,7 @@ function mapOrderChanges(before, after) {
     const now = sectionBeatIds(section).filter(Boolean);
     const arrived = now.filter((id) => !shown.includes(id));
     const keptAsShown = shown.filter((id) => now.includes(id));
-    if (same(now, [...keptAsShown, ...arrived])) return;
+    if (arrived.length <= 1 && same(now, [...keptAsShown, ...arrived])) return;
     out.push({ at: [{ key: 'sections' }, { index, match: { slot: section.slot } }, { key: 'beats' }], before: shown, after: now, order: true });
   });
   return out;

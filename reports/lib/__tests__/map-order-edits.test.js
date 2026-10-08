@@ -73,6 +73,70 @@ describe("4C: the director's order of a section is one edit, the section's beat 
   });
 });
 
+// Fix round 1, finding 3: R3's foot exception is one beat, "a beat moved to the foot". Two cards
+// that arrived in a column after the beats it kept no longer read as both at its foot, so a card
+// dropped above an earlier arrival makes the column's order edit, and a pass that swaps the two
+// is undone and reported. The diff reads only versions, so two plain moves to the foot of one
+// column carry its order too, in either order (the integrator to confirm).
+describe("4C, fix round 1: one beat that arrived in a column may sit at its foot without an order edit, and no more", () => {
+  /** b9 moved to the foot of Closing, then b2 dropped above it. */
+  const a2c = () => EditLogic.moveBeat(EditLogic.moveBeat(boardMap(), 'b9', 'closing'), 'b2', 'closing', 2);
+  /** b1 moved to the foot of Closing, its photo with it, then b2 dropped above it. */
+  const a2 = () => EditLogic.moveBeat(EditLogic.moveBeat(boardMap(), 'b1', 'closing'), 'b2', 'closing', 2);
+
+  it('a card dropped above a card that arrived before it: the move edits and the column\'s order edit', () => {
+    const shapes = [[a2c(), ['b15', 'b16', 'b2', 'b9']], [a2(), ['b15', 'b16', 'b2', 'b1']]];
+    shapes.forEach(([left, closing]) => {
+      expect(idsIn(left, 'closing')).toEqual(closing);
+      const orders = D.mapEditsBetween(boardMap(), left).filter((c) => c.order);
+      expect(orders.map((c) => [D._testing.pathOf(c.at), c.after])).toEqual([['sections[#closing].beats', closing]]);
+    });
+    expect(pathsOf(D.mapEditsBetween(boardMap(), a2()))).toEqual([
+      'sections[#closing].beats[#b2]', 'sections[#closing].beats[#b1]', 'sections[#closing].photos[#p02.jpg]', 'sections[#closing].beats'
+    ]);
+    expect(pathsOf(D.mapEditsBetween(boardMap(), a2c()))).toEqual(['sections[#closing].beats[#b2]', 'sections[#closing].beats[#b9]', 'sections[#closing].beats']);
+  });
+
+  it('one plain move to the foot still makes only its move edit', () => {
+    expect(pathsOf(D.mapEditsBetween(boardMap(), EditLogic.moveBeat(boardMap(), 'b9', 'closing')))).toEqual(['sections[#closing].beats[#b9]']);
+  });
+
+  it('two plain moves to the foot of one column carry its order, in either order', () => {
+    const firstThenSecond = EditLogic.moveBeat(EditLogic.moveBeat(boardMap(), 'b9', 'closing'), 'b2', 'closing');
+    const secondThenFirst = EditLogic.moveBeat(EditLogic.moveBeat(boardMap(), 'b2', 'closing'), 'b9', 'closing');
+    expect(D.mapEditsBetween(boardMap(), firstThenSecond).filter((c) => c.order).map((c) => c.after)).toEqual([['b15', 'b16', 'b9', 'b2']]);
+    expect(D.mapEditsBetween(boardMap(), secondThenFirst).filter((c) => c.order).map((c) => c.after)).toEqual([['b15', 'b16', 'b2', 'b9']]);
+  });
+
+  it('an automatic pass that swaps the two arrivals has them put back, with one order line in the report, and the page counts the order among the edits that stand', () => {
+    const { mapCheckpointData } = require('../map');
+    const { keptPhotoFilenames } = require('../workflow/nodes/ai-nodes');
+    const ViewLogic = require('../../console/checkpoint-view-logic');
+    const { boardMapState } = require('./fixtures/board-map');
+    const before = a2c();
+    const standing = D.standingOnMap(null, boardMap(), before);
+    const edits = D.carriedEdits(standing, before);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([
+      ['E1', 'sections[#closing].beats[#b2]'], ['E2', 'sections[#closing].beats[#b9]'], ['E3', 'sections[#closing].beats']
+    ]);
+    const pass = clone(before);
+    const closing = pass.sections.find((s) => s.slot === 'closing');
+    closing.beats = [beatOf(pass, 'b15'), beatOf(pass, 'b16'), beatOf(pass, 'b9'), beatOf(pass, 'b2')];
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+    expect(idsIn(settled.output, 'closing')).toEqual(['b15', 'b16', 'b2', 'b9']);
+    expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
+    expect(settled.report.changed).toEqual([expect.objectContaining({
+      id: 'E3', where: 'section "closing", the order of its moves', automatic: true, restored: true
+    })]);
+    // The page's line is true of the map the stop shows: code put the order back, so the round
+    // lists no changed line (changedEditsToShow) and every edit stands, the order among them.
+    const state = boardMapState({ outline: settled.output, _mapBaseline: settled.output, _outlineHandEdits: standing, _outlineHandEditReport: settled.report });
+    const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, state.outline.topPhoto), evidenceIndex: {}, maxRevisions: 1 });
+    const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+    expect(view.kept).toBe('All 3 of your edits stand.');
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // It stands across looks (R3)
 // ═══════════════════════════════════════════════════════════════════════════
