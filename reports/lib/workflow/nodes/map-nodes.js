@@ -38,7 +38,7 @@ const {
   mapDirectorsShare, mapWritersShareOf, mapWritersTextBlank, mapLengthOf, mapLegendOf, MAP_CHECKS_SOURCE
 } = require('../../map');
 const { meetingDirectorsThreads } = require('../../meeting');
-const { carriedEdits, directorEditConcern } = require('../../hand-edit-diff');
+const { carriedEdits, standingEditsOf, directorEditConcern } = require('../../hand-edit-diff');
 const { weaveIdOf, settledAngleOf } = require('../../weave');
 const { evidenceContextOf } = require('../../evidence');
 const { stopPage, wordsShown, PAGE_REGIONS } = require('../../stop-pages');
@@ -159,6 +159,10 @@ function mapCheckInputsOf(state, map) {
     meetingEdits: meetingEditIdsOf(state),
     meetingNote: meetingNoteOf(state),
     edits: carriedEdits(state._outlineHandEdits, map),
+    // Fix F, second round: the repeat check finds the beat that keeps a repeated id by the
+    // director's standing edits, carried or not, since a repeat leaves an edit of a beat's place
+    // uncarried (lib/map.js keeperOfRepeatedId).
+    standingEdits: (standingEditsOf(state._outlineHandEdits) || { edits: [] }).edits,
     // Phase 4b (brief 1D): what the evidence and story-terms checks read.
     evidence: evidenceContextOf(state),
     // Fix round 2: the director's words name a photo by their description of it.

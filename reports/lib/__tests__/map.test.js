@@ -317,6 +317,52 @@ describe('the map checks (spec 5.4)', () => {
       expect(messageOf(pass, { edits: carriedEdits(standing, pass) })).toBe('Beats sharing the id b4: "The first vote goes six to four" and "The first vote goes six to four". '
         + `Keep b4 on the first, "The first vote goes six to four" (in section "theStory"), and give "The first vote goes six to four" (in leftOut) ${NEW_ID}`);
     });
+
+    // Fix F, second round: an edit of a beat's place stands, but the map carries it only while the
+    // beat sits there and nowhere else, so a repeat leaves it uncarried. The keeper reads the
+    // director's standing edits, and the place edit finds the beat that sits where they put it: a
+    // copy a pass left in another place is the pass's (fix round 1).
+    describe("the director's edit of the beat's place finds it, carried or not", () => {
+      const EditLogic = require('../../console/outline-edit-logic');
+      const keepingOf = (pass, standing) => messageOf(pass, { edits: carriedEdits(standing, pass), standingEdits: standing.edits });
+
+      it('a move: the director moved the opening beat into The Story, and a send-back\'s rework wrote another beat under its id in the lede; the director\'s beat keeps the id', () => {
+        const left = EditLogic.moveBeat(writers(), 'b1', 'theStory');
+        const standing = standingOnMap(null, writers(), left);
+        expect(standing.edits.map((e) => [e.id, e.from])).toEqual([['E1', 'lede']]);
+        const pass = clone(left);
+        pass.sections[0].beats.unshift(move('b1', 'scene', 'A new beat under b1', ['Ellis']));
+        expect(carriedEdits(standing, pass)).toEqual([]);
+        expect(keepingOf(pass, standing)).toBe('Beats sharing the id b1: "A new beat under b1" and "The scoreboard goes up on the screen". '
+          + `Keep b1 on "The scoreboard goes up on the screen" (in section "theStory"), the beat the director's edits find by that id, and give "A new beat under b1" (in section "lede") ${NEW_ID}`);
+      });
+
+      it('a strike: the director struck the first vote, and a send-back\'s rework wrote it back into The Story; the struck beat keeps the id', () => {
+        const left = EditLogic.strikeBeat(writers(), 'b4');
+        const standing = standingOnMap(null, writers(), left);
+        expect(standing.edits.map((e) => [e.id, e.struck])).toEqual([['E1', true]]);
+        const pass = clone(left);
+        pass.sections[1].beats.splice(1, 0, move('b4', 'scene', 'The first vote, told again', ['Mira', 'Vale']));
+        expect(carriedEdits(standing, pass)).toEqual([]);
+        expect(keepingOf(pass, standing)).toBe('Beats sharing the id b4: "The first vote, told again" and "The first vote, six to four". '
+          + `Keep b4 on "The first vote, six to four" (in leftOut), the beat the director's edits find by that id, and give "The first vote, told again" (in section "theStory") ${NEW_ID}`);
+      });
+
+      it("a bring-back, through the check node: the rework reads the message naming the beat the director brought back, from the standing edits in state", () => {
+        const { boardMap, boardMapState } = require('./fixtures/board-map');
+        const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
+        const left = EditLogic.bringBackBeat(boardMap(), 'b17', 'closing');
+        const standing = standingOnMap(null, boardMap(), left);
+        expect(standing.edits.map((e) => [e.id, e.from])).toEqual([['E1', 'leftOut']]);
+        const pass = clone(left);
+        pass.sections[0].beats.unshift({ ...clone(pass.sections[4].beats[2]), move: 'A new beat under b17', synopsis: 'A new beat, and the room moves on.' });
+        const { validationResults } = checkMap(boardMapState({ outline: pass, _outlineHandEdits: standing }));
+        expect(validationResults.structuralIssues.filter((m) => m.startsWith('Beats sharing'))).toEqual([
+          'Beats sharing the id b17: "A new beat under b17" and "The other suspects let go". '
+            + `Keep b17 on "The other suspects let go" (in section "closing"), the beat the director's edits find by that id, and give "A new beat under b17" (in section "lede") ${NEW_ID}`
+        ]);
+      });
+    });
   });
 
   it('a value that is no map is one failure', () => {

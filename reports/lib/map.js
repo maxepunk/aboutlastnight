@@ -544,13 +544,16 @@ function beatFieldAt(beat, steps) {
 /**
  * Which beat under a repeated id keeps the id (fix F3): the one the director's edits find by that
  * id, when they find exactly one, else the first in the map's order. A field edit finds the beat
- * whose field holds the director's value; an edit of a beat's place finds the beat that sits where
- * the edit puts it. The checks read the edits the map carries (lib/hand-edit-diff.js carriedEdits),
- * and a beat in two places carries no edit of its place, so a field edit is the usual find.
+ * whose field holds the director's value; an edit of a beat's place (a beat they moved, struck,
+ * brought back or added) finds the beat that sits where the edit puts it. It reads the director's
+ * standing edits, carried or not (fix F, second round): the map carries an edit of a beat's place
+ * only while the beat sits there and nowhere else (lib/hand-edit-diff.js mapEditCarried), so a
+ * repeat leaves it uncarried, and the beat it finds is still theirs, since a copy a pass left in
+ * another place is the pass's (fix round 1).
  *
  * @param {string} id
  * @param {Array<{beat: Object, slot: string|null}>} under - the beats under the id, in the map's order (allBeats)
- * @param {Array<{edit: Object, address: Object|null}>} entries - the director's edits on the map (addressed)
+ * @param {Array<{edit: Object, address: Object|null}>} entries - the director's standing edits on the map (addressed)
  * @returns {{keeper: {beat: Object, slot: string|null}, found: boolean}} `found` when the director's edits found it
  */
 function keeperOfRepeatedId(id, under, entries) {
@@ -876,8 +879,9 @@ function cardFault(beat, evidence) {
  *
  * The checks:
  * - every beat has an id of its own, since the director's edits find a beat by its id
- *   (`duplicate-beat-id`); its message says which beat keeps the id, the one the director's edits
- *   find by it or else the first, and gives the others new ids (keeperOfRepeatedId; fix F3);
+ *   (`duplicate-beat-id`); its message says which beat keeps the id, the one the director's
+ *   standing edits find by it, carried or not, or else the first, and gives the others new ids
+ *   (keeperOfRepeatedId; fix F3 and its second round);
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id the record holds, quotation, clock time or money
  *   figure): the gap note's line, each section's job, each beat's move and its synopsis in a
@@ -947,6 +951,9 @@ function cardFault(beat, evidence) {
  *   the meeting's own form (meetingEditIdsOf)
  * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
+ * @param {Object[]} [inputs.standingEdits] - the director's standing edits, carried or not, by which
+ *   the repeat check finds the beat that keeps a repeated id (keeperOfRepeatedId); none, the edits
+ *   the map carries
  * @param {Object} [inputs.photoDescriptions] - the director's description of each photo, `{filename: text}`,
  *   by which the director's words name a photo (a failure's `line`, a concern's finding)
  * @param {Object} [inputs.evidence] - what the evidence, story-terms and card checks read
@@ -970,6 +977,8 @@ function mapFindings(map, inputs = {}) {
   const kept = Array.isArray(inputs.keptPhotos) ? inputs.keptPhotos.filter((f) => typeof f === 'string' && f.trim()) : [];
   const edits = (Array.isArray(inputs.edits) ? inputs.edits : []).filter((edit) => edit && edit.scope === MAP_SCOPE);
   const entries = addressed(edits);
+  // Fix F, second round: the repeat check's keeper reads every standing edit, carried or not.
+  const standingEntries = Array.isArray(inputs.standingEdits) ? addressed(inputs.standingEdits) : entries;
   const share = mapDirectorsShare(edits);
   const evidence = inputs.evidence || null;
   const failures = [];
@@ -988,7 +997,7 @@ function mapFindings(map, inputs = {}) {
       const under = allBeats(map).filter(({ beat }) => beatIdOf(beat) === id);
       // Fix F3: the check rework also reads "Every beat keeps its id" (node-helpers.js
       // buildRevisionContext), so the message says which beat keeps it, as the weave's does.
-      const { keeper, found } = keeperOfRepeatedId(id, under, entries);
+      const { keeper, found } = keeperOfRepeatedId(id, under, standingEntries);
       const others = under.filter((each) => each !== keeper);
       const named = (each) => `"${textOf(each.beat.move)}" (${each.slot === null ? 'in leftOut' : `in section "${each.slot}"`})`;
       const keep = found ? `Keep ${id} on ${named(keeper)}, the beat the director's edits find by that id` : `Keep ${id} on the first, ${named(keeper)}`;
