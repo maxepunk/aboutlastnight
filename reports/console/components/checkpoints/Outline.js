@@ -21,8 +21,8 @@
  *
  * A card shows its title with the arrow that opens its summary, its people, its dots (each names
  * its thread in its title), the "Card" mark and its thumbnails, and what the round says of it
- * under its title (spec 7). Selecting a card (a click, or Enter where it has focus) opens it in
- * place with its summary, its people, its threads by name, its photos with their descriptions, its
+ * under its title (spec 7). A card is a button named by the move it selects; selecting it (a
+ * click, or Enter or Space where it has focus) opens it in place with its summary, its people, its threads by name, its photos with their descriptions, its
  * controls and what's behind it; clicking it again, Escape, or selecting something else closes it.
  * A move in the tray and a photo open the same way. The summaries' toggles and the selection are
  * this screen's own state, folded each time the page opens.
@@ -343,14 +343,17 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
 
   function isSelected(sel) { return selected === sel; }
 
-  /** A card's or a photo's click and keys: a click or Enter selects it, Escape closes it; one from its own controls or open parts does neither. */
+  /**
+   * A card's click and keys: a click, Enter or Space selects it, as a button's would (fix B3), and
+   * Escape closes it; one from its own controls or open parts does neither.
+   */
   function selectHandlers(sel) {
     return {
       onClick: function (e) { if (!fromInside(e)) select(sel); },
       onKeyDown: function (e) {
         if (!e) return;
         if (closeOnEscape(sel, e)) return;
-        if (e.key === 'Enter' && (!e.target || e.target === e.currentTarget)) {
+        if ((e.key === 'Enter' || e.key === ' ') && (!e.target || e.target === e.currentTarget)) {
           if (typeof e.preventDefault === 'function') e.preventDefault();
           select(sel);
         }
@@ -834,6 +837,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       key: beat.key,
       className: cardClass(beat, (selectedHere ? ' map__card--selected' : '') + (editingHere ? ' map__editing' : '')),
       tabIndex: 0,
+      // Fix B3: a card is a control, a button named by the move it selects.
+      role: 'button',
+      'aria-label': beat.labels.select,
       'aria-expanded': selectedHere,
       title: !selectedHere && selectHeld ? selectHeld : undefined
     }, selectHandlers(sel), cardDrag(beat, slot, editingHere), dropTarget('card:' + beat.key, landOnCard(section, beat))),
@@ -883,6 +889,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       key: item.key,
       className: cardClass(item, ' map__card--tray' + (selectedHere ? ' map__card--selected' : '')),
       tabIndex: 0,
+      // Fix B3: a card is a control, a button named by the move it selects.
+      role: 'button',
+      'aria-label': item.labels.select,
       'aria-expanded': selectedHere,
       title: !selectedHere && selectHeld ? selectHeld : undefined
     }, selectHandlers(sel), cardDrag(item, null, false)),

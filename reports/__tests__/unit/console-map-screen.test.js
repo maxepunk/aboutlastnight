@@ -1537,3 +1537,29 @@ describe('Fix B2: each control on the board is named by the words it shows', () 
     expect(elementsOf(tree, (n) => n.type === 'label' && n.props.htmlFor === 'map-note')).toHaveLength(1);
   });
 });
+
+// Fix B3: a card is a control, so it has the role of a button and a name, the view's
+// `labels.select`, in a column and in the tray; as a button, Space selects it as Enter does.
+describe('Fix B3: a card has a role and a name', () => {
+  const data = boardPayloadOf();
+  const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+
+  it("each card in a column and in the tray is a button named by the view's labels.select", () => {
+    const tree = mountMap({ data }).render();
+    const cards = columnCards(tree);
+    expect(cards.map((c) => [c.props.role, c.props['aria-label']])).toEqual(viewBeats(view).map((b) => ['button', b.labels.select]));
+    const tray = elementsOf(elementsOf(tree, hasClass('map__tray'))[0], hasClass('map__card'));
+    expect(tray.length).toBeGreaterThan(0);
+    expect(tray.map((c) => [c.props.role, c.props['aria-label']])).toEqual(view.leftOut.items.map((b) => ['button', b.labels.select]));
+  });
+
+  it('Space selects a card that has focus, as Enter does', () => {
+    const mounted = mountMap({ data });
+    const title = 'Marcus asks Quinn to raise the dose';
+    const card = cardOf(mounted.render(), title);
+    let prevented = false;
+    card.props.onKeyDown({ key: ' ', target: card, currentTarget: card, preventDefault: () => { prevented = true; } });
+    expect(prevented).toBe(true);
+    expect(mapClassesOf(cardOf(mounted.render(), title))).toContain('map__card--selected');
+  });
+});
