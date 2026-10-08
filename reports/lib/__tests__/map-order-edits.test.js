@@ -330,8 +330,9 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
 
 // Fix A (the integrator's ruling: the spec's section 17 wins): code puts the director's order back
 // by putting each beat it names back into the section, at its place in that order, from wherever
-// the pass put it, so it prints once; a beat the pass removed from the map comes from the version
-// the pass started from. Each beat the pass added keeps its place relative to the others.
+// the pass put it, so it prints once. Each beat the pass added keeps its place relative to the
+// others. Fix C2: a writer's beat the pass removed from the map stays out, as a beat the director
+// only moved does (mapRestoresWhenGone), and the order holds for the beats that remain.
 describe("Fix A: the order's restore puts each beat it names back into the section, from wherever the pass put it", () => {
   /** The director's map: Jess moved above Marcus's request, in The Story. */
   const directors = () => EditLogic.moveBeatBy(boardMap(), 'b5', -1);
@@ -371,21 +372,22 @@ describe("Fix A: the order's restore puts each beat it names back into the secti
     expect(placesOf(output, 'b4')).toEqual(['theStory']);
   });
 
-  it('a beat the pass removed from the map comes back from the version the pass started from, evidence and all', () => {
+  it('fix C2: a beat the pass removed from the map stays out, and the beats that remain go back into the order', () => {
     const before = directors();
     const pass = passOf(before, (map, story) => { story.beats.splice(2, 1); });
     const { output } = settle(before, pass);
-    expect(idsIn(output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b20', 'b7', 'b8']);
-    expect(beatOf(output, 'b4')).toEqual(beatOf(before, 'b4'));
-    expect(DIRECTORS_STORY.every((id) => placesOf(output, id).length === 1)).toBe(true);
+    expect(idsIn(output, 'theStory')).toEqual(['b3', 'b5', 'b6', 'b20', 'b7', 'b8']);
+    expect(placesOf(output, 'b4')).toEqual([]);
+    expect(DIRECTORS_STORY.filter((id) => id !== 'b4').every((id) => placesOf(output, id).length === 1)).toBe(true);
   });
 });
 
 // Fix A, items 1, 2 and 5: the order stands while its section holds every beat it names, in the
 // director's order. A named beat a pass took out of the section breaks it (moved to another section,
-// put into left out, or gone from the map), and code puts it back after an automatic pass. A
-// send-back's rework that does the same is reported with its reason and not restored. Only the
-// director's own changes narrow it, at their next look.
+// put into left out, or gone from the map), and code puts it back after an automatic pass, but for
+// a beat gone from the map, which stays out (fix C2). A send-back's rework that does the same is
+// reported with its reason and not restored. Only the director's own changes narrow it, at their
+// next look, and code's, by the beats a pass removed from the map (fix C2).
 describe('Fix A: the order stands while its section holds every beat it names, and code puts it back', () => {
   const { mapCheckpointData } = require('../map');
   const { keptPhotoFilenames } = require('../workflow/nodes/ai-nodes');
@@ -429,15 +431,18 @@ describe('Fix A: the order stands while its section holds every beat it names, a
     expect(pageOf(settled.output, standing, settled.report).kept).toBe('Your edit stands.');
   });
 
-  it('a pass that removes a named move from the map: it comes back at its place, from the version the pass started from', () => {
+  it('fix C2: a pass that removes a named move from the map: it stays out, and the report names it, with nothing to put back in the order', () => {
     const before = headMoved();
     const edits = editsOf(boardMap(), before);
     const pass = clone(before);
     pass.sections.find((s) => s.slot === 'theStory').beats.splice(2, 1);
     const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
-    expect(idsIn(settled.output, 'theStory')).toEqual(HEAD_ORDER);
-    expect(beatOf(settled.output, 'b4')).toEqual(beatOf(before, 'b4'));
-    expect(settled.report.changed).toEqual([expect.objectContaining({ id: 'E1', automatic: true, restored: true })]);
+    expect(idsIn(settled.output, 'theStory')).toEqual(HEAD_ORDER.filter((id) => id !== 'b4'));
+    expect(placesOf(settled.output, 'b4')).toEqual([]);
+    expect(settled.report.changed).toEqual([expect.objectContaining({
+      id: 'E1', where: 'section "theStory", beat "b4"', moved: true, automatic: true, restored: false, became: null,
+      title: 'Marcus asks Quinn to raise the dose'
+    })]);
   });
 
   it("a check rework never reads an order line naming fewer beats than the director's order", () => {
@@ -679,5 +684,75 @@ describe("Fix C: the edge cases of the director's order", () => {
     expect(photoPlaces(settled.output, 'p03.jpg')).toEqual([{ slot: 'theStory', beat: 'b3' }]);
     expect(settled.output.sections.find((s) => s.slot === 'closing').photos).toEqual(boardMap().sections[4].photos);
     expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1']);
+  });
+
+  // C2: the rule every other map edit follows (mapRestoresWhenGone). A writer's move the pass
+  // removed from the map stays out: only its place was the director's, and its removal can be the
+  // fix of a fault in the writer's text. The order holds for the moves that remain, and the report
+  // records the removed move, which the page names by its title.
+  describe('C2: a named move the pass removed from the map stays out', () => {
+    const { mapCheckpointData } = require('../map');
+    const { keptPhotoFilenames } = require('../workflow/nodes/ai-nodes');
+    const ViewLogic = require('../../console/checkpoint-view-logic');
+    const { boardMapState } = require('./fixtures/board-map');
+    const pageOf = (map, standing, report) => {
+      const state = boardMapState({ outline: map, _mapBaseline: map, _outlineHandEdits: standing, _outlineHandEditReport: report, humanOutlineRevisionCount: 1 });
+      const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, state.outline.topPhoto), evidenceIndex: {}, maxRevisions: 1 });
+      return ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+    };
+
+    it('the pass removes a writer\'s move and swaps two others: it stays out, the rest go back into the order, and the page names it by its title', () => {
+      const before = EditLogic.moveBeat(boardMap(), 'b5', 'theStory', 0);
+      const standing = D.standingOnMap(null, boardMap(), before);
+      const edits = D.carriedEdits(standing, before);
+      expect(edits.map((e) => [e.id, e.after])).toEqual([['E1', ['b5', 'b3', 'b4', 'b6', 'b7', 'b8']]]);
+      const pass = clone(before);
+      const story = pass.sections.find((s) => s.slot === 'theStory');
+      story.beats = ['b5', 'b3', 'b7', 'b6', 'b8'].map((id) => beatOf(before, id));
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+      expect(idsIn(settled.output, 'theStory')).toEqual(['b5', 'b3', 'b6', 'b7', 'b8']);
+      expect(beatPlaces(settled.output, 'b4')).toEqual([]);
+      expect(settled.report.changed).toEqual([
+        expect.objectContaining({ id: 'E1', where: 'section "theStory", the order of its moves', automatic: true, restored: true }),
+        expect.objectContaining({
+          id: 'E1', where: 'section "theStory", beat "b4"', moved: true, automatic: true, restored: false, became: null,
+          director: 'Marcus asks Quinn to raise the dose (shows Quinn)', title: 'Marcus asks Quinn to raise the dose'
+        })
+      ]);
+      // The order stands narrowed to the moves that remain, as code put it back.
+      expect(settled.narrowed.map((e) => [e.id, e.after])).toEqual([['E1', ['b5', 'b3', 'b6', 'b7', 'b8']]]);
+      expect(D.carriedEdits(settled.narrowed, settled.output).map((e) => e.id)).toEqual(['E1']);
+      const view = pageOf(settled.output, standing, settled.report);
+      expect(view.kept).toBe('');
+      expect(view.sections.find((s) => s.slot === 'theStory').changed).toEqual([
+        'The Story, the move "Marcus asks Quinn to raise the dose": automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.'
+      ]);
+    });
+
+    it('a move the director placed in the order, which the pass removed, is reported once, by its own edit', () => {
+      const before = EditLogic.moveBeat(boardMap(), 'b2', 'theStory', 1);
+      const edits = editsOf(boardMap(), before);
+      expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b2]'], ['E2', 'sections[#theStory].beats']]);
+      const pass = clone(before);
+      const story = pass.sections.find((s) => s.slot === 'theStory');
+      story.beats = story.beats.filter((b) => b.id !== 'b2');
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+      expect(beatPlaces(settled.output, 'b2')).toEqual([]);
+      expect(idsIn(settled.output, 'theStory')).toEqual(['b3', 'b4', 'b5', 'b6', 'b7', 'b8']);
+      expect(settled.report.changed.map((c) => [c.id, c.where, c.moved, c.restored])).toEqual([
+        ['E1', 'section "theStory", beat "b2", moved from section "lede"', true, false]
+      ]);
+    });
+
+    it('a move the director added that the pass removed is put back by its own edit, and the order holds on it', () => {
+      const added = EditLogic.addBeat(boardMap(), 'closing', 'Kai leaves before the count', 'Kai');
+      const before = EditLogic.moveBeatBy(added, 'b19', -1);
+      const edits = editsOf(boardMap(), before);
+      const pass = clone(before);
+      pass.sections.find((s) => s.slot === 'closing').beats = pass.sections.find((s) => s.slot === 'closing').beats.filter((b) => b.id !== 'b19');
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+      expect(idsIn(settled.output, 'closing')).toEqual(['b15', 'b19', 'b16']);
+      expect(settled.narrowed).toEqual([]);
+    });
   });
 });

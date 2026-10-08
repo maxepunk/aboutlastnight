@@ -2764,15 +2764,40 @@ function narrowedOrder(edit, map) {
 }
 
 /**
+ * The beats an order names that `map` holds nowhere, in the sections or in left out (fix C2): the
+ * ones a pass removed from the map, which stay out.
+ */
+function orderGoneFrom(order, map) {
+  return order.ids.filter((id) => mapPlaces(map, 'beat', { id }).length === 0);
+}
+
+/**
+ * An order named by the beats `map` still holds anywhere (fix C2): the edit itself while it holds
+ * them all, a copy naming the rest, in the director's order, when a pass removed one from the map,
+ * and null when fewer than two remain, which is no order. A beat a pass removed from the map stays
+ * out (restoreMapOrder), so the order code puts back is this one.
+ */
+function orderOnMap(edit, map) {
+  const order = mapOrderOf(edit);
+  const gone = orderGoneFrom(order, map);
+  if (gone.length === 0) return edit;
+  const held = order.ids.filter((id) => !gone.includes(id));
+  return held.length < MAP_ORDER_MIN_BEATS ? null : { ...edit, after: held };
+}
+
+/**
  * Put the director's order back into `out`, the pass's output (changed in place; R3, fix A: the
- * spec's section 17). Each beat it names goes back into the section, so it prints once there:
+ * spec's section 17). Each beat it names that the map still holds goes back into the section, so it
+ * prints once there:
  * - the beats the section holds go into the director's order in the places they hold, a second
  *   copy of one in the section taken out;
  * - a beat the pass took out of the section comes from wherever the pass put it (another section,
- *   or left out), and one the pass removed from the map from `before`, the version the pass started
- *   from; it goes right after the beat before it in the director's order, or right before the beat
- *   after it when it opens that order, and where the section holds none of them, at the place it
- *   held in `before`.
+ *   or left out); it goes right after the beat before it in the director's order, or right before
+ *   the beat after it when it opens that order, and where the section holds none of them, at the
+ *   place it held in `before`, the version the pass started from;
+ * - a beat the pass removed from the map stays out (fix C2), as a beat the director only moved
+ *   does (mapRestoresWhenGone): only its place was theirs, and its removal can be the fix of a
+ *   fault in the writer's text. A beat the director added goes back by its own edit, first.
  * Every other beat stays where the pass put it, so a beat the pass added keeps its place relative
  * to the others. The photos beside a beat it names that sit in another section come with the beat,
  * to the foot of the section's photos, as the director's own move takes them (carryPhotosBeside;
@@ -2789,17 +2814,14 @@ function restoreMapOrder(order, before, out) {
   const was = Array.isArray(section.beats) ? section.beats : [];
   const idOf = (beat) => (isObj(beat) ? mapIdText(beat.id) : '');
   const rank = (id) => order.ids.indexOf(id);
-  // The beat each id names: the section's own, else the one the pass put elsewhere on the map,
-  // else the one `before` held, in this section where it can.
+  // The beat each id names: the section's own, else the one the pass put elsewhere on the map. One
+  // the map no longer holds stays out (fix C2).
   const held = new Map();
   was.forEach((beat) => { if (rank(idOf(beat)) !== -1 && !held.has(idOf(beat))) held.set(idOf(beat), beat); });
   const elementOf = (id) => {
     if (held.has(id)) return held.get(id);
     const elsewhere = mapPlaces(out, 'beat', { id })[0];
-    if (elsewhere) return elsewhere.element;
-    const places = mapPlaces(before, 'beat', { id });
-    const place = places.find((p) => p.container === order.slot) || places[0];
-    return place ? clone(place.element) : null;
+    return elsewhere ? elsewhere.element : null;
   };
   const elements = new Map(order.ids.map((id) => [id, elementOf(id)]).filter(([, element]) => element));
   let written = false;
@@ -4619,7 +4641,13 @@ function cameBackStillIn(report, stored) {
  *   it names out of the section (piece 4, R3; fix A), is one entry, at `section "<slot>", the
  *   order of its moves`, its `director` the beats it names by their titles in the director's order
  *   and its `became` those the section holds in the pass's order (null when it holds none, or the
- *   pass removed the section), and `restored` says code put the order back.
+ *   pass removed the section), and `restored` says code put the order back. After a pass held to
+ *   the edits (fix C2), a beat the order names that the pass removed from the map stays out, so the
+ *   order is read on the beats the version stored holds (orderOnMap), and each removed beat is an
+ *   entry of its own, at `section "<slot>", beat "<id>"`, `moved` with `became` null, as a beat the
+ *   director moved that a pass removed is, its `director` the beat by its move and its people and
+ *   its `title` its move, by which the page names a beat the map no longer holds; a beat a move
+ *   edit of the director's placed is reported by that edit alone.
  * `checked` lists every id the round's passes checked. The server resets the report at
  * each send-back (and, at the story meeting, at each reweave), so it holds one round.
  *
@@ -4661,6 +4689,11 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   // Piece 3 (the final review): a thread's place in an angle the pass took out whole went with the
   // angle, so the entry says so (`angleTakenOut`) and never reads as the pass undoing it there.
   const angleTakenOutOf = (membership) => (membership && angleUnder(after, membership.angleId) === null ? { angleTakenOut: true } : {});
+  // Fix C2: a beat one of the director's moves places on the map, whose own entry reports it.
+  const placedByMove = (id) => carried.some((m) => {
+    const address = isMove(m) ? mapAddressOf(m) : null;
+    return Boolean(address) && address.kind === 'beat' && address.fieldSteps.length === 0 && mapIdText(address.identity.id) === id;
+  });
   const changed = [];
   carried.forEach((e) => {
     if (isCut(e)) {
@@ -4695,6 +4728,29 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
           ...(back && isMoveWithin(e) && { inOrder: editCarried(stored, e) })
         }));
       }
+      return;
+    }
+    // Fix C2: after a pass held to the edits, a beat the director's order names that the pass
+    // removed from the map stays out, so the order is read on the beats the version stored still
+    // holds (orderOnMap), and is an entry only where the pass changed it there. Each removed beat is
+    // an entry of its own, at its place in the section, as a beat the director moved that a pass
+    // removed is (`moved`, `became` null), with its `title`, by which the page names a beat the map
+    // no longer holds. A beat a move edit of theirs placed is reported by that edit. A section the
+    // version stored lacks took the order with it, which is one entry, the order gone, as below.
+    const order = automatic ? mapOrderOf(e) : null;
+    if (order && sectionOfSlot(stored, order.slot)) {
+      const onMap = orderOnMap(e, stored);
+      if (onMap && !editCarried(after, onMap)) {
+        changed.push(entry(e, { director: textOf(onMap, onMap.after), became: becameOf(onMap, before, after), restored: putBack.has(e.id) }));
+      }
+      orderGoneFrom(order, stored).filter((id) => !placedByMove(id)).forEach((id) => {
+        const place = mapPlaces(before, 'beat', { id })[0];
+        const title = place ? editValueText(place.element.move) : '';
+        changed.push(entry(e, {
+          where: `section "${order.slot}", beat "${id}"`, moved: true, director: place ? mapBeatText(place.element) : '', became: null,
+          ...(title && { title })
+        }));
+      });
       return;
     }
     // Piece 3 (the final review): a thread the director added that the pass kept in their words and
@@ -4769,7 +4825,10 @@ function reportWithHeld(report, held) {
  * keeps its place (restoreMapOrder; piece 4, R3; fix A): every order the output no longer carries,
  * the ones the pass changed or broke by taking a beat it names out of the section, and the ones
  * code's own restores broke by putting a beat back at its place (fix round 1, findings 1 and 2);
- * the report records only an order the pass changed or broke. A section the pass removed takes
+ * the report records only an order the pass changed or broke. A beat the order names that the
+ * pass removed from the map stays out, as a beat the director only moved does
+ * (mapRestoresWhenGone), and the order goes back on the beats that remain (orderOnMap; fix C2),
+ * which it stands as from here on (`narrowed`). A section the pass removed takes
  * the order with it: nothing goes back, and the report says the order is gone. Code also holds
  * each section the director dropped by its slot (droppedSlotsOf,
  * console/outline-edit-logic.js holdDroppedSections; task 4.14b, fix round 1): a section the pass
@@ -4802,8 +4861,9 @@ function reportWithHeld(report, held) {
  * @param {string|null} [pass.whiteboard] - the whiteboard photo's filename, which no list
  *   holds and the article never prints (T13; task 4.5g)
  * @returns {{output: *, report: Object|null, narrowed: Object[]}} the version to store, the
- *   report, and each edit code put back without a photo it left out, as it stands now: empty
- *   unless the pass was given `photos` or `whiteboard`, as only the article's rework is
+ *   report, and each edit that stands narrowed, as it stands now: an edit code put back without a
+ *   photo it left out, which only the article's rework, given `photos` or `whiteboard`, has; and
+ *   on the map, the director's order put back on the beats a pass left on the map (fix C2)
  */
 function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [], photos, whiteboard = null } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
@@ -4868,8 +4928,9 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // An edit is unprintable when a photo block of it the article cannot print prints
       // nowhere in the version stored.
       changed.forEach((e) => {
-        const asRestored = editAsRestored(e, leavesOut);
-        const carriedNow = editCarried(output, asRestored);
+        // Fix C2: the director's order is put back on the beats the map still holds (orderOnMap).
+        const asRestored = isMapOrder(e) ? orderOnMap(e, output) : editAsRestored(e, leavesOut);
+        const carriedNow = asRestored !== null && editCarried(output, asRestored);
         if (carriedNow || backInSection(e, after, output)) restored.push(e.id);
         if (carriedNow && asRestored !== e) narrowed.push(asRestored);
         if (unprintablePhotosOf(e, before, photos, whiteboard).some((block) => !printsPhoto(output, block))) unprintable.push(e.id);

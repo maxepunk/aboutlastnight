@@ -3862,15 +3862,17 @@
   /**
    * A beat's place as a diff or a report names it (`beat "b4"`, `beat "b4", move`), in the words
    * the map's page uses (beatOfPlace): the beat's move, found on the map (phase 4b, brief 1D; spec
-   * 9: the tags leave the page), which names the move field too, or "a move" for a beat the map no
-   * longer holds. So `the summary of beat "b4"` reads as the summary of the move (R11).
+   * 9: the tags leave the page), which names the move field too. A beat the map no longer holds
+   * reads by `title`, the title the report entry carries for it (lib/hand-edit-diff.js
+   * reportAfterPass; fix C2: a move the director's order named that a pass removed from the map),
+   * or as "a move" with none. So `the summary of beat "b4"` reads as the summary of the move (R11).
    */
-  function beatWords(text, map) {
+  function beatWords(text, map, title) {
     var t = asString(text);
     var named = beatOfPlace(t);
     if (!named) return t;
     var beat = outlineEditLogic().beatWithId(map, named.id);
-    var move = isPlainObject(beat) ? asString(beat.move).trim() : '';
+    var move = isPlainObject(beat) ? asString(beat.move).trim() : asString(title).trim();
     var words = move ? 'the move "' + shortText(move) + '"' : 'a move';
     return t.slice(0, named.index) + words + t.slice(named.index + named.text.length);
   }
@@ -3889,7 +3891,7 @@
    */
   function mapEditLineOptions(slots, map) {
     return {
-      place: function (entry) { return capitalized(beatWords(slotWords(mapLineWords(asString(entry.where) || scopeLabel(entry.scope)), slots), map)); },
+      place: function (entry) { return capitalized(beatWords(slotWords(mapLineWords(asString(entry.where) || scopeLabel(entry.scope)), slots), map, entry.title)); },
       valueText: function (text) {
         var m = /^section "([^"]*)"$/.exec(asString(text));
         return m ? slotLabelOf(m[1], slots) : text;
