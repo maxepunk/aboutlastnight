@@ -500,6 +500,20 @@ describe('Fix A: the order stands while its section holds every beat it names, a
     expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
     expect(settled.report.changed.map((c) => [c.id, c.moved, c.restored])).toEqual([['E1', true, true], ['E2', false, true]]);
   });
+
+  // Fix A, item 3: an order of fewer than two beats is no edit, wherever one comes from, such as a
+  // store written by hand or by an earlier build.
+  it('an order of one beat is no edit: not carried, no <HAND_EDITS> line, not checked by a pass, and not counted among the edits that stand', () => {
+    const left = EditLogic.moveBeatBy(clone(MAP), 'b4', -1);
+    const [order] = D.standingOnMap(null, MAP, left).edits;
+    const standing = { kind: 'map', issued: 1, edits: [{ ...order, before: ['b3'], after: ['b3'] }] };
+    expect(D.carriedEdits(standing, left)).toEqual([]);
+    expect(handEditsOn(standing, left)).not.toContain('the order of its moves');
+    expect(D.standingOnMap(standing, left, left)).toEqual({ kind: 'map', issued: 1, edits: [] });
+    const settled = D.settleEdits(null, { edits: standing.edits, before: left, after: clone(left), pass: 1 });
+    expect(settled.report).toBeNull();
+    expect(pageOf(left, standing, settled.report).kept).toBe('');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

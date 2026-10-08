@@ -134,10 +134,11 @@
  * in their order, followed by at most one beat that arrived in it, at its foot; carried while the
  * section holds every beat it names, in that order, and narrowed only by the director's own
  * changes, at their next look, to the beats their section still holds (fix A: the spec's section
- * 17); replaced under its id by a later reorder of the section; and put back after an automatic
- * pass, last of the restores, with each beat it names back in the section at its place in that
- * order, taken from wherever the pass put it, or from the version the pass started from when the
- * pass removed it (fix A). A beat's summary (its synopsis) is a line like any other, named as the
+ * 17); replaced under its id by a later reorder of the section; never an order of fewer than two
+ * beats (MAP_ORDER_MIN_BEATS), which is no edit (isEdit); and put back after an automatic pass,
+ * last of the restores, with each beat it names back in the section at its place in that order,
+ * taken from wherever the pass put it, or from the version the pass started from when the pass
+ * removed it (fix A). A beat's summary (its synopsis) is a line like any other, named as the
  * summary of the move (R11).
  */
 'use strict';
@@ -972,7 +973,16 @@ function rawEditsOf(diff) {
 
 // ─── the director's edits ─────────────────────────────────────────────────────
 
-function isEdit(e) { return isObj(e) && typeof e.id === 'string' && typeof e.path === 'string'; }
+/**
+ * An edit: an id and a path. The director's order of a section on the map names at least two beats
+ * (MAP_ORDER_MIN_BEATS; fix A): an order of fewer is no edit, wherever one comes from, so no reader
+ * carries it, lists it in <HAND_EDITS>, checks it or counts it among the edits that stand.
+ */
+function isEdit(e) {
+  if (!isObj(e) || typeof e.id !== 'string' || typeof e.path !== 'string') return false;
+  const order = mapOrderOf(e);
+  return order === null || order.ids.length >= MAP_ORDER_MIN_BEATS;
+}
 
 /** A cut: the director removed the text, so the edit has no `after`. */
 function isCut(edit) { return edit.after === null || edit.after === undefined; }
@@ -2516,6 +2526,9 @@ const MAP_SUMMARY_FIELD = 'synopsis';
 /** Where the director's order of a section sits, after the section (piece 4, R3; mapEditWhere). */
 const MAP_ORDER_WORDS = 'the order of its moves';
 
+/** The fewest beats an order of a section names (fix A): one beat has no order, so an order of fewer is no edit. */
+const MAP_ORDER_MIN_BEATS = 2;
+
 /**
  * Is this a story map (brief 4.6): sections with beats, or a left-out list, and no
  * section of content blocks (a content bundle) or thread (a weave)?
@@ -2713,6 +2726,7 @@ function mapOrderChanges(before, after) {
     if (!was) return;
     const shown = sectionBeatIds(was).filter(Boolean);
     const now = sectionBeatIds(section).filter(Boolean);
+    if (now.length < MAP_ORDER_MIN_BEATS) return;
     const arrived = now.filter((id) => !shown.includes(id));
     const keptAsShown = shown.filter((id) => now.includes(id));
     if (arrived.length <= 1 && same(now, [...keptAsShown, ...arrived])) return;
@@ -2744,7 +2758,7 @@ function narrowedOrder(edit, map) {
   const order = mapOrderOf(edit);
   const holds = sectionBeatIds(sectionOfSlot(map, order.slot));
   const held = order.ids.filter((id) => holds.includes(id));
-  if (held.length < 2) return null;
+  if (held.length < MAP_ORDER_MIN_BEATS) return null;
   return same(held, order.ids) ? edit : { ...edit, after: held };
 }
 
