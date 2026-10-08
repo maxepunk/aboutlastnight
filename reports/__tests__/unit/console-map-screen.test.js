@@ -959,6 +959,52 @@ describe('4D: each drop reaches the same op as its button, once', () => {
     MOVE_OPS.forEach((op) => expect(`${op} ${mounted.ops[op].mock.calls.length}`).toBe(`${op} 0`));
   });
 
+  // Fix round 1: the browser bubbles a drag's events from the card to its column. A card that holds
+  // what is dragged already (the card itself, or a photo beside it) stops them there, so the column
+  // never takes a drop that would change nothing into a move.
+  /** A drag whose dragover and drop bubble through `path`, the innermost first, until a handler stops them. */
+  const bubbleDrag = (mounted, from, path) => {
+    const dt = transfer();
+    from(mounted.render()).props.onDragStart(event(dt));
+    const bubbled = (type) => {
+      let stopped = false;
+      const e = { ...event(dt), stopPropagation: () => { stopped = true; } };
+      path.forEach((find) => {
+        const node = find(mounted.render());
+        if (!stopped && node.props[type]) node.props[type](e);
+      });
+      return e;
+    };
+    const over = bubbled('onDragOver');
+    const landing = mounted.render();
+    bubbled('onDrop');
+    return { over, landing };
+  };
+
+  it('a photo dropped back on the move it sits beside stays there: its card stops the drag, and its column shows no landing', () => {
+    const mounted = mountMap({ data });
+    const { over, landing } = bubbleDrag(mounted, photo('p03.jpg'), [card('Marcus tests the batch on himself'), column('The Story')]);
+    expect(over.preventDefault).not.toHaveBeenCalled();
+    expect(elementsOf(landing, (n) => /--drop/.test(n.props.className || ''))).toHaveLength(0);
+    MOVE_OPS.forEach((op) => expect(`${op} ${mounted.ops[op].mock.calls.length}`).toBe(`${op} 0`));
+    expect(mounted.dispatched).toEqual([]);
+  });
+
+  it('a card dropped back on itself stays where it is, the column under it showing no landing', () => {
+    const mounted = mountMap({ data });
+    const { over, landing } = bubbleDrag(mounted, card('Marcus tests the batch on himself'), [card('Marcus tests the batch on himself'), column('The Story')]);
+    expect(over.preventDefault).not.toHaveBeenCalled();
+    expect(elementsOf(landing, (n) => /--drop/.test(n.props.className || ''))).toHaveLength(0);
+    MOVE_OPS.forEach((op) => expect(`${op} ${mounted.ops[op].mock.calls.length}`).toBe(`${op} 0`));
+  });
+
+  it('a photo dropped on another move of its column goes beside that move, the column taking nothing', () => {
+    const mounted = mountMap({ data });
+    bubbleDrag(mounted, photo('p03.jpg'), [card('Jess warns Sarah away'), column('The Story')]);
+    calledOnly(mounted, 'placePhotoBeside');
+    expect(mounted.saved().sections[1].photos.find((p) => p.filename === 'p03.jpg').beat).toBe('b5');
+  });
+
   it('a card whose editor is open does not drag, and a drop waits for no editor, since an editor is keyed by its line', () => {
     const mounted = mountMap({ data });
     click(cardOf(mounted.render(), 'Jess warns Sarah away'));

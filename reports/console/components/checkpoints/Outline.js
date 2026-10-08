@@ -76,6 +76,11 @@ const INNER = 'button, select, input, textarea, a, label, .map__card-detail, .ma
 // drop elsewhere on the page (the note box among them) takes nothing from it.
 const DRAG_TYPE = 'application/x-aln-map';
 
+// What a drop target's land returns for a drag that is where it would land already: the card
+// dragged over itself, or a photo over the move it sits beside. The target stops the drag there and
+// shows no landing, so the column around it never makes a move of a drop that changes nothing.
+const STAYS = 'stays';
+
 /**
  * The line beside what waits for unsaved input (tasks 4.14d and 4.14g): the rule's line, or nothing
  * for none. A hold, not an error, so it is styled .held-line, calmer than a refusal's red.
@@ -446,13 +451,22 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
 
   /**
    * A drop target, by its key (dropAt): `land(what)` returns the move a drop of `what` runs, or null
-   * for a drag the target does not take. While a drag it takes is over it, it shows where that will
+   * for a drag the target does not take, which goes on to the target around it, or STAYS for a drag
+   * that is where it would land already, which goes no further, so the target around it (a card's
+   * column) never makes a move of it. While a drag it takes is over it, it shows where that will
    * land; a drop runs the move.
    */
   function dropTarget(key, land) {
     return {
       onDragOver: function (e) {
-        if (!dragging || !land(dragging)) return;
+        if (!dragging) return;
+        const run = land(dragging);
+        if (run === STAYS) {
+          if (typeof e.stopPropagation === 'function') e.stopPropagation();
+          if (dropAt !== null) setDropAt(null);
+          return;
+        }
+        if (!run) return;
         e.preventDefault();
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -465,6 +479,11 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       onDrop: function (e) {
         const what = droppedOf(e);
         const run = what ? land(what) : null;
+        if (run === STAYS) {
+          e.preventDefault();
+          if (typeof e.stopPropagation === 'function') e.stopPropagation();
+          return;
+        }
         if (!run) return;
         e.preventDefault();
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
@@ -480,18 +499,21 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     return section.beats.filter(function (b) { return b.id !== id; }).indexOf(beat);
   }
 
-  /** A card as a drop target: a move lands just before it, and a photo goes beside it. */
+  /**
+   * A card as a drop target: a move lands just before it, and a photo goes beside it. The card
+   * itself, or a photo already beside it, STAYS.
+   */
   function landOnCard(section, beat) {
     return function (what) {
       if (beat.locked) return null;
       if (what.kind === 'beat') {
-        if (what.id === beat.id) return null;
+        if (what.id === beat.id) return STAYS;
         const index = placeBefore(section, beat, what.id);
         return what.from === null
           ? function () { bringBack(what.id, section.slot, index); }
           : function () { moveCard(what.id, section.slot, index); };
       }
-      if (what.from === section.slot && what.beat === beat.id) return null;
+      if (what.from === section.slot && what.beat === beat.id) return STAYS;
       return function () { placePhoto(what.from, what.index, section.slot, beat.id); };
     };
   }
