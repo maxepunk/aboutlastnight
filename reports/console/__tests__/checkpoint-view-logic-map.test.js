@@ -773,7 +773,7 @@ describe('4.9: after a send-back and an automatic pass', () => {
   test('a round whose passes kept every edit says so', () => {
     const d = payloadOf(stateAt({ _outlineHandEditReport: { checked: ['E1', 'E2'], changed: [] } }));
     // 4.10b: the line says the edits stand, which holds too when code put a change back.
-    expect(ViewLogic.mapView(d, opened(d)).kept).toBe('Both of your edits stand.');
+    expect(ViewLogic.mapView(d, opened(d)).kept).toBe('Your edits stand.');
   });
 });
 
@@ -1208,11 +1208,25 @@ describe("4.10b: the map lists a restore out of the director's order, and says w
     const d = payloadOf(stateAt({ outline: struck, _outlineHandEditReport: report }));
     const view = ViewLogic.mapView(d, opened(d));
     expect(view.changedEdits).toEqual([]);
-    expect(view.kept).toBe('Both of your edits stand.');
+    expect(view.kept).toBe('Your edits stand.');
+  });
+
+  // Fix H4: the map counts no records. One action can make two edits there (a card dropped mid-column
+  // is a move edit and an order edit; a photo put beside a move in another column is a move and a
+  // beside), so a count of records reads as more than the director did. The meeting and the desk keep
+  // their counts.
+  test("fix H4: the map says the director's edits stand with no count; the meeting and the desk keep theirs", () => {
+    const eight = { checked: ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'], changed: [] };
+    expect(viewWith({ checked: ['E1'], changed: [] }).kept).toBe('Your edit stands.');
+    expect(viewWith({ checked: ['E1', 'E2'], changed: [] }).kept).toBe('Your edits stand.');
+    expect(viewWith(eight).kept).toBe('Your edits stand.');
+    expect(ViewLogic.steeringView(eight, []).kept).toBe('All 8 of your edits stand.');
+    expect(ViewLogic.editsStandLine(eight)).toBe('All 8 of your edits stand.');
+    expect(ViewLogic.editsStandLine(eight, { counted: false })).toBe('Your edits stand.');
   });
 
   test('three edits, and a send-back entry to show', () => {
-    expect(viewWith({ checked: ['E1', 'E2', 'E3'], changed: [] }).kept).toBe('All 3 of your edits stand.');
+    expect(viewWith({ checked: ['E1', 'E2', 'E3'], changed: [] }).kept).toBe('Your edits stand.');
     const sendBack = entry({ id: 'E2', scope: 'map', where: 'section "closing", beat "b6", move', director: 'a', became: 'b', pass: SEND_BACK_PASS, automatic: false });
     expect(viewWith({ checked: ['E1', 'E2'], changed: [sendBack] }).kept).toBe('');
   });

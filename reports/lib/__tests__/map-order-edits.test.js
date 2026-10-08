@@ -108,7 +108,7 @@ describe("4C, fix round 1: one beat that arrived in a column may sit at its foot
     expect(D.mapEditsBetween(boardMap(), secondThenFirst).filter((c) => c.order).map((c) => c.after)).toEqual([['b15', 'b16', 'b2', 'b9']]);
   });
 
-  it('an automatic pass that swaps the two arrivals has them put back, with one order line in the report, and the page counts the order among the edits that stand', () => {
+  it('an automatic pass that swaps the two arrivals has them put back, with one order line in the report, and the page says the edits stand', () => {
     const { mapCheckpointData } = require('../map');
     const { keptPhotoFilenames } = require('../workflow/nodes/ai-nodes');
     const ViewLogic = require('../../console/checkpoint-view-logic');
@@ -133,7 +133,7 @@ describe("4C, fix round 1: one beat that arrived in a column may sit at its foot
     const state = boardMapState({ outline: settled.output, _mapBaseline: settled.output, _outlineHandEdits: standing, _outlineHandEditReport: settled.report });
     const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, state.outline.topPhoto), evidenceIndex: {}, maxRevisions: 1 });
     const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
-    expect(view.kept).toBe('All 3 of your edits stand.');
+    expect(view.kept).toBe('Your edits stand.');
   });
 });
 
@@ -234,7 +234,7 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
   // its place, which can break the order, so the order goes back after every other restore. Fix A:
   // a beat the order names that the pass took out of the section breaks the order too, so the
   // report records the order's restore beside the move's, and the stored map carries both edits,
-  // so "Both of your edits stand." is true.
+  // so the map's "Your edits stand." is true.
   describe("a beat code puts back at its place does not leave the director's order broken", () => {
     const setUp = (passOf) => {
       const before = EditLogic.moveBeat(boardMap(), 'b2', 'closing', 1);
@@ -726,7 +726,7 @@ describe("Fix C: the edge cases of the director's order", () => {
       const standing = D.standingOnMap(null, boardMap(), directors());
       const state = boardMapState({ outline: settled.output, _mapBaseline: settled.output, _outlineHandEdits: standing, _outlineHandEditReport: settled.report, humanOutlineRevisionCount: 1 });
       const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, state.outline.topPhoto), evidenceIndex: {}, maxRevisions: 1 });
-      expect(ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined)).kept).toBe('Both of your edits stand.');
+      expect(ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined)).kept).toBe('Your edits stand.');
     });
 
     it('the pass takes the photo with the move into a third column: code puts the photo back in Closing by itself, and the order\'s restore leaves it there', () => {

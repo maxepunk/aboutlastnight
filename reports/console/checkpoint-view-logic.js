@@ -740,16 +740,22 @@
    * (brief 4.10b): the edits stand, whether the round's passes kept them or code put them back.
    * '' when the stop shows a changed line (changedEditsToShow), or checked no edit. One line for
    * the map (mapView), the story meeting (meetingView) and the desk's folded record of the round
-   * (steeringView, which RevisionDiff prints; brief 4.10c).
+   * (steeringView, which RevisionDiff prints; brief 4.10c). The map counts no records (fix H4): one
+   * action there can make two edits (a card dropped mid-column is a move edit and an order edit; a
+   * photo put beside a move in another column is a move and a beside), so it passes
+   * `counted: false` and says only that the edits stand.
    *
    * @param {*} report - a stop's handEditReport
+   * @param {Object} [options]
+   * @param {boolean} [options.counted] - false: more than one edit reads "Your edits stand."
    * @returns {string}
    */
-  function editsStandLine(report) {
+  function editsStandLine(report, options) {
     var read = editReportOf(report);
     if (!read || changedEditsToShow(read).length > 0) return '';
     var n = read.checked.length;
     if (n === 1) return 'Your edit stands.';
+    if (options && options.counted === false) return 'Your edits stand.';
     return (n === 2 ? 'Both' : 'All ' + n) + ' of your edits stand.';
   }
 
@@ -4537,7 +4543,8 @@
       ? { label: roundsBanner(human, d.revisionCount, d.maxRevisions).roundLabel, note: feedback ? 'You sent the map back with: "' + feedback + '"' : '' }
       : null;
     var changedEdits = mapChangedEditLines(restOfReport, slots, map);
-    var kept = editsStandLine(d.handEditReport);
+    // Fix H4: the map counts no records.
+    var kept = editsStandLine(d.handEditReport, { counted: false });
     var dropped = asArray(map.dropped).filter(isPlainObject);
     var weaveChanges = asArray(map.weaveChanges).filter(isPlainObject);
     var present = {
