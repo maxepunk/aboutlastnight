@@ -109,8 +109,8 @@ The spec's section 17, restated so each brief can point at one.
 - **R3. The director's order is one edit per section.**
   - A section carries an order edit when the director's version either puts a beat at a place other than the section's foot, or holds two of its beats in an order the map they were shown did not.
   - The edit's value is the director's order of the section's beat ids. A beat moved to the foot of another section makes only today's move edit.
-  - The edit stands while the beats it names that the section still holds sit in that relative order.
-  - After an automatic pass that changed the order, code puts those beats back into it, in the places they hold, and leaves every other beat where the pass put it. The report records the restore.
+  - The edit stands while the section holds every beat it names, in that order (the spec's section 17; the integrator's ruling after run 2, which replaces this plan's first wording, "the beats it names that the section still holds"). The director's own later move, strike or removal of a named beat narrows the edit at their next look, and an order of fewer than two beats is no edit.
+  - After an automatic pass that changed the order or took a named beat out of the section, code puts each named beat back into the section at its place in the order, taking it from wherever the pass put it (or from the version the pass started from), and leaves every other beat where the pass put it. The report records the restore.
   - A send-back's rework may change the order, saying why, as with every edit.
   - The report and the page read the edit as the order of that section, with the moves named by their titles.
   - Map beats have ids, so the desk's within-section move (`between`, `inOrder`) is not used.
