@@ -2811,7 +2811,9 @@ function orderOnMap(edit, map) {
  * to the others. The photos beside a beat it names that sit in another section come with the beat,
  * to the foot of the section's photos, as the director's own move takes them (carryPhotosBeside;
  * fix C1), and one the section already holds prints there once, its copy outside taken out (fix
- * C3). Nothing goes back into a section the pass removed.
+ * C3). A line of the director's that only a copy taken out held goes back on the copy kept, once
+ * this restore is done (settleEdits; fix C, second round). Nothing goes back into a section the
+ * pass removed.
  *
  * @param {{slot: string, ids: string[]}} order - mapOrderOf's
  * @param {Object} before - the version the pass started from
@@ -4933,14 +4935,22 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // Brief 4.6, fix round 1: a beat or photo put back whole keeps its copy in the
       // director's place and loses the pass's other copies, one of which may have held a
       // field the director wrote; that field goes back on the copy kept.
-      carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
+      const fieldsOnCopyKept = () => carried
+        .filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
         .forEach((e) => restoreEdit(e, before, output, leavesOut));
+      fieldsOnCopyKept();
       // Piece 4 (R3): the director's order of each section last, once every beat sits where the
       // director's other edits put it, so the order goes back on the beats the section holds. It is
       // read on the output as the restores above left it, not on the pass's: a beat a move's restore
       // put back at its place can break an order the pass left intact (fix round 1, findings 1 and 2).
+      let orderWritten = false;
       carried.filter((e) => isMapOrder(e) && !editCarried(output, e))
-        .forEach((e) => restoreEdit(e, before, output, leavesOut));
+        .forEach((e) => { if (restoreEdit(e, before, output, leavesOut)) orderWritten = true; });
+      // Fix C, second round: the order's restore keeps the section's copy of each beat it names and
+      // takes the others out, with the photos beside them (restoreMapOrder), as a move's restore
+      // does, so a field the director wrote, held only by a copy it took out, goes back on the copy
+      // kept the same way.
+      if (orderWritten) fieldsOnCopyKept();
       // Task 4.14b, fix round 1: the director's drop held by its slot, once their other edits are
       // back, so a beat they struck that the pass brought into the section has left it again. An
       // empty section goes; one the pass filled stays, out of the dropped list, and its cut is

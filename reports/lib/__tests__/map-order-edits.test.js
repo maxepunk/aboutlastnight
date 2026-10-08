@@ -796,6 +796,61 @@ describe("Fix C: the edge cases of the director's order", () => {
       expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
       expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E2', true]]);
     });
+
+    // The restore keeps the section's copy of a named move and takes the others out. The director's
+    // own words on the move (its title, its summary) and on a photo beside it go onto the copy kept,
+    // as they do when a move's restore takes a copy out, so the words the page says stand print.
+    describe("the copy the restore takes out held the director's words", () => {
+      const TITLE = 'Marcus begs Quinn for a stronger batch';
+      const SUMMARY = 'Marcus asks twice, and Quinn says yes the second time.';
+      /** The director's map: Jess moved up, Marcus's request retitled and summarised, the lone photo set beside it. */
+      const directors = () => {
+        const left = EditLogic.moveBeatBy(boardMap(), 'b5', -1);
+        beatOf(left, 'b4').move = TITLE;
+        beatOf(left, 'b4').synopsis = SUMMARY;
+        return EditLogic.setPhotoBeside(left, 'theStory', 2, 'b4');
+      };
+      const edits = () => editsOf(boardMap(), directors());
+      const lede = (map) => map.sections.find((s) => s.slot === 'lede');
+      const story = (map) => map.sections.find((s) => s.slot === 'theStory');
+      const settle = (pass) => D.settleEdits(null, { edits: edits(), before: directors(), after: pass, pass: 1 });
+
+      it('the edits: the title, the summary, the photo beside the move, and the order', () => {
+        expect(edits().map((e) => [e.id, e.path])).toEqual([
+          ['E1', 'sections[#theStory].beats[#b4].move'], ['E2', 'sections[#theStory].beats[#b4].synopsis'],
+          ['E3', 'sections[#theStory].photos[#p05.jpg].beat'], ['E4', 'sections[#theStory].beats']
+        ]);
+      });
+
+      it("a copy in an earlier column holds them, and the pass rewrote the section's copy: they go onto the copy kept, which prints once", () => {
+        const pass = clone(directors());
+        lede(pass).beats.push(clone(beatOf(pass, 'b4')));
+        lede(pass).photos.push(clone(story(pass).photos[2]));
+        const own = story(pass).beats.find((b) => b.id === 'b4');
+        own.move = 'Marcus asks Quinn for more';
+        own.synopsis = 'Quinn agrees to a larger batch.';
+        story(pass).photos[2].beat = 'b6';
+        // The pass's version carries the director's words, on the copy in the earlier column.
+        expect(D.carriedEdits(edits(), pass).map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
+        const settled = settle(pass);
+        expect(idsIn(settled.output, 'theStory')).toEqual(STORY);
+        expect(beatPlaces(settled.output, 'b4')).toEqual(['theStory']);
+        expect(beatOf(settled.output, 'b4')).toMatchObject({ move: TITLE, synopsis: SUMMARY });
+        expect(photoPlaces(settled.output, 'p05.jpg')).toEqual([{ slot: 'theStory', beat: 'b4' }]);
+        expect(D.carriedEdits(edits(), settled.output).map((e) => e.id)).toEqual(['E1', 'E2', 'E3', 'E4']);
+      });
+
+      it('the pass rewrote both copies: code writes the words once, on the copy kept, and the report records each restore', () => {
+        const pass = clone(directors());
+        lede(pass).beats.push({ ...clone(beatOf(pass, 'b4')), move: 'Marcus wants a stronger batch' });
+        story(pass).beats.find((b) => b.id === 'b4').move = 'Marcus asks Quinn for more';
+        const settled = settle(pass);
+        expect(beatPlaces(settled.output, 'b4')).toEqual(['theStory']);
+        expect(beatOf(settled.output, 'b4')).toMatchObject({ move: TITLE, synopsis: SUMMARY });
+        expect(D.carriedEdits(edits(), settled.output).map((e) => e.id)).toEqual(['E1', 'E2', 'E3', 'E4']);
+        expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E4', true]]);
+      });
+    });
   });
 
   // C4: no edit can find a beat by an id the writer repeated, so the board locks the lines under a
