@@ -2795,6 +2795,23 @@ function orderOnMap(edit, map) {
 }
 
 /**
+ * The photos the director placed (fix C, third round): each photo a move edit of theirs puts in a
+ * place, by its key (photoKey), to that place's container. The place is theirs; the photo's fields
+ * stay the writer's (mapEditCarried), so the beat a pass sets it beside is the pass's.
+ *
+ * @param {Object[]} edits - the standing edits a version carries
+ * @returns {Map<string, string>}
+ */
+function photosPlacedBy(edits) {
+  const placed = new Map();
+  (Array.isArray(edits) ? edits : []).forEach((e) => {
+    const address = isObj(e) && isMove(e) ? mapAddressOf(e) : null;
+    if (address && address.kind === 'photo' && address.fieldSteps.length === 0) placed.set(photoKey(address.identity.filename), address.container);
+  });
+  return placed;
+}
+
+/**
  * Put the director's order back into `out`, the pass's output (changed in place; R3, fix A: the
  * spec's section 17). Each beat it names that the map still holds goes back into the section, so it
  * prints once there:
@@ -2811,16 +2828,19 @@ function orderOnMap(edit, map) {
  * to the others. The photos beside a beat it names that sit in another section come with the beat,
  * to the foot of the section's photos, as the director's own move takes them (carryPhotosBeside;
  * fix C1), and one the section already holds prints there once, its copy outside taken out (fix
- * C3). A line of the director's that only a copy taken out held goes back on the copy kept, once
- * this restore is done (settleEdits; fix C, second round). Nothing goes back into a section the
- * pass removed.
+ * C3). A photo the director placed in that other section (`placedPhotos`) stays where they put it,
+ * by itself, since the beat the pass set it beside has left the section (fix C, third round): its
+ * place is their edit, which this restore leaves standing. A line of the director's that only a
+ * copy taken out held goes back on the copy kept, once this restore is done (settleEdits; fix C,
+ * second round). Nothing goes back into a section the pass removed.
  *
  * @param {{slot: string, ids: string[]}} order - mapOrderOf's
  * @param {Object} before - the version the pass started from
  * @param {Object} out - the pass's output, changed in place
+ * @param {Map<string, string>} [placedPhotos] - photosPlacedBy's, of the director's standing edits
  * @returns {boolean} whether anything was written
  */
-function restoreMapOrder(order, before, out) {
+function restoreMapOrder(order, before, out, placedPhotos = new Map()) {
   const section = sectionOfSlot(out, order.slot);
   if (!section) return false;
   const was = Array.isArray(section.beats) ? section.beats : [];
@@ -2882,7 +2902,8 @@ function restoreMapOrder(order, before, out) {
   // director's own move puts them (console/outline-edit-logic.js carryPhotosBeside), so a photo the
   // pass moved with the beat prints once, beside it. Fix C3: a photo the section already holds (a
   // restore that brought the section back whole brought its photos too) prints there once, so the
-  // copy outside goes.
+  // copy outside goes. Fix C, third round: a photo the director placed in the other section stays
+  // there by itself, so the restore never breaks their move of it.
   const photoKeysIn = (list) => new Set((Array.isArray(list) ? list : []).filter(isObj).map((photo) => photoKey(photo.filename)));
   (Array.isArray(out.sections) ? out.sections : []).forEach((other) => {
     if (!isObj(other) || other === section) return;
@@ -2890,6 +2911,11 @@ function restoreMapOrder(order, before, out) {
       const holds = photoKeysIn(section.photos);
       const kept = other.photos.filter((photo) => !(isObj(photo) && elements.has(mapIdText(photo.beat)) && holds.has(photoKey(photo.filename))));
       if (kept.length !== other.photos.length) { other.photos = kept; written = true; }
+      other.photos.forEach((photo) => {
+        if (!isObj(photo) || !elements.has(mapIdText(photo.beat)) || placedPhotos.get(photoKey(photo.filename)) !== mapIdText(other.slot)) return;
+        delete photo.beat;
+        written = true;
+      });
     }
     elements.forEach((_element, id) => { if (carryPhotosBeside(other, section, id)) written = true; });
   });
@@ -4312,22 +4338,25 @@ function blocksOf(collection, element) {
  * a block holding fewer of its words, such as a paragraph the pass inserted right before its
  * copy, which stays the writer's (fix round 1). Where code cannot tell which block is the
  * pass's version, it goes back where it sat. The director's order of a section on the map goes
- * back with each beat it names in the section, at its place in that order (restoreMapOrder; piece
- * 4, R3; fix A).
+ * back with each beat it names in the section, at its place in that order, leaving each photo the
+ * director placed where they put it (restoreMapOrder; piece 4, R3; fix A; fix C, third round).
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
  * @param {Object} out - the pass's output, changed in place
  * @param {function(*): boolean} [leavesOut] - the photo blocks the restore leaves out
  *   (leftOutOfRestore); by default none
+ * @param {Object} [options]
+ * @param {Map<string, string>} [options.placedPhotos] - the photos the director's standing edits
+ *   place on the map (photosPlacedBy), which an order's restore leaves where they are; by default none
  * @returns {boolean} whether anything was written
  */
-function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
+function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT, { placedPhotos } = {}) {
   if (!isObj(out)) return false;
   if (isCut(edit)) return takeOutDeletedEntry(edit, out);
   // Piece 4 (R3; fix A): the director's order of a section, each beat it names back in it.
   const order = mapOrderOf(edit);
-  if (order) return restoreMapOrder(order, before, out);
+  if (order) return restoreMapOrder(order, before, out, placedPhotos);
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
   if (isMove(edit)) return restoreMove(edit, before, out);
@@ -4943,9 +4972,11 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // director's other edits put it, so the order goes back on the beats the section holds. It is
       // read on the output as the restores above left it, not on the pass's: a beat a move's restore
       // put back at its place can break an order the pass left intact (fix round 1, findings 1 and 2).
+      // Fix C, third round: a photo the director placed stays where they put it.
       let orderWritten = false;
+      const placedPhotos = photosPlacedBy(carried);
       carried.filter((e) => isMapOrder(e) && !editCarried(output, e))
-        .forEach((e) => { if (restoreEdit(e, before, output, leavesOut)) orderWritten = true; });
+        .forEach((e) => { if (restoreEdit(e, before, output, leavesOut, { placedPhotos })) orderWritten = true; });
       // Fix C, second round: the order's restore keeps the section's copy of each beat it names and
       // takes the others out, with the photos beside them (restoreMapOrder), as a move's restore
       // does, so a field the director wrote, held only by a copy it took out, goes back on the copy

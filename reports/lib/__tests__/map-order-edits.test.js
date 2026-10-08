@@ -686,6 +686,55 @@ describe("Fix C: the edge cases of the director's order", () => {
     expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1']);
   });
 
+  // Fix C, third round: C1 takes back the photos beside a named move, but a photo whose place is
+  // the director's (a move edit of theirs put it in that section) stays where they put it. Its
+  // place is their edit, and code never breaks an edit it puts back. The beat it names leaves the
+  // section with the order's restore, so it sits there by itself, as the director left it.
+  describe("C1, third round: a photo the director moved into another column stays there when the pass sets it beside a named move", () => {
+    const { mapCheckpointData } = require('../map');
+    const { keptPhotoFilenames } = require('../workflow/nodes/ai-nodes');
+    const ViewLogic = require('../../console/checkpoint-view-logic');
+    const { boardMapState } = require('./fixtures/board-map');
+    /** The director's map: Jess moved up in The Story, and its lone photo moved to Closing by itself. */
+    const directors = () => EditLogic.movePhoto(EditLogic.moveBeatBy(boardMap(), 'b5', -1), 'theStory', 2, 'closing');
+    const edits = () => editsOf(boardMap(), directors());
+    const photoIndex = (map, slot, filename) => map.sections.find((s) => s.slot === slot).photos.findIndex((p) => p.filename === filename);
+
+    it('the edits: the photo moved to Closing, and the order of The Story', () => {
+      expect(edits().map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#closing].photos[#p05.jpg]'], ['E2', 'sections[#theStory].beats']]);
+      expect(photoPlaces(directors(), 'p05.jpg')).toEqual([{ slot: 'closing' }]);
+    });
+
+    it('the pass moves a named move into Closing and sets the photo beside it: the move comes home with its own photo, and the director\'s photo stays in Closing by itself', () => {
+      const moved = EditLogic.moveBeat(directors(), 'b3', 'closing');
+      const pass = EditLogic.setPhotoBeside(moved, 'closing', photoIndex(moved, 'closing', 'p05.jpg'), 'b3');
+      expect(photoPlaces(pass, 'p05.jpg')).toEqual([{ slot: 'closing', beat: 'b3' }]);
+      const settled = D.settleEdits(null, { edits: edits(), before: directors(), after: pass, pass: 1 });
+      expect(idsIn(settled.output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b7', 'b8']);
+      expect(photoPlaces(settled.output, 'p03.jpg')).toEqual([{ slot: 'theStory', beat: 'b3' }]);
+      expect(photoPlaces(settled.output, 'p05.jpg')).toEqual([{ slot: 'closing' }]);
+      expect(D.carriedEdits(edits(), settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
+      expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E2', true]]);
+      // The page's line that the edits stand is true of the map stored.
+      const standing = D.standingOnMap(null, boardMap(), directors());
+      const state = boardMapState({ outline: settled.output, _mapBaseline: settled.output, _outlineHandEdits: standing, _outlineHandEditReport: settled.report, humanOutlineRevisionCount: 1 });
+      const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, state.outline.topPhoto), evidenceIndex: {}, maxRevisions: 1 });
+      expect(ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined)).kept).toBe('Both of your edits stand.');
+    });
+
+    it('the pass takes the photo with the move into a third column: code puts the photo back in Closing by itself, and the order\'s restore leaves it there', () => {
+      let pass = EditLogic.moveBeat(directors(), 'b3', 'followTheMoney');
+      pass = EditLogic.placePhotoBeside(pass, 'closing', photoIndex(pass, 'closing', 'p05.jpg'), 'followTheMoney', 'b3');
+      expect(photoPlaces(pass, 'p05.jpg')).toEqual([{ slot: 'followTheMoney', beat: 'b3' }]);
+      const settled = D.settleEdits(null, { edits: edits(), before: directors(), after: pass, pass: 1 });
+      expect(idsIn(settled.output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b7', 'b8']);
+      expect(photoPlaces(settled.output, 'p03.jpg')).toEqual([{ slot: 'theStory', beat: 'b3' }]);
+      expect(photoPlaces(settled.output, 'p05.jpg')).toEqual([{ slot: 'closing' }]);
+      expect(D.carriedEdits(edits(), settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
+      expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E2', true]]);
+    });
+  });
+
   // C2: the rule every other map edit follows (mapRestoresWhenGone). A writer's move the pass
   // removed from the map stays out: only its place was the director's, and its removal can be the
   // fix of a fault in the writer's text. The order holds for the moves that remain, and the report
