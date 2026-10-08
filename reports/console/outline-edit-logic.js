@@ -293,6 +293,27 @@
   }
 
   /**
+   * The photos of the section `from` beside the beat `id`, moved to the foot of the section
+   * `target`'s photos, beside the beat still, so each photo stays with its moment (spec 2026-10-07
+   * section 6): where a move puts them (moveBeat), and where code puts them when it takes a beat
+   * back into the director's order of a section after an automatic pass (lib/hand-edit-diff.js
+   * restoreMapOrder; fix C1). Changes both sections in place.
+   *
+   * @param {Object} from - the section the photos leave
+   * @param {Object} target - the section the beat is in now
+   * @param {string} id - the beat's id
+   * @returns {boolean} whether any photo moved
+   */
+  function carryPhotosBeside(from, target, id) {
+    var going = besideBeat(from, id);
+    if (going.length === 0) return false;
+    from.photos = from.photos.filter(function (photo) { return going.indexOf(photo) === -1; });
+    if (!Array.isArray(target.photos)) target.photos = [];
+    target.photos.push.apply(target.photos, going);
+    return true;
+  }
+
+  /**
    * Is the beat `id` struck: held by the map only in left out (task 4.14b)? The beat is found
    * as every move finds it (placeOfBeat): the first beat with the id, in the sections, then in
    * left out.
@@ -451,12 +472,7 @@
     target.beats.splice(at, 0, beat);
     var from = place.section ? [place.section] : next.sections.filter(isPlainObject);
     from.forEach(function (section) {
-      if (section === target) return;
-      var going = besideBeat(section, beatIdOf(beat));
-      if (going.length === 0) return;
-      section.photos = section.photos.filter(function (photo) { return going.indexOf(photo) === -1; });
-      if (!Array.isArray(target.photos)) target.photos = [];
-      target.photos.push.apply(target.photos, going);
+      if (section !== target) carryPhotosBeside(section, target, beatIdOf(beat));
     });
     return next;
   }
@@ -1281,6 +1297,8 @@
     dropEmptiedSections: dropEmptiedSections,
     holdDroppedSections: holdDroppedSections,
     leftOutTopPhoto: leftOutTopPhoto,
+    // Fix C1: where a move puts the photos beside it, which the order's restore reads too
+    carryPhotosBeside: carryPhotosBeside,
 
     validateOutlineShape: validateOutlineShape,
     validateMapShape: validateMapShape,

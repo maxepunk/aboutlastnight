@@ -158,9 +158,10 @@ const { WEAVE_ANSWER_KEY, pairWeaveQuestions } = require('./writer-questions');
 // it, as the map checks, the kept photos and the leave-out box do (brief 4.6, fix round 1).
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 // Which beats a map holds only in left out, the strike's rule for the photos beside them
-// (task 4.14b), and the rule that holds a section the director dropped after an automatic pass
-// (fix round 1), from the map's console module, as the desk's naming rule comes from the desk's.
-const { isStruckBeat, holdDroppedSections } = require('../console/outline-edit-logic');
+// (task 4.14b), the rule that holds a section the director dropped after an automatic pass
+// (fix round 1), and where a move puts the photos beside it (fix C1), from the map's console
+// module, as the desk's naming rule comes from the desk's.
+const { isStruckBeat, holdDroppedSections, carryPhotosBeside } = require('../console/outline-edit-logic');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
 // which do not name metadata, voice_self_check or _revisionHistory.
@@ -2773,7 +2774,9 @@ function narrowedOrder(edit, map) {
  *   after it when it opens that order, and where the section holds none of them, at the place it
  *   held in `before`.
  * Every other beat stays where the pass put it, so a beat the pass added keeps its place relative
- * to the others. Nothing goes back into a section the pass removed.
+ * to the others. The photos beside a beat it names that sit in another section come with the beat,
+ * to the foot of the section's photos, as the director's own move takes them (carryPhotosBeside;
+ * fix C1). Nothing goes back into a section the pass removed.
  *
  * @param {{slot: string, ids: string[]}} order - mapOrderOf's
  * @param {Object} before - the version the pass started from
@@ -2841,6 +2844,13 @@ function restoreMapOrder(order, before, out) {
   });
   if (beats.length !== was.length || beats.some((beat, i) => beat !== was[i])) written = true;
   section.beats = beats;
+  // Fix C1: the photos beside each beat it names come into the section with the beat, where the
+  // director's own move puts them (console/outline-edit-logic.js carryPhotosBeside), so a photo the
+  // pass moved with the beat prints once, beside it.
+  (Array.isArray(out.sections) ? out.sections : []).forEach((other) => {
+    if (!isObj(other) || other === section) return;
+    elements.forEach((_element, id) => { if (carryPhotosBeside(other, section, id)) written = true; });
+  });
   return written;
 }
 

@@ -649,3 +649,35 @@ describe('4C: the report prints no id and no field name for the order edit and t
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fix C: the edge cases of the order the director sets
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("Fix C: the edge cases of the director's order", () => {
+  /** Every place a photo sits on the map: its section's slot and the beat it names. */
+  const photoPlaces = (map, filename) => [
+    ...(map.topPhoto === filename ? [{ slot: 'topPhoto' }] : []),
+    ...map.sections.flatMap((s) => (s.photos || []).filter((p) => p.filename === filename).map((p) => ({ slot: s.slot, ...(p.beat ? { beat: p.beat } : {}) })))
+  ];
+  /** Every place a beat sits on the map: its section's slot, or leftOut. */
+  const beatPlaces = (map, id) => [
+    ...map.sections.flatMap((s) => s.beats.filter((b) => b.id === id).map(() => s.slot)),
+    ...map.leftOut.filter((b) => b.id === id).map(() => 'leftOut')
+  ];
+
+  // C1: a move the order names comes back from another section with the photos the pass moved
+  // with it, as the director's own move takes them (console/outline-edit-logic.js moveBeat).
+  it('C1: a pass moves a named move and its photo to another column; both come back, and each prints once', () => {
+    const before = EditLogic.moveBeatBy(boardMap(), 'b5', -1);
+    const edits = editsOf(boardMap(), before);
+    const pass = EditLogic.moveBeat(before, 'b3', 'closing');
+    expect(photoPlaces(pass, 'p03.jpg')).toEqual([{ slot: 'closing', beat: 'b3' }]);
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+    expect(idsIn(settled.output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b7', 'b8']);
+    expect(beatPlaces(settled.output, 'b3')).toEqual(['theStory']);
+    expect(photoPlaces(settled.output, 'p03.jpg')).toEqual([{ slot: 'theStory', beat: 'b3' }]);
+    expect(settled.output.sections.find((s) => s.slot === 'closing').photos).toEqual(boardMap().sections[4].photos);
+    expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1']);
+  });
+});
