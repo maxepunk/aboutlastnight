@@ -4664,8 +4664,10 @@ function reportWithHeld(report, held) {
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed. On the map, once the
  * other edits are back, code puts the director's order of each section back on the beats it names,
- * in the places they hold, so a beat the pass added keeps its place (restoreMapOrder; piece 4, R3),
- * and holds each section the director dropped by its slot (droppedSlotsOf,
+ * in the places they hold, so a beat the pass added keeps its place (restoreMapOrder; piece 4, R3):
+ * every order the output no longer carries, the ones the pass changed and the ones code's own
+ * restores broke by putting a beat back at its place (fix round 1, findings 1 and 2); the report
+ * records only an order the pass changed. Code also holds each section the director dropped by its slot (droppedSlotsOf,
  * console/outline-edit-logic.js holdDroppedSections; task 4.14b, fix round 1): a section the pass
  * put back goes again when it holds nothing, and one the pass filled stays, out of the dropped
  * list, its cut reported as come back. Code never puts
@@ -4719,6 +4721,8 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
     // on the map when a pass removed it (mapRestoresWhenGone).
     const moves = changed.filter((e) => isMove(e)
       && (outcome(e) === 'moved' || outcome(e) === 'reordered' || (outcome(e) === 'gone' && mapRestoresWhenGone(e))));
+    // Piece 4 (R3): an order the pass changed opens the restore; the order restore itself, below,
+    // reads every order the output no longer carries once the other restores are done.
     const orders = changed.filter(isMapOrder);
     const fields = changed.filter((e) => !isMove(e) && !isCut(e) && !isMapOrder(e));
     // Task 4.14b, fix round 1: a section the pass put back under a slot the director dropped.
@@ -4744,8 +4748,11 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
         .forEach((e) => restoreEdit(e, before, output, leavesOut));
       // Piece 4 (R3): the director's order of each section last, once every beat sits where the
-      // director's other edits put it, so the order goes back on the beats the section holds.
-      orders.forEach((e) => restoreEdit(e, before, output, leavesOut));
+      // director's other edits put it, so the order goes back on the beats the section holds. It is
+      // read on the output as the restores above left it, not on the pass's: a beat a move's restore
+      // put back at its place can break an order the pass left intact (fix round 1, findings 1 and 2).
+      carried.filter((e) => isMapOrder(e) && !editCarried(output, e))
+        .forEach((e) => restoreEdit(e, before, output, leavesOut));
       // Task 4.14b, fix round 1: the director's drop held by its slot, once their other edits are
       // back, so a beat they struck that the pass brought into the section has left it again. An
       // empty section goes; one the pass filled stays, out of the dropped list, and its cut is
