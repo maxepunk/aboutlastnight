@@ -344,7 +344,8 @@ describe('the map as a corkboard (phase 4b, piece 4)', () => {
   it("the article generator tells each section's beats in the map's order, each as its synopsis says", () => {
     const job = section(agent('article-generator'), 'Job');
     expect(job).toMatch(/in the map's order/);
-    expect(job).toContain('as its `synopsis` says');
+    // Fix B6: a beat the director added may have no synopsis, as the pipeline's STORY_MAP_LABEL says.
+    expect(job).toContain('as its `synopsis` says, where it has one');
   });
 
   it("the map's stop shows each move with its summary, in the article's order, with both counts", () => {
