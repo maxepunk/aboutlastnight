@@ -1301,8 +1301,9 @@ describe("4.6: the map's rework context", () => {
     expect(sent.label).toBe('Map revision 1');
   });
 
-  // Fix C5: a pass that renumbers the beats of a column the director ordered gets every move in it
-  // printed twice, since each renumbered id reads as gone. The automatic pass's scope says every
+  // Fix C5: a pass that renumbers a beat of a column the director ordered has it read as removed,
+  // so code does not put the director's order back on it, and the page reports the move as removed
+  // (fix C2). The automatic pass's scope says every
   // beat keeps its id, once, as the weave's says of its elements; a send-back's scope, where the
   // note sets what changes, says nothing of ids.
   it("on an automatic pass, every beat keeps its id; a send-back says nothing of ids", () => {

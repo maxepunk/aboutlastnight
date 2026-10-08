@@ -1192,7 +1192,8 @@ ${formatEditLines(standingEdits, previousOutput)}
     // every id, which the director's edits and pick find their elements by.
     meetingMode && "Every angle, thread, connection and question keeps its id, because the director's edits and pick find them by it.",
     // Fix C5: so does the map's check rework, whose every beat the director's edits find by its id:
-    // a renumbered beat reads as gone, and a column they ordered would print each of its moves twice.
+    // a renumbered beat reads as removed, so code does not put the director's order back on it, and
+    // the page reports the move as removed (fix C2).
     mapMode && "Every beat keeps its id, because the director's edits find each beat by it."
   ].filter(Boolean).join(' ');
   // Brief 4.5 (TH7, R23): the director's two rounds at the story meeting, each stated

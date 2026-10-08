@@ -131,14 +131,18 @@
  * for it (overWritersBeat). Since phase 4b, piece 4 (R3), the order of a section's beats is the
  * order the article tells them, and the director's order is one edit per section, the section's
  * beat ids in their order (mapOrderOf): made unless their version holds the beats the section kept
- * in their order, followed by at most one beat that arrived in it, at its foot; carried while the
- * section holds every beat it names, in that order, and narrowed only by the director's own
- * changes, at their next look, to the beats their section still holds (fix A: the spec's section
- * 17); replaced under its id by a later reorder of the section; never an order of fewer than two
- * beats (MAP_ORDER_MIN_BEATS), which is no edit (isEdit); and put back after an automatic pass,
- * last of the restores, with each beat it names back in the section at its place in that order,
- * taken from wherever the pass put it, or from the version the pass started from when the pass
- * removed it (fix A). A beat's summary (its synopsis) is a line like any other, named as the
+ * in their order, followed by at most one beat that arrived in it, at its foot, and never in a
+ * section either version holds a repeated beat id in (fix C4); carried while the section holds
+ * every beat it names, each once, in that order, and no beat it names prints anywhere else on the
+ * map (fix A: the spec's section 17; fix C3); replaced under its id by a later reorder of the
+ * section; narrowed by the director's own changes, at their next look, to the beats their section
+ * still holds, and within a round by code, to the beats a pass left (fixes C2 and C6); never an
+ * order of fewer than two beats (MAP_ORDER_MIN_BEATS), which is no edit (isEdit); and put back
+ * after an automatic pass, last of the restores, with each beat it names that the map still holds
+ * back in the section at its place in that order, taken from wherever the pass put it, with the
+ * photos beside it (fix C1). A beat it names that the pass removed from the map stays out, as a
+ * beat the director only moved does (mapRestoresWhenGone), and the order goes back on the beats
+ * that remain (fix C2). A beat's summary (its synopsis) is a line like any other, named as the
  * summary of the move (R11).
  */
 'use strict';
@@ -2746,8 +2750,9 @@ function mapOrderChanges(before, after) {
  * every beat it names, each once, in the director's order, whatever else the section holds, and no
  * beat it names prints anywhere else on the map, in another section or in left out (fix C3). A beat
  * it names that left the section (moved to another, put into left out, or gone from the map) breaks
- * it, and so do a copy of one outside the section and a section that is gone. Only the director's
- * own changes narrow it, at their next look (narrowedOrder).
+ * it, and so do a copy of one outside the section and a section that is gone. The director's own
+ * changes narrow it, at their next look (narrowedOrder), and within a round code narrows it to the
+ * beats a pass left (orderOnMap, fix C2; settleEdits' `narrowed`, fix C6).
  */
 function mapOrderCarried(obj, order) {
   const section = sectionOfSlot(obj, order.slot);
