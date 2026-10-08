@@ -3922,6 +3922,8 @@
     return {
       place: function (entry) { return capitalized(beatWords(slotWords(mapLineWords(asString(entry.where) || scopeLabel(entry.scope)), slots), map, entry.title)); },
       valueText: function (text) {
+        // Fix H2: left out reads as the tray the page names it by.
+        if (asString(text) === 'left out') return scopeLabel('leftOut');
         var m = /^section "([^"]*)"$/.exec(asString(text));
         return m ? slotLabelOf(m[1], slots) : text;
       },

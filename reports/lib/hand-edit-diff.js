@@ -141,8 +141,9 @@
  * after an automatic pass, last of the restores, with each beat it names that the map still holds
  * back in the section at its place in that order, taken from wherever the pass put it, with the
  * photos beside it (fix C1). A beat it names that the pass removed from the map stays out, as a
- * beat the director only moved does (mapRestoresWhenGone), and the order goes back on the beats
- * that remain (fix C2). A beat's summary (its synopsis) is a line like any other, named as the
+ * beat the director only moved does (mapRestoresWhenGone), and so does a writer's beat it names
+ * that the pass struck into left out, which stays struck (fix H2), and the order goes back on the
+ * beats that remain (fix C2). A beat's summary (its synopsis) is a line like any other, named as the
  * summary of the move (R11).
  */
 'use strict';
@@ -2786,16 +2787,62 @@ function orderGoneFrom(order, map) {
 }
 
 /**
+ * Whether a move edit of the director's places each beat (fix C2): a predicate over a beat's id,
+ * true for a beat they moved, added or brought back, whose own edit puts it back and reports it.
+ *
+ * @param {Object[]} edits - the standing edits a version carries
+ * @returns {function(string): boolean}
+ */
+function placedByMoveOf(edits) {
+  const ids = new Set((Array.isArray(edits) ? edits : []).map((e) => {
+    const address = isObj(e) && isMove(e) ? mapAddressOf(e) : null;
+    return address && address.kind === 'beat' && address.fieldSteps.length === 0 ? mapIdText(address.identity.id) : '';
+  }).filter(Boolean));
+  return (id) => ids.has(id);
+}
+
+/**
+ * The beats an order names that a pass struck into left out (fix H2): each one `after`, the pass's
+ * output, holds in left out and in no section, which `before`, the version the pass started from,
+ * did not hold in left out, and which no move edit of the director's places (`placedByMove`; their
+ * own edit puts such a beat back). It stays struck, as a beat a pass removed from the map stays out
+ * (orderGoneFrom): a strike is how the check rework fixes a card count over five, as R5's failure
+ * asks, so putting it back would spend the round's one rework and open the stop on the same failure.
+ *
+ * @param {{slot: string, ids: string[]}} order - mapOrderOf's
+ * @param {Object} before
+ * @param {Object} after
+ * @param {function(string): boolean} placedByMove - placedByMoveOf's
+ * @returns {string[]}
+ */
+function orderStruckIn(order, before, after, placedByMove) {
+  const inLeftOut = (map, id) => mapPlaces(map, 'beat', { id }).some((place) => place.container === MAP_LEFT_OUT);
+  return order.ids.filter((id) => !placedByMove(id) && inLeftOut(after, id) && !inLeftOut(before, id)
+    && mapPlaces(after, 'beat', { id }).every((place) => place.container === MAP_LEFT_OUT));
+}
+
+/**
+ * An order named without the beats in `out` (fix H2): the edit itself when `out` is empty, else a
+ * copy naming the rest, in the director's order, whatever their number. The order's restore takes
+ * it, so a beat a pass struck stays struck.
+ */
+function orderWithout(edit, out) {
+  if (!Array.isArray(out) || out.length === 0) return edit;
+  return { ...edit, after: edit.after.filter((id) => !out.includes(mapIdText(id))) };
+}
+
+/**
  * An order named by the beats `map` still holds anywhere (fix C2): the edit itself while it holds
  * them all, a copy naming the rest, in the director's order, when a pass removed one from the map,
  * and null when fewer than two remain, which is no order. A beat a pass removed from the map stays
- * out (restoreMapOrder), so the order code puts back is this one.
+ * out (restoreMapOrder), so the order code puts back is this one. Fix H2: so does each beat in
+ * `struck`, a writer's move the pass struck into left out (orderStruckIn).
  */
-function orderOnMap(edit, map) {
+function orderOnMap(edit, map, struck = []) {
   const order = mapOrderOf(edit);
-  const gone = orderGoneFrom(order, map);
-  if (gone.length === 0) return edit;
-  const held = order.ids.filter((id) => !gone.includes(id));
+  const out = [...orderGoneFrom(order, map), ...struck];
+  if (out.length === 0) return edit;
+  const held = order.ids.filter((id) => !out.includes(id));
   return held.length < MAP_ORDER_MIN_BEATS ? null : { ...edit, after: held };
 }
 
@@ -2828,7 +2875,9 @@ function photosPlacedBy(edits) {
  *   place it held in `before`, the version the pass started from;
  * - a beat the pass removed from the map stays out (fix C2), as a beat the director only moved
  *   does (mapRestoresWhenGone): only its place was theirs, and its removal can be the fix of a
- *   fault in the writer's text. A beat the director added goes back by its own edit, first.
+ *   fault in the writer's text. A beat the director added goes back by its own edit, first. A
+ *   writer's beat the pass struck into left out stays struck too: settleEdits gives this restore
+ *   the order without it (orderStruckIn, orderWithout; fix H2).
  * Every other beat stays where the pass put it, so a beat the pass added keeps its place relative
  * to the others. The photos beside a beat it names that sit in another section come with the beat,
  * to the foot of the section's photos, as the director's own move takes them (carryPhotosBeside;
@@ -4792,7 +4841,9 @@ function cameBackStillIn(report, stored) {
  *   director's order named (fix H1), its `director` the beat by its move and its people and
  *   its `title` its move, by which the page names a beat the map no longer holds; a beat a move
  *   edit of the director's placed is reported by that edit alone, whose entry carries the same
- *   `title` when the version stored no longer holds the beat (goneBeatTitle; fix F1).
+ *   `title` when the version stored no longer holds the beat (goneBeatTitle; fix F1). A writer's
+ *   beat the order names that the pass struck into left out stays struck, and is an entry of its
+ *   own in the same shape, `became` `left out` (orderStruckIn; fix H2).
  * `checked` lists every id the round's passes checked. The server resets the report at
  * each send-back (and, at the story meeting, at each reweave), so it holds one round.
  *
@@ -4835,10 +4886,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
   // angle, so the entry says so (`angleTakenOut`) and never reads as the pass undoing it there.
   const angleTakenOutOf = (membership) => (membership && angleUnder(after, membership.angleId) === null ? { angleTakenOut: true } : {});
   // Fix C2: a beat one of the director's moves places on the map, whose own entry reports it.
-  const placedByMove = (id) => carried.some((m) => {
-    const address = isMove(m) ? mapAddressOf(m) : null;
-    return Boolean(address) && address.kind === 'beat' && address.fieldSteps.length === 0 && mapIdText(address.identity.id) === id;
-  });
+  const placedByMove = placedByMoveOf(carried);
   const changed = [];
   carried.forEach((e) => {
     if (isCut(e)) {
@@ -4889,17 +4937,22 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     // version stored lacks took the order with it, which is one entry, the order gone, as below.
     const order = automatic ? mapOrderOf(e) : null;
     if (order && sectionOfSlot(stored, order.slot)) {
-      const onMap = orderOnMap(e, stored);
+      // Fix H2: a writer's move the order names that the pass struck into left out stays struck, as
+      // a removed one stays out, and is an entry of its own, `became` left out.
+      const struck = orderStruckIn(order, before, after, placedByMove);
+      const onMap = orderOnMap(e, stored, struck);
       if (onMap && !editCarried(after, onMap)) {
         changed.push(entry(e, { director: textOf(onMap, onMap.after), became: becameOf(onMap, before, after), restored: putBack.has(e.id) }));
       }
-      orderGoneFrom(order, stored).filter((id) => !placedByMove(id)).forEach((id) => {
+      const leftByPass = (id, became) => {
         const place = mapPlaces(before, 'beat', { id })[0];
         changed.push(entry(e, {
-          where: `section "${order.slot}", beat "${id}"`, moved: true, fromOrder: true, director: place ? mapBeatText(place.element) : '', became: null,
+          where: `section "${order.slot}", beat "${id}"`, moved: true, fromOrder: true, director: place ? mapBeatText(place.element) : '', became,
           ...goneBeatTitle(id, before, stored)
         }));
-      });
+      };
+      orderGoneFrom(order, stored).filter((id) => !placedByMove(id)).forEach((id) => leftByPass(id, null));
+      struck.forEach((id) => leftByPass(id, mapContainerWords(MAP_LEFT_OUT)));
       return;
     }
     // Piece 3 (the final review): a thread the director added that the pass kept in their words and
@@ -4981,8 +5034,11 @@ function reportWithHeld(report, held) {
  * code's own restores broke by putting a beat back at its place (fix round 1, findings 1 and 2);
  * the report records only an order the pass changed or broke. A beat the order names that the
  * pass removed from the map stays out, as a beat the director only moved does
- * (mapRestoresWhenGone), and the order goes back on the beats that remain (orderOnMap; fix C2),
- * which it stands as from here on (`narrowed`). A section the pass removed takes
+ * (mapRestoresWhenGone), and so does a writer's beat it names that the pass struck into left out,
+ * which stays struck (orderStruckIn; fix H2: a strike is how the check rework fixes a card count
+ * over five), and the order goes back on the beats that remain (orderOnMap; fix C2), which it
+ * stands as from here on (`narrowed`). A beat the director placed, added or brought back goes
+ * back by its own move edit, as before. A section the pass removed takes
  * the order with it: nothing goes back, and the report says the order is gone; but where the
  * restore of a field edit on the section (the director's heading or job) brings it back whole,
  * the order goes back on it, and each beat it names prints once, in the section, its copies the
@@ -5034,6 +5090,9 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
   const narrowed = [];
   if (pass !== SEND_BACK_PASS && isObj(after)) {
     const outcome = (e) => moveOutcome(e, before, after).outcome;
+    // Fix H2: the writer's moves an order names that the pass struck into left out.
+    const placedByMove = placedByMoveOf(carried);
+    const struckOf = (e) => orderStruckIn(mapOrderOf(e), before, after, placedByMove);
     // Task 4.14f: of the cuts, only a Key Evidence entry the director deleted, which the pass put back.
     const changed = carried.filter((e) => (isCut(e)
       ? deletedEntryOf(e) !== null && !editCarried(after, e)
@@ -5081,9 +5140,12 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // read on the output as the restores above left it, not on the pass's: a beat a move's restore
       // put back at its place can break an order the pass left intact (fix round 1, findings 1 and 2).
       // Fix C, third round: a photo the director placed stays where they put it.
+      // Fix H2: a writer's move the order names that the pass struck into left out stays struck, so
+      // the order goes back without it.
       let orderWritten = false;
       const placedPhotos = photosPlacedBy(carried);
-      carried.filter((e) => isMapOrder(e) && !editCarried(output, e))
+      carried.filter(isMapOrder).map((e) => orderWithout(e, struckOf(e)))
+        .filter((e) => !editCarried(output, e))
         .forEach((e) => { if (restoreEdit(e, before, output, leavesOut, { placedPhotos })) orderWritten = true; });
       // Fix C, second round: the order's restore keeps the section's copy of each beat it names and
       // takes the others out, with the photos beside them (restoreMapOrder), as a move's restore
@@ -5101,8 +5163,9 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // An edit is unprintable when a photo block of it the article cannot print prints
       // nowhere in the version stored.
       changed.forEach((e) => {
-        // Fix C2: the director's order is put back on the beats the map still holds (orderOnMap).
-        const asRestored = isMapOrder(e) ? orderOnMap(e, output) : editAsRestored(e, leavesOut);
+        // Fix C2: the director's order is put back on the beats the map still holds (orderOnMap);
+        // fix H2: without a writer's move the pass struck.
+        const asRestored = isMapOrder(e) ? orderOnMap(e, output, struckOf(e)) : editAsRestored(e, leavesOut);
         const carriedNow = asRestored !== null && editCarried(output, asRestored);
         if (carriedNow || backInSection(e, after, output)) restored.push(e.id);
         if (carriedNow && asRestored !== e) narrowed.push(asRestored);
