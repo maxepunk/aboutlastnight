@@ -26,13 +26,15 @@
   --layer-excluded: #d4a853;
 
   /* The map's thread tones (piece 4, R4): a thread's place in the settled story, 1 to 8, and 0 for
-     a thread outside the story. The console has one theme, this dark one. */
+     a thread outside the story, the one grey. Each story tone is a saturated hue of its own, so none
+     reads as that grey (fix B4: tone 5 was a grey-green, #a8b3a0, and is now a lime). The console
+     has no light theme, so these dark tokens are the only ones. */
   --map-tone-0: #5a5549;
   --map-tone-1: #d4a853;
   --map-tone-2: #4ecdc4;
   --map-tone-3: #e07a5f;
   --map-tone-4: #9b8cf2;
-  --map-tone-5: #a8b3a0;
+  --map-tone-5: #bcd94a;
   --map-tone-6: #6fbf73;
   --map-tone-7: #e58fb5;
   --map-tone-8: #7fa7d9;

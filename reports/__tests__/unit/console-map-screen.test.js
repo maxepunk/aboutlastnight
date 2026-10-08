@@ -1563,3 +1563,38 @@ describe('Fix B3: a card has a role and a name', () => {
     expect(mapClassesOf(cardOf(mounted.render(), title))).toContain('map__card--selected');
   });
 });
+
+// Fix B4: each story tone is a saturated colour of its own hue, so no story thread's dot reads as
+// the grey of a thread outside the story (tone 0). Tone 5 was a grey-green (#a8b3a0) beside it.
+describe('Fix B4: each story tone stands apart from the grey and from the others', () => {
+  const css = read('console.css');
+  const root = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')));
+  const hsl = (tone) => {
+    const hex = root.match(new RegExp(`--map-tone-${tone}:\\s*#([0-9a-f]{6});`))[1];
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+    const l = (max + min) / 2;
+    const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    let h = 0;
+    if (d !== 0 && max === r) h = 60 * (((g - b) / d) % 6);
+    else if (d !== 0 && max === g) h = 60 * ((b - r) / d + 2);
+    else if (d !== 0) h = 60 * ((r - g) / d + 4);
+    return { h: (h + 360) % 360, s };
+  };
+  const tones = Array.from({ length: ViewLogic.MAP_TONES }, (_, i) => i + 1);
+
+  it('every story tone is saturated, and each hue sits at least 25 degrees from every other', () => {
+    // The old tone 5 had a saturation of 0.11; the least saturated story tone now, the green, 0.38.
+    tones.forEach((tone) => expect(`${tone}: ${hsl(tone).s >= 0.35}`).toBe(`${tone}: true`));
+    tones.forEach((a) => tones.filter((b) => b > a).forEach((b) => {
+      const gap = Math.abs(hsl(a).h - hsl(b).h);
+      expect(`${a}/${b}: ${Math.min(gap, 360 - gap) >= 25}`).toBe(`${a}/${b}: true`);
+    }));
+  });
+
+  it("says in the tokens' comment that the console has no light theme", () => {
+    expect(root).toMatch(/no light theme/);
+  });
+});
