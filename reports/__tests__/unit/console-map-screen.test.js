@@ -1701,3 +1701,42 @@ describe('Fix E1: the board fits a desktop screen', () => {
     expect(narrow).toMatch(/\.map__columns \{[^}]*grid-auto-flow:\s*row/);
   });
 });
+
+// Fix E2: the headline reads as the article's headline (the mock-up "Map: corkboard columns"): large,
+// in the page's serif, with the deck under it smaller. It rendered in the label face (Bebas Neue, a
+// section label's size), under a deck that read larger. The editor's markup stays: the headline and
+// the deck sit in the pencil host `.map__head`, which routes through ALWAYS.
+describe("Fix E2: the map's headline reads as the article's headline, the deck under it smaller", () => {
+  const css = read('console.css');
+  const map = css.slice(css.indexOf('/* ── 4.9: the map ──'), css.indexOf("/* ── 4.10: the desk's marks ──"));
+  const src = read('components/checkpoints/Outline.js');
+  const body = (selector) => {
+    const at = map.indexOf(`\n${selector} {`);
+    return at === -1 ? '' : map.slice(at, map.indexOf('}', at));
+  };
+  const rem = (selector) => {
+    const m = /font-size:\s*([\d.]+)rem;/.exec(body(selector));
+    return m ? Number(m[1]) : null;
+  };
+
+  it("sets the headline in the page's serif, large and weighted, never in the label face", () => {
+    expect(body('.map__headline')).toMatch(/font-family:\s*var\(--font-body\);/);
+    expect(body('.map__headline')).not.toMatch(/--font-display|text-transform|letter-spacing/);
+    expect(body('.map__headline')).toMatch(/font-weight:\s*600;/);
+    expect(rem('.map__headline')).toBeGreaterThanOrEqual(1.6);
+  });
+
+  it('sets the deck under it smaller than the headline, and no smaller than the body text', () => {
+    expect(rem('.map__deck')).not.toBeNull();
+    expect(rem('.map__deck')).toBeLessThan(rem('.map__headline'));
+    expect(rem('.map__deck')).toBeGreaterThanOrEqual(1);
+    expect(rem('.map__headline')).toBeGreaterThan(rem('.map__label'));
+  });
+
+  it("keeps the editor's markup: the headline and the deck in the pencil host that routes through ALWAYS", () => {
+    expect(src).toContain("React.createElement('div', { className: 'map__head ' + ALWAYS },");
+    const host = src.slice(src.indexOf("React.createElement('div', { className: 'map__head ' + ALWAYS },"));
+    expect(host.indexOf("React.createElement('p', { className: 'map__headline' }, view.headline.text)"))
+      .toBeLessThan(host.indexOf("React.createElement('p', { className: 'map__deck' }, view.deck.text)"));
+  });
+});

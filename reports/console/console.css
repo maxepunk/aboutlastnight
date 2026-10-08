@@ -3287,13 +3287,19 @@ textarea.input {
   padding-bottom: var(--space-xs);
 }
 
+/* The headline reads as the article's headline, in the page's serif, with the deck under it
+   smaller (fix E2; the mock-up "Map: corkboard columns"). */
 .map__headline {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-family: var(--font-body);
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.2;
   color: var(--text-primary);
 }
 
 .map__deck {
+  font-size: 1rem;
+  line-height: 1.5;
   color: var(--text-secondary);
 }
 
