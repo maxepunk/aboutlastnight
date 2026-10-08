@@ -164,14 +164,17 @@ describe('4C: the order edit stands across looks, and a later reorder of the sec
     expect(undone).toEqual({ kind: 'map', issued: 1, edits: [] });
   });
 
-  it("a struck beat the order named: the order stands on the beats that remain, and the next look names only those", () => {
+  it("a struck beat the order named: the director's next look names only the beats that remain, and the order stands on them", () => {
     const ordered = EditLogic.moveBeat(boardMap(), 'b5', 'theStory', 0);
     const first = D.standingOnMap(null, boardMap(), ordered);
     expect(first.edits[0].after).toEqual(['b5', 'b3', 'b4', 'b6', 'b7', 'b8']);
     const struck = EditLogic.strikeBeat(ordered, 'b3');
-    expect(D.carriedEdits(first, struck).map((e) => e.id)).toEqual(['E1']);
+    // Fix A: the order is carried only while the section holds every beat it names, so the edit
+    // as it stood is not carried on the struck map; the director's own strike narrows it at the look.
+    expect(D.carriedEdits(first, struck)).toEqual([]);
     const next = D.standingOnMap(first, struck, struck);
     expect(next.edits.map((e) => [e.id, e.after])).toEqual([['E1', ['b5', 'b4', 'b6', 'b7', 'b8']]]);
+    expect(D.carriedEdits(next, struck).map((e) => e.id)).toEqual(['E1']);
   });
 });
 
@@ -196,19 +199,18 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
     })]);
   });
 
-  it('a pass that keeps the order of the beats it names, though it strikes one of them, changes nothing of the edit', () => {
+  it('Fix A: a pass that strikes a beat the order names breaks it, and code brings the beat back at its place', () => {
     const before = EditLogic.moveBeat(boardMap(), 'b5', 'theStory', 0);
     const edits = editsOf(boardMap(), before);
     const pass = EditLogic.strikeBeat(before, 'b3');
     const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
-    expect(settled.output).toEqual(pass);
-    expect(settled.report.changed).toEqual([]);
-    // A later pass that swaps two of the rest has them put back, and the struck beat with them:
-    // the order's restore puts each beat it names back into the section (fix A).
-    const swapped = EditLogic.moveBeatBy(pass, 'b4', -1);
-    const again = D.settleEdits(null, { edits, before: pass, after: swapped, pass: 2 });
+    expect(idsIn(settled.output, 'theStory')).toEqual(['b5', 'b3', 'b4', 'b6', 'b7', 'b8']);
+    expect(settled.output.leftOut.map((b) => b.id)).toEqual(['b17', 'b18']);
+    expect(settled.report.changed).toEqual([expect.objectContaining({ id: 'E1', automatic: true, restored: true })]);
+    // A later pass that swaps two of them has them put back too.
+    const swapped = EditLogic.moveBeatBy(settled.output, 'b4', -1);
+    const again = D.settleEdits(null, { edits, before: settled.output, after: swapped, pass: 2 });
     expect(idsIn(again.output, 'theStory')).toEqual(['b5', 'b3', 'b4', 'b6', 'b7', 'b8']);
-    expect(again.output.leftOut.map((b) => b.id)).not.toContain('b3');
   });
 
   it('a card dropped in the middle of another column: the move edit and that section\'s order edit, both put back', () => {
@@ -228,9 +230,10 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
 
   // Fix round 1, findings 1 and 2: a pass that left the director's order intact on the beats the
   // section still held, but took out a beat the director placed in it. Code puts that beat back at
-  // its place, which can break the order, so the order goes back after every other restore. The
-  // report holds the move alone, since the pass did not change the order (R3), and the stored map
-  // carries both edits, so "Both of your edits stand." is true.
+  // its place, which can break the order, so the order goes back after every other restore. Fix A:
+  // a beat the order names that the pass took out of the section breaks the order too, so the
+  // report records the order's restore beside the move's, and the stored map carries both edits,
+  // so "Both of your edits stand." is true.
   describe("a beat code puts back at its place does not leave the director's order broken", () => {
     const setUp = (passOf) => {
       const before = EditLogic.moveBeat(boardMap(), 'b2', 'closing', 1);
@@ -248,7 +251,7 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
       expect(idsIn(settled.output, 'lede')).toEqual(['b1']);
       expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
       expect(settled.report.checked).toEqual(['E1', 'E2']);
-      expect(settled.report.changed.map((c) => [c.id, c.moved, c.restored])).toEqual([['E1', true, true]]);
+      expect(settled.report.changed.map((c) => [c.id, c.moved, c.restored])).toEqual([['E1', true, true], ['E2', false, true]]);
       // The next look: the stored map is the writer's last map, and the director leaves it as shown.
       expect(D.standingOnMap(standing, settled.output, settled.output).edits.map((e) => e.id)).toEqual(['E1', 'E2']);
     };
@@ -271,7 +274,7 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
       const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
       expect(idsIn(settled.output, 'theStory')).toEqual(['b21', 'b2', 'b9', 'b3', 'b4']);
       expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
-      expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true]]);
+      expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E2', true]]);
     });
   });
 
@@ -375,6 +378,127 @@ describe("Fix A: the order's restore puts each beat it names back into the secti
     expect(idsIn(output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b20', 'b7', 'b8']);
     expect(beatOf(output, 'b4')).toEqual(beatOf(before, 'b4'));
     expect(DIRECTORS_STORY.every((id) => placesOf(output, id).length === 1)).toBe(true);
+  });
+});
+
+// Fix A, items 1, 2 and 5: the order stands while its section holds every beat it names, in the
+// director's order. A named beat a pass took out of the section breaks it (moved to another section,
+// put into left out, or gone from the map), and code puts it back after an automatic pass. A
+// send-back's rework that does the same is reported with its reason and not restored. Only the
+// director's own changes narrow it, at their next look.
+describe('Fix A: the order stands while its section holds every beat it names, and code puts it back', () => {
+  const { mapCheckpointData } = require('../map');
+  const { keptPhotoFilenames } = require('../workflow/nodes/ai-nodes');
+  const ViewLogic = require('../../console/checkpoint-view-logic');
+  const { boardMapState } = require('./fixtures/board-map');
+  /** The page the stop shows for a map, the director's standing edits and the round's report. */
+  const pageOf = (map, standing, report) => {
+    const state = boardMapState({ outline: map, _mapBaseline: map, _outlineHandEdits: standing, _outlineHandEditReport: report, humanOutlineRevisionCount: 1 });
+    const data = mapCheckpointData(state, { keptPhotos: keptPhotoFilenames(state, state.outline.topPhoto), evidenceIndex: {}, maxRevisions: 1 });
+    return ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+  };
+  const handEditsOn = (handEdits, version) => handEditsBlock(buildRevisionContext({
+    phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: version, handEdits, humanFeedback: null
+  }).contextSection);
+  const placesOf = (map, id) => [
+    ...map.sections.flatMap((s) => s.beats.filter((b) => b.id === id).map(() => s.slot)),
+    ...map.leftOut.filter((b) => b.id === id).map(() => 'leftOut')
+  ];
+  /** The director's map: Jess warns Sarah away moved to the head of The Story. */
+  const headMoved = () => EditLogic.moveBeat(boardMap(), 'b5', 'theStory', 0);
+  const HEAD_ORDER = ['b5', 'b3', 'b4', 'b6', 'b7', 'b8'];
+
+  it("an automatic pass that moves the director's head move to another section: it comes back to the head, prints once, and the report records the restore", () => {
+    const before = headMoved();
+    const standing = D.standingOnMap(null, boardMap(), before);
+    const edits = D.carriedEdits(standing, before);
+    expect(edits.map((e) => [e.id, e.after])).toEqual([['E1', HEAD_ORDER]]);
+    const pass = EditLogic.moveBeat(before, 'b5', 'closing');
+    // The pass's map no longer carries the order: a check rework reading it would find no order line.
+    expect(D.carriedEdits(edits, pass)).toEqual([]);
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+    expect(idsIn(settled.output, 'theStory')).toEqual(HEAD_ORDER);
+    expect(placesOf(settled.output, 'b5')).toEqual(['theStory']);
+    expect(idsIn(settled.output, 'closing')).toEqual(['b15', 'b16']);
+    expect(settled.report.changed).toEqual([expect.objectContaining({
+      id: 'E1', where: 'section "theStory", the order of its moves', automatic: true, pass: 1, restored: true,
+      became: 'Marcus tests the batch on himself / Marcus asks Quinn to raise the dose / Quinn tells the room another story / The trial run comes to light / Remi presses Quinn and backs off'
+    })]);
+    // The next pass reads the whole order, every move by its title.
+    expect(handEditsOn(edits, settled.output)).toContain('E1 (section "theStory", the order of its moves): beat "b5" "Jess warns Sarah away", then beat "b3"');
+    expect(pageOf(settled.output, standing, settled.report).kept).toBe('Your edit stands.');
+  });
+
+  it('a pass that removes a named move from the map: it comes back at its place, from the version the pass started from', () => {
+    const before = headMoved();
+    const edits = editsOf(boardMap(), before);
+    const pass = clone(before);
+    pass.sections.find((s) => s.slot === 'theStory').beats.splice(2, 1);
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+    expect(idsIn(settled.output, 'theStory')).toEqual(HEAD_ORDER);
+    expect(beatOf(settled.output, 'b4')).toEqual(beatOf(before, 'b4'));
+    expect(settled.report.changed).toEqual([expect.objectContaining({ id: 'E1', automatic: true, restored: true })]);
+  });
+
+  it("a check rework never reads an order line naming fewer beats than the director's order", () => {
+    const left = EditLogic.moveBeatBy(clone(MAP), 'b4', -1);
+    const edits = editsOf(MAP, left);
+    let pass = EditLogic.moveBeat(left, 'b2', 'closing');
+    pass = EditLogic.moveBeat(pass, 'b4', 'closing');
+    expect(handEditsOn(edits, pass)).not.toContain('the order of its moves');
+    const settled = D.settleEdits(null, { edits, before: left, after: pass, pass: 1 });
+    expect(idsIn(settled.output, 'theStory')).toEqual(['b2', 'b4', 'b3']);
+    expect(idsIn(settled.output, 'closing')).toEqual(['b6']);
+    expect(handEditsOn(edits, settled.output)).toContain('E1 (section "theStory", the order of its moves): beat "b2" "Marcus brags about the sale", then beat "b4" "The paternity result names Sarah", then beat "b3" "Morgan pays Riley at the bar"');
+  });
+
+  it("a send-back's rework that moves a named move out: reported with its reason, not restored, and the page shows it", () => {
+    const before = headMoved();
+    const standing = D.standingOnMap(null, boardMap(), before);
+    const edits = D.carriedEdits(standing, before);
+    const pass = EditLogic.moveBeat(before, 'b5', 'closing');
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: D.SEND_BACK_PASS, reasons: [{ id: 'E1', reason: 'The note asks for the warning at the close.' }] });
+    expect(settled.output).toEqual(pass);
+    expect(settled.report.changed).toEqual([expect.objectContaining({
+      id: 'E1', pass: 'send-back', automatic: false, restored: false, reason: 'The note asks for the warning at the close.'
+    })]);
+    const view = pageOf(settled.output, standing, settled.report);
+    expect(view.kept).toBe('');
+    expect(view.sections.find((s) => s.slot === 'theStory').changed).toEqual([
+      expect.stringContaining('Why: The note asks for the warning at the close.')
+    ]);
+  });
+
+  it("an order narrowed by the director's own strike to one beat: no edit, no <HAND_EDITS> line, and not counted among the edits that stand", () => {
+    const left = EditLogic.moveBeatBy(clone(MAP), 'b4', -1);
+    const first = D.standingOnMap(null, MAP, left);
+    expect(first.edits.map((e) => [e.id, e.after])).toEqual([['E1', ['b2', 'b4', 'b3']]]);
+    // The director's next look: they strike two of the three, which leaves the order one beat.
+    const struck = EditLogic.strikeBeat(EditLogic.strikeBeat(left, 'b2'), 'b4');
+    expect(idsIn(struck, 'theStory')).toEqual(['b3']);
+    expect(D.carriedEdits(first, struck)).toEqual([]);
+    expect(handEditsOn(first, struck)).not.toContain('the order of its moves');
+    const next = D.standingOnMap(first, left, struck);
+    expect(next.edits.map((e) => e.path)).toEqual(['leftOut[#b2]', 'leftOut[#b4]']);
+    expect(handEditsOn(next, struck)).not.toContain('the order of its moves');
+    // The round's automatic pass changes nothing: the page counts the two strikes alone.
+    const edits = D.carriedEdits(next, struck);
+    const settled = D.settleEdits(null, { edits, before: struck, after: clone(struck), pass: 1 });
+    expect(settled.report.checked).toEqual(['E2', 'E3']);
+  });
+
+  it('an order edit next to an added move the pass removed: both put back, and the order holds', () => {
+    const added = EditLogic.addBeat(boardMap(), 'closing', 'Kai leaves before the count', 'Kai');
+    const before = EditLogic.moveBeatBy(added, 'b19', -1);
+    const edits = editsOf(boardMap(), before);
+    expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#closing].beats[#b19]'], ['E2', 'sections[#closing].beats']]);
+    const pass = clone(before);
+    const closing = pass.sections.find((s) => s.slot === 'closing');
+    closing.beats = closing.beats.filter((b) => b.id !== 'b19');
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+    expect(idsIn(settled.output, 'closing')).toEqual(['b15', 'b19', 'b16']);
+    expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
+    expect(settled.report.changed.map((c) => [c.id, c.moved, c.restored])).toEqual([['E1', true, true], ['E2', false, true]]);
   });
 });
 

@@ -132,11 +132,13 @@
  * order the article tells them, and the director's order is one edit per section, the section's
  * beat ids in their order (mapOrderOf): made unless their version holds the beats the section kept
  * in their order, followed by at most one beat that arrived in it, at its foot; carried while the
- * beats it names that the section still holds sit in that order; replaced under its id by a later
- * reorder of the section; and put back after an automatic pass, last of the restores, with each
- * beat it names back in the section at its place in that order, taken from wherever the pass put
- * it, or from the version the pass started from when the pass removed it (fix A). A beat's summary
- * (its synopsis) is a line like any other, named as the summary of the move (R11).
+ * section holds every beat it names, in that order, and narrowed only by the director's own
+ * changes, at their next look, to the beats their section still holds (fix A: the spec's section
+ * 17); replaced under its id by a later reorder of the section; and put back after an automatic
+ * pass, last of the restores, with each beat it names back in the section at its place in that
+ * order, taken from wherever the pass put it, or from the version the pass started from when the
+ * pass removed it (fix A). A beat's summary (its synopsis) is a line like any other, named as the
+ * summary of the move (R11).
  */
 'use strict';
 
@@ -1323,7 +1325,8 @@ function moveContainer(obj, edit) {
 /** Does `obj` still carry this edit (see the module header)? */
 function editCarried(obj, edit) {
   if (!isObj(obj) || !isEdit(edit)) return false;
-  // Piece 4 (R3): the director's order of a section, while the beats it names sit in that order.
+  // Piece 4 (R3; fix A): the director's order of a section, while the section holds every beat it
+  // names, in that order.
   const order = mapOrderOf(edit);
   if (order) return mapOrderCarried(obj, order);
   const address = mapAddressOf(edit);
@@ -2719,24 +2722,28 @@ function mapOrderChanges(before, after) {
 }
 
 /**
- * Does `obj` carry the director's order (R3)? While the beats it names that the section still holds
- * sit in that relative order, whatever else the section holds; never when the section is gone.
+ * Does `obj` carry the director's order (R3; fix A: the spec's section 17)? While the section holds
+ * every beat it names, each once, in the director's order, whatever else the section holds. A beat
+ * it names that left the section (moved to another, put into left out, or gone from the map) breaks
+ * it, and so does a section that is gone. Only the director's own changes narrow it, at their next
+ * look (narrowedOrder).
  */
 function mapOrderCarried(obj, order) {
   const section = sectionOfSlot(obj, order.slot);
   if (!section) return false;
-  const ranks = sectionBeatIds(section).filter((id) => order.ids.includes(id)).map((id) => order.ids.indexOf(id));
-  return ranks.every((rank, i) => i === 0 || ranks[i - 1] < rank);
+  return same(sectionBeatIds(section).filter((id) => order.ids.includes(id)), order.ids);
 }
 
 /**
- * An order the director's version carries, named by the beats that version's section holds
- * (standingOnMap): the edit itself while it holds them all, a copy naming the rest when one has
- * left the section, and null when fewer than two remain, which is no order.
+ * An order named by the beats the director's version holds in its section (standingOnMap): the
+ * edit itself while it holds them all, a copy naming the rest, in the director's order, when the
+ * director moved, struck or took out one of them, and null when fewer than two remain, which is no
+ * order. Whether the version still carries it is the caller's to read (mapOrderCarried).
  */
 function narrowedOrder(edit, map) {
   const order = mapOrderOf(edit);
-  const held = sectionBeatIds(sectionOfSlot(map, order.slot)).filter((id) => order.ids.includes(id));
+  const holds = sectionBeatIds(sectionOfSlot(map, order.slot));
+  const held = order.ids.filter((id) => holds.includes(id));
   if (held.length < 2) return null;
   return same(held, order.ids) ? edit : { ...edit, after: held };
 }
@@ -3379,8 +3386,10 @@ function reanchoredMapEdit(edit, map) {
  * - The director's order of a section (piece 4, R3) is one edit per section. Where their
  *   version orders the section against the baseline, that order is the edit, under the id of
  *   the section's earlier order edit when there is one, so a later reorder replaces it. Where it
- *   does not, an earlier order edit their version still carries stands, named by the beats the
- *   section still holds (narrowedOrder), and one it no longer carries goes.
+ *   does not, an earlier order edit is first named by the beats their version's section still
+ *   holds (narrowedOrder): the director moved, struck or took out the others (fix A). It stands
+ *   while their version holds those beats in that order, and goes when it does not, or when fewer
+ *   than two remain.
  *
  * @param {*} previous - the map's standing edits so far (state._outlineHandEdits)
  * @param {Object|null} baseline - the writer's last map
@@ -3409,9 +3418,11 @@ function standingOnMap(previous, baseline, left, { names } = {}) {
     if (now) {
       ordersNow.delete(order.slot);
       kept.push(completeEdit({ id: edit.id, ...now }, null, null));
-    } else if (editCarried(left, edit)) {
+    } else {
+      // Fix A: the director's own changes narrow the order to the beats their section still holds,
+      // and the narrowed order stands while their version holds those beats in it.
       const narrowed = narrowedOrder(edit, left);
-      if (narrowed) kept.push(narrowed);
+      if (narrowed && editCarried(left, narrowed)) kept.push(narrowed);
     }
   });
   const covered = new Set(kept.map(mapCoverKey));
@@ -4580,10 +4591,11 @@ function cameBackStillIn(report, stored) {
  *   whether an automatic pass made it, and the rework's reason (null: none given);
  * - a beat the director struck on the map that a pass brought back (brief 4.6) is marked
  *   `struck`, and `restored` says code struck it again;
- * - the director's order of a section on the map that a pass changed (piece 4, R3) is one entry,
- *   at `section "<slot>", the order of its moves`, its `director` the beats it names by their
- *   titles in the director's order and its `became` those the section holds in the pass's order
- *   (null when it holds none), and `restored` says code put the order back.
+ * - the director's order of a section on the map that a pass changed, or broke by taking a beat
+ *   it names out of the section (piece 4, R3; fix A), is one entry, at `section "<slot>", the
+ *   order of its moves`, its `director` the beats it names by their titles in the director's order
+ *   and its `became` those the section holds in the pass's order (null when it holds none, or the
+ *   pass removed the section), and `restored` says code put the order back.
  * `checked` lists every id the round's passes checked. The server resets the report at
  * each send-back (and, at the story meeting, at each reweave), so it holds one round.
  *
@@ -4730,9 +4742,12 @@ function reportWithHeld(report, held) {
  * the edits as an automatic pass is: code puts back each line it changed. On the map, once the
  * other edits are back, code puts the director's order of each section back, each beat it names in
  * the section at its place in that order, from wherever the pass put it, so a beat the pass added
- * keeps its place (restoreMapOrder; piece 4, R3; fix A): every order the output no longer carries, the ones the pass changed and the ones code's own
- * restores broke by putting a beat back at its place (fix round 1, findings 1 and 2); the report
- * records only an order the pass changed. Code also holds each section the director dropped by its slot (droppedSlotsOf,
+ * keeps its place (restoreMapOrder; piece 4, R3; fix A): every order the output no longer carries,
+ * the ones the pass changed or broke by taking a beat it names out of the section, and the ones
+ * code's own restores broke by putting a beat back at its place (fix round 1, findings 1 and 2);
+ * the report records only an order the pass changed or broke. A section the pass removed takes
+ * the order with it: nothing goes back, and the report says the order is gone. Code also holds
+ * each section the director dropped by its slot (droppedSlotsOf,
  * console/outline-edit-logic.js holdDroppedSections; task 4.14b, fix round 1): a section the pass
  * put back goes again when it holds nothing, and one the pass filled stays, out of the dropped
  * list, its cut reported as come back. Code never puts
