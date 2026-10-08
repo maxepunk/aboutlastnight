@@ -1271,7 +1271,9 @@ function mapReworkFailed(state, previousOutline, error) {
  * Every pass but a send-back is held to the director's standing edits: code puts back each
  * line it changed and strikes again, by id, each beat it brought back (lib/hand-edit-diff.js
  * settleEdits), and the round's report (`_outlineHandEditReport`) records each change and
- * each restore. The map a pass leaves is the writer's last map (`_mapBaseline`), unchecked
+ * each restore. A pass that leaves the director's order of a section standing on fewer beats (a
+ * beat an automatic pass removed from the map, or one a send-back took out of the section) stores
+ * the order so (`_outlineHandEdits`, fixes C2 and C6). The map a pass leaves is the writer's last map (`_mapBaseline`), unchecked
  * (`_mapCheck: null`), and its top photo is the hero. It stamps the map writer's phase,
  * OUTLINE_GENERATION, as the writer does (brief 4.6b).
  *
@@ -1345,6 +1347,9 @@ async function reviseOutline(state, config) {
       heroImage: topPhotoOf(settled.output),
       _previousOutline: null,  // Clear temporary field after use
       _outlineFeedback: null,  // Clear human feedback after consumption
+      // Fixes C2 and C6: the director's order of a section stands narrowed to the beats a pass left
+      // in it, so the round's next pass is held to the rest (standingAfterPass).
+      ...(settled.narrowed.length > 0 && { _outlineHandEdits: standingAfterPass(state._outlineHandEdits, settled.narrowed) }),
       _outlineHandEditReport: settled.report,
       _outlineRework: null,  // Task 4.14e: the rework completed
       currentPhase: PHASES.OUTLINE_GENERATION

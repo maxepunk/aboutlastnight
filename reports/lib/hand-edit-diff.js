@@ -4836,7 +4836,9 @@ function reportWithHeld(report, held) {
  * 4.3c). Every restore and the report read which copy is the pass's by one rule
  * (passCopies), so a copy the director kept in another section stays (task 4.3c, fix
  * round 1). A send-back's rework is left as it is: the director's note may
- * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
+ * change an edit, and the rework says why; on the map, one that only took beats the director's
+ * order names out of its section, keeping the rest in that order, leaves the order standing on
+ * the rest (`narrowed`; fix C6). A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed. On the map, once the
  * other edits are back, code puts the director's order of each section back, each beat it names in
  * the section at its place in that order, from wherever the pass put it, so a beat the pass added
@@ -4884,7 +4886,8 @@ function reportWithHeld(report, held) {
  * @returns {{output: *, report: Object|null, narrowed: Object[]}} the version to store, the
  *   report, and each edit that stands narrowed, as it stands now: an edit code put back without a
  *   photo it left out, which only the article's rework, given `photos` or `whiteboard`, has; and
- *   on the map, the director's order put back on the beats a pass left on the map (fix C2)
+ *   on the map, the director's order put back on the beats a pass left on the map (fix C2), or
+ *   named by the beats a send-back's rework left in its section in their order (fix C6)
  */
 function settleEdits(previous, { edits = [], before = null, after = null, pass, reasons = [], photos, whiteboard = null } = {}) {
   const carried = (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit);
@@ -4958,6 +4961,16 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       });
     }
   }
+  // Fix C6: a send-back's rework that only took beats the director's order names out of its section,
+  // and kept the rest in their order, narrows the order to the rest for the round (narrowedOrder),
+  // so the round's next pass is held to it. One that reordered the rest changed the order, which is
+  // reported and stands no longer.
+  if (pass === SEND_BACK_PASS && isMap(after)) {
+    carried.filter((e) => isMapOrder(e) && !editCarried(after, e)).forEach((e) => {
+      const rest = narrowedOrder(e, after);
+      if (rest && rest !== e && editCarried(after, rest)) narrowed.push(rest);
+    });
+  }
   return { output, report: reportAfterPass(previous, { edits: carried, before, after, pass, reasons, restored, unprintable, stored: output }), narrowed };
 }
 
@@ -4969,9 +4982,11 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
  * next pass, the judge, the verdict guard and the fact check (carriedEdits) and the next
  * send-back (standingAfterSendBack) hold the rest of it as the director's (R11). `previous`
  * itself when the pass narrowed none. The article's rework stores it (ai-nodes.js
- * reviseContentBundle), the one pass given the photos the article can print.
+ * reviseContentBundle), the one pass given the photos the article can print. On the map an edit
+ * narrowed is the director's order of a section, named by the beats a pass left (fixes C2 and C6):
+ * the map's rework stores it (ai-nodes.js reviseOutline), so the round's next pass is held to it.
  *
- * @param {*} previous - the stop's standing edits (state._articleHandEdits)
+ * @param {*} previous - the stop's standing edits (state._articleHandEdits, state._outlineHandEdits)
  * @param {Object[]} [narrowed] - settleEdits' `narrowed`
  * @returns {*} the standing edits to store
  */

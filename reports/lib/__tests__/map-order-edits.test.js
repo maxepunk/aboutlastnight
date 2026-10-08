@@ -817,4 +817,72 @@ describe("Fix C: the edge cases of the director's order", () => {
     expect(D.carriedEdits(standing, left).map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
     expect(D.standingOnMap(standing, shown, left)).toEqual(standing);
   });
+
+  // C6: a send-back's rework that only takes named moves out of an ordered column, keeping the rest
+  // in the director's order, narrows the order to the rest for the round, so the round's check rework
+  // is held to it. Its line still reports the move it took out. One that reorders the rest changes
+  // the order, which is reported and dropped, as before.
+  describe('C6: a send-back that only takes moves out leaves the rest of the order standing', () => {
+    const { mapResume } = require('../map');
+    const { reviseOutline } = require('../workflow/nodes/ai-nodes');
+    const FAILED = {
+      phase: 'outline', source: 'map-checks', passed: false, ready: false, structuralPassed: false,
+      structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out."]
+    };
+    const REASON = 'The note asks for the paternity result at the close.';
+
+    /** The director reorders The Story and sends the map back; the rework moves the paternity result to the close, and `rest` orders what remains. */
+    async function sendBackRound(rest) {
+      const state = reworkFixtureState();
+      const left = EditLogic.moveBeatBy(clone(MAP), 'b4', -1);
+      const { error, stateUpdates } = mapResume({ outline: 'send-back', map: left, note: 'Close on the paternity result.' }, state, { theme: 'journalist' });
+      expect(error).toBeNull();
+      expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.id, e.after])).toEqual([['E1', ['b2', 'b4', 'b3']]]);
+      const sendBack = EditLogic.moveBeat(left, 'b4', 'closing');
+      const story = sendBack.sections.find((s) => s.slot === 'theStory');
+      story.beats = rest.map((id) => story.beats.find((b) => b.id === id));
+      const round = { ...state, ...stateUpdates, humanOutlineRevisionCount: 1, outlineRevisionCount: 0 };
+      const afterSendBack = await reviseOutline(
+        { ...round, _previousOutline: clone(round.outline) },
+        { configurable: { sdkClient: async () => ({ ...clone(sendBack), changedDirectorEdits: [{ id: 'E1', reason: REASON }] }), theme: 'journalist' } }
+      );
+      expect(afterSendBack._outlineHandEditReport.changed).toEqual([expect.objectContaining({
+        id: 'E1', where: 'section "theStory", the order of its moves', pass: 'send-back', restored: false, reason: REASON,
+        director: 'Marcus brags about the sale / The paternity result names Sarah / Morgan pays Riley at the bar'
+      })]);
+      return { round, afterSendBack };
+    }
+
+    /** The round's check rework, which puts Morgan's payment above the brag. */
+    async function checkRework({ round, afterSendBack }) {
+      const check = clone(afterSendBack.outline);
+      const story = check.sections.find((s) => s.slot === 'theStory');
+      story.beats = ['b3', 'b2'].map((id) => story.beats.find((b) => b.id === id));
+      let sent;
+      const afterCheck = await reviseOutline(
+        { ...round, ...afterSendBack, _previousOutline: clone(afterSendBack.outline), outlineRevisionCount: 1, _outlineFeedback: null, validationResults: FAILED },
+        { configurable: { sdkClient: async (options) => { sent = options; return clone(check); }, theme: 'journalist' } }
+      );
+      return { afterCheck, sent };
+    }
+
+    it("the send-back moves one named move out, and the check rework reorders the rest: the rest go back to the director's order", async () => {
+      const done = await sendBackRound(['b2', 'b3']);
+      expect(done.afterSendBack._outlineHandEdits.edits.map((e) => [e.id, e.after])).toEqual([['E1', ['b2', 'b3']]]);
+      const { afterCheck, sent } = await checkRework(done);
+      expect(handEditsBlock(sent.prompt)).toContain('E1 (section "theStory", the order of its moves): beat "b2" "Marcus brags about the sale", then beat "b3" "Morgan pays Riley at the bar"');
+      expect(idsIn(afterCheck.outline, 'theStory')).toEqual(['b2', 'b3']);
+      expect(idsIn(afterCheck.outline, 'closing')).toEqual(['b6', 'b4']);
+      // The send-back's line still reports the move it took out; the check rework's restore asks nothing.
+      expect(afterCheck._outlineHandEditReport.changed.map((c) => [c.id, c.pass, c.restored])).toEqual([['E1', 'send-back', false], ['E1', 1, true]]);
+    });
+
+    it('a send-back that reorders the rest changes the order: reported, and dropped for the round', async () => {
+      const done = await sendBackRound(['b3', 'b2']);
+      expect(done.afterSendBack._outlineHandEdits).toBeUndefined();
+      const { afterCheck, sent } = await checkRework({ ...done, afterSendBack: { ...done.afterSendBack, outline: done.afterSendBack.outline } });
+      expect(sent.prompt).not.toContain('the order of its moves');
+      expect(idsIn(afterCheck.outline, 'theStory')).toEqual(['b3', 'b2']);
+    });
+  });
 });
