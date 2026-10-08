@@ -2738,14 +2738,18 @@ function mapOrderChanges(before, after) {
 
 /**
  * Does `obj` carry the director's order (R3; fix A: the spec's section 17)? While the section holds
- * every beat it names, each once, in the director's order, whatever else the section holds. A beat
+ * every beat it names, each once, in the director's order, whatever else the section holds, and no
+ * beat it names prints anywhere else on the map, in another section or in left out (fix C3). A beat
  * it names that left the section (moved to another, put into left out, or gone from the map) breaks
- * it, and so does a section that is gone. Only the director's own changes narrow it, at their next
- * look (narrowedOrder).
+ * it, and so do a copy of one outside the section and a section that is gone. Only the director's
+ * own changes narrow it, at their next look (narrowedOrder).
  */
 function mapOrderCarried(obj, order) {
   const section = sectionOfSlot(obj, order.slot);
   if (!section) return false;
+  const outside = mapElements(obj, 'beat').some((place) => order.ids.includes(place.key)
+    && (place.container === MAP_LEFT_OUT || obj.sections[place.sectionIndex] !== section));
+  if (outside) return false;
   return same(sectionBeatIds(section).filter((id) => order.ids.includes(id)), order.ids);
 }
 
@@ -2801,7 +2805,8 @@ function orderOnMap(edit, map) {
  * Every other beat stays where the pass put it, so a beat the pass added keeps its place relative
  * to the others. The photos beside a beat it names that sit in another section come with the beat,
  * to the foot of the section's photos, as the director's own move takes them (carryPhotosBeside;
- * fix C1). Nothing goes back into a section the pass removed.
+ * fix C1), and one the section already holds prints there once, its copy outside taken out (fix
+ * C3). Nothing goes back into a section the pass removed.
  *
  * @param {{slot: string, ids: string[]}} order - mapOrderOf's
  * @param {Object} before - the version the pass started from
@@ -2868,9 +2873,17 @@ function restoreMapOrder(order, before, out) {
   section.beats = beats;
   // Fix C1: the photos beside each beat it names come into the section with the beat, where the
   // director's own move puts them (console/outline-edit-logic.js carryPhotosBeside), so a photo the
-  // pass moved with the beat prints once, beside it.
+  // pass moved with the beat prints once, beside it. Fix C3: a photo the section already holds (a
+  // restore that brought the section back whole brought its photos too) prints there once, so the
+  // copy outside goes.
+  const photoKeysIn = (list) => new Set((Array.isArray(list) ? list : []).filter(isObj).map((photo) => photoKey(photo.filename)));
   (Array.isArray(out.sections) ? out.sections : []).forEach((other) => {
     if (!isObj(other) || other === section) return;
+    if (Array.isArray(other.photos)) {
+      const holds = photoKeysIn(section.photos);
+      const kept = other.photos.filter((photo) => !(isObj(photo) && elements.has(mapIdText(photo.beat)) && holds.has(photoKey(photo.filename))));
+      if (kept.length !== other.photos.length) { other.photos = kept; written = true; }
+    }
     elements.forEach((_element, id) => { if (carryPhotosBeside(other, section, id)) written = true; });
   });
   return written;
@@ -4829,7 +4842,10 @@ function reportWithHeld(report, held) {
  * pass removed from the map stays out, as a beat the director only moved does
  * (mapRestoresWhenGone), and the order goes back on the beats that remain (orderOnMap; fix C2),
  * which it stands as from here on (`narrowed`). A section the pass removed takes
- * the order with it: nothing goes back, and the report says the order is gone. Code also holds
+ * the order with it: nothing goes back, and the report says the order is gone; but where the
+ * restore of a field edit on the section (the director's heading or job) brings it back whole,
+ * the order goes back on it, and each beat it names prints once, in the section, its copies the
+ * pass put elsewhere taken out with the photos beside them (fix C3). Code also holds
  * each section the director dropped by its slot (droppedSlotsOf,
  * console/outline-edit-logic.js holdDroppedSections; task 4.14b, fix round 1): a section the pass
  * put back goes again when it holds nothing, and one the pass filled stays, out of the dropped

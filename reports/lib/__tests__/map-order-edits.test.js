@@ -755,4 +755,46 @@ describe("Fix C: the edge cases of the director's order", () => {
       expect(settled.narrowed).toEqual([]);
     });
   });
+
+  // C3: the order is carried only while each move it names prints once, in its section. A named
+  // move that also sits in another section or in left out breaks it, and the restore takes the
+  // copies outside the section out, with the photos beside them.
+  describe('C3: a named move printed twice breaks the order', () => {
+    const STORY = ['b3', 'b5', 'b4', 'b6', 'b7', 'b8'];
+
+    it('a named move with a copy in left out: the order is not carried, and the restore takes the copy out', () => {
+      const before = EditLogic.moveBeatBy(boardMap(), 'b5', -1);
+      const edits = editsOf(boardMap(), before);
+      const pass = clone(before);
+      pass.leftOut.push(clone(beatOf(before, 'b4')));
+      expect(D.carriedEdits(edits, pass)).toEqual([]);
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+      expect(idsIn(settled.output, 'theStory')).toEqual(STORY);
+      expect(beatPlaces(settled.output, 'b4')).toEqual(['theStory']);
+      expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1']);
+    });
+
+    it("the director edits a section's heading and orders its moves; a pass removes the section and puts its moves in another column: each move prints once, in the director's section and order", () => {
+      const before = EditLogic.moveBeatBy(boardMap(), 'b5', -1);
+      before.sections.find((s) => s.slot === 'theStory').heading = 'What the Batch Did';
+      const edits = editsOf(boardMap(), before);
+      expect(edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].heading'], ['E2', 'sections[#theStory].beats']]);
+      let pass = before;
+      STORY.forEach((id) => { pass = EditLogic.moveBeat(pass, id, 'closing'); });
+      pass = clone(pass);
+      pass.sections = pass.sections.filter((s) => s.slot !== 'theStory');
+      const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+      const story = settled.output.sections.find((s) => s.slot === 'theStory');
+      expect(settled.output.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'followTheMoney', 'thePlayers', 'closing']);
+      expect(story.heading).toBe('What the Batch Did');
+      expect(idsIn(settled.output, 'theStory')).toEqual(STORY);
+      expect(idsIn(settled.output, 'closing')).toEqual(['b15', 'b16']);
+      STORY.forEach((id) => expect(`${id}: ${beatPlaces(settled.output, id)}`).toBe(`${id}: theStory`));
+      expect(['p03.jpg', 'p04.jpg', 'p05.jpg'].map((f) => photoPlaces(settled.output, f))).toEqual([
+        [{ slot: 'theStory', beat: 'b3' }], [{ slot: 'theStory', beat: 'b6' }], [{ slot: 'theStory' }]
+      ]);
+      expect(D.carriedEdits(edits, settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
+      expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E2', true]]);
+    });
+  });
 });
