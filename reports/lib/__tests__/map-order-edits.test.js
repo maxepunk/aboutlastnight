@@ -555,14 +555,14 @@ describe("4C: the map's rework reads the order edit and the summary edit", () =>
     return left;
   }
 
-  it('the guide says what the order line lists and that a beat\'s summary is its synopsis; the rule keeps the order', () => {
+  it('the guide says what the order line lists and that a beat\'s summary is its synopsis; the rule keeps the order, and each beat it names in its section (fix A)', () => {
     expect(D.MAP_EDIT_LINES_GUIDE).toContain("the order of a section's moves, which lists the section's beats in the order the director set for the article to tell them");
     expect(D.MAP_EDIT_LINES_GUIDE).toContain("the summary of a beat is its synopsis");
     const { contextSection } = buildRevisionContext({
       phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: directorsMap(),
       handEdits: D.standingOnMap(null, MAP, directorsMap()), humanFeedback: null
     });
-    expect(handEditsBlock(contextSection)).toContain('the beats of each section they ordered stay in the order they set');
+    expect(handEditsBlock(contextSection)).toContain('the beats of each section they ordered stay in that section, in the order they set');
   });
 
   it('lists the order by the moves\' titles in the director\'s order, and the summary edit by its beat, never by the field\'s name', () => {

@@ -1237,8 +1237,9 @@ describe("4.6: the map's rework context", () => {
   const { reviseOutline } = require('../workflow/nodes/ai-nodes');
   const clone = (v) => JSON.parse(JSON.stringify(v));
   // Task 4.14b, fix round 1: a section the director dropped stays in dropped. Piece 4 (brief
-  // 4C; R3): the beats of a section the director ordered stay in their order.
-  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, the beats of each section they ordered stay in the order they set, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.';
+  // 4C; R3): the beats of a section the director ordered stay in their order. Fix A: and in that
+  // section, since the order stands only while the section holds every beat it names.
+  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, the beats of each section they ordered stay in that section, in the order they set, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.';
 
   /** The director's map: b6's line rewritten, and b4 struck. */
   function directorsMap() {
@@ -1544,7 +1545,7 @@ describe('4.14b fix round 1: a send-back that empties a section, then an automat
     const block = prompt.slice(prompt.indexOf('<HAND_EDITS>'), prompt.indexOf('</HAND_EDITS>'));
     expect(MAP_EDIT_LINES_GUIDE).toContain('a section they dropped, in two lines (its dropped slot with the reason, and the section marked cut), which is out of the story;');
     expect(block).toContain(`The director's edits on the map, by id. ${MAP_EDIT_LINES_GUIDE}`);
-    expect(block).toContain("This automatic pass fixes the writer's lines. Each edit of the director's is final: the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, the beats of each section they ordered stay in the order they set, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.");
+    expect(block).toContain("This automatic pass fixes the writer's lines. Each edit of the director's is final: the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, the beats of each section they ordered stay in that section, in the order they set, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.");
     expect(block).toContain('E1 (dropped slot "followTheMoney"): slot "followTheMoney"; reason "The director emptied this section on the map."');
     expect(block).toContain('E2 (section "followTheMoney", cut): slot "followTheMoney"; heading "Follow the Money"; job "What the sale paid, and to whom."');
   });
