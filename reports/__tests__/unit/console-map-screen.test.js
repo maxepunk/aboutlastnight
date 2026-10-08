@@ -1210,8 +1210,9 @@ describe('1F: no tag on the page, and every aria-label names a move by its words
     all.forEach((beat) => expect(beat.labels).toEqual({
       fold: `What's behind it: ${beat.move}`,
       moveTo: `Move "${beat.move}" to another section`,
-      strike: `Strike "${beat.move}" into left out`,
-      takeOut: `Take out the move you added: ${beat.move}`,
+      // Fix B2: Leave it out and Take it out each named by the words they show, the move in place of "it".
+      strike: `Leave "${beat.move}" out`,
+      takeOut: `Take "${beat.move}" out`,
       bringBack: `Bring "${beat.move}" back into a section`,
       // Piece 4 (brief 4B): the card's own controls, each by the move's title.
       select: `Select the move "${beat.move}"`,
@@ -1227,7 +1228,7 @@ describe('1F: no tag on the page, and every aria-label names a move by its words
     const [detail] = elementsOf(mounted.render(), hasClass('map__card-detail'));
     [added.labels.moveUp, added.labels.moveDown, added.labels.moveTo, added.labels.photoBeside, added.labels.takeOut, added.labels.fold]
       .forEach((label) => expect([label, elementsOf(detail, (n) => n.props['aria-label'] === label).length]).toEqual([label, 1]));
-    expect(added.labels.takeOut).toBe('Take out the move you added: Remi walks out before the vote');
+    expect(added.labels.takeOut).toBe('Take "Remi walks out before the vote" out');
   });
 
   // Fix round 3: a move with no words is named "a move" (moveLabelsOf's fallback), never by its
@@ -1282,7 +1283,7 @@ describe("1F: the add line takes a move's words and its people, under `adding.mo
     const addButton = () => elementsOf(line(), (n) => n.type === 'button' && textOf(n) === 'Add the move')[0];
     const approve = () => elementsOf(mounted.render(), (n) => n.type === 'button' && textOf(n) === ViewLogic.mapButtons('', false).approve.label)[0];
     expect([elementsOf(line(), hasClass('map__add-move'))[0].props['aria-label'], elementsOf(line(), hasClass('map__add-players'))[0].props['aria-label']])
-      .toEqual(['The move to add', 'The players the move shows']);
+      .toEqual([ViewLogic.MAP_CONTROLS.addLine.moveLabel, ViewLogic.MAP_CONTROLS.addLine.playersLabel]);
     expect(addButton().props.disabled).toBe(true);
     expect(approve().props.disabled).toBe(false);
     elementsOf(line(), hasClass('map__add-move'))[0].props.onChange({ target: { value: 'Remi walks out before the vote' } });
@@ -1455,5 +1456,84 @@ describe("Fix B1: the board's control words come from the view", () => {
     const fields = elementsOf(mounted.child(editorNode).render(), (n) => typeof n.type === 'function' && n.type.name === 'TextField');
     const E = CONTROLS.beatEditor;
     expect(fields.map((f) => [f.props.label, f.props.hint])).toEqual([[E.move, E.moveHint], [E.synopsis, E.synopsisHint], [E.players, E.playersHint]]);
+  });
+});
+
+// Fix B2 (WCAG 2.5.3, label in name): each control's accessible name holds the words it shows, in
+// their order, with the move or the photo it acts on named in place of "it" ('Leave it out' reads
+// 'Leave "<title>" out'). A select whose shown text is its placeholder is read by that text; one
+// that shows its value (a photo's place in its section) shows no label to hold.
+describe('Fix B2: each control on the board is named by the words it shows', () => {
+  const tokens = (text) => String(text).toLowerCase().replace(/[“”"…]/g, ' ').split(/[^a-z0-9']+/).filter(Boolean);
+  const shownWords = (text) => tokens(text).filter((w) => w !== 'it' && w !== 'its');
+  const holds = (name, shown) => {
+    const words = tokens(name);
+    let at = 0;
+    return shownWords(shown).every((w) => {
+      const found = words.indexOf(w, at);
+      if (found === -1) return false;
+      at = found + 1;
+      return true;
+    });
+  };
+  /** Each named control in a tree, with the words it shows. */
+  const namedControls = (tree) => elementsOf(tree, (n) => ['button', 'select', 'input'].includes(n.type) && typeof n.props['aria-label'] === 'string')
+    .map((n) => {
+      let shown = '';
+      if (n.type === 'button') shown = textOf(n);
+      // A move control's placeholder is an option of its own, before the list of places; a select
+      // of places alone shows its value.
+      if (n.type === 'select' && n.props.value === '' && n.children[0] && n.children[0].type === 'option') shown = textOf(n.children[0]);
+      if (n.type === 'input') shown = n.props.placeholder || '';
+      return { name: n.props['aria-label'], shown };
+    })
+    .filter((c) => /[a-z]/i.test(c.shown));
+  const misnamed = (tree) => namedControls(tree).filter((c) => !holds(c.name, c.shown)).map((c) => `${c.shown} -> ${c.name}`);
+
+  it("names a selected card's controls, a tray move's and a photo's by the words they show", () => {
+    const data = boardPayloadOf();
+    const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+    const mounted = mountMap({ data });
+    const seen = [];
+    const look = () => { const tree = mounted.render(); seen.push(...namedControls(tree)); return misnamed(tree); };
+    expect(look()).toEqual([]);
+    click(cardOf(mounted.render(), 'Marcus asks Quinn to raise the dose'));
+    expect(look()).toEqual([]);
+    click(cardOf(mounted.render(), view.leftOut.items[0].label));
+    expect(look()).toEqual([]);
+    labelled(mounted.render(), view.sections[2].byThemselves[0].labels.select).props.onClick();
+    expect(look()).toEqual([]);
+    labelled(mounted.render(), view.topPhoto.labels.select).props.onClick();
+    expect(look()).toEqual([]);
+    elementsOf(mounted.render(), (n) => n.type === 'button' && textOf(n) === ViewLogic.MAP_CONTROLS.addLine.open)[0].props.onClick();
+    expect(look()).toEqual([]);
+    const shown = new Set(seen.map((c) => c.shown));
+    [ViewLogic.MAP_CONTROLS.card.leaveOut, ViewLogic.MAP_CONTROLS.card.moveUp, ViewLogic.MAP_CONTROLS.card.moveTo, ViewLogic.MAP_CONTROLS.card.photoBeside,
+      ViewLogic.MAP_CONTROLS.tray.bringBack, ViewLogic.MAP_CONTROLS.photo.placeBeside, ViewLogic.MAP_CONTROLS.photo.moveTo, ViewLogic.MAP_CONTROLS.photo.topMoveTo,
+      ViewLogic.MAP_CONTROLS.addLine.move, ViewLogic.MAP_CONTROLS.addLine.players]
+      .forEach((words) => expect(`${words}: ${shown.has(words)}`).toBe(`${words}: true`));
+  });
+
+  it('names Take it out on a move the director added by the words it shows', () => {
+    const data = boardPayloadOf();
+    const added = EditLogic.addBeat(ViewLogic.mapDraftOf(data, undefined), data.outline.sections[0].slot, 'Remi walks out before the vote', 'Remi');
+    const mounted = mountMap({ data, pendingEdits: ViewLogic.mapPendingSlot(data, added) });
+    click(cardOf(mounted.render(), 'Remi walks out before the vote'));
+    const tree = mounted.render();
+    expect(namedControls(tree).map((c) => c.shown)).toContain(ViewLogic.MAP_CONTROLS.card.takeOut);
+    expect(misnamed(tree)).toEqual([]);
+  });
+
+  it('names the confirming Send back by the words it shows, and the note box by its label alone', () => {
+    const data = boardPayloadOf();
+    const mounted = mountMap({ data });
+    elementsOf(mounted.render(), (n) => n.type === 'textarea' && n.props.id === 'map-note')[0].props.onChange({ target: { value: 'Move the vote earlier.' } });
+    buttonOf(mounted.render(), 'Send back').props.onClick();
+    const tree = mounted.render();
+    expect(namedControls(tree).map((c) => c.shown)).toContain(ViewLogic.mapButtons('Move the vote earlier.', true).sendBack.label);
+    expect(misnamed(tree)).toEqual([]);
+    const [box] = elementsOf(tree, (n) => n.type === 'textarea' && n.props.id === 'map-note');
+    expect(box.props['aria-label']).toBeUndefined();
+    expect(elementsOf(tree, (n) => n.type === 'label' && n.props.htmlFor === 'map-note')).toHaveLength(1);
   });
 });

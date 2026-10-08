@@ -914,7 +914,7 @@
       disabled: !ready,
       label: isArmed ? 'Confirm send back, starts a rework' : 'Send back',
       ariaLabel: isArmed
-        ? 'Confirm sending the ' + noun + ' back, which starts a rework'
+        ? 'Confirm send back of the ' + noun + ', which starts a rework'
         : 'Send the ' + noun + ' back for a rework, with the note'
     };
   }
@@ -3516,7 +3516,9 @@
    * The words the board's controls show (piece 4, spec 5 and 6; fix B1), which Outline.js prints as
    * they are: a selected card's controls, a selected move's in the tray, a selected photo's (the
    * top photo's move into a section among them), the add line at a column's foot and the move's
-   * editor.
+   * editor. Each control's accessible name holds the words it shows, in their order, with the move
+   * or the photo it acts on named in place of "it" (WCAG 2.5.3, label in name; fix B2): mapView's
+   * `labels` name a move's and a photo's controls, and the add line's names are here.
    */
   var MAP_CONTROLS = {
     card: {
@@ -3533,9 +3535,9 @@
     addLine: {
       open: '+ Add a move',
       move: 'The move, in a few plain words',
-      moveLabel: 'The move to add',
+      moveLabel: 'The move to add, in a few plain words',
       players: 'Its players, separated by commas',
-      playersLabel: 'The players the move shows',
+      playersLabel: "The move's players, separated by commas",
       add: 'Add the move'
     },
     beatEditor: {
@@ -4002,8 +4004,8 @@
     return {
       fold: evidenceFoldLabel(words || 'a move'),
       moveTo: 'Move ' + named + ' to another section',
-      strike: 'Strike ' + named + ' into left out',
-      takeOut: 'Take out the move you added: ' + (words || 'a move'),
+      strike: 'Leave ' + named + ' out',
+      takeOut: 'Take ' + named + ' out',
       bringBack: 'Bring ' + named + ' back into a section',
       select: words ? 'Select the move ' + named : 'Select a move',
       showSummary: 'Show the summary of ' + named,

@@ -135,7 +135,10 @@ describe('4B: each card gives its title, people, dots, mark, photos, synopsis, e
       hideSummary: 'Hide the summary of "Jess warns Sarah away"',
       moveUp: 'Move "Jess warns Sarah away" up',
       moveDown: 'Move "Jess warns Sarah away" down',
-      photoBeside: 'Put a photo beside "Jess warns Sarah away"'
+      photoBeside: 'Put a photo beside "Jess warns Sarah away"',
+      // Fix B2: each name holds the words its control shows, the move in place of "it".
+      strike: 'Leave "Jess warns Sarah away" out',
+      takeOut: 'Take "Jess warns Sarah away" out'
     });
   });
 

@@ -546,7 +546,8 @@ describe('review payloads for the article stop (phase 1, brief 1.1)', () => {
     expect(armed.armed).toBe(true);
     expect(armed.disabled).toBe(false);
     expect(armed.label).toBe('Confirm send back, starts a rework');
-    expect(armed.ariaLabel).toContain('Confirm sending the article back');
+    // Fix B2: the confirming button's name holds the words it shows, "Confirm send back".
+    expect(armed.ariaLabel).toContain('Confirm send back of the article');
   });
 
   test('a blank note disables Send back and reads as disarmed however the flag stands', () => {
