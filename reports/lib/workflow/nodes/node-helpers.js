@@ -1099,8 +1099,10 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
   // note needs it, saying why. The wording names beats, photos and the top photo, so it is
   // the map's when the version the rework starts from is a map (mapMode, above). Task 4.14b,
   // fix round 1: a section the director emptied is dropped, and stays so as a struck beat stays
-  // struck (code holds it by its slot too, lib/hand-edit-diff.js settleEdits).
-  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.';
+  // struck (code holds it by its slot too, lib/hand-edit-diff.js settleEdits). Phase 4b, piece 4
+  // (R3): the order of a section's beats is the order the article tells them, and the director's
+  // order of a section stays (code puts it back too, lib/hand-edit-diff.js restoreMapOrder).
+  const MAP_EDITS_FINAL = 'the text they wrote stays exactly as written, each beat and photo they moved stays where they put it, the beats of each section they ordered stay in the order they set, each beat they added stays, each beat they struck stays in leftOut, each section they dropped stays in dropped, each removed sentence stays out, and the top photo they chose stays the top photo.';
   // Brief 4.7f: the article's edits, one list for both kinds of rework. The integrator, at
   // 4.7f's merge: the send-back's exception comes first, as the map's and the meeting's do,
   // and what a cut block said has a sentence of its own, bounded to that block.
@@ -1133,7 +1135,7 @@ ${issuesList}${shouldConsiderBlock}${feedbackBlock}`;
 ${handEditsIntro}
 ${handEditsRule}
 
-${formatEditLines(standingEdits)}
+${formatEditLines(standingEdits, previousOutput)}
 </HAND_EDITS>
 
 `

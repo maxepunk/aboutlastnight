@@ -632,10 +632,13 @@ describe("1D: the evidence is never the director's edit", () => {
     expect(report.changed).toEqual([expect.objectContaining({ ...cameBack, automatic: true })]);
   });
 
-  it("the map's printed text is its lines and its moves, never the evidence under them", () => {
+  // Piece 4 (brief 4C; R1): a move's summary prints when the director opens it, so it is printed
+  // text too, and a sentence the director cut from one that comes back is found.
+  it("the map's printed text is its lines, its moves and their summaries, never the evidence under them", () => {
     const leaves = diffTesting.printedLeaves(storyLevelMap());
     expect(leaves).toContain('Marcus asks Quinn for a higher dose');
-    expect(leaves.join('\n')).not.toMatch(/raise the dose|Sam writes/);
+    expect(leaves).toContain("Marcus asks Quinn to raise the dose, which sits badly beside Quinn's story.");
+    expect(leaves.join('\n')).not.toMatch(/raise the dose for the pilot|Sam writes/);
   });
 
   it("an automatic pass that gives the director's beat its evidence keeps the edit, and the restore of a move it rewrote keeps the pass's evidence", () => {

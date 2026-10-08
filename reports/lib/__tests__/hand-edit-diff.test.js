@@ -1931,13 +1931,17 @@ describe('4.6: the map\'s edits', () => {
       ]);
     });
 
-    it("the headline, a section's job and a dropped slot's reason are field edits; a section's beat order is no change", () => {
+    // Piece 4 (brief 4C; R3): the order of a section's beats is the article's, so the director's
+    // order of a section is their edit, one for the section, after the beats and the photos.
+    it("the headline, a section's job and a dropped slot's reason are field edits; a section's beat order is one edit of the section", () => {
       const left = writers();
       left.headline = 'Ellis Reeve Pointed the Room at Rowan. It Named Him.';
       left.sections[1].job = 'How the room built its case, and lost it.';
       left.dropped[0].reason = 'The players appear in the story.';
       left.sections[1].beats.reverse();
-      expect(pathsOf(D.mapEditsBetween(writers(), left))).toEqual(['headline', 'dropped[#thePlayers].reason', 'sections[#theStory].job']);
+      const changes = D.mapEditsBetween(writers(), left);
+      expect(pathsOf(changes)).toEqual(['headline', 'dropped[#thePlayers].reason', 'sections[#theStory].job', 'sections[#theStory].beats']);
+      expect(changes[3]).toMatchObject({ order: true, before: ['b3', 'b4'], after: ['b4', 'b3'] });
     });
   });
 

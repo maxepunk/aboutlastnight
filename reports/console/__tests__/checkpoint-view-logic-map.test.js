@@ -1174,17 +1174,20 @@ describe("4.10b: the map lists a restore out of the director's order, and says w
   };
 
   // 4.10c: only the desk produces an out-of-order restore. lib/hand-edit-diff.js reportAfterPass
-  // writes `inOrder` only for a block moved within its section; the map records a move only from
-  // one place to another (mapElementEdits: an order within a section is the writer's), and the
-  // weave records no move at all. This entry is built by hand to hold the map to the rule every
-  // stop reads (changedEditsToShow); no map round writes one.
+  // writes `inOrder` only for a block moved within its section. The map records a move only from
+  // one place to another (mapElementEdits), and the director's order within a section as one edit
+  // of the section, the beat ids in their order, which code puts back on the beats it names with no
+  // `inOrder` (mapOrderOf; piece 4, brief 4C, R3: map beats have ids, so the desk's move within a
+  // section is not used); the weave records no move at all. This entry is built by hand to hold the
+  // map to the rule every stop reads (changedEditsToShow); no map round writes one.
   test("the shared rule, on an entry only the desk writes: one code put back out of the director's order is listed, with the line that asks the director to move it", () => {
     const outOfOrder = entry({
       id: 'E1', scope: 'map', where: 'section "closing", photo "p2.jpg", moved from section "theStory"', moved: true,
       director: 'filename: p2.jpg', became: 'section "theStory"', pass: 1, automatic: true, restored: true, inOrder: false
     });
     const view = viewWith({ checked: ['E1'], changed: [outOfOrder] });
-    // It sits under the head of the section the photo is in (run 1 follow-up F8).
+    // It sits under the head of the section its place names (run 1 follow-up F8): the photo sits
+    // beside no move there, so it prints on no card of that section (brief 4C).
     expect(view.sections.find((s) => s.slot === 'closing').changed).toEqual([
       'Closing, photo "p2.jpg", moved from The Story: automatic pass 1 moved the photo you placed here to The Story. It was put back in its section, but not in the order you left it: move it again if the order matters.'
     ]);
@@ -1353,12 +1356,17 @@ describe('4.14b: striking a beat and bringing it back keeps its photo', () => {
     expect(stateUpdates._outlineHandEdits.edits.map((e) => [e.path, e.from])).toEqual([['leftOut[#b2]', 'theStory']]);
   });
 
-  test('brought back into its section, the beat has its photo beside it again, and the map records no edit', () => {
-    const back = EditLogic.bringBackBeat(EditLogic.strikeBeat(opened(), 'b2'), 'b2', 'theStory');
+  // Piece 4 (brief 4C; R3): brought back to the place it held, the beat leaves the map as it was.
+  // Brought back to the foot of its section, it changes the order the article tells the section's
+  // moves in, which is the director's order of the section, its one edit.
+  test('brought back into its place in its section, the beat has its photo beside it again, and the map records no edit', () => {
+    const back = EditLogic.bringBackBeat(EditLogic.strikeBeat(opened(), 'b2'), 'b2', 'theStory', 0);
     expect(back.sections[1].photos).toEqual([{ filename: 'p2.jpg', beat: 'b2' }]);
     expect(ViewLogic.mapView(payloadOf(stateAt()), back).sections[1].photos[0].beat).toBe('b2');
     expect(standingOnMap(null, clone(MAP), back)).toBeNull();
     expect(mapResume({ outline: 'approve', map: back }, stateAt(), { theme: 'journalist' }).stateUpdates._outlineHandEdits).toBeNull();
+    const atFoot = EditLogic.bringBackBeat(EditLogic.strikeBeat(opened(), 'b2'), 'b2', 'theStory');
+    expect(standingOnMap(null, clone(MAP), atFoot).edits.map((e) => [e.path, e.order, e.after])).toEqual([['sections[#theStory].beats', true, ['b3', 'b4', 'b2']]]);
   });
 
   test("brought back into another section, its photo goes with it, beside it, as a moved beat's photo does", () => {

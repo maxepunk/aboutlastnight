@@ -128,7 +128,14 @@
  * task 4.14b, fix round 1). The evidence under a beat's move is never the director's either
  * (phase 4b, brief 1D; R6, survey Q1): the diff reads every beat without it (withoutEvidence),
  * so no piece is an edit, and a restore of a beat the director placed keeps what a writer found
- * for it (overWritersBeat).
+ * for it (overWritersBeat). Since phase 4b, piece 4 (R3), the order of a section's beats is the
+ * order the article tells them, and the director's order is one edit per section, the section's
+ * beat ids in their order (mapOrderOf): made where their version puts a beat that arrived in the
+ * section anywhere but its foot, or holds two of its beats in another order; carried while the
+ * beats it names that the section still holds sit in that order; replaced under its id by a later
+ * reorder of the section; and put back after an automatic pass on the beats it names, in the
+ * places they hold, last of the restores. A beat's summary (its synopsis) is a line like any other,
+ * named as the summary of the move (R11).
  */
 'use strict';
 
@@ -1078,12 +1085,13 @@ function threadLabelOf(thread) {
 
 /**
  * An edit of a place alone, which owns no text (task 4.5e): a block the director moved
- * (isMove), and a thread they flipped into or out of an angle (isFlip; piece 3, R2). The place is
+ * (isMove), a thread they flipped into or out of an angle (isFlip; piece 3, R2), and their order
+ * of a section's beats on the map (isMapOrder; piece 4, R3). The place is
  * theirs, and the text there is the writer's (fix round 1, finding 2). The one rule for which edits
  * own no text: writerParts and locatingTexts read it, and the verdict guard reads a finding filed
  * under such edits alone by its quotes (evaluator-nodes.js guardDirectorEdits).
  */
-function ownsNoText(edit) { return isMove(edit) || isFlip(edit); }
+function ownsNoText(edit) { return isMove(edit) || isFlip(edit) || isMapOrder(edit); }
 
 function editNumber(id) {
   const m = /^E(\d+)$/.exec(String(id));
@@ -1314,6 +1322,9 @@ function moveContainer(obj, edit) {
 /** Does `obj` still carry this edit (see the module header)? */
 function editCarried(obj, edit) {
   if (!isObj(obj) || !isEdit(edit)) return false;
+  // Piece 4 (R3): the director's order of a section, while the beats it names sit in that order.
+  const order = mapOrderOf(edit);
+  if (order) return mapOrderCarried(obj, order);
   const address = mapAddressOf(edit);
   if (address) return mapEditCarried(obj, edit, address);
   if (isCut(edit)) return cutReturnedIn(obj, edit) === null;
@@ -1393,6 +1404,9 @@ function completeEdit(edit, sentBackText, names) {
   // director added in the angle they added it to.
   if (Object.prototype.hasOwnProperty.call(FLIP_WORDS, edit.flip)) out.flip = edit.flip;
   if (isObj(edit.angle)) out.angle = { ...edit.angle };
+  // Piece 4 (R3): the director's order of a section names beats by their ids and owns no text, so
+  // it records no removed sentence and no name.
+  if (edit.order === true && isMapOrder({ ...out, order: true })) return { ...out, order: true };
   const parts = sentBackText ? sentBackText.map((part) => ({ text: part.text })) : null;
   if (isCut(out)) {
     if (sentBackText) out.pieces = cutSentences(out).filter((sentence) => !partHolding(sentBackText, sentence));
@@ -2210,13 +2224,18 @@ function moveLine(edit) {
  * One line per edit, by id and place, with the director's text whole: a cut's line
  * holds the text the director removed, and a rewrite's removed sentences follow it, one
  * `removed:` line each. Text is quoted; an element prints its fields, never JSON. A
- * move's line names the block and its place (moveLine).
+ * move's line names the block and its place (moveLine). The director's order of a section on
+ * the map lists its beats in that order, each by its id and its title in `version` (mapOrderLine;
+ * piece 4, R3).
  *
  * @param {Object[]} edits
+ * @param {Object} [version] - the version the edits are read in, which names each beat of an order
  * @returns {string}
  */
-function formatEditLines(edits) {
+function formatEditLines(edits, version) {
   return (Array.isArray(edits) ? edits : []).filter(isEdit).map(normalizeEdit).map((e) => {
+    const order = mapOrderOf(e);
+    if (order) return `${e.id} (${editWhere(e)}): ${mapOrderLine(order, version)}`;
     // Brief 4.6: a beat or a photo the director moved or struck on the map, by its id and
     // place; its own text is the writer's.
     if (e.scope === MAP_SCOPE && isMove(e)) return e.from === MAP_NONE ? `${e.id} (${editWhere(e)}): ${valueLine(e.after)}` : `${e.id} (${editWhere(e)})`;
@@ -2478,9 +2497,20 @@ const MAP_SCOPE = 'map';
 /**
  * How to read the map's edit lines (formatEditLines), for the map's reworks'
  * <HAND_EDITS> block (brief 4.6). A section the director emptied reads as two lines, its
- * dropped slot and its cut (task 4.14b, fix round 1).
+ * dropped slot and its cut (task 4.14b, fix round 1). Piece 4 (R3, R11): a beat's synopsis is
+ * named as its summary, as the page names it, and the director's order of a section reads as
+ * the order of its moves, each by its id and its title in that order (mapOrderLine).
  */
-const MAP_EDIT_LINES_GUIDE = "Each line is one change of the director's on the map, by its id and place: a line they rewrote, with their text; a beat they added (added, with its fields); a beat or a photo they moved (moved, or brought back from left out), whose own text is still the writer's; a beat they struck (struck, now in leftOut), which is out of the story; a section they dropped, in two lines (its dropped slot with the reason, and the section marked cut), which is out of the story; and the top photo they chose. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+const MAP_EDIT_LINES_GUIDE = "Each line is one change of the director's on the map, by its id and place: a line they rewrote, with their text, where the summary of a beat is its synopsis; a beat they added (added, with its fields); a beat or a photo they moved (moved, or brought back from left out), whose own text is still the writer's; the order of a section's moves, which lists the section's beats in the order the director set for the article to tell them; a beat they struck (struck, now in leftOut), which is out of the story; a section they dropped, in two lines (its dropped slot with the reason, and the section marked cut), which is out of the story; and the top photo they chose. A removed: line under an edit is a sentence the director took out of that text when rewriting it.";
+
+/**
+ * A beat's summary, as the map holds it (piece 4, R1): the field the page and the report name as
+ * "the summary of" its move, never by this name (R11; mapEditWhere).
+ */
+const MAP_SUMMARY_FIELD = 'synopsis';
+
+/** Where the director's order of a section sits, after the section (piece 4, R3; mapEditWhere). */
+const MAP_ORDER_WORDS = 'the order of its moves';
 
 /**
  * Is this a story map (brief 4.6): sections with beats, or a left-out list, and no
@@ -2502,8 +2532,11 @@ function mapIdText(value) {
 
 /**
  * The map's text, part by part: the lines the stop prints, each beat by its move (phase 4b,
- * brief 1D). A left-out beat is not in the story, and the evidence under a move is no line of
- * the map's: the page folds it, and it is never the director's (R6).
+ * brief 1D) and its summary (piece 4, R1: the page prints it when the director opens it), so a
+ * sentence the director cut from a summary that a pass brings back is found, and a rewrite of a
+ * summary records only the sentences the director's version no longer holds. A left-out beat is
+ * not in the story, and the evidence under a move is no line of the map's: the page folds it,
+ * and it is never the director's (R6).
  */
 function mapParts(map) {
   const objects = (list) => (Array.isArray(list) ? list.filter(isObj) : []);
@@ -2511,7 +2544,9 @@ function mapParts(map) {
     map.headline,
     map.deck,
     isObj(map.gapNote) ? map.gapNote.line : null,
-    ...objects(map.sections).flatMap((section) => [section.heading, section.job, ...objects(section.beats).map((beat) => beat.move)]),
+    ...objects(map.sections).flatMap((section) => [
+      section.heading, section.job, ...objects(section.beats).flatMap((beat) => [beat.move, beat[MAP_SUMMARY_FIELD]])
+    ]),
     ...objects(map.dropped).map((slot) => slot.reason),
     ...objects(map.weaveChanges).map((change) => change.change)
   ].filter((text) => typeof text === 'string' && text.trim()).map((text) => ({ text, cardContent: false }));
@@ -2612,14 +2647,170 @@ function mapAddressOf(edit) {
   return null;
 }
 
+// ─── the director's order of a section (phase 4b, piece 4; R3) ─────────────────
+//
+// The order of a section's beats is the order the article tells them (R2), so the director's order
+// is their edit: one per section, `{scope: 'map', at: sections[#slot].beats, before, after, order:
+// true}`, `after` the section's beat ids in the director's order and `before` in the order of the
+// map they were read against. It owns no text (ownsNoText): only the order is theirs, and each
+// beat's words stay the writer's. Map beats have ids, so the desk's move within a section (`between`,
+// `inOrder`) is not used.
+
+/**
+ * The director's order an edit holds (R3): `{slot, ids}`, the section's slot and its beat ids in
+ * the director's order, for an edit on the map marked `order` whose steps end on a section's beats;
+ * null for any other edit. The one reading of an order edit: its carry, its restore, its words and
+ * its report all read it here.
+ *
+ * @param {Object} edit
+ * @returns {{slot: string, ids: string[]}|null}
+ */
+function mapOrderOf(edit) {
+  if (!isObj(edit) || edit.scope !== MAP_SCOPE || edit.order !== true || !Array.isArray(edit.after)) return null;
+  const steps = stepsOf(edit);
+  if (steps.length !== 3 || !('key' in steps[0]) || steps[0].key !== 'sections' || !isElementStep(steps[1])
+    || !isObj(steps[1].match) || steps[1].match.slot === undefined || !('key' in steps[2]) || steps[2].key !== 'beats') return null;
+  const slot = mapIdText(steps[1].match.slot);
+  return slot ? { slot, ids: edit.after.map(mapIdText).filter(Boolean) } : null;
+}
+
+/** Is this the director's order of a section (mapOrderOf)? */
+function isMapOrder(edit) { return mapOrderOf(edit) !== null; }
+
+/** The section of `map` its slot names, or null. */
+function sectionOfSlot(map, slot) {
+  return (isObj(map) && Array.isArray(map.sections) ? map.sections : []).find((section) => isObj(section) && mapIdText(section.slot) === slot) || null;
+}
+
+/** A section's beat ids, in its order, each as every join on the map reads it ('' for a beat with none). */
+function sectionBeatIds(section) {
+  return (isObj(section) && Array.isArray(section.beats) ? section.beats : []).map((beat) => (isObj(beat) ? mapIdText(beat.id) : ''));
+}
+
+/**
+ * The director's order of each section where it is theirs (R3), one change per section, against
+ * the map the director's version is read against: a section carries one when the director's
+ * version puts a beat that arrived in it (moved, brought back or added) at a place other than its
+ * foot, or holds two of the beats it held in that map in another order. A beat moved to the foot
+ * of another section makes only its move. A section that map lacks carries none.
+ *
+ * @param {Object} before
+ * @param {Object} after
+ * @returns {Object[]} changes as mapEditsBetween gives them, before their scope
+ */
+function mapOrderChanges(before, after) {
+  const out = [];
+  (Array.isArray(after.sections) ? after.sections : []).forEach((section, index) => {
+    if (!isObj(section) || !mapIdText(section.slot)) return;
+    const was = sectionOfSlot(before, mapIdText(section.slot));
+    if (!was) return;
+    const shown = sectionBeatIds(was).filter(Boolean);
+    const now = sectionBeatIds(section).filter(Boolean);
+    const arrived = now.filter((id) => !shown.includes(id));
+    const keptAsShown = shown.filter((id) => now.includes(id));
+    if (same(now, [...keptAsShown, ...arrived])) return;
+    out.push({ at: [{ key: 'sections' }, { index, match: { slot: section.slot } }, { key: 'beats' }], before: shown, after: now, order: true });
+  });
+  return out;
+}
+
+/**
+ * Does `obj` carry the director's order (R3)? While the beats it names that the section still holds
+ * sit in that relative order, whatever else the section holds; never when the section is gone.
+ */
+function mapOrderCarried(obj, order) {
+  const section = sectionOfSlot(obj, order.slot);
+  if (!section) return false;
+  const ranks = sectionBeatIds(section).filter((id) => order.ids.includes(id)).map((id) => order.ids.indexOf(id));
+  return ranks.every((rank, i) => i === 0 || ranks[i - 1] < rank);
+}
+
+/**
+ * An order the director's version carries, named by the beats that version's section holds
+ * (standingOnMap): the edit itself while it holds them all, a copy naming the rest when one has
+ * left the section, and null when fewer than two remain, which is no order.
+ */
+function narrowedOrder(edit, map) {
+  const order = mapOrderOf(edit);
+  const held = sectionBeatIds(sectionOfSlot(map, order.slot)).filter((id) => order.ids.includes(id));
+  if (held.length < 2) return null;
+  return same(held, order.ids) ? edit : { ...edit, after: held };
+}
+
+/**
+ * Put the director's order back into `out`, the pass's output (changed in place; R3): the beats
+ * it names go back into that order in the places they hold, and every other beat stays where the
+ * pass put it, so a beat the pass added keeps its place.
+ *
+ * @returns {boolean} whether a beat moved
+ */
+function restoreMapOrder(order, out) {
+  const section = sectionOfSlot(out, order.slot);
+  if (!section || !Array.isArray(section.beats)) return false;
+  const rank = (beat) => order.ids.indexOf(isObj(beat) ? mapIdText(beat.id) : '');
+  const places = [];
+  section.beats.forEach((beat, i) => { if (rank(beat) !== -1) places.push(i); });
+  const inOrder = places.map((i) => section.beats[i]).sort((a, b) => rank(a) - rank(b));
+  let moved = false;
+  places.forEach((at, k) => {
+    if (section.beats[at] !== inOrder[k]) moved = true;
+    section.beats[at] = inOrder[k];
+  });
+  return moved;
+}
+
+/**
+ * Beats by their titles, as the page reads them (R3, R11): each beat's move, found in `maps` in
+ * order, joined in the order given; a beat no version holds as MAP_BEAT_NOT_ON_MAP.
+ */
+function orderTitles(ids, maps) {
+  return ids.map((id) => {
+    for (const map of maps) {
+      const place = isObj(map) ? mapPlaces(map, 'beat', { id })[0] : null;
+      if (place) return editValueText(place.element.move) || MAP_BEAT_NOT_ON_MAP;
+    }
+    return MAP_BEAT_NOT_ON_MAP;
+  }).join(' / ');
+}
+
+/** The ids of an order that `map`'s section holds, in the order's order; all of them when it has no such section. */
+function orderHeldIn(order, ids, map) {
+  const section = sectionOfSlot(map, order.slot);
+  return section ? ids.filter((id) => sectionBeatIds(section).includes(id)) : ids;
+}
+
+/**
+ * What the director's order became in a pass's output (reportAfterPass): the beats it names that
+ * the section holds, by their titles, in the pass's order; null when the section holds none.
+ */
+function mapOrderBecame(order, after) {
+  const section = sectionOfSlot(after, order.slot);
+  if (!section) return null;
+  const held = sectionBeatIds(section).filter((id) => order.ids.includes(id));
+  return held.length > 0 ? orderTitles(held, [after]) : null;
+}
+
+/**
+ * The director's order as the map's rework reads it in <HAND_EDITS> (R3): each beat the section of
+ * the version in hand holds, in the director's order, by its id and its title, `beat "b4" "Marcus
+ * asks Quinn to raise the dose", then beat "b3" "..."`; with no version, each by its id.
+ */
+function mapOrderLine(order, version) {
+  return orderHeldIn(order, order.ids, version).map((id) => {
+    const place = isObj(version) ? mapPlaces(version, 'beat', { id })[0] : null;
+    const title = place ? editValueText(place.element.move) : '';
+    return title ? `beat "${id}" "${title}"` : `beat "${id}"`;
+  }).join(', then ');
+}
+
 /**
  * The changes between two versions of a beat's or a photo's places, one per place: each
  * beat found by its id and each photo by its filename wherever it sits. One that sits in
  * another place is a move (`from` the place it left; into leftOut, `struck`); one the
  * older version holds nowhere is placed `from` MAP_NONE, whole; one the newer holds
  * nowhere is a cut. Its fields, changed where both versions hold it, are one change each
- * at its newer place. A beat's order within its section is the article writer's, and no
- * change.
+ * at its newer place. A beat's order within its section is no change of the beat's: the
+ * director's order of a section is one change of its own (mapOrderChanges; piece 4, R3).
  *
  * No beat is read with its evidence (withoutEvidence; phase 4b, brief 1D; R6, survey Q1): a
  * difference in a beat's evidence is no change, so valueEdits never recurses into its pieces,
@@ -2663,11 +2854,13 @@ function mapElementEdits(before, after, kind) {
  * deck and the expected length; the gap note field by field; the changes to the weave as
  * one list; each dropped slot; each section's heading and job, the section found by its
  * slot (a section one version lacks is added or cut whole, without its beats and photos);
- * then the beats and the photos (mapElementEdits). Every change has the scope MAP_SCOPE.
+ * then the beats and the photos (mapElementEdits); then the director's order of each section
+ * where it is theirs, marked `order` (mapOrderChanges; piece 4, R3). Every change has the scope
+ * MAP_SCOPE.
  *
  * @param {Object} before
  * @param {Object} after
- * @returns {Array<{scope: string, at: Object[], before: *, after: *, from?: string, struck?: true}>}
+ * @returns {Array<{scope: string, at: Object[], before: *, after: *, from?: string, struck?: true, order?: true}>}
  */
 function mapEditsBetween(before, after) {
   if (!isObj(before) || !isObj(after)) return [];
@@ -2709,6 +2902,7 @@ function mapEditsBetween(before, after) {
 
   mapElementEdits(before, after, 'beat').forEach(push);
   mapElementEdits(before, after, 'photo').forEach(push);
+  mapOrderChanges(before, after).forEach(push);
   return out;
 }
 
@@ -2815,8 +3009,8 @@ function mapBeatText(beat) {
  * beat by its id (mapEditWhere), which the page reads as the beat's move
  * (console/checkpoint-view-logic.js beatWords). A beat's threads, connection, card and kind, which
  * the page does not edit, read as editValueText reads them, so an edit of its threads reads by the
- * threads' ids. Of those four the page prints only the card, as the marker "(card)" beside the
- * move. An edit that is not on the map's beats or photos reads as
+ * threads' ids. Of those four the page prints only the card, as the "Card" mark on the move's
+ * card. An edit that is not on the map's beats or photos reads as
  * editValueText reads it.
  *
  * @param {Object} edit
@@ -2870,8 +3064,10 @@ function weaveReportText(edit, value) {
 
 /**
  * A value of an edit as the report gives it to a stop's page: an edit on the map's beats or
- * photos as the map reads it (mapReportText, its beat ids looked up in `versions`), every other
- * as the weave's counterpart reads it (weaveReportText), which reads a value off the weave as
+ * photos as the map reads it (mapReportText, its beat ids looked up in `versions`), the
+ * director's order of a section as its beats by their titles, those the section of the first
+ * version holds, in the director's order (piece 4, R3, R11; orderTitles), and every other as the
+ * weave's counterpart reads it (weaveReportText), which reads a value off the weave as
  * editValueText does.
  *
  * @param {Object} edit
@@ -2880,6 +3076,11 @@ function weaveReportText(edit, value) {
  * @returns {string}
  */
 function reportValueText(edit, value, versions = []) {
+  const order = mapOrderOf(edit);
+  if (order) {
+    const ids = (Array.isArray(value) ? value : []).map(mapIdText).filter(Boolean);
+    return orderTitles(orderHeldIn(order, ids, versions[0]), versions);
+  }
   return mapAddressOf(edit) ? mapReportText(edit, value, versions) : weaveReportText(edit, value);
 }
 
@@ -3111,6 +3312,11 @@ function reanchoredMapEdit(edit, map) {
  * - Each change between the baseline and the director's version that no standing edit
  *   covers (mapCoverKey) joins them, numbered on from every id given at the stop. A photo a
  *   strike freed is part of the strike, and no change of its own (freedByStrike; task 4.14b).
+ * - The director's order of a section (piece 4, R3) is one edit per section. Where their
+ *   version orders the section against the baseline, that order is the edit, under the id of
+ *   the section's earlier order edit when there is one, so a later reorder replaces it. Where it
+ *   does not, an earlier order edit their version still carries stands, named by the beats the
+ *   section still holds (narrowedOrder), and one it no longer carries goes.
  *
  * @param {*} previous - the map's standing edits so far (state._outlineHandEdits)
  * @param {Object|null} baseline - the writer's last map
@@ -3122,14 +3328,32 @@ function reanchoredMapEdit(edit, map) {
 function standingOnMap(previous, baseline, left, { names } = {}) {
   const prior = standingEditsOf(previous);
   const issued = prior ? prior.issued : 0;
-  const kept = prior
-    ? prior.edits.filter((edit) => editCarried(left, edit)).map((edit) => stillRemoved(reanchoredMapEdit(edit, left), [left]))
-    : [];
+  const between = mapEditsBetween(isObj(baseline) ? baseline : left, left);
+  const ordersNow = new Map();
+  between.forEach((raw) => {
+    const order = mapOrderOf(raw);
+    if (order) ordersNow.set(order.slot, raw);
+  });
+  const kept = [];
+  (prior ? prior.edits : []).forEach((edit) => {
+    const order = mapOrderOf(edit);
+    if (!order) {
+      if (editCarried(left, edit)) kept.push(stillRemoved(reanchoredMapEdit(edit, left), [left]));
+      return;
+    }
+    const now = ordersNow.get(order.slot);
+    if (now) {
+      ordersNow.delete(order.slot);
+      kept.push(completeEdit({ id: edit.id, ...now }, null, null));
+    } else if (editCarried(left, edit)) {
+      const narrowed = narrowedOrder(edit, left);
+      if (narrowed) kept.push(narrowed);
+    }
+  });
   const covered = new Set(kept.map(mapCoverKey));
   const roster = Array.isArray(names) ? names.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim()) : null;
   const leftText = versionText(left);
-  const changes = mapEditsBetween(isObj(baseline) ? baseline : left, left)
-    .filter((raw) => !covered.has(mapCoverKey(raw)) && !freedByStrike(raw, left));
+  const changes = between.filter((raw) => !covered.has(mapCoverKey(raw)) && !freedByStrike(raw, left));
   const added = changes.map((raw, i) => completeEdit({ id: `E${issued + 1 + i}`, ...raw }, leftText, roster));
   if (kept.length === 0 && added.length === 0 && issued === 0) return null;
   return { kind: 'map', issued: issued + added.length, edits: [...kept, ...added] };
@@ -3147,17 +3371,25 @@ function mapMoveWords(edit, address) {
  * Where an edit on the map sits, as its line and the report name it: `section "lede", beat
  * "b4", move`, `left out, beat "b2", struck from section "lede"`, `the top photo, photo
  * "a.jpg", moved from section "theStory"`, `headline`, `gap note, line`, `dropped slot
- * "thePlayers", reason`.
+ * "thePlayers", reason`. Piece 4 (R3, R11): a beat's synopsis is `section "lede", the summary of
+ * beat "b4"`, never by the field's name, and the director's order of a section is `section
+ * "lede", the order of its moves`. The page reads each beat by its move
+ * (console/checkpoint-view-logic.js beatOfPlace, beatWords) and each section by its slot's label.
  */
 function mapEditWhere(edit) {
+  const order = mapOrderOf(edit);
+  if (order) return `section "${order.slot}", ${MAP_ORDER_WORDS}`;
   const steps = stepsOf(edit);
   const address = mapAddressOf(edit);
   const parts = [];
   if (address) {
-    if (address.container === MAP_TOP_PHOTO) parts.push('the top photo', `photo "${address.identity.filename}"`);
-    else if (address.container === MAP_LEFT_OUT) parts.push('left out', `beat "${mapIdText(address.identity.id)}"`);
-    else parts.push(`section "${address.container}"`, address.kind === 'beat' ? `beat "${mapIdText(address.identity.id)}"` : `photo "${address.identity.filename}"`);
-    parts.push(...address.fieldSteps.filter((step) => 'key' in step).map((step) => step.key));
+    const element = address.kind === 'beat' ? `beat "${mapIdText(address.identity.id)}"` : `photo "${address.identity.filename}"`;
+    const fields = address.fieldSteps.filter((step) => 'key' in step).map((step) => step.key);
+    const summary = address.kind === 'beat' && fields.length === 1 && fields[0] === MAP_SUMMARY_FIELD;
+    if (address.container === MAP_TOP_PHOTO) parts.push('the top photo');
+    else if (address.container === MAP_LEFT_OUT) parts.push('left out');
+    else parts.push(`section "${address.container}"`);
+    parts.push(summary ? `the summary of ${element}` : element, ...(summary ? [] : fields));
   } else {
     const head = steps[0] && 'key' in steps[0] ? steps[0].key : null;
     if (head === 'sections' && isElementStep(steps[1])) {
@@ -3633,10 +3865,14 @@ function moveOutcome(edit, before, after) {
  * follows it (passVersionOf; task 4.14c), so null where code cannot tell which block that
  * is; for a cut, the text where it came back; for a move, the section the pass took the
  * block to, or another place in the director's section (moveOutcome). A thread or a connection
- * reads without its evidence (weaveReportText; fix round 4).
+ * reads without its evidence (weaveReportText; fix round 4). The director's order of a section
+ * on the map, as the beats it names in the pass's order, by their titles (mapOrderBecame; piece
+ * 4, R3).
  */
 function becameOf(edit, before, after) {
   if (!isObj(after)) return null;
+  const order = mapOrderOf(edit);
+  if (order) return mapOrderBecame(order, after);
   const address = mapAddressOf(edit);
   if (address) return mapBecame(edit, address, after);
   if (isCut(edit)) return cutReturnedIn(after, edit);
@@ -3934,7 +4170,8 @@ function blocksOf(collection, element) {
  * 4.14c): the pass's copy of it where nothing pairs it, or where only its place pairs it with
  * a block holding fewer of its words, such as a paragraph the pass inserted right before its
  * copy, which stays the writer's (fix round 1). Where code cannot tell which block is the
- * pass's version, it goes back where it sat.
+ * pass's version, it goes back where it sat. The director's order of a section on the map goes
+ * back on the beats it names, in the places they hold (restoreMapOrder; piece 4, R3).
  *
  * @param {Object} edit
  * @param {Object} before - the version the pass started from
@@ -3946,6 +4183,9 @@ function blocksOf(collection, element) {
 function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT) {
   if (!isObj(out)) return false;
   if (isCut(edit)) return takeOutDeletedEntry(edit, out);
+  // Piece 4 (R3): the director's order of a section, back on the beats it names where they sit.
+  const order = mapOrderOf(edit);
+  if (order) return restoreMapOrder(order, out);
   const address = mapAddressOf(edit);
   if (address) return restoreMapEdit(edit, address, before, out);
   if (isMove(edit)) return restoreMove(edit, before, out);
@@ -4274,7 +4514,11 @@ function cameBackStillIn(report, stored) {
  * - each with the pass (SEND_BACK_PASS, REWEAVE_PASS or the automatic pass's number),
  *   whether an automatic pass made it, and the rework's reason (null: none given);
  * - a beat the director struck on the map that a pass brought back (brief 4.6) is marked
- *   `struck`, and `restored` says code struck it again.
+ *   `struck`, and `restored` says code struck it again;
+ * - the director's order of a section on the map that a pass changed (piece 4, R3) is one entry,
+ *   at `section "<slot>", the order of its moves`, its `director` the beats it names by their
+ *   titles in the director's order and its `became` those the section holds in the pass's order
+ *   (null when it holds none), and `restored` says code put the order back.
  * `checked` lists every id the round's passes checked. The server resets the report at
  * each send-back (and, at the story meeting, at each reweave), so it holds one round.
  *
@@ -4419,7 +4663,9 @@ function reportWithHeld(report, held) {
  * round 1). A send-back's rework is left as it is: the director's note may
  * change an edit, and the rework says why. A reweave (REWEAVE_PASS, brief 4.5) is held to
  * the edits as an automatic pass is: code puts back each line it changed. On the map, once the
- * other edits are back, code holds each section the director dropped by its slot (droppedSlotsOf,
+ * other edits are back, code puts the director's order of each section back on the beats it names,
+ * in the places they hold, so a beat the pass added keeps its place (restoreMapOrder; piece 4, R3),
+ * and holds each section the director dropped by its slot (droppedSlotsOf,
  * console/outline-edit-logic.js holdDroppedSections; task 4.14b, fix round 1): a section the pass
  * put back goes again when it holds nothing, and one the pass filled stays, out of the dropped
  * list, its cut reported as come back. Code never puts
@@ -4473,11 +4719,12 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
     // on the map when a pass removed it (mapRestoresWhenGone).
     const moves = changed.filter((e) => isMove(e)
       && (outcome(e) === 'moved' || outcome(e) === 'reordered' || (outcome(e) === 'gone' && mapRestoresWhenGone(e))));
-    const fields = changed.filter((e) => !isMove(e) && !isCut(e));
+    const orders = changed.filter(isMapOrder);
+    const fields = changed.filter((e) => !isMove(e) && !isCut(e) && !isMapOrder(e));
     // Task 4.14b, fix round 1: a section the pass put back under a slot the director dropped.
     const droppedSlots = isMap(after) ? droppedSlotsOf(carried) : [];
     const sectionBack = droppedSlots.some((slot) => after.sections.some((section) => isObj(section) && section.slot === slot));
-    if (deletedEntries.length + moves.length + fields.length > 0 || sectionBack) {
+    if (deletedEntries.length + moves.length + fields.length + orders.length > 0 || sectionBack) {
       output = clone(after);
       // Task 4.5g: the restore leaves out only a photo the article cannot print that the
       // version the pass returned prints nowhere: `after`, not the output the restores change.
@@ -4496,6 +4743,9 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // field the director wrote; that field goes back on the copy kept.
       carried.filter((e) => !isCut(e) && !isMove(e) && mapAddressOf(e) && !editCarried(output, e))
         .forEach((e) => restoreEdit(e, before, output, leavesOut));
+      // Piece 4 (R3): the director's order of each section last, once every beat sits where the
+      // director's other edits put it, so the order goes back on the beats the section holds.
+      orders.forEach((e) => restoreEdit(e, before, output, leavesOut));
       // Task 4.14b, fix round 1: the director's drop held by its slot, once their other edits are
       // back, so a beat they struck that the pass brought into the section has left it again. An
       // empty section goes; one the pass filled stays, out of the dropped list, and its cut is
@@ -4585,6 +4835,9 @@ module.exports = {
     EVIDENCE_KEY, withoutEvidence,
     // Task 4.5e: one rule names an element (a test holds nameOf to identityOf), and the
     // restore reads a photo as the fact check does (a test holds printableBlock to it)
-    nameOf, identityOf, printableBlock
+    nameOf, identityOf, printableBlock,
+    // Piece 4, brief 4C: the field a beat's summary is in, which the console copies (a test holds
+    // the two equal)
+    MAP_SUMMARY_FIELD
   }
 };
