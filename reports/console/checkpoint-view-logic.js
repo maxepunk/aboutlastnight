@@ -3833,9 +3833,14 @@
     return m ? m[1] : null;
   }
 
-  /** The lines the map's page shows, by their keys (mapLineKeyOf): each beat and photo where the map places it. */
-  function mapLinesOnPage(map) {
+  /**
+   * The lines the map's page shows, by their keys (mapLineKeyOf): each beat and photo where the map
+   * places it. A value that is no map (isMapValue) places nothing, so the page shows its own lines
+   * alone (fix E3).
+   */
+  function mapLinesOnPage(given) {
     var editLogic = outlineEditLogic();
+    var map = editLogic.shownMapOf(given) || {};
     var keys = new Set(['headline', 'deck', 'expectedLength', 'weaveChanges']);
     if (isPlainObject(map.gapNote)) keys.add('gapNote');
     asArray(map.sections).filter(isPlainObject).forEach(function (section) { keys.add('section:' + section.slot); });
@@ -4197,15 +4202,18 @@
    * that is no map. The server refuses such a thread wherever it sits, paused, complete or
    * stopped on an error (lib/old-thread.js; fix round 1), so no replay carries its outline
    * past a fresh meeting to this stop; paused here, it gets the server's message in place
-   * of the stop (app.js, oldThreadView).
+   * of the stop (app.js, oldThreadView). A value that is no map (isMapValue: null, or an
+   * outline in an old shape) still shows no map and throws nothing (fix E3): it is read as
+   * an empty one, as the gate reads it (shownMapOf), so every reader below gets an object.
    *
    * @param {Object} data - the stop's payload
-   * @param {Object} map - the map as the director has it (mapDraftOf, then their changes)
+   * @param {*} given - the map as the director has it (mapDraftOf, then their changes)
    * @returns {Object}
    */
-  function mapView(data, map) {
+  function mapView(data, given) {
     var d = isPlainObject(data) ? data : {};
     var editLogic = outlineEditLogic();
+    var map = editLogic.shownMapOf(given) || {};
     var slots = slotsOf(d);
     var story = isPlainObject(d.settledStory)
       ? { story: asString(d.settledStory.story), question: asString(d.settledStory.question) }

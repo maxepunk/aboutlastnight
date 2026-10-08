@@ -1545,3 +1545,41 @@ describe('4.14b fix round 1: a section the director emptied that a pass put back
     expect(view.changedEdits).toEqual([]);
   });
 });
+
+// Fix E3: a value that is no map shows no map, and nothing throws. A real thread at the map always
+// holds a map, since the server refuses an old one (task 4.11), but the page reads a value that is
+// no map as no map shown (shownMapOf, isMapValue), as the gate does. mapView threw on null
+// (mapLinesOnPage read `gapNote` of it), and the whole stop rendered blank.
+describe('Fix E3: a value that is no map shows no map, and nothing throws', () => {
+  const data = payloadOf(stateAt());
+  /** An outline in the shape from before the map: its sections by key, with no `sections` list. */
+  const OLD_SHAPE = {
+    lede: { hook: 'An old hook about the room.', keyTension: 'Who sold first', primaryArc: 'arc-1', selectedEvidence: ['e1'] },
+    theStory: { arcs: [{ name: 'An old arc', paragraphs: 2 }] },
+    closing: { finalLine: 'An old closing line.' }
+  };
+  const NO_MAPS = [['null', null], ['undefined', undefined], ['a string', 'not a map'], ['an outline in the old sections-by-key shape', OLD_SHAPE]];
+
+  test.each(NO_MAPS)('the lines on the page, given %s, are the page\'s own lines alone', (_name, value) => {
+    expect([...ViewLogic.mapLinesOnPage(value)].sort()).toEqual(['deck', 'expectedLength', 'headline', 'weaveChanges']);
+  });
+
+  test.each(NO_MAPS)('mapView given %s shows no map: no column, no move, no photo and no gap note', (_name, value) => {
+    const view = ViewLogic.mapView(data, value);
+    expect(view.sections).toEqual([]);
+    expect(view.leftOut.items).toEqual([]);
+    expect(view.topPhoto).toBeNull();
+    expect(view.gapNote).toBeNull();
+    expect(view.headline.text).toBe('');
+    expect(view.deck.text).toBe('');
+    expect(view.dropped).toEqual([]);
+    expect(view.weaveChanges).toEqual([]);
+    expect(view).toEqual(ViewLogic.mapView(data, null));
+  });
+
+  test('a shown value in the old shape is no map shown either, and the page still opens on the map as the director has it', () => {
+    const view = ViewLogic.mapView({ ...data, outline: clone(OLD_SHAPE) }, opened(data));
+    expect(view.sections.map((s) => s.slot)).toEqual(['lede', 'theStory', 'followTheMoney', 'closing']);
+    expect(ViewLogic.mapView({ ...data, outline: clone(OLD_SHAPE) }, clone(OLD_SHAPE)).sections).toEqual([]);
+  });
+});
