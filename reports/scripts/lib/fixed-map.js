@@ -11,8 +11,12 @@
  * the map's stop (the shapes lib/map.js directorMapSchemaFor allows). The director's
  * changes between them, which lib/hand-edit-diff.js standingOnMap reads as the standing
  * edits:
+ * - a summary rewritten: b1's synopsis (piece 4, brief 4C; R11), which <HAND_EDITS> names as the
+ *   summary of its beat;
  * - a struck beat: b2, moved from the lede into leftOut;
- * - a moved photo: render-diff-photo-2.jpg, from the story to the lede.
+ * - a moved photo: render-diff-photo-2.jpg, from the story to the lede;
+ * - the story's order: b4 moved above b3 (piece 4, brief 4C; R3), which <HAND_EDITS> lists as the
+ *   order of the section's moves, by their titles.
  *
  * The card beat b3 flags a piece whose source is a document no record holds, RENDER-DIFF-DOC,
  * as the fixed weave's evidence names it, and the photos are no session's, so the map checks
@@ -58,6 +62,10 @@ const FIXED_MAP_BASELINE = Object.freeze({
         {
           id: 'b3', move: 'RENDER-DIFF MOVE 3: a document', players: [], synopsis: 'RENDER-DIFF SYNOPSIS 3: a document tells a second account of the night.', threads: ['t4'], card: true, kind: 'receipt',
           evidence: [{ ...piece(['RENDER-DIFF-DOC'], 'RENDER-DIFF PIECE 3: a document no record holds.'), card: true }]
+        },
+        {
+          id: 'b4', move: 'RENDER-DIFF MOVE 4: the room turns', players: [], synopsis: 'RENDER-DIFF SYNOPSIS 5: the room turns on its own account.', threads: ['t2'], kind: 'scene',
+          evidence: [piece(['notes'], 'RENDER-DIFF PIECE 5: the notes record the turn.')]
         }
       ],
       photos: [{ filename: 'render-diff-photo-2.jpg' }]
@@ -74,16 +82,16 @@ const FIXED_MAP_BASELINE = Object.freeze({
   weaveChanges: [{ source: 'M1', change: 'RENDER-DIFF CHANGE: the story the director rewrote at the meeting.' }]
 });
 
-/** The map as the director left it: b2 struck into leftOut, the second photo moved to the lede. */
+/** The map as the director left it: b1's summary rewritten, b2 struck into leftOut, the second photo moved to the lede, b4 above b3. */
 const FIXED_MAP = Object.freeze({
   ...FIXED_MAP_BASELINE,
   sections: [
     {
       ...FIXED_MAP_BASELINE.sections[0],
-      beats: [FIXED_MAP_BASELINE.sections[0].beats[0]],
+      beats: [{ ...FIXED_MAP_BASELINE.sections[0].beats[0], synopsis: "RENDER-DIFF SUMMARY EDIT: the director's sentence for the vote." }],
       photos: [...FIXED_MAP_BASELINE.sections[0].photos, FIXED_MAP_BASELINE.sections[1].photos[0]]
     },
-    { ...FIXED_MAP_BASELINE.sections[1], photos: [] }
+    { ...FIXED_MAP_BASELINE.sections[1], beats: [FIXED_MAP_BASELINE.sections[1].beats[1], FIXED_MAP_BASELINE.sections[1].beats[0]], photos: [] }
   ],
   leftOut: [...FIXED_MAP_BASELINE.leftOut, FIXED_MAP_BASELINE.sections[0].beats[1]]
 });

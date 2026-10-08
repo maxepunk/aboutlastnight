@@ -58,7 +58,9 @@
  * pass after the map checks, with the checks' lines. When the thread holds no map, or holds
  * one in phase 4's shape (brief 1G: lib/old-thread.js isOldShapeMap), the
  * fixed map of scripts/lib/fixed-map.js is planted, as the fixed story meeting is:
- * invented text, with a struck beat and a moved photo as the director's standing edits. A
+ * invented text, with a struck beat and a moved photo as the director's standing edits, and
+ * since phase 4b, piece 4 (brief 4C) a summary rewritten and a section reordered, so the
+ * send-back rework and the check rework list the order and the summary edit. A
  * thread whose map carries no edits gets the fixed edit on its headline. The outline
  * judge's render went with the outline judge, and the outline's <SHOULD_CONSIDER> with the
  * arc selection.
@@ -302,7 +304,8 @@ async function render() {
     state._weaveHandEdits = diffMod.standingAtMeeting(null, baseline, weaveModule.weaveForPrompt(state.weave));
   }
   // Brief 4.6: a thread from before the map holds none, so the fixed map is planted, with the
-  // director's struck beat and moved photo as the standing edits; brief 1G: and so is one whose
+  // director's struck beat and moved photo as the standing edits, and their rewritten summary and
+  // reordered section (piece 4, brief 4C); brief 1G: and so is one whose
   // map is in phase 4's shape. A thread whose map carries no edits of the director's gets the
   // fixed edit on its headline.
   const mapPlanted = plantReason(state.outline, diffMod.isMap, oldThread.isOldShapeMap);
