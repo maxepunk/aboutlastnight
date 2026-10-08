@@ -60,6 +60,8 @@ window.Console.checkpoints = window.Console.checkpoints || {};
 const { CollapsibleSection, TracePanel, editBtn, CHECKPOINT_LABELS } = window.Console.utils;
 const EditLogic = window.Console.outlineEditLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
+// The words the board's controls show are the view's (fix B1).
+const CONTROLS = ViewLogic.MAP_CONTROLS;
 const { unsavedInputLine } = window.Console.unsavedInputLogic;
 
 // Every line the director edits on the map in place is a pencil host in the always-visible mode
@@ -174,10 +176,11 @@ function SectionEditor({ section, onSave, onCancel }) {
 function BeatEditor({ beat, onSave, onCancel }) {
   const [form, setForm] = React.useState(function () { return EditLogic.initBeat(beat); });
   const set = fieldSetter(setForm);
+  const words = CONTROLS.beatEditor;
   return React.createElement('div', { className: 'article-block__edit-form' },
-    React.createElement(TextField, { label: 'The move', value: form.move, onChange: set('move'), multiline: true, rows: 2, hint: 'A few plain words of the story.' }),
-    React.createElement(TextField, { label: 'Summary', value: form.synopsis, onChange: set('synopsis'), multiline: true, rows: 2, hint: 'One sentence: what the article tells at this move.' }),
-    React.createElement(TextField, { label: 'Players it shows', value: form.players, onChange: set('players'), hint: 'Names, separated by commas.' }),
+    React.createElement(TextField, { label: words.move, value: form.move, onChange: set('move'), multiline: true, rows: 2, hint: words.moveHint }),
+    React.createElement(TextField, { label: words.synopsis, value: form.synopsis, onChange: set('synopsis'), multiline: true, rows: 2, hint: words.synopsisHint }),
+    React.createElement(TextField, { label: words.players, value: form.players, onChange: set('players'), hint: words.playersHint }),
     actionsRow(function () { onSave(EditLogic.buildBeat(form, beat)); }, onCancel)
   );
 }
@@ -696,7 +699,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         }, photo.besideOptions.map(function (o) {
           return React.createElement('option', { key: o.value || 'itself', value: o.value }, o.label);
         })),
-        moveSelect('Put it beside a move…', photo.besideTargets, false, photo.labels.placeBeside, function (beatId) {
+        moveSelect(CONTROLS.photo.placeBeside, photo.besideTargets, false, photo.labels.placeBeside, function (beatId) {
           const target = photo.besideTargets.filter(function (t) { return t.value === beatId; })[0];
           if (target) placePhoto(fromSlot, fromIndex, target.slot, beatId);
         }),
@@ -728,7 +731,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       heldHere(sel),
       failuresOf(photo.failures),
       concernsOf(photo.concerns),
-      isSelected(sel) && photoPanel(photo, photo.slot, photo.index, 'Move to…')
+      isSelected(sel) && photoPanel(photo, photo.slot, photo.index, CONTROLS.photo.moveTo)
     );
   }
 
@@ -769,17 +772,17 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         React.createElement('button', {
           type: 'button', className: 'btn btn-ghost btn-sm', disabled: !!editHeld, title: editHeld || undefined,
           onClick: function () { open('beat', beat.id); }
-        }, 'Edit the words'),
+        }, CONTROLS.card.editWords),
         React.createElement('button', {
           type: 'button', className: 'btn btn-ghost btn-sm', disabled: !beat.canMoveUp || !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.moveUp,
           onClick: whenFree(function () { moveCardBy(beat.id, -1); })
-        }, 'Move up'),
+        }, CONTROLS.card.moveUp),
         React.createElement('button', {
           type: 'button', className: 'btn btn-ghost btn-sm', disabled: !beat.canMoveDown || !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.moveDown,
           onClick: whenFree(function () { moveCardBy(beat.id, 1); })
-        }, 'Move down'),
-        moveSelect('Move to another section…', beat.moveTargets, false, beat.labels.moveTo, function (to) { moveCard(beat.id, to); }),
-        moveSelect('Put a photo beside it…', beat.photoChoices, false, beat.labels.photoBeside, function (value) {
+        }, CONTROLS.card.moveDown),
+        moveSelect(CONTROLS.card.moveTo, beat.moveTargets, false, beat.labels.moveTo, function (to) { moveCard(beat.id, to); }),
+        moveSelect(CONTROLS.card.photoBeside, beat.photoChoices, false, beat.labels.photoBeside, function (value) {
           const choice = beat.photoChoices.filter(function (c) { return c.value === value; })[0];
           if (choice) placePhoto(choice.slot, choice.index, slot, beat.id);
         }),
@@ -787,11 +790,11 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           ? React.createElement('button', {
               type: 'button', className: 'btn btn-ghost btn-sm', disabled: !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.takeOut,
               onClick: whenFree(function () { takeOut(beat.id); })
-            }, 'Take it out')
+            }, CONTROLS.card.takeOut)
           : React.createElement('button', {
               type: 'button', className: 'btn btn-ghost btn-sm', disabled: !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.strike,
               onClick: whenFree(function () { leaveOut(beat.id); })
-            }, 'Leave it out')
+            }, CONTROLS.card.leaveOut)
       ),
       heldLine(moveHeld)
     );
@@ -893,7 +896,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         item.players && React.createElement('p', { className: 'map__people' }, item.players),
         threadsByName(item),
         React.createElement('div', { className: 'map__controls' },
-          moveSelect('Bring it back into…', item.targets, item.locked, item.labels.bringBack,
+          moveSelect(CONTROLS.tray.bringBack, item.targets, item.locked, item.labels.bringBack,
             function (to) { bringBack(item.id, to); })),
         !item.locked && heldLine(moveHeld),
         behindIt(item))
@@ -908,26 +911,26 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         disabled: !!addHeld,
         title: addHeld || undefined,
         onClick: function () { openAddLine(slot); }
-      }, '+ Add a move');
+      }, CONTROLS.addLine.open);
     }
     return React.createElement('div', { className: 'map__add' },
       React.createElement('input', {
         type: 'text',
         className: 'input map__add-move',
         value: adding.move,
-        placeholder: 'The move, in a few plain words',
+        placeholder: CONTROLS.addLine.move,
         onChange: function (e) { setAdding(Object.assign({}, adding, { move: e.target.value })); },
-        'aria-label': 'The move to add'
+        'aria-label': CONTROLS.addLine.moveLabel
       }),
       React.createElement('input', {
         type: 'text',
         className: 'input map__add-players',
         value: adding.players,
-        placeholder: 'Its players, separated by commas',
+        placeholder: CONTROLS.addLine.players,
         onChange: function (e) { setAdding(Object.assign({}, adding, { players: e.target.value })); },
-        'aria-label': 'The players the move shows'
+        'aria-label': CONTROLS.addLine.playersLabel
       }),
-      React.createElement('button', { type: 'button', className: 'btn btn-secondary btn-sm', disabled: !adding.move.trim(), onClick: addTheBeat }, 'Add the move'),
+      React.createElement('button', { type: 'button', className: 'btn btn-secondary btn-sm', disabled: !adding.move.trim(), onClick: addTheBeat }, CONTROLS.addLine.add),
       React.createElement('button', { type: 'button', className: 'btn btn-ghost btn-sm', onClick: function () { setAdding(null); setHeldAt(null); } }, 'Cancel'),
       heldLine(addHeld)
     );
@@ -1088,7 +1091,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           heldHere(topSel),
           failuresOf(view.topPhoto.failures),
           concernsOf(view.topPhoto.concerns),
-          isSelected(topSel) && photoPanel(view.topPhoto, EditLogic.MAP_TOP_PHOTO, 0, 'Move into a section…')),
+          isSelected(topSel) && photoPanel(view.topPhoto, EditLogic.MAP_TOP_PHOTO, 0, CONTROLS.photo.topMoveTo)),
         // Spec 2026-10-07 section 7: an edit a rework changed that is about the headline, the deck or the top photo sits here.
         changedOf(view.top.changed)
       );

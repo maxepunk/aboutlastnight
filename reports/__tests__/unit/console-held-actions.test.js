@@ -286,10 +286,11 @@ describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a mov
     // a move's words open from Edit the words on its selected card, which waits the same way.
     expect(count(src, 'editBtn(')).toBe(4);
     expect(count(src, '); }, editHeld)')).toBe(4);
-    const editTheWords = buttonProps(src, "'Edit the words'");
+    // Fix B1: the controls' words are the view's (MAP_CONTROLS), so each button is found by its constant.
+    const editTheWords = buttonProps(src, 'CONTROLS.card.editWords');
     expect(editTheWords).toMatch(/disabled: !!editHeld\b/);
     expect(editTheWords).toContain("open('beat', beat.id)");
-    const add = buttonProps(src, "'+ Add a move'");
+    const add = buttonProps(src, 'CONTROLS.addLine.open');
     expect(add).toMatch(/disabled: !!addHeld\b/);
     expect(add).toContain('title: addHeld || undefined');
     expect(add).toContain('openAddLine(slot)');
@@ -329,7 +330,7 @@ describe('4D: on the board, selecting something else and every control on what i
   it('whenFree returns first while moveHeld holds, and every control on what is selected goes through it, disabled with the line as its tooltip', () => {
     expect(functionBody(src, 'whenFree')).toContain(`return function (e) {\n      ${guard('moveHeld')}`);
     const controls = functionBody(src, 'cardControls');
-    ["'Move up'", "'Move down'", "'Take it out'", "'Leave it out'"].forEach((marker) => {
+    ['CONTROLS.card.moveUp', 'CONTROLS.card.moveDown', 'CONTROLS.card.takeOut', 'CONTROLS.card.leaveOut'].forEach((marker) => {
       const props = buttonProps(src, marker);
       expect([marker, /disabled: [^,]*!!moveHeld\b/.test(props), props.includes('title: moveHeld || undefined'), props.includes('onClick: whenFree(')]).toEqual([marker, true, true, true]);
     });

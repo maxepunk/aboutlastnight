@@ -1399,3 +1399,61 @@ describe("4D: the board's styles", () => {
       .forEach((gone) => expect(`${gone}: ${src.includes(gone)}`).toBe(`${gone}: false`));
   });
 });
+
+// Fix B1: the board's control words are the view's (MAP_CONTROLS), which Outline.js prints as they
+// are, so the component decides no word of its own: a selected card's controls, a move's in the
+// tray, a photo's, the add line and the move's editor.
+describe("Fix B1: the board's control words come from the view", () => {
+  const src = read('components/checkpoints/Outline.js');
+  const CONTROLS = ViewLogic.MAP_CONTROLS;
+  const wordsOf = (group) => Object.values(group);
+
+  it('the view gives every word of the controls, and Outline.js writes none of them itself', () => {
+    expect(Object.keys(CONTROLS)).toEqual(['card', 'tray', 'photo', 'addLine', 'beatEditor']);
+    Object.values(CONTROLS).flatMap(wordsOf).forEach((words) => {
+      expect(typeof words).toBe('string');
+      expect(`${words}: ${src.includes(`'${words}'`)}`).toBe(`${words}: false`);
+    });
+    expect(src).toMatch(/^const CONTROLS = ViewLogic\.MAP_CONTROLS;$/m);
+  });
+
+  it("a selected card's controls, a tray move's and a photo's show the view's words", () => {
+    const data = boardPayloadOf();
+    const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+    const mounted = mountMap({ data });
+    click(cardOf(mounted.render(), 'Marcus asks Quinn to raise the dose'));
+    const [detail] = elementsOf(mounted.render(), hasClass('map__card-detail'));
+    const shown = (node) => elementsOf(node, (n) => n.type === 'button' || n.type === 'select').map((n) => (n.type === 'select' ? textOf(n.children[0]) : textOf(n)));
+    expect(shown(elementsOf(detail, hasClass('map__controls'))[0])).toEqual([
+      CONTROLS.card.editWords, CONTROLS.card.moveUp, CONTROLS.card.moveDown, CONTROLS.card.moveTo, CONTROLS.card.photoBeside, CONTROLS.card.leaveOut
+    ]);
+    click(cardOf(mounted.render(), view.leftOut.items[0].label));
+    expect(shown(elementsOf(mounted.render(), hasClass('map__card-detail'))[0])).toContain(CONTROLS.tray.bringBack);
+    const photo = view.sections[2].byThemselves[0];
+    labelled(mounted.render(), photo.labels.select).props.onClick();
+    const [panel] = elementsOf(mounted.render(), hasClass('map__photo-panel'));
+    expect(shown(panel).slice(1)).toEqual([CONTROLS.photo.placeBeside, CONTROLS.photo.moveTo]);
+    labelled(mounted.render(), view.topPhoto.labels.select).props.onClick();
+    expect(shown(elementsOf(mounted.render(), hasClass('map__photo-panel'))[0])).toEqual([CONTROLS.photo.placeBeside, CONTROLS.photo.topMoveTo]);
+  });
+
+  it("the add line and the move's editor show the view's words", () => {
+    const data = boardPayloadOf();
+    const mounted = mountMap({ data });
+    const open = elementsOf(mounted.render(), (n) => n.type === 'button' && textOf(n) === CONTROLS.addLine.open);
+    expect(open.length).toBeGreaterThan(0);
+    open[0].props.onClick();
+    const [line] = elementsOf(mounted.render(), hasClass('map__add'));
+    const [move, players] = elementsOf(line, (n) => n.type === 'input');
+    expect([move.props.placeholder, move.props['aria-label'], players.props.placeholder, players.props['aria-label']])
+      .toEqual([CONTROLS.addLine.move, CONTROLS.addLine.moveLabel, CONTROLS.addLine.players, CONTROLS.addLine.playersLabel]);
+    expect(elementsOf(line, (n) => n.type === 'button').map(textOf)[0]).toBe(CONTROLS.addLine.add);
+    click(cardOf(mounted.render(), 'Jess warns Sarah away'));
+    buttonOf(cardOf(mounted.render(), 'Jess warns Sarah away'), CONTROLS.card.editWords).props.onClick();
+    const [host] = elementsOf(mounted.render(), (n) => hasClass('map__card')(n) && hasClass('map__editing')(n));
+    const [editorNode] = elementsOf(host, (n) => typeof n.type === 'function' && n.type.name === 'BeatEditor');
+    const fields = elementsOf(mounted.child(editorNode).render(), (n) => typeof n.type === 'function' && n.type.name === 'TextField');
+    const E = CONTROLS.beatEditor;
+    expect(fields.map((f) => [f.props.label, f.props.hint])).toEqual([[E.move, E.moveHint], [E.synopsis, E.synopsisHint], [E.players, E.playersHint]]);
+  });
+});

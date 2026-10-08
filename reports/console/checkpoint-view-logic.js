@@ -3513,6 +3513,42 @@
   var MAP_SUMMARY_TOGGLE = { open: 'Open every summary', close: 'Close every summary' };
 
   /**
+   * The words the board's controls show (piece 4, spec 5 and 6; fix B1), which Outline.js prints as
+   * they are: a selected card's controls, a selected move's in the tray, a selected photo's (the
+   * top photo's move into a section among them), the add line at a column's foot and the move's
+   * editor.
+   */
+  var MAP_CONTROLS = {
+    card: {
+      editWords: 'Edit the words',
+      moveUp: 'Move up',
+      moveDown: 'Move down',
+      moveTo: 'Move to another section…',
+      photoBeside: 'Put a photo beside it…',
+      leaveOut: 'Leave it out',
+      takeOut: 'Take it out'
+    },
+    tray: { bringBack: 'Bring it back into…' },
+    photo: { placeBeside: 'Put it beside a move…', moveTo: 'Move to…', topMoveTo: 'Move into a section…' },
+    addLine: {
+      open: '+ Add a move',
+      move: 'The move, in a few plain words',
+      moveLabel: 'The move to add',
+      players: 'Its players, separated by commas',
+      playersLabel: 'The players the move shows',
+      add: 'Add the move'
+    },
+    beatEditor: {
+      move: 'The move',
+      moveHint: 'A few plain words of the story.',
+      synopsis: 'Summary',
+      synopsisHint: 'One sentence: what the article tells at this move.',
+      players: 'Players it shows',
+      playersHint: 'Names, separated by commas.'
+    }
+  };
+
+  /**
    * The fold of a beat the director added on the map while it carries no evidence: the article
    * writer finds its evidence (spec 5.3). A beat of the writer's with none is a check's failure,
    * which the page shows beside it instead.
@@ -5394,6 +5430,8 @@
     MAP_NO_HEADING_LINE: MAP_NO_HEADING_LINE,
     MAP_EMPTIED_COLUMN_LINE: MAP_EMPTIED_COLUMN_LINE,
     MAP_SUMMARY_TOGGLE: MAP_SUMMARY_TOGGLE,
+    // Fix B1: the words the board's controls show
+    MAP_CONTROLS: MAP_CONTROLS,
     MAP_NO_EVIDENCE_LINE: MAP_NO_EVIDENCE_LINE,
     stopVersion: stopVersion,
     mapVersion: mapVersion,
