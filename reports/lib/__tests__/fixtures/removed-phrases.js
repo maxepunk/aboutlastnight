@@ -480,7 +480,10 @@ const REMOVED_PHRASES = [
   'grounds it',
   'mirrors it',
   'carries it forward',
-  'left out, with one line on why'
+  'left out, with one line on why',
+  // Phase 4b, piece 4 (slices 4A and 4B): the order of a section's beats is the map's, which
+  // the director sees and sets, so the article writer no longer chooses it (C2, C16).
+  /the order of the beats within (?:each|a) section/i
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
