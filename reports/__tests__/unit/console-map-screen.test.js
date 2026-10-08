@@ -142,6 +142,17 @@ describe('4.9: the map\'s styles', () => {
       .forEach((rule) => expect(`${rule}: ${map.includes(rule)}`).toBe(`${rule}: true`));
     ['.outline-thesis', '.outline-section__list', '.outline-section--editing'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
   });
+
+  // Fix H6: the counts sit in one row that wraps on a narrow screen, as the mock-up "Map: corkboard
+  // columns" has them, the length with its pencil beside it (its host shrinks to the length's line).
+  it('lays the counts in a row with a gap, wrapping on a narrow screen', () => {
+    const start = css.indexOf('\n.map__tally {');
+    expect(start).toBeGreaterThan(-1);
+    const rule = css.slice(start, css.indexOf('}', start));
+    expect(rule).toContain('flex-direction: row;');
+    expect(rule).toContain('flex-wrap: wrap;');
+    expect(rule).toMatch(/column-gap: var\(--space-\w+\);/);
+  });
 });
 
 // Brief 4.6c: Outline.js finds a section as the editors and moves find it. Phase 4b (brief 1D;

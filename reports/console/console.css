@@ -3247,6 +3247,16 @@ textarea.input {
   word-break: break-word;
 }
 
+/* The counts in one row that wraps on a narrow screen (fix H6; the mock-up "Map: corkboard
+   columns"). The length's host shrinks to its line, so its pencil sits beside the length. */
+.map__tally {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-lg);
+  row-gap: var(--space-xs);
+}
+
 /* The settled story and the gap note, side by side, the gap note under it on a narrow screen. */
 .map__story-row {
   display: grid;
