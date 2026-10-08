@@ -367,6 +367,14 @@ describe('the map as a corkboard (phase 4b, piece 4)', () => {
     expect(entry('Story map')).toContain('On screen it is a corkboard');
   });
 
+  // Fix D2: a move the director added may have no summary (in docs, its `synopsis`), as STORY_MAP_LABEL and the article
+  // generator say, so every place that tells the article writer to follow a summary qualifies it.
+  it.each([...Object.keys(ALL), 'CLAUDE.md'])("%s tells the article writer to follow a move's summary only where it has one", (name) => {
+    const text = name === 'CLAUDE.md' ? read(path.join(REPO, 'CLAUDE.md')) : ALL[name];
+    const follows = /as (?:its (?:summary|sentence|`?synopsis`?) says|their summaries say)(?!,? where)/g;
+    expect(`${name}: ${(text.replace(/\s*│\s*/g, ' ').match(follows) || []).length}`).toBe(`${name}: 0`);
+  });
+
   it.each(Object.keys(ALL))("%s describes none of the map's retired page or the article writer's own order", (name) => {
     const old = {
       cardInBrackets: /\(card\)/,

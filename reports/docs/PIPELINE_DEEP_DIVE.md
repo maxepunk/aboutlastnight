@@ -209,9 +209,9 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 │              PHASE 4: ARTICLE GENERATION (Opus)                             │
 │  Reads the whole rule set: the world, the truth rules, all 8 craft files    │
 │  Nova's voice: C12 in craft-voice.md; words that never print: T14           │
-│  Writes each beat in the map's order, as its summary says, from its         │
-│  evidence; the fact check, then a truth-only judge; the director finishes   │
-│  the article at the desk                                                    │
+│  Writes each beat in the map's order, as its summary says, where it has     │
+│  one, from its evidence; the fact check, then a truth-only judge; the       │
+│  director finishes the article at the desk                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -449,7 +449,7 @@ A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLI
 
 **Nodes**: `generateContentBundle`, `evaluateArticle` (the fact check, then the article judge), `checkpointArticle` (the desk), and the rework, `incrementArticleRevision` then `reviseContentBundle` (`lib/workflow/nodes/ai-nodes.js` and `evaluator-nodes.js`; phase 4, briefs 4.7a and 4.7b; spec section 6)
 
-**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files and the standing notes last. It writes all the prose from the map's beats, each section's beats in the map's order and each as its synopsis says (C2, C16), each from the evidence the beat carries, citing its quotations, figures and times, and reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
+**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files and the standing notes last. It writes all the prose from the map's beats, each section's beats in the map's order and each as its synopsis says, where it has one (C2, C16), each from the evidence the beat carries, citing its quotations, figures and times, and reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
 
 **The rules**: the article writer reads the whole rule set (`loadRuleSet('article', {theme})`): the world and the truth rules in its system prompt after the mode block, and all eight craft files last in its user prompt. Nova's voice is C12 in `craft-voice.md`; where Nova stood is the session's mode block (`mode-on-site.md` or `mode-remote.md`) and T8; the length and the house style are C4 in `craft-telling.md`; the fiction's own words are T14, buried memories T3, and characters, not players, T11, all in `truth-rules.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
 

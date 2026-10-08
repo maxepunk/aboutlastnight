@@ -148,7 +148,7 @@ The director can edit any line, a move's title, summary and people among them; m
 
 ### 10. Write the article
 
-Start `journalist-article-generator`. It writes from the settled angle and the map as the director left them, each section's beats in the map's order, each as its summary says, from the evidence it carries, and renders `output/article.html`.
+Start `journalist-article-generator`. It writes from the settled angle and the map as the director left them, each section's beats in the map's order, each as its summary says, where it has one, from the evidence it carries, and renders `output/article.html`.
 
 ### 11. Check the article
 

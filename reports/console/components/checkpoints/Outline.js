@@ -189,10 +189,10 @@ function BeatEditor({ beat, onSave, onCancel }) {
 function LengthEditor({ map, onSave, onCancel }) {
   const [form, setForm] = React.useState(function () { return EditLogic.initMapLength(map); });
   const length = EditLogic.buildMapLength(form);
+  const words = CONTROLS.lengthEditor;
   return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(TextField, {
-      label: 'Expected length, in words', value: form.expectedLength, onChange: fieldSetter(setForm)('expectedLength'),
-      hint: 'A whole number. The article writer aims at it, so set it lower when you leave moves out.'
+      label: words.label, value: form.expectedLength, onChange: fieldSetter(setForm)('expectedLength'), hint: words.hint
     }),
     actionsRow(function () { if (length !== null) onSave(length); }, onCancel, length === null)
   );

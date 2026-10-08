@@ -1409,7 +1409,7 @@ describe("Fix B1: the board's control words come from the view", () => {
   const wordsOf = (group) => Object.values(group);
 
   it('the view gives every word of the controls, and Outline.js writes none of them itself', () => {
-    expect(Object.keys(CONTROLS)).toEqual(['card', 'tray', 'photo', 'addLine', 'beatEditor']);
+    expect(Object.keys(CONTROLS)).toEqual(['card', 'tray', 'photo', 'addLine', 'beatEditor', 'lengthEditor']);
     Object.values(CONTROLS).flatMap(wordsOf).forEach((words) => {
       expect(typeof words).toBe('string');
       expect(`${words}: ${src.includes(`'${words}'`)}`).toBe(`${words}: false`);
@@ -1455,6 +1455,17 @@ describe("Fix B1: the board's control words come from the view", () => {
     const fields = elementsOf(mounted.child(editorNode).render(), (n) => typeof n.type === 'function' && n.type.name === 'TextField');
     const E = CONTROLS.beatEditor;
     expect(fields.map((f) => [f.props.label, f.props.hint])).toEqual([[E.move, E.moveHint], [E.synopsis, E.synopsisHint], [E.players, E.playersHint]]);
+  });
+
+  // Fix D1: the expected length's editor shows the view's words too.
+  it("the expected length's editor shows the view's words", () => {
+    const mounted = mountMap({ data: boardPayloadOf() });
+    const lengthOf = (tree) => elementsOf(tree, hasClass('map__length'))[0];
+    elementsOf(lengthOf(mounted.render()), hasClass('article-block__edit-btn'))[0].props.onClick();
+    const [editorNode] = elementsOf(lengthOf(mounted.render()), (n) => typeof n.type === 'function' && n.type.name === 'LengthEditor');
+    const fields = elementsOf(mounted.child(editorNode).render(), (n) => typeof n.type === 'function' && n.type.name === 'TextField');
+    const L = CONTROLS.lengthEditor;
+    expect(fields.map((f) => [f.props.label, f.props.hint])).toEqual([[L.label, L.hint]]);
   });
 });
 
@@ -1542,7 +1553,7 @@ describe('Fix B2: each control on the board is named by the words it shows', () 
 // since it holds other controls (the summary's toggle, the thumbnails, a selected card's controls
 // and an open editor's fields), which a button's role would make presentational. A native button
 // selects on a click, Enter and Space alike.
-describe('Fix B3: a card has a role and a name', () => {
+describe("Fix B3: a card's title is the button that selects it, and the card stays a list item", () => {
   const data = boardPayloadOf();
   const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
   const CONTROL_TYPES = ['button', 'select', 'input', 'textarea', 'a'];
@@ -1631,5 +1642,12 @@ describe("Fix B7: the run sheet names the board's controls as the board shows th
     [...Object.values(C.card), ...Object.values(C.tray), ...Object.values(C.photo), C.addLine.open, C.addLine.add,
       ViewLogic.MAP_SUMMARY_TOGGLE.open, ViewLogic.MAP_SUMMARY_TOGGLE.close]
       .forEach((words) => expect(`${words}: ${mapPart.includes(`**${words}**`)}`).toBe(`${words}: true`));
+  });
+
+  // Fix D1: the length editor's hint is the view's, and the run sheet gives the director its advice.
+  it("gives the expected length's advice as the length editor's hint does", () => {
+    const advice = C.lengthEditor.hint.split(', so ')[1];
+    expect(advice).toBe('set it lower when you leave moves out.');
+    expect(mapPart).toContain(advice);
   });
 });

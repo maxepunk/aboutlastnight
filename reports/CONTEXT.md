@@ -89,7 +89,7 @@ The model pass that produces the arcs, the outline or the article.
 _Avoid_: generator, agent, model, Nova (the reporter persona, not the pass)
 
 **Beat**:
-One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, one sentence on what the article tells there, and the evidence under it. On the map's page it is a move, and its words are its title. The article writer tells every beat in the map's order, as its sentence says, from its evidence, and adds none.
+One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, one sentence on what the article tells there, and the evidence under it. On the map's page it is a move, and its words are its title. The article writer tells every beat in the map's order, as its sentence says, where it has one, from its evidence, and adds none.
 _Avoid_: point, item, paragraph plan
 
 **Photo description**:

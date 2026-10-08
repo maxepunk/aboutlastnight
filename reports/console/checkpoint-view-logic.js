@@ -3515,10 +3515,11 @@
   /**
    * The words the board's controls show (piece 4, spec 5 and 6; fix B1), which Outline.js prints as
    * they are: a selected card's controls, a selected move's in the tray, a selected photo's (the
-   * top photo's move into a section among them), the add line at a column's foot and the move's
-   * editor. Each control's accessible name holds the words it shows, in their order, with the move
-   * or the photo it acts on named in place of "it" (WCAG 2.5.3, label in name; fix B2): mapView's
-   * `labels` name a move's and a photo's controls, and the add line's names are here.
+   * top photo's move into a section among them), the add line at a column's foot, the move's
+   * editor and the expected length's editor (fix D1). Each control's accessible name holds the
+   * words it shows, in their order, with the move or the photo it acts on named in place of "it"
+   * (WCAG 2.5.3, label in name; fix B2): mapView's `labels` name a move's and a photo's
+   * controls, and the add line's names are here.
    */
   var MAP_CONTROLS = {
     card: {
@@ -3547,6 +3548,10 @@
       synopsisHint: 'One sentence: what the article tells at this move.',
       players: 'Players it shows',
       playersHint: 'Names, separated by commas.'
+    },
+    lengthEditor: {
+      label: 'Expected length, in words',
+      hint: 'A whole number. The article writer aims at it, so set it lower when you leave moves out.'
     }
   };
 
