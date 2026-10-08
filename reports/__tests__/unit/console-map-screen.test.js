@@ -1655,9 +1655,10 @@ describe("Fix B7: the run sheet names the board's controls as the board shows th
 // Fix E1: the board fits a desktop screen (spec 2026-10-07 section 1: the director sees the
 // article's shape at a glance). Every stop sits in `.console-main`, 960px wide at most, where five
 // columns scrolled sideways and the Closing column was off a 1440px screen. The map's stop alone
-// takes the screen's width (the stop's root is `.map`, which `.console-main:has(.map)` reads), so
-// on a screen wide enough for every column, every column shows with no sideways scroll. The other
-// stops keep 960px, the columns still scroll below that width, and on a phone they still stack.
+// lifts that cap (the stop's root is `.map`, which `.console-main:has(.map)` reads), to the room six
+// columns need (fix G2), so on a screen wide enough for every column, every column shows with no
+// sideways scroll. The other stops keep 960px, the columns still scroll below that width, and on a
+// phone they still stack.
 describe('Fix E1: the board fits a desktop screen', () => {
   const css = read('console.css');
   const map = css.slice(css.indexOf('/* ── 4.9: the map ──'), css.indexOf("/* ── 4.10: the desk's marks ──"));
@@ -1672,9 +1673,25 @@ describe('Fix E1: the board fits a desktop screen', () => {
   };
   const token = (name) => Number(new RegExp(`--${name}:\\s*(\\d+)px;`).exec(css)[1]);
 
-  it("keeps every other stop at 960px, and lets the map's stop take the screen's width", () => {
+  // Fix G2: the map's stop had no cap at all, so on a very wide screen its prose (the settled
+  // story, the gap note, the round's lines, the note box) ran across the whole window. Its cap is
+  // the room six columns at their narrowest need with the page's padding, and no wider.
+  it("keeps every other stop at 960px, and caps the map's stop where six columns at their narrowest fit, and no seventh", () => {
     expect(px(ruleIn(css, '.console-main'), 'max-width')).toBe('960px');
-    expect(px(ruleIn(map, '.console-main:has(.map)'), 'max-width')).toBe('none');
+    const cap = px(ruleIn(map, '.console-main:has(.map)'), 'max-width');
+    expect(cap).toMatch(/^\d+px$/);
+    const columns = ruleIn(map, '.map__columns');
+    const narrowest = Number(/grid-auto-columns:\s*minmax\((\d+)px,/.exec(columns)[1]);
+    const gap = token(px(columns, 'gap').replace(/^var\(--|\)$/g, ''));
+    // Every box is border-box, so the cap holds .console-main's padding, the stop's panel's padding
+    // and the panel's border on each side, then the board.
+    const page = 2 * token(px(ruleIn(css, '.console-main'), 'padding').split(/\s+/)[1].replace(/^var\(--|\)$/g, ''))
+      + 2 * token(px(ruleIn(css, '.glass-panel'), 'padding').replace(/^var\(--|\)$/g, ''))
+      + 2 * Number(/--glass-border:\s*(\d+)px/.exec(css)[1]);
+    const room = (n) => narrowest * n + gap * (n - 1) + page;
+    expect(room(6)).toBe(1498);
+    expect(room(6)).toBeLessThanOrEqual(parseInt(cap, 10));
+    expect(room(7)).toBeGreaterThan(parseInt(cap, 10));
     // The rule finds the map's stop by its root, which no other screen of the console carries.
     expect(src).toContain("React.createElement('div', { className: 'map flex flex-col gap-md' }");
     const screens = ['app.js', ...fs.readdirSync(path.join(CONSOLE_DIR, 'components')).filter((f) => f.endsWith('.js')).map((f) => `components/${f}`),

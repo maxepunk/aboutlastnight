@@ -3221,12 +3221,15 @@ textarea.input {
    their padding with the longhands: a `padding` shorthand here comes later in the file and would
    cancel it. Each thread's dot takes its tone's colour from the tokens on :root. */
 
-/* The map's stop takes the screen's width (fix E1; spec 2026-10-07 section 1: the article's shape
-   at a glance). Every other stop keeps .console-main's 960px. Five columns at their narrowest need
-   about 1,180px, so on a screen that wide every column shows with no sideways scroll; below it the
-   columns scroll sideways, and on a phone they stack. The stop's root is `.map` (Outline.js). */
+/* The map's stop lifts .console-main's 960px cap (fix E1; spec 2026-10-07 section 1: the article's
+   shape at a glance), to the room six columns need (fix G2): six at their narrowest, 220px, five
+   16px gaps, the page's 96px of padding and the panel's border come to 1,498px. So on a desktop
+   screen every column shows with no sideways scroll, while on a very wide one the map's prose (the
+   settled story, the gap note, the round's lines, the note box) stops at the board's width. Every
+   other stop keeps 960px. Below the board's width the columns scroll sideways, and on a phone they
+   stack. The stop's root is `.map` (Outline.js). */
 .console-main:has(.map) {
-  max-width: none;
+  max-width: 1520px;
 }
 
 .map__story,
