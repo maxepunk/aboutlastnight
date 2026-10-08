@@ -108,7 +108,8 @@ describe.each([
     stop: 'the map',
     rel: 'components/checkpoints/Outline.js',
     asks: ["const held = unsavedInputLine('outline', unsaved);"],
-    controls: ["const editHeld = unsavedInputLine('outline', unsaved, 'edit');", "const addHeld = unsavedInputLine('outline', unsaved, 'add');"],
+    controls: ["const editHeld = unsavedInputLine('outline', unsaved, 'edit');", "const addHeld = unsavedInputLine('outline', unsaved, 'add');",
+      "const selectHeld = unsavedInputLine('outline', unsaved, 'select');", "const moveHeld = unsavedInputLine('outline', unsaved, 'move');"],
     paths: [['send', 'held'], ['send', 'held']],
     payload: 'ViewLogic.mapPayload(',
     buttons: [["send('approve')", 'held'], ['onClick: handleSendBackClick', 'held']],
@@ -264,9 +265,9 @@ describe('4.14g: at the desk, a pencil, a move, a delete and an insert wait for 
   });
 });
 
-// Task 4.14g. On the map, a pencil opens its editor in place of the open one, and "+ Add a beat" opens
+// Task 4.14g. On the map, a pencil opens its editor in place of the open one, and "+ Add a move" opens
 // the add line in its section in place of the open one.
-describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a beat" for an add line that holds text', () => {
+describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a move" for an add line that holds text', () => {
   const src = read('components/checkpoints/Outline.js');
 
   it('asks the rule about the same description of what is open as the actions', () => {
@@ -280,7 +281,7 @@ describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a bea
     [...src.matchAll(/\bsetAdding\(\{ slot:/g)].forEach((m) => expect(enclosingFunction(src, m.index)).toBe('openAddLine'));
   });
 
-  it('holds every pencil and every "+ Add a beat" while its answer holds', () => {
+  it('holds every pencil and every "+ Add a move" while its answer holds', () => {
     // Piece 4 (brief 4D): four pencils, the head, the gap note, each column's head and the length;
     // a move's words open from Edit the words on its selected card, which waits the same way.
     expect(count(src, 'editBtn(')).toBe(4);
@@ -288,13 +289,13 @@ describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a bea
     const editTheWords = buttonProps(src, "'Edit the words'");
     expect(editTheWords).toMatch(/disabled: !!editHeld\b/);
     expect(editTheWords).toContain("open('beat', beat.id)");
-    const add = buttonProps(src, "'+ Add a beat'");
+    const add = buttonProps(src, "'+ Add a move'");
     expect(add).toMatch(/disabled: !!addHeld\b/);
     expect(add).toContain('title: addHeld || undefined');
     expect(add).toContain('openAddLine(slot)');
   });
 
-  it('shows the pencils\' line under every open editor, and "+ Add a beat"\'s under the add line', () => {
+  it('shows the pencils\' line under every open editor, and "+ Add a move"\'s under the add line', () => {
     const editing = [...src.matchAll(/map__editing'/g)].map((m) => m.index);
     expect(editing.length).toBe(5);
     expect(count(src, HELD_LINE('editHeld'))).toBe(5);
@@ -305,6 +306,59 @@ describe('4.14g: on the map, a pencil waits for an open editor, and "+ Add a bea
     });
     expect(count(src, HELD_LINE('addHeld'))).toBe(1);
     expect(functionBody(src, 'addLine')).toContain(HELD_LINE('addHeld'));
+  });
+});
+
+// Piece 4 (brief 4D; R9). On the board, selecting something else and every control on the selected
+// card (or the selected move in the tray, or the selected photo) wait while an editor is open or the
+// add line holds text: selecting through select, which returns before it selects while selectHeld
+// holds, and each control through whenFree, which returns first while moveHeld holds. A drop waits for
+// nothing, so the drop handlers call the moves' handlers directly. Behaviour is pinned under the
+// stand-in React in console-map-screen.test.js; the wiring here.
+describe('4D: on the board, selecting something else and every control on what is selected wait for an open editor and a typed add line', () => {
+  const src = read('components/checkpoints/Outline.js');
+
+  it('select closes what is selected freely, and returns before it selects anything else while selectHeld holds, noting where the click landed', () => {
+    const body = functionBody(src, 'select');
+    expect(body.indexOf('if (selected === sel) {')).toBeLessThan(body.indexOf('if (selectHeld) {'));
+    expect(body.slice(body.indexOf('if (selectHeld) {'))).toMatch(/^if \(selectHeld\) \{\s*setHeldAt\(sel\);\s*return;/);
+    expect(body.indexOf('if (selectHeld) {')).toBeLessThan(body.indexOf('setSelected(sel);'));
+    [...src.matchAll(/\bsetSelected\(sel\)/g)].forEach((m) => expect(enclosingFunction(src, m.index)).toBe('select'));
+  });
+
+  it('whenFree returns first while moveHeld holds, and every control on what is selected goes through it, disabled with the line as its tooltip', () => {
+    expect(functionBody(src, 'whenFree')).toContain(`return function (e) {\n      ${guard('moveHeld')}`);
+    const controls = functionBody(src, 'cardControls');
+    ["'Move up'", "'Move down'", "'Take it out'", "'Leave it out'"].forEach((marker) => {
+      const props = buttonProps(src, marker);
+      expect([marker, /disabled: [^,]*!!moveHeld\b/.test(props), props.includes('title: moveHeld || undefined'), props.includes('onClick: whenFree(')]).toEqual([marker, true, true, true]);
+    });
+    expect(count(controls, 'moveSelect(')).toBe(2);
+    const select = functionBody(src, 'moveSelect');
+    expect(select).toContain('disabled: disabled || targets.length === 0 || !!moveHeld,');
+    expect(select).toContain('title: moveHeld || undefined,');
+    expect(select).toContain('onChange: whenFree(');
+    // The tray's Bring it back and a photo's places go through moveSelect too; a photo's place in its own section through whenFree.
+    expect(count(functionBody(src, 'trayItem'), 'moveSelect(')).toBe(1);
+    expect(count(functionBody(src, 'photoPanel'), 'moveSelect(')).toBe(2);
+    expect(functionBody(src, 'photoPanel')).toContain('onChange: whenFree(function (e) { photoBeside(fromSlot, fromIndex, e.target.value); })');
+  });
+
+  it("shows the line under the controls of what is selected, and on a card or photo a held click reached", () => {
+    expect(count(src, HELD_LINE('moveHeld'))).toBe(3);
+    expect(functionBody(src, 'cardControls')).toContain(HELD_LINE('moveHeld'));
+    expect(functionBody(src, 'trayItem')).toContain(HELD_LINE('moveHeld'));
+    expect(functionBody(src, 'photoPanel')).toContain(HELD_LINE('moveHeld'));
+    expect(count(src, HELD_LINE('selectHeld'))).toBe(1);
+    expect(functionBody(src, 'heldHere')).toContain('heldAt === sel && !isSelected(sel) ? heldLine(selectHeld) : null');
+    ['card', 'trayItem', 'photoItem'].forEach((name) => expect([name, functionBody(src, name).includes('heldHere(sel)')]).toEqual([name, true]));
+  });
+
+  it('the drop handlers wait for nothing: they call the moves\' handlers, never through whenFree or select', () => {
+    ['dropTarget', 'landOnCard', 'landOnColumn', 'landInTray', 'landOnTop'].forEach((name) => {
+      const body = functionBody(src, name);
+      expect([name, /whenFree|select\(|moveHeld|selectHeld/.test(body)]).toEqual([name, false]);
+    });
   });
 });
 

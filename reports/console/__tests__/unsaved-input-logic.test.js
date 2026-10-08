@@ -111,8 +111,9 @@ describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', ()
       expect(unsavedInputLine('outline', { editor: { line: 'beat', key: 'b1' }, adding: null, sections: wordless })).toBe(unnamed);
     });
 
-    it('names an add line that holds a beat or only its players, by its section, and says to add or cancel it first', () => {
-      const line = 'Before you approve or send back, add or cancel the new beat in "The Story".';
+    // Piece 4 (brief 4D): the line says "move", the page's word.
+    it('names an add line that holds a move or only its players, by its section, and says to add or cancel it first', () => {
+      const line = 'Before you approve or send back, add or cancel the new move in "The Story".';
       expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', move: 'Morgan pays Riley at the bar', players: '' }, sections: MAP_SECTIONS })).toBe(line);
       expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', move: '', players: 'Morgan, Riley' }, sections: MAP_SECTIONS })).toBe(line);
     });
@@ -122,7 +123,7 @@ describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', ()
         editor: { line: 'beat', key: 'b4' },
         adding: { slot: 'followTheMoney', move: 'The ledger at 9:40', players: '' },
         sections: MAP_SECTIONS
-      })).toBe('Before you approve or send back: save or cancel your edit to the move "Morgan pays Riley at the bar"; add or cancel the new beat in "Follow the Money".');
+      })).toBe('Before you approve or send back: save or cancel your edit to the move "Morgan pays Riley at the bar"; add or cancel the new move in "Follow the Money".');
     });
   });
 
@@ -294,10 +295,10 @@ describe('4.14g: every control that would close or replace an open editor or add
     });
   });
 
-  describe('the map: a pencil waits for an open editor, and "+ Add a beat" for an add line that holds text', () => {
+  describe('the map: a pencil waits for an open editor, and "+ Add a move" for an add line that holds text', () => {
     const HEAD = { line: 'head', key: 'head' };
     const TYPED = { slot: 'theStory', move: 'Morgan pays Riley at the bar', players: '' };
-    const ADD_LINE = 'Before you add a beat in another section, add or cancel the new beat in "The Story".';
+    const ADD_LINE = 'Before you add a move in another section, add or cancel the new move in "The Story".';
 
     it('a pencil waits while an editor is open, and the line names the editor', () => {
       expect(unsavedInputLine('outline', { editor: HEAD, adding: null, sections: MAP_SECTIONS }, 'edit'))
@@ -310,14 +311,41 @@ describe('4.14g: every control that would close or replace an open editor or add
       expect(unsavedInputLine('outline', { editor: null, adding: TYPED, sections: MAP_SECTIONS }, 'edit')).toBeNull();
     });
 
-    it('"+ Add a beat" waits while the add line holds a beat or only its players, and the line names its section', () => {
+    it('"+ Add a move" waits while the add line holds a move or only its players, and the line names its section', () => {
       expect(unsavedInputLine('outline', { editor: null, adding: TYPED, sections: MAP_SECTIONS }, 'add')).toBe(ADD_LINE);
       expect(unsavedInputLine('outline', { editor: HEAD, adding: { slot: 'theStory', move: ' ', players: 'Morgan' }, sections: MAP_SECTIONS }, 'add')).toBe(ADD_LINE);
     });
 
-    it('"+ Add a beat" is free while the add line is blank, since moving it loses nothing, and beside an open editor, which it does not close', () => {
+    it('"+ Add a move" is free while the add line is blank, since moving it loses nothing, and beside an open editor, which it does not close', () => {
       expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'theStory', move: '', players: '  ' }, sections: MAP_SECTIONS }, 'add')).toBeNull();
       expect(unsavedInputLine('outline', { editor: HEAD, adding: null, sections: MAP_SECTIONS }, 'add')).toBeNull();
+    });
+  });
+
+  // Piece 4 (brief 4D; R9): on the board, selecting something else and every control on the selected
+  // card (Move up, Move down, Move to another section, Put a photo beside it, Leave it out, Take it
+  // out, Bring it back, and a selected photo's places) wait while an editor is open or the add line
+  // holds text, and one line names each unsaved piece. A drag waits for nothing, since an editor is
+  // keyed by its line.
+  describe("the board: selecting something else and the selected card's controls wait for an open editor and a typed add line", () => {
+    const TYPED = { slot: 'theStory', move: 'Morgan pays Riley at the bar', players: '' };
+    const MOVE_EDITOR = { line: 'beat', key: 'b4' };
+
+    it.each(['select', 'move'])('%s waits while an editor is open, and the line names it by its words', (control) => {
+      expect(unsavedInputLine('outline', { editor: MOVE_EDITOR, adding: null, sections: MAP_SECTIONS }, control))
+        .toBe('Before you select or move anything else, save or cancel your edit to the move "Morgan pays Riley at the bar".');
+    });
+
+    it.each(['select', 'move'])('%s waits while the add line holds text, and with both, the line names both', (control) => {
+      expect(unsavedInputLine('outline', { editor: null, adding: TYPED, sections: MAP_SECTIONS }, control))
+        .toBe('Before you select or move anything else, add or cancel the new move in "The Story".');
+      expect(unsavedInputLine('outline', { editor: { line: 'head', key: 'head' }, adding: TYPED, sections: MAP_SECTIONS }, control))
+        .toBe('Before you select or move anything else: save or cancel your edit to the headline and deck; add or cancel the new move in "The Story".');
+    });
+
+    it.each(['select', 'move'])('%s is free while nothing is open and the add line is blank', (control) => {
+      expect(unsavedInputLine('outline', { editor: null, adding: null, sections: MAP_SECTIONS }, control)).toBeNull();
+      expect(unsavedInputLine('outline', { editor: null, adding: { slot: 'lede', move: ' ', players: '' }, sections: MAP_SECTIONS }, control)).toBeNull();
     });
   });
 

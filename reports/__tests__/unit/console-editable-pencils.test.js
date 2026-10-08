@@ -89,8 +89,9 @@ describe('inline edit pencil: default reveal is hover/focus', () => {
     // Each of the map's pencil hosts (task 4.9) carries its own padding. A `padding`
     // shorthand there has equal specificity and comes later in the file, so it would
     // silently reset padding-right and the pencil would sit over the line it was given a
-    // gutter to clear: the hosts use the longhands.
-    ['.map__head {', '.map__gap {', '.map__section-head {', '.map__beat {', '.map__length {'].forEach((selector) => {
+    // gutter to clear: the hosts use the longhands. Piece 4 (brief 4D): a move is a card,
+    // whose words open from its selected card, so it is no pencil host.
+    ['.map__head {', '.map__gap {', '.map__section-head {', '.map__length {'].forEach((selector) => {
       const hostRule = css.slice(css.indexOf(selector));
       const body = hostRule.slice(0, hostRule.indexOf('}'));
       expect(`${selector} ${css.includes(selector)}`).toBe(`${selector} true`);

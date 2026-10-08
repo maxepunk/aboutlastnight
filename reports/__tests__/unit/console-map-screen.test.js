@@ -138,7 +138,7 @@ describe('4.9: the map\'s styles', () => {
   it('the map has its own section, and the old outline\'s thesis panel and lists went with its editors', () => {
     expect(css).toContain('/* ── 4.9: the map ──');
     const map = css.slice(css.indexOf('/* ── 4.9: the map ──'));
-    ['.map__story', '.map__section', '.map__beat', '.map__photo', '.map__thumb', '.map__concern', '.map__check', '.map__tally', '.map__controls']
+    ['.map__story', '.map__column', '.map__card', '.map__photo', '.map__thumb', '.map__concern', '.map__check', '.map__tally', '.map__controls']
       .forEach((rule) => expect(`${rule}: ${map.includes(rule)}`).toBe(`${rule}: true`));
     ['.outline-thesis', '.outline-section__list', '.outline-section--editing'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
   });
@@ -418,7 +418,7 @@ describe('4D: the board: a column per section, its cards in order, its photos by
       expect(textOf(elementsOf(head, (n) => n.type === 'h4')[0])).toBe(section.label);
       expect(textOf(elementsOf(head, hasClass('map__heading'))[0])).toBe(section.heading || ViewLogic.MAP_NO_HEADING_LINE);
       expect(textOf(elementsOf(head, hasClass('map__job'))[0])).toBe(section.job);
-      expect(elementsOf(column, (n) => n.type === 'button' && textOf(n) === '+ Add a beat')).toHaveLength(1);
+      expect(elementsOf(column, (n) => n.type === 'button' && textOf(n) === '+ Add a move')).toHaveLength(1);
     });
   });
 
@@ -736,16 +736,248 @@ describe("4D: Edit the words opens the move's editor on its card: its title, its
     expect(elementsOf(mounted.render(), hasClass('map__editing'))).toHaveLength(0);
   });
 
-  // Review focus 3, the part this seat holds: the editor is keyed by its line, not by the selection,
-  // so selecting another card leaves it open on its own card (seat 2 holds the click itself).
-  it('an editor open on a move stays on its card when another card is selected', () => {
+  // Review focus 3 (R9): with a move's editor open, a click on another card waits and says why on
+  // that card, and the words typed in the editor survive: the editor stays open on its own card,
+  // and its Save puts them on the map.
+  it('a click on another card while an editor is open is held, shows its line on that card, and the typed words survive', () => {
     const mounted = mountMap({ data: boardPayloadOf() });
     click(cardOf(mounted.render(), 'Jess warns Sarah away'));
     buttonOf(cardOf(mounted.render(), 'Jess warns Sarah away'), 'Edit the words').props.onClick();
+    const editorOf = () => elementsOf(mounted.render(), (n) => typeof n.type === 'function' && n.type.name === 'BeatEditor')[0];
+    const editor = mounted.child(editorOf());
+    const fields = () => elementsOf(editor.render(), (n) => typeof n.type === 'function' && n.type.name === 'TextField');
+    fields()[0].props.onChange('Jess pulls Sarah out of the vote');
     click(cardOf(mounted.render(), 'Quinn tells the room another story'));
     const tree = mounted.render();
+    const LINE = 'Before you select or move anything else, save or cancel your edit to the move "Jess warns Sarah away".';
     expect(elementsOf(tree, (n) => hasClass('map__card')(n) && hasClass('map__editing')(n)).map((n) => n.props.key)).toEqual(['theStory-beat-b5']);
-    expect(elementsOf(tree, hasClass('map__card--selected')).map((n) => n.props.key)).toEqual(['theStory-beat-b6']);
+    expect(elementsOf(tree, hasClass('map__card--selected')).map((n) => n.props.key)).toEqual(['theStory-beat-b5']);
+    expect(elementsOf(cardOf(tree, 'Quinn tells the room another story'), hasClass('held-line')).map(textOf)).toEqual([LINE]);
+    expect(editorOf().props.beat.id).toBe('b5');
+    expect(fields()[0].props.value).toBe('Jess pulls Sarah out of the vote');
+    elementsOf(editor.render(), (n) => n.type === 'button' && textOf(n) === 'Save')[0].props.onClick();
+    expect(mounted.saved().sections[1].beats[2].move).toBe('Jess pulls Sarah out of the vote');
+    expect(heldLines(mounted.render())).toEqual([]);
+    click(cardOf(mounted.render(), 'Quinn tells the room another story'));
+    expect(elementsOf(mounted.render(), hasClass('map__card--selected')).map((n) => n.props.key)).toEqual(['theStory-beat-b6']);
+  });
+
+  it('while an editor is open, the card selected can still be closed, by a click on it or by Escape', () => {
+    const mounted = mountMap({ data: boardPayloadOf() });
+    click(cardOf(mounted.render(), 'Jess warns Sarah away'));
+    elementsOf(mounted.render(), (n) => n.type === 'button' && n.props.className === 'article-block__edit-btn')[0].props.onClick();
+    click(cardOf(mounted.render(), 'Jess warns Sarah away'));
+    expect(elementsOf(mounted.render(), hasClass('map__card--selected'))).toHaveLength(0);
+    click(cardOf(mounted.render(), 'Quinn tells the room another story'));
+    expect(elementsOf(mounted.render(), hasClass('map__card--selected'))).toHaveLength(0);
+    click(cardOf(mounted.render(), 'Jess warns Sarah away'));
+    cardOf(mounted.render(), 'Jess warns Sarah away').props.onKeyDown({ key: 'Escape' });
+    expect(elementsOf(mounted.render(), hasClass('map__card--selected'))).toHaveLength(0);
+  });
+});
+
+// Piece 4 (brief 4D; R9): every control on the selected card waits while an editor is open or the
+// add line holds text, disabled with its line as its tooltip and its line under the controls, and
+// its click changes nothing; so does a photo's thumbnail and a selected photo's places.
+describe("4D: the selected card's controls, and selecting a photo, wait for what the director typed", () => {
+  const data = boardPayloadOf();
+  const LINE = 'Before you select or move anything else, add or cancel the new move in "Closing".';
+  const typeInAddLine = (mounted) => {
+    const [closing] = elementsOf(mounted.render(), (n) => n.type === 'section' && n.props['aria-label'] === 'Closing');
+    buttonOf(closing, '+ Add a move').props.onClick();
+    elementsOf(mounted.render(), hasClass('map__add-move'))[0].props.onChange({ target: { value: 'Remi walks out before the vote' } });
+  };
+
+  it('each button and place on the selected card is off, says why, and does nothing', () => {
+    const mounted = mountMap({ data });
+    click(cardOf(mounted.render(), 'Marcus asks Quinn to raise the dose'));
+    typeInAddLine(mounted);
+    const [detail] = elementsOf(cardOf(mounted.render(), 'Marcus asks Quinn to raise the dose'), hasClass('map__card-detail'));
+    const controls = elementsOf(detail, (n) => (n.type === 'button' || n.type === 'select') && textOf(n) !== 'Edit the words');
+    expect(controls.map((n) => (n.type === 'select' ? textOf(n.children[0]) : textOf(n)))).toEqual(['Move up', 'Move down', 'Move to another section…', 'Put a photo beside it…', 'Leave it out']);
+    controls.forEach((n) => expect([textOf(n).slice(0, 20), n.props.disabled, n.props.title]).toEqual([textOf(n).slice(0, 20), true, LINE]));
+    buttonOf(detail, 'Move up').props.onClick();
+    buttonOf(detail, 'Leave it out').props.onClick();
+    controls.filter((n) => n.type === 'select').forEach((n) => n.props.onChange({ target: { value: n.children[1][0].props.value } }));
+    MOVE_OPS.filter((op) => op !== 'addBeat').forEach((op) => expect(`${op} ${mounted.ops[op].mock.calls.length}`).toBe(`${op} 0`));
+    expect(elementsOf(detail, hasClass('held-line')).map(textOf)).toEqual([LINE]);
+  });
+
+  it('Edit the words waits only for an open editor, as every pencil does, so it opens beside a typed add line', () => {
+    const mounted = mountMap({ data });
+    click(cardOf(mounted.render(), 'Marcus asks Quinn to raise the dose'));
+    typeInAddLine(mounted);
+    const edit = buttonOf(cardOf(mounted.render(), 'Marcus asks Quinn to raise the dose'), 'Edit the words');
+    expect(edit.props.disabled).toBe(false);
+  });
+
+  it('a move in the tray waits to be brought back, and a photo to be selected', () => {
+    const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+    const item = view.leftOut.items[0];
+    const photo = view.sections[2].byThemselves[0];
+    const mounted = mountMap({ data });
+    click(cardOf(mounted.render(), item.label));
+    typeInAddLine(mounted);
+    const bring = labelled(mounted.render(), item.labels.bringBack);
+    expect([bring.props.disabled, bring.props.title]).toEqual([true, LINE]);
+    bring.props.onChange({ target: { value: 'lede' } });
+    labelled(mounted.render(), photo.labels.select).props.onClick();
+    expect(elementsOf(mounted.render(), hasClass('map__photo-panel'))).toHaveLength(0);
+    expect(labelled(mounted.render(), photo.labels.select).props.title).toBe(LINE);
+    expect(mounted.ops.bringBackBeat).not.toHaveBeenCalled();
+  });
+});
+
+// Piece 4 (brief 4D; R10): the board's drag and drop is the browser's own. Each drop calls the
+// handler its button calls, which reaches its EditLogic op once; a drop target shows where the card
+// or photo will land. The stand-in dataTransfer keeps what the drag start set, as the browser's does.
+describe('4D: each drop reaches the same op as its button, once', () => {
+  const data = boardPayloadOf();
+  const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+  const calledOnly = (mounted, op) => MOVE_OPS.forEach((name) => expect(`${name} ${mounted.ops[name].mock.calls.length}`).toBe(`${name} ${name === op ? 1 : 0}`));
+  const transfer = () => {
+    const store = {};
+    return { setData: (type, value) => { store[type] = String(value); }, getData: (type) => store[type] || '', effectAllowed: '', dropEffect: '' };
+  };
+  const event = (dt) => ({ dataTransfer: dt, target: {}, currentTarget: {}, relatedTarget: null, preventDefault: jest.fn(), stopPropagation: () => {} });
+  /** A drag from the node `from` finds to the node `to` finds, each found again in the page as it is then. */
+  const drag = (mounted, from, to) => {
+    const dt = transfer();
+    from(mounted.render()).props.onDragStart(event(dt));
+    const over = event(dt);
+    to(mounted.render()).props.onDragOver(over);
+    const landing = mounted.render();
+    to(landing).props.onDrop(event(dt));
+    return { over, landing };
+  };
+  const card = (title) => (tree) => cardOf(tree, title);
+  const column = (label) => (tree) => elementsOf(tree, (n) => hasClass('map__column')(n) && n.props['aria-label'] === label)[0];
+  const tray = (tree) => elementsOf(tree, hasClass('map__tray'))[0];
+  const top = (tree) => elementsOf(tree, hasClass('map__top'))[0];
+  const photo = (filename) => (tree) => elementsOf(tree, (n) => hasClass('map__photo')(n) && elementsOf(n, (img) => img.type === 'img' && img.props.src.endsWith('/' + filename)).length > 0)[0];
+  const ids = (map, slot) => map.sections.find((s) => s.slot === slot).beats.map((b) => b.id);
+
+  it('a card dropped on a card in its column lands just before it, as Move up and Move down place it', () => {
+    const mounted = mountMap({ data });
+    const { over, landing } = drag(mounted, card('The trial run comes to light'), card('Marcus asks Quinn to raise the dose'));
+    expect(over.preventDefault).toHaveBeenCalled();
+    expect(mapClassesOf(cardOf(landing, 'Marcus asks Quinn to raise the dose'))).toContain('map__card--drop-before');
+    calledOnly(mounted, 'moveBeat');
+    expect(mounted.ops.moveBeat.mock.calls[0].slice(1)).toEqual(['b7', 'theStory', 1]);
+    expect(ids(mounted.saved(), 'theStory')).toEqual(['b3', 'b7', 'b4', 'b5', 'b6', 'b8']);
+    expect(elementsOf(mounted.render(), (n) => /--drop|--dragging/.test(n.props.className || ''))).toHaveLength(0);
+  });
+
+  it('a card dropped lower in its own column lands just before the card it was dropped on', () => {
+    const mounted = mountMap({ data });
+    drag(mounted, card('Marcus tests the batch on himself'), card('Quinn tells the room another story'));
+    calledOnly(mounted, 'moveBeat');
+    expect(ids(mounted.saved(), 'theStory')).toEqual(['b4', 'b5', 'b3', 'b6', 'b7', 'b8']);
+  });
+
+  it('a card dropped on a card in another column lands before it, and on a column at its foot, as Move to another section puts it', () => {
+    const before = mountMap({ data });
+    drag(before, card('Marcus asks Quinn to raise the dose'), card('A launch waits on the closed case'));
+    calledOnly(before, 'moveBeat');
+    expect(ids(before.saved(), 'closing')).toEqual(['b15', 'b4', 'b16']);
+    const foot = mountMap({ data });
+    const { landing } = drag(foot, card('Marcus asks Quinn to raise the dose'), column('Closing'));
+    expect(mapClassesOf(column('Closing')(landing))).toContain('map__column--drop');
+    calledOnly(foot, 'moveBeat');
+    expect(foot.ops.moveBeat.mock.calls[0].slice(1, 3)).toEqual(['b4', 'closing']);
+    expect(ids(foot.saved(), 'closing')).toEqual(['b15', 'b16', 'b4']);
+  });
+
+  it('a card dropped in the tray is left out, and a move the director added is taken out, as their buttons do', () => {
+    const mounted = mountMap({ data });
+    const { landing } = drag(mounted, card('Jess warns Sarah away'), tray);
+    expect(mapClassesOf(tray(landing))).toContain('map__tray--drop');
+    calledOnly(mounted, 'strikeBeat');
+    expect(mounted.saved().leftOut.map((b) => b.id)).toEqual(['b17', 'b18', 'b5']);
+    const added = EditLogic.addBeat(ViewLogic.mapDraftOf(data, undefined), 'closing', 'Remi walks out before the vote', 'Remi');
+    const withAdded = mountMap({ data, pendingEdits: ViewLogic.mapPendingSlot(data, added) });
+    drag(withAdded, card('Remi walks out before the vote'), tray);
+    calledOnly(withAdded, 'removeBeat');
+  });
+
+  it('a move dragged out of the tray onto a card comes back before it, and onto a column at its foot, as Bring it back does', () => {
+    const item = view.leftOut.items[0];
+    const before = mountMap({ data });
+    drag(before, card(item.label), card('Alex wonders if everyone was dosed'));
+    calledOnly(before, 'bringBackBeat');
+    expect(before.ops.bringBackBeat.mock.calls[0].slice(1)).toEqual(['b17', 'lede', 1]);
+    expect(ids(before.saved(), 'lede')).toEqual(['b1', 'b17', 'b2']);
+    const foot = mountMap({ data });
+    drag(foot, card(item.label), column('Lede'));
+    calledOnly(foot, 'bringBackBeat');
+    expect(ids(foot.saved(), 'lede')).toEqual(['b1', 'b2', 'b17']);
+  });
+
+  it('a photo dropped on a move in another section goes beside it there, in one op, as Put a photo beside it does', () => {
+    const mounted = mountMap({ data });
+    const { landing } = drag(mounted, photo('p06.jpg'), card('The verdict clears every hand'));
+    expect(mapClassesOf(cardOf(landing, 'The verdict clears every hand'))).toContain('map__card--drop-beside');
+    calledOnly(mounted, 'placePhotoBeside');
+    expect(mounted.ops.placePhotoBeside.mock.calls[0].slice(1)).toEqual(['followTheMoney', 0, 'closing', 'b15']);
+  });
+
+  it('a photo dropped on a column stands there by itself: from another section, and from beside a move of its own', () => {
+    const other = mountMap({ data });
+    drag(other, photo('p06.jpg'), column('Closing'));
+    calledOnly(other, 'movePhoto');
+    expect(other.ops.movePhoto.mock.calls[0].slice(1)).toEqual(['followTheMoney', 0, 'closing']);
+    const own = mountMap({ data });
+    drag(own, photo('p03.jpg'), column('The Story'));
+    calledOnly(own, 'setPhotoBeside');
+    expect(own.saved().sections[1].photos[0]).toEqual({ filename: 'p03.jpg' });
+  });
+
+  it('a photo dropped on the top of the article becomes the top photo, and the top photo goes into a column', () => {
+    const toTop = mountMap({ data });
+    const { landing } = drag(toTop, photo('p06.jpg'), top);
+    expect(mapClassesOf(top(landing))).toContain('map__top--drop');
+    calledOnly(toTop, 'movePhoto');
+    expect(toTop.saved().topPhoto).toBe('p06.jpg');
+    const fromTop = mountMap({ data });
+    drag(fromTop, photo('p01.jpg'), column('Closing'));
+    calledOnly(fromTop, 'movePhoto');
+    expect(fromTop.ops.movePhoto.mock.calls[0].slice(1)).toEqual([EditLogic.MAP_TOP_PHOTO, 0, 'closing']);
+  });
+
+  it('a target that does not take what is dragged shows no landing and changes nothing', () => {
+    const mounted = mountMap({ data });
+    const { over, landing } = drag(mounted, card('Jess warns Sarah away'), top);
+    expect(over.preventDefault).not.toHaveBeenCalled();
+    expect(mapClassesOf(top(landing))).not.toContain('map__top--drop');
+    drag(mounted, card('Jess warns Sarah away'), card('Jess warns Sarah away'));
+    drag(mounted, photo('p01.jpg'), top);
+    drag(mounted, photo('p05.jpg'), column('The Story'));
+    drag(mounted, photo('p04.jpg'), card('Quinn tells the room another story'));
+    MOVE_OPS.forEach((op) => expect(`${op} ${mounted.ops[op].mock.calls.length}`).toBe(`${op} 0`));
+    cardOf(mounted.render(), 'Jess warns Sarah away').props.onDrop(event(transfer()));
+    MOVE_OPS.forEach((op) => expect(`${op} ${mounted.ops[op].mock.calls.length}`).toBe(`${op} 0`));
+  });
+
+  it('a card whose editor is open does not drag, and a drop waits for no editor, since an editor is keyed by its line', () => {
+    const mounted = mountMap({ data });
+    click(cardOf(mounted.render(), 'Jess warns Sarah away'));
+    buttonOf(cardOf(mounted.render(), 'Jess warns Sarah away'), 'Edit the words').props.onClick();
+    expect(cardOf(mounted.render(), 'Jess warns Sarah away').props.draggable).toBe(false);
+    expect(cardOf(mounted.render(), 'Marcus tests the batch on himself').props.draggable).toBe(true);
+    drag(mounted, card('The trial run comes to light'), card('Marcus tests the batch on himself'));
+    calledOnly(mounted, 'moveBeat');
+    expect(elementsOf(mounted.render(), (n) => hasClass('map__card')(n) && hasClass('map__editing')(n)).map((n) => n.props.key)).toEqual(['theStory-beat-b5']);
+  });
+
+  it('the dragged card is marked while it drags, and the marks clear when the drag ends', () => {
+    const mounted = mountMap({ data });
+    const dt = transfer();
+    cardOf(mounted.render(), 'Jess warns Sarah away').props.onDragStart(event(dt));
+    expect(mapClassesOf(cardOf(mounted.render(), 'Jess warns Sarah away'))).toContain('map__card--dragging');
+    cardOf(mounted.render(), 'Marcus tests the batch on himself').props.onDragOver(event(dt));
+    expect(mapClassesOf(cardOf(mounted.render(), 'Marcus tests the batch on himself'))).toContain('map__card--drop-before');
+    cardOf(mounted.render(), 'Jess warns Sarah away').props.onDragEnd(event(dt));
+    expect(elementsOf(mounted.render(), (n) => /--drop|--dragging/.test(n.props.className || ''))).toHaveLength(0);
   });
 });
 
@@ -851,12 +1083,12 @@ describe('1F: no tag on the page, and every aria-label names a move by its words
     const mounted = mountMap({ data, pendingEdits: pending });
     click(cardOf(mounted.render(), 'Marcus asks Quinn for a higher dose'));
     buttonOf(cardOf(mounted.render(), 'Marcus asks Quinn for a higher dose'), 'Edit the words').props.onClick();
-    elementsOf(mounted.render(), (n) => n.type === 'button' && textOf(n) === '+ Add a beat')[0].props.onClick();
+    elementsOf(mounted.render(), (n) => n.type === 'button' && textOf(n) === '+ Add a move')[0].props.onClick();
     elementsOf(mounted.render(), hasClass('map__add-move'))[0].props.onChange({ target: { value: 'Kai counts the votes' } });
     expect(heldLines(mounted.render())).toEqual([
-      'Before you add a beat in another section, add or cancel the new beat in "Lede".',
+      'Before you add a move in another section, add or cancel the new move in "Lede".',
       'Before you edit another line, save or cancel your edit to the move "Marcus asks Quinn for a higher dose".',
-      'Before you approve or send back: save or cancel your edit to the move "Marcus asks Quinn for a higher dose"; add or cancel the new beat in "Lede".'
+      'Before you approve or send back: save or cancel your edit to the move "Marcus asks Quinn for a higher dose"; add or cancel the new move in "Lede".'
     ]);
   });
 
@@ -932,12 +1164,12 @@ describe("1F: the add line takes a move's words and its people, under `adding.mo
   it('opens in its column, holds the buttons while it holds a move, and adds `{id, move, players}` through addBeat', () => {
     const mounted = mountMap({ data: mapPayloadOf() });
     const [closing] = elementsOf(mounted.render(), (n) => n.type === 'section' && n.props['aria-label'] === 'Closing');
-    elementsOf(closing, (n) => n.type === 'button' && textOf(n) === '+ Add a beat')[0].props.onClick();
+    elementsOf(closing, (n) => n.type === 'button' && textOf(n) === '+ Add a move')[0].props.onClick();
     const line = () => elementsOf(mounted.render(), hasClass('map__add'))[0];
-    const addButton = () => elementsOf(line(), (n) => n.type === 'button' && textOf(n) === 'Add the beat')[0];
+    const addButton = () => elementsOf(line(), (n) => n.type === 'button' && textOf(n) === 'Add the move')[0];
     const approve = () => elementsOf(mounted.render(), (n) => n.type === 'button' && textOf(n) === ViewLogic.mapButtons('', false).approve.label)[0];
     expect([elementsOf(line(), hasClass('map__add-move'))[0].props['aria-label'], elementsOf(line(), hasClass('map__add-players'))[0].props['aria-label']])
-      .toEqual(['The move to add', 'The players the beat shows']);
+      .toEqual(['The move to add', 'The players the move shows']);
     expect(addButton().props.disabled).toBe(true);
     expect(approve().props.disabled).toBe(false);
     elementsOf(line(), hasClass('map__add-move'))[0].props.onChange({ target: { value: 'Remi walks out before the vote' } });
@@ -946,8 +1178,8 @@ describe("1F: the add line takes a move's words and its people, under `adding.mo
     expect(addButton().props.disabled).toBe(false);
     expect(approve().props.disabled).toBe(true);
     expect(heldLines(mounted.render())).toEqual([
-      'Before you add a beat in another section, add or cancel the new beat in "Closing".',
-      'Before you approve or send back, add or cancel the new beat in "Closing".'
+      'Before you add a move in another section, add or cancel the new move in "Closing".',
+      'Before you approve or send back, add or cancel the new move in "Closing".'
     ]);
     addButton().props.onClick();
     expect(mounted.ops.addBeat).toHaveBeenCalledTimes(1);
@@ -962,19 +1194,17 @@ describe("1F: the map's styles", () => {
   const map = css.slice(css.indexOf('/* ── 4.9: the map ──'), css.indexOf("/* ── 4.10: the desk's marks ──"));
   const ruled = (rule) => new RegExp(`${rule.replace(/[.-]/g, '\\$&')}[\\s,{:]`).test(map);
 
-  it("styles the move's words, the card mark, a check beside its line, the photo's description and the add line's move", () => {
-    ['.map__move-words', '.map__card-mark', '.map__check--beside', '.map__photo-description', '.map__add-move']
+  it("styles the card mark, a check beside its line, the photo's description and the add line's move", () => {
+    ['.map__card-mark', '.map__check--beside', '.map__photo-description', '.map__add-move']
       .forEach((rule) => expect(`${rule}: ${ruled(rule)}`).toBe(`${rule}: true`));
   });
 
   // Fix round 3: the map's fold copied the meeting's declaration for declaration. Each of its
-  // rules now names both pages' classes, once, under the meeting's section.
-  it("styles the fold, its pieces and a piece that cuts against its move in the meeting's rules, each grouped with its twin", () => {
+  // rules named both pages' classes, once, under the meeting's section. Piece 4 (brief 4D, R8): the
+  // map's evidence shows on the selected card, unfolded, so the fold's rules are the meeting's alone,
+  // and the pieces' rules still name both pages' classes.
+  it("styles the pieces and a piece that cuts against its move in the meeting's rules, each grouped with its twin, and keeps the fold the meeting's", () => {
     const twins = [
-      ['.meeting__fold .collapsible-section', '.map__fold .collapsible-section'],
-      ['.meeting__fold .collapsible-header', '.map__fold .collapsible-header'],
-      ['.meeting__fold .collapsible-header:hover', '.map__fold .collapsible-header:hover'],
-      ['.meeting__fold .collapsible-body', '.map__fold .collapsible-body'],
       ['.meeting__pieces', '.map__pieces'],
       ['.meeting__piece', '.map__piece'],
       ['.meeting__piece.meeting__cuts-against', '.map__piece.map__cuts-against'],
@@ -984,11 +1214,75 @@ describe("1F: the map's styles", () => {
       const grouped = `${meeting},\n${ofMap} {`;
       expect(`${grouped}: ${css.split(grouped).length - 1}`).toBe(`${grouped}: 1`);
     });
+    ['.meeting__fold .collapsible-section {', '.meeting__fold .collapsible-header {', '.meeting__fold .collapsible-header:hover {', '.meeting__fold .collapsible-body {']
+      .forEach((rule) => expect(`${rule} ${css.split(rule).length - 1}`).toBe(`${rule} 1`));
     ['.map__fold', '.map__pieces', '.map__piece', '.map__cuts-against', '.map__no-evidence']
       .forEach((rule) => expect(`${rule}: ${ruled(rule)}`).toBe(`${rule}: false`));
+    expect(css).not.toContain('.map__fold');
   });
 
   it('keeps no style for an id, a kind, the material or the header that held them', () => {
     ['.map__id', '.map__kind', '.map__material', '.map__add-material', '.map__beat-head'].forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
+  });
+});
+
+// Piece 4 (brief 4D; spec 4 to 7): the board's look, in the console's tokens. The columns stand side
+// by side and stack on a narrow screen; the cards, the selected state, a thread followed and the drop
+// targets each have a rule; each thread tone takes its colour from a token on :root; and the
+// one-column page's classes went with it.
+describe("4D: the board's styles", () => {
+  const css = read('console.css');
+  const map = css.slice(css.indexOf('/* ── 4.9: the map ──'), css.indexOf("/* ── 4.10: the desk's marks ──"));
+  const ruled = (rule) => new RegExp(`${rule.replace(/[.-]/g, '\\$&')}[\\s,{:>]`).test(map);
+  const src = read('components/checkpoints/Outline.js');
+  const root = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')));
+  const body = (selector) => {
+    const at = map.indexOf(`${selector} {`);
+    return at === -1 ? '' : map.slice(at, map.indexOf('}', at));
+  };
+
+  // The pieces of what's behind a move are styled with the meeting's twins, above the map's section.
+  it('styles every class Outline.js gives the board, the tones aside', () => {
+    const anywhere = (rule) => new RegExp(`${rule.replace(/[.-]/g, '\\$&')}[\\s,{:>]`).test(css);
+    const used = [...new Set([...src.matchAll(/map__[a-z][a-z-]*[a-z]/g)].map((m) => `.${m[0]}`))]
+      .filter((name) => !name.startsWith('.map__dot--tone'));
+    expect(used.length).toBeGreaterThan(40);
+    used.forEach((name) => expect(`${name}: ${anywhere(name)}`).toBe(`${name}: true`));
+  });
+
+  it("gives each of mapView's tones, and the grey tone outside the story, a token on :root and a dot's rule that reads it", () => {
+    for (let tone = 0; tone <= ViewLogic.MAP_TONES; tone += 1) {
+      expect(`--map-tone-${tone} ${new RegExp(`--map-tone-${tone}:\\s*#[0-9a-f]{6};`).test(root)}`).toBe(`--map-tone-${tone} true`);
+      expect(body(`.map__dot--tone-${tone}`)).toContain(`background: var(--map-tone-${tone});`);
+    }
+    expect(map).not.toContain(`.map__dot--tone-${ViewLogic.MAP_TONES + 1}`);
+  });
+
+  it('stands the columns side by side, and stacks them one under another on a narrow screen', () => {
+    expect(body('.map__columns')).toMatch(/grid-auto-flow:\s*column/);
+    const narrow = map.slice(map.indexOf('@media (max-width: 768px)'));
+    expect(map.indexOf('@media (max-width: 768px)')).toBeGreaterThan(-1);
+    const stacked = narrow.slice(narrow.indexOf('.map__columns {'), narrow.indexOf('}', narrow.indexOf('.map__columns {')));
+    expect(stacked).toMatch(/grid-auto-flow:\s*row/);
+    expect(stacked).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
+  });
+
+  it('marks the selected card, a thread followed and the rest dimmed, the card dragged and each place a drag lands', () => {
+    ['.map__card--selected', '.map__card--follows', '.map__card--dimmed', '.map__card--dragging',
+      '.map__card--drop-before', '.map__card--drop-beside', '.map__column--drop', '.map__tray--drop', '.map__top--drop']
+      .forEach((name) => expect(`${name}: ${ruled(name)}`).toBe(`${name}: true`));
+    expect(src).toContain("' map__card--drop-before'");
+    expect(src).toContain("' map__card--drop-beside'");
+  });
+
+  it('shows a picture that cannot load as its description, never hidden', () => {
+    expect(body('.map__thumb--missing')).not.toMatch(/display:\s*none/);
+  });
+
+  it("the one-column page's classes went with it", () => {
+    ['.map__beat', '.map__left-out', '.map__section ', '.map__section,', '.map__section {', '.map__move-words', '.map__photo-body']
+      .forEach((gone) => expect(`${gone}: ${css.includes(gone)}`).toBe(`${gone}: false`));
+    ['map__beat', 'map__left-out', "'map__section'", 'map__move-words', 'map__photo-body', 'map__fold']
+      .forEach((gone) => expect(`${gone}: ${src.includes(gone)}`).toBe(`${gone}: false`));
   });
 });

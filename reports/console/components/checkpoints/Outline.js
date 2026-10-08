@@ -35,14 +35,22 @@
  * go to the map's pendingEdits slot on every change, under the map's version (mapPendingSlot), so
  * they survive a remount of that version and clear when a new one arrives
  * (pendingEditsAfterCheckpoint, in state.js).
+ * Drag and drop is the browser's own (spec 6): a card moves within its column, into another column,
+ * into the tray and out of it; a photo drops onto a move, onto a column or onto the top. A drag
+ * carries what it moves in its dataTransfer (DRAG_TYPE), the drop reads it and calls the handler
+ * the matching button calls, and the target the drag is over shows where it will land.
+ *
  * An open editor, or an add line that holds text, holds both buttons, and a line beside them says
  * to save or discard it first (unsavedInputLine, task 4.14d). Nor does any other control drop it
  * (task 4.14g): while an editor is open every pencil waits, since a pencil opens its editor in the
- * open one's place, and while the add line holds text every "+ Add a beat" waits, since it opens
+ * open one's place, and while the add line holds text every "+ Add a move" waits, since it opens
  * the add line in another section; each is disabled with the rule's line as its tooltip, and the
- * line shows under the open editor or the add line, in the hold's own style (heldLine). An editor
- * open on a move stays open on its card whatever is selected, so selecting something else drops
- * nothing typed.
+ * line shows under the open editor or the add line, in the hold's own style (heldLine). On the
+ * board (R9) selecting something else and every control on the selected card wait for both: a click
+ * on another card or photo shows the line on what was clicked, and each control is disabled with the
+ * line as its tooltip and the line under the controls. Closing what is selected waits for nothing,
+ * and neither does a drop: an editor is keyed by its line, and a card whose editor is open does not
+ * drag.
  * Exports to window.Console.checkpoints.Outline
  */
 
@@ -64,12 +72,28 @@ const ALWAYS = 'article-block--editable article-block--editable-always';
 // select or close the card: a control, an editor's form, a selected card's details, a photo's panel.
 const INNER = 'button, select, input, textarea, a, label, .map__card-detail, .map__photo-panel, .article-block__edit-form';
 
+// What a drag carries in its dataTransfer: what it moves, as JSON. A type of the board's own, so a
+// drop elsewhere on the page (the note box among them) takes nothing from it.
+const DRAG_TYPE = 'application/x-aln-map';
+
 /**
  * The line beside what waits for unsaved input (tasks 4.14d and 4.14g): the rule's line, or nothing
  * for none. A hold, not an error, so it is styled .held-line, calmer than a refusal's red.
  */
 function heldLine(text) {
   return text ? React.createElement('p', { className: 'held-line', role: 'status' }, text) : null;
+}
+
+/** What a drop carries: the thing dragged, as its drag start set it, or null for anything else. */
+function droppedOf(e) {
+  const text = e && e.dataTransfer && typeof e.dataTransfer.getData === 'function' ? e.dataTransfer.getData(DRAG_TYPE) : '';
+  if (!text) return null;
+  try {
+    const what = JSON.parse(text);
+    return what && (what.kind === 'beat' || what.kind === 'photo') ? what : null;
+  } catch (err) {
+    return null;
+  }
 }
 
 /** Whether a click or a key reached a card or a photo from one of its controls or open parts (INNER). */
@@ -159,7 +183,7 @@ function LengthEditor({ map, onSave, onCancel }) {
   return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(TextField, {
       label: 'Expected length, in words', value: form.expectedLength, onChange: fieldSetter(setForm)('expectedLength'),
-      hint: 'A whole number. The article writer aims at it, so set it lower when you strike beats.'
+      hint: 'A whole number. The article writer aims at it, so set it lower when you leave moves out.'
     }),
     actionsRow(function () { if (length !== null) onSave(length); }, onCancel, length === null)
   );
@@ -192,6 +216,11 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   const [opened, setOpened] = React.useState({});
   const [picked, setPicked] = React.useState(null);
   const [missing, setMissing] = React.useState({});
+  // The drag in flight, as its drag start set it, and the drop target it is over, which shows where
+  // it will land; and the card or photo a held click reached, which shows the hold's line.
+  const [dragging, setDragging] = React.useState(null);
+  const [dropAt, setDropAt] = React.useState(null);
+  const [heldAt, setHeldAt] = React.useState(null);
 
   // A new map version opens the map on it, with every summary folded and nothing selected; the
   // same version keeps what the director had (the pending slot survives CHECKPOINT_RECEIVED only
@@ -206,6 +235,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     setSelected(null);
     setOpened({});
     setPicked(null);
+    setDragging(null);
+    setDropAt(null);
+    setHeldAt(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
@@ -215,10 +247,13 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   // adds them, so while either holds input both buttons wait, and this line says why.
   const unsaved = { editor: editing, adding: adding, sections: view.sections };
   const held = unsavedInputLine('outline', unsaved);
-  // Task 4.14g: a pencil opens its editor in place of the open one, and "+ Add a beat" opens the add
+  // Task 4.14g: a pencil opens its editor in place of the open one, and "+ Add a move" opens the add
   // line in its section in place of the open one, so each waits as the buttons do.
   const editHeld = unsavedInputLine('outline', unsaved, 'edit');
   const addHeld = unsavedInputLine('outline', unsaved, 'add');
+  // R9: selecting something else, and every control on the selected card, wait for both.
+  const selectHeld = unsavedInputLine('outline', unsaved, 'select');
+  const moveHeld = unsavedInputLine('outline', unsaved, 'move');
   const standing = ViewLogic.standingNotesView(data && data.directorGateNotes, CHECKPOINT_LABELS);
   // Brief 2.7: what the automatic rework of this round did before the director arrived.
   const trace = ViewLogic.traceView(data && data.trace, theme);
@@ -249,6 +284,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   function save(nextDraft) {
     change(nextDraft);
     setEditing(null);
+    setHeldAt(null);
   }
 
   function isEditing(line, key) { return editing !== null && editing.line === line && editing.key === key; }
@@ -259,21 +295,42 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     setEditing({ line: line, key: key });
   }
 
-  /** "+ Add a beat": opens the add line in its section in place of the open one, so it waits while that holds text (task 4.14g). */
+  /** "+ Add a move": opens the add line in its section in place of the open one, so it waits while that holds text (task 4.14g). */
   function openAddLine(slot) {
     if (addHeld) return;
     setAdding({ slot: slot, move: '', players: '' });
   }
 
-  function cancel() { setEditing(null); }
+  function cancel() { setEditing(null); setHeldAt(null); }
   function editNote(text) { keep(draft, text); setSendBackArmed(false); }
   function backToMeeting() { if (onRollback) onRollback('arc-selection'); }
 
   // ── Selecting, the summaries and the threads (spec 4 and 5) ──
 
-  /** Selecting a move or a photo opens it in place; selecting it again closes it, and selecting something else closes the one open. */
+  /**
+   * Selecting a move or a photo opens it in place; selecting it again closes it, and selecting
+   * something else closes the one open. Selecting something else waits while an editor is open or
+   * the add line holds text (R9), and the hold's line shows on what was clicked; closing waits for nothing.
+   */
   function select(sel) {
-    setSelected(selected === sel ? null : sel);
+    if (selected === sel) {
+      setSelected(null);
+      return;
+    }
+    if (selectHeld) {
+      setHeldAt(sel);
+      return;
+    }
+    setHeldAt(null);
+    setSelected(sel);
+  }
+
+  /** A control on the selected card or photo: it waits while an editor is open or the add line holds text (R9). */
+  function whenFree(run) {
+    return function (e) {
+      if (moveHeld) return;
+      run(e);
+    };
   }
 
   function isSelected(sel) { return selected === sel; }
@@ -363,6 +420,108 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     if (!adding) return;
     change(EditLogic.addBeat(draft, adding.slot, adding.move, adding.players));
     setAdding(null);
+    setHeldAt(null);
+  }
+
+  // ── Drag and drop (spec 6): each drop calls the handler its button calls (R10) ──
+
+  /** A card or a photo that drags: what it moves goes in the drag's dataTransfer, as JSON. */
+  function dragSource(item) {
+    return {
+      draggable: true,
+      onDragStart: function (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (e.dataTransfer) {
+          e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(item));
+          e.dataTransfer.effectAllowed = 'move';
+        }
+        setDragging(item);
+      },
+      onDragEnd: function () {
+        setDragging(null);
+        setDropAt(null);
+      }
+    };
+  }
+
+  /**
+   * A drop target, by its key (dropAt): `land(what)` returns the move a drop of `what` runs, or null
+   * for a drag the target does not take. While a drag it takes is over it, it shows where that will
+   * land; a drop runs the move.
+   */
+  function dropTarget(key, land) {
+    return {
+      onDragOver: function (e) {
+        if (!dragging || !land(dragging)) return;
+        e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        if (dropAt !== key) setDropAt(key);
+      },
+      onDragLeave: function (e) {
+        const inside = e && e.relatedTarget && e.currentTarget && typeof e.currentTarget.contains === 'function' && e.currentTarget.contains(e.relatedTarget);
+        if (dropAt === key && !inside) setDropAt(null);
+      },
+      onDrop: function (e) {
+        const what = droppedOf(e);
+        const run = what ? land(what) : null;
+        if (!run) return;
+        e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        setDragging(null);
+        setDropAt(null);
+        run();
+      }
+    };
+  }
+
+  /** The place among a column's moves that a move dropped just before `beat` takes, once it has left its own place. */
+  function placeBefore(section, beat, id) {
+    return section.beats.filter(function (b) { return b.id !== id; }).indexOf(beat);
+  }
+
+  /** A card as a drop target: a move lands just before it, and a photo goes beside it. */
+  function landOnCard(section, beat) {
+    return function (what) {
+      if (beat.locked) return null;
+      if (what.kind === 'beat') {
+        if (what.id === beat.id) return null;
+        const index = placeBefore(section, beat, what.id);
+        return what.from === null
+          ? function () { bringBack(what.id, section.slot, index); }
+          : function () { moveCard(what.id, section.slot, index); };
+      }
+      if (what.from === section.slot && what.beat === beat.id) return null;
+      return function () { placePhoto(what.from, what.index, section.slot, beat.id); };
+    };
+  }
+
+  /** A column as a drop target: a move lands at its foot, and a photo stands there by itself. */
+  function landOnColumn(section) {
+    return function (what) {
+      if (what.kind === 'beat') {
+        if (what.from === section.slot) return null;
+        return what.from === null
+          ? function () { bringBack(what.id, section.slot); }
+          : function () { moveCard(what.id, section.slot); };
+      }
+      if (what.from === section.slot) {
+        return what.beat ? function () { photoBeside(section.slot, what.index, ''); } : null;
+      }
+      return function () { movePhotoTo(what.from, what.index, section.slot); };
+    };
+  }
+
+  /** The tray as a drop target: a move from a column is left out, or taken out when the director added it, as its button does. */
+  function landInTray(what) {
+    if (what.kind !== 'beat' || what.from === null) return null;
+    return what.added ? function () { takeOut(what.id); } : function () { leaveOut(what.id); };
+  }
+
+  /** The top of the article as a drop target: a photo becomes the top photo. */
+  function landOnTop(what) {
+    if (what.kind !== 'photo' || what.from === EditLogic.MAP_TOP_PHOTO) return null;
+    return function () { movePhotoTo(what.from, what.index, EditLogic.MAP_TOP_PHOTO); };
   }
 
   /**
@@ -422,13 +581,17 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     return React.createElement(React.Fragment, null, failuresOf(line.failures), concernsOf(line.concerns), changedOf(line.changed));
   }
 
-  /** A move control: picking a place moves the line, and the control reads as itself again. */
+  /**
+   * A move control: picking a place moves the line, and the control reads as itself again. Like every
+   * control on what is selected, it waits while an editor is open or the add line holds text (R9).
+   */
   function moveSelect(placeholder, targets, disabled, ariaLabel, onPick) {
     return React.createElement('select', {
       className: 'map__move',
       value: '',
-      disabled: disabled || targets.length === 0,
-      onChange: function (e) { if (e.target.value) onPick(e.target.value); },
+      disabled: disabled || targets.length === 0 || !!moveHeld,
+      title: moveHeld || undefined,
+      onChange: whenFree(function (e) { if (e.target.value) onPick(e.target.value); }),
       'aria-label': ariaLabel
     },
       React.createElement('option', { value: '' }, placeholder),
@@ -457,6 +620,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       className: 'map__thumb-button' + (isSelected(sel) ? ' map__thumb-button--selected' : ''),
       'aria-label': photo.labels.select,
       'aria-pressed': isSelected(sel),
+      title: !isSelected(sel) && selectHeld ? selectHeld : undefined,
       onClick: function () { select(sel); }
     },
       url && !missing[photo.filename]
@@ -487,7 +651,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         photo.besideOptions && React.createElement('select', {
           className: 'map__move',
           value: photo.beat,
-          onChange: function (e) { photoBeside(fromSlot, fromIndex, e.target.value); },
+          disabled: !!moveHeld,
+          title: moveHeld || undefined,
+          onChange: whenFree(function (e) { photoBeside(fromSlot, fromIndex, e.target.value); }),
           'aria-label': photo.labels.beside
         }, photo.besideOptions.map(function (o) {
           return React.createElement('option', { key: o.value || 'itself', value: o.value }, o.label);
@@ -497,19 +663,31 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           if (target) placePhoto(fromSlot, fromIndex, target.slot, beatId);
         }),
         moveSelect(moveLabel, photo.moveTargets, false, photo.labels.moveTo, function (to) { movePhotoTo(fromSlot, fromIndex, to); })
-      )
+      ),
+      !photo.locked && heldLine(moveHeld)
     );
+  }
+
+  /** What a photo's drag carries: where it sits, and the move it sits beside, if any. A locked photo does not drag. */
+  function photoDrag(photo, fromSlot, fromIndex) {
+    return photo.locked ? {} : dragSource({ kind: 'photo', from: fromSlot, index: fromIndex, beat: photo.beat || '' });
+  }
+
+  /** The hold's line on a card or a photo a held click reached (R9). */
+  function heldHere(sel) {
+    return heldAt === sel && !isSelected(sel) ? heldLine(selectHeld) : null;
   }
 
   /** A photo of a section where it sits (on its move's card, or by itself at the column's foot): its thumbnail, its margin, and its panel when selected. */
   function photoItem(photo, Tag) {
     const sel = selectionOf('photo', photo);
-    return React.createElement(Tag, {
+    return React.createElement(Tag, Object.assign({
       key: photo.key,
       className: 'map__photo' + (photo.locked ? ' map__photo--locked' : '') + (isSelected(sel) ? ' map__photo--selected' : ''),
       onKeyDown: function (e) { closeOnEscape(sel, e); }
-    },
+    }, photoDrag(photo, photo.slot, photo.index)),
       thumb(photo, sel),
+      heldHere(sel),
       failuresOf(photo.failures),
       concernsOf(photo.concerns),
       isSelected(sel) && photoPanel(photo, photo.slot, photo.index, 'Move to…')
@@ -541,50 +719,72 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     );
   }
 
-  /** A selected card's controls (spec 5), each through its move's one handler. */
+  /**
+   * A selected card's controls (spec 5), each through its move's one handler. Edit the words is a
+   * pencil and waits for an open editor, as every pencil does (task 4.14g); every other control waits
+   * for an open editor or a typed add line (R9), with the hold's line under them.
+   */
   function cardControls(beat, slot) {
     if (beat.locked) return null;
-    return React.createElement('div', { className: 'map__controls' },
-      React.createElement('button', {
-        type: 'button', className: 'btn btn-ghost btn-sm', disabled: !!editHeld, title: editHeld || undefined,
-        onClick: function () { open('beat', beat.id); }
-      }, 'Edit the words'),
-      React.createElement('button', {
-        type: 'button', className: 'btn btn-ghost btn-sm', disabled: !beat.canMoveUp, 'aria-label': beat.labels.moveUp,
-        onClick: function () { moveCardBy(beat.id, -1); }
-      }, 'Move up'),
-      React.createElement('button', {
-        type: 'button', className: 'btn btn-ghost btn-sm', disabled: !beat.canMoveDown, 'aria-label': beat.labels.moveDown,
-        onClick: function () { moveCardBy(beat.id, 1); }
-      }, 'Move down'),
-      moveSelect('Move to another section…', beat.moveTargets, false, beat.labels.moveTo, function (to) { moveCard(beat.id, to); }),
-      moveSelect('Put a photo beside it…', beat.photoChoices, false, beat.labels.photoBeside, function (value) {
-        const choice = beat.photoChoices.filter(function (c) { return c.value === value; })[0];
-        if (choice) placePhoto(choice.slot, choice.index, slot, beat.id);
-      }),
-      beat.added
-        ? React.createElement('button', {
-            type: 'button', className: 'btn btn-ghost btn-sm', 'aria-label': beat.labels.takeOut,
-            onClick: function () { takeOut(beat.id); }
-          }, 'Take it out')
-        : React.createElement('button', {
-            type: 'button', className: 'btn btn-ghost btn-sm', 'aria-label': beat.labels.strike,
-            onClick: function () { leaveOut(beat.id); }
-          }, 'Leave it out')
+    return React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'map__controls' },
+        React.createElement('button', {
+          type: 'button', className: 'btn btn-ghost btn-sm', disabled: !!editHeld, title: editHeld || undefined,
+          onClick: function () { open('beat', beat.id); }
+        }, 'Edit the words'),
+        React.createElement('button', {
+          type: 'button', className: 'btn btn-ghost btn-sm', disabled: !beat.canMoveUp || !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.moveUp,
+          onClick: whenFree(function () { moveCardBy(beat.id, -1); })
+        }, 'Move up'),
+        React.createElement('button', {
+          type: 'button', className: 'btn btn-ghost btn-sm', disabled: !beat.canMoveDown || !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.moveDown,
+          onClick: whenFree(function () { moveCardBy(beat.id, 1); })
+        }, 'Move down'),
+        moveSelect('Move to another section…', beat.moveTargets, false, beat.labels.moveTo, function (to) { moveCard(beat.id, to); }),
+        moveSelect('Put a photo beside it…', beat.photoChoices, false, beat.labels.photoBeside, function (value) {
+          const choice = beat.photoChoices.filter(function (c) { return c.value === value; })[0];
+          if (choice) placePhoto(choice.slot, choice.index, slot, beat.id);
+        }),
+        beat.added
+          ? React.createElement('button', {
+              type: 'button', className: 'btn btn-ghost btn-sm', disabled: !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.takeOut,
+              onClick: whenFree(function () { takeOut(beat.id); })
+            }, 'Take it out')
+          : React.createElement('button', {
+              type: 'button', className: 'btn btn-ghost btn-sm', disabled: !!moveHeld, title: moveHeld || undefined, 'aria-label': beat.labels.strike,
+              onClick: whenFree(function () { leaveOut(beat.id); })
+            }, 'Leave it out')
+      ),
+      heldLine(moveHeld)
     );
   }
 
-  /** A card's class: selected, outlined or dimmed by the thread picked, locked, being edited. */
+  /**
+   * A card's class: selected, outlined or dimmed by the thread picked, locked, being edited, being
+   * dragged, and where a drag over it will land: a move just before it, a photo beside it.
+   */
   function cardClass(beat, extra) {
     const follows = pickedThread ? (beat.legendKeys.indexOf(pickedThread.key) !== -1 ? ' map__card--follows' : ' map__card--dimmed') : '';
-    return 'map__card' + extra + follows + (beat.locked ? ' map__card--locked' : '');
+    const dragged = dragging && dragging.kind === 'beat' && dragging.id === beat.id && !beat.locked ? ' map__card--dragging' : '';
+    const landing = dropAt === 'card:' + beat.key && dragging ? (dragging.kind === 'beat' ? ' map__card--drop-before' : ' map__card--drop-beside') : '';
+    return 'map__card' + extra + follows + (beat.locked ? ' map__card--locked' : '') + dragged + landing;
+  }
+
+  /**
+   * What a card's drag carries: the move by its id, where it sits (null in the tray), and whether the
+   * director added it at this look. A locked card, or one whose editor is open, does not drag.
+   */
+  function cardDrag(beat, from, editingHere) {
+    if (beat.locked || editingHere) return { draggable: false };
+    return dragSource({ kind: 'beat', id: beat.id, from: from, added: Boolean(beat.added) });
   }
 
   /**
    * A move's card in its column (spec 4, 5 and 7), keyed by its beat's id (mapView's `key`), so an
    * editor open on it keeps what was typed when a card above it moves (task 4.14b).
    */
-  function card(beat, slot) {
+  function card(beat, section) {
+    const slot = section.slot;
     const sel = selectionOf('beat', beat);
     const selectedHere = isSelected(sel);
     const summaryOpen = Boolean(beat.synopsis && (selectedHere || opened[sel]));
@@ -593,8 +793,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       key: beat.key,
       className: cardClass(beat, (selectedHere ? ' map__card--selected' : '') + (editingHere ? ' map__editing' : '')),
       tabIndex: 0,
-      'aria-expanded': selectedHere
-    }, selectHandlers(sel)),
+      'aria-expanded': selectedHere,
+      title: !selectedHere && selectHeld ? selectHeld : undefined
+    }, selectHandlers(sel), cardDrag(beat, slot, editingHere), dropTarget('card:' + beat.key, landOnCard(section, beat))),
       React.createElement('div', { className: 'map__card-head' },
         beat.synopsis && React.createElement('button', {
           type: 'button',
@@ -606,6 +807,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         }, summaryOpen ? '▾' : '▸'),
         React.createElement('p', { className: 'map__card-title' }, beat.label)
       ),
+      heldHere(sel),
       marginOf(beat),
       editingHere
         ? React.createElement(React.Fragment, null,
@@ -640,10 +842,12 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
       key: item.key,
       className: cardClass(item, ' map__card--tray' + (selectedHere ? ' map__card--selected' : '')),
       tabIndex: 0,
-      'aria-expanded': selectedHere
-    }, selectHandlers(sel)),
+      'aria-expanded': selectedHere,
+      title: !selectedHere && selectHeld ? selectHeld : undefined
+    }, selectHandlers(sel), cardDrag(item, null, false)),
       React.createElement('div', { className: 'map__card-head' },
         React.createElement('p', { className: 'map__card-title' }, item.label)),
+      heldHere(sel),
       React.createElement('div', { className: 'map__card-marks' }, item.dots.map(dot)),
       marginOf(item),
       selectedHere && React.createElement('div', { className: 'map__card-detail' },
@@ -653,6 +857,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         React.createElement('div', { className: 'map__controls' },
           moveSelect('Bring it back into…', item.targets, item.locked, item.labels.bringBack,
             function (to) { bringBack(item.id, to); })),
+        !item.locked && heldLine(moveHeld),
         behindIt(item))
     );
   }
@@ -665,7 +870,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         disabled: !!addHeld,
         title: addHeld || undefined,
         onClick: function () { openAddLine(slot); }
-      }, '+ Add a beat');
+      }, '+ Add a move');
     }
     return React.createElement('div', { className: 'map__add' },
       React.createElement('input', {
@@ -682,17 +887,19 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         value: adding.players,
         placeholder: 'Its players, separated by commas',
         onChange: function (e) { setAdding(Object.assign({}, adding, { players: e.target.value })); },
-        'aria-label': 'The players the beat shows'
+        'aria-label': 'The players the move shows'
       }),
-      React.createElement('button', { type: 'button', className: 'btn btn-secondary btn-sm', disabled: !adding.move.trim(), onClick: addTheBeat }, 'Add the beat'),
-      React.createElement('button', { type: 'button', className: 'btn btn-ghost btn-sm', onClick: function () { setAdding(null); } }, 'Cancel'),
+      React.createElement('button', { type: 'button', className: 'btn btn-secondary btn-sm', disabled: !adding.move.trim(), onClick: addTheBeat }, 'Add the move'),
+      React.createElement('button', { type: 'button', className: 'btn btn-ghost btn-sm', onClick: function () { setAdding(null); setHeldAt(null); } }, 'Cancel'),
       heldLine(addHeld)
     );
   }
 
   /** A column (spec 4): its head with its editor, and what the round says of it under the head while the editor is open too; its cards in order; its photos by themselves; its add line. */
   function column(section) {
-    return React.createElement('section', { key: section.key, className: 'map__column', 'aria-label': section.label },
+    const landing = dropAt === 'column:' + section.slot && dragging ? ' map__column--drop' : '';
+    return React.createElement('section', Object.assign({ key: section.key, className: 'map__column' + landing, 'aria-label': section.label },
+      dropTarget('column:' + section.slot, landOnColumn(section))),
       isEditing('section', section.slot)
         ? React.createElement('div', { className: 'map__section-head map__editing' },
             React.createElement(SectionEditor, {
@@ -710,7 +917,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
               : React.createElement('p', { className: 'map__heading map__heading--none' }, ViewLogic.MAP_NO_HEADING_LINE),
             React.createElement('p', { className: 'map__job' }, section.job),
             marginOf(section)),
-      React.createElement('ul', { className: 'map__cards' }, section.beats.map(function (beat) { return card(beat, section.slot); })),
+      React.createElement('ul', { className: 'map__cards' }, section.beats.map(function (beat) { return card(beat, section); })),
       section.emptied && React.createElement('p', { className: 'map__hint' }, section.emptied),
       section.byThemselves.length > 0 && React.createElement('ul', { className: 'map__loose' }, section.byThemselves.map(function (photo) { return photoItem(photo, 'li'); })),
       addLine(section.slot)
@@ -815,7 +1022,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     // The top of the article: the headline, the deck and the top photo.
     top: function () {
       const topSel = view.topPhoto ? selectionOf('photo', view.topPhoto) : null;
-      return React.createElement('section', { key: 'top', className: 'map__top', 'aria-label': 'The headline, the deck and the top photo' },
+      const landing = dropAt === 'top' && dragging ? ' map__top--drop' : '';
+      return React.createElement('section', Object.assign({ key: 'top', className: 'map__top' + landing, 'aria-label': 'The headline, the deck and the top photo' },
+        dropTarget('top', landOnTop)),
         isEditing('head', 'head')
           ? React.createElement('div', { className: 'map__head map__editing' },
               React.createElement(HeadEditor, { map: draft, onSave: function (head) { save(EditLogic.mergeMapHead(draft, head)); }, onCancel: cancel }),
@@ -826,11 +1035,12 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
               concernsOf(view.headline.concerns),
               React.createElement('p', { className: 'map__deck' }, view.deck.text),
               concernsOf(view.deck.concerns)),
-        view.topPhoto && React.createElement('div', {
+        view.topPhoto && React.createElement('div', Object.assign({
           className: 'map__photo map__photo--top' + (view.topPhoto.locked ? ' map__photo--locked' : '') + (isSelected(topSel) ? ' map__photo--selected' : ''),
           onKeyDown: function (e) { closeOnEscape(topSel, e); }
-        },
+        }, photoDrag(view.topPhoto, EditLogic.MAP_TOP_PHOTO, 0)),
           thumb(view.topPhoto, topSel),
+          heldHere(topSel),
           failuresOf(view.topPhoto.failures),
           concernsOf(view.topPhoto.concerns),
           isSelected(topSel) && photoPanel(view.topPhoto, EditLogic.MAP_TOP_PHOTO, 0, 'Move into a section…')),
@@ -852,7 +1062,9 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
 
     // Left out, always open (R8): each move by its title and its dots, opening in place when selected.
     leftOut: function () {
-      return React.createElement('section', { key: 'leftOut', className: 'map__tray', 'aria-label': view.leftOut.title },
+      const landing = dropAt === 'tray' && dragging ? ' map__tray--drop' : '';
+      return React.createElement('section', Object.assign({ key: 'leftOut', className: 'map__tray' + landing, 'aria-label': view.leftOut.title },
+        dropTarget('tray', landInTray)),
         React.createElement('h4', { className: 'map__label' }, view.leftOut.title),
         view.leftOut.items.length === 0
           ? React.createElement('p', { className: 'text-xs text-muted' }, 'Nothing was left out.')

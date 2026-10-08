@@ -19,9 +19,11 @@
  * Other controls dropped it the same way (task 4.14g; the review of 4.14d, minor 4). At the desk the
  * pencil on another piece opened its editor in place of the open one, and a move, a delete or an
  * insert put a new bundle on the desk, which closed it (Article.js applyDesk). On the map another
- * line's pencil replaced the open editor, and "+ Add a beat" in another section reset an add line
- * holding a typed beat. So every control that would close or replace an editor or an add line
- * holding input waits for it as the actions do, and its line names the unsaved piece.
+ * line's pencil replaced the open editor, and "+ Add a move" in another section reset an add line
+ * holding a typed move. So every control that would close or replace an editor or an add line
+ * holding input waits for it as the actions do, and its line names the unsaved piece. On the board
+ * (piece 4, R9) selecting something else and every control on the selected card wait the same way,
+ * so nothing typed is dropped while the director works the board.
  *
  * The desk sends two things (fix round 1). Approve and Send back send the bundle on the desk, so JSON
  * the director typed in the JSON editor holds them too: only that editor's own Save & Approve sends
@@ -45,9 +47,9 @@
  *     is null while the editor is closed, since the editor takes the desk's text again when it opens.
  *   - 'article-json', the JSON editor's Save & Approve: the desk's { editor, bundle, json, deskVersion }.
  *   - 'outline', the map: { editor, adding, sections }. `editor` is Outline.js's editing, an open
- *     editor; `adding` its add-a-beat line, `{slot, move, players}`, which holds the actions once
- *     its move or its players hold text; `sections` the page's sections as mapView lists them,
- *     whose labels name a section and whose beats' moves name a beat (phase 4b, brief 1F).
+ *     editor; `adding` its add line, `{slot, move, players}`, which holds the actions once its move
+ *     or its players hold text; `sections` the page's sections as mapView lists them, whose labels
+ *     name a section and whose beats' moves name a move (phase 4b, brief 1F).
  *   - 'arc-selection', the story meeting: { addLine }, the add-a-thread line's text, which holds
  *     the actions once it holds text. Every other change at the meeting (a pick, a flip, a line
  *     rewritten, an answer) is kept as the director makes it.
@@ -308,11 +310,11 @@
     return isPlainObject(open.editor) ? [saveOrCancel(mapEditorName(open.editor, open.sections))] : [];
   }
 
-  /** The add line's instruction once it holds text, its move or its players: its two buttons, Add the beat and Cancel. */
+  /** The add line's instruction once it holds text, its move or its players: its two buttons, Add the move and Cancel. */
   function mapAddLineInstructions(open) {
     var adding = open.adding;
     if (!isPlainObject(adding) || !(holdsText(adding.move) || holdsText(adding.players))) return [];
-    return ['add or cancel the new beat in ' + mapSectionName(open.sections, adding.slot)];
+    return ['add or cancel the new move in ' + mapSectionName(open.sections, adding.slot)];
   }
 
   function mapInstructions(open) {
@@ -344,8 +346,13 @@
    * - The desk: a pencil opens its editor in place of the open one, and a move, a delete or an insert
    *   puts a new bundle on the desk, which closes the open editor (Article.js applyDesk). None of them
    *   closes the JSON editor, so JSON typed there holds none of them.
-   * - The map: a pencil opens its editor in place of the open one, and "+ Add a beat" opens the add
-   *   line in its section in place of the open one. Neither closes what the other holds.
+   * - The map: a pencil opens its editor in place of the open one, and "+ Add a move" opens the add
+   *   line in its section in place of the open one. Neither closes what the other holds. Selecting
+   *   something else on the board, and every control on the selected card ('move': Move up, Move
+   *   down, Move to another section, Put a photo beside it, Leave it out, Take it out, Bring it back,
+   *   and a selected photo's places), wait for both, an open editor and a typed add line (R9), so
+   *   the director saves or discards what they typed before the board changes under it. A drag waits
+   *   for nothing: an editor is keyed by its line, and a card whose editor is open does not drag.
    * The story meeting has none: no control there closes or replaces its add line. Its other
    * controls (an angle's card, a flip, a line rewritten in place) change the weave as the director
    * acts, and an angle's card leaves the add line as typed, so a thread added after a pick goes into
@@ -357,7 +364,8 @@
     ],
     outline: [
       { controls: ['edit'], object: 'another line', instructions: mapEditorInstructions },
-      { controls: ['add'], object: 'a beat in another section', instructions: mapAddLineInstructions }
+      { controls: ['add'], object: 'a move in another section', instructions: mapAddLineInstructions },
+      { controls: ['select', 'move'], object: 'anything else', instructions: mapInstructions }
     ]
   };
 
@@ -395,7 +403,7 @@
    *   JSON editor
    * @param {Object} open - what the stop has open (see the header)
    * @param {string} [control] - a kind of control at the desk ('edit', 'move', 'delete', 'insert')
-   *   or on the map ('edit', 'add'); omitted, the stop's actions
+   *   or on the map ('edit', 'add', 'select', 'move'); omitted, the stop's actions
    * @returns {string|null}
    */
   function unsavedInputLine(stop, open, control) {
