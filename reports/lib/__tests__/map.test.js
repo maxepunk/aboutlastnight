@@ -362,6 +362,22 @@ describe('the map checks (spec 5.4)', () => {
             + `Keep b17 on "The other suspects let go" (in section "closing"), the beat the director's edits find by that id, and give "A new beat under b17" (in section "lede") ${NEW_ID}`
         ]);
       });
+
+      // Fix F3, finished: the keeper is the one beat the director's edits find. An edit that finds
+      // more than one beat, such as a line of theirs a pass copied onto its own beat, names none,
+      // and an edit of the beat's place decides before a line, since a copy can carry their words
+      // but sits elsewhere.
+      it('a move and a rewrite: a send-back\'s rework put a copy of the director\'s beat, their words and all, back where it sat; the beat they moved keeps the id', () => {
+        const left = EditLogic.moveBeat(writers(), 'b1', 'theStory');
+        left.sections[1].beats.find((beat) => beat.id === 'b1').move = 'The scoreboard lights the room';
+        const standing = standingOnMap(null, writers(), left);
+        expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].beats[#b1]'], ['E2', 'sections[#theStory].beats[#b1].move']]);
+        const pass = clone(left);
+        pass.sections[0].beats.unshift(clone(left.sections[1].beats.find((beat) => beat.id === 'b1')));
+        expect(carriedEdits(standing, pass).map((e) => e.id)).toEqual(['E2']);
+        expect(keepingOf(pass, standing)).toBe('Beats sharing the id b1: "The scoreboard lights the room" and "The scoreboard lights the room". '
+          + `Keep b1 on "The scoreboard lights the room" (in section "theStory"), the beat the director's edits find by that id, and give "The scoreboard lights the room" (in section "lede") ${NEW_ID}`);
+      });
     });
   });
 

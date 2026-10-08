@@ -543,13 +543,16 @@ function beatFieldAt(beat, steps) {
 
 /**
  * Which beat under a repeated id keeps the id (fix F3): the one the director's edits find by that
- * id, when they find exactly one, else the first in the map's order. A field edit finds the beat
- * whose field holds the director's value; an edit of a beat's place (a beat they moved, struck,
- * brought back or added) finds the beat that sits where the edit puts it. It reads the director's
- * standing edits, carried or not (fix F, second round): the map carries an edit of a beat's place
- * only while the beat sits there and nowhere else (lib/hand-edit-diff.js mapEditCarried), so a
- * repeat leaves it uncarried, and the beat it finds is still theirs, since a copy a pass left in
- * another place is the pass's (fix round 1).
+ * id, else the first in the map's order. A field edit finds the beat whose field holds the
+ * director's value; an edit of a beat's place (a beat they moved, struck, brought back or added)
+ * finds the beat that sits where the edit puts it. An edit that finds more than one beat, such as a
+ * line of theirs a pass copied onto its own beat, names none. The edits of a place decide first,
+ * since a copy can carry the director's words but sits elsewhere; the field edits decide when no
+ * edit of a place names a beat. The keeper is the one beat the deciding edits name; when they name
+ * two, it is the first. It reads the director's standing edits, carried or not (fix F, second
+ * round): the map carries an edit of a beat's place only while the beat sits there and nowhere else
+ * (lib/hand-edit-diff.js mapEditCarried), so a repeat leaves it uncarried, and the beat it finds is
+ * still theirs, since a copy a pass left in another place is the pass's (fix round 1).
  *
  * @param {string} id
  * @param {Array<{beat: Object, slot: string|null}>} under - the beats under the id, in the map's order (allBeats)
@@ -560,17 +563,17 @@ function keeperOfRepeatedId(id, under, entries) {
   const holds = (value, after) => (typeof value === 'string' && typeof after === 'string'
     ? value.trim() === after.trim()
     : canonicalJson(value) === canonicalJson(after));
-  const found = new Set();
+  const named = { place: new Set(), field: new Set() };
   entries.forEach(({ edit, address }) => {
     if (!address || address.kind !== 'beat' || isCut(edit) || String(address.identity.id).trim() !== id) return;
-    under.forEach((each) => {
-      const finds = address.fieldSteps.length > 0
-        ? holds(beatFieldAt(each.beat, address.fieldSteps), edit.after)
-        : (each.slot === null ? MAP_LEFT_OUT : each.slot) === address.container;
-      if (finds) found.add(each);
-    });
+    const byField = address.fieldSteps.length > 0;
+    const finds = under.filter((each) => (byField
+      ? holds(beatFieldAt(each.beat, address.fieldSteps), edit.after)
+      : (each.slot === null ? MAP_LEFT_OUT : each.slot) === address.container));
+    if (finds.length === 1) named[byField ? 'field' : 'place'].add(finds[0]);
   });
-  return found.size === 1 ? { keeper: [...found][0], found: true } : { keeper: under[0], found: false };
+  const deciding = named.place.size > 0 ? named.place : named.field;
+  return deciding.size === 1 ? { keeper: [...deciding][0], found: true } : { keeper: under[0], found: false };
 }
 
 /** The players a beat, a gap note or a players list names. */
@@ -880,8 +883,8 @@ function cardFault(beat, evidence) {
  * The checks:
  * - every beat has an id of its own, since the director's edits find a beat by its id
  *   (`duplicate-beat-id`); its message says which beat keeps the id, the one the director's
- *   standing edits find by it, carried or not, or else the first, and gives the others new ids
- *   (keeperOfRepeatedId; fix F3 and its second round);
+ *   standing edits find by it, carried or not (an edit of its place before a line of theirs), or
+ *   else the first, and gives the others new ids (keeperOfRepeatedId; fix F3 and its second round);
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id the record holds, quotation, clock time or money
  *   figure): the gap note's line, each section's job, each beat's move and its synopsis in a
