@@ -976,7 +976,7 @@
     return { valid: errors.length === 0, errors: errors };
   }
 
-  // ── (K) THE MAP'S READERS, AND EVERYONE AND THE COUNTS (phase 4, brief 4.6) ──
+  // ── (K) THE MAP'S READERS, AND THE COUNTS (phase 4, brief 4.6) ──
   //
   // How the map is read: whether a value is a map, a beat's id and card, where the map places
   // each beat and photo, and what it repeats. The client gate, the moves and the map on screen
