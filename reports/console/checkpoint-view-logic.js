@@ -3621,6 +3621,29 @@
     return mapSlotFits(data, pending) && typeof pendingNote === 'string' ? pendingNote : '';
   }
 
+  /**
+   * The map's own lines as the page names them, by the field a validator's path or a report's place
+   * names (R11: never by the field's name): mapPathWords and mapEditLineOptions read them.
+   */
+  var MAP_LINE_WORDS = {
+    headline: 'the headline', deck: 'the deck', topPhoto: 'the top photo', expectedLength: 'the expected length',
+    gapNote: 'the gap note', weaveChanges: "the map's changes to the weave"
+  };
+
+  /**
+   * A report's place that opens on one of the map's own lines by its field's name (`expectedLength`,
+   * `weaveChanges, cut`), in the page's words; a place that opens on a word already ("headline",
+   * "gap note") stays as it is.
+   */
+  function mapLineWords(where) {
+    return asString(where).replace(/^[a-z]+[A-Z][A-Za-z]*(?=,|$)/, function (field) {
+      return hasOwn(MAP_LINE_WORDS, field) ? MAP_LINE_WORDS[field] : field;
+    });
+  }
+
+  /** The field of a beat that holds its summary (piece 4, R1), which the page names "the summary of" its move (R11). */
+  var MAP_SUMMARY_FIELD = 'synopsis';
+
   /** A place in the map, as the validator's path names it, in the words the page uses. */
   function mapPathWords(path, map, slots) {
     var parts = asString(path).split('/').filter(Boolean);
@@ -3631,22 +3654,24 @@
       var move = isPlainObject(beat) ? asString(beat.move).trim() : '';
       return move ? '"' + shortText(move) + '"' : String(Number(index) + 1);
     };
-    var heads = {
-      headline: 'the headline', deck: 'the deck', topPhoto: 'the top photo', expectedLength: 'the expected length',
-      gapNote: 'the gap note', weaveChanges: "the map's changes to the weave"
+    // Piece 4 (R11): a beat's summary as the summary of its move, never by the field's name.
+    var beatPlace = function (beat, index, rest) {
+      return rest[0] === MAP_SUMMARY_FIELD
+        ? 'the summary of the move ' + beatName(beat, index) + tail(rest.slice(1))
+        : 'beat ' + beatName(beat, index) + tail(rest);
     };
     if (parts.length === 0) return 'the map';
-    if (hasOwn(heads, parts[0])) return heads[parts[0]];
+    if (hasOwn(MAP_LINE_WORDS, parts[0])) return MAP_LINE_WORDS[parts[0]];
     if (parts[0] === 'dropped') {
       var dropped = asArray(m.dropped)[Number(parts[1])];
       return 'the dropped section ' + slotLabelOf(isPlainObject(dropped) ? dropped.slot : '', slots) + tail(parts.slice(2));
     }
-    if (parts[0] === 'leftOut') return 'left out, beat ' + beatName(asArray(m.leftOut)[Number(parts[1])], parts[1]) + tail(parts.slice(2));
+    if (parts[0] === 'leftOut') return 'left out, ' + beatPlace(asArray(m.leftOut)[Number(parts[1])], parts[1], parts.slice(2));
     if (parts[0] === 'sections') {
       var section = asArray(m.sections)[Number(parts[1])];
       var label = isPlainObject(section) ? slotLabelOf(section.slot, slots) : 'a section';
       if (parts[2] === 'beats') {
-        return label + ', beat ' + beatName(asArray(isPlainObject(section) ? section.beats : null)[Number(parts[3])], parts[3]) + tail(parts.slice(4));
+        return label + ', ' + beatPlace(asArray(isPlainObject(section) ? section.beats : null)[Number(parts[3])], parts[3], parts.slice(4));
       }
       if (parts[2] === 'photos') {
         var photo = asArray(isPlainObject(section) ? section.photos : null)[Number(parts[3])];
@@ -3774,23 +3799,44 @@
   }
 
   /**
+   * The beat a report entry's place names, the one reader of it (piece 4, brief 4C): lib/hand-edit-
+   * diff.js mapEditWhere writes a beat as `beat "<id>"`, followed by `, move` when the edit is on its
+   * move (`section "lede", beat "b4", move`, `section "lede", the summary of beat "b4"`, `left out,
+   * beat "b2", struck from section "lede"`). Returns `{id, text, index}`, the id, the text naming
+   * the beat (its move field with it) and where that text starts, or null for a place that names
+   * no beat, such as a section's order or a photo's. mapView reads an entry's beat through it, and
+   * beatWords the words it rewrites; a test holds it to the places the server writes.
+   *
+   * @param {*} where - an entry's place
+   * @returns {{id: string, text: string, index: number}|null}
+   */
+  function beatOfPlace(where) {
+    var m = /beat "([^"]*)"(?:, move\b)?/.exec(asString(where));
+    return m ? { id: m[1], text: m[0], index: m.index } : null;
+  }
+
+  /**
    * A beat's place as a diff or a report names it (`beat "b4"`, `beat "b4", move`), in the words
-   * the map's page uses: the beat's move, found on the map (phase 4b, brief 1D; spec 9: the tags
-   * leave the page), which names the move field too, or "a move" for a beat the map no longer
-   * holds.
+   * the map's page uses (beatOfPlace): the beat's move, found on the map (phase 4b, brief 1D; spec
+   * 9: the tags leave the page), which names the move field too, or "a move" for a beat the map no
+   * longer holds. So `the summary of beat "b4"` reads as the summary of the move (R11).
    */
   function beatWords(text, map) {
-    return asString(text).replace(/beat "([^"]*)"(?:, move\b)?/g, function (_, id) {
-      var beat = outlineEditLogic().beatWithId(map, id);
-      var move = isPlainObject(beat) ? asString(beat.move).trim() : '';
-      return move ? 'the move "' + shortText(move) + '"' : 'a move';
-    });
+    var t = asString(text);
+    var named = beatOfPlace(t);
+    if (!named) return t;
+    var beat = outlineEditLogic().beatWithId(map, named.id);
+    var move = isPlainObject(beat) ? asString(beat.move).trim() : '';
+    var words = move ? 'the move "' + shortText(move) + '"' : 'a move';
+    return t.slice(0, named.index) + words + t.slice(named.index + named.text.length);
   }
 
   /**
    * How the map phrases an edit a rework changed (changedEditLine, every stop's builder): its
    * place as the report names it, with each slot under its label, each beat by its move
-   * (beatWords) and no edit id, since the map shows none; a moved element is a beat or a photo,
+   * (beatWords), the map's own lines by their names (mapLineWords) and no edit id, since the map
+   * shows none, so a summary edit reads as the summary of the move and an order edit as the order
+   * of the section's moves (piece 4, R11); a moved element is a beat or a photo,
    * and a section it went to reads by its label; text that came back is still on the map (task
    * 4.10).
    *
@@ -3799,7 +3845,7 @@
    */
   function mapEditLineOptions(slots, map) {
     return {
-      place: function (entry) { return capitalized(beatWords(slotWords(asString(entry.where) || scopeLabel(entry.scope), slots), map)); },
+      place: function (entry) { return capitalized(beatWords(slotWords(mapLineWords(asString(entry.where) || scopeLabel(entry.scope)), slots), map)); },
       valueText: function (text) {
         var m = /^section "([^"]*)"$/.exec(asString(text));
         return m ? slotLabelOf(m[1], slots) : text;
@@ -4014,9 +4060,14 @@
    *   that says the director's edits stand when none of theirs is listed (editsStandLine; brief
    *   4.10b), and `otherConcerns`, the concerns none of whose places the page shows. An edit a
    *   rework changed that is about a move the map holds sits on that move's card instead
-   *   (`changed`; spec 7), one about a section the board shows under that section's head (its
-   *   `changed`), and one about the headline, the deck or the top photo at the top of the article
-   *   (`top.changed`; run 1 follow-up F8): only one with no place on the page stays here;
+   *   (`changed`; spec 7), as does one about a photo in a section that sits beside a move of it,
+   *   since the photo prints on that card (brief 4C); one about a section the board shows (its
+   *   order, a field of it, a photo by itself in it) under that section's head (its `changed`);
+   *   one about the headline, the deck or the top photo at the top of the article (`top.changed`;
+   *   run 1 follow-up F8); and one about the gap note (while the page shows it), the expected
+   *   length or the weave changes beside that place (`changedBeside`, `{gapNote, length,
+   *   weaveChanges}`, each a list of lines; brief 4C): only one with no place on the page stays
+   *   here. The beat an entry names is read by beatOfPlace, the one reader of its place;
    * - `gapNote`, `headline`, `deck` and `topPhoto`, and `top`, the top of the article's
    *   `{changed}`;
    * - `sections`, the board's columns in the map's order, each under its slot's label with its
@@ -4121,27 +4172,66 @@
     // head, and one about the headline, the deck or the top photo at the top of the article
     // (sectionOfEntry, onTop; run 1 follow-up F8), each in mapChangedEditLines' words; only one with
     // no place on the page stays among the round's lines.
+    // Brief 4C (the integrator's ruling after run 1's follow-ups): a photo prints on the card of the
+    // move it sits beside, so a line about a photo in a section sits on that card (cardOfEntry), and
+    // one about a photo by itself keeps its section's head; a line about the gap note, the expected
+    // length or the weave changes sits beside its own place (`changedBeside`, besideOfEntry). The
+    // order edit names its section, so it sits under the section's head.
     var lineOptions = mapEditLineOptions(slots, map);
     var placedBeatIds = editLogic.mapBeatPlacements(map).map(function (placement) { return placement.id; });
+    /** The beat on the map an entry's place names (beatOfPlace, the one reader), or null. */
     var beatOfEntry = function (entry) {
-      var m = /beat "([^"]*)"/.exec(asString(entry.where));
-      return m && placedBeatIds.indexOf(m[1]) !== -1 ? m[1] : null;
+      var named = beatOfPlace(entry.where);
+      return named && placedBeatIds.indexOf(named.id) !== -1 ? named.id : null;
+    };
+    /** Each photo that prints on a card, by its section's slot and its key, to the id of the move it sits beside there. */
+    var photoCards = {};
+    sections.forEach(function (section) {
+      var ids = idsOf(section.beats);
+      asArray(section.photos).forEach(function (photo) {
+        if (!isPlainObject(photo) || !asString(photo.filename).trim()) return;
+        var beside = editLogic.photoBeatOf(map, photo);
+        if (beside && ids.indexOf(beside) !== -1) photoCards[asString(section.slot) + '|' + editLogic.photoKey(photo.filename)] = beside;
+      });
+    });
+    /**
+     * The card an entry sits on: the move its place names, or the move beside which the photo it
+     * names sits in the section it names, where that photo prints; else null. A photo now in
+     * another section keeps the head of the section its place names.
+     */
+    var cardOfEntry = function (entry) {
+      var named = beatOfEntry(entry);
+      if (named !== null) return named;
+      var photo = /^section "([^"]*)", photo "([^"]*)"/.exec(asString(entry.where));
+      var key = photo ? photo[1] + '|' + editLogic.photoKey(photo[2]) : '';
+      return photo && hasOwn(photoCards, key) ? photoCards[key] : null;
     };
     var boardSlots = sections.map(function (section) { return asString(section.slot); });
-    /** The slot of the section on the board an entry is about (a field of it, a photo in it, its cut or its drop), or null. */
+    /** The slot of the section on the board an entry is about (a field of it, its order, a photo by itself in it, its cut or its drop), or null. */
     var sectionOfEntry = function (entry) {
       var m = /^(?:section|dropped slot) "([^"]*)"/.exec(asString(entry.where));
       return m && boardSlots.indexOf(m[1]) !== -1 ? m[1] : null;
     };
     /** Whether an entry is about the top of the article: the headline, the deck or the top photo. */
     var onTop = function (entry) { return /^(?:headline|deck|the top photo|topPhoto)(?:,|$)/.test(asString(entry.where)); };
+    /** The map's own place an entry is about, beside which its line sits: the gap note while the page shows one, the expected length or the weave changes; else null. */
+    var besideOfEntry = function (entry) {
+      var where = asString(entry.where);
+      if (/^gap note(?:,|$)/.test(where)) return isPlainObject(map.gapNote) ? 'gapNote' : null;
+      if (/^expectedLength(?:,|$)/.test(where)) return 'length';
+      if (/^weaveChanges(?:,|$)/.test(where)) return 'weaveChanges';
+      return null;
+    };
     var report = isPlainObject(d.handEditReport) ? d.handEditReport : null;
     var toShow = changedEditsToShow(report);
-    var onCards = toShow.filter(function (entry) { return beatOfEntry(entry) !== null; });
+    var onCards = toShow.filter(function (entry) { return cardOfEntry(entry) !== null; });
     var onSections = toShow.filter(function (entry) { return onCards.indexOf(entry) === -1 && sectionOfEntry(entry) !== null; });
     var atTop = toShow.filter(function (entry) { return onCards.indexOf(entry) === -1 && onSections.indexOf(entry) === -1 && onTop(entry); });
+    var besides = toShow.filter(function (entry) {
+      return onCards.indexOf(entry) === -1 && onSections.indexOf(entry) === -1 && atTop.indexOf(entry) === -1 && besideOfEntry(entry) !== null;
+    });
     var changedOn = function (id) {
-      return onCards.filter(function (entry) { return beatOfEntry(entry) === id; }).map(function (entry) { return changedEditLine(entry, lineOptions); });
+      return onCards.filter(function (entry) { return cardOfEntry(entry) === id; }).map(function (entry) { return changedEditLine(entry, lineOptions); });
     };
     /** The report with only the entries `keep` holds, for mapChangedEditLines, which pairs a section's cut with its drop. */
     var reportOf = function (keep) {
@@ -4151,7 +4241,12 @@
       var here = onSections.filter(function (entry) { return sectionOfEntry(entry) === slot; });
       return here.length > 0 ? mapChangedEditLines(reportOf(function (entry) { return here.indexOf(entry) !== -1; }), slots, map) : [];
     };
-    var placedEntries = onCards.concat(onSections, atTop);
+    var changedBesideOf = function (place) {
+      var here = besides.filter(function (entry) { return besideOfEntry(entry) === place; });
+      return here.length > 0 ? mapChangedEditLines(reportOf(function (entry) { return here.indexOf(entry) !== -1; }), slots, map) : [];
+    };
+    var changedBeside = { gapNote: changedBesideOf('gapNote'), length: changedBesideOf('length'), weaveChanges: changedBesideOf('weaveChanges') };
+    var placedEntries = onCards.concat(onSections, atTop, besides);
     var restOfReport = report && placedEntries.length > 0
       ? reportOf(function (entry) { return placedEntries.indexOf(entry) === -1; })
       : report;
@@ -4306,7 +4401,7 @@
       round: Boolean(d.roundDidNotRun) || Boolean(round) || failing.top.length > 0 || changedEdits.length > 0 || Boolean(kept) || placed.other.length > 0,
       legend: legend.view.threads.length > 0,
       dropped: dropped.length > 0,
-      weaveChanges: weaveChanges.length > 0 || at('weaveChanges').length > 0 || failuresAt('weaveChanges').length > 0
+      weaveChanges: weaveChanges.length > 0 || at('weaveChanges').length > 0 || failuresAt('weaveChanges').length > 0 || changedBeside.weaveChanges.length > 0
     };
 
     return {
@@ -4327,6 +4422,7 @@
       deck: { text: asString(map.deck), concerns: at('deck') },
       topPhoto: topPhoto,
       top: { changed: atTop.length > 0 ? mapChangedEditLines(reportOf(function (entry) { return atTop.indexOf(entry) !== -1; }), slots, map) : [] },
+      changedBeside: changedBeside,
       evidenceTitle: EVIDENCE_FOLD_TITLE,
       sections: sectionViews,
       dropped: dropped.map(function (entry) {
@@ -5248,6 +5344,10 @@
     mapLineKeyOf: mapLineKeyOf,
     mapLinesOnPage: mapLinesOnPage,
     mapEditLineOptions: mapEditLineOptions,
+    // Brief 4C: the one reader of the beat a report entry's place names, and the field a beat's
+    // summary is in (a copy of lib/hand-edit-diff.js's, held equal by a test)
+    beatOfPlace: beatOfPlace,
+    MAP_SUMMARY_FIELD: MAP_SUMMARY_FIELD,
     mapView: mapView,
     mapPhotoUrl: mapPhotoUrl,
     // Task 4.14b: going back to the map, a photo left out since the map, a section the director

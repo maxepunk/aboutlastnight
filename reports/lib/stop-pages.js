@@ -694,6 +694,8 @@ const MAP_PARTS = {
       page.text(view.tally.photos);
       page.text(view.tally.length);
       page.beside(view.tally.lengthConcerns, []);
+      // Spec 7 (brief 4C): what the round says of the expected length sits beside it.
+      view.changedBeside.length.forEach((text) => page.toned('mark', text));
     });
   },
   // The settled story, with the way back to the meeting, and the gap note beside it.
@@ -710,6 +712,7 @@ const MAP_PARTS = {
       page.text(view.gapNote.line);
       page.text(view.gapNote.players, 'It raises');
       addBesideLine(page, view.gapNote);
+      view.changedBeside.gapNote.forEach((text) => page.toned('mark', text));
     }
   },
   // The threads (R4): each by its name, its line folded until it is picked.
@@ -767,6 +770,7 @@ const MAP_PARTS = {
     page.title(PAGE_HEADINGS[OUTLINE].weaveChanges);
     view.weaveChanges.forEach((change) => page.text(change.change, change.source));
     addBesideLine(page, { failures: view.weaveChangesFailures, concerns: view.weaveChangesConcerns });
+    view.changedBeside.weaveChanges.forEach((text) => page.toned('mark', text));
   }
 };
 
