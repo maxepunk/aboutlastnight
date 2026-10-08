@@ -159,9 +159,10 @@ const { WEAVE_ANSWER_KEY, pairWeaveQuestions } = require('./writer-questions');
 const { photoKey } = require('./prompt-renderers/director-words-renderer');
 // Which beats a map holds only in left out, the strike's rule for the photos beside them
 // (task 4.14b), the rule that holds a section the director dropped after an automatic pass
-// (fix round 1), and where a move puts the photos beside it (fix C1), from the map's console
-// module, as the desk's naming rule comes from the desk's.
-const { isStruckBeat, holdDroppedSections, carryPhotosBeside } = require('../console/outline-edit-logic');
+// (fix round 1), where a move puts the photos beside it (fix C1), and the one rule for a
+// repeated beat id (fix C4), from the map's console module, as the desk's naming rule comes from
+// the desk's.
+const { isStruckBeat, holdDroppedSections, carryPhotosBeside, mapRepeats } = require('../console/outline-edit-logic');
 
 // Never walked, by construction: the bundle diff visits only the scope lists below,
 // which do not name metadata, voice_self_check or _revisionHistory.
@@ -2713,7 +2714,10 @@ function sectionBeatIds(section) {
  * beat. Every other placement makes the section's order edit: a beat that arrived anywhere but the
  * foot, two of the beats it kept in another order, or a second arrival, above the first or below
  * it, since the diff reads only versions and cannot tell a card dropped above an earlier arrival
- * from two plain moves to the foot (fix round 1, finding 3). A section that map lacks carries none.
+ * from two plain moves to the foot (fix round 1, finding 3). A section that map lacks carries none,
+ * and so does a section either version holds a repeated beat id in (fix C4): no edit can find a
+ * beat by a repeated id, so the board locks the lines under one (console/outline-edit-logic.js
+ * mapRepeats, the one rule for a repeat) and the meeting refuses a change under one.
  *
  * @param {Object} before
  * @param {Object} after
@@ -2721,13 +2725,14 @@ function sectionBeatIds(section) {
  */
 function mapOrderChanges(before, after) {
   const out = [];
+  const repeated = new Set([...mapRepeats(before).beatIds, ...mapRepeats(after).beatIds]);
   (Array.isArray(after.sections) ? after.sections : []).forEach((section, index) => {
     if (!isObj(section) || !mapIdText(section.slot)) return;
     const was = sectionOfSlot(before, mapIdText(section.slot));
     if (!was) return;
     const shown = sectionBeatIds(was).filter(Boolean);
     const now = sectionBeatIds(section).filter(Boolean);
-    if (now.length < MAP_ORDER_MIN_BEATS) return;
+    if (now.length < MAP_ORDER_MIN_BEATS || [...shown, ...now].some((id) => repeated.has(id))) return;
     const arrived = now.filter((id) => !shown.includes(id));
     const keptAsShown = shown.filter((id) => now.includes(id));
     if (arrived.length <= 1 && same(now, [...keptAsShown, ...arrived])) return;

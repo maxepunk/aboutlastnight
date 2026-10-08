@@ -797,4 +797,24 @@ describe("Fix C: the edge cases of the director's order", () => {
       expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E2', true]]);
     });
   });
+
+  // C4: no edit can find a beat by an id the writer repeated, so the board locks the lines under a
+  // repeat (mapRepeats) and the meeting refuses a change under one. A section holding such an id
+  // makes no order edit.
+  it('C4: a column with a repeated id, reordered by the director, makes no order edit, and the other edits stand as before', () => {
+    const shown = boardMap();
+    shown.leftOut.push(clone(beatOf(shown, 'b4')));
+    expect(EditLogic.mapRepeats(shown).beatIds).toEqual(['b4']);
+    let left = EditLogic.moveBeatBy(shown, 'b5', -1);
+    left = EditLogic.moveBeatBy(left, 'b16', -1);
+    left.sections.find((s) => s.slot === 'closing').heading = 'Where the Gains Drift';
+    beatOf(left, 'b6').synopsis = "Quinn's account leaves out the dose.";
+    expect(idsIn(left, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b7', 'b8']);
+    const standing = D.standingOnMap(null, shown, left);
+    expect(standing.edits.map((e) => [e.id, e.path])).toEqual([
+      ['E1', 'sections[#closing].heading'], ['E2', 'sections[#theStory].beats[#b6].synopsis'], ['E3', 'sections[#closing].beats']
+    ]);
+    expect(D.carriedEdits(standing, left).map((e) => e.id)).toEqual(['E1', 'E2', 'E3']);
+    expect(D.standingOnMap(standing, shown, left)).toEqual(standing);
+  });
 });
