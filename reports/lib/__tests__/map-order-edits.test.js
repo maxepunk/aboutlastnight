@@ -514,6 +514,31 @@ describe('Fix A: the order stands while its section holds every beat it names, a
     expect(settled.report).toBeNull();
     expect(pageOf(left, standing, settled.report).kept).toBe('');
   });
+
+  // Fix A, item 6: the order cannot be put back into a section the pass removed, and the report
+  // says so, as it does for every edit a pass should have kept.
+  it('a pass that removes the ordered section: nothing goes back, the report says the order is gone, and the page lists it', () => {
+    const before = headMoved();
+    const standing = D.standingOnMap(null, boardMap(), before);
+    const edits = D.carriedEdits(standing, before);
+    const pass = clone(before);
+    pass.sections = pass.sections.filter((s) => s.slot !== 'theStory');
+    const settled = D.settleEdits(null, { edits, before, after: pass, pass: 1 });
+    expect(settled.output).toEqual(pass);
+    expect(settled.report).toEqual({
+      checked: ['E1'],
+      changed: [{
+        id: 'E1', scope: 'map', where: 'section "theStory", the order of its moves', cut: false, removed: false, moved: false,
+        director: 'Jess warns Sarah away / Marcus tests the batch on himself / Marcus asks Quinn to raise the dose / Quinn tells the room another story / The trial run comes to light / Remi presses Quinn and backs off',
+        became: null, pass: 1, automatic: true, reason: null, restored: false
+      }]
+    });
+    const view = pageOf(settled.output, standing, settled.report);
+    expect(view.kept).toBe('');
+    expect(view.changedEdits).toEqual([
+      'The Story, the order of its moves: your "Jess warns Sarah away / Marcus tests the batch on himself / Marcus asks Quinn to raise the dose / Quinn tells the room another story / The trial run comes to light / Remi presses Quinn and backs off" is gone (automatic pass 1, which should have kept your edit). No reason given.'
+    ]);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
