@@ -594,7 +594,7 @@ console/
         ├── EvidenceBundle.js       # Three-layer evidence display + rescue
         ├── ArcSelection.js         # The story meeting (task 4.8; brief 3D): the angles side by side, each card opening its angle; the open angle's pitch and its threads rewritten in place, each thread flipped in or out; Approve, Reweave and Send back
         ├── Photos.js               # The photo folder, collected after the story meeting, with "Back to the story meeting (no model call)"
-        ├── Outline.js              # The map (task 4.9): the story map edited line by line, Approve and Send back
+        ├── Outline.js              # The map (task 4.9; piece 4, brief 4D): a corkboard, a column per section with its moves as cards in the order the article tells them; the selected card opens in place with its controls and what's behind it; the tray of moves left out; cards and photos moved by drag and drop or by the selected card's controls; Approve and Send back
         └── Article.js              # The desk (tasks 4.3 and 4.10): every editor visible; move, delete and insert; the marks beside their pieces; the page as it will print
 ```
 
