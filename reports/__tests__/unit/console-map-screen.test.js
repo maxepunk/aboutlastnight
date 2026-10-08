@@ -1598,3 +1598,17 @@ describe('Fix B4: each story tone stands apart from the grey and from the others
     expect(root).toMatch(/no light theme/);
   });
 });
+
+// Fix B7: the run sheet names the board's controls as the board shows them (MAP_CONTROLS), so the
+// director finds each by its words.
+describe("Fix B7: the run sheet names the board's controls as the board shows them", () => {
+  const sheet = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'runbook', 'first-run-sheet.md'), 'utf8');
+  const mapPart = sheet.slice(sheet.indexOf('### The map'), sheet.indexOf('### The desk'));
+  const C = ViewLogic.MAP_CONTROLS;
+
+  it('names each control of a selected card, a tray move, a photo and the add line in bold, in its words', () => {
+    [...Object.values(C.card), ...Object.values(C.tray), ...Object.values(C.photo), C.addLine.open, C.addLine.add,
+      ViewLogic.MAP_SUMMARY_TOGGLE.open, ViewLogic.MAP_SUMMARY_TOGGLE.close]
+      .forEach((words) => expect(`${words}: ${mapPart.includes(`**${words}**`)}`).toBe(`${words}: true`));
+  });
+});
