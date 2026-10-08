@@ -5173,6 +5173,9 @@ module.exports = {
   // Brief 4.6: the map's edits
   MAP_SCOPE, MAP_NONE, MAP_LEFT_OUT, MAP_TOP_PHOTO, MAP_EDIT_LINES_GUIDE, isMap, mapEditsBetween, standingOnMap,
   mapEditAddress: mapAddressOf, isCut, isMove, isStrike,
+  // Fix F, third round: the director's order of a section, by which the map's repeat check finds
+  // the beat that keeps a repeated id (lib/map.js keeperOfRepeatedId)
+  mapOrderOf,
   // Task 4.5e: an edit of a place alone, which the verdict guard reads
   ownsNoText,
   // Task 4.5f: a photo's name as a photo reference is matched, which the fact check imports.

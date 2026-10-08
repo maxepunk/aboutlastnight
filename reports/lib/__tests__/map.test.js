@@ -378,6 +378,59 @@ describe('the map checks (spec 5.4)', () => {
         expect(keepingOf(pass, standing)).toBe('Beats sharing the id b1: "The scoreboard lights the room" and "The scoreboard lights the room". '
           + `Keep b1 on "The scoreboard lights the room" (in section "theStory"), the beat the director's edits find by that id, and give "The scoreboard lights the room" (in section "lede") ${NEW_ID}`);
       });
+
+      // Fix F, third round: two edits of the director's find a beat by its id in a place without
+      // being addressed to the beat. The order of a column (R3) finds the beat under the id that
+      // sits in that column, the copy restoreMapOrder keeps; a photo set beside a move finds the
+      // beat under the id in the photo's column. Each through the check node, from the standing
+      // edits in state, as the rework reads it.
+      describe('an edit that finds the beat by its id in a column, without being addressed to it', () => {
+        const { boardMap, boardMapState } = require('./fixtures/board-map');
+        const { _testing: { checkMap } } = require('../workflow/nodes/map-nodes');
+        const repeatsOf = (pass, standing) => checkMap(boardMapState({ outline: pass, _outlineHandEdits: standing }))
+          .validationResults.structuralIssues.filter((m) => m.startsWith('Beats sharing'));
+        /** The pass's output: a send-back's rework that wrote another beat under the id at the head of the lede. */
+        const repeatInLede = (left, slot, id) => {
+          const pass = clone(left);
+          const theirs = pass.sections.find((s) => s.slot === slot).beats.find((beat) => beat.id === id);
+          pass.sections[0].beats.unshift({ ...clone(theirs), move: `A new beat under ${id}`, synopsis: 'A new beat, and the room moves on.' });
+          return pass;
+        };
+
+        it("the column's order: the director put a move at the head of The Story; the beat The Story holds under its id keeps it", () => {
+          const left = EditLogic.moveBeat(boardMap(), 'b6', 'theStory', 0);
+          const standing = standingOnMap(null, boardMap(), left);
+          expect(standing.edits.map((e) => [e.id, e.order])).toEqual([['E1', true]]);
+          const pass = repeatInLede(left, 'theStory', 'b6');
+          expect(carriedEdits(standing, pass)).toEqual([]);
+          expect(repeatsOf(pass, standing)).toEqual([
+            'Beats sharing the id b6: "A new beat under b6" and "Quinn tells the room another story". '
+              + `Keep b6 on "Quinn tells the room another story" (in section "theStory"), the beat the director's edits find by that id, and give "A new beat under b6" (in section "lede") ${NEW_ID}`
+          ]);
+        });
+
+        it('a photo set beside a move: the director dropped a photo on a move in The Story; the beat beside it keeps the id', () => {
+          const left = EditLogic.placePhotoBeside(boardMap(), 'followTheMoney', 0, 'theStory', 'b5');
+          const standing = standingOnMap(null, boardMap(), left);
+          expect(standing.edits.map((e) => [e.id, e.path])).toEqual([['E1', 'sections[#theStory].photos[#p06.jpg]'], ['E2', 'sections[#theStory].photos[#p06.jpg].beat']]);
+          const pass = repeatInLede(left, 'theStory', 'b5');
+          expect(repeatsOf(pass, standing)).toEqual([
+            'Beats sharing the id b5: "A new beat under b5" and "Jess warns Sarah away". '
+              + `Keep b5 on "Jess warns Sarah away" (in section "theStory"), the beat the director's edits find by that id, and give "A new beat under b5" (in section "lede") ${NEW_ID}`
+          ]);
+        });
+
+        it("the top photo set beside a move: the photo's move is its one edit, and the beat it sits beside keeps the id", () => {
+          const left = EditLogic.placePhotoBeside(boardMap(), 'topPhoto', 0, 'theStory', 'b5');
+          const standing = standingOnMap(null, boardMap(), left);
+          expect(standing.edits.map((e) => [e.id, e.from, e.after])).toEqual([['E1', 'topPhoto', { filename: 'p01.jpg', beat: 'b5' }]]);
+          const pass = repeatInLede(left, 'theStory', 'b5');
+          expect(repeatsOf(pass, standing)).toEqual([
+            'Beats sharing the id b5: "A new beat under b5" and "Jess warns Sarah away". '
+              + `Keep b5 on "Jess warns Sarah away" (in section "theStory"), the beat the director's edits find by that id, and give "A new beat under b5" (in section "lede") ${NEW_ID}`
+          ]);
+        });
+      });
     });
   });
 

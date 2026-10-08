@@ -160,8 +160,8 @@ function mapCheckInputsOf(state, map) {
     meetingNote: meetingNoteOf(state),
     edits: carriedEdits(state._outlineHandEdits, map),
     // Fix F, second round: the repeat check finds the beat that keeps a repeated id by the
-    // director's standing edits, carried or not, since a repeat leaves an edit of a beat's place
-    // uncarried (lib/map.js keeperOfRepeatedId).
+    // director's standing edits, carried or not, since a repeat leaves an edit of a beat's place,
+    // and the order of its column, uncarried (lib/map.js keeperOfRepeatedId).
     standingEdits: (standingEditsOf(state._outlineHandEdits) || { edits: [] }).edits,
     // Phase 4b (brief 1D): what the evidence and story-terms checks read.
     evidence: evidenceContextOf(state),
