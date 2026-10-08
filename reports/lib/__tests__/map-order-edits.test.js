@@ -793,6 +793,40 @@ describe("Fix C: the edge cases of the director's order", () => {
       ]);
     });
 
+    // Fix F1: the move edit's entry is the one line the page shows for that move, and the map no
+    // longer holds the move, so the entry carries its title, read from the version the pass started
+    // from, as C2's own entry for a removed move does. The page names the move by it.
+    it('fix F1: that move\'s entry carries its title, and the page names the move by it', () => {
+      const before = EditLogic.moveBeat(boardMap(), 'b2', 'theStory', 1);
+      const standing = D.standingOnMap(null, boardMap(), before);
+      const pass = clone(before);
+      const story = pass.sections.find((s) => s.slot === 'theStory');
+      story.beats = story.beats.filter((b) => b.id !== 'b2');
+      const settled = D.settleEdits(null, { edits: D.carriedEdits(standing, before), before, after: pass, pass: 1 });
+      expect(settled.report.changed).toEqual([expect.objectContaining({
+        id: 'E1', moved: true, became: null, restored: false, title: 'Alex wonders if everyone was dosed'
+      })]);
+      const view = pageOf(settled.output, standing, settled.report);
+      expect(view.sections.find((s) => s.slot === 'theStory').changed).toEqual([
+        'The Story, the move "Alex wonders if everyone was dosed", moved from Lede: automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.'
+      ]);
+    });
+
+    it('fix F1: a move the director moved between columns that a pass removed is named by its title too; one the map still holds carries none', () => {
+      const before = EditLogic.moveBeat(boardMap(), 'b9', 'closing');
+      const standing = D.standingOnMap(null, boardMap(), before);
+      const edits = D.carriedEdits(standing, before);
+      const gone = clone(before);
+      gone.sections.find((s) => s.slot === 'closing').beats = gone.sections.find((s) => s.slot === 'closing').beats.filter((b) => b.id !== 'b9');
+      const removed = D.settleEdits(null, { edits, before, after: gone, pass: 1 });
+      expect(removed.report.changed).toEqual([expect.objectContaining({ id: 'E1', became: null, title: 'The first memories go early' })]);
+      expect(pageOf(removed.output, standing, removed.report).sections.find((s) => s.slot === 'closing').changed[0])
+        .toMatch(/^Closing, the move "The first memories go early", moved from Follow the Money: /);
+      const moved = D.settleEdits(null, { edits, before, after: EditLogic.moveBeat(before, 'b9', 'thePlayers'), pass: 1 });
+      expect(moved.report.changed).toEqual([expect.objectContaining({ id: 'E1', restored: true })]);
+      expect(moved.report.changed[0]).not.toHaveProperty('title');
+    });
+
     it('a move the director added that the pass removed is put back by its own edit, and the order holds on it', () => {
       const added = EditLogic.addBeat(boardMap(), 'closing', 'Kai leaves before the count', 'Kai');
       const before = EditLogic.moveBeatBy(added, 'b19', -1);

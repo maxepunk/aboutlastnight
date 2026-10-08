@@ -3161,6 +3161,25 @@ function mapBeatText(beat) {
 }
 
 /**
+ * The title a report entry carries for a beat the map stored no longer holds (fix C2; fix F1): its
+ * move in `before`, the version the pass started from, by which the page names a beat it cannot
+ * find (console/checkpoint-view-logic.js beatWords). `{}` for a beat the map still holds, for no
+ * id, and for a beat with no move. reportAfterPass gives it to the entry of a beat the director's
+ * order names and to the entry of a beat a move edit of theirs placed.
+ *
+ * @param {string} id - the beat's id, as mapIdText reads it
+ * @param {Object} before - the version the pass started from
+ * @param {Object} stored - the version stored after the pass
+ * @returns {{title?: string}}
+ */
+function goneBeatTitle(id, before, stored) {
+  if (!id || mapPlaces(stored, 'beat', { id }).length > 0) return {};
+  const place = mapPlaces(before, 'beat', { id })[0];
+  const title = place ? editValueText(place.element.move) : '';
+  return title ? { title } : {};
+}
+
+/**
  * A value of an edit on the map as the report gives it to the director's page (phase 4b, brief
  * 1D; spec 9): a beat whole by its move and its people (mapBeatText); a photo whole by its
  * filename and the move it sits beside; the beat a photo sits beside (its `beat` field) by that
@@ -4696,7 +4715,8 @@ function cameBackStillIn(report, stored) {
  *   entry of its own, at `section "<slot>", beat "<id>"`, `moved` with `became` null, as a beat the
  *   director moved that a pass removed is, its `director` the beat by its move and its people and
  *   its `title` its move, by which the page names a beat the map no longer holds; a beat a move
- *   edit of the director's placed is reported by that edit alone.
+ *   edit of the director's placed is reported by that edit alone, whose entry carries the same
+ *   `title` when the version stored no longer holds the beat (goneBeatTitle; fix F1).
  * `checked` lists every id the round's passes checked. The server resets the report at
  * each send-back (and, at the story meeting, at each reweave), so it holds one round.
  *
@@ -4772,9 +4792,13 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
           changed.push(entry(e, { director: textOf(e, e.after), became: becameOf(e, before, after), restored: back }));
           return;
         }
+        // Fix F1: a beat the version stored no longer holds is named by its title, as C2's are.
+        const address = mapAddressOf(e);
+        const movedBeat = address && address.kind === 'beat' && address.fieldSteps.length === 0 ? mapIdText(address.identity.id) : '';
         changed.push(entry(e, {
           moved: true, director: textOf(e, e.after), became: becameOf(e, before, after), restored: back,
-          ...(back && isMoveWithin(e) && { inOrder: editCarried(stored, e) })
+          ...(back && isMoveWithin(e) && { inOrder: editCarried(stored, e) }),
+          ...goneBeatTitle(movedBeat, before, stored)
         }));
       }
       return;
@@ -4794,10 +4818,9 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       }
       orderGoneFrom(order, stored).filter((id) => !placedByMove(id)).forEach((id) => {
         const place = mapPlaces(before, 'beat', { id })[0];
-        const title = place ? editValueText(place.element.move) : '';
         changed.push(entry(e, {
           where: `section "${order.slot}", beat "${id}"`, moved: true, director: place ? mapBeatText(place.element) : '', became: null,
-          ...(title && { title })
+          ...goneBeatTitle(id, before, stored)
         }));
       });
       return;

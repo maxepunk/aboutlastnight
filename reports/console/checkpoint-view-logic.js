@@ -3874,8 +3874,9 @@
    * the map's page uses (beatOfPlace): the beat's move, found on the map (phase 4b, brief 1D; spec
    * 9: the tags leave the page), which names the move field too. A beat the map no longer holds
    * reads by `title`, the title the report entry carries for it (lib/hand-edit-diff.js
-   * reportAfterPass; fix C2: a move the director's order named that a pass removed from the map),
-   * or as "a move" with none. So `the summary of beat "b4"` reads as the summary of the move (R11).
+   * reportAfterPass goneBeatTitle: fix C2, a move the director's order named that a pass removed
+   * from the map; fix F1, a move a move edit of theirs placed that a pass removed), or as "a move"
+   * with none. So `the summary of beat "b4"` reads as the summary of the move (R11).
    */
   function beatWords(text, map, title) {
     var t = asString(text);
