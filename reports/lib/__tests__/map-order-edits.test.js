@@ -735,6 +735,54 @@ describe("Fix C: the edge cases of the director's order", () => {
     });
   });
 
+  // Fix F2: a photo prints beside a move of its own column only, so a photo code puts back in a
+  // column keeps the move the pass set it beside only while that move sits in the column; else it
+  // goes back beside the move it sat beside in the version the pass started from, while that move
+  // sits in the column; else it stands there by itself. Both restores read the photo so: the
+  // order's (restoreMapOrder) and a photo move's (restoreMapEdit).
+  describe('F2: a photo code puts back in a column sits beside a move of that column', () => {
+    /** The director's map: Jess moved up in The Story, and its lone photo moved to Closing by itself. */
+    const directors = () => EditLogic.movePhoto(EditLogic.moveBeatBy(boardMap(), 'b5', -1), 'theStory', 2, 'closing');
+    const edits = () => editsOf(boardMap(), directors());
+    /** The version a pass starts from: the director's map, with the photo set beside a move of Closing (as a send-back's rework may set it). */
+    const besideB16 = () => {
+      const map = directors();
+      map.sections.find((s) => s.slot === 'closing').photos.find((p) => p.filename === 'p05.jpg').beat = 'b16';
+      return map;
+    };
+    const photoIndex = (map, slot, filename) => map.sections.find((s) => s.slot === slot).photos.findIndex((p) => p.filename === filename);
+
+    it("the order's restore: the pass sets the photo beside a named move it moved into Closing; the photo goes back beside the Closing move it sat beside", () => {
+      const before = besideB16();
+      expect(D.carriedEdits(edits(), before).map((e) => e.id)).toEqual(['E1', 'E2']);
+      const moved = EditLogic.moveBeat(before, 'b3', 'closing');
+      const pass = EditLogic.setPhotoBeside(moved, 'closing', photoIndex(moved, 'closing', 'p05.jpg'), 'b3');
+      expect(photoPlaces(pass, 'p05.jpg')).toEqual([{ slot: 'closing', beat: 'b3' }]);
+      const settled = D.settleEdits(null, { edits: edits(), before, after: pass, pass: 1 });
+      expect(idsIn(settled.output, 'theStory')).toEqual(['b3', 'b5', 'b4', 'b6', 'b7', 'b8']);
+      expect(photoPlaces(settled.output, 'p05.jpg')).toEqual([{ slot: 'closing', beat: 'b16' }]);
+      expect(D.carriedEdits(edits(), settled.output).map((e) => e.id)).toEqual(['E1', 'E2']);
+    });
+
+    it("a photo move's restore: the pass takes the photo into another column beside a move there; it goes back to Closing by itself, or beside the Closing move it sat beside", () => {
+      const into = (before) => EditLogic.placePhotoBeside(before, 'closing', photoIndex(before, 'closing', 'p05.jpg'), 'followTheMoney', 'b9');
+      expect(photoPlaces(into(directors()), 'p05.jpg')).toEqual([{ slot: 'followTheMoney', beat: 'b9' }]);
+      const alone = D.settleEdits(null, { edits: edits(), before: directors(), after: into(directors()), pass: 1 });
+      expect(photoPlaces(alone.output, 'p05.jpg')).toEqual([{ slot: 'closing' }]);
+      expect(alone.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true]]);
+      const beside = D.settleEdits(null, { edits: edits(), before: besideB16(), after: into(besideB16()), pass: 1 });
+      expect(photoPlaces(beside.output, 'p05.jpg')).toEqual([{ slot: 'closing', beat: 'b16' }]);
+    });
+
+    it("a photo move's restore keeps the move the pass set the photo beside while that move sits in the column", () => {
+      const before = directors();
+      const pass = EditLogic.setPhotoBeside(clone(before), 'closing', photoIndex(before, 'closing', 'p05.jpg'), 'b15');
+      pass.sections.find((s) => s.slot === 'followTheMoney').photos.push({ filename: 'p05.jpg', beat: 'b9' });
+      const settled = D.settleEdits(null, { edits: edits(), before, after: pass, pass: 1 });
+      expect(photoPlaces(settled.output, 'p05.jpg')).toEqual([{ slot: 'closing', beat: 'b15' }]);
+    });
+  });
+
   // C2: the rule every other map edit follows (mapRestoresWhenGone). A writer's move the pass
   // removed from the map stays out: only its place was the director's, and its removal can be the
   // fix of a fault in the writer's text. The order holds for the moves that remain, and the report
