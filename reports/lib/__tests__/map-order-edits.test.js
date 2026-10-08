@@ -781,6 +781,27 @@ describe("Fix C: the edge cases of the director's order", () => {
       const settled = D.settleEdits(null, { edits: edits(), before, after: pass, pass: 1 });
       expect(photoPlaces(settled.output, 'p05.jpg')).toEqual([{ slot: 'closing', beat: 'b15' }]);
     });
+
+    // Fix F, second round: code seats a photo once every move and field edit is back, so a photo
+    // whose move edit comes before the move edit of the move it sits beside (the photo moved at one
+    // look, the move at the next) finds that move back in its column.
+    it("two looks: the photo moved to Closing at the first, the move it sits beside at the second; a pass takes the move home with its photo, and both go back, the photo beside the move", () => {
+      const first = EditLogic.movePhoto(boardMap(), 'lede', 0, 'closing');
+      const firstLook = D.standingOnMap(null, boardMap(), first);
+      let second = EditLogic.moveBeat(first, 'b1', 'closing');
+      second = EditLogic.setPhotoBeside(second, 'closing', photoIndex(second, 'closing', 'p02.jpg'), 'b1');
+      const standing = D.standingOnMap(firstLook, boardMap(), second);
+      expect(standing.edits.map((e) => [e.id, D._testing.pathOf(e.at)])).toEqual([
+        ['E1', 'sections[#closing].photos[#p02.jpg]'], ['E3', 'sections[#closing].beats[#b1]']
+      ]);
+      const pass = EditLogic.moveBeat(second, 'b1', 'lede');
+      expect(photoPlaces(pass, 'p02.jpg')).toEqual([{ slot: 'lede', beat: 'b1' }]);
+      const settled = D.settleEdits(null, { edits: D.carriedEdits(standing, second), before: second, after: pass, pass: 1 });
+      expect(idsIn(settled.output, 'closing')).toEqual(['b15', 'b16', 'b1']);
+      expect(photoPlaces(settled.output, 'p02.jpg')).toEqual([{ slot: 'closing', beat: 'b1' }]);
+      expect(settled.report.changed.map((c) => [c.id, c.restored])).toEqual([['E1', true], ['E3', true]]);
+      expect(D.carriedEdits(standing, settled.output).map((e) => e.id)).toEqual(['E1', 'E3']);
+    });
   });
 
   // C2: the rule every other map edit follows (mapRestoresWhenGone). A writer's move the pass

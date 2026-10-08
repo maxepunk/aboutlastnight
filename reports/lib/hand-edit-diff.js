@@ -3393,8 +3393,8 @@ function overWritersBeat(element, ...placesLists) {
  * keeps the beat it names while that beat sits in the section in `out`; else it takes the beat it
  * named in `before`, the version the pass started from, while that beat sits in the section; else
  * it stands there by itself. Both restores that put a photo back in a section read it so: a photo
- * move's (restoreMapEdit) and the order's, for a photo the director placed in another section
- * (restoreMapOrder).
+ * move's (restoreMapEdit), once every move and field edit is back (seatRestoredPhotos), and the
+ * order's, for a photo the director placed in another section (restoreMapOrder).
  *
  * @param {Object} photo - the photo as it goes back, changed in place
  * @param {string} slot - the section it goes back into
@@ -3418,6 +3418,26 @@ function seatPhotoBeside(photo, slot, before, out) {
 }
 
 /**
+ * Seat each photo a move's restore put back in a section (restoreMapEdit's `seats`), as
+ * seatPhotoBeside reads it, on `out` as the restores of every move and field edit left it (fix F,
+ * second round). A move whose restore came after the photo's, such as the move it sits beside that
+ * the director put in its section at a later look, then sits in the section, so the photo keeps
+ * it. A photo a later restore took out of that section is no longer seated there.
+ *
+ * @param {Array<{filename: string, slot: string}>} seats
+ * @param {Object} before - the version the pass started from
+ * @param {Object} out - the pass's output, changed in place
+ */
+function seatRestoredPhotos(seats, before, out) {
+  seats.forEach(({ filename, slot }) => {
+    const section = sectionOfSlot(out, slot);
+    const photo = (section && Array.isArray(section.photos) ? section.photos : [])
+      .find((each) => isObj(each) && photoKey(each.filename) === photoKey(filename));
+    if (photo) seatPhotoBeside(photo, slot, before, out);
+  });
+}
+
+/**
  * Put one of the director's edits on the map's beats or photos back into `out`, the pass's
  * output (changed in place). A field goes back on the beat or photo wherever it sits now,
  * or, when the pass removed it, with the beat or photo where it sat in `before`. A move
@@ -3425,11 +3445,20 @@ function seatPhotoBeside(photo, slot, before, out) {
  * it, as the pass left it; one the director added goes back as they wrote it, a beat with what a
  * writer found for it (overWritersBeat), and one the pass removed comes back only as
  * mapRestoresWhenGone says. So it prints once. A photo put back in a section sits beside a move of
- * that section, or by itself (seatPhotoBeside; fix F2). A cut is never put back.
+ * that section, or by itself (seatPhotoBeside; fix F2): given `seats`, it goes back beside the move
+ * the pass set it beside and joins `seats`, for the caller to seat once every move and field edit
+ * is back (seatRestoredPhotos; fix F, second round); without, it is seated at once. A cut is never
+ * put back.
  *
+ * @param {Object} edit
+ * @param {Object} address - the edit's address (mapAddressOf)
+ * @param {Object} before - the version the pass started from
+ * @param {Object} out - the pass's output, changed in place
+ * @param {Array<{filename: string, slot: string}>|null} [seats] - the photos put back in a section,
+ *   to seat later
  * @returns {boolean} whether anything was written
  */
-function restoreMapEdit(edit, address, before, out) {
+function restoreMapEdit(edit, address, before, out, seats = null) {
   if (isCut(edit)) return false;
   if (address.fieldSteps.length > 0) {
     const places = mapPlaces(out, address.kind, address.identity);
@@ -3453,8 +3482,12 @@ function restoreMapEdit(edit, address, before, out) {
   const placeable = address.container === MAP_TOP_PHOTO || address.container === MAP_LEFT_OUT
     || (Array.isArray(out.sections) && out.sections.some((s) => isObj(s) && mapIdText(s.slot) === address.container));
   if (!placeable) return false;
-  // Fix F2: a photo goes back beside a move of the section it goes back into.
-  if (address.kind === 'photo' && address.container !== MAP_TOP_PHOTO) seatPhotoBeside(element, address.container, before, out);
+  // Fix F2: a photo goes back beside a move of the section it goes back into; fix F, second round:
+  // given `seats`, once every move and field edit is back.
+  if (address.kind === 'photo' && address.container !== MAP_TOP_PHOTO) {
+    if (Array.isArray(seats)) seats.push({ filename: element.filename, slot: address.container });
+    else seatPhotoBeside(element, address.container, before, out);
+  }
   removeMapPlaces(out, address.kind, address.identity);
   return insertIntoMap(out, address.kind, address.container, address.index, address.container === MAP_TOP_PHOTO ? { filename: element.filename } : element);
 }
@@ -4407,16 +4440,19 @@ function blocksOf(collection, element) {
  * @param {Object} [options]
  * @param {Map<string, string>} [options.placedPhotos] - the photos the director's standing edits
  *   place on the map (photosPlacedBy), which an order's restore leaves where they are; by default none
+ * @param {Array<{filename: string, slot: string}>} [options.seats] - where a move's restore on the
+ *   map lists each photo it put back in a section, for the caller to seat (seatRestoredPhotos); by
+ *   default each is seated at once
  * @returns {boolean} whether anything was written
  */
-function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT, { placedPhotos } = {}) {
+function restoreEdit(edit, before, out, leavesOut = NOTHING_LEFT_OUT, { placedPhotos, seats } = {}) {
   if (!isObj(out)) return false;
   if (isCut(edit)) return takeOutDeletedEntry(edit, out);
   // Piece 4 (R3; fix A): the director's order of a section, each beat it names back in it.
   const order = mapOrderOf(edit);
   if (order) return restoreMapOrder(order, before, out, placedPhotos);
   const address = mapAddressOf(edit);
-  if (address) return restoreMapEdit(edit, address, before, out);
+  if (address) return restoreMapEdit(edit, address, before, out, seats);
   if (isMove(edit)) return restoreMove(edit, before, out);
   // Piece 3 (R2): a flip goes back as that thread's place alone; a thread the director added goes
   // back whole, then into its place in the angle.
@@ -4932,7 +4968,10 @@ function reportWithHeld(report, held) {
  * change an edit, and the rework says why; on the map, one that only took beats the director's
  * order names out of its section, keeping the rest in that order, leaves the order standing on
  * the rest (`narrowed`; fix C6). A reweave (REWEAVE_PASS, brief 4.5) is held to
- * the edits as an automatic pass is: code puts back each line it changed. On the map, once the
+ * the edits as an automatic pass is: code puts back each line it changed. On the map, a photo a
+ * move's restore put back in a section sits beside a move of that section, read once every move and
+ * field edit is back, so a move whose restore came later counts (seatRestoredPhotos; fix F2; fix F,
+ * second round). On the map, once the
  * other edits are back, code puts the director's order of each section back, each beat it names in
  * the section at its place in that order, from wherever the pass put it, so a beat the pass added
  * keeps its place (restoreMapOrder; piece 4, R3; fix A): every order the output no longer carries,
@@ -5020,9 +5059,14 @@ function settleEdits(previous, { edits = [], before = null, after = null, pass, 
       // The moves first, so a field edit on a moved block finds the block where the
       // director put it. A move whose section the pass removed waits for the field edits,
       // one of which may put that section back whole, block included.
-      const waiting = moves.filter((e) => !restoreEdit(e, before, output, leavesOut));
+      // Fix F, second round: a photo a move's restore puts back in a section is seated beside a
+      // move of that section once every move and field edit is back, so the move it sits beside
+      // counts though its own restore came later.
+      const seats = [];
+      const waiting = moves.filter((e) => !restoreEdit(e, before, output, leavesOut, { seats }));
       fields.forEach((e) => restoreEdit(e, before, output, leavesOut));
-      waiting.forEach((e) => restoreEdit(e, before, output, leavesOut));
+      waiting.forEach((e) => restoreEdit(e, before, output, leavesOut, { seats }));
+      seatRestoredPhotos(seats, before, output);
       // Brief 4.6, fix round 1: a beat or photo put back whole keeps its copy in the
       // director's place and loses the pass's other copies, one of which may have held a
       // field the director wrote; that field goes back on the copy kept.
