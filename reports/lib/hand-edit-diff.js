@@ -4788,7 +4788,8 @@ function cameBackStillIn(report, stored) {
  *   the edits (fix C2), a beat the order names that the pass removed from the map stays out, so the
  *   order is read on the beats the version stored holds (orderOnMap), and each removed beat is an
  *   entry of its own, at `section "<slot>", beat "<id>"`, `moved` with `became` null, as a beat the
- *   director moved that a pass removed is, its `director` the beat by its move and its people and
+ *   director moved that a pass removed is, and `fromOrder`, which marks a writer's move the
+ *   director's order named (fix H1), its `director` the beat by its move and its people and
  *   its `title` its move, by which the page names a beat the map no longer holds; a beat a move
  *   edit of the director's placed is reported by that edit alone, whose entry carries the same
  *   `title` when the version stored no longer holds the beat (goneBeatTitle; fix F1).
@@ -4883,7 +4884,8 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
     // holds (orderOnMap), and is an entry only where the pass changed it there. Each removed beat is
     // an entry of its own, at its place in the section, as a beat the director moved that a pass
     // removed is (`moved`, `became` null), with its `title`, by which the page names a beat the map
-    // no longer holds. A beat a move edit of theirs placed is reported by that edit. A section the
+    // no longer holds, and `fromOrder` (fix H1): the move was the writer's, which the director only
+    // ordered, so the page says so and asks for nothing. A beat a move edit of theirs placed is reported by that edit. A section the
     // version stored lacks took the order with it, which is one entry, the order gone, as below.
     const order = automatic ? mapOrderOf(e) : null;
     if (order && sectionOfSlot(stored, order.slot)) {
@@ -4894,7 +4896,7 @@ function reportAfterPass(previous, { edits = [], before = null, after = null, pa
       orderGoneFrom(order, stored).filter((id) => !placedByMove(id)).forEach((id) => {
         const place = mapPlaces(before, 'beat', { id })[0];
         changed.push(entry(e, {
-          where: `section "${order.slot}", beat "${id}"`, moved: true, director: place ? mapBeatText(place.element) : '', became: null,
+          where: `section "${order.slot}", beat "${id}"`, moved: true, fromOrder: true, director: place ? mapBeatText(place.element) : '', became: null,
           ...goneBeatTitle(id, before, stored)
         }));
       });

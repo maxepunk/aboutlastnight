@@ -441,7 +441,7 @@ describe('Fix A: the order stands while its section holds every beat it names, a
     expect(placesOf(settled.output, 'b4')).toEqual([]);
     expect(settled.report.changed).toEqual([expect.objectContaining({
       id: 'E1', where: 'section "theStory", beat "b4"', moved: true, automatic: true, restored: false, became: null,
-      title: 'Marcus asks Quinn to raise the dose'
+      title: 'Marcus asks Quinn to raise the dose', fromOrder: true
     })]);
   });
 
@@ -834,7 +834,7 @@ describe("Fix C: the edge cases of the director's order", () => {
         expect.objectContaining({ id: 'E1', where: 'section "theStory", the order of its moves', automatic: true, restored: true }),
         expect.objectContaining({
           id: 'E1', where: 'section "theStory", beat "b4"', moved: true, automatic: true, restored: false, became: null,
-          director: 'Marcus asks Quinn to raise the dose (shows Quinn)', title: 'Marcus asks Quinn to raise the dose'
+          director: 'Marcus asks Quinn to raise the dose (shows Quinn)', title: 'Marcus asks Quinn to raise the dose', fromOrder: true
         })
       ]);
       // The order stands narrowed to the moves that remain, as code put it back.
@@ -843,7 +843,7 @@ describe("Fix C: the edge cases of the director's order", () => {
       const view = pageOf(settled.output, standing, settled.report);
       expect(view.kept).toBe('');
       expect(view.sections.find((s) => s.slot === 'theStory').changed).toEqual([
-        'The Story, the move "Marcus asks Quinn to raise the dose": automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.'
+        "The Story, the move \"Marcus asks Quinn to raise the dose\": automatic pass 1 removed this move from the order you set. It was the writer's move, so it was not put back."
       ]);
     });
 
@@ -875,9 +875,12 @@ describe("Fix C: the edge cases of the director's order", () => {
       expect(settled.report.changed).toEqual([expect.objectContaining({
         id: 'E1', moved: true, became: null, restored: false, title: 'Alex wonders if everyone was dosed'
       })]);
+      // Fix H1: the director placed this move, so its line keeps "add it again"; only a writer's
+      // move the order named is marked as one.
+      expect(settled.report.changed[0]).not.toHaveProperty('fromOrder');
       const view = pageOf(settled.output, standing, settled.report);
       expect(view.sections.find((s) => s.slot === 'theStory').changed).toEqual([
-        'The Story, the move "Alex wonders if everyone was dosed", moved from Lede: automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.'
+        'The Story, the move "Alex wonders if everyone was dosed", moved from Lede: automatic pass 1 removed the move you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.'
       ]);
     });
 

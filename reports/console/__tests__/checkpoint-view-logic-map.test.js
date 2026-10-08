@@ -752,7 +752,7 @@ describe('4.9: after a send-back and an automatic pass', () => {
     expect(ViewLogic.mapView(d, opened(d)).changedEdits).toEqual([]);
     // Phase 4b (brief 1D; spec 9): each beat by its move on the map, never by its id.
     expect(report.changed.map((c) => ViewLogic.changedEditLine(c, ViewLogic.mapEditLineOptions(SLOTS.map((s) => ({ key: s.key, label: s.label })), STRUCK)))).toEqual([
-      'Closing, the move "Morgan pays Riley at the bar", moved from The Story: automatic pass 1 moved the beat you placed here to The Story. It was put back.',
+      'Closing, the move "Morgan pays Riley at the bar", moved from The Story: automatic pass 1 moved the move you placed here to The Story. It was put back.',
       'Left out, the move "The paternity result names Sarah", struck from The Story: automatic pass 1 brought it back. It was struck again.'
     ]);
   });
@@ -1074,7 +1074,7 @@ describe('4.10: the map lists the changes no pass put back, and a send-back\'s w
 
   test('a beat a pass removed is listed: only its place was the director\'s, so code did not put it back', () => {
     expect(linesFor([entry({ id: 'E3', scope: 'map', where: 'section "closing", beat "b3", moved from section "theStory"', moved: true, director: 'b3', became: null, pass: 1, automatic: true })]))
-      .toEqual(['Closing, the move "Morgan pays Riley at the bar", moved from The Story: automatic pass 1 removed the beat you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.']);
+      .toEqual(['Closing, the move "Morgan pays Riley at the bar", moved from The Story: automatic pass 1 removed the move you placed here. Only its place was your edit, so it was not put back: add it again if it should stay.']);
   });
 });
 

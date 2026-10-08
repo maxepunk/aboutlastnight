@@ -493,6 +493,15 @@
   var MOVED_BLOCK_LEFT_OUT = 'Only its place was your edit, so it was not put back: add it again if it should stay.';
 
   /**
+   * What the line says of a writer's move the director's order of a section named, which an
+   * automatic pass removed from the map or moved into Left out (the entry's `fromOrder`;
+   * lib/hand-edit-diff.js reportAfterPass, fixes C2 and H1): the director set its place in the
+   * order and never placed it, and its evidence went with it, so code leaves it where the pass
+   * put it and the line asks for nothing.
+   */
+  var WRITERS_MOVE_LEFT = 'It was the writer\'s move, so it was not put back.';
+
+  /**
    * What the line says of a block moved within its section that code put back in that section
    * where no place keeps the director's order (task 4.3c: the entry's `inOrder` is false).
    */
@@ -596,8 +605,11 @@
    * - A block the director moved that a pass took to another section: where it went, and
    *   whether code put it back, in the director's order or not (task 4.3c, `inOrder`); one a
    *   pass removed: that code left it out, since only its place was the director's edit. The
-   *   map (task 4.9) names the element a beat or a photo, and the desk a Key Evidence entry an
-   *   entry (task 4.14c).
+   *   map (task 4.9) names the element a move or a photo (fix H1: the page's word), and the desk
+   *   a Key Evidence entry an entry (task 4.14c).
+   * - A writer's move the director's order of a section named, which an automatic pass took out
+   *   of that order (`fromOrder`, fix H1): that the pass removed it, or moved it into the place
+   *   `became` names, and that code left it there, since the move was the writer's.
    * - A block the director wrote that code put back where it could not tell which block was the
    *   pass's version of it (`maybeCopies`, task 4.14c): the blocks that may be, for the director
    *   to check.
@@ -661,6 +673,12 @@
     }
     if (entry.cut === true) return label + ': the text you cut came back' + cameBackAs + ' (' + by + '). ' + (held ? stillInLine(o.stillIn) : why);
     if (entry.removed === true) return label + ': a sentence you removed came back' + cameBackAs + ' (' + by + '). ' + (held ? stillInLine(o.stillIn) : why);
+    if (entry.moved === true && entry.fromOrder === true) {
+      var outOfOrder = label + ': ' + by + (became !== null
+        ? ' moved this ' + thing + ' from the order you set into ' + became + '.'
+        : ' removed this ' + thing + ' from the order you set.');
+      return outOfOrder + ' ' + (held ? WRITERS_MOVE_LEFT : why);
+    }
     if (entry.moved === true) {
       var moved = became !== null ? 'moved the ' + thing + ' you placed here to ' + became : 'removed the ' + thing + ' you placed here';
       if (!held) return label + ': ' + by + ' ' + moved + '. ' + why;
@@ -3893,7 +3911,7 @@
    * place as the report names it, with each slot under its label, each beat by its move
    * (beatWords), the map's own lines by their names (mapLineWords) and no edit id, since the map
    * shows none, so a summary edit reads as the summary of the move and an order edit as the order
-   * of the section's moves (piece 4, R11); a moved element is a beat or a photo,
+   * of the section's moves (piece 4, R11); a moved element is a move or a photo (fix H1),
    * and a section it went to reads by its label; text that came back is still on the map (task
    * 4.10).
    *
@@ -3907,7 +3925,7 @@
         var m = /^section "([^"]*)"$/.exec(asString(text));
         return m ? slotLabelOf(m[1], slots) : text;
       },
-      thing: function (entry) { return /(^|, )photo "/.test(asString(entry.where)) ? 'photo' : 'beat'; },
+      thing: function (entry) { return /(^|, )photo "/.test(asString(entry.where)) ? 'photo' : 'move'; },
       stillIn: 'on the map'
     };
   }
