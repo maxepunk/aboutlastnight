@@ -1103,6 +1103,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           failuresOf(view.topPhoto.failures),
           concernsOf(view.topPhoto.concerns),
           isSelected(topSel) && photoPanel(view.topPhoto, EditLogic.MAP_TOP_PHOTO, 0, CONTROLS.photo.topMoveTo)),
+        // Fix H3: with no top photo the article prints no hero, and the top says so where the photo sits.
+        view.top.noPhoto && React.createElement('p', { className: 'map__hint map__top-none' }, view.top.noPhoto),
         // Spec 2026-10-07 section 7: an edit a rework changed that is about the headline, the deck or the top photo sits here.
         changedOf(view.top.changed)
       );

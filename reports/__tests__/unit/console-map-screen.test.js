@@ -405,6 +405,32 @@ describe("4D: the top of the page: the counts, the settled story with the gap no
   });
 });
 
+// Fix H3: a photo dropped from the top onto a move or a column leaves the map with no top photo,
+// and the article then prints no hero. The top of the article says so where the top photo sits.
+describe('Fix H3: the top of the article says when it holds no photo', () => {
+  it("the view gives the top of the article its line only while the map has no top photo", () => {
+    const data = boardPayloadOf();
+    const draft = ViewLogic.mapDraftOf(data, undefined);
+    expect(ViewLogic.mapView(data, draft).top.noPhoto).toBe('');
+    const dropped = EditLogic.placePhotoBeside(draft, EditLogic.MAP_TOP_PHOTO, 0, 'theStory', 'b3');
+    expect(dropped.topPhoto).toBeFalsy();
+    const view = ViewLogic.mapView(data, dropped);
+    expect(view.topPhoto).toBeNull();
+    expect(view.top.noPhoto).toBe(ViewLogic.MAP_NO_TOP_PHOTO_LINE);
+    expect(ViewLogic.MAP_NO_TOP_PHOTO_LINE).toBe('No top photo: the article prints none. Drag a photo here, or select one and move it to the top of the article, to set it.');
+  });
+
+  it('the page prints the line where the top photo sits, and none while there is one', () => {
+    const map = boardMap();
+    map.sections.find((s) => s.slot === 'theStory').photos.push({ filename: map.topPhoto, beat: 'b3' });
+    delete map.topPhoto;
+    const [top] = elementsOf(mountMap({ data: boardPayloadOf(boardMapState({ outline: map, _mapBaseline: map })) }).render(), hasClass('map__top'));
+    expect(elementsOf(top, hasClass('map__top-none')).map(textOf)).toEqual([ViewLogic.MAP_NO_TOP_PHOTO_LINE]);
+    const [withPhoto] = elementsOf(mountMap({ data: boardPayloadOf() }).render(), hasClass('map__top'));
+    expect(elementsOf(withPhoto, hasClass('map__top-none'))).toHaveLength(0);
+  });
+});
+
 describe('4D: the board: a column per section, its cards in order, its photos by themselves and its add line', () => {
   const data = boardPayloadOf();
   const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));

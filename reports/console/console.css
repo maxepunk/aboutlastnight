@@ -3665,6 +3665,16 @@ textarea.input {
   height: 120px;
 }
 
+/* The top of the article with no top photo (fix H3): its line sits where the photo would, in a
+   frame the size of the top photo's thumbnail, so the place to drop one shows. */
+.map__top-none {
+  max-width: 200px;
+  min-height: 120px;
+  padding: var(--space-sm);
+  border: 1px dashed rgba(232, 230, 225, 0.25);
+  border-radius: var(--radius-md);
+}
+
 .map__thumb-button {
   display: inline-flex;
   padding: 0;

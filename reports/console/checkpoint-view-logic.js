@@ -3524,6 +3524,12 @@
   /** A column whose section prints no heading. */
   var MAP_NO_HEADING_LINE = 'No heading printed';
 
+  /**
+   * The top of the article when the map has no top photo (fix H3): a photo dropped from the top onto
+   * a move or a column leaves none, and the article then prints no hero.
+   */
+  var MAP_NO_TOP_PHOTO_LINE = 'No top photo: the article prints none. Drag a photo here, or select one and move it to the top of the article, to set it.';
+
   /** A column the director emptied: the gate drops it when the map is sent (outline-edit-logic.js dropEmptiedSections). */
   var MAP_EMPTIED_COLUMN_LINE = 'Empty: this section drops from the article when you send the map.';
 
@@ -4158,7 +4164,8 @@
    *   weaveChanges}`, each a list of lines; brief 4C): only one with no place on the page stays
    *   here. The beat an entry names is read by beatOfPlace, the one reader of its place;
    * - `gapNote`, `headline`, `deck` and `topPhoto`, and `top`, the top of the article's
-   *   `{changed}`;
+   *   `{changed, noPhoto}`, `noPhoto` MAP_NO_TOP_PHOTO_LINE while the map has no top photo, else ''
+   *   (fix H3);
    * - `sections`, the board's columns in the map's order, each under its slot's label with its
    *   heading ('' when it prints none: the page says MAP_NO_HEADING_LINE), job, cards (`beats`)
    *   and photos (`photos`, every photo of the section in its order, for the controls that place
@@ -4557,7 +4564,10 @@
       headline: { text: asString(map.headline), concerns: at('headline') },
       deck: { text: asString(map.deck), concerns: at('deck') },
       topPhoto: topPhoto,
-      top: { changed: atTop.length > 0 ? mapChangedEditLines(reportOf(function (entry) { return atTop.indexOf(entry) !== -1; }), slots, map) : [] },
+      top: {
+        changed: atTop.length > 0 ? mapChangedEditLines(reportOf(function (entry) { return atTop.indexOf(entry) !== -1; }), slots, map) : [],
+        noPhoto: topPhoto ? '' : MAP_NO_TOP_PHOTO_LINE
+      },
       changedBeside: changedBeside,
       evidenceTitle: EVIDENCE_FOLD_TITLE,
       sections: sectionViews,
@@ -5466,6 +5476,7 @@
     MAP_LEGEND_TITLE: MAP_LEGEND_TITLE,
     MAP_TONES: MAP_TONES,
     MAP_NO_HEADING_LINE: MAP_NO_HEADING_LINE,
+    MAP_NO_TOP_PHOTO_LINE: MAP_NO_TOP_PHOTO_LINE,
     MAP_EMPTIED_COLUMN_LINE: MAP_EMPTIED_COLUMN_LINE,
     MAP_SUMMARY_TOGGLE: MAP_SUMMARY_TOGGLE,
     // Fix B1: the words the board's controls show
