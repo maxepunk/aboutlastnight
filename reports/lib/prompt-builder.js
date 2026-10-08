@@ -519,8 +519,8 @@ function mapCardsLine(map, evidenceBundle = null) {
  *
  * The beats line and the words line give the director's edits precedence over the body
  * (briefs 4.7e and 4.7f): the director's edits first, as HAND_EDITS gives them; otherwise every
- * beat in the map's sections, and no other, and the writer's order, words, transitions and
- * detail. The map keeps the beat of a card the director deleted at the desk (only a deleted
+ * beat in the map's sections, and no other, in the map's order, and the writer's words,
+ * transitions and detail (piece 4, R2: the order is the map's). The map keeps the beat of a card the director deleted at the desk (only a deleted
  * photo leaves it, through the leave-out list), its leftOut lists material a paragraph the
  * director inserts may use, and code does not restore a send-back's rework, so the edits come
  * first. The rule for those edits, with its send-back exception, is stated in <HAND_EDITS> alone

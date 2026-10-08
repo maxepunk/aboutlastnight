@@ -2878,8 +2878,10 @@ function photosPlacedBy(edits) {
  *   fault in the writer's text. A beat the director added goes back by its own edit, first. A
  *   writer's beat the pass struck into left out stays struck too: settleEdits gives this restore
  *   the order without it (orderStruckIn, orderWithout; fix H2).
- * Every other beat stays where the pass put it, so a beat the pass added keeps its place relative
- * to the others. The photos beside a beat it names that sit in another section come with the beat,
+ * Every other beat, a beat the pass added among them, keeps the index the pass gave it in the
+ * section, while the named beats the section holds are sorted into the places they hold; a named
+ * beat that comes back from elsewhere is spliced in beside its neighbours in the order, which moves
+ * each beat after it down one place. The photos beside a beat it names that sit in another section come with the beat,
  * to the foot of the section's photos, as the director's own move takes them (carryPhotosBeside;
  * fix C1), and one the section already holds prints there once, its copy outside taken out (fix
  * C3). A photo the director placed in that other section (`placedPhotos`) stays where they put it
@@ -5028,8 +5030,9 @@ function reportWithHeld(report, held) {
  * field edit is back, so a move whose restore came later counts (seatRestoredPhotos; fix F2; fix F,
  * second round). On the map, once the
  * other edits are back, code puts the director's order of each section back, each beat it names in
- * the section at its place in that order, from wherever the pass put it, so a beat the pass added
- * keeps its place (restoreMapOrder; piece 4, R3; fix A): every order the output no longer carries,
+ * the section at its place in that order, from wherever the pass put it, and every other beat, a
+ * beat the pass added among them, keeps the index the pass gave it, save for the beats spliced in
+ * before it (restoreMapOrder; piece 4, R3; fix A): every order the output no longer carries,
  * the ones the pass changed or broke by taking a beat it names out of the section, and the ones
  * code's own restores broke by putting a beat back at its place (fix round 1, findings 1 and 2);
  * the report records only an order the pass changed or broke. A beat the order names that the
