@@ -229,9 +229,10 @@ const MOVE_OPS = ['moveBeat', 'moveBeatBy', 'strikeBeat', 'bringBackBeat', 'addB
  * file reads. A component the page uses from utils (CollapsibleSection, TracePanel) stays a node,
  * uncalled; an editor of the page's own (BeatEditor and the rest) is a node too, which `child`
  * runs with hooks of its own. `render()` renders the page as it is now; `dispatched` holds every
- * action the page sent; `ops` holds a spy for each of the moves' EditLogic ops.
+ * action the page sent; `ops` holds a spy for each of the moves' EditLogic ops. `options.mapView`,
+ * when given, stands in for the view logic's mapView, for a view field set by hand.
  */
-function mountMap(props) {
+function mountMap(props, options = {}) {
   const src = read('components/checkpoints/Outline.js');
   let hooks = null;
   const React = {
@@ -258,7 +259,7 @@ function mountMap(props) {
         CHECKPOINT_LABELS: { 'arc-selection': 'Story meeting', outline: 'Map', article: 'Article' }
       },
       outlineEditLogic: editLogic,
-      checkpointViewLogic: ViewLogic,
+      checkpointViewLogic: options.mapView ? { ...ViewLogic, mapView: options.mapView } : ViewLogic,
       unsavedInputLogic: require('../../console/unsaved-input-logic')
     }
   };
@@ -1028,6 +1029,56 @@ describe('4D: the margin: what the round says of a move, a section or the top si
       elementsOf(column, hasClass('article-block__edit-btn'))[0].props.onClick();
       const [open] = elementsOf(mounted.render(), (n) => hasClass('map__section-head')(n) && hasClass('map__editing')(n));
       expect(changedIn(open)).toEqual(view.sections[1].changed);
+    });
+  });
+
+  // Fix round 1: the run 2 contract's changedBeside, which 4C fills, holds the changed lines about the
+  // gap note, the expected length and the map's changes to the weave; each shows under its place,
+  // while its editor is open too, and an absent field shows nothing.
+  describe("an edit a rework changed about the gap note, the expected length or the weave changes shows under it (changedBeside)", () => {
+    const data = mapPayloadOf(storyLevelMapState());
+    const BESIDE = { gapNote: ['Your gap note was changed.'], length: ['Your length was changed.'], weaveChanges: ['Your change to the weave was changed.'] };
+    const withBeside = (beside) => (d, m) => {
+      const v = ViewLogic.mapView(d, m);
+      const order = v.order.includes('weaveChanges') ? v.order : [...v.order, 'weaveChanges'];
+      return beside === undefined ? { ...v, order } : { ...v, order, changedBeside: beside };
+    };
+    const changedIn = (node) => elementsOf(node, hasClass('map__changed')).map(textOf);
+    const gapOf = (tree) => elementsOf(tree, hasClass('map__gap'))[0];
+    const lengthOf = (tree) => elementsOf(tree, hasClass('map__length'))[0];
+    const weaveChangesOf = (tree) => elementsOf(tree, hasClass('map__changes'))[0];
+
+    it('renders each under its place, and nowhere else', () => {
+      const tree = mountMap({ data }, { mapView: withBeside(BESIDE) }).render();
+      expect(changedIn(gapOf(tree))).toEqual(BESIDE.gapNote);
+      expect(changedIn(lengthOf(tree))).toEqual(BESIDE.length);
+      expect(changedIn(weaveChangesOf(tree))).toEqual(BESIDE.weaveChanges);
+      expect(changedIn(tree)).toEqual([...BESIDE.length, ...BESIDE.gapNote, ...BESIDE.weaveChanges]);
+    });
+
+    it("keeps the gap note's and the length's lines under them while their editors are open", () => {
+      const mounted = mountMap({ data }, { mapView: withBeside(BESIDE) });
+      elementsOf(gapOf(mounted.render()), hasClass('article-block__edit-btn'))[0].props.onClick();
+      const gap = gapOf(mounted.render());
+      expect(mapClassesOf(gap)).toContain('map__editing');
+      expect(changedIn(gap)).toEqual(BESIDE.gapNote);
+      const lengthMounted = mountMap({ data }, { mapView: withBeside(BESIDE) });
+      elementsOf(lengthOf(lengthMounted.render()), hasClass('article-block__edit-btn'))[0].props.onClick();
+      const length = lengthOf(lengthMounted.render());
+      expect(mapClassesOf(length)).toContain('map__editing');
+      expect(changedIn(length)).toEqual(BESIDE.length);
+    });
+
+    it('shows nothing for a view with no changedBeside, or with a field of it absent', () => {
+      expect(changedIn(mountMap({ data }, { mapView: withBeside(undefined) }).render())).toEqual([]);
+      expect(changedIn(mountMap({ data }, { mapView: withBeside({ length: ['Only the length.'] }) }).render())).toEqual(['Only the length.']);
+    });
+
+    it("shows the gap note's line under the settled story when the map holds no gap note any more", () => {
+      const noGap = (d, m) => ({ ...withBeside(BESIDE)(d, m), gapNote: null });
+      const gap = gapOf(mountMap({ data }, { mapView: noGap }).render());
+      expect(changedIn(gap)).toEqual(BESIDE.gapNote);
+      expect(elementsOf(gap, hasClass('article-block__edit-btn'))).toHaveLength(0);
     });
   });
 

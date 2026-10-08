@@ -582,6 +582,14 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   }
 
   /**
+   * The changed lines about the gap note, the expected length or the map's changes to the weave
+   * (`key`), which mapView gives in `changedBeside` (the run 2 contract); none when it gives none.
+   */
+  function changedBesideOf(key) {
+    return (view.changedBeside && view.changedBeside[key]) || [];
+  }
+
+  /**
    * A move control: picking a place moves the line, and the control reads as itself again. Like every
    * control on what is selected, it waits while an editor is open or the add line holds text (R9).
    */
@@ -955,14 +963,16 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
         view.tally.raised && React.createElement('p', { className: 'text-sm text-muted' }, view.tally.raised),
         React.createElement('p', null, view.tally.cards),
         React.createElement('p', null, view.tally.photos),
+        // What the round says of the length shows under it while its editor is open too, as a section head's does.
         isEditing('length', 'length')
           ? React.createElement('div', { className: 'map__length map__editing' },
               React.createElement(LengthEditor, { map: draft, onSave: function (n) { save(EditLogic.mergeMapLength(draft, n)); }, onCancel: cancel }),
-              heldLine(editHeld))
+              heldLine(editHeld),
+              marginOf({ concerns: view.tally.lengthConcerns, changed: changedBesideOf('length') }))
           : React.createElement('div', { className: 'map__length ' + ALWAYS },
               editBtn(function () { open('length', 'length'); }, editHeld),
               React.createElement('p', null, view.tally.length),
-              concernsOf(view.tally.lengthConcerns))
+              marginOf({ concerns: view.tally.lengthConcerns, changed: changedBesideOf('length') }))
       );
     },
 
@@ -982,17 +992,22 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
             'aria-label': 'Go back to the story meeting, which reopens as you left it'
           }, 'Back to the story meeting')
         ),
+        // What the round says of the gap note shows under it while its editor is open too, as a section head's does.
         view.gapNote && (isEditing('gapNote', 'gap')
           ? React.createElement('div', { className: 'map__gap map__editing' },
               React.createElement(GapNoteEditor, { gapNote: draft.gapNote, onSave: function (g) { save(EditLogic.mergeGapNote(draft, g)); }, onCancel: cancel }),
-              heldLine(editHeld))
+              heldLine(editHeld),
+              marginOf({ failures: view.gapNote.failures, concerns: view.gapNote.concerns, changed: changedBesideOf('gapNote') }))
           : React.createElement('div', { className: 'map__gap ' + ALWAYS },
               editBtn(function () { open('gapNote', 'gap'); }, editHeld),
               React.createElement('p', { className: 'map__label' }, 'The gap'),
               React.createElement('p', null, view.gapNote.line),
               view.gapNote.players && React.createElement('p', { className: 'text-xs text-muted' }, 'It raises: ' + view.gapNote.players),
-              failuresOf(view.gapNote.failures),
-              concernsOf(view.gapNote.concerns)))
+              marginOf({ failures: view.gapNote.failures, concerns: view.gapNote.concerns, changed: changedBesideOf('gapNote') }))),
+        // A map with no gap note left, whose gap note the director had edited, still shows what became of that edit.
+        !view.gapNote && changedBesideOf('gapNote').length > 0 && React.createElement('div', { className: 'map__gap' },
+          React.createElement('p', { className: 'map__label' }, 'The gap'),
+          changedOf(changedBesideOf('gapNote')))
       );
     },
 
@@ -1096,7 +1111,8 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           })
         ),
         failuresOf(view.weaveChangesFailures),
-        concernsOf(view.weaveChangesConcerns)
+        concernsOf(view.weaveChangesConcerns),
+        changedOf(changedBesideOf('weaveChanges'))
       );
     }
   };
