@@ -175,6 +175,15 @@ describe('4.11: the script renders every call, and checks every marker, from a s
     });
   }, 60000);
 
+  // Fix C5: the map's check rework, an automatic pass, keeps every beat's id, which the director's
+  // edits find each beat by; the send-back's rework, whose note sets what changes, says nothing of ids.
+  it("the map's check-rework render says every beat keeps its id, and the send-back's does not", () => {
+    const ids = "Every beat keeps its id, because the director's edits find each beat by it.";
+    const { out } = render('1004112');
+    expect(fs.readFileSync(path.join(out, 'outline-check-rework.txt'), 'utf8')).toContain(ids);
+    expect(fs.readFileSync(path.join(out, 'outline-revision.txt'), 'utf8')).not.toContain(ids);
+  }, 60000);
+
   it("the renders on the old shapes read the fixed weave and map, and nothing of the old shapes", () => {
     const { out } = render('1004114');
     RENDERS.forEach((file) => {

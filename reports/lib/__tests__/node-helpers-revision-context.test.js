@@ -1300,6 +1300,25 @@ describe("4.6: the map's rework context", () => {
     expect(sent.prompt).toContain(`MAP CHECK FAILURES:\n  - ${line}`);
     expect(sent.label).toBe('Map revision 1');
   });
+
+  // Fix C5: a pass that renumbers the beats of a column the director ordered gets every move in it
+  // printed twice, since each renumbered id reads as gone. The automatic pass's scope says every
+  // beat keeps its id, once, as the weave's says of its elements; a send-back's scope, where the
+  // note sets what changes, says nothing of ids.
+  it("on an automatic pass, every beat keeps its id; a send-back says nothing of ids", () => {
+    const ids = "Every beat keeps its id, because the director's edits find each beat by it.";
+    const left = directorsMap();
+    const auto = buildRevisionContext({
+      phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: left,
+      handEdits: standingOnMap(null, MAP, left), humanFeedback: null
+    }).contextSection;
+    expect(auto.split(ids).length - 1).toBe(1);
+    const sendBack = buildRevisionContext({
+      phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, previousOutput: left,
+      handEdits: standingOnMap(null, MAP, left), humanFeedback: 'Lead with the envelope.'
+    }).contextSection;
+    expect(sendBack).not.toContain(ids);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
