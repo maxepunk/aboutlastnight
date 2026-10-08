@@ -3470,10 +3470,6 @@ textarea.input {
   border-color: rgba(212, 168, 83, 0.35);
 }
 
-.map__card:focus-visible {
-  outline: 2px solid var(--accent-cyan);
-  outline-offset: 2px;
-}
 
 .map__card--selected {
   border-color: var(--accent-amber);
@@ -3552,11 +3548,25 @@ textarea.input {
   cursor: default;
 }
 
+/* The card's title is the button that selects it (fix B3), so it reads as the title's text. */
 .map__card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
   font-size: 1rem;
   font-weight: 500;
   line-height: 1.35;
+  text-align: left;
   color: var(--text-primary);
+  cursor: inherit;
+}
+
+.map__card-title:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
 }
 
 .map__synopsis {

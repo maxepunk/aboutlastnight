@@ -21,8 +21,9 @@
  *
  * A card shows its title with the arrow that opens its summary, its people, its dots (each names
  * its thread in its title), the "Card" mark and its thumbnails, and what the round says of it
- * under its title (spec 7). A card is a button named by the move it selects; selecting it (a
- * click, or Enter or Space where it has focus) opens it in place with its summary, its people, its threads by name, its photos with their descriptions, its
+ * under its title (spec 7). A card is a list item whose title is a button named by the move it
+ * selects (fix B3); selecting it (a click on the card, or on its title, or Enter or Space on the
+ * title) opens it in place with its summary, its people, its threads by name, its photos with their descriptions, its
  * controls and what's behind it; clicking it again, Escape, or selecting something else closes it.
  * A move in the tray and a photo open the same way. The summaries' toggles and the selection are
  * this screen's own state, folded each time the page opens.
@@ -344,21 +345,34 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
   function isSelected(sel) { return selected === sel; }
 
   /**
-   * A card's click and keys: a click, Enter or Space selects it, as a button's would (fix B3), and
-   * Escape closes it; one from its own controls or open parts does neither.
+   * A card's own click and keys: a click on the card outside its controls and open parts selects it,
+   * for the mouse, and Escape from anywhere inside it closes it. The keyboard selects it from its
+   * title, a button (cardTitle), since the card itself holds other controls (fix B3).
    */
   function selectHandlers(sel) {
     return {
       onClick: function (e) { if (!fromInside(e)) select(sel); },
-      onKeyDown: function (e) {
-        if (!e) return;
-        if (closeOnEscape(sel, e)) return;
-        if ((e.key === 'Enter' || e.key === ' ') && (!e.target || e.target === e.currentTarget)) {
-          if (typeof e.preventDefault === 'function') e.preventDefault();
-          select(sel);
-        }
-      }
+      onKeyDown: function (e) { closeOnEscape(sel, e); }
     };
+  }
+
+  /**
+   * A card's title (fix B3): the button that selects the card, named by the view's `labels.select`,
+   * which holds the title's words, and holding no other control. The card stays a list item, since
+   * a button's role would make its own controls (the summary's toggle, the thumbnails, a selected
+   * card's controls, an open editor's fields) presentational. A native button selects on a click,
+   * Enter and Space alike; a click on it is one of the card's controls, so the card's own click
+   * leaves it to the button.
+   */
+  function cardTitle(beat, sel, selectedHere) {
+    return React.createElement('button', {
+      type: 'button',
+      className: 'map__card-title',
+      'aria-label': beat.labels.select,
+      'aria-expanded': selectedHere,
+      title: !selectedHere && selectHeld ? selectHeld : undefined,
+      onClick: function () { select(sel); }
+    }, beat.label);
   }
 
   /** Escape closes what is selected, from anywhere inside it. */
@@ -835,13 +849,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     const editingHere = isEditing('beat', beat.id);
     return React.createElement('li', Object.assign({
       key: beat.key,
-      className: cardClass(beat, (selectedHere ? ' map__card--selected' : '') + (editingHere ? ' map__editing' : '')),
-      tabIndex: 0,
-      // Fix B3: a card is a control, a button named by the move it selects.
-      role: 'button',
-      'aria-label': beat.labels.select,
-      'aria-expanded': selectedHere,
-      title: !selectedHere && selectHeld ? selectHeld : undefined
+      className: cardClass(beat, (selectedHere ? ' map__card--selected' : '') + (editingHere ? ' map__editing' : ''))
     }, selectHandlers(sel), cardDrag(beat, slot, editingHere), dropTarget('card:' + beat.key, landOnCard(section, beat))),
       React.createElement('div', { className: 'map__card-head' },
         beat.synopsis && React.createElement('button', {
@@ -852,7 +860,7 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           disabled: selectedHere,
           onClick: function () { toggleSummary(sel); }
         }, summaryOpen ? '▾' : '▸'),
-        React.createElement('p', { className: 'map__card-title' }, beat.label)
+        cardTitle(beat, sel, selectedHere)
       ),
       heldHere(sel),
       marginOf(beat),
@@ -887,16 +895,10 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
     const selectedHere = isSelected(sel);
     return React.createElement('li', Object.assign({
       key: item.key,
-      className: cardClass(item, ' map__card--tray' + (selectedHere ? ' map__card--selected' : '')),
-      tabIndex: 0,
-      // Fix B3: a card is a control, a button named by the move it selects.
-      role: 'button',
-      'aria-label': item.labels.select,
-      'aria-expanded': selectedHere,
-      title: !selectedHere && selectHeld ? selectHeld : undefined
+      className: cardClass(item, ' map__card--tray' + (selectedHere ? ' map__card--selected' : ''))
     }, selectHandlers(sel), cardDrag(item, null, false)),
       React.createElement('div', { className: 'map__card-head' },
-        React.createElement('p', { className: 'map__card-title' }, item.label)),
+        cardTitle(item, sel, selectedHere)),
       heldHere(sel),
       React.createElement('div', { className: 'map__card-marks' }, item.dots.map(dot)),
       marginOf(item),

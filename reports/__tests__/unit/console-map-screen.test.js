@@ -475,14 +475,14 @@ describe('4D: selecting a card opens it in place', () => {
   const b4 = viewBeats(view).find((b) => b.id === 'b4');
   const TITLE = 'Marcus asks Quinn to raise the dose';
 
-  it('a card is focusable and opens on a click, with its summary, its people, its threads by name, its photos, its controls and what is behind it', () => {
+  it('a card opens on a click, with its summary, its people, its threads by name, its photos, its controls and what is behind it', () => {
     const mounted = mountMap({ data });
     const closed = cardOf(mounted.render(), TITLE);
-    expect(closed.props.tabIndex).toBe(0);
+    expect(elementsOf(closed, hasClass('map__card-title'))[0].type).toBe('button');
     expect(elementsOf(closed, hasClass('map__card-detail'))).toHaveLength(0);
     click(closed);
     const card = cardOf(mounted.render(), TITLE);
-    expect(card.props['aria-expanded']).toBe(true);
+    expect(elementsOf(card, hasClass('map__card-title'))[0].props['aria-expanded']).toBe(true);
     expect(mapClassesOf(card)).toContain('map__card--selected');
     expect(elementsOf(card, hasClass('map__synopsis')).map(textOf)).toEqual([b4.synopsis]);
     const [detail] = elementsOf(card, hasClass('map__card-detail'));
@@ -499,11 +499,10 @@ describe('4D: selecting a card opens it in place', () => {
     expect(elementsOf(behind, hasClass('map__meets')).map(textOf)).toEqual([b4.meets]);
   });
 
-  it('Enter selects a card that has focus; clicking it again, Escape, or selecting another closes it', () => {
+  it("the card's title selects it (a click, or Enter or Space on the button); clicking it again, Escape, or selecting another closes it", () => {
     const mounted = mountMap({ data });
     const selectedTitles = () => elementsOf(mounted.render(), hasClass('map__card--selected')).map((n) => textOf(elementsOf(n, hasClass('map__card-title'))[0]));
-    const first = cardOf(mounted.render(), TITLE);
-    first.props.onKeyDown({ key: 'Enter', target: first, currentTarget: first, preventDefault: () => {} });
+    elementsOf(cardOf(mounted.render(), TITLE), hasClass('map__card-title'))[0].props.onClick();
     expect(selectedTitles()).toEqual([TITLE]);
     click(cardOf(mounted.render(), TITLE));
     expect(selectedTitles()).toEqual([]);
@@ -1538,29 +1537,51 @@ describe('Fix B2: each control on the board is named by the words it shows', () 
   });
 });
 
-// Fix B3: a card is a control, so it has the role of a button and a name, the view's
-// `labels.select`, in a column and in the tray; as a button, Space selects it as Enter does.
+// Fix B3: a card's title is the control that selects it: a real button named by the view's
+// `labels.select`, holding no other control, with aria-expanded. The card itself stays a list item,
+// since it holds other controls (the summary's toggle, the thumbnails, a selected card's controls
+// and an open editor's fields), which a button's role would make presentational. A native button
+// selects on a click, Enter and Space alike.
 describe('Fix B3: a card has a role and a name', () => {
   const data = boardPayloadOf();
   const view = ViewLogic.mapView(data, ViewLogic.mapDraftOf(data, undefined));
+  const CONTROL_TYPES = ['button', 'select', 'input', 'textarea', 'a'];
+  const titleOf = (card) => elementsOf(card, hasClass('map__card-title'))[0];
+  const inner = (node) => elementsOf(node, (n) => n !== node && CONTROL_TYPES.includes(n.type));
 
-  it("each card in a column and in the tray is a button named by the view's labels.select", () => {
+  it("each card in a column and in the tray is a list item whose title is a button named by the view's labels.select", () => {
     const tree = mountMap({ data }).render();
     const cards = columnCards(tree);
-    expect(cards.map((c) => [c.props.role, c.props['aria-label']])).toEqual(viewBeats(view).map((b) => ['button', b.labels.select]));
     const tray = elementsOf(elementsOf(tree, hasClass('map__tray'))[0], hasClass('map__card'));
     expect(tray.length).toBeGreaterThan(0);
-    expect(tray.map((c) => [c.props.role, c.props['aria-label']])).toEqual(view.leftOut.items.map((b) => ['button', b.labels.select]));
+    const beats = [...viewBeats(view), ...view.leftOut.items];
+    [...cards, ...tray].forEach((card, i) => {
+      expect([card.type, card.props.role, card.props.tabIndex, card.props['aria-label'], card.props['aria-expanded']])
+        .toEqual(['li', undefined, undefined, undefined, undefined]);
+      const title = titleOf(card);
+      expect([title.type, title.props.type, title.props['aria-label'], title.props['aria-expanded'], textOf(title)])
+        .toEqual(['button', 'button', beats[i].labels.select, false, beats[i].label]);
+      expect(inner(title)).toEqual([]);
+    });
   });
 
-  it('Space selects a card that has focus, as Enter does', () => {
+  it('the title selects its card on a click, as Enter and Space do on a native button, and shows it open', () => {
     const mounted = mountMap({ data });
     const title = 'Marcus asks Quinn to raise the dose';
+    titleOf(cardOf(mounted.render(), title)).props.onClick();
     const card = cardOf(mounted.render(), title);
-    let prevented = false;
-    card.props.onKeyDown({ key: ' ', target: card, currentTarget: card, preventDefault: () => { prevented = true; } });
-    expect(prevented).toBe(true);
-    expect(mapClassesOf(cardOf(mounted.render(), title))).toContain('map__card--selected');
+    expect(mapClassesOf(card)).toContain('map__card--selected');
+    expect(titleOf(card).props['aria-expanded']).toBe(true);
+    expect(inner(titleOf(card))).toEqual([]);
+    titleOf(card).props.onClick();
+    expect(mapClassesOf(cardOf(mounted.render(), title))).not.toContain('map__card--selected');
+  });
+
+  it('a tray move is selected from its title too', () => {
+    const mounted = mountMap({ data });
+    const label = view.leftOut.items[0].label;
+    titleOf(cardOf(mounted.render(), label)).props.onClick();
+    expect(titleOf(cardOf(mounted.render(), label)).props['aria-expanded']).toBe(true);
   });
 });
 
