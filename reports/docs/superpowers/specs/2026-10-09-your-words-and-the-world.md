@@ -77,17 +77,22 @@ The session report from the game engine logged the bonus and the transfers of 10
 
 ## 5. The article's authors, known to every stage
 
-**Nova.** Every writer and judge is told Nova's name for the session, from the first name the director gave at the start: "Nova, the NovaNews reporter who writes this article, signs it Cassandra Nova. The director's notes may call Nova by that first name." The character-IDs parse knows it too, so it never "corrects" the name to a player's, and a photo's entry marks Nova as the article's writer. Today the map writer met "Cassandra" in a photo, no first name for Nova, and the game character Cass Zhang in the canonical roster, and raised her as missing from the roster. A caption names Nova by that name, as 100426's "Ashe Motoko and Cassandra Nova compare notes" did.
+**Nova.** Every writer and judge is told Nova's name for the session, from the first name the director gave at the start: "Nova, the NovaNews reporter who writes this article, signs it Cassandra Nova. The director's notes may call Nova by that first name." Only on site can a photo show Nova. In an on-site session, the character-IDs parse knows Nova's name too, so it never "corrects" the name to a player's, and a photo's entry marks Nova as the article's writer. Today the map writer met "Cassandra" in a photo, no first name for Nova, and the game character Cass Zhang in the canonical roster, and raised her as missing from the roster. A caption names Nova by that name, as 100426's "Ashe Motoko and Cassandra Nova compare notes" did.
 
-**The guest reporter.** The meeting's writer, the map's writer and the judges are told who the guest reporter is and that they share the byline. Today only the article's byline line knows. On the timeline, a memory turned in under the guest reporter's name is marked as theirs: "named: Taylor (the guest reporter, Taylor Chase)".
+**The guest reporter, when the session has one.** The meeting's writer, the map's writer and the judges are told who the guest reporter is and that they share the byline. Today only the article's byline line knows. On the timeline, a memory turned in under the guest reporter's name is marked as theirs: "named: Taylor (the guest reporter, Taylor Chase)". A session with no guest reporter prints no such line.
 
 How the article writes about its authors is phase 15's (section 6).
 
 ## 6. The article's authors are in the story
 
-- **On site, Nova is in the room.** Players make deals with Nova, tell Nova things, talk with Nova and appear in photos with Nova. Nova still never votes, joins the room's accusation or exposes a memory. The rules today say Nova "is never one of the room", and the on-site block lets Nova's "we" take in the room "for being there and for nothing more"; both change.
-- **What Nova said in the room** is told in Nova's own voice, in prose ("I asked Sam whether…"), never as a quote.
-- **The guest reporter** shares the byline for what they contributed, in either mode. A memory they turned in under their name is their reporting for this article, and the article credits it that way, never as a conflict to disclose or a name on a board. How they earned the byline, such as a deal with Nova, is part of the story where it carries it.
+Where Nova stood depends on the session's reporting mode, and the mode block says which.
+- **On site, Nova is a character in the room, working it for the story.** Nova makes and offers deals, such as a byline for memories; questions people; is told secrets; is asked for theories; and appears in photos. On 100426 the director's notes name Nova 27 times: "Ashe made a deal with Nova", "Nova offered Taylor a chance to screw Ashe over", "Nova asked if he thought one of them did it".
+  - The article tells Nova's own part in the first person where it carries the story: "Ashe Motoko had made me a deal", "I also tried to work with Taylor on this article".
+  - What Nova said in the room is told in prose ("I asked Sam whether…"), never as a quote. What Nova saw and heard is Nova's own witness.
+  - The rules today say Nova "is never one of the room", and the on-site block lets Nova's "we" take in the room "for being there and for nothing more". Both change.
+- **Remote, Nova was outside the warehouse and took no part in the room.** The players had no dealings with Nova beyond turning memories in. The room's events reached Nova as reports, told as scenes with attribution where it matters, as today's remote block says. Nova is never in a photo. The notes of the remote sessions 092026, 100226 and 100326 never mention Nova.
+- **In both modes, Nova takes no side in the verdict.** Nova never votes, joins the room's accusation or exposes a memory. "Uninterested" is about the verdict, not the story: the police deal made Nova a neutral monitor of what the room decides, and Nova works for the story.
+- **A guest reporter, when the session has one,** is in the room and shares the byline for what they contributed, in either mode. Many sessions have none, remote ones included. A memory they turned in under their name is their reporting for this article, and the article credits it that way, never as a conflict to disclose or a name on a board. How they earned the byline, such as a deal with Nova on site, is part of the story where it carries it.
 - **Nova's motive.** C12 allows "one honest line about Nova's own motive"; it produced 100426's "I should declare an interest here", which the director cut. It goes.
 
 ## 7. Nova holds only what exists in the world
@@ -138,9 +143,10 @@ After each session's readout, the director's desk edits are read for what they d
 
 The director reads the new text before the build, as they read the rule text of phases 3 and 4.
 - **world.md:** the investigation's time of day (section 10); the authors in the room (section 6); the record's exception for character sheets (section 7); the mechanics as Nova's knowledge, never an explanation (section 8). World.md and the truth rules render the same in both modes, so the time of day comes from code's line and Nova in the room lives in the on-site block.
-- **truth-rules.md:** T1 (opinion as one of Nova's forms; the sheets' exception; the director's words including their notes at the stops); T4 (account names, section 8); T5 (the money's time of day; backstory in place of "motive background"); T6 (the director's words, with the anonymity sentence the lint holds); T7 (the time of day); T8 (Nova's place, section 6); T12 (Nova's own lines in prose).
-- **mode-on-site.md:** Nova in the room, dealing and talking with the players, in photos; never voting, accusing or exposing.
-- **craft files:** C4 (the one plain line goes); C11 (the guest reporter's turn-ins); C12 (opinion and the theory past the room; the motive line goes; players' choices in their characters' terms); C13 (critique past the room); C14 and C2 (the closing, no forced form); C9 (no card from a sheet).
+- **truth-rules.md:** T1 (opinion as one of Nova's forms; the sheets' exception; the director's words including their notes at the stops); T4 (account names, section 8); T5 (the money's time of day; backstory in place of "motive background"); T6 (the director's words, with the anonymity sentence the lint holds); T7 (the time of day); T8 (in both modes, Nova takes no side in the verdict, and the mode block says where Nova stood and what part Nova took in the room, section 6); T12 (Nova's own lines in prose).
+- **mode-on-site.md:** Nova a character in the room, working it for the story: dealing, questioning, told things, asked for theories, in photos; Nova's own part told in the first person; never voting, accusing or exposing.
+- **mode-remote.md:** Nova took no part in the room: no dealings beyond the memories turned in, never in a photo. The rest of today's block stands.
+- **craft files:** C4 (the one plain line goes); C11 (a guest reporter's turn-ins, when the session has one); C12 (opinion and the theory past the room; the motive line goes; players' choices in their characters' terms); C13 (critique past the room); C14 and C2 (the closing, no forced form); C9 (no card from a sheet).
 - **CONTEXT.md:** Note (every note counts as the director's words), Guest reporter, Character sheet, and the time of day.
 
 ## 14. Sessions already running
@@ -168,7 +174,7 @@ The director reads the new text before the build, as they read the rule text of 
   - whether the desk edits still make the five corrections of section 2;
   - every judge finding against a line that follows a note of the director's;
   - the input review's ledger line, if the game engine's clock is still off;
-  - Nova and the guest reporter in the article and its captions;
+  - Nova in the article and its captions, by the session's mode, and the guest reporter when there is one;
   - the time of day, if the session runs before 5 PM.
 
 ## 17. Out of scope
@@ -200,9 +206,8 @@ This section is where the design meets the code. The surveys, kept locally at `.
   - The repo's fixtures with transfers up to 2.5 hours after the last sale stay inside the three-hour margin, unshifted.
 - **The authors (section 5).**
   - Nova's line: `generateRosterSection`'s Nova entry (`prompt-builder.js` :192-204, from `theme-config.js` :82) gains the session's first name (`sessionConfig.journalistFirstName`). It moves all three writer pins; the fixture's first name is `'Cass'`.
-  - The character-IDs parse (`image-prompt-builder.js` ~:274, `photo-nodes.js` :672-676) and the enrichment's `ROSTER:` line gain Nova's names beside the roster.
-  - The photo entries (`heroPhotoEntry`, `buildAvailablePhotos` in `ai-nodes.js`, which hold state) mark a name equal to Nova's first name, or "Nova", as the article's writer.
-  - The guest reporter joins `buildSessionFacts` / `_sessionFactsSection` and the weave writer's roster block; `record-view.js` `turnInName` (:214) marks a turn-in under the guest reporter's name, matched by full name or first name, case-insensitively.
+  - On site only (`sessionConfig.reportingMode`): the character-IDs parse (`image-prompt-builder.js` ~:274, `photo-nodes.js` :672-676) and the enrichment's `ROSTER:` line gain Nova's names beside the roster, and the photo entries (`heroPhotoEntry`, `buildAvailablePhotos` in `ai-nodes.js`, which hold state) mark a name equal to Nova's first name, or "Nova", as the article's writer. A remote session's parse and entries are unchanged.
+  - Only when `sessionConfig.guestReporter` is set: the guest reporter joins `buildSessionFacts` / `_sessionFactsSection` and the weave writer's roster block, and `record-view.js` `turnInName` (:214) marks a turn-in under their name, matched by full name or first name, case-insensitively. A session with none prints nothing new, so the pinned fixture (remote, no guest reporter) moves only for Nova's line.
 - **Character sheets (section 7).**
   - A sheet is told apart by its name ending " Character Sheet", backed by its `▌[FLAGGED] SUSPECTED MOTIVE` heading; `basicType` is "Document" for sheets and 33 other items, so it cannot decide.
   - `record-view.js` `renderDocument` (:113-145) prints a sheet with its own kind and a one-line label, and drops the SUSPECTED MOTIVE and WHERE TO START blocks by heading. Character extraction renders through the same view (`renderRecordView(..., {buried:false})`), so it gets the trimmed sheet too.
@@ -227,7 +232,8 @@ This section is where the design meets the code. The surveys, kept locally at `.
 - Every note the director sends at a stop counts as their words for every later writer, the judges, the fact check and the evidence check. What a note says happened or rules is record; a direction it gives is written as Nova's reading and never flagged for being followed.
 - Ledger rows the session report logs off the game's clock are shifted to line up, the bonus included, by one whole-hour shift anchored on the first sale. The root fix is the director's, in the game engine.
 - A session that starts at 5:00 PM or later runs in the morning in the story; an earlier one runs in the afternoon. The investigation cannot begin before 5 AM, since Marcus died around 4 AM.
-- Nova in a photo is named by the first name the director gave Nova for the session.
+- On site, Nova is a character in the room, working it for the story, and may be in the photos, named by the first name the director gave Nova for the session. Remote, Nova took no part in the room: no dealings beyond the memories turned in, and never in a photo. In both, Nova takes no side in the verdict.
+- Many sessions have no guest reporter, remote ones included; everything about the guest reporter applies only when there is one.
 - A character sheet's backstory may be reported as evidence; the sheet, its suspected motive and its goals never appear.
 - Nova may wonder about an account's namesake, or read the name as a frame, as opinion or a question; never as fact unless the director saw the sale or it happened in the open.
 - Ending with the investigation still running is common, never required: no rule forces a form.
