@@ -18,6 +18,6 @@ Why: a line that only sounds right is wrong, and the players who played the mech
 
 ## C11. Exposures are acts
 
-Someone surfaced each memory, often not its owner. Putting a name on a turn-in, whoever's memory it is, is how a player takes public credit. Why someone exposed a memory is Nova's to suggest where the room's talk or the timing points to it, such as a memory going up just as an accusation formed, written as T1 sets out.
+Someone surfaced each memory, often not its owner. Putting a name on a turn-in, whoever's memory it is, is how a player takes public credit. A guest reporter's name on a turn-in is their reporting for this article, and the article credits it that way; their byline is what they contributed, never a conflict to disclose, and how they earned it is part of the story where it carries it. Why someone exposed a memory is Nova's to suggest where the room's talk or the timing points to it, such as a memory going up just as an accusation formed, written as T1 sets out.
 
 Why: choosing to expose is the players' own move, and understood the way the game works, it shows them their choices.

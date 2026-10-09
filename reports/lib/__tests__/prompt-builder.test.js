@@ -374,10 +374,13 @@ describe('PromptBuilder', () => {
         : b.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP);
     };
 
-    it.each(['outline', 'article'])('the %s system prompt says the party was last night and the investigation this morning', async (which) => {
+    // Task A of phases 14 and 15: the world no longer fixes the morning. The investigation is
+    // the day after the party, at the time of day the session's facts give.
+    it.each(['outline', 'article'])('the %s system prompt says the party was last night and the investigation the day after', async (which) => {
       const { systemPrompt, userPrompt } = await stagesFor('on-site', which);
       expect(systemPrompt).toContain('**The party** happened last night');
-      expect(systemPrompt).toContain('**The investigation** is the game itself, this morning');
+      expect(systemPrompt).toContain('**The investigation** is the game itself, in the warehouse, the day after the party.');
+      expect(systemPrompt).not.toContain('this morning, in the warehouse');
       expect(userPrompt).not.toContain('<TEMPORAL_DISCIPLINE>');
       expect(systemPrompt).not.toContain('the game session');
     });

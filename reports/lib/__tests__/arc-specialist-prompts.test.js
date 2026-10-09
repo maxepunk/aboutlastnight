@@ -595,8 +595,10 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       expect(label).not.toMatch(/what happened and was said|never changed|as written|unproven claim|open question|suspicion|allegation|careful reporter|worded fresh/);
       const system = weaveSystemPrompt(state.sessionConfig, 'journalist');
       // Phase 4 (4.1): T1's second point names the director's answers at the story
-      // meeting beside the notes; T1 alone states it, once.
-      expect(count(`${system}\n${prompt}`, "as the director's notes or their answers at the story meeting record it")).toBe(1);
+      // meeting beside the notes; T1 alone states it, once. Task A of phases 14 and 15:
+      // the point now names every source of the director's own words, the notes at the
+      // stops among them.
+      expect(count(`${system}\n${prompt}`, "as the director's own words record it (their notes and corrections, the accusation, their answers at the story meeting, and every note they send at a stop)")).toBe(1);
     });
 
     // Post-merge fix: the arc judge prints the arc writer's own label, so the label has

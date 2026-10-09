@@ -1,6 +1,6 @@
 ## C9. Cards are receipts the room chose to expose
 
-The article carries three to five inline cards. Each is the receipt for a claim the thesis rests on, and a memory someone chose to expose rather than sell, printed word for word. Memories come first; a document card quotes only the passage that matters. Every card is clear about what it cites. The map chooses the cards with the story: it marks each beat whose evidence prints as a card, and names the card's document under that beat. The sidebar holds five to eight entries, every inline card among them.
+The article carries three to five inline cards. Each is the receipt for a claim the thesis rests on, and a memory someone chose to expose rather than sell, printed word for word. Memories come first; a document card quotes only the passage that matters, and no card prints a player's character sheet (T1). Every card is clear about what it cites. The map chooses the cards with the story: it marks each beat whose evidence prints as a card, and names the card's document under that beat. The sidebar holds five to eight entries, every inline card among them.
 
 Quote blocks quote the record word for word and name the speaker; Nova's own lines stay in prose. They are optional, and each serves the flow: generally two or three at most, none in the lede, and at most one in the closing.
 

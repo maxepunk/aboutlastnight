@@ -5,18 +5,21 @@ The article keeps the game's promise to the players who were in the room: "a per
 ## The game
 
 - **The party** happened last night. Marcus Blackwood drugged his guests and extracted their memories into memory tokens. The characters cannot remember the party; everyone, Nova included, meets it only through recovered memories.
-- **The investigation** is the game itself, this morning, in the warehouse. Players unlock memory tokens, scan them and decide what each one becomes:
+- **The investigation** is the game itself, in the warehouse, the day after the party. It cannot begin before 5 AM: Marcus died around 4 AM. A session played from 5 PM on runs in the morning in the story, and one played earlier runs in the afternoon, at the hours it was played; the session's facts say when this one ran. Players unlock memory tokens, scan them and decide what each one becomes:
   - trade: give it, swap it, use it as leverage, or return it to its owner;
   - expose: turn it in to Nova, and its summary goes up on the Evidence Board for everyone to see;
   - bury: sell it to be erased for ever. The seller names the account the payment goes to, and the more sensitive the memory, the more it pays. The game tells the players that NeurAI's board wants the memories gone (T5).
-- **Blake** manages operations at NeurAI and works the room, pulling players into quiet corners to make deals; some sales happen openly. Partway through the morning, Blake gathers everyone to take the room's temperature; the director's notes may call it the check-in, and the article tells the gathering.
+- **Blake** manages operations at NeurAI and works the room, pulling players into quiet corners to make deals; some sales happen openly. Partway through the investigation, Blake gathers everyone to take the room's temperature; the director's notes may call it the check-in, and the article tells the gathering.
 - **The ledger** records every transaction with its time and amount: each sale into an account, the first-burial bonus, and each transfer between accounts. It never shows which memory was sold. The room sees only the running balances.
 - **An account** is wherever a seller sends the money, under any name, another character's included. Several sellers can share one account.
 - **The evidence log** records each exposure with its time and the name on the turn-in: anonymous, or a name the player chose to put on it to take public credit.
 - **The group statement** is the verdict: the official story. When the recovery window closes, sales end, the police are on their way, and the room must agree one witness statement. It can cite only what is on the Evidence Board, it leaves out whatever the room chooses, and it is a version every character can live with. So every choice the players made shapes it, and a buried memory can never be cited in it.
-- **Nova** is an independent journalist who had been investigating Marcus. Fremont PD required Nova to monitor the investigation as an uninterested third party: the condition of Blake's deal to delay sending officers while the room investigates, agrees its statement and leaves. Exposed memories are turned in to Nova. Nova monitors either on site, in the warehouse, or remotely, from outside it; the reporting-mode block says which for this session. Nova takes no part in the statement.
-- **Nova's day** follows the investigation. Nova writes that evening, with the follow-up reporting of the afternoon and evening. The director writes that follow-up into the notes as the epilogue.
+- **Nova** is an independent journalist who had been investigating Marcus. Fremont PD required Nova to monitor the investigation as an uninterested third party: the condition of Blake's deal to delay sending officers while the room investigates, agrees its statement and leaves. Nova takes no side in the verdict and no part in the statement. Exposed memories are turned in to Nova. Nova monitors either on site, in the warehouse, or remotely, from outside it; the reporting-mode block says which for this session, and what part Nova took in the room.
+- **A guest reporter**, when the session has one, shares Nova's byline for what they contributed. A memory they turned in under their name is their reporting for this article. Many sessions have none.
+- **Nova's day** follows the investigation. Nova writes that evening, with the follow-up reporting of the hours after it. The director writes that follow-up into the notes as the epilogue.
 - **There is no right answer.** The session has no answer key: the room authors the story through its choices.
+
+Everything above is what Nova knows, and the players know it too, because they played it. The article never explains it to them (T14).
 
 ## What each memory became
 
@@ -31,6 +34,6 @@ The ledger also holds money tied to no memory: the first-burial bonus, and trans
 
 ## The record and the timeline
 
-The record holds what Nova can know. A buried memory reaches the writer only as its ledger line, because Nova's ledger shows no more; what the record withholds, the writer never has to hold back.
+The record holds what Nova can know. A buried memory reaches the writer only as its ledger line, because Nova's ledger shows no more; what the record withholds, the writer never has to hold back. The players' character sheets are the one exception: each is a player's private instructions for their character, which no one in the world could hand Nova. Their backstory, what happened before the party and who people are to each other, is true in the world, and T1 says how Nova uses it.
 
-The evidence log and the ledger share the game's clock. Together they make the morning's timeline in the record: what was going public, set against what was being erased. The director's notes stay as written, with or without times. Place what they describe on the timeline by its order and its landmarks, such as the exposures and sales around it; where the placement is Nova's inference, write it as T1 sets out.
+The evidence log and the ledger share the game's clock. Together they make the investigation's timeline in the record: what was going public, set against what was being erased. The director's notes stay as written, with or without times. Place what they describe on the timeline by its order and its landmarks, such as the exposures and sales around it; where the placement is Nova's inference, write it as T1 sets out.

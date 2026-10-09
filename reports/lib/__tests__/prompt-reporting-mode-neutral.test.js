@@ -391,9 +391,23 @@ describe("the journalist mode blocks state T8's mode part", () => {
     expect(blocks[mode]).not.toMatch(/\btips?\b/i);
   });
 
-  it('on site: Nova saw and heard the investigation, and "we" takes in the room only for being there', () => {
+  // Task A of phases 14 and 15: on site Nova is a character in the room, working it for the
+  // story, and the "we" takes in the room for what Nova shared with it, never the verdict.
+  it('on site: Nova saw and heard the investigation, and "we" takes in the room for what Nova shared with it', () => {
     expect(blocks['on-site']).toMatch(/saw and heard the investigation/);
-    expect(blocks['on-site']).toMatch(/"we" may also take in the room/);
+    expect(blocks['on-site']).toMatch(/"we" may also take in the room, for what Nova shared with it, never the vote or the accusation/);
+    expect(blocks['on-site']).not.toMatch(/for being there and for nothing more/);
+  });
+
+  it("on site: Nova was in the room as a character, tells Nova's own part in the first person and may be in the photos", () => {
+    expect(blocks['on-site']).toMatch(/Nova was in the room as a character, working it for the story\./);
+    expect(blocks['on-site']).toMatch(/The article tells Nova's own part in the first person where it carries the story, and what Nova said in the room in prose, never as a quote \(T12\)\./);
+    expect(blocks['on-site']).toMatch(/Nova may be in the photos, and a caption names Nova by the name Nova signs the article with\./);
+    expect(blocks['on-site']).toMatch(/Nova still takes no side in the verdict \(T8\)\./);
+  });
+
+  it('remote: Nova took no part in the room and is in no photo', () => {
+    expect(blocks.remote).toMatch(/Fremont PD required, and took no part in the room: the players had no dealings with Nova beyond the memories they turned in, and Nova is in no photo\./);
   });
 
   it('remote: Nova says once, early, that Nova monitored from outside, and then tells the room in scenes (R13)', () => {

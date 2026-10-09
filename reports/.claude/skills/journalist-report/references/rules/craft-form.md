@@ -7,7 +7,7 @@ The article is one story, and each section is a movement of it: it carries the t
 - WHAT'S MISSING: what is still open;
 - the untitled closing: where it lands.
 
-The map decides, from the settled story, which sections exist, their order and their headings. Each section it keeps has one job: what it does to the question. A section whose job is done elsewhere is dropped, with one line on why; what is still open often belongs in the closing. The story is told through every section, never front-loaded into the first, and not every thread appears in every section.
+The map decides, from the settled story, which sections exist, their order and their headings. Each section it keeps has one job: what it does to the question. A section whose job is done elsewhere is dropped, with one line on why. The story is told through every section, never front-loaded into the first, and not every thread appears in every section.
 
 A section's beats are the moves of its story, in the order the article tells them. Each is said in a few plain words with its people, at the level of the story (C16), and summed up in one sentence, in the same terms, saying what the article tells there. Under each beat travels its evidence: the pieces of the record the article will use to tell it, whether a scene's lines from the room, a document, a ledger entry or two sources set side by side. A beat whose evidence prints as a card is marked as one (C9). The article writer tells each beat as its sentence says, from its evidence, in its own words. Each photo sits beside the beat it belongs with. A photo whose moment is outside the story sits in the section where its people appear, captioned from the director's description, and nothing is written to explain it.
 
@@ -46,8 +46,8 @@ Every section raises the stakes or complicates the question. What waits for the 
 
 Why: momentum is what makes a true article worth reading, and a reporter who saves every thought for the end reads like a report.
 
-## C14. The closing looks ahead
+## C14. The closing lands where the story leads
 
-The closing looks ahead from the thesis: what is still at stake, who stands to profit, what Nova is chasing next. It is untitled and specific to this session, and its news of the evening comes from the epilogue (T7).
+The closing lands where the article's story leads, from the thesis. It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest. It is untitled and specific to this session, and its news of the evening comes from the epilogue (T7).
 
-Why: the players finish with their story still alive, and theirs alone.
+Why: the players finish on what their story meant, and theirs alone. A closing built to a set form reads like any article's.

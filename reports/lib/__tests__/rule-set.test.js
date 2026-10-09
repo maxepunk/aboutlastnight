@@ -199,7 +199,12 @@ describe('the mode block', () => {
     const onSite = loadModeBlock('on-site', JOURNALIST);
     const remote = loadModeBlock('remote', JOURNALIST);
     expect(onSite).not.toBe(remote);
-    expect(ruleIds(onSite)).toEqual(['T8']);
+    // Task A of phases 14 and 15: the on-site block's body points at T12 and T8 (Nova's
+    // lines in prose, no side in the verdict), so each block states T8 as its one item and
+    // its body points only at items the set states (the lint below).
+    expect(itemIds(onSite)).toEqual(['T8']);
+    expect(itemIds(remote)).toEqual(['T8']);
+    expect(ruleIds(onSite)).toEqual(['T8', 'T12', 'T8']);
     expect(ruleIds(remote)).toEqual(['T8']);
   });
 
@@ -365,7 +370,8 @@ describe('the items phase 4 rewrites (task 4.1)', () => {
     ['C8', 'craft-material', 'The article carries each line word for word and in the right mouth (T12).'],
     ['C7', 'craft-material', 'The map places every player in a beat, through something the record shows they did or said, in the section where it matters, never as a roll call.'],
     ['C15', 'craft-questions', "The director answers each in its own box at the story meeting, and the answer travels with its question to every later writer as the director's words."],
-    ['T1', 'truth-rules', "What happened or was said in the room, as the director's notes or their answers at the story meeting record it, Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
+    // Task A of phases 14 and 15 (2026-10-09) rewrote the T1 sentence this row pinned, so the
+    // director's words take in every note they send at a stop; its block below pins it.
     // T2 gained the desk clause on the director's ruling (2026-10-04): the desk edits come first.
     ['T2', 'truth-rules', "The map places each alternative theory the room debated, a line each, and the article reports every one the map carries, as the director's desk edits leave it; a theory the director strikes from the map or cuts at the desk stays out."],
     ['T5', 'truth-rules', 'An entry that looks like a mistake is raised as a question at the story meeting (C15); with no answer, a later writer leaves that entry out of print.'],
@@ -461,6 +467,89 @@ describe('the items phase 4b piece 4 rewrites (task 4A)', () => {
   // The read takes the order of the beats out of the article writer's list: the order is the map's.
   it('C16 no longer gives the article writer the order of the beats within each section', () => {
     expect(itemText('craft-story', 'C16')).not.toContain('the order of the beats within each section');
+  });
+});
+
+/**
+ * Phases 14 and 15, task A: the rule text the director approved on 2026-10-09
+ * (rule-text-read.md in the phases' workspace; the spec's section 13). The article sits in
+ * its world: its authors in the story (Nova on site a character in the room, remote no part
+ * in it, in both no side in the verdict; the guest reporter when there is one), only what
+ * exists in the world (a character sheet backs only its backstory), the game's rules off the
+ * page, the account-name rule the director set, opinion and a theory past the room, the
+ * closing with no forced form, the time of day the session's facts give, and every note the
+ * director sends at a stop among their words. Each changed item carries one of the read's
+ * new sentences inside its own item, and world.md its new paragraphs. The lint above holds
+ * the rest: each item once, every pointer, no em-dash, no gendered Nova and nothing on the
+ * removed list.
+ */
+describe('the items phases 14 and 15 rewrite (task A)', () => {
+  const world = fs.readFileSync(path.join(RULES_ROOT, 'world.md'), 'utf8');
+
+  it.each([
+    "**The investigation** is the game itself, in the warehouse, the day after the party. It cannot begin before 5 AM: Marcus died around 4 AM. A session played from 5 PM on runs in the morning in the story, and one played earlier runs in the afternoon, at the hours it was played; the session's facts say when this one ran.",
+    "Partway through the investigation, Blake gathers everyone to take the room's temperature;",
+    'Nova takes no side in the verdict and no part in the statement.',
+    'the reporting-mode block says which for this session, and what part Nova took in the room.',
+    "- **A guest reporter**, when the session has one, shares Nova's byline for what they contributed. A memory they turned in under their name is their reporting for this article. Many sessions have none.",
+    'Nova writes that evening, with the follow-up reporting of the hours after it.',
+    'Everything above is what Nova knows, and the players know it too, because they played it. The article never explains it to them (T14).',
+    "The players' character sheets are the one exception: each is a player's private instructions for their character, which no one in the world could hand Nova.",
+    "Their backstory, what happened before the party and who people are to each other, is true in the world, and T1 says how Nova uses it.",
+    "Together they make the investigation's timeline in the record: what was going public, set against what was being erased."
+  ])('world.md carries the approved text: %s', (text) => {
+    expect(world).toContain(text);
+  });
+
+  it.each([
+    ['T1', 'truth-rules', "A player's character sheet backs only its backstory: Nova may report and quote it as evidence, never names the sheet as its source, and never uses its suspected motive, its goals or its instructions to the player."],
+    ['T1', 'truth-rules', "What happened or was said in the room, as the director's own words record it (their notes and corrections, the accusation, their answers at the story meeting, and every note they send at a stop), Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
+    ['T1', 'truth-rules', "A note that gives the article a direction, such as a theory to pursue, is the director's direction, not a fact: Nova writes it as Nova's own reading."],
+    ['T1', 'truth-rules', "or an opinion Nova commits to and marks as Nova's"],
+    ['T1', 'truth-rules', "A theory may reach past the room, toward where the epilogue takes the world, and stays Nova's."],
+    ['T4', 'truth-rules', "Otherwise Nova may wonder about the character an account is named after, or read the name as someone's attempt to frame them, as Nova's opinion or a question"],
+    ['T4', 'truth-rules', "Totals show where the investigation's money went."],
+    ['T5', 'truth-rules', "The ledger holds the investigation's payments for erasure. Money from before the party, such as an investment, a fortune or an inheritance, is the characters' backstory, from the documents."],
+    ['T6', 'truth-rules', 'their answers at the story meeting, or a note they sent at a stop.'],
+    ['T7', 'truth-rules', "The investigation is told at the time of day the session's facts give, morning or afternoon, and never called by the other."],
+    ['T8', 'truth-rules', 'Nova takes no side in the verdict: Nova never votes, joins the room\'s accusation or exposes a memory. "Uninterested" is about what the room decides, not the story, which Nova works.'],
+    ['T8', 'truth-rules', 'It also says where Nova stood and what part Nova took in the room.'],
+    ['T14', 'truth-rules', 'Nor does the article explain how the game works: the players played it.'],
+    ['C4', 'craft-telling', 'Where the record stops on something that matters, Nova reasons inside the world (T14) and lets it lead into the suspicion, the opinion or the question it raises.'],
+    ['C12', 'craft-voice', "Nova commits to a reading: where the session gives reason, Nova offers a theory as Nova's own opinion, and it may reach past the room toward where the epilogue takes the world (T1)."],
+    ['C12', 'craft-voice', "tells each player's choices in their character's terms, and takes a player's suspicion as a lead to follow, not as their belief alone."],
+    ['C11', 'craft-material', "A guest reporter's name on a turn-in is their reporting for this article, and the article credits it that way;"],
+    ['C13', 'craft-judgement', "it aims where this session's evidence and its epilogue lead, such as NeurAI, its board, its technology and the business of buying memories, written as Nova's suspicion or opinion (T1, T5)."],
+    ['C2', 'craft-form', 'A section whose job is done elsewhere is dropped, with one line on why. The story is told through every section'],
+    ['C14', 'craft-form', "It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest."],
+    ['C9', 'craft-cards', "Memories come first; a document card quotes only the passage that matters, and no card prints a player's character sheet (T1)."]
+  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
+    expect(itemText(name, id)).toContain(sentence);
+  });
+
+  it('C14 carries the approved title', () => {
+    expect(itemText('craft-form', 'C14').split('\n')[0]).toBe('## C14. The closing lands where the story leads');
+  });
+
+  // The read retires these wordings from the rule files (the spec's section 15; R12).
+  it.each([
+    ['truth-rules', 'is never one of the room'],
+    ['truth-rules', 'from outside its choices'],
+    ['truth-rules', 'is never a reason to suspect its namesake'],
+    ['truth-rules', 'on the morning clock'],
+    ['truth-rules', "the morning's"],
+    ['truth-rules', 'motive background'],
+    ['mode-on-site', 'for being there and for nothing more'],
+    ['craft-telling', 'Nova says so in one plain line'],
+    ['craft-voice', "One honest line about Nova's own motive"],
+    ['craft-voice', "the morning's"],
+    ['craft-form', 'what is still open often belongs in the closing'],
+    ['craft-form', 'The closing looks ahead from the thesis'],
+    ['world', 'this morning, in the warehouse'],
+    ['world', 'through the morning']
+  ])('%s.md no longer says "%s"', (name, phrase) => {
+    const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8');
+    expect(text).not.toContain(phrase);
   });
 });
 
@@ -812,7 +901,8 @@ describe('the removed-phrase fixture: the wording 3.8 retires from the rule file
     'The game tells the players that NeurAI\'s board wants the memories gone (T5).',
     'where the placement is Nova\'s inference, write it as T1 sets out.',
     'Nova says so once, early, as the start of Nova\'s questions.',
-    'The closing looks ahead from the thesis: what is still at stake, who stands to profit, what Nova is chasing next.',
+    // Task A of phases 14 and 15 retired round 7's C14 sentence; C14's sentence now.
+    "It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest.",
     'The deliberation is usually the room\'s decisive scene: the theories debated and dropped, and how the room came to its verdict.',
     'Why someone exposed a memory is Nova\'s to suggest where the room\'s talk or the timing points to it',
     'where it stops, ask the question a reporter would ask of that gap.',
