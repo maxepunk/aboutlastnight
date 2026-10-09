@@ -54,6 +54,7 @@ const { renderRecordView, recordIdOf } = require('../../prompt-renderers/record-
 const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
+const { guestReporterLine } = require('../../prompt-renderers/session-authors');
 const { directorAccusationText } = require('../../accusation-verdict');
 // rosterWithPronounsSection: the roster with pronouns (phase 3, 3.10; T9), the one
 // builder the arc writer and the outline writer print it with. systemPromptOpening: the
@@ -306,8 +307,8 @@ ${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one on
  * The arc writer's user prompt up to its <DIRECTOR_GUIDANCE>: the output format; what
  * the room concluded (the accusation and the director's account of it, the whiteboard
  * reading, the director's notes and corrections and their sentences about Blake and the
- * Valet, the investigation focus, the roster, the character categories, the roster with
- * pronouns and the character context); the record with its morning timeline and the
+ * Valet, the investigation focus, the roster with the guest reporter's line when the session
+ * has one, the character categories, the roster with pronouns and the character context); the record with its morning timeline and the
  * sources a piece of evidence may name; the weave's task; and the rule set's craft files, last,
  * by the placement ruling, from the theme's rules folder (R14). The arc rework opens with
  * the same sections (phase 2, 2.3), so whatever the writer reads reaches its rework.
@@ -321,6 +322,9 @@ function buildWeaveSections(state) {
   const allCharacters = Object.keys(state.canonicalCharacters || {});
   const { craft } = loadRuleSet('arc', { theme: state.theme || 'journalist' });
   const blakeSentences = directorTensionSentences(state.narrativeTensions, context.directorProse);
+  // Phases 14 and 15 (R5): who shares the byline, after the session roster, only when the
+  // session has a guest reporter.
+  const guestLine = guestReporterLine(state.sessionConfig);
 
   const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
 ### Character Context (${DERIVED_LABELS.characterContext})
@@ -376,7 +380,7 @@ ${context.primaryInvestigation}
 
 ### Session Roster (the players at the investigation)
 ${JSON.stringify(context.roster)}
-
+${guestLine ? `${guestLine}\n` : ''}
 ${buildCharacterCategoriesBlock(context.roster, state.theme || 'journalist', allCharacters).trimEnd()}
 
 ${rosterWithPronounsSection(state.sessionConfig, state.canonicalCharacters)}

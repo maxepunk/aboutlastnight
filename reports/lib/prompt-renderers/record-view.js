@@ -29,6 +29,7 @@
  */
 
 const { sessionClockOf, firstEventTime, printLoggedTime, printClockMinute, sessionOrderOf } = require('./session-clock');
+const { guestTurnInName } = require('./session-authors');
 
 /** The one wording an instruction uses to point a writer at a document's text (R1). */
 const DOCUMENT_POINTER = 'the document with that id in <RECORD>';
@@ -255,11 +256,19 @@ const TABLE_ORDER = { sale: 0, bonus: 1, transfer: 1, exposure: 2 };
  * The name on an exposure's turn-in: null when the evidence log records it as
  * anonymous (empty, "NovaNews (Anonymous)", or Nova's outlet alone), else the name as
  * written, which is an honest attribution (spec T6).
+ *
+ * Phases 14 and 15 (R5): a name that is the guest reporter's, by their full name or their
+ * first name in any case, is marked as theirs (session-authors.js guestTurnInName):
+ * "Taylor (the guest reporter, Taylor Chase)". With no guest reporter, the name as written.
+ *
+ * @param {*} exposer - the evidence log's name on the turn-in
+ * @param {Object|null} [sessionConfig] - its guestReporter
+ * @returns {string|null}
  */
-function turnInName(exposer) {
+function turnInName(exposer, sessionConfig = null) {
   const text = typeof exposer === 'string' ? exposer.trim() : '';
   if (!text || /anonymous/i.test(text) || /^novanews$/i.test(text)) return null;
-  return text;
+  return guestTurnInName(text, sessionConfig);
 }
 
 /** The memories the bundle holds as exposed: each known id, lower case, to the id the view prints. */
@@ -283,8 +292,8 @@ function exposedMemoryIds(evidenceBundle) {
  * - Sales: the bundle's buried transactions, as account, amount and time only.
  * - Exposures: sessionConfig.exposures, only for a memory the bundle holds as
  *   exposed (the list is model-filled, and an entry naming a buried memory is left
- *   out), as the memory's document id and the name on the turn-in. Its owner column
- *   is never read.
+ *   out), as the memory's document id and the name on the turn-in, marked as the guest
+ *   reporter's when it is theirs (turnInName). Its owner column is never read.
  * - Adjustments: sessionConfig.adjustments, the bonus and the transfers.
  *
  * Events go in order from the first of them, the adjustments included, so an
@@ -323,7 +332,7 @@ function buildMorningTimeline(evidenceBundle, sessionConfig) {
   const exposedIdOf = (entry) => (entry && typeof entry.tokenId === 'string' ? exposed.get(entry.tokenId.trim().toLowerCase()) : undefined);
   asArray(config.exposures)
     .filter((e) => exposedIdOf(e))
-    .forEach((e) => rows.push({ logged: e.time, event: { kind: 'exposure', documentId: exposedIdOf(e), exposer: turnInName(e.exposer) } }));
+    .forEach((e) => rows.push({ logged: e.time, event: { kind: 'exposure', documentId: exposedIdOf(e), exposer: turnInName(e.exposer, config) } }));
 
   const start = firstEventTime(rows.map((row) => row.logged));
   const placed = rows.map((row, index) => ({ ...row, index, order: sessionOrderOf(row.logged, start) }));

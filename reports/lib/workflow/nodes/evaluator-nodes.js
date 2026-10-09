@@ -39,6 +39,7 @@ const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCEntries } = require('../../theme-config');
+const { guestReporterLine } = require('../../prompt-renderers/session-authors');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 // Phase 3 (3.4): each judge reads the rule set its writer reads, from the rules folder of its
 // theme (R14), after its theme's identity line (brief 4.13) and the mode block: its system
@@ -1140,15 +1141,17 @@ function renderJudgeFinancialSummary(state) {
 
 /**
  * The session roster for the article judge: the players present, by
- * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts).
+ * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts), then,
+ * with a guest reporter, their line as SESSION_FACTS prints it (phases 14 and 15, R5).
  *
  * @param {Object|null} sessionFacts
  * @returns {string}
  */
 function renderJudgeSessionRoster(sessionFacts) {
   if (!sessionFacts) return 'SESSION ROSTER: none recorded for this session.';
+  const guest = sessionFacts.guestReporterLine ? `\n\n${sessionFacts.guestReporterLine}` : '';
   return `SESSION ROSTER (${sessionFacts.playerCount} players who were present at this session's investigation):
-${sessionFacts.roster.join('\n')}`;
+${sessionFacts.roster.join('\n')}${guest}`;
 }
 
 /**
@@ -1411,7 +1414,10 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       //
       // Phases 14 and 15, brief B (R2): every note the director has sent at a stop so far,
       // right after the answers, in its own block, which holds "None." when there is none.
+      //
+      // Phases 14 and 15, brief E (R5): with a guest reporter, their line before the roster.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
+      const guestLine = guestReporterLine(state.sessionConfig);
       return `Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
 WEAVE:
@@ -1420,7 +1426,7 @@ ${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
 ${afterJudged}THE ACCUSATION (the parsed verdict, then the director's account word for word):
 ${renderArcAccusation(state.playerFocus?.accusation, directorAccusationText(state), "Players' Reasoning")}
 
-${renderJudgeRosterSection(state)}
+${guestLine ? `${guestLine}\n\n` : ''}${renderJudgeRosterSection(state)}
 
 ${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}${answers ? `\n\n${answers}` : ''}
 

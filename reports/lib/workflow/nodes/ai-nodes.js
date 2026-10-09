@@ -60,6 +60,7 @@ const {
 const { traceNode } = require('../../observability');
 const { directorAccusationText } = require('../../accusation-verdict');
 const { photoKey } = require('../../prompt-renderers/director-words-renderer');
+const { guestReporterLine, markWriterInPhoto } = require('../../prompt-renderers/session-authors');
 // Brief 4.2b: a photo's mapping, the one lookup isPhotoExcluded shares with the photo nodes
 const { photoMappingOf } = require('../../photo-leave-out');
 
@@ -704,6 +705,10 @@ async function processRescuedItems(state, config) {
  * vote), the director's accusation word for word, and the whiteboard parse;
  * renderSessionFactsVerdict (director-words-renderer.js) prints them.
  *
+ * Phases 14 and 15 (R5): with a guest reporter, the facts carry their line
+ * (session-authors.js guestReporterLine), which SESSION_FACTS and the article judge print
+ * beside the roster; with none, no key.
+ *
  * @param {Object} state
  * @returns {Object|null} null when there is no roster
  */
@@ -733,7 +738,9 @@ function buildSessionFacts(state) {
     },
     accusationText: directorAccusationText(state),
     whiteboard: state.playerFocus?.whiteboardContext || null,
-    playerCount: roster.length
+    playerCount: roster.length,
+    // Phases 14 and 15 (R5): who shares the byline, only when the session has a guest reporter
+    ...(guestReporterLine(state.sessionConfig) && { guestReporterLine: guestReporterLine(state.sessionConfig) })
   };
 }
 

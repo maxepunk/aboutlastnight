@@ -714,18 +714,22 @@ All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is wh
    * it for NeurAI" stated as fact who stands behind the market, which is Nova's
    * suspicion, and the gate's outline carried it into FOLLOW THE MONEY.
    *
+   * Phases 14 and 15 (R5): with a guest reporter, their line (buildSessionFacts'
+   * guestReporterLine) follows the roster.
+   *
    * @param {Object|null} sessionFacts - ai-nodes.js buildSessionFacts
    * @returns {string} the XML section, or '' without facts
    */
   _sessionFactsSection(sessionFacts) {
     if (!sessionFacts) return '';
     const n = sessionFacts.playerCount;
+    const guest = sessionFacts.guestReporterLine ? `${sessionFacts.guestReporterLine}\n\n` : '';
     return `
 <SESSION_FACTS>
 INVESTIGATION ROSTER (${n} players):
 ${sessionFacts.roster.join('\n')}
 
-${renderSessionFactsVerdict(sessionFacts)}
+${guest}${renderSessionFactsVerdict(sessionFacts)}
 
 Only the ${n} players above were at the investigation. Every other character except Blake appears only through the memories and documents. Blake was in the room too, making deals, and acts and speaks there as the record shows. Nova is not one of the players. When the article counts the people at the investigation, it counts these ${n} players.
 </SESSION_FACTS>`;
