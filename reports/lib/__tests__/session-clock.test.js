@@ -16,7 +16,8 @@ const {
   printLoggedTime,
   printClockMinute,
   firstEventTime,
-  sessionOrderOf
+  sessionOrderOf,
+  loggedTimeFromMinutes
 } = require('../prompt-renderers/session-clock');
 
 describe('parseLoggedTime', () => {
@@ -186,5 +187,30 @@ describe('withSessionClock: the decision handed to a printer with no bundle (fix
   it('keeps the stamp the parse made', () => {
     const stamp = { decided: true, evening: false, firstTime: '04:59 PM' };
     expect(withSessionClock({ sessionClock: stamp }, bundle).sessionClock).toEqual(stamp);
+  });
+});
+
+/**
+ * Phases 14 and 15, brief C (ruling R3): a ledger row the parse shifts onto the game's
+ * clock is written back as a logged time, in the one format the session report's own
+ * rows read as: "hh:mm AM", the hour two digits. printClockMinute prints a minute on the
+ * session clock through it.
+ */
+describe('loggedTimeFromMinutes: minutes after midnight, written back as a logged time', () => {
+  it('writes the hour in two digits and the meridiem after a space, noon and midnight included', () => {
+    expect(loggedTimeFromMinutes(15 * 60 + 55)).toBe('03:55 PM');
+    expect(loggedTimeFromMinutes(9 * 60 + 21)).toBe('09:21 AM');
+    expect(loggedTimeFromMinutes(0)).toBe('12:00 AM');
+    expect(loggedTimeFromMinutes(12 * 60 + 5)).toBe('12:05 PM');
+    expect(loggedTimeFromMinutes(23 * 60 + 59)).toBe('11:59 PM');
+  });
+
+  it('wraps a minute past either end of the day', () => {
+    expect(loggedTimeFromMinutes(-60)).toBe('11:00 PM');
+    expect(loggedTimeFromMinutes(24 * 60 + 30)).toBe('12:30 AM');
+  });
+
+  it('reads back as the same minute', () => {
+    [0, 1, 719, 720, 1439].forEach((m) => expect(parseLoggedTime(loggedTimeFromMinutes(m))).toEqual({ minutes: m }));
   });
 });

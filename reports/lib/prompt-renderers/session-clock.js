@@ -209,6 +209,24 @@ function printLoggedTime(text, clock) {
 }
 
 /**
+ * Minutes after midnight, written back as a logged time in the session report's own
+ * format: "03:55 PM", the hour two digits. A minute past either end of the day wraps.
+ * The parse writes a ledger row it shifts onto the game's clock with this
+ * (lib/session-ledger.js; phases 14 and 15, brief C), so every reader takes the shifted
+ * time as it takes a logged one.
+ *
+ * @param {number} minutes
+ * @returns {string}
+ */
+function loggedTimeFromMinutes(minutes) {
+  const wrapped = ((Math.round(minutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  const hour = Math.floor(wrapped / 60);
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(hour12)}:${pad(wrapped % 60)} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+/**
  * One minute on the session clock, in one format: "07:50 AM", the hour two digits.
  *
  * printLoggedTime keeps each time's logged format, and the session report writes one
@@ -223,11 +241,7 @@ function printLoggedTime(text, clock) {
 function printClockMinute(text, clock) {
   const read = parseLoggedTime(typeof text === 'string' ? text : '');
   if (!read) return null;
-  const minutes = clock && clock.evening ? (read.minutes + MINUTES_PER_DAY / 2) % MINUTES_PER_DAY : read.minutes;
-  const hour = Math.floor(minutes / 60);
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(hour12)}:${pad(minutes % 60)} ${hour < 12 ? 'AM' : 'PM'}`;
+  return loggedTimeFromMinutes(clock && clock.evening ? read.minutes + MINUTES_PER_DAY / 2 : read.minutes);
 }
 
 /**
@@ -254,5 +268,6 @@ module.exports = {
   firstEventTime,
   printLoggedTime,
   printClockMinute,
+  loggedTimeFromMinutes,
   sessionOrderOf
 };
