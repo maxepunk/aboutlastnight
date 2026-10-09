@@ -271,12 +271,13 @@ function addAccusation(page, accusationValue) {
   page.text(accusation.notes);
 }
 
-/** The ledger: the clock rule and what needs the director first, the accounts and adjustments folded. */
+/** The ledger: the clock rule, the rows lined up onto the game's clock (brief C), what needs the director first, the accounts and adjustments folded. */
 function addLedger(page, ledgerValue) {
   const H = PAGE_HEADINGS[INPUT_REVIEW];
   const ledger = InputLogic.ledgerView(ledgerValue);
   page.title(H.ledger);
   page.text(ledger.clockLine);
+  if (ledger.shiftLine) page.text(ledger.shiftLine);
   ledger.warnings.forEach((warning) => page.alert(warning));
   if (ledger.accounts.length === 0 && ledger.adjustments.length === 0) return;
   page.folded(() => {

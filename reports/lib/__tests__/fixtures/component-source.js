@@ -47,11 +47,11 @@ function consoleSafeStringify() {
 }
 
 /**
- * InputReview.js's EnrichmentPanel and InputReview, run with a React whose createElement returns
+ * InputReview.js's EnrichmentPanel, LedgerPanel and InputReview, run with a React whose createElement returns
  * `{type, props, children}` (a component it is given stays a node, uncalled) and whose hooks hold
  * their first value, and with the console's own modules for the globals the file reads.
  *
- * @returns {{EnrichmentPanel: Function, InputReview: Function}}
+ * @returns {{EnrichmentPanel: Function, InputReview: Function, LedgerPanel: Function}}
  */
 function loadInputReview() {
   const src = fs.readFileSync(path.join(ROOT, 'console', 'components', 'checkpoints', 'InputReview.js'), 'utf8');
@@ -68,7 +68,7 @@ function loadInputReview() {
       checkpointViewLogic: require('../../../console/checkpoint-view-logic')
     }
   };
-  return new Function('window', 'React', `${src}\nreturn { EnrichmentPanel, InputReview };`)(window, React);
+  return new Function('window', 'React', `${src}\nreturn { EnrichmentPanel, InputReview, LedgerPanel };`)(window, React);
 }
 
 /**

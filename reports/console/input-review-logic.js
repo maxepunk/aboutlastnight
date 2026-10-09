@@ -49,11 +49,49 @@
       : 'Daytime session: logged times shown as logged' + first;
   }
 
-  /** One adjustment in words. */
+  /**
+   * One adjustment in words. A row the parse shifted onto the game's clock shows its
+   * logged time beside the shifted one.
+   */
   function adjustmentLine(a) {
-    const when = a.time ? a.time + ': ' : '';
+    const logged = a.time && a.loggedTime ? ' (logged ' + a.loggedTime + ')' : '';
+    const when = a.time ? a.time + logged + ': ' : '';
     if (a.kind === 'bonus') return when + 'first-burial bonus of ' + dollars(a.amount) + ' paid to ' + a.toAccount;
     return when + 'transfer of ' + dollars(a.amount) + ' from ' + a.fromAccount + ' to ' + a.toAccount;
+  }
+
+  /** A count with its noun, singular for one: "1 transfer", "4 transfers". */
+  function counted(n, noun) {
+    return n + ' ' + noun + (n === 1 ? '' : 's');
+  }
+
+  /**
+   * The ledger rows the parse lined up onto the game's clock, in one line (phases 14
+   * and 15, brief C; R3): what moved, how many hours and which way (ledgerCheck.clockShift,
+   * {hours, moved, bonus}), or how many rows sit off the clock with no single shift that
+   * lines them up (ledgerCheck.offClock, {rows}). Null when every row is on the clock.
+   *
+   * @param {Object} ledger - data.ledger
+   * @returns {string|null}
+   */
+  function shiftLine(ledger) {
+    const shift = ledger.clockShift;
+    if (shift && typeof shift === 'object' && Number(shift.moved) > 0) {
+      const transfers = Number(shift.moved) - (shift.bonus ? 1 : 0);
+      const what = [shift.bonus ? 'the first-burial bonus' : '', transfers > 0 ? counted(transfers, 'transfer') : '']
+        .filter(Boolean).join(' and ');
+      const hours = counted(Math.abs(Number(shift.hours)), 'hour');
+      return 'The session report logged ' + what + ' ' + hours + ' off the game\'s clock. ' +
+        (Number(shift.moved) === 1 ? 'It\'s' : 'They\'re') + ' shifted ' + (Number(shift.hours) < 0 ? 'back ' : 'forward ') +
+        hours + ' to line up with the sales.';
+    }
+    const off = ledger.offClock;
+    if (off && typeof off === 'object' && Number(off.rows) > 0) {
+      const one = Number(off.rows) === 1;
+      return counted(Number(off.rows), 'ledger row') + (one ? ' sits' : ' sit') + ' off the game\'s clock, and no single shift lines ' +
+        (one ? 'it' : 'them') + ' up. ' + (one ? 'It prints' : 'They print') + ' as the session report logged ' + (one ? 'it' : 'them') + '.';
+    }
+    return null;
   }
 
   /** An account name for matching, as lib/session-ledger.js keys it: letters and digits, lower case. */
@@ -87,13 +125,15 @@
    * ledgerReviewOf): what needs the director first, then each account and each
    * adjustment.
    *
+   * `shiftLine` sits beside the clock's line: the rows the parse lined up onto the game's
+   * clock, or the rows no single shift fits (shiftLine above), null when there are none.
    * `warnings` leads: the adjustment rows not parsed, a total that disagrees with
    * the session report's Final Standings (and which figure the writers got), no sale or
    * account parsed at all, a row the code could not classify. The accounts and
    * adjustments are the detail, folded away on the screen.
    *
    * @param {Object|null} ledger
-   * @returns {{clockLine: string, warnings: string[], accounts: Array<{name: string, total: string, sales: string}>, adjustments: string[]}}
+   * @returns {{clockLine: string, shiftLine: string|null, warnings: string[], accounts: Array<{name: string, total: string, sales: string}>, adjustments: string[]}}
    */
   function ledgerView(ledger) {
     const l = ledger || {};
@@ -122,6 +162,7 @@
     }
     return {
       clockLine: clockLine(l.clock),
+      shiftLine: shiftLine(l),
       warnings: warnings,
       accounts: list(l.accounts).filter(function (a) { return a && a.name; }).map(function (a) {
         const n = typeof a.tokenCount === 'number' ? a.tokenCount : 0;

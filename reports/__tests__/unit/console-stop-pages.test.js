@@ -231,6 +231,38 @@ describe('4.12d: the input review\'s notes receipt reads as InputReview.js rende
   });
 });
 
+// Phases 14 and 15, brief C (R3): the ledger's shift line, from input-review-logic.js ledgerView,
+// shows on the screen right after the clock's line, as the page prints it.
+describe('brief C: the ledger panel shows the shift line beside the clock\'s line', () => {
+  const InputLogic = require('../../console/input-review-logic');
+  const LEDGER = {
+    clock: { decided: true, evening: false, firstTime: '03:50 PM' },
+    adjustmentsParsed: true,
+    adjustments: [{ time: '03:55 PM', loggedTime: '12:55AM', kind: 'bonus', amount: 50000, toAccount: 'Pip' }],
+    accounts: [{ name: 'Pip', total: 350000, tokenCount: 1, rank: 1 }],
+    mismatches: [],
+    unclassified: []
+  };
+  const paragraphs = (ledger) => {
+    const { LedgerPanel } = loadInputReview();
+    return elementsOf(LedgerPanel({ ledger }), (element, folded) => element.type === 'p' && !folded).map(textOf);
+  };
+
+  it.each([
+    ['a shift', { clockShift: { hours: -9, moved: 1, bonus: true } }],
+    ['no shift that fits', { offClock: { rows: 3 } }]
+  ])('for %s', (name, extra) => {
+    const ledger = { ...LEDGER, ...extra };
+    const view = InputLogic.ledgerView(ledger);
+    expect(typeof view.shiftLine).toBe('string');
+    expect(paragraphs(ledger).slice(0, 2)).toStrictEqual([view.clockLine, view.shiftLine]);
+  });
+
+  it('shows no line when every row is on the clock', () => {
+    expect(paragraphs(LEDGER)).toStrictEqual([InputLogic.ledgerView(LEDGER).clockLine]);
+  });
+});
+
 // Task 4.12e (the ruling on 4.12d's minor 3): the page printed a whiteboard region's heading in
 // straight quotation marks, "SUSPECTS", where InputReview.js prints “SUSPECTS”, and nothing held the
 // page's whiteboard text to the screen. It is held here on InputReview.js run with a React that

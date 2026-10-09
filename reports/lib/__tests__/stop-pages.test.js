@@ -484,6 +484,21 @@ describe('4.12c: the input review\'s page is the parse as its view models render
     expect(shownText.indexOf(board.ambiguities[0])).toBeGreaterThan(shownText.indexOf(ledger.clockLine));
   });
 
+  // Phases 14 and 15, brief C (R3): the line that says the parse shifted ledger rows onto the
+  // game's clock, or that no single shift fits them, shows right after the clock's line.
+  it('shows the ledger\'s shift line right after the clock\'s line, unfolded', () => {
+    [{ clockShift: { hours: -9, moved: 5, bonus: true } }, { offClock: { rows: 3 } }].forEach((extra) => {
+      const data = inputReviewData();
+      data.ledger = { ...data.ledger, ...extra };
+      const ledger = InputLogic.ledgerView(data.ledger);
+      expect(typeof ledger.shiftLine).toBe('string');
+      const shown = textsOf(stopPage('input-review', data));
+      expect(shown.indexOf(ledger.shiftLine)).toBe(shown.indexOf(ledger.clockLine) + 1);
+    });
+    const plain = textsOf(stopPage('input-review', inputReviewData())).join('\n');
+    expect(plain).not.toMatch(/game's clock/);
+  });
+
   it('folds what the component folds: the accounts and adjustments, the exposed memories, the quote bank and the epilogue', () => {
     const data = inputReviewData();
     const ledger = InputLogic.ledgerView(data.ledger);

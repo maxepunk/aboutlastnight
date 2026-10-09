@@ -59,14 +59,16 @@ function EnrichmentPanel({ enrichment }) {
 }
 
 /**
- * The ledger (phase 3, brief 3.5), built to be skimmed: the clock rule and anything
- * that needs the director first, the accounts and adjustments folded away.
+ * The ledger (phase 3, brief 3.5), built to be skimmed: the clock rule, the rows the
+ * parse lined up onto the game's clock (brief C), and anything that needs the director
+ * first, the accounts and adjustments folded away.
  */
 function LedgerPanel({ ledger }) {
   const view = ledgerView(ledger);
   return React.createElement('div', { className: 'checkpoint-section' },
     React.createElement('h4', { className: 'checkpoint-section__title' }, 'Ledger'),
     React.createElement('p', { className: 'text-sm text-secondary' }, view.clockLine),
+    view.shiftLine && React.createElement('p', { className: 'text-sm' }, view.shiftLine),
     view.warnings.map(function (w, i) {
       return React.createElement('p', { key: 'lw-' + i, className: 'enrichment__warning', role: 'alert' }, w);
     }),

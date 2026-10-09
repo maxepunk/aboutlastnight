@@ -230,3 +230,67 @@ describe('enrichmentWarningLines: the enricher\'s new warnings, each a count wit
     ]);
   });
 });
+
+/**
+ * Phases 14 and 15, brief C (ruling R3): the session report can log the bonus and the
+ * transfers hours off the game's clock. The parse lines them up by one shift
+ * (ledgerCheck.clockShift) or, when no single shift fits, leaves them as logged
+ * (ledgerCheck.offClock), and ledgerView says which in one line beside the clock's.
+ */
+describe('ledgerView: the ledger rows off the game\'s clock', () => {
+  const base = {
+    clock: { decided: true, evening: false, firstTime: '03:50 PM' },
+    adjustmentsParsed: true,
+    adjustments: [],
+    accounts: [{ name: 'Pip', total: 350000, tokenCount: 1, rank: 1 }],
+    mismatches: [],
+    unclassified: []
+  };
+
+  it('says what moved, how far and which way, exactly', () => {
+    const line = (clockShift) => ledgerView({ ...base, clockShift }).shiftLine;
+    expect(line({ hours: -9, moved: 5, bonus: true })).toBe(
+      "The session report logged the first-burial bonus and 4 transfers 9 hours off the game's clock. They're shifted back 9 hours to line up with the sales."
+    );
+    expect(line({ hours: -9, moved: 1, bonus: true })).toBe(
+      "The session report logged the first-burial bonus 9 hours off the game's clock. It's shifted back 9 hours to line up with the sales."
+    );
+    expect(line({ hours: -5, moved: 1, bonus: false })).toBe(
+      "The session report logged 1 transfer 5 hours off the game's clock. It's shifted back 5 hours to line up with the sales."
+    );
+    expect(line({ hours: 1, moved: 2, bonus: false })).toBe(
+      "The session report logged 2 transfers 1 hour off the game's clock. They're shifted forward 1 hour to line up with the sales."
+    );
+    expect(line({ hours: -4, moved: 2, bonus: true })).toBe(
+      "The session report logged the first-burial bonus and 1 transfer 4 hours off the game's clock. They're shifted back 4 hours to line up with the sales."
+    );
+  });
+
+  it('says when no single shift lines the rows up, exactly', () => {
+    expect(ledgerView({ ...base, offClock: { rows: 3 } }).shiftLine).toBe(
+      "3 ledger rows sit off the game's clock, and no single shift lines them up. They print as the session report logged them."
+    );
+    expect(ledgerView({ ...base, offClock: { rows: 1 } }).shiftLine).toBe(
+      "1 ledger row sits off the game's clock, and no single shift lines it up. It prints as the session report logged it."
+    );
+  });
+
+  it('has no line when every row is on the clock, or for a missing ledger', () => {
+    expect(ledgerView(base).shiftLine).toBeNull();
+    expect(ledgerView({ ...base, clockShift: null, offClock: null }).shiftLine).toBeNull();
+    expect(ledgerView(null).shiftLine).toBeNull();
+  });
+
+  it('shows a moved row\'s logged time beside the shifted one', () => {
+    const view = ledgerView({ ...base, adjustments: [
+      { time: '03:55 PM', loggedTime: '12:55AM', kind: 'bonus', amount: 50000, toAccount: 'Pip' },
+      { time: '04:28 PM', loggedTime: '01:28AM', kind: 'transfer', amount: 20000, fromAccount: 'Pip', toAccount: 'Ash' },
+      { time: '04:40 PM', kind: 'transfer', amount: 1000, fromAccount: 'Ash', toAccount: 'Pip' }
+    ] });
+    expect(view.adjustments).toEqual([
+      '03:55 PM (logged 12:55AM): first-burial bonus of $50,000 paid to Pip',
+      '04:28 PM (logged 01:28AM): transfer of $20,000 from Pip to Ash',
+      '04:40 PM: transfer of $1,000 from Ash to Pip'
+    ]);
+  });
+});
