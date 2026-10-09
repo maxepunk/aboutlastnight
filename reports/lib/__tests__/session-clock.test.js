@@ -17,7 +17,11 @@ const {
   printClockMinute,
   firstEventTime,
   sessionOrderOf,
-  loggedTimeFromMinutes
+  loggedTimeFromMinutes,
+  sessionSpanOf,
+  placeInSpan,
+  minutesOutsideSpan,
+  timeOfDayLine
 } = require('../prompt-renderers/session-clock');
 
 describe('parseLoggedTime', () => {
@@ -212,5 +216,74 @@ describe('loggedTimeFromMinutes: minutes after midnight, written back as a logge
 
   it('reads back as the same minute', () => {
     [0, 1, 719, 720, 1439].forEach((m) => expect(parseLoggedTime(loggedTimeFromMinutes(m))).toEqual({ minutes: m }));
+  });
+});
+
+/**
+ * Phases 14 and 15, brief E (rulings R3 and R7): the session's span, from its first sale or
+ * exposure to its last in the session clock's order, which the ledger's shift and the
+ * time-of-day line both read; and the time-of-day line, the session's facts on when the
+ * investigation ran. An evening session (first event at 5:00 PM or later) ran in the morning
+ * in the story, its times on the evening clock; an earlier one ran in the afternoon, its times
+ * as logged.
+ */
+describe('sessionSpanOf: the session from its first sale or exposure to its last', () => {
+  it('starts at the first event and measures the end from it', () => {
+    const span = sessionSpanOf(['09:20 PM', '10:23 PM', '09:41 PM']);
+    expect(span).toEqual({ start: 21 * 60 + 20, end: 63, firstTime: '09:20 PM', lastTime: '10:23 PM' });
+  });
+
+  it('runs past midnight as one span', () => {
+    const span = sessionSpanOf(['11:30 PM', '12:40 AM']);
+    expect(span).toEqual({ start: 23 * 60 + 30, end: 70, firstTime: '11:30 PM', lastTime: '12:40 AM' });
+    expect(placeInSpan(15, span)).toBe(45);
+  });
+
+  it('is null when no time reads as a time', () => {
+    expect(sessionSpanOf([])).toBeNull();
+    expect(sessionSpanOf([null, 'soon'])).toBeNull();
+  });
+
+  it('says how far a minute of the day sits outside it, before or after', () => {
+    const span = sessionSpanOf(['03:54 PM', '05:15 PM']);
+    expect(minutesOutsideSpan(16 * 60, span)).toBe(0);
+    expect(minutesOutsideSpan(17 * 60 + 45, span)).toBe(30);
+    expect(minutesOutsideSpan(15 * 60, span)).toBe(54);
+  });
+});
+
+describe('timeOfDayLine: when the investigation ran, from the session clock and the span', () => {
+  const bundleOf = (...times) => ({ buried: { transactions: times.map((time) => ({ shellAccount: 'Acct', amount: 1000, time })) } });
+
+  it('puts an evening session in the morning, on the evening clock', () => {
+    const config = { exposures: [{ tokenId: 'a1', time: '09:20 PM' }] };
+    expect(timeOfDayLine(config, bundleOf('09:41 PM', '10:23 PM')))
+      .toBe('The investigation ran this morning, from 9:20 to 10:23 AM.');
+  });
+
+  it('puts a daytime session in the afternoon, at the hours it was played', () => {
+    const config = { exposures: [{ tokenId: 'a1', time: '05:18 PM' }], sessionClock: { decided: true, evening: false, firstTime: '03:50 PM' } };
+    expect(timeOfDayLine(config, bundleOf('03:50 PM', '04:22PM')))
+      .toBe('The investigation ran this afternoon, from 3:50 to 5:18 PM.');
+  });
+
+  it('names both meridiems when the span crosses noon', () => {
+    expect(timeOfDayLine({}, bundleOf('11:30 PM', '12:40 AM')))
+      .toBe('The investigation ran this morning, from 11:30 AM to 12:40 PM.');
+  });
+
+  it('gives one time for a session with one event', () => {
+    expect(timeOfDayLine({}, bundleOf('07:50 PM'))).toBe('The investigation ran this morning, at 7:50 AM.');
+  });
+
+  it('reads the sales and exposures, never an adjustment', () => {
+    const config = { adjustments: [{ kind: 'bonus', time: '06:02 PM' }], exposures: [{ tokenId: 'a1', time: '07:37 PM' }] };
+    expect(timeOfDayLine(config, bundleOf('07:50 PM'))).toBe('The investigation ran this morning, from 7:37 to 7:50 AM.');
+  });
+
+  it('is null for a session with no sale and no exposure', () => {
+    expect(timeOfDayLine({}, { buried: { transactions: [] } })).toBeNull();
+    expect(timeOfDayLine({ adjustments: [{ kind: 'bonus', time: '06:02 PM' }] }, null)).toBeNull();
+    expect(timeOfDayLine(null, null)).toBeNull();
   });
 });

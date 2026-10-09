@@ -56,9 +56,10 @@
 const {
   sessionClockOf,
   parseLoggedTime,
-  firstEventTime,
-  sessionOrderOf,
-  loggedTimeFromMinutes
+  loggedTimeFromMinutes,
+  sessionSpanOf: clockSpanOf,
+  placeInSpan,
+  minutesOutsideSpan
 } = require('./prompt-renderers/session-clock');
 
 /** An account name for matching: letters and digits only, lower case. */
@@ -214,7 +215,6 @@ function classifyAdjustments(rows, { accounts } = {}) {
 const OFF_CLOCK_MINUTES = 180;
 /** The widest shift tried, in whole hours either way. */
 const MAX_SHIFT_HOURS = 12;
-const MINUTES_PER_DAY = 24 * 60;
 
 /** Minutes after midnight, from a logged time; null when it is not a time. */
 function minutesOf(text) {
@@ -223,34 +223,18 @@ function minutesOf(text) {
 }
 
 /**
- * The span of the session: from its first sale or exposure to its last, in the session
- * clock's order (session-clock.js, its first-event rule, so a session that runs past
- * midnight is one span). Null when no sale or exposure has a time.
+ * The span of the session (session-clock.js sessionSpanOf: its first sale or exposure to its
+ * last, in the session clock's order, so a session that runs past midnight is one span), with
+ * its first sale. Null when no sale or exposure has a time.
  *
  * @returns {{start: number, end: number, firstSale: number|null}|null} `start` in minutes
  *   after midnight; `end` and `firstSale` in minutes after the start
  */
 function sessionSpanOf(saleTimes, exposureTimes) {
-  const startTime = firstEventTime([...saleTimes, ...exposureTimes]);
-  if (!startTime) return null;
-  const orderOf = (times) => times.map((t) => sessionOrderOf(t, startTime)).filter((o) => o !== null);
-  const sales = orderOf(saleTimes);
-  return {
-    start: minutesOf(startTime),
-    end: Math.max(...orderOf([...saleTimes, ...exposureTimes])),
-    firstSale: sales.length > 0 ? Math.min(...sales) : null
-  };
-}
-
-/** Where a minute of the day falls in the span: minutes after its start. */
-function placeInSpan(minutes, span) {
-  return (((minutes - span.start) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-}
-
-/** How many minutes a minute of the day sits outside the span, before it or after it; 0 inside. */
-function minutesOutside(minutes, span) {
-  const place = placeInSpan(minutes, span);
-  return place <= span.end ? 0 : Math.min(place - span.end, MINUTES_PER_DAY - place);
+  const span = clockSpanOf([...saleTimes, ...exposureTimes]);
+  if (!span) return null;
+  const sales = saleTimes.map(minutesOf).filter((m) => m !== null).map((m) => placeInSpan(m, span));
+  return { start: span.start, end: span.end, firstSale: sales.length > 0 ? Math.min(...sales) : null };
 }
 
 /**
@@ -280,7 +264,7 @@ function lineUpOffClockEvents(adjustments, saleTimes, exposureTimes) {
   if (!span) return { adjustments };
   const offClock = adjustments
     .map((event, index) => ({ event, index, minutes: minutesOf(event.time) }))
-    .filter(({ minutes }) => minutes !== null && minutesOutside(minutes, span) > OFF_CLOCK_MINUTES);
+    .filter(({ minutes }) => minutes !== null && minutesOutsideSpan(minutes, span) > OFF_CLOCK_MINUTES);
   if (offClock.length === 0) return { adjustments };
 
   const fits = [];

@@ -1,11 +1,13 @@
 /**
  * The session clock (phase 3, brief 3.5; spec section 6 and T7).
  *
- * The investigation is the morning in the fiction, and sessions run in the evening
- * as often as in the day. One decision per session puts every logged time on the
- * morning clock: when the session's first exposure or sale was logged at 5:00 PM or
- * later, every logged time shows AM in place of PM, same hour and minute; otherwise
- * times show as logged.
+ * The investigation cannot begin before 5 AM, since Marcus died around 4 AM, and
+ * sessions run in the evening as often as in the day. One decision per session: when
+ * the session's first exposure or sale was logged at 5:00 PM or later, the
+ * investigation ran in the morning in the story, and every logged time shows AM in
+ * place of PM, same hour and minute; otherwise it ran in the afternoon, at the hours it
+ * was played, and times show as logged (spec 2026-10-09 section 10). timeOfDayLine says
+ * which, for every writer and judge.
  *
  * - The decision reads the evidence log's exposures and the ledger's sales, never an
  *   adjustment: the game master's setup row can fall before 5 PM in an evening
@@ -14,7 +16,7 @@
  *   session starts after the longest quiet stretch of the 24-hour clock, so an
  *   evening session that runs past midnight starts in the evening, and 12:15 AM
  *   sorts after 11:50 PM. Past midnight the evening clock carries on into the
- *   afternoon (12:15 AM shows as 12:15 PM), so the morning clock never runs backward.
+ *   afternoon (12:15 AM shows as 12:15 PM), so the evening clock never runs backward.
  * - The parse stamps the decision on the session config (sessionConfig.sessionClock),
  *   so every reader takes the same one. A thread parsed before phase 3 has no stamp;
  *   its clock is decided from what it holds: its exposures and the bundle's sales.
@@ -22,9 +24,10 @@
  *   session config through withSessionClock, so it reads the decision the timeline
  *   reads.
  *
- * Every logged time a prompt prints goes through printLoggedTime (the morning
+ * Every logged time a prompt prints goes through printLoggedTime (the investigation's
  * timeline in the record view and the transaction links), or printClockMinute for
- * the heading of a same-minute group on the timeline. The director's notes are
+ * the heading of a same-minute group on the timeline, and the time-of-day line prints
+ * the span's ends on the same clock. The director's notes are
  * never changed; nothing here touches them.
  *
  * Pure: no I/O, no state.
@@ -151,12 +154,96 @@ function stampedClock(sessionConfig) {
 function sessionClockOf(sessionConfig, evidenceBundle = null) {
   const stamped = stampedClock(sessionConfig);
   if (stamped) return stamped;
+  return decideSessionClock(sessionTimesOf(sessionConfig, evidenceBundle));
+}
+
+/** The session's exposure and sale times, the times the clock decision and the span read; never an adjustment's. */
+function sessionTimesOf(sessionConfig, evidenceBundle) {
   const exposures = Array.isArray(sessionConfig?.exposures) ? sessionConfig.exposures : [];
   const sales = Array.isArray(evidenceBundle?.buried?.transactions) ? evidenceBundle.buried.transactions : [];
-  return decideSessionClock([
-    ...exposures.map((e) => e && e.time),
-    ...sales.map((t) => t && t.time)
-  ]);
+  return [...exposures.map((e) => e && e.time), ...sales.map((t) => t && t.time)];
+}
+
+/**
+ * The session's span: from its first sale or exposure to its last, in the session's order
+ * (firstEventOf: a session that runs past midnight is one span). The ledger's shift lines
+ * the off-clock adjustments up against it (lib/session-ledger.js, ruling R3), and the
+ * time-of-day line prints its ends (ruling R7).
+ *
+ * @param {Array<*>} times - every sale's and exposure's logged time; never an adjustment's
+ * @returns {{start: number, end: number, firstTime: string, lastTime: string}|null} `start`
+ *   in minutes after midnight, `end` in minutes after the start, and the logged times at
+ *   each end; null when no time reads as a time
+ */
+function sessionSpanOf(times) {
+  const parsed = readTimes(times);
+  if (parsed.length === 0) return null;
+  const first = firstEventOf(parsed);
+  const place = (event) => placeInSpan(event.minutes, { start: first.minutes });
+  const last = parsed.reduce((latest, event) => (place(event) > place(latest) ? event : latest), first);
+  return { start: first.minutes, end: place(last), firstTime: first.text, lastTime: last.text };
+}
+
+/**
+ * Where a minute of the day falls in a span: minutes after its start.
+ *
+ * @param {number} minutes - minutes after midnight
+ * @param {{start: number}} span
+ * @returns {number}
+ */
+function placeInSpan(minutes, span) {
+  return (((minutes - span.start) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+}
+
+/**
+ * How many minutes a minute of the day sits outside a span, before it or after it; 0 inside.
+ *
+ * @param {number} minutes - minutes after midnight
+ * @param {{start: number, end: number}} span
+ * @returns {number}
+ */
+function minutesOutsideSpan(minutes, span) {
+  const place = placeInSpan(minutes, span);
+  return place <= span.end ? 0 : Math.min(place - span.end, MINUTES_PER_DAY - place);
+}
+
+/** A minute of the day on the session clock, as the time-of-day line prints it: "9:20" and its meridiem. */
+function clockReading(minutes, clock) {
+  const onClock = placeInSpan(clock && clock.evening ? minutes + MINUTES_PER_DAY / 2 : minutes, { start: 0 });
+  const hour = Math.floor(onClock / 60);
+  return {
+    time: `${hour % 12 === 0 ? 12 : hour % 12}:${String(onClock % 60).padStart(2, '0')}`,
+    meridiem: hour < 12 ? 'AM' : 'PM'
+  };
+}
+
+/**
+ * When the investigation ran: the line the session's facts give every writer and judge
+ * (phases 14 and 15, brief E; spec section 10, ruling R7). An evening session ran this
+ * morning in the story, on the evening clock; a daytime one this afternoon, at the hours
+ * it was played. The span runs from the session's first sale or exposure to its last, on
+ * the session clock, as the record's timeline prints them:
+ *
+ *   "The investigation ran this morning, from 9:20 to 10:23 AM."
+ *   "The investigation ran this afternoon, from 3:50 to 5:18 PM."
+ *
+ * The meridiem prints once, unless the span crosses noon, and a session with one event
+ * prints that time alone.
+ *
+ * @param {Object|null} sessionConfig - its exposures, and its stamped clock when it has one
+ * @param {Object|null} [evidenceBundle] - the curated bundle, for its sales
+ * @returns {string|null} null when the session has no sale and no exposure
+ */
+function timeOfDayLine(sessionConfig, evidenceBundle = null) {
+  const span = sessionSpanOf(sessionTimesOf(sessionConfig, evidenceBundle));
+  if (!span) return null;
+  const clock = sessionClockOf(sessionConfig, evidenceBundle);
+  const when = clock.evening ? 'this morning' : 'this afternoon';
+  const first = clockReading(span.start, clock);
+  if (span.end === 0) return `The investigation ran ${when}, at ${first.time} ${first.meridiem}.`;
+  const last = clockReading(span.start + span.end, clock);
+  const from = first.meridiem === last.meridiem ? first.time : `${first.time} ${first.meridiem}`;
+  return `The investigation ran ${when}, from ${from} to ${last.time} ${last.meridiem}.`;
 }
 
 /**
@@ -269,5 +356,11 @@ module.exports = {
   printLoggedTime,
   printClockMinute,
   loggedTimeFromMinutes,
-  sessionOrderOf
+  sessionOrderOf,
+  // Phases 14 and 15, brief E (rulings R3 and R7): the session's span, which the ledger's
+  // shift and the time-of-day line read, and the time-of-day line
+  sessionSpanOf,
+  placeInSpan,
+  minutesOutsideSpan,
+  timeOfDayLine
 };
