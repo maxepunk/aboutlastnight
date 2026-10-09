@@ -87,6 +87,8 @@ const THEME_CONFIGS = {
     // - inPhotos: on site only, the character-IDs parse and the photo enrichment read it
     //   beside the roster, so neither corrects Nova's name to a player's.
     // - inAPhoto: on site only, a photo entry's name for Nova, which no roster player has.
+    // - inTheRoom: on site only, SESSION_FACTS' line beside Blake's (the final fix wave, K1),
+    //   which points at the mode block rather than restating it.
     npcs: [
       { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the man whose death the room investigates' },
       {
@@ -98,7 +100,8 @@ const THEME_CONFIGS = {
           signs: "Nova signs it {first} Nova, and the director's notes may call Nova {first}.",
           inPhotos: 'Nova, the NovaNews reporter who writes this article and signs it {first} Nova, was in the room and may be in a photo. ' +
             'A name a roster player has names that player; any other "Nova" or "{first}" names Nova: keep it as written.',
-          inAPhoto: '{name} (Nova, who writes this article)'
+          inAPhoto: '{name} (Nova, who writes this article)',
+          inTheRoom: 'Nova was in the room too, working it for the story, as the reporting-mode block sets out (T8).'
         }
       },
       { name: 'Blake', fullName: 'Blake', role: 'manages operations at NeurAI; Marcus called Blake his Valet' },

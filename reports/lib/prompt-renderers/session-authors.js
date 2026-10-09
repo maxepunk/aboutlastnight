@@ -13,8 +13,10 @@
  * - markWriterInPhoto: on site only, marks a photo's name for Nova (the first name, the
  *   entry's name, or the two together) as the article's writer. The roster decides a clash:
  *   a name a roster player has is that player, and stays unmarked.
- * Remote, Nova was outside the warehouse and is in no photo, so the parse and the photo
- * entries are as they were. A theme with no writer entry, such as the parked detective,
+ * - writerInTheRoom: on site only, SESSION_FACTS names the writer beside Blake among the
+ *   characters in the room (K1).
+ * Remote, Nova was outside the warehouse and is in no photo, so the parse, the photo
+ * entries and SESSION_FACTS are as they were. A theme with no writer entry, such as the parked detective,
  * gets none of these.
  *
  * The guest reporter (R5), only when sessionConfig.guestReporter names one:
@@ -120,6 +122,22 @@ function markWriterInPhoto(names, { theme, sessionConfig, rosterNames = [] } = {
 }
 
 /**
+ * The writer in the room, on site only (the final fix wave, K1): SESSION_FACTS names the
+ * writer beside Blake among the characters who were in the room, with the theme's line for
+ * it (`writer.inTheRoom`), which points at the mode block. Remote, the writer took no part in
+ * the room, and SESSION_FACTS is as it was.
+ *
+ * @param {string} theme
+ * @param {Object|null} sessionConfig - its reportingMode, read through isOnSite
+ * @returns {{name: string, line: string}|null} null remote, or for a theme with no writer entry
+ */
+function writerInTheRoom(theme, sessionConfig) {
+  const entry = writerEntryOf(theme);
+  if (!entry || !isOnSite(sessionConfig)) return null;
+  return { name: entry.name, line: entry.writer.inTheRoom };
+}
+
+/**
  * The session's guest reporter, or null: `{name, firstName, role}` from
  * sessionConfig.guestReporter, which the start form stamps as `{name, role}`.
  *
@@ -172,6 +190,7 @@ module.exports = {
   writerSignsLine,
   writerInPhotosLine,
   markWriterInPhoto,
+  writerInTheRoom,
   guestReporterOf,
   guestReporterLine,
   guestTurnInName

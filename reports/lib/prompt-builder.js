@@ -29,7 +29,7 @@ const { SOURCES_GLOSS, documentResolverOf } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
-const { writerSignsLine, reportingModeOf } = require('./prompt-renderers/session-authors');
+const { writerSignsLine, reportingModeOf, writerInTheRoom } = require('./prompt-renderers/session-authors');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // A standing note's kind, the one rule (review of 4.12e).
 const { noteKindOf } = require('./workflow/state');
@@ -727,6 +727,12 @@ All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is wh
    * Brief E (R7): the time-of-day line (buildSessionFacts' timeOfDayLine) opens it, so every
    * writer and judge that reads SESSION_FACTS knows when the investigation ran.
    *
+   * Final fix wave (K1): who was in the room follows the reporting mode, read through the one
+   * mode rule (isOnSite). On site, the writer was in the room too, beside Blake, working it for
+   * the story (the on-site mode block): its name joins Blake's in the exception, and the theme's
+   * line for it (writerInTheRoom) follows Blake's, pointing at the mode block. Remote, the
+   * sentence is as it was. Both keep "not one of the players" and the head count.
+   *
    * @param {Object|null} sessionFacts - ai-nodes.js buildSessionFacts
    * @returns {string} the XML section, or '' without facts
    */
@@ -736,6 +742,10 @@ All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is wh
     const guest = sessionFacts.guestReporterLine ? `${sessionFacts.guestReporterLine}\n\n` : '';
     // Phases 14 and 15 (R7): when the investigation ran, first; none with no sale and no exposure
     const when = sessionFacts.timeOfDayLine ? `${sessionFacts.timeOfDayLine}\n\n` : '';
+    // K1: on site, the writer was in the room too, beside Blake
+    const writer = writerInTheRoom(this.themeName, this.sessionConfig);
+    const inTheRoom = writer ? ` and ${writer.name}` : '';
+    const writerLine = writer ? `${writer.line} ` : '';
     return `
 <SESSION_FACTS>
 ${when}INVESTIGATION ROSTER (${n} players):
@@ -743,7 +753,7 @@ ${sessionFacts.roster.join('\n')}
 
 ${guest}${renderSessionFactsVerdict(sessionFacts)}
 
-Only the ${n} players above were at the investigation. Every other character except Blake appears only through the memories and documents. Blake was in the room too, making deals, and acts and speaks there as the record shows. Nova is not one of the players. When the article counts the people at the investigation, it counts these ${n} players.
+Only the ${n} players above were at the investigation. Every other character except Blake${inTheRoom} appears only through the memories and documents. Blake was in the room too, making deals, and acts and speaks there as the record shows. ${writerLine}Nova is not one of the players. When the article counts the people at the investigation, it counts these ${n} players.
 </SESSION_FACTS>`;
   }
 

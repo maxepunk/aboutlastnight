@@ -1483,6 +1483,39 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       expect(facts).not.toMatch(/NEVER give non-roster characters/);
     });
 
+    // Final fix wave (K1): the sentence follows the reporting mode, read through the one mode
+    // rule (isOnSite). Remote, it stays exactly as it was. On site, it put Nova among the
+    // characters who appear only through the memories and documents, against the on-site
+    // block: Nova was in the room too, beside Blake, working it for the story. The clause comes
+    // from the theme's Nova entry and points at the mode block rather than restating it. Both
+    // modes keep "Nova is not one of the players" and the head count.
+    const REMOTE_AGENCY = 'Only the 2 players above were at the investigation. Every other character except Blake appears only through the memories and documents. ' +
+      'Blake was in the room too, making deals, and acts and speaks there as the record shows. Nova is not one of the players. ' +
+      'When the article counts the people at the investigation, it counts these 2 players.';
+    const ON_SITE_AGENCY = 'Only the 2 players above were at the investigation. Every other character except Blake and Nova appears only through the memories and documents. ' +
+      'Blake was in the room too, making deals, and acts and speaks there as the record shows. ' +
+      'Nova was in the room too, working it for the story, as the reporting-mode block sets out (T8). Nova is not one of the players. ' +
+      'When the article counts the people at the investigation, it counts these 2 players.';
+
+    it.each(['outline', 'article'])('the %s SESSION_FACTS, remote, keeps the sentence as it was', async (which) => {
+      const { userPrompt } = which === 'outline' ? await outlineOf(journalist()) : await articleOf(journalist());
+      expect(between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>')).toContain(REMOTE_AGENCY);
+    });
+
+    it.each(['outline', 'article'])('the %s SESSION_FACTS, on site, puts Nova in the room beside Blake', async (which) => {
+      const onSite = journalist({ ...SESSION, reportingMode: 'on-site' });
+      const { userPrompt } = which === 'outline' ? await outlineOf(onSite) : await articleOf(onSite);
+      const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
+      expect(facts).toContain(ON_SITE_AGENCY);
+      expect(facts).not.toContain('Every other character except Blake appears');
+    });
+
+    it('reads the mode through the one mode rule: a session with no mode stamped is on site', async () => {
+      const { reportingMode, ...noMode } = SESSION;
+      const { userPrompt } = await articleOf(journalist(noMode));
+      expect(between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>')).toContain(ON_SITE_AGENCY);
+    });
+
     // Final review (rules-writers[0]; R11, T5, T14): the line said Blake worked the room
     // "for NeurAI", a fact about whom the deals were for, which round 7 made Nova's
     // suspicion; the gate's outline echoed it into FOLLOW THE MONEY. It now says what
