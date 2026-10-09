@@ -48,6 +48,6 @@ Why: momentum is what makes a true article worth reading, and a reporter who sav
 
 ## C14. The closing lands where the story leads
 
-The closing lands where the article's story leads, from the thesis. It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest. It is untitled and specific to this session, and its news of the evening comes from the epilogue (T7).
+The closing lands where the article's story leads, from the thesis. It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest. It is untitled and specific to this session, and its news of the evening comes from the sources T7 names.
 
 Why: the players finish on what their story meant, and theirs alone. A closing built to a set form reads like any article's.
