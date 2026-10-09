@@ -2162,7 +2162,9 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
         const description = truthOf(phase, 'evidenceTruth');
         expect(description).toContain("a player's character sheet used for its backstory alone");
         expect(description).toContain('never for its suspected motive, goals or instructions to the player');
-        expect(description).toContain("what the record cannot back written as Nova's own suspicion, allegation, question or opinion, marked as Nova's");
+        // Final fix wave (K5): the mark is the opinion's alone, as T1 attaches it.
+        expect(description).toContain("what the record cannot back written as Nova's own suspicion, an allegation, a question, or an opinion marked as Nova's");
+        expect(description).not.toContain("question or opinion, marked as Nova's");
         expect(description).toContain("a direction a note at a stop gives written as Nova's own reading");
       }
     });
