@@ -373,3 +373,43 @@ describe('documentIdsOf: the ids, never the names', () => {
     expect(documentIdsOf(clone({}))).toEqual(new Set());
   });
 });
+
+// Phase 15, brief D (ruling R6; spec 2026-10-09 section 7): a player's character sheet is told
+// apart by its name, and no card prints one; a piece of evidence may still cite it.
+describe('character sheets: isCharacterSheet, and the card refusal', () => {
+  const { isCharacterSheet, recordDocumentOf } = require('../evidence');
+  const { characterSheet, headinglessSheet } = require('./fixtures/character-sheet');
+  const withSheet = () => {
+    const s = state();
+    s.evidenceBundle.exposed.paperEvidence.push(characterSheet());
+    return s;
+  };
+
+  it('is a document whose name ends " Character Sheet", in any case, headings or none', () => {
+    expect(isCharacterSheet(characterSheet())).toBe(true);
+    expect(isCharacterSheet(headinglessSheet())).toBe(true);
+    expect(isCharacterSheet(characterSheet({ name: '  Dana Vire character sheet ' }))).toBe(true);
+  });
+
+  it('is not a document holding "Character Sheet" elsewhere than at its end, nor one only its text or type would mark', () => {
+    expect(isCharacterSheet(characterSheet({ name: 'Character Sheet Template Notes' }))).toBe(false);
+    expect(isCharacterSheet(characterSheet({ name: 'Character Sheet' }))).toBe(false);
+    expect(isCharacterSheet({ ...characterSheet(), name: 'Dana Vire file' })).toBe(false);
+    expect(isCharacterSheet(null)).toBe(false);
+    expect(isCharacterSheet({})).toBe(false);
+  });
+
+  it("refuses a sheet as a card's document, by any id it answers to, and keeps every other document", () => {
+    const ctx = evidenceContextOf(withSheet());
+    expect(recordDocumentOf('sheet-0001', ctx)).toBeNull();
+    expect(recordDocumentOf('SHEET-0001', ctx)).toBeNull();
+    expect(recordDocumentOf('Dana Vire Character Sheet', ctx)).toBeNull();
+    expect(recordDocumentOf('p-email', ctx)).toEqual({ id: 'p-email', text: EMAIL });
+  });
+
+  it('accepts a piece of evidence that cites a sheet and quotes its backstory', () => {
+    expect(evidenceProblems([
+      piece(['sheet-0001'], 'Dana "poured the wine at the gallery opening where Quinn first met Marcus."')
+    ], evidenceContextOf(withSheet()))).toEqual([]);
+  });
+});

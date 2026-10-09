@@ -106,9 +106,48 @@ function escapeAttr(value) {
     .replace(/"/g, '&quot;');
 }
 
+// ── Character sheets (phase 15, brief D; ruling R6; spec 2026-10-09 section 7) ──
+//
+// A player's character sheet is the game's private instructions to one player for their
+// character. Its backstory is true in the world; its suspected motive and its starting
+// instructions are the game talking to the player, so the record leaves those two blocks out
+// and marks the sheet with its own kind and a label pointing at T1. Every writer and judge
+// reads the record through this view, and character extraction too (`{buried: false}`), so
+// each reads the sheet marked and trimmed. lib/evidence.js isCharacterSheet decides what a
+// sheet is.
+
+/** The kind a character sheet prints with, in place of its basicType. */
+const CHARACTER_SHEET_KIND = 'character sheet';
+
+/** The sheet's one-line label, the first line of its body. It points at T1 and restates none of it. */
+const CHARACTER_SHEET_LABEL = "(A player's character sheet: the game's private instructions to one player for their character. T1 says what the article may take from it.)";
+
+/** A sheet's heading line: capital letters, with no lower case, digit or prose punctuation. */
+function isSheetHeading(line) {
+  const text = line.trim();
+  return /[A-Z]/.test(text) && !/[a-z0-9:|"“”.,!?]/.test(text);
+}
+
+/** The headings whose blocks the record leaves out: `▌[FLAGGED] SUSPECTED MOTIVE` and WHERE TO START. */
+const SHEET_BLOCKS_LEFT_OUT = /(?:^|[\s\]▌])(?:SUSPECTED MOTIVE|WHERE TO START)$/;
+
+/**
+ * A sheet's text without its suspected motive and its starting instructions: each of those
+ * blocks runs from its heading to the next heading, or to the end. A sheet stored without the
+ * headings (an older copy) keeps its text whole.
+ */
+function sheetTextOf(text) {
+  let leftOut = false;
+  const kept = text.split(/\r?\n/).filter((line) => {
+    if (isSheetHeading(line)) leftOut = SHEET_BLOCKS_LEFT_OUT.test(line.trim());
+    return !leftOut;
+  });
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 /**
  * One <document> tag. An attribute the record holds no value for is left out,
- * never guessed (R1).
+ * never guessed (R1). A character sheet's body is its label, then its trimmed text.
  */
 function renderDocument(item, kind) {
   const attrs = [
@@ -121,6 +160,10 @@ function renderDocument(item, kind) {
     .filter(([, value]) => typeof value === 'string' && value.trim())
     .map(([key, value]) => `${key}="${escapeAttr(value)}"`)
     .join(' ');
+  if (kind === CHARACTER_SHEET_KIND) {
+    const text = textOf(item);
+    return `<document ${attrs}>\n${CHARACTER_SHEET_LABEL}\n${(text && sheetTextOf(text)) || NO_TEXT}\n</document>`;
+  }
   return `<document ${attrs}>\n${textOf(item) || NO_TEXT}\n</document>`;
 }
 
@@ -136,11 +179,13 @@ function asArray(value) {
  * @returns {string} the <document> tags, or a line saying there are none
  */
 function renderRecordDocuments(evidenceBundle) {
+  // Required here, not at the top: lib/evidence.js requires this module as it loads.
+  const { isCharacterSheet } = require('../evidence');
   const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
   const documents = [
     ...asArray(exposed.tokens).filter(t => t && typeof t === 'object').map(t => renderDocument(t, 'memory')),
     ...asArray(exposed.paperEvidence).filter(p => p && typeof p === 'object')
-      .map(p => renderDocument(p, firstText(recordOf(p).basicType, p.basicType)))
+      .map(p => renderDocument(p, isCharacterSheet(p) ? CHARACTER_SHEET_KIND : firstText(recordOf(p).basicType, p.basicType)))
   ];
   return documents.length > 0 ? documents.join('\n\n') : NO_DOCUMENTS;
 }
@@ -396,6 +441,9 @@ module.exports = {
   isBuriedTransactionRow,
   formatAmount,
   recordIdOf,
-  DOCUMENT_POINTER
+  DOCUMENT_POINTER,
+  // Phase 15, brief D: how the record marks a player's character sheet
+  CHARACTER_SHEET_KIND,
+  CHARACTER_SHEET_LABEL
 };
 

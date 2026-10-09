@@ -80,7 +80,7 @@ const { meetingChangePlace } = require('./meeting');
 // the weave and the map share.
 const {
   EVIDENCE_PIECE_SCHEMA, evidenceProblems, describeEvidenceProblems, evidenceProblemsSaid, storyTermsProblems,
-  describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX, recordDocumentOf
+  describeStoryTerms, storyTermsSaid, STORY_TERMS_FIX, recordDocumentOf, citesCharacterSheet
 } = require('./evidence');
 const { normalizeForGrounding } = require('./grounding');
 const { wordCount, pageLengthOf } = require('./word-count');
@@ -873,6 +873,14 @@ function cardFault(beat, evidence) {
   }
   const card = beatCardOf(beat);
   if (card && recordDocumentOf(card, evidence)) return null;
+  // Phase 15, brief D (R6): a player's character sheet is in the record, and no card prints one.
+  if (card && citesCharacterSheet(card, evidence)) {
+    return {
+      message: `Beat ${id}'s card piece names "${card}", a player's character sheet, and no card prints one, ${C9}. Choose in <RECORD> another document that tells the beat for its card, and flag the piece that names it by its id.`,
+      said: "is marked as a card, and its card's document is a player's character sheet, which no card prints",
+      marker: null
+    };
+  }
   const sources = stringsOf(flagged[0].sources).map((source) => `"${source}"`);
   return {
     message: `Beat ${id}'s card piece names ${sources.length > 0 ? listOf(sources) : 'no source'}, which is no document in <RECORD>. A card prints a document from <RECORD>, never the ledger, the evidence log or the notes: choose in <RECORD> the document the card prints, and flag the piece that names it by its id.`,
@@ -925,7 +933,8 @@ function cardFault(beat, evidence) {
  *   (`photo-not-placed`, `photo-placed-twice`), and no photo outside the kept set is placed
  *   (`photo-not-offered`; T13);
  * - each beat in a section marked as a card flags one piece, whose source is a document in the
- *   record, and no unmarked beat flags one (`card-not-in-record`; R4, cardFault), and the cards
+ *   record and no player's character sheet (recordDocumentOf; phase 15, brief D), and no
+ *   unmarked beat flags one (`card-not-in-record`; R4, cardFault), and the cards
  *   number three to five (`card-count`; C9). A beat's card is its flagged piece, read through
  *   beatCardOf by every reader;
  * - every thread in the settled weave's story lands in a section's beat that names it among its

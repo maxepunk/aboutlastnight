@@ -273,3 +273,57 @@ describe('record view: the whole view', () => {
     expect(DOCUMENT_POINTER).toBe('the document with that id in <RECORD>');
   });
 });
+
+// Phase 15, brief D (ruling R6; spec 2026-10-09 section 7): a player's character sheet is the
+// game's private instructions to one player. The record marks it with its own kind and a label
+// pointing at T1, and drops its suspected motive and its starting instructions; its backstory
+// blocks stay. Invented text with the real headings (lib/__tests__/fixtures/character-sheet.js).
+describe('record view: character sheets', () => {
+  const {
+    characterSheet, headinglessSheet, SHEET_BACKSTORY, SHEET_MOTIVE, SHEET_START, HEADINGLESS_TEXT
+  } = require('./fixtures/character-sheet');
+  const LABEL = "(A player's character sheet: the game's private instructions to one player for their character. T1 says what the article may take from it.)";
+
+  it('marks a sheet in the stored shape, keeps its backstory blocks and drops the motive and the start blocks', () => {
+    const out = renderRecordDocuments(bundle({ tokens: [], paper: [characterSheet()] }));
+    expect(out).toBe(
+      '<document id="sheet-0001" kind="character sheet" name="Dana Vire Character Sheet" owner="Dana Vire" layer="exposed">\n' +
+      LABEL + '\n' +
+      SHEET_BACKSTORY.join('\n') + '\n' +
+      '</document>'
+    );
+    [...SHEET_MOTIVE, ...SHEET_START].forEach((line) => expect(out).not.toContain(line));
+  });
+
+  it('marks a sheet with none of the headings and prints its text whole', () => {
+    const out = renderRecordDocuments(bundle({ tokens: [], paper: [headinglessSheet()] }));
+    expect(out).toBe(
+      '<document id="sheet-0002" kind="character sheet" name="Dana Vire Character Sheet" owner="Dana Vire" layer="exposed">\n' +
+      LABEL + '\n' +
+      HEADINGLESS_TEXT + '\n' +
+      '</document>'
+    );
+  });
+
+  it('reads a name ending "Character Sheet" in any case as a sheet, and one holding it elsewhere as a document', () => {
+    expect(renderRecordDocuments(bundle({ tokens: [], paper: [characterSheet({ name: 'Dana Vire CHARACTER SHEET' })] })))
+      .toContain('kind="character sheet"');
+    const notSheet = renderRecordDocuments(bundle({ tokens: [], paper: [characterSheet({ name: 'Character Sheet Template Notes' })] }));
+    expect(notSheet).toContain('kind="Document"');
+    expect(notSheet).toContain(SHEET_MOTIVE[0]);
+    expect(notSheet).not.toContain(LABEL);
+  });
+
+  it('prints every other document as before, beside a sheet', () => {
+    const alone = renderRecordDocuments(bundle());
+    const beside = renderRecordDocuments(bundle({ paper: [bundlePaper(), characterSheet()] }));
+    expect(beside.startsWith(alone + '\n\n<document id="sheet-0001"')).toBe(true);
+  });
+
+  it('gives character extraction, which takes the documents alone, the trimmed sheet too', () => {
+    const out = renderRecordView({ exposed: { tokens: [], paperEvidence: [characterSheet()] } }, { buried: false });
+    expect(out).toContain(LABEL);
+    expect(out).not.toContain(SHEET_MOTIVE[1]);
+    expect(out).not.toContain(SHEET_START[1]);
+  });
+});

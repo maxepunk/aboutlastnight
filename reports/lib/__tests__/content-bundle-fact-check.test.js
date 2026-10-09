@@ -2809,3 +2809,44 @@ describe("4.14c, the integrator's pin: a present-tense speech tag is the speaker
     expect(hits('Marcus said they would never sell the company.')).toEqual(['Marcus said they']);
   });
 });
+
+// Phase 15, brief D (ruling R6; spec 2026-10-09 sections 7 and 11): no card prints a player's
+// character sheet, so card fidelity fails a card whose document is one, inline or in the sidebar,
+// whatever its text; the card checks are the one place code holds the rule outright.
+describe('card fidelity: a card that prints a character sheet', () => {
+  const { characterSheet, SHEET_BACKSTORY } = require('./fixtures/character-sheet');
+  const withSheet = (contentBundle) => baseArgs({
+    contentBundle,
+    evidenceBundle: {
+      exposed: {
+        tokens: [{ id: 'vic001', owner: 'Vic Kingsley', fullContent: TOKEN_TEXT }],
+        paperEvidence: [{ id: 'paper-1', fullContent: PAPER_TEXT }, characterSheet()]
+      }
+    }
+  });
+  const MESSAGE = (where) => `Evidence card "sheet-0001" (${where}) prints a player's character sheet, and no card prints one, as C9 (\`<craft-cards>\`) sets out. Make the card from another document in <RECORD> that tells the same moment, or drop the card.`;
+
+  it('fails an inline card whose content its sheet holds word for word', () => {
+    const result = factCheckContentBundle(withSheet(storyWith(
+      inlineCard({ tokenId: 'sheet-0001', headline: 'The cork', content: SHEET_BACKSTORY[5] })
+    )));
+    expect(result.cardFidelity).toEqual([{ tokenId: 'sheet-0001', ok: false, reason: 'character sheet', locations: IN_STORY }]);
+    expect(result.structuralIssues).toEqual([MESSAGE('in section "the-story"')]);
+    expect(result.findings.filter((f) => f.kind === 'cardFidelity').map((f) => [f.status, f.line])).toEqual([
+      ['structural', "This card prints {document}, a player's character sheet, which no card prints."]
+    ]);
+  });
+
+  it('fails a sidebar entry that cites a sheet, and passes the other cards beside it', () => {
+    const bundle = storyWith(inlineCard());
+    bundle.evidenceCards = [card({ tokenId: 'sheet-0001', headline: 'Dana' })];
+    const result = factCheckContentBundle(withSheet(bundle));
+    expect(result.cardFidelity).toEqual([
+      { tokenId: 'vic001', ok: true, reason: null, locations: IN_STORY },
+      { tokenId: 'sheet-0001', ok: false, reason: 'character sheet', locations: [{ placement: 'sidebar', section: null }] }
+    ]);
+    expect(result.structuralIssues).toEqual([MESSAGE('in the sidebar')]);
+    expect(result.findings.filter((f) => f.kind === 'cardFidelity').map((f) => f.line))
+      .toEqual(["This sidebar card prints {document}, a player's character sheet, which no card prints."]);
+  });
+});

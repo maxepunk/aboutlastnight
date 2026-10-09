@@ -1220,7 +1220,8 @@ function factCheckContentBundle({
   // that content must be copied from its document. A sidebar entry prints a
   // headline and a summary about its document, so it is checked for a known
   // document id and nothing else: a made-up id prints a headline and summary
-  // about nothing.
+  // about nothing. A card of either kind whose document is a player's character sheet fails
+  // whatever its text (phase 15, brief D; R6): no card prints one (C9).
   //
   // One report per defect: a document that fails in several places (inline and
   // in the sidebar, or twice inline) is ONE `cardFidelity` item carrying every
@@ -1272,6 +1273,9 @@ function factCheckContentBundle({
     const document = resolveSource(tokenId);
     const source = document ? document.text : undefined;
     if (!source) note(tokenId, 'unknown source', location, inline ? edits.blockEdited(key, card) : edits.sidebarCard(card), card);
+    // Phase 15, brief D (R6): no card prints a player's character sheet, inline or in the
+    // sidebar, whatever its text (lib/evidence.js isCharacterSheet, through the resolver).
+    else if (document.sheet) note(tokenId, 'character sheet', location, inline ? edits.blockEdited(key, card) : edits.sidebarCard(card), card);
     else if (!inline || isVerbatim(content, source)) note(tokenId, null, location, null, card);
     else note(tokenId, 'not verbatim', location, edits.blockField(key, card, 'content'), card);
   }
@@ -1293,6 +1297,14 @@ function factCheckContentBundle({
         `document in this session's record carries that id. Use the id of a document in <RECORD>, ` +
         `or drop the card.`,
         (place) => `No memory or paper document from this session has the ID ${place.sidebar ? 'this sidebar card' : 'this card'} cites, ${quoted(item.tokenId)}.`
+      );
+    } else if (item.reason === 'character sheet') {
+      // The document is real and no card may print it (C9): another document, or no card.
+      report(
+        `Evidence card "${item.tokenId}" (${where}) prints a player's character sheet, and no card ` +
+        `prints one, as C9 (\`<craft-cards>\`) sets out. Make the card from another document in ` +
+        `<RECORD> that tells the same moment, or drop the card.`,
+        (place) => `${place.sidebar ? 'This sidebar card' : 'This card'} prints ${DOCUMENT_SLOT}, a player's character sheet, which no card prints.`
       );
     } else {
       // The document is real and the choice of it stands; only the text is wrong.
