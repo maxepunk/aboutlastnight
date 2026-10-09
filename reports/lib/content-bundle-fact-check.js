@@ -1120,9 +1120,10 @@ function describeLocations(locations) {
  * @param {Object}   [args.npcPronouns]        - name -> 'he/him': the declared NPCs alone,
  *                                               read when no `npcs` is given
  * @param {Object}   [args.rosterPronouns]     - first name -> pronouns from the roster stop
- * @param {string}   [args.directorText]       - the director's words (notes, corrections,
- *                                               accusation, answers at the story meeting): a
- *                                               pronoun they give is not invented
+ * @param {string}   [args.directorText]       - the director's words (lib/director-words.js:
+ *                                               the notes, corrections, accusation, answers
+ *                                               at the story meeting and the notes at the
+ *                                               stops): a pronoun they give is not invented
  * @param {Object}   [args.guestReporter]      - {name}: named in the head-count message
  * @param {string}   [args.theme]              - 'journalist' (default) | 'detective': which
  *                                               page's printed text roster coverage reads; the
@@ -1549,7 +1550,8 @@ function factCheckContentBundle({
         editId ? concerns.get(editId) : message, lineOf(place ? quoted(excerpt) : `${quoted(excerpt)} (across two pieces)`), editId));
   };
   // Brief 4.10b: the director's lines say what T8 asks of the reporter in either theme.
-  const votesLine = (phrase) => `${phrase} makes the reporter one of the room: the reporter never votes, joins the room's accusation or exposes a memory.`;
+  // Phases 14 and 15, brief F (T8 as rewritten): the reporter takes no side in the verdict.
+  const votesLine = (phrase) => `${phrase} has the reporter take a side in the verdict: the reporter never votes, joins the room's accusation or exposes a memory.`;
   const presenceLine = (phrase) => `${phrase} puts the reporter in the room, but the reporter covered this session remotely.`;
 
   for (const phrase of NEVER_VOTES) {
@@ -1559,10 +1561,12 @@ function factCheckContentBundle({
       // Phase 3 (3.9): T8's first sentence as round 7 words it (R21): "accuses" is
       // joining the room's accusation. A rework reads this line as must-fix. Task 4.5f: who
       // turned a memory in is named by the evidence log or the director's words, as the
-      // article judge's T6 clause reads them since 4.7d (T1).
+      // article judge's T6 clause reads them since 4.7d (T1). Phases 14 and 15, brief F (R9;
+      // spec 11): T8 as rewritten, Nova takes no side in the verdict in either mode; the
+      // prefix stays, since the console groups by it.
       reporterHit(phrase, journalist
-        ? `Reporter-mode violation: "${phrase}". Nova reports on the room from outside its choices: Nova never ` +
-          `votes, joins the room's accusation or exposes a memory, and is never one of the room (T8). Rewrite the ` +
+        ? `Reporter-mode violation: "${phrase}". Nova takes no side in the verdict: Nova never votes, joins ` +
+          `the room's accusation or exposes a memory (T8). Rewrite the ` +
           `sentence without Nova in the vote or the exposure: the vote is the room's, and an exposure stays ` +
           `anonymous unless the evidence log or the director's words name who turned it in.`
         : `Reporter-mode violation: "${phrase}". The reporter covers the room, they are not a member ` +

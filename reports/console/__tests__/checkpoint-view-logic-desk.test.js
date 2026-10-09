@@ -791,7 +791,7 @@ describe('4.10b: a mark found by its words sits beside a block of the kind its l
     const last = desk.sections[1].content.length - 1;
     expect(deskMarksAt(marks, block(1, 1))).toEqual([]);
     expect(deskMarksAt(marks, block(1, last)).map((m) => m.text)).toEqual([
-      '"I voted" makes the reporter one of the room: the reporter never votes, joins the room\'s accusation or exposes a memory.'
+      '"I voted" has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.'
     ]);
   });
 });
@@ -1017,7 +1017,7 @@ describe('4.10e: the folded trace reads past its rule ids', () => {
         structuralIssues: [
           'T5: The judge found a fault in the money and gave no detail.',
           'T4, T6: "Kai sold the memory" names a seller the ledger never shows.',
-          'Reporter-mode violation: "i voted". Nova reports on the room from outside its choices.'
+          'Reporter-mode violation: "i voted". Nova takes no side in the verdict.'
         ],
         advisoryWarnings: ["Em-dash in the narrator's prose: 1 em-dash (in section \"theStory\", paragraph 2)."]
       }
@@ -1028,7 +1028,7 @@ describe('4.10e: the folded trace reads past its rule ids', () => {
       items: [
         'The judge found a fault in the money and gave no detail.',
         '"Kai sold the memory" names a seller the ledger never shows.',
-        'Reporter-mode violation: "i voted". Nova reports on the room from outside its choices.'
+        'Reporter-mode violation: "i voted". Nova takes no side in the verdict.'
       ]
     });
     expect(pass.shouldConsider.items).toEqual(trace[0].findings.advisoryWarnings);
