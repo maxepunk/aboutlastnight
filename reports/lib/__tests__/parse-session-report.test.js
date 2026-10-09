@@ -116,6 +116,44 @@ describe('parseRawInput: the ledger', () => {
     expect((await run(rowsOnly.sdk)).sessionConfig.exposedTokenCount).toBe(0);
   });
 
+  // Phases 14 and 15, brief C (R3): the shift is chosen at the parse, from the span of the
+  // session's sales and exposures, and stamped on the session config with each moved row's
+  // logged time beside its shifted one.
+  const ROOK_STANDINGS = [...REPORT_ANSWER.finalStandings, { name: 'Rook', total: 25000 }];
+  const transferToRook = (credit, debit) => [
+    { time: credit, detail: 'From ember (GM_Station_1)', team: 'Rook', amount: 25000 },
+    { time: debit, detail: 'To rook (GM_Station_1)', team: 'Ember', amount: -25000 }
+  ];
+
+  it('lines up a transfer logged off the game\'s clock, and stamps the shift on the session config', async () => {
+    // The span runs 05:10 to 06:40 PM; a transfer at 03:00 AM fits only back 9 hours.
+    const { sdk } = makeSdk({
+      ...REPORT_ANSWER,
+      finalStandings: ROOK_STANDINGS,
+      adjustmentRows: [...REPORT_ANSWER.adjustmentRows, ...transferToRook('03:00AM', '03:00 AM')]
+    });
+    const result = await run(sdk);
+    expect(result.sessionConfig.adjustments[1]).toEqual({ time: '06:00 PM', loggedTime: '03:00AM', kind: 'transfer', amount: 25000, fromAccount: 'Ember', toAccount: 'Rook' });
+    expect(result.sessionConfig.ledgerCheck.clockShift).toEqual({ hours: -9, moved: 1, bonus: false });
+    const config = JSON.parse(fs.readFileSync(path.join(dataDir, '092026', 'inputs', 'session-config.json'), 'utf8'));
+    expect(config.ledgerCheck.clockShift).toEqual({ hours: -9, moved: 1, bonus: false });
+    expect(config.adjustments[1].loggedTime).toBe('03:00AM');
+  });
+
+  it('reads the exposures\' times into the span: a transfer within three hours of the last exposure stays as logged', async () => {
+    // The sales end at 06:40 PM, the exposures at 10:00 PM; the transfer at 12:30 AM is two and a half hours after.
+    const { sdk } = makeSdk({
+      ...REPORT_ANSWER,
+      finalStandings: ROOK_STANDINGS,
+      exposures: [...REPORT_ANSWER.exposures, { tokenId: 'ale004', exposer: 'NovaNews (Anonymous)', time: '10:00 PM', owner: 'Alex Reeves' }],
+      adjustmentRows: [...REPORT_ANSWER.adjustmentRows, ...transferToRook('12:30AM', '12:30 AM')]
+    });
+    const result = await run(sdk);
+    expect(result.sessionConfig.adjustments[1]).toEqual({ time: '12:30AM', kind: 'transfer', amount: 25000, fromAccount: 'Ember', toAccount: 'Rook' });
+    expect(result.sessionConfig.ledgerCheck).not.toHaveProperty('clockShift');
+    expect(result.sessionConfig.ledgerCheck).not.toHaveProperty('offClock');
+  });
+
   it('with no adjustment rows, keeps the Final Standings totals and says so', async () => {
     const { sdk } = makeSdk({ ...REPORT_ANSWER, adjustmentRows: [] });
     const result = await run(sdk);

@@ -253,6 +253,7 @@ describe('buildLedger: each account\'s total and sale count, checked against the
       { name: 'L', total: 375000, tokenCount: 0, rank: 2 },
       { name: 'Vic', total: 25000, tokenCount: 1, rank: 3 }
     ]);
+    // Brief C (R3): matched exactly, so it also holds that rows on the game's clock add no clockShift or offClock key.
     expect(ledger.ledgerCheck).toEqual({ adjustmentsParsed: true, mismatches: [], unclassified: [] });
     expect(ledger.adjustments).toHaveLength(2);
   });
@@ -271,6 +272,7 @@ describe('buildLedger: each account\'s total and sale count, checked against the
   it('with no adjustment rows, keeps the Final Standings totals and says the rows were not parsed', () => {
     const ledger = buildLedger({ buriedTokens: SALES, adjustmentRows: [], finalStandings: STANDINGS });
     expect(ledger.adjustments).toEqual([]);
+    // Brief C (R3): matched exactly, so it also holds that rows on the game's clock add no clockShift or offClock key.
     expect(ledger.ledgerCheck).toEqual({ adjustmentsParsed: false, mismatches: [], unclassified: [] });
     expect(ledger.shellAccounts).toEqual([
       { name: 'Ember', total: 925000, tokenCount: 2, rank: 1 },
@@ -295,6 +297,7 @@ describe('buildLedger: each account\'s total and sale count, checked against the
       { name: 'Alex', total: 410000, tokenCount: 1, rank: 2 },
       { name: 'Remi', total: 40000, tokenCount: 0, rank: 3 }
     ]);
+    // Brief C (R3): matched exactly, so it also holds that rows on the game's clock add no clockShift or offClock key.
     expect(ledger.ledgerCheck).toEqual({ adjustmentsParsed: true, mismatches: [], unclassified: [] });
   });
 
@@ -432,5 +435,212 @@ describe('ledgerReviewOf: what the input review shows', () => {
     expect(review.adjustmentsParsed).toBe(false);
     expect(review.adjustments).toEqual([]);
     expect(review.accounts).toEqual([{ name: 'Ember', total: 925000, tokenCount: 2, rank: 1 }]);
+  });
+});
+
+/**
+ * Phases 14 and 15, brief C (spec section 4, ruling R3): the session report logged the
+ * bonus and the transfers of two sessions nine hours off the game's clock. At the parse,
+ * an adjustment event (the bonus, a transfer) more than three hours outside the span of
+ * the session's sales and exposures moves by one whole-hour shift, and keeps its logged
+ * time beside the shifted one. ledgerCheck says which shift was used (clockShift), or
+ * that no single shift lines the rows up (offClock); neither key is present when no
+ * event is off the clock. Synthetic rows in the two sessions' shapes, with invented
+ * accounts.
+ */
+describe("buildLedger: adjustment events logged off the game's clock", () => {
+  /** A daytime session's sales, from 03:54 to 05:15 PM, and its exposures, 03:50 to 05:18 PM. */
+  const DAY_SALES = [
+    { tokenId: 'hhh001', shellAccount: 'Pip', amount: 300000, time: '03:54 PM' },
+    { tokenId: 'hhh002', shellAccount: 'Ash', amount: 250000, time: '04:20 PM' },
+    { tokenId: 'hhh003', shellAccount: 'Kit', amount: 200000, time: '05:15 PM' }
+  ];
+  const DAY_EXPOSURES = [{ tokenId: 'iii001', time: '03:50 PM' }, { tokenId: 'iii002', time: '05:18 PM' }];
+  /** The Final Standings the shifted rows reconcile with: a shift moves times, never money. */
+  const DAY_STANDINGS = [
+    { name: 'Pip', total: 325000 }, { name: 'Ash', total: 255000 }, { name: 'Kit', total: 220000 },
+    { name: 'First Burial Bonus', total: 0 }
+  ];
+  /**
+   * The rows in the shape of the daytime session whose report ran nine hours ahead: the
+   * setup row before the session, the bonus at 12:55 AM (its credit and the holding
+   * account's debit, written two ways), and four transfers from 1:28 to 2:14 AM, a
+   * transfer's debit sometimes a minute after its credit.
+   */
+  const DAY_ROWS = [
+    { time: '10:07 PM', detail: 'First Burial Bonus (GM_Station_1)', team: 'First Burial Bonus', amount: 50000 },
+    { time: '12:55AM', detail: 'Firstburial(GMStation2)', team: 'Pip', amount: 50000 },
+    { time: '12:55 AM', detail: 'To pip (GM_Station_2)', team: 'First Burial Bonus', amount: -50000 },
+    { time: '01:28AM', detail: 'From pip (GM_Station_2)', team: 'Ash', amount: 20000 },
+    { time: '01:28 AM', detail: 'To ash (GM_Station_2)', team: 'Pip', amount: -20000 },
+    { time: '02:09AM', detail: 'From ash (GM_Station_2)', team: 'Kit', amount: 15000 },
+    { time: '02:10 AM', detail: 'To kit (GM_Station_2)', team: 'Ash', amount: -15000 },
+    { time: '02:11AM', detail: 'From kit (GM_Station_2)', team: 'Pip', amount: 5000 },
+    { time: '02:11 AM', detail: 'To pip (GM_Station_2)', team: 'Kit', amount: -5000 },
+    { time: '02:14AM', detail: 'From pip (GM_Station_2)', team: 'Kit', amount: 10000 },
+    { time: '02:15 AM', detail: 'To kit (GM_Station_2)', team: 'Pip', amount: -10000 }
+  ];
+
+  /** An evening session's sales, 09:20 to 10:23 PM, and its exposures, 08:59 to 10:20 PM. */
+  const EVENING_SALES = [
+    { tokenId: 'jjj001', shellAccount: 'Ratchet', amount: 400000, time: '09:20 PM' },
+    { tokenId: 'jjj002', shellAccount: 'Wren', amount: 150000, time: '10:23 PM' }
+  ];
+  const EVENING_EXPOSURES = [{ tokenId: 'kkk001', time: '08:59 PM' }, { tokenId: 'kkk002', time: '10:20 PM' }];
+  /** The bonus alone off the clock, at 6:21 AM: back 8 and back 9 hours both land it inside the span. */
+  const EVENING_ROWS = [
+    { time: '03:48 AM', detail: 'Holding Account (GM_Station_1)', team: 'First Burial Bonus', amount: 50000 },
+    { time: '06:21AM', detail: 'First burial bonus (GM_Station_1)', team: 'Ratchet', amount: 50000 },
+    { time: '06:22 AM', detail: 'ToRatchet(GMStation1)', team: 'FirstBurialBonus', amount: -50000 }
+  ];
+
+  /** Two sales an afternoon apart, 01:00 and 04:00 PM, and nothing else. */
+  const AFTERNOON_SALES = [
+    { tokenId: 'lll001', shellAccount: 'Mo', amount: 100000, time: '01:00 PM' },
+    { tokenId: 'lll002', shellAccount: 'Jo', amount: 100000, time: '04:00 PM' }
+  ];
+  const transferRows = (credit, debit, amount, from, to) => [
+    { time: credit, detail: `From ${from.toLowerCase()} (GM_Station_1)`, team: to, amount },
+    { time: debit, detail: `To ${to.toLowerCase()} (GM_Station_1)`, team: from, amount: -amount }
+  ];
+
+  it("moves the daytime shape's bonus and four transfers back 9 hours: the bonus a minute after the first sale, the transfers inside the span", () => {
+    const ledger = buildLedger({ buriedTokens: DAY_SALES, adjustmentRows: DAY_ROWS, finalStandings: DAY_STANDINGS, exposures: DAY_EXPOSURES });
+    expect(ledger.adjustments).toEqual([
+      { time: '03:55 PM', loggedTime: '12:55AM', kind: 'bonus', amount: 50000, toAccount: 'Pip' },
+      { time: '04:28 PM', loggedTime: '01:28AM', kind: 'transfer', amount: 20000, fromAccount: 'Pip', toAccount: 'Ash' },
+      { time: '05:09 PM', loggedTime: '02:09AM', kind: 'transfer', amount: 15000, fromAccount: 'Ash', toAccount: 'Kit' },
+      { time: '05:11 PM', loggedTime: '02:11AM', kind: 'transfer', amount: 5000, fromAccount: 'Kit', toAccount: 'Pip' },
+      { time: '05:14 PM', loggedTime: '02:14AM', kind: 'transfer', amount: 10000, fromAccount: 'Pip', toAccount: 'Kit' }
+    ]);
+    expect(ledger.ledgerCheck).toEqual({
+      adjustmentsParsed: true, mismatches: [], unclassified: [],
+      clockShift: { hours: -9, moved: 5, bonus: true }
+    });
+  });
+
+  it('keeps the bonus paired with its holding-account debit, and the setup row out, after the shift', () => {
+    const { adjustments, ledgerCheck } = buildLedger({ buriedTokens: DAY_SALES, adjustmentRows: DAY_ROWS, exposures: DAY_EXPOSURES });
+    expect(adjustments.filter((a) => a.kind === 'bonus')).toHaveLength(1);
+    expect(ledgerCheck.unclassified).toEqual([]);
+    expect(JSON.stringify(adjustments)).not.toMatch(/10:07/);
+  });
+
+  it("moves a bonus paired only by its minute (061226's shape) as the bonus", () => {
+    const { adjustments, ledgerCheck } = buildLedger({
+      buriedTokens: DAY_SALES,
+      exposures: DAY_EXPOSURES,
+      adjustmentRows: [
+        { time: '12:55AM', detail: 'Payout (GM_Station_1)', team: 'Pip', amount: 50000 },
+        { time: '12:55 AM', detail: 'Manual GM adjustment (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }
+      ]
+    });
+    expect(adjustments).toEqual([{ time: '03:55 PM', loggedTime: '12:55AM', kind: 'bonus', amount: 50000, toAccount: 'Pip' }]);
+    expect(ledgerCheck.clockShift).toEqual({ hours: -9, moved: 1, bonus: true });
+  });
+
+  it('leaves an unclassified row as logged, beside the events it moves', () => {
+    const { adjustments, ledgerCheck } = buildLedger({
+      buriedTokens: DAY_SALES,
+      exposures: DAY_EXPOSURES,
+      adjustmentRows: [...DAY_ROWS, { time: '01:40AM', detail: 'Gift (GM_Station_2)', team: 'Ash', amount: 1000 }]
+    });
+    expect(ledgerCheck.unclassified).toEqual([{ time: '01:40AM', account: 'Ash', amount: 1000 }]);
+    expect(adjustments).toHaveLength(5);
+    expect(ledgerCheck.clockShift).toEqual({ hours: -9, moved: 5, bonus: true });
+  });
+
+  it('on the evening shape, where back 8 and back 9 both fit the span, lets the bonus decide: back 9, a minute after the first sale', () => {
+    const ledger = buildLedger({ buriedTokens: EVENING_SALES, adjustmentRows: EVENING_ROWS, exposures: EVENING_EXPOSURES });
+    expect(ledger.adjustments).toEqual([{ time: '09:21 PM', loggedTime: '06:21AM', kind: 'bonus', amount: 50000, toAccount: 'Ratchet' }]);
+    expect(ledger.ledgerCheck.clockShift).toEqual({ hours: -9, moved: 1, bonus: true });
+  });
+
+  it('prints the shifted time on the timeline, on the evening clock as on the daytime one', () => {
+    const { renderMorningTimeline } = require('../prompt-renderers/record-view');
+    const timelineOf = (sales, rows, exposures) => {
+      const ledger = buildLedger({ buriedTokens: sales, adjustmentRows: rows, exposures });
+      return renderMorningTimeline(
+        { exposed: { tokens: [], paperEvidence: [] }, buried: { transactions: sales.map((s) => ({ ...s, sourceType: 'memory-token' })) } },
+        { adjustments: ledger.adjustments, exposures }
+      );
+    };
+    const evening = timelineOf(EVENING_SALES, EVENING_ROWS, EVENING_EXPOSURES);
+    expect(evening).toMatch(/09:21 AM[^\n]*first-burial bonus/);
+    expect(evening).not.toMatch(/06:21/);
+    const day = timelineOf(DAY_SALES, DAY_ROWS, DAY_EXPOSURES);
+    expect(day).toMatch(/03:55 PM[^\n]*first-burial bonus/);
+    expect(day).not.toMatch(/12:55|01:28|02:1/);
+  });
+
+  it('with no bonus off the clock, takes the shift of the fewest hours that puts every off-clock transfer inside the span', () => {
+    // The span runs 01:00 to 04:00 PM; a transfer at 08:30 PM fits back 5, 6 or 7 hours.
+    const { adjustments, ledgerCheck } = buildLedger({
+      buriedTokens: AFTERNOON_SALES,
+      adjustmentRows: transferRows('08:30PM', '08:30 PM', 30000, 'Mo', 'Jo')
+    });
+    expect(adjustments).toEqual([{ time: '03:30 PM', loggedTime: '08:30PM', kind: 'transfer', amount: 30000, fromAccount: 'Mo', toAccount: 'Jo' }]);
+    expect(ledgerCheck.clockShift).toEqual({ hours: -5, moved: 1, bonus: false });
+  });
+
+  it('moves nothing when no single shift lines the rows up, and counts them in offClock', () => {
+    // The span runs 01:00 to 04:00 PM: 09:00 PM fits only back 5 to 8 hours, 02:00 AM only back 10 to 12.
+    const { adjustments, ledgerCheck } = buildLedger({
+      buriedTokens: AFTERNOON_SALES,
+      adjustmentRows: [
+        ...transferRows('09:00PM', '09:00 PM', 30000, 'Mo', 'Jo'),
+        ...transferRows('02:00AM', '02:00 AM', 10000, 'Jo', 'Mo')
+      ]
+    });
+    expect(adjustments).toEqual([
+      { time: '09:00PM', kind: 'transfer', amount: 30000, fromAccount: 'Mo', toAccount: 'Jo' },
+      { time: '02:00AM', kind: 'transfer', amount: 10000, fromAccount: 'Jo', toAccount: 'Mo' }
+    ]);
+    expect(ledgerCheck.offClock).toEqual({ rows: 2 });
+    expect(ledgerCheck.clockShift).toBeUndefined();
+  });
+
+  it('leaves a transfer two and a half hours after the last sale where it was logged, and adds no key', () => {
+    const ledger = buildLedger({
+      buriedTokens: [
+        { tokenId: 'mmm001', shellAccount: 'Mo', amount: 100000, time: '07:30 PM' },
+        { tokenId: 'mmm002', shellAccount: 'Jo', amount: 100000, time: '08:00 PM' }
+      ],
+      adjustmentRows: transferRows('10:30 PM', '10:30 PM', 30000, 'Mo', 'Jo'),
+      exposures: [{ tokenId: 'nnn001', time: '07:20 PM' }]
+    });
+    expect(ledger.adjustments).toEqual([{ time: '10:30 PM', kind: 'transfer', amount: 30000, fromAccount: 'Mo', toAccount: 'Jo' }]);
+    expect(Object.keys(ledger.ledgerCheck).sort()).toEqual(['adjustmentsParsed', 'mismatches', 'unclassified']);
+  });
+
+  it("leaves the repo's on-clock shapes as they were, byte for byte", () => {
+    [
+      { buriedTokens: SALES, adjustmentRows: [...BONUS_ROWS, ...TRANSFER_ROWS], finalStandings: STANDINGS },
+      { buriedTokens: SALES_061226, adjustmentRows: [...BONUS_ROWS_061226, ...TRANSFER_ROWS_061226], finalStandings: STANDINGS_061226 }
+    ].forEach((input) => {
+      const without = buildLedger(input);
+      const withExposures = buildLedger({ ...input, exposures: [{ tokenId: 'ooo001', time: '07:37 PM' }] });
+      expect(JSON.stringify(withExposures)).toBe(JSON.stringify(without));
+      expect(JSON.stringify(without.adjustments)).not.toMatch(/loggedTime/);
+    });
+  });
+
+  it('tests nothing when the session has no sale and no exposure time', () => {
+    const ledger = buildLedger({ buriedTokens: [], adjustmentRows: TRANSFER_ROWS, finalStandings: STANDINGS, exposures: [] });
+    expect(ledger.adjustments).toEqual([{ time: '10:30 PM', kind: 'transfer', amount: 375000, fromAccount: 'Vic', toAccount: 'L' }]);
+    expect(Object.keys(ledger.ledgerCheck).sort()).toEqual(['adjustmentsParsed', 'mismatches', 'unclassified']);
+  });
+
+  it('ledgerReviewOf passes the shift, or the rows no shift fits, through to the input review', () => {
+    const ledger = buildLedger({ buriedTokens: DAY_SALES, adjustmentRows: DAY_ROWS, exposures: DAY_EXPOSURES });
+    const review = ledgerReviewOf({ sessionConfig: { adjustments: ledger.adjustments, ledgerCheck: ledger.ledgerCheck }, shellAccounts: ledger.shellAccounts });
+    expect(review.clockShift).toEqual({ hours: -9, moved: 5, bonus: true });
+    expect(review.offClock).toBeNull();
+    expect(review.adjustments[0].loggedTime).toBe('12:55AM');
+    const unfit = ledgerReviewOf({ sessionConfig: { adjustments: [], ledgerCheck: { adjustmentsParsed: true, mismatches: [], unclassified: [], offClock: { rows: 3 } } } });
+    expect(unfit.offClock).toEqual({ rows: 3 });
+    expect(unfit.clockShift).toBeNull();
+    const none = ledgerReviewOf({ sessionConfig: { adjustments: [], ledgerCheck: { adjustmentsParsed: true, mismatches: [], unclassified: [] } } });
+    expect([none.clockShift, none.offClock]).toEqual([null, null]);
   });
 });

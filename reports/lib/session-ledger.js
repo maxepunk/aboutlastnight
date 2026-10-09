@@ -44,10 +44,22 @@
  * unclassified, so the computed book had no account L though the standings show it at
  * $1,100,000, and the writers' money list left it out.
  *
+ * The session report's clock can run hours off the game's: 100326's and 100426's logged
+ * the bonus and the transfers nine hours ahead of the sales (phases 14 and 15, brief C).
+ * The events are lined up before anything reads them (lineUpOffClockEvents): one
+ * whole-hour shift, anchored on the bonus at the first sale, each moved event keeping
+ * its logged time beside the shifted one.
+ *
  * Pure: no I/O, no state.
  */
 
-const { sessionClockOf, parseLoggedTime } = require('./prompt-renderers/session-clock');
+const {
+  sessionClockOf,
+  parseLoggedTime,
+  firstEventTime,
+  sessionOrderOf,
+  loggedTimeFromMinutes
+} = require('./prompt-renderers/session-clock');
 
 /** An account name for matching: letters and digits only, lower case. */
 function keyOf(name) {
@@ -194,6 +206,109 @@ function classifyAdjustments(rows, { accounts } = {}) {
 }
 
 /**
+ * How far outside the span of the session's sales and exposures an adjustment event may
+ * sit before it is off the game's clock: three hours. The sessions on the clock put a
+ * transfer up to two and a half hours after the last sale; the off-clock rows of 100326
+ * and 100426 sat seven and a half to nine hours out.
+ */
+const OFF_CLOCK_MINUTES = 180;
+/** The widest shift tried, in whole hours either way. */
+const MAX_SHIFT_HOURS = 12;
+const MINUTES_PER_DAY = 24 * 60;
+
+/** Minutes after midnight, from a logged time; null when it is not a time. */
+function minutesOf(text) {
+  const read = parseLoggedTime(typeof text === 'string' ? text : '');
+  return read ? read.minutes : null;
+}
+
+/**
+ * The span of the session: from its first sale or exposure to its last, in the session
+ * clock's order (session-clock.js, its first-event rule, so a session that runs past
+ * midnight is one span). Null when no sale or exposure has a time.
+ *
+ * @returns {{start: number, end: number, firstSale: number|null}|null} `start` in minutes
+ *   after midnight; `end` and `firstSale` in minutes after the start
+ */
+function sessionSpanOf(saleTimes, exposureTimes) {
+  const startTime = firstEventTime([...saleTimes, ...exposureTimes]);
+  if (!startTime) return null;
+  const orderOf = (times) => times.map((t) => sessionOrderOf(t, startTime)).filter((o) => o !== null);
+  const sales = orderOf(saleTimes);
+  return {
+    start: minutesOf(startTime),
+    end: Math.max(...orderOf([...saleTimes, ...exposureTimes])),
+    firstSale: sales.length > 0 ? Math.min(...sales) : null
+  };
+}
+
+/** Where a minute of the day falls in the span: minutes after its start. */
+function placeInSpan(minutes, span) {
+  return (((minutes - span.start) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+}
+
+/** How many minutes a minute of the day sits outside the span, before it or after it; 0 inside. */
+function minutesOutside(minutes, span) {
+  const place = placeInSpan(minutes, span);
+  return place <= span.end ? 0 : Math.min(place - span.end, MINUTES_PER_DAY - place);
+}
+
+/**
+ * Lines up the adjustment events the session report logged off the game's clock
+ * (phases 14 and 15, brief C; spec section 4, ruling R3).
+ *
+ * An event (the bonus, a transfer) is off the clock when it sits more than
+ * OFF_CLOCK_MINUTES outside the session's span. Every off-clock event moves by one
+ * shift of whole hours, from -12 to +12, and a shift is used only when every event it
+ * moves lands inside the span. Among the shifts that do:
+ * - when the bonus is among the events, the one that lands it nearest the session's
+ *   first sale, since the first-burial bonus is paid with the first sale (a tie goes to
+ *   the bonus at or after the sale, then to the fewer hours);
+ * - otherwise the one of the fewest hours (a tie goes to the shift back).
+ * When none fits, nothing moves. A row that makes no event (the setup row, an
+ * unclassified row) is never tested and stays as logged, and the classification has
+ * already paired the bonus with its holding-account debit on the logged minutes.
+ *
+ * @param {Array} adjustments - the classified events, each with its logged `time`
+ * @param {Array<string>} saleTimes
+ * @param {Array<string>} exposureTimes
+ * @returns {{adjustments: Array, clockShift?: {hours, moved, bonus}, offClock?: {rows}}}
+ *   a moved event's `time` is the shifted time and its `loggedTime` the time as logged
+ */
+function lineUpOffClockEvents(adjustments, saleTimes, exposureTimes) {
+  const span = sessionSpanOf(saleTimes, exposureTimes);
+  if (!span) return { adjustments };
+  const offClock = adjustments
+    .map((event, index) => ({ event, index, minutes: minutesOf(event.time) }))
+    .filter(({ minutes }) => minutes !== null && minutesOutside(minutes, span) > OFF_CLOCK_MINUTES);
+  if (offClock.length === 0) return { adjustments };
+
+  const fits = [];
+  for (let hours = -MAX_SHIFT_HOURS; hours <= MAX_SHIFT_HOURS; hours += 1) {
+    if (hours !== 0 && offClock.every(({ minutes }) => placeInSpan(minutes + hours * 60, span) <= span.end)) fits.push(hours);
+  }
+  if (fits.length === 0) return { adjustments, offClock: { rows: offClock.length } };
+
+  const bonus = offClock.find(({ event }) => event.kind === 'bonus');
+  const byFewestHours = (a, b) => Math.abs(a) - Math.abs(b) || a - b;
+  const fromFirstSale = (hours) => placeInSpan(bonus.minutes + hours * 60, span) - span.firstSale;
+  const nearestFirstSale = (a, b) => Math.abs(fromFirstSale(a)) - Math.abs(fromFirstSale(b))
+    || Number(fromFirstSale(a) < 0) - Number(fromFirstSale(b) < 0)
+    || byFewestHours(a, b);
+  const [hours] = fits.sort(bonus && span.firstSale !== null ? nearestFirstSale : byFewestHours);
+
+  const moved = new Map(offClock.map(({ index, minutes }) => [index, loggedTimeFromMinutes(minutes + hours * 60)]));
+  return {
+    adjustments: adjustments.map((event, index) => {
+      if (!moved.has(index)) return event;
+      const { time, ...rest } = event;
+      return { time: moved.get(index), loggedTime: time, ...rest };
+    }),
+    clockShift: { hours, moved: offClock.length, bonus: Boolean(bonus) }
+  };
+}
+
+/**
  * The account book: every account, keyed for matching, keeping the first spelling seen.
  */
 function accountBook() {
@@ -226,18 +341,26 @@ function accountBook() {
  * @param {Array} [parse.buriedTokens] - the sales: {shellAccount, amount, time}
  * @param {Array} [parse.adjustmentRows] - every Adjustment row, as the parse copied it
  * @param {Array} [parse.finalStandings] - every Final Standings row: {name, total}
+ * @param {Array} [parse.exposures] - the evidence log's rows, {time}: with the sales, the
+ *   span the bonus and the transfers are lined up against (lineUpOffClockEvents)
  * @returns {{adjustments: Array, shellAccounts: Array<{name, total, tokenCount, rank, computedTotal?}>,
- *            ledgerCheck: {adjustmentsParsed: boolean, mismatches: Array, unclassified: Array}}}
- *            computedTotal is present only on an account whose total is the standings'
+ *            ledgerCheck: {adjustmentsParsed: boolean, mismatches: Array, unclassified: Array,
+ *            clockShift?: {hours, moved, bonus}, offClock?: {rows}}}}
+ *            computedTotal is present only on an account whose total is the standings';
+ *            clockShift only when events moved onto the game's clock, offClock only when
+ *            events sit off it and no single shift fits them
  */
-function buildLedger({ buriedTokens, adjustmentRows, finalStandings } = {}) {
+function buildLedger({ buriedTokens, adjustmentRows, finalStandings, exposures } = {}) {
   const adjustmentsParsed = Array.isArray(adjustmentRows) && adjustmentRows.length > 0;
   // A transfer's source is an account only when the session report shows it here too.
   const shown = [
     ...(Array.isArray(buriedTokens) ? buriedTokens : []).map((sale) => sale && sale.shellAccount),
     ...(Array.isArray(finalStandings) ? finalStandings : []).map((row) => row && row.name)
   ].filter((name) => String(name || '').trim());
-  const { adjustments, unclassified } = classifyAdjustments(adjustmentRows, { accounts: shown });
+  const classified = classifyAdjustments(adjustmentRows, { accounts: shown });
+  const { unclassified } = classified;
+  const timesOf = (list) => (Array.isArray(list) ? list : []).map((entry) => entry && entry.time);
+  const { adjustments, clockShift, offClock } = lineUpOffClockEvents(classified.adjustments, timesOf(buriedTokens), timesOf(exposures));
   const { accounts, get } = accountBook();
 
   (Array.isArray(buriedTokens) ? buriedTokens : []).forEach((sale) => {
@@ -289,12 +412,15 @@ function buildLedger({ buriedTokens, adjustmentRows, finalStandings } = {}) {
     .sort((a, b) => b.total - a.total || a.order - b.order)
     .map(({ order, ...a }, i) => ({ ...a, rank: i + 1 }));
 
-  return { adjustments, shellAccounts, ledgerCheck: { adjustmentsParsed, mismatches, unclassified } };
+  const ledgerCheck = { adjustmentsParsed, mismatches, unclassified };
+  if (clockShift) ledgerCheck.clockShift = clockShift;
+  if (offClock) ledgerCheck.offClock = offClock;
+  return { adjustments, shellAccounts, ledgerCheck };
 }
 
 /**
  * What the input review shows of the ledger: the clock rule, the adjustments beside
- * the accounts, and the totals check.
+ * the accounts, the totals check, and the rows the parse lined up onto the game's clock.
  *
  * A thread parsed before phase 3 has no adjustments and no check: it shows its stored
  * account totals, says the adjustment rows were not parsed, and decides its clock from
@@ -302,7 +428,8 @@ function buildLedger({ buriedTokens, adjustmentRows, finalStandings } = {}) {
  *
  * @param {Object} state
  * @returns {{clock: Object, adjustmentsParsed: boolean, adjustments: Array, accounts: Array,
- *            mismatches: Array, unclassified: Array}}
+ *            mismatches: Array, unclassified: Array, clockShift: Object|null, offClock: Object|null}}
+ *            the last two as the parse stamped them (lineUpOffClockEvents), null when absent
  */
 function ledgerReviewOf(state) {
   const sessionConfig = (state && state.sessionConfig) || {};
@@ -314,8 +441,14 @@ function ledgerReviewOf(state) {
     adjustments: parsed ? sessionConfig.adjustments : [],
     accounts: Array.isArray(state && state.shellAccounts) ? state.shellAccounts : [],
     mismatches: Array.isArray(check.mismatches) ? check.mismatches : [],
-    unclassified: Array.isArray(check.unclassified) ? check.unclassified : []
+    unclassified: Array.isArray(check.unclassified) ? check.unclassified : [],
+    clockShift: isPlainObject(check.clockShift) ? check.clockShift : null,
+    offClock: isPlainObject(check.offClock) ? check.offClock : null
   };
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 module.exports = {

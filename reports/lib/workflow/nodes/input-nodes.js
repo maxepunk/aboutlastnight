@@ -21,7 +21,8 @@
  *   verdictKind and, for a split final vote, its votes), the director's accusation
  *   word for word (accusationRaw), each exposed memory's exposer/time/owner
  *   (exposures, which the morning timeline reads since phase 3), the classified
- *   adjustments, the totals check (ledgerCheck), the session clock (sessionClock),
+ *   adjustments (one logged off the game's clock lined up, with its loggedTime), the
+ *   totals check (ledgerCheck, with the shift), the session clock (sessionClock),
  *   metadata (NOT photosPath - C1: state.photosPath owns it)
  * - director-notes.json: observations, whiteboard data (from vision)
  * - orchestrator-parsed.json: exposedTokens, exposures, buriedTokens, the Adjustment
@@ -750,10 +751,14 @@ Return structured JSON matching the schema.${correctionsBlock}`;
   // checked against the Final Standings (sessionConfig.ledgerCheck, shown at the input
   // review). The computed accounts replace the model's on disk too, because
   // loadDirectorNotes refills state.shellAccounts from orchestrator-parsed.json.
+  // Phases 14 and 15, brief C: the bonus and the transfers the session report logged
+  // off the game's clock are lined up against the span of the sales and exposures, and
+  // stamped here, where the sale times are (ledgerCheck.clockShift or .offClock).
   const ledger = buildLedger({
     buriedTokens: orchestratorParsed.buriedTokens,
     adjustmentRows: orchestratorParsed.adjustmentRows,
-    finalStandings: orchestratorParsed.finalStandings
+    finalStandings: orchestratorParsed.finalStandings,
+    exposures: orchestratorParsed.exposures
   });
   sessionConfig.adjustments = ledger.adjustments;
   sessionConfig.ledgerCheck = ledger.ledgerCheck;
@@ -762,6 +767,11 @@ Return structured JSON matching the schema.${correctionsBlock}`;
     console.warn('[parseRawInput] No Adjustment rows parsed: account totals are the Final Standings, with no bonus or transfer events');
   } else if (ledger.ledgerCheck.mismatches.length > 0) {
     console.warn(`[parseRawInput] Account totals disagree with the Final Standings: ${JSON.stringify(ledger.ledgerCheck.mismatches)}`);
+  }
+  if (ledger.ledgerCheck.clockShift) {
+    console.warn(`[parseRawInput] Adjustments logged off the game's clock, shifted: ${JSON.stringify(ledger.ledgerCheck.clockShift)}`);
+  } else if (ledger.ledgerCheck.offClock) {
+    console.warn(`[parseRawInput] Adjustments logged off the game's clock, no single shift fits: ${JSON.stringify(ledger.ledgerCheck.offClock)}`);
   }
 
   // Brief 3.5: one session clock, decided once from the first exposure or sale (never
