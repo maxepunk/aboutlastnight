@@ -100,7 +100,7 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
   "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched> | character sheet", "owners": ["<character>"], "text": "<description, whole; for a character sheet, without its SUSPECTED MOTIVE and WHERE TO START blocks>"}],
   "ledger": {
     "clock": "as logged | evening session: times moved twelve hours",
-    "shift": "The session report logged <the first-burial bonus and N transfers> <N> hours off the game's clock. They're shifted <back | forward> <N> hours to line up with the sales. | <N> ledger rows sit off the game's clock, and no single shift lines them up. They print as the session report logged them. | null",
+    "shift": "The session report logged <the first-burial bonus | N transfer(s) | the first-burial bonus and N transfer(s)> <N hour(s)> off the game's clock. <It's | They're> shifted <back | forward> <N hour(s)> to line up with the sales. | <N> ledger <row sits | rows sit> off the game's clock, and no single shift lines <it | them> up. <It prints | They print> as the session report logged <it | them>. | null",
     "accounts": [{"name": "<account>", "total": <number>, "sales": <number>}],
     "total": <number>
   },

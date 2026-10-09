@@ -440,6 +440,22 @@ describe('your words and the world (phases 14 and 15)', () => {
       expect(`${name}: ${/when the investigation ran/.test(section(agent(name), 'Input'))}`).toBe(`${name}: true`));
   });
 
+  // Final fix wave (K7): the validator reads the session's facts the other agents name, and the
+  // shift's placeholder in the record allows the singular forms the console prints.
+  it("the validator reads the session's facts the other agents name", () => {
+    const input = section(agent('article-validator'), 'Input');
+    expect(input).toMatch(/when the investigation ran \(`timeOfDay`\)/);
+    expect(input).toMatch(/Nova's first name for the session/);
+    expect(input).toMatch(/the guest reporter, when there is one/);
+  });
+
+  it("the shift's placeholder in the record allows each form the console prints", () => {
+    const shift = recordBlock().match(/"shift": "([^"]*)"/)[1];
+    ["It's | They're", '<row sits | rows sit>', 'lines <it | them> up', '<It prints | They print>', '<back | forward>'].forEach((form) =>
+      expect(`${form}: ${shift.includes(form)}`).toBe(`${form}: true`));
+    expect(shift).toMatch(/the first-burial bonus/);
+  });
+
   it("the article generator's byline names a guest reporter only when the session has one", () => {
     expect(section(agent('article-generator'), 'Job')).toMatch(/no `guestReporter` when it has none/);
   });

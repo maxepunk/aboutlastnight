@@ -57,7 +57,7 @@ const {
   sessionClockOf,
   parseLoggedTime,
   loggedTimeFromMinutes,
-  sessionSpanOf: clockSpanOf,
+  sessionSpanOf,
   placeInSpan,
   minutesOutsideSpan
 } = require('./prompt-renderers/session-clock');
@@ -225,13 +225,14 @@ function minutesOf(text) {
 /**
  * The span of the session (session-clock.js sessionSpanOf: its first sale or exposure to its
  * last, in the session clock's order, so a session that runs past midnight is one span), with
- * its first sale. Null when no sale or exposure has a time.
+ * its first sale, which the bonus is lined up against. Null when no sale or exposure has a
+ * time. Named for what it adds to the clock's span (the final fix wave, K7).
  *
  * @returns {{start: number, end: number, firstSale: number|null}|null} `start` in minutes
  *   after midnight; `end` and `firstSale` in minutes after the start
  */
-function sessionSpanOf(saleTimes, exposureTimes) {
-  const span = clockSpanOf([...saleTimes, ...exposureTimes]);
+function spanWithFirstSaleOf(saleTimes, exposureTimes) {
+  const span = sessionSpanOf([...saleTimes, ...exposureTimes]);
   if (!span) return null;
   const sales = saleTimes.map(minutesOf).filter((m) => m !== null).map((m) => placeInSpan(m, span));
   return { start: span.start, end: span.end, firstSale: sales.length > 0 ? Math.min(...sales) : null };
@@ -260,7 +261,7 @@ function sessionSpanOf(saleTimes, exposureTimes) {
  *   a moved event's `time` is the shifted time and its `loggedTime` the time as logged
  */
 function lineUpOffClockEvents(adjustments, saleTimes, exposureTimes) {
-  const span = sessionSpanOf(saleTimes, exposureTimes);
+  const span = spanWithFirstSaleOf(saleTimes, exposureTimes);
   if (!span) return { adjustments };
   const offClock = adjustments
     .map((event, index) => ({ event, index, minutes: minutesOf(event.time) }))

@@ -24,7 +24,7 @@ Read these first. They are what you check the draft against; this file adds only
 
 From `data/<session-id>/`:
 - `output/content-bundle.json`: the draft;
-- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, the roster and the photos;
+- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, the roster and the photos, with the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and the guest reporter, when there is one;
 - `analysis/article-outline.json`: the story map the draft was written from, whose beats place the players;
 - `analysis/weave.json`: the weave, whose answers on its questions are the director's words;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note, which are record too.
