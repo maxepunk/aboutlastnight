@@ -29,7 +29,7 @@ A programmatic test of an output, free to run, with a definite answer.
 _Avoid_: validation, fact check (one particular check)
 
 **Record**:
-The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the ledger and the evidence log, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the photos and the director's descriptions of them, and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's own suspicion, an allegation or a question, unless the director writes it into the article.
+The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the ledger and the evidence log, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the photos and the director's descriptions of them, and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's own suspicion, an allegation, a question or an opinion Nova marks as Nova's, unless the director writes it into the article.
 _Avoid_: session data, ground truth, context
 
 **Character sheet**:
@@ -49,7 +49,7 @@ The character whose memory it is: the point of view the memory records. The arti
 _Avoid_: author, source
 
 **Exposer**:
-The player who turned a memory in to Nova. Anonymous unless the evidence log carries a name or the director's own words (the notes, a correction at the input review, the accusation as written, or an answer at the story meeting) record who turned it in. A name on a turn-in is the player taking public credit: an honest attribution, which the article may print. Never assumed to be the owner.
+The player who turned a memory in to Nova. Anonymous unless the evidence log carries a name or the director's own words (the notes, a correction at the input review, the accusation as written, an answer at the story meeting, or a note sent at a stop) record who turned it in. A name on a turn-in is the player taking public credit: an honest attribution, which the article may print. Never assumed to be the owner.
 _Avoid_: source, submitter
 
 **Ledger**:

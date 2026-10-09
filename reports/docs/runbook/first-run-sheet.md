@@ -18,8 +18,15 @@ This session tests phase 4. Its readout counts what the pipeline asked of you: h
 - Never restart the server while a step is running. Restart only at a pause (a stop).
 - If the page resets to the blank Session screen: note the time in the decision log, open the browser DevTools console and run
   `document.wasDiscarded; performance.getEntriesByType('navigation')[0].type` and write down both values, then type the session ID and click **Resume**. Nothing is lost.
-- Every note you type is kept: each stop shows the notes so far, folded, and every later writer reads them.
+- Every note you type is kept: each stop shows the notes so far, folded, and every later writer, judge and check reads them as your words. What a note says happened, or rules about the record (such as a ledger time), holds for every later stage; a direction it gives is written as Nova's reading.
 - Going back to the story meeting or the map costs no model call: each reopens as you left it.
+
+### The input review (the stepper's "Input Review")
+The **Ledger** panel opens with the clock's line ("Evening session: logged times shown as morning" or "Daytime session: logged times shown as logged"), and under it, when the session report logged the first-burial bonus or transfers off the game's clock, one line saying what the parse did with them:
+- "The session report logged the first-burial bonus and 4 transfers 9 hours off the game's clock. They're shifted back 9 hours to line up with the sales." (the count, the kinds and the hours as moved). The writers read the shifted times, so they need not ask you about those rows.
+- "3 ledger rows sit off the game's clock, and no single shift lines them up. They print as the session report logged them."
+
+Each moved row shows its logged time beside the shifted one among the adjustments. Rows the session report logged on the game's clock print no line. If a shift is wrong, say so in a note at any stop: the writers and the judges read it as your ruling. **Reject with Corrections** re-parses, and a re-parse lines the rows up again; a session parsed before this change keeps its logged times until it is re-parsed.
 
 ### The story meeting (the stepper's "Story meeting")
 A memo of two or three angles, each a story the article could tell, with one open at a time: angle 1 when the page first opens. With any angle open, the page comes to at most 450 words. The checks hold the writer's own lines to 450 less the words code prints (the verdict, the "Open below" line, the line that keeps the verdict's thread in, the labels), and never to fewer than 350, so a long split vote can run the page past 450. The writer's lines are in plain words, with no quotations, figures, times or document ids; only the headlines, which the article would print, and the questions, which may name the figure they ask about, are exempt. In this order:

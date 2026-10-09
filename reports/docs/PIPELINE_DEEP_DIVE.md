@@ -70,17 +70,16 @@ Each session has a subset of these characters (typically 8-16 players). Token ID
 | NPC | Token Prefix | Role |
 |-----|--------------|------|
 | **Marcus Blackwood** | mab | The man whose death the room investigates (T15). Host of the party. Founder of NeurAI. |
-| **[Firstname] Nova** | — | The NovaNews reporter who writes the article (`world.md`). Players turn memories in to Nova to EXPOSE them. First name is configurable per session (often "Cassandra"). |
+| **[Firstname] Nova** | — | The NovaNews reporter who writes the article (`world.md`). Players turn memories in to Nova to EXPOSE them. First name is configurable per session (often "Cassandra"), and every writer and judge is told it in the roster section's Nova line. |
 | **Blake / Valet** | — | Manages operations at NeurAI; Marcus called Blake his Valet (T15). Works the room, making the deals that BURY memories (`world.md`; the money and the buyer: T5). |
 
 ### Character Sheets
 
-Character sheets are part of the paper evidence in Notion. They contain:
-- The character's **starting memories** (what they "remember" at game start)
-- Basic character context before investigation begins
-- Relationships and backstory hints
+A character sheet is a player's private instructions for their character: backstory (starting memories, who people are to each other), a suspected motive, goals and where to start. Six of them sit in Notion as paper evidence, each named "<character> Character Sheet", and the paper-evidence stop starts with every item ticked, so a sheet reaches the record like any other document unless the director unticks it. In the world no one could hand Nova a sheet: its backstory is true in the world, and the sheet itself, its motive and its goals never appear (T1; spec `docs/superpowers/specs/2026-10-09-your-words-and-the-world.md` section 7).
 
-These starting memories give players a foundation before they discover additional memory tokens and paper evidence during gameplay.
+- **Which document is a sheet** is one rule, `isCharacterSheet` in `lib/evidence.js`: a paper document whose name ends " Character Sheet", in any case. Its `basicType` cannot decide: it is "Document", as 33 other documents' is.
+- **The record** (`lib/prompt-renderers/record-view.js` `renderDocument`) prints a sheet with its own kind, `kind="character sheet"`, and a one-line label pointing at T1, and leaves out its `▌[FLAGGED] SUSPECTED MOTIVE` and WHERE TO START blocks, each to the next heading. A sheet stored without those headings (an older copy) prints whole, marked. Character extraction reads the record through the same view, so it reads the trimmed sheet. The goals that sit inside CORE IDENTITY stay in the text, and T1 covers them.
+- **No card prints a sheet** (C9): `recordDocumentOf` refuses a sheet as a card's document, so the map's card check and the article's card fidelity both fail a card that prints one. A piece of evidence may still cite a sheet, for its backstory.
 
 ---
 
@@ -139,13 +138,15 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 
 ### Layer 2: BURIED (Observable Patterns Only)
 
-**Game Reality**: Player scanned token → chose "BURY" → the memory was sold to be erased. Nova's ledger has the sale's time, amount and account, never which memory, and the record view prints a buried memory only as that sale on the morning timeline (`lib/prompt-renderers/record-view.js`).
+**Game Reality**: Player scanned token → chose "BURY" → the memory was sold to be erased. Nova's ledger has the sale's time, amount and account, never which memory, and the record view prints a buried memory only as that sale on the investigation's timeline (`lib/prompt-renderers/record-view.js`).
 
 **Rules**: `world.md` ("Buried", the ledger, an account); in `truth-rules.md`, T3 (buried memories never appear as evidence), T4 (an account is the seller's chosen destination and name), T5 (the buyer pays the seller) and T7 (the stages and the clock).
 
 ### Layer 3: CONTEXT (Director Notes = the Director's Observations)
 
 **Game Reality**: The director watched the session and writes it into the notes: the room's scenes and lines, the deliberation, often the director's own read of the session, and the epilogue. The players' whiteboard and the director's accusation text come in beside the notes.
+
+**The director's words** are one list (`lib/director-words.js` `DIRECTOR_WORDS_SOURCES`; spec 2026-10-09 section 3): the notes, the corrections at the input review, the accusation, the answers at the story meeting, and every note sent at a stop with approve, reweave or send-back. What a note says happened, or rules about the record, is record; a direction it gives is written as Nova's reading (T1). The writers read the notes at the stops as standing notes in `<DIRECTOR_GUIDANCE>`. Both judges print them in `<DIRECTOR_STOP_NOTES>`, read from `directorGateNotes` whole, the note a rework is acting on included, with "None." when there is none; the evidence check (a piece may cite one under `notes`), the article fact check and the verdict guard read the whole list. "From your notes" at the story meeting still quotes the session notes and corrections alone.
 
 **Rules**: in `truth-rules.md`, T1 (evidence decides how a claim is written), T2 (the verdict is the group's negotiated official story), T7 (the stages and the clock) and T13 (photos and the whiteboard); the director's lines are C8 in `craft-material.md`, weighed by the arc writer and chosen by the map. What Nova could witness is the session's reporting mode block (`mode-on-site.md` or `mode-remote.md`, through `buildReportingModeBlock` in `lib/prompt-builder.js`).
 
@@ -243,6 +244,8 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 - `input-review` (0.2): Confirm parsed session data (runs AFTER data acquisition + incremental input)
 
 **Note**: Incremental input flow means `parseRawInput` runs after `await-full-context` checkpoint, not at workflow start.
+
+**The ledger's shift** (spec 2026-10-09 section 4; `lib/session-ledger.js` `buildLedger`). The session report can log the first-burial bonus and the transfers on another clock than the sales (100326 and 100426 logged them nine hours off). At the parse, a classified adjustment event (the bonus, a transfer) more than three hours outside the span of the session's sales and exposures is off the game's clock, and every such event moves by one shift of whole hours: the one that lands the bonus nearest the first sale when the bonus is among them, otherwise the fewest hours that put every one inside the span, and only when every event it moves lands inside the span. Each moved event keeps its `loggedTime` beside its new time; `ledgerCheck.clockShift` (`{hours, moved, bonus}`) records the shift, or `ledgerCheck.offClock` (`{rows}`) the rows no shift fits, which stay as logged. The input review's ledger panel says which in one line (`console/input-review-logic.js` `ledgerView`'s `shiftLine`). The shift is stamped at the parse, so a replay reads the stamped times, and a session parsed before it keeps its logged times until a new parse. Every writer, rework and judge reads the shifted times on the timeline, and a note at any stop corrects a wrong shift.
 
 ### Phase 1: Data Acquisition
 
@@ -348,9 +351,10 @@ SECTION 1: WHAT THE ROOM CONCLUDED
   - The whiteboard: a model's reading of the photo, context only
   - The director's notes and corrections: the record for the room, under T1
   - Blake and the Valet in the director's notes (when the notes name them)
-  - The investigation focus, the session roster, the character categories,
+  - The investigation focus, the session roster with when the investigation
+    ran and the guest reporter when there is one, the character categories,
     the roster with pronouns and the character context
-SECTION 2: THE RECORD (every exposed document, then the morning timeline),
+SECTION 2: THE RECORD (every exposed document, then the investigation's timeline),
   then the Sources a piece of evidence may name: the document ids,
   "ledger", "evidence-log" and "notes"
 SECTION 3: THE WEAVE (WEAVE_TASK: C1, C16 and C15, by pointer)
@@ -741,7 +745,7 @@ State persists via `MemorySaver` (in-memory) or `SqliteSaver` (persistent).
 
 ### The stages and the clock
 
-The party, the investigation and Nova's day, and the clock every logged time is printed on, are T7 in `truth-rules.md`, with the timeline in `world.md` ("The record and the timeline"). Code makes the clock: the session clock (`lib/prompt-renderers/session-clock.js`) decides once per session whether logged times print as logged or with AM for PM, and every time a prompt prints goes through it, the record view's `<morning-timeline>` and the transaction links included.
+The party, the investigation and Nova's day, and the clock every logged time is printed on, are T7 in `truth-rules.md`, with the timeline in `world.md` ("The record and the timeline"). Code makes the clock: the session clock (`lib/prompt-renderers/session-clock.js`) decides once per session whether logged times print as logged or with AM for PM, and every time a prompt prints goes through it, the record view's `<investigation-timeline>` and the transaction links included. The investigation cannot begin before 5 AM: a session played from 5 PM on runs in the morning in the story, an earlier one in the afternoon. Code gives every writer and judge one line saying which, with the span of the session's sales and exposures (with the session's facts, or beside the session roster in the calls without them), and no code-built label fixes the time of day. Ledger rows the session report logged off the game's clock are lined up at the parse (see **The ledger's shift** under Phase 0).
 
 ---
 
@@ -835,11 +839,11 @@ item.fullDescription || item.rawData?.fullDescription || item.content || item.su
 
 ### "Temporal conflation in article"
 
-**Symptom**: The article mixes the party (what a memory shows) with the investigation (the room, and the sales and exposures on the morning timeline) in one sentence, or prints a logged time off the morning clock.
+**Symptom**: The article mixes the party (what a memory shows) with the investigation (the room, and the sales and exposures on the investigation's timeline) in one sentence, prints a logged time off the session clock, or calls an afternoon investigation the morning.
 
 **Check**:
 1. Does the article writer's system prompt carry `truth-rules.md` T7 (the stages and the clock)?
-2. Does the record's `<morning-timeline>` show the times on the session clock? The input review's ledger panel says which clock rule applied.
+2. Does the record's `<investigation-timeline>` show the times on the session clock, and does the time-of-day line say morning or afternoon as the clock decides? The input review's ledger panel says which clock rule applied, and which ledger rows were shifted onto the game's clock.
 3. Did the judges' `stagesTruth` criterion (T7) flag the line?
 
 **Fix**: The rule is T7 (`truth-rules.md`), with the timeline in `world.md`. A time on the wrong clock is fixed in `lib/prompt-renderers/session-clock.js`, which every printed time goes through.
