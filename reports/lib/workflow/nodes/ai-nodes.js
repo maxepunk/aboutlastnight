@@ -1022,7 +1022,7 @@ function outlineWriterInputs(state) {
  * replay).
  *
  * It reads the settled weave first, as its task, then what the outline writer read: the
- * record and the morning timeline, the director's notes and accusation, the photos with the
+ * record and the investigation's timeline, the director's notes and accusation, the photos with the
  * director's descriptions, the roster with pronouns and its rule files
  * (outlineWriterInputs). The map it returns is the writer's last map (`_mapBaseline`), which
  * the director's edits at the stop are made against, and is unchecked (`_mapCheck: null`):

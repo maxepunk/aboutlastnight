@@ -590,7 +590,7 @@ class PromptBuilder {
    *
    * Shared by the article prompt and (phase 1, brief 1.5) the outline prompt: the
    * planner that decides what each section does had never read the director's own
-   * account of the morning. One renderer, one wording, so the outline and the
+   * account of the investigation. One renderer, one wording, so the outline and the
    * article are planned and written against the same observations.
    *
    * @param {Object|null} directorNotes - enriched director notes
@@ -802,7 +802,7 @@ Only the ${n} players above were at the investigation. Every other character exc
    *
    * The settled weave comes first, as the writer's task (spec 5.1), then the task itself and
    * the theme's slots, then what the outline writer read: the director's notes, the photos
-   * with the director's descriptions, the record with its morning timeline, the money, the
+   * with the director's descriptions, the record with the investigation's timeline, the money, the
    * session facts with the director's accusation, the roster with pronouns (phase 3, 3.10;
    * T9), the map's <SCHEMA> (fix 3.2b) and the craft files last (the integrator's placement
    * ruling). The arcs, the arc analysis and the selected arcs went with their channels (R4),
@@ -817,7 +817,7 @@ Only the ${n} players above were at the investigation. Every other character exc
     }
     const slots = mapSlotsOf(this.themeName);
     const observationsSection = this._buildInvestigationObservations(options.directorNotes, options.directorCorrections, options.evidenceBundle);
-    // Brief 2.1: every usable document in full, once, with the morning timeline.
+    // Brief 2.1: every usable document in full, once, with the investigation's timeline.
     const recordSection = renderRecordView(options.evidenceBundle, { sessionConfig: this.sessionConfig });
     const rosterSection = rosterWithPronounsSection(this.sessionConfig, this.canonicalCharacters);
     const photoList = Array.isArray(photos) ? photos : [];

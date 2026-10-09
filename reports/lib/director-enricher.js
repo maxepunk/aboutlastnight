@@ -95,7 +95,7 @@ const DIRECTOR_NOTES_ENRICHED_SCHEMA = {
           properties: {
             excerpt: { type: 'string', description: 'Verbatim passage from the director prose' },
             proseOffset: { type: 'integer', minimum: 0, description: 'Byte index into the director prose' },
-            timeAnchor: { type: 'string', description: 'Temporal cue if present (e.g., "throughout morning")' },
+            timeAnchor: { type: 'string', description: 'Temporal cue if present (e.g., "throughout the investigation")' },
             linkedCharacters: {
               type: 'array',
               items: { type: 'string' },

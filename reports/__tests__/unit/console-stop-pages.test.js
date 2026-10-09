@@ -329,3 +329,24 @@ describe('4.12e: the input review\'s whiteboard reads as InputReview.js renders 
     expect(pageBoard({})).toEqual(screen);
   });
 });
+
+// Final fix wave (K6): the evidence log's alert names the writers' timeline, the investigation's,
+// with no time of day, and the screen and the page print the one line (the screen's apostrophe
+// curled).
+describe('K6: the evidence log alert says the writers\' timeline, on the screen as on the page', () => {
+  const { InputReview } = loadInputReview();
+  const data = { type: 'input-review', sessionConfig: { exposures: [], exposedTokenCount: 2 }, directorNotes: {} };
+  const EXPECTED = "Evidence log: no exposure times or turn-in names parsed, so the writers' timeline shows no exposures. Reject with corrections if the evidence log had rows.";
+
+  it('prints the line on the page', () => {
+    const lines = stopPage('input-review', data).lines.filter((line) => line.tone === 'alert' && /^Evidence log/.test(line.label));
+    expect(lines.map((line) => line.label)).toEqual([EXPECTED]);
+  });
+
+  it('prints the same line on the screen', () => {
+    const screen = InputReview({ data, onApprove() {}, onReject() {}, theme: 'journalist' });
+    const alerts = elementsOf(screen, (element) => element.props && element.props.role === 'alert')
+      .map(textOf).filter((text) => /^Evidence log/.test(text));
+    expect(alerts.map((text) => text.replace(/\u2019/g, "'"))).toEqual([EXPECTED]);
+  });
+});

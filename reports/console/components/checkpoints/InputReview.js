@@ -295,13 +295,13 @@ function InputReview({ data, onApprove, onReject, theme }) {
       'as buried. Reject with corrections if the evidence log had rows.'
     ),
     exposures.logEmpty && React.createElement('p', { className: 'enrichment__warning', role: 'alert' },
-      'Evidence log: no exposure times or turn-in names parsed, so the writers’ morning ' +
+      'Evidence log: no exposure times or turn-in names parsed, so the writers’ ' +
       'timeline shows no exposures. Reject with corrections if the evidence log had rows.'
     ),
 
     // Exposed memories (brief 2.2): who turned each one in, when, and whose it is,
     // as the parse kept them from the session report. Since brief 3.5 the writers
-    // see each one's time and the name on its turn-in on the morning timeline.
+    // see each one's time and the name on its turn-in on the investigation's timeline.
     exposures.count > 0 && React.createElement('div', { className: 'checkpoint-section' },
       React.createElement(window.Console.utils.CollapsibleSection, {
         title: 'Exposed Memories (' + exposures.count + ')',

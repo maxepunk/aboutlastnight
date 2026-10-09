@@ -310,7 +310,7 @@ function notesTextsOf(state) {
  * - `documentIds`: the ids a line may not name (documentIdsOf);
  * - `texts`: the text of each source besides a document: the ledger's rows (each sale, the
  *   first-burial bonus and each transfer) and the evidence log's (each exposure: the document and
- *   the name on its turn-in, or "anonymous"), each as the writer reads it on the morning timeline
+ *   the name on its turn-in, or "anonymous"), each as the writer reads it on the investigation's timeline
  *   (lib/prompt-renderers/record-view.js timelineEventLine; fix round 4), and the director's words
  *   (notesTextsOf);
  * - `buried`: the buried memories by their ids, which no piece names.

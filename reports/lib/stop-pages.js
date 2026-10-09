@@ -294,7 +294,7 @@ function addExposures(page, sessionConfig) {
     page.tag('Exposed memories: none parsed from the session report, so every memory will count as buried. Reject with corrections if the evidence log had rows.', 'alert');
   }
   if (exposures.logEmpty) {
-    page.tag("Evidence log: no exposure times or turn-in names parsed, so the writers' morning timeline shows no exposures. Reject with corrections if the evidence log had rows.", 'alert');
+    page.tag("Evidence log: no exposure times or turn-in names parsed, so the writers' timeline shows no exposures. Reject with corrections if the evidence log had rows.", 'alert');
   }
   if (exposures.count === 0) return;
   page.folded(() => {

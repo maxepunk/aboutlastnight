@@ -20,7 +20,7 @@
  * - session-config.json: roster (stamped from the roster stop), accusation (with its
  *   verdictKind and, for a split final vote, its votes), the director's accusation
  *   word for word (accusationRaw), each exposed memory's exposer/time/owner
- *   (exposures, which the morning timeline reads since phase 3), the classified
+ *   (exposures, which the investigation's timeline reads since phase 3), the classified
  *   adjustments (one logged off the game's clock lined up, with its loggedTime), the
  *   totals check (ledgerCheck, with the shift), the session clock (sessionClock),
  *   metadata (NOT photosPath - C1: state.photosPath owns it)
@@ -158,7 +158,7 @@ const SESSION_REPORT_SCHEMA = {
       description: 'The ids of the memories turned in to Nova, from the evidence log\'s Token column'
     },
     // Phase 2 brief 2.2 kept the Detective Evidence Log's per-row columns. Phase 3
-    // (brief 3.5): the morning timeline prints each exposure's time and the name on
+    // (brief 3.5): the investigation's timeline prints each exposure's time and the name on
     // its turn-in, for memories the bundle holds as exposed; the owner column prints
     // nowhere.
     exposures: {

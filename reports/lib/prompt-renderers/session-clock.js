@@ -116,7 +116,7 @@ function decideSessionClock(times) {
 
 /**
  * The logged time the session starts at, among any of its times: the first event by
- * the rule the clock decision reads. The morning timeline orders its events from
+ * the rule the clock decision reads. The investigation's timeline orders its events from
  * this, over every event it prints, the adjustments included, so a bonus logged a
  * minute before the first sale opens the timeline rather than closing it. The clock
  * decision itself still reads the exposures and sales alone.
@@ -318,7 +318,7 @@ function loggedTimeFromMinutes(minutes) {
  *
  * printLoggedTime keeps each time's logged format, and the session report writes one
  * minute more than one way ("07:50 PM" for a sale, "07:50PM" for an adjustment). The
- * morning timeline heads each same-minute group with this, so one minute prints one
+ * investigation's timeline heads each same-minute group with this, so one minute prints one
  * way. The clock is printLoggedTime's: the evening clock moves the time 12 hours.
  *
  * @param {*} text - the logged time

@@ -1022,7 +1022,7 @@
    * from the session report's Detective Evidence Log (sessionConfig.exposures).
    *
    * Since phase 3 (brief 3.5) the writers see each one's time and the name on its
-   * turn-in on the morning timeline, for memories the bundle holds as exposed; the
+   * turn-in on the investigation's timeline, for memories the bundle holds as exposed; the
    * owner column is shown here only.
    *
    * Two alarms (phase 3, brief 3.5), from two lists the parse keeps apart:

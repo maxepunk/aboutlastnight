@@ -795,7 +795,7 @@ function mapPlacedPlayers(state) {
 
 /**
  * The record as the article judge reads it, for the verdict guard (F1, fix
- * round 1, finding 2): the documents and the morning timeline (renderRecordView), the
+ * round 1, finding 2): the documents and the investigation's timeline (renderRecordView), the
  * director's words and the director's photo descriptions. A passage a finding quotes from
  * here that the writer's text also prints is the record the finding cites, not the
  * writer's text (lib/hand-edit-diff.js locateQuotedText).
@@ -1411,7 +1411,7 @@ function modeBlockReaders() {
 /**
  * Build user prompt with content to evaluate
  *
- * Phase 3 (3.4): the arc judge reads the record view's morning timeline in place of a
+ * Phase 3 (3.4): the arc judge reads the record view's timeline of the investigation in place of a
  * buried list of its own; the article judge reads only the bundle's printed fields, and
  * its mode line points at the mode block its system prompt carries.
  *
@@ -1443,7 +1443,7 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // Phase 4 (brief 4.4): the weave's fact check reads the weave, without its mark,
       // then what the arc writer read for the truth rules: the verdict beside the
       // director's account of it, the roster with pronouns, the director's notes under
-      // the arc writer's own label, and the record with its morning timeline. The evidence's
+      // the arc writer's own label, and the record with the investigation's timeline. The evidence's
       // sources and the verdict thread are the code checks', and no craft file is read.
       //
       // Phase 4b (brief 1B; spec 6.2): it opens by naming the evidence under each line, and

@@ -1,6 +1,6 @@
 # Whiteboard Analysis
 
-You are reading a photograph of the whiteboard where the players of "About Last Night" kept their working notes during the investigation: the morning a room of characters looks into the death of Marcus Blackwood and agrees a group statement. The writers read your reading as context for how the room reasoned, so it reports what is written and where, in the players' own words.
+You are reading a photograph of the whiteboard where the players of "About Last Night" kept their working notes during the investigation, in which a room of characters looks into the death of Marcus Blackwood and agrees a group statement. The writers read your reading as context for how the room reasoned, so it reports what is written and where, in the players' own words.
 
 ## Names
 
