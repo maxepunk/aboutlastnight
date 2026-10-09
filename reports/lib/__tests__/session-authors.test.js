@@ -34,6 +34,8 @@ const { buildEvaluationUserPrompt } = evalTesting;
 
 const CANONICAL = { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson', Cass: 'Cass Zhang' };
 const MARKED = (name) => `${name} (Nova, who writes this article)`;
+// K4: a name that already holds Nova's own name takes the shorter mark, so it does not repeat it
+const MARKED_BY_NAME = (name) => `${name} (who writes this article)`;
 const GUEST = { name: 'Dana Okafor', role: 'Contributing Reporter' };
 const GUEST_LINE = "The guest reporter: Dana Okafor (Contributing Reporter) shares this article's byline. " +
   "A memory turned in under the name Dana Okafor or Dana is Dana Okafor's reporting for this article.";
@@ -115,8 +117,17 @@ describe('the photo entries mark Nova as the article\'s writer, on site only (R4
   it('marks a name equal to Nova\'s first name, or "Nova", in the hero entry and the other photos', () => {
     const state = photoState({ reportingMode: 'on-site', names: ['Vic', 'rhea', 'Nova'] });
     expect(buildAvailablePhotos(state, 'b.jpg', null)[0].identifiedCharacters)
-      .toEqual(['Vic', MARKED('rhea'), MARKED('Nova')]);
-    expect(heroPhotoEntry(state, 'a.jpg').identifiedCharacters).toEqual(['Vic', MARKED('rhea'), MARKED('Nova')]);
+      .toEqual(['Vic', MARKED('rhea'), MARKED_BY_NAME('Nova')]);
+    expect(heroPhotoEntry(state, 'a.jpg').identifiedCharacters).toEqual(['Vic', MARKED('rhea'), MARKED_BY_NAME('Nova')]);
+  });
+
+  // Final fix wave (K4): "Nova (Nova, who writes this article)" repeated the name. A name that
+  // is Nova's own, alone or with the first name, takes the theme's shorter mark; the first name
+  // alone keeps the mark that names Nova.
+  it("marks Nova's own name without repeating it", () => {
+    const context = { theme: 'journalist', sessionConfig: { reportingMode: 'on-site', journalistFirstName: 'Rhea' } };
+    expect(markWriterInPhoto(['Nova', 'Rhea Nova', 'Rhea', 'nova'], context))
+      .toEqual(['Nova (who writes this article)', 'Rhea Nova (who writes this article)', 'Rhea (Nova, who writes this article)', 'nova (who writes this article)']);
   });
 
   it('leaves a roster player who shares Nova\'s first name as the player: the roster decides', () => {

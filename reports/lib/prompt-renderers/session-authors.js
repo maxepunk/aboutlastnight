@@ -11,7 +11,8 @@
  * - writerInPhotosLine: on site only, the character-IDs parse and the photo enrichment read
  *   it beside the roster, so neither corrects Nova's name to a player's;
  * - markWriterInPhoto: on site only, marks a photo's name for Nova (the first name, the
- *   entry's name, or the two together) as the article's writer. The roster decides a clash:
+ *   entry's name, or the two together) as the article's writer; a name that holds the entry's
+ *   own name takes the shorter mark, so it is not repeated (K4). The roster decides a clash:
  *   a name a roster player has is that player, and stays unmarked.
  * - writerInTheRoom: on site only, SESSION_FACTS names the writer beside Blake among the
  *   characters in the room (K1).
@@ -128,13 +129,16 @@ function markWriterInPhoto(names, { theme, sessionConfig, rosterNames = [] } = {
   const entry = writerEntryOf(theme);
   if (!entry || !isOnSite(sessionConfig)) return [...list];
   const first = writerFirstName(entry, sessionConfig?.journalistFirstName);
-  const writerNames = new Set([entry.name, first, `${first} ${entry.name}`].map(lower));
+  // K4: a name that already holds the entry's own name takes the shorter mark
+  const byOwnName = new Set([entry.name, `${first} ${entry.name}`].map(lower));
+  const writerNames = new Set([...byOwnName, lower(first)]);
   // A roster player goes by each name given and by its first word: "Cass Zhang" is Cass.
   const players = new Set(rosterNames.filter((name) => typeof name === 'string' && name.trim())
     .flatMap((name) => [lower(name), lower(name).split(/\s+/)[0]]));
-  return list.map((name) => (typeof name === 'string' && writerNames.has(lower(name)) && !players.has(lower(name))
-    ? fill(entry.writer.inAPhoto, { name })
-    : name));
+  return list.map((name) => {
+    if (typeof name !== 'string' || !writerNames.has(lower(name)) || players.has(lower(name))) return name;
+    return fill(byOwnName.has(lower(name)) ? entry.writer.inAPhotoByName : entry.writer.inAPhoto, { name });
+  });
 }
 
 /**
