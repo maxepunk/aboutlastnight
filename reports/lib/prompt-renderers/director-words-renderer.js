@@ -17,12 +17,16 @@
  *   sits here because the same writers' sections print it.)
  * - each photo's description as the director typed it at the character-IDs stop,
  *   joined to its photo by filename.
+ * - the notes the director sent at the stops, for both judges (phases 14 and 15,
+ *   brief B), each under its stop and the action it went with.
  *
  * Nothing here paraphrases the director. A label says whose words follow; the
  * words themselves are copied as given (trimmed at the ends, nothing else).
  */
 
 const { isNoCulpritVerdict, blamesNoCharacter, accusedNames, normalizeVotes } = require('../accusation-verdict');
+const { stopNotesOf } = require('../director-words');
+const { noteKindOf } = require('../workflow/state');
 
 // ═══════════════════════════════════════════════════════
 // ACCUSATION
@@ -240,6 +244,52 @@ ${formatCorrectionList(list)}
 }
 
 // ═══════════════════════════════════════════════════════
+// THE NOTES AT THE STOPS
+// ═══════════════════════════════════════════════════════
+
+/** The tag the judges print the notes at the stops under (evaluator-nodes.js TRUTH_MATERIAL.stopNotes). */
+const DIRECTOR_STOP_NOTES_TAG = 'DIRECTOR_STOP_NOTES';
+
+/** Each stop that files a note, in the words the console's stop labels give it. */
+const STOP_NOTE_PLACES = Object.freeze({
+  'arc-selection': 'the story meeting',
+  outline: 'the map',
+  article: 'the article'
+});
+
+/**
+ * The action a note went with, from its kind (workflow/state.js noteKindOf). A reweave's note
+ * and a send-back's are both filed as a rejection, so both read as sent back.
+ */
+const STOP_NOTE_ACTIONS = Object.freeze({ approval: 'approved', rejection: 'sent back' });
+
+/**
+ * The notes the director sent at the stops, for both judges (phases 14 and 15, brief B; ruling
+ * R2): one line pointing at T1, then each note in the order filed, under its stop and the action
+ * it went with, its text word for word in quotation marks (trimmed at the ends), as the answers
+ * block quotes an answer, so a note that holds lines of its own reads as one note. Every note in
+ * directorGateNotes prints, the one a rework acted on included (lib/director-words.js
+ * stopNotesOf). With none the block holds "None.", so every question that reads it finds it.
+ *
+ * @param {Object} state
+ * @returns {string} the tagged block, always
+ */
+function renderDirectorStopNotes(state) {
+  const notes = stopNotesOf(state);
+  const lines = notes.length === 0 ? ['None.'] : notes.map((note) => {
+    const place = STOP_NOTE_PLACES[note.gate] || 'an earlier stop';
+    const action = STOP_NOTE_ACTIONS[noteKindOf(note)] || STOP_NOTE_ACTIONS.rejection;
+    return `- At ${place}, ${action}: "${note.text.trim()}"`;
+  });
+  return [
+    `<${DIRECTOR_STOP_NOTES_TAG}>`,
+    "The notes the director sent with their actions at the stops, in order: the director's own words, each read as T1 sets out.",
+    ...lines,
+    `</${DIRECTOR_STOP_NOTES_TAG}>`
+  ].join('\n');
+}
+
+// ═══════════════════════════════════════════════════════
 // WHITEBOARD
 // ═══════════════════════════════════════════════════════
 
@@ -386,6 +436,9 @@ module.exports = {
   formatCorrectionList,
   buildParseCorrectionsBlock,
   renderDirectorCorrectionsBlock,
+  // Brief B (R2): the notes at the stops, which both judges print
+  DIRECTOR_STOP_NOTES_TAG,
+  renderDirectorStopNotes,
   renderWhiteboardConnections,
   // The one join key for a photo: the leave-out box, the hero, the kept photos, and the map's
   // edits and checks (brief 4.6). console/outline-edit-logic.js holds a copy a test keeps equal.

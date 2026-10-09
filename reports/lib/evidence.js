@@ -41,8 +41,8 @@
 
 const { isVerbatimIn, normalizeForGrounding, QUOTED_SPANS, ELISION } = require('./grounding');
 const { recordIdOf, buildMorningTimeline, timelineEventLine } = require('./prompt-renderers/record-view');
-const { directorAccusationText } = require('./accusation-verdict');
-const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('./writer-questions');
+// Phases 14 and 15, brief B (R1): the director's words are one list, which "notes" reads.
+const { directorWordsTexts } = require('./director-words');
 
 /** The sources a piece may name besides a document in the record. */
 const EVIDENCE_SOURCES = Object.freeze({ LEDGER: 'ledger', EVIDENCE_LOG: 'evidence-log', NOTES: 'notes' });
@@ -65,7 +65,7 @@ const NAMED_SOURCES = (() => {
 const SOURCE_MEANINGS = Object.freeze({
   [EVIDENCE_SOURCES.LEDGER]: 'a sale, the bonus or a transfer on the morning timeline',
   [EVIDENCE_SOURCES.EVIDENCE_LOG]: 'an exposure on it',
-  [EVIDENCE_SOURCES.NOTES]: "the director's own words: the notes, the corrections, the accusation and the answers at the story meeting"
+  [EVIDENCE_SOURCES.NOTES]: "the director's own words: the notes, the corrections, the accusation, the answers at the story meeting and the standing notes from the stops"
 });
 
 /**
@@ -255,14 +255,13 @@ function buriedIdsOf(evidenceBundle) {
   return ids;
 }
 
-/** The director's own words a piece names as "notes": the notes, the corrections, the accusation as written and the answers at the story meeting (T1). */
+/**
+ * The director's own words a piece names as "notes" (T1): the director's words as one list
+ * (lib/director-words.js), the notes, the corrections, the accusation as written, the answers
+ * at the story meeting and every note sent at a stop, so a piece may quote a note at a stop.
+ */
 function notesTextsOf(state) {
-  return [
-    state.directorNotes && state.directorNotes.rawProse,
-    ...asArray(state.inputReviewCorrections),
-    directorAccusationText(state),
-    ...weaveQuestionsOf(state.weave && state.weave.questions).filter(isAnswered).map((question) => question[WEAVE_ANSWER_KEY])
-  ].filter((text) => textOf(text));
+  return directorWordsTexts(state);
 }
 
 /**

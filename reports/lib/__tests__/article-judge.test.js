@@ -122,30 +122,32 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
   it('each truth question is worded as section B of the rule-text read gives it', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
-      evidenceTruth: "Is every claim in the article written as its evidence allows, the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) included as record (T1); with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's words name (T6)?",
-      moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the morning as FINANCIAL_SUMMARY gives it; a balance the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
+      evidenceTruth: "Is every claim in the article written as its evidence allows, the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) included as record (T1); with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor the director's words name (T6)?",
+      moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the morning as FINANCIAL_SUMMARY gives it; a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
       verdictTruth: VERDICT_QUESTION,
       stagesTruth: "In the article, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
       novaPositionTruth: "In the article, is Nova the uninterested third party, reporting on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and witnesses only what this session's mode block allows (T8)?",
-      playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes, the input-review corrections, the accusation and the answers at the story meeting), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
-      wordsTruth: "Is every quoted line in the article word for word from the record or the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?",
+      playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
+      wordsTruth: "Is every quoted line in the article word for word from the record or the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?",
       photosTruth: "Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director's description wherever PHOTOS gives one (T13)?",
       fictionTruth: "Does every line of the article that reaches print speak the fiction's own words, with no production word in it (T14)?"
     });
   });
 
   // Brief 4.7c: a question that names the director's words reads all four sources. Brief 4.7f:
-  // verdictTruth reads the director's edits too, under the heading its question names.
+  // verdictTruth reads the director's edits too, under the heading its question names. Phases 14
+  // and 15, brief B (R1, R2): the notes at the stops are the fifth source, so every question that
+  // reads the director's words reads them, verdictTruth among them.
   it('the answers from the story meeting join the reads of evidenceTruth, moneyTruth, playersTruth and verdictTruth (T1)', () => {
     const reads = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.reads]));
     expect(reads).toEqual({
-      evidenceTruth: ['record', 'timeline', 'notes', 'corrections', 'verdict', 'answers'],
-      moneyTruth: ['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'weave'],
-      verdictTruth: ['verdict', 'notes', 'answers', 'map', 'directorEdits'],
+      evidenceTruth: ['record', 'timeline', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes'],
+      moneyTruth: ['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes', 'weave'],
+      verdictTruth: ['verdict', 'notes', 'answers', 'stopNotes', 'map', 'directorEdits'],
       stagesTruth: ['record', 'modeBlock', 'epilogue', 'timeline'],
       novaPositionTruth: ['modeBlock'],
-      playersTruth: ['roster', 'notes', 'corrections', 'verdict', 'answers'],
-      wordsTruth: ['record', 'notes', 'corrections', 'verdict', 'answers', 'printedCards'],
+      playersTruth: ['roster', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes'],
+      wordsTruth: ['record', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes', 'printedCards'],
       photosTruth: ['photos', 'whiteboard', 'printedCaptions'],
       fictionTruth: ['truthRules']
     });
@@ -286,6 +288,8 @@ describe('4.7a: what the article judge reads', () => {
   it('every material a truth criterion reads is printed in the judge\'s prompts', () => {
     const state = articleState();
     state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
+    // Brief B (R2): a note the director sent at a stop, as the notes at the stops' block prints it.
+    state.directorGateNotes = [{ gate: 'outline', kind: 'approval', round: 1, stopRound: 1, text: 'Keep the bartender in the story.' }];
     // An article that prints a captioned photo, as photosTruth reads its captions.
     state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
     // Brief 4.7f: an edit of the director's, as verdictTruth reads them, sent as createEvaluator
@@ -420,7 +424,8 @@ describe("4.7d: the director's words are one list", () => {
     notes: 'PLANTED NOTES: Morgan paced the bar before the vote.',
     corrections: 'PLANTED CORRECTION: Riley kept the books, not Morgan.',
     verdict: 'PLANTED ACCUSATION: six votes for an accidental overdose.',
-    answers: 'PLANTED ANSWER: Sarah ran the bar all morning.'
+    answers: 'PLANTED ANSWER: Sarah ran the bar all morning.',
+    stopNotes: 'PLANTED STOP NOTE: the transfer times shift nine hours to fit the timeline.'
   };
   const plantedState = () => {
     const state = articleState();
@@ -428,11 +433,13 @@ describe("4.7d: the director's words are one list", () => {
     state.inputReviewCorrections = [PLANTED.corrections];
     state.sessionConfig = { ...state.sessionConfig, accusationRaw: PLANTED.verdict };
     state.weave.questions[0].answer = PLANTED.answers;
+    state.directorGateNotes = [{ gate: 'outline', kind: 'rejection', round: 1, stopRound: 1, text: PLANTED.stopNotes }];
     return state;
   };
 
-  it('one source per material, in one order: the notes, the corrections, the accusation, the answers', () => {
-    expect(DIRECTOR_WORDS_SOURCES.map((source) => source.material)).toEqual(['notes', 'corrections', 'verdict', 'answers']);
+  // Phases 14 and 15, brief B (R1): the notes at the stops are the fifth source.
+  it('one source per material, in one order: the notes, the corrections, the accusation, the answers, the notes at the stops', () => {
+    expect(DIRECTOR_WORDS_SOURCES.map((source) => source.material)).toEqual(['notes', 'corrections', 'verdict', 'answers', 'stopNotes']);
     expect(DIRECTOR_WORDS_MATERIAL).toEqual(DIRECTOR_WORDS_SOURCES.map((source) => source.material));
   });
 
@@ -440,7 +447,7 @@ describe("4.7d: the director's words are one list", () => {
     const at = DIRECTOR_WORDS_SOURCES.map((source) => ARTICLE_DIRECTOR_WORDS.indexOf(source.label));
     expect(at.filter((index) => index < 0)).toEqual([]);
     expect(at).toEqual([...at].sort((a, b) => a - b));
-    expect(ARTICLE_DIRECTOR_WORDS).toBe('(the notes, the input-review corrections, the accusation and the answers at the story meeting)');
+    expect(ARTICLE_DIRECTOR_WORDS).toBe('(the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops)');
   });
 
   it('directorWords returns each planted text, in the order DIRECTOR_WORDS_MATERIAL names its source', () => {

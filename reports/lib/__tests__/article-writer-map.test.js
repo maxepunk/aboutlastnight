@@ -549,7 +549,7 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     const { _testing: { buildWeaveSections } } = require('../workflow/nodes/arc-specialist-nodes');
     // The gloss says what each named source holds, in the weave writer's words: the director's
     // words under "notes" are the four the evidence check reads (evidenceContextOf).
-    expect(SOURCES_GLOSS).toBe('"ledger" for a sale, the bonus or a transfer on the morning timeline, "evidence-log" for an exposure on it, or "notes" for the director\'s own words: the notes, the corrections, the accusation and the answers at the story meeting');
+    expect(SOURCES_GLOSS).toBe('"ledger" for a sale, the bonus or a transfer on the morning timeline, "evidence-log" for an exposure on it, or "notes" for the director\'s own words: the notes, the corrections, the accusation, the answers at the story meeting and the standing notes from the stops');
     const { user } = await writerPrompt(articleState());
     expect(labelOf(user)).toContain(`each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows"`);
     expect(buildWeaveSections(articleState())).toContain(`A piece of evidence names each of its sources by one of these document ids, or as ${SOURCES_GLOSS}.\n`);

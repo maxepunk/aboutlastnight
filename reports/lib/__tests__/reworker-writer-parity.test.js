@@ -301,7 +301,7 @@ describe('journalist arc stop', () => {
 
     // The sources a piece may name follow the writer's id rule, so a rescued document is named
     // by its Notion id in both (wave-2 ruling W2; phase 4b, brief 1B: the Sources list).
-    expect(rework.user).toContain("### Sources\nA piece of evidence names each of its sources by one of these document ids, or as \"ledger\" for a sale, the bonus or a transfer on the morning timeline, \"evidence-log\" for an exposure on it, or \"notes\" for the director's own words: the notes, the corrections, the accusation and the answers at the story meeting.\n[\"ale003\",\"mor001\",\"p-dna\",\"p-rescued\"]");
+    expect(rework.user).toContain("### Sources\nA piece of evidence names each of its sources by one of these document ids, or as \"ledger\" for a sale, the bonus or a transfer on the morning timeline, \"evidence-log\" for an exposure on it, or \"notes\" for the director's own words: the notes, the corrections, the accusation, the answers at the story meeting and the standing notes from the stops.\n[\"ale003\",\"mor001\",\"p-dna\",\"p-rescued\"]");
     expect(rework.user).not.toContain('## SESSION CONTEXT');
 
     const at = (s) => rework.user.indexOf(s);

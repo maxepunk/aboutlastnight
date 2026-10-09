@@ -426,11 +426,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   the page's words: outline-journalist 24801 -> 24848. Its line that a beat in a section
  *   carries only threads of the story gives R5's reason, which no rule file states: the director
  *   settled the other threads out of it at the meeting (F3, +71): 24848 -> 24919.
+ * - Phases 14 and 15, brief B (spec 2026-10-09 section 3; R1, R10), the director's words at every
+ *   stop. The gloss on "notes" (lib/evidence.js SOURCES_GLOSS), which the weave writer's Sources
+ *   line and the article writer's map label print, says the director's own words include the
+ *   standing notes from the stops, since a piece of evidence may now quote one (+35):
+ *   arcs-journalist 12079 -> 12114 and article-journalist 35835 -> 35870. The outline pin does
+ *   not move.
  */
 const PINNED = {
   'outline-journalist': ['cccaf9981018185f7462af4f5b11d00dea0e890a97c27f3c1cd88f0cfed524d6', 24919],
-  'article-journalist': ['f9449f999fce14c6ebc82d1a72bcea0cecdf7111ccd34e2c7cda33ce87cb5e49', 35835],
-  'arcs-journalist': ['d45be33a2d854c23404b412793a6a162f34797d48b91375f09cb0e838f58c8fa', 12079]
+  'article-journalist': ['d40afe0e906ab8124185dc647ffbd26f4f748dfb5b8785184f9c5a7e64eb54f7', 35870],
+  'arcs-journalist': ['27763c901989f8730cbe485ba7f975e0c451028afb46714b4ab3b181a7d48e3b', 12114]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

@@ -1702,6 +1702,8 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     const fullState = () => {
       const state = stateFor('journalist');
       state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
+      // Brief B (R2): a note the director sent at a stop, which both judges print.
+      state.directorGateNotes = [{ gate: 'arc-selection', kind: 'rejection', round: 1, stopRound: 1, text: 'Keep the bartender in the story.' }];
       state.heroImage = 'hero.jpg';
       state.contentBundle.heroImage = { filename: 'hero.jpg', caption: 'The room before the vote.' };
       state.contentBundle.sections[0].content.push({ type: 'photo', filename: 'p2.jpg', caption: 'Alex points at a line in the ledger.' });
@@ -2098,14 +2100,15 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
 
     it('moneyTruth reads the timeline and the notes at every judge, and FINANCIAL_SUMMARY where its writer had it', () => {
       // Brief 4.5 (T1): the weave's fact check reads the director's answers too.
-      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes', 'answers']);
+      // Brief B (R1, R2): both judges read the notes the director sent at the stops.
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes', 'answers', 'stopNotes']);
       expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
       // Brief 4.7a (T1, T5): the article judge reads the answers, and the settled weave,
       // which lists the questions left unanswered. Brief 4.7c: the director's words whole,
       // the input-review corrections and the accusation beside the notes and the answers.
       for (const phase of ['article']) {
         const { reads } = getPhaseCriteria(phase, 'journalist').moneyTruth;
-        expect(reads).toEqual(['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'weave']);
+        expect(reads).toEqual(['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes', 'weave']);
       }
     });
 
@@ -2120,7 +2123,7 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     // balance is the one the director's words record, each of the four sources named.
     it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the room', () => {
       const LEDGER = 'Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;';
-      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation and the answers at the story meeting) record as said or shown in the room as that moment's figure (T1);";
+      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the room as that moment's figure (T1);";
       for (const phase of ['article']) {
         const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
         expect(description).toContain(LEDGER);

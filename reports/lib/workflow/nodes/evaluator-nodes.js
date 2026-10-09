@@ -49,8 +49,14 @@ const { systemPromptOpening } = require('../../prompt-builder');
 const { renderRecordView } = require('../../prompt-renderers/record-view');
 const { withSessionClock } = require('../../prompt-renderers/session-clock');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
-const { renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry } = require('../../prompt-renderers/director-words-renderer');
+const {
+  renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry, renderDirectorStopNotes, DIRECTOR_STOP_NOTES_TAG
+} = require('../../prompt-renderers/director-words-renderer');
 const { directorAccusationText } = require('../../accusation-verdict');
+// Phases 14 and 15, brief B (R1): the director's words are one list, which the article's
+// questions name, the judges read under their materials, and the fact check and the verdict
+// guard read as text.
+const { DIRECTOR_WORDS_SOURCES, directorWordsTexts } = require('../../director-words');
 // The writers' own builders: the writers' SESSION_FACTS, the article writer's inputs (its
 // photos, 3.9), the PromptBuilder (whose roster method gives the roster section, and
 // whose money summary the article judge prints, 3.9), the one rule for a kept photo (the
@@ -61,9 +67,6 @@ const { ARC_NOTES_LABEL } = require('./arc-specialist-nodes');
 const {
   buildSessionFacts, articleWriterInputs, getPromptBuilder, isPhotoExcluded, whiteboardFilenameOf
 } = require('./ai-nodes');
-// Brief 4.7a: the director's answers at the story meeting, which the fact check reads
-// among the director's words (T1).
-const { weaveQuestionsOf, isAnswered, WEAVE_ANSWER_KEY } = require('../../writer-questions');
 // Phase 4 (brief 4.4): the weave the fact check judges, the mark it leaves on it, and
 // the meeting's approval it skips on. Brief 4.5: the weave as the fact check judges it
 // (no pick, no answer), and the director's answers, which it reads as record.
@@ -130,7 +133,7 @@ const JUDGE_MAP_LABEL = 'MAP:';
 
 /**
  * The material a truth criterion reads, by the heading or tag its judge's prompts print
- * it under. The first sixteen are the judge's inputs; the last two are the judged
+ * it under. The first seventeen are the judge's inputs; the last two are the judged
  * output's own text, which only the article holds (the weave places neither cards nor
  * photos).
  */
@@ -141,6 +144,7 @@ const TRUTH_MATERIAL = Object.freeze({
   notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
   corrections: '<DIRECTOR_CORRECTIONS>',    // the director's input-review corrections, after the notes (brief 4.7c)
   answers: '<DIRECTOR_ANSWERS>',            // the director's answers at the story meeting (renderDirectorAnswers; brief 4.5)
+  stopNotes: `<${DIRECTOR_STOP_NOTES_TAG}>`, // every note the director sent at a stop (renderDirectorStopNotes; brief B, R2)
   weave: '<SETTLED_WEAVE>',                 // the weave as the director settled it, every question with its answer or none (settledWeaveOf; brief 4.7a)
   map: `\n${JUDGE_MAP_LABEL}\n`,           // the map as the director left it, its struck beats in leftOut (brief 4.7a)
   directorEdits: "THE DIRECTOR'S EDITS (",  // the director's edits, right after the output judged, when it carries one (renderJudgeDirectorEdits; brief 4.7f)
@@ -175,23 +179,16 @@ const TRUTH_MATERIAL = Object.freeze({
 // Brief 4.7d: the four are one list, DIRECTOR_WORDS_SOURCES, which builds all three: the
 // questions' name for them, the materials the judge reads them under, and the texts the fact
 // check and the verdict guard read (directorWords), so all three hold one order.
-
-/**
- * The director's words (T1), source by source, in one order: its `label` as an article truth
- * question names it, the `material` the article judge reads it under (TRUTH_MATERIAL), and its
- * `texts` in state, each word for word.
- */
-const DIRECTOR_WORDS_SOURCES = Object.freeze([
-  { label: 'the notes', material: 'notes', texts: (state) => [state.directorNotes && state.directorNotes.rawProse] },
-  { label: 'the input-review corrections', material: 'corrections', texts: (state) => (Array.isArray(state.inputReviewCorrections) ? state.inputReviewCorrections : []) },
-  { label: 'the accusation', material: 'verdict', texts: (state) => [directorAccusationText(state)] },
-  { label: 'the answers at the story meeting', material: 'answers', texts: (state) => meetingAnswers(state) }
-].map(Object.freeze));
+//
+// Phases 14 and 15, brief B (R1, R2): the list is lib/director-words.js's, and the notes the
+// director sent at the stops are its fifth source. Both judges print them in their own block
+// (renderDirectorStopNotes), and every question that reads the director's words reads it: the
+// article's through DIRECTOR_WORDS_MATERIAL, the weave's and verdictTruth's by hand.
 
 /** The director's words as an article truth question names them: each source's label, in order. */
 const ARTICLE_DIRECTOR_WORDS = `(${DIRECTOR_WORDS_SOURCES.slice(0, -1).map((source) => source.label).join(', ')} and ${DIRECTOR_WORDS_SOURCES[DIRECTOR_WORDS_SOURCES.length - 1].label})`;
 
-/** The materials the four sources print under, in the order directorWords holds them. */
+/** The materials the sources print under, in the order directorWords holds them. */
 const DIRECTOR_WORDS_MATERIAL = Object.freeze(DIRECTOR_WORDS_SOURCES.map((source) => source.material));
 
 // Brief 4.10d: each group's `about` is what it checks, in plain words, which a failed
@@ -201,7 +198,7 @@ const TRUTH_GROUPS = [
     key: 'evidenceTruth',
     about: 'how the claims are written against their evidence',
     rules: ['T1', 'T3', 'T4', 'T6'],
-    reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers'] : ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL]),
+    reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers', 'stopNotes'] : ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL]),
     // Phase 3 (3.9): T4 as round 7 words it (R21). Brief 4.7d (T1, T6): at the article, a
     // correction or an answer that names who turned a memory in is the director's words as
     // the notes are, so the T6 clause reads an exposer from the four sources its T1 clause
@@ -226,14 +223,14 @@ const TRUTH_GROUPS = [
     // Brief 4.7a (T5 as rewritten): a figure raised as a question at the story meeting
     // prints as the director's answer gives it, and stays out of print while the question
     // has no answer; the settled weave lists each question with its answer or none.
-    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers'] : ['timeline', 'financialSummary', ...DIRECTOR_WORDS_MATERIAL, 'weave']),
+    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers', 'stopNotes'] : ['timeline', 'financialSummary', ...DIRECTOR_WORDS_MATERIAL, 'weave']),
     describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1)." : `a balance the director's words ${ARTICLE_DIRECTOR_WORDS} record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).`}`
   },
   {
     key: 'verdictTruth',
     about: 'how the verdict is told',
     rules: ['T2'],
-    reads: (phase) => (phase === 'arcs' ? ['verdict', 'notes'] : ['verdict', 'notes', 'answers', 'map', 'directorEdits']),
+    reads: (phase) => (phase === 'arcs' ? ['verdict', 'notes', 'stopNotes'] : ['verdict', 'notes', 'answers', 'stopNotes', 'map', 'directorEdits']),
     // Phase 4 (brief 4.4; T2 as rewritten): the map places the theories the room debated,
     // so the weave's question asks for the verdict as the official story alone. Brief 4.7a:
     // the article reports every theory the map, as the director left it, carries, and a
@@ -273,7 +270,7 @@ const TRUTH_GROUPS = [
     // Brief 4.7a (T9 as rewritten): at the article, a pronoun the director's own words give
     // counts as the answer, and a player with none is written by name. Brief 4.7c: the
     // director's words are the four sources the fact check's pronoun check reads.
-    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers'] : ['roster', ...DIRECTOR_WORDS_MATERIAL]),
+    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers', 'stopNotes'] : ['roster', ...DIRECTOR_WORDS_MATERIAL]),
     describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's answer at the story meeting gives" : `the pronoun the director's own words give ${ARTICLE_DIRECTOR_WORDS}, or else the player's name in place of a pronoun`} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
   },
   {
@@ -283,7 +280,7 @@ const TRUTH_GROUPS = [
     // Only the article prints a card's text; the weave's evidence quotes the record under its
     // lines (phase 4b, brief 1B), which the weave's question reads. Brief 4.7c:
     // at the article, a line the director's words hold is quoted from them, any of the four.
-    reads: (phase) => (phase === 'article' ? ['record', ...DIRECTOR_WORDS_MATERIAL, 'printedCards'] : ['record', 'notes']),
+    reads: (phase) => (phase === 'article' ? ['record', ...DIRECTOR_WORDS_MATERIAL, 'printedCards'] : ['record', 'notes', 'stopNotes']),
     describe: (s, phase) => (phase === 'article'
       ? `Is every quoted line in the article word for word from the record or the director's words ${ARTICLE_DIRECTOR_WORDS} and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?`
       : `Is every quoted line in ${s} word for word from the record or the director's notes, and in its real speaker's mouth (T12)?`)
@@ -725,30 +722,17 @@ function truthOnlyVerdict(guard, criteria) {
 }
 
 /**
- * The director's answers at the story meeting, each word for word (brief 4.7a; T1 as
- * rewritten: the answers count like the notes). Only answered questions give one.
- *
- * @param {Object} state
- * @returns {string[]}
- */
-function meetingAnswers(state) {
-  const weave = state.weave;
-  return weaveQuestionsOf(weave && weave.questions).filter(isAnswered).map((question) => question[WEAVE_ANSWER_KEY]);
-}
-
-/**
- * The director's words: the notes, the input-review corrections, the accusation and, since
- * brief 4.7a, the answers at the story meeting (T1), each source's texts in the order
- * DIRECTOR_WORDS_SOURCES gives them (brief 4.7d). The fact check's pronoun check reads them
- * (buildFactCheckArgs), and the verdict guard reads them as record (recordTexts).
+ * The director's words: the notes, the input-review corrections, the accusation, since brief
+ * 4.7a the answers at the story meeting, and since brief B the notes at the stops (T1), each
+ * source's texts in the order DIRECTOR_WORDS_SOURCES gives them (lib/director-words.js). The
+ * fact check's pronoun check reads them (buildFactCheckArgs), and the verdict guard reads them
+ * as record (recordTexts).
  *
  * @param {Object} state
  * @returns {string[]}
  */
 function directorWords(state) {
-  return DIRECTOR_WORDS_SOURCES
-    .flatMap((source) => source.texts(state))
-    .filter(text => typeof text === 'string' && text.trim());
+  return directorWordsTexts(state);
 }
 
 /**
@@ -814,6 +798,9 @@ function recordTexts(state) {
  * Brief 4.7a: the players the map places (mapPlacedPlayers), so a roster player the map as
  * the director left it does not place is no finding; and the director's answers at the
  * story meeting among the director's words (T1).
+ *
+ * Phases 14 and 15, brief B (R1): the notes the director sent at the stops among them too, so
+ * a pronoun a note gives Blake counts as given.
  *
  * @param {Object} state
  * @returns {Object}
@@ -1421,6 +1408,9 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       //
       // Phase 4b, piece 3 (brief 3B; spec 9.2): it opens by naming the angles and the threads
       // they draw on, and judges every angle, since the director may pick any of them.
+      //
+      // Phases 14 and 15, brief B (R2): every note the director has sent at a stop so far,
+      // right after the answers, in its own block, which holds "None." when there is none.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
       return `Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
@@ -1433,6 +1423,8 @@ ${renderArcAccusation(state.playerFocus?.accusation, directorAccusationText(stat
 ${renderJudgeRosterSection(state)}
 
 ${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}${answers ? `\n\n${answers}` : ''}
+
+${renderDirectorStopNotes(state)}
 
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
@@ -1449,6 +1441,9 @@ Is the weave free of truth-rule breaches?`;
       // map as the director left it, whose leftOut holds each theory the director struck
       // (T2); the article as the page prints it, with the director's edits right after it;
       // and the code fact check's result. It reads no craft file (spec section 11).
+      //
+      // Phases 14 and 15, brief B (R2): every note the director sent at a stop, the one a
+      // rework acted on included, right after the answers, in its own block.
       const reportingMode = state.sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
       const articleMoney = renderJudgeFinancialSummary(state);
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
@@ -1458,6 +1453,8 @@ Is the weave free of truth-rule breaches?`;
 REPORTING MODE FOR THIS SESSION: ${reportingMode} (the mode block in your instructions says what Nova could witness; ${modeBlockReaders()} score the article against it)
 
 ${renderJudgeSessionContext(state)}${answers ? `\n\n${answers}` : ''}
+
+${renderDirectorStopNotes(state)}
 
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}${articleMoney ? `\n\n${articleMoney}` : ''}
 
