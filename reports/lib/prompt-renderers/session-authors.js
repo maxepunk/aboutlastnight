@@ -30,7 +30,30 @@
 
 const { getThemeNPCEntries } = require('../theme-config');
 
-const ON_SITE = 'on-site';
+/**
+ * The one rule for the reporting mode (final fix wave, K2): on site unless the mode is
+ * 'remote', as the mode block has always read it, so a session with no mode stamped is on
+ * site everywhere. The mode block (prompt-builder.js buildReportingModeBlock), the photo
+ * calls and marks below, SESSION_FACTS' line for Nova (prompt-builder.js
+ * _sessionFactsSection), the article judge's mode line and the fact check's reporter-mode
+ * scan all read it.
+ *
+ * @param {Object|null} sessionConfig - its reportingMode
+ * @returns {boolean}
+ */
+function isOnSite(sessionConfig) {
+  return sessionConfig?.reportingMode !== 'remote';
+}
+
+/**
+ * The session's reporting mode by that rule, as the mode files name it.
+ *
+ * @param {Object|null} sessionConfig - its reportingMode
+ * @returns {'on-site'|'remote'}
+ */
+function reportingModeOf(sessionConfig) {
+  return isOnSite(sessionConfig) ? 'on-site' : 'remote';
+}
 
 const lower = (text) => String(text).trim().toLowerCase();
 const fill = (template, values) => template.replace(/\{(\w+)\}/g, (whole, key) => (key in values ? values[key] : whole));
@@ -66,8 +89,8 @@ function writerSignsLine(theme, firstName) {
  */
 function writerInPhotosLine(theme, sessionConfig) {
   const entry = writerEntryOf(theme);
-  if (!entry || sessionConfig?.reportingMode !== ON_SITE) return null;
-  return fill(entry.writer.inPhotos, { first: writerFirstName(entry, sessionConfig.journalistFirstName) });
+  if (!entry || !isOnSite(sessionConfig)) return null;
+  return fill(entry.writer.inPhotos, { first: writerFirstName(entry, sessionConfig?.journalistFirstName) });
 }
 
 /**
@@ -85,8 +108,8 @@ function writerInPhotosLine(theme, sessionConfig) {
 function markWriterInPhoto(names, { theme, sessionConfig, rosterNames = [] } = {}) {
   const list = Array.isArray(names) ? names : [];
   const entry = writerEntryOf(theme);
-  if (!entry || sessionConfig?.reportingMode !== ON_SITE) return [...list];
-  const first = writerFirstName(entry, sessionConfig.journalistFirstName);
+  if (!entry || !isOnSite(sessionConfig)) return [...list];
+  const first = writerFirstName(entry, sessionConfig?.journalistFirstName);
   const writerNames = new Set([entry.name, first, `${first} ${entry.name}`].map(lower));
   // A roster player goes by each name given and by its first word: "Cass Zhang" is Cass.
   const players = new Set(rosterNames.filter((name) => typeof name === 'string' && name.trim())
@@ -144,6 +167,8 @@ function guestTurnInName(name, sessionConfig) {
 }
 
 module.exports = {
+  isOnSite,
+  reportingModeOf,
   writerSignsLine,
   writerInPhotosLine,
   markWriterInPhoto,

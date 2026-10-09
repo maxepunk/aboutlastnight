@@ -29,7 +29,7 @@ const { SOURCES_GLOSS, documentResolverOf } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
-const { writerSignsLine } = require('./prompt-renderers/session-authors');
+const { writerSignsLine, reportingModeOf } = require('./prompt-renderers/session-authors');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // A standing note's kind, the one rule (review of 4.12e).
 const { noteKindOf } = require('./workflow/state');
@@ -399,8 +399,8 @@ const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
  *   naming it (lib/rule-set.js)
  */
 function buildReportingModeBlock(sessionConfig, theme) {
-  const mode = sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
-  return loadModeBlock(mode, { theme });
+  // K2: the one mode rule (session-authors.js isOnSite), which the photo calls read too.
+  return loadModeBlock(reportingModeOf(sessionConfig), { theme });
 }
 
 /**

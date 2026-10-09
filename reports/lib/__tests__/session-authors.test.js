@@ -203,3 +203,31 @@ describe('the guest reporter, when the session has one (R5)', () => {
     expect(plain).not.toContain('guest reporter');
   });
 });
+
+// Final fix wave (K2): one rule for the reporting mode. The mode block read anything but
+// 'remote' as on site, the photo calls and marks anything but 'on-site' as remote, so a
+// session with no mode stamped got the on-site block and remote photos. isOnSite is the one
+// rule, the mode block's: on site unless the mode is 'remote'.
+describe('one rule for the reporting mode (K2)', () => {
+  const { isOnSite, reportingModeOf } = require('../prompt-renderers/session-authors');
+  const { buildReportingModeBlock } = require('../prompt-builder');
+
+  it('is on site unless the mode is remote', () => {
+    expect(isOnSite({ reportingMode: 'on-site' })).toBe(true);
+    expect(isOnSite({ reportingMode: 'remote' })).toBe(false);
+    expect(isOnSite({})).toBe(true);
+    expect(isOnSite(null)).toBe(true);
+    expect(reportingModeOf({})).toBe('on-site');
+    expect(reportingModeOf({ reportingMode: 'remote' })).toBe('remote');
+  });
+
+  it('gives the mode block, the photo line and the photo marks the same reading of a session with no mode', () => {
+    const noMode = { journalistFirstName: 'Rhea' };
+    expect(buildReportingModeBlock(noMode, 'journalist')).toBe(buildReportingModeBlock({ reportingMode: 'on-site' }, 'journalist'));
+    expect(writerInPhotosLine('journalist', noMode)).toBe(writerInPhotosLine('journalist', { ...noMode, reportingMode: 'on-site' }));
+    expect(writerInPhotosLine('journalist', noMode)).not.toBeNull();
+    expect(markWriterInPhoto(['Rhea'], { theme: 'journalist', sessionConfig: noMode }))
+      .toEqual(markWriterInPhoto(['Rhea'], { theme: 'journalist', sessionConfig: { ...noMode, reportingMode: 'on-site' } }));
+    expect(markWriterInPhoto(['Rhea'], { theme: 'journalist', sessionConfig: noMode })).not.toEqual(['Rhea']);
+  });
+});

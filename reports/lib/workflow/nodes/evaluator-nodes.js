@@ -39,7 +39,7 @@ const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCEntries } = require('../../theme-config');
-const { guestReporterLine } = require('../../prompt-renderers/session-authors');
+const { guestReporterLine, reportingModeOf } = require('../../prompt-renderers/session-authors');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 // Phase 3 (3.4): each judge reads the rule set its writer reads, from the rules folder of its
 // theme (R14), after its theme's identity line (brief 4.13) and the mode block: its system
@@ -1493,7 +1493,7 @@ Is the weave free of truth-rule breaches?`;
       //
       // Phases 14 and 15, brief B (R2): every note the director sent at a stop, the one a
       // rework acted on included, right after the answers, in its own block.
-      const reportingMode = state.sessionConfig?.reportingMode === 'remote' ? 'remote' : 'on-site';
+      const reportingMode = reportingModeOf(state.sessionConfig);
       const articleMoney = renderJudgeFinancialSummary(state);
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
       const settledWeave = settledWeaveOf(state);

@@ -48,6 +48,7 @@ const { wordCount } = require('./word-count');
 // which the evidence check and the map's card check read too.
 const { QUOTED_SPANS } = require('./grounding');
 const { documentResolverOf } = require('./evidence');
+const { reportingModeOf } = require('./prompt-renderers/session-authors');
 
 /**
  * Normalise for substring comparison: every single and double quotation mark,
@@ -1495,7 +1496,7 @@ function factCheckContentBundle({
   // narrator's own words, each piece read with its quoted spans masked (maskQuotedSpans),
   // so a player's line quoted inside a paragraph, 'Kai told me, "I voted for Mel."', is the
   // player's too.
-  const mode = reportingMode === 'remote' ? 'remote' : 'on-site';
+  const mode = reportingModeOf({ reportingMode });
   const pieces = narratorSegments(bundle);
   const normProse = normalize(pieces.map(segment => maskQuotedSpans(segment.text)).join('\n'));
   const violations = [];
