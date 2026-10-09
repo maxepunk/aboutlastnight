@@ -139,7 +139,7 @@ describe('the arc stage: no prompt carries the buried memory, so none reaches th
     expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
     // Phase 3 (3.5): the arc writer reads the morning timeline, with the sale and the
     // real exposure on it, and the buried memory's evidence-log entry left out.
-    expect(prompts[0]).toContain('<morning-timeline>');
+    expect(prompts[0]).toContain('<investigation-timeline>');
     expect(prompts[0]).toContain('| sale | account: Gorlan | amount: $125,000');
     expect(prompts[0]).toContain('| exposure | document: ale003 | anonymous');
     expect(leaksIn(prompts[0])).toEqual([]);
@@ -162,7 +162,7 @@ describe('the arc stage: no prompt carries the buried memory, so none reaches th
     const prompts = promptsOf(sdk);
     expect(prompts).toHaveLength(1);
     expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
-    expect(prompts[0]).toContain('<morning-timeline>');
+    expect(prompts[0]).toContain('<investigation-timeline>');
     expect(leaksIn(prompts[0])).toEqual([]);
   });
 });
@@ -181,7 +181,7 @@ describe('journalist: the map writer and its rework carry no buried memory', () 
     for (const prompt of prompts) {
       expect(prompt).toContain('<SETTLED_WEAVE>');
       expect(prompt).toContain('<TRANSACTION_LINKS>');
-      expect(prompt).toContain('<morning-timeline>');
+      expect(prompt).toContain('<investigation-timeline>');
       expect(leaksIn(prompt)).toEqual([]);
     }
   });
@@ -202,7 +202,7 @@ describe('journalist: the article writer and its rework carry no buried memory',
       expect(prompt).toContain('<SETTLED_WEAVE>');
       expect(prompt).toContain('<STORY_MAP>');
       expect(prompt).toContain('<TRANSACTION_LINKS>');
-      expect(prompt).toContain('<morning-timeline>');
+      expect(prompt).toContain('<investigation-timeline>');
       expect(leaksIn(prompt)).toEqual([]);
     }
   });
@@ -223,7 +223,7 @@ describe.each(['journalist'])('%s: no judge prompt carries the buried memory', (
     expect(prompts[0]).toContain('<TRANSACTION_LINKS>');
     expect(leaksIn(prompts[0])).toEqual([]);
     // The article judge reads the whole record view, timeline included.
-    expect(prompts[0]).toContain('<morning-timeline>');
+    expect(prompts[0]).toContain('<investigation-timeline>');
   });
 });
 

@@ -234,7 +234,7 @@ describe('evaluator-nodes', () => {
         // evidence's sources.
         expect(prompt).toContain('<RECORD>');
         expect(prompt).not.toContain('EXPOSED EVIDENCE DETAILS');
-        expect(prompt).toContain('<morning-timeline>');
+        expect(prompt).toContain('<investigation-timeline>');
         expect(prompt).not.toContain('BURIED TRANSACTIONS');
         expect(prompt).not.toContain('ALL VALID EVIDENCE IDS');
       });
@@ -2017,7 +2017,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       const state = stateFor();
       const prompt = userFor('arcs', state);
       expect(prompt).toContain(renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig }));
-      expect(prompt).toContain('<morning-timeline>');
+      expect(prompt).toContain('<investigation-timeline>');
       expect(prompt).not.toContain('BURIED TRANSACTIONS (');
       expect(prompt).not.toContain('"accountName"');
     });

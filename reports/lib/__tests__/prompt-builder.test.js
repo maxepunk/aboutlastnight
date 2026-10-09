@@ -1059,7 +1059,7 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     // Buried memories: sales only, once, on the morning timeline (phase 3, 3.5: it
     // replaced <buried-transactions>; 07:50 PM is the first sale, so the evening clock
     // shows each time as morning), with no id, owner or text.
-    expect(count(userPrompt, '<morning-timeline>\n')).toBe(1);
+    expect(count(userPrompt, '<investigation-timeline>\n')).toBe(1);
     expect(userPrompt).toContain('- 08:00 AM | sale | account: Deez | amount: $225,000');
     for (const secret of ['zzq001', 'Quill']) expect(userPrompt).not.toContain(secret);
     // The director's words keep the last word.
@@ -1446,8 +1446,12 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     const section = generateRosterSection('journalist', CANONICAL, null, { Alex: 'he/him', Jamie: 'they/them' }, ['Alex', 'Riley', 'Jamie']);
     const lines = section.split('\n');
 
+    // Phases 14 and 15 (R4): Nova's one line gains the name Nova signs the article with (the
+    // theme's default first name here), and still no pronoun.
     it('never genders Nova', () => {
-      expect(lines.filter((l) => /\bNova\b/.test(l))).toEqual(['- Nova - the NovaNews reporter who writes the article']);
+      expect(lines.filter((l) => /\bNova\b/.test(l))).toEqual([
+        "- Nova - the NovaNews reporter who writes the article. Nova signs it Cassandra Nova, and the director's notes may call Nova Cassandra."
+      ]);
     });
 
     it('gives Marcus he/him and the canon line, and invents nothing for Blake', () => {

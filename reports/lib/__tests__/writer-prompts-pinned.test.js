@@ -432,11 +432,30 @@ const REPO = path.join(__dirname, '..', '..');
  *   standing notes from the stops, since a piece of evidence may now quote one (+35):
  *   arcs-journalist 12079 -> 12114 and article-journalist 35835 -> 35870. The outline pin does
  *   not move.
+ * - Phases 14 and 15, brief E (spec 2026-10-09 sections 5 and 10; R4, R7, R8, R10), the authors
+ *   and the time of day, both seats re-pinned once. The fixture is remote, has no guest reporter
+ *   and an evening clock with one sale, so the guest line, its turn-in mark and Nova in the photos
+ *   print nothing here. In every writer: Nova's roster line gains the name Nova signs the article
+ *   with, ". Nova signs it Cass Nova, and the director's notes may call Nova Cass." (R4, +71); the
+ *   time-of-day line, "The investigation ran this morning, at 7:50 AM.", opens SESSION_FACTS in
+ *   the map and article writers (+49) and follows the session roster in the weave writer's SECTION
+ *   1 (+48) (R7); the timeline's tag is <investigation-timeline>, open and close (+12); its
+ *   introduction opens "The investigation in time order" and says each logged time prints at the
+ *   hour the investigation ran (T7) (+24); and the record view's introduction says each document
+ *   prints in full except a player's character sheet, marked and trimmed (T1), and names the new
+ *   tag (+93) (R8). The money summary's total is what the buyer paid out "during the
+ *   investigation", where it said "this morning" (+12): outline-journalist 24919 -> 25180 (+261).
+ *   The Sources gloss puts the ledger on "the investigation's timeline" (+8) and names the
+ *   director's words by lib/director-words.js's labels, "the input-review corrections" and "the
+ *   notes at the stops" (+2), in the article writer's map label and the weave writer's Sources
+ *   line: article-journalist 35870 -> 36141 (+271). The weave writer's SECTION 2 line says each
+ *   document is whole except a character sheet, marked and trimmed (T1), then the investigation's
+ *   timeline, with no "morning clock" (+63): arcs-journalist 12114 -> 12435 (+321).
  */
 const PINNED = {
-  'outline-journalist': ['cccaf9981018185f7462af4f5b11d00dea0e890a97c27f3c1cd88f0cfed524d6', 24919],
-  'article-journalist': ['d40afe0e906ab8124185dc647ffbd26f4f748dfb5b8785184f9c5a7e64eb54f7', 35870],
-  'arcs-journalist': ['27763c901989f8730cbe485ba7f975e0c451028afb46714b4ab3b181a7d48e3b', 12114]
+  'outline-journalist': ['19c1d5daca5da9099826721805716c30d4cd9239911edc69598acf82ea251b3c', 25180],
+  'article-journalist': ['a5d1afc460554e7ed2a4fb52deee595e88e49b8cf99eb1ccad69a2df0341b94c', 36141],
+  'arcs-journalist': ['5131375bd7d6c5b99f59b948d18a8ad2625a684ee418bf90a4cbe538609986b2', 12435]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

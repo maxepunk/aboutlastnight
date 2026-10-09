@@ -175,7 +175,9 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     expect(prompt).not.toContain('Haiku summary of the name');
     expect(prompt).not.toContain('Derived Guess');
     // Phase 3 (3.3): the section is the whole record view, its intro counting the documents.
-    expect(section3).toContain('The 1 exposed memories and 2 paper documents in full, then the morning timeline');
+    // Phases 14 and 15 (brief E, R8): the investigation's timeline, and a character sheet
+    // printed marked and trimmed (T1).
+    expect(section3).toContain("The 1 exposed memories and 2 paper documents, each whole except a player's character sheet, which prints marked and trimmed (T1); then the investigation's timeline");
   });
 
   it('the sales appear once, on the record view\'s morning timeline (phase 3, 3.3)', () => {
@@ -623,7 +625,7 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     it('carries the whole view once, with the session config, and no Buried Transactions list', () => {
       const prompt = buildWeaveSections(journalistState());
       expect(prompt.match(/^<RECORD>$/gm)).toHaveLength(1);
-      expect(prompt.match(/^<morning-timeline>$/gm)).toHaveLength(1);
+      expect(prompt.match(/^<investigation-timeline>$/gm)).toHaveLength(1);
       expect(prompt).toContain('- 07:37 AM | exposure | document: ale003 | anonymous\n- 07:50 AM | sale | account: Melanie | amount: $75,000');
       expect(prompt).not.toContain('### Buried Transactions');
       expect(prompt).not.toContain('"shellAccount"');

@@ -29,6 +29,7 @@ const { SOURCES_GLOSS, documentResolverOf } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
+const { writerSignsLine } = require('./prompt-renderers/session-authors');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // A standing note's kind, the one rule (review of 4.12e).
 const { noteKindOf } = require('./workflow/state');
@@ -128,14 +129,20 @@ const WRITER_RULE_SET_CALLS = Object.freeze({
  * director's choice, they/them included (R3), and prints as set. Nova has no
  * pronoun in the canon, Marcus is he/him, and Blake has none.
  *
+ * Phases 14 and 15 (R4): the line of the NPC who writes the article gains the session's
+ * name for it (session-authors.js writerSignsLine, from the theme's file and the first name
+ * the director gave), so every writer and judge knows who signs the article.
+ *
  * @param {string} theme - Theme name (e.g., 'journalist') — kept for signature compatibility
  * @param {Object|null} canonicalCharacters - Notion-derived map of firstName -> fullName
  * @param {Object|null} characterData - Optional character metadata (groups, roles, relationships) from extractCharacterData node
  * @param {Object|null} rosterPronouns - first name -> pronouns captured for this session's roster
  * @param {Array<string|{name: string}>|null} roster - this session's roster (sessionConfig.roster)
+ * @param {string|null} [writerFirstName] - the session's first name for the writer
+ *   (sessionConfig.journalistFirstName); the theme's default when none was given
  * @returns {string} Formatted roster section for prompts
  */
-function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null, rosterPronouns = null, roster = null) {
+function generateRosterSection(theme = 'journalist', canonicalCharacters = null, characterData = null, rosterPronouns = null, roster = null, writerFirstName = null) {
   const characters = canonicalCharacters || {};
   const pronounMap = rosterPronouns || {};
   const lower = (name) => String(name).trim().toLowerCase();
@@ -194,7 +201,8 @@ ${lines}${unrecorded}`;
       const display = e.fullName || e.name;
       const pronouns = showPronouns && e.pronouns ? ` (${e.pronouns})` : '';
       const role = e.role ? ` - ${e.role}` : '';
-      return `- ${display}${pronouns}${role}`;
+      const signs = e.writer ? writerSignsLine(theme, writerFirstName) : null;
+      return `- ${display}${pronouns}${role}${signs ? `. ${signs}` : ''}`;
     });
 
   if (npcLines.length > 0) {
@@ -415,7 +423,7 @@ function buildReportingModeBlock(sessionConfig, theme) {
 function rosterWithPronounsSection(sessionConfig, canonicalCharacters) {
   const config = sessionConfig || {};
   return `### Names and Pronouns
-${generateRosterSection('journalist', canonicalCharacters || null, null, config.rosterPronouns, config.roster)}`;
+${generateRosterSection('journalist', canonicalCharacters || null, null, config.rosterPronouns, config.roster, config.journalistFirstName)}`;
 }
 
 /**
@@ -579,7 +587,7 @@ class PromptBuilder {
    */
   _rosterSection() {
     return generateRosterSection(this.themeName, this.canonicalCharacters, this.characterData,
-      this.sessionConfig?.rosterPronouns, this.sessionConfig?.roster);
+      this.sessionConfig?.rosterPronouns, this.sessionConfig?.roster, this.sessionConfig?.journalistFirstName);
   }
 
   /**
@@ -690,7 +698,7 @@ ${notes}
 <FINANCIAL_SUMMARY>
 The ledger's accounts, with figures code computed from the session report. Each account's total is its sales, plus the first-burial bonus and the transfers it received, less the transfers it sent; beside it, how many sales it took.
 ${nonZero.map(a => `- ${a.name}: $${a.total.toLocaleString('en-US')} (${sales(a.tokenCount)}${finalFigure(a)})`).join('\n')}
-All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is what the buyer paid out this morning, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.
+All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is what the buyer paid out during the investigation, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.
 </FINANCIAL_SUMMARY>`;
   }
 
@@ -716,6 +724,8 @@ All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is wh
    *
    * Phases 14 and 15 (R5): with a guest reporter, their line (buildSessionFacts'
    * guestReporterLine) follows the roster.
+   * Brief E (R7): the time-of-day line (buildSessionFacts' timeOfDayLine) opens it, so every
+   * writer and judge that reads SESSION_FACTS knows when the investigation ran.
    *
    * @param {Object|null} sessionFacts - ai-nodes.js buildSessionFacts
    * @returns {string} the XML section, or '' without facts
@@ -724,9 +734,11 @@ All accounts together${sumSource}: $${total.toLocaleString('en-US')}. That is wh
     if (!sessionFacts) return '';
     const n = sessionFacts.playerCount;
     const guest = sessionFacts.guestReporterLine ? `${sessionFacts.guestReporterLine}\n\n` : '';
+    // Phases 14 and 15 (R7): when the investigation ran, first; none with no sale and no exposure
+    const when = sessionFacts.timeOfDayLine ? `${sessionFacts.timeOfDayLine}\n\n` : '';
     return `
 <SESSION_FACTS>
-INVESTIGATION ROSTER (${n} players):
+${when}INVESTIGATION ROSTER (${n} players):
 ${sessionFacts.roster.join('\n')}
 
 ${guest}${renderSessionFactsVerdict(sessionFacts)}

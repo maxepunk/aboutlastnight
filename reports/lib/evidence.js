@@ -45,7 +45,7 @@
 const { isVerbatimIn, normalizeForGrounding, QUOTED_SPANS, ELISION } = require('./grounding');
 const { recordIdOf, buildMorningTimeline, timelineEventLine } = require('./prompt-renderers/record-view');
 // Phases 14 and 15, brief B (R1): the director's words are one list, which "notes" reads.
-const { directorWordsTexts } = require('./director-words');
+const { directorWordsTexts, DIRECTOR_WORDS_SOURCES } = require('./director-words');
 
 /** The sources a piece may name besides a document in the record. */
 const EVIDENCE_SOURCES = Object.freeze({ LEDGER: 'ledger', EVIDENCE_LOG: 'evidence-log', NOTES: 'notes' });
@@ -61,14 +61,21 @@ const NAMED_SOURCES = (() => {
 
 /**
  * What each source besides a document holds, as the writers read it. evidenceContextOf reads the
- * same meanings in code: the ledger's rows and the evidence log's from the morning timeline, and
- * the director's words through notesTextsOf. The evidence log's meaning follows the ledger's in
- * EVIDENCE_SOURCES' order, so its "it" is the morning timeline.
+ * same meanings in code: the ledger's rows and the evidence log's from the investigation's
+ * timeline, and the director's words through notesTextsOf. The evidence log's meaning follows the
+ * ledger's in EVIDENCE_SOURCES' order, so its "it" is the investigation's timeline.
+ *
+ * Phases 14 and 15 (brief E, R8): the timeline is the investigation's, which ran in the morning or
+ * the afternoon; and the director's words are named by lib/director-words.js's own labels, so
+ * every place names the five sources, the notes at the stops among them, in one wording.
  */
 const SOURCE_MEANINGS = Object.freeze({
-  [EVIDENCE_SOURCES.LEDGER]: 'a sale, the bonus or a transfer on the morning timeline',
+  [EVIDENCE_SOURCES.LEDGER]: "a sale, the bonus or a transfer on the investigation's timeline",
   [EVIDENCE_SOURCES.EVIDENCE_LOG]: 'an exposure on it',
-  [EVIDENCE_SOURCES.NOTES]: "the director's own words: the notes, the corrections, the accusation, the answers at the story meeting and the standing notes from the stops"
+  [EVIDENCE_SOURCES.NOTES]: (() => {
+    const labels = DIRECTOR_WORDS_SOURCES.map((source) => source.label);
+    return `the director's own words: ${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+  })()
 });
 
 /**

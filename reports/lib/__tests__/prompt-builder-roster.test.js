@@ -11,8 +11,9 @@
  * their names, and the roster block now states them.
  */
 
-const { generateRosterSection } = require('../prompt-builder');
+const { generateRosterSection, rosterWithPronounsSection, PromptBuilder } = require('../prompt-builder');
 const { getThemeNPCs, getThemeNPCPronouns, getThemeNPCEntries } = require('../theme-config');
+const { writerSignsLine } = require('../prompt-renderers/session-authors');
 
 const CANONICAL = { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson' };
 
@@ -176,5 +177,34 @@ describe('fact-check pronoun scan (class 3)', () => {
     const result = factCheckContentBundle(args);
     expect(result.advisoryWarnings).toEqual([]);
     expect(result.structuralIssues).toEqual([]);
+  });
+});
+
+// Phases 14 and 15 (R4; spec 2026-10-09 section 5): one line, from the theme's Nova entry
+// (lib/theme-config.js) and sessionConfig.journalistFirstName, joins Nova's line in the
+// roster section, which every writer and judge reads.
+describe("Nova's name for the session (R4)", () => {
+  const novaLineOf = (section) => section.split('\n').find((line) => line.startsWith('- Nova'));
+
+  it('joins the roster section\'s Nova line, with the default first name when none was given', () => {
+    expect(novaLineOf(generateRosterSection('journalist', CANONICAL, null, {}, ['Vic'])))
+      .toBe("- Nova - the NovaNews reporter who writes the article. Nova signs it Cassandra Nova, and the director's notes may call Nova Cassandra.");
+  });
+
+  it('gives the first name the director set at the start', () => {
+    const section = rosterWithPronounsSection({ roster: ['Vic'], journalistFirstName: 'Rhea' }, CANONICAL);
+    expect(novaLineOf(section)).toBe("- Nova - the NovaNews reporter who writes the article. Nova signs it Rhea Nova, and the director's notes may call Nova Rhea.");
+  });
+
+  it('reaches every writer and judge through the builder\'s roster section, in both modes', () => {
+    for (const reportingMode of ['remote', 'on-site']) {
+      const builder = new PromptBuilder(null, 'journalist', { roster: ['Vic'], reportingMode, journalistFirstName: 'Rhea' }, CANONICAL, null);
+      expect(novaLineOf(builder._rosterSection())).toContain('Nova signs it Rhea Nova');
+    }
+  });
+
+  it('is the theme\'s: the parked detective has no writer entry and prints no such line', () => {
+    expect(writerSignsLine('detective', 'Rhea')).toBeNull();
+    expect(generateRosterSection('detective', CANONICAL, null, {}, ['Vic'])).not.toContain('signs it');
   });
 });

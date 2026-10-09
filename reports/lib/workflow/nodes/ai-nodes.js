@@ -62,6 +62,7 @@ const { traceNode } = require('../../observability');
 const { directorAccusationText } = require('../../accusation-verdict');
 const { photoKey } = require('../../prompt-renderers/director-words-renderer');
 const { guestReporterLine, markWriterInPhoto } = require('../../prompt-renderers/session-authors');
+const { timeOfDayLine } = require('../../prompt-renderers/session-clock');
 // Brief 4.2b: a photo's mapping, the one lookup isPhotoExcluded shares with the photo nodes
 const { photoMappingOf } = require('../../photo-leave-out');
 
@@ -708,7 +709,9 @@ async function processRescuedItems(state, config) {
  *
  * Phases 14 and 15 (R5): with a guest reporter, the facts carry their line
  * (session-authors.js guestReporterLine), which SESSION_FACTS and the article judge print
- * beside the roster; with none, no key.
+ * beside the roster; with none, no key. Brief E (R7): the facts carry the time-of-day line
+ * (session-clock.js timeOfDayLine), which SESSION_FACTS and the article judge print before the
+ * roster; a session with no sale and no exposure has no key.
  *
  * @param {Object} state
  * @returns {Object|null} null when there is no roster
@@ -726,6 +729,7 @@ function buildSessionFacts(state) {
   }
   if (roster.length === 0) return null;
   const accusation = state.sessionConfig?.accusation || {};
+  const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);
   return {
     roster: roster.map(p => {
       const name = p.name || p;
@@ -740,6 +744,8 @@ function buildSessionFacts(state) {
     accusationText: directorAccusationText(state),
     whiteboard: state.playerFocus?.whiteboardContext || null,
     playerCount: roster.length,
+    // Phases 14 and 15 (R7): when the investigation ran, morning or afternoon, and its span
+    ...(whenLine && { timeOfDayLine: whenLine }),
     // Phases 14 and 15 (R5): who shares the byline, only when the session has a guest reporter
     ...(guestReporterLine(state.sessionConfig) && { guestReporterLine: guestReporterLine(state.sessionConfig) })
   };

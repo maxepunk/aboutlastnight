@@ -24,9 +24,11 @@ describe('financial summary - the ledger figures', () => {
   // Phase 3 (3.9; T5, R11): the total is what the buyer paid out. NeurAI and its board are
   // Nova's suspicion, so the summary the writers copy from never names them as the payer
   // (rule-text read 2, section D).
-  test('says the total is what the buyer paid out this morning, naming no buyer', () => {
+  // Phases 14 and 15 (brief E, R8): "during the investigation", which ran in the morning or
+  // the afternoon, never a fixed "this morning".
+  test('says the total is what the buyer paid out during the investigation, naming no buyer', () => {
     const result = createPromptBuilder('journalist')._buildFinancialSummary([{ name: 'Burns', total: 1300000, tokenCount: 7 }]);
-    expect(result).toContain('All accounts together: $1,300,000. That is what the buyer paid out this morning');
+    expect(result).toContain('All accounts together: $1,300,000. That is what the buyer paid out during the investigation');
     expect(result).not.toMatch(/NeurAI|board/);
   });
 });
@@ -61,7 +63,7 @@ describe("financial summary - a total that is the session report's final figure"
   });
 
   test('sums what the ledger adds up to, the sales and the bonus, and says so', () => {
-    expect(summary()).toContain("All accounts together, by the ledger's sales, bonus and transfers: $2,280,000. That is what the buyer paid out this morning, the sales and the first-burial bonus;");
+    expect(summary()).toContain("All accounts together, by the ledger's sales, bonus and transfers: $2,280,000. That is what the buyer paid out during the investigation, the sales and the first-burial bonus;");
   });
 
   test('a ledger the Final Standings agree with prints exactly as before', () => {
@@ -77,7 +79,7 @@ describe("financial summary - a total that is the session report's final figure"
       '- Ember: $925,000 (2 sales)',
       '- L: $375,000 (0 sales)',
       '- Vic: $25,000 (1 sale)',
-      'All accounts together: $1,325,000. That is what the buyer paid out this morning, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.',
+      'All accounts together: $1,325,000. That is what the buyer paid out during the investigation, the sales and the first-burial bonus; a transfer moves money between accounts and adds nothing to it.',
       '</FINANCIAL_SUMMARY>'
     ].join('\n'));
   });

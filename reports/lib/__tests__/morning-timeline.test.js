@@ -118,8 +118,8 @@ describe('renderMorningTimeline', () => {
       }
     );
     const lines = out.split('\n');
-    expect(lines[0]).toBe('<morning-timeline>');
-    expect(lines[lines.length - 1]).toBe('</morning-timeline>');
+    expect(lines[0]).toBe('<investigation-timeline>');
+    expect(lines[lines.length - 1]).toBe('</investigation-timeline>');
     expect(lines.slice(2, -1)).toEqual([
       '- 07:37 AM | exposure | document: ale003 | anonymous',
       '- 07:50 AM, same minute:',
@@ -152,17 +152,17 @@ describe('renderMorningTimeline', () => {
   });
 
   it('says (none) when the morning logged nothing', () => {
-    expect(renderMorningTimeline(bundle(), {}).split('\n').slice(2)).toEqual(['(none)', '</morning-timeline>']);
+    expect(renderMorningTimeline(bundle(), {}).split('\n').slice(2)).toEqual(['(none)', '</investigation-timeline>']);
   });
 
   it('is the record view\'s last part, and the view without it leaves it out', () => {
     const b = bundle({ tokens: [exposedToken('ale003')], transactions: [sale('Ember', 75000, '07:50 PM')] });
     const whole = renderRecordView(b, { sessionConfig: {} });
     expect(whole).toContain(renderMorningTimeline(b, {}));
-    expect(whole.indexOf('<document id="ale003"')).toBeLessThan(whole.indexOf('<morning-timeline>\n'));
+    expect(whole.indexOf('<document id="ale003"')).toBeLessThan(whole.indexOf('<investigation-timeline>\n'));
     expect(whole).not.toContain('<buried-transactions>');
     const documentsOnly = renderRecordView(b, { buried: false });
-    expect(documentsOnly).not.toContain('morning-timeline');
+    expect(documentsOnly).not.toContain('investigation-timeline');
     expect(documentsOnly).not.toContain('Ember');
   });
 });

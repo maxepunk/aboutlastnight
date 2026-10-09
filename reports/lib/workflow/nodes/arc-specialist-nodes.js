@@ -51,7 +51,7 @@ const { traceNode } = require('../../observability');
 const { WEAVE_SYSTEM_PROMPT, WEAVE_SCHEMA } = require('../../sdk-client/subagents');
 const { renderDirectorEnrichmentBlock, directorTensionSentences } = require('../../prompt-renderers/director-notes-renderer');
 const { renderRecordView, recordIdOf } = require('../../prompt-renderers/record-view');
-const { withSessionClock } = require('../../prompt-renderers/session-clock');
+const { withSessionClock, timeOfDayLine } = require('../../prompt-renderers/session-clock');
 const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { guestReporterLine } = require('../../prompt-renderers/session-authors');
@@ -307,8 +307,9 @@ ${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one on
  * The arc writer's user prompt up to its <DIRECTOR_GUIDANCE>: the output format; what
  * the room concluded (the accusation and the director's account of it, the whiteboard
  * reading, the director's notes and corrections and their sentences about Blake and the
- * Valet, the investigation focus, the roster with the guest reporter's line when the session
- * has one, the character categories, the roster with pronouns and the character context); the record with its morning timeline and the
+ * Valet, the investigation focus, the roster with the time-of-day line and, when the session
+ * has one, the guest reporter's line, the character categories, the roster with pronouns and the
+ * character context); the record with its investigation's timeline and the
  * sources a piece of evidence may name; the weave's task; and the rule set's craft files, last,
  * by the placement ruling, from the theme's rules folder (R14). The arc rework opens with
  * the same sections (phase 2, 2.3), so whatever the writer reads reaches its rework.
@@ -325,6 +326,9 @@ function buildWeaveSections(state) {
   // Phases 14 and 15 (R5): who shares the byline, after the session roster, only when the
   // session has a guest reporter.
   const guestLine = guestReporterLine(state.sessionConfig);
+  // Brief E (R7): when the investigation ran, after the session roster; with no sale and no
+  // exposure, none. The weave writer reads no SESSION_FACTS, so it reads the line here.
+  const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);
 
   const characterContext = state.characterData?.characters && Object.keys(state.characterData.characters).length > 0 ? `
 ### Character Context (${DERIVED_LABELS.characterContext})
@@ -380,7 +384,7 @@ ${context.primaryInvestigation}
 
 ### Session Roster (the players at the investigation)
 ${JSON.stringify(context.roster)}
-${guestLine ? `${guestLine}\n` : ''}
+${whenLine ? `${whenLine}\n` : ''}${guestLine ? `${guestLine}\n` : ''}
 ${buildCharacterCategoriesBlock(context.roster, state.theme || 'journalist', allCharacters).trimEnd()}
 
 ${rosterWithPronounsSection(state.sessionConfig, state.canonicalCharacters)}
@@ -389,7 +393,7 @@ ${characterContext}
 
 ## SECTION 2: THE RECORD
 
-The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents in full, then the morning timeline: every sale, exposure, bonus and transfer, in time order on the morning clock.
+The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents, each whole except a player's character sheet, which prints marked and trimmed (T1); then the investigation's timeline: every sale, exposure, bonus and transfer, in time order.
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 ### Sources

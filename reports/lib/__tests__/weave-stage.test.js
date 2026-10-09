@@ -150,7 +150,7 @@ describe('the arc writer writes one weave in one call', () => {
     const state = weaveState();
     const prompt = buildWeaveSections(state);
     expect(prompt.match(/^<RECORD>$/gm)).toHaveLength(1);
-    expect(prompt.match(/^<morning-timeline>$/gm)).toHaveLength(1);
+    expect(prompt.match(/^<investigation-timeline>$/gm)).toHaveLength(1);
     expect(prompt).toContain(state.directorNotes.rawProse);
     expect(prompt).toContain(state.inputReviewCorrections[0]);
     expect(prompt).toContain(state.sessionConfig.accusationRaw);

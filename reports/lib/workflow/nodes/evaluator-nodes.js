@@ -48,7 +48,7 @@ const { systemPromptOpening } = require('../../prompt-builder');
 // Phase 2, brief 2.4: the judges read the record and the director's words through
 // the same renderers and builders the writers use, so a judge sees what it judges.
 const { renderRecordView } = require('../../prompt-renderers/record-view');
-const { withSessionClock } = require('../../prompt-renderers/session-clock');
+const { withSessionClock, timeOfDayLine } = require('../../prompt-renderers/session-clock');
 const { renderDirectorEnrichmentBlock } = require('../../prompt-renderers/director-notes-renderer');
 const {
   renderSessionFactsVerdict, renderArcAccusation, renderPhotoListEntry, renderDirectorStopNotes, DIRECTOR_STOP_NOTES_TAG
@@ -140,7 +140,7 @@ const JUDGE_MAP_LABEL = 'MAP:';
  */
 const TRUTH_MATERIAL = Object.freeze({
   record: '<RECORD>',                       // the exposed documents (renderRecordView)
-  timeline: '<morning-timeline>',           // the ledger and the evidence log, on the morning clock
+  timeline: '<investigation-timeline>',     // the ledger and the evidence log, at the hour the investigation ran (brief E, R8)
   financialSummary: '<FINANCIAL_SUMMARY>',  // the account totals the article writer copies (3.9)
   notes: '<DIRECTOR_NOTES>',                // the director's notes (renderDirectorEnrichmentBlock)
   corrections: '<DIRECTOR_CORRECTIONS>',    // the director's input-review corrections, after the notes (brief 4.7c)
@@ -1142,7 +1142,8 @@ function renderJudgeFinancialSummary(state) {
 /**
  * The session roster for the article judge: the players present, by
  * the full names the writers' SESSION_FACTS lists (ai-nodes.js buildSessionFacts), then,
- * with a guest reporter, their line as SESSION_FACTS prints it (phases 14 and 15, R5).
+ * with a guest reporter, their line as SESSION_FACTS prints it (phases 14 and 15, R5). The
+ * time-of-day line opens it, as it opens SESSION_FACTS (brief E, R7).
  *
  * @param {Object|null} sessionFacts
  * @returns {string}
@@ -1150,7 +1151,8 @@ function renderJudgeFinancialSummary(state) {
 function renderJudgeSessionRoster(sessionFacts) {
   if (!sessionFacts) return 'SESSION ROSTER: none recorded for this session.';
   const guest = sessionFacts.guestReporterLine ? `\n\n${sessionFacts.guestReporterLine}` : '';
-  return `SESSION ROSTER (${sessionFacts.playerCount} players who were present at this session's investigation):
+  const when = sessionFacts.timeOfDayLine ? `${sessionFacts.timeOfDayLine}\n\n` : '';
+  return `${when}SESSION ROSTER (${sessionFacts.playerCount} players who were present at this session's investigation):
 ${sessionFacts.roster.join('\n')}${guest}`;
 }
 
@@ -1416,8 +1418,11 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // right after the answers, in its own block, which holds "None." when there is none.
       //
       // Phases 14 and 15, brief E (R5): with a guest reporter, their line before the roster.
+      // Brief E (R7): when the investigation ran, before them both, since this judge reads no
+      // SESSION_FACTS; with no sale and no exposure, none.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
       const guestLine = guestReporterLine(state.sessionConfig);
+      const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);
       return `Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
 WEAVE:
@@ -1426,7 +1431,7 @@ ${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
 ${afterJudged}THE ACCUSATION (the parsed verdict, then the director's account word for word):
 ${renderArcAccusation(state.playerFocus?.accusation, directorAccusationText(state), "Players' Reasoning")}
 
-${guestLine ? `${guestLine}\n\n` : ''}${renderJudgeRosterSection(state)}
+${whenLine ? `${whenLine}\n\n` : ''}${guestLine ? `${guestLine}\n\n` : ''}${renderJudgeRosterSection(state)}
 
 ${renderJudgeDirectorNotes(state, ARC_NOTES_LABEL)}${answers ? `\n\n${answers}` : ''}
 

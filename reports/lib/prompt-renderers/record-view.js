@@ -11,8 +11,9 @@
  *   the document's full text
  *   </document>
  *
- * Buried memories are never documents. They appear once, as sales on the morning
- * timeline (<morning-timeline>, phase 3 brief 3.5): account, amount and time, with no
+ * Buried memories are never documents. They appear once, as sales on the investigation's
+ * timeline (<investigation-timeline>, phase 3 brief 3.5; named for the morning until phases
+ * 14 and 15, brief E): account, amount and time, with no
  * id, owner or text. The timeline merges the ledger (the sales and the classified
  * adjustments on sessionConfig.adjustments) with the evidence log
  * (sessionConfig.exposures, for memories the bundle holds as exposed) in time order,
@@ -120,6 +121,9 @@ function escapeAttr(value) {
 /** The kind a character sheet prints with, in place of its basicType. */
 const CHARACTER_SHEET_KIND = 'character sheet';
 
+/** An exposed memory's kind. */
+const MEMORY_KIND = 'memory';
+
 /** The sheet's one-line label, the first line of its body. It points at T1 and restates none of it. */
 const CHARACTER_SHEET_LABEL = "(A player's character sheet: the game's private instructions to one player for their character. T1 says what the article may take from it.)";
 
@@ -148,12 +152,20 @@ function sheetTextOf(text) {
 
 /**
  * One <document> tag. An attribute the record holds no value for is left out,
- * never guessed (R1). A character sheet's body is its label, then its trimmed text.
+ * never guessed (R1). A paper document that is a character sheet (lib/evidence.js
+ * isCharacterSheet, the one rule) prints with the sheet's kind, and its body is its label,
+ * then its trimmed text; a memory is never one.
+ *
+ * @param {Object} item - an exposed memory or paper document
+ * @param {string} kind - 'memory', or the paper document's type
  */
 function renderDocument(item, kind) {
+  // Required here, not at the top: lib/evidence.js requires this module as it loads.
+  const { isCharacterSheet } = require('../evidence');
+  const sheet = kind !== MEMORY_KIND && isCharacterSheet(item);
   const attrs = [
     ['id', recordIdOf(item)],
-    ['kind', kind],
+    ['kind', sheet ? CHARACTER_SHEET_KIND : kind],
     ['name', firstText(recordOf(item).name, item.name)],
     ['owner', ownerOf(item)],
     ['layer', 'exposed']
@@ -161,7 +173,7 @@ function renderDocument(item, kind) {
     .filter(([, value]) => typeof value === 'string' && value.trim())
     .map(([key, value]) => `${key}="${escapeAttr(value)}"`)
     .join(' ');
-  if (kind === CHARACTER_SHEET_KIND) {
+  if (sheet) {
     const text = textOf(item);
     return `<document ${attrs}>\n${CHARACTER_SHEET_LABEL}\n${(text && sheetTextOf(text)) || NO_TEXT}\n</document>`;
   }
@@ -180,13 +192,11 @@ function asArray(value) {
  * @returns {string} the <document> tags, or a line saying there are none
  */
 function renderRecordDocuments(evidenceBundle) {
-  // Required here, not at the top: lib/evidence.js requires this module as it loads.
-  const { isCharacterSheet } = require('../evidence');
   const exposed = (evidenceBundle && evidenceBundle.exposed) || {};
   const documents = [
-    ...asArray(exposed.tokens).filter(t => t && typeof t === 'object').map(t => renderDocument(t, 'memory')),
+    ...asArray(exposed.tokens).filter(t => t && typeof t === 'object').map(t => renderDocument(t, MEMORY_KIND)),
     ...asArray(exposed.paperEvidence).filter(p => p && typeof p === 'object')
-      .map(p => renderDocument(p, isCharacterSheet(p) ? CHARACTER_SHEET_KIND : firstText(recordOf(p).basicType, p.basicType)))
+      .map(p => renderDocument(p, firstText(recordOf(p).basicType, p.basicType)))
   ];
   return documents.length > 0 ? documents.join('\n\n') : NO_DOCUMENTS;
 }
@@ -286,7 +296,7 @@ function exposedMemoryIds(evidenceBundle) {
 }
 
 /**
- * The morning timeline: the ledger and the evidence log merged in time order, every
+ * The investigation's timeline: the ledger and the evidence log merged in time order, every
  * logged time on the session clock (phase 3, brief 3.5).
  *
  * - Sales: the bundle's buried transactions, as account, amount and time only.
@@ -374,7 +384,7 @@ function timelineEventText(event) {
 }
 
 /**
- * One event's line as the morning timeline prints it, its time first: the one text the writers
+ * One event's line as the investigation's timeline prints it, its time first: the one text the writers
  * read and the evidence check reads a piece's quotation of the ledger or the evidence log against
  * (lib/evidence.js evidenceContextOf; fix round 4). An event in a shared minute prints its time on
  * the minute's heading instead, and the check reads it with its time all the same.
@@ -383,19 +393,21 @@ function timelineEventLine(event) {
   return `${event.time} | ${timelineEventText(event)}`;
 }
 
-const TIMELINE_INTRO = 'The morning in time order: the ledger and the evidence log merged, each logged time on the morning clock. ' +
+// Phases 14 and 15 (brief E, R8): the investigation ran in the morning or the afternoon, and
+// the time-of-day line says which (session-clock.js timeOfDayLine), so no label here names it.
+const TIMELINE_INTRO = 'The investigation in time order: the ledger and the evidence log merged, each logged time at the hour the investigation ran (T7). ' +
   'A sale is a buried memory\'s ledger line: the account paid, the amount and the time. ' +
   'An exposure names the memory\'s document id and the name on the turn-in. ' +
   'Events logged in the same minute sit under that minute, in no known order.';
 
 /**
- * The <morning-timeline> part of the view (buildMorningTimeline, printed): one line
+ * The <investigation-timeline> part of the view (buildMorningTimeline, printed): one line
  * per event, time first, and the events of a shared minute under one heading, which
  * prints the minute in one format.
  *
  * @param {Object|null} evidenceBundle
  * @param {Object|null} sessionConfig
- * @returns {string} the <morning-timeline> block
+ * @returns {string} the <investigation-timeline> block
  */
 function renderMorningTimeline(evidenceBundle, sessionConfig) {
   const { events } = buildMorningTimeline(evidenceBundle, sessionConfig);
@@ -409,11 +421,11 @@ function renderMorningTimeline(evidenceBundle, sessionConfig) {
     if (!previous || !previous.sameMinute || previous.minute !== event.minute) lines.push(`- ${event.minute}, same minute:`);
     lines.push(`  - ${timelineEventText(event)}`);
   });
-  return `<morning-timeline>\n${TIMELINE_INTRO}\n${lines.length > 0 ? lines.join('\n') : '(none)'}\n</morning-timeline>`;
+  return `<investigation-timeline>\n${TIMELINE_INTRO}\n${lines.length > 0 ? lines.join('\n') : '(none)'}\n</investigation-timeline>`;
 }
 
 /**
- * The whole view: one <RECORD> section, the documents and then the morning
+ * The whole view: one <RECORD> section, the documents and then the investigation's
  * timeline. A prompt that lists the buried transactions itself takes the documents
  * alone with `{ buried: false }` (R2), so the sales appear once per prompt: the arc
  * writer and the arc judge, until phase 3's 3.3 and 3.4 move them to the timeline.
@@ -423,17 +435,19 @@ function renderMorningTimeline(evidenceBundle, sessionConfig) {
  *
  * @param {Object|null} evidenceBundle - the curated evidence bundle
  * @param {Object} [options]
- * @param {boolean} [options.buried=true] - include the <morning-timeline> block
+ * @param {boolean} [options.buried=true] - include the <investigation-timeline> block
  * @param {Object|null} [options.sessionConfig] - the session's parse: its exposures,
  *   adjustments and clock (a caller without it gets the sales alone, on the clock
  *   their times decide)
  * @returns {string}
  */
 function renderRecordView(evidenceBundle, { buried = true, sessionConfig = null } = {}) {
-  const intro = 'The session\'s record. Each exposed document below is complete: its id, its kind ' +
-    '(memory, or the paper document\'s type), its name, its owner when the record names one, ' +
-    'and its layer, then its full text.' +
-    (buried ? ' Buried memories appear only as sales on the <morning-timeline> that follows the documents.' : '');
+  // Phases 14 and 15 (brief E): a character sheet prints marked and trimmed, so the
+  // introduction no longer calls every document complete; T1 says what a sheet gives.
+  const intro = 'The session\'s record. Each exposed document below gives its id, its kind ' +
+    '(memory, the paper document\'s type, or character sheet), its name, its owner when the record names one, ' +
+    'and its layer, then its text: in full, except a player\'s character sheet, which prints marked and trimmed (T1).' +
+    (buried ? ' Buried memories appear only as sales on the <investigation-timeline> that follows the documents.' : '');
   const parts = [intro, renderRecordDocuments(evidenceBundle)];
   if (buried) parts.push(renderMorningTimeline(evidenceBundle, sessionConfig));
   return `<RECORD>\n${parts.join('\n\n')}\n</RECORD>`;

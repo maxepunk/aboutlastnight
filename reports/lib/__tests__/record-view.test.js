@@ -201,7 +201,7 @@ describe('record view: buried memories reach the timeline as sales only', () => 
     expect(out).toContain(
       '- 07:50 AM | sale | account: Melanie | amount: $75,000\n' +
       '- 08:00 AM | sale | account: Deez | amount: $225,000\n' +
-      '</morning-timeline>'
+      '</investigation-timeline>'
     );
   });
 
@@ -228,12 +228,12 @@ describe('record view: buried memories reach the timeline as sales only', () => 
     }), {});
     expect(out.split('\n').slice(2)).toEqual([
       '- 09:10 AM | sale | account: Jinin | amount: (not recorded)',
-      '</morning-timeline>'
+      '</investigation-timeline>'
     ]);
   });
 
   it('says (none) when nothing was sold or exposed', () => {
-    expect(renderMorningTimeline(bundle(), {})).toMatch(/\n\(none\)\n<\/morning-timeline>$/);
+    expect(renderMorningTimeline(bundle(), {})).toMatch(/\n\(none\)\n<\/investigation-timeline>$/);
   });
 });
 
@@ -246,7 +246,7 @@ describe('record view: the whole view', () => {
     expect(out.endsWith('\n</RECORD>')).toBe(true);
     expect(out.match(/<RECORD>/g)).toHaveLength(1);
     expect(out.indexOf('<document id="ale003"')).toBeLessThan(out.indexOf('<document id="p-test-1"'));
-    expect(out.indexOf('<document id="p-test-1"')).toBeLessThan(out.indexOf('<morning-timeline>\n'));
+    expect(out.indexOf('<document id="p-test-1"')).toBeLessThan(out.indexOf('<investigation-timeline>\n'));
     expect(out).toContain(renderRecordDocuments(bundle()));
   });
 
@@ -255,7 +255,7 @@ describe('record view: the whole view', () => {
       transactions: [{ shellAccount: 'Melanie', amount: 75000, time: '07:50 PM' }]
     }), { buried: false });
     expect(out).toContain('<document id="ale003"');
-    expect(out).not.toContain('morning-timeline');
+    expect(out).not.toContain('investigation-timeline');
     expect(out).not.toContain('Melanie');
   });
 
@@ -264,7 +264,7 @@ describe('record view: the whole view', () => {
       const out = renderRecordView(empty);
       expect(out).toContain('<RECORD>');
       expect(out).toContain('(The record holds no exposed documents.)');
-      expect(out).toMatch(/<morning-timeline>\n[^\n]+\n\(none\)\n<\/morning-timeline>/);
+      expect(out).toMatch(/<investigation-timeline>\n[^\n]+\n\(none\)\n<\/investigation-timeline>/);
       expect(out).not.toContain('<document');
     }
   });

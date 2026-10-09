@@ -172,6 +172,6 @@ describe('every reader of the director\'s words reads the notes at the stops', (
   });
 
   it("the gloss on \"notes\" says the director's own words include their notes at the stops", () => {
-    expect(SOURCES_GLOSS).toMatch(/"notes" for the director's own words: .*the standing notes from the stops$/);
+    expect(SOURCES_GLOSS).toMatch(/"notes" for the director's own words: .*the answers at the story meeting and the notes at the stops$/);
   });
 });

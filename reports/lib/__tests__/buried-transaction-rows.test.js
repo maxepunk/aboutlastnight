@@ -66,7 +66,7 @@ describe('the arc writer, its reworker and the arc judge share the rule', () => 
     const state = { ...reworkFixtureState('journalist'), evidenceBundle: bundleWith(ROWS) };
     const sections = arcTesting.buildWeaveSections(state);
     expect(sections).not.toContain('### Buried Transactions');
-    const timeline = sections.slice(sections.indexOf('<morning-timeline>\n'), sections.indexOf('</morning-timeline>'));
+    const timeline = sections.slice(sections.indexOf('<investigation-timeline>\n'), sections.indexOf('</investigation-timeline>'));
     expect(timeline.split('\n').filter((l) => l.includes('| sale |'))).toHaveLength(2);
   });
 
@@ -77,7 +77,7 @@ describe('the arc writer, its reworker and the arc judge share the rule', () => 
     const state = { ...reworkFixtureState('journalist'), evidenceBundle: bundleWith(ROWS), narrativeArcs: [] };
     const prompt = evalTesting.buildEvaluationUserPrompt('arcs', state, {});
     expect(prompt).not.toContain('BURIED TRANSACTIONS (');
-    const timeline = prompt.slice(prompt.indexOf('<morning-timeline>'), prompt.indexOf('</morning-timeline>'));
+    const timeline = prompt.slice(prompt.indexOf('<investigation-timeline>'), prompt.indexOf('</investigation-timeline>'));
     expect(timeline.split('\n').filter((l) => l.includes('| sale |'))).toHaveLength(2);
     expect(timeline).not.toContain('Unknown');
     expect(timeline).toContain('account: Melanie');
