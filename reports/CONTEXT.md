@@ -17,7 +17,7 @@ One look the director takes at a stop. A stop can have many rounds.
 _Avoid_: attempt, revision N of M
 
 **Note**:
-Anything the director writes for the writer. A note goes into prompts and stands for every later writer until the director closes it.
+Anything the director writes with an action at a stop. Every note counts as the director's words for every later writer, judge and check: what it says happened, or rules about the record, is record; a direction it gives is written as Nova's reading.
 _Avoid_: feedback, guidance, corrections, comment
 
 **Edit**:
@@ -32,6 +32,14 @@ _Avoid_: validation, fact check (one particular check)
 The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the ledger and the evidence log, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the photos and the director's descriptions of them, and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's own suspicion, an allegation or a question, unless the director writes it into the article.
 _Avoid_: session data, ground truth, context
 
+**Character sheet**:
+A player's private instructions for their character: backstory, a suspected motive and goals. Its backstory is true in the world and may be reported as evidence; the sheet itself, its motive and its goals never appear.
+_Avoid_: file, brief, dossier
+
+**Investigation**:
+The game itself, in the warehouse, the day after the party, ending in the group statement as the police come. It cannot begin before 5 AM, since Marcus died around 4 AM: a session played from 5 PM on runs in the morning in the story, and one played earlier runs in the afternoon, at the hours it was played.
+_Avoid_: the session (for the fiction), the game night
+
 **Epilogue**:
 What happened after the investigation, as the director writes it into the notes: a successor named, someone fled, a warrant, a leak, a call that went unanswered. It is record and the only source of the article's follow-up news. All of that news is Nova's own reporting; a channel the director names (a leaked email, an anonymous tip) is Nova's source for that item.
 _Avoid_: post-investigation news, aftermath facts
@@ -45,7 +53,7 @@ The player who turned a memory in to Nova. Anonymous unless the evidence log car
 _Avoid_: source, submitter
 
 **Ledger**:
-Nova's record of every transaction in the morning's market: each sale into an account, the first-burial bonus and each transfer, with its time and amount. It never shows which memory was sold. The live display in the room shows only running balances.
+Nova's record of every transaction in the investigation's market: each sale into an account, the first-burial bonus and each transfer, with its time and amount. It never shows which memory was sold. The live display in the room shows only running balances.
 _Avoid_: scoreboard, Blake's display
 
 **Account**:
@@ -81,8 +89,12 @@ The batch the director submits at a stop in one go: anchored notes, a cover note
 _Avoid_: approval, feedback, submission
 
 **Nova**:
-The NovaNews reporter who writes the article, in the first person. An independent journalist who had been investigating Marcus. Fremont PD required Nova to monitor the investigation as an uninterested third party: the condition of Blake's deal to delay sending officers while the room investigates, agrees its statement and leaves. Exposed memories are turned in to Nova. On site Nova is in the warehouse; remote, Nova monitors from outside. Nova takes no part in the group statement and is never referred to with gendered pronouns.
+The NovaNews reporter who writes the article, in the first person. An independent journalist who had been investigating Marcus. Fremont PD required Nova to monitor the investigation as an uninterested third party: the condition of Blake's deal to delay sending officers while the room investigates, agrees its statement and leaves. Exposed memories are turned in to Nova. On site, Nova is a character in the room, working it for the story, and may be in the photos; remote, Nova monitors from outside and takes no part in the room beyond the memories turned in. In both, Nova takes no side in the verdict and is never referred to with gendered pronouns.
 _Avoid_: the writer (the model pass), the narrator
+
+**Guest reporter**:
+Whoever shares Nova's byline for what they contributed, named when the session starts. A memory they turned in under their name is their reporting for the article. Many sessions have none.
+_Avoid_: co-author, second reporter
 
 **Writer**:
 The model pass that produces the arcs, the outline or the article.
