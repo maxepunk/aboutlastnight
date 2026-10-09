@@ -386,6 +386,99 @@ describe('the map as a corkboard (phase 4b, piece 4)', () => {
   });
 });
 
+/**
+ * Phases 14 and 15 (brief G; spec docs/superpowers/specs/2026-10-09-your-words-and-the-world.md
+ * sections 3, 4, 7, 10 and 15): the standalone path and the docs follow the pipeline.
+ * - The curator marks a player's character sheet with the record view's own kind and leaves out
+ *   its suspected motive and starting instructions (R6), lines up ledger rows logged off the
+ *   game's clock (R3), and writes the time of day the writers read (R7), which the planning and
+ *   writing agents read with the record.
+ * - The article generator's byline names a guest reporter only when the session has one (R5).
+ * - The deep dive describes the sheets, the notes at the stops and the shift; the run sheet
+ *   quotes the input review's shift lines as the console builds them.
+ * - No file describes what the phases retire (gate 5).
+ */
+describe('your words and the world (phases 14 and 15)', () => {
+  const { CHARACTER_SHEET_KIND } = require('../../lib/prompt-renderers/record-view');
+  const { ledgerView } = require('../../console/input-review-logic');
+  const DOCS = {
+    'CONTEXT.md': read(path.join(REPO, 'CONTEXT.md')),
+    'PIPELINE_DEEP_DIVE.md': read(path.join(REPO, 'docs', 'PIPELINE_DEEP_DIVE.md')),
+    'first-run-sheet.md': read(path.join(REPO, 'docs', 'runbook', 'first-run-sheet.md'))
+  };
+  const ALL = { ...FILES, ...DOCS };
+  const curator = () => section(agent('evidence-curator'), 'Job');
+  const recordBlock = () => {
+    const doc = FILES['schemas.md'];
+    const at = doc.indexOf('### analysis/evidence-bundle.json');
+    return at < 0 ? '' : (doc.slice(at).match(/```\n([\s\S]*?)\n```/) || ['', ''])[1];
+  };
+  const contextEntry = (term) => {
+    const text = DOCS['CONTEXT.md'];
+    const at = text.indexOf(`**${term}**:`);
+    return at < 0 ? '' : text.slice(at, text.indexOf('_Avoid_', at));
+  };
+
+  it("the curator marks a character sheet with the record's kind and leaves out its motive and starting instructions", () => {
+    expect(curator()).toMatch(/Character Sheet/);
+    expect(curator()).toContain('SUSPECTED MOTIVE');
+    expect(curator()).toContain('WHERE TO START');
+    expect(recordBlock()).toContain(`| ${CHARACTER_SHEET_KIND}"`);
+  });
+
+  it("the curator lines up ledger rows logged off the game's clock, and the record says what moved", () => {
+    expect(curator()).toMatch(/off the game's clock/);
+    expect(curator()).toMatch(/\bthree hours\b/);
+    expect(curator()).toMatch(/\bfirst sale\b/);
+    expect(recordBlock()).toContain('"shift":');
+  });
+
+  it('the curator writes when the investigation ran, and every planning and writing agent reads it with the record', () => {
+    expect(curator()).toContain('The investigation ran this');
+    expect(recordBlock()).toContain('"timeOfDay":');
+    ['arc-analyzer', 'outline-generator', 'article-generator'].forEach((name) =>
+      expect(`${name}: ${/when the investigation ran/.test(section(agent(name), 'Input'))}`).toBe(`${name}: true`));
+  });
+
+  it("the article generator's byline names a guest reporter only when the session has one", () => {
+    expect(section(agent('article-generator'), 'Job')).toMatch(/no `guestReporter` when it has none/);
+  });
+
+  it("the deep dive describes the character sheets, the notes at the stops and the ledger's shift", () => {
+    const doc = DOCS['PIPELINE_DEEP_DIVE.md'];
+    expect(doc).toContain('isCharacterSheet');
+    expect(doc).toContain('SUSPECTED MOTIVE');
+    expect(doc).toContain('<DIRECTOR_STOP_NOTES>');
+    expect(doc).toContain('lib/director-words.js');
+    expect(doc).toContain('clockShift');
+  });
+
+  it("the run sheet quotes the input review's shift lines as the console builds them", () => {
+    const moved = ledgerView({ adjustmentsParsed: true, clockShift: { hours: -9, moved: 5, bonus: true } }).shiftLine;
+    const unfit = ledgerView({ adjustmentsParsed: true, offClock: { rows: 3 } }).shiftLine;
+    expect(DOCS['first-run-sheet.md']).toContain(moved);
+    expect(DOCS['first-run-sheet.md']).toContain(unfit);
+  });
+
+  it("CONTEXT.md's Exposer names a note at a stop among the director's words, and its Record names opinion", () => {
+    expect(contextEntry('Exposer')).toMatch(/a note (?:they sent|sent) at a stop/);
+    expect(contextEntry('Record')).toMatch(/\bopinion\b/);
+  });
+
+  it.each(Object.keys(ALL))('%s describes nothing the phases retire (gate 5)', (name) => {
+    const old = {
+      morning: /\bthis morning\b|\bmorning(?: |-)(?:timeline|clock)\b|\bmorning's market\b/i,
+      fourSources: /\bfour sources\b/i,
+      oneOfTheRoom: /never one of the room/i,
+      plainLine: /Nova says so in one plain line|one plain line where the record stops/i,
+      motiveLine: /Nova's own motive/i,
+      namesake: /reason to suspect its namesake/i,
+      chasingNext: /what Nova is chasing next/i
+    };
+    Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(ALL[name])}`).toBe(`${name}: ${what}: false`));
+  });
+});
+
 describe('the skill path carries no retired text', () => {
   it.each(NAMES)('%s has no em-dash', (name) => {
     expect(FILES[name]).not.toMatch(/—/);

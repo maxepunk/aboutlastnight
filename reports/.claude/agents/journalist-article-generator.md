@@ -33,7 +33,7 @@ Read these first. They are the rules for everything you write; this file adds on
 From `data/<session-id>/`:
 - `analysis/weave.json`: the weave, whose settled angle is the story the director settled at the meeting: the angle `picked` names, or angle 1 when nothing is picked, with the director's answers on the weave's questions. The other angles are the meeting's, and you read none of them. `fromYourNotes` belongs to angle 1, so it is yours only when angle 1 is the settled angle;
 - `analysis/article-outline.json`: the story map as the director left it at the map's stop, each beat with its evidence;
-- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger and the photos;
+- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the photos and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and the guest reporter, when there is one;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
 - on a rework, also `output/content-bundle.json` and `output/article-metadata.json`, the version the rework starts from, and, when the validator set the rework off, its must-fix findings.
 
@@ -60,7 +60,7 @@ Write `output/content-bundle.json` with the fields the page prints. Every object
 3. `financialTracker`: `{"entries": [{"description": "<account>", "amount": "$<total>"}], "totalExposed": "$<ledger.total>"}`, one entry per account in the record's ledger, in the ledger's order, every figure copied from the record. The standalone renderer prints these entries as given.
 4. `heroImage`: `{"filename": "<the map's topPhoto>", "caption": "<caption>"}`; a map with no top photo has no hero.
 5. `headline`: `{"main": "<headline>", "kicker": "<kicker>", "deck": "<deck>"}`: the main headline and the deck are the map's `headline` and `deck`, word for word.
-6. `byline`: `{"author": "<journalistFirstName> Nova | NovaNews", "title": "Senior Investigative Correspondent"}`, with `"guestReporter": "<name> | <role>"` when the session has one.
+6. `byline`: `{"author": "<journalistFirstName> Nova | NovaNews", "title": "Senior Investigative Correspondent"}`, with `"guestReporter": "<name> | <role>"` when the session has one, and no `guestReporter` when it has none.
 7. `metadata`: `{"sessionId": "<session id>", "theme": "journalist", "generatedAt": "<ISO timestamp>"}`.
 
 The bundle leaves out the fields nothing prints: `photos`, `pullQuotes` and `voice_self_check`; a sidebar entry's `owner`, `placement` and `content`; and the `characters` of a photo or of the hero image.

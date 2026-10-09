@@ -8,7 +8,7 @@ model: sonnet
 
 # Photo analyzer
 
-You describe one photo from an About Last Night session. Read `.claude/skills/journalist-report/references/rules/world.md` first: it says what the game is. The session photos show the investigation, this morning in the warehouse.
+You describe one photo from an About Last Night session. Read `.claude/skills/journalist-report/references/rules/world.md` first: it says what the game is. The session photos show the investigation in the warehouse.
 
 ## Input
 

@@ -48,7 +48,7 @@ Required:
 - the director's notes, the epilogue included;
 - the folder of session photos, and which photo is the whiteboard.
 
-Optional: the reporting mode (`on-site`, the default, or `remote`), a guest reporter's name and role, and Nova's first name for the byline (default Cassandra).
+Optional: the reporting mode (`on-site`, the default, or `remote`), a guest reporter's name and role when the session has one, and Nova's first name for the session (default Cassandra), which the article signs.
 
 Write `inputs/session-config.json`, and `inputs/director-notes.json` with the notes and an empty `stopNotes`.
 
@@ -94,7 +94,7 @@ Show the director each session photo other than the whiteboard (Read it) beside 
 
 Start `journalist-evidence-curator`.
 
-**Stop: the record.** Show `summaries/evidence-summary.json` with its questions. The director approves or corrects. A correction to something the record copies (a pronoun, the reporting mode, a ledger row) is made in the input file that holds it, and the curator runs again.
+**Stop: the record.** Show `summaries/evidence-summary.json` with its questions, its clock, when the investigation ran, and its shift line when ledger rows sat off the game's clock. The director approves or corrects. A correction to something the record copies (a pronoun, the reporting mode, a ledger row) is made in the input file that holds it, and the curator runs again.
 
 ### 8. Pitch the angles
 

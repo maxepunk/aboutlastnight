@@ -97,9 +97,10 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
   "sessionContext": {"sessionId", "roster", "reportingMode", "journalistFirstName", "guestReporter"},
   "verdict": "<the group statement>",
   "exposedMemories": [{"id": "<tokenId>", "name": "<name>", "owners": ["<character>"], "text": "<fullDescription, whole>"}],
-  "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched>", "owners": ["<character>"], "text": "<description, whole>"}],
+  "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched> | character sheet", "owners": ["<character>"], "text": "<description, whole; for a character sheet, without its SUSPECTED MOTIVE and WHERE TO START blocks>"}],
   "ledger": {
     "clock": "as logged | evening session: times moved twelve hours",
+    "shift": "The session report logged <the first-burial bonus and N transfers> <N> hours off the game's clock. They're shifted <back | forward> <N> hours to line up with the sales. | <N> ledger rows sit off the game's clock, and no single shift lines them up. They print as the session report logged them. | null",
     "accounts": [{"name": "<account>", "total": <number>, "sales": <number>}],
     "total": <number>
   },
@@ -107,10 +108,11 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
     {"minute": "<hh:mm AM|PM>", "events": [
       {"kind": "exposure", "memoryId": "<id>", "turnedIn": "anonymous | named: <name>"},
       {"kind": "sale", "amount": <number>, "account": "<account>"},
-      {"kind": "bonus", "amount": <number>, "account": "<account>"},
-      {"kind": "transfer", "amount": <number>, "from": "<account>", "to": "<account>"}
+      {"kind": "bonus", "amount": <number>, "account": "<account>", "loggedTime": "<as logged, only when the shift moved it>"},
+      {"kind": "transfer", "amount": <number>, "from": "<account>", "to": "<account>", "loggedTime": "<as logged, only when the shift moved it>"}
     ]}
   ],
+  "timeOfDay": "The investigation ran this <morning | afternoon>, from <h:mm> to <h:mm AM | PM>." | null,
   "whiteboardReading": {"label": "A model's reading of the whiteboard photo: the room's working notes, context only", "text": "<legible text>"} | null,
   "photos": [{"filename": "<file>", "path": "<local path>", "characters": ["<name>"], "description": "<the director's description>", "excluded": false, "analysis": "<the photo analysis's visualContent>"}],
   "bundledAt": "<ISO timestamp>"
@@ -128,6 +130,8 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
   "paperEvidence": [{"id": "<id>", "name": "<name>"}],
   "accounts": [{"name": "<account>", "total": <number>, "sales": <number>}],
   "clock": "<as in the ledger>",
+  "shift": "<as in the ledger>",
+  "timeOfDay": "<as in the record>",
   "verdict": "<the group statement>",
   "questions": [<record question>]
 }

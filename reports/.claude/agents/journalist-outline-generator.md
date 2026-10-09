@@ -30,7 +30,7 @@ Read these first. They are the rules for everything you plan; this file adds onl
 
 From `data/<session-id>/`:
 - `analysis/weave.json`: the weave, whose settled angle is your task: the angle `picked` names, or angle 1 when nothing is picked. Read its headline, story, question, why it lands and where it ends up; its threads in the order it lists them, each with its evidence; the weave's other threads, which it leaves out, by name alone; and the connections that join two of its threads, each with its evidence. The other angles are the meeting's, and you read none of them. `fromYourNotes` belongs to angle 1, so it is yours only when angle 1 is the settled angle. The director's answers sit on their questions; `directorChanges` lists each change the director made at the meeting, by its id, and a thread the director added there has no evidence yet;
-- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the morning timeline and the photos with the director's descriptions;
+- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the investigation's timeline, the photos with the director's descriptions and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and the guest reporter, when there is one;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
 - on a send-back, also `analysis/article-outline.json`, the version the rework starts from.
 
