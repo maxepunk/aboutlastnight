@@ -173,11 +173,11 @@ const TRUTH_MATERIAL = Object.freeze({
 // director struck.
 //
 // Brief 4.7c (T1, T9): an article question that names where the director's words come from
-// names the four sources the fact check reads as the director's words (buildFactCheckArgs'
+// names the sources the fact check reads as the director's words (buildFactCheckArgs'
 // directorWords): ARTICLE_DIRECTOR_WORDS, printed under DIRECTOR_WORDS_MATERIAL, which such a
-// question reads. The weave's questions keep their wording.
+// question reads.
 //
-// Brief 4.7d: the four are one list, DIRECTOR_WORDS_SOURCES, which builds all three: the
+// Brief 4.7d: the sources are one list, DIRECTOR_WORDS_SOURCES, which builds all three: the
 // questions' name for them, the materials the judge reads them under, and the texts the fact
 // check and the verdict guard read (directorWords), so all three hold one order.
 //
@@ -185,6 +185,10 @@ const TRUTH_MATERIAL = Object.freeze({
 // director sent at the stops are its fifth source. Both judges print them in their own block
 // (renderDirectorStopNotes), and every question that reads the director's words reads it: the
 // article's through DIRECTOR_WORDS_MATERIAL, the weave's and verdictTruth's by hand.
+//
+// Phases 14 and 15, brief F (R9; spec 11): the questions follow the approved rules. Each weave
+// question that says where the director's words come from names the notes at the stops beside
+// the notes and the answers, as the article's name every source.
 
 /** The director's words as an article truth question names them: each source's label, in order. */
 const ARTICLE_DIRECTOR_WORDS = `(${DIRECTOR_WORDS_SOURCES.slice(0, -1).map((source) => source.label).join(', ')} and ${DIRECTOR_WORDS_SOURCES[DIRECTOR_WORDS_SOURCES.length - 1].label})`;
@@ -202,9 +206,24 @@ const TRUTH_GROUPS = [
     reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers', 'stopNotes'] : ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL]),
     // Phase 3 (3.9): T4 as round 7 words it (R21). Brief 4.7d (T1, T6): at the article, a
     // correction or an answer that names who turned a memory in is the director's words as
-    // the notes are, so the T6 clause reads an exposer from the four sources its T1 clause
-    // names. The weave's question keeps its wording.
-    describe: (s, phase) => `Is every claim in ${s} written as its evidence allows, ${phase === 'arcs' ? "the director's answers at the story meeting included as record, as the notes are (T1)," : `the director's words ${ARTICLE_DIRECTOR_WORDS} included as record (T1);`} with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and an account's name never a reason to suspect its namesake (T4); and with no exposer named that neither the evidence log nor ${phase === 'arcs' ? "the director's notes" : "the director's words"} name (T6)?`
+    // the notes are, so the T6 clause reads an exposer from every source its T1 clause names.
+    //
+    // Brief F (T1, T4 as rewritten): opinion joins Nova's forms for what the record cannot
+    // back; a character sheet, which the record marks as one, backs its backstory alone; a
+    // direction a note at a stop gives is Nova's reading; and an account's namesake is Nova's
+    // wondering, opinion or question, never the seller. A weave's evidence names a sheet by its
+    // id as a source, which is allowed, so only the article's question holds the sheet unnamed.
+    describe: (s, phase) => {
+      const arcs = phase === 'arcs';
+      const sheet = `a player's character sheet used for its backstory alone${arcs ? '' : ', never named as a source'} and never for its suspected motive, goals or instructions to the player`;
+      const words = arcs
+        ? "the director's answers at the story meeting and the notes at the stops included as record, as the notes are"
+        : `the director's words ${ARTICLE_DIRECTOR_WORDS} included as record`;
+      const exposerNamers = arcs
+        ? "the director's notes, their answers at the story meeting or the notes at the stops"
+        : "the director's words";
+      return `Is every claim in ${s} written as its evidence allows (T1): what the record backs stated, with ${sheet}; ${words}, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back written as Nova's own suspicion, allegation, question or opinion, marked as Nova's? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor ${exposerNamers} name (T6)?`;
+    }
   },
   {
     key: 'moneyTruth',
@@ -216,7 +235,7 @@ const TRUTH_GROUPS = [
     // timeline alone. The buyer is Nova's suspicion (T5, R11).
     //
     // Final review (judges-factcheck[0]): each source is named by what it gives. The
-    // summary's totals are the close of the morning's, and the director's notes record
+    // summary's totals are the close of the investigation's, and the director's notes record
     // balances said or shown in the room before then (092026's read-out of the balances,
     // 092626's "$4 million in the RW account"), so a judge reads such a line as that
     // moment's figure (T1) and never "corrects" it to a closing total.
@@ -224,8 +243,12 @@ const TRUTH_GROUPS = [
     // Brief 4.7a (T5 as rewritten): a figure raised as a question at the story meeting
     // prints as the director's answer gives it, and stays out of print while the question
     // has no answer; the settled weave lists each question with its answer or none.
+    //
+    // Brief F (T5 as rewritten; spec 3, 4 and 10): the ledger holds the investigation's
+    // payments, at whatever time of day it ran, and a ledger line a note at a stop explains
+    // (such as a ruling on its logged time) is as the note gives it, at either judge.
     reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers', 'stopNotes'] : ['timeline', 'financialSummary', ...DIRECTOR_WORDS_MATERIAL, 'weave']),
-    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the morning's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the morning as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1)." : `a balance the director's words ${ARTICLE_DIRECTOR_WORDS} record as said or shown in the room as that moment's figure (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).`}`
+    describe: (s, phase) => `Does the money in ${s} run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the investigation's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the investigation as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes or the notes at the stops record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1)." : `a balance the director's words ${ARTICLE_DIRECTOR_WORDS} record as said or shown in the room as that moment's figure, and a ledger line they explain as they give it (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).`}`
   },
   {
     key: 'verdictTruth',
@@ -244,25 +267,37 @@ const TRUTH_GROUPS = [
     // sent to bring the cut back. A theory the director wrote into the article from leftOut
     // read as a breach the same way. A sentence a rewrite took out is cut text too, as the
     // edit lines' removed: line names it.
+    //
+    // Brief F: each question names where the director's words on the verdict come from, the
+    // notes at the stops among them, as its reads list them.
     describe: (s, phase) => (phase === 'arcs'
-      ? `Is the verdict in ${s} told as the room's official story, ungraded against any hidden answer (T2)? The theories the room debated are the map's to place, so the weave keeps T2 whether it names them or not.`
-      : `Is the verdict in ${s} told as the room's official story, left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)? The director's edits come first, where THE DIRECTOR'S EDITS lists them, so the map is read as they leave it: a theory the director cut, or took out in a rewrite, is out of its sections, and a theory the director's own text reports is in them, from its leftOut too.`)
+      ? `Is the verdict in ${s} told as the room's official story, as the director's words record it (the accusation, the notes and the notes at the stops), ungraded against any hidden answer (T2)? The theories the room debated are the map's to place, so the weave keeps T2 whether it names them or not.`
+      : `Is the verdict in ${s} told as the room's official story, as the director's words record it (the accusation, the notes, the answers at the story meeting and the notes at the stops), left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)? The director's edits come first, where THE DIRECTOR'S EDITS lists them, so the map is read as they leave it: a theory the director cut, or took out in a rewrite, is out of its sections, and a theory the director's own text reports is in them, from its leftOut too.`)
   },
   {
     key: 'stagesTruth',
     about: 'the timeline',
     rules: ['T7'],
-    reads: () => ['record', 'modeBlock', 'epilogue', 'timeline'],
     // Phase 3 (3.9): T7's point on Nova's intent (R21).
-    describe: (s) => `In ${s}, is the party met only through memories, the investigation told as the reporting mode allows, Nova's day taken from the epilogue alone, and every logged time on the morning clock (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.`
+    //
+    // Brief F (T7 as rewritten; spec 10): the investigation is told at the time of day the
+    // session's facts give, never a fixed morning. The question reads the notes at the stops:
+    // a note at any stop corrects a ledger time the shift got wrong, for the writers and the
+    // judges (spec 4), and a note that adds to Nova's day is the director's words (T1). The
+    // time-of-day line is no material of its own: a session with no sale and no exposure has
+    // none, so the question names it by what it says, in the session's facts.
+    reads: () => ['record', 'modeBlock', 'epilogue', 'timeline', 'stopNotes'],
+    describe: (s) => `In ${s}, is the party met only through memories; the investigation told as the reporting mode allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; Nova's day taken only from the epilogue and from any note at a stop that adds to it; and every logged time as the record's timeline prints it, or as a note at a stop rules it (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.`
   },
   {
     key: 'novaPositionTruth',
     about: "the reporter's role",
     rules: ['T8'],
     reads: () => ['modeBlock'],
-    // Phase 3 (3.9): T8's first sentence as round 7 words it (R21).
-    describe: (s) => `In ${s}, is Nova the uninterested third party, reporting on the room from outside its choices: Nova never votes, joins the room's accusation or exposes a memory, and witnesses only what this session's mode block allows (T8)?`
+    // Phase 3 (3.9): T8's first sentence as round 7 words it (R21). Brief F (T8 as rewritten):
+    // Nova takes no side in the verdict in either mode, and the mode block says where Nova
+    // stood and what part Nova took in the room, so on site Nova working the room is no breach.
+    describe: (s) => `In ${s}, does Nova take no side in the verdict, never voting, joining the room's accusation or exposing a memory, and are where Nova stood, what part Nova took in the room and what Nova could witness as this session's mode block states them (T8)?`
   },
   {
     key: 'playersTruth',
@@ -270,9 +305,9 @@ const TRUTH_GROUPS = [
     rules: ['T9', 'T11'],
     // Brief 4.7a (T9 as rewritten): at the article, a pronoun the director's own words give
     // counts as the answer, and a player with none is written by name. Brief 4.7c: the
-    // director's words are the four sources the fact check's pronoun check reads.
+    // director's words are the sources the fact check's pronoun check reads (directorWords).
     reads: (phase) => (phase === 'arcs' ? ['roster', 'answers', 'stopNotes'] : ['roster', ...DIRECTOR_WORDS_MATERIAL]),
-    describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's answer at the story meeting gives" : `the pronoun the director's own words give ${ARTICLE_DIRECTOR_WORDS}, or else the player's name in place of a pronoun`} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
+    describe: (s, phase) => `Does every player in ${s} take the pronoun the roster gives, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's answer at the story meeting or a note at a stop gives" : `the pronoun the director's own words give ${ARTICLE_DIRECTOR_WORDS}, or else the player's name in place of a pronoun`} (T9), and does the judgement in ${s} land on the characters' choices, with no player's looks described (T11)?`
   },
   {
     key: 'wordsTruth',
@@ -280,11 +315,12 @@ const TRUTH_GROUPS = [
     rules: ['T12'],
     // Only the article prints a card's text; the weave's evidence quotes the record under its
     // lines (phase 4b, brief 1B), which the weave's question reads. Brief 4.7c:
-    // at the article, a line the director's words hold is quoted from them, any of the four.
+    // at the article, a line the director's words hold is quoted from them, any of their
+    // sources. Brief F: at the weave, from the notes or the notes at the stops.
     reads: (phase) => (phase === 'article' ? ['record', ...DIRECTOR_WORDS_MATERIAL, 'printedCards'] : ['record', 'notes', 'stopNotes']),
     describe: (s, phase) => (phase === 'article'
       ? `Is every quoted line in the article word for word from the record or the director's words ${ARTICLE_DIRECTOR_WORDS} and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?`
-      : `Is every quoted line in ${s} word for word from the record or the director's notes, and in its real speaker's mouth (T12)?`)
+      : `Is every quoted line in ${s} word for word from the record, the director's notes or the notes at the stops, and in its real speaker's mouth (T12)?`)
   },
   {
     key: 'photosTruth',
@@ -303,7 +339,9 @@ const TRUTH_GROUPS = [
     rules: ['T14'],
     phases: ['article'],
     reads: () => ['truthRules'],
-    describe: (s) => `Does every line of ${s} that reaches print speak the fiction's own words, with no production word in it (T14)?`
+    // Brief F (T14 as rewritten, the director's approval): a line that explains a rule of the
+    // game to the players breaks the fiction as a production word does, so it is must-fix.
+    describe: (s) => `Does every line of ${s} that reaches print speak the fiction's own words, with no production word in it and no rule of the game explained to the players, Nova reasoning inside the world wherever a rule matters to a line (T14)?`
   }
 ];
 

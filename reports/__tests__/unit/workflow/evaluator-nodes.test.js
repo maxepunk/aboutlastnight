@@ -2091,7 +2091,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
         const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
         expect(description).toContain("run from the buyer to the seller's chosen account");
         expect(description).toContain("NeurAI and its board written as Nova's suspicion");
-        expect(description).toContain('the morning\'s payments for erasure');
+        // Brief F (T5): the investigation's payments, at whatever time of day it ran.
+        expect(description).toContain("the investigation's payments for erasure");
         expect(description).toMatch(/\bT5\b/);
         expect(description).not.toContain("run from NeurAI's board");
         expect(description).not.toContain('other wealth');
@@ -2113,39 +2114,67 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     });
 
     // Final review (judges-factcheck[0]): the outline and article judges now hold
-    // FINANCIAL_SUMMARY, whose totals are each account's at the close of the morning,
+    // FINANCIAL_SUMMARY, whose totals are each account's at the close of the investigation,
     // while the director's notes record balances said or shown in the room earlier
     // (092026's read-out, 092626's "$4 million in the RW account"). The criterion names
     // each source by what it gives, so a judge never "corrects" a player's line to a
     // closing total (T1).
     // Brief 4.7a (T5 as rewritten): at the article, a figure raised as a question at the
     // story meeting follows the balance said in the room. Brief 4.7c: at the article, the
-    // balance is the one the director's words record, each of the four sources named.
+    // balance is the one the director's words record, each of its sources named. Brief F (T1):
+    // a ledger line the director's words explain, such as a note at a stop ruling on its time, is
+    // as they give it, at either judge (spec 3 and 4).
     it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the room', () => {
       const LEDGER = 'Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;';
-      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the room as that moment's figure (T1);";
+      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the room as that moment's figure, and a ledger line they explain as they give it (T1);";
       for (const phase of ['article']) {
         const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
         expect(description).toContain(LEDGER);
-        expect(description).toContain('each total at the close of the morning as FINANCIAL_SUMMARY gives it;');
+        expect(description).toContain('each total at the close of the investigation as FINANCIAL_SUMMARY gives it;');
         expect(description).toContain(IN_THE_ROOM);
         expect(description).not.toContain('as the ledger or FINANCIAL_SUMMARY gives it');
       }
-      // Brief 4.5 (T1): at the weave, a ledger line the director's answer explains, too.
+      // Brief 4.5 (T1): at the weave, a ledger line the director's answer explains, too; brief
+      // F: or a note at a stop.
       const arcs = getPhaseCriteria('arcs', 'journalist').moneyTruth.description;
-      expect(arcs).toContain(`${LEDGER} a balance the director's notes record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting explains as that answer gives it (T1).`);
+      expect(arcs).toContain(`${LEDGER} a balance the director's notes or the notes at the stops record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1).`);
     });
   });
 
   describe('the truth criteria follow the truth lines of round 7', () => {
     const truthOf = (phase, key) => getPhaseCriteria(phase, 'journalist')[key].description;
 
-    it('evidenceTruth (T4): a person is tied to an account as fact only on the director\'s sight of the sale or an open sale, never by its name', () => {
+    // Phases 14 and 15, brief F (T4 as the director ruled): Nova may wonder about the character
+    // an account is named after, or read the name as a frame, as opinion or a question.
+    it("evidenceTruth (T4): a person is tied to an account as fact only on the director's sight of the sale or an open sale; otherwise the namesake is Nova's opinion or question", () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'evidenceTruth');
         expect(description).toContain('only where the director saw the sale or it was made openly in front of the room');
-        expect(description).toContain('never a reason to suspect its namesake (T4)');
+        expect(description).toContain("and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4)");
+        expect(description).not.toContain('never a reason to suspect its namesake');
         expect(description).not.toContain('read as proof of who holds it');
+      }
+    });
+
+    // Brief F (T1): opinion joins Nova's forms, and a character sheet backs its backstory alone.
+    it("evidenceTruth (T1): a character sheet backs only its backstory, and what the record cannot back is Nova's suspicion, allegation, question or opinion", () => {
+      for (const phase of ['arcs', 'article']) {
+        const description = truthOf(phase, 'evidenceTruth');
+        expect(description).toContain("a player's character sheet used for its backstory alone");
+        expect(description).toContain('never for its suspected motive, goals or instructions to the player');
+        expect(description).toContain("what the record cannot back written as Nova's own suspicion, allegation, question or opinion, marked as Nova's");
+        expect(description).toContain("a direction a note at a stop gives written as Nova's own reading");
+      }
+    });
+
+    // Brief F (T7): the time of day the session's facts give, and a note at a stop that rules on
+    // a time or adds to Nova's day.
+    it("stagesTruth (T7): the investigation at the time of day the session's facts give, and the timeline or a note at a stop for each logged time", () => {
+      for (const phase of ['arcs', 'article']) {
+        const description = truthOf(phase, 'stagesTruth');
+        expect(description).toContain("at the time of day the session's facts give for it, morning or afternoon, and never called the other");
+        expect(description).toContain("every logged time as the record's timeline prints it, or as a note at a stop rules it (T7)");
+        expect(description).not.toMatch(/morning clock/);
       }
     });
 
@@ -2155,10 +2184,14 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       }
     });
 
-    it('novaPositionTruth (T8): Nova never votes, joins the room\'s accusation or exposes a memory', () => {
+    // Phases 14 and 15, brief F (T8 as rewritten): Nova takes no side in the verdict in either
+    // mode, and the mode block says where Nova stood and what part Nova took in the room.
+    it('novaPositionTruth (T8): Nova takes no side in the verdict, and the mode block says where Nova stood and what part Nova took', () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'novaPositionTruth');
-        expect(description).toContain("never votes, joins the room's accusation or exposes a memory");
+        expect(description).toContain("does Nova take no side in the verdict, never voting, joining the room's accusation or exposing a memory");
+        expect(description).toContain("where Nova stood, what part Nova took in the room and what Nova could witness as this session's mode block states them (T8)");
+        expect(description).not.toContain('from outside its choices');
         expect(description).not.toContain('accusations and exposures');
       }
     });
