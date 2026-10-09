@@ -30,7 +30,7 @@ const { settledWeaveOf, renderDirectorAnswers } = require('../prompt-renderers/s
 const { REVISION_CAPS } = require('../workflow/state');
 const { reworkFixtureState, PREVIOUS_BUNDLE, MAP } = require('./fixtures/rework-state');
 const { beatCardOf } = require('../../console/outline-edit-logic');
-const { RETIRED_WORDINGS } = require('./fixtures/retired-wordings');
+const { findRemovedPhrases } = require('./fixtures/removed-phrases');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const count = (text, part) => text.split(part).length - 1;
@@ -169,8 +169,7 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
   // content-bundle-fact-check.test.js.
   it('no truth question at either judge carries a retired wording', () => {
     const carried = ['arcs', 'article'].flatMap((phase) => Object.entries(getPhaseCriteria(phase, 'journalist'))
-      .flatMap(([key, criterion]) => RETIRED_WORDINGS
-        .filter((wording) => criterion.description.toLowerCase().includes(wording.toLowerCase()))
+      .flatMap(([key, criterion]) => findRemovedPhrases(criterion.description)
         .map((wording) => `${phase} ${key}: "${wording}"`)));
     expect(carried).toEqual([]);
   });

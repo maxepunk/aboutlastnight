@@ -483,7 +483,22 @@ const REMOVED_PHRASES = [
   'left out, with one line on why',
   // Phase 4b, piece 4 (slices 4A and 4B): the order of a section's beats is the map's, which
   // the director sees and sets, so the article writer no longer chooses it (C2, C16).
-  /the order of the beats within (?:each|a) section/i
+  /the order of the beats within (?:each|a) section/i,
+  // Phases 14 and 15 (plan ruling R12; spec 2026-10-09 section 15): the wordings the approved
+  // rules retired, with the judges' and the fact check's own copies of them (brief F).
+  'is never one of the room',
+  'makes the reporter one of the room',
+  'for being there and for nothing more',
+  'Nova says so in one plain line',
+  "One honest line about Nova's own motive",
+  'this morning, in the warehouse',
+  'what is still open often belongs in the closing',
+  'never a reason to suspect its namesake',
+  'paid out this morning',
+  'on the morning clock',
+  'from outside its choices',
+  "the morning's payments",
+  'the close of the morning'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

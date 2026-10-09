@@ -16,7 +16,7 @@
  */
 
 const { factCheckContentBundle } = require('../content-bundle-fact-check');
-const { RETIRED_WORDINGS } = require('./fixtures/retired-wordings');
+const { findRemovedPhrases } = require('./fixtures/removed-phrases');
 
 const TOKEN_TEXT =
   'You are standing by the bar when Vic leans in. The job is already decided, she says, ' +
@@ -1534,7 +1534,7 @@ describe('the fix lines follow the rules (phase 3, 3.4)', () => {
       }));
       const texts = [...result.structuralIssues, ...result.findings.filter((f) => f.kind === 'reporterMode').map((f) => f.line)];
       expect(texts.length).toBeGreaterThan(1);
-      return texts.flatMap((text) => RETIRED_WORDINGS.filter((wording) => text.toLowerCase().includes(wording.toLowerCase())).map((wording) => `${reportingMode}: "${wording}"`));
+      return texts.flatMap((text) => findRemovedPhrases(text).map((wording) => `${reportingMode}: "${wording}"`));
     });
     expect(carried).toEqual([]);
   });
