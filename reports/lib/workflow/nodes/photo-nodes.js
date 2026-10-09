@@ -44,6 +44,7 @@ const { CHARACTER_IDS_PHOTO_TEMPLATE, PARSED_CHARACTER_IDS_SCHEMA } = require('.
 const { shownPhotos, withExplicitExclusions, photoMappingOf } = require('../../photo-leave-out');
 // Brief 4.2b: finalizePhotoAnalyses decides a left-out photo by the one rule
 const { isPhotoExcluded } = require('./ai-nodes');
+const { writerInPhotosLine } = require('../../prompt-renderers/session-authors');
 
 /**
  * Default data directory for session outputs
@@ -672,7 +673,9 @@ async function parseCharacterIds(state, config) {
     const { systemPrompt, userPrompt } = await imagePromptBuilder.buildCharacterIdParsingPrompt({
       photoAnalyses: state.photoAnalyses.analyses,
       naturalLanguageInput: state.characterIdsRaw,
-      roster: resolveRoster(state)   // H4
+      roster: resolveRoster(state),   // H4
+      // Phases 14 and 15 (R4): on site, Nova's names, so the parse keeps them as written
+      writerLine: writerInPhotosLine(state.theme || 'journalist', state.sessionConfig)
     });
 
     const parsed = await sdk({
@@ -863,6 +866,8 @@ async function finalizePhotoAnalyses(state, config) {
   // Build sessionData for enrichment context
   const sessionData = {
     roster: resolveRoster(state),   // H4
+    // Phases 14 and 15 (R4): on site, Nova's names beside the roster
+    writerLine: writerInPhotosLine(state.theme || 'journalist', state.sessionConfig),
     directorNotes: state.directorNotes || null
   };
 

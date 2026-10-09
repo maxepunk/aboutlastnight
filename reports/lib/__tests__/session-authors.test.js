@@ -14,22 +14,124 @@
  * Invented names throughout: the repo is public.
  */
 
+jest.mock('../workflow/checkpoint-helpers',
+  () => require('../../__tests__/mocks/checkpoint-helpers.mock'));
+
 const { PromptBuilder } = require('../prompt-builder');
 const { renderMorningTimeline } = require('../prompt-renderers/record-view');
 const {
-  guestReporterLine, guestTurnInName
+  writerInPhotosLine, markWriterInPhoto, guestReporterLine, guestTurnInName
 } = require('../prompt-renderers/session-authors');
-const { buildSessionFacts } = require('../workflow/nodes/ai-nodes');
+const { buildAvailablePhotos, heroPhotoEntry, buildSessionFacts } = require('../workflow/nodes/ai-nodes');
+const { parseCharacterIds, finalizePhotoAnalyses } = require('../workflow/nodes/photo-nodes');
 const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
 const { _testing: evalTesting } = require('../workflow/nodes/evaluator-nodes');
+const { createImagePromptBuilder } = require('../image-prompt-builder');
 const { reworkFixtureState } = require('./fixtures/rework-state');
 
 const { buildWeaveSections } = arcTesting;
 const { buildEvaluationUserPrompt } = evalTesting;
 
+const CANONICAL = { Vic: 'Vic Kingsley', Mel: 'Mel Nilsson', Cass: 'Cass Zhang' };
+const MARKED = (name) => `${name} (Nova, who writes this article)`;
 const GUEST = { name: 'Dana Okafor', role: 'Contributing Reporter' };
 const GUEST_LINE = "The guest reporter: Dana Okafor (Contributing Reporter) shares this article's byline. " +
   "A memory turned in under the name Dana Okafor or Dana is Dana Okafor's reporting for this article.";
+
+describe("on site, the character-IDs parse and the photo enrichment know Nova's names (R4)", () => {
+  const ANALYSES = {
+    analyses: [{
+      filename: 'room-1.jpg',
+      visualContent: 'Two people at a table',
+      narrativeMoment: 'Comparing notes',
+      emotionalTone: 'focused',
+      storyRelevance: 'high',
+      characterDescriptions: [{ description: 'person in a grey coat', role: 'seated' }]
+    }],
+    stats: { totalPhotos: 1, analyzedPhotos: 1 }
+  };
+  const ENRICHED = {
+    enrichedVisualContent: 'Vic at the table', enrichedNarrativeMoment: 'Comparing notes',
+    finalCaption: 'Vic and Rhea compare notes', identifiedCharacters: ['Vic', 'Rhea'], boundaryCheck: 'clean'
+  };
+  function makeConfig(sdkResult) {
+    const prompts = [];
+    return {
+      prompts,
+      config: { configurable: { imagePromptBuilder: createImagePromptBuilder(), sdkClient: async ({ prompt }) => { prompts.push(prompt); return sdkResult; } } }
+    };
+  }
+  const stateFor = (reportingMode) => ({
+    theme: 'journalist',
+    roster: ['Vic', 'Mel'],
+    sessionConfig: { roster: ['Vic', 'Mel'], reportingMode, journalistFirstName: 'Rhea' },
+    photoAnalyses: ANALYSES
+  });
+
+  it('gives the line only on site, naming Nova and the first name', () => {
+    const line = writerInPhotosLine('journalist', { reportingMode: 'on-site', journalistFirstName: 'Rhea' });
+    expect(line).toContain('Rhea Nova');
+    expect(line).toContain('A name a roster player has names that player');
+    expect(writerInPhotosLine('journalist', { reportingMode: 'remote', journalistFirstName: 'Rhea' })).toBeNull();
+    expect(writerInPhotosLine('detective', { reportingMode: 'on-site' })).toBeNull();
+  });
+
+  it('prints the line beside the roster in the character-IDs parse, on site only', async () => {
+    const onSite = makeConfig({ photos: [] });
+    await parseCharacterIds({ ...stateFor('on-site'), characterIdsRaw: 'the grey coat is Rhea' }, onSite.config);
+    expect(onSite.prompts.join('\n')).toContain(`VALID ROSTER:\nVic, Mel\n\nTHE ARTICLE'S WRITER:\n${writerInPhotosLine('journalist', stateFor('on-site').sessionConfig)}`);
+
+    const remote = makeConfig({ photos: [] });
+    await parseCharacterIds({ ...stateFor('remote'), characterIdsRaw: 'the grey coat is Vic' }, remote.config);
+    expect(remote.prompts.join('\n')).not.toContain("THE ARTICLE'S WRITER");
+    expect(remote.prompts.join('\n')).not.toContain('Nova');
+  });
+
+  it("prints the line after the enrichment's ROSTER line, on site only", async () => {
+    const mappings = { 'room-1.jpg': { characterMappings: [{ descriptionIndex: 0, characterName: 'Vic' }] } };
+    const onSite = makeConfig(ENRICHED);
+    await finalizePhotoAnalyses({ ...stateFor('on-site'), characterIdMappings: mappings }, onSite.config);
+    expect(onSite.prompts.join('\n')).toContain(`ROSTER: Vic, Mel\nTHE ARTICLE'S WRITER: ${writerInPhotosLine('journalist', stateFor('on-site').sessionConfig)}`);
+
+    const remote = makeConfig(ENRICHED);
+    await finalizePhotoAnalyses({ ...stateFor('remote'), characterIdMappings: mappings }, remote.config);
+    expect(remote.prompts.join('\n')).not.toContain("THE ARTICLE'S WRITER");
+  });
+});
+
+describe('the photo entries mark Nova as the article\'s writer, on site only (R4)', () => {
+  const photoState = ({ reportingMode, journalistFirstName = 'Rhea', roster = ['Vic', 'Mel'], names }) => ({
+    theme: 'journalist',
+    roster,
+    sessionConfig: { roster, reportingMode, journalistFirstName },
+    canonicalCharacters: CANONICAL,
+    sessionPhotos: ['photos/a.jpg', 'photos/b.jpg'],
+    photoAnalyses: { analyses: [
+      { filename: 'a.jpg', identifiedCharacters: names },
+      { filename: 'b.jpg', identifiedCharacters: ['Vic'] }
+    ] }
+  });
+
+  it('marks a name equal to Nova\'s first name, or "Nova", in the hero entry and the other photos', () => {
+    const state = photoState({ reportingMode: 'on-site', names: ['Vic', 'rhea', 'Nova'] });
+    expect(buildAvailablePhotos(state, 'b.jpg', null)[0].identifiedCharacters)
+      .toEqual(['Vic', MARKED('rhea'), MARKED('Nova')]);
+    expect(heroPhotoEntry(state, 'a.jpg').identifiedCharacters).toEqual(['Vic', MARKED('rhea'), MARKED('Nova')]);
+  });
+
+  it('leaves a roster player who shares Nova\'s first name as the player: the roster decides', () => {
+    const state = photoState({ reportingMode: 'on-site', journalistFirstName: 'Cass', roster: ['Vic', 'Cass'], names: ['Vic', 'Cass', 'Cass Zhang'] });
+    expect(heroPhotoEntry(state, 'a.jpg').identifiedCharacters).toEqual(['Vic', 'Cass', 'Cass Zhang']);
+    expect(markWriterInPhoto(['Cass'], { theme: 'journalist', sessionConfig: { reportingMode: 'on-site', journalistFirstName: 'Cass' }, rosterNames: ['Cass Zhang'] }))
+      .toEqual(['Cass']);
+  });
+
+  it('marks nothing in a remote session', () => {
+    const state = photoState({ reportingMode: 'remote', names: ['Vic', 'Rhea', 'Nova'] });
+    expect(heroPhotoEntry(state, 'a.jpg').identifiedCharacters).toEqual(['Vic', 'Rhea', 'Nova']);
+    expect(buildAvailablePhotos(state, 'b.jpg', null)[0].identifiedCharacters).toEqual(['Vic', 'Rhea', 'Nova']);
+  });
+});
 
 describe('the guest reporter, when the session has one (R5)', () => {
   const withGuest = (guestReporter) => {

@@ -55,6 +55,7 @@ const {
   processWithConcurrency,
   pairRepliesWithBatch,  // residual item 8: scored items keyed to their inputs
   findUncoveredRosterNames,  // F1 invariant guard: roster names with no canonical match
+  resolveRoster,  // R4: the roster decides a name the writer shares with a player
   buildRevisionContext: buildRevisionContextDRY  // DRY revision context helper
 } = require('./node-helpers');
 const { traceNode } = require('../../observability');
@@ -778,10 +779,31 @@ function isPhotoExcluded(state, filename) {
 }
 
 /**
+ * A photo's identified names as the writers read them (phases 14 and 15, R4): on site, a
+ * name for the writer of the article (Nova's first name for the session, or "Nova") marked
+ * as the article's writer, unless a roster player has it (session-authors.js
+ * markWriterInPhoto). Remote, the names as identified.
+ *
+ * @param {Object} state
+ * @param {*} names - the analysis's identifiedCharacters
+ * @returns {string[]}
+ */
+function photoNamesOf(state, names) {
+  const canonical = state.canonicalCharacters || {};
+  const rosterNames = resolveRoster(state)
+    .map((player) => (player && typeof player === 'object' ? player.name : player))
+    .filter((name) => typeof name === 'string' && name.trim())
+    .flatMap((name) => [name, canonical[name]].filter(Boolean));
+  return markWriterInPhoto(Array.isArray(names) ? names : [], {
+    theme: state.theme || 'journalist', sessionConfig: state.sessionConfig, rosterNames
+  });
+}
+
+/**
  * The hero image as a photo entry: its filename, the names identified in it, and
  * `hero: true`; null when there is no hero or the director excluded it (T13). The
  * builder of the article writer's hero entry (articleWriterInputs), its analysis found by
- * photoKey (the 4b fix batch).
+ * photoKey (the 4b fix batch). On site, the writer's name in it is marked (photoNamesOf).
  *
  * @param {Object} state
  * @param {string|null} heroImage - the hero's filename
@@ -793,7 +815,7 @@ function heroPhotoEntry(state, heroImage) {
   const analysis = (state.photoAnalyses?.analyses || []).find(a => a?.filename && photoKey(a.filename) === key);
   return {
     filename: heroImage,
-    identifiedCharacters: Array.isArray(analysis?.identifiedCharacters) ? analysis.identifiedCharacters : [],
+    identifiedCharacters: photoNamesOf(state, analysis?.identifiedCharacters),
     hero: true
   };
 }
@@ -814,6 +836,8 @@ function heroPhotoEntry(state, heroImage) {
  * the map's top photo, a name the writer or the director typed, so a top photo whose name
  * differs from the session photo's in case is still left out here, and a list that puts the
  * hero first names it once.
+ *
+ * Phases 14 and 15 (R4): on site, the writer's name in a photo is marked (photoNamesOf).
  *
  * @param {Object} state
  * @param {string} heroImage - excluded (it has its own slot)
@@ -842,7 +866,7 @@ function buildAvailablePhotos(state, heroImage, whiteboardFilename) {
       return {
         filename,
         fullPath: photoPath,
-        identifiedCharacters: Array.isArray(analysis.identifiedCharacters) ? analysis.identifiedCharacters : []
+        identifiedCharacters: photoNamesOf(state, analysis.identifiedCharacters)
       };
     });
 }

@@ -77,9 +77,30 @@ const THEME_CONFIGS = {
     // extraction reads them too. What Marcus's death was is the room's verdict (T2),
     // so the line names no murder. Nova has no pronoun field: Nova is never gendered
     // (T9), and writes in the first person.
+    //
+    // Phases 14 and 15 (R4; spec section 5): the NPC who writes the article carries
+    // `writer`, the text code builds Nova's lines from (lib/prompt-renderers/
+    // session-authors.js), so no code names Nova. `{first}` is the session's first name for
+    // Nova (sessionConfig.journalistFirstName, else defaultFirstName), `{name}` a name as a
+    // photo gives it.
+    // - signs: joins Nova's line in the roster section, which every writer and judge reads.
+    // - inPhotos: on site only, the character-IDs parse and the photo enrichment read it
+    //   beside the roster, so neither corrects Nova's name to a player's.
+    // - inAPhoto: on site only, a photo entry's name for Nova, which no roster player has.
     npcs: [
       { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the man whose death the room investigates' },
-      { name: 'Nova', fullName: 'Nova', role: 'the NovaNews reporter who writes the article' },
+      {
+        name: 'Nova',
+        fullName: 'Nova',
+        role: 'the NovaNews reporter who writes the article',
+        writer: {
+          defaultFirstName: 'Cassandra',
+          signs: "Nova signs it {first} Nova, and the director's notes may call Nova {first}.",
+          inPhotos: 'Nova, the NovaNews reporter who writes this article and signs it {first} Nova, was in the room and may be in a photo. ' +
+            'A name a roster player has names that player; any other "Nova" or "{first}" names Nova: keep it as written.',
+          inAPhoto: '{name} (Nova, who writes this article)'
+        }
+      },
       { name: 'Blake', fullName: 'Blake', role: 'manages operations at NeurAI; Marcus called Blake his Valet' },
       { name: 'Valet', aliasOf: 'Blake', role: 'alias for Blake' }
     ],

@@ -128,6 +128,8 @@ Example: {"description": "person in blue jacket with glasses", "role": "pointing
    * @param {Object} options.userInput - User's character mappings and corrections
    * @param {Object} options.sessionData - Session data for context
    * @param {string[]} options.sessionData.roster - Character roster
+   * @param {string|null} [options.sessionData.writerLine] - on site, the article's writer's
+   *   names (session-authors.js writerInPhotosLine; phases 14 and 15, R4), after the roster
    * @param {Object} [options.sessionData.directorNotes] - Director observations
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
@@ -156,9 +158,10 @@ Example: {"description": "person in blue jacket with glasses", "role": "pointing
     if (corrections.other) correctionLines.push(`Additional: ${corrections.other}`);
 
     // Build roster context for natural caption generation
-    const rosterContext = sessionData.roster?.length > 0
-      ? `ROSTER: ${sessionData.roster.join(', ')}`
-      : '';
+    const rosterContext = [
+      sessionData.roster?.length > 0 ? `ROSTER: ${sessionData.roster.join(', ')}` : '',
+      sessionData.writerLine ? `THE ARTICLE'S WRITER: ${sessionData.writerLine}` : ''
+    ].filter(Boolean).join('\n');
 
     // Include relevant director notes if available
     // Enriched schema (2026-04): use raw prose, truncated for context
@@ -209,10 +212,13 @@ TASK:
    * @param {Object[]} options.photoAnalyses - Array of photo analysis objects
    * @param {string} options.naturalLanguageInput - User's natural language mappings
    * @param {string[]} options.roster - Character roster for validation
+   * @param {string|null} [options.writerLine] - on site, the article's writer's names
+   *   (session-authors.js writerInPhotosLine; phases 14 and 15, R4), printed after the
+   *   roster so the parse keeps a name for the writer as written
    * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
    */
   async buildCharacterIdParsingPrompt(options) {
-    const { photoAnalyses, naturalLanguageInput, roster = [] } = options;
+    const { photoAnalyses, naturalLanguageInput, roster = [], writerLine = null } = options;
 
     // Build photo context - each photo with its character descriptions
     const photoContexts = photoAnalyses.map((analysis, photoIndex) => {
@@ -273,7 +279,7 @@ Output valid JSON only. No explanation needed.`;
 
 VALID ROSTER:
 ${roster.join(', ')}
-
+${writerLine ? `\nTHE ARTICLE'S WRITER:\n${writerLine}\n` : ''}
 PHOTO ANALYSES:
 ${photoContexts}
 
