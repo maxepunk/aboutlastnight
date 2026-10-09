@@ -231,3 +231,42 @@ describe('one rule for the reporting mode (K2)', () => {
     expect(markWriterInPhoto(['Rhea'], { theme: 'journalist', sessionConfig: noMode })).not.toEqual(['Rhea']);
   });
 });
+
+// Final fix wave (K3): one default first name for Nova. The theme's writer.defaultFirstName
+// is the one source: the parse's stamp and the article writer's byline read it through
+// writerFirstNameOf, and no other server file holds the name. The console's start form cannot
+// import the server's theme, so it keeps its own copy, held equal here.
+describe("one default first name for the article's writer (K3)", () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { writerFirstNameOf } = require('../prompt-renderers/session-authors');
+  const { getThemeNPCEntries } = require('../theme-config');
+  const REPORTS = path.join(__dirname, '..', '..');
+  const DEFAULT = getThemeNPCEntries('journalist').find((entry) => entry && entry.writer).writer.defaultFirstName;
+
+  it("gives the director's first name, else the theme's default, and none for a theme with no writer", () => {
+    expect(writerFirstNameOf('journalist', '  Rhea ')).toBe('Rhea');
+    expect(writerFirstNameOf('journalist', '')).toBe(DEFAULT);
+    expect(writerFirstNameOf('journalist', undefined)).toBe(DEFAULT);
+    expect(writerFirstNameOf('detective', undefined)).toBeNull();
+  });
+
+  it('is held by the theme alone among the server files that stamp or print it', () => {
+    for (const file of ['lib/prompt-builder.js', 'lib/workflow/nodes/input-nodes.js', 'lib/workflow/nodes/ai-nodes.js']) {
+      expect([file, fs.readFileSync(path.join(REPORTS, file), 'utf8').includes(`'${DEFAULT}'`)]).toEqual([file, false]);
+    }
+  });
+
+  it("matches the console's start form: its stamp, its placeholder and its help line", () => {
+    const source = fs.readFileSync(path.join(REPORTS, 'console', 'components', 'SessionStart.js'), 'utf8');
+    expect(source).toMatch(/raw\.journalistFirstName = reporterName\.trim\(\) \|\| '([^']+)'/);
+    expect(source.match(/raw\.journalistFirstName = reporterName\.trim\(\) \|\| '([^']+)'/)[1]).toBe(DEFAULT);
+    expect(source.match(/placeholder: '([^']+)',\s*value: reporterName/)[1]).toBe(DEFAULT);
+    expect(source.match(/'Leave blank for default \((\S+) Nova\)'/)[1]).toBe(DEFAULT);
+  });
+
+  it('stamps the default at the parse when the start form gives none', () => {
+    const source = fs.readFileSync(path.join(REPORTS, 'lib', 'workflow', 'nodes', 'input-nodes.js'), 'utf8');
+    expect(source).toMatch(/result\.journalistFirstName = writerFirstNameOf\(/);
+  });
+});

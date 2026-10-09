@@ -174,6 +174,18 @@ describe('parseRawInput: the director\'s words stored with the parse', () => {
     expect(onDisk.accusation.accused).toEqual([]);
   });
 
+  // Final fix wave (K3): with no first name from the start form, the parse stamps the theme's
+  // default for the article's writer, the one the byline and the roster line read.
+  it("stamps the theme's default first name for Nova when the start form gives none, and the director's when it gives one", async () => {
+    const { getThemeNPCEntries } = require('../theme-config');
+    const fallback = getThemeNPCEntries('journalist').find((entry) => entry && entry.writer).writer.defaultFirstName;
+    const none = await parseRawInput(makeState(), { configurable: { sdkClient: makeSdk().sdk, dataDir, sessionId: '092026' } });
+    expect(none.sessionConfig.journalistFirstName).toBe(fallback);
+    const given = await parseRawInput(makeState({ rawSessionInput: { journalistFirstName: 'Rhea' } }),
+      { configurable: { sdkClient: makeSdk().sdk, dataDir, sessionId: '092026' } });
+    expect(given.sessionConfig.journalistFirstName).toBe('Rhea');
+  });
+
   it('keeps each exposure in state (sessionConfig) and in orchestrator-parsed.json', async () => {
     const { sdk } = makeSdk();
     const result = await parseRawInput(makeState(), { configurable: { sdkClient: sdk, dataDir, sessionId: '092026' } });

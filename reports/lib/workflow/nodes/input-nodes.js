@@ -49,6 +49,7 @@ const { VERDICT_KINDS, normalizeAccusation } = require('../../accusation-verdict
 const { buildParseCorrectionsBlock, normalizeCorrections } = require('../../prompt-renderers/director-words-renderer');
 const { decideSessionClock } = require('../../prompt-renderers/session-clock');
 const { buildLedger } = require('../../session-ledger');
+const { writerFirstNameOf } = require('../../prompt-renderers/session-authors');
 
 /**
  * Default data directory for session files
@@ -620,7 +621,8 @@ Return structured JSON matching the schema.${correctionsBlock}`;
     // photosPath is NOT copied here any more (C1): state.photosPath is the one
     // owner and fetchSessionPhotos reads only that. Two copies is how the gate
     // and the fetch came to disagree about which folder was in play.
-    result.journalistFirstName = rawInput.journalistFirstName || 'Cassandra';
+    // K3: the theme's default for the article's writer, its one source (writerFirstNameOf)
+    result.journalistFirstName = writerFirstNameOf(config?.configurable?.theme || 'journalist', rawInput.journalistFirstName);
     result.reportingMode = rawInput.reportingMode || 'on-site';
     result.guestReporter = rawInput.guestReporter || null;
     // F1 (X-1 + CR-6 + CR-4): consume the raw rosterPronouns channel EXACTLY ONCE here.

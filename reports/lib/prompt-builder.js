@@ -29,7 +29,7 @@ const { SOURCES_GLOSS, documentResolverOf } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
-const { writerSignsLine, reportingModeOf, writerInTheRoom } = require('./prompt-renderers/session-authors');
+const { writerSignsLine, reportingModeOf, writerInTheRoom, writerFirstNameOf } = require('./prompt-renderers/session-authors');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // A standing note's kind, the one rule (review of 4.12e).
 const { noteKindOf } = require('./workflow/state');
@@ -337,11 +337,6 @@ function buildDirectorGuidanceSection(gateNotes = [], ...retired) {
   }
   return labelPromptSection('DIRECTOR_GUIDANCE', formatGateNotes(gateNotes));
 }
-
-// Default reporter first name when the director provides none. The pipeline's
-// authoritative stamp is input-nodes.js (parseRawInput); this fallback only
-// covers PromptBuilder instances constructed without that stamp (e.g. tests, skill).
-const DEFAULT_JOURNALIST_FIRST_NAME = 'Cassandra';
 
 /**
  * The reporting-mode block for one session and theme, defaulting to on-site
@@ -1009,7 +1004,8 @@ ${tensions.map(sentence => `- ${sentence}`).join('\n')}
 </NARRATIVE_TENSIONS>` : '';
 
     const byline = [
-      `"author": "${this.sessionConfig.journalistFirstName || DEFAULT_JOURNALIST_FIRST_NAME} Nova | NovaNews"`,
+      // K3: the theme's default when the session holds no stamp (writerFirstNameOf)
+      `"author": "${writerFirstNameOf(this.themeName, this.sessionConfig.journalistFirstName)} Nova | NovaNews"`,
       '"title": "Senior Investigative Correspondent"',
       ...(this.sessionConfig.guestReporter
         ? [`"guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"`]

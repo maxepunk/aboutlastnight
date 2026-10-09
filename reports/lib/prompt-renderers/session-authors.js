@@ -71,6 +71,22 @@ function writerFirstName(entry, firstName) {
 }
 
 /**
+ * The session's first name for the article's writer (the final fix wave, K3): the one the
+ * director gave at the start form, else the theme's default (`writer.defaultFirstName`), the
+ * one source of the default. The parse stamps it (input-nodes.js parseRawInput) and the
+ * article writer's byline prints it (prompt-builder.js). The console's start form keeps its own
+ * copy of the default, which session-authors.test.js holds equal.
+ *
+ * @param {string} theme
+ * @param {string|null} [firstName] - the first name the director gave
+ * @returns {string|null} null for a theme with no writer entry
+ */
+function writerFirstNameOf(theme, firstName) {
+  const entry = writerEntryOf(theme);
+  return entry ? writerFirstName(entry, firstName) : null;
+}
+
+/**
  * The writer's line for the session, which joins its line in the roster section (R4).
  *
  * @param {string} theme
@@ -187,6 +203,7 @@ function guestTurnInName(name, sessionConfig) {
 module.exports = {
   isOnSite,
   reportingModeOf,
+  writerFirstNameOf,
   writerSignsLine,
   writerInPhotosLine,
   markWriterInPhoto,
