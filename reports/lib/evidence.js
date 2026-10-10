@@ -149,10 +149,12 @@ const CHARACTER_SHEET_NAME = /\scharacter sheet$/i;
  * a sheet's basicType is "Document", as 33 other documents' is, and an older copy saved as a Prop
  * carries none of a sheet's headings. A name that holds the words elsewhere is no sheet.
  *
- * In the world a sheet is the game's private instructions to one player for their character. The
+ * In the world a sheet is the game's private instructions to one player for their character,
+ * handed out before the game: never an in-world document, and never cited (the director's ruling,
+ * 2026-10-10). Since then the paper fetch leaves every sheet out (fetch-nodes.js
+ * fetchPaperEvidence), so no sheet reaches a new thread's record. For a thread fetched before, the
  * record view prints it marked and without its suspected motive and its starting instructions
- * (record-view.js renderDocument), and no card prints one (recordDocumentOf); a piece of evidence
- * may still cite it, for its backstory (T1).
+ * (record-view.js renderDocument), and no card prints one (recordDocumentOf).
  *
  * @param {*} item - a document in the record: a paper item, or a token
  * @returns {boolean}

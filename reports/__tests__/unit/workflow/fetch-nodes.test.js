@@ -365,6 +365,52 @@ describe('fetch-nodes', () => {
 
       expect(Object.keys(result).sort()).toEqual(['currentPhase', 'paperEvidence']);
     });
+
+    // The director's ruling (2026-10-10): a character sheet is a player's private instructions,
+    // handed out before the game, never an in-world document, so none reaches the paper list.
+    describe('leaves out every character sheet', () => {
+      const sheet = (name) => ({
+        notionId: `sheet-${name}`, name, basicType: 'Document',
+        description: '< Role >\nCORE IDENTITY\nInvented backstory.', narrativeThreads: [], owners: []
+      });
+      const evidence = [
+        ...mockEvidenceResponse.evidence,
+        sheet('Vic Kingsley Character Sheet'),
+        sheet('Flip Character Sheet'),
+        sheet('Jamie Woods character sheet'),
+        { notionId: 'doc-x', name: 'A note on the character sheet layout', basicType: 'Document',
+          description: 'Invented text.', narrativeThreads: [], owners: [] }
+      ];
+      const client = createMockNotionClient({ evidence });
+
+      it('returns no sheet and keeps every other item', async () => {
+        const result = await fetchPaperEvidence({}, { configurable: { notionClient: client } });
+        const names = result.paperEvidence.map(e => e.name);
+
+        expect(names.filter(n => /character sheet$/i.test(n))).toEqual([]);
+        expect(names).toEqual([
+          ...mockEvidenceResponse.evidence.map(e => e.name),
+          'A note on the character sheet layout'
+        ]);
+      });
+
+      it('saves no sheet to fetched/paper-evidence.json', async () => {
+        const os = require('os');
+        const fsp = require('fs').promises;
+        const dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sheets-out-'));
+        try {
+          await fetchPaperEvidence({ sessionId: '101026' },
+            { configurable: { notionClient: client, dataDir } });
+          const saved = JSON.parse(await fsp.readFile(
+            path.join(dataDir, '101026', 'fetched', 'paper-evidence.json'), 'utf8'));
+
+          expect(saved.evidence.some(e => /character sheet$/i.test(e.name))).toBe(false);
+          expect(saved.evidence).toHaveLength(mockEvidenceResponse.evidence.length + 1);
+        } finally {
+          await fsp.rm(dataDir, { recursive: true, force: true });
+        }
+      });
+    });
   });
 
   describe('createMockNotionClient', () => {

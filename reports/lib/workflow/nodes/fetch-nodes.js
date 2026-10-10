@@ -22,6 +22,7 @@ const { createNotionClient } = require('../../notion-client');
 const { createCachedNotionClient } = require('../../cache');
 const { synthesizePlayerFocus } = require('./node-helpers');
 const { traceNode } = require('../../observability');
+const { isCharacterSheet } = require('../../evidence');
 
 /**
  * Default data directory for session files
@@ -427,9 +428,14 @@ async function fetchPaperEvidence(state, config) {
 
   console.log('[fetchPaperEvidence] Fetching paper evidence from Notion...');
   const result = await client.fetchPaperEvidence(includeAttachments);
-  const paperEvidence = result.evidence || [];
+  // A character sheet is a player's private instructions, handed out before the game, never an
+  // in-world document (the director's ruling, 2026-10-10), so none reaches the paper list: not the
+  // director's selection, the record, character extraction, or any writer or judge.
+  const fetched = result.evidence || [];
+  const paperEvidence = fetched.filter(item => !isCharacterSheet(item));
 
-  console.log(`[fetchPaperEvidence] Fetched ${paperEvidence.length} items`);
+  console.log(`[fetchPaperEvidence] Fetched ${paperEvidence.length} items` +
+    (fetched.length > paperEvidence.length ? ` (${fetched.length - paperEvidence.length} character sheets left out)` : ''));
 
   // Persist to disk for debugging and resume
   if (state.sessionId) {
@@ -439,7 +445,7 @@ async function fetchPaperEvidence(state, config) {
       await fs.mkdir(fetchedDir, { recursive: true });
       await fs.writeFile(
         path.join(fetchedDir, 'paper-evidence.json'),
-        JSON.stringify({ evidence: paperEvidence, fetchedAt: result.fetchedAt, totalCount: result.totalCount }, null, 2)
+        JSON.stringify({ evidence: paperEvidence, fetchedAt: result.fetchedAt, totalCount: paperEvidence.length }, null, 2)
       );
       console.log(`[fetchPaperEvidence] Saved ${paperEvidence.length} items to fetched/paper-evidence.json`);
     } catch (err) {
