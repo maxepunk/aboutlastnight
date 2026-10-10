@@ -209,24 +209,22 @@ const TRUTH_GROUPS = [
     // the notes are, so the T6 clause reads an exposer from every source its T1 clause names.
     //
     // Brief F (T1, T4 as rewritten): opinion joins Nova's forms for what the record cannot
-    // back; a character sheet, which the record marks as one, backs its backstory alone; a
-    // direction a note at a stop gives is Nova's reading; and an account's namesake is Nova's
-    // wondering, opinion or question, never the seller. A weave's evidence names a sheet by its
-    // id as a source, which is allowed, so only the article's question holds the sheet unnamed.
+    // back; a direction a note at a stop gives is Nova's reading; and an account's namesake is
+    // Nova's wondering, opinion or question, never the seller. The character-sheet clause went
+    // on 2026-10-10 (the director's ruling): a sheet is never in the record, so no judge reads one.
     //
     // Final fix wave (K5): "marked as Nova's" belongs to the opinion alone, as T1 attaches it
     // ("an opinion Nova commits to and marks as Nova's"), so a question or an allegation in a
     // weave's plain third-person line is not held to the mark.
     describe: (s, phase) => {
       const arcs = phase === 'arcs';
-      const sheet = `a player's character sheet used for its backstory alone${arcs ? '' : ', never named as a source'} and never for its suspected motive, goals or instructions to the player`;
       const words = arcs
         ? "the director's answers at the story meeting and the notes at the stops included as record, as the notes are"
         : `the director's words ${ARTICLE_DIRECTOR_WORDS} included as record`;
       const exposerNamers = arcs
         ? "the director's notes, their answers at the story meeting or the notes at the stops"
         : "the director's words";
-      return `Is every claim in ${s} written as its evidence allows (T1): what the record backs stated, with ${sheet}; ${words}, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back written as Nova's own suspicion, an allegation, a question, or an opinion marked as Nova's? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor ${exposerNamers} name (T6)?`;
+      return `Is every claim in ${s} written as its evidence allows (T1): what the record backs stated; ${words}, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back written as Nova's own suspicion, an allegation, a question, or an opinion marked as Nova's? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor ${exposerNamers} name (T6)?`;
     }
   },
   {

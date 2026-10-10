@@ -69,7 +69,7 @@ const {
 } = require('../../weave');
 // Phase 4b (brief 1B; R10): the evidence under each line, the sources a piece may name, and what
 // the checks the weave and the map share read.
-const { SOURCES_GLOSS, EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../../evidence');
+const { SOURCES_GLOSS, EVIDENCE_PIECE_SCHEMA, evidenceContextOf, isCharacterSheet } = require('../../evidence');
 // Phase 4b (brief 1B; R5): the meeting's page as it first opens, counted as the stops log counts it.
 const { meetingCheckpointData } = require('../../meeting');
 const { wordsShown } = require('../../stop-pages');
@@ -393,7 +393,7 @@ ${characterContext}
 
 ## SECTION 2: THE RECORD
 
-The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents, each whole except a player's character sheet, which prints marked and trimmed (T1); then the investigation's timeline: every sale, exposure, bonus and transfer, in time order.
+The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents in full, then the investigation's timeline: every sale, exposure, bonus and transfer, in time order.
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 ### Sources
@@ -874,8 +874,10 @@ function extractEvidenceSummary(evidenceBundle) {
     timeline: t.temporalContext || 'party-night'
   }));
 
-  // A rescued item has no `id`: it is named by its Notion id, as in the view.
-  const exposedPaper = (exposed.paperEvidence || []).map(p => ({
+  // A rescued item has no `id`: it is named by its Notion id, as in the view. A player's
+  // character sheet is never in the record (the director's ruling, 2026-10-10), so it is never
+  // a source either, on a thread fetched before the fetch left sheets out.
+  const exposedPaper = (exposed.paperEvidence || []).filter(p => !isCharacterSheet(p)).map(p => ({
     id: recordIdOf(p) || p.name,
     name: p.name,
     summary: p.summary || p.description?.substring(0, 200),

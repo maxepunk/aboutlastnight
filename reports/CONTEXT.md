@@ -33,7 +33,7 @@ The session's source of truth that every claim the writer makes must agree with:
 _Avoid_: session data, ground truth, context
 
 **Character sheet**:
-A player's private instructions for their character: backstory, a suspected motive and goals. Its backstory is true in the world and may be reported as evidence; the sheet itself, its motive and its goals never appear.
+A player's private instructions for their character, handed out before the game: background on the character, a suspected motive, goals and the character's secrets. It is not an in-world document, so it is never in the record, never cited and never printed.
 _Avoid_: file, brief, dossier
 
 **Investigation**:

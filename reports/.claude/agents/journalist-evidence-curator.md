@@ -21,10 +21,10 @@ When one is missing, stop and name it.
 
 ## Job
 
-Copy, never summarise. The record copies every text, name and figure its source gives, less the two blocks of a character sheet the Paper evidence bullet names, and computes only the totals and counts the Accounts bullet names. Every logged time goes on the session clock.
+Copy, never summarise. The record copies every text, name and figure its source gives, and computes only the totals and counts the Accounts bullet names. Every logged time goes on the session clock.
 
 - **Exposed memories.** Each memory the session report lists as exposed: its `tokenId` as its id, its name and owners, and its `fullDescription` whole as its text.
-- **Paper evidence.** Each unlocked item: its `notionId` as its id, its name, `basicType` and owners, and its `description` whole as its text. A player's character sheet, an item whose name ends "Character Sheet" in any case, takes the type `character sheet` in place of its `basicType`, and its text leaves out two blocks, each from its heading to the next heading: `▌[FLAGGED] SUSPECTED MOTIVE` and WHERE TO START. A sheet stored without those headings keeps its text whole. T1 says what the writers may take from a sheet.
+- **Paper evidence.** Each unlocked item: its `notionId` as its id, its name, `basicType` and owners, and its `description` whole as its text. A player's character sheet, an item whose name ends "Character Sheet" in any case, is never one: it is the player's private instructions, handed out before the game, never an in-world document, so the record leaves it out.
 - **Owners.** A document's owners are the characters the fetch names. The fetch writes `Unknown` for an owner it could not name: leave that entry out, so a document with no named owner has an empty `owners` list.
 - **Sales.** Each sale enters the record as its time, amount and account, and nothing more: Nova's ledger shows only the sale.
 - **Adjustments.** The first-burial bonus is one event, paid to the account that received it. A transfer is one event between two accounts.

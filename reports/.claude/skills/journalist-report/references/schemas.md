@@ -97,7 +97,7 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
   "sessionContext": {"sessionId", "roster", "reportingMode", "journalistFirstName", "guestReporter"},
   "verdict": "<the group statement>",
   "exposedMemories": [{"id": "<tokenId>", "name": "<name>", "owners": ["<character>"], "text": "<fullDescription, whole>"}],
-  "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched> | character sheet", "owners": ["<character>"], "text": "<description, whole; for a character sheet, without its SUSPECTED MOTIVE and WHERE TO START blocks>"}],
+  "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched>", "owners": ["<character>"], "text": "<description, whole>"}],
   "ledger": {
     "clock": "as logged | evening session: times moved twelve hours",
     "shift": "The session report logged <the first-burial bonus | N transfer(s) | the first-burial bonus and N transfer(s)> <N hour(s)> off the game's clock. <It's | They're> shifted <back | forward> <N hour(s)> to line up with the sales. | <N> ledger <row sits | rows sit> off the game's clock, and no single shift lines <it | them> up. <It prints | They print> as the session report logged <it | them>. | null",

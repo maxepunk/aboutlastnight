@@ -112,11 +112,13 @@ describe('no code-built label fixes the morning (R8)', () => {
     expect(lines[1]).not.toMatch(/morning/i);
   });
 
-  it('says in the record view\'s introduction that a character sheet prints marked and trimmed (T1)', () => {
+  // A character sheet is never in the record (the director's ruling, 2026-10-10), so every
+  // document the record prints is complete again, and the introduction says so.
+  it("says in the record view's introduction that each document is complete, and names no morning and no sheet", () => {
     const intro = renderRecordView(bundle, { sessionConfig: eveningState().sessionConfig }).split('\n')[1];
-    expect(intro).toContain("a player's character sheet, which prints marked and trimmed (T1)");
+    expect(intro).toContain('Each exposed document below is complete');
     expect(intro).toContain('<investigation-timeline>');
-    expect(intro).not.toMatch(/morning|is complete/i);
+    expect(intro).not.toMatch(/morning|character sheet/i);
   });
 
   it('glosses the ledger and the log on the investigation\'s timeline, and the notes as the director\'s words name them', () => {
@@ -127,10 +129,10 @@ describe('no code-built label fixes the morning (R8)', () => {
     expect(labels[labels.length - 1]).toBe('the notes at the stops');
   });
 
-  it("opens the weave writer's SECTION 2 on the investigation's timeline, a sheet marked and trimmed", () => {
+  it("opens the weave writer's SECTION 2 on the investigation's timeline", () => {
     const sections = buildWeaveSections(eveningState());
     const line = sections.slice(sections.indexOf('## SECTION 2: THE RECORD\n\n')).split('\n')[2];
-    expect(line).toBe("The 2 exposed memories and 2 paper documents, each whole except a player's character sheet, which prints marked and trimmed (T1); then the investigation's timeline: every sale, exposure, bonus and transfer, in time order.");
+    expect(line).toBe("The 2 exposed memories and 2 paper documents in full, then the investigation's timeline: every sale, exposure, bonus and transfer, in time order.");
   });
 
   it('says the money summary\'s total is what the buyer paid out during the investigation', () => {

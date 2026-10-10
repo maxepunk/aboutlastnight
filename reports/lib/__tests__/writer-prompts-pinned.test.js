@@ -451,11 +451,16 @@ const REPO = path.join(__dirname, '..', '..');
  *   line: article-journalist 35870 -> 36141 (+271). The weave writer's SECTION 2 line says each
  *   document is whole except a character sheet, marked and trimmed (T1), then the investigation's
  *   timeline, with no "morning clock" (+63): arcs-journalist 12114 -> 12435 (+321).
+ * - 2026-10-10, the director's ruling that a character sheet is never in the record: the record
+ *   view's introduction says again that each document is complete, "then its full text", and
+ *   names no sheet (-87 in every writer): outline-journalist 25180 -> 25093 and
+ *   article-journalist 36141 -> 36054; the weave writer's SECTION 2 line says the paper
+ *   documents print "in full" (-76): arcs-journalist 12435 -> 12272 (-163).
  */
 const PINNED = {
-  'outline-journalist': ['19c1d5daca5da9099826721805716c30d4cd9239911edc69598acf82ea251b3c', 25180],
-  'article-journalist': ['a5d1afc460554e7ed2a4fb52deee595e88e49b8cf99eb1ccad69a2df0341b94c', 36141],
-  'arcs-journalist': ['5131375bd7d6c5b99f59b948d18a8ad2625a684ee418bf90a4cbe538609986b2', 12435]
+  'outline-journalist': ['766c384c3c934f57a52394d744cb8c5b3461b0560556e742aa72fce03dd3b44d', 25093],
+  'article-journalist': ['a56cb09bdf3b057170c244a1e449b88e9e0b0b3c87eb182c9193f356c9c5e072', 36054],
+  'arcs-journalist': ['0a50d9fc952971341fc1b50ac73024a65fa8b2eaff9abe964e72e29215a1af20', 12272]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

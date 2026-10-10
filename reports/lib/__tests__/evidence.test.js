@@ -374,9 +374,10 @@ describe('documentIdsOf: the ids, never the names', () => {
   });
 });
 
-// Phase 15, brief D (ruling R6; spec 2026-10-09 section 7): a player's character sheet is told
-// apart by its name, and no card prints one; a piece of evidence may still cite it.
-describe('character sheets: isCharacterSheet, and the card refusal', () => {
+// A player's character sheet is told apart by its name (phase 15, brief D), and is never in the
+// record (the director's ruling, 2026-10-10): no card prints one and no piece of evidence cites one,
+// on a thread fetched before the fetch left sheets out.
+describe('character sheets: isCharacterSheet, and never in the record', () => {
   const { isCharacterSheet, recordDocumentOf } = require('../evidence');
   const { characterSheet, headinglessSheet } = require('./fixtures/character-sheet');
   const withSheet = () => {
@@ -399,7 +400,7 @@ describe('character sheets: isCharacterSheet, and the card refusal', () => {
     expect(isCharacterSheet({})).toBe(false);
   });
 
-  it("refuses a sheet as a card's document, by any id it answers to, and keeps every other document", () => {
+  it("finds no sheet as a card's document, by any id it answers to, and keeps every other document", () => {
     const ctx = evidenceContextOf(withSheet());
     expect(recordDocumentOf('sheet-0001', ctx)).toBeNull();
     expect(recordDocumentOf('SHEET-0001', ctx)).toBeNull();
@@ -407,9 +408,18 @@ describe('character sheets: isCharacterSheet, and the card refusal', () => {
     expect(recordDocumentOf('p-email', ctx)).toEqual({ id: 'p-email', text: EMAIL });
   });
 
-  it('accepts a piece of evidence that cites a sheet and quotes its backstory', () => {
-    expect(evidenceProblems([
+  it('refuses a piece of evidence that cites a sheet, as it would any source the record does not hold', () => {
+    const problems = evidenceProblems([
       piece(['sheet-0001'], 'Dana "poured the wine at the gallery opening where Quinn first met Marcus."')
-    ], evidenceContextOf(withSheet()))).toEqual([]);
+    ], evidenceContextOf(withSheet()));
+    expect(problems.map((p) => p.kinds)).toEqual([['source']]);
+  });
+
+  it("gives no sheet text to the fact check's source map", () => {
+    const { documentTextsOf } = require('../evidence');
+    const map = documentTextsOf(withSheet().evidenceBundle);
+    expect(map.has('sheet-0001')).toBe(false);
+    expect(map.has('Dana Vire Character Sheet')).toBe(false);
+    expect(map.get('p-email')).toBe(EMAIL);
   });
 });

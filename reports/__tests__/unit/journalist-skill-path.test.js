@@ -389,17 +389,16 @@ describe('the map as a corkboard (phase 4b, piece 4)', () => {
 /**
  * Phases 14 and 15 (brief G; spec docs/superpowers/specs/2026-10-09-your-words-and-the-world.md
  * sections 3, 4, 7, 10 and 15): the standalone path and the docs follow the pipeline.
- * - The curator marks a player's character sheet with the record view's own kind and leaves out
- *   its suspected motive and starting instructions (R6), lines up ledger rows logged off the
+ * - The curator leaves every player's character sheet out of the record (the director's ruling,
+ *   2026-10-10: a sheet is never an in-world document), lines up ledger rows logged off the
  *   game's clock (R3), and writes the time of day the writers read (R7), which the planning and
  *   writing agents read with the record.
  * - The article generator's byline names a guest reporter only when the session has one (R5).
- * - The deep dive describes the sheets, the notes at the stops and the shift; the run sheet
+ * - The deep dive says no sheet is ever in the record, and describes the notes at the stops and the shift; the run sheet
  *   quotes the input review's shift lines as the console builds them.
  * - No file describes what the phases retire (gate 5).
  */
 describe('your words and the world (phases 14 and 15)', () => {
-  const { CHARACTER_SHEET_KIND } = require('../../lib/prompt-renderers/record-view');
   const { ledgerView } = require('../../console/input-review-logic');
   const DOCS = {
     'CONTEXT.md': read(path.join(REPO, 'CONTEXT.md')),
@@ -419,11 +418,11 @@ describe('your words and the world (phases 14 and 15)', () => {
     return at < 0 ? '' : text.slice(at, text.indexOf('_Avoid_', at));
   };
 
-  it("the curator marks a character sheet with the record's kind and leaves out its motive and starting instructions", () => {
-    expect(curator()).toMatch(/Character Sheet/);
-    expect(curator()).toContain('SUSPECTED MOTIVE');
-    expect(curator()).toContain('WHERE TO START');
-    expect(recordBlock()).toContain(`| ${CHARACTER_SHEET_KIND}"`);
+  it('the curator leaves every character sheet out of the record, and the record has no kind for one', () => {
+    expect(curator()).toMatch(/name ends "Character Sheet" in any case, is never one/);
+    expect(curator()).toMatch(/the record leaves it out/);
+    expect(curator()).not.toContain('SUSPECTED MOTIVE');
+    expect(recordBlock()).not.toMatch(/character sheet/i);
   });
 
   it("the curator lines up ledger rows logged off the game's clock, and the record says what moved", () => {
@@ -460,10 +459,10 @@ describe('your words and the world (phases 14 and 15)', () => {
     expect(section(agent('article-generator'), 'Job')).toMatch(/no `guestReporter` when it has none/);
   });
 
-  it("the deep dive describes the character sheets, the notes at the stops and the ledger's shift", () => {
+  it("the deep dive says no character sheet is ever in the record, and describes the notes at the stops and the ledger's shift", () => {
     const doc = DOCS['PIPELINE_DEEP_DIVE.md'];
     expect(doc).toContain('isCharacterSheet');
-    expect(doc).toContain('SUSPECTED MOTIVE');
+    expect(doc).toContain('never in the record, never cited and never printed');
     expect(doc).toContain('<DIRECTOR_STOP_NOTES>');
     expect(doc).toContain('lib/director-words.js');
     expect(doc).toContain('clockShift');

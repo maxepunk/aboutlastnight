@@ -475,7 +475,7 @@ describe('the items phase 4b piece 4 rewrites (task 4A)', () => {
  * (rule-text-read.md in the phases' workspace; the spec's section 13). The article sits in
  * its world: its authors in the story (Nova on site a character in the room, remote no part
  * in it, in both no side in the verdict; the guest reporter when there is one), only what
- * exists in the world (a character sheet backs only its backstory), the game's rules off the
+ * exists in the world, the game's rules off the
  * page, the account-name rule the director set, opinion and a theory past the room, the
  * closing with no forced form, the time of day the session's facts give, and every note the
  * director sends at a stop among their words. Each changed item carries one of the read's
@@ -494,15 +494,12 @@ describe('the items phases 14 and 15 rewrite (task A)', () => {
     "- **A guest reporter**, when the session has one, shares Nova's byline for what they contributed. A memory they turned in under their name is their reporting for this article. Many sessions have none.",
     'Nova writes that evening, with the follow-up reporting of the hours after it.',
     'Everything above is what Nova knows, and the players know it too, because they played it. The article never explains it to them (T14).',
-    "The players' character sheets are the one exception: each is a player's private instructions for their character, which no one in the world could hand Nova.",
-    "Their backstory, what happened before the party and who people are to each other, is true in the world, and T1 says how Nova uses it.",
     "Together they make the investigation's timeline in the record: what was going public, set against what was being erased."
   ])('world.md carries the approved text: %s', (text) => {
     expect(world).toContain(text);
   });
 
   it.each([
-    ['T1', 'truth-rules', "A player's character sheet backs only its backstory: Nova may report and quote it as evidence, never names the sheet as its source, and never uses its suspected motive, its goals or its instructions to the player."],
     ['T1', 'truth-rules', "What happened or was said in the room, as the director's own words record it (their notes and corrections, the accusation, their answers at the story meeting, and every note they send at a stop), Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
     ['T1', 'truth-rules', "A note that gives the article a direction, such as a theory to pursue, is the director's direction, not a fact: Nova writes it as Nova's own reading."],
     ['T1', 'truth-rules', "or an opinion Nova commits to and marks as Nova's"],
@@ -522,7 +519,7 @@ describe('the items phases 14 and 15 rewrite (task A)', () => {
     ['C13', 'craft-judgement', "it aims where this session's evidence and its epilogue lead, such as NeurAI, its board, its technology and the business of buying memories, written as Nova's suspicion or opinion (T1, T5)."],
     ['C2', 'craft-form', 'A section whose job is done elsewhere is dropped, with one line on why. The story is told through every section'],
     ['C14', 'craft-form', "It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest."],
-    ['C9', 'craft-cards', "Memories come first; a document card quotes only the passage that matters, and no card prints a player's character sheet (T1)."]
+    ['C9', 'craft-cards', "Memories come first; a document card quotes only the passage that matters. Every card is clear about what it cites."]
   ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
     expect(itemText(name, id)).toContain(sentence);
   });
@@ -550,6 +547,20 @@ describe('the items phases 14 and 15 rewrite (task A)', () => {
   ])('%s.md no longer says "%s"', (name, phrase) => {
     const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8');
     expect(text).not.toContain(phrase);
+  });
+});
+
+/**
+ * The director's ruling of 2026-10-10: a player's character sheet is never an in-world document,
+ * so it is never in the record, never cited and never printed. The paper fetch leaves every sheet
+ * out, and no rule file tells a writer or a judge how to use one (the three passages the
+ * 2026-10-09 read gave T1, world.md and C9 went, with T1's reason for them).
+ */
+describe('no rule file speaks of a character sheet (2026-10-10)', () => {
+  it.each(['world', 'truth-rules', 'mode-on-site', 'mode-remote', 'craft-story', 'craft-form', 'craft-material',
+    'craft-voice', 'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'])('%s.md', (name) => {
+    const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8');
+    expect(text).not.toMatch(/character sheet/i);
   });
 });
 

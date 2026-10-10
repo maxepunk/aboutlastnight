@@ -34,6 +34,6 @@ The ledger also holds money tied to no memory: the first-burial bonus, and trans
 
 ## The record and the timeline
 
-The record holds what Nova can know. A buried memory reaches the writer only as its ledger line, because Nova's ledger shows no more; what the record withholds, the writer never has to hold back. The players' character sheets are the one exception: each is a player's private instructions for their character, which no one in the world could hand Nova. Their backstory, what happened before the party and who people are to each other, is true in the world, and T1 says how Nova uses it.
+The record holds what Nova can know. A buried memory reaches the writer only as its ledger line, because Nova's ledger shows no more; what the record withholds, the writer never has to hold back.
 
 The evidence log and the ledger share the game's clock. Together they make the investigation's timeline in the record: what was going public, set against what was being erased. The director's notes stay as written, with or without times. Place what they describe on the timeline by its order and its landmarks, such as the exposures and sales around it; where the placement is Nova's inference, write it as T1 sets out.

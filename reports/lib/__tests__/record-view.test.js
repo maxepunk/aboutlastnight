@@ -274,56 +274,45 @@ describe('record view: the whole view', () => {
   });
 });
 
-// Phase 15, brief D (ruling R6; spec 2026-10-09 section 7): a player's character sheet is the
-// game's private instructions to one player. The record marks it with its own kind and a label
-// pointing at T1, and drops its suspected motive and its starting instructions; its backstory
-// blocks stay. Invented text with the real headings (lib/__tests__/fixtures/character-sheet.js).
-describe('record view: character sheets', () => {
+// A player's character sheet is the player's private instructions, handed out before the game,
+// never an in-world document, so it is never in the record (the director's ruling, 2026-10-10).
+// The paper fetch leaves sheets out; the view skips one a thread fetched before still holds.
+// Invented text with the real headings (lib/__tests__/fixtures/character-sheet.js).
+describe('record view: a character sheet is never in the record', () => {
   const {
     characterSheet, headinglessSheet, SHEET_BACKSTORY, SHEET_MOTIVE, SHEET_START, HEADINGLESS_TEXT
   } = require('./fixtures/character-sheet');
-  const LABEL = "(A player's character sheet: the game's private instructions to one player for their character. T1 says what the article may take from it.)";
+  const sheetLines = [...SHEET_BACKSTORY, ...SHEET_MOTIVE, ...SHEET_START].filter((line) => line.trim());
 
-  it('marks a sheet in the stored shape, keeps its backstory blocks and drops the motive and the start blocks', () => {
+  it('leaves out a sheet in the stored shape, every block of it', () => {
     const out = renderRecordDocuments(bundle({ tokens: [], paper: [characterSheet()] }));
-    expect(out).toBe(
-      '<document id="sheet-0001" kind="character sheet" name="Dana Vire Character Sheet" owner="Dana Vire" layer="exposed">\n' +
-      LABEL + '\n' +
-      SHEET_BACKSTORY.join('\n') + '\n' +
-      '</document>'
-    );
-    [...SHEET_MOTIVE, ...SHEET_START].forEach((line) => expect(out).not.toContain(line));
+    expect(out).not.toContain('sheet-0001');
+    sheetLines.forEach((line) => expect(out).not.toContain(line));
   });
 
-  it('marks a sheet with none of the headings and prints its text whole', () => {
+  it('leaves out a sheet stored with none of the headings', () => {
     const out = renderRecordDocuments(bundle({ tokens: [], paper: [headinglessSheet()] }));
-    expect(out).toBe(
-      '<document id="sheet-0002" kind="character sheet" name="Dana Vire Character Sheet" owner="Dana Vire" layer="exposed">\n' +
-      LABEL + '\n' +
-      HEADINGLESS_TEXT + '\n' +
-      '</document>'
-    );
+    expect(out).not.toContain('sheet-0002');
+    expect(out).not.toContain(HEADINGLESS_TEXT);
   });
 
-  it('reads a name ending "Character Sheet" in any case as a sheet, and one holding it elsewhere as a document', () => {
+  it('reads a name ending "Character Sheet" in any case as a sheet, and one holding it elsewhere as a document printed whole', () => {
     expect(renderRecordDocuments(bundle({ tokens: [], paper: [characterSheet({ name: 'Dana Vire CHARACTER SHEET' })] })))
-      .toContain('kind="character sheet"');
+      .not.toContain(SHEET_BACKSTORY[3]);
     const notSheet = renderRecordDocuments(bundle({ tokens: [], paper: [characterSheet({ name: 'Character Sheet Template Notes' })] }));
     expect(notSheet).toContain('kind="Document"');
     expect(notSheet).toContain(SHEET_MOTIVE[0]);
-    expect(notSheet).not.toContain(LABEL);
+    expect(notSheet).toContain(SHEET_START[0]);
   });
 
-  it('prints every other document as before, beside a sheet', () => {
+  it('prints every other document exactly as it would with no sheet beside it', () => {
     const alone = renderRecordDocuments(bundle());
     const beside = renderRecordDocuments(bundle({ paper: [bundlePaper(), characterSheet()] }));
-    expect(beside.startsWith(alone + '\n\n<document id="sheet-0001"')).toBe(true);
+    expect(beside).toBe(alone);
   });
 
-  it('gives character extraction, which takes the documents alone, the trimmed sheet too', () => {
+  it('gives character extraction, which takes the documents alone, no sheet either', () => {
     const out = renderRecordView({ exposed: { tokens: [], paperEvidence: [characterSheet()] } }, { buried: false });
-    expect(out).toContain(LABEL);
-    expect(out).not.toContain(SHEET_MOTIVE[1]);
-    expect(out).not.toContain(SHEET_START[1]);
+    sheetLines.forEach((line) => expect(out).not.toContain(line));
   });
 });

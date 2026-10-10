@@ -68,6 +68,7 @@ if (!NOTION_TOKEN) {
 }
 
 const { NotionClient } = require(path.join(__dirname, '..', '..', '..', '..', 'lib', 'notion-client'));
+const { isCharacterSheet } = require(path.join(__dirname, '..', '..', '..', '..', 'lib', 'evidence'));
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -98,6 +99,11 @@ async function main() {
     try {
         const client = new NotionClient(NOTION_TOKEN);
         const result = await client.fetchPaperEvidence(includeFiles); // { evidence, fetchedAt, totalCount }
+        // A character sheet is a player's private instructions, never an in-world document,
+        // so the paper list leaves every one out (the director's ruling, 2026-10-10), as the
+        // console's fetch does (lib/workflow/nodes/fetch-nodes.js).
+        result.evidence = result.evidence.filter(item => !isCharacterSheet(item));
+        result.totalCount = result.evidence.length;
 
         if (downloadFiles) {
             console.error(`\nDownloading files to: ${outputDir}`);

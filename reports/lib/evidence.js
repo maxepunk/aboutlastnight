@@ -31,9 +31,9 @@
  *   the map's card check, the article writer's card line and the article fact check's card
  *   fidelity read;
  * - evidenceContextOf, what both checks read from a thread's state;
- * - isCharacterSheet, the one rule for a player's character sheet (phase 15, brief D; R6), which
- *   the record view marks and trims and which no card prints: recordDocumentOf refuses it as a
- *   card's document, while a piece of evidence may still cite it.
+ * - isCharacterSheet, the one rule for a player's character sheet, which is never in the record
+ *   (the director's ruling, 2026-10-10): the paper fetch leaves every sheet out, and the record
+ *   view, documentTextsOf and documentResolverOf skip one a thread fetched before still holds.
  *
  * The evidence is never the director's edit (R6): lib/hand-edit-diff.js leaves it out of every
  * diff, so no check finds a director's share of it.
@@ -140,21 +140,19 @@ function sourceTextOf(item) {
   return String(item.fullContent || item.content || item.description || item.text || '');
 }
 
-/** A character sheet's name ends with this, in any case (phase 15, ruling R6): the one mark the fetch gives a sheet. */
+/** A character sheet's name ends with this, in any case: the one mark the fetch gives a sheet. */
 const CHARACTER_SHEET_NAME = /\scharacter sheet$/i;
 
 /**
- * Whether an item is a player's character sheet (phase 15, brief D; ruling R6; spec 2026-10-09
- * section 7): a paper document whose name ends " Character Sheet", in any case. The name decides:
- * a sheet's basicType is "Document", as 33 other documents' is, and an older copy saved as a Prop
- * carries none of a sheet's headings. A name that holds the words elsewhere is no sheet.
+ * Whether an item is a player's character sheet: a paper document whose name ends
+ * " Character Sheet", in any case (phase 15, brief D). The name decides: a sheet's basicType is
+ * "Document", as many other documents' is. A name that holds the words elsewhere is no sheet.
  *
- * In the world a sheet is the game's private instructions to one player for their character,
- * handed out before the game: never an in-world document, and never cited (the director's ruling,
- * 2026-10-10). Since then the paper fetch leaves every sheet out (fetch-nodes.js
- * fetchPaperEvidence), so no sheet reaches a new thread's record. For a thread fetched before, the
- * record view prints it marked and without its suspected motive and its starting instructions
- * (record-view.js renderDocument), and no card prints one (recordDocumentOf).
+ * Every player gets their character's sheet before the game: their private instructions, never
+ * an in-world document, so a sheet is never in the record and never cited (the director's
+ * ruling, 2026-10-10). The paper fetch leaves every sheet out (fetch-nodes.js
+ * fetchPaperEvidence); the record view (record-view.js renderRecordDocuments), documentTextsOf
+ * and documentResolverOf skip one a thread fetched before still holds.
  *
  * @param {*} item - a document in the record: a paper item, or a token
  * @returns {boolean}
@@ -178,7 +176,7 @@ const SOURCE_ID_FIELDS = ['id', 'tokenId', 'notionId', 'pageId', 'name'];
  * Each document in the record by every id it answers to (SOURCE_ID_FIELDS), with its quotable
  * text: the evidence bundle's exposed documents, nested under `exposed.{tokens,paperEvidence}`
  * (older callers pass a flat `exposedEvidence` array). The first document to claim an id keeps it.
- * A buried memory is never a document.
+ * A buried memory is never a document, nor is a player's character sheet (isCharacterSheet).
  *
  * Phase 4 (brief 4.6; R5): the record alone, every source an arc package supplied still found.
  * Phase 4b (brief 1B; R10): moved here from the article fact check (its buildSourceMap), which
@@ -190,7 +188,7 @@ const SOURCE_ID_FIELDS = ['id', 'tokenId', 'notionId', 'pageId', 'name'];
 function documentTextsOf(evidenceBundle) {
   const map = new Map();
   const add = (item) => {
-    if (!isObject(item)) return;
+    if (!isObject(item) || isCharacterSheet(item)) return;
     const text = sourceTextOf(item);
     if (!text) return;
     SOURCE_ID_FIELDS.forEach((field) => {
@@ -210,9 +208,8 @@ function documentTextsOf(evidenceBundle) {
  * documents, the exposed documents with quotable text: an id in any case, any of the ids a
  * document answers to (SOURCE_ID_FIELDS), resolves to `{id, text}`, the record's own id, as the
  * record view names the document (record-view.js recordIdOf, else its pageId or name), and its
- * text, with `sheet: true` on a player's character sheet (isCharacterSheet; phase 15, brief D),
- * which a card's reader refuses. The first document to claim an id keeps it. Null for an id no
- * such document answers to.
+ * text. A player's character sheet is never one (isCharacterSheet). The first document to claim
+ * an id keeps it. Null for an id no such document answers to.
  *
  * The evidence check reads it for a piece's source (evidenceProblems), the map's card check for a
  * card's document (lib/map.js), the article writer's card line to print the record's spelling
@@ -225,11 +222,11 @@ function documentTextsOf(evidenceBundle) {
 function documentResolverOf(evidenceBundle) {
   const byLowerId = new Map();
   const add = (item) => {
-    if (!isObject(item)) return;
+    if (!isObject(item) || isCharacterSheet(item)) return;
     const text = sourceTextOf(item);
     if (!text) return;
     const own = recordIdOf(item) || textOf(item.pageId) || textOf(item.name);
-    const document = isCharacterSheet(item) ? { id: own, text, sheet: true } : { id: own, text };
+    const document = { id: own, text };
     SOURCE_ID_FIELDS.forEach((field) => {
       const id = item[field] ? String(item[field]).trim().toLowerCase() : '';
       if (id && !byLowerId.has(id)) byLowerId.set(id, document);
@@ -404,31 +401,14 @@ function sourceTexts(source, ctx) {
 
 /**
  * The document in the record an id names, in any case, as a card's document: `{id, text}`, the
- * record's own id and its text, or null (documentResolverOf's rule). A player's character sheet
- * is null here (phase 15, brief D; R6): no card prints one, so the map's card check fails a card
- * that names one. The evidence check reads a piece's sources through the resolver itself
- * (sourceTexts), so a piece may still cite a sheet.
+ * record's own id and its text, or null (documentResolverOf's rule).
  *
  * @param {*} id
  * @param {Object} context - evidenceContextOf's
  * @returns {{id: string, text: string}|null}
  */
 function recordDocumentOf(id, context) {
-  const document = contextOf(context).resolveDocument(id);
-  return document && !document.sheet ? document : null;
-}
-
-/**
- * Whether an id names a player's character sheet in the record, in any case (documentResolverOf's
- * rule): what the map's card check says when recordDocumentOf refuses a card's document.
- *
- * @param {*} id
- * @param {Object} context - evidenceContextOf's
- * @returns {boolean}
- */
-function citesCharacterSheet(id, context) {
-  const document = contextOf(context).resolveDocument(id);
-  return Boolean(document && document.sheet);
+  return contextOf(context).resolveDocument(id);
 }
 
 /** How to fix each kind of fault a piece can have, in the order a line gives them. */
@@ -680,7 +660,6 @@ module.exports = {
   // Fix round 4: the one rule for "this document is in the record"
   documentResolverOf,
   recordDocumentOf,
-  // Phase 15, brief D: the one rule for a player's character sheet, which no card prints
-  isCharacterSheet,
-  citesCharacterSheet
+  // The one rule for a player's character sheet, which is never in the record
+  isCharacterSheet
 };

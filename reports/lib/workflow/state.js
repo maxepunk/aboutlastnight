@@ -429,7 +429,8 @@ const ReportStateAnnotation = Annotation.Root({
   /**
    * Character data extracted from paper evidence + tokens (pre-curation)
    * Contains structured groups, relationships, and roles for roster characters.
-   * Extracted before curation so character sheet data is captured regardless of scoring.
+   * Extracted before curation so every selected document is read regardless of scoring
+   * (never a character sheet: the director's ruling, 2026-10-10).
    */
   characterData: Annotation({
     reducer: replaceReducer,

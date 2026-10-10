@@ -175,9 +175,9 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     expect(prompt).not.toContain('Haiku summary of the name');
     expect(prompt).not.toContain('Derived Guess');
     // Phase 3 (3.3): the section is the whole record view, its intro counting the documents.
-    // Phases 14 and 15 (brief E, R8): the investigation's timeline, and a character sheet
-    // printed marked and trimmed (T1).
-    expect(section3).toContain("The 1 exposed memories and 2 paper documents, each whole except a player's character sheet, which prints marked and trimmed (T1); then the investigation's timeline");
+    // Phases 14 and 15 (brief E, R8): the investigation's timeline. No character sheet is ever
+    // in the record (the director's ruling, 2026-10-10), so every document is whole.
+    expect(section3).toContain("The 1 exposed memories and 2 paper documents in full, then the investigation's timeline");
   });
 
   it('the sales appear once, on the record view\'s morning timeline (phase 3, 3.3)', () => {

@@ -2156,12 +2156,13 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       }
     });
 
-    // Brief F (T1): opinion joins Nova's forms, and a character sheet backs its backstory alone.
-    it("evidenceTruth (T1): a character sheet backs only its backstory, and what the record cannot back is Nova's suspicion, allegation, question or opinion", () => {
+    // Brief F (T1): opinion joins Nova's forms. The clause on character sheets went on 2026-10-10:
+    // a sheet is never in the record (the director's ruling), so no judge is asked about one.
+    it("evidenceTruth (T1): what the record cannot back is Nova's suspicion, allegation, question or opinion, and no character sheet is asked about", () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'evidenceTruth');
-        expect(description).toContain("a player's character sheet used for its backstory alone");
-        expect(description).toContain('never for its suspected motive, goals or instructions to the player');
+        expect(description).not.toMatch(/character sheet/i);
+        expect(description).toContain("what the record backs stated; ");
         // Final fix wave (K5): the mark is the opinion's alone, as T1 attaches it.
         expect(description).toContain("what the record cannot back written as Nova's own suspicion, an allegation, a question, or an opinion marked as Nova's");
         expect(description).not.toContain("question or opinion, marked as Nova's");

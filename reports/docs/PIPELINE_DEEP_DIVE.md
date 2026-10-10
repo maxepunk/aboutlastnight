@@ -75,11 +75,11 @@ Each session has a subset of these characters (typically 8-16 players). Token ID
 
 ### Character Sheets
 
-A character sheet is a player's private instructions for their character: backstory (starting memories, who people are to each other), a suspected motive, goals and where to start. Six of them sit in Notion as paper evidence, each named "<character> Character Sheet", and the paper-evidence stop starts with every item ticked, so a sheet reaches the record like any other document unless the director unticks it. In the world no one could hand Nova a sheet: its backstory is true in the world, and the sheet itself, its motive and its goals never appear (T1; spec `docs/superpowers/specs/2026-10-09-your-words-and-the-world.md` section 7).
+A character sheet is a player's private instructions for their character, handed out before the game: background on the character, a suspected motive, goals, where to start, and the character's secrets, mixed line by line. There are 20, one per character. A sheet is not an in-world document, so it is never in the record, never cited and never printed (the director's ruling, 2026-10-10).
 
-- **Which document is a sheet** is one rule, `isCharacterSheet` in `lib/evidence.js`: a paper document whose name ends " Character Sheet", in any case. Its `basicType` cannot decide: it is "Document", as 33 other documents' is.
-- **The record** (`lib/prompt-renderers/record-view.js` `renderDocument`) prints a sheet with its own kind, `kind="character sheet"`, and a one-line label pointing at T1, and leaves out its `▌[FLAGGED] SUSPECTED MOTIVE` and WHERE TO START blocks, each to the next heading. A sheet stored without those headings (an older copy) prints whole, marked. Character extraction reads the record through the same view, so it reads the trimmed sheet. The goals that sit inside CORE IDENTITY stay in the text, and T1 covers them.
-- **No card prints a sheet** (C9): `recordDocumentOf` refuses a sheet as a card's document, so the map's card check and the article's card fidelity both fail a card that prints one. A piece of evidence may still cite a sheet, for its backstory.
+- **Which document is a sheet** is one rule, `isCharacterSheet` in `lib/evidence.js`: a paper document whose name ends " Character Sheet", in any case.
+- **The paper fetch leaves every sheet out** (`lib/workflow/nodes/fetch-nodes.js` `fetchPaperEvidence`), so no sheet reaches the paper-evidence stop, the preprocessing, the scoring, character extraction or any writer or judge. The standalone skill's fetch script leaves them out too.
+- **A thread fetched before 2026-10-10** may still hold sheets. The record view (`renderRecordDocuments`), `documentTextsOf`, `documentResolverOf` and the weave writer's Sources list (`extractEvidenceSummary`) skip them, so no writer or judge reads one and no piece or card can cite one.
 
 ---
 

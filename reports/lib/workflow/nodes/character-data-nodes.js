@@ -3,8 +3,10 @@
  *
  * Extracts structured character data (groups, relationships, roles) from
  * the paper documents the director selected + every exposed memory token, each in
- * full, through the record view (brief 2.1). Runs before curation so that
- * character sheet data is captured regardless of curation scoring.
+ * full, through the record view (brief 2.1). Runs before curation so that every
+ * selected document is read regardless of curation scoring. A player's character sheet is
+ * never one: the paper fetch leaves sheets out, and the record view skips one an older
+ * thread still holds (the director's ruling, 2026-10-10).
  *
  * Uses Haiku for fast extraction — this is a factual parsing task, not creative.
  */

@@ -1102,9 +1102,10 @@ describe("4.6c: a card count is the director's only for the edits that changed i
     concerns: findings.concerns.filter((c) => c.type === 'card-not-in-record').map((c) => [c.editIds, c.finding])
   });
 
-  // Phase 15, brief D (ruling R6): no card prints a player's character sheet, so a card whose
-  // flagged piece names one fails, saying so; the sheet is still in the record for evidence.
-  it("a card whose flagged piece names a player's character sheet fails, naming the sheet", () => {
+  // A player's character sheet is never in the record (the director's ruling, 2026-10-10), so a
+  // card whose flagged piece names one, on a thread fetched before the fetch left sheets out,
+  // fails as a card whose document the record does not hold.
+  it("a card whose flagged piece names a player's character sheet fails as no document in the record", () => {
     const { characterSheet } = require('./fixtures/character-sheet');
     const withSheet = evidenceContextOf({
       evidenceBundle: { exposed: {
@@ -1115,12 +1116,10 @@ describe("4.6c: a card count is the director's only for the edits that changed i
     const map = writers();
     markCard(map.sections[1].beats[1], 'sheet-0001');
     const findings = mapFindings(map, inputs({ evidence: withSheet }));
-    expect(cards(findings)).toEqual({
-      failures: ["Beat b4's card piece names \"sheet-0001\", a player's character sheet, and no card prints one, as C9 (`<craft-cards>`) sets out. Choose in <RECORD> another document that tells the beat for its card, and flag the piece that names it by its id."],
-      concerns: []
-    });
+    expect(cards(findings).failures).toHaveLength(1);
+    expect(cards(findings).failures[0]).toMatch(/^Beat b4's card piece names "sheet-0001", which is no document in <RECORD>\. /);
     expect(findings.failures.find((f) => f.type === 'card-not-in-record').line)
-      .toBe("The move \"The first vote, six to four\" is marked as a card, and its card's document is a player's character sheet, which no card prints.");
+      .toBe("The move \"The first vote, six to four\" is marked as a card, and its card's document is not one the record holds.");
   });
 
   // Fix round 2: the evidence is never the director's edit (R6), so a flagged piece that names no
