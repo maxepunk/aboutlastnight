@@ -32,7 +32,7 @@ This document provides a comprehensive understanding of the post-game report gen
 - **Journalist theme** (`state.theme = 'journalist'`): Nova, the NovaNews reporter (who Nova is: `world.md`), writes an investigative article in the first person, about 1,500 words (`craft-voice.md`, `craft-telling.md`), with NovaNews branding.
 - **Detective theme** (`state.theme = 'detective'`): Detective Anondono files an official case report (~750 words, third-person investigative voice, single-column case file format).
 
-Both themes share one 44-node LangGraph pipeline with 11 checkpoints, and since phase 4 the detective is parked (R1): it starts no session until it has its own files for the story meeting, the map and the article. What a theme decides lives in its files: `theme-config.js` (its NPCs, map slots, rules folder and identity lines), `rule-set.js` (each theme's rule set, read from the folder its config names; the journalist's: see [Prompt Reference Files](#prompt-reference-files)), `theme-loader.js` (the image calls' prompt files from `.claude/skills/{theme}-report/`), and `templates/{theme}/` (Handlebars layouts). `reports/CLAUDE.md`, "Adding a new theme", lists them.
+Both themes share one 44-node LangGraph pipeline with 11 checkpoints, and since phase 4 the detective is parked (R1): it starts no session until it has its own files for the story meeting, the map and the article. What a theme decides lives in its files: `theme-config.js` (its NPCs, map slots, rules folder and identity lines), `rule-set.js` (each theme's rule set, read from the folder its config names; the journalist's: see [Prompt Reference Files](#prompt-reference-files)), `theme-loader.js` (the image calls' prompt files from `.claude/skills/{theme}-report/`), and `templates/{theme}/` (Handlebars layouts). `reports/docs/architecture/prompts.md`, "Adding a new theme", lists them.
 
 ---
 
@@ -399,7 +399,7 @@ The director picks an angle (instant, with no model call), rewrites any line of 
 - **Reweave**, offered only when the director changed the open angle or a thread, or wrote a note, works on the open angle: the writer fits in the director's changes on that angle and on its threads (their changes on other angles stand as they are), keeps every line the director wrote, finds the evidence for a thread they added in the record, or leaves it with none when the record holds none (the meeting then says "The writer found nothing in the record for it.", and the map's gap note says so after), and writes the connections between the threads now in. Code then puts back every other angle, every thread outside the open angle and every connection that does not join two of its threads, as the rework started from them, so the director can still switch; a thread the open angle shares with another angle may be reworded, and the new words show in both.
 - **Send back** needs a note, which sets the rethink: the rework may rewrite any angle or pitch new ones, and changes one of the director's edits only where the note needs it, saying why. The meeting reopens on the angle the director had open, if the rework kept it, otherwise on angle 1.
 
-The director's edits are final: an automatic pass or a reweave never changes one. Later prompts name the meeting's changes in the meeting's own form, M and the edit's number, apart from the map's and the desk's E ids. Approve writes `data/<id>/analysis/weave.approved.json`, the whole weave with its pick. Going back to the meeting reopens it as the director left it, the angle they sent open, with no model call (R9). The details are in `reports/CLAUDE.md`, **The story meeting**.
+The director's edits are final: an automatic pass or a reweave never changes one. Later prompts name the meeting's changes in the meeting's own form, M and the edit's number, apart from the map's and the desk's E ids. Approve writes `data/<id>/analysis/weave.approved.json`, the whole weave with its pick. Going back to the meeting reopens it as the director left it, the angle they sent open, with no model call (R9). The details are in `reports/docs/architecture/story-meeting.md`, **The story meeting**.
 
 ### Phase 2.36: Photo Branch
 
@@ -461,7 +461,7 @@ A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLI
 
 **The judge**: the fact check runs first, and a structural failure under the automated budget sends the article to its rework without the judge's call; then the article judge scores the truth criteria alone (see [Evaluation & Revision Architecture](#evaluation--revision-architecture)).
 
-**Checkpoint**: `article` (4.25) - The desk (tasks 4.3 and 4.10; spec 6.3): the article as it will print, every editor visible, move, delete and insert, each Key Evidence entry moved and deleted as a block is (task 4.14c), the marks beside their pieces, and nothing in front of the article. Approve publishes exactly what is on the desk; Send back, with a note, starts a structural rework. The details are in `reports/CLAUDE.md`, **The map's and the desk's editors**.
+**Checkpoint**: `article` (4.25) - The desk (tasks 4.3 and 4.10; spec 6.3): the article as it will print, every editor visible, move, delete and insert, each Key Evidence entry moved and deleted as a block is (task 4.14c), the marks beside their pieces, and nothing in front of the article. Approve publishes exactly what is on the desk; Send back, with a note, starts a structural rework. The details are in `reports/docs/architecture/console.md`, **The map's and the desk's editors**.
 
 ### Phase 5: HTML Assembly
 
@@ -601,8 +601,8 @@ A reweave or a send-back opens a new round and starts the budget over.
 **Rework Pattern** (DRY):
 - `incrementXxxRevision` counts the pass; the map's and the article's keep the version the rework starts from (`_previousOutline`, `_previousContentBundle`), and the weave's rework starts from the weave where it is
 - `reviseXxx` receives the previous version and the revision context
-- A rework that fails keeps the version it started from as its stop's output (task 4.14e): a call that fails on a transient error runs again, up to three calls; a director's send-back that gives up reopens its stop with the director's version and says the round did not run; an automatic pass that gives up ends the run in an error with that version kept, so Retry opens the stop with no call ("A rework that fails" in `reports/CLAUDE.md`)
-- How much it keeps follows the revision context (`buildRevisionContext`, under WHAT THIS REWORK DOES; phase 3, TH7): on a send back the director's note decides ("rethink" gets a rethink); a reweave works on the open angle: it fits the director's changes in and keeps every line they did not touch, and code puts back every other angle and every thread and connection outside the open angle; on an automatic pass the rework fixes the must-fix items and leaves everything else word for word (R23; "The rework rules" in `reports/CLAUDE.md` gives the details). After an automatic pass or a reweave, code puts back what the pass changed in the director's edits (`settleEdits`); a send-back's rework may change an edit where its note needs it, and says why. One revision context serves every theme: the detective's older "targeted fixes" branch went (R1; phase 4, brief 4.7c)
+- A rework that fails keeps the version it started from as its stop's output (task 4.14e): a call that fails on a transient error runs again, up to three calls; a director's send-back that gives up reopens its stop with the director's version and says the round did not run; an automatic pass that gives up ends the run in an error with that version kept, so Retry opens the stop with no call ("A rework that fails" in `reports/docs/architecture/reworks.md`)
+- How much it keeps follows the revision context (`buildRevisionContext`, under WHAT THIS REWORK DOES; phase 3, TH7): on a send back the director's note decides ("rethink" gets a rethink); a reweave works on the open angle: it fits the director's changes in and keeps every line they did not touch, and code puts back every other angle and every thread and connection outside the open angle; on an automatic pass the rework fixes the must-fix items and leaves everything else word for word (R23; "The rework rules" in `reports/docs/architecture/reworks.md` gives the details). After an automatic pass or a reweave, code puts back what the pass changed in the director's edits (`settleEdits`); a send-back's rework may change an edit where its note needs it, and says why. One revision context serves every theme: the detective's older "targeted fixes" branch went (R1; phase 4, brief 4.7c)
 
 ## Key Implementation Details
 
@@ -680,7 +680,7 @@ const result = await sdkClient({
 - Improves performance (reduces context and latency)
 - Ensures deterministic output (no file-read variations)
 
-Since H21 every pipeline call declares its tools (`disableTools: true` for pure structured output, `tools: ['Read']` for the two image calls), because a call with neither runs with the full tool set (`reports/CLAUDE.md`, "Tool gating").
+Since H21 every pipeline call declares its tools (`disableTools: true` for pure structured output, `tools: ['Read']` for the two image calls), because a call with neither runs with the full tool set (`reports/docs/architecture/sdk.md`, "Tool gating").
 
 ### fullDescription Priority Chain (Commit 6ffeef8)
 
@@ -890,7 +890,7 @@ The eight craft files group C1 to C19 by the writer's job (phase 3, task 3.8). E
 
 ### Data Directory Structure
 
-What the console writes (the standalone skill writes its own files beside these: `reports/CLAUDE.md`, "Session Data Directory Structure"):
+What the console writes (the standalone skill writes its own files beside these: `reports/docs/architecture/data.md`, "Session Data Directory Structure"):
 
 ```
 data/{sessionId}/

@@ -285,7 +285,7 @@ async function sdkQueryImpl({
   //
   // Note on channel skip: this does NOT prevent the structured-output channel skip
   // we see on generateContentBundle. That's caused by a known SDK bug (#277) in
-  // constrained decoding for complex schemas — see CLAUDE.md "Channel skip".
+  // constrained decoding for complex schemas — see docs/architecture/sdk.md, "SDK #277 channel skip".
   if (loadProjectSettings === false) {
     options.settingSources = [];
   } else {

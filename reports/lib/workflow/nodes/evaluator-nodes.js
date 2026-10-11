@@ -903,7 +903,7 @@ const TRUTH_ONLY_ADVISORY_WARNINGS = "only a concern about one of the director's
  * edits. The weighted schema this was derived from, with a criterion type and advisories as
  * suggestions, went with its last caller (brief 4.7c). The contract holds no `issues` array.
  *
- * NOTE: no `format` keyword anywhere (SDK #277; see reports/CLAUDE.md).
+ * NOTE: no `format` keyword anywhere (SDK #277; see docs/architecture/sdk.md).
  */
 const TRUTH_ONLY_EVALUATION_JSON_SCHEMA = {
   type: 'object',
