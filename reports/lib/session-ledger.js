@@ -190,7 +190,21 @@ function classifyAdjustments(rows, { accounts } = {}) {
   });
   debits.forEach((debit) => {
     if (pairedDebits.has(debit.index)) return;          // the mirror of a credit above
-    if (keyOf(debit.account) === BONUS_HOLDING_KEY) return; // the holding account's own bookkeeping
+    if (keyOf(debit.account) === BONUS_HOLDING_KEY) {
+      // An unpaired holding-account debit that names an account is the bonus itself:
+      // 100926's report paid it in this one row ("To Marcus" out of the holding account),
+      // with no credit row in the account it paid. One that names no account, or a name
+      // the report shows nowhere else, is the holding account's own bookkeeping, unless it
+      // names one: then it is reported, never made an account.
+      const paidTo = debitDestination(debit.detail);
+      if (!paidTo || keyOf(paidTo) === BONUS_HOLDING_KEY) return;
+      if (isAccount(paidTo)) {
+        events.push({ index: debit.index, event: { time: debit.time, kind: 'bonus', amount: -debit.amount, toAccount: paidTo } });
+      } else {
+        unclassified.push({ index: debit.index, time: debit.time, account: debit.account, amount: debit.amount });
+      }
+      return;
+    }
     const destination = debitDestination(debit.detail);
     const destinationKey = keyOf(destination);
     if (destinationKey && destinationKey !== BONUS_HOLDING_KEY && destinationKey !== keyOf(debit.account) && isAccount(debit.account)) {

@@ -550,6 +550,53 @@ describe("buildLedger: adjustment events logged off the game's clock", () => {
     expect(ledgerCheck.clockShift).toEqual({ hours: -9, moved: 5, bonus: true });
   });
 
+  /**
+   * 100926's shape (2026-10-11): the report pays the bonus in one row, "To <account>" out
+   * of the holding account, with no credit row in the account it paid. Both rows are
+   * logged off the game's clock. Before this fix the payout read as the holding account's
+   * own bookkeeping and was dropped: the account's total disagreed with the Final
+   * Standings by the bonus, and no bonus reached the timeline or the shift.
+   */
+  const DEBIT_ONLY_SALES = [
+    { tokenId: 'mmm001', shellAccount: 'Marcus', amount: 150000, time: '09:03 PM' },
+    { tokenId: 'mmm002', shellAccount: 'Sky', amount: 350000, time: '10:17 PM' }
+  ];
+  const DEBIT_ONLY_EXPOSURES = [{ tokenId: 'nnn001', time: '08:54 PM' }, { tokenId: 'nnn002', time: '09:52 PM' }];
+  const DEBIT_ONLY_ROWS = [
+    { time: '03:54 AM', detail: 'First Burial Bonus (GM_Station_1)', team: 'First Burial Bonus', amount: 50000 },
+    { time: '06:08 AM', detail: 'To Marcus (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }
+  ];
+  const DEBIT_ONLY_STANDINGS = [
+    { name: 'Marcus', total: 200000 }, { name: 'Sky', total: 350000 }, { name: 'First Burial Bonus', total: 0 }
+  ];
+
+  it("reads 100926's one-row payout, \"To <account>\" out of the holding account, as the bonus paid to that account", () => {
+    const { adjustments, unclassified } = classifyAdjustments(DEBIT_ONLY_ROWS, { accounts: ['Marcus', 'Sky', 'First Burial Bonus'] });
+    expect(adjustments).toEqual([{ time: '06:08 AM', kind: 'bonus', amount: 50000, toAccount: 'Marcus' }]);
+    expect(unclassified).toEqual([]);
+  });
+
+  it('with the one-row payout, the account reconciles with the Final Standings and the bonus is lined up a few minutes after the first sale', () => {
+    const ledger = buildLedger({
+      buriedTokens: DEBIT_ONLY_SALES, adjustmentRows: DEBIT_ONLY_ROWS, finalStandings: DEBIT_ONLY_STANDINGS, exposures: DEBIT_ONLY_EXPOSURES
+    });
+    expect(ledger.adjustments).toEqual([{ time: '09:08 PM', loggedTime: '06:08 AM', kind: 'bonus', amount: 50000, toAccount: 'Marcus' }]);
+    expect(ledger.ledgerCheck).toEqual({
+      adjustmentsParsed: true, mismatches: [], unclassified: [],
+      clockShift: { hours: -9, moved: 1, bonus: true }
+    });
+    expect(ledger.shellAccounts.find((a) => a.name === 'Marcus').total).toBe(200000);
+  });
+
+  it('reports a holding-account payout to a name the report shows nowhere else as unclassified, never as an account', () => {
+    const { adjustments, unclassified } = classifyAdjustments(
+      [{ time: '09:10 PM', detail: 'To Payout (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }],
+      { accounts: ['Marcus', 'First Burial Bonus'] }
+    );
+    expect(adjustments).toEqual([]);
+    expect(unclassified).toEqual([{ time: '09:10 PM', account: 'First Burial Bonus', amount: -50000 }]);
+  });
+
   it('on the evening shape, where back 8 and back 9 both fit the span, lets the bonus decide: back 9, a minute after the first sale', () => {
     const ledger = buildLedger({ buriedTokens: EVENING_SALES, adjustmentRows: EVENING_ROWS, exposures: EVENING_EXPOSURES });
     expect(ledger.adjustments).toEqual([{ time: '09:21 PM', loggedTime: '06:21AM', kind: 'bonus', amount: 50000, toAccount: 'Ratchet' }]);
