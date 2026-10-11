@@ -340,17 +340,16 @@ describe('the weave checks (the check node)', () => {
     const { storyLevelState } = require('./fixtures/story-level-weave');
     const pageOf = (state, weave) => wordsShown('arc-selection', meetingCheckpointData({ weave, sessionConfig: state.sessionConfig }, { evidenceIndex: {}, maxRevisions: 0 }));
     /**
-     * The words the writer wrote that the meeting prints unfolded with one angle open: "from your
-     * notes", every other angle's headline and card line, the open angle's pitch, its threads' names
-     * and lines, the names of the threads it leaves out, the lines of the connections between its
-     * threads, and the questions.
+     * The words the writer wrote that the meeting prints unfolded with one angle open: every other
+     * angle's headline and card line, the open angle's pitch, its threads' names and lines, the
+     * names of the threads it leaves out, the lines of the connections between its threads, and the
+     * questions. "From your notes" is the director's words (2026-10-11), never the writer's.
      */
     const writersWords = (weave, id) => {
       const angle = weave.angles.find((a) => a.id === id);
       const inStory = new Set(angle.threads);
       const words = (...texts) => texts.reduce((n, text) => n + wordCount(text), 0);
-      return words(weave.fromYourNotes)
-        + weave.angles.filter((a) => a.id !== id).reduce((n, a) => n + words(a.headline, a.gist), 0)
+      return weave.angles.filter((a) => a.id !== id).reduce((n, a) => n + words(a.headline, a.gist), 0)
         + words(angle.headline, angle.story, angle.question, angle.lands, angle.ends)
         + weave.threads.reduce((n, t) => n + words(t.name) + (inStory.has(t.id) ? words(t.line) : 0), 0)
         + weave.connections.filter((c) => inStory.has(c.joins[0]) && inStory.has(c.joins[1])).reduce((n, c) => n + words(c.line), 0)
@@ -376,7 +375,9 @@ describe('the weave checks (the check node)', () => {
       const state = storyLevelState();
       const { _arcValidation } = validateArcStructure(state, {});
       const { page, writer, allowance, angle } = _arcValidation.words;
-      expect({ page, writer, allowance, angle }).toEqual({ page: 292, writer: 268, allowance: 426, angle: 'a1' });
+      // 2026-10-11: the fixture's nine-word "from your notes" counts as the director's, so the
+      // writer's words are 259, not 268, and its allowance 417 (450 less 33 the writer did not write).
+      expect({ page, writer, allowance, angle }).toEqual({ page: 292, writer: 259, allowance: 417, angle: 'a1' });
       expect(page).toBe(pageOf(state, { ...state.weave, picked: angle }));
       state.weave.angles.forEach((a) => {
         const open = { ...state.weave, picked: a.id };
@@ -411,6 +412,38 @@ describe('the weave checks (the check node)', () => {
       const card = (i) => wordCount(state.weave.angles[i].headline) + wordCount(state.weave.angles[i].gist);
       const pitch = wordCount(a3.headline) + wordCount(a3.story) + wordCount(a3.question) + wordCount(a3.lands) + wordCount(a3.ends);
       expect(failure.message).toBe(`${open} meeting's page runs to ${page} words, ${writer} of them in the lines you write, past the ${allowance} those lines may use (350, or more while the whole page stays within 450). Cut ${writer - allowance} words or more from your lines on that page, starting with the longest: angle a3's pitch (${pitch} words), angle a1's headline and card line (${card(0)} words) and angle a2's headline and card line (${card(1)} words). Keep each line short, and keep in each angle only the threads its story turns on: the headline and card line of every other angle print beside the open one. The rest of the page (the verdict and the lines beside yours) is printed by code.`);
+    });
+
+    // 2026-10-11, the director's ruling after 100926: "from your notes" is the director's own
+    // words, so the length check counts it with what code prints, never as the writer's. On
+    // 100926 two length reworks cut the director's read from 139 words to 68, then to 15, because
+    // the check named it first among "your lines" to cut.
+    describe('"from your notes" counts as the director\'s words', () => {
+      const READ = Array.from({ length: 14 }, (_, k) => `The director thinks the morning hid deal number ${k + 1} behind the vote.`).join(' ');
+      const withLongRead = () => {
+        const state = storyLevelState();
+        state.directorNotes = { rawProse: `${state.directorNotes.rawProse}\n\n${READ}` };
+        state.weave.fromYourNotes = READ;
+        return state;
+      };
+
+      it('a long read adds nothing to the writer\'s words, and fails nothing on its own', () => {
+        const state = withLongRead();
+        const { _arcValidation } = validateArcStructure(state, {});
+        const base = validateArcStructure(storyLevelState({}), {})._arcValidation.words;
+        expect(wordCount(READ)).toBeGreaterThan(130);
+        expect(_arcValidation.words.writer).toBe(base.writer);
+        expect(_arcValidation.words.page).toBeGreaterThan(base.page + 100);
+        expect(_arcValidation.failures).toEqual([]);
+      });
+
+      it('an over-length page never names "from your notes" among the lines to cut', () => {
+        const state = withLongRead();
+        state.weave.angles[2].story = `${state.weave.angles[2].story} ${'The room kept arguing about the money. '.repeat(40).trim()}`;
+        const [failure] = validateArcStructure(state, {})._arcValidation.failures;
+        expect(failure.type).toBe('over-length');
+        expect(failure.message).not.toMatch(/from your notes/i);
+      });
     });
 
     // Piece 3 (brief 3B; R5): 450 words with any angle open, so about 325 of the writer's own.

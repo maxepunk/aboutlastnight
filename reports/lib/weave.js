@@ -79,8 +79,10 @@ const CONNECTION_KINDS = Object.freeze(['person', 'moment', 'document', 'line'])
  * sections 5 and 9.1; R5). The rule is lib/word-count.js pageLengthOf's, which the map keeps
  * too: the meeting's writer is held only to its own words, and may use
  * max(MEETING_WORD_FLOOR, MEETING_WORD_BOUND - overhead) of them (meetingLengthOf). The meeting's
- * overhead is what code prints: the verdict, its charge and its vote, the open angle's card line,
- * the verdict thread's lock and the thin-notes line (labels are no words on the page). The check
+ * overhead is what the writer did not write: the verdict, its charge and its vote, the open angle's
+ * card line, the verdict thread's lock and the thin-notes line, which code prints (labels are no
+ * words on the page), and "from your notes", the director's own words (the director's ruling,
+ * 2026-10-11, after two length reworks on 100926 cut their read from 139 words to 15). The check
  * node counts it once with each angle open, with every field the writer writes left blank
  * (weaveWritersTextBlank; lib/workflow/nodes/arc-specialist-nodes.js meetingPageWords), on the
  * writer's share of the weave (writersShareOf). The writer's task asks
@@ -628,12 +630,13 @@ const NO_WORDS = '-';
 /**
  * The weave with every field the writer writes holding no word (NO_WORDS; pageLengthOf's rule),
  * for the page the check node counts the meeting's overhead on: each of the fields the meeting
- * prints (WEAVE_PRINTED_FIELDS) that holds text, which are "from your notes" (the writer chooses
- * how much of the director's words to quote), each angle's pitch, each thread's name and line,
- * each connection's line, and each question's text, what it changes and what it is about.
- * So the verdict, the open angle's card line, the verdict thread's lock and the thin-notes line
- * count as code's. The pick stays, so the page opens the same angle. The weave given is left as it
- * was.
+ * prints (WEAVE_PRINTED_FIELDS) that holds text, but for the director's words: each angle's pitch,
+ * each thread's name and line, each connection's line, and each question's text, what it changes
+ * and what it is about. So the verdict, the open angle's card line, the verdict thread's lock and
+ * the thin-notes line count as code's, and "from your notes" (WEAVE_PRINTED_FIELDS.directorsWords)
+ * as the director's: the writer copies it from their notes, and the check never asks the writer
+ * to cut it (the director's ruling, 2026-10-11). The pick stays, so the page opens the same
+ * angle. The weave given is left as it was.
  *
  * @param {Object} weave
  * @returns {Object}
@@ -641,7 +644,8 @@ const NO_WORDS = '-';
 function weaveWritersTextBlank(weave) {
   if (!isWeave(weave)) return weave;
   const out = JSON.parse(JSON.stringify(weave));
-  printedWeaveFields(out).forEach(({ part, field, element }) => {
+  printedWeaveFields(out).forEach(({ part, field, element, directorsWords }) => {
+    if (directorsWords) return;
     const holder = part === 'weave' ? out : element;
     if (holder && typeof holder === 'object' && typeof holder[field] === 'string' && holder[field].trim()) holder[field] = NO_WORDS;
   });
@@ -651,7 +655,7 @@ function weaveWritersTextBlank(weave) {
 /**
  * The writer's lines on the meeting's page with the picked angle open (pickedAngleOf), each with
  * its words, the longest first, as the page prints them (console/checkpoint-view-logic.js
- * meetingView): "from your notes", the card of each other angle (its headline and its card line),
+ * meetingView): the card of each other angle (its headline and its card line),
  * the open angle's pitch (its headline, story, question, why it lands and where it ends up), each
  * of its threads (its name and its line), the names of the threads it leaves out, the line of each
  * connection between its threads, and each question. Read from the writer's share of the weave
@@ -668,7 +672,7 @@ function writersLinesOnPage(weave) {
     if (words > 0) lines.push({ name, words });
   };
   if (!isWeave(weave)) return lines;
-  add('"from your notes"', weave.fromYourNotes);
+  // "From your notes" is the director's words, never a line of the writer's to cut.
   const settled = settledAngleOf(weave);
   objectsOf(weave.angles)
     .filter((angle) => !settled || angle !== settled.angle)
