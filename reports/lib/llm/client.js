@@ -74,27 +74,29 @@ const MODEL_BUDGETS = {
  */
 const MODEL_IDS = {
   opus: 'claude-opus-5-5',
-  sonnet: 'claude-sonnet-5',
-  haiku: 'claude-haiku-4-5'
+  sonnet: 'claude-sonnet-5-5',
+  haiku: 'claude-haiku-5-5'
 };
 
 /**
- * Per-model effort defaults. Passed explicitly per query so the SDK
- * doesn't fall through the legacy server-pushed taskIntensityOverride
- * resolution chain (which returned null client_data for accounts on
- * Opus 4.8's adaptive-thinking + new effort semantics).
+ * Per-model effort defaults, sent explicitly on every call, so a call never runs on a
+ * default the SDK, the CLI or the API chooses. A call site passes its own `effort`
+ * where its job calls for another level, with the reason beside it.
  *
  * Per Anthropic's effort docs (https://platform.claude.com/docs/en/build-with-claude/effort):
- *   - Haiku 4.5: effort not supported (omit)
- *   - Sonnet 5: 'xhigh' — the best setting for the hard coding/agentic content-generation work this pipeline runs (Sonnet 5 added 'xhigh'; 'high' is the SDK default)
  *   - Opus 5.5: 'xhigh' kept from the Opus 4.8 runs. Opus 5.5 defaults to 'medium' when no
- *     effort is sent, so sending it explicitly matters more than it did on 4.8. The phase 2
- *     gate records every call's duration against session 092026's before any level moves.
+ *     effort is sent. Its levels are decided in roadmap phase 16, not here.
+ *   - Sonnet 5.5 (since 2026-10-11): 'high', the API's default and the docs' starting point
+ *     for work that is not agentic. Its levels are recalibrated from Sonnet 5's, so Sonnet 5's
+ *     'xhigh' does not carry over; the docs keep 'xhigh' for work where an eval shows a gain.
+ *   - Haiku 5.5 (since 2026-10-11): 'medium', the API's default and the docs' starting point.
+ *     Haiku 5.5 is the first Haiku with effort; Haiku 4.5 took none (the CLI gave it a
+ *     thinking budget).
  */
 const EFFORT_LEVELS = {
   opus: 'xhigh',
-  sonnet: 'xhigh'
-  // haiku omitted — Haiku 4.5 doesn't support the effort parameter
+  sonnet: 'high',
+  haiku: 'medium'
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -345,13 +347,12 @@ async function sdkQueryImpl({
   // (a ~5-min stream watchdog re-requesting), never completing, while each cycle
   // re-armed our idle timer. "summarized" streams readable thinking text as it
   // happens (1.3K chars in the first 20s on the same prompt), which keeps the
-  // stream alive and gives the console's THINKING stage real content. Haiku 4.5
-  // has no adaptive thinking, so it gets no thinking option. Opus 5.5 cannot run with
-  // thinking off (`disabled` and `budget_tokens` are both a 400), so on Opus this
-  // streamed text is what keeps the idle timer fed during a long think.
-  if (model !== 'haiku') {
-    options.thinking = { type: 'adaptive', display: 'summarized' };
-  }
+  // stream alive and gives the console's THINKING stage real content. Every pinned
+  // model thinks adaptively with display "omitted" by default: Opus 5.5, Sonnet 5.5 and,
+  // since 2026-10-11, Haiku 5.5, where Haiku 4.5 returned summarized thinking (the Haiku
+  // 5.5 migration guide). So every call asks for summarized thinking, and the streamed text
+  // keeps the idle timer fed during a long think.
+  options.thinking = { type: 'adaptive', display: 'summarized' };
 
   // Pass effort explicitly so the SDK doesn't traverse the legacy
   // server-pushed taskIntensityOverride chain (which returned null
@@ -997,6 +998,8 @@ async function isClaudeAvailable(sdkQuery) {
       prompt: 'Respond with exactly: ok',
       model: 'haiku',
       systemPrompt: 'You are a health check. Respond with exactly one word: ok',
+      // One fixed word: the cheapest, fastest level is enough (the Haiku 5.5 effort guide's 'low').
+      effort: 'low',
       // H21 applies here too: an ungated call runs with the SDK's full default tool set,
       // which changed across the 0.3 line (Task tools, embedded find/grep). A one-word
       // health check needs none.

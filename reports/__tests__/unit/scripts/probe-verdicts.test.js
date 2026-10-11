@@ -32,9 +32,18 @@ describe('isolationVerdict', () => {
   test('the live gate\'s shapes pass: Opus disableTools + schema, Haiku Read + schema', () => {
     expect(isolationVerdict(good).ok).toBe(true);
     expect(isolationVerdict({
-      ...good, alias: 'haiku', pinnedId: 'claude-haiku-4-5', declaredTools: ['Read'],
-      inits: [init(['Read', 'StructuredOutput'])], thinkingChars: 0, servedModels: ['claude-haiku-4-5']
+      ...good, alias: 'haiku', pinnedId: 'claude-haiku-5-5', declaredTools: ['Read'],
+      inits: [init(['Read', 'StructuredOutput'])], thinkingChars: 120, servedModels: ['claude-haiku-5-5']
     })).toEqual({ ok: true, failures: [] });
+  });
+
+  test('Haiku 5.5 is asked for summarized thinking too, so a Haiku call with no thinking text fails', () => {
+    const verdict = isolationVerdict({
+      ...good, alias: 'haiku', pinnedId: 'claude-haiku-5-5', declaredTools: ['Read'],
+      inits: [init(['Read', 'StructuredOutput'])], thinkingChars: 0, servedModels: ['claude-haiku-5-5']
+    });
+    expect(verdict.ok).toBe(false);
+    expect(verdict.failures.join(' ')).toMatch(/no readable thinking/);
   });
 
   test('without a schema, StructuredOutput is not expected (and fails if it appears)', () => {
@@ -144,7 +153,7 @@ describe('scripts/probe-sdk-isolation.js through the wrapper', () => {
   });
 
   test('the Haiku call carries the one-tool image shape, and Read plus StructuredOutput passes', async () => {
-    const options = stream({ tools: ['Read', 'StructuredOutput'], thinking: null, served: { 'claude-haiku-4-5': {} } });
+    const options = stream({ tools: ['Read', 'StructuredOutput'], served: { 'claude-haiku-5-5': {} } });
     const { verdict, obs } = await probeOne('haiku', { sdkQuery: sdkQueryImpl, modelIds: MODEL_IDS });
     expect(verdict).toEqual({ ok: true, failures: [] });
     expect(obs.declaredTools).toEqual(['Read']);
@@ -165,11 +174,11 @@ describe('scripts/probe-sdk-isolation.js through the wrapper', () => {
   });
 
   test('every init line prints the tool names, on a pass as on a failure', async () => {
-    stream({ tools: ['Read', 'StructuredOutput'], thinking: null, served: { 'claude-haiku-4-5': {} } });
+    stream({ tools: ['Read', 'StructuredOutput'], served: { 'claude-haiku-5-5': {} } });
     const passed = await probeOne('haiku', { sdkQuery: sdkQueryImpl, modelIds: MODEL_IDS });
     const passText = report(passed);
     expect(passText).toMatch(/PASS/);
-    expect(passText).toMatch(/init 1: model=claude-haiku-4-5 tools=2 \[Read, StructuredOutput\]/);
+    expect(passText).toMatch(/init 1: model=claude-haiku-5-5 tools=2 \[Read, StructuredOutput\]/);
     expect(passText).toMatch(/expected tools: \[Read, StructuredOutput\] \(declared \[Read\], plus StructuredOutput for the schema\)/);
 
     stream({ tools: ['StructuredOutput', 'Bash'] });

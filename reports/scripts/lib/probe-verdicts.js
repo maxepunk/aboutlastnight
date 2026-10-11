@@ -12,8 +12,9 @@
 
 const { hasMemoryPaths, servedModelMatches } = require('../../lib/llm/sdk-fields');
 
-// Aliases the wrapper sends adaptive thinking with display 'summarized' (client.js).
-const THINKING_ALIASES = new Set(['opus', 'sonnet']);
+// Aliases the wrapper sends adaptive thinking with display 'summarized' (client.js): all three
+// since the move to Haiku 5.5 (2026-10-11), which thinks by default with its text omitted.
+const THINKING_ALIASES = new Set(['opus', 'sonnet', 'haiku']);
 
 // The CLI's own structured-output tool. CLI 2.1.282 lists it at init whenever the call
 // has a schema: at the live gate on 2026-09-25 an Opus call with disableTools and a

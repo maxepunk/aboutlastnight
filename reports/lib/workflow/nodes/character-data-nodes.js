@@ -125,6 +125,9 @@ Take each entry from what a document states about that character, and leave a fi
       prompt,
       systemPrompt: 'You extract structured character data from narrative evidence.',
       model: 'haiku',
+      // Knowledge work over every exposed document, held to one strict rule (only what a
+      // document states): the Haiku 5.5 effort guide gives 'high' for both.
+      effort: 'high',
       jsonSchema: CHARACTER_EXTRACTION_SCHEMA,
       // Inherits the standardized 10-min model default (lib/llm/client.js).
       // Per-call timeout overrides have been removed across the codebase — see

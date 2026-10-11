@@ -184,7 +184,8 @@ describe('sdkQueryImpl contract', () => {
       const captured = captureOptions();
       await expect(isClaudeAvailable(sdkQueryImpl)).resolves.toBe(true);
       expect(captured.options.tools).toEqual([]);
-      expect(captured.options.model).toBe('claude-haiku-4-5');
+      expect(captured.options.model).toBe('claude-haiku-5-5');
+      expect(captured.options.effort).toBe('low');
     });
   });
 
@@ -987,14 +988,14 @@ describe('sdkQueryImpl model substitution (round 3 ruling, judged on the answer\
   // answer was Sonnet's; the CLI's own Haiku helper showed only in modelUsage.
   test('a helper model in modelUsage beside a pinned-model answer returns the answer and records both', async () => {
     const { thrown, value, events } = await run([
-      frame('claude-sonnet-5'),
-      frame('claude-sonnet-5', { message: { model: 'claude-sonnet-5', content: [{ type: 'text', text: 'done' }], stop_reason: 'end_turn' } }),
-      finish({ 'claude-haiku-4-5': {}, 'claude-sonnet-5': {} })
+      frame('claude-sonnet-5-5'),
+      frame('claude-sonnet-5-5', { message: { model: 'claude-sonnet-5-5', content: [{ type: 'text', text: 'done' }], stop_reason: 'end_turn' } }),
+      finish({ 'claude-haiku-4-5': {}, 'claude-sonnet-5-5': {} })
     ], { model: 'sonnet', jsonSchema: SIMPLE_SCHEMA });
     expect(thrown).toBeUndefined();
     expect(value).toEqual({ ok: true });
     const complete = events.find((e) => e.type === 'llm_complete');
-    expect(complete.servedModels).toEqual(['claude-haiku-4-5', 'claude-sonnet-5']);
+    expect(complete.servedModels).toEqual(['claude-haiku-4-5', 'claude-sonnet-5-5']);
     expect(events.filter((e) => e.type === 'llm_error')).toHaveLength(0);
   });
 
@@ -1025,10 +1026,10 @@ describe('sdkQueryImpl model substitution (round 3 ruling, judged on the answer\
   });
 
   test('a text call written by another model throws too', async () => {
-    const { thrown, value } = await run([frame('claude-sonnet-5'), finish({ 'claude-sonnet-5': {} }, { structured_output: undefined, result: 'plain text' })], { model: 'haiku' });
+    const { thrown, value } = await run([frame('claude-sonnet-5-5'), finish({ 'claude-sonnet-5-5': {} }, { structured_output: undefined, result: 'plain text' })], { model: 'haiku' });
     expect(value).toBeUndefined();
     expect(thrown).toBeInstanceOf(SdkModelSubstitutionError);
-    expect(thrown.message).toMatch(/requested claude-haiku-4-5, served by claude-sonnet-5/);
+    expect(thrown.message).toMatch(/requested claude-haiku-5-5, served by claude-sonnet-5-5/);
   });
 
   test('an answer whose frames name the pinned model and another: both are named, the substitute singled out', async () => {

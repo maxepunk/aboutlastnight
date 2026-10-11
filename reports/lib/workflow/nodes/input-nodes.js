@@ -597,6 +597,10 @@ Return structured JSON matching the schema.${correctionsBlock}`;
       prompt: sessionConfigPrompt,
       systemPrompt: 'You parse game session information into structured JSON. Be precise and accurate.',
       model: 'haiku',
+      // The verdict every writer builds the article on, under rules the parse must follow
+      // exactly (the verdict kinds, no accused for a no-culprit verdict, a split vote): the
+      // Haiku 5.5 effort guide gives 'high' for strict instruction following.
+      effort: 'high',
       jsonSchema: SESSION_CONFIG_SCHEMA,
       disableTools: true,          // H21: pure parse; no tool needs it
       loadProjectSettings: false

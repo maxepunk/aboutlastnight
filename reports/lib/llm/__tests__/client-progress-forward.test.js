@@ -172,13 +172,13 @@ describe('client llm_complete — the served model (brief 2.0)', () => {
   it('records a helper model in servedModels without failing a pinned-model answer', async () => {
     const events = [];
     setMockQuery(() => makeAsyncIterable([
-      { type: 'assistant', parent_tool_use_id: null, message: { model: 'claude-sonnet-5', content: [{ type: 'text', text: 'ok' }] } },
-      { type: 'result', subtype: 'success', result: 'ok', modelUsage: { 'claude-haiku-4-5': { outputTokens: 40 }, 'claude-sonnet-5': { outputTokens: 7988 } } }
+      { type: 'assistant', parent_tool_use_id: null, message: { model: 'claude-sonnet-5-5', content: [{ type: 'text', text: 'ok' }] } },
+      { type: 'result', subtype: 'success', result: 'ok', modelUsage: { 'claude-haiku-4-5': { outputTokens: 40 }, 'claude-sonnet-5-5': { outputTokens: 7988 } } }
     ]));
     await sdkQueryImpl({ prompt: 'x', model: 'sonnet', onProgress: (e) => events.push(e) });
     const done = events.find(e => e.type === 'llm_complete');
-    expect(done.servedModels).toEqual(['claude-haiku-4-5', 'claude-sonnet-5']);
-    expect(done.answerModels).toEqual(['claude-sonnet-5']);
+    expect(done.servedModels).toEqual(['claude-haiku-4-5', 'claude-sonnet-5-5']);
+    expect(done.answerModels).toEqual(['claude-sonnet-5-5']);
   });
 
   it('is null when the result has no modelUsage', async () => {

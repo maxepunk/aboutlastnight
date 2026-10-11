@@ -8,8 +8,10 @@
  * "empty thinking delta → status: requesting" every ~340s for 20 minutes and never
  * completed, while re-arming our own idle timer each cycle. A direct probe with
  * `thinking: { type: 'adaptive', display: 'summarized' }` streamed 1.3K chars of
- * thinking summary in the first 20s. Haiku 4.5 does not support adaptive thinking,
- * so it gets no thinking option.
+ * thinking summary in the first 20s. Haiku 4.5 did not support adaptive thinking and
+ * got no thinking option; Haiku 5.5 (pinned since 2026-10-11) thinks by default with its
+ * display "omitted", as Opus 5.5 and Sonnet 5.5 do, so every model now asks for
+ * summarized thinking.
  */
 
 let capturedOptions = null;
@@ -27,13 +29,8 @@ const { sdkQuery } = require('../llm');
 describe('SDK thinking display', () => {
   beforeEach(() => { capturedOptions = null; });
 
-  test.each(['opus', 'sonnet'])('%s streams summarized adaptive thinking', async (model) => {
+  test.each(['opus', 'sonnet', 'haiku'])('%s streams summarized adaptive thinking', async (model) => {
     await sdkQuery({ prompt: 'test', model, disableTools: true });
     expect(capturedOptions.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
-  });
-
-  test('haiku passes no thinking config (adaptive is unsupported on Haiku 4.5)', async () => {
-    await sdkQuery({ prompt: 'test', model: 'haiku', disableTools: true });
-    expect(capturedOptions.thinking).toBeUndefined();
   });
 });
