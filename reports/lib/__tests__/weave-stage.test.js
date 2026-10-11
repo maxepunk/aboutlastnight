@@ -411,7 +411,7 @@ describe('the weave checks (the check node)', () => {
       const a3 = state.weave.angles[2];
       const card = (i) => wordCount(state.weave.angles[i].headline) + wordCount(state.weave.angles[i].gist);
       const pitch = wordCount(a3.headline) + wordCount(a3.story) + wordCount(a3.question) + wordCount(a3.lands) + wordCount(a3.ends);
-      expect(failure.message).toBe(`${open} meeting's page runs to ${page} words, ${writer} of them in the lines you write, past the ${allowance} those lines may use (350, or more while the whole page stays within 450). Cut ${writer - allowance} words or more from your lines on that page, starting with the longest: angle a3's pitch (${pitch} words), angle a1's headline and card line (${card(0)} words) and angle a2's headline and card line (${card(1)} words). Keep each line short, and keep in each angle only the threads its story turns on: the headline and card line of every other angle print beside the open one. The rest of the page (the verdict and the lines beside yours) is printed by code.`);
+      expect(failure.message).toBe(`${open} meeting's page runs to ${page} words, ${writer} of them in the lines you write, past the ${allowance} those lines may use (350, or more while the whole page stays within 450). Cut ${writer - allowance} words or more from your lines on that page, starting with the longest: angle a3's pitch (${pitch} words), angle a1's headline and card line (${card(0)} words) and angle a2's headline and card line (${card(1)} words). Keep each line short, and keep in each angle only the threads its story turns on: the headline and card line of every other angle print beside the open one. The rest of the page (the verdict, the labels beside your lines and "from your notes", the director's own words) is not yours to cut.`);
     });
 
     // 2026-10-11, the director's ruling after 100926: "from your notes" is the director's own
@@ -442,7 +442,8 @@ describe('the weave checks (the check node)', () => {
         state.weave.angles[2].story = `${state.weave.angles[2].story} ${'The room kept arguing about the money. '.repeat(40).trim()}`;
         const [failure] = validateArcStructure(state, {})._arcValidation.failures;
         expect(failure.type).toBe('over-length');
-        expect(failure.message).not.toMatch(/from your notes/i);
+        expect(failure.message).not.toMatch(/"from your notes" \(\d+ words\)/i);
+        expect(failure.message).toMatch(/"from your notes", the director's own words\) is not yours to cut/);
       });
     });
 

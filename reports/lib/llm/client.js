@@ -294,8 +294,8 @@ async function sdkQueryImpl({
     options.settingSources = ['project'];
   }
 
-  // Enable 1M context window for Opus and Sonnet (beta)
-  // Haiku doesn't support 1M
+  // The 1M context window beta for Opus and Sonnet. Haiku 5.5's window is 1M without it,
+  // so Haiku calls send no beta.
   // Control 3: MCP isolation. settingSources: [] scopes filesystem SETTINGS only;
   // the SDK still loads every MCP server from the user's ~/.claude.json (the
   // claude.ai connectors: Gmail, Google Drive, Calendar, Notion, Claude Docs). A

@@ -135,8 +135,10 @@ function unreadableRow(row, index) {
  *            code could not read or classify, in row order
  */
 function classifyAdjustments(rows, { accounts } = {}) {
-  const known = accounts ? new Set([...accounts].map(keyOf)) : null;
+  // Each account the report shows, by its key, as the report spells it first.
+  const known = accounts ? new Map([...accounts].reverse().map((name) => [keyOf(name), String(name)])) : null;
   const isAccount = (name) => !known || known.has(keyOf(name));
+  const spelled = (name) => (known && known.get(keyOf(name))) || name;
   const read = [];
   const unclassified = [];
   // A row with no account, or a zero or unreadable amount, is reported, never dropped:
@@ -191,15 +193,20 @@ function classifyAdjustments(rows, { accounts } = {}) {
   debits.forEach((debit) => {
     if (pairedDebits.has(debit.index)) return;          // the mirror of a credit above
     if (keyOf(debit.account) === BONUS_HOLDING_KEY) {
-      // An unpaired holding-account debit that names an account is the bonus itself:
-      // 100926's report paid it in this one row ("To Marcus" out of the holding account),
-      // with no credit row in the account it paid. One that names no account, or a name
-      // the report shows nowhere else, is the holding account's own bookkeeping, unless it
-      // names one: then it is reported, never made an account.
+      // An unpaired holding-account debit that names an account is the bonus itself, while
+      // no other row paid it: 100926's report paid it in this one row ("To Marcus" out of the
+      // holding account), with no credit row in the account it paid. The game pays one
+      // first-burial bonus, so beside a bonus already classified, or after the first such
+      // row, it is the holding account's own bookkeeping, as is a debit that names no
+      // account or the setup source; an account's total that then disagrees with the Final
+      // Standings shows it at the input review. One that names a name the report shows
+      // nowhere else is reported, never made an account.
       const paidTo = debitDestination(debit.detail);
-      if (!paidTo || keyOf(paidTo) === BONUS_HOLDING_KEY) return;
+      const paidKey = keyOf(paidTo);
+      if (!paidTo || paidKey === BONUS_HOLDING_KEY || paidKey === SETUP_SOURCE_KEY) return;
+      if (events.some(({ event }) => event.kind === 'bonus')) return;
       if (isAccount(paidTo)) {
-        events.push({ index: debit.index, event: { time: debit.time, kind: 'bonus', amount: -debit.amount, toAccount: paidTo } });
+        events.push({ index: debit.index, event: { time: debit.time, kind: 'bonus', amount: -debit.amount, toAccount: spelled(paidTo) } });
       } else {
         unclassified.push({ index: debit.index, time: debit.time, account: debit.account, amount: debit.amount });
       }

@@ -71,6 +71,16 @@ describe('normalizeAccusation: the split vote', () => {
     expect(out.votes.map((v) => v.adopted)).toEqual([true, false]);
   });
 
+  // The final review (2026-10-11): the mark kept is the one with the most votes, wherever the
+  // parse listed it. Before, the first listed kept its mark.
+  it('keeps the mark of the option with the most votes, listed second as first', () => {
+    const out = normalizeAccusation({
+      verdictKind: 'culprit', accused: ['Remi'], charge: 'Murder',
+      votes: [{ option: 'Vic', count: 4, adopted: true }, { option: 'Remi', count: 7, adopted: true }]
+    });
+    expect(out.votes.map((v) => [v.option, v.adopted])).toEqual([['Vic', false], ['Remi', true]]);
+  });
+
   // 100426 (2026-10-11): "Vic and Flip, tied 8 votes to 8 in the final round, and Blake
   // gave the police both names." The parse marked both adopted, and code kept only Flip,
   // so the writers read Vic as the side the room voted down.

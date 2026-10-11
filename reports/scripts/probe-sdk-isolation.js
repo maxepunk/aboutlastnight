@@ -13,7 +13,7 @@
  *     StructuredOutput when it has a schema (CLI 2.1.282 counts its own structured-output
  *     tool), or sends no init at all; every undeclared and every missing tool is named;
  *   - loads any memory path;
- *   - streams no readable thinking text (Opus and Sonnet);
+ *   - streams no readable thinking text (every model, Haiku since its move to 5.5);
  *   - is served by anything other than the pinned id (result modelUsage);
  *   - fails.
  * Every init line prints the tool names, pass or fail.

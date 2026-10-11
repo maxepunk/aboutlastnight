@@ -588,6 +588,38 @@ describe("buildLedger: adjustment events logged off the game's clock", () => {
     expect(ledger.shellAccounts.find((a) => a.name === 'Marcus').total).toBe(200000);
   });
 
+  // The final review of the fix (2026-10-11): the game pays one first-burial bonus. A second
+  // one-row payout, or one beside a bonus already paid in another shape (a credit and its
+  // reversal the parse copied under two names, logged a minute apart), stays the holding
+  // account's bookkeeping, as before the fix: never a second bonus. A real second payout then
+  // shows at the input review as its account's total disagreeing with the Final Standings.
+  it('counts one first-burial bonus: a second one-row payout stays bookkeeping', () => {
+    const { adjustments, unclassified } = classifyAdjustments([
+      ...DEBIT_ONLY_ROWS,
+      { time: '06:30 AM', detail: 'To Sky (GM_Station_1)', team: 'First Burial Bonus', amount: -20000 }
+    ], { accounts: ['Marcus', 'Sky', 'First Burial Bonus'] });
+    expect(adjustments).toEqual([{ time: '06:08 AM', kind: 'bonus', amount: 50000, toAccount: 'Marcus' }]);
+    expect(unclassified).toEqual([]);
+  });
+
+  it('never adds a one-row payout beside a bonus another shape already paid', () => {
+    const { adjustments, unclassified } = classifyAdjustments([
+      { time: '07:50 PM', detail: 'First burial bonus (GM_Station_1)', team: 'Donald Trump JR', amount: 50000 },
+      { time: '07:51PM', detail: 'ToDonaldtrump(GMStation1)', team: 'FirstBurialBonus', amount: -50000 }
+    ], { accounts: ['Donald Trump JR', 'Donaldtrump', 'First Burial Bonus'] });
+    expect(adjustments).toEqual([{ time: '07:50 PM', kind: 'bonus', amount: 50000, toAccount: 'Donald Trump JR' }]);
+    expect(unclassified).toEqual([]);
+  });
+
+  it("names the bonus's account as the report's accounts spell it, and leaves money returned to the setup source as bookkeeping", () => {
+    const { adjustments, unclassified } = classifyAdjustments([
+      { time: '06:08 AM', detail: 'To marcus (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 },
+      { time: '06:40 AM', detail: 'To Holding Account (GM_Station_1)', team: 'First Burial Bonus', amount: -10000 }
+    ], { accounts: ['Marcus', 'First Burial Bonus'] });
+    expect(adjustments).toEqual([{ time: '06:08 AM', kind: 'bonus', amount: 50000, toAccount: 'Marcus' }]);
+    expect(unclassified).toEqual([]);
+  });
+
   it('reports a holding-account payout to a name the report shows nowhere else as unclassified, never as an account', () => {
     const { adjustments, unclassified } = classifyAdjustments(
       [{ time: '09:10 PM', detail: 'To Payout (GM_Station_1)', team: 'First Burial Bonus', amount: -50000 }],

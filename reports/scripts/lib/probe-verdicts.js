@@ -70,7 +70,7 @@ function expectedInitTools(declaredTools, hasSchema) {
  * (nothing verified); an init's tool names are not exactly the declared tools plus
  * StructuredOutput when the call has a schema (every undeclared and every missing tool is
  * named), or the init does not report its tools; any memory path loaded; no readable
- * thinking text streamed on Opus or Sonnet; the result named no served model; or any
+ * thinking text streamed (on every model since Haiku 5.5); the result named no served model; or any
  * served model is not the pinned id.
  *
  * @param {Object} obs
