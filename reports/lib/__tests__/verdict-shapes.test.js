@@ -3,7 +3,7 @@
  * the plan's Review Focus 4).
  *
  * - A split final vote keeps every option that drew votes, with its count, and marks
- *   the one the group statement adopted, or none.
+ *   the one the group statement adopted, both sides of a tie it adopted together, or none.
  * - A verdict that blames an institution or an unnamed person is a culprit verdict
  *   naming no character, with the room's words as the charge.
  * - A verdict with no culprit names no one.
@@ -63,12 +63,30 @@ describe('normalizeAccusation: the split vote', () => {
       .not.toHaveProperty('votes');
   });
 
-  it('keeps at most one adopted option', () => {
+  it('keeps one adopted option when the options marked adopted drew different counts', () => {
     const out = normalizeAccusation({
       verdictKind: 'culprit', accused: ['Remi'], charge: 'Murder',
       votes: [{ option: 'Remi', count: 7, adopted: true }, { option: 'Vic', count: 4, adopted: true }]
     });
     expect(out.votes.map((v) => v.adopted)).toEqual([true, false]);
+  });
+
+  // 100426 (2026-10-11): "Vic and Flip, tied 8 votes to 8 in the final round, and Blake
+  // gave the police both names." The parse marked both adopted, and code kept only Flip,
+  // so the writers read Vic as the side the room voted down.
+  it('keeps every option marked adopted when they are tied: the statement adopted both sides of the tie', () => {
+    const votes = [{ option: 'Flip', count: 8, adopted: true }, { option: 'Vic', count: 8, adopted: true }];
+    const out = normalizeAccusation({ verdictKind: 'culprit', accused: ['Flip', 'Vic'], charge: 'Murder', votes });
+    expect(out.votes).toEqual(votes);
+    expect(formatSplitVote(out.votes)).toBe('Flip 8, adopted by the group statement; Vic 8, adopted by the group statement');
+  });
+
+  it('in a three-way vote, keeps the tied options marked adopted and not a third with a lower count', () => {
+    const out = normalizeAccusation({
+      verdictKind: 'culprit', accused: ['Flip', 'Vic'], charge: 'Murder',
+      votes: [{ option: 'Flip', count: 6, adopted: true }, { option: 'Vic', count: 6, adopted: true }, { option: 'Sam', count: 2, adopted: true }]
+    });
+    expect(out.votes.map((v) => v.adopted)).toEqual([true, true, false]);
   });
 });
 

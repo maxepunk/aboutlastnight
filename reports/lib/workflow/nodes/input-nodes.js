@@ -114,10 +114,10 @@ const SESSION_CONFIG_SCHEMA = {
             properties: {
               option: { type: 'string', description: 'What the votes were for, in the director\'s words: a character, an institution, or a verdict such as "accidental overdose".' },
               count: { type: 'number', description: 'How many votes it drew.' },
-              adopted: { type: 'boolean', description: 'True for the option the group statement adopted.' }
+              adopted: { type: 'boolean', description: 'True for each option the group statement adopted: one, or both sides of a tie the statement adopted together.' }
             }
           },
-          description: 'Only for a split final vote that the text records: every option that drew votes, with its count. Mark the one the group statement adopted, or none when it adopted none of them. Leave this out when the final vote was unanimous or the text gives no tally.'
+          description: 'Only for a split final vote that the text records: every option that drew votes, with its count. Mark the one the group statement adopted, both sides of a tie it adopted together, or none when it adopted none of them. Leave this out when the final vote was unanimous or the text gives no tally.'
         },
         notes: {
           type: 'string',
@@ -589,7 +589,7 @@ How to parse it:
    - It blames an institution, such as NeurAI's board, or a person it does not name: verdictKind "culprit", accused empty, and the room's own words for who and what in charge.
    - It names no culprit (an accident, an overdose, self-harm): verdictKind is that kind, accused empty, and the verdict in charge.
    Marcus Blackwood is the man whose death the room investigates, so accused never lists him.
-2. When the text records a split final vote, list in votes every option that drew votes, with its count, and mark the one the group statement adopted; when it adopted none of them, mark none.
+2. When the text records a split final vote, list in votes every option that drew votes, with its count, and mark the one the group statement adopted, or both sides of a tie it adopted together; when it adopted none of them, mark none.
 
 Return structured JSON matching the schema.${correctionsBlock}`;
 

@@ -72,24 +72,26 @@ function blamesNoCharacter(accusation) {
 }
 
 /**
- * The split final vote, cleaned: each option with a name and a count, at most one
- * marked adopted, and at least two options (one option is not a split).
+ * The split final vote, cleaned: each option with a name and a count, and at least two
+ * options (one option is not a split). The options marked adopted are kept only where
+ * they drew the most votes among the options so marked: a tie the group statement
+ * adopted both sides of keeps both (100426: "tied 8 votes to 8 in the final round, and
+ * Blake gave the police both names"), while a second option marked adopted with fewer
+ * votes is the parse's slip and loses its mark.
  *
  * @param {*} votes - the parse's votes
  * @returns {Array<{option: string, count: number, adopted: boolean}>|null} null when there is no split
  */
 function normalizeVotes(votes) {
   if (!Array.isArray(votes)) return null;
-  let adoptedSeen = false;
-  const clean = votes
-    .filter((v) => v && typeof v.option === 'string' && v.option.trim() && typeof v.count === 'number' && Number.isFinite(v.count))
-    .map((v) => {
-      const adopted = v.adopted === true && !adoptedSeen;
-      if (adopted) adoptedSeen = true;
-      return { option: v.option.trim(), count: v.count, adopted };
-    });
-  if (votes.filter((v) => v && v.adopted === true).length > 1) {
-    console.warn('[normalizeAccusation] more than one vote option marked adopted; kept the first');
+  const named = votes
+    .filter((v) => v && typeof v.option === 'string' && v.option.trim() && typeof v.count === 'number' && Number.isFinite(v.count));
+  const markedCounts = named.filter((v) => v.adopted === true).map((v) => v.count);
+  const top = markedCounts.length ? Math.max(...markedCounts) : null;
+  const clean = named.map((v) => ({ option: v.option.trim(), count: v.count, adopted: v.adopted === true && v.count === top }));
+  const dropped = markedCounts.filter((count) => count !== top).length;
+  if (dropped > 0) {
+    console.warn(`[normalizeAccusation] ${dropped} vote option(s) marked adopted with fewer votes than another marked option; their mark was dropped`);
   }
   return clean.length >= 2 ? clean : null;
 }
