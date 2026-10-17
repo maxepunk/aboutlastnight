@@ -8,6 +8,7 @@ import smtplib
 import csv
 import re
 import html
+from html.parser import HTMLParser
 import io
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -366,6 +367,94 @@ def load_template() -> str:
     with open(TEMPLATE_FILE, 'r', encoding='utf-8') as f:
         return f.read()
 
+class _TextExtractor(HTMLParser):
+    """Turn the HTML email into readable plain text.
+
+    Every table cell / div / paragraph becomes its own paragraph, <br> becomes a
+    newline, and links keep their URL: a link that is the ONLY content of its cell
+    (the buttons) renders as an indented ">> url" line, an inline link renders as
+    "text (url)". Head, style, script and title contents are dropped.
+    """
+
+    _SKIP = {'head', 'style', 'script', 'title'}
+    _BLOCK = {'td', 'th', 'div', 'p', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'}
+
+    def __init__(self):
+        super().__init__()
+        self.blocks = []       # finished paragraphs (strings)
+        self._pieces = []      # current paragraph: str pieces or (text, href) link tuples
+        self._skip = 0
+        self._href = None
+        self._link_text = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP:
+            self._skip += 1
+        elif self._skip:
+            return
+        elif tag in self._BLOCK:
+            self._flush()
+        elif tag == 'br':
+            self._pieces.append('\n')
+        elif tag == 'a':
+            self._href = dict(attrs).get('href')
+            self._link_text = []
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP:
+            self._skip = max(0, self._skip - 1)
+        elif self._skip:
+            return
+        elif tag in self._BLOCK:
+            self._flush()
+        elif tag == 'a':
+            text = re.sub(r'\s+', ' ', ''.join(self._link_text)).strip()
+            self._pieces.append((text, self._href) if self._href else text)
+            self._href = None
+            self._link_text = []
+
+    def handle_data(self, data):
+        if self._skip:
+            return
+        if self._href is not None:
+            self._link_text.append(data)
+        else:
+            self._pieces.append(re.sub(r'\s+', ' ', data))
+
+    def _flush(self):
+        pieces, self._pieces = self._pieces, []
+        links = [x for x in pieces if isinstance(x, tuple)]
+        others = ''.join(x for x in pieces if isinstance(x, str)).strip()
+        if len(links) == 1 and not others:
+            # A cell whose only content is a link: the call-to-action buttons.
+            text = f"  >> {links[0][1]}"
+        else:
+            joined = ''.join(
+                x if isinstance(x, str)
+                else (x[1] if x[0] == x[1] else f"{x[0]} ({x[1]})")
+                for x in pieces
+            )
+            text = '\n'.join(line.strip() for line in joined.split('\n')).strip()
+        if text:
+            self.blocks.append(text)
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def html_to_text(html_content: str) -> str:
+    """Derive the plain-text alternative from the (already personalized) HTML.
+
+    The HTML template is the single source of the email copy; the plain-text part
+    and the preview are both rendered from it, so editing the template is the
+    whole job.
+    """
+    extractor = _TextExtractor()
+    extractor.feed(html_content)
+    extractor.close()
+    return '\n\n'.join(extractor.blocks)
+
 def personalize_email(template: str, recipient: Dict, session_date: str, report_id: str, session_note: str = "") -> str:
     """Replace placeholders with recipient-specific data"""
     email = template
@@ -400,38 +489,9 @@ def personalize_email(template: str, recipient: Dict, session_date: str, report_
 def create_email_message(recipient: Dict, html_content: str, session_note: str = "", photos: List[Tuple[str, bytes]] = None) -> MIMEMultipart:
     """Create the email message with headers and content, optionally with photo attachments"""
 
-    first_name = recipient['name'].split()[0]
-
-    # Plain text version (fallback)
-    # NOTE: This text must match preview_recipients() and the HTML template content.
-    # If you update the email copy, update all three locations.
-    text_content = f"""Hey {first_name},
-
-First of all, thank you.
-
-About Last Night... is a weird, ambitious thing that we've been building for over a year and a half. It's a pop-up. It's experimental. It only exists because people like you decide to show up and trust us with your precious free time. So thank you for taking a chance on a new and unusual experience. I hope it gave you something worth remembering.
-
-And speaking of memories — there's a new NovaNews article that's just dropped, covering your investigation:
-
-  >> {CASE_FILE_BASE}report-{recipient.get('report_id', '')}.html
-
-This investigative article is unique to YOUR game-session. Its contents are all based on what you chose to expose publicly, and the things you chose to bury for profit. You might see threads you recognize, or pieces that fill in parts of the story that you didn't get to. It is a version of the story that could not exist without your choices and participation.
-
-We're a small, independent show and reviews genuinely make a difference for us. If you had a good time, leaving a review on Morty would be amazing. And if you want to share photos, theories, or hot takes from the night, tag @storypunkstudio on Instagram or StoryPunk on Facebook — we love seeing your posts.
-
-And if you've got thoughts on the experience (what worked, what didn't, how you might describe the game to a friend), it would mean the WORLD to us to have your feedback as we continue to evolve and grow our game. Use the link below or just reply to this email with your thoughts:
-
-  >> {FEEDBACK_BASE}?date={recipient.get('feedback_date', '')}
-
-Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: ALNReturnVisit — consider it a thank you for being part of the story of this experience.
-
-Thanks again for being part of this.
-
-Max, Shuai & Casey
-StoryPunk / Patchwork Adventures"""
-
-    if session_note:
-        text_content = text_content.rstrip() + "\n\n" + session_note
+    # Plain-text alternative, derived from the personalized HTML (which already
+    # carries the session note), so the template is the only copy of the email text.
+    text_content = html_to_text(html_content)
 
     if photos:
         text_content = text_content.rstrip() + f"\n\n[{len(photos)} photo(s) from your session are attached to this email]"
@@ -496,7 +556,7 @@ def save_to_csv(recipients: List[Dict], session_date: str, report_id: str, filen
             })
     print(f"  ✓ Saved to: {filename}")
 
-def preview_recipients(recipients: List[Dict], session_date: str, report_id: str, session_note: str = "", photos: List[Tuple[str, bytes]] = None):
+def preview_recipients(template: str, recipients: List[Dict], session_date: str, report_id: str, session_note: str = "", photos: List[Tuple[str, bytes]] = None):
     """Show preview of what will be sent, including full email body"""
     print("\n" + "="*60)
     print("PREVIEW")
@@ -505,40 +565,10 @@ def preview_recipients(recipients: List[Dict], session_date: str, report_id: str
     print(f"Report ID: {report_id}")
     print(f"Recipients: {len(recipients)}")
 
-    # Show full plain text body using first recipient as example
-    # NOTE: This text must match create_email_message() and the HTML template content.
-    # If you update the email copy, update all three locations.
+    # Render the first recipient's email exactly as it will be sent, then show the
+    # plain-text form of it (same conversion the outgoing message uses).
     first = recipients[0]
-    first_name = first['name'].split()[0]
-    feedback_date = session_date[:4]
-
-    text_body = f"""Hey {first_name},
-
-First of all, thank you.
-
-About Last Night... is a weird, ambitious thing that we've been building for over a year and a half. It's a pop-up. It's experimental. It only exists because people like you decide to show up and trust us with your precious free time. So thank you for taking a chance on a new and unusual experience. I hope it gave you something worth remembering.
-
-And speaking of memories — there's a new NovaNews article that's just dropped, covering your investigation:
-
-  >> {CASE_FILE_BASE}report-{report_id}.html
-
-This investigative article is unique to YOUR game-session. Its contents are all based on what you chose to expose publicly, and the things you chose to bury for profit. You might see threads you recognize, or pieces that fill in parts of the story that you didn't get to. It is a version of the story that could not exist without your choices and participation.
-
-We're a small, independent show and reviews genuinely make a difference for us. If you had a good time, leaving a review on Morty would be amazing. And if you want to share photos, theories, or hot takes from the night, tag @storypunkstudio on Instagram or StoryPunk on Facebook — we love seeing your posts.
-
-And if you've got thoughts on the experience (what worked, what didn't, how you might describe the game to a friend), it would mean the WORLD to us to have your feedback as we continue to evolve and grow our game. Use the link below or just reply to this email with your thoughts:
-
-  >> {FEEDBACK_BASE}?date={feedback_date}
-
-Finally About Last Night is constantly growing and evolving and if you return, your experience of the game may be a completely new one. So we invite you to come back and play again, and bring your crew through. Here's a promo code for a 33% discount: ALNReturnVisit — consider it a thank you for being part of the story of this experience.
-
-Thanks again for being part of this.
-
-Max, Shuai & Casey
-StoryPunk / Patchwork Adventures"""
-
-    if session_note:
-        text_body += "\n\n" + session_note
+    text_body = html_to_text(personalize_email(template, first, session_date, report_id, session_note))
 
     print(f"\nFull email body (using {first['name']} as example):")
     print("-" * 60)
@@ -590,14 +620,8 @@ def main():
     photo_paths = get_photo_folder()
     photos = process_photos(photo_paths, session_date) if photo_paths else []
 
-    # Enrich recipients with computed fields for plain text rendering
-    feedback_date = session_date[:4]
-    for r in recipients:
-        r['report_id'] = report_id
-        r['feedback_date'] = feedback_date
-
     # Step 5: Preview (full email body + recipient list + photo summary)
-    preview_recipients(recipients, session_date, report_id, session_note, photos)
+    preview_recipients(template, recipients, session_date, report_id, session_note, photos)
 
     # Step 6: Confirm before proceeding
     print("\n" + "="*60)

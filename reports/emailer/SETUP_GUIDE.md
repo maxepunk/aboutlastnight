@@ -94,6 +94,10 @@ python send_followup_emails_smart.py
 relative path and writes the record CSV into the current directory. (Running it as
 `python emailer/send_followup_emails_smart.py` from elsewhere will fail to find the template.)
 
+**To change the email wording, edit the HTML template only.** The plain-text version of the
+email and the preview shown at the confirm prompt are both generated from the template at
+send time, so there is no second copy of the copy to keep in sync.
+
 The script is fully interactive — it has **no command-line flags**. It walks you through:
 
 1. **Session date** — `MMDDYY` format (6 digits), e.g. `122725` for Dec 27, 2025.
