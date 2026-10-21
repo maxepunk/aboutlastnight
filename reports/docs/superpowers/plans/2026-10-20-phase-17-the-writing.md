@@ -299,6 +299,7 @@ Update each sentence pin Who-owns names, each with its reason. The pinned writer
 **Invariants.**
 - `ARTICLE_TASK`'s kept lines stay word for word (pinned at `article-writer-map.test.js` :265, :290, :292, :360, :364, :516).
 - The story-terms check's scope is unchanged, and no check reads the headline, the deck or a heading beyond today's.
+  - Note (fix wave 3; the director's call, 2026-10-20, after the final review; spec section 3). Code holds the map's headline: the first map carries the settled angle's headline, and each later pass keeps the headline it started from, except a send-back with the director's note, whose rework may write the new headline the note asks for.
 - The judges' lists stay `[]`.
 - Every text naming Nova comes from the theme's file (`theme-rules.test.js`).
 - No code picks a craft file by position: each placement takes the craft block whole.
@@ -325,6 +326,8 @@ Update each sentence pin Who-owns names, each with its reason. The pinned writer
 **Done.** Each writer reads R2's files in R2's order. The tasks, the label, the identity line and the schema say what the read says, and the skill's lists match.
 
 **Out of scope.** The rule files' wording (A). The judges (C). The skill's task text (E). A code stamp of the angle's headline onto the map.
+
+Note (fix wave 3; the director's call, 2026-10-20, after the final review; spec section 3). Code holds the map's headline: the first map carries the settled angle's headline, and each later pass keeps the headline it started from, except a send-back with the director's note, whose rework may write the new headline the note asks for.
 
 ---
 
