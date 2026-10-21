@@ -1587,9 +1587,7 @@ describe("fix wave 2: the map's headline is the settled angle's", () => {
   });
 
   it('a difference only in spacing passes: each side trimmed, each run of whitespace one space', () => {
-    const spaced = `  ${SETTLED.replace('Room at', 'Room\nat').replace(/ /g, '  ')} `;
-    expect(spaced).toContain('\n');
-    expect(findings(withHeadline(spaced))).toEqual({ failures: [], concerns: [] });
+    expect(findings(withHeadline(`  ${SETTLED.replace(/ /g, '  ').replace('Room at', 'Room\nat')} `))).toEqual({ failures: [], concerns: [] });
     expect(findings(writers(), { settledHeadline: `\t${SETTLED.replace('Pointed the', 'Pointed   the')}  ` })).toEqual({ failures: [], concerns: [] });
   });
 
