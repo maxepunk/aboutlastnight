@@ -93,9 +93,9 @@ Today the article writer is told to "write the map": its task (`ARTICLE_TASK`, `
 - **C16's article writer part** says the writer writes the article the map plans, drawing on the evidence under each move for what the move needs, and cites what it uses. It carries point 5: every quotation, figure or document the article prints does something in its paragraph (proves the point, complicates it, or shows the person), and what the paragraph does not need stays in the record.
 - **C2** calls the evidence "the pieces of the record the article can draw on to tell it" (today "will use to tell it"), and its line on the article writer says "drawing on its evidence".
 - **The map's label** in the article writer's prompt (`STORY_MAP_LABEL`) says the evidence holds the pieces the move "can be told from" (today "is told from").
-- **The identity line** (`lib/theme-config.js`, `identities.article`) may gain a clause naming the article's reader and that it is one story; the rule-text read decides.
+- **The identity line** (`lib/theme-config.js`, `identities.article`) gains a clause naming the article's reader and that it is one story: "one story, for the players who were there that night, each of whom saw only part of it" (the rule-text read, 2026-10-20).
 
-The director agreed: the article writer's craft files (`ARTICLE_CRAFT`, `lib/rule-set.js`) end with craft-telling and craft-voice, the two that say how the prose reads, so they sit last before the director's notes. Today voice sits in the middle of the list. The arc writer's and the map writer's lists gain craft-voice (section 3) and otherwise keep their order.
+The director agreed: the article writer's craft files (`ARTICLE_CRAFT`, `lib/rule-set.js`) end with craft-telling and craft-voice, the two that say how the prose reads, so they sit last before the director's notes. Today voice sits in the middle of the list. All three lists follow one order, with telling and voice last: the arc writer's and the map writer's gain craft-voice (section 3), and the map writer's reads its cards before telling (the rule-text read, change 17).
 
 ### 5. The truth floor and the fiction
 
