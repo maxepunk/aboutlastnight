@@ -184,6 +184,17 @@ describe('4.11: the script renders every call, and checks every marker, from a s
     expect(fs.readFileSync(path.join(out, 'outline-revision.txt'), 'utf8')).not.toContain(ids);
   }, 60000);
 
+  // Phase 17, fix wave 3: code holds the map's headline, and the map's send-back with the
+  // director's note is the one pass that may write a new one, so its render alone says when.
+  it("only the map's send-back render says the headline stays unless the director's note asks for a new one", () => {
+    const line = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, in the voice C12 (`<craft-voice>`) sets out.";
+    const { out } = render('1004112');
+    RENDERS.forEach((file) => {
+      const count = fs.readFileSync(path.join(out, file), 'utf8').split(line).length - 1;
+      expect(`${file}: ${count}`).toBe(`${file}: ${file === 'outline-revision.txt' ? 1 : 0}`);
+    });
+  }, 60000);
+
   it("the renders on the old shapes read the fixed weave and map, and nothing of the old shapes", () => {
     const { out } = render('1004114');
     RENDERS.forEach((file) => {

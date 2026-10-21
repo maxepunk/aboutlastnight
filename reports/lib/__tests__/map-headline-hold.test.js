@@ -8,6 +8,7 @@
  *   director's version on a send-back), except a send-back with the director's note, whose
  *   rework may write the new headline the note asks for; the automatic passes after it in that
  *   round keep that one.
+ * - The map's send-back with the director's note, and only it, reads the line that says so.
  *
  * One function holds a map's headline: lib/map.js holdHeadline. getSdkClient returns
  * config.configurable.sdkClient as is, so a jest.fn IS the model here. No model call. Invented
@@ -18,6 +19,7 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-secret-not-used
 
 const { holdHeadline } = require('../map');
 const { generateOutline, reviseOutline, createMockPromptBuilder } = require('../workflow/nodes/ai-nodes');
+const { buildRevisionContext } = require('../workflow/nodes/node-helpers');
 const { _testing: { incrementOutlineRevision } } = require('../workflow/graph');
 const { roundNoteOf } = require('../workflow/state');
 const { CHECKPOINT_TYPES } = require('../workflow/checkpoint-helpers');
@@ -26,11 +28,12 @@ const { withFactCheckMark } = require('../weave');
 const { StructuredOutputExtractionError } = require('../llm/structured-output-extractor');
 const { CHANGED_EDITS_KEY, carriedEdits } = require('../hand-edit-diff');
 const { buildResumePayload } = require('../../server.js');
-const { reworkFixtureState, WEAVE, MAP } = require('./fixtures/rework-state');
+const { reworkFixtureState, WEAVE, MAP, PREVIOUS_BUNDLE } = require('./fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const returning = (value) => jest.fn(async () => clone(value));
 const cfg = (sdk) => ({ configurable: { sdkClient: sdk, promptBuilder: createMockPromptBuilder(), theme: 'journalist' } });
+const promptOf = (sdk) => sdk.mock.calls[0][0].prompt;
 
 /** The settled angle's headline in the fixture: the first angle's, since the weave carries no pick. */
 const SETTLED = WEAVE.angles[0].headline;
@@ -40,6 +43,8 @@ const REWORDED = 'The Room Called It an Overdose, and the Ledger Disagreed';
 const TYPED = 'A Sale on the Night He Died, and a Room That Looked Away';
 /** The director's note that asks for a new headline. */
 const NOTE = 'Give the map a headline about the sale, not the vote.';
+/** The line a map send-back with the director's note reads, word for word (fix wave 3, step 3). */
+const HEADLINE_LINE = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, in the voice C12 (`<craft-voice>`) sets out.";
 
 beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -241,5 +246,46 @@ describe("the map's rework: each later pass keeps the headline it started from",
       expect(result.outline.headline).toBe(TYPED);
       expect(result.outline).toEqual(state._previousOutline);
     });
+  });
+});
+
+describe("the send-back's line: the map's send-back with the director's note, and only it", () => {
+  const atMap = () => ({ ...reworkFixtureState('journalist'), outlineRevisionCount: 0, humanOutlineRevisionCount: 0, directorGateNotes: [] });
+
+  it("is in the map send-back's prompt, after the note's scope", async () => {
+    const { stateUpdates } = buildResumePayload({ outline: 'send-back', note: NOTE, map: clone(MAP) }, atMap(), 'journalist', CHECKPOINT_TYPES.OUTLINE);
+    const after = { ...atMap(), ...stateUpdates };
+    const state = { ...after, ...(await incrementOutlineRevision(after)) };
+    const sdk = returning(MAP);
+    await reviseOutline(state, cfg(sdk));
+    const prompt = promptOf(sdk);
+    expect(prompt.split(HEADLINE_LINE).length - 1).toBe(1);
+    expect(prompt).toContain(`What the note leaves alone stays as it was. ${HEADLINE_LINE}`);
+  });
+
+  it("is not in the map's automatic pass", async () => {
+    const state = { ...atMap(), ...(await incrementOutlineRevision(atMap())) };
+    const sdk = returning(MAP);
+    await reviseOutline(state, cfg(sdk));
+    expect(promptOf(sdk)).not.toContain(HEADLINE_LINE);
+    expect(promptOf(sdk)).not.toContain("unless the director's note asks for a new one");
+  });
+
+  // Every rework's context, built as its node builds it: the map's two, the article's two and the
+  // weave's three (lib/workflow/nodes/node-helpers.js buildRevisionContext).
+  const contexts = {
+    'the map send-back with a note': { phase: 'outline', outputName: 'map', revisionCount: 0, round: 2, previousOutput: clone(MAP), humanFeedback: NOTE },
+    "the map's automatic pass": { phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: clone(MAP), humanFeedback: null, validationResults: { phase: 'outline', source: 'map-checks', passed: false, structuralIssues: ['Riley is in no move.'] } },
+    "the article's send-back with a note": { phase: 'article', revisionCount: 0, round: 2, previousOutput: clone(PREVIOUS_BUNDLE), humanFeedback: NOTE },
+    "the article's automatic pass": { phase: 'article', revisionCount: 1, previousOutput: clone(PREVIOUS_BUNDLE), humanFeedback: null, validationResults: { phase: 'article', passed: false, structuralIssues: ['A card quotes no document.'] } },
+    "the weave's send-back with a note": { phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, previousOutput: clone(WEAVE), meetingRound: 'send-back', humanFeedback: NOTE },
+    "the weave's reweave with a note": { phase: 'arcs', outputName: 'weave', revisionCount: 0, round: 2, previousOutput: clone(WEAVE), meetingRound: 'reweave', humanFeedback: NOTE },
+    "the weave's automatic pass": { phase: 'arcs', outputName: 'weave', revisionCount: 1, previousOutput: clone(WEAVE), meetingRound: null, humanFeedback: null, validationResults: { phase: 'arcs', passed: false, structuralIssues: ['T3 breaks a rule.'] } }
+  };
+
+  it.each(Object.keys(contexts))('%s', (name) => {
+    const { contextSection } = buildRevisionContext(contexts[name]);
+    const expected = name === 'the map send-back with a note';
+    expect(`${name}: ${contextSection.includes(HEADLINE_LINE)}`).toBe(`${name}: ${expected}`);
   });
 });

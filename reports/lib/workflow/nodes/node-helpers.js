@@ -1249,7 +1249,14 @@ ${formatEditLines(standingEdits, previousOutput)}
   const sentBackAngleLine = openAngle && meetingRound === 'send-back'
     ? ` The director had the angle ${openAngleWords} open when they sent the weave back, so a note about "this angle" or "the angle" is about that one; the rethink still reaches any angle, as far as the note asks.`
     : '';
-  const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.${sentBackAngleLine}`;
+  // Phase 17, fix wave 3 (the director's call after the final review): code holds the map's
+  // headline (lib/map.js holdHeadline), and a map send-back with the director's note is the one
+  // pass whose headline stands as its rework writes it (ai-nodes.js reviseOutline, by the same
+  // feedback slot). The map writer's task, which the rework reads, says the map carries the
+  // settled angle's headline word for word, so this scope says when the note may change it.
+  const MAP_SEND_BACK_HEADLINE = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, in the voice C12 (`<craft-voice>`) sets out.";
+  const mapHeadlineLine = mapMode && directorsRound ? ` ${MAP_SEND_BACK_HEADLINE}` : '';
+  const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.${sentBackAngleLine}${mapHeadlineLine}`;
   let scope;
   if (meetingRound === 'reweave') scope = reweaveScope;
   else if (directorsRound) scope = noteScope;
