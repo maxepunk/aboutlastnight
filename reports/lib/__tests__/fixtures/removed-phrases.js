@@ -522,7 +522,14 @@ const REMOVED_PHRASES = [
   'reasoning inside the world wherever a rule matters',
   'is their reporting for this article',
   'Write the map as C16',
-  'each written from the pieces of its'
+  'each written from the pieces of its',
+
+  // Phase 17, fix wave 2 (the director's calls after the final review, 2026-10-20): C12's last
+  // test and the article writer's identity line read the players as in the room, since the
+  // investigation runs the day after the party; and C8's last sentence says each line the article
+  // quotes is word for word, where it read as print every line the map places.
+  'there that night',
+  'The article carries each line word for word'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
