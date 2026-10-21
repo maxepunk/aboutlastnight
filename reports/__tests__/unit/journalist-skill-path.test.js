@@ -242,9 +242,12 @@ describe('the story level, with the evidence underneath (phase 4b, piece 1)', ()
     expect(section(agent('outline-generator'), 'Input')).toContain('.claude/skills/journalist-report/references/schemas.md');
   });
 
-  it("the article generator writes each beat from its evidence, and prints a card from the flagged piece", () => {
+  // Phase 17 (brief E; the writing spec's section 4): each beat draws on its evidence for what the
+  // beat needs, as C16 now words the article writer's part, in place of "each written from the
+  // pieces of its `evidence`".
+  it("the article generator draws on each beat's evidence, and prints a card from the flagged piece", () => {
     const job = section(agent('article-generator'), 'Job');
-    expect(job).toContain('each written from the pieces of its `evidence`');
+    expect(job).toContain('drawing on the pieces of its `evidence` for what the beat needs');
     expect(job).toContain('print an inline card of the document named by its piece flagged `card`');
   });
 
@@ -448,7 +451,8 @@ describe('your words and the world (phases 14 and 15)', () => {
     const input = section(agent('article-validator'), 'Input');
     expect(input).toMatch(/when the investigation ran \(`timeOfDay`\)/);
     expect(input).toMatch(/Nova's first name for the session/);
-    expect(input).toMatch(/the guest reporter, when there is one/);
+    // Phase 17 (brief E; R5): the session holds its guest reporters as a list, each apart.
+    expect(input).toMatch(/each guest reporter, when the session has any/);
   });
 
   it("the shift's placeholder in the record allows each form the console prints", () => {
@@ -458,8 +462,13 @@ describe('your words and the world (phases 14 and 15)', () => {
     expect(shift).toMatch(/the first-burial bonus/);
   });
 
-  it("the article generator's byline names a guest reporter only when the session has one", () => {
-    expect(section(agent('article-generator'), 'Job')).toMatch(/no `guestReporter` when it has none/);
+  // Phase 17 (brief E; R5, the read's addendum f): the byline credits each guest reporter whole,
+  // "Name | Role" or "Name", joined with " || ", as the pipeline's byline instruction gives it.
+  it("the article generator's byline credits each guest reporter, and names none when the session has none", () => {
+    const job = section(agent('article-generator'), 'Job');
+    expect(job).toContain('each guest reporter in `guestReporters`');
+    expect(job).toContain('`<name> | <role>`, or `<name>` with no role, joined with ` || `');
+    expect(job).toMatch(/no `guestReporter` when the session has none/);
   });
 
   it("the deep dive says no character sheet is ever in the record, and describes the notes at the stops and the ledger's shift", () => {
@@ -492,6 +501,99 @@ describe('your words and the world (phases 14 and 15)', () => {
       motiveLine: /Nova's own motive/i,
       namesake: /reason to suspect its namesake/i,
       chasingNext: /what Nova is chasing next/i
+    };
+    Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(ALL[name])}`).toBe(`${name}: ${what}: false`));
+  });
+});
+
+/**
+ * Phase 17 (brief E; spec docs/superpowers/specs/2026-10-18-the-writing-design.md sections 3, 4,
+ * 6 and 8): the standalone path and the docs follow the pipeline.
+ * - The article generator writes the article as ARTICLE_TASK frames it: one cohesive story that
+ *   argues the settled angle's thesis, built on the headline and the deck, with the map as its
+ *   plan, and the prose as C4 and C12 set it out.
+ * - The outline generator's only prose is the deck under the settled angle's headline, which it
+ *   carries word for word, and the headings, as mapTask (addendum a) gives it; the arc analyzer
+ *   writes each angle's headline in the voice.
+ * - The guest reporters are a list, `guestReporters`, empty when the session has none (R5).
+ * - The deep dive names C12's and C4's new titles and the lists' new source.
+ * - No file says what gate 5 retires.
+ */
+describe('the writing (phase 17)', () => {
+  const DOCS = {
+    'CONTEXT.md': read(path.join(REPO, 'CONTEXT.md')),
+    'PIPELINE_DEEP_DIVE.md': read(path.join(REPO, 'docs', 'PIPELINE_DEEP_DIVE.md')),
+    'first-run-sheet.md': read(path.join(REPO, 'docs', 'runbook', 'first-run-sheet.md'))
+  };
+  const ALL = { ...FILES, ...DOCS };
+  const opening = (name) => {
+    const text = agent(name);
+    return text.slice(text.indexOf('\n# '), text.indexOf('\n## Rules'));
+  };
+  const step = (n) => {
+    const text = FILES['SKILL.md'];
+    return text.slice(text.indexOf(`### ${n}. `), text.indexOf(`### ${n + 1}. `));
+  };
+
+  it('the article generator writes one cohesive story on the headline and the deck, with the map as its plan', () => {
+    const job = section(agent('article-generator'), 'Job');
+    expect(job).toContain("Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map as its plan.");
+    expect(job).toContain("Write it as C16 (`craft-story.md`) sets out the article writer's part");
+    expect(job).toContain('as C4 (`craft-telling.md`) sets out, in the voice C12 (`craft-voice.md`) sets out');
+  });
+
+  it('the article generator writes the prose under the headline, the deck and the headings the map gives it', () => {
+    expect(opening('article-generator')).not.toMatch(/all of its prose/);
+    expect(opening('article-generator')).toMatch(/under the headline, the deck and the headings the map gives it/);
+  });
+
+  it("the outline generator's only prose is the deck under the settled angle's headline, and each heading, in the voice", () => {
+    const text = opening('outline-generator');
+    expect(text).toContain("The map's only prose is the copy the article prints as you write it: the deck under the settled angle's headline, which the map carries word for word, and each section's heading, written as C5 (`craft-form.md`) sets out, in the voice C12 (`craft-voice.md`) sets out. Every other line stays in story terms.");
+  });
+
+  it("the arc analyzer writes each angle's headline in the voice, and every other line in plain words", () => {
+    expect(opening('arc-analyzer')).toMatch(/each angle's headline in the voice C12 \(`craft-voice\.md`\) sets out/);
+    expect(opening('arc-analyzer')).toMatch(/every other line in plain words/);
+  });
+
+  it('the session config and the record hold the guest reporters as a list, empty when the session has none', () => {
+    const schemas = FILES['schemas.md'];
+    expect(schemas).toContain('"guestReporters": [{"name": "<name>", "role": "<role>"}],');
+    expect(schemas).toContain('"journalistFirstName", "guestReporters"}');
+    expect(schemas).toMatch(/`guestReporters` holds one entry for each guest reporter, and is empty when the session has none/);
+    expect(step(1)).toMatch(/each guest reporter's name and role when the session has any/);
+    expect(step(1)).toMatch(/`guestReporters`/);
+  });
+
+  // The curator copies the session's facts into the record (its Job); the others read them there.
+  it.each([['arc-analyzer', 'Input'], ['outline-generator', 'Input'], ['article-generator', 'Input'], ['article-validator', 'Input'], ['evidence-curator', 'Job']])(
+    "%s reads each guest reporter apart (its %s)", (name, heading) => {
+      expect(section(agent(name), heading)).toMatch(/each guest reporter, when the session has any/);
+    });
+
+  it("SKILL.md's article step draws on each beat's evidence for what the beat needs, as C16 words it", () => {
+    expect(step(10)).toContain('drawing on its evidence for what the beat needs');
+    expect(step(10)).toContain('writes the article the map plans');
+  });
+
+  it("the deep dive names C12's and C4's new titles, and the lists' source in this phase", () => {
+    const doc = DOCS['PIPELINE_DEEP_DIVE.md'];
+    expect(doc).toContain('| C12: Nova works the case in front of the reader |');
+    expect(doc).toContain('| C4: about 1,500 words, every sentence saying something |');
+    expect(doc).not.toMatch(/Each call reads the ones the phase 4 spec's section 11 gives it/);
+    expect(doc).toContain('SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions, voice)');
+  });
+
+  it.each(Object.keys(ALL))('%s describes nothing phase 17 retires (gate 5)', (name) => {
+    const old = {
+      sixNames: /Kara Swisher|Casey Newton|Heather Cox Richardson|Marisa Kabas|Hunter S\. Thompson/,
+      noProse: /\b(?:writes|with) no prose\b/i,
+      markedOpinion: /\bmarks? as Nova's\b|\bmarked as Nova's\b|\bworded fresh\b/i,
+      sharpLine: /\bevery sharp line\b/i,
+      writeTheMap: /\bWrite the map as\b|\bthe evidence it carries\b|\bfrom the evidence the beat carries\b|\bwritten from the pieces of its\b/i,
+      mapReadsNoVoice: /but `?craft-voice(?:\.md)?`? and|working reporter with a stake|every paragraph pulling/i,
+      oneGuest: /\bthe guest reporter,? when there is one\b|"guestReporter": \{|\ba guest reporter's name and role\b/i
     };
     Object.entries(old).forEach(([what, pattern]) => expect(`${name}: ${what}: ${pattern.test(ALL[name])}`).toBe(`${name}: ${what}: false`));
   });

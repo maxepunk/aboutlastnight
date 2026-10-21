@@ -76,7 +76,7 @@ What each control does:
 - **+ Add a move** at the foot of each column opens a line for the move in a few plain words and its players, separated by commas; **Add the move** adds it at the column's foot. It starts with no summary: select it and use **Edit the words** to write one, or leave it without.
 - **The pencil** on a section's heading and job, the headline, the deck, the gap and the expected length opens its editor; the article writer aims at the expected length, so set it lower when you leave moves out. Your changes are to the lines: the evidence stays the writers'.
 - **Note to the writer, sent with whichever button you press**: with Approve it stands for every later writer; with Send back the writer reworks the map as it asks.
-- **Approve**: the article writer writes from the map as you left it, each section's moves in their order, each as its summary says, where it has one, from the evidence it carries, and finds the evidence for a move you added. **Send back** needs a note and takes two clicks.
+- **Approve**: the article writer writes the article the map plans, as you left it, each section's moves in their order, each as its summary says, where it has one, drawing on each move's evidence for what the move needs, and finds the evidence for a move you added. **Send back** needs a note and takes two clicks.
 
 ### The desk (the stepper's "Article")
 The article as it will print, with every editor visible and nothing in front of it: the word count, the hero, **Settled at the story meeting** (the story and its question, read-only), the headline, the byline, and each section with its blocks.

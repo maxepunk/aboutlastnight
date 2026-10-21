@@ -48,9 +48,9 @@ Required:
 - the director's notes, the epilogue included;
 - the folder of session photos, and which photo is the whiteboard.
 
-Optional: the reporting mode (`on-site`, the default, or `remote`), a guest reporter's name and role when the session has one, and Nova's first name for the session (default Cassandra), which the article signs.
+Optional: the reporting mode (`on-site`, the default, or `remote`), each guest reporter's name and role when the session has any, and Nova's first name for the session (default Cassandra), which the article signs.
 
-Write `inputs/session-config.json`, and `inputs/director-notes.json` with the notes and an empty `stopNotes`.
+Write `inputs/session-config.json`, with each guest reporter apart in `guestReporters`, and `inputs/director-notes.json` with the notes and an empty `stopNotes`.
 
 ### 2. Copy the session report
 
@@ -148,7 +148,7 @@ The director can edit any line, a move's title, summary and people among them; m
 
 ### 10. Write the article
 
-Start `journalist-article-generator`. It writes from the settled angle and the map as the director left them, each section's beats in the map's order, each as its summary says, where it has one, from the evidence it carries, and renders `output/article.html`.
+Start `journalist-article-generator`. It writes the article the map plans, from the settled angle and the map as the director left them, each section's beats in the map's order, each as its summary says, where it has one, drawing on its evidence for what the beat needs, and renders `output/article.html`.
 
 ### 11. Check the article
 

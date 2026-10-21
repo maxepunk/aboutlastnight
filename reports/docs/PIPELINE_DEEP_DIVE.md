@@ -210,9 +210,9 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 │              PHASE 4: ARTICLE GENERATION (Opus)                             │
 │  Reads the whole rule set: the world, the truth rules, all 8 craft files    │
 │  Nova's voice: C12 in craft-voice.md; words that never print: T14           │
-│  Writes each beat in the map's order, as its summary says, where it has     │
-│  one, from its evidence; the fact check, then a truth-only judge; the       │
-│  director finishes the article at the desk                                  │
+│  Writes one story the map plans, each beat in the map's order, as its       │
+│  summary says, where it has one, drawing on its evidence; the fact check,   │
+│  then a truth-only judge; the director finishes the article at the desk     │
 └─────────────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -340,7 +340,7 @@ What the article can do with each layer is the rule set's, stated once: `world.m
 **Nodes**: `analyzeArcs` (graph name; the function `analyzeArcsPlayerFocusGuided`), `validateArcs` (`validateArcStructure`, the weave checks), `evaluateArcs` (the fact check), `checkpointArcSelection` (the story meeting), and the rework, `incrementArcRevision` then `reviseArcs` (phase 4, briefs 4.4 and 4.5; spec section 4)
 **Files**: `lib/workflow/nodes/arc-specialist-nodes.js`, `lib/weave.js` (the weave's shape and its checks), `lib/meeting.js` (the meeting's payloads and what it shows)
 
-**The arc writer** writes one weave in one call: two or three angles, each a story the article could tell, over one shared set of threads, from which the director picks one and settles it at the story meeting before anything is planned (phase 4b, piece 3; spec `docs/superpowers/specs/2026-10-06-meeting-as-angles.md`). When the director's notes end with their own read of the session, angle 1 is that read worked up as a pitch, and the others are the strongest alternatives the session offers; otherwise every angle is the writer's, the strongest first (C1). The record and everything else supply the threads, their evidence and what complicates each story. Since phase 4b (piece 1; spec `docs/superpowers/specs/2026-10-05-story-level-and-evidence.md`) each thread and connection is a line in story terms, with the evidence that tells it underneath: the director reads the lines, and the evidence travels to the map writer and on to the article writer, which cites it. The lens work C16 sets out reaches the weave as the angles, each a different way the threads make a story, and as the evidence, each piece marked as supporting its line or cutting against it.
+**The arc writer** writes one weave in one call: two or three angles, each a story the article could tell, over one shared set of threads, from which the director picks one and settles it at the story meeting before anything is planned (phase 4b, piece 3; spec `docs/superpowers/specs/2026-10-06-meeting-as-angles.md`). When the director's notes end with their own read of the session, angle 1 is that read worked up as a pitch, and the others are the strongest alternatives the session offers; otherwise every angle is the writer's, the strongest first (C1). The record and everything else supply the threads, their evidence and what complicates each story. Since phase 4b (piece 1; spec `docs/superpowers/specs/2026-10-05-story-level-and-evidence.md`) each thread and connection is a line in story terms, with the evidence that tells it underneath: the director reads the lines, and the evidence travels to the map writer and on to the article writer, which draws on it for what each move needs and cites what it uses. The lens work C16 sets out reaches the weave as the angles, each a different way the threads make a story, and as the evidence, each piece marked as supporting its line or cutting against it.
 
 **Prompt Structure** (recency bias: rules LAST). The system prompt is the theme's identity line, the mode block, the world and the truth rules (`systemPromptOpening`, from `loadRuleSet('arc', {theme})`), then the writer's role. The user prompt (`buildWeaveSections`):
 
@@ -352,13 +352,13 @@ SECTION 1: WHAT THE ROOM CONCLUDED
   - The director's notes and corrections: the record for the room, under T1
   - Blake and the Valet in the director's notes (when the notes name them)
   - The investigation focus, the session roster with when the investigation
-    ran and the guest reporter when there is one, the character categories,
-    the roster with pronouns and the character context
+    ran and each guest reporter, when the session has any, the character
+    categories, the roster with pronouns and the character context
 SECTION 2: THE RECORD (every exposed document, then the investigation's timeline),
   then the Sources a piece of evidence may name: the document ids,
   "ledger", "evidence-log" and "notes"
 SECTION 3: THE WEAVE (WEAVE_TASK: C1, C16 and C15, by pointer)
-SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions)
+SECTION 4: CRAFT GUIDANCE (story, form, material, judgement, questions, voice)
 <DIRECTOR_GUIDANCE> (the standing notes)
 ```
 
@@ -434,7 +434,7 @@ The photo branch joins at the map writer. Phase 2.4, the arc evidence packages (
 }
 ```
 
-**The writer** reads the settled weave first, as its task (`settledWeaveOf`): the angle the director sent on, its headline, story, question, why it lands and where it ends up, each of its threads in its order with its evidence under it, the threads it leaves out by name, and the connections between its threads, then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-voice.md` and `craft-questions.md` (`loadRuleSet('outline', {theme})`), and the standing notes last. It writes each section's beats as moves in story terms, in the order the article will tell them (C2, C6), gives each its people, a synopsis of about 20 words, its threads and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words of its own as the page opens (`MAP_WORD_AIM`) and about 250 between the synopses (`MAP_SYNOPSIS_AIM`). Code writes `heroImage` from the map's top photo.
+**The writer** reads the settled weave first, as its task (`settledWeaveOf`): the angle the director sent on, its headline, story, question, why it lands and where it ends up, each of its threads in its order with its evidence under it, the threads it leaves out by name, and the connections between its threads, then the theme's slots, the director's notes, the photos with code's pick for the top photo first, the record, FINANCIAL_SUMMARY, `SESSION_FACTS`, the roster with pronouns, `<SCHEMA>` and every craft file but `craft-questions.md`, telling and voice last (`loadRuleSet('outline', {theme})`), and the standing notes last. Its only prose is the deck under the settled angle's headline, which it carries word for word, and each section's heading, in Nova's voice (C5, C12); every other line stays in story terms. It writes each section's beats as moves in story terms, in the order the article will tell them (C2, C6), gives each its people, a synopsis of about 20 words, its threads and its evidence, from those threads' evidence and from the record, flags each card's document, and aims for 300 words of its own as the page opens (`MAP_WORD_AIM`) and about 250 between the synopses (`MAP_SYNOPSIS_AIM`). Code writes `heroImage` from the map's top photo.
 
 **The checks** (`lib/map.js` `mapFindings`), free and in code:
 - every roster player in a beat or raised in the gap note, and every kept photo placed once;
@@ -453,9 +453,9 @@ A failed check sends the map back for one automatic rework (`REVISION_CAPS.OUTLI
 
 **Nodes**: `generateContentBundle`, `evaluateArticle` (the fact check, then the article judge), `checkpointArticle` (the desk), and the rework, `incrementArticleRevision` then `reviseContentBundle` (`lib/workflow/nodes/ai-nodes.js` and `evaluator-nodes.js`; phase 4, briefs 4.7a and 4.7b; spec section 6)
 
-**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files and the standing notes last. It writes all the prose from the map's beats, each section's beats in the map's order and each as its synopsis says, where it has one (C2, C16), each from the evidence the beat carries, citing its quotations, figures and times, and reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
+**What the writer reads** (`articleWriterInputs`): the settled weave first (`settledWeaveOf`), then the map as the director left it (`<STORY_MAP>`), then its task, then PHOTOS, the record, the money, the director's notes, `SESSION_FACTS`, the instruction with its `<SCHEMA>`, the eight craft files with telling and voice last, and the standing notes last. It writes the article the map plans: one cohesive story that argues the settled angle's thesis, built on the map's headline and deck, each section's beats in the map's order and each as its synopsis says, where it has one (C2, C16), each drawing on the evidence the beat carries for what the beat needs and citing what it uses, and it reads the whole record for a scene's detail; an inline card prints the document of the piece its beat flags (C9). It adds no beat and no connection (C16). Code stamps the map's headline, deck and top photo into the first draft (`stampFromMap`, R7).
 
-**The rules**: the article writer reads the whole rule set (`loadRuleSet('article', {theme})`): the world and the truth rules in its system prompt after the mode block, and all eight craft files last in its user prompt. Nova's voice is C12 in `craft-voice.md`; where Nova stood is the session's mode block (`mode-on-site.md` or `mode-remote.md`) and T8; the length and the house style are C4 in `craft-telling.md`; the fiction's own words are T14, buried memories T3, and characters, not players, T11, all in `truth-rules.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
+**The rules**: the article writer reads the whole rule set (`loadRuleSet('article', {theme})`): the world and the truth rules in its system prompt after the mode block, and all eight craft files last in its user prompt, telling and voice the last two. Nova's voice is C12 in `craft-voice.md`, which the arc writer and the map writer read too, for the headline, the deck and the headings they write; where Nova stood is the session's mode block (`mode-on-site.md` or `mode-remote.md`) and T8; the length and the house style are C4 in `craft-telling.md`; the fiction's own words are T14, buried memories T3, and characters, not players, T11, all in `truth-rules.md`. Code checks the em-dash, the production words, Nova's pronoun, the length and the head count as advisories (`lib/content-bundle-fact-check.js`).
 
 **Photos** (T13): the writer is given every photo the director kept (`articleWriterInputs`, `options.photos`): the hero, the map's top photo, first, then every other photo but the whiteboard, each printed once under PHOTOS. The map places each kept photo once, beside its beat or with its people, and the article prints each where the map places it; the article judge's `photosTruth` checks every one. The hero is read once, through `topPhotoOf(articleMapOf(state))`: PHOTOS, the instruction's hero line, the stamp and the judge's PHOTOS all name it (brief 4.7c).
 
@@ -879,14 +879,14 @@ The writers and judges read the rule set of their theme (phase 3; phase 4, R14),
 | `references/rules/craft-story.md` | C1, C3, C16: one thesis, how the official story was made, the threads woven toward one convergence |
 | `references/rules/craft-form.md` | C2, C5, C6, C17, C18, C19, C14: the article's form, from the opening to the closing |
 | `references/rules/craft-material.md` | C8, C7, C10, C11: the director's lines (weighed by the arc writer, chosen by the map), the players, the mechanics, the exposures |
-| `references/rules/craft-voice.md` | C12: Nova, a working reporter with a stake |
+| `references/rules/craft-voice.md` | C12: Nova works the case in front of the reader |
 | `references/rules/craft-judgement.md` | C13: judgement on the characters, critique past them |
-| `references/rules/craft-telling.md` | C4: about 1,500 words, every paragraph pulling the reader on |
+| `references/rules/craft-telling.md` | C4: about 1,500 words, every sentence saying something |
 | `references/rules/craft-cards.md` | C9: cards and quote blocks |
 | `references/rules/craft-questions.md` | C15: questions to the director, at the story meeting |
 | `references/rules/mode-on-site.md`, `mode-remote.md` | The reporting-mode block: T8's mode part, what Nova could witness |
 
-The eight craft files group C1 to C19 by the writer's job (phase 3, task 3.8). Each call reads the ones the phase 4 spec's section 11 gives it (`RULE_SET_CALLS` in `lib/rule-set.js`; it was the rule-set spec's section 8).
+The eight craft files group C1 to C19 by the writer's job (phase 3, task 3.8). Each call reads the ones `RULE_SET_CALLS` in `lib/rule-set.js` gives it, in one order with telling and voice last, as the phase 17 spec's sections 3 and 4 set them (`docs/superpowers/specs/2026-10-18-the-writing-design.md`; the phase 4 spec's section 11 set them before, and the rule-set spec's section 8 before that).
 
 ### Data Directory Structure
 

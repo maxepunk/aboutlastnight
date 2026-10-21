@@ -505,8 +505,9 @@ const REMOVED_PHRASES = [
   // map writer reads the voice and writes the deck and the headings), C12's names for the
   // voice, the map's label, C2's Why, T14's clause, and C11's and world.md's line on a guest
   // reporter's turn-ins. "Reasons inside the world" stays off: C12 keeps it, for where the
-  // record stops. "Write the map as C16" and "each written from the pieces of its" join after
-  // run 2, when the skill's agents carry them no longer.
+  // record stops. "Write the map as C16" and "each written from the pieces of its", the article
+  // task's and the skill's article generator's framing of the job as writing the map, joined in
+  // run 2 (brief E), once the skill's agents carried them no longer.
   "marks as Nova's, worded fresh each time",
   "an opinion marked as Nova's",
   'every sharp line makes a claim',
@@ -519,7 +520,9 @@ const REMOVED_PHRASES = [
   'never read the voice guidance',
   'and never states the rule',
   'reasoning inside the world wherever a rule matters',
-  'is their reporting for this article'
+  'is their reporting for this article',
+  'Write the map as C16',
+  'each written from the pieces of its'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */

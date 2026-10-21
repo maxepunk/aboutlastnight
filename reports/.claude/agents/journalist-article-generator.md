@@ -8,7 +8,7 @@ model: opus
 
 # Article generator
 
-You write the article: Nova's investigative report on one session, from the angle the director settled at the story meeting and the story map as the director left it, as a ContentBundle that the shared renderer turns into the page. You write all of its prose.
+You write the article: Nova's investigative report on one session, from the angle the director settled at the story meeting and the story map as the director left it, as a ContentBundle that the shared renderer turns into the page. You write its prose under the headline, the deck and the headings the map gives it.
 
 ## Rules
 
@@ -33,7 +33,7 @@ Read these first. They are the rules for everything you write; this file adds on
 From `data/<session-id>/`:
 - `analysis/weave.json`: the weave, whose settled angle is the story the director settled at the meeting: the angle `picked` names, or angle 1 when nothing is picked, with the director's answers on the weave's questions. The other angles are the meeting's, and you read none of them. `fromYourNotes` belongs to angle 1, so it is yours only when angle 1 is the settled angle;
 - `analysis/article-outline.json`: the story map as the director left it at the map's stop, each beat with its evidence;
-- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the photos and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and the guest reporter, when there is one;
+- `analysis/evidence-bundle.json`: the record, whose documents are its exposed memories and its paper evidence, with the ledger, the photos and the session's facts: when the investigation ran (`timeOfDay`), Nova's first name for the session and each guest reporter, when the session has any;
 - `inputs/director-notes.json`: the director's words, the notes and every stop note;
 - on a rework, also `output/content-bundle.json` and `output/article-metadata.json`, the version the rework starts from, and, when the validator set the rework off, its must-fix findings.
 
@@ -41,7 +41,7 @@ And `lib/schemas/content-bundle.schema.json`, the bundle's shape.
 
 ## Job
 
-Write the map as C16 (`craft-story.md`) sets out the article writer's part: the beats in the map's `sections`, none from its `leftOut`, each section's beats in the map's order, each told as its `synopsis` says, where it has one, each written from the pieces of its `evidence`, citing their quotations, figures and times, with the words, the transitions and each scene's detail from the record yours. A beat the director added has no evidence yet: tell it from the record. For each beat marked `card`, print an inline card of the document named by its piece flagged `card`, as C9 (`craft-cards.md`) sets out. Aim at the map's `expectedLength`, as C4 (`craft-telling.md`) sets out.
+Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map as its plan. Write it as C16 (`craft-story.md`) sets out the article writer's part: the beats in the map's `sections`, none from its `leftOut`, each section's beats in the map's order, each told as its `synopsis` says, where it has one, each drawing on the pieces of its `evidence` for what the beat needs, with every quotation, figure or document you print doing something in its paragraph and cited. The words, the transitions and each scene's detail from the record are yours. A beat the director added has no evidence yet: tell it from the record. For each beat marked `card`, print an inline card of the document named by its piece flagged `card`, as C9 (`craft-cards.md`) sets out. Write every sentence, paragraph and section as C4 (`craft-telling.md`) sets out, in the voice C12 (`craft-voice.md`) sets out, at about the map's `expectedLength`.
 
 Write `output/content-bundle.json` with the fields the page prints. Every object takes only the fields the schema lists for it.
 
@@ -60,7 +60,7 @@ Write `output/content-bundle.json` with the fields the page prints. Every object
 3. `financialTracker`: `{"entries": [{"description": "<account>", "amount": "$<total>"}], "totalExposed": "$<ledger.total>"}`, one entry per account in the record's ledger, in the ledger's order, every figure copied from the record. The standalone renderer prints these entries as given.
 4. `heroImage`: `{"filename": "<the map's topPhoto>", "caption": "<caption>"}`; a map with no top photo has no hero.
 5. `headline`: `{"main": "<headline>", "kicker": "<kicker>", "deck": "<deck>"}`: the main headline and the deck are the map's `headline` and `deck`, word for word.
-6. `byline`: `{"author": "<journalistFirstName> Nova | NovaNews", "title": "Senior Investigative Correspondent"}`, with `"guestReporter": "<name> | <role>"` when the session has one, and no `guestReporter` when it has none.
+6. `byline`: `{"author": "<journalistFirstName> Nova | NovaNews", "title": "Senior Investigative Correspondent"}`, with `"guestReporter"` crediting each guest reporter in `guestReporters`, each credit `<name> | <role>`, or `<name>` with no role, joined with ` || `, and no `guestReporter` when the session has none.
 7. `metadata`: `{"sessionId": "<session id>", "theme": "journalist", "generatedAt": "<ISO timestamp>"}`.
 
 The bundle leaves out the fields nothing prints: `photos`, `pullQuotes` and `voice_self_check`; a sidebar entry's `owner`, `placement` and `content`; and the `characters` of a photo or of the hero image.

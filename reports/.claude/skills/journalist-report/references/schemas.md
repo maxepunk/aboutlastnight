@@ -31,11 +31,13 @@ A **record question** is one the session report or the record leaves for the dir
   "roster": [{"name": "<the character's first name>", "pronouns": "<as the director gives them>"}],
   "reportingMode": "on-site | remote",
   "journalistFirstName": "<first name>",
-  "guestReporter": {"name": "<name>", "role": "<role>"} | null,
+  "guestReporters": [{"name": "<name>", "role": "<role>"}],
   "accusationRaw": "<the group statement>",
   "whiteboardPhoto": "<filename> | null"
 }
 ```
+
+`guestReporters` holds one entry for each guest reporter, and is empty when the session has none.
 
 ### inputs/director-notes.json
 
@@ -94,7 +96,7 @@ One per session photo, the image analyzer's reply; `analysis/image-analyses-comb
 
 ```
 {
-  "sessionContext": {"sessionId", "roster", "reportingMode", "journalistFirstName", "guestReporter"},
+  "sessionContext": {"sessionId", "roster", "reportingMode", "journalistFirstName", "guestReporters"},
   "verdict": "<the group statement>",
   "exposedMemories": [{"id": "<tokenId>", "name": "<name>", "owners": ["<character>"], "text": "<fullDescription, whole>"}],
   "paperEvidence": [{"id": "<notionId>", "name": "<name>", "type": "<basicType, as fetched>", "owners": ["<character>"], "text": "<description, whole>"}],
