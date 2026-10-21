@@ -472,11 +472,13 @@ const REPO = path.join(__dirname, '..', '..');
  *   ends on the prose as C4 and C12 set it out (+97): article-journalist 36054 -> 36324 (+270).
  * - Phase 17, fix wave 2 (the director's calls after the final review, 2026-10-20). The article
  *   writer's identity line says its players were "in the room", since in the fiction the
- *   investigation runs the day after the party (-5): article-journalist 36324 -> 36319.
+ *   investigation runs the day after the party (-5): article-journalist 36324 -> 36319. The
+ *   byline's guestReporter description in its <SCHEMA> names the " || " join of two or more
+ *   credits, as the byline instruction gives them (+58): article-journalist 36319 -> 36377.
  */
 const PINNED = {
   'outline-journalist': ['b3e3e235b31d78e8a484dcdc62531159cbe8a1ed4cd0ef57388115cd1fb75f1d', 25519],
-  'article-journalist': ['8faf626460d7a25fd1299f6d218dfeb73708a7564f7f36f085ada48cae9f3648', 36319],
+  'article-journalist': ['2ee55f5ebea7c0e2200e61477457a5ab6edb84b2b651e5213aef8a086fcacd36', 36377],
   'arcs-journalist': ['d7586be4b567321e07151d17b9727fc418666ae0cae7780b4e7f90afa9ba0f1a', 12319]
 };
 

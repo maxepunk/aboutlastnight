@@ -79,7 +79,7 @@
         },
         "guestReporter": {
           "type": "string",
-          "description": "Guest-reporter credit, as 'Name | Role'"
+          "description": "Guest-reporter credit, as 'Name | Role', the credits joined by ' || ' when there is more than one"
         }
       },
       "additionalProperties": false
