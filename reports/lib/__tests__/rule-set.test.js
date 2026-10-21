@@ -388,8 +388,9 @@ describe('the items phase 4 rewrites (task 4.1)', () => {
     ['C4', 'craft-telling', "The article writer gives each beat the sentences its job needs, a supporting player's beat a line or two and a decisive scene more, and aims at the map's expected length: a session that gives less makes a shorter article, never a padded one."],
     // Task 1A (phase 4b's read, 2026-10-05) rewrote the sentence this row pinned, on where
     // the map places each line, and pins it in its own block below; this row pins the
-    // phase 4 read's sentence that stands.
-    ['C8', 'craft-material', 'The article carries each line word for word and in the right mouth (T12).'],
+    // phase 4 read's sentence that stands, as phase 17's fix wave 2 words it (the director's
+    // call after the final review, 2026-10-20): the article quotes the lines it needs (C16).
+    ['C8', 'craft-material', 'Each line the article quotes is word for word and in the right mouth (T12).'],
     ['C7', 'craft-material', 'The map places every player in a beat, through something the record shows they did or said, in the section where it matters, never as a roll call.'],
     ['C15', 'craft-questions', "The director answers each in its own box at the story meeting, and the answer travels with its question to every later writer as the director's words."],
     // Task A of phases 14 and 15 (2026-10-09) rewrote the T1 sentence this row pinned, so the
