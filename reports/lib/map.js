@@ -1411,7 +1411,7 @@ function topPhotoOf(map) {
  *
  * @param {*} map - the map a writer or a rework returned
  * @param {*} headline - the headline the map carries, word for word
- * @returns {*} a copy of the map with that headline when the headline is a non-empty string and
+ * @returns {*} a copy of the map with that headline when the headline is a string that is not blank and
  *   the value is a map (isMapValue); otherwise the map as it is
  */
 function holdHeadline(map, headline) {
