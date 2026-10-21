@@ -492,7 +492,8 @@ describe('presence lines outside the article prompt', () => {
     // Phase 3 (3.2): the rule set in place of the retired craft files.
     expect(all).toContain('<world>');
     expect(all).toContain('<truth-rules>');
-    expect(all).toContain('<craft-voice>');
+    // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
+    expect(all.match(/^<craft-voice>$/gm)).toHaveLength(1);
     expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');
     [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
       expect(`${mode}: ${phrase}: ${all.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);

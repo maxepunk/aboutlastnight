@@ -191,12 +191,13 @@ describe('PromptBuilder', () => {
       expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
     });
 
+    // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
     it('should carry the voice craft file in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         SETTLED_WEAVE, mockMap
       );
 
-      expect(userPrompt).toContain('<craft-voice>');
+      expect(userPrompt.match(/^<craft-voice>$/gm)).toHaveLength(1);
       expect(userPrompt).not.toContain('Be NovaGlade');
     });
 
@@ -205,9 +206,14 @@ describe('PromptBuilder', () => {
         SETTLED_WEAVE, mockMap
       );
 
-      // Task 3.8: the eight craft files, grouped by the writer's job (spec section 8).
-      ['story', 'form', 'material', 'voice', 'judgement', 'telling', 'cards', 'questions']
-        .forEach((name) => expect(userPrompt).toContain(`<craft-${name}>`));
+      // Task 3.8: the eight craft files, grouped by the writer's job (spec section 8). Phase 17
+      // (R3): the task names story, form, cards, telling and voice in prose, so each file is
+      // counted by the line that opens it.
+      ['story', 'form', 'material', 'judgement', 'cards', 'questions', 'telling', 'voice']
+        .forEach((name) => {
+          const lines = (userPrompt.match(new RegExp(`^<craft-${name}>$`, 'gm')) || []).length;
+          expect(`${name}: ${lines}`).toBe(`${name}: 1`);
+        });
       expect(userPrompt).not.toContain('Show dont tell');
     });
 
@@ -239,13 +245,14 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('anthropics/claude-agent-sdk-typescript#277');
     });
 
-    // Phase 3 (3.2): the em-dash house style is C4's, in craft-telling.
+    // Phase 3 (3.2): the em-dash house style is C4's, in craft-telling. Phase 17 (R3): the
+    // task names <craft-telling> in prose, so the file is counted by its line.
     it('should carry the telling craft file, where the em-dash house style lives', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         SETTLED_WEAVE, mockMap
       );
 
-      expect(userPrompt).toContain('<craft-telling>');
+      expect(userPrompt.match(/^<craft-telling>$/gm)).toHaveLength(1);
     });
 
     // Brief 4.7b: the sections are the map's, each named by its slot; no code names the
@@ -286,7 +293,7 @@ describe('PromptBuilder', () => {
       );
       const generationInstruction = userPrompt.split('<GENERATION_INSTRUCTION>')[1] || '';
       expect(generationInstruction).not.toContain('1000-1500 words');
-      expect(userPrompt).toContain('<craft-telling>');
+      expect(userPrompt.match(/^<craft-telling>$/gm)).toHaveLength(1);
     });
   });
 
@@ -632,14 +639,18 @@ describe('PromptBuilder', () => {
       // "this morning"; T1 and the mode block say how the room's events reached Nova.
       expect(userPrompt).toContain("The director's notes on the session, as written");
       expect(userPrompt).not.toContain('What happened during the investigation this morning');
-      // Whiteboard should NOT be in this section. Phase 17: the scan reads the section alone,
-      // since C12 in the craft files now says "what Nova suspects" (rule-text read, change 1).
+      // Whiteboard should NOT be in this section, nor anywhere in the prompt. Phase 17: the
+      // article writer reads C12, which says "what Nova suspects" (rule-text read, change 1), so
+      // the scan reads the prompt outside the craft files, as the map writer's twin does.
       const section = userPrompt.slice(
         userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>'),
         userPrompt.indexOf('</INVESTIGATION_OBSERVATIONS>')
       );
       expect(section).toContain('Blake solicited Vic three times');
       expect(section).not.toContain('suspects');
+      const outsideCraft = userPrompt.replace(/^<(craft-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
+      expect(outsideCraft).toContain('<SETTLED_WEAVE>');
+      expect(outsideCraft).not.toContain('suspects');
     });
 
     it('should omit INVESTIGATION_OBSERVATIONS when directorNotes is null', async () => {
@@ -1396,7 +1407,8 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       const { systemPrompt, userPrompt } = await articleOf(journalist());
       expect(systemPrompt.split(core).length - 1).toBe(1);
       expect(userPrompt.split(craft).length - 1).toBe(1);
-      expect(userPrompt).toContain('<craft-voice>');
+      // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
+      expect(userPrompt.match(/^<craft-voice>$/gm)).toHaveLength(1);
       expect(userPrompt.indexOf(craft)).toBeGreaterThan(userPrompt.indexOf('</GENERATION_INSTRUCTION>'));
       expect(userPrompt.indexOf(craft)).toBeLessThan(userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
     });
