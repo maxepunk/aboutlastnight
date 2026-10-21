@@ -11,8 +11,8 @@
  * - `truth-rules.md`: T1 to T15, with T8's mode-independent part;
  * - eight `craft-*.md` files, the craft items C1 to C19 grouped by the writer's job
  *   (spec section 5; task 3.8): story (C1, C3, C16), form (C2, C5, C6, C17, C18,
- *   C19, C14), material (C8, C7, C10, C11), voice (C12), judgement (C13), telling
- *   (C4), cards (C9) and questions (C15). Each call reads the files RULE_SET_CALLS gives
+ *   C19, C14), material (C8, C7, C10, C11), judgement (C13), cards (C9), questions
+ *   (C15), telling (C4) and voice (C12). Each call reads the files RULE_SET_CALLS gives
  *   it, as the phase 17 spec's sections 3 and 4 set them
  *   (docs/superpowers/specs/2026-10-18-the-writing-design.md);
  * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block,

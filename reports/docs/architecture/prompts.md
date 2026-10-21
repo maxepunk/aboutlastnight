@@ -10,7 +10,7 @@ The pipeline supports multiple report themes via `state.theme`. Each theme produ
 
 | Theme | Output | Voice | Length | Narrator |
 |-------|--------|-------|--------|----------|
-| `journalist` | NovaNews investigative article | First person: C12: Nova works the case in front of the reader | About 1,500 words (C4) | Nova |
+| `journalist` | NovaNews investigative article | First person: C12's reporter working the case in front of the reader | About 1,500 words (C4) | Nova |
 | `detective` (parked, R1) | Detective case file | Third-person investigative | ~750 words | Det. Anondono |
 
 **Theme-aware layers:**

@@ -3,11 +3,12 @@
  *
  * The rule files under .claude/skills/journalist-report/references/rules/ state the
  * world (spec sections 1, 2 and 3a), the truth rules T1 to T15 and the craft items C1
- * to C19, each once. lib/rule-set.js hands each call the files the phase 4 spec's section 11 gives
- * it, and the reporting-mode block for the session's mode.
+ * to C19, each once. lib/rule-set.js hands each call the files the phase 17 spec's sections 3
+ * and 4 give it (docs/superpowers/specs/2026-10-18-the-writing-design.md; R2), and the
+ * reporting-mode block for the session's mode.
  *
  * Task 3.8 (spec round 7): the craft items are regrouped by the writer's job into
- * eight files (story, form, material, voice, judgement, telling, cards, questions),
+ * eight files (story, form, material, judgement, cards, questions, telling, voice),
  * C17 to C19 are new, and a body may point at another item ("(T1)", "as T5 sets
  * out"), so the lint counts an item by its heading.
  *
@@ -33,11 +34,12 @@ const JOURNALIST = { theme: 'journalist' };
 const CORE_FILES = ['world', 'truth-rules'];
 /**
  * The eight craft files, in the order a call reads the ones it is given: story, form,
- * material, voice, judgement, telling, cards, questions (task 3.8).
+ * material, judgement, cards, questions, telling, voice (phase 17, R2; the writing spec's
+ * sections 3 and 4).
  */
 const CRAFT_FILES = [
-  'craft-story', 'craft-form', 'craft-material', 'craft-voice',
-  'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
+  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+  'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
 ];
 const MODE_FILES = ['mode-on-site', 'mode-remote'];
 const ALL_FILES = [...CORE_FILES, ...CRAFT_FILES, ...MODE_FILES];
