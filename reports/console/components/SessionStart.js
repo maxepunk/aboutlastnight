@@ -465,7 +465,7 @@ function SessionStart({ dispatch, theme }) {
             'aria-label': 'Role or title of the guest reporter'
           }),
           React.createElement('p', { className: 'text-muted text-xs mt-xs' },
-            'Leave Name blank to omit. Role defaults to "Guest Reporter" if blank.'
+            'Leave Name blank to omit. Separate two reporters with a comma, and give their roles in the same order. Role defaults to "Guest Reporter" if blank.'
           )
         )
       )

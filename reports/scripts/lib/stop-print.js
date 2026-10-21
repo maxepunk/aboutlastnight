@@ -49,7 +49,7 @@ function besideLine(tone, text, label = '', beside = false) {
   return { tone, text: String(text), label, folded: false, beside };
 }
 
-/** The session's settings, as InputReview.js's Session Info shows them: the reporting mode and a guest reporter only for the journalist. */
+/** The session's settings, as InputReview.js's Session Info shows them: the reporting mode and each guest reporter only for the journalist. */
 function sessionInfoLines(config, theme) {
   const lines = [
     besideLine('title', '', BESIDE_HEADINGS['input-review'].session),
@@ -57,9 +57,9 @@ function sessionInfoLines(config, theme) {
   ];
   if (config.journalistFirstName) lines.push(besideLine('text', config.journalistFirstName, 'Journalist'));
   if (theme === 'journalist' && config.reportingMode) lines.push(besideLine('text', config.reportingMode, 'Reporting Mode'));
-  if (theme === 'journalist' && isPlainObject(config.guestReporter)) {
-    const guest = config.guestReporter;
-    lines.push(besideLine('text', `${guest.name} | ${guest.role || 'Guest Reporter'}`, 'Guest Reporter'));
+  // Phase 17 (R5): each guest reporter on a line of their own, as the panel prints them
+  if (theme === 'journalist') {
+    InputLogic.guestReporterPanelLines(config).forEach((line) => lines.push(besideLine('text', line, 'Guest Reporter')));
   }
   lines.push(besideLine('text', theme, 'Theme'));
   return lines;

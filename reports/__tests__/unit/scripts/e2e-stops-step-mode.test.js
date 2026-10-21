@@ -327,6 +327,20 @@ describe('4.12c, fix round 1: the harness prints beside a page the blocks its sc
     expect(titleAt(printed, 'Roster')).toBeLessThan(titleAt(printed, 'Accusation'));
   });
 
+  // Phase 17 (R5): each guest reporter on a line of their own, read apart as the panel reads
+  // them (input-review-logic.js guestReporterPanelLines), and nothing with none.
+  it('prints each guest reporter on a line of their own, and none with none', () => {
+    const settings = (sessionConfig) => stopPrint('input-review', reviewData({ sessionConfig: { ...reviewData().sessionConfig, guestReporter: undefined, ...sessionConfig } }))
+      .map((line) => line.text.trim()).filter((text) => text.startsWith('Guest Reporter'));
+    const two = ['Guest Reporter: Dana Okafor | Guest Reporter', 'Guest Reporter: Remi Vale | Contributing Reporter'];
+    expect(settings({ guestReporters: [{ name: 'Dana Okafor', role: 'Guest Reporter' }, { name: 'Remi Vale', role: 'Contributing Reporter' }] }))
+      .toEqual(two);
+    expect(settings({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter, Contributing Reporter' } })).toEqual(two);
+    expect(settings({ guestReporters: [{ name: 'Dana Okafor', role: '' }] })).toEqual(['Guest Reporter: Dana Okafor | Guest Reporter']);
+    expect(settings({ guestReporters: [] })).toEqual([]);
+    expect(settings({ guestReporter: null })).toEqual([]);
+  });
+
   it('leaves out the reporting mode and the guest reporter at a detective session, as the screen does', () => {
     const text = textOf(stopPrint('input-review', reviewData(), { theme: 'detective' }));
     expect(text).toContain('Theme: detective');

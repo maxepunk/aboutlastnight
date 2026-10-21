@@ -259,7 +259,64 @@
       });
   }
 
-  const api = { resolveRosterPronoun, clockLine, ledgerView, quoteView, epilogueItemView, enrichmentWarningLines };
+  // ── Phase 17 (R5): each guest reporter apart ───────────────────────────────
+
+  /** A name as the guest reporters' reading keeps it: trimmed, its inner whitespace collapsed. */
+  function cleanName(value) {
+    return String(value).trim().replace(/\s+/g, ' ');
+  }
+
+  /** One guest reporter, {name, firstName, role}, the first name the name's first word. */
+  function guestEntry(name, role) {
+    const full = cleanName(name);
+    return { name: full, firstName: full.split(' ')[0], role: typeof role === 'string' ? role.trim() : '' };
+  }
+
+  /**
+   * The session's guest reporters, each apart: the console's copy of the server's one
+   * reading (lib/prompt-renderers/session-authors.js guestReportersOf), which the console
+   * cannot import; console/__tests__/guest-reporters.test.js holds the two equal. The list
+   * the parse stamps (guestReporters), else an older thread's single {name, role}, its name
+   * split on commas and its roles paired by position when the counts match, else each
+   * reporter taking the role whole.
+   *
+   * @param {Object|null} sessionConfig - its guestReporters, else its guestReporter
+   * @returns {Array<{name: string, firstName: string, role: string}>} [] with none
+   */
+  function guestReportersOf(sessionConfig) {
+    const config = sessionConfig && typeof sessionConfig === 'object' ? sessionConfig : {};
+    const named = function (entry) {
+      return entry && typeof entry === 'object' && typeof entry.name === 'string' && entry.name.trim();
+    };
+    if (Array.isArray(config.guestReporters)) {
+      return config.guestReporters.filter(named).map(function (entry) { return guestEntry(entry.name, entry.role); });
+    }
+    const guest = config.guestReporter;
+    if (!named(guest)) return [];
+    const names = guest.name.split(',').map(cleanName).filter(Boolean);
+    const role = typeof guest.role === 'string' ? guest.role : '';
+    const roles = role.split(',');
+    return names.map(function (name, i) { return guestEntry(name, roles.length === names.length ? roles[i] : role); });
+  }
+
+  /**
+   * The input review's session panel, one line per guest reporter: "Name | Role", with
+   * "Guest Reporter" for a blank role. InputReview.js and the harness's print of it
+   * (scripts/lib/stop-print.js) print these.
+   *
+   * @param {Object|null} sessionConfig
+   * @returns {string[]} [] with none
+   */
+  function guestReporterPanelLines(sessionConfig) {
+    return guestReportersOf(sessionConfig).map(function (guest) {
+      return guest.name + ' | ' + (guest.role || 'Guest Reporter');
+    });
+  }
+
+  const api = {
+    resolveRosterPronoun, clockLine, ledgerView, quoteView, epilogueItemView, enrichmentWarningLines,
+    guestReportersOf, guestReporterPanelLines
+  };
 
   if (typeof window !== 'undefined') {
     window.Console = window.Console || {};

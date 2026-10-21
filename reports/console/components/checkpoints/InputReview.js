@@ -15,7 +15,7 @@ window.Console = window.Console || {};
 window.Console.checkpoints = window.Console.checkpoints || {};
 
 const { Badge, safeStringify } = window.Console.utils;
-const { resolveRosterPronoun, ledgerView, quoteView, epilogueItemView, enrichmentWarningLines } = window.Console.inputReviewLogic;
+const { resolveRosterPronoun, ledgerView, quoteView, epilogueItemView, enrichmentWarningLines, guestReporterPanelLines } = window.Console.inputReviewLogic;
 const { validateRosterEntry } = window.Console.awaitRosterLogic;
 const ViewLogic = window.Console.checkpointViewLogic;
 
@@ -209,12 +209,13 @@ function InputReview({ data, onApprove, onReject, theme }) {
           React.createElement('span', { className: 'text-muted' }, 'Reporting Mode: '),
           React.createElement('span', { className: 'text-secondary' }, sessionConfig.reportingMode)
         ),
-        theme === 'journalist' && sessionConfig.guestReporter && React.createElement('span', { className: 'text-sm' },
-          React.createElement('span', { className: 'text-muted' }, 'Guest Reporter: '),
-          React.createElement('span', { className: 'text-secondary' },
-            sessionConfig.guestReporter.name + ' | ' + (sessionConfig.guestReporter.role || 'Guest Reporter')
-          )
-        ),
+        // Phase 17 (R5): each guest reporter on a line of their own
+        theme === 'journalist' && guestReporterPanelLines(sessionConfig).map(function (line, i) {
+          return React.createElement('span', { key: 'guest-' + i, className: 'text-sm' },
+            React.createElement('span', { className: 'text-muted' }, 'Guest Reporter: '),
+            React.createElement('span', { className: 'text-secondary' }, line)
+          );
+        }),
         React.createElement('span', { className: 'text-sm' },
           React.createElement('span', { className: 'text-muted' }, 'Theme: '),
           React.createElement('span', { className: 'text-secondary' }, theme || 'journalist')
