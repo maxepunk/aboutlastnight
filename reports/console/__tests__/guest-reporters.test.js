@@ -38,7 +38,15 @@ const CASES = [
   { guestReporter: { name: 'Dana Okafor, Remi Vale', role: '' } },
   { guestReporter: { name: 'Dana Okafor', role: ' Reporter, Editor ' } },
   { guestReporter: { name: '  Dana   Okafor ,, ,  Remi\tVale ', role: ' Guest Reporter ' } },
-  { guestReporter: { name: 'Dana Okafor, Dana Vale, Kit Arden', role: 'Guest Reporter, , Field Reporter' } }
+  { guestReporter: { name: 'Dana Okafor, Dana Vale, Kit Arden', role: 'Guest Reporter, , Field Reporter' } },
+  // The integrator's ruling after run 1: blank role pieces drop before pairing, and a name the
+  // Name field repeats is one reporter.
+  { guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter,' } },
+  { guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter, , Contributing Reporter' } },
+  { guestReporter: { name: 'Dana Okafor, dana okafor', role: 'Guest Reporter' } },
+  { guestReporter: { name: 'Dana Okafor, Remi Vale,  DANA   OKAFOR ', role: 'Contributing Reporter, Field Reporter' } },
+  { guestReporter: { name: 'Dana Okafor', role: 'Guest Reporter,' } },
+  { guestReporter: { name: 'Dana Okafor, Remi Vale', role: ' , ' } }
 ];
 
 describe("the console's guestReportersOf (R5)", () => {
@@ -53,6 +61,19 @@ describe("the console's guestReportersOf (R5)", () => {
       { name: 'Dana Okafor', firstName: 'Dana', role: 'Contributing Reporter' },
       { name: 'Remi Vale', firstName: 'Remi', role: 'Field Reporter' }
     ]);
+  });
+
+  it('drops blank role pieces before pairing, and reads a repeated name as one reporter', () => {
+    expect(Logic.guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter,' } })).toEqual([
+      { name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' },
+      { name: 'Remi Vale', firstName: 'Remi', role: 'Guest Reporter' }
+    ]);
+    expect(Logic.guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter, , Contributing Reporter' } })).toEqual([
+      { name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' },
+      { name: 'Remi Vale', firstName: 'Remi', role: 'Contributing Reporter' }
+    ]);
+    expect(Logic.guestReportersOf({ guestReporter: { name: 'Dana Okafor, dana okafor', role: 'Guest Reporter' } }))
+      .toEqual([{ name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' }]);
   });
 });
 

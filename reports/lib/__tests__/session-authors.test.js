@@ -226,6 +226,40 @@ describe('each guest reporter, when the session has any (R5)', () => {
       ]);
       expect(guestReportersOf({ guestReporters: [{ name: '  Remi   Vale ', role: ' Field Reporter ' }] })).toEqual([REMI]);
     });
+
+    // The integrator's ruling after run 1: a trailing comma or a doubled name is a typo, not a
+    // second role or a second reporter.
+    it("drops blank role pieces before pairing: one piece left is every reporter's", () => {
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter,' } })).toEqual([
+        { name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' },
+        { name: 'Remi Vale', firstName: 'Remi', role: 'Guest Reporter' }
+      ]);
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor', role: 'Guest Reporter,' } }))
+        .toEqual([{ name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' }]);
+    });
+
+    it('drops blank role pieces before pairing: pieces as many as the names pair by position', () => {
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter, , Contributing Reporter' } })).toEqual([
+        { name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' },
+        { name: 'Remi Vale', firstName: 'Remi', role: 'Contributing Reporter' }
+      ]);
+    });
+
+    it('gives each reporter the whole role, trimmed, when the pieces left are neither one nor as many as the names', () => {
+      const whole = 'Guest Reporter, , Field Reporter';
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale, Kit Arden', role: ` ${whole} ` } })).toEqual([
+        { name: 'Dana Okafor', firstName: 'Dana', role: whole },
+        { name: 'Remi Vale', firstName: 'Remi', role: whole },
+        { name: 'Kit Arden', firstName: 'Kit', role: whole }
+      ]);
+    });
+
+    it('reads a name the Name field repeats, in any case and spacing, as one reporter, the first', () => {
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor, dana okafor', role: 'Guest Reporter' } }))
+        .toEqual([{ name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' }]);
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale,  DANA   OKAFOR ', role: 'Contributing Reporter, Field Reporter' } }))
+        .toEqual([DANA, REMI]);
+    });
   });
 
   describe('the line', () => {

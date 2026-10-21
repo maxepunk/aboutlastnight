@@ -276,9 +276,11 @@
    * The session's guest reporters, each apart: the console's copy of the server's one
    * reading (lib/prompt-renderers/session-authors.js guestReportersOf), which the console
    * cannot import; console/__tests__/guest-reporters.test.js holds the two equal. The list
-   * the parse stamps (guestReporters), else an older thread's single {name, role}, its name
-   * split on commas and its roles paired by position when the counts match, else each
-   * reporter taking the role whole.
+   * the parse stamps (guestReporters), else an older thread's single {name, role}: its name
+   * split on commas, blank pieces dropped and a name repeated in any case one reporter, the
+   * first; its role split on commas with blank pieces dropped, one piece left every
+   * reporter's, as many pieces as names paired by position, else each reporter taking the
+   * role whole, trimmed.
    *
    * @param {Object|null} sessionConfig - its guestReporters, else its guestReporter
    * @returns {Array<{name: string, firstName: string, role: string}>} [] with none
@@ -293,10 +295,16 @@
     }
     const guest = config.guestReporter;
     if (!named(guest)) return [];
-    const names = guest.name.split(',').map(cleanName).filter(Boolean);
+    const lower = function (text) { return text.toLowerCase(); };
+    const names = guest.name.split(',').map(cleanName).filter(Boolean).filter(function (name, i, all) {
+      return all.findIndex(function (other) { return lower(other) === lower(name); }) === i;
+    });
     const role = typeof guest.role === 'string' ? guest.role : '';
-    const roles = role.split(',');
-    return names.map(function (name, i) { return guestEntry(name, roles.length === names.length ? roles[i] : role); });
+    const roles = role.split(',').map(function (piece) { return piece.trim(); }).filter(Boolean);
+    const roleOf = function (i) {
+      return roles.length === 1 ? roles[0] : roles.length === names.length ? roles[i] : role;
+    };
+    return names.map(function (name, i) { return guestEntry(name, roleOf(i)); });
   }
 
   /**

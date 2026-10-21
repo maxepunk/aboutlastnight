@@ -171,10 +171,15 @@ function guestEntry(name, role) {
  * The session's guest reporters, each apart (phase 17, R5): the one reading every reader
  * calls. `sessionConfig.guestReporters`, the list the parse stamps as `[{name, role}]`, when
  * it is a list. Otherwise an older thread's `sessionConfig.guestReporter`, one `{name, role}`
- * whose name may hold several reporters: the name split on commas, each piece trimmed with
- * its inner whitespace collapsed and blank pieces dropped; the role split on commas and paired
- * by position when the counts match, otherwise taken whole, trimmed, by each reporter. The
- * console's copy (console/input-review-logic.js) is held equal to this one by a test.
+ * whose name may hold several reporters:
+ * - the name split on commas, each piece trimmed with its inner whitespace collapsed, blank
+ *   pieces dropped, and a name repeated in any case one reporter, the first;
+ * - the role split on commas, blank pieces dropped: one piece left is every reporter's, as
+ *   many pieces as names pair by position, and otherwise each reporter takes the role whole,
+ *   trimmed.
+ * A trailing comma or a doubled name is a typo, not a second role or reporter (the
+ * integrator's ruling after phase 17's run 1). The console's copy
+ * (console/input-review-logic.js) is held equal to this one by a test.
  *
  * @param {Object|null} sessionConfig - its guestReporters, else its guestReporter
  * @returns {Array<{name: string, firstName: string, role: string}>} [] with none
@@ -187,10 +192,12 @@ function guestReportersOf(sessionConfig) {
   }
   const guest = config.guestReporter;
   if (!named(guest)) return [];
-  const names = guest.name.split(',').map(cleanName).filter(Boolean);
+  const names = guest.name.split(',').map(cleanName).filter(Boolean)
+    .filter((name, i, all) => all.findIndex((other) => lower(other) === lower(name)) === i);
   const role = typeof guest.role === 'string' ? guest.role : '';
-  const roles = role.split(',');
-  return names.map((name, i) => guestEntry(name, roles.length === names.length ? roles[i] : role));
+  const roles = role.split(',').map((piece) => piece.trim()).filter(Boolean);
+  const roleOf = (i) => (roles.length === 1 ? roles[0] : roles.length === names.length ? roles[i] : role);
+  return names.map((name, i) => guestEntry(name, roleOf(i)));
 }
 
 /**
