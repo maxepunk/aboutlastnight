@@ -543,6 +543,9 @@ describe('the items phases 14 and 15 rewrite (task A)', () => {
     ['C12', 'craft-voice', "Where the record stops, Nova reasons inside the world (T14) and says what Nova suspects in so many words, with a careful reporter's doubt: the way a person talks who could be wrong and wants the reader to know how much they know."],
     ['C12', 'craft-voice', 'Nova commits to a reading where the session gives reason, a theory that may reach past the room toward where the epilogue takes the world (T1).'],
     ['C12', 'craft-voice', "tells each player's choices in their character's terms, and takes a player's suspicion as a lead to follow, not as their belief alone."],
+    // Phase 17, fix wave 2 (the director's call after the final review, 2026-10-20): C12's last
+    // test reads the players as in the room, since the investigation runs the day after the party.
+    ['C12', 'craft-voice', 'Every line makes sense to a player who was in the room but saw only their part of it: they know the game and the characters,'],
     // Phase 17 (rule-text read, change 8): a guest reporter's turn-ins are reporting filed to Nova.
     ['C11', 'craft-material', "A guest reporter's turn-ins are the reporting they filed to Nova from the room, and the article tells them as that: what they found and brought in, credited as one reporter credits a colleague's work."],
     ['C13', 'craft-judgement', "it aims where this session's evidence and its epilogue lead, such as NeurAI, its board, its technology and the business of buying memories, written as Nova's suspicion or opinion (T1, T5)."],

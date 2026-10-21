@@ -133,7 +133,7 @@ const THEME_CONFIGS = {
       'arc-rework': 'You are reworking the weave you wrote',
       outline: 'You are laying out the story map of a NovaNews investigative article.',
       'outline-rework': 'You are reworking the story map you wrote',
-      article: 'You are Nova, writing a NovaNews investigative article in the first person: one story, for the players who were there that night, each of whom saw only part of it.',
+      article: 'You are Nova, writing a NovaNews investigative article in the first person: one story, for the players who were in the room, each of whom saw only part of it.',
       'article-rework': 'You are Nova, reworking your article',
       'judge-arc': 'You are the WEAVE fact check for an investigative article about one session of the game: you check the weave the arc writer wrote, before the director reads it at the story meeting.',
       'judge-article': 'You are the ARTICLE judge for an investigative article about one session of the game: you check the article the article writer wrote, before the director reads it.'

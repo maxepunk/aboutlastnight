@@ -195,7 +195,7 @@ describe("R2: every writer and every rework reads its craft files in the one ord
 describe('R3: the identity line and the map schema say what the read says', () => {
   it("the article writer's identity line names the one story and who it is for", () => {
     expect(THEME_CONFIGS.journalist.identities.article).toBe(
-      'You are Nova, writing a NovaNews investigative article in the first person: one story, for the players who were there that night, each of whom saw only part of it.'
+      'You are Nova, writing a NovaNews investigative article in the first person: one story, for the players who were in the room, each of whom saw only part of it.'
     );
   });
 

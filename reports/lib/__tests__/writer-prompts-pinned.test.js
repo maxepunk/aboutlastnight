@@ -466,14 +466,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   evidence "it can be told from" and the deck and headings as its only prose (+89), and the
  *   evidence field's "can tell the move from", twice (+6): outline-journalist 25093 -> 25519
  *   (+426). The article writer's craft files are reordered, telling and voice last (0); its
- *   identity line names one story for the players who were there that night (+88); its map
+ *   identity line names one story for its players, each of whom saw only part of it (+88); its map
  *   label says the move "can be told from" its evidence (+4); and its task opens on one
  *   cohesive story built on the headline and the deck, with the map as its plan (+81), and
  *   ends on the prose as C4 and C12 set it out (+97): article-journalist 36054 -> 36324 (+270).
+ * - Phase 17, fix wave 2 (the director's calls after the final review, 2026-10-20). The article
+ *   writer's identity line says its players were "in the room", since in the fiction the
+ *   investigation runs the day after the party (-5): article-journalist 36324 -> 36319.
  */
 const PINNED = {
   'outline-journalist': ['b3e3e235b31d78e8a484dcdc62531159cbe8a1ed4cd0ef57388115cd1fb75f1d', 25519],
-  'article-journalist': ['163c450009ef205e6bea20109ea2ece6d66882c6287a0a16f21ddfbe71b37308', 36324],
+  'article-journalist': ['8faf626460d7a25fd1299f6d218dfeb73708a7564f7f36f085ada48cae9f3648', 36319],
   'arcs-journalist': ['d7586be4b567321e07151d17b9727fc418666ae0cae7780b4e7f90afa9ba0f1a', 12319]
 };
 
