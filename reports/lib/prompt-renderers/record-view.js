@@ -230,7 +230,7 @@ const TABLE_ORDER = { sale: 0, bonus: 1, transfer: 1, exposure: 2 };
  * "Taylor (the guest reporter, Taylor Chase)". With no guest reporter, the name as written.
  *
  * @param {*} exposer - the evidence log's name on the turn-in
- * @param {Object|null} [sessionConfig] - its guestReporter
+ * @param {Object|null} [sessionConfig] - its guest reporters, read through guestReportersOf (phase 17: each apart)
  * @returns {string|null}
  */
 function turnInName(exposer, sessionConfig = null) {

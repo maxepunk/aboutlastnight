@@ -1,4 +1,17 @@
-const { _testing } = require('../workflow/nodes/input-nodes');
+jest.mock('../llm', () => ({
+  sdkQuery: jest.fn(),
+  createProgressLogger: () => jest.fn(),
+  isClaudeAvailable: jest.fn()
+}));
+jest.mock('../observability', () => ({
+  traceNode: (fn) => fn,
+  progressEmitter: { emit: jest.fn() }
+}));
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { parseRawInput, _testing } = require('../workflow/nodes/input-nodes');
 
 describe('parseRawInput wiring', () => {
   it('does NOT export legacy DIRECTOR_NOTES_SCHEMA', () => {
@@ -19,7 +32,7 @@ describe('mergeDirectorOverrides — passthrough behavior', () => {
       roster: ['Alex'],
       journalistFirstName: 'Cassandra',
       reportingMode: 'remote',
-      guestReporter: { name: 'Ashe', role: 'Guest Reporter' }
+      guestReporters: [{ name: 'Dana Okafor', role: 'Guest Reporter' }]
     };
     const directorNotes = { rawProse: 'anything' };
     const merged = mergeDirectorOverrides(sessionConfig, directorNotes);
@@ -32,11 +45,12 @@ describe('mergeDirectorOverrides — passthrough behavior', () => {
     expect(merged.reportingMode).toBe('remote');
   });
 
-  it('preserves guestReporter from sessionConfig', () => {
-    const guest = { name: 'Ashe', role: 'Guest Reporter' };
-    const sessionConfig = { roster: ['Alex'], guestReporter: guest };
+  // Phase 17 (R5): the parse stamps the list, guestReporters
+  it('preserves guestReporters from sessionConfig', () => {
+    const guests = [{ name: 'Dana Okafor', role: 'Guest Reporter' }, { name: 'Remi Vale', role: 'Contributing Reporter' }];
+    const sessionConfig = { roster: ['Alex'], guestReporters: guests };
     const merged = mergeDirectorOverrides(sessionConfig, { rawProse: '' });
-    expect(merged.guestReporter).toEqual(guest);
+    expect(merged.guestReporters).toEqual(guests);
   });
 
   it('handles null directorNotes without adding default fields', () => {
@@ -46,9 +60,53 @@ describe('mergeDirectorOverrides — passthrough behavior', () => {
   });
 });
 
+// Phase 17 (R5): the parse stamps each guest reporter apart, as [{name, role}], read from the
+// start form's value through guestReportersOf, and no longer stamps the single guestReporter.
+// The file on disk carries the list.
+describe('parseRawInput stamps the guest reporters as a list', () => {
+  const { SESSION_CONFIG_SCHEMA, SESSION_REPORT_SCHEMA, WHITEBOARD_SCHEMA } = _testing;
+  let dataDir;
+  beforeEach(() => { dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aln-guests-')); });
+  afterEach(() => { fs.rmSync(dataDir, { recursive: true, force: true }); });
+
+  const sdk = jest.fn(async (options) => {
+    if (options.jsonSchema === SESSION_CONFIG_SCHEMA) {
+      return { roster: ['Alex', 'Remi'], accusation: { verdictKind: 'culprit', accused: ['Alex'], charge: 'Sold it' } };
+    }
+    if (options.jsonSchema === SESSION_REPORT_SCHEMA) return { exposedTokens: [], exposures: [], buriedTokens: [], shellAccounts: [] };
+    if (options.jsonSchema === WHITEBOARD_SCHEMA) return { names: [] };
+    return { characterMentions: {}, quotes: [], transactionReferences: [], postInvestigationDevelopments: [] };
+  });
+
+  async function stampOf(rawSessionInput) {
+    const state = {
+      sessionId: '010126', accusation: 'Alex sold it.', sessionReport: '# Session Report',
+      directorNotesRaw: 'Remi asked Alex about the sale.', sessionConfig: {}, rawSessionInput
+    };
+    const result = await parseRawInput(state, { configurable: { sdkClient: sdk, dataDir, sessionId: '010126' } });
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, '010126', 'inputs', 'session-config.json'), 'utf8'));
+    return { config: result.sessionConfig, onDisk };
+  }
+
+  it("reads the start form's two names and two roles apart, in state and on disk", async () => {
+    const { config, onDisk } = await stampOf({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter, Contributing Reporter' } });
+    const expected = [{ name: 'Dana Okafor', role: 'Guest Reporter' }, { name: 'Remi Vale', role: 'Contributing Reporter' }];
+    expect(config.guestReporters).toEqual(expected);
+    expect(onDisk.guestReporters).toEqual(expected);
+    expect(config).not.toHaveProperty('guestReporter');
+    expect(onDisk).not.toHaveProperty('guestReporter');
+  });
+
+  it('stamps one reporter as a list of one, and an empty list with none', async () => {
+    expect((await stampOf({ guestReporter: { name: 'Dana Okafor', role: 'Guest Reporter' } })).config.guestReporters)
+      .toEqual([{ name: 'Dana Okafor', role: 'Guest Reporter' }]);
+    const none = await stampOf({});
+    expect(none.config.guestReporters).toEqual([]);
+    expect(none.config).not.toHaveProperty('guestReporter');
+  });
+});
+
 describe('Step-1 parse prompt does not invite a derived sessionId (Task 1 Minor)', () => {
-  const fs = require('fs');
-  const path = require('path');
   const src = fs.readFileSync(
     path.join(__dirname, '..', 'workflow', 'nodes', 'input-nodes.js'), 'utf8'
   );

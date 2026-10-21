@@ -324,8 +324,8 @@ function buildWeaveSections(state) {
   const { craft } = loadRuleSet('arc', { theme: state.theme || 'journalist' });
   const blakeSentences = directorTensionSentences(state.narrativeTensions, context.directorProse);
   // Phases 14 and 15 (R5): who shares the byline, after the session roster, only when the
-  // session has a guest reporter.
-  const guestLine = guestReporterLine(state.sessionConfig);
+  // session has a guest reporter (phase 17: each reporter apart).
+  const guestLine = guestReporterLine(state.sessionConfig, state.theme || 'journalist');
   // Brief E (R7): when the investigation ran, after the session roster; with no sale and no
   // exposure, none. The weave writer reads no SESSION_FACTS, so it reads the line here.
   const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);

@@ -20,12 +20,13 @@
  * entries and SESSION_FACTS are as they were. A theme with no writer entry, such as the parked detective,
  * gets none of these.
  *
- * The guest reporter (R5), only when sessionConfig.guestReporter names one:
- * - guestReporterLine: who shares the byline, and that a memory turned in under their name
- *   is their reporting for this article. SESSION_FACTS, the weave writer's first section and
- *   both judges print it;
- * - guestTurnInName: the record view's timeline marks a turn-in under their full name or
- *   their first name, in any case.
+ * The guest reporters (R5; phase 17, each apart), only when the session has any, read
+ * through guestReportersOf, the one reading:
+ * - guestReporterLine: who shares the byline, and that a memory turned in under each one's
+ *   name is reporting they filed to the writer for this article. SESSION_FACTS, the weave
+ *   writer's first section and both judges print it;
+ * - guestTurnInName: the record view's timeline marks a turn-in under a reporter's full name
+ *   or their first name, in any case.
  * A session with no guest reporter prints nothing of either.
  *
  * Pure: no I/O, and nothing passed in is changed.
@@ -157,51 +158,92 @@ function writerInTheRoom(theme, sessionConfig) {
   return { name: entry.name, line: entry.writer.inTheRoom };
 }
 
-/**
- * The session's guest reporter, or null: `{name, firstName, role}` from
- * sessionConfig.guestReporter, which the start form stamps as `{name, role}`.
- *
- * @param {Object|null} sessionConfig
- * @returns {{name: string, firstName: string, role: string}|null}
- */
-function guestReporterOf(sessionConfig) {
-  const guest = sessionConfig && sessionConfig.guestReporter;
-  if (!guest || typeof guest !== 'object' || typeof guest.name !== 'string' || !guest.name.trim()) return null;
-  const name = guest.name.trim().replace(/\s+/g, ' ');
-  return { name, firstName: name.split(' ')[0], role: typeof guest.role === 'string' ? guest.role.trim() : '' };
+/** A name as the guest reporters' reading keeps it: trimmed, its inner whitespace collapsed. */
+const cleanName = (text) => String(text).trim().replace(/\s+/g, ' ');
+
+/** One guest reporter, `{name, firstName, role}`, the first name the name's first word. */
+function guestEntry(name, role) {
+  const full = cleanName(name);
+  return { name: full, firstName: full.split(' ')[0], role: typeof role === 'string' ? role.trim() : '' };
 }
 
 /**
- * The guest reporter's line (R5): who shares the byline, and that a memory turned in under
- * their name is their reporting for this article.
+ * The session's guest reporters, each apart (phase 17, R5): the one reading every reader
+ * calls. `sessionConfig.guestReporters`, the list the parse stamps as `[{name, role}]`, when
+ * it is a list. Otherwise an older thread's `sessionConfig.guestReporter`, one `{name, role}`
+ * whose name may hold several reporters: the name split on commas, each piece trimmed with
+ * its inner whitespace collapsed and blank pieces dropped; the role split on commas and paired
+ * by position when the counts match, otherwise taken whole, trimmed, by each reporter. The
+ * console's copy (console/input-review-logic.js) is held equal to this one by a test.
  *
- * @param {Object|null} sessionConfig
- * @returns {string|null} null with no guest reporter
+ * @param {Object|null} sessionConfig - its guestReporters, else its guestReporter
+ * @returns {Array<{name: string, firstName: string, role: string}>} [] with none
  */
-function guestReporterLine(sessionConfig) {
-  const guest = guestReporterOf(sessionConfig);
-  if (!guest) return null;
-  const role = guest.role ? ` (${guest.role})` : '';
-  const names = guest.firstName === guest.name ? guest.name : `${guest.name} or ${guest.firstName}`;
-  return `The guest reporter: ${guest.name}${role} shares this article's byline. ` +
-    `A memory turned in under the name ${names} is ${guest.name}'s reporting for this article.`;
+function guestReportersOf(sessionConfig) {
+  const config = sessionConfig && typeof sessionConfig === 'object' ? sessionConfig : {};
+  const named = (entry) => entry && typeof entry === 'object' && typeof entry.name === 'string' && entry.name.trim();
+  if (Array.isArray(config.guestReporters)) {
+    return config.guestReporters.filter(named).map((entry) => guestEntry(entry.name, entry.role));
+  }
+  const guest = config.guestReporter;
+  if (!named(guest)) return [];
+  const names = guest.name.split(',').map(cleanName).filter(Boolean);
+  const role = typeof guest.role === 'string' ? guest.role : '';
+  const roles = role.split(',');
+  return names.map((name, i) => guestEntry(name, roles.length === names.length ? roles[i] : role));
+}
+
+/** Names as a sentence lists them: "A", "A and B", "A, B and C". */
+function joinedNames(names) {
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] || '');
+}
+
+/** Whether a reporter's first name is theirs alone among the session's guest reporters. */
+function firstNameIsTheirs(reporter, reporters) {
+  return reporters.filter((other) => lower(other.firstName) === lower(reporter.firstName)).length === 1;
 }
 
 /**
- * The name on a turn-in, marked as the guest reporter's when it is their full name or their
- * first name, in any case (R5): "Taylor (the guest reporter, Taylor Chase)", or
- * "Taylor Chase (the guest reporter)".
+ * The guest reporters' line (R5; the read's section 14): who shares the byline, then for each
+ * reporter, that a memory turned in under their name is reporting they filed to the article's
+ * writer, named from the theme's writer entry. A first name two reporters share names neither,
+ * as the mark marks neither.
+ *
+ * @param {Object|null} sessionConfig
+ * @param {string} theme
+ * @returns {string|null} null with no guest reporter, or for a theme with no writer entry
+ */
+function guestReporterLine(sessionConfig, theme) {
+  const reporters = guestReportersOf(sessionConfig);
+  const entry = writerEntryOf(theme);
+  if (reporters.length === 0 || !entry) return null;
+  const credits = joinedNames(reporters.map((reporter) => (reporter.role ? `${reporter.name} (${reporter.role})` : reporter.name)));
+  const byline = reporters.length === 1
+    ? `The guest reporter: ${credits} shares this article's byline.`
+    : `The guest reporters: ${credits} share this article's byline.`;
+  const turnIns = reporters.map((reporter) => {
+    const names = reporter.firstName === reporter.name || !firstNameIsTheirs(reporter, reporters)
+      ? reporter.name : `${reporter.name} or ${reporter.firstName}`;
+    return `Each memory turned in under the name ${names} is reporting ${reporter.name} filed to ${entry.name} for this article.`;
+  });
+  return [byline, ...turnIns].join(' ');
+}
+
+/**
+ * The name on a turn-in, marked as a guest reporter's (R5): "Taylor Chase (the guest
+ * reporter)" when it is any reporter's full name, in any case, and "Taylor (the guest
+ * reporter, Taylor Chase)" when it is the first name of exactly one reporter.
  *
  * @param {string} name - the name on the turn-in, as written
  * @param {Object|null} sessionConfig
- * @returns {string} the name as written when it is not theirs, or with no guest reporter
+ * @returns {string} the name as written when it is no reporter's, or with no guest reporter
  */
 function guestTurnInName(name, sessionConfig) {
-  const guest = guestReporterOf(sessionConfig);
-  if (!guest || typeof name !== 'string') return name;
-  if (lower(name) === lower(guest.name)) return `${name} (the guest reporter)`;
-  if (lower(name) === lower(guest.firstName)) return `${name} (the guest reporter, ${guest.name})`;
-  return name;
+  const reporters = guestReportersOf(sessionConfig);
+  if (reporters.length === 0 || typeof name !== 'string') return name;
+  if (reporters.some((reporter) => lower(name) === lower(reporter.name))) return `${name} (the guest reporter)`;
+  const byFirst = reporters.filter((reporter) => lower(name) === lower(reporter.firstName));
+  return byFirst.length === 1 ? `${name} (the guest reporter, ${byFirst[0].name})` : name;
 }
 
 module.exports = {
@@ -212,7 +254,8 @@ module.exports = {
   writerInPhotosLine,
   markWriterInPhoto,
   writerInTheRoom,
-  guestReporterOf,
+  guestReportersOf,
+  joinedNames,
   guestReporterLine,
   guestTurnInName
 };

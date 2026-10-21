@@ -39,7 +39,7 @@ const { GraphInterrupt } = require('@langchain/langgraph');
 const { safeParseJson, getSdkClient, formatIssuesForMessage, STRUCTURAL_PASS_SCORE, leadingRuleIds } = require('./node-helpers');
 const { traceNode } = require('../../observability');
 const { getThemeNPCEntries } = require('../../theme-config');
-const { guestReporterLine, reportingModeOf } = require('../../prompt-renderers/session-authors');
+const { guestReportersOf, guestReporterLine, reportingModeOf } = require('../../prompt-renderers/session-authors');
 const { factCheckContentBundle } = require('../../content-bundle-fact-check');
 // Phase 3 (3.4): each judge reads the rule set its writer reads, from the rules folder of its
 // theme (R14), after its theme's identity line (brief 4.13) and the mode block: its system
@@ -822,7 +822,7 @@ function recordTexts(state) {
  * Phase 3 (3.4): the theme's NPC entries (Blake's missing pronoun included), the
  * roster's pronouns and the director's words (the notes, the input-review
  * corrections and the accusation) for the pronoun check, and the guest reporter for
- * the head count.
+ * the head count (phase 17, R5: each guest reporter apart, through guestReportersOf).
  *
  * The 4b fix batch (T13): the session photos the director excluded, by the one rule
  * (ai-nodes.js isPhotoExcluded), so the photo check reads an excluded photo as no
@@ -866,7 +866,8 @@ function buildFactCheckArgs(state) {
     npcs: getThemeNPCEntries(theme),
     rosterPronouns: config.rosterPronouns || null,
     directorText,
-    guestReporter: config.guestReporter || null,
+    // Phase 17 (R5): each guest reporter apart, an older thread's single value too
+    guestReporters: guestReportersOf(config),
     theme,
     directorEdits: judgedEdits('article', state)
   };
@@ -1464,7 +1465,7 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // Brief E (R7): when the investigation ran, before them both, since this judge reads no
       // SESSION_FACTS; with no sale and no exposure, none.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
-      const guestLine = guestReporterLine(state.sessionConfig);
+      const guestLine = guestReporterLine(state.sessionConfig, state.theme || 'journalist');
       const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);
       return `Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 

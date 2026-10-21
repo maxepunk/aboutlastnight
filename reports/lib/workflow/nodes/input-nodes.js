@@ -49,7 +49,7 @@ const { VERDICT_KINDS, normalizeAccusation } = require('../../accusation-verdict
 const { buildParseCorrectionsBlock, normalizeCorrections } = require('../../prompt-renderers/director-words-renderer');
 const { decideSessionClock } = require('../../prompt-renderers/session-clock');
 const { buildLedger } = require('../../session-ledger');
-const { writerFirstNameOf } = require('../../prompt-renderers/session-authors');
+const { writerFirstNameOf, guestReportersOf, joinedNames } = require('../../prompt-renderers/session-authors');
 
 /**
  * Default data directory for session files
@@ -420,8 +420,8 @@ function projectBuriedTokensToScoringTimeline(buriedTokens) {
 /**
  * Shallow-copy sessionConfig, reserved as an extension point for future
  * director-notes-driven overrides. Currently a passthrough — reportingMode
- * and guestReporter are now stamped from rawSessionInput in parseRawInput
- * Step 1 (see docs/superpowers/specs/2026-04-20-reporting-mode-explicit-input-design.md).
+ * and guestReporters (guestReporter before phase 17) are now stamped from
+ * rawSessionInput in parseRawInput Step 1 (see docs/superpowers/specs/2026-04-20-reporting-mode-explicit-input-design.md).
  * @param {Object} sessionConfig - Parsed session config from Step 1
  * @param {Object} directorNotes - Unused; retained for signature stability
  */
@@ -628,7 +628,9 @@ Return structured JSON matching the schema.${correctionsBlock}`;
     // K3: the theme's default for the article's writer, its one source (writerFirstNameOf)
     result.journalistFirstName = writerFirstNameOf(config?.configurable?.theme || 'journalist', rawInput.journalistFirstName);
     result.reportingMode = rawInput.reportingMode || 'on-site';
-    result.guestReporter = rawInput.guestReporter || null;
+    // Phase 17 (R5): each guest reporter apart, [{name, role}], read from the start form's value
+    // through the one reading (guestReportersOf); the single guestReporter is no longer stamped
+    result.guestReporters = guestReportersOf(rawInput).map(({ name, role }) => ({ name, role }));
     // F1 (X-1 + CR-6 + CR-4): consume the raw rosterPronouns channel EXACTLY ONCE here.
     // The await-roster approval writes typed-keyed pronouns to state.rosterPronouns
     // (the channel); this is the single bridge that normalizes them to canonical
@@ -821,8 +823,9 @@ Return structured JSON matching the schema.${correctionsBlock}`;
   // Merge director note overrides into sessionConfig
   sessionConfig = mergeDirectorOverrides(sessionConfig, directorNotes);
   console.log(`[parseRawInput] Reporting mode: ${sessionConfig.reportingMode}`);
-  if (sessionConfig.guestReporter) {
-    console.log(`[parseRawInput] Guest reporter: ${sessionConfig.guestReporter.name}`);
+  const guestReporters = guestReportersOf(sessionConfig);
+  if (guestReporters.length > 0) {
+    console.log(`[parseRawInput] Guest reporter${guestReporters.length > 1 ? 's' : ''}: ${joinedNames(guestReporters.map(guest => guest.name))}`);
   }
 
   // ─────────────────────────────────────────────────────

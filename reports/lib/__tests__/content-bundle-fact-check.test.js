@@ -1455,19 +1455,31 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       }
     });
 
+    // Phase 17 (R5): the guest reporters come read apart (evaluator-nodes.js
+    // buildFactCheckArgs, through guestReportersOf), and each is counted on or off the roster
+    // by their first name.
     it('counts a guest reporter on the roster once, as one of the players', () => {
-      const guestReporter = { name: 'Ashe Motoko', role: 'Contributing Reporter' };
-      expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporter }), 'headCount')).toEqual([]);
-      const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporter }), 'headCount');
-      expect(message).toContain('Ashe Motoko');
+      const guestReporters = [{ name: 'Remi Vale', role: 'Contributing Reporter' }];
+      expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporters }), 'headCount')).toEqual([]);
+      const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporters }), 'headCount');
+      expect(message).toContain('the guest reporter Remi Vale among them');
       expect(message).toContain('9 players');
     });
 
     it('does not count a guest reporter who plays no character on the roster', () => {
-      const guestReporter = { name: 'Jordan Lee', role: 'Contributing Reporter' };
-      expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporter }), 'headCount')).toEqual([]);
-      const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporter }), 'headCount');
-      expect(message).toContain('Jordan Lee');
+      const guestReporters = [{ name: 'Dana Okafor', role: 'Contributing Reporter' }];
+      expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporters }), 'headCount')).toEqual([]);
+      const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporters }), 'headCount');
+      expect(message).toContain('the guest reporter Dana Okafor plays no character on it and is not counted');
+    });
+
+    it('names each of two guest reporters, one on the roster and one off it', () => {
+      const guestReporters = [{ name: 'Remi Vale', role: 'Guest Reporter' }, { name: 'Dana Okafor', role: 'Contributing Reporter' }];
+      expect(flagged(run(paragraphs('Nine people were in the room.'), { roster, guestReporters }), 'headCount')).toEqual([]);
+      const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporters }), 'headCount');
+      expect(message).toBe('Head count: "Ten people were in the room" in section "the-story", paragraph 1, but the roster lists 9 players at the investigation, ' +
+        'the guest reporter Remi Vale among them; the guest reporter Dana Okafor plays no character on it and is not counted. ' +
+        'The head count is the players at the investigation (T10).');
     });
   });
 
@@ -2316,12 +2328,24 @@ describe("4.10b: each finding carries the director's line for its place", () => 
 
   it("a head count: each statement against the roster's count, with the guest reporter", () => {
     const result = factCheckContentBundle(baseArgs({
-      roster: ['Vic', 'Mel', 'Kai'], guestReporter: { name: 'Kai Lune' },
+      roster: ['Vic', 'Mel', 'Kai'], guestReporters: [{ name: 'Kai Lune', role: '' }],
       contentBundle: storyWith(para('Vic, Mel and Kai argued. There were nine people in the room.'))
     }));
     expect(linesOf(result, 'headCount')).toEqual([
       [{ section: 'the-story', paragraph: 1 }, '"There were nine people in the room" does not match the roster: 3 players were at the investigation, the guest reporter Kai Lune among them.']
     ]);
+  });
+
+  // Phase 17 (R5): each guest reporter apart, those on the roster together and those off it
+  it('a head count with two guest reporters on the roster, and two off it', () => {
+    const lineWith = (guestReporters) => linesOf(factCheckContentBundle(baseArgs({
+      roster: ['Vic', 'Mel', 'Kai'], guestReporters,
+      contentBundle: storyWith(para('Vic, Mel and Kai argued. There were nine people in the room.'))
+    })), 'headCount')[0][1];
+    expect(lineWith([{ name: 'Kai Lune', role: '' }, { name: 'Mel Arden', role: 'Guest Reporter' }])).toBe(
+      '"There were nine people in the room" does not match the roster: 3 players were at the investigation, the guest reporters Kai Lune and Mel Arden among them.');
+    expect(lineWith([{ name: 'Dana Okafor', role: '' }, { name: 'Remi Vale', role: '' }])).toBe(
+      '"There were nine people in the room" does not match the roster: 3 players were at the investigation; the guest reporters Dana Okafor and Remi Vale play no character and are not counted.');
   });
 
   it("the parked detective's findings carry the same lines", () => {

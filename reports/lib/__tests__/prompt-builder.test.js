@@ -394,44 +394,42 @@ describe('PromptBuilder', () => {
     });
   });
 
+  // Phase 17 (R5, the read's addendum f): the byline instruction gives each guest reporter's
+  // credit whole, "Name | Role" or "Name" with no role, joined with " || ", read through
+  // guestReportersOf; with none it gives no guestReporter, and with one it is as before.
   describe('byline generation instruction', () => {
-    it('should include byline instruction in journalist article prompt', async () => {
+    const AUTHOR = '"author": "Cassandra Nova | NovaNews", "title": "Senior Investigative Correspondent"';
+    async function bylineLine(sessionConfig) {
       mockThemeLoader.loadPhasePrompts.mockResolvedValue({
         'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
         'section-rules': '', 'editorial-design': '', 'formatting': '',
         'anti-patterns': ''
       });
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {
-        journalistFirstName: 'Cassandra',
-        guestReporter: null
-      });
+      const builder = new PromptBuilder(mockThemeLoader, 'journalist', { journalistFirstName: 'Cassandra', ...sessionConfig });
+      const { userPrompt } = await builder.buildArticlePrompt(SETTLED_WEAVE, STORY_MAP);
+      return userPrompt.split('\n').find((line) => line.startsWith('5. "byline"'));
+    }
 
-      const { userPrompt } = await builder.buildArticlePrompt(
-        SETTLED_WEAVE, STORY_MAP
-      );
-
-      expect(userPrompt).toContain('"byline"');
-      expect(userPrompt).toContain('"author"');
-      expect(userPrompt).toContain('Cassandra Nova | NovaNews');
+    it('gives the author and title, and no guest reporter with none', async () => {
+      for (const none of [{ guestReporter: null }, { guestReporters: [] }, {}]) {
+        expect(await bylineLine(none)).toBe(`5. "byline": {${AUTHOR}}.`);
+      }
     });
 
-    it('should include guest reporter in byline when present', async () => {
-      mockThemeLoader.loadPhasePrompts.mockResolvedValue({
-        'character-voice': '', 'evidence-boundaries': '', 'narrative-structure': '',
-        'section-rules': '', 'editorial-design': '', 'formatting': '',
-        'anti-patterns': ''
-      });
-      const builder = new PromptBuilder(mockThemeLoader, 'journalist', {
-        journalistFirstName: 'Cassandra',
-        guestReporter: { name: 'Ashe Motoko', role: 'Guest Reporter' }
-      });
+    it('credits one guest reporter as before', async () => {
+      const expected = `5. "byline": {${AUTHOR}, "guestReporter": "Dana Okafor | Guest Reporter"}.`;
+      expect(await bylineLine({ guestReporters: [{ name: 'Dana Okafor', role: 'Guest Reporter' }] })).toBe(expected);
+      expect(await bylineLine({ guestReporter: { name: 'Dana Okafor', role: 'Guest Reporter' } })).toBe(expected);
+    });
 
-      const { userPrompt } = await builder.buildArticlePrompt(
-        SETTLED_WEAVE, STORY_MAP
-      );
-
-      expect(userPrompt).toContain('Ashe Motoko');
-      expect(userPrompt).toContain('Guest Reporter');
+    it('credits each of two guest reporters whole, and a reporter with no role by name alone', async () => {
+      const expected = `5. "byline": {${AUTHOR}, "guestReporter": "Dana Okafor | Guest Reporter || Remi Vale | Contributing Reporter"}.`;
+      expect(await bylineLine({ guestReporters: [{ name: 'Dana Okafor', role: 'Guest Reporter' }, { name: 'Remi Vale', role: 'Contributing Reporter' }] }))
+        .toBe(expected);
+      expect(await bylineLine({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter, Contributing Reporter' } }))
+        .toBe(expected);
+      expect(await bylineLine({ guestReporters: [{ name: 'Dana Okafor', role: 'Guest Reporter' }, { name: 'Remi Vale', role: '' }] }))
+        .toBe(`5. "byline": {${AUTHOR}, "guestReporter": "Dana Okafor | Guest Reporter || Remi Vale"}.`);
     });
   });
 

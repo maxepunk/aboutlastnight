@@ -708,8 +708,8 @@ async function processRescuedItems(state, config) {
  * renderSessionFactsVerdict (director-words-renderer.js) prints them.
  *
  * Phases 14 and 15 (R5): with a guest reporter, the facts carry their line
- * (session-authors.js guestReporterLine), which SESSION_FACTS and the article judge print
- * beside the roster; with none, no key. Brief E (R7): the facts carry the time-of-day line
+ * (session-authors.js guestReporterLine; since phase 17 each reporter apart), which
+ * SESSION_FACTS and the article judge print beside the roster; with none, no key. Brief E (R7): the facts carry the time-of-day line
  * (session-clock.js timeOfDayLine), which SESSION_FACTS and the article judge print before the
  * roster; a session with no sale and no exposure has no key.
  *
@@ -730,6 +730,7 @@ function buildSessionFacts(state) {
   if (roster.length === 0) return null;
   const accusation = state.sessionConfig?.accusation || {};
   const whenLine = timeOfDayLine(state.sessionConfig, state.evidenceBundle);
+  const guestLine = guestReporterLine(state.sessionConfig, state.theme || 'journalist');
   return {
     roster: roster.map(p => {
       const name = p.name || p;
@@ -746,8 +747,9 @@ function buildSessionFacts(state) {
     playerCount: roster.length,
     // Phases 14 and 15 (R7): when the investigation ran, morning or afternoon, and its span
     ...(whenLine && { timeOfDayLine: whenLine }),
-    // Phases 14 and 15 (R5): who shares the byline, only when the session has a guest reporter
-    ...(guestReporterLine(state.sessionConfig) && { guestReporterLine: guestReporterLine(state.sessionConfig) })
+    // Phases 14 and 15 (R5): who shares the byline, only when the session has a guest reporter;
+    // phase 17: each reporter apart, the writer named from the theme's writer entry
+    ...(guestLine && { guestReporterLine: guestLine })
   };
 }
 

@@ -29,7 +29,7 @@ const { SOURCES_GLOSS, documentResolverOf } = require('./evidence');
 // Brief 4.13: each writer's identity line is its theme's (identityLineOf), and the rule set
 // and the mode block come from the theme's rules folder (R14).
 const { getThemeNPCEntries, mapSlotsOf, identityLineOf } = require('./theme-config');
-const { writerSignsLine, reportingModeOf, writerInTheRoom, writerFirstNameOf } = require('./prompt-renderers/session-authors');
+const { writerSignsLine, reportingModeOf, writerInTheRoom, writerFirstNameOf, guestReportersOf } = require('./prompt-renderers/session-authors');
 const { loadModeBlock, loadRuleSet } = require('./rule-set');
 // A standing note's kind, the one rule (review of 4.12e).
 const { noteKindOf } = require('./workflow/state');
@@ -1018,12 +1018,15 @@ ${DERIVED_LABELS.narrativeTensions}
 ${tensions.map(sentence => `- ${sentence}`).join('\n')}
 </NARRATIVE_TENSIONS>` : '';
 
+    const guests = guestReportersOf(this.sessionConfig);
     const byline = [
       // K3: the theme's default when the session holds no stamp (writerFirstNameOf)
       `"author": "${writerFirstNameOf(this.themeName, this.sessionConfig.journalistFirstName)} Nova | NovaNews"`,
       '"title": "Senior Investigative Correspondent"',
-      ...(this.sessionConfig.guestReporter
-        ? [`"guestReporter": "${this.sessionConfig.guestReporter.name} | ${this.sessionConfig.guestReporter.role}"`]
+      // Phase 17 (R5; the read's addendum f): each guest reporter's credit whole, "Name | Role" or
+      // "Name" with no role, joined with " || "; none with no guest reporter
+      ...(guests.length > 0
+        ? [`"guestReporter": "${guests.map(guest => (guest.role ? `${guest.name} | ${guest.role}` : guest.name)).join(' || ')}"`]
         : [])
     ].join(', ');
 

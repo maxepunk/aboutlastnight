@@ -7,9 +7,10 @@
  * - On site only, the character-IDs parse and the photo enrichment are told Nova's names
  *   beside the roster, and the photo entries mark a name for Nova as the article's writer.
  *   The roster decides a clash: a name a roster player has is that player.
- * - The guest reporter, when the session has one: one line in SESSION_FACTS, the weave
- *   writer's first section and both judges, and a turn-in under their name marked on the
- *   timeline. With none, nothing new prints.
+ * - Each guest reporter, when the session has any (phase 17, R5): read apart through
+ *   guestReportersOf, one line in SESSION_FACTS, the weave writer's first section and both
+ *   judges, and a turn-in under each one's name marked on the timeline. With none, nothing
+ *   new prints.
  *
  * Invented names throughout: the repo is public.
  */
@@ -37,8 +38,20 @@ const MARKED = (name) => `${name} (Nova, who writes this article)`;
 // K4: a name that already holds Nova's own name takes the shorter mark, so it does not repeat it
 const MARKED_BY_NAME = (name) => `${name} (who writes this article)`;
 const GUEST = { name: 'Dana Okafor', role: 'Contributing Reporter' };
+const SECOND = { name: 'Remi Vale', role: 'Field Reporter' };
+const DANA = { name: 'Dana Okafor', firstName: 'Dana', role: 'Contributing Reporter' };
+const REMI = { name: 'Remi Vale', firstName: 'Remi', role: 'Field Reporter' };
+const EXPOSURES = [
+  { tokenId: 'ale003', exposer: 'Dana', time: '07:37 PM' },
+  { tokenId: 'mor001', exposer: 'dana okafor', time: '07:40 PM' },
+  { tokenId: 'sar002', exposer: 'Remi', time: '07:45 PM' }
+];
+// The read's section 14, word for word, for one reporter and for two
 const GUEST_LINE = "The guest reporter: Dana Okafor (Contributing Reporter) shares this article's byline. " +
-  "A memory turned in under the name Dana Okafor or Dana is Dana Okafor's reporting for this article.";
+  'Each memory turned in under the name Dana Okafor or Dana is reporting Dana Okafor filed to Nova for this article.';
+const TWO_LINE = "The guest reporters: Dana Okafor (Contributing Reporter) and Remi Vale (Field Reporter) share this article's byline. " +
+  'Each memory turned in under the name Dana Okafor or Dana is reporting Dana Okafor filed to Nova for this article. ' +
+  'Each memory turned in under the name Remi Vale or Remi is reporting Remi Vale filed to Nova for this article.';
 
 describe("on site, the character-IDs parse and the photo enrichment know Nova's names (R4)", () => {
   const ANALYSES = {
@@ -144,74 +157,205 @@ describe('the photo entries mark Nova as the article\'s writer, on site only (R4
   });
 });
 
-describe('the guest reporter, when the session has one (R5)', () => {
-  const withGuest = (guestReporter) => {
+// Phase 17 (R5): each guest reporter apart. guestReportersOf is the one reading: the parse's
+// list, or an older thread's single {name, role}, its comma-joined names read apart and its
+// roles paired by position. The line (the read's section 14) takes the writer's name from the
+// theme's writer entry; the mark keeps its form, and a first name two reporters share marks
+// neither.
+describe('each guest reporter, when the session has any (R5)', () => {
+  const { guestReportersOf } = require('../prompt-renderers/session-authors');
+  const withGuests = (guestReporters) => {
     const base = reworkFixtureState('journalist');
-    return {
-      ...base,
-      sessionConfig: {
-        ...base.sessionConfig,
-        guestReporter,
-        exposures: [
-          { tokenId: 'ale003', exposer: 'Dana', time: '07:37 PM' },
-          { tokenId: 'mor001', exposer: 'dana okafor', time: '07:40 PM' }
-        ]
-      }
-    };
+    return { ...base, sessionConfig: { ...base.sessionConfig, guestReporters, exposures: EXPOSURES } };
+  };
+  const withOlderGuest = (guestReporter) => {
+    const base = reworkFixtureState('journalist');
+    return { ...base, sessionConfig: { ...base.sessionConfig, guestReporter, exposures: EXPOSURES } };
+  };
+  const BUNDLE = {
+    exposed: { tokens: ['ale003', 'mor001', 'sar002'].map((id) => ({ id, rawData: { tokenId: id } })), paperEvidence: [] },
+    buried: { transactions: [] }
   };
 
-  it('is one line that says who shares the byline and whose reporting their turn-ins are', () => {
-    expect(guestReporterLine({ guestReporter: GUEST })).toBe(GUEST_LINE);
-    expect(guestReporterLine({ guestReporter: { name: 'Ashe', role: '' } }))
-      .toBe("The guest reporter: Ashe shares this article's byline. A memory turned in under the name Ashe is Ashe's reporting for this article.");
+  describe('guestReportersOf', () => {
+    it('is empty with none: a null config, no value, a null value, a blank name', () => {
+      expect(guestReportersOf(null)).toEqual([]);
+      expect(guestReportersOf({})).toEqual([]);
+      expect(guestReportersOf({ guestReporter: null })).toEqual([]);
+      expect(guestReportersOf({ guestReporter: { name: '  ', role: 'Guest Reporter' } })).toEqual([]);
+      expect(guestReportersOf({ guestReporter: { role: 'Guest Reporter' } })).toEqual([]);
+      expect(guestReportersOf({ guestReporters: [] })).toEqual([]);
+      expect(guestReportersOf({ guestReporters: [{ name: ' ', role: 'Guest Reporter' }, null] })).toEqual([]);
+    });
+
+    it("reads the parse's list, each entry with its first name", () => {
+      expect(guestReportersOf({ guestReporters: [GUEST, SECOND] })).toEqual([DANA, REMI]);
+    });
+
+    it('reads the list before an older value', () => {
+      expect(guestReportersOf({ guestReporters: [SECOND], guestReporter: GUEST })).toEqual([REMI]);
+      expect(guestReportersOf({ guestReporters: [], guestReporter: GUEST })).toEqual([]);
+    });
+
+    it('reads an older value with one name as one reporter', () => {
+      expect(guestReportersOf({ guestReporter: GUEST })).toEqual([DANA]);
+      expect(guestReportersOf({ guestReporter: { name: 'Dana' } })).toEqual([{ name: 'Dana', firstName: 'Dana', role: '' }]);
+    });
+
+    it('reads an older value with two names and two roles as two reporters, the roles paired by position', () => {
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Contributing Reporter, Field Reporter' } }))
+        .toEqual([DANA, REMI]);
+    });
+
+    it('gives each of two names the one role when there is one', () => {
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Guest Reporter' } })).toEqual([
+        { name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' },
+        { name: 'Remi Vale', firstName: 'Remi', role: 'Guest Reporter' }
+      ]);
+    });
+
+    it('keeps the role whole for one name whose role holds a comma', () => {
+      expect(guestReportersOf({ guestReporter: { name: 'Dana Okafor', role: ' Reporter, Editor ' } }))
+        .toEqual([{ name: 'Dana Okafor', firstName: 'Dana', role: 'Reporter, Editor' }]);
+    });
+
+    it('collapses whitespace and drops blank pieces', () => {
+      expect(guestReportersOf({ guestReporter: { name: '  Dana   Okafor ,, ,  Remi\tVale ', role: ' Guest Reporter ' } })).toEqual([
+        { name: 'Dana Okafor', firstName: 'Dana', role: 'Guest Reporter' },
+        { name: 'Remi Vale', firstName: 'Remi', role: 'Guest Reporter' }
+      ]);
+      expect(guestReportersOf({ guestReporters: [{ name: '  Remi   Vale ', role: ' Field Reporter ' }] })).toEqual([REMI]);
+    });
   });
 
-  it('is null with no guest reporter', () => {
-    expect(guestReporterLine({ guestReporter: null })).toBeNull();
-    expect(guestReporterLine({})).toBeNull();
-    expect(guestReporterLine({ guestReporter: { name: '  ', role: 'Guest Reporter' } })).toBeNull();
-    expect(guestReporterLine(null)).toBeNull();
+  describe('the line', () => {
+    it('names one reporter, whose turn-ins are reporting they filed to the writer', () => {
+      expect(guestReporterLine({ guestReporters: [GUEST] }, 'journalist')).toBe(GUEST_LINE);
+      expect(guestReporterLine({ guestReporter: GUEST }, 'journalist')).toBe(GUEST_LINE);
+    });
+
+    it('names two reporters, then one sentence for each', () => {
+      expect(guestReporterLine({ guestReporters: [GUEST, SECOND] }, 'journalist')).toBe(TWO_LINE);
+      expect(guestReporterLine({ guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Contributing Reporter, Field Reporter' } }, 'journalist'))
+        .toBe(TWO_LINE);
+    });
+
+    it('joins three names as "A, B and C"', () => {
+      const line = guestReporterLine({ guestReporters: [GUEST, SECOND, { name: 'Kit Arden', role: '' }] }, 'journalist');
+      expect(line.startsWith("The guest reporters: Dana Okafor (Contributing Reporter), Remi Vale (Field Reporter) and Kit Arden share this article's byline. "))
+        .toBe(true);
+      expect(line.endsWith('Each memory turned in under the name Kit Arden or Kit is reporting Kit Arden filed to Nova for this article.')).toBe(true);
+    });
+
+    it('prints a one-word name once, and no parentheses with no role', () => {
+      expect(guestReporterLine({ guestReporters: [{ name: 'Dana', role: '' }] }, 'journalist'))
+        .toBe("The guest reporter: Dana shares this article's byline. Each memory turned in under the name Dana is reporting Dana filed to Nova for this article.");
+    });
+
+    it('names no first name two reporters share, as the mark marks neither', () => {
+      expect(guestReporterLine({ guestReporters: [GUEST, { name: 'Dana Vale', role: '' }] }, 'journalist')).toBe(
+        "The guest reporters: Dana Okafor (Contributing Reporter) and Dana Vale share this article's byline. " +
+        'Each memory turned in under the name Dana Okafor is reporting Dana Okafor filed to Nova for this article. ' +
+        'Each memory turned in under the name Dana Vale is reporting Dana Vale filed to Nova for this article.'
+      );
+    });
+
+    it('is null with no guest reporter, or with no writer entry in the theme', () => {
+      expect(guestReporterLine({ guestReporter: null }, 'journalist')).toBeNull();
+      expect(guestReporterLine({}, 'journalist')).toBeNull();
+      expect(guestReporterLine({ guestReporters: [] }, 'journalist')).toBeNull();
+      expect(guestReporterLine({ guestReporter: { name: '  ', role: 'Guest Reporter' } }, 'journalist')).toBeNull();
+      expect(guestReporterLine(null, 'journalist')).toBeNull();
+      expect(guestReporterLine({ guestReporters: [GUEST] }, 'detective')).toBeNull();
+      expect(guestReporterLine({ guestReporters: [GUEST] })).toBeNull();
+    });
   });
 
   it('joins SESSION_FACTS for the map and article writers, and nothing prints with none', () => {
-    const state = withGuest(GUEST);
-    const builder = new PromptBuilder(null, 'journalist', state.sessionConfig, state.canonicalCharacters, null);
-    expect(builder._sessionFactsSection(buildSessionFacts(state))).toContain(GUEST_LINE);
-
-    const none = withGuest(null);
-    expect(builder._sessionFactsSection(buildSessionFacts(none))).not.toContain('guest reporter');
+    for (const [state, line] of [[withGuests([GUEST]), GUEST_LINE], [withGuests([GUEST, SECOND]), TWO_LINE], [withOlderGuest(GUEST), GUEST_LINE]]) {
+      const builder = new PromptBuilder(null, 'journalist', state.sessionConfig, state.canonicalCharacters, null);
+      expect(builder._sessionFactsSection(buildSessionFacts(state))).toContain(line);
+    }
+    for (const none of [withGuests([]), withOlderGuest(null)]) {
+      const builder = new PromptBuilder(null, 'journalist', none.sessionConfig, none.canonicalCharacters, null);
+      expect(buildSessionFacts(none)).not.toHaveProperty('guestReporterLine');
+      expect(builder._sessionFactsSection(buildSessionFacts(none))).not.toContain('guest reporter');
+    }
   });
 
   it("joins the weave writer's first section, beside the session roster", () => {
-    const sections = buildWeaveSections(withGuest(GUEST));
-    const section1 = sections.slice(sections.indexOf('## SECTION 1'), sections.indexOf('## SECTION 2'));
-    expect(section1).toContain(GUEST_LINE);
-    expect(buildWeaveSections(withGuest(null))).not.toContain('The guest reporter:');
+    for (const [state, line] of [[withGuests([GUEST]), GUEST_LINE], [withGuests([GUEST, SECOND]), TWO_LINE], [withOlderGuest(GUEST), GUEST_LINE]]) {
+      const sections = buildWeaveSections(state);
+      const section1 = sections.slice(sections.indexOf('## SECTION 1'), sections.indexOf('## SECTION 2'));
+      expect(section1).toContain(line);
+    }
+    expect(buildWeaveSections(withGuests([]))).not.toContain('The guest reporter');
+    expect(buildWeaveSections(withOlderGuest(null))).not.toContain('The guest reporter');
   });
 
   it('reaches both judges beside the session roster', () => {
     for (const phase of ['arcs', 'article']) {
-      expect(buildEvaluationUserPrompt(phase, withGuest(GUEST), { factCheck: null })).toContain(GUEST_LINE);
-      expect(buildEvaluationUserPrompt(phase, withGuest(null), { factCheck: null })).not.toContain('The guest reporter:');
+      expect(buildEvaluationUserPrompt(phase, withGuests([GUEST]), { factCheck: null })).toContain(GUEST_LINE);
+      expect(buildEvaluationUserPrompt(phase, withGuests([GUEST, SECOND]), { factCheck: null })).toContain(TWO_LINE);
+      expect(buildEvaluationUserPrompt(phase, withGuests([]), { factCheck: null })).not.toContain('The guest reporter');
+      expect(buildEvaluationUserPrompt(phase, withOlderGuest(null), { factCheck: null })).not.toContain('The guest reporter');
     }
   });
 
-  it('marks a turn-in under their full name or their first name, in any case', () => {
-    expect(guestTurnInName('Dana', { guestReporter: GUEST })).toBe('Dana (the guest reporter, Dana Okafor)');
-    expect(guestTurnInName('dana okafor', { guestReporter: GUEST })).toBe('dana okafor (the guest reporter)');
-    expect(guestTurnInName('Vic', { guestReporter: GUEST })).toBe('Vic');
-    expect(guestTurnInName('Dana', { guestReporter: null })).toBe('Dana');
+  it("gives the fact check's head count each reporter apart, an older value too", () => {
+    const { buildFactCheckArgs } = evalTesting;
+    expect(buildFactCheckArgs(withGuests([GUEST, SECOND])).guestReporters).toEqual([DANA, REMI]);
+    expect(buildFactCheckArgs(withOlderGuest({ name: 'Dana Okafor, Remi Vale', role: 'Contributing Reporter, Field Reporter' })).guestReporters)
+      .toEqual([DANA, REMI]);
+    expect(buildFactCheckArgs(withOlderGuest(null)).guestReporters).toEqual([]);
+    expect(buildFactCheckArgs(withOlderGuest(null))).not.toHaveProperty('guestReporter');
+  });
 
-    const bundle = {
-      exposed: { tokens: ['ale003', 'mor001'].map((id) => ({ id, rawData: { tokenId: id } })), paperEvidence: [] },
-      buried: { transactions: [] }
-    };
-    const timeline = renderMorningTimeline(bundle, withGuest(GUEST).sessionConfig);
-    expect(timeline).toContain('document: ale003 | named: Dana (the guest reporter, Dana Okafor)');
-    expect(timeline).toContain('document: mor001 | named: dana okafor (the guest reporter)');
-    const plain = renderMorningTimeline(bundle, withGuest(null).sessionConfig);
-    expect(plain).toContain('document: ale003 | named: Dana\n');
-    expect(plain).not.toContain('guest reporter');
+  describe('the mark', () => {
+    it("marks a turn-in under each reporter's full name or first name, in any case", () => {
+      const config = { guestReporters: [GUEST, SECOND] };
+      expect(guestTurnInName('Dana', config)).toBe('Dana (the guest reporter, Dana Okafor)');
+      expect(guestTurnInName('dana okafor', config)).toBe('dana okafor (the guest reporter)');
+      expect(guestTurnInName('Remi', config)).toBe('Remi (the guest reporter, Remi Vale)');
+      expect(guestTurnInName('REMI VALE', config)).toBe('REMI VALE (the guest reporter)');
+      expect(guestTurnInName('Vic', config)).toBe('Vic');
+      expect(guestTurnInName('Dana', { guestReporter: null })).toBe('Dana');
+      expect(guestTurnInName('Dana', { guestReporters: [] })).toBe('Dana');
+    });
+
+    it('marks an older value as each reporter apart', () => {
+      const config = { guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Contributing Reporter, Field Reporter' } };
+      expect(guestTurnInName('Dana', config)).toBe('Dana (the guest reporter, Dana Okafor)');
+      expect(guestTurnInName('Remi', config)).toBe('Remi (the guest reporter, Remi Vale)');
+      expect(guestTurnInName('Remi Vale', config)).toBe('Remi Vale (the guest reporter)');
+      expect(guestTurnInName('Dana Okafor, Remi Vale', config)).toBe('Dana Okafor, Remi Vale');
+    });
+
+    it('marks a guest who plays a roster character: the normal case', () => {
+      const config = { roster: ['Vic', 'Dana'], guestReporters: [GUEST], exposures: [{ tokenId: 'ale003', exposer: 'Dana', time: '07:37 PM' }] };
+      expect(guestTurnInName('Dana', config)).toBe('Dana (the guest reporter, Dana Okafor)');
+      expect(renderMorningTimeline(BUNDLE, config)).toContain('document: ale003 | named: Dana (the guest reporter, Dana Okafor)');
+    });
+
+    it('leaves a first name two reporters share unmarked, while each full name marks', () => {
+      const config = { guestReporters: [GUEST, { name: 'Dana Vale', role: '' }] };
+      expect(guestTurnInName('Dana', config)).toBe('Dana');
+      expect(guestTurnInName('dana', config)).toBe('dana');
+      expect(guestTurnInName('Dana Okafor', config)).toBe('Dana Okafor (the guest reporter)');
+      expect(guestTurnInName('Dana Vale', config)).toBe('Dana Vale (the guest reporter)');
+    });
+
+    it("marks each reporter's turn-ins on the timeline", () => {
+      const timeline = renderMorningTimeline(BUNDLE, withGuests([GUEST, SECOND]).sessionConfig);
+      expect(timeline).toContain('document: ale003 | named: Dana (the guest reporter, Dana Okafor)');
+      expect(timeline).toContain('document: mor001 | named: dana okafor (the guest reporter)');
+      expect(timeline).toContain('document: sar002 | named: Remi (the guest reporter, Remi Vale)');
+      for (const none of [withGuests([]), withOlderGuest(null)]) {
+        const plain = renderMorningTimeline(BUNDLE, none.sessionConfig);
+        expect(plain).toContain('document: ale003 | named: Dana\n');
+        expect(plain).not.toContain('guest reporter');
+      }
+    });
   });
 });
 

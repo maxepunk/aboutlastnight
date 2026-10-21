@@ -48,7 +48,7 @@ const { wordCount } = require('./word-count');
 // which the evidence check and the map's card check read too.
 const { QUOTED_SPANS } = require('./grounding');
 const { documentResolverOf } = require('./evidence');
-const { reportingModeOf } = require('./prompt-renderers/session-authors');
+const { reportingModeOf, guestReportersOf, joinedNames } = require('./prompt-renderers/session-authors');
 
 /**
  * Normalise for substring comparison: every single and double quotation mark,
@@ -1125,7 +1125,10 @@ function describeLocations(locations) {
  *                                               the notes, corrections, accusation, answers
  *                                               at the story meeting and the notes at the
  *                                               stops): a pronoun they give is not invented
- * @param {Object}   [args.guestReporter]      - {name}: named in the head-count message
+ * @param {Array}    [args.guestReporters]     - [{name, role}], read through guestReportersOf
+ *                                               (phase 17, R5): each named in the head-count
+ *                                               message, counted on or off the roster by
+ *                                               their first name
  * @param {string}   [args.theme]              - 'journalist' (default) | 'detective': which
  *                                               page's printed text roster coverage reads; the
  *                                               phase 3 checks run for the journalist only
@@ -1182,7 +1185,7 @@ function factCheckContentBundle({
   npcPronouns,
   rosterPronouns,
   directorText,
-  guestReporter,
+  guestReporters,
   theme,
   directorEdits
 } = {}) {
@@ -1783,20 +1786,22 @@ function factCheckContentBundle({
         }
       }
       if (counts.length > 0) {
-        const reporterName = guestReporter && typeof guestReporter === 'object' && typeof guestReporter.name === 'string'
-          ? guestReporter.name.trim() : '';
-        const reporterFirst = reporterName.split(/\s+/)[0] || '';
-        const reporterOnRoster = reporterFirst && names.some(name => name.toLowerCase() === reporterFirst.toLowerCase());
-        const reporterNote = !reporterName ? ''
-          : reporterOnRoster ? `, the guest reporter ${reporterName} among them`
-            : `; the guest reporter ${reporterName} plays no character on it and is not counted`;
+        // Phase 17 (R5): each guest reporter apart, counted among the players when their first
+        // name is a roster player's; those on the roster are named together, then those off it
+        const reporters = guestReportersOf({ guestReporters });
+        const onRoster = reporters.filter(reporter => names.some(name => name.toLowerCase() === reporter.firstName.toLowerCase()));
+        const offRoster = reporters.filter(reporter => !onRoster.includes(reporter));
+        const reportersNamed = (list) => `the guest reporter${list.length > 1 ? 's' : ''} ${joinedNames(list.map(reporter => reporter.name))}`;
+        const amongThem = onRoster.length > 0 ? `, ${reportersNamed(onRoster)} among them` : '';
+        const notCounted = (onIt) => offRoster.length === 0 ? ''
+          : offRoster.length === 1 ? `; ${reportersNamed(offRoster)} plays no character${onIt} and is not counted`
+            : `; ${reportersNamed(offRoster)} play no character${onIt} and are not counted`;
+        const reporterNote = `${amongThem}${notCounted(' on it')}`;
         const message =
           `Head count: ${counts.map(hit => hit.text).join('; ')}, but the roster lists ${names.length} players at the investigation` +
           `${reporterNote}. The head count is the players at the investigation (T10).`;
         advisoryWarnings.push(message);
-        const reporterLine = !reporterName ? ''
-          : reporterOnRoster ? `, the guest reporter ${reporterName} among them`
-            : `; the guest reporter ${reporterName} plays no character and is not counted`;
+        const reporterLine = `${amongThem}${notCounted('')}`;
         for (const hit of counts) {
           found('headCount', 'advisory', hit.place, hit.excerpt, message,
             `${quoted(hit.excerpt)} does not match the roster: ${names.length} players were at the investigation${reporterLine}.`);
