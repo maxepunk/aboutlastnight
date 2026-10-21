@@ -434,7 +434,10 @@ describe("1D: each of the writer's beats passes the evidence check, and each of 
     map.deck = 'At 10:18 AM the room said "accident" and Kai\'s account took $450,000.';
     map.sections[1].heading = 'The Story at 9:58';
     beatOf(map, 'b2').move = "Kai's and Quinn's quick vote, five to four";
-    expect(check(map).failures).toEqual([]);
+    // Phase 17, fix wave 2: the map's headline is the settled angle's, so the angle carries it too.
+    const weave = clone(storyLevelMapState().weave);
+    weave.angles[0].headline = map.headline;
+    expect(check(map, { weave }).failures).toEqual([]);
   });
 
   it("a line the director rewrote is never held to story terms", () => {

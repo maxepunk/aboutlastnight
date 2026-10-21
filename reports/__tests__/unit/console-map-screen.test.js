@@ -1188,6 +1188,8 @@ describe('4D: the margin: what the round says of a move, a section or the top si
       { type: 'story-terms', message: 'The job of lede holds a time.', line: 'This job gives the time 9:58.', place: 'sections[#lede]' },
       { type: 'photo-placed-twice', message: 'board.jpg twice.', line: 'This photo is placed twice.', place: 'sections[#theStory].photos[#board.jpg]' },
       { type: 'story-terms', message: 'The gap note holds a time.', line: 'The gap note gives the time 9:58.', place: 'gapNote' },
+      // Phase 17, fix wave 2: the headline check's failure, placed at the headline.
+      { type: 'headline-changed', message: "The headline is not the settled angle's.", line: `The map's headline, "A Vote", is not the one settled at the meeting, "Ten Votes".`, place: 'headline' },
       { type: 'player-not-placed', message: 'Players in no beat: Remi.', line: 'Remi is in no move and not in the gap note.' }
     ];
     const data = { ...mapPayloadOf(storyLevelMapState({ outline: map })), checkFailures: failures };
@@ -1206,9 +1208,12 @@ describe('4D: the margin: what the round says of a move, a section or the top si
       expect(board.failures).toEqual(['Check still failing: This photo is placed twice.']);
       const [gap] = elementsOf(tree, hasClass('map__gap'));
       expect(checksIn(gap)).toEqual(view.gapNote.failures);
+      const [head] = elementsOf(tree, hasClass('map__head'));
+      expect(checksIn(head)).toEqual(view.headline.failures);
+      expect(view.headline.failures).toEqual([`Check still failing: The map's headline, "A Vote", is not the one settled at the meeting, "Ten Votes".`]);
       const atTop = new Set(elementsOf(round, hasClass('map__check')));
       const beside = elementsOf(tree, (n) => hasClass('map__check')(n) && !atTop.has(n));
-      expect(beside).toHaveLength(4);
+      expect(beside).toHaveLength(5);
       beside.forEach((check) => {
         expect(mapClassesOf(check)).toContain('map__check--beside');
         expect(check.props.role).toBe('alert');

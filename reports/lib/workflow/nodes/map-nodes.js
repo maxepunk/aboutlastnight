@@ -6,7 +6,8 @@
  * photos kept for the article, the record's document ids, the threads and the connections of
  * the angle the director settled (lib/weave.js settledAngleOf: its threads, and the connections
  * between them; phase 4b, piece 3, brief 3B), the threads it leaves out, by which a writer's beat
- * that carries one is named (piece 4, R5), and the
+ * that carries one is named (piece 4, R5), its headline, which the map carries word for word
+ * (phase 17, fix wave 2), and the
  * director's changes and note at the meeting. A failure the director caused on the map is a concern on their edit, never a
  * rework.
  *
@@ -142,6 +143,7 @@ function settledWeaveThreadsOf(state) {
  * @returns {Object} mapFindings's inputs
  */
 function mapCheckInputsOf(state, map) {
+  const settled = settledAngleOf(state.weave);
   return {
     roster: mapRosterOf(state.sessionConfig, state.canonicalCharacters),
     keptPhotos: keptPhotoFilenames(state, topPhotoOf(map)),
@@ -153,9 +155,12 @@ function mapCheckInputsOf(state, map) {
     // Brief 4.14a; piece 3: only the connections between the settled angle's threads are in the
     // story, so no map is asked to land another. Each with its line, by which the director's
     // line names it.
-    connections: (settledAngleOf(state.weave) || { connections: [] }).connections
+    connections: (settled || { connections: [] }).connections
       .filter((connection) => weaveIdOf(connection))
       .map((connection) => ({ id: weaveIdOf(connection), line: typeof connection.line === 'string' ? connection.line.trim() : '' })),
+    // Phase 17, fix wave 2: the map's headline is the settled angle's, the director's own where
+    // they rewrote it at the meeting (the meeting's approve writes their version as the weave).
+    settledHeadline: settled && typeof settled.angle.headline === 'string' ? settled.angle.headline : '',
     meetingEdits: meetingEditIdsOf(state),
     meetingNote: meetingNoteOf(state),
     edits: carriedEdits(state._outlineHandEdits, map),

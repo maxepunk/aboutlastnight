@@ -165,6 +165,11 @@ function textOf(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/** A field as text, trimmed, with each run of whitespace one space: '' for anything but a string. */
+function spacedText(value) {
+  return textOf(value).replace(/\s+/g, ' ');
+}
+
 /** The objects in a list, or none. */
 function objectsOf(value) {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) : [];
@@ -896,7 +901,7 @@ function cardFault(beat, evidence) {
  *   (console/checkpoint-view-logic.js mapView).
  * - `place` is where the map shows it, beside the line it names: a beat's path
  *   (`sections[#lede].beats[#b2]`, `leftOut[#b9]`), a section's (`sections[#lede]`), a photo's
- *   (`sections[#lede].photos[#a.jpg]`, `topPhoto`), or a field of the map (`gapNote`,
+ *   (`sections[#lede].photos[#a.jpg]`, `topPhoto`), or a field of the map (`headline`, `gapNote`,
  *   `weaveChanges`). A failure about what the map lacks (a player, a photo placed nowhere, a
  *   thread, a connection, the card count, the length) has no place and sits at the top.
  *
@@ -906,6 +911,12 @@ function cardFault(beat, evidence) {
  *   standing edits find by it, carried or not (a line of theirs, else an edit of its place or the
  *   order of its column), or else the first, and gives the others new ids (keeperOfRepeatedId;
  *   fix F3 and its rounds, and fix G1);
+ * - the map's headline is the settled angle's, the one the director may have rewritten at the
+ *   meeting, since the article prints the map's (`headline-changed`; phase 17, fix wave 2, the
+ *   director's call after the final review): each is trimmed, with each run of whitespace one
+ *   space, and any other difference fails, a word, the case, punctuation or a quotation mark. A
+ *   headline the director rewrote on the map is theirs, and with no settled headline in hand
+ *   (an older thread, a map with no weave) there is no check;
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id the record holds, quotation, clock time or money
  *   figure): the gap note's line, each section's job, each beat's move and its synopsis in a
@@ -947,8 +958,9 @@ function cardFault(beat, evidence) {
  *   count.
  *
  * The director's share of the map is never a check's failure (mapDirectorsShare): a line they
- * wrote is not held to story terms, and a beat they added is never failed for having no threads
- * or no evidence, which the article writer finds (spec 5.3). The evidence is never theirs (R6),
+ * wrote is not held to story terms, a headline they rewrote is not held to the settled angle's,
+ * and a beat they added is never failed for having no threads or no evidence, which the article
+ * writer finds (spec 5.3). The evidence is never theirs (R6),
  * so every piece is the writer's to answer for, under the director's beat too. A failure the
  * director caused is a concern on their edit, beside its line, never a rework: a beat they
  * struck or cut that held the only place of a player, a thread or a connection; a card fault the
@@ -975,6 +987,8 @@ function cardFault(beat, evidence) {
  * @param {string[]} inputs.meetingEdits - the ids of the director's changes at the meeting, in
  *   the meeting's own form (meetingEditIdsOf)
  * @param {boolean} inputs.meetingNote - whether the director left an approval note at the meeting (meetingNoteOf)
+ * @param {string} [inputs.settledHeadline] - the settled angle's headline (lib/weave.js
+ *   settledAngleOf), which the map's headline is held to; none, or blank, no headline check
  * @param {Object[]} [inputs.edits] - the director's standing edits the map carries
  * @param {Object[]} [inputs.standingEdits] - the director's standing edits, carried or not, by which
  *   the repeat check finds the beat that keeps a repeated id (keeperOfRepeatedId); none, the edits
@@ -1029,6 +1043,21 @@ function mapFindings(map, inputs = {}) {
       fail('duplicate-beat-id', `Beats sharing the id ${id}: ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))}. ${keep}, and give ${listOf(others.map(named))} ${others.length > 1 ? 'each ' : ''}a new id that no other beat, in the sections or in leftOut, carries.`,
         `The writer gave the moves ${listOf(under.map(({ beat }) => `"${textOf(beat.move)}"`))} one id, so the map cannot move or edit them.`, beatPlace(under[0].slot, under[0].beat));
     });
+  }
+
+  // The map's headline is the settled angle's (phase 17, fix wave 2): the article prints the map's,
+  // and the director may have rewritten the angle's at the meeting. Each is trimmed, with each run
+  // of whitespace one space. A headline the director rewrote on the map is theirs.
+  const settledHeadline = spacedText(inputs.settledHeadline);
+  if (settledHeadline && !has(share.fields, 'headline')) {
+    const headline = spacedText(map.headline);
+    if (headline !== settledHeadline) {
+      fail('headline-changed', `The headline is not the settled angle's. The map carries the settled angle's headline word for word: "${settledHeadline}".`,
+        headline
+          ? `The map's headline, "${headline}", is not the one settled at the meeting, "${settledHeadline}".`
+          : `The map has no headline; the one settled at the meeting is "${settledHeadline}".`,
+        'headline');
+    }
   }
 
   // Each of the writer's lines is in story terms (R8): the headline, the deck and the section
