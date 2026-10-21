@@ -1091,7 +1091,6 @@ function Outline({ data, sessionId, theme, onApprove, onReject, onRollback, disp
           : React.createElement('div', { className: 'map__head ' + ALWAYS },
               editBtn(function () { open('head', 'head'); }, editHeld),
               React.createElement('p', { className: 'map__headline' }, view.headline.text),
-              failuresOf(view.headline.failures),
               concernsOf(view.headline.concerns),
               React.createElement('p', { className: 'map__deck' }, view.deck.text),
               concernsOf(view.deck.concerns)),

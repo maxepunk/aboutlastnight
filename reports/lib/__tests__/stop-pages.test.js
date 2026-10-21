@@ -297,19 +297,6 @@ describe('4.12a: the map\'s page is mapView\'s', () => {
     expect(page.lines.find((line) => line.tone === 'title' && line.label === section.label)).toBeTruthy();
   });
 
-  // Phase 17, fix wave 2: the headline check's failure sits beside the headline, as on the screen.
-  it('puts a check still failing on the headline right after the headline, as an alert beside it', () => {
-    const line = 'The map has no headline; the one settled at the meeting is "The Ledger Kept Talking".';
-    const data = mapData({ checkFailures: [{ type: 'headline-changed', message: "The headline is not the settled angle's.", line, place: 'headline' }] });
-    const view = View.mapView(data, View.mapDraftOf(data));
-    const page = stopPage('outline', data);
-    const at = page.lines.findIndex((l) => l.label === 'Headline');
-    expect(page.lines[at].text).toBe(view.headline.text);
-    expect(page.lines[at + 1]).toMatchObject({ tone: 'alert', text: `Check still failing: ${line}`, beside: true });
-    expect(page.lines[at + 2]).toMatchObject({ label: 'Deck', text: view.deck.text });
-    expect(page.lines.filter((l) => l.tone === 'alert').map((l) => l.text)).toEqual([`Check still failing: ${line}`]);
-  });
-
   it('shows the tray always open (R8), and folds the trace and the standing notes', () => {
     const data = mapData({
       trace: [{ pass: 1, round: 1, trigger: 'check', findings: { structuralIssues: ['A beat names no document.'] }, at: null, diff: null, changedScopes: ['sections'] }],

@@ -4225,10 +4225,9 @@
    *   `weaveChanges`, each with its source in words (weaveChangeSource; task 4.14b);
    * - every concern beside the line of the edit it is about (concernsBesideLines), every code
    *   check still failing beside the line its place names (`failures` on a beat, a section, a
-   *   photo, the headline and the gap note, `weaveChangesFailures`; failuresBesideLines with
-   *   mapLineKeyOf; spec 6.3; the headline's since phase 17's fix wave 2), and a line under a
-   *   repeat of the map the stop showed (mapRepeats, the writer's) `locked`, its controls off,
-   *   with `lockedHint`, which speaks of those repeats alone.
+   *   photo and the gap note, `weaveChangesFailures`; failuresBesideLines with mapLineKeyOf;
+   *   spec 6.3), and a line under a repeat of the map the stop showed (mapRepeats, the writer's)
+   *   `locked`, its controls off, with `lockedHint`, which speaks of those repeats alone.
    * No line or label names a beat, a thread or a connection by its id: the tags leave the page
    * (spec 9). Each beat's `id` stays on its view for the controls, which change the map by it.
    *
@@ -4569,8 +4568,7 @@
       gapNote: isPlainObject(map.gapNote)
         ? { line: asString(map.gapNote.line), players: stringList(map.gapNote.players).join(', '), concerns: at('gapNote'), failures: failuresAt('gapNote') }
         : null,
-      // Phase 17, fix wave 2: the headline check's failure (lib/map.js, `headline-changed`) sits under the headline.
-      headline: { text: asString(map.headline), concerns: at('headline'), failures: failuresAt('headline') },
+      headline: { text: asString(map.headline), concerns: at('headline') },
       deck: { text: asString(map.deck), concerns: at('deck') },
       topPhoto: topPhoto,
       top: {

@@ -83,7 +83,6 @@ The change:
 - **C5** (`craft-form.md`), which the arc writer, the map writer and the article writer all read, carries the director's statement of what the headline and the deck do: set the tone, establish the voice, set up the throughline, and capture the reader at once.
 - **The map writer's task** names the deck, the headline it carries, and the section headings as the prose it writes, in place of "It writes no prose".
 - The stamp is unchanged: the article prints the map's headline, deck and top photo, and the article writer builds the lede and the throughline on them.
-- A map check holds the map's headline to the settled angle's: a headline the map writer changed fails, and the map's automatic rework puts it back; a headline the director edits on the map is theirs (the director's call, 2026-10-20, after the final review).
 
 The director then sees the article's tone at the meeting and on the map, where steering costs least, instead of first meeting it at the desk.
 

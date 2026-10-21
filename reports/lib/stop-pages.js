@@ -728,8 +728,7 @@ const MAP_PARTS = {
   top(page, view) {
     page.inRegion(PAGE_REGIONS[OUTLINE].top, () => {
       page.text(view.headline.text, 'Headline');
-      // Phase 17, fix wave 2: the headline check's failure sits beside the headline, before its concerns.
-      addBesideLine(page, { failures: view.headline.failures, concerns: view.headline.concerns });
+      page.beside(view.headline.concerns, []);
       page.text(view.deck.text, 'Deck');
       page.beside(view.deck.concerns, []);
       if (view.topPhoto) addPhoto(page, view.topPhoto, 'Top photo');

@@ -258,8 +258,8 @@ function pickedAngleOf(weave) {
 /**
  * The settled story (spec 2026-10-06 section 8; survey Q1): the one reading of the angle the
  * director picked, which every reader after the meeting goes through (the settled weave the later
- * writers read, the map's settled story, the map checks' threads, connections and headline, the
- * director's threads the map may name in its gap note).
+ * writers read, the map's settled story, the map checks' threads and connections, the director's
+ * threads the map may name in its gap note).
  * - `angle`: the picked angle (pickedAngleOf);
  * - `threads`: the threads it tells, in its order, each once: an id it names that the weave
  *   does not hold is skipped, and a thread the director added comes after the angle's own, since

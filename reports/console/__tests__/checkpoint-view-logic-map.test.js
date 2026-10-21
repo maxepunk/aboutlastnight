@@ -609,7 +609,7 @@ describe("4.9: the map's page before any round", () => {
   });
 
   test('the headline, the deck and the top photo, which moves to any section', () => {
-    expect(view.headline).toEqual({ text: MAP.headline, concerns: [], failures: [] });
+    expect(view.headline).toEqual({ text: MAP.headline, concerns: [] });
     expect(view.deck).toEqual({ text: MAP.deck, concerns: [] });
     expect(view.topPhoto).toMatchObject({ filename: 'hero.jpg', locked: false, concerns: [] });
     expect(view.topPhoto.moveTargets).toEqual([
@@ -725,17 +725,6 @@ describe('4.9: with a check still failing and with a concern', () => {
   test("a concern whose place is not on the page is listed on its own", () => {
     const d = { ...data, concerns: [{ text: directorEditConcern(['E2'], 'A beat that is gone.'), editIds: ['E2'], places: [{ id: 'E2', path: 'sections[#closing].beats[#b77]', where: 'x' }] }] };
     expect(ViewLogic.mapView(d, opened(d)).otherConcerns).toEqual(['Concern: A beat that is gone.']);
-  });
-
-  // Phase 17, fix wave 2: the headline check (lib/map.js mapFindings, `headline-changed`) places
-  // its failure at `headline`, the key the page reads the headline by (mapLineKeyOf).
-  test("a check still failing on the headline sits under the headline, in the director's words, not at the top", () => {
-    const line = `The map's headline, "${MAP.headline}", is not the one settled at the meeting, "The Ledger Kept Talking".`;
-    const d = { ...data, checkFailures: [{ type: 'headline-changed', message: "The headline is not the settled angle's.", line, place: 'headline' }] };
-    const v = ViewLogic.mapView(d, opened(d));
-    expect(v.headline.failures).toEqual([`Check still failing: ${line}`]);
-    expect(v.checkFailures).toEqual([]);
-    expect(v.deck).toEqual({ text: MAP.deck, concerns: [] });
   });
 });
 
