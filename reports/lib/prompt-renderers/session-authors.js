@@ -23,8 +23,8 @@
  * The guest reporters (R5; phase 17, each apart), only when the session has any, read
  * through guestReportersOf, the one reading:
  * - guestReporterLine: who shares the byline, and that a memory turned in under each one's
- *   name is reporting they filed to the writer for this article. SESSION_FACTS, the weave
- *   writer's first section and both judges print it;
+ *   name is reporting they filed to Nova for this article, as world.md and C11 say.
+ *   SESSION_FACTS, the weave writer's first section and both judges print it;
  * - guestTurnInName: the record view's timeline marks a turn-in under a reporter's full name
  *   or their first name, in any case.
  * A session with no guest reporter prints nothing of either.
@@ -193,7 +193,10 @@ function guestReportersOf(sessionConfig) {
   return names.map((name, i) => guestEntry(name, roles.length === names.length ? roles[i] : role));
 }
 
-/** Names as a sentence lists them: "A", "A and B", "A, B and C". */
+/**
+ * Names as a sentence lists them: "A", "A and B", "A, B and C". The one rule: the guest
+ * reporters' line, the parse's log line and the fact check's messages read it.
+ */
 function joinedNames(names) {
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] || '');
 }
@@ -205,9 +208,9 @@ function firstNameIsTheirs(reporter, reporters) {
 
 /**
  * The guest reporters' line (R5; the read's section 14): who shares the byline, then for each
- * reporter, that a memory turned in under their name is reporting they filed to the article's
- * writer, named from the theme's writer entry. A first name two reporters share names neither,
- * as the mark marks neither.
+ * reporter, that a memory turned in under their name is reporting they filed to Nova for this
+ * article, as world.md and C11 say, Nova named from the theme's writer entry. A first name two
+ * reporters share names neither, as the mark marks neither.
  *
  * @param {Object|null} sessionConfig
  * @param {string} theme

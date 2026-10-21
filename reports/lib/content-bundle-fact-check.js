@@ -671,11 +671,6 @@ function quoted(text) {
   return `"${String(text == null ? '' : text).replace(/\s+/g, ' ').trim()}"`;
 }
 
-/** Names as a line lists them: "Mel", "Mel and Kai", "Mel, Kai and Sam". */
-function namesList(names) {
-  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
-
 /** What a line calls a narrator piece: a headline field by its name, a paragraph "This paragraph". */
 const PIECE_NAMES = { 'headline.main': 'The headline', 'headline.kicker': 'The kicker', 'headline.deck': 'The deck' };
 
@@ -1360,7 +1355,7 @@ function factCheckContentBundle({
       `director's ${cutWord} removed the only place the article named ${cutNames.length === 1 ? cutNames[0] : 'each of them'}.`
     );
     found('rosterCoverage', 'advisory', null, null, concern,
-      `Your ${cutWord} took out the only ${cutNames.length === 1 ? 'mention' : 'mentions'} of ${namesList(cutNames)} in the article.`, cutId);
+      `Your ${cutWord} took out the only ${cutNames.length === 1 ? 'mention' : 'mentions'} of ${joinedNames(cutNames)} in the article.`, cutId);
   }
   if (missing.length > 0) {
     const message = placed
@@ -1372,7 +1367,7 @@ function factCheckContentBundle({
         `specific, evidence-grounded appearance.`;
     structuralIssues.push(message);
     found('rosterCoverage', 'structural', null, null, message,
-      `${namesList(missing)} ${missing.length === 1 ? 'is' : 'are'} on the ${placed ? 'map' : 'roster'} but never named in the article.`);
+      `${joinedNames(missing)} ${missing.length === 1 ? 'is' : 'are'} on the ${placed ? 'map' : 'roster'} but never named in the article.`);
   }
 
   // ── 3. Photo references (BASELINE class 7) ───────────────────────────────
