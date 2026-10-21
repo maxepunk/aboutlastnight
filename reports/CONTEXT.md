@@ -29,7 +29,7 @@ A programmatic test of an output, free to run, with a definite answer.
 _Avoid_: validation, fact check (one particular check)
 
 **Record**:
-The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the ledger and the evidence log, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the photos and the director's descriptions of them, and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's own suspicion, an allegation, a question or an opinion Nova marks as Nova's, unless the director writes it into the article.
+The session's source of truth that every claim the writer makes must agree with: the evidence bundle, the ledger and the evidence log, the director's own notes (those given at intake and any note written at a stop) and accusation text, the epilogue, the roster and pronouns, the photos and the director's descriptions of them, and the director's edits. Backstory the director knows but the session does not show is not record: it reaches print only as Nova's own suspicion, an allegation, a question or an opinion said plainly as Nova's own, unless the director writes it into the article.
 _Avoid_: session data, ground truth, context
 
 **Character sheet**:
@@ -93,7 +93,7 @@ The NovaNews reporter who writes the article, in the first person. An independen
 _Avoid_: the writer (the model pass), the narrator
 
 **Guest reporter**:
-Whoever shares Nova's byline for what they contributed, named when the session starts. A memory they turned in under their name is their reporting for the article. Many sessions have none.
+A journalist working the room who shares Nova's byline for what they contributed, named when the session starts. Each memory they turned in under their name is reporting they filed to Nova for the article. A session may have more than one, each held apart; many have none.
 _Avoid_: co-author, second reporter
 
 **Writer**:
@@ -101,7 +101,7 @@ The model pass that produces the arcs, the outline or the article.
 _Avoid_: generator, agent, model, Nova (the reporter persona, not the pass)
 
 **Beat**:
-One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, one sentence on what the article tells there, and the evidence under it. On the map's page it is a move, and its words are its title. The article writer tells every beat in the map's order, as its sentence says, where it has one, from its evidence, and adds none.
+One move of the story on the story map: a few words in story terms, the people in it, the threads it carries, one sentence on what the article tells there, and the evidence under it. On the map's page it is a move, and its words are its title. The article writer tells every beat in the map's order, as its sentence says, where it has one, drawing on its evidence for what the beat needs, and adds none.
 _Avoid_: point, item, paragraph plan
 
 **Photo description**:
@@ -157,7 +157,7 @@ The rework of the story meeting after the director changes the angle they have o
 _Avoid_: rebuild, regenerate
 
 **Evidence**:
-What gets cited. A piece of evidence is a memory, a paper document, a ledger line, an exposure in the evidence log, or something the director's own words record from the room (their notes, their corrections and their answers at the story meeting, as T1 sets out). Each piece names its source or sources, says in a short line what it shows, with the words or figures that matter, and is marked as supporting its line or cutting against it; a piece that sets two sources side by side names both. One thread draws on many pieces, and one piece can serve several threads. The evidence travels under each thread, connection and beat to the article writer, which cites it. The writers choose it; the director sees it only by opening a line, and never edits it.
+What gets cited. A piece of evidence is a memory, a paper document, a ledger line, an exposure in the evidence log, or something the director's own words record from the room (their notes, their corrections and their answers at the story meeting, as T1 sets out). Each piece names its source or sources, says in a short line what it shows, with the words or figures that matter, and is marked as supporting its line or cutting against it; a piece that sets two sources side by side names both. One thread draws on many pieces, and one piece can serve several threads. The evidence travels under each thread, connection and beat to the article writer, which draws on it and cites what it prints. The writers choose it; the director sees it only by opening a line, and never edits it.
 _Avoid_: sources (what a piece names), citation (the line on an evidence card)
 
 **Evidence card**:
