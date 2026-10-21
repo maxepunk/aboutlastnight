@@ -2163,8 +2163,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
         const description = truthOf(phase, 'evidenceTruth');
         expect(description).not.toMatch(/character sheet/i);
         expect(description).toContain("what the record backs stated; ");
-        // Final fix wave (K5): the mark is the opinion's alone, as T1 attaches it.
-        expect(description).toContain("what the record cannot back written as Nova's own suspicion, an allegation, a question, or an opinion marked as Nova's");
+        // Phase 17 (R4): an opinion is Nova's by how its line says it, not by a tag.
+        expect(description).toContain("what the record cannot back never stated as fact, but written as Nova's own suspicion, an allegation, a question, or an opinion plainly Nova's own, which a line shows by how it says it, not by a tag?");
         expect(description).not.toContain("question or opinion, marked as Nova's");
         expect(description).toContain("a direction a note at a stop gives written as Nova's own reading");
       }

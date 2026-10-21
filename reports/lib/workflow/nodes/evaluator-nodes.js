@@ -213,9 +213,10 @@ const TRUTH_GROUPS = [
     // Nova's wondering, opinion or question, never the seller. The character-sheet clause went
     // on 2026-10-10 (the director's ruling): a sheet is never in the record, so no judge reads one.
     //
-    // Final fix wave (K5): "marked as Nova's" belongs to the opinion alone, as T1 attaches it
-    // ("an opinion Nova commits to and marks as Nova's"), so a question or an allegation in a
-    // weave's plain third-person line is not held to the mark.
+    // Phase 17 (R4; the writing spec, section 5): the T1 clause asks what T1 is for. What the
+    // record cannot back is never stated as fact, and an opinion is Nova's by how its line says
+    // it, not by a tag, as T1 now words it ("said plainly as Nova's own"), so neither judge looks
+    // for a mark or asks for one, and a plainly said opinion passes.
     describe: (s, phase) => {
       const arcs = phase === 'arcs';
       const words = arcs
@@ -224,7 +225,7 @@ const TRUTH_GROUPS = [
       const exposerNamers = arcs
         ? "the director's notes, their answers at the story meeting or the notes at the stops"
         : "the director's words";
-      return `Is every claim in ${s} written as its evidence allows (T1): what the record backs stated; ${words}, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back written as Nova's own suspicion, an allegation, a question, or an opinion marked as Nova's? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor ${exposerNamers} name (T6)?`;
+      return `Is every claim in ${s} written as its evidence allows (T1): what the record backs stated; ${words}, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back never stated as fact, but written as Nova's own suspicion, an allegation, a question, or an opinion plainly Nova's own, which a line shows by how it says it, not by a tag? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor ${exposerNamers} name (T6)?`;
     }
   },
   {
@@ -343,7 +344,9 @@ const TRUTH_GROUPS = [
     reads: () => ['truthRules'],
     // Brief F (T14 as rewritten, the director's approval): a line that explains a rule of the
     // game to the players breaks the fiction as a production word does, so it is must-fix.
-    describe: (s) => `Does every line of ${s} that reaches print speak the fiction's own words, with no production word in it and no rule of the game explained to the players, Nova reasoning inside the world wherever a rule matters to a line (T14)?`
+    // Phase 17 (R4): a rule stated to the players is caught too, and Nova reasons from what a
+    // rule makes true, as T14 now words it.
+    describe: (s) => `Does every line of ${s} that reaches print speak the fiction's own words, with no production word in it and no rule of the game explained or stated to the players, Nova reasoning from what a rule makes true wherever it matters to a line (T14)?`
   }
 ];
 

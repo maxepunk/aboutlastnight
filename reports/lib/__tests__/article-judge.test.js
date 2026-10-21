@@ -128,12 +128,14 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
   // that rules on a time or adds to Nova's day is the director's words (spec 3 and 4); T8 has
   // Nova take no side in the verdict, the mode block saying where Nova stood and what part Nova
   // took; T14 keeps the rules of the game off the page as well as the production words.
-  // Final fix wave (K5): "marked as Nova's" belongs to the opinion alone, as T1 attaches it, so a
-  // plain third-person line that is a question or an allegation is not held to the mark.
+  // Phase 17 (R4; the writing spec, section 5): the two questions ask what T1 and T14 are for.
+  // What the record cannot back is never stated as fact, and an opinion is Nova's by how its line
+  // says it, not by a tag, so a plainly said opinion passes and no question asks for a mark; a
+  // rule of the game explained or stated to the players is caught.
   it('each truth question is worded as the rules give it', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
-      evidenceTruth: "Is every claim in the article written as its evidence allows (T1): what the record backs stated; the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) included as record, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back written as Nova's own suspicion, an allegation, a question, or an opinion marked as Nova's? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor the director's words name (T6)?",
+      evidenceTruth: "Is every claim in the article written as its evidence allows (T1): what the record backs stated; the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) included as record, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back never stated as fact, but written as Nova's own suspicion, an allegation, a question, or an opinion plainly Nova's own, which a line shows by how it says it, not by a tag? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor the director's words name (T6)?",
       moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the investigation's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the investigation as FINANCIAL_SUMMARY gives it; a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the room as that moment's figure, and a ledger line they explain as they give it (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
       verdictTruth: VERDICT_QUESTION,
       stagesTruth: "In the article, is the party met only through memories; the investigation told as the reporting mode allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; Nova's day taken only from the epilogue and from any note at a stop that adds to it; and every logged time as the record's timeline prints it, or as a note at a stop rules it (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
@@ -141,7 +143,7 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
       playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
       wordsTruth: "Is every quoted line in the article word for word from the record or the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?",
       photosTruth: "Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director's description wherever PHOTOS gives one (T13)?",
-      fictionTruth: "Does every line of the article that reaches print speak the fiction's own words, with no production word in it and no rule of the game explained to the players, Nova reasoning inside the world wherever a rule matters to a line (T14)?"
+      fictionTruth: "Does every line of the article that reaches print speak the fiction's own words, with no production word in it and no rule of the game explained or stated to the players, Nova reasoning from what a rule makes true wherever it matters to a line (T14)?"
     });
   });
 
@@ -164,6 +166,16 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
       photosTruth: ['photos', 'whiteboard', 'printedCaptions'],
       fictionTruth: ['truthRules']
     });
+  });
+
+  // Phase 17 (R4): neither judge asks for an opinion marked as Nova's, nor for Nova reasoning
+  // inside the world, the wordings T1 and T14 retired.
+  it('no truth question at either judge asks for a mark or for reasoning inside the world', () => {
+    const carried = ['arcs', 'article'].flatMap((phase) => Object.entries(getPhaseCriteria(phase, 'journalist'))
+      .flatMap(([key, criterion]) => ["marked as Nova's", 'reasoning inside the world wherever']
+        .filter((wording) => criterion.description.includes(wording))
+        .map((wording) => `${phase} ${key}: "${wording}"`)));
+    expect(carried).toEqual([]);
   });
 
   // Phases 14 and 15 (R12; spec 15): the wordings the approved rules retired. No question at
