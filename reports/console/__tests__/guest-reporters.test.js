@@ -4,8 +4,9 @@
  * The console cannot import lib/, so input-review-logic.js keeps its own copy of
  * guestReportersOf (lib/prompt-renderers/session-authors.js), held equal to the server's here
  * over every case R5 names. The input review's session panel prints each reporter on a line
- * of their own through guestReporterPanelLines, and the start form's help line says how to
- * give two.
+ * of their own through guestReporterPanelLines, read here as InputReview.js renders it
+ * (lib/__tests__/fixtures/component-source.js loadInputReview), and the start form's help line
+ * says how to give two.
  *
  * Invented names throughout: the repo is public.
  */
@@ -14,6 +15,7 @@ const path = require('path');
 
 const Logic = require('../input-review-logic');
 const Server = require('../../lib/prompt-renderers/session-authors');
+const { loadInputReview, textOf, elementsOf } = require('../../lib/__tests__/fixtures/component-source');
 
 const CONSOLE_DIR = path.join(__dirname, '..');
 
@@ -93,10 +95,36 @@ describe("the input review's session panel (R5)", () => {
     expect(Logic.guestReporterPanelLines(null)).toEqual([]);
   });
 
-  it("is what InputReview.js's panel prints, with no reading of its own", () => {
-    const source = fs.readFileSync(path.join(CONSOLE_DIR, 'components', 'checkpoints', 'InputReview.js'), 'utf8');
-    expect(source).toMatch(/guestReporterPanelLines\(sessionConfig\)/);
-    expect(source).not.toMatch(/sessionConfig\.guestReporter\b/);
+  // InputReview.js run with a React that builds a tree of its elements: the session panel's rows
+  // as the screen renders them, one row per line the panel prints.
+  describe("is what InputReview.js's panel prints", () => {
+    const { InputReview } = loadInputReview();
+    const panelRows = (sessionConfig) => {
+      const screen = InputReview({ data: { type: 'input-review', sessionConfig, directorNotes: {} }, onApprove() {}, onReject() {}, theme: 'journalist' });
+      const [panel] = elementsOf(screen, (element) => element.props.className === 'checkpoint-section' &&
+        elementsOf(element.children, (child) => child.type === 'h4').map(textOf)[0] === 'Session Info');
+      return elementsOf(panel, (element) => element.type === 'span' && element.props.className === 'text-sm').map(textOf);
+    };
+
+    it('with no guest reporter: no guest row', () => {
+      expect(panelRows({ sessionId: '0101' })).toEqual(['Session ID: 0101', 'Theme: journalist']);
+      expect(panelRows({ sessionId: '0101', guestReporters: [] })).toEqual(['Session ID: 0101', 'Theme: journalist']);
+    });
+
+    it('with one: one row, "Guest Reporter" for a blank role', () => {
+      expect(panelRows({ sessionId: '0101', guestReporters: [{ name: 'Dana Okafor', role: 'Contributing Reporter' }] }))
+        .toEqual(['Session ID: 0101', 'Guest Reporter: Dana Okafor | Contributing Reporter', 'Theme: journalist']);
+      expect(panelRows({ sessionId: '0101', guestReporter: { name: 'Dana Okafor', role: '' } }))
+        .toEqual(['Session ID: 0101', 'Guest Reporter: Dana Okafor | Guest Reporter', 'Theme: journalist']);
+    });
+
+    it('with two: a row for each, from the list and from an older value alike', () => {
+      const rows = ['Session ID: 0101', 'Guest Reporter: Dana Okafor | Contributing Reporter', 'Guest Reporter: Remi Vale | Field Reporter', 'Theme: journalist'];
+      expect(panelRows({ sessionId: '0101', guestReporters: [{ name: 'Dana Okafor', role: 'Contributing Reporter' }, { name: 'Remi Vale', role: 'Field Reporter' }] }))
+        .toEqual(rows);
+      expect(panelRows({ sessionId: '0101', guestReporter: { name: 'Dana Okafor, Remi Vale', role: 'Contributing Reporter, Field Reporter' } }))
+        .toEqual(rows);
+    });
   });
 });
 
