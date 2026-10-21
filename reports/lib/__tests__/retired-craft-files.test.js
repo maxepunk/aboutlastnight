@@ -91,8 +91,9 @@ describe('the retired journalist craft files', () => {
    * Task 4c-fix (3.12 review minor 5): each standalone agent lists exactly the rule files
    * its pipeline counterpart reads, so an agent's list cannot fall behind a change to
    * RULE_SET_CALLS. Every call reads the world and the truth rules, then its craft files
-   * in RULE_SET_CALLS order, then the reporting-mode block (the phase 4 spec's section 11,
-   * which was the rule-set spec's section 8). The evidence curator and the image analyzer
+   * in RULE_SET_CALLS order, then the reporting-mode block (phase 17's spec, sections 3 and
+   * 4, docs/superpowers/specs/2026-10-18-the-writing-design.md, sets the lists and their one
+   * order; the phase 4 spec's section 11 set them before). The evidence curator and the image analyzer
    * write no story text, so they read the world file alone, for the game's facts and what
    * each memory became. The three specialists left the skill path when the standalone path
    * was rewritten to defer to the rule set: nothing started them.

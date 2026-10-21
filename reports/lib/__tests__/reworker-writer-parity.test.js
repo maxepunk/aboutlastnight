@@ -211,7 +211,8 @@ describe('journalist article stop', () => {
     // The writer's rules and schema replace the reworker's own smaller copies.
     // Phase 3 (3.2): the journalist's rules are its craft files, once.
     expect(count(rework.user, '<RULES>')).toBe(0);
-    expect(count(rework.user, '<craft-voice>')).toBe(1);
+    // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
+    expect(rework.user.match(/^<craft-voice>$/gm)).toHaveLength(1);
     expect(count(rework.user, '<SCHEMA>')).toBe(1);
     expect(rework.user).not.toContain('## OUTPUT SCHEMA');
     // Brief 4.7b: the settled weave first, then the map as the director left it.

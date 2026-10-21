@@ -20,11 +20,11 @@ Read these first. They are the rules for everything you write; this file adds on
 .claude/skills/journalist-report/references/rules/craft-story.md
 .claude/skills/journalist-report/references/rules/craft-form.md
 .claude/skills/journalist-report/references/rules/craft-material.md
-.claude/skills/journalist-report/references/rules/craft-voice.md
 .claude/skills/journalist-report/references/rules/craft-judgement.md
-.claude/skills/journalist-report/references/rules/craft-telling.md
 .claude/skills/journalist-report/references/rules/craft-cards.md
 .claude/skills/journalist-report/references/rules/craft-questions.md
+.claude/skills/journalist-report/references/rules/craft-telling.md
+.claude/skills/journalist-report/references/rules/craft-voice.md
 .claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, as the record's reportingMode says)
 ```
 

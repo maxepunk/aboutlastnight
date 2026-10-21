@@ -9,7 +9,7 @@
  * - the world and the truth rules once, in the system prompt; the call's craft files
  *   once, in the user prompt, after the data and before <DIRECTOR_GUIDANCE> (the
  *   integrator's placement ruling); the outline writer reads every craft file but
- *   the voice (spec section 8);
+ *   the questions, the voice among them since phase 17 (R2);
  * - none of the removed phrases in the pipeline's own instruction text, a gendered
  *   Nova included (the lint the brief asks for), and no em-dash (R171);
  * - no retired craft file loaded on any journalist path.
@@ -168,11 +168,12 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
     expect(count(user, '\n<RECORD>\n')).toBe(1);
   });
 
-  it('the outline calls read every craft file but the voice; the article calls read the voice too', () => {
-    expect(renders['outline writer'].prompt).not.toContain('<craft-voice>');
-    expect(renders['outline reworker'].prompt).not.toContain('<craft-voice>');
-    expect(renders['article writer'].prompt).toContain('<craft-voice>');
-    expect(renders['article reworker'].prompt).toContain('<craft-voice>');
+  // Phase 17 (R2): the map writer reads the voice, for the deck and the headings it writes. Its
+  // task names the tag in prose, so the file is counted by the line that opens it.
+  it('the outline and article calls read the voice, once, as the line that opens its file', () => {
+    Object.keys(CALL_OF).forEach((name) => {
+      expect(`${name}: ${(renders[name].prompt.match(/^<craft-voice>$/gm) || []).length}`).toBe(`${name}: 1`);
+    });
   });
 
   it("each reworker's prompts open with its writer's", () => {

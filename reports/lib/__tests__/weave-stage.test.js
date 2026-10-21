@@ -160,7 +160,8 @@ describe('the arc writer writes one weave in one call', () => {
   });
 
   it('carries its rule files as RULE_SET_CALLS[\'arc\'] gives them, after the record and before <DIRECTOR_GUIDANCE>, which stays last', () => {
-    expect(RULE_SET_CALLS.arc).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions']);
+    // Phase 17 (R2): the arc writer reads the voice, last, for each angle's headline.
+    expect(RULE_SET_CALLS.arc).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions', 'craft-voice']);
     const notes = [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Lead with the vote.', at: 't' }];
     const prompt = buildWeavePrompt(weaveState({ directorGateNotes: notes }));
     const { craft } = loadRuleSet('arc');

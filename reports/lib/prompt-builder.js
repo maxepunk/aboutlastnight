@@ -86,13 +86,19 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
  * the story, which the checks hold it to. The schema's description of the field says what a
  * synopsis is, and C2 why.
  *
+ * Phase 17 (R3; the writing spec's section 3; the rule-text read's addendum a): the deck and
+ * the section headings print as the map writer writes them, so the task names them as the
+ * map's only prose, under the settled angle's headline, which the map carries word for word,
+ * and points at C5 and C12 for how they read (the map writer reads the voice since R2). Every
+ * other line stays in story terms, and the story-terms check's scope is unchanged.
+ *
  * @param {boolean} heroMarked - whether <available-photos> marks a photo [hero image]
  * @param {boolean} meetingNote - whether <DIRECTOR_GUIDANCE> holds the director's approval
  *   note from the story meeting (lib/map.js meetingNoteOf)
  * @returns {string}
  */
 function mapTask(heroMarked, meetingNote) {
-  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. It writes no prose. The director reads it as a board whose synopses are folded when it opens: that page holds at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM} of your own; with every synopsis open it holds at most ${MAP_OPEN_WORD_BOUND}, so give the synopses about ${MAP_SYNOPSIS_AIM} words between them.
+  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map's only prose is the copy the article prints as you write it: the deck under the settled angle's headline, which the map carries word for word, and each section's heading, written as C5 (\`<craft-form>\`) sets out, in the voice C12 (\`<craft-voice>\`) sets out. Every other line stays in story terms. The director reads it as a board whose synopses are folded when it opens: that page holds at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM} of your own; with every synopsis open it holds at most ${MAP_OPEN_WORD_BOUND}, so give the synopses about ${MAP_SYNOPSIS_AIM} words between them.
 - The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id${meetingNote ? MAP_TASK_NOTE_CHANGE : ''}. List each change you make to fit one in under weaveChanges, with its source: the edit's id${meetingNote ? MAP_TASK_NOTE_SOURCE : ''}.
 - Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out, its beats in the order the article will tell them, as C6 (\`<craft-form>\`) sets out: each beat a move of the story in story terms, as C16 sets them out, with its people, its synopsis of about 20 words, the ids of the threads it carries, and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat, and a beat in a section carries only threads of the story, since the director settled the other threads out of it at the meeting. Drop each slot the story does not use, with its reason.
 - Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces, as C9 (\`<craft-cards>\`) sets out.
@@ -463,11 +469,13 @@ function systemPromptOpening(theme, call, sessionConfig) {
  * the one sentence saying what the article tells there, which C16 has the article writer tell the
  * beat as. A map from before piece 4, and a move the director added, may carry none, so the line
  * says "where the beat has one".
+ * Phase 17 (R3; the rule-text read's section 13): the evidence holds the pieces the move "can be
+ * told from", so the article draws on them for what the move needs, as C16 says.
  * It names the record in words, never by its tag, as lib/evidence.js's piece descriptions do: the
  * map prints above the record, and the prompt's readers take the first <RECORD> for the record.
  */
 const STORY_MAP_TAG = 'STORY_MAP';
-const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move is told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
+const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move can be told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
 
 /**
  * The instruction's line on which inline cards the article prints (phase 4b, brief 1E; spec
@@ -508,7 +516,13 @@ function mapCardsLine(map, evidenceBundle = null) {
 /**
  * The article writer's task (brief 4.7b; spec 6.1; the approved read's section D), right
  * after the settled weave and the map: the reading order, then what the writer writes from
- * the map. It points at the rule items that say how (C16, C2, C4) and restates none of them.
+ * the map. It points at the rule items that say how (C16, C2, C4, C12) and restates none of
+ * them.
+ *
+ * Phase 17 (R3; the writing spec's section 4; the rule-text read's section 11): the task opens
+ * on the article as one cohesive story that argues the settled angle's thesis, built on the
+ * headline and the deck, with the map as its plan, and its last line is the prose, as C4 and
+ * C12 set it out. The lines between keep the director's decisions and are unchanged.
  *
  * The article rework carries this task word for word, ahead of its <HAND_EDITS>, which lists
  * the director's edits at the desk (spec section 7). So the lines on a section's heading, a
@@ -534,9 +548,10 @@ function mapCardsLine(map, evidenceBundle = null) {
  * sections, and no other.
  *
  * Phase 4b (brief 1E; spec 2026-10-05 sections 5.2, 5.3 and 7): C16 has the article writer
- * write each beat from the evidence it carries and cite it, and the beats line says only what
- * C16 does not (fix round 3: each rule is stated once, spec section 8): a beat that carries no
- * evidence, such as one the director added on the map, is told from the record, and the items
+ * tell each beat drawing on the evidence it carries for what the beat needs, and cite what it
+ * uses (since phase 17), and the beats line says only what C16 does not (fix round 3: each
+ * rule is stated once, spec section 8): a beat that carries no evidence, such as one the
+ * director added on the map, is told from the record, and the items
  * that say how to cite, T1 for each source (a document, the ledger, the evidence log and the
  * director's notes) and C9 for a card. It names T1 by its id alone, as the arc writer's notes
  * label does: the truth rules print in the system prompt, and a user prompt carries no
@@ -553,13 +568,13 @@ function mapCardsLine(map, evidenceBundle = null) {
  * "<HAND_EDITS>" it meets (lib/__tests__/fixtures/removed-phrases.js instructionText), so a
  * bracketed name here would hide every line between the task and the block from it.
  */
-const ARTICLE_TASK = `Write the article from the settled weave and the story map above. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write the map as C16 (\`<craft-story>\`) sets out the article writer's part:
+const ARTICLE_TASK = `Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map above as its plan. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write it as C16 (\`<craft-story>\`) sets out the article writer's part:
 - the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (\`<craft-cards>\`) sets out;
 - the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order, as C2 (\`<craft-form>\`) sets them out, and the words, the transitions and each scene's detail from the record are yours;
 - each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
 - each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;
 - the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;
-- about the map's expected length, as C4 (\`<craft-telling>\`) sets out.`;
+- the prose: every sentence, paragraph and section as C4 (\`<craft-telling>\`) sets out, in the voice C12 (\`<craft-voice>\`) sets out, at about the map's expected length.`;
 
 class PromptBuilder {
   /**

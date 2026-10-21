@@ -13,9 +13,8 @@
  *   (spec section 5; task 3.8): story (C1, C3, C16), form (C2, C5, C6, C17, C18,
  *   C19, C14), material (C8, C7, C10, C11), voice (C12), judgement (C13), telling
  *   (C4), cards (C9) and questions (C15). Each call reads the files RULE_SET_CALLS gives
- *   it: the phase 4 spec's section 11, who reads what
- *   (docs/superpowers/specs/2026-10-02-story-meeting-and-map.md), which was the rule-set
- *   spec's section 8;
+ *   it, as the phase 17 spec's sections 3 and 4 set them
+ *   (docs/superpowers/specs/2026-10-18-the-writing-design.md);
  * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block,
  *   which loadModeBlock hands back in its tag as loadRuleSet does each file.
  *
@@ -39,31 +38,37 @@ const REPORTS_ROOT = path.resolve(__dirname, '..');
 const CORE_FILES = ['world', 'truth-rules'];
 
 /**
- * Each call's craft files, every list in one order: story, form, material, voice,
- * judgement, telling, cards, questions. The arc writer writes the weave and reads the
- * story, form, material, judgement and questions files; the map writer lays it across the
- * sections and reads all but the voice and the questions; the article writer reads all
- * eight. A reworker passes its writer's call.
+ * Each call's craft files, every list in one order: story, form, material, judgement,
+ * cards, questions, telling, voice. The telling and the voice say how the prose reads, so
+ * they come last, right before the director's notes. The arc writer writes the weave and
+ * reads the story, form, material, judgement, questions and voice files; the map writer
+ * lays it across the sections and reads all but the questions; the article writer reads
+ * all eight. A reworker passes its writer's call.
  *
- * Phase 4: the lists follow the phase 4 spec's section 11 (who reads what; it was the
- * rule-set spec's section 8). The interweaving call is gone, and the judges read the
- * world, the truth rules and the mode block alone: they write no notes on the writing, so
- * they read no craft file (the story meeting's fact check, brief 4.4; the article judge,
- * brief 4.7a). The map writer asks nothing, so it reads no craft-questions, and the
- * outline judge went with the map (brief 4.6).
+ * Phase 17 (R2; the writing spec's sections 3 and 4,
+ * docs/superpowers/specs/2026-10-18-the-writing-design.md): the arc writer and the map
+ * writer read the voice, for the lines the article prints that they write (an angle's
+ * headline, the map's deck and its headings), and every list takes the one order. The
+ * phase 4 spec's section 11 set the lists before. The judges read
+ * the world, the truth rules and the mode block alone: they write no notes on the writing,
+ * so they read no craft file (the story meeting's fact check, brief 4.4; the article judge,
+ * brief 4.7a). The map writer asks nothing, so it reads no craft-questions (brief 4.6).
  *
  * The calls are one list (brief 4.13b): lib/theme-config.js derives its identity calls from
  * RULE_SET_CALLS, each call and each writer's rework (a judge's call opens `judge-`), so a
  * call added here needs its identity line in each theme's config.
  */
-const ARC_CRAFT = ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'];
+const ARC_CRAFT = [
+  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+  'craft-questions', 'craft-voice'
+];
 const OUTLINE_CRAFT = [
   'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-  'craft-telling', 'craft-cards'
+  'craft-cards', 'craft-telling', 'craft-voice'
 ];
 const ARTICLE_CRAFT = [
-  'craft-story', 'craft-form', 'craft-material', 'craft-voice',
-  'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
+  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+  'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
 ];
 
 const RULE_SET_CALLS = Object.freeze({

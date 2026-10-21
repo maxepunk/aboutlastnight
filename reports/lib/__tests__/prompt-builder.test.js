@@ -969,17 +969,23 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
 
   it('carries the whiteboard nowhere near it — that is Layer 3, and it has its own path', async () => {
     const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES });
-    expect(userPrompt).not.toContain('suspects');
+    // Phase 17: the map writer reads C12, which says "what Nova suspects" (rule-text read,
+    // change 1), so the scan reads the prompt outside the craft files.
+    const outsideCraft = userPrompt.replace(/^<(craft-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
+    expect(outsideCraft).toContain('<SETTLED_WEAVE>');
+    expect(outsideCraft).not.toContain('suspects');
   });
 
   // Phase 3 (3.2): the <TEMPORAL_DISCIPLINE> block went (the world and T7 state the
-  // stages). Phase 4 (brief 4.6): the outline's third-person line went with its task; the
-  // map writes no prose. Phase 4b (brief 1D): each beat is a move in story terms, with its
-  // evidence underneath (C2).
-  it('the map writes no prose, and the prompt carries no first-person marker (integrator ruling, phase 1)', async () => {
+  // stages). Phase 4 (brief 4.6): the outline's third-person line went with its task. Phase 4b
+  // (brief 1D): each beat is a move in story terms, with its evidence underneath (C2). Phase 17
+  // (R3; the read's addendum a): the map's only prose is the deck under the settled angle's
+  // headline and the headings, in the voice; every other line stays in story terms.
+  it("the map's only prose is the deck and the headings, and the prompt carries no first-person marker (integrator ruling, phase 1)", async () => {
     const { userPrompt } = await render({ directorNotes: null });
     const task = userPrompt.slice(userPrompt.indexOf('</SETTLED_WEAVE>'), userPrompt.indexOf('<SLOTS>'));
-    expect(task).toContain('writes no prose');
+    expect(task).toContain("Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map's only prose is the copy the article prints as you write it: the deck under the settled angle's headline, which the map carries word for word, and each section's heading, written as C5 (`<craft-form>`) sets out, in the voice C12 (`<craft-voice>`) sets out. Every other line stays in story terms. The director reads it as a board ");
+    expect(task).not.toContain('writes no prose');
     expect(userPrompt).not.toContain('"I watched"');
     expect(userPrompt).not.toContain('Nova was there');
   });
@@ -1372,12 +1378,15 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
   const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close) + close.length);
 
   describe('the rule sections', () => {
-    it('the outline writer: the world and the truth rules in its system prompt, its craft (no voice) in its user prompt', async () => {
+    // Phase 17 (R2): the map writer reads the voice, for the deck and the headings. Its task
+    // names the tag in prose, so the file is counted by the line that opens it.
+    it('the outline writer: the world and the truth rules in its system prompt, its craft, the voice last, in its user prompt', async () => {
       const { core, craft } = loadRuleSet('outline');
       const { systemPrompt, userPrompt } = await outlineOf(journalist());
       expect(systemPrompt.split(core).length - 1).toBe(1);
       expect(userPrompt.split(craft).length - 1).toBe(1);
-      expect(userPrompt).not.toContain('<craft-voice>');
+      expect(userPrompt.match(/^<craft-voice>$/gm)).toHaveLength(1);
+      expect(craft.trimEnd().endsWith('</craft-voice>')).toBe(true);
       expect(userPrompt.indexOf(craft)).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
       // Phase 4 (brief 4.6): the map's task names <DIRECTOR_GUIDANCE> in prose, so the
       // section is the last one.

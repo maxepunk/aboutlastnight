@@ -61,27 +61,36 @@ const CRAFT_ITEMS = {
 };
 
 /**
- * The phase 4 spec's section 11 (who reads what; it was the rule-set spec's section 8),
- * item by item: the arc writer reads neither the voice (C12), the telling (C4) nor the
- * cards (C9); the map writer reads neither the voice nor the questions (C15), since it
- * asks nothing (brief 4.6). The interweaving call is gone, and neither judge reads a craft
- * file: the story meeting's fact check (brief 4.4) and the article judge (brief 4.7a).
+ * Who reads what, item by item (phase 17, the writing spec's sections 3 and 4,
+ * docs/superpowers/specs/2026-10-18-the-writing-design.md; the phase 4 spec's section 11
+ * before it): the arc writer reads neither the telling (C4) nor the cards (C9); the map
+ * writer reads no questions (C15), since it asks nothing (brief 4.6). Both read the voice
+ * (C12) since phase 17, for the lines the article prints that they write: an angle's
+ * headline, the map's deck and its headings. Neither judge reads a craft file: the story
+ * meeting's fact check (brief 4.4) and the article judge (brief 4.7a).
  */
 const SPEC_SECTION_11 = {
-  arc: ALL_CRAFT.filter((id) => !['C4', 'C9', 'C12'].includes(id)),
-  outline: ALL_CRAFT.filter((id) => !['C12', 'C15'].includes(id)),
+  arc: ALL_CRAFT.filter((id) => !['C4', 'C9'].includes(id)),
+  outline: ALL_CRAFT.filter((id) => !['C15'].includes(id)),
   article: ALL_CRAFT
 };
 SPEC_SECTION_11['judge-arc'] = [];
 SPEC_SECTION_11['judge-article'] = [];
 
-/** The brief's map (the phase 4 spec's section 11; the read's section C): each call's craft files, in order. */
+/**
+ * The brief's map (phase 17, R2; the writing spec's section 4): each call's craft files, every
+ * list in one order, story, form, material, judgement, cards, questions, telling, voice, so
+ * the two that say how the prose reads come last, before the director's notes.
+ */
 const BRIEF_MAP = {
-  arc: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions'],
-  outline: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-telling', 'craft-cards'],
+  arc: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions', 'craft-voice'],
+  outline: [
+    'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+    'craft-cards', 'craft-telling', 'craft-voice'
+  ],
   article: [
-    'craft-story', 'craft-form', 'craft-material', 'craft-voice',
-    'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'
+    'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+    'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
   ]
 };
 BRIEF_MAP['judge-arc'] = [];
@@ -138,7 +147,7 @@ describe('the loader', () => {
     expect(craft).toBe(BRIEF_MAP[call].map((name) => `<${name}>\nSTUB ${name}\n</${name}>`).join('\n\n'));
   });
 
-  it.each(Object.keys(SPEC_SECTION_11))('%s: the real files give exactly the craft items spec section 11 lists, each once', (call) => {
+  it.each(Object.keys(SPEC_SECTION_11))('%s: the real files give exactly the craft items the spec lists for the call, each once', (call) => {
     const { core, craft } = loadRuleSet(call, JOURNALIST);
     // An item is counted by its heading; a body may point at an item another file states.
     const crafted = itemIds(craft).filter((id) => id.startsWith('C'));
@@ -179,11 +188,22 @@ describe('the loader', () => {
     expect(() => loadRuleSet('arc', { root })).toThrow(/truth-rules\.md.*craft-story\.md/s);
   });
 
+  // Phase 17 (R2): the map writer reads the voice, so a missing craft-voice.md fails it as it
+  // fails the article writer; the questions, which it never reads, still cannot.
   it('does not throw for a broken file the call does not read', () => {
     const root = tempStubRoot();
-    fs.unlinkSync(path.join(root, 'craft-voice.md'));
+    fs.unlinkSync(path.join(root, 'craft-questions.md'));
     expect(() => loadRuleSet('outline', { root })).not.toThrow();
-    expect(() => loadRuleSet('article', { root })).toThrow(/craft-voice\.md/);
+    expect(() => loadRuleSet('article', { root })).toThrow(/craft-questions\.md/);
+  });
+
+  it('throws for a missing craft-voice.md in every writer that reads it', () => {
+    const root = tempStubRoot();
+    fs.unlinkSync(path.join(root, 'craft-voice.md'));
+    ['arc', 'outline', 'article'].forEach((call) => {
+      expect(() => loadRuleSet(call, { root })).toThrow(/craft-voice\.md/);
+    });
+    expect(() => loadRuleSet('judge-article', { root })).not.toThrow();
   });
 });
 

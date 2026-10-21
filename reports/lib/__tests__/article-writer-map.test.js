@@ -56,7 +56,7 @@ function blockJson(text, tag) {
 
 /** The article task's lines, from its opening to the data that follows it. */
 function taskLines(prompt) {
-  const start = prompt.indexOf('Write the article from the settled weave and the story map above.');
+  const start = prompt.indexOf("Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map above as its plan.");
   expect(start).toBeGreaterThanOrEqual(0);
   return prompt.slice(start, prompt.indexOf('<DATA_CONTEXT>', start)).split('\n').filter((line) => line.startsWith('- '));
 }
@@ -77,7 +77,7 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
       '</SETTLED_WEAVE>',
       `<${STORY_MAP_TAG}>`,
       `</${STORY_MAP_TAG}>`,
-      'Write the article from the settled weave and the story map above',
+      'Write the article: one cohesive story',
       '<DATA_CONTEXT>',
       'PHOTOS (',
       '\n<RECORD>\n',
@@ -523,7 +523,8 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     // Phase 4b, piece 4 (brief 4B; R1): the label names the beat's summary, its synopsis, which a
     // map from before piece 4 and a move the director added may lack.
     expect(label).toContain('A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave\'s threads it carries, and "connection" the id of the weave\'s connection that lands in it.');
-    expect(label).toContain('Its "evidence" holds the pieces of the record the move is told from, each with its "sources"');
+    // Phase 17 (R3; the read's section 13): the article draws on the evidence, as C16 says.
+    expect(label).toContain('Its "evidence" holds the pieces of the record the move can be told from, each with its "sources"');
     expect(label).toContain('what it "shows", and its "stance": whether it supports the move or cuts against it.');
     expect(label).toContain('A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true.');
     // A piece's sources besides a document, as lib/evidence.js names them.

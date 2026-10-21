@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "outline",
   "title": "StoryMap",
-  "description": "The story map: the settled weave laid across the article's sections. Each beat is a move of the story in a few plain words, with the evidence that tells it underneath; the map writes no prose.",
+  "description": "The story map: the settled weave laid across the article's sections. Each beat is a move of the story in a few plain words, with the evidence it can be told from underneath; its only prose is the deck and the section headings the article prints, under the settled angle's headline.",
   "type": "object",
   "additionalProperties": false,
   "required": ["headline", "deck", "sections", "dropped", "leftOut", "expectedLength", "weaveChanges"],
@@ -73,7 +73,7 @@
                 "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the move puts on the page: a scene, a receipt, a line or a figure" },
                 "evidence": {
                   "type": "array",
-                  "description": "The pieces of the record the article writer tells the move from",
+                  "description": "The pieces of the record the article writer can tell the move from",
                   "items": { "type": "object" }
                 }
               }
@@ -134,7 +134,7 @@
           "kind": { "type": "string", "enum": ["scene", "receipt", "line", "figure"], "description": "What the move puts on the page: a scene, a receipt, a line or a figure" },
           "evidence": {
             "type": "array",
-            "description": "The pieces of the record the article writer tells the move from",
+            "description": "The pieces of the record the article writer can tell the move from",
             "items": { "type": "object" }
           }
         }

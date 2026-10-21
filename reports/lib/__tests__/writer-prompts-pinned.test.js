@@ -456,11 +456,25 @@ const REPO = path.join(__dirname, '..', '..');
  *   names no sheet (-87 in every writer): outline-journalist 25180 -> 25093 and
  *   article-journalist 36141 -> 36054; the weave writer's SECTION 2 line says the paper
  *   documents print "in full" (-76): arcs-journalist 12435 -> 12272 (-163).
+ * - Phase 17, brief B (spec 2026-10-18 sections 3 and 4; R2, R3, R6), what the writers are told
+ *   and read. Every writer reads its craft files in one order, story, form, material,
+ *   judgement, cards, questions, telling, voice (R2): the arc writer gains the voice stub, last
+ *   (+47): arcs-journalist 12272 -> 12319. The map writer gains the voice stub and reads its
+ *   cards before its telling (+47); its task's "It writes no prose." becomes the read's
+ *   addendum a sentence, the deck under the settled angle's headline and each heading as its
+ *   only prose, in the voice (+284); and its <SCHEMA> prints the schema's new description, the
+ *   evidence "it can be told from" and the deck and headings as its only prose (+89), and the
+ *   evidence field's "can tell the move from", twice (+6): outline-journalist 25093 -> 25519
+ *   (+426). The article writer's craft files are reordered, telling and voice last (0); its
+ *   identity line names one story for the players who were there that night (+88); its map
+ *   label says the move "can be told from" its evidence (+4); and its task opens on one
+ *   cohesive story built on the headline and the deck, with the map as its plan (+81), and
+ *   ends on the prose as C4 and C12 set it out (+97): article-journalist 36054 -> 36324 (+270).
  */
 const PINNED = {
-  'outline-journalist': ['766c384c3c934f57a52394d744cb8c5b3461b0560556e742aa72fce03dd3b44d', 25093],
-  'article-journalist': ['a56cb09bdf3b057170c244a1e449b88e9e0b0b3c87eb182c9193f356c9c5e072', 36054],
-  'arcs-journalist': ['0a50d9fc952971341fc1b50ac73024a65fa8b2eaff9abe964e72e29215a1af20', 12272]
+  'outline-journalist': ['b3e3e235b31d78e8a484dcdc62531159cbe8a1ed4cd0ef57388115cd1fb75f1d', 25519],
+  'article-journalist': ['163c450009ef205e6bea20109ea2ece6d66882c6287a0a16f21ddfbe71b37308', 36324],
+  'arcs-journalist': ['d7586be4b567321e07151d17b9727fc418666ae0cae7780b4e7f90afa9ba0f1a', 12319]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {
