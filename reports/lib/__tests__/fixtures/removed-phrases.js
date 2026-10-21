@@ -498,7 +498,28 @@ const REMOVED_PHRASES = [
   'on the morning clock',
   'from outside its choices',
   "the morning's payments",
-  'the close of the morning'
+  'the close of the morning',
+  // Phase 17 (plan ruling R7; the rule text approved on 2026-10-20): the wordings the new rule
+  // text and the writers' tasks retired, with the judges' copies of them: T1's mark on an
+  // opinion, C4's and C16's sharp lines, the map's "no prose" in its task and its schema (the
+  // map writer reads the voice and writes the deck and the headings), C12's names for the
+  // voice, the map's label, C2's Why, T14's clause, and C11's and world.md's line on a guest
+  // reporter's turn-ins. "Reasons inside the world" stays off: C12 keeps it, for where the
+  // record stops. "Write the map as C16" and "each written from the pieces of its" join after
+  // run 2, when the skill's agents carry them no longer.
+  "marks as Nova's, worded fresh each time",
+  "an opinion marked as Nova's",
+  'every sharp line makes a claim',
+  'says it once and says it sharply',
+  'It writes no prose',
+  'the map writes no prose',
+  'The voice draws on',
+  'Hunter S. Thompson',
+  'the move is told from',
+  'never read the voice guidance',
+  'and never states the rule',
+  'reasoning inside the world wherever a rule matters',
+  'is their reporting for this article'
 ];
 
 /** Blocks that hold the director's words or the record, whole. */
