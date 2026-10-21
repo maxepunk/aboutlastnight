@@ -8,7 +8,10 @@
  * out, the director edits it at the map's stop, and the article writer writes the prose from it.
  *
  * A map holds:
- * - `headline` and `deck`, within the content bundle's limits;
+ * - `headline` and `deck`, within the content bundle's limits. Code holds the headline
+ *   (holdHeadline; phase 17, fix wave 3): the first map carries the settled angle's, and each
+ *   later pass keeps the headline of the map it started from, except a send-back with the
+ *   director's note, whose rework may write the new headline the note asks for;
  * - `topPhoto`: the photo the article prints at its top, its hero;
  * - `gapNote`, only when the record cannot carry part of the story, a player cannot be
  *   placed or a link the weave lacks was seen: `{line, players}`;
@@ -1397,6 +1400,25 @@ function topPhotoOf(map) {
   return map && typeof map === 'object' && typeof map.topPhoto === 'string' && map.topPhoto.trim() ? map.topPhoto : null;
 }
 
+/**
+ * The map with `headline` as its headline: the one rule by which code holds the map's headline
+ * (phase 17, fix wave 3, the director's call after the final review), since the article prints
+ * the map's (ai-nodes.js stampFromMap). The map writer's node holds its map to the settled
+ * angle's headline (lib/weave.js settledAngleOf), the director's own where they edited it at the
+ * meeting; the map's rework (reviseOutline) holds each pass to the headline of the map it started
+ * from, except a send-back with the director's note, whose rework may write the new headline the
+ * note asks for.
+ *
+ * @param {*} map - the map a writer or a rework returned
+ * @param {*} headline - the headline the map carries, word for word
+ * @returns {*} a copy of the map with that headline when the headline is a non-empty string and
+ *   the value is a map (isMapValue); otherwise the map as it is
+ */
+function holdHeadline(map, headline) {
+  if (!isMapValue(map) || typeof headline !== 'string' || !headline.trim()) return map;
+  return { ...map, headline };
+}
+
 // ─── the stop (brief 4.6) ─────────────────────────────────────────────────────
 
 /** The map's two actions. */
@@ -1673,6 +1695,8 @@ module.exports = {
   directorMapSchemaFor,
   directorMapProblems,
   topPhotoOf,
+  // Phase 17, fix wave 3: code holds the map's headline
+  holdHeadline,
   mapLeftOutPhotos,
   mapResume,
   mapCheckFailures,

@@ -38,8 +38,11 @@ const {
 } = require('../../hand-edit-diff');
 const contentBundleSchema = require('../../schemas/content-bundle.schema.json');
 // Phase 4 (brief 4.6): the map's schema for the theme (its slots), and the hero its top
-// photo names; the settled weave, which the map writer reads first, as its task.
-const { mapSchemaFor, topPhotoOf } = require('../../map');
+// photo names; the settled weave, which the map writer reads first, as its task. Phase 17, fix
+// wave 3: the one rule that holds the map's headline, and the settled angle whose headline the
+// first map carries.
+const { mapSchemaFor, topPhotoOf, holdHeadline } = require('../../map');
+const { settledAngleOf } = require('../../weave');
 const { settledWeaveOf } = require('../../prompt-renderers/settled-weave');
 // Brief 4.13: the map's and the article's reworks open with their theme's rework identity.
 const { identityLineOf } = require('../../theme-config');
@@ -1026,10 +1029,13 @@ function outlineWriterInputs(state) {
  * It reads the settled weave first, as its task, then what the outline writer read: the
  * record and the investigation's timeline, the director's notes and accusation, the photos with the
  * director's descriptions, the roster with pronouns and its rule files
- * (outlineWriterInputs). The map it returns is the writer's last map (`_mapBaseline`), which
- * the director's edits at the stop are made against, and is unchecked (`_mapCheck: null`):
- * the map checks run on it next. Code writes the hero from the map's top photo (R7), so the
- * article writer's PHOTOS and the page name the photo the map chose.
+ * (outlineWriterInputs). Code holds the map's headline (lib/map.js holdHeadline; phase 17, fix
+ * wave 3): the map carries the settled angle's headline (lib/weave.js settledAngleOf), the
+ * director's own where they edited it at the meeting, whatever the writer wrote; with no settled
+ * headline, an older thread's, the writer's stands. That map is the writer's last map
+ * (`_mapBaseline`), which the director's edits at the stop are made against, and is unchecked
+ * (`_mapCheck: null`): the map checks run on it next. Code writes the hero from the map's top
+ * photo (R7), so the article writer's PHOTOS and the page name the photo the map chose.
  *
  * It stamps the map writer's phase, OUTLINE_GENERATION, on a replay too (brief 4.6b): the
  * map's resource endpoint (server.js RESOURCE_ENDPOINTS) reads the map as available from it.
@@ -1048,13 +1054,15 @@ async function generateOutline(state, config) {
   const theme = config?.configurable?.theme || state.theme || 'journalist';
   const { systemPrompt, userPrompt } = await promptBuilder.buildOutlinePrompt(...outlineWriterInputs(state));
 
-  const map = await sdk({
+  const written = await sdk({
     prompt: userPrompt,
     systemPrompt,
     model: 'opus',  // Commit 8.25: Upgraded from sonnet for quality
     disableTools: true,
     jsonSchema: mapSchemaFor(theme)
   });
+  const settled = settledAngleOf(state.weave);
+  const map = holdHeadline(written, settled ? settled.angle.headline : null);
 
   return {
     outline: map,
@@ -1075,7 +1083,8 @@ async function generateOutline(state, config) {
 // 2. reviseOutline reads _previousOutline with the map checks' lines (validationResults)
 //    or the director's note, and the director's standing edits
 // 3. buildRevisionContextDRY formats the context
-// 4. The rework returns the whole map; code holds it to the director's edits
+// 4. The rework returns the whole map; code holds its headline (holdHeadline; phase 17, fix
+//    wave 3) and holds it to the director's edits
 
 /**
  * The list a send-back's rework returns of the director's edits it changed (F1, spec
@@ -1307,6 +1316,14 @@ function mapReworkFailed(state, previousOutline, error) {
  * where the note's structural change means it no longer fits, saying why (the changed-edits
  * list its schema adds).
  *
+ * Code holds the map's headline (lib/map.js holdHeadline; phase 17, fix wave 3), before it
+ * settles the edits: each automatic pass keeps the headline of the map it started from
+ * (`_previousOutline`, which on a send-back is the director's version, so a headline they typed
+ * on the map comes through). A send-back with the director's note (`_outlineFeedback`, the text
+ * they typed: lib/map.js mapResume writes it and refuses a send-back with none; mapReworkCall's
+ * `sendBack`) leaves the rework's headline as it returns it, so the rework may write the new
+ * headline the note asks for, and the automatic passes after it in that round keep that one.
+ *
  * Every pass but a send-back is held to the director's standing edits: code puts back each
  * line it changed and strikes again, by id, each beat it brought back (lib/hand-edit-diff.js
  * settleEdits), and the round's report (`_outlineHandEditReport`) records each change and
@@ -1372,11 +1389,15 @@ async function reviseOutline(state, config) {
     const beats = sections.reduce((n, section) => n + (Array.isArray(section?.beats) ? section.beats.length : 0), 0);
     console.log(`[reviseOutline] Complete: ${sections.length} sections, ${beats} beats in ${duration}s`);
 
+    // Phase 17, fix wave 3: code holds the map's headline. A pass keeps the headline of the map it
+    // started from; a send-back with the director's note keeps the headline its rework wrote.
+    const held = call.sendBack ? result : holdHeadline(result, call.before && call.before.headline);
+
     // FA (spec 2026-10-02 section 7): after an automatic pass, code puts back any of the
     // director's edits the pass changed; a send-back's rework is left as it is, with its
     // reasons. The report adds this pass's changes and restores to the round's.
     const settled = settleEdits(state._outlineHandEditReport, {
-      edits: call.edits, before: call.before, after: result || {},
+      edits: call.edits, before: call.before, after: held || {},
       pass: call.sendBack ? SEND_BACK_PASS : revisionCount, reasons
     });
     return {
