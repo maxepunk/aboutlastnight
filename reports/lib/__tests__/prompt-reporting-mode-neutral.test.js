@@ -412,7 +412,8 @@ describe("the journalist mode blocks state T8's mode part", () => {
 
   it('remote: Nova says once, early, that Nova monitored from outside, and then tells the room in scenes (R13)', () => {
     expect(blocks.remote).toMatch(/Nova monitored the investigation remotely, from outside the warehouse/);
-    expect(blocks.remote).toMatch(/Nova says so once, early, as the start of Nova's questions/);
+    // Phase 17 (rule-text read, change 10): in Nova's own words, with the police deal in the background.
+    expect(blocks.remote).toMatch(/Nova says so once, early, in Nova's own words and as the start of Nova's questions; the terms of the police deal that put Nova there stay in the background unless the story turns on them\./);
     expect(blocks.remote).toMatch(/After that the room's events are told as scenes/);
   });
 

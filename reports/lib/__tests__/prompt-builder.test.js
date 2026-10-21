@@ -634,8 +634,14 @@ describe('PromptBuilder', () => {
       // "this morning"; T1 and the mode block say how the room's events reached Nova.
       expect(userPrompt).toContain("The director's notes on the session, as written");
       expect(userPrompt).not.toContain('What happened during the investigation this morning');
-      // Whiteboard should NOT be in this section
-      expect(userPrompt).not.toContain('suspects');
+      // Whiteboard should NOT be in this section. Phase 17: the scan reads the section alone,
+      // since C12 in the craft files now says "what Nova suspects" (rule-text read, change 1).
+      const section = userPrompt.slice(
+        userPrompt.indexOf('<INVESTIGATION_OBSERVATIONS>'),
+        userPrompt.indexOf('</INVESTIGATION_OBSERVATIONS>')
+      );
+      expect(section).toContain('Blake solicited Vic three times');
+      expect(section).not.toContain('suspects');
     });
 
     it('should omit INVESTIGATION_OBSERVATIONS when directorNotes is null', async () => {

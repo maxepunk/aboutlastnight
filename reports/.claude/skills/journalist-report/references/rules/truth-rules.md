@@ -6,11 +6,11 @@ These keep the article true to the record and to how the game works. Each carrie
 
 - What the record backs (an exposed memory, a document, the ledger, the evidence log, a photo), Nova states, and shows when it carries the thesis.
 - What happened or was said in the room, as the director's own words record it (their notes and corrections, the accusation, their answers at the story meeting, and every note they send at a stop), Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12). What a note rules about the record is record too. A note that gives the article a direction, such as a theory to pursue, is the director's direction, not a fact: Nova writes it as Nova's own reading.
-- What Nova knows or suspects but the record cannot back (Nova's earlier reporting on Marcus, who bought, who sold, why someone acted), Nova writes as a careful reporter does: as Nova's own suspicion, an allegation, a question, or an opinion Nova commits to and marks as Nova's, worded fresh each time and grounded in what the record does show. A theory may reach past the room, toward where the epilogue takes the world, and stays Nova's.
+- What Nova knows or suspects but the record cannot back (Nova's earlier reporting on Marcus, who bought, who sold, why someone acted), Nova writes as a careful reporter does: as Nova's own suspicion, an allegation, a question, or an opinion Nova commits to, said plainly as Nova's own, the way a person says what they think, and grounded in what the record does show. A theory may reach past the room, toward where the epilogue takes the world, and stays Nova's.
 
 Nothing is invented.
 
-Why: the players know what happened, and a false detail about their character breaks the gift. Receipts set against allegations are how Nova earns belief. NovaNews answers for what it states as fact about a person or a company, and a suspicion stated as fact is libel; an opinion marked as the reporter's own is how a newsroom commits to a reading without stating it as fact.
+Why: the players know what happened, and a false detail about their character breaks the gift. Receipts set against allegations are how Nova earns belief. NovaNews answers for what it states as fact about a person or a company, and a suspicion stated as fact is libel; an opinion plainly the reporter's own is how a newsroom commits to a reading without stating it as fact.
 
 ## T2. The verdict is the group's negotiated official story
 
@@ -92,7 +92,7 @@ Why: the players are in the photos, and the whiteboard is context for how the ro
 
 ## T14. The fiction stays whole
 
-The article speaks the fiction's own words: memories, memory tokens, burying and selling. Production words never print: director, GM, game master, tier, timer, or a bare "token" or "tokens" as a system label. Nor does the article explain how the game works: the players played it. Where a rule of the game matters to a line, such as who names an account or what the ledger shows, Nova reasons inside the world and never states the rule. Memories are turned in to Nova. In print the market is the deals made with Blake around the room, with no proper name, and who stands behind it is Nova's suspicion (T5).
+The article speaks the fiction's own words: memories, memory tokens, burying and selling. Production words never print: director, GM, game master, tier, timer, or a bare "token" or "tokens" as a system label. Nor does the article explain how the game works: the players played it. Where a rule of the game matters to a line, such as who names an account or what the ledger shows, Nova reasons from what the rule makes true and leaves the rule itself unsaid: the players who played it see it at work. Memories are turned in to Nova. In print the market is the deals made with Blake around the room, with no proper name, and who stands behind it is Nova's suspicion (T5).
 
 Why: the players read the article as part of the world they played in, and the rulebook read back to them takes them out of it.
 

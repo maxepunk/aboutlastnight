@@ -458,8 +458,10 @@ ${itemText('craft-story', 'C16')}`.toLowerCase();
 describe('the items phase 4b piece 4 rewrites (task 4A)', () => {
   it.each([
     ['C2', 'craft-form', "A section's beats are the moves of its story, in the order the article tells them."],
-    ['C2', 'craft-form', 'The article writer tells each beat as its sentence says, from its evidence, in its own words.'],
-    ['C16', 'craft-story', "It tells each beat as the beat's sentence says, from the evidence the beat carries, and cites it."]
+    // Phase 17 (rule-text read, 2026-10-20, changes 5 and 4): the article writer draws on a
+    // beat's evidence for what the beat needs, and cites what it uses.
+    ['C2', 'craft-form', 'The article writer tells each beat as its sentence says, drawing on its evidence, in its own words.'],
+    ['C16', 'craft-story', "It tells each beat as the beat's sentence says, drawing on the evidence the beat carries for what the beat needs, and cites what it uses: every quotation, figure or document it prints does something in its paragraph, proving the point, complicating it or showing the person, and what the paragraph does not need stays in the record."]
   ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
     expect(itemText(name, id)).toContain(sentence);
   });
@@ -491,7 +493,8 @@ describe('the items phases 14 and 15 rewrite (task A)', () => {
     "Partway through the investigation, Blake gathers everyone to take the room's temperature;",
     'Nova takes no side in the verdict and no part in the statement.',
     'the reporting-mode block says which for this session, and what part Nova took in the room.',
-    "- **A guest reporter**, when the session has one, shares Nova's byline for what they contributed. A memory they turned in under their name is their reporting for this article. Many sessions have none.",
+    // Phase 17 (rule-text read, change 9): a guest reporter is a journalist working the room.
+    "- **A guest reporter**, when the session has one, is a journalist working the room who shares Nova's byline for what they contributed. Each memory the evidence log shows them turning in under their name is reporting they filed to Nova for this article (C11). Many sessions have none.",
     'Nova writes that evening, with the follow-up reporting of the hours after it.',
     'Everything above is what Nova knows, and the players know it too, because they played it. The article never explains it to them (T14).',
     "Together they make the investigation's timeline in the record: what was going public, set against what was being erased."
@@ -502,7 +505,8 @@ describe('the items phases 14 and 15 rewrite (task A)', () => {
   it.each([
     ['T1', 'truth-rules', "What happened or was said in the room, as the director's own words record it (their notes and corrections, the accusation, their answers at the story meeting, and every note they send at a stop), Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
     ['T1', 'truth-rules', "A note that gives the article a direction, such as a theory to pursue, is the director's direction, not a fact: Nova writes it as Nova's own reading."],
-    ['T1', 'truth-rules', "or an opinion Nova commits to and marks as Nova's"],
+    // Phase 17 (rule-text read, change 6): an opinion is said plainly as Nova's own, not marked.
+    ['T1', 'truth-rules', "or an opinion Nova commits to, said plainly as Nova's own, the way a person says what they think, and grounded in what the record does show."],
     ['T1', 'truth-rules', "A theory may reach past the room, toward where the epilogue takes the world, and stays Nova's."],
     ['T4', 'truth-rules', "Otherwise Nova may wonder about the character an account is named after, or read the name as someone's attempt to frame them, as Nova's opinion or a question"],
     ['T4', 'truth-rules', "Totals show where the investigation's money went."],
@@ -512,10 +516,13 @@ describe('the items phases 14 and 15 rewrite (task A)', () => {
     ['T8', 'truth-rules', 'Nova takes no side in the verdict: Nova never votes, joins the room\'s accusation or exposes a memory. "Uninterested" is about what the room decides, not the story, which Nova works.'],
     ['T8', 'truth-rules', 'It also says where Nova stood and what part Nova took in the room.'],
     ['T14', 'truth-rules', 'Nor does the article explain how the game works: the players played it.'],
-    ['C4', 'craft-telling', 'Where the record stops on something that matters, Nova reasons inside the world (T14) and lets it lead into the suspicion, the opinion or the question it raises.'],
-    ['C12', 'craft-voice', "Nova commits to a reading: where the session gives reason, Nova offers a theory as Nova's own opinion, and it may reach past the room toward where the epilogue takes the world (T1)."],
+    // Phase 17 (rule-text read, changes 1 and 3): where the record stops moves from C4 into
+    // C12's description of the voice, said once, and C12 commits to a reading in its new words.
+    ['C12', 'craft-voice', "Where the record stops, Nova reasons inside the world (T14) and says what Nova suspects in so many words, with a careful reporter's doubt: the way a person talks who could be wrong and wants the reader to know how much they know."],
+    ['C12', 'craft-voice', 'Nova commits to a reading where the session gives reason, a theory that may reach past the room toward where the epilogue takes the world (T1).'],
     ['C12', 'craft-voice', "tells each player's choices in their character's terms, and takes a player's suspicion as a lead to follow, not as their belief alone."],
-    ['C11', 'craft-material', "A guest reporter's name on a turn-in is their reporting for this article, and the article credits it that way;"],
+    // Phase 17 (rule-text read, change 8): a guest reporter's turn-ins are reporting filed to Nova.
+    ['C11', 'craft-material', "A guest reporter's turn-ins are the reporting they filed to Nova from the room, and the article tells them as that: what they found and brought in, credited as one reporter credits a colleague's work."],
     ['C13', 'craft-judgement', "it aims where this session's evidence and its epilogue lead, such as NeurAI, its board, its technology and the business of buying memories, written as Nova's suspicion or opinion (T1, T5)."],
     ['C2', 'craft-form', 'A section whose job is done elsewhere is dropped, with one line on why. The story is told through every section'],
     ['C14', 'craft-form', "It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest."],
