@@ -44,7 +44,7 @@ const TYPED = 'A Sale on the Night He Died, and a Room That Looked Away';
 /** The director's note that asks for a new headline. */
 const NOTE = 'Give the map a headline about the sale, not the vote.';
 /** The line a map send-back with the director's note reads, word for word (fix wave 3, step 3). */
-const HEADLINE_LINE = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, in the voice C12 (`<craft-voice>`) sets out.";
+const HEADLINE_LINE = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, as the brief says a headline is written.";
 
 beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});

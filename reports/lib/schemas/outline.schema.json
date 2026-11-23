@@ -24,7 +24,7 @@
     },
     "gapNote": {
       "type": "object",
-      "description": "The line at the top of the map, present only when the record cannot carry part of the story or a change the director made at the meeting, a player cannot be placed, or a link the weave lacks was seen",
+      "description": "The line at the top of the map, present only when the record cannot carry part of the story or a change the director made at the meeting, a player cannot be placed, or a connection the weave lacks was seen",
       "additionalProperties": false,
       "required": ["line", "players"],
       "properties": {
@@ -46,7 +46,7 @@
         "properties": {
           "slot": { "type": "string", "description": "The slot the section fills" },
           "heading": { "type": "string", "description": "The heading the article prints over the section; empty for a section that prints none" },
-          "job": { "type": "string", "description": "What the section does to the question, in one sentence" },
+          "job": { "type": "string", "description": "The section's step: what the reader learns here about the question, and what that leaves them wanting to know, in one sentence" },
           "beats": {
             "type": "array",
             "description": "The section's beats, in the order the article tells them",
@@ -62,7 +62,7 @@
                   "description": "The roster players the beat shows, by name",
                   "items": { "type": "string" }
                 },
-                "synopsis": { "type": "string", "description": "One sentence, in the same story terms as the move, saying what the article tells at this move: what happens there, which the article writer tells in its own words" },
+                "synopsis": { "type": "string", "description": "One sentence, in the same plain words as the move, saying what the article tells at this beat. The article writer tells it in its own words" },
                 "threads": {
                   "type": "array",
                   "description": "The ids of the settled weave's threads the move carries",
@@ -123,7 +123,7 @@
             "description": "The roster players the beat shows, by name",
             "items": { "type": "string" }
           },
-          "synopsis": { "type": "string", "description": "One sentence, in the same story terms as the move, saying what the article tells at this move: what happens there, which the article writer tells in its own words" },
+          "synopsis": { "type": "string", "description": "One sentence, in the same plain words as the move, saying what the article tells at this beat. The article writer tells it in its own words" },
           "threads": {
             "type": "array",
             "description": "The ids of the settled weave's threads the move carries",

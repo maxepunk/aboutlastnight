@@ -1283,7 +1283,7 @@ describe("4.6: the map's rework context", () => {
     const { validationResults } = checkMap({ ...state, outline: failing, _mapCheck: null });
     expect(validationResults).toMatchObject({ phase: 'outline', source: 'map-checks', passed: false });
     const [line] = validationResults.structuralIssues;
-    expect(line).toBe("Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out.");
+    expect(line).toBe("Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as \"The people\" in `<job-map>` says.");
     const { contextSection } = buildRevisionContext({
       phase: 'outline', outputName: 'map', revisionCount: 1, previousOutput: failing, validationResults, humanFeedback: null
     });
@@ -1536,7 +1536,7 @@ describe('4.14b fix round 1: a send-back that empties a section, then an automat
   /** A map check failure on the send-back rework's map: the writer's, so an automatic pass runs. */
   const FAILED = {
     phase: 'outline', source: 'map-checks', passed: false, ready: false, structuralPassed: false,
-    structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out."]
+    structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as \"The people\" in `<job-map>` says."]
   };
 
   /** The director strikes b5, Follow the Money's one beat, and sends the map back; the send-back's rework keeps the drop. */

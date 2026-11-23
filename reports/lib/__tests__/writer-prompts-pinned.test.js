@@ -492,9 +492,17 @@ const REPO = path.join(__dirname, '..', '..');
  *   field descriptions lose their rule numbers; and the format's question, where it ends up and
  *   connection's line take the read's wording. arcs-journalist 12064 -> 12135 (+71), a79ae324.
  *   outline-journalist and article-journalist do not move.
+ * - Phase 18, slice C (R10; the rule-text read's parts 2 and 5b), the map writer's task and the map
+ *   schema it embeds. The task is the read's, word for word: it points at <job-map> in place of nine
+ *   rules by number, drops the paragraph's "in story terms" and the lines that restated rules, asks
+ *   for each section's step (the job, one sentence of about 25 words at most), and prints the page's
+ *   bounds from the constants at their new values, 550, 400 and 850 (same width as 450, 300 and 750).
+ *   In <SCHEMA>, a section's job is described as its step (+72), a beat's synopsis in plain words in
+ *   both copies of the beat (-23 each) and the line at the top as a connection the weave lacks (+6):
+ *   +32 in all, so the task itself is -364. outline-journalist 25217 -> 24885 (-332). No other pin moves.
  */
 const PINNED = {
-  'outline-journalist': ['4c0ed98db0e86521a72301be750d2dfb4b68d43a3b4e8be5363af35b41b00192', 25217],
+  'outline-journalist': ['6448c1d8684ff7906a4283ef580de155837a7e489f255721472c426d79df493d', 24885],
   'article-journalist': ['b02351b6293ac65d33b6c3e028cda3470d6c99b22a888d210d4360db2565b1d1', 36028],
   'arcs-journalist': ['a79ae324351e3b0c356a129f867c1352e2390e0187cf82ab9d26507dd3862912', 12135]
 };

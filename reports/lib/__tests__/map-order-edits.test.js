@@ -299,7 +299,7 @@ describe('4C: after an automatic pass that changed the order, code puts the beat
     const { reviseOutline } = require('../workflow/nodes/ai-nodes');
     const FAILED = {
       phase: 'outline', source: 'map-checks', passed: false, ready: false, structuralPassed: false,
-      structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out."]
+      structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as \"The people\" in `<job-map>` says."]
     };
     const state = reworkFixtureState();
     const left = EditLogic.moveBeatBy(clone(MAP), 'b4', -1);
@@ -1110,7 +1110,7 @@ describe("Fix C: the edge cases of the director's order", () => {
     const { reviseOutline } = require('../workflow/nodes/ai-nodes');
     const FAILED = {
       phase: 'outline', source: 'map-checks', passed: false, ready: false, structuralPassed: false,
-      structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as C7 (`<craft-material>`) sets out."]
+      structuralIssues: ["Players in no beat: Riley. Place each in a section's beat, or name them among gapNote's players, as \"The people\" in `<job-map>` says."]
     };
     const REASON = 'The note asks for the paternity result at the close.';
 

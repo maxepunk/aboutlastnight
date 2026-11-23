@@ -61,11 +61,11 @@ describe('4B: a beat carries its synopsis, required of the writer and never of t
     });
   });
 
-  it("the synopsis's description says what it is in the map writer's <SCHEMA>: one sentence, in story terms, on what the article tells there", () => {
+  it("the synopsis's description says what it is in the map writer's <SCHEMA>: one sentence, in plain words, on what the article tells at the beat", () => {
     const { description } = copies(writer)[0].properties.synopsis;
     expect(description).toMatch(/one sentence/i);
-    expect(description).toMatch(/story terms/);
-    expect(description).toMatch(/what the article tells/);
+    expect(description).toBe('One sentence, in the same plain words as the move, saying what the article tells at this beat. The article writer tells it in its own words');
+    expect(description).not.toMatch(/story terms/);
     expect(description).not.toMatch(/—/);
     expect(copies(writer)[1].properties.synopsis).toEqual(copies(writer)[0].properties.synopsis);
   });
@@ -254,11 +254,11 @@ describe("4B: the map writer's task asks for a synopsis on every move, the artic
     return userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
   };
 
-  it('the bounds: 450 and 750 words, the aims 300 and 250', () => {
-    expect([MAP_WORD_BOUND, MAP_WORD_AIM, MAP_OPEN_WORD_BOUND, MAP_SYNOPSIS_AIM]).toEqual([450, 300, 750, 250]);
+  it('the bounds: 550 and 850 words, the aims 400 and 250 (phase 18, R10: 100 more for the steps)', () => {
+    expect([MAP_WORD_BOUND, MAP_WORD_AIM, MAP_OPEN_WORD_BOUND, MAP_SYNOPSIS_AIM]).toEqual([550, 400, 850, 250]);
   });
 
-  it('asks for both pages: at most 450 as it opens, aiming for 300, and at most 750 with every synopsis open, the synopses about 250', async () => {
+  it('asks for both pages: at most 550 as it opens, aiming for 400, and at most 850 with every synopsis open, the synopses about 250', async () => {
     const task = await taskOf();
     expect(task).toContain(`at most ${MAP_WORD_BOUND} words`);
     expect(task).toContain(`aim for ${MAP_WORD_AIM}`);
@@ -266,12 +266,12 @@ describe("4B: the map writer's task asks for a synopsis on every move, the artic
     expect(task).toContain(`about ${MAP_SYNOPSIS_AIM}`);
   });
 
-  it("asks for each move's synopsis, of about 20 words, and each section's moves in the order the article will tell them, pointing at C2 and C6", async () => {
+  it("asks for each move's synopsis, of about 20 words, and each section's moves in the order the article will tell them, pointing at no rule by number", async () => {
     const task = await taskOf();
     expect(task).toMatch(/synopsis/);
     expect(task).toContain('about 20 words');
     expect(task).toMatch(/in the order the article will tell them/);
-    expect(task).toContain('C6');
+    expect(task).not.toMatch(/\b[TC]\d{1,2}\b/);
     expect(task).not.toMatch(/—/);
   });
 
@@ -282,6 +282,6 @@ describe("4B: the map writer's task asks for a synopsis on every move, the artic
   });
 
   it('says the left-out moves print on the page by their titles (run 1 follow-up F1)', async () => {
-    expect(await taskOf()).toContain('under leftOut, as C8 (`<craft-material>`) sets out. Those moves print on the page by their titles.');
+    expect(await taskOf()).toContain('under leftOut. Those beats print on the page by their titles.');
   });
 });

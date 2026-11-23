@@ -14,13 +14,15 @@
  *   director's note, whose rework may write the new headline the note asks for;
  * - `topPhoto`: the photo the article prints at its top, its hero;
  * - `gapNote`, only when the record cannot carry part of the story, a player cannot be
- *   placed or a link the weave lacks was seen: `{line, players}`;
+ *   placed or a connection the weave lacks was seen: `{line, players}`;
  * - `sections`, in order: `{slot, heading, job, beats, photos}`, each slot one of the
  *   theme's (lib/theme-config.js mapSlotsOf), its beats in the order the article tells them
- *   (piece 4, R2);
+ *   (piece 4, R2). The `job` is the section's step (phase 18, R10): what the reader learns there
+ *   about the question, one sentence of about 25 words at most. The key keeps its name in every
+ *   stored map, diff and payload; only the page's label for it is "Step";
  * - each beat `{id, move, players, synopsis, threads, connection?, card?, kind?, evidence}` (R1):
  *   its move in a few plain words, its title on the map's page; the roster players it shows; its
- *   synopsis, one sentence in story terms saying what the article tells there (phase 4b, piece 4;
+ *   synopsis, one sentence in plain words saying what the article tells there (phase 4b, piece 4;
  *   spec 2026-10-07 section 3), which the writer's schema requires and the director's does not, so
  *   a map from before piece 4 still reads; the ids of the settled weave's threads it
  *   carries, the id of the weave's connection that lands in it, its card marker, its kind
@@ -93,7 +95,7 @@ const { settledAngleOf, weaveIdOf } = require('./weave');
 /** A beat's kind: what its move puts on the page, kept underneath as a hint to the article writer and never printed (R1). */
 const MAP_BEAT_KINDS = Object.freeze(['scene', 'receipt', 'line', 'figure']);
 
-/** How many inline cards the article carries (C9), which the map's cards are held to. */
+/** How many inline cards the article carries, which the map's cards are held to. */
 const MAP_CARDS = Object.freeze({ min: 3, max: 5 });
 
 /**
@@ -105,18 +107,22 @@ const MAP_CARDS = Object.freeze({ min: 3, max: 5 });
  * prints; a photo prints no words (R7). The check node counts it with every text field the writer
  * writes left blank (mapWritersTextBlank; lib/workflow/nodes/map-nodes.js mapPageWords), on the
  * writer's share of the map (mapWritersShareOf).
+ *
+ * Phase 18 (R10): the three bounds rose by 100 words each (450, 300 and 750 before) for each
+ * section's step, which is a sentence of about 25 words where the job was a topic of five to ten.
+ * A map written under the old bounds passes the new ones.
  */
-const MAP_WORD_BOUND = 450;
+const MAP_WORD_BOUND = 550;
 
 /** The words of its own the map writer aims for, and may always use: the floor of pageLengthOf's rule (spec 4.2). Its task asks for them. */
-const MAP_WORD_AIM = 300;
+const MAP_WORD_AIM = 400;
 
 /**
  * The bound on the map's page with every synopsis open (phase 4b, piece 4; spec 2026-10-07
  * section 8; R6): the page as it opens is held to MAP_WORD_BOUND, and the same page with each
  * move's synopsis unfolded to this. The open page's floor is MAP_WORD_AIM + MAP_SYNOPSIS_AIM.
  */
-const MAP_OPEN_WORD_BOUND = 750;
+const MAP_OPEN_WORD_BOUND = 850;
 
 /** The words the synopses aim for between them, about 20 for each move (spec 8). The map writer's task asks for them. */
 const MAP_SYNOPSIS_AIM = 250;
@@ -130,7 +136,7 @@ const MAP_SYNOPSIS_AIM = 250;
 const MAP_PAGES = Object.freeze([
   {
     key: 'folded', open: false, page: 'As the map opens', said: 'As the map opens', bound: MAP_WORD_BOUND, floor: MAP_WORD_AIM,
-    fix: 'The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: say each move, in a section or in leftOut, in a few words, and keep leftOut to one line for each thing considered, as C8 sets out.'
+    fix: 'The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: say each move, in a section or in leftOut, in a few words, and keep leftOut to one line for each thing considered.'
   },
   {
     key: 'unfolded', open: true, page: 'With every synopsis open', said: 'With every summary open', bound: MAP_OPEN_WORD_BOUND, floor: MAP_WORD_AIM + MAP_SYNOPSIS_AIM,
@@ -852,24 +858,23 @@ function cardFault(beat, evidence) {
   const flagged = cardPiecesOf(beat);
   const marked = beat.card === true;
   if (!marked && flagged.length === 0) return null;
-  const C9 = 'as C9 (`<craft-cards>`) sets out';
   if (!marked) {
     return {
-      message: `Beat ${id} flags a piece as a card's document and is not marked as a card. Mark the beat "card": true when its evidence prints as a card, or take the flag off the piece, ${C9}.`,
+      message: `Beat ${id} flags a piece as a card's document and is not marked as a card. Mark the beat "card": true when its evidence prints as a card, or take the flag off the piece.`,
       said: "flags a piece of its evidence as a card's document, and is not marked as a card",
       marker: 'cleared'
     };
   }
   if (flagged.length === 0) {
     return {
-      message: `Beat ${id} is marked as a card and flags no piece as the card's document. Flag the one piece whose document prints as the card with "card": true, ${C9}.`,
+      message: `Beat ${id} is marked as a card and flags no piece as the card's document. Flag the one piece whose document prints as the card with "card": true.`,
       said: "is marked as a card, and no piece of its evidence is the card's document",
       marker: 'set'
     };
   }
   if (flagged.length > 1) {
     return {
-      message: `Beat ${id} flags ${flagged.length} pieces as the card's document. Flag one: the piece whose document prints as the card, ${C9}.`,
+      message: `Beat ${id} flags ${flagged.length} pieces as the card's document. Flag one: the piece whose document prints as the card.`,
       said: "is marked as a card, and its evidence names more than one card's document",
       marker: null
     };
@@ -923,14 +928,14 @@ function cardFault(beat, evidence) {
  *   each source a document in the record or the ledger, the evidence log or the notes, never a
  *   buried memory, and each quotation word for word in its source);
  * - every roster player appears in a section's beat, or is among the gap note's players
- *   (`player-not-placed`; C7);
+ *   (`player-not-placed`);
  * - every kept photo is placed once: as the top photo or among a section's photos
  *   (`photo-not-placed`, `photo-placed-twice`), and no photo outside the kept set is placed
  *   (`photo-not-offered`; T13);
  * - each beat in a section marked as a card flags one piece, whose source is a document in the
  *   record (recordDocumentOf), and no
  *   unmarked beat flags one (`card-not-in-record`; R4, cardFault), and the cards
- *   number three to five (`card-count`; C9). A beat's card is its flagged piece, read through
+ *   number three to five (`card-count`). A beat's card is its flagged piece, read through
  *   beatCardOf by every reader;
  * - every thread in the settled weave's story lands in a section's beat that names it among its
  *   threads (`thread-not-landed`; R3). A thread the director added at the meeting, or brought
@@ -1128,7 +1133,7 @@ function mapFindings(map, inputs = {}) {
     });
   }
 
-  // Every roster player appears in a beat, or is raised in the gap note (C7).
+  // Every roster player appears in a beat, or is raised in the gap note.
   const tally = mapTally(map, { roster, keptPhotos: kept });
   const raised = new Set(tally.raised);
   const missing = tally.unplaced.filter((name) => !raised.has(name));
@@ -1139,7 +1144,7 @@ function mapFindings(map, inputs = {}) {
     else writersMissing.push(name);
   });
   if (writersMissing.length > 0) {
-    fail('player-not-placed', `Players in no beat: ${writersMissing.join(', ')}. Place each in a section's beat, or name them among gapNote's players, as C7 (\`<craft-material>\`) sets out.`,
+    fail('player-not-placed', `Players in no beat: ${writersMissing.join(', ')}. Place each in a section's beat, or name them among gapNote's players, as "The people" in \`<job-map>\` says.`,
       `${listOf(writersMissing)} ${writersMissing.length > 1 ? 'are' : 'is'} in no move and not in the gap note.`);
   }
 
@@ -1160,7 +1165,7 @@ function mapFindings(map, inputs = {}) {
   });
   const nowhere = writersPhotos('photo-not-placed', kept.filter((filename) => !placed.has(photoKey(filename))), (said) => `The photo ${said} is placed nowhere.`);
   if (nowhere.length > 0) {
-    fail('photo-not-placed', `Photos placed nowhere: ${nowhere.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people, as C2 (\`<craft-form>\`) sets out.`,
+    fail('photo-not-placed', `Photos placed nowhere: ${nowhere.join(', ')}. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people.`,
       `${nowhere.length > 1 ? 'These photos are' : 'This photo is'} placed nowhere: ${listOf(nowhere.map(photoSaid))}.`);
   }
   writersPhotos('photo-placed-twice', [...repeatedPhotos(map).keys()].filter((key) => keptKeys.includes(key)).map(nameOfKey), (said) => `The photo ${said} is placed more than once.`)
@@ -1174,7 +1179,7 @@ function mapFindings(map, inputs = {}) {
     });
 
   // Each beat marked as a card flags one piece, whose source is a document in the record (R4),
-  // and the cards, as the tally counts them through beatCardOf, number three to five (C9). A
+  // and the cards, as the tally counts them through beatCardOf, number three to five. A
   // fault is the director's concern only when the card marker they set or cleared made it; the
   // evidence is never their edit (R6).
   sectionBeats(map).forEach(({ beat, slot }) => {
@@ -1191,7 +1196,7 @@ function mapFindings(map, inputs = {}) {
     const said = `${carries}; the article carries ${MAP_CARDS.min} to ${MAP_CARDS.max}.`;
     if (owners.editIds.length > 0) concern('card-count', owners.editIds, said);
     if (owners.writers) {
-      fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each flagging the piece whose document it prints, as C9 (\`<craft-cards>\`) sets out.`, said);
+      fail('card-count', `${carries}. Mark ${MAP_CARDS.min} to ${MAP_CARDS.max} beats as cards, each flagging the piece whose document it prints.`, said);
     }
   }
 
@@ -1226,7 +1231,7 @@ function mapFindings(map, inputs = {}) {
     const named = listOf(unlanded.directors.map((thread) => `${threadName(thread)} (${thread.id})`));
     const how = unlanded.directors.every((thread) => thread.added) ? 'you added'
       : unlanded.directors.every((thread) => !thread.added) ? 'you brought into the story' : 'you put in the story';
-    fail('thread-not-landed', `Threads the director added or brought into the story at the meeting that no beat carries and gapNote's line does not name: ${named}. Give each a beat with the evidence that tells it, or, when the record cannot carry it, name it in gapNote's line by its name, without quotation marks, as C16 (\`<craft-story>\`) sets out.`,
+    fail('thread-not-landed', `Threads the director added or brought into the story at the meeting that no beat carries and gapNote's line does not name: ${named}. Give each a beat with the evidence that tells it, or, when the record cannot carry it, name it in gapNote's line by its name, without quotation marks.`,
       `${threadsWords(unlanded.directors)} ${how} at the meeting ${lands(unlanded.directors)} in no move, and the gap note does not name ${unlanded.directors.length > 1 ? 'them' : 'it'}.`);
   }
 

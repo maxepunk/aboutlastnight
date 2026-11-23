@@ -1254,7 +1254,7 @@ ${formatEditLines(standingEdits, previousOutput)}
   // pass whose headline stands as its rework writes it (ai-nodes.js reviseOutline, by the same
   // feedback slot). The map writer's task, which the rework reads, says the map carries the
   // settled angle's headline word for word, so this scope says when the note may change it.
-  const MAP_SEND_BACK_HEADLINE = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, in the voice C12 (`<craft-voice>`) sets out.";
+  const MAP_SEND_BACK_HEADLINE = "The map's headline stays word for word unless the director's note asks for a new one: then write the headline the note asks for, as the brief says a headline is written.";
   const mapHeadlineLine = mapMode && directorsRound ? ` ${MAP_SEND_BACK_HEADLINE}` : '';
   const noteScope = `The director's note above is the task, and it sets how much of the previous ${outputName} this rework keeps: change what the note asks, as far as it asks, so a note that asks for a rethink gets a rethink. What the note leaves alone stays as it was${hasEvaluation ? ', unless an issue to address needs it changed' : ''}.${sentBackAngleLine}${mapHeadlineLine}`;
   let scope;

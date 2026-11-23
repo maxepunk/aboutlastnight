@@ -993,7 +993,7 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
   it("the map's only prose is the deck and the headings, and the prompt carries no first-person marker (integrator ruling, phase 1)", async () => {
     const { userPrompt } = await render({ directorNotes: null });
     const task = userPrompt.slice(userPrompt.indexOf('</SETTLED_WEAVE>'), userPrompt.indexOf('<SLOTS>'));
-    expect(task).toContain("Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map's only prose is the copy the article prints as you write it: the deck under the settled angle's headline, which the map carries word for word, and each section's heading, written as C5 (`<craft-form>`) sets out, in the voice C12 (`<craft-voice>`) sets out. Every other line stays in story terms. The director reads it as a board ");
+    expect(task).toContain("Lay the settled weave above across the article's sections: the story map the article writer writes the article from. `<job-map>` below says how. The only lines on the map that the article prints as you write them are the deck under the settled angle's headline, which the map carries word for word, and each section's heading. The director reads the map as a board ");
     expect(task).not.toContain('writes no prose');
     expect(userPrompt).not.toContain('"I watched"');
     expect(userPrompt).not.toContain('Nova was there');
@@ -1643,11 +1643,11 @@ describe("4.6c: the map writer's task points at the meeting's note only when its
   const HERO = { filename: 'hero.jpg', identifiedCharacters: ['Alex'], hero: true };
   const builder = () => new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
   /** The task's line on the meeting's changes: from the story's line to the sections' line. */
-  const changeLineOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("- The story is the director's"), userPrompt.indexOf('- Give each section you use'));
+  const changeLineOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf('- Fit in each change the director made'), userPrompt.indexOf('- Give each section you use'));
   /** The map writer's task: from its first line to the theme's slots. */
   const taskOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
-  const WITH_NOTE = "- The story is the director's, and the map's part in it is C16's (`<craft-story>`). Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or \"note\".\n";
-  const WITHOUT_NOTE = "- The story is the director's, and the map's part in it is C16's (`<craft-story>`). Fit in each change the director made at the meeting, marked above by its edit's id. List each change you make to fit one in under weaveChanges, with its source: the edit's id.\n";
+  const WITH_NOTE = "- Fit in each change the director made at the meeting, marked above by its edit's id, and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>). List each change you make to fit one in under weaveChanges, with its source: the edit's id, or \"note\".\n";
+  const WITHOUT_NOTE = "- Fit in each change the director made at the meeting, marked above by its edit's id. List each change you make to fit one in under weaveChanges, with its source: the edit's id.\n";
 
   it("with the meeting's approval note among the notes, the line points at it and offers \"note\" as a source", async () => {
     const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: MEETING_NOTES });
@@ -1667,5 +1667,59 @@ describe("4.6c: the map writer's task points at the meeting's note only when its
     expect(changeLineOf(userPrompt)).toBe(WITHOUT_NOTE);
     expect(taskOf(userPrompt)).not.toContain("the director's note from the meeting");
     expect(taskOf(userPrompt)).not.toContain('"note"');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, C: the map writer's task reads as the director approved it
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The rule-text read's part 2 prints the task with this session's numbers filled in. Code keeps
+// the four bounds as constants and the two conditional pieces (the meeting's note, the top
+// photo's line) where they were, so the text below is that print with the constants in their
+// places. It points at `<job-map>` by its tag, cites no rule by number, and asks for each
+// section's step.
+describe("phase 18, C: the map writer's task is the read's, word for word", () => {
+  const { MAP_WORD_BOUND, MAP_WORD_AIM, MAP_OPEN_WORD_BOUND, MAP_SYNOPSIS_AIM } = require('../map');
+  const HERO = { filename: 'hero.jpg', identifiedCharacters: ['Alex'], hero: true };
+  const builder = () => new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
+  const taskOf = (userPrompt) => userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
+  const TOP_PHOTO_LINE = "- Choose the top photo. The photo marked [hero image] in <available-photos> is code's pick, the one with the most players identified in it: start from it.";
+  const NOTE_CHANGE = ", and each change the director's note from the meeting asks for (the approval note marked arc-selection in <DIRECTOR_GUIDANCE>)";
+  const AS_READ = `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. \`<job-map>\` below says how. The only lines on the map that the article prints as you write them are the deck under the settled angle's headline, which the map carries word for word, and each section's heading. The director reads the map as a board whose synopses are folded when it opens: that page holds at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM} of your own; with every synopsis open it holds at most ${MAP_OPEN_WORD_BOUND}, so give the synopses about ${MAP_SYNOPSIS_AIM} words between them.
+- Fit in each change the director made at the meeting, marked above by its edit's id. List each change you make to fit one in under weaveChanges, with its source: the edit's id.
+- Give each section you use its heading, its job, its beats and its photos. The job is the section's step, in one sentence of about 25 words at most. The beats come in the order the article will tell them. Each has its move, a title of a few plain words with its people; its synopsis of about 20 words; the ids of the threads it carries; and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat, and a beat in a section carries only threads of the story, since the director settled the other threads out of it at the meeting. Drop each slot the story does not use, with its reason.
+- Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces.
+- List what you considered and did not use under leftOut. Those beats print on the page by their titles.
+- What the record cannot carry goes in gapNote, the one line at the top, in plain words: a part of the story, or a change the director made at the meeting, named by its name without quotation marks. A player you cannot place and a connection you see that the weave lacks go there too.
+- Set expectedLength from what the map holds.
+Code reads who is placed from each beat's players, counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, that each line is in plain words, and the page's length on both counts. A player named among gapNote's players counts as raised.`;
+
+  it('with no meeting note and no photo marked, the task is the read, byte for byte', async () => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, {});
+    expect(taskOf(userPrompt).trimEnd()).toBe(AS_READ);
+  });
+
+  it("the meeting's note and the top photo's line each sit where they sat, and change nothing else", async () => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: MEETING_NOTES });
+    const withBoth = AS_READ
+      .replace("marked above by its edit's id. List each change you make to fit one in under weaveChanges, with its source: the edit's id.",
+        `marked above by its edit's id${NOTE_CHANGE}. List each change you make to fit one in under weaveChanges, with its source: the edit's id, or "note".`)
+      .replace('- List what you considered', `${TOP_PHOTO_LINE}\n- List what you considered`);
+    expect(withBoth).not.toBe(AS_READ);
+    expect(taskOf(userPrompt).trimEnd()).toBe(withBoth);
+  });
+
+  it('cites no rule by number or by tag, names no craft file, and has no em-dash', async () => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [HERO], [], null, { gateNotes: MEETING_NOTES });
+    const task = taskOf(userPrompt);
+    expect(task).not.toMatch(/\b[TC]\d{1,2}\b/);
+    expect(task).not.toMatch(/<craft-|<truth-rules>|story terms|—/);
+    expect(task).toContain('`<job-map>` below says how.');
+  });
+
+  it("asks for each section's step: its job, in one sentence of about 25 words at most", async () => {
+    const { userPrompt } = await builder().buildOutlinePrompt(SETTLED_WEAVE, [], [], null, {});
+    expect(taskOf(userPrompt)).toContain("The job is the section's step, in one sentence of about 25 words at most.");
   });
 });

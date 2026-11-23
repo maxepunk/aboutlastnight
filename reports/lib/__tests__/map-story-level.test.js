@@ -322,7 +322,7 @@ describe("fix round 4: the gap note names a thread the director put in the story
     const { storyLevelWeave } = require('./fixtures/story-level-weave');
     const builder = new PromptBuilder({ loadPhasePrompts: jest.fn(), validate: jest.fn() });
     const { userPrompt } = await builder.buildOutlinePrompt(renderSettledWeave(storyLevelWeave(), null), [], [], null, {});
-    expect(userPrompt).toContain('a change the director made at the meeting, such as a thread they added or brought into the story, named by its name without quotation marks.');
+    expect(userPrompt).toContain('a change the director made at the meeting, named by its name without quotation marks.');
   });
 });
 
@@ -471,15 +471,15 @@ describe("1D: the writer's own words on the page are held to its allowance under
     return map;
   };
 
-  it('the bound is 450 words, and the aim 300', () => {
-    expect([MAP_WORD_BOUND, MAP_WORD_AIM]).toEqual([450, 300]);
+  it('the bound is 550 words, and the aim 400', () => {
+    expect([MAP_WORD_BOUND, MAP_WORD_AIM]).toEqual([550, 400]);
   });
 
   // Fix round 2 (the integrator's ruling): the writer is held only to the words it wrote.
-  it('the writer may use 300 words of its own, and more only while the whole page stays within 450 (mapLengthOf)', () => {
-    expect(mapLengthOf(244, 115)).toEqual({ page: 244, writer: 129, allowance: 335 });
-    expect(mapLengthOf(488, 359)).toEqual({ page: 488, writer: 129, allowance: 300 });
-    expect(mapLengthOf(450, 150)).toEqual({ page: 450, writer: 300, allowance: 300 });
+  it('the writer may use 400 words of its own, and more only while the whole page stays within 550 (mapLengthOf)', () => {
+    expect(mapLengthOf(244, 115)).toEqual({ page: 244, writer: 129, allowance: 435 });
+    expect(mapLengthOf(588, 459)).toEqual({ page: 588, writer: 129, allowance: 400 });
+    expect(mapLengthOf(550, 150)).toEqual({ page: 550, writer: 400, allowance: 400 });
   });
 
   // Piece 4 (R6): the page as it opens is `folded`, one of the two pages the check reads; its
@@ -487,14 +487,14 @@ describe("1D: the writer's own words on the page are held to its allowance under
   it("the writer's own words past its allowance fail, and words within it pass, however long the page", () => {
     const state = storyLevelMapState();
     const folded = (length) => ({ ...inputsOf(state), length: { folded: length } });
-    expect(mapFindings(storyLevelMap(), folded({ page: 520, writer: 290, allowance: 300 })).failures).toEqual([]);
-    expect(mapFindings(storyLevelMap(), folded({ page: 450, writer: 349, allowance: 349 })).failures).toEqual([]);
-    const over = mapFindings(storyLevelMap(), folded({ page: 452, writer: 351, allowance: 349 })).failures;
+    expect(mapFindings(storyLevelMap(), folded({ page: 620, writer: 390, allowance: 400 })).failures).toEqual([]);
+    expect(mapFindings(storyLevelMap(), folded({ page: 550, writer: 449, allowance: 449 })).failures).toEqual([]);
+    const over = mapFindings(storyLevelMap(), folded({ page: 552, writer: 451, allowance: 449 })).failures;
     expect(typesOf({ failures: over })).toEqual(['over-length']);
-    expect(over[0].line).toBe("As the map opens, the writer's part of the map runs to 351 words, past the 349 it may use.");
+    expect(over[0].line).toBe("As the map opens, the writer's part of the map runs to 451 words, past the 449 it may use.");
     expect(over[0].line).not.toMatch(/\bb\d+\b/);
     // The rework reads which of its lines to cut, the longest first, and that code prints the rest.
-    expect(over[0].message).toMatch(/^As the map opens, the map's page runs to 452 words, 351 of them in the lines you write, past the 349 those lines may use \(300, or more while the whole page stays within 450\)\. Cut 2 words or more from your lines, starting with the longest: /);
+    expect(over[0].message).toMatch(/^As the map opens, the map's page runs to 552 words, 451 of them in the lines you write, past the 449 those lines may use \(400, or more while the whole page stays within 550\)\. Cut 2 words or more from your lines, starting with the longest: /);
     expect(over[0].message).toContain("beat b6's move and people (10 words)");
     expect(over[0].message).toContain("The rest of the page (the settled story, the threads' names and the counts) is printed by code.");
   });
@@ -521,8 +521,8 @@ describe("1D: the writer's own words on the page are held to its allowance under
   });
 
   // Piece 4 (R7): a photo prints no words, so its description is on neither page; before piece 4
-  // long descriptions pushed the page past 450.
-  it("long photo descriptions count on neither page, and a writer within its own 300 passes", () => {
+  // long descriptions pushed the page past its bound.
+  it("long photo descriptions count on neither page, and a writer within its own 400 passes", () => {
     const long = (word) => Array.from({ length: 90 }, () => word).join(' ');
     const state = storyLevelMapState({ photoDescriptions: { 'top.jpg': long('crowd'), 'board.jpg': long('board'), 'bar.jpg': long('bar') } });
     const result = mapNodes.checkMap(state);
@@ -725,7 +725,7 @@ describe("1D: the map's page prints each move with its people, the evidence fold
 // The map writer's task
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("1D: the map writer's task asks for moves in story terms, each with its evidence, at most 450 words aiming for 300", () => {
+describe("1D: the map writer's task asks for moves in plain words, each with its evidence, at most 550 words aiming for 400", () => {
   const { PromptBuilder } = require('../prompt-builder');
   const { renderSettledWeave } = require('../prompt-renderers/settled-weave');
   const { storyLevelWeave } = require('./fixtures/story-level-weave');
@@ -735,20 +735,21 @@ describe("1D: the map writer's task asks for moves in story terms, each with its
     return userPrompt.slice(userPrompt.indexOf("Lay the settled weave above across the article's sections"), userPrompt.indexOf('<SLOTS>'));
   };
 
-  it('asks for the page at most 450 words, aiming for 300, and no beat naming its material', async () => {
+  it('asks for the page at most 550 words, aiming for 400, and no beat naming its material', async () => {
     const task = await taskOf();
     expect(task).toContain(`at most ${MAP_WORD_BOUND} words`);
     expect(task).toContain(`aim for ${MAP_WORD_AIM}`);
-    expect(task).not.toMatch(/naming its material|about 450 words/);
+    expect(task).not.toMatch(/naming its material|about 550 words/);
   });
 
-  it("asks for each move in story terms as C2 sets them out, with its threads, its people and its evidence, and the card's document flagged as C9 sets out", async () => {
+  it("asks for each move as a title of a few plain words, with its threads, its people and its evidence, and the card's document flagged, pointing at the writer's part by its tag", async () => {
     const task = await taskOf();
-    expect(task).toContain('C2 (`<craft-form>`)');
+    expect(task).toContain('`<job-map>` below says how.');
+    expect(task).toContain('a title of a few plain words with its people');
     expect(task).toMatch(/threads/);
     expect(task).toMatch(/evidence/);
-    expect(task).toContain('C9 (`<craft-cards>`)');
-    expect(task).toMatch(/flag/);
+    expect(task).toContain("Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces.");
+    expect(task).not.toMatch(/\b[TC]\d{1,2}\b|<craft-/);
   });
 
   it("asks for a change of the director's that the record cannot carry to go in the gap note", async () => {
@@ -784,5 +785,111 @@ describe('the story-level map fixture', () => {
     const state = storyLevelMapState();
     expect(mapFindings(STORY_LEVEL_MAP, { ...inputsOf(state) })).toEqual({ failures: [], concerns: [] });
     expect(evidenceContextOf(state).documents.has('sam001')).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, C: the map's messages end at their fix and cite no rule
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The rule-text read's part 5d, first table. A message the rework reads names the defect and its
+// fix; it no longer points at a rule by number and tag. The one pointer left is the player's,
+// which names the writer's part by its heading and its tag.
+
+describe('phase 18, C: the map checks say their fix and cite no rule by number', () => {
+  const messageOf = (map, type) => check(map).failures.find((f) => f.type === type).message;
+  const pieceTwice = (b) => { b.evidence.push(JSON.parse(JSON.stringify(b.evidence[0]))); };
+
+  it.each([
+    ['a piece flagged on a beat that is not marked as a card', (b) => { delete b.card; },
+      'Beat b4 flags a piece as a card\'s document and is not marked as a card. Mark the beat "card": true when its evidence prints as a card, or take the flag off the piece.'],
+    ['a beat marked as a card that flags no piece', (b) => { delete b.evidence[0].card; },
+      'Beat b4 is marked as a card and flags no piece as the card\'s document. Flag the one piece whose document prints as the card with "card": true.'],
+    ['a beat that flags two pieces', pieceTwice,
+      'Beat b4 flags 2 pieces as the card\'s document. Flag one: the piece whose document prints as the card.']
+  ])('%s: the message ends at the fix it gives', (_name, change, message) => {
+    const map = storyLevelMap();
+    change(beatOf(map, 'b4'));
+    expect(messageOf(map, 'card-not-in-record')).toBe(message);
+  });
+
+  it('the card count: three to five, each flagging the piece whose document it prints', () => {
+    const map = storyLevelMap();
+    delete beatOf(map, 'b4').card;
+    delete beatOf(map, 'b4').evidence[0].card;
+    expect(messageOf(map, 'card-count')).toBe('The map carries 2 cards. Mark 3 to 5 beats as cards, each flagging the piece whose document it prints.');
+  });
+
+  it('a player on no beat: the fix points at the writer\'s part by the heading it holds the rule under', () => {
+    const map = storyLevelMap();
+    [...map.sections.flatMap((s) => s.beats), ...map.leftOut].forEach((b) => { b.players = b.players.filter((p) => p !== 'Jess'); });
+    expect(messageOf(map, 'player-not-placed')).toBe("Players in no beat: Jess. Place each in a section's beat, or name them among gapNote's players, as \"The people\" in `<job-map>` says.");
+  });
+
+  it('a photo placed nowhere: beside its beat or with its people, and no more', () => {
+    const map = storyLevelMap();
+    map.sections[1].photos = map.sections[1].photos.filter((p) => p.filename !== 'bar.jpg');
+    expect(messageOf(map, 'photo-not-placed')).toBe('Photos placed nowhere: bar.jpg. Place each photo once: as topPhoto, or among the photos of the section where it belongs, beside its beat or with its people.');
+  });
+
+  it("a thread the director added that no beat carries: name it in the gap note's line by its name, without quotation marks", () => {
+    const { standingAtMeeting } = require('../hand-edit-diff');
+    const state = storyLevelMapState();
+    const left = clone(state.weave);
+    left.threads.push({ id: 't11', name: 'The second vial', line: 'Kai kept a second vial in the coat room.' });
+    left.angles[0].threads.push('t11');
+    const at = storyLevelMapState({ weave: left, _weaveHandEdits: standingAtMeeting(null, state.weave, left) });
+    const failure = mapFindings(at.outline, inputsOf(at)).failures.find((f) => f.type === 'thread-not-landed');
+    expect(failure.message.endsWith("name it in gapNote's line by its name, without quotation marks.")).toBe(true);
+  });
+
+  it('no message the map checks give the rework cites a rule by number or by its tag', () => {
+    const scenarios = [
+      (m) => { delete beatOf(m, 'b4').card; },
+      (m) => { delete beatOf(m, 'b4').evidence[0].card; },
+      (m) => { pieceTwice(beatOf(m, 'b4')); },
+      (m) => { m.sections[1].photos = m.sections[1].photos.filter((p) => p.filename !== 'bar.jpg'); },
+      (m) => { [...m.sections.flatMap((s) => s.beats), ...m.leftOut].forEach((b) => { b.players = b.players.filter((p) => p !== 'Jess'); }); }
+    ];
+    scenarios.forEach((change) => {
+      const map = storyLevelMap();
+      change(map);
+      const failures = check(map).failures;
+      expect(failures.length).toBeGreaterThan(0);
+      failures.forEach((f) => expect(f.message).not.toMatch(/\b[TC]\d{1,2}\b|<craft-/));
+    });
+  });
+});
+
+describe("phase 18, C: the outline schema's three descriptions say what the section's step, a beat's synopsis and the line at the top are", () => {
+  const outline = require('../schemas/outline.schema.json');
+  const beatShapes = [outline.properties.sections.items.properties.beats.items, outline.properties.leftOut.items];
+
+  it("a section's job is its step: what the reader learns here about the question, and what that leaves them wanting to know, in one sentence", () => {
+    expect(outline.properties.sections.items.properties.job.description)
+      .toBe("The section's step: what the reader learns here about the question, and what that leaves them wanting to know, in one sentence");
+    expect(Object.keys(outline.properties.sections.items.properties)).toEqual(['slot', 'heading', 'job', 'beats', 'photos']);
+  });
+
+  it('a beat\'s synopsis says plain words, in both places the beat\'s shape appears', () => {
+    expect(beatShapes).toHaveLength(2);
+    beatShapes.forEach((beat) => {
+      expect(beat.properties.synopsis.description).toBe('One sentence, in the same plain words as the move, saying what the article tells at this beat. The article writer tells it in its own words');
+    });
+  });
+
+  it('the line at the top is present only when a connection the weave lacks was seen', () => {
+    expect(outline.properties.gapNote.description)
+      .toBe('The line at the top of the map, present only when the record cannot carry part of the story or a change the director made at the meeting, a player cannot be placed, or a connection the weave lacks was seen');
+  });
+
+  it('the writer\'s and the director\'s schemas carry them as they carry the stored one', () => {
+    ['journalist'].forEach((theme) => {
+      [mapSchemaFor(theme), directorMapSchemaFor(theme)].forEach((schema) => {
+        expect(schema.properties.sections.items.properties.job.description).toBe(outline.properties.sections.items.properties.job.description);
+        expect(schema.properties.leftOut.items.properties.synopsis.description).toBe(beatShapes[1].properties.synopsis.description);
+        expect(schema.properties.gapNote.description).toBe(outline.properties.gapNote.description);
+      });
+    });
   });
 });

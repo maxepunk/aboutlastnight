@@ -55,8 +55,10 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
 
 /**
  * The map writer's task (phase 4, brief 4.6), right after the settled weave: lay the weave
- * across the sections. It names what goes where in the map and points at the rule items
- * that say how (spec 5.1 and 5.2; the approved read's section D), stating none of them.
+ * across the sections. It names what goes where in the map and points at the writer's own part,
+ * `<job-map>`, for how (phase 18: the rule-text read's part 2, word for word, with the page's
+ * bounds filled in from lib/map.js); the part and the brief say the rest, so the task restates none
+ * of it.
  *
  * Brief 4.6b: each line is true of the prompt it sits in. The meeting's note is the approval
  * note marked arc-selection in <DIRECTOR_GUIDANCE>, the one note the map checks take as a
@@ -69,28 +71,27 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
  * and the round's one rework goes on that failure (0926262).
  *
  * Phase 4b (brief 1D; spec 2026-10-05 sections 4.2, 5 and 7): the map stays at the level of the
- * story, a page of at most MAP_WORD_BOUND words aiming for MAP_WORD_AIM. Each beat is a move in
- * story terms, as C2 and C16 set them out, with its people, the threads it carries and its
- * evidence from those threads' evidence and the record; the card's document is flagged on a
- * piece (C9); and what the record cannot carry, a change of the director's among it, goes in the
- * gap note. On 100226 the map ran to 1,193 words of beats that quoted their material. Fix round 4:
- * a thread the director added or brought into the story is named there by its name, without
- * quotation marks, the outlet lib/map.js mapFindings reads.
+ * story, a page of at most MAP_WORD_BOUND words aiming for MAP_WORD_AIM. Each beat is a move
+ * with its people, the threads it carries and its evidence from those threads' evidence and the
+ * record; the card's document is flagged on a piece; and what the record cannot carry, a change
+ * of the director's among it, goes in the gap note, a thread the director added or brought into
+ * the story named there by its name, without quotation marks, the outlet lib/map.js mapFindings
+ * reads (fix round 4).
  *
  * Phase 4b, piece 4 (spec 2026-10-07 sections 3, 8 and 11; R2, R5, R6): the director reads the
  * map as a board whose synopses are folded when it opens, so the task asks for each beat's
  * synopsis, of about 20 words, and for both pages: at most MAP_WORD_BOUND words as it opens,
  * aiming for MAP_WORD_AIM of the writer's own, and at most MAP_OPEN_WORD_BOUND with every synopsis
  * open, the synopses about MAP_SYNOPSIS_AIM between them. Each section's beats are in the order the
- * article will tell them, which C2 and C6 set out; and a beat in a section carries only threads of
- * the story, which the checks hold it to. The schema's description of the field says what a
- * synopsis is, and C2 why.
+ * article will tell them, and a beat in a section carries only threads of the story, which the
+ * checks hold it to.
  *
- * Phase 17 (R3; the writing spec's section 3; the rule-text read's addendum a): the deck and
- * the section headings print as the map writer writes them, so the task names them as the
- * map's only prose, under the settled angle's headline, which the map carries word for word,
- * and points at C5 and C12 for how they read (the map writer reads the voice since R2). Every
- * other line stays in story terms, and the story-terms check's scope is unchanged.
+ * Phase 17 (R3): the deck and the section headings print as the map writer writes them, so the
+ * task names them as the only lines the article prints as written, under the settled angle's
+ * headline, which the map carries word for word.
+ *
+ * Phase 18 (R10): the job is the section's step, in one sentence of about 25 words at most, and
+ * the page's bounds rose by 100 words for it.
  *
  * @param {boolean} heroMarked - whether <available-photos> marks a photo [hero image]
  * @param {boolean} meetingNote - whether <DIRECTOR_GUIDANCE> holds the director's approval
@@ -98,14 +99,14 @@ const MAP_TASK_NOTE_SOURCE = ', or "note"';
  * @returns {string}
  */
 function mapTask(heroMarked, meetingNote) {
-  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map's only prose is the copy the article prints as you write it: the deck under the settled angle's headline, which the map carries word for word, and each section's heading, written as C5 (\`<craft-form>\`) sets out, in the voice C12 (\`<craft-voice>\`) sets out. Every other line stays in story terms. The director reads it as a board whose synopses are folded when it opens: that page holds at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM} of your own; with every synopsis open it holds at most ${MAP_OPEN_WORD_BOUND}, so give the synopses about ${MAP_SYNOPSIS_AIM} words between them.
-- The story is the director's, and the map's part in it is C16's (\`<craft-story>\`). Fit in each change the director made at the meeting, marked above by its edit's id${meetingNote ? MAP_TASK_NOTE_CHANGE : ''}. List each change you make to fit one in under weaveChanges, with its source: the edit's id${meetingNote ? MAP_TASK_NOTE_SOURCE : ''}.
-- Give each section you use its heading, its job, its beats and its photos as C2 (\`<craft-form>\`) sets them out, its beats in the order the article will tell them, as C6 (\`<craft-form>\`) sets out: each beat a move of the story in story terms, as C16 sets them out, with its people, its synopsis of about 20 words, the ids of the threads it carries, and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat, and a beat in a section carries only threads of the story, since the director settled the other threads out of it at the meeting. Drop each slot the story does not use, with its reason.
-- Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces, as C9 (\`<craft-cards>\`) sets out.
-${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut, as C8 (\`<craft-material>\`) sets out. Those moves print on the page by their titles.
-- What the record cannot carry goes in gapNote, the one line at the top, in story terms: a part of the story, or a change the director made at the meeting, such as a thread they added or brought into the story, named by its name without quotation marks. A player you cannot place and a link you see that the weave lacks go there too, as C7 (\`<craft-material>\`) and C16 set out.
-- Set expectedLength from what the map holds, as C4 (\`<craft-telling>\`) sets out.
-Code reads who is placed from each beat's players, counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, the story terms and the page's length on both counts. A player named among gapNote's players counts as raised.`;
+  return `Lay the settled weave above across the article's sections: the story map the article writer writes the article from. \`<job-map>\` below says how. The only lines on the map that the article prints as you write them are the deck under the settled angle's headline, which the map carries word for word, and each section's heading. The director reads the map as a board whose synopses are folded when it opens: that page holds at most ${MAP_WORD_BOUND} words, so aim for ${MAP_WORD_AIM} of your own; with every synopsis open it holds at most ${MAP_OPEN_WORD_BOUND}, so give the synopses about ${MAP_SYNOPSIS_AIM} words between them.
+- Fit in each change the director made at the meeting, marked above by its edit's id${meetingNote ? MAP_TASK_NOTE_CHANGE : ''}. List each change you make to fit one in under weaveChanges, with its source: the edit's id${meetingNote ? MAP_TASK_NOTE_SOURCE : ''}.
+- Give each section you use its heading, its job, its beats and its photos. The job is the section's step, in one sentence of about 25 words at most. The beats come in the order the article will tell them. Each has its move, a title of a few plain words with its people; its synopsis of about 20 words; the ids of the threads it carries; and its evidence, taken from those threads' evidence above and from the record. Every thread in the story lands in at least one beat, and a beat in a section carries only threads of the story, since the director settled the other threads out of it at the meeting. Drop each slot the story does not use, with its reason.
+- Mark each beat whose evidence prints as a card, and flag the card's document on one of its pieces.
+${heroMarked ? `${MAP_TASK_TOP_PHOTO}\n` : ''}- List what you considered and did not use under leftOut. Those beats print on the page by their titles.
+- What the record cannot carry goes in gapNote, the one line at the top, in plain words: a part of the story, or a change the director made at the meeting, named by its name without quotation marks. A player you cannot place and a connection you see that the weave lacks go there too.
+- Set expectedLength from what the map holds.
+Code reads who is placed from each beat's players, counts the cards by their flagged pieces, and checks the players, the photos, the cards, the threads, the connections, each beat's evidence, that each line is in plain words, and the page's length on both counts. A player named among gapNote's players counts as raised.`;
 }
 
 /** What the roster block prints for a roster character whose pronoun the roster stop did not capture (T9). */

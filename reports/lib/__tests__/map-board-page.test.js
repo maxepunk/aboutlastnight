@@ -140,11 +140,11 @@ describe("4B: the map's page prints the board in the view's order", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('4B: the length is counted as the page opens and with every synopsis open', () => {
-  test('the bounds: 450 as it opens, aiming for 300; 750 with every synopsis open, the synopses aiming for 250', () => {
-    expect([MAP_WORD_BOUND, MAP_WORD_AIM, MAP_OPEN_WORD_BOUND, MAP_SYNOPSIS_AIM]).toEqual([450, 300, 750, 250]);
-    expect(mapLengthOf(400, 150)).toEqual({ page: 400, writer: 250, allowance: 300 });
-    expect(mapLengthOf(700, 150, { open: true })).toEqual({ page: 700, writer: 550, allowance: 600 });
-    expect(mapLengthOf(700, 250, { open: true })).toEqual({ page: 700, writer: 450, allowance: 550 });
+  test('the bounds: 550 as it opens, aiming for 400; 850 with every synopsis open, the synopses aiming for 250 (phase 18, R10)', () => {
+    expect([MAP_WORD_BOUND, MAP_WORD_AIM, MAP_OPEN_WORD_BOUND, MAP_SYNOPSIS_AIM]).toEqual([550, 400, 850, 250]);
+    expect(mapLengthOf(500, 150)).toEqual({ page: 500, writer: 350, allowance: 400 });
+    expect(mapLengthOf(800, 150, { open: true })).toEqual({ page: 800, writer: 650, allowance: 700 });
+    expect(mapLengthOf(800, 250, { open: true })).toEqual({ page: 800, writer: 550, allowance: 650 });
   });
 
   test('a map in the mock-up\'s shape, sixteen moves, fits both pages', () => {
@@ -186,7 +186,7 @@ describe('4B: the length is counted as the page opens and with every synopsis op
     expect(failures[0].message).toMatch(/^As the map opens, the map's page runs to \d+ words/);
     expect(failures[0].message).toMatch(/beat b\d+'s move and people/);
     expect(failures[0].message).not.toMatch(/synopsis \(/);
-    expect(failures[0].message).toContain('The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: say each move, in a section or in leftOut, in a few words, and keep leftOut to one line for each thing considered, as C8 sets out.');
+    expect(failures[0].message).toContain('The moves in leftOut print on this page by their titles too, so the saving is in fewer and shorter lines: say each move, in a section or in leftOut, in a few words, and keep leftOut to one line for each thing considered.');
     expect(failures[0].message).not.toMatch(/move into leftOut/);
   });
 
@@ -266,5 +266,71 @@ describe("4B: the map's pause line in the stops log carries both counts", () => 
     expect([map.words, map.wordsOpen]).toEqual([wordsShown(OUTLINE, data), wordsShown(OUTLINE, data, { synopsesOpen: true })]);
     expect(map.wordsOpen).toBeGreaterThan(map.words);
     expect(Object.keys(photos)).toEqual(['at', 'kind', 'stop', 'round', 'words']);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, C: a section's step has room on the page (R10)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A section's `job` is its step: one sentence of about 25 words at most, where today's maps hold
+// five to ten. The page's bounds rose by 100 words for it (MAP_WORD_BOUND 550, MAP_WORD_AIM 400,
+// MAP_OPEN_WORD_BOUND 850), and a map written before the change still opens, edits and passes.
+
+describe('phase 18, C: the step, 25 words a section, fits the higher bounds', () => {
+  const words = (n, stem) => Array.from({ length: n }, (_, i) => `${stem}${i}`).join(' ');
+  /** The mock-up's map with a 25-word step on every section, and each synopsis padded by `pad` words. */
+  const withSteps = (pad = 0) => {
+    const map = longSynopses(pad);
+    map.sections.forEach((s, i) => { s.job = words(25, `step${i}x`); });
+    return map;
+  };
+
+  test('a map whose steps run to 25 words each passes both pages, with the open page past what 750 allowed', () => {
+    const state = boardMapState({ outline: withSteps(8) });
+    const { passed, failures, words: counts } = mapNodes.checkMap(state)._mapCheck;
+    expect(failures).toEqual([]);
+    expect(passed).toBe(true);
+    expect(counts.unfolded.page).toBeGreaterThan(750);
+    expect(counts.unfolded.page).toBeLessThanOrEqual(MAP_OPEN_WORD_BOUND);
+    expect(counts.folded.page).toBeLessThanOrEqual(MAP_WORD_BOUND);
+    expect(counts.unfolded.writer).toBeLessThanOrEqual(counts.unfolded.allowance);
+    // The steps are on the page as the director reads it, one for each section, in full.
+    const shown = shownOf(stopPage(OUTLINE, payloadOf(state)));
+    withSteps().sections.forEach((s) => expect(shown).toContain(s.job));
+  });
+
+  test("a map in today's shape, a job of five to ten words on each section, still opens, edits and passes", () => {
+    const today = boardMap();
+    expect(today.sections.every((s) => wordCount(s.job) >= 4 && wordCount(s.job) <= 10)).toBe(true);
+    const state = boardMapState({ outline: today });
+    const data = payloadOf(state);
+    const view = View.mapView(data, View.mapDraftOf(data));
+    expect(view.sections.map((s) => s.job)).toEqual(today.sections.map((s) => s.job));
+    // It opens on the director's gate and the client's.
+    expect(directorMapProblems(today, { theme: 'journalist', shown: boardMap() })).toBeNull();
+    expect(EditLogic.validateOutlineShape(clone(today), 'journalist', data.mapSlots, today).valid).toBe(true);
+    // A step edited at the section's editor merges onto the section, and the map still passes.
+    const slot = today.sections[1].slot;
+    const form = EditLogic.initMapSection(today.sections[1]);
+    expect(form.job).toBe(today.sections[1].job);
+    const step = 'The room builds its case, then the sale turns it, in one sentence of about twenty words.';
+    const edited = EditLogic.mergeMapSection(clone(today), slot, EditLogic.buildMapSection({ ...form, job: step }));
+    expect(edited.sections[1].job).toBe(step);
+    expect(directorMapProblems(edited, { theme: 'journalist', shown: boardMap() })).toBeNull();
+    expect(mapNodes.checkMap(boardMapState({ outline: today }))._mapCheck).toMatchObject({ passed: true, failures: [] });
+  });
+
+  test('the over-length message names the bounds the constants hold, on each page', () => {
+    const synopses = mapNodes.checkMap(boardMapState({ outline: longSynopses(30) }))._mapCheck.failures;
+    expect(synopses).toHaveLength(1);
+    expect(synopses[0].message).toContain(`(${MAP_WORD_AIM + MAP_SYNOPSIS_AIM}, or more while the whole page stays within ${MAP_OPEN_WORD_BOUND}).`);
+    expect(synopses[0].message).toContain('(650, or more while the whole page stays within 850).');
+    const titles = boardMap();
+    titles.sections.forEach((s) => s.beats.forEach((b) => { b.move = `${b.move} ${words(20, 'title')}`; }));
+    const folded = mapNodes.checkMap(boardMapState({ outline: titles }))._mapCheck.failures[0];
+    expect(folded.message).toContain(`(${MAP_WORD_AIM}, or more while the whole page stays within ${MAP_WORD_BOUND}).`);
+    expect(folded.message).toContain('(400, or more while the whole page stays within 550).');
+    expect(`${synopses[0].message} ${folded.message}`).not.toMatch(/\b(450|750)\b/);
   });
 });

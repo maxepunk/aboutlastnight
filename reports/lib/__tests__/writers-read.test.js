@@ -183,7 +183,7 @@ describe("R2: every writer and every rework reads the brief, then its own part, 
     const weave = prompt.slice(0, prompt.indexOf('</SETTLED_WEAVE>'));
     expect(weave).toMatch(/^HEADLINE: \S/m);
     const task = prompt.slice(prompt.indexOf('</SETTLED_WEAVE>'));
-    expect(task).toContain("Lay the settled weave above across the article's sections: the story map the article writer writes the article from. The map's only prose is the copy the article prints as you write it: the deck under the settled angle's headline, which the map carries word for word, and each section's heading, written as C5 (`<craft-form>`) sets out, in the voice C12 (`<craft-voice>`) sets out. Every other line stays in story terms. The director reads it as a board ");
+    expect(task).toContain("Lay the settled weave above across the article's sections: the story map the article writer writes the article from. `<job-map>` below says how. The only lines on the map that the article prints as you write them are the deck under the settled angle's headline, which the map carries word for word, and each section's heading. The director reads the map as a board ");
   });
 });
 
