@@ -8,9 +8,9 @@
  * starts no session until it has files for the meeting, the map and the article.
  *
  * The arc composers in arc-specialist-nodes.js open the system prompt with the theme's
- * identity line, put the mode block, the world and the truth rules after it (loadRuleSet,
- * from the theme's rules folder), then this prompt's text; the craft files go in the user
- * prompt.
+ * identity line, put the <this-session> block, <world> and <limits> after it (loadRuleSet,
+ * from the theme's rules folder), then this prompt's text; <brief> then <job-weave> go in the
+ * user prompt.
  */
 
 const { ANGLE_FIELDS, CONNECTION_KINDS } = require('../weave');

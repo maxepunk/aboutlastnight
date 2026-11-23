@@ -56,7 +56,7 @@ const { DERIVED_LABELS } = require('../../prompt-renderers/derived-labels');
 const { renderArcAccusation, renderWhiteboardConnections } = require('../../prompt-renderers/director-words-renderer');
 const { guestReporterLine } = require('../../prompt-renderers/session-authors');
 const { directorAccusationText } = require('../../accusation-verdict');
-// rosterWithPronounsSection: the roster with pronouns (phase 3, 3.10; T9), the one
+// rosterWithPronounsSection: the roster with pronouns, the one
 // builder the arc writer and the outline writer print it with. systemPromptOpening: the
 // opening every writer's and judge's system prompt shares (brief 4.13b).
 const { systemPromptOpening, buildDirectorGuidanceSection, filterGateNotes, rosterWithPronounsSection } = require('../../prompt-builder');
@@ -101,12 +101,12 @@ function buildArcStandingNotes(state) {
 
 /**
  * The arc writer's system prompt: its opening (lib/prompt-builder.js systemPromptOpening;
- * brief 4.13b), the theme's identity line, the session's reporting-mode block (brief 1.5),
- * <world> and <truth-rules> from the theme's rules folder (phase 3, 3.3; R14), then the
- * prompt's own text. The call's craft files go in its user prompt.
+ * brief 4.13b): the theme's identity line, the session's <this-session> block, then <world>
+ * and <limits> from the theme's rules folder, then the prompt's own text. The call's <brief>
+ * and <job-weave> go in its user prompt, <brief> first.
  *
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
- * @param {string} [theme='journalist'] - state.theme: its identity line, mode block and rules
+ * @param {string} [theme='journalist'] - state.theme: its identity line, <this-session> block and rules
  * @returns {string}
  */
 function weaveSystemPrompt(sessionConfig, theme = 'journalist') {
@@ -308,8 +308,8 @@ ${nonRosterPCs.length > 0 ? `${nonRosterPCs.join(', ')}\n- A thread names one on
  * Valet, the investigation focus, the roster with the time-of-day line and, when the session
  * has one, the guest reporter's line, the character categories, the roster with pronouns and the
  * character context); the record with its investigation's timeline and the
- * sources a piece of evidence may name; the weave's task; and the rule set's craft files, last,
- * by the placement ruling, from the theme's rules folder (R14). The arc rework opens with
+ * sources a piece of evidence may name; the weave's task; and the rule set's <brief> then
+ * <job-weave>, last, from the theme's rules folder. The arc rework opens with
  * the same sections (phase 2, 2.3), so whatever the writer reads reaches its rework.
  *
  * @param {Object} state - Current workflow state
@@ -577,8 +577,8 @@ function arcRevisionRules(round, theme) {
 
 /**
  * The arc rework's system prompt: the arc writer's, then the rework rules for this kind
- * of rework (phase 2, 2.3). The writer's brings the theme's identity line, the mode block,
- * the world and the truth rules.
+ * of rework (phase 2, 2.3). The writer's brings the theme's identity line, the
+ * <this-session> block, <world> and <limits>.
  *
  * @param {'reweave'|'send-back'|null} [round=null] - the director's round, by its mark
  * @param {Object} [sessionConfig] - state.sessionConfig, carrying reportingMode
