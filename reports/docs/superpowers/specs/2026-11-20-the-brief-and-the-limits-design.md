@@ -271,7 +271,7 @@ The writer's last draft beside the approved article, read as whole articles:
 
 ## Appendix A: the settled text
 
-Five files, each holding exactly what its rule file will hold, in `2026-11-20-phase-18-approved-text/` beside this spec: `brief.md`, `world.md`, `limits.md`, `mode-remote.md`, `mode-on-site.md`.
+Eight files, each holding exactly what its rule file will hold, in `2026-11-20-phase-18-approved-text/` beside this spec. Five were settled with this spec: `brief.md`, `world.md`, `limits.md`, `mode-remote.md`, `mode-on-site.md`. Three are each writer's own part, which the director approved on 2026-11-20 in the rule-text read (`2026-11-20-phase-18-rule-text-read.md`): `job-weave.md`, `job-map.md`, `job-article.md`.
 
 ## Appendix B: notes for people, never for a prompt
 
