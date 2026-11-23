@@ -96,7 +96,7 @@ describe('4.14d: unsavedInputLine, the one rule for a stop\'s unsaved input', ()
 
     it.each([
       ['a beat by its move\'s words, never its id', { line: 'beat', key: 'b4' }, 'the move "Morgan pays Riley at the bar"'],
-      ['a section by the label the page heads it with', { line: 'section', key: 'followTheMoney' }, 'the heading and job of "Follow the Money"'],
+      ['a section by the label the page heads it with', { line: 'section', key: 'followTheMoney' }, 'the heading and step of "Follow the Money"'],
       ['the gap note', { line: 'gapNote', key: 'gap' }, 'the gap note'],
       ['the expected length', { line: 'length', key: 'length' }, 'the expected length']
     ])('names %s', (_case, editor, name) => {

@@ -280,7 +280,7 @@ describe('4.12a: a run through the story meeting, the map and the desk writes th
     const text = (stop, data) => stopPrint(stop, data).map((line) => line.text).join('\n');
     expect(text('arc-selection', shown.meeting2)).toContain('The verdict closes the night; the ledger keeps it open.');
     View.mapView(shown.map, View.mapDraftOf(shown.map)).sections.forEach((section) => {
-      expect(text('outline', shown.map)).toContain(`Job: ${section.job}`);
+      expect(text('outline', shown.map)).toContain(`Step: ${section.job}`);
     });
     expect(text('article', shown.desk2)).toContain('Marcus bragged about the sale the night he died.');
     expect(text('article', shown.desk2)).toContain(shown.desk2.settledStory.story);

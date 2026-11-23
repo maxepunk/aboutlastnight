@@ -299,7 +299,7 @@
   function mapEditorName(editor, sections) {
     if (editor.line === 'head') return 'the headline and deck';
     if (editor.line === 'gapNote') return 'the gap note';
-    if (editor.line === 'section') return 'the heading and job of ' + mapSectionName(sections, editor.key);
+    if (editor.line === 'section') return 'the heading and step of ' + mapSectionName(sections, editor.key);
     if (editor.line === 'beat') return holdsText(editor.key) ? mapBeatName(sections, editor.key) : '';
     if (editor.line === 'length') return 'the expected length';
     return '';

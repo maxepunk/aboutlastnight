@@ -399,6 +399,13 @@ describe("4.9: the console's validator decides as the gate does (ruling 3)", () 
     expect(ViewLogic.mapProblems(r, { outline: clone(MAP), mapSlots: SLOTS }))
       .toBe('The map cannot be sent yet: Lede, beat "Alex at the window" shares its id with another beat: your changes made this repeat. Give each beat an id of its own.');
   });
+
+  // Phase 18, C (R10): the page calls a section's job its step wherever it names the line.
+  test("a refusal about a section's job names it the step", () => {
+    const m = clone(MAP);
+    m.sections[0].job = 12;
+    expect(ViewLogic.mapProblems(m, { outline: clone(MAP), mapSlots: SLOTS })).toBe('The map cannot be sent yet: Lede, step must be a string.');
+  });
 });
 
 /** Each case: the map the director left, the map the stop showed, and whether the gate takes it under 4.6b's rule. */

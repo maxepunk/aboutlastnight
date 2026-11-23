@@ -27,7 +27,7 @@
  * A line is `{tone, text, label, folded, beside?, piece?, region?}`:
  * - `text` is the view models' own text: a thread's line, a beat's move, a paragraph, a mark;
  * - `label` names the line: an id, a piece of the desk, or the page's own heading for the line
- *   ("Charge", "Job"). A title, and a line the page shows by its name alone (a photo, a heading
+ *   ("Charge", "Step"). A title, and a line the page shows by its name alone (a photo, a heading
  *   the page does not print, a line in the component's own fixed words), carries only a label;
  * - `tone` is what kind of line it is: title, text, note (what happened this round), alert (a
  *   check still failing, a problem the console would refuse), concern, mark or hint;
@@ -743,7 +743,7 @@ const MAP_PARTS = {
       page.title(section.label);
       if (section.heading) page.text(section.heading, 'Heading');
       else page.tag(View.MAP_NO_HEADING_LINE);
-      page.text(section.job, 'Job');
+      page.text(section.job, 'Step');
       addMargin(page, section);
       section.beats.forEach((beat) => addCard(page, view, beat, synopsesOpen));
       section.byThemselves.forEach((photo) => addPhoto(page, photo, 'Photo, by itself'));

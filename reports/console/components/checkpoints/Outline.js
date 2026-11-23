@@ -166,7 +166,7 @@ function SectionEditor({ section, onSave, onCancel }) {
   const set = fieldSetter(setForm);
   return React.createElement('div', { className: 'article-block__edit-form' },
     React.createElement(TextField, { label: 'Heading', value: form.heading, onChange: set('heading'), hint: 'Leave it empty for a section that prints no heading.' }),
-    React.createElement(TextField, { label: 'Job: what the section does to the question', value: form.job, onChange: set('job'), multiline: true, rows: 2 }),
+    React.createElement(TextField, { label: 'Step: what the reader learns here about the question', value: form.job, onChange: set('job'), multiline: true, rows: 2 }),
     actionsRow(function () { onSave(EditLogic.buildMapSection(form)); }, onCancel)
   );
 }

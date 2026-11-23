@@ -183,6 +183,8 @@ describe('4B: each card gives its title, people, dots, mark, photos, synopsis, e
     const view = viewOf(state);
     const story = view.sections.find((s) => s.slot === 'theStory');
     expect(story.changed).toEqual([expect.stringContaining('Builds the case slowly.')]);
+    // Phase 18, C (R10): the report names the line the step, as the section's editor does; the diff's key stays `job`.
+    expect(story.changed[0]).toMatch(/^The Story, step: /);
     view.sections.filter((s) => s.slot !== 'theStory').forEach((s) => expect(s.changed).toEqual([]));
     expect(view.top.changed).toEqual([expect.stringContaining('The room called it an accident.'), expect.stringContaining('The note asked for the vote.')]);
     expect(view.changedEdits).toEqual([expect.stringContaining('The note folded it into the closing.')]);

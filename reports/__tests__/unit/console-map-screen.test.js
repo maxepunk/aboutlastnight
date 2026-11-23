@@ -752,6 +752,37 @@ describe("4D: each of a selected card's controls, and a photo's, reaches its Edi
   });
 });
 
+// Phase 18, C (R10): a section's job is its step. The editor's label says so, the key it saves
+// into is still `job`, and a 25-word step goes in as typed.
+describe("phase 18, C: the section's editor labels the line as the step and saves it into job", () => {
+  it("opens on the heading and the step, and saves what the director typed into the section's job", () => {
+    const data = boardPayloadOf();
+    const mounted = mountMap({ data });
+    const slot = boardMap().sections[1].slot;
+    const [column] = elementsOf(mounted.render(), (n) => hasClass('map__column')(n) && n.props['aria-label'] === ViewLogic.mapView(data, ViewLogic.mapDraftOf(data)).sections[1].label);
+    elementsOf(column, hasClass('article-block__edit-btn'))[0].props.onClick();
+    const [editorNode] = elementsOf(mounted.render(), (n) => typeof n.type === 'function' && n.type.name === 'SectionEditor');
+    const editor = mounted.child(editorNode);
+    const fields = () => elementsOf(editor.render(), (n) => typeof n.type === 'function' && n.type.name === 'TextField');
+    expect(fields().map((f) => [f.props.label, f.props.value])).toEqual([
+      ['Heading', boardMap().sections[1].heading],
+      ['Step: what the reader learns here about the question', boardMap().sections[1].job]
+    ]);
+    const step = Array.from({ length: 25 }, (_, i) => `word${i}`).join(' ');
+    fields()[1].props.onChange(step);
+    elementsOf(editor.render(), (n) => n.type === 'button' && textOf(n) === 'Save')[0].props.onClick();
+    const section = mounted.saved().sections.find((s) => s.slot === slot);
+    expect(section.job).toBe(step);
+    expect(Object.keys(section)).toEqual(Object.keys(boardMap().sections[1]));
+  });
+
+  it("the page's source names the line the step nowhere as the job", () => {
+    const src = read('components/checkpoints/Outline.js');
+    expect(src).toContain("label: 'Step: what the reader learns here about the question'");
+    expect(src).not.toMatch(/Job: what the section does/);
+  });
+});
+
 describe("4D: Edit the words opens the move's editor on its card: its title, its summary and its people", () => {
   it("opens on the move's words, and saves what the director typed into that move, keeping the rest of it", () => {
     const data = boardPayloadOf();

@@ -3473,7 +3473,7 @@
 
   // ── The map on screen (phase 4, task 4.9; spec 5.2 and 5.3) ────────────────
   //
-  // The outline stop is the map: at most 450 words, aiming for 300 (phase 4b), which the
+  // The outline stop is the map: at most 550 words, aiming for 400 (phase 4b; phase 18, R10), which the
   // director reads in minutes and edits line by line. Outline.js renders it from mapView and changes it only through the editors and
   // moves of console/outline-edit-logic.js; it sends only mapPayload's payloads, 4.6's
   // `{outline: 'approve' | 'send-back', map, note}` (lib/map.js mapResume), each held first to
@@ -3644,7 +3644,8 @@
   function slotWords(text, slots) {
     return asString(text)
       .replace(/dropped slot "([^"]*)"/g, function (_, key) { return 'dropped section ' + slotLabelOf(key, slots); })
-      .replace(/section "([^"]*)"/g, function (_, key) { return slotLabelOf(key, slots); });
+      // A section's job is the step on the page (phase 18, R10), also where a report names the line.
+      .replace(/section "([^"]*)"(, job(?=,|$))?/g, function (_, key, job) { return slotLabelOf(key, slots) + (job ? ', step' : ''); });
   }
 
   /** A whole number with its thousands marked: 1,400. */
@@ -3756,6 +3757,8 @@
         var photo = asArray(isPlainObject(section) ? section.photos : null)[Number(parts[3])];
         return label + ', photo ' + (isPlainObject(photo) && asString(photo.filename) ? photo.filename : String(Number(parts[3]) + 1)) + tail(parts.slice(4));
       }
+      // Phase 18 (R10): a section's job is its step; the key keeps its name, the page its word.
+      if (parts[2] === 'job') return label + ', step' + tail(parts.slice(3));
       return label + tail(parts.slice(2));
     }
     return asString(path);

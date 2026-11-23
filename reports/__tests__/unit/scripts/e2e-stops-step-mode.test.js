@@ -105,14 +105,14 @@ describe('4.12a: step mode prints the three stops from the console\'s view model
     expect(note.text).toMatch(/▸/);
   });
 
-  it('prints the map\'s page: the settled story, each section under its slot\'s label, its job and beats, and the counts', () => {
+  it('prints the map\'s page: the settled story, each section under its slot\'s label, its step and beats, and the counts', () => {
     const data = mapData();
     const view = View.mapView(data, View.mapDraftOf(data));
     const text = textOf(stopPrint('outline', data));
     expect(text).toContain(view.settledStory.story);
     view.sections.forEach((section) => {
       expect(text).toContain(section.label);
-      expect(text).toContain(`Job: ${section.job}`);
+      expect(text).toContain(`Step: ${section.job}`);
       section.beats.forEach((beat) => expect(text).toContain(beat.move));
     });
     expect(text).toContain(view.tally.cards);
