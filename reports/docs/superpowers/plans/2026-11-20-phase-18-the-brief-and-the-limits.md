@@ -129,32 +129,39 @@ Inputs a person will meet that the spec implies but no ordinary test exercises, 
 
 **Seats.** Each slice is one builder in one worktree. After it comes a reviewer who reads the diff against the brief and the read, then a verifier for each blocking finding before any fixer, and at most two fix rounds.
 
-**Each seat's model and effort is chosen for its work** (the director, 2026-11-23: "we should carefully consider what model and effort level each agent should use instead of defaulting to the same model and effort level for each agent"). This replaces the roadmap's rule that every seat runs on the session's model. The session runs on Fable 5.2, so every seat is pinned and none inherits. Three things decide a seat:
-- **How much of the work is judgement.** The wording is given word for word, so a builder's judgement is in the tests it moves and the plumbing it touches. Where a slice is transcription and tests, the builder is Sonnet 5.5. Where a mistake would spread to later slices or reach a live session unseen, it is Opus 5.5.
-- **A reviewer is never weaker than the builder it checks, and never Sonnet.** Sonnet reviewers stated a wrong fact about the code and proposed a broken fix in stage 3, which an Opus review then caught (the director's ruling of that time).
-- **Effort follows risk.** High where a wrong call is expensive to find later. Medium elsewhere.
+**Each seat's model and effort is chosen for its work** (the director, 2026-11-23: "we should carefully consider what model and effort level each agent should use instead of defaulting to the same model and effort level for each agent", and later that day, on effort: "are you actually thinking about the specific tasks requirements and levels of complexity/nuance vs what the actual models available are good at/weak at and what all effort levels are possible"). This replaces the roadmap's rule that every seat runs on the session's model. The session runs on Fable 5.2, so every seat is pinned or inherits on purpose.
+
+What the choices rest on, from the published guidance for these three models:
+- **Five effort levels exist: low, medium, high, xhigh, max.** A level sets how much the model thinks and how many tool calls it makes. The same name means a different amount on each model.
+- **Opus 5.5** defaults to medium. The guidance is to start there, test the neighbouring levels, and keep xhigh and max for a measured gain. Its largest measured gains are carrying a change through a large repository until its tests pass, and code review with fewer false alarms, both at medium.
+- **Sonnet 5.5** defaults to high. Medium is the recommended start for coding in a repository. At low it sometimes reports a change done without running a check.
+- **Fable 5.2** defaults to high, where most of its gain arrives. xhigh raised coding scores slightly for many more tokens. max suits open-ended problems.
+- **Price per token does not predict cost per finished task.** With a pass-or-fail signal, the cheaper pattern is to run at the lower level and redo only the failures higher.
+
+So no seat runs at low (exact wording and green tests are the work), and none at xhigh or max (no gain has been measured, and the difficulty here is breadth and exactness, which a reviewer buys better than more thinking). None of this is measured on this codebase. The ledger records time, tokens and fix rounds for each seat so the next phase can choose on evidence.
 
 | Seat | Model | Effort | Why |
 |---|---|---|---|
-| A, builder | Opus 5.5 | high | The widest change: about 25 test files move, and every later slice stands on it |
-| A, reviewer | Opus 5.5 | high | Has to tell a test rightly retired from one that should have been rewritten |
-| B, builder | Sonnet 5.5 | medium | Four files of wording given word for word, and their tests |
-| B, reviewer | Opus 5.5 | medium | Reads each changed line against the read |
-| C, builder | Sonnet 5.5 | high | Given wording, three numbers, one label, across the server and the console |
+| A, builder | Opus 5.5 | high | Ran before this table was revised. The widest change: every later slice stands on it |
+| A, reviewer | Opus 5.5 | high | Ran before this table was revised |
+| B, builder | Sonnet 5.5 | medium | Transcription and tests in four files. Medium is Sonnet's recommended start for this |
+| B, reviewer | Opus 5.5 | medium | Reads each changed line against the read. Opus's review gains were measured at medium |
+| C, builder | Sonnet 5.5 | high | Has to find every copy of three numbers and a label across the server and the console; effort buys more searching |
 | C, reviewer | Opus 5.5 | medium | Checks the console's copy of the bounds and that old maps still pass |
-| D, builder | Opus 5.5 | high | The schema the writer is shown against the schema the SDK is given is the phase's one piece of real design risk |
-| D, reviewer | Opus 5.5 | high | The same risk, read fresh |
+| D, builder | Opus 5.5 | high | The one real design decision: the schema the writer is shown against the schema the SDK is given |
+| D, reviewer | Fable 5.2 | high | The risk is in how the real SDK takes the schema, which the tests cannot see because they use a stand-in |
 | E, builder | Sonnet 5.5 | medium | Label swaps in six files |
 | E, reviewer | Opus 5.5 | medium | Reads each changed line against the read |
-| F, builder | Opus 5.5 | medium | The judges decide reworks and guard the director's edits, and their questions carry variable parts that must survive |
-| F, reviewer | Opus 5.5 | high | A stored finding has to parse as before |
-| G, builder | Opus 5.5 | medium | Writes the skill's own text, which a model reads, and the docs |
+| F, builder | Opus 5.5 | medium | The wording is given, but each question has parts that vary by judge and must survive |
+| F, reviewer | Opus 5.5 | high | The judges decide reworks and guard the director's edits, and a stored finding has to parse as before |
+| G, builder | Opus 5.5 | medium | Writes the skill's own text, which a model reads, and broad doc edits |
 | G, reviewer | Opus 5.5 | medium | Reads the agent files as an agent meets them, and runs the docs grep |
-| Verifier, one for each blocking finding | Sonnet 5.5 | medium | Shows the fault by running something, or says it could not |
-| Fixer | The slice's builder, resumed | as the builder | It already holds the slice |
-| Final whole-phase review | Fable 5.2 | high | One seat, the last check before a merge that reaches the next live session |
+| Verifier, one for each blocking finding | Sonnet 5.5 | medium | Its whole job is to run a check, so not low |
+| Fixer | One step up from the attempt that failed: Sonnet medium to Sonnet high; C to Opus medium; Opus medium to Opus high; D stays Opus high | | The "redo failures higher" pattern |
+| Re-review of a fix | Opus 5.5 | medium | A small diff against a short list of findings |
+| Final whole-phase review | Fable 5.2 | high | One seat, the last check before a merge that reaches the next live session. High is Fable's default |
 
-No seat is Haiku: every seat has to find its way through a large codebase and run a suite of about 7,400 tests, and a cheaper model's extra turns cost more than they save. The integrator checks, with a two-agent probe before run 1, that "opus" and "sonnet" resolve to Opus 5.5 and Sonnet 5.5.
+No seat is Haiku: its guidance places it at classification, extraction and sub-agent tasks, and the smallest seat here decides whether a finding lives. The integrator checks, with a two-agent probe before run 1, that "opus" and "sonnet" resolve to Opus 5.5 and Sonnet 5.5.
 
 **Who owns which file.**
 
