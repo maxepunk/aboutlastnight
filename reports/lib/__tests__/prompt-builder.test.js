@@ -238,7 +238,9 @@ describe('PromptBuilder', () => {
       // Schema content should be present at the field level so the model
       // sees enum values and additionalProperties constraints, not just names.
       expect(userPrompt).toContain('"evidenceCards"');
-      expect(userPrompt).toContain('"financialTracker"');
+      // Phase 18 (R13): the printed schema holds only what the writer writes
+      // (article-printed-schema.test.js holds the rest).
+      expect(userPrompt).not.toContain('"financialTracker"');
       expect(userPrompt).toContain('"additionalProperties": false');
       // Phase 3 (3.2; M24): the SDK issue note is a code comment now, not prompt text.
       expect(userPrompt).not.toContain('anthropics/claude-agent-sdk-typescript#277');
@@ -265,13 +267,15 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('one of lede, the-story, follow-the-money, the-players, whats-missing or closing');
     });
 
-    it('journalist prompt includes pullQuotes and financialTracker', async () => {
+    // Phase 18 (R13): the writer is no longer shown the fields it leaves out, in the schema or
+    // in the instruction's closing paragraph.
+    it('journalist prompt names neither pullQuotes nor financialTracker', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         SETTLED_WEAVE, mockMap
       );
 
-      expect(userPrompt).toContain('pullQuotes');
-      expect(userPrompt).toContain('financialTracker');
+      expect(userPrompt).not.toContain('pullQuotes');
+      expect(userPrompt).not.toContain('financialTracker');
     });
 
     // Phase 3 (3.2; spec section 7): the fixed section table and every-arc-in-every-

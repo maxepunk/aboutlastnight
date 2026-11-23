@@ -500,10 +500,18 @@ const REPO = path.join(__dirname, '..', '..');
  *   In <SCHEMA>, a section's job is described as its step (+72), a beat's synopsis in plain words in
  *   both copies of the beat (-23 each) and the line at the top as a connection the weave lacks (+6):
  *   +32 in all, so the task itself is -364. outline-journalist 25217 -> 24885 (-332). No other pin moves.
+ * - Phase 18, slice D (R7, R13; the phase 18 read's parts 2 and 5b), the article writer's prompt.
+ *   Its task points at <brief> and <job-article> by their tags, cites no rule by number, and ends
+ *   on the length; its lines on the headings, the photos' places, and the headline and the deck
+ *   are unchanged (-452). Its map label says a section's job is its step (+78). Its generation
+ *   instruction's closing paragraph keeps its first sentence and loses the list of fields to
+ *   leave out (-258), and the schema printed in <SCHEMA> loses those fields
+ *   (printedBundleSchemaOf; -5603): article-journalist 36028 -> 29793 (-6235). The outline and
+ *   arc pins do not move.
  */
 const PINNED = {
   'outline-journalist': ['6448c1d8684ff7906a4283ef580de155837a7e489f255721472c426d79df493d', 24885],
-  'article-journalist': ['b02351b6293ac65d33b6c3e028cda3470d6c99b22a888d210d4360db2565b1d1', 36028],
+  'article-journalist': ['bf5f9f6250473dc81adf991f74bdad290d9a0d5d1432a30e3a00ba6cddee3023', 29793],
   'arcs-journalist': ['a79ae324351e3b0c356a129f867c1352e2390e0187cf82ab9d26507dd3862912', 12135]
 };
 

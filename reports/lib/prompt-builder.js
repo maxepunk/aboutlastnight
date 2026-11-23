@@ -467,16 +467,18 @@ function systemPromptOpening(theme, call, sessionConfig) {
  * as a marker on the beat with its document on the piece flagged "card". The beat's `kind` stays
  * unnamed, a hint the JSON carries.
  * Phase 4b, piece 4 (spec 2026-10-07 sections 3 and 9; R1): the line names the beat's "synopsis",
- * the one sentence saying what the article tells there, which C16 has the article writer tell the
- * beat as. A map from before piece 4, and a move the director added, may carry none, so the line
+ * the one sentence saying what the article tells there, which the article writer tells in its own
+ * words. A map from before piece 4, and a move the director added, may carry none, so the line
  * says "where the beat has one".
  * Phase 17 (R3; the rule-text read's section 13): the evidence holds the pieces the move "can be
- * told from", so the article draws on them for what the move needs, as C16 says.
+ * told from", so the article draws on them for what the move needs.
+ * Phase 18 (the phase 18 read's part 5b): a section's job on the map is its step, and the line
+ * says so right after it names a section's parts.
  * It names the record in words, never by its tag, as lib/evidence.js's piece descriptions do: the
  * map prints above the record, and the prompt's readers take the first <RECORD> for the record.
  */
 const STORY_MAP_TAG = 'STORY_MAP';
-const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move can be told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
+const STORY_MAP_LABEL = `The story map as the director left it at the map's stop, as JSON. Each section gives its slot, heading, job, beats and photos. A section's job is its step: what the reader learns there about the question. A beat is one move of the story: its "move" says it in a few plain words, "synopsis", where the beat has one, says in one sentence what the article tells there, "players" names the people in it, "threads" the ids of the settled weave's threads it carries, and "connection" the id of the weave's connection that lands in it. Its "evidence" holds the pieces of the record the move can be told from, each with its "sources" (the id of a document in the record, ${SOURCES_GLOSS}), what it "shows", and its "stance": whether it supports the move or cuts against it. A beat marked "card": true prints an inline evidence card of the document named by its piece flagged "card": true. A photo's "beat" is the beat it sits beside. "leftOut" lists the beats the story does not use, and "gapNote" and "dropped" are the map's notes to the director.`;
 
 /**
  * The instruction's line on which inline cards the article prints (phase 4b, brief 1E; spec
@@ -517,13 +519,14 @@ function mapCardsLine(map, evidenceBundle = null) {
 /**
  * The article writer's task (brief 4.7b; spec 6.1; the approved read's section D), right
  * after the settled weave and the map: the reading order, then what the writer writes from
- * the map. It points at the rule items that say how (C16, C2, C4, C12) and restates none of
- * them.
+ * the map.
  *
- * Phase 17 (R3; the writing spec's section 4; the rule-text read's section 11): the task opens
- * on the article as one cohesive story that argues the settled angle's thesis, built on the
- * headline and the deck, with the map as its plan, and its last line is the prose, as C4 and
- * C12 set it out. The lines between keep the director's decisions and are unchanged.
+ * Phase 18 (the brief-and-the-limits spec, sections 3 and 7; the phase 18 read's part 2): the
+ * task points at the brief (<brief>) and the writer's own part (<job-article>) by their tags,
+ * which print below it, and repeats neither. It cites no rule by number. It names this call's
+ * decisions: the beats, the sections' order, the headings, the photos' places, the headline and
+ * the deck, and the length. How the writer tells a beat, with or without evidence, how it prints
+ * a card, and its words, transitions and voice are its own part's to say.
  *
  * The article rework carries this task word for word, ahead of its <HAND_EDITS>, which lists
  * the director's edits at the desk (spec section 7). So the lines on a section's heading, a
@@ -535,10 +538,10 @@ function mapCardsLine(map, evidenceBundle = null) {
  * the kicker no owner, so a kicker the director edited at the desk stands on <HAND_EDITS>
  * alone. The top photo is the map's: the desk edits only its caption.
  *
- * The beats line and the words line give the director's edits precedence over the body
+ * The beats line and the sections line give the director's edits precedence over the body
  * (briefs 4.7e and 4.7f): the director's edits first, as HAND_EDITS gives them; otherwise every
- * beat in the map's sections, and no other, in the map's order, and the writer's words,
- * transitions and detail (piece 4, R2: the order is the map's). The map keeps the beat of a card the director deleted at the desk (only a deleted
+ * beat in the map's sections, and no other, in the map's order (piece 4, R2: the order is the
+ * map's). The map keeps the beat of a card the director deleted at the desk (only a deleted
  * photo leaves it, through the leave-out list), its leftOut lists material a paragraph the
  * director inserts may use, and code does not restore a send-back's rework, so the edits come
  * first. The rule for those edits, with its send-back exception, is stated in <HAND_EDITS> alone
@@ -548,20 +551,9 @@ function mapCardsLine(map, evidenceBundle = null) {
  * first draft, the prompt carries no <HAND_EDITS>, and the lines ask for every beat in the map's
  * sections, and no other.
  *
- * Phase 4b (brief 1E; spec 2026-10-05 sections 5.2, 5.3 and 7): C16 has the article writer
- * tell each beat drawing on the evidence it carries for what the beat needs, and cite what it
- * uses (since phase 17), and the beats line says only what C16 does not (fix round 3: each
- * rule is stated once, spec section 8): a beat that carries no evidence, such as one the
- * director added on the map, is told from the record, and the items
- * that say how to cite, T1 for each source (a document, the ledger, the evidence log and the
- * director's notes) and C9 for a card. It names T1 by its id alone, as the arc writer's notes
- * label does: the truth rules print in the system prompt, and a user prompt carries no
- * <truth-rules> tag (writers-rule-set.test.js). The words line still gives each scene its detail
- * from the record.
- *
  * Phase 4b, piece 4 (spec 2026-10-07 sections 3 and 9; R2): the order of a section's beats is the
- * map's, where the director sees it and can change it, so the words line gives the writer the
- * beats in the map's order and keeps the words, the transitions and the detail as the writer's.
+ * map's, where the director sees it and can change it, so the sections line gives the writer the
+ * beats in the map's order.
  *
  * The lines name the block without its angle brackets, as the judges' questions name
  * FINANCIAL_SUMMARY, and the writer's prompts never say "desk". A rework carries the task above
@@ -569,13 +561,69 @@ function mapCardsLine(map, evidenceBundle = null) {
  * "<HAND_EDITS>" it meets (lib/__tests__/fixtures/removed-phrases.js instructionText), so a
  * bracketed name here would hide every line between the task and the block from it.
  */
-const ARTICLE_TASK = `Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map above as its plan. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write it as C16 (\`<craft-story>\`) sets out the article writer's part:
-- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (\`<craft-cards>\`) sets out;
-- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order, as C2 (\`<craft-form>\`) sets them out, and the words, the transitions and each scene's detail from the record are yours;
+const ARTICLE_TASK = `Write the article. The weave above is the story the director settled at the meeting, and the story map lays it across the article's sections as the director left it at the map's stop. <brief> below says what the article has to be, and <job-article> says what is yours to decide. For this article:
+- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article;
+- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order;
 - each section's heading: the director's own where the director has edited one, otherwise the map's, as written;
 - each photo's place: the director's where the director has moved the photo, otherwise the map's, beside its beat; and the map's top photo at the top of the article;
 - the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;
-- the prose: every sentence, paragraph and section as C4 (\`<craft-telling>\`) sets out, in the voice C12 (\`<craft-voice>\`) sets out, at about the map's expected length.`;
+- the length: about the map's expected length.`;
+
+/**
+ * The ContentBundle schema's properties the article writer is not shown (phase 18, R13; the
+ * phase 18 read's part 5b), each as [where it sits, the object schema that holds it, its name]:
+ * the fields the writer does not write. The top-level money tracker, which prints itself
+ * from the ledger; the top-level photos, pull quotes and voice self-check, which nothing prints;
+ * a sidebar entry's owner, placement and content, which the sidebar does not print (the article
+ * stop's sidebar editor writes the owner); and the characters of a photo block and of the hero
+ * image. The schema keeps each as optional, for the SDK, the validator, the template and the
+ * desk's editors.
+ */
+const UNPRINTED_BUNDLE_FIELDS = [
+  ['the bundle', (schema) => schema, 'financialTracker'],
+  ['the bundle', (schema) => schema, 'photos'],
+  ['the bundle', (schema) => schema, 'pullQuotes'],
+  ['the bundle', (schema) => schema, 'voice_self_check'],
+  ['a sidebar entry', (schema) => schema.properties?.evidenceCards?.items, 'owner'],
+  ['a sidebar entry', (schema) => schema.properties?.evidenceCards?.items, 'placement'],
+  ['a sidebar entry', (schema) => schema.properties?.evidenceCards?.items, 'content'],
+  ['a photo block', (schema) => (schema.properties?.sections?.items?.properties?.content?.items?.oneOf || [])
+    .find((branch) => branch?.properties?.type?.const === 'photo'), 'characters'],
+  ['the hero image', (schema) => schema.properties?.heroImage, 'characters']
+];
+
+/**
+ * The schema the article writer is shown in <SCHEMA> (phase 18, R13): the full ContentBundle
+ * schema with UNPRINTED_BUNDLE_FIELDS removed, derived here so the two cannot drift. A pure
+ * function: it returns a copy and leaves `schema` as it is. The SDK call (ai-nodes.js), the
+ * validator (schema-validator.js) and the template read the full schema, so a bundle that holds
+ * a removed field still validates.
+ *
+ * It fails loud, naming the field, when a field it removes is missing from `schema` (the schema
+ * changed and the list did not follow) or is required where it sits (a required field the writer
+ * is not shown would fail every bundle). No property removed is the target of a "$ref", since
+ * the schema holds none, so the copy stays valid JSON Schema.
+ *
+ * @param {Object} schema - the full ContentBundle schema
+ * @returns {Object} the printed schema
+ */
+function printedBundleSchemaOf(schema) {
+  const printed = JSON.parse(JSON.stringify(schema));
+  UNPRINTED_BUNDLE_FIELDS.forEach(([where, objectOf, name]) => {
+    const object = objectOf(printed);
+    if (!object || !object.properties || !Object.prototype.hasOwnProperty.call(object.properties, name)) {
+      throw new Error(`printedBundleSchemaOf: the ContentBundle schema has no "${name}" on ${where} to leave out of the article writer's <SCHEMA>`);
+    }
+    if (Array.isArray(object.required) && object.required.includes(name)) {
+      throw new Error(`printedBundleSchemaOf: "${name}" on ${where} is required, so the article writer's <SCHEMA> cannot leave it out`);
+    }
+    delete object.properties[name];
+  });
+  return printed;
+}
+
+/** The article writer's printed schema, built once at load, so a schema it cannot trim fails the server's start. */
+const PRINTED_BUNDLE_SCHEMA = printedBundleSchemaOf(contentBundleSchema);
 
 class PromptBuilder {
   /**
@@ -982,7 +1030,9 @@ ${this._rosterSection()}`;
    *
    * The instruction asks only for the fields the article prints. The schema keeps
    * the rest as optional (HY1, the integrator's ruling): the article stop's sidebar
-   * editor writes a sidebar entry's owner. The money tracker prints itself from the ledger (M2). An
+   * editor writes a sidebar entry's owner. Phase 18 (R13): the schema printed in <SCHEMA>
+   * is the full one without those fields (printedBundleSchemaOf), so the instruction no
+   * longer lists them to leave out; the SDK is given the full schema. The money tracker prints itself from the ledger (M2). An
    * evidence reference is described as the template prints it, a caption naming a
    * document (M1).
    *
@@ -1078,13 +1128,13 @@ ${heroLine}
 5. "byline": {${byline}}.
 6. "metadata": {"sessionId": "...", "theme": "journalist", "generatedAt": "<an ISO 8601 timestamp>"}. The server stamps these values.
 
-These are the fields the article prints, and the money tracker prints itself from the ledger. The schema also allows fields that nothing prints, and the bundle leaves them out: "financialTracker", "photos", "pullQuotes" and "voice_self_check"; a sidebar entry's "owner", "placement" and "content"; and the "characters" of a photo or of the hero image.
+These are the fields the article prints, and the money tracker prints itself from the ledger.
 
 <SCHEMA>
 The ContentBundle's shape: field names, types, enum values and required fields.
 
 \`\`\`json
-${JSON.stringify(contentBundleSchema, null, 2)}
+${JSON.stringify(PRINTED_BUNDLE_SCHEMA, null, 2)}
 \`\`\`
 </SCHEMA>
 </GENERATION_INSTRUCTION>
@@ -1157,6 +1207,8 @@ module.exports = {
   buildDirectorGuidanceSection,
   // Brief 4.7b: the tag the article writer prints the story map in
   STORY_MAP_TAG,
+  // Phase 18 (R13): the schema the article writer is shown, from the full one
+  printedBundleSchemaOf,
   filterGateNotes,
   buildReportingModeBlock,
   // Brief 4.13b: the opening of every writer's and judge's system prompt, which the weave

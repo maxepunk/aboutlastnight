@@ -56,7 +56,7 @@ function blockJson(text, tag) {
 
 /** The article task's lines, from its opening to the data that follows it. */
 function taskLines(prompt) {
-  const start = prompt.indexOf("Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map above as its plan.");
+  const start = prompt.indexOf('Write the article. The weave above is the story the director settled at the meeting,');
   expect(start).toBeGreaterThanOrEqual(0);
   return prompt.slice(start, prompt.indexOf('<DATA_CONTEXT>', start)).split('\n').filter((line) => line.startsWith('- '));
 }
@@ -77,7 +77,7 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
       '</SETTLED_WEAVE>',
       `<${STORY_MAP_TAG}>`,
       `</${STORY_MAP_TAG}>`,
-      'Write the article: one cohesive story',
+      'Write the article. The weave above',
       '<DATA_CONTEXT>',
       'PHOTOS (',
       '\n<RECORD>\n',
@@ -355,14 +355,14 @@ describe("4.7e: the rework's task gives a card the director cut and a paragraph 
   const DESK_PARAGRAPH = 'An unsigned letter warned Marcus about the Stanford patents a week before he died.';
   /**
    * The task's beats line: the director's edits first, as HAND_EDITS gives them, the map's beats
-   * otherwise. Phase 4b (brief 1E; fix round 3) adds what C16 does not say: a beat with no
-   * evidence told from the record, and the rules on citing (the 1E describe below).
+   * otherwise. Phase 18 (the read's part 2): the line ends at the beats under leftOut; what the
+   * writer does inside a beat, with or without evidence, is the writer's own part's to say.
    */
-  const BEATS_LINE = "- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article; a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (`<craft-cards>`) sets out;";
-  /** The task's words line: the director's edits first, the map's beats and the writer's words otherwise. */
-  // Phase 4b, piece 4 (brief 4B; R2): the order of a section's beats is the map's, so the line
-  // gives the writer the beats in the map's order, and the words, the transitions and the detail.
-  const WORDS_LINE = "- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order, as C2 (`<craft-form>`) sets them out, and the words, the transitions and each scene's detail from the record are yours;";
+  const BEATS_LINE = "- the beats: the director's edits first, as HAND_EDITS gives them; otherwise every beat in the map's sections, and no other, so the beats under leftOut, the director's strikes among them, stay out of the article;";
+  /** The task's sections line: the director's edits first, the map's beats in the map's order otherwise. */
+  // Phase 4b, piece 4 (brief 4B; R2): the order of a section's beats is the map's. Phase 18 (the
+  // read's part 2): the words, the transitions and the detail are the writer's own part's to say.
+  const WORDS_LINE = "- the map's sections in its order; the director's edits first, as HAND_EDITS gives them; otherwise each section holds its beats in the map's order;";
   /** The precedence both lines open their body with. */
   const FIRST = "the director's edits first, as HAND_EDITS gives them";
 
@@ -516,8 +516,8 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
   const labelOf = (prompt) => block(prompt, STORY_MAP_TAG).split('\n')[1];
   /** The instruction's card line. */
   const cardLineOf = (prompt) => prompt.split('\n').filter((line) => line.startsWith('     * {"type": "evidence-card"'));
-  /** What the beats line adds to C16 on each beat, after the beats it names. */
-  const BEATS_EVIDENCE = 'a beat that carries no evidence told from the record; each source cited as T1 sets out, and a card as C9 (`<craft-cards>`) sets out;';
+  /** How the beats line ends (phase 18, the read's part 2): at the beats under leftOut. */
+  const BEATS_END = "so the beats under leftOut, the director's strikes among them, stay out of the article;";
   /** The precedence the beats line and the card line open with. */
   const FIRST = "the director's edits first, as HAND_EDITS gives them";
 
@@ -549,6 +549,13 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     });
   });
 
+  // Phase 18 (the read's part 5b): a section's job on the map is its step, and the label says so
+  // right after it names a section's parts.
+  it("the map's label reads a section's job as its step", async () => {
+    const { user } = await writerPrompt(articleState());
+    expect(labelOf(user)).toContain("Each section gives its slot, heading, job, beats and photos. A section's job is its step: what the reader learns there about the question. A beat is one move of the story:");
+  });
+
   it("the map's label and the weave writer's Sources line print one gloss of the named sources, lib/evidence.js's", async () => {
     const { SOURCES_GLOSS } = require('../evidence');
     const { _testing: { buildWeaveSections } } = require('../workflow/nodes/arc-specialist-nodes');
@@ -561,26 +568,24 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     expect(buildWeaveSections(articleState())).toContain(`A piece of evidence names each of its sources by one of these document ids, or as ${SOURCES_GLOSS}.\n`);
   });
 
-  it("the beats line leaves C16's sentence to C16, sends a beat with no evidence to the record and points at the rules on citing that the prompt holds", async () => {
+  // Phase 18 (the read's part 2; R7): the beats line ends at the beats under leftOut. How the
+  // writer tells a beat, from its evidence or, with none, from the record, is the writer's own
+  // part's to say (<job-article>), so the line restates none of it and cites no rule by number.
+  it("the beats line ends at leftOut, restates nothing of the writer's own part and cites no rule by number", async () => {
     const { user, system } = await writerPrompt(articleState());
     const beatsLines = taskLines(user).filter((line) => line.startsWith('- the beats:'));
     expect(beatsLines).toHaveLength(1);
     expect(beatsLines[0].startsWith(`- the beats: ${FIRST};`)).toBe(true);
-    expect(beatsLines[0].endsWith(` ${BEATS_EVIDENCE}`)).toBe(true);
-    // Each rule is stated once (spec section 8): the line does not say a second time that the
-    // writer draws on each beat's evidence. Phase 18 (R4): the rule files' sentences this test
-    // pinned (C16's, T1's and C9's headings) went with the old files; each new file is pinned
-    // whole by hash in rule-set.test.js.
-    expect(beatsLines[0]).not.toMatch(/from the evidence it carries|evidence cited/);
+    expect(beatsLines[0].endsWith(` ${BEATS_END}`)).toBe(true);
+    expect(beatsLines[0]).not.toMatch(/from the evidence it carries|evidence cited|from the record/);
+    expect(taskLines(user).filter((line) => /\b[TC]\d{1,2}\b|<craft-/.test(line))).toEqual([]);
     // The limits print in the system prompt alone.
     expect(system).toMatch(/^<limits>$[\s\S]*^<\/limits>$/m);
     expect(user).not.toContain('<limits>');
-    // The writer still reads the record for each scene's detail.
-    expect(taskLines(user).filter((line) => line.includes("each scene's detail from the record"))).toHaveLength(1);
   });
 
-  // The task's offer of the record for a beat with no evidence is a fixed line, in the prompt
-  // whether such a beat is or not: the beats-line test above holds it.
+  // The writer's own part tells a beat with no evidence from the record, in the prompt whether
+  // such a beat is or not.
   it('a beat the director added on the map, with no evidence, prints as they left it', async () => {
     const map = clone(MAP);
     map.sections[3].beats.push({ id: 'b7', move: 'Riley leaves by the back door', players: ['Riley'] });

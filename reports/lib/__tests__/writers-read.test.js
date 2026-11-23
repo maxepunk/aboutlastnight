@@ -167,10 +167,12 @@ describe("R2: every writer and every rework reads the brief, then its own part, 
     expect(prompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });
 
-  it.each(['article writer', 'article rework'])("%s: the task opens on one cohesive story and ends on the prose, its lines between kept", (name) => {
+  // Phase 18 (the read's part 2, "The article writer's task"): the task points at the brief and
+  // the writer's own part by their tags, cites no rule by number, and ends on the length.
+  it.each(['article writer', 'article rework'])("%s: the task opens on the brief and its own part and ends on the length, its lines between kept", (name) => {
     const [, { prompt }] = renders[name];
-    const opening = "Write the article: one cohesive story that argues the settled angle's thesis, built on the headline and the deck, with the story map above as its plan. The weave is the story the director settled at the meeting, and the map lays it across the article's sections as the director left it at the map's stop. Write it as C16 (`<craft-story>`) sets out the article writer's part:\n- the beats: ";
-    const last = "\n- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;\n- the prose: every sentence, paragraph and section as C4 (`<craft-telling>`) sets out, in the voice C12 (`<craft-voice>`) sets out, at about the map's expected length.\n";
+    const opening = "Write the article. The weave above is the story the director settled at the meeting, and the story map lays it across the article's sections as the director left it at the map's stop. <brief> below says what the article has to be, and <job-article> says what is yours to decide. For this article:\n- the beats: ";
+    const last = "\n- the headline and the deck: the director's own where the director has edited one, otherwise the map's, as written;\n- the length: about the map's expected length.\n";
     expect(prompt.split(opening)).toHaveLength(2);
     expect(prompt.split(last)).toHaveLength(2);
     expect(prompt.indexOf(last)).toBeGreaterThan(prompt.indexOf(opening));

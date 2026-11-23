@@ -55,7 +55,13 @@ describe('article prompt: sidebar entries carry no document text (slice 2.5)', (
     expect(fields).not.toContain('"content"');
     expect(fields).not.toContain('arcEvidencePackages fullContent');
     expect(fields).toContain('a one-line "summary" under 100 characters');
-    expect(await journalistArticlePrompt()).toContain('a sidebar entry\'s "owner", "placement" and "content"');
+    // Phase 18 (R13): the writer is not shown a sidebar entry's content at all: the schema printed
+    // in <SCHEMA> leaves it out, so the instruction no longer lists it to leave out.
+    const prompt = await journalistArticlePrompt();
+    expect(prompt).not.toContain('a sidebar entry\'s "owner", "placement" and "content"');
+    const printed = prompt.slice(prompt.indexOf('\n<SCHEMA>\n'), prompt.indexOf('\n</SCHEMA>\n'));
+    const json = JSON.parse(printed.slice(printed.indexOf('```json\n') + 8, printed.lastIndexOf('\n```')));
+    expect(Object.keys(json.properties.evidenceCards.items.properties)).not.toContain('content');
   });
 
   it('describes "content" as the inline card\'s, copied from the document in <RECORD>', async () => {
