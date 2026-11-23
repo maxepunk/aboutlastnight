@@ -791,7 +791,7 @@ describe('4.10b: a mark found by its words sits beside a block of the kind its l
     const last = desk.sections[1].content.length - 1;
     expect(deskMarksAt(marks, block(1, 1))).toEqual([]);
     expect(deskMarksAt(marks, block(1, last)).map((m) => m.text)).toEqual([
-      '"I voted" has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.'
+      '"I voted" has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.'
     ]);
   });
 });

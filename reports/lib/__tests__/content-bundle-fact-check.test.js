@@ -706,7 +706,9 @@ describe('the remote reporter-mode message follows the remote mode block (phase 
   // since round 7 (R13): Nova never claims to have seen or heard the room, and the event
   // is told as a scene, attributed where it matters. It no longer sends every room event
   // through an attribution.
-  it('keeps its prefix and tells the rework to tell the event as a scene, attributed where it matters', () => {
+  // Phase 18 (the read's part 5d): the fix says what the limits say. Nova was outside, was told
+  // what happened, and names who told Nova only where the director's notes say.
+  it('keeps its prefix and tells the rework Nova was told, naming who told Nova only where the notes say', () => {
     const result = factCheckContentBundle(baseArgs({
       reportingMode: 'remote',
       contentBundle: {
@@ -717,9 +719,7 @@ describe('the remote reporter-mode message follows the remote mode block (phase 
     expect(result.structuralIssues).toHaveLength(1);
     const [message] = result.structuralIssues;
     // The console groups this message under reporter-mode violations by this prefix.
-    expect(message.startsWith('Reporter-mode violation (remote): "i was in the room".')).toBe(true);
-    expect(message).toContain('never claims to have seen or heard the room (T8)');
-    expect(message).toContain('Tell the moment as a scene, with attribution where it matters: a line someone was overheard saying, a claim about a person.');
+    expect(message).toBe('Reporter-mode violation (remote): "i was in the room". In this session Nova was outside the warehouse and saw and heard nothing inside it. Nova was told what happened and does not write as an eyewitness. Tell the moment as something Nova was told, and name the person who told Nova only when the director\'s notes say who it was.');
     expect(message).not.toContain("attributing the room's events to the people in it");
     expect(message).not.toContain("the room's events reached Nova from people in it");
     expect(message).not.toContain('at most once');
@@ -750,8 +750,9 @@ describe('repeated absence statements, remote only (phase 2, 2.6)', () => {
     const advisories = absenceAdvisories(result);
     expect(advisories).toHaveLength(1);
     expect(advisories[0]).toMatch(/^Absence stated 2 times \(remote\): "I was not there", "I was not in that room"\./);
-    // Phase 3 (3.9): the remote mode block of round 7 (R13): said once, early, then scenes.
-    expect(advisories[0]).toContain('Nova says so once, early; after that, the room\'s events are told as scenes (T8).');
+    // Phase 18 (the read's part 5d): the players know where Nova was; it comes up only when
+    // something Nova tells them depends on it. The count that triggers it stays more than one.
+    expect(advisories[0]).toBe('Absence stated 2 times (remote): "I was not there", "I was not in that room". The players know where Nova was. It comes up only when something Nova is telling them depends on it.');
     expect(advisories[0]).not.toContain("attributing the room's events to the people in it");
     expect(advisories[0]).not.toContain('at most once');
     expect(result.structuralIssues).toEqual([]);
@@ -1479,7 +1480,7 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       const [message] = flagged(run(paragraphs('Ten people were in the room.'), { roster, guestReporters }), 'headCount');
       expect(message).toBe('Head count: "Ten people were in the room" in section "the-story", paragraph 1, but the roster lists 9 players at the investigation, ' +
         'the guest reporter Remi Vale among them; the guest reporter Dana Okafor plays no character on it and is not counted. ' +
-        'The head count is the players at the investigation (T10).');
+        'The head count is the players at the investigation.');
     });
   });
 
@@ -1494,6 +1495,48 @@ describe('the new advisory checks (phase 3, 3.4)', () => {
       expect([key, flagged(result, key).length]).toEqual([key, expected[key]]);
       expect(result.structuralIssues.some((s) => s.startsWith(PREFIXES[key]))).toBe(false);
     }
+  });
+
+  // Phase 18 (the read's part 5d; R9): each reworded message keeps the words it opens with, which
+  // the desk groups by, and ends as the read words it, with no rule cited by number. The checks'
+  // logic and thresholds do not change.
+  it('each reworded message keeps its opening, ends as the read words it and cites no rule by number', () => {
+    const result = run(paragraphs(
+      'There were ten people in the room — every token counted. Nova filed her story. Blake said he was done.',
+      words(1800)
+    ), { roster: ROSTER9 });
+    const given = run(paragraphs('Blake said she would pay double.'), { directorText: 'Blake said he was leaving.' });
+    const ends = {
+      emDash: [result, 'House style puts a comma, a colon or a full stop where an em-dash might go.'],
+      productionWords: [result, '. The article uses the story\'s own words: rewrite each line in them.'],
+      novaPronoun: [result, 'Nova writes in the first person and is otherwise "Nova", never a gendered pronoun.'],
+      npcPronouns: [result, '). Write Blake by name.'],
+      length: [result, '. Cut what the argument does not need.'],
+      headCount: [result, '. The head count is the players at the investigation.']
+    };
+    Object.entries(ends).forEach(([key, [from, end]]) => {
+      const [message] = flagged(from, key);
+      expect([key, message.startsWith(PREFIXES[key]), message.endsWith(end)]).toEqual([key, true, true]);
+    });
+    const [other] = flagged(given, 'npcPronouns');
+    expect(other.endsWith('). Use the pronoun the record gives, or write Blake by name.')).toBe(true);
+    expect(flagged(result, 'length')[0]).toContain('above the 1,800-word flag for an article of about 1,500 words: ');
+    const texts = [result, given].flatMap((r) => [...r.advisoryWarnings, ...r.structuralIssues, ...r.findings.map((f) => f.line)]);
+    expect(texts.length).toBeGreaterThan(6);
+    expect(texts.filter((text) => /\b[TC]\d{1,2}\b/.test(text))).toEqual([]);
+  });
+
+  it("the reporter's messages and lines, on a remote session, cite no rule by number", () => {
+    const result = factCheckContentBundle(baseArgs({
+      theme: 'journalist', reportingMode: 'remote',
+      contentBundle: paragraphs('I voted with the room.', 'I was in the room when it ended.', 'I was not there. I was not in that room.')
+    }));
+    const texts = [...result.advisoryWarnings, ...result.structuralIssues, ...result.findings.map((f) => f.line)];
+    expect(result.structuralIssues.map((s) => s.slice(0, s.indexOf('". ') + 3))).toEqual([
+      'Reporter-mode violation: "i voted". ', 'Reporter-mode violation (remote): "i was in the room". '
+    ]);
+    expect(result.advisoryWarnings.filter((w) => w.startsWith('Absence stated 2 times (remote): '))).toHaveLength(1);
+    expect(texts.filter((text) => /\b[TC]\d{1,2}\b/.test(text))).toEqual([]);
   });
 
   it('the detective theme keeps today\'s checks only', () => {
@@ -1521,18 +1564,19 @@ describe('the fix lines follow the rules (phase 3, 3.4)', () => {
     expect(message.startsWith('Reporter-mode violation: "one of them was mine".')).toBe(true);
     expect(message).not.toMatch(/whoever/i);
     expect(message).not.toMatch(/Attribute the action/);
-    expect(message).toMatch(/\bT8\b/);
-    expect(message).toMatch(/anonymous/);
+    // Phase 18 (the read's part 5d): no rule number; nobody is named as having turned a memory
+    // in unless the evidence log or the director's words name them.
+    expect(message).not.toMatch(/\b[TC]\d{1,2}\b/);
+    expect(message).toContain("nobody is named as having turned a memory in unless the evidence log or the director's words name them.");
   });
 
   // Phase 3 (3.9): the vote fix line states T8 as round 7 words it (R21): "accuses" means
   // joining the room's accusation. Phases 14 and 15, brief F (R9; spec 11): T8 as rewritten,
   // Nova takes no side in the verdict in either mode; the prefix stays, since the console
-  // groups by it.
-  it('the vote fix line says what T8 says: Nova takes no side in the verdict, never voting, joining the room\'s accusation or exposing a memory', () => {
+  // groups by it. Phase 18 (the read's part 5d): the limit's words, with no rule number.
+  it('the vote fix line says what the limit says: Nova takes no side, did not vote, join in accusing anyone or make any memory public', () => {
     const [message] = remote('I voted with the room.').structuralIssues;
-    expect(message.startsWith('Reporter-mode violation: "i voted".')).toBe(true);
-    expect(message).toContain("Nova takes no side in the verdict: Nova never votes, joins the room's accusation or exposes a memory (T8).");
+    expect(message).toBe('Reporter-mode violation: "i voted". Nova takes no side: Nova did not vote, did not join in accusing anyone and did not make any memory public. Rewrite the sentence without Nova in the vote, the accusation or the turning in of a memory. The vote was the players\', and nobody is named as having turned a memory in unless the evidence log or the director\'s words name them.');
     expect(message).not.toContain('accuses or exposes');
   });
 
@@ -1551,11 +1595,13 @@ describe('the fix lines follow the rules (phase 3, 3.4)', () => {
     expect(carried).toEqual([]);
   });
 
-  it('the remote fix line has exposures reach Nova by turn-in, never as tips', () => {
+  // Phase 18 (the read's part 5d): Nova was told what happened and does not write as an
+  // eyewitness, and the line cites no rule by number.
+  it('the remote fix line has Nova told what happened, never an eyewitness', () => {
     const [message] = remote('I was in the room when the vote turned.').structuralIssues;
     expect(message.startsWith('Reporter-mode violation (remote): "i was in the room".')).toBe(true);
-    expect(message).not.toMatch(/\btips?\b/i);
-    expect(message).toMatch(/turned in to Nova/);
+    expect(message).toContain('Nova was told what happened and does not write as an eyewitness.');
+    expect(message).not.toMatch(/\b[TC]\d{1,2}\b/);
   });
 
   it('the detective keeps its reporter-mode wording', () => {
@@ -1969,7 +2015,7 @@ describe('4.7a: each finding with its place', () => {
     expect(result.findings.filter((f) => f.kind === 'reporterMode')).toEqual([
       {
         kind: 'reporterMode', status: 'structural', place: { section: 'the-story', paragraph: 2 }, excerpt: 'I voted', message: result.structuralIssues[0],
-        line: '"I voted" has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.'
+        line: '"I voted" has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.'
       }
     ]);
   });
@@ -2248,13 +2294,13 @@ describe("4.10b: each finding carries the director's line for its place", () => 
       reportingMode: 'remote', contentBundle: storyWith(para('Then I voted with the room.'), para('I was in the room when it ended.'))
     }));
     expect(linesOf(remote, 'reporterMode')).toEqual([
-      [{ section: 'the-story', paragraph: 1 }, '"I voted" has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.'],
-      [{ section: 'the-story', paragraph: 2 }, '"I was in the room" puts the reporter in the room, but the reporter covered this session remotely.']
+      [{ section: 'the-story', paragraph: 1 }, '"I voted" has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.'],
+      [{ section: 'the-story', paragraph: 2 }, '"I was in the room" puts the reporter in the warehouse, but in this session the reporter was outside it.']
     ]);
     // 4.10c: the phrase as the article prints it, across two pieces.
     const across = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('The vote came and I'), para('voted again.')) }));
     expect(linesOf(across, 'reporterMode')).toEqual([
-      [null, '"I voted" (across two pieces) has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.']
+      [null, '"I voted" (across two pieces) has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.']
     ]);
   });
 
@@ -2263,8 +2309,8 @@ describe("4.10b: each finding carries the director's line for its place", () => 
       reportingMode: 'remote', contentBundle: storyWith(para('I was not in the room.'), para("I wasn't there when the vote came."))
     }));
     expect(linesOf(result, 'repeatedAbsence')).toEqual([
-      [{ section: 'the-story', paragraph: 1 }, '"I was not in the room" is one of 2 places the article says the reporter was not in the room; once, early, is enough.'],
-      [{ section: 'the-story', paragraph: 2 }, '"I wasn\'t there" is one of 2 places the article says the reporter was not in the room; once, early, is enough.']
+      [{ section: 'the-story', paragraph: 1 }, '"I was not in the room" is one of 2 places the article says the reporter was outside the warehouse. The players know that already.'],
+      [{ section: 'the-story', paragraph: 2 }, '"I wasn\'t there" is one of 2 places the article says the reporter was outside the warehouse. The players know that already.']
     ]);
   });
 
@@ -2354,7 +2400,7 @@ describe("4.10b: each finding carries the director's line for its place", () => 
       contentBundle: storyWith(para('I voted with the room.'), para('Marcus said they would pay.'))
     }));
     expect(linesOf(result, 'reporterMode')).toEqual([
-      [{ section: 'the-story', paragraph: 1 }, '"I voted" has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.']
+      [{ section: 'the-story', paragraph: 1 }, '"I voted" has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.']
     ]);
     expect(linesOf(result, 'npcPronouns')).toEqual([
       [null, '"Marcus said they would pay" gives Marcus the wrong pronoun: Marcus takes he/him.']
@@ -2405,7 +2451,8 @@ describe("4.5f: the vote fix line reads the director's words for who turned a me
       contentBundle: { headline: { main: 'h', deck: 'd' }, sections: [{ id: 'lede', type: 'narrative', content: [{ type: 'paragraph', text: 'I voted with the room.' }] }], evidenceCards: [] }
     })).structuralIssues;
     expect(message.startsWith('Reporter-mode violation: "i voted".')).toBe(true);
-    expect(message.endsWith("an exposure stays anonymous unless the evidence log or the director's words name who turned it in.")).toBe(true);
+    // Phase 18 (the read's part 5d): in the limit's words.
+    expect(message.endsWith("nobody is named as having turned a memory in unless the evidence log or the director's words name them.")).toBe(true);
     expect(message).not.toContain("the director's notes");
   });
 });
@@ -2443,7 +2490,7 @@ describe('4.10c: each line says exactly what the article prints', () => {
       [{ section: 'the-story', paragraph: 1 }, 'This paragraph has 2 em-dashes outside quoted speech; house style uses none.']
     ]);
     expect(result.advisoryWarnings.filter((w) => w.startsWith('Em-dash'))).toEqual([
-      'Em-dash in the narrator\'s prose: 2 em-dashes (in section "the-story", paragraph 1 twice). House style puts a comma, a colon or a full stop where an em-dash might go (C4).'
+      'Em-dash in the narrator\'s prose: 2 em-dashes (in section "the-story", paragraph 1 twice). House style puts a comma, a colon or a full stop where an em-dash might go.'
     ]);
   });
 
@@ -2468,7 +2515,7 @@ describe('4.10c: each line says exactly what the article prints', () => {
   });
 
   it('a phrase that runs across two pieces prints as the article prints it: from one paragraph to the next, and from the deck to a paragraph', () => {
-    const LINE = ' (across two pieces) has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.';
+    const LINE = ' (across two pieces) has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.';
     const paragraphs = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('The vote came and I'), para('voted again.')) }));
     expect(paragraphs.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line])).toEqual([
       [null, 'I voted', `"I voted"${LINE}`]
@@ -2498,8 +2545,8 @@ describe('4.10d: the reporter-mode phrases match words, not letters', () => {
   const para = (text) => ({ type: 'paragraph', text });
   /** Each reporter-mode finding as [its place, its excerpt, its line]. */
   const reporterFindings = (result) => result.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line]);
-  const VOTES = ' has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.';
-  const PRESENCE = ' puts the reporter in the room, but the reporter covered this session remotely.';
+  const VOTES = ' has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.';
+  const PRESENCE = ' puts the reporter in the warehouse, but in this session the reporter was outside it.';
 
   it('"Remi voted with the room.", and every other phrase whose letters a name holds: no finding', () => {
     [
@@ -2560,7 +2607,7 @@ describe('4.10e: the reporter-mode check reads the narrator\'s own words', () =>
   const para = (text) => ({ type: 'paragraph', text });
   /** Each reporter-mode finding as [its place, its excerpt, its line]. */
   const reporterFindings = (result) => result.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line]);
-  const VOTES = ' has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.';
+  const VOTES = ' has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.';
 
   it("a player's line quoted in a paragraph, in straight and curly quotation marks: no finding", () => {
     [
@@ -2604,7 +2651,7 @@ describe('4.10e: the reporter-mode check reads the narrator\'s own words', () =>
   it('"my votes" is one of the phrases', () => {
     const result = factCheckContentBundle(baseArgs({ contentBundle: storyWith(para('Both of my votes went to Mel.')) }));
     expect(reporterFindings(result)).toEqual([[{ section: 'the-story', paragraph: 1 }, 'my votes', `"my votes"${VOTES}`]]);
-    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "my votes"\. Nova takes no side in the verdict/)]);
+    expect(result.structuralIssues).toEqual([expect.stringMatching(/^Reporter-mode violation: "my votes"\. Nova takes no side: /)]);
     expect(result.reporterMode.violations).toEqual(['my votes']);
   });
 
@@ -2614,8 +2661,8 @@ describe('4.10e: the reporter-mode check reads the narrator\'s own words', () =>
       contentBundle: storyWith(para("Kai wasn't there at noon, and I wasn't there either."), para('I was not in the room.'))
     }));
     expect(result.findings.filter((f) => f.kind === 'repeatedAbsence').map((f) => [f.place, f.excerpt, f.line])).toEqual([
-      [{ section: 'the-story', paragraph: 1 }, "I wasn't there", '"I wasn\'t there" is one of 2 places the article says the reporter was not in the room; once, early, is enough.'],
-      [{ section: 'the-story', paragraph: 2 }, 'I was not in the room', '"I was not in the room" is one of 2 places the article says the reporter was not in the room; once, early, is enough.']
+      [{ section: 'the-story', paragraph: 1 }, "I wasn't there", '"I wasn\'t there" is one of 2 places the article says the reporter was outside the warehouse. The players know that already.'],
+      [{ section: 'the-story', paragraph: 2 }, 'I was not in the room', '"I was not in the room" is one of 2 places the article says the reporter was outside the warehouse. The players know that already.']
     ]);
   });
 });
@@ -2637,7 +2684,7 @@ describe('4.10f: one quoted-span rule, straight single quotation marks included'
   const para = (text) => ({ type: 'paragraph', text });
   /** Each reporter-mode finding as [its place, its excerpt, its line]. */
   const reporterFindings = (result) => result.findings.filter((f) => f.kind === 'reporterMode').map((f) => [f.place, f.excerpt, f.line]);
-  const VOTES = ' has the reporter take a side in the verdict: the reporter never votes, joins the room\'s accusation or exposes a memory.';
+  const VOTES = ' has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.';
   const NARRATORS_VOTE = [[{ section: 'the-story', paragraph: 1 }, 'I voted', `"I voted"${VOTES}`]];
   const absenceAdvisories = (result) => result.advisoryWarnings.filter((w) => w.startsWith('Absence stated '));
   /** Each absence finding as [its place, its excerpt]. */

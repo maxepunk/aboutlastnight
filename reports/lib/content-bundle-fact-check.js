@@ -1536,10 +1536,11 @@ function factCheckContentBundle({
       .forEach(({ place, excerpt, editId }) => found('reporterMode', editId ? 'advisory' : 'structural', place, excerpt,
         editId ? concerns.get(editId) : message, lineOf(place ? quoted(excerpt) : `${quoted(excerpt)} (across two pieces)`), editId));
   };
-  // Brief 4.10b: the director's lines say what T8 asks of the reporter in either theme.
-  // Phases 14 and 15, brief F (T8 as rewritten): the reporter takes no side in the verdict.
-  const votesLine = (phrase) => `${phrase} has the reporter take a side in the verdict: the reporter never votes, joins the room's accusation or exposes a memory.`;
-  const presenceLine = (phrase) => `${phrase} puts the reporter in the room, but the reporter covered this session remotely.`;
+  // Brief 4.10b: the director's lines say what the limit asks of the reporter, in either theme.
+  // Phases 14 and 15, brief F: the reporter takes no side in the verdict. Phase 18 (the read's
+  // part 5d): in the limits' words, the warehouse in place of the room.
+  const votesLine = (phrase) => `${phrase} has the reporter take a side: the reporter does not vote, join in accusing anyone or make a memory public.`;
+  const presenceLine = (phrase) => `${phrase} puts the reporter in the warehouse, but in this session the reporter was outside it.`;
 
   for (const phrase of NEVER_VOTES) {
     if (wholePhrase(phrase).test(normProse)) {
@@ -1550,12 +1551,13 @@ function factCheckContentBundle({
       // turned a memory in is named by the evidence log or the director's words, as the
       // article judge's T6 clause reads them since 4.7d (T1). Phases 14 and 15, brief F (R9;
       // spec 11): T8 as rewritten, Nova takes no side in the verdict in either mode; the
-      // prefix stays, since the console groups by it.
+      // prefix stays, since the console groups by it. Phase 18 (the read's part 5d; R9): what
+      // follows the prefix is the limit's words, with no rule number.
       reporterHit(phrase, journalist
-        ? `Reporter-mode violation: "${phrase}". Nova takes no side in the verdict: Nova never votes, joins ` +
-          `the room's accusation or exposes a memory (T8). Rewrite the ` +
-          `sentence without Nova in the vote or the exposure: the vote is the room's, and an exposure stays ` +
-          `anonymous unless the evidence log or the director's words name who turned it in.`
+        ? `Reporter-mode violation: "${phrase}". Nova takes no side: Nova did not vote, did not join ` +
+          `in accusing anyone and did not make any memory public. Rewrite the sentence without Nova in ` +
+          `the vote, the accusation or the turning in of a memory. The vote was the players', and nobody ` +
+          `is named as having turned a memory in unless the evidence log or the director's words name them.`
         : `Reporter-mode violation: "${phrase}". The reporter covers the room, they are not a member ` +
           `of it — they never vote and no exposed memory is theirs. Attribute the action to whoever took it.`,
         votesLine
@@ -1568,13 +1570,14 @@ function factCheckContentBundle({
         // Phase 3 (3.4): exposed memories reach Nova by turn-in, never as tips (spec T6, T8).
         // Phase 3 (3.9): the remote mode block of round 7 (R13): Nova never claims to have
         // seen or heard the room, and the event is told as a scene, attributed where it
-        // matters, not sourced sentence by sentence.
+        // matters, not sourced sentence by sentence. Phase 18 (the read's part 5d; R9): the
+        // limit's words. Nova was told and did not see, and names who told Nova only when the
+        // director's notes say.
         reporterHit(phrase, journalist
-          ? `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: Nova ` +
-            `monitored from outside the warehouse and never claims to have seen or heard the room (T8). Tell ` +
-            `the moment as a scene, with attribution where it matters: a line someone was overheard saying, a ` +
-            `claim about a person. Exposed memories were turned in to Nova directly, and a person is named as ` +
-            `Nova's source only where the record names them.`
+          ? `Reporter-mode violation (remote): "${phrase}". In this session Nova was outside the warehouse ` +
+            `and saw and heard nothing inside it. Nova was told what happened and does not write as an ` +
+            `eyewitness. Tell the moment as something Nova was told, and name the person who told Nova only ` +
+            `when the director's notes say who it was.`
           : `Reporter-mode violation (remote): "${phrase}". This session was covered remotely: every ` +
             `exposure, observation and the verdict arrived as a tip from someone who was there. Show ` +
             `where each fact came from by attributing it to the people who told you, and state your ` +
@@ -1587,13 +1590,15 @@ function factCheckContentBundle({
     // 'repeatedAbsence' — ADVISORY (FACT_CHECK_ADVISORY_ONLY): one statement of
     // the absence is allowed. Phase 3 (3.9): for the journalist, as the remote mode
     // block of round 7 says (R13): once, early, and the room's events told as scenes
-    // after it. The detective keeps its line.
+    // after it. The detective keeps its line. Phase 18 (the read's part 5d; R9): the players
+    // know where Nova was, so it comes up only when something Nova tells them depends on it.
+    // The count that triggers the advisory stays more than one.
     const absences = findAbsenceStatements(narratorText(bundle));
     if (absences.length > 1) {
       const message =
         `Absence stated ${absences.length} times (remote): ${absences.map(a => `"${a.statement}"`).join(', ')}. ` +
         (journalist
-          ? `Nova says so once, early; after that, the room's events are told as scenes (T8).`
+          ? `The players know where Nova was. It comes up only when something Nova is telling them depends on it.`
           : `Say that you were not in the room at most once in the whole article, or not at all; ` +
             `everywhere else, show where each fact came from by attributing it to the people who told you.`);
       advisoryWarnings.push(message);
@@ -1604,7 +1609,7 @@ function factCheckContentBundle({
       for (const segment of narratorSegments(bundle)) {
         for (const { excerpt: shown } of findAbsenceStatements(segment.text)) {
           found('repeatedAbsence', 'advisory', segment.place, shown, message,
-            `${quoted(shown)} is one of ${absences.length} places the article says the reporter was not in the room; once, early, is enough.`);
+            `${quoted(shown)} is one of ${absences.length} places the article says the reporter was outside the warehouse. The players know that already.`);
         }
       }
     }
@@ -1664,10 +1669,10 @@ function factCheckContentBundle({
       const message = given.size === 0
         ? `Pronoun error: ${entry.name} has no pronoun in the record (neither the director's notes nor the ` +
           `roster give one), but the article writes "${hit.excerpt}" (in ${hit.where}). Write ${entry.name} ` +
-          `by name (T9).`
+          `by name.`
         : `Pronoun error: ${entry.name} takes only the pronoun the director's notes or the roster give, but ` +
           `the article writes "${hit.excerpt}" (in ${hit.where}). Use the pronoun the record gives, or write ` +
-          `${entry.name} by name (T9).`;
+          `${entry.name} by name.`;
       advisoryWarnings.push(message);
       const shown = printedExcerpt(hit.original, hit.matched);
       found('npcPronouns', 'advisory', hit.place, shown, message, given.size === 0
@@ -1681,7 +1686,7 @@ function factCheckContentBundle({
     if (novaHit) {
       const message =
         `Gendered pronoun for Nova: "${novaHit.excerpt}" (in ${novaHit.where}). Nova writes in the first ` +
-        `person and is otherwise "Nova", never a gendered pronoun (T9).`;
+        `person and is otherwise "Nova", never a gendered pronoun.`;
       advisoryWarnings.push(message);
       const shown = printedExcerpt(novaHit.original, novaHit.matched);
       found('novaPronoun', 'advisory', novaHit.place, shown, message,
@@ -1699,7 +1704,7 @@ function factCheckContentBundle({
       const message =
         `Em-dash in the narrator's prose: ${total} em-dash${total === 1 ? '' : 'es'} ` +
         `(${dashes.map(d => `in ${d.where}${times(d.n)}`).join('; ')}). House style puts a comma, a ` +
-        `colon or a full stop where an em-dash might go (C4).`;
+        `colon or a full stop where an em-dash might go.`;
       advisoryWarnings.push(message);
       for (const { segment, n } of dashes) {
         found('emDash', 'advisory', segment.place, printedExcerpt(segment.original, windowAround(segment.text, segment.text.indexOf('—'), 1)), message,
@@ -1721,8 +1726,8 @@ function factCheckContentBundle({
     }
     if (production.length > 0) {
       const message =
-        `Production word in print: ${production.map(hit => hit.text).join('; ')}. The article speaks the fiction's own words ` +
-        `(T14): rewrite each line in the world's terms.`;
+        `Production word in print: ${production.map(hit => hit.text).join('; ')}. The article uses the story's own words: ` +
+        `rewrite each line in them.`;
       advisoryWarnings.push(message);
       for (const hit of production) {
         found('productionWords', 'advisory', hit.place, hit.excerpt, message,
@@ -1745,8 +1750,8 @@ function factCheckContentBundle({
       const fmt = (n) => n.toLocaleString('en-US');
       const message =
         `Over length: the narrator's prose (headline, deck and paragraphs) runs ${fmt(totalWords)} words, above ` +
-        `the ${fmt(LENGTH_FLAG_WORDS)}-word flag for an article of about ${fmt(LENGTH_TARGET_WORDS)} words (C4): ` +
-        `${[...bySection].map(([key, n]) => `${key} ${fmt(n)}`).join(', ')}. Cut what the thesis does not need.`;
+        `the ${fmt(LENGTH_FLAG_WORDS)}-word flag for an article of about ${fmt(LENGTH_TARGET_WORDS)} words: ` +
+        `${[...bySection].map(([key, n]) => `${key} ${fmt(n)}`).join(', ')}. Cut what the argument does not need.`;
       advisoryWarnings.push(message);
       // Each section's words, by its place (brief 4.10b: the section's part of the line). Brief
       // 4.10c: the words counted are the article's words of prose, never a card's, a quote's or
@@ -1794,7 +1799,7 @@ function factCheckContentBundle({
         const reporterNote = `${amongThem}${notCounted(' on it')}`;
         const message =
           `Head count: ${counts.map(hit => hit.text).join('; ')}, but the roster lists ${names.length} players at the investigation` +
-          `${reporterNote}. The head count is the players at the investigation (T10).`;
+          `${reporterNote}. The head count is the players at the investigation.`;
         advisoryWarnings.push(message);
         const reporterLine = `${amongThem}${notCounted('')}`;
         for (const hit of counts) {
