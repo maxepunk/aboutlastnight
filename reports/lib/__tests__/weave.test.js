@@ -189,7 +189,11 @@ describe("the weave's shape (WEAVE_SCHEMA), on a weave in 100226's shape", () =>
   it('every description in the schema is free of an em-dash and names no theme', () => {
     const text = JSON.stringify(WEAVE_SCHEMA);
     expect(text).not.toMatch(/[–—]/);
-    expect(text).not.toMatch(/Nova|NovaNews|detective/i);
+    // Phase 18 (B, R17): "where it ends up" is Nova's answer to the question, in the read's words.
+    // Nova is the one name the schema's descriptions carry, in that line alone.
+    expect(text.match(/Nova/g)).toHaveLength(1);
+    expect(WEAVE_SCHEMA.properties.angles.items.properties.ends.description).toBe("Where it ends up: Nova's answer to the question, in one line");
+    expect(text).not.toMatch(/NovaNews|detective/i);
     expect(text).not.toMatch(/named exactly|receipt/i);
   });
 });
@@ -451,7 +455,7 @@ describe('the weave checks (checkWeave)', () => {
     it("fires on an angle that leaves out the verdict's thread, at that angle's place", () => {
       const failures = check(withAngle('a2', (a) => ({ ...a, threads: ['t4', 't5'] })));
       expect(failures.map((f) => [f.type, f.place])).toEqual([['angle-without-verdict', 'angles[#a2]']]);
-      expect(failures[0].message).toMatch(/^The angle "The Plan to Replace the Founder Outlives the Verdict" leaves out "The case against Rowan", the thread that carries the room's verdict/);
+      expect(failures[0].message).toMatch(/^The angle "The Plan to Replace the Founder Outlives the Verdict" leaves out "The case against Rowan", the thread that carries the verdict\. Put it in every angle\.$/);
     });
 
     it("is silent when every angle tells the verdict's thread, wherever it falls", () => {
@@ -600,6 +604,18 @@ describe("each failure says what is wrong to the director in plain words (its li
     expect(lineOf('duplicate-id', 'connections[#c2]')).toBe('The writer gave the connections "The scoreboard brings the money into the vote." and "The scoreboard again." one id, so the meeting cannot change them.');
     expect(lineOf('duplicate-id', 'questions[#q1]')).toMatch(/^The writer gave the questions ".*" and "Another question under the same id\?" one id\.$/);
     expect(lineOf('over-length', undefined)).toBe("The writer's part of the meeting runs to 300 words, past the 262 it may use.");
+  });
+
+  // Phase 18 (B; the read, part 5d): the messages a weave rework reads end at the fix each gives,
+  // and cite no rule by number or by file.
+  it('the angle count, the missing verdict and the verdict thread messages say the read\'s words', () => {
+    const count = check({ ...clone(WEAVE), angles: [clone(WEAVE).angles[0]] }).find((f) => f.type === 'angle-count');
+    expect(count.message).toBe("The weave pitches 1 angle. Pitch two or three angles, each a different story told through the weave's threads.");
+    const without = check(withAngle('a2', (a) => ({ ...a, threads: ['t4', 't5'] }))).find((f) => f.type === 'angle-without-verdict');
+    expect(without.message).toBe('The angle "The Plan to Replace the Founder Outlives the Verdict" leaves out "The case against Rowan", the thread that carries the verdict. Put it in every angle.');
+    const none = check(withThread('t1', ({ verdict: _v, ...t }) => t)).find((f) => f.type === 'no-verdict-thread');
+    expect(none.message).toBe('No thread carries the verdict. Mark the thread that tells the verdict with "verdict": true, and put it in every angle.');
+    for (const failure of [count, without, none]) expect(failure.message).not.toMatch(/\b[TC]\d{1,2}\b|<craft-/);
   });
 
   it("an angle without the verdict's thread, an angle count outside two or three, and a weave with no threads each have their line", () => {

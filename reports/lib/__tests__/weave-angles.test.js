@@ -186,6 +186,9 @@ describe('the checks on the angles (spec 9.1; R4)', () => {
     const [failure] = failuresOf(weave, 'question-too-long');
     expect(failure.place).toBe('questions[#q1]');
     expect(failure.message).toContain('79');
+    // Phase 18 (B; the read, part 5d): the message ends at the fix it gives, citing no rule.
+    expect(failure.message.endsWith('Ask it in one or two short sentences, with a line on what its answer changes.')).toBe(true);
+    expect(failure.message).not.toMatch(/\b[TC]\d{1,2}\b|<craft-/);
   });
 
   // Fix round 1, finding 5: code keeps an answered question's words whatever a rework writes

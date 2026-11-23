@@ -307,7 +307,7 @@ describe('the arc reworker carries the writer\'s OUTPUT FORMAT with the field', 
     const { WEAVE_QUESTIONS_PROPERTY } = require('../writer-questions');
     const prompt = arcNodes._testing.buildArcRevisionPrompt(reworkFixtureState('journalist'), 'CTX', 'PREV');
     expect(prompt).toContain('  "questions": []\n}\n');
-    expect(prompt).toContain('"questions" stays [] unless the record leaves something only the director can settle (C15). Each entry:\n{ "id": "q1", "kind": "player" | "pronoun" | "figure", ');
+    expect(prompt).toContain('"questions" stays [] unless the record leaves something only the director can settle. Each entry:\n{ "id": "q1", "kind": "player" | "pronoun" | "figure", ');
     expect(prompt).toContain(`"about": ${JSON.stringify(WEAVE_QUESTIONS_PROPERTY.items.properties.about.description)}, `);
     expect(prompt).not.toContain('writerQuestions');
   });

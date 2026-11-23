@@ -25,16 +25,16 @@ const { EVIDENCE_PIECE_SCHEMA } = require('../evidence');
  * 4.13), so this text names no narrator, publication or form of output.
  */
 const WEAVE_SYSTEM_PROMPT = `YOUR ROLE:
-Read the record and the director's account of the room, find the threads of the session's story, and pitch the angles the article could take, each a story told through those threads. The director reads the angles at the story meeting, picks one, changes what they choose, and settles it; every later writer works from the angle the director settles.`;
+Read the record and the director's account of the session, find the threads of the session's story, and pitch the angles the article could take, each a story told through those threads. The director reads the angles at the story meeting, picks one, changes what they choose, and settles it; every later writer works from the angle the director settles.`;
 
-/** Each printed field of an angle (lib/weave.js ANGLE_FIELDS), with what it holds and the rule item that governs it. */
+/** Each printed field of an angle (lib/weave.js ANGLE_FIELDS), with what it holds. */
 const ANGLE_FIELD_SCHEMAS = {
   headline: { type: 'string', description: 'The headline the article would print for this angle' },
   gist: { type: 'string', description: 'One sentence that sums the angle up, for its card' },
-  story: { type: 'string', description: 'The story, in two or three sentences (C1)' },
-  question: { type: 'string', description: 'The question the story carries through the article (C1)' },
-  lands: { type: 'string', description: 'Why it lands with the players, in one line (C1)' },
-  ends: { type: 'string', description: 'Where it ends up, its convergence, in one line (C16)' }
+  story: { type: 'string', description: 'The story, in two or three sentences' },
+  question: { type: 'string', description: 'The question the article asks near its top and answers at its end' },
+  lands: { type: 'string', description: 'Why it lands with the players, in one line' },
+  ends: { type: 'string', description: "Where it ends up: Nova's answer to the question, in one line" }
 };
 
 /**
@@ -52,13 +52,13 @@ const WEAVE_SCHEMA = {
   properties: {
     angles: {
       type: 'array',
-      description: 'Two or three angles, each a different story the article could tell (C1)',
+      description: 'Two or three angles, each a different story the article could tell',
       items: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'A short id, unique in the weave' },
           ...Object.fromEntries(ANGLE_FIELDS.map((field) => [field, ANGLE_FIELD_SCHEMAS[field]])),
-          threads: { type: 'array', items: { type: 'string' }, description: 'The ids of the threads the angle tells, in the order it tells them (C16)' }
+          threads: { type: 'array', items: { type: 'string' }, description: 'The ids of the threads the angle tells, in the order it tells them' }
         },
         required: ['id', ...ANGLE_FIELDS, 'threads']
       }
@@ -69,14 +69,14 @@ const WEAVE_SCHEMA = {
     },
     threads: {
       type: 'array',
-      description: 'The threads every angle draws on, each named for what happened and said in one line in story terms, with its evidence underneath (C16)',
+      description: 'The threads every angle draws on, each named for what happened and said in one line in plain words, with its evidence underneath',
       items: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'A short id, unique in the weave' },
-          name: { type: 'string', description: 'What happened, with its people, in a few plain words (C16)' },
-          line: { type: 'string', description: 'The thread in one line, in story terms' },
-          verdict: { type: 'boolean', description: "true on the thread that carries the room's verdict" },
+          name: { type: 'string', description: 'What happened, with its people, in a few plain words' },
+          line: { type: 'string', description: 'The thread in one line, in plain words' },
+          verdict: { type: 'boolean', description: "true on the thread that carries the verdict" },
           evidence: { type: 'array', items: EVIDENCE_PIECE_SCHEMA, description: 'The pieces of the record that tell the thread' }
         },
         required: ['id', 'name', 'line', 'evidence']
@@ -84,15 +84,15 @@ const WEAVE_SCHEMA = {
     },
     connections: {
       type: 'array',
-      description: 'Where two threads touch, the touches an angle turns on (C16)',
+      description: 'Where two threads connect: the connections an angle depends on',
       items: {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'A short id, unique in the weave' },
           joins: { type: 'array', items: { type: 'string' }, description: 'The ids of the two threads it joins' },
-          line: { type: 'string', description: 'Where the two threads touch, in one line in story terms' },
+          line: { type: 'string', description: 'Where the two threads connect, in one line in plain words' },
           kind: { type: 'string', enum: [...CONNECTION_KINDS], description: 'What the two threads share' },
-          evidence: { type: 'array', items: EVIDENCE_PIECE_SCHEMA, description: 'The pieces of the record that show the two threads touch' }
+          evidence: { type: 'array', items: EVIDENCE_PIECE_SCHEMA, description: 'The pieces of the record that show the two threads connect' }
         },
         required: ['id', 'joins', 'line', 'kind', 'evidence']
       }

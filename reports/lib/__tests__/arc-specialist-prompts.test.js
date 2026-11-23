@@ -177,7 +177,7 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     // Phase 3 (3.3): the section is the whole record view, its intro counting the documents.
     // Phases 14 and 15 (brief E, R8): the investigation's timeline. No character sheet is ever
     // in the record (the director's ruling, 2026-10-10), so every document is whole.
-    expect(section3).toContain("The 1 exposed memories and 2 paper documents in full, then the investigation's timeline");
+    expect(section3).toContain("The 1 memories that were made public and 2 paper documents in full, then the investigation's timeline");
   });
 
   it('the sales appear once, on the record view\'s morning timeline (phase 3, 3.3)', () => {
@@ -497,24 +497,27 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       expect(count(prompt, craft)).toBe(1);
       expect(restated(prompt, craft)).toEqual([]);
       const section = prompt.slice(prompt.indexOf('## SECTION 3: THE WEAVE'), prompt.indexOf('## SECTION 4'));
-      // Brief 4.5 (ruling 10): the task names the fields and points at C1 and C16 for the rest.
-      // Phase 4b (brief 1B): C16 sets out the level of the story and the evidence under each line too.
-      // Piece 3 (brief 3B): C1 sets out the angles, and C16 where each angle ends up.
-      expect(section).toContain('C1 (<craft-story>) sets out the angles');
-      expect(section).toContain('C16 (<craft-story>) sets out the threads, the connections, where each angle ends up, the level of the story every line keeps and the evidence under each line');
+      // Brief 4.5 (ruling 10): the task names the fields and points at the weave writer's own part
+      // for the rest. Phase 18 (B; the read, part 2): it points at <job-weave> by name, by no rule's number.
+      expect(section).toContain('<job-weave> below says what an angle, a thread and a connection are, and how each line is said. The fields hold them:');
+      expect(section).not.toMatch(/\b[TC]\d{1,2}\b|<craft-/);
       expect(prompt.replace(craft, '')).not.toMatch(/analysisNotes|"financial"|"behavioral"|"victimization"/);
     });
 
-    // Phase 4 (brief 4.4): the weave's schema names C16 for its threads, connections and
-    // convergence, and restates none of it.
-    // Piece 3 (brief 3B): the convergence is each angle's `ends`.
-    it('the schema descriptions refer to C16 for the threads and the convergence, and restate neither', () => {
+    // Phase 4 (brief 4.4): the weave's schema restates none of the lens work for its threads,
+    // connections and convergence. Piece 3 (brief 3B): the convergence is each angle's `ends`.
+    // Phase 18 (B; the read, part 5b): no description of the weave cites a rule by number. The
+    // evidence piece's `card` description is the record's (E's) and keeps its own wording here.
+    it('the schema descriptions cite no rule by number and restate no lens work', () => {
       const { threads, connections } = WEAVE_SCHEMA.properties;
       const { ends } = WEAVE_SCHEMA.properties.angles.items.properties;
       for (const field of [threads, connections, ends]) {
-        expect(field.description).toMatch(/\(C16\)/);
         expect(field.description).not.toMatch(/verdict|culmination|thesis|near (its|the) end|end of the article/);
       }
+      const { WEAVE_QUESTIONS_PROPERTY } = require('../writer-questions');
+      const own = JSON.stringify(WEAVE_SCHEMA).replace(/\(C9\)/g, '');
+      expect(own).not.toMatch(/\b[TC]\d{1,2}\b/);
+      expect(JSON.stringify(WEAVE_QUESTIONS_PROPERTY)).not.toMatch(/\b[TC]\d{1,2}\b/);
       expect(JSON.stringify(WEAVE_SCHEMA)).not.toMatch(/murder|maximum/i);
     });
 
@@ -580,16 +583,17 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     });
   });
 
-  describe("the director's notes, under T1", () => {
-    // Task 3.10 (spec R12; rule-text read 2, section D): backstory in the notes is what
-    // Nova knows but the record cannot back, T1's third point. "Reading" is retired as
-    // the rules' word for Nova's inference: it came back as a tic in print.
-    it("the label names the notes T1's record for the room and backstory in them T1's third point, and restates no rule", () => {
+  describe("the director's notes' label", () => {
+    // Task 3.10 (spec R12): "Reading" is retired as the rules' word for Nova's inference: it
+    // came back as a tic in print. Phase 18 (B; the read, part 5a): the label says what the
+    // notes are (what people did and said in the warehouse) and where backstory in them falls.
+    it("the label names the notes what people did and said in the warehouse, says where backstory falls, and cites no rule", () => {
       const state = journalistState();
       const prompt = buildWeaveSections(state);
       const label = prompt.slice(prompt.indexOf("### The Director's Notes"), prompt.indexOf('<DIRECTOR_NOTES>'));
-      expect(label).toMatch(/^### The Director's Notes \(the record for the room, under T1\)$/m);
-      expect(label).toMatch(/[Bb]ackstory[^.]*what Nova knows but the record cannot back: T1's third point\./);
+      expect(label).toMatch(/^### The Director's Notes \(what people did and said in the warehouse\)$/m);
+      expect(label).toContain('is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.');
+      expect(label).not.toMatch(/\b[TC]\d{1,2}\b|the room/);
       expect(label).not.toMatch(/\breading\b/i);
       expect(prompt).not.toMatch(/ground truth/i);
       // T1 says how the room's record and what the record cannot back are written, and
@@ -606,7 +610,7 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     it('the label is ARC_NOTES_LABEL, the one text the arc writer prints and the arc judge imports', () => {
       const { ARC_NOTES_LABEL } = arcModule;
       expect(typeof ARC_NOTES_LABEL).toBe('string');
-      expect(ARC_NOTES_LABEL).toMatch(/^The Director's Notes \(the record for the room, under T1\)\n[Bb]ackstory[^.]*what Nova knows but the record cannot back: T1's third point\.$/);
+      expect(ARC_NOTES_LABEL).toBe("The Director's Notes (what people did and said in the warehouse)\nBackstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.");
       expect(ARC_NOTES_LABEL).not.toContain("Nova's reading");
       const prompt = buildWeaveSections(journalistState());
       expect(count(prompt, ARC_NOTES_LABEL)).toBe(1);

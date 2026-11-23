@@ -483,11 +483,20 @@ const REPO = path.join(__dirname, '..', '..');
  *   (-242), the map writer's seven to <brief> and <job-map> (-289), the article writer's eight to
  *   <brief> and <job-article> (-336). arcs-journalist 12319 -> 12064 (-255), outline-journalist
  *   25519 -> 25217 (-302), article-journalist 36377 -> 36028 (-349). Nothing else in a render moves.
+ * - Phase 18, slice B (the read, parts 2, 5a and 5b; R17), the weave writer's prompt. The task
+ *   points at <job-weave> in place of C1, C15 and C16 and says "the verdict" for "the room's
+ *   verdict"; the heading of section 1 says "the players", the heading of section 4 "the brief and
+ *   your part"; the label over the director's notes says what the notes are and where backstory
+ *   falls; the record's opening line says "memories that were made public" and "memory turned in";
+ *   the roster's line and the role line lose "the room"; the questions' format line and the
+ *   field descriptions lose their rule numbers; and the format's question, where it ends up and
+ *   connection's line take the read's wording. arcs-journalist 12064 -> 12135 (+71), a79ae324.
+ *   outline-journalist and article-journalist do not move.
  */
 const PINNED = {
   'outline-journalist': ['4c0ed98db0e86521a72301be750d2dfb4b68d43a3b4e8be5363af35b41b00192', 25217],
   'article-journalist': ['b02351b6293ac65d33b6c3e028cda3470d6c99b22a888d210d4360db2565b1d1', 36028],
-  'arcs-journalist': ['087cc063121c6f55e865a92fb603ed645739f2eaabe0be2e2c859377e11fba50', 12064]
+  'arcs-journalist': ['a79ae324351e3b0c356a129f867c1352e2390e0187cf82ab9d26507dd3862912', 12135]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

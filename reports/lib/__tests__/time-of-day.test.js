@@ -132,7 +132,7 @@ describe('no code-built label fixes the morning (R8)', () => {
   it("opens the weave writer's SECTION 2 on the investigation's timeline", () => {
     const sections = buildWeaveSections(eveningState());
     const line = sections.slice(sections.indexOf('## SECTION 2: THE RECORD\n\n')).split('\n')[2];
-    expect(line).toBe("The 2 exposed memories and 2 paper documents in full, then the investigation's timeline: every sale, exposure, bonus and transfer, in time order.");
+    expect(line).toBe("The 2 memories that were made public and 2 paper documents in full, then the investigation's timeline: every sale, memory turned in, bonus and transfer, in time order.");
   });
 
   it('says the money summary\'s total is what the buyer paid out during the investigation', () => {

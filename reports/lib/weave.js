@@ -66,7 +66,7 @@ const PICKED_KEY = 'picked';
 
 /**
  * The words a question may use across its `about`, `question` and `changes` together (R4; spec
- * 9.1): one or two short sentences and a line on what its answer changes (C15). On 100326 one
+ * 9.1): one or two short sentences and a line on what its answer changes. On 100326 one
  * question ran to 79.
  */
 const QUESTION_WORD_BOUND = 40;
@@ -945,11 +945,11 @@ function elementPlace(collection, element) {
  *   of angles, the page's length and a verdict no thread carries) sits at the top of the page.
  *
  * In the order the meeting prints the weave:
- * - the writer pitches two or three angles (`angle-count`; C1);
+ * - the writer pitches two or three angles (`angle-count`);
  * - each angle has every field, its headline, card line, story, question, why it lands, where it
  *   ends up and at least one thread (`angle-incomplete`); names only threads the weave holds
  *   (`angle-names-unknown-thread`); and holds the thread that carries the room's verdict
- *   (`angle-without-verdict`; C16, T2);
+ *   (`angle-without-verdict`);
  * - each of the writer's lines is in story terms (`story-terms`; lib/evidence.js
  *   storyTermsProblems: no document id, quotation, clock time or money figure): each angle's card
  *   line, story, question, why it lands and where it ends up, each thread's name and line, and
@@ -975,7 +975,7 @@ function elementPlace(collection, element) {
  * - each question comes to at most QUESTION_WORD_BOUND words across what it is about, the
  *   question and what its answer changes (`question-too-long`; R4), and a question that sits
  *   beside a thread names one the weave holds (`question-thread-unknown`). One question per
- *   subject is the writer's rule (C15), not a check's;
+ *   subject is the writer's rule, not a check's;
  * - the writer's own words on the meeting's page stay within the words it may use with each angle
  *   open (`over-length`; R5; lib/word-count.js pageLengthOf's rule): the check node counts the
  *   page of the writer's share (writersShareOf) once with each angle open, with lib/stop-pages.js
@@ -1048,7 +1048,7 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
   // verdict's among them.
   if (angles.length < 2 || angles.length > 3) {
     const pitched = `${angles.length} ${angles.length === 1 ? 'angle' : 'angles'}`;
-    fail('angle-count', `The weave pitches ${pitched}. Pitch two or three angles, as C1 (<craft-story>) sets out, each a different story told through the weave's threads.`,
+    fail('angle-count', `The weave pitches ${pitched}. Pitch two or three angles, each a different story told through the weave's threads.`,
       `The writer pitched ${pitched}, and the meeting reads two or three.`);
   }
   angles.forEach((angle) => {
@@ -1078,7 +1078,7 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
     const missing = verdictThreads.filter((thread) => !named.includes(weaveIdOf(thread)));
     if (missing.length > 0) {
       const verdictNames = listOf(missing.map((thread) => `"${textOf(thread.name) || textOf(thread.line) || weaveIdOf(thread)}"`));
-      fail('angle-without-verdict', `${opening(words)} leaves out ${verdictNames}, the thread that carries the room's verdict. Put it in every angle, as C16 (<craft-story>) sets out.`,
+      fail('angle-without-verdict', `${opening(words)} leaves out ${verdictNames}, the thread that carries the verdict. Put it in every angle.`,
         `${opening(words)} leaves out ${verdictNames}, the thread that tells the room's verdict.`, place);
     }
     elementTerms(words, place, angle, ANGLE_STORY_FIELDS.filter((field) => !theirs(field)));
@@ -1149,7 +1149,7 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
   if (verdictThreads.length === 0) {
     const flagEdits = threads.map(thread => editOf(share.threadFields, `${weaveIdOf(thread)}.verdict`)).filter(Boolean);
     if (flagEdits.length > 0) concern('no-verdict-thread', flagEdits, "No thread carries the room's verdict.");
-    else fail('no-verdict-thread', 'No thread carries the room\'s verdict. Mark the thread that tells the verdict with "verdict": true, and put it in every angle (C16).', "No thread tells the room's verdict.");
+    else fail('no-verdict-thread', 'No thread carries the verdict. Mark the thread that tells the verdict with "verdict": true, and put it in every angle.', "No thread tells the room's verdict.");
   }
 
   objectsOf(weave.connections).forEach((connection) => {
@@ -1177,14 +1177,14 @@ function weaveFindings(weave, { evidence = null, directorWords = [], directorsSh
 
   // The questions (R4): each short, and beside a thread the weave holds when it names one. A
   // question the director has answered is not held to the bound (fix round 1, finding 5): code
-  // keeps its words whatever a rework writes (C15, lib/writer-questions.js carriedWeaveQuestions),
+  // keeps its words whatever a rework writes (lib/writer-questions.js carriedWeaveQuestions),
   // so no rework could shorten it, and the director has already read it.
   objectsOf(weave.questions).forEach((question) => {
     const words = questionWords(question);
     const place = elementPlace('questions', question);
     const count = ['about', 'question', 'changes'].reduce((sum, field) => sum + wordCount(textOf(question[field])), 0);
     if (count > QUESTION_WORD_BOUND && !isAnswered(question)) {
-      fail('question-too-long', `${opening(words)} runs to ${count} words across its about, question and changes, past the ${QUESTION_WORD_BOUND} a question may use. Ask it in one or two short sentences, with a line on what its answer changes, as C15 (<craft-questions>) sets out.`,
+      fail('question-too-long', `${opening(words)} runs to ${count} words across its about, question and changes, past the ${QUESTION_WORD_BOUND} a question may use. Ask it in one or two short sentences, with a line on what its answer changes.`,
         `${opening(words)} runs to ${count} words, past the ${QUESTION_WORD_BOUND} a question may use.`, place);
     }
     const beside = textOf(question[WEAVE_QUESTION_THREAD_KEY]);

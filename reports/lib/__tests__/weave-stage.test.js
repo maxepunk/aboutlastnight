@@ -114,7 +114,7 @@ describe('the arc writer writes one weave in one call', () => {
     expect(WEAVE_SYSTEM_PROMPT).not.toMatch(/roster member|placement|every player|each player|narrative arcs/i);
   });
 
-  it("the user prompt's output format and task describe the weave, and the task points at C1, C15 and C16", () => {
+  it("the user prompt's output format and task describe the weave, and the task points at <job-weave>", () => {
     const prompt = buildWeaveSections(weaveState());
     expect(prompt.startsWith('# The Weave\n')).toBe(true);
     const format = prompt.slice(prompt.indexOf('## OUTPUT FORMAT'), prompt.indexOf('## SECTION 1'));
@@ -129,7 +129,17 @@ describe('the arc writer writes one weave in one call', () => {
     expect(format).toContain('"supports" | "cuts-against"');
     expect(format).toContain('"player" | "pronoun" | "figure"');
     const task = prompt.slice(prompt.indexOf('## SECTION 3'), prompt.indexOf('## SECTION 4'));
-    ['C1', 'C15', 'C16'].forEach((item) => expect(task).toMatch(new RegExp(`\\b${item}\\b`)));
+    // Phase 18 (B; the read, part 2): the task points at <job-weave> by name, and cites no rule by number.
+    expect(task).toContain('<job-weave> below says what an angle, a thread and a connection are, and how each line is said.');
+    expect(task).toContain('**questions**: the questions <job-weave> allows, each with what its answer changes in print as "changes"');
+    expect(task).toContain("when angle 1 is the director's read, the words it rests on");
+    expect(task).toContain('The thread that carries the verdict has "verdict": true.');
+    expect(task).not.toMatch(/\b[TC]\d{1,2}\b|<craft-|the room/);
+    // R17: the format echoes three field descriptions in the read's shorter words.
+    expect(format).toContain('"question": "The question the article asks near its top and answers at its end"');
+    expect(format).toContain('"ends": "Where it ends up: Nova\'s answer to the question, in one line"');
+    expect(format).toContain('"line": "Where the two threads connect, in one plain line"');
+    expect(format).not.toMatch(/\b[TC]\d{1,2}\b/);
     expect(task).toContain(`comes to at most ${MEETING_WORD_BOUND} words`);
     // The old shape's words went: a claim, a receipt, a connection named exactly.
     expect(`${format}${task}`).not.toMatch(/\bclaim|\breceipt|named exactly|"detail"/i);

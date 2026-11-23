@@ -450,7 +450,7 @@ describe('presence lines outside the article prompt', () => {
     const { _testing: arcTesting } = require('../workflow/nodes/arc-specialist-nodes');
     const block = arcTesting.buildCharacterCategoriesBlock(['Vic'], 'journalist', []);
     expect(block).not.toContain('Nova observed them');
-    expect(block).toContain('how Nova learned of them is set by the reporting mode');
+    expect(block).toContain('the part about this session says how Nova knows what they did');
   });
 
   it('the photo enrichment examples make no first-person presence claim', async () => {

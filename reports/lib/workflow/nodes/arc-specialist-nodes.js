@@ -26,7 +26,7 @@
  * links the arc cards hid, the director's read of the session was filed as a caveat, and
  * the arc judge ran three times. Phase 4 replaces them with the weave: the long
  * write-ups, the interweaving call and the every-player rule at this stage went. Since phase
- * 4b, piece 3, the lens work (C16) reaches the meeting as the angles, each a different way the
+ * 4b, piece 3, the lens work reaches the meeting as the angles, each a different way the
  * threads make a story, and as evidence marked supporting its thread or cutting against it; the
  * roles, the main thread and the stronger main thread went. The detective's arc branches went
  * with them (ruling R1): its theme starts no session until it has its own stages.
@@ -157,19 +157,18 @@ function directorWordsOf(state) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The arc writer's label for the director's notes (phase 3, brief 3.3): T1's record for
- * the room, and the one mapping T1 does not state, where backstory in the notes falls.
- * Phase 3 (3.10; R12, rule-text read 2 section D): backstory is what Nova knows but the
- * record cannot back, T1's third point, which the label names and does not restate. The
- * writer prints it as its notes heading; the fact check (evaluator-nodes.js) prints it
- * too, so both name the notes in one text.
+ * The arc writer's label for the director's notes: what people did and said in the
+ * warehouse, and where backstory in the notes falls (not in the record, never stated as
+ * fact, open to what Nova suspects, asks or believes). The writer prints it as its notes
+ * heading; the fact check (evaluator-nodes.js) prints it too, so both name the notes in
+ * one text.
  */
-const ARC_NOTES_LABEL = `The Director's Notes (the record for the room, under T1)
-Backstory in the notes, what the director knows about the characters beyond what the session showed, is what Nova knows but the record cannot back: T1's third point.`;
+const ARC_NOTES_LABEL = `The Director's Notes (what people did and said in the warehouse)
+Backstory in the notes, what the director knows about the characters beyond what the session showed, is not in the record and did not happen in the warehouse. The article never states it as fact. It can appear as what Nova suspects, asks or believes.`;
 
 /**
  * The OUTPUT FORMAT line for the weave's questions: the list stays empty unless the record
- * leaves something only the director can settle (C15), then one entry's shape, its kinds, its
+ * leaves something only the director can settle, then one entry's shape, its kinds, its
  * `about` and its `thread` in the schema's own wording (WEAVE_QUESTIONS_PROPERTY), so the format
  * and the schema say one thing.
  *
@@ -177,7 +176,7 @@ Backstory in the notes, what the director knows about the characters beyond what
  */
 function weaveQuestionsFormatLine() {
   const { kind, about, [WEAVE_QUESTION_THREAD_KEY]: thread } = WEAVE_QUESTIONS_PROPERTY.items.properties;
-  return `"questions" stays [] unless the record leaves something only the director can settle (C15). Each entry:
+  return `"questions" stays [] unless the record leaves something only the director can settle. Each entry:
 { "id": "q1", "kind": ${kind.enum.map(value => JSON.stringify(value)).join(' | ')}, "about": ${JSON.stringify(about.description)}, "question": "The question for the director", "changes": "What its answer changes in print", "${WEAVE_QUESTION_THREAD_KEY}": ${JSON.stringify(thread.description)} }`;
 }
 
@@ -213,9 +212,9 @@ Return one JSON object in this shape:
       "headline": "The headline the article would print for this angle",
       "gist": "One sentence that sums the angle up, for its card",
       "story": "The story in two or three plain sentences, in the third person",
-      "question": "The question the story carries through the article",
+      "question": "The question the article asks near its top and answers at its end",
       "lands": "Why it lands with the players, in one line",
-      "ends": "Where it ends up, in one line",
+      "ends": "Where it ends up: Nova's answer to the question, in one line",
       "threads": ["t1", "t2"]
     }
   ],
@@ -235,7 +234,7 @@ Return one JSON object in this shape:
     {
       "id": "c1",
       "joins": ["t1", "t2"],
-      "line": "Where the two threads touch, in one plain line",
+      "line": "Where the two threads connect, in one plain line",
       "kind": ${alternatives(CONNECTION_KINDS)},
       "evidence": [
         ${evidencePieceFormat()}
@@ -250,10 +249,9 @@ ${weaveQuestionsFormatLine()}`;
 
 /**
  * The arc writer's task (phase 4, briefs 4.4 and 4.5; phase 4b, briefs 1B and 3B; spec 2026-10-06
- * sections 4, 5 and 9): which field holds what, and the page's bound. C1 states the angles; C16
- * the threads, the connections, where each angle ends up, the level of the story every line keeps
- * and the evidence under each line; C15 the questions. The task points at them and states only
- * what no rule says: what the director reads, the page with the labels code prints beside the
+ * sections 4, 5 and 9): which field holds what, and the page's bound. The weave writer's own part
+ * (<job-weave>) says what an angle, a thread and a connection are, and how each line is said;
+ * the task points at it and states only what it does not say: what the director reads, the page with the labels code prints beside the
  * writer's lines, at most MEETING_WORD_BOUND words with any angle open, and so about 325 words of
  * the writer's own (R5: the checks hold the writer's own words to the allowance lib/word-count.js
  * pageLengthOf's rule gives, never less than MEETING_WORD_FLOOR, 350, so 325 holds with the angle
@@ -264,14 +262,14 @@ ${weaveQuestionsFormatLine()}`;
  * "from your notes" holds, the verdict flag, where a piece names its sources, and the bound on a
  * question (R4: QUESTION_WORD_BOUND).
  */
-const WEAVE_TASK = `Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The page they read comes to at most ${MEETING_WORD_BOUND} words with any one angle open: your lines, without the evidence under them (the headline and card line of each angle that is not open; the open angle's pitch, its threads and the names of the threads it leaves out; the line of each connection between its threads; the questions), and what code prints around them (the verdict, the line that says the open angle is open below, the line that keeps the verdict's thread in, the labels over your lines, and a line when the notes end without the director's read). So your own lines come to about 325 words. C1 (<craft-story>) sets out the angles; C16 (<craft-story>) sets out the threads, the connections, where each angle ends up, the level of the story every line keeps and the evidence under each line. The fields hold them:
+const WEAVE_TASK = `Pitch two or three angles for the director to read in a few minutes at the story meeting and pick from. The page they read comes to at most ${MEETING_WORD_BOUND} words with any one angle open: your lines, without the evidence under them (the headline and card line of each angle that is not open; the open angle's pitch, its threads and the names of the threads it leaves out; the line of each connection between its threads; the questions), and what code prints around them (the verdict, the line that says the open angle is open below, the line that keeps the verdict's thread in, the labels over your lines, and a line when the notes end without the director's read). So your own lines come to about 325 words. <job-weave> below says what an angle, a thread and a connection are, and how each line is said. The fields hold them:
 
 - **angles**: each angle's **headline**, the article's own printed line; its **gist**, one sentence that sums it up for its card; its **story**, its **question**, why it **lands** with the players and where it **ends** up; and its **threads**, the ids of the threads it tells, in the order it tells them.
-- **fromYourNotes**: when angle 1 is the director's read (C1), the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. When every angle is your own, the field stays out.
-- **threads**: the one set of threads the angles draw on, each a **name** and one **line**. The thread that carries the room's verdict has "verdict": true.
+- **fromYourNotes**: when angle 1 is the director's read, the words it rests on: one unbroken passage, copied exactly from the notes or the corrections. When every angle is your own, the field stays out.
+- **threads**: the one set of threads the angles draw on, each a **name** and one **line**. The thread that carries the verdict has "verdict": true.
 - **evidence**: under each thread, the pieces of the record that tell it, and under each connection, the pieces that show the two threads touch; each piece with its **sources** from the Sources list, what it **shows**, and its **stance**. Each thread has at least one piece that supports it, so the map writer can tell it from the record.
 - **connections**: each one **line**, with the ids of the two threads it **joins** and its **kind**.
-- **questions**: C15's (<craft-questions>), each with what its answer changes in print as "changes", and the id of the thread it sits beside as "thread". Each comes to ${QUESTION_WORD_BOUND} words or fewer across its about, question and changes, so the director reads it in a glance.`;
+- **questions**: the questions <job-weave> allows, each with what its answer changes in print as "changes", and the id of the thread it sits beside as "thread". Each comes to ${QUESTION_WORD_BOUND} words or fewer across its about, question and changes, so the director reads it in a glance.`;
 
 /**
  * The three-category character block: the roster, the theme's NPCs, and the game's
@@ -292,7 +290,7 @@ function buildCharacterCategoriesBlock(roster = [], theme = 'journalist', allCha
 
   return `### Character Categories
 
-**ROSTER PCs** (they were in the room; how Nova learned of them is set by the reporting mode):
+**ROSTER PCs** (they were at the investigation; the part about this session says how Nova knows what they did):
 ${JSON.stringify(roster)}
 
 **NPCs** (the game's own characters, never players):
@@ -361,7 +359,7 @@ ${weaveOutputFormat()}
 
 ---
 
-## SECTION 1: WHAT THE ROOM CONCLUDED
+## SECTION 1: WHAT THE PLAYERS CONCLUDED
 
 ### The Accusation
 ${renderArcAccusation(context.accusation, directorAccusationText(state), "Players' Reasoning")}
@@ -393,7 +391,7 @@ ${characterContext}
 
 ## SECTION 2: THE RECORD
 
-The ${evidenceSummary.exposedTokens.length} exposed memories and ${evidenceSummary.exposedPaper.length} paper documents in full, then the investigation's timeline: every sale, exposure, bonus and transfer, in time order.
+The ${evidenceSummary.exposedTokens.length} memories that were made public and ${evidenceSummary.exposedPaper.length} paper documents in full, then the investigation's timeline: every sale, memory turned in, bonus and transfer, in time order.
 ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })}
 
 ### Sources
@@ -408,7 +406,7 @@ ${WEAVE_TASK}
 
 ---
 
-## SECTION 4: CRAFT GUIDANCE
+## SECTION 4: THE BRIEF AND YOUR PART
 
 ${craft}
 `;

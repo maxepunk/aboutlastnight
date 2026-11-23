@@ -297,7 +297,7 @@ describe('journalist arc stop', () => {
     // writer's own part. Phase 4 (brief 4.4): the weave's sections.
     [
       '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',
-      '## SECTION 2: THE RECORD', '## SECTION 3: THE WEAVE', '## SECTION 4: CRAFT GUIDANCE', '\n<brief>\n', '\n<job-weave>\n'
+      '## SECTION 2: THE RECORD', '## SECTION 3: THE WEAVE', '## SECTION 4: THE BRIEF AND YOUR PART', '\n<brief>\n', '\n<job-weave>\n'
     ].forEach((heading) => expect(rework.user).toContain(heading));
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user).toContain(text));
 

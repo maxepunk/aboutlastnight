@@ -1,11 +1,11 @@
 /**
- * The writers' questions for the director (phase 3, brief 3.7; spec C15, R5).
+ * The writers' questions for the director (phase 3, brief 3.7; R5).
  *
  * When the record holds nothing about a player, a roster pronoun is missing, or a figure
  * looks wrong, the writer asks the director instead of guessing. Since phase 4 the
  * questions are asked at the story meeting alone (spec section 10): the weave carries
  * them in its own property, `questions` (WEAVE_QUESTIONS_PROPERTY below), each
- * `{id, kind, about, question, changes}`, with C15's three cases as the story meeting asks
+ * `{id, kind, about, question, changes}`, with its three cases as the story meeting asks
  * them (a player, a pronoun, a figure that looks wrong) and what each answer changes in
  * print. Since phase 4b, piece 3 (brief 3B; R10), a question may name the thread it sits beside,
  * `thread` (WEAVE_QUESTION_THREAD_KEY): the thread its answer changes. One with none sits by the
@@ -16,7 +16,7 @@
  * and the server refuses every thread that holds one with no weave, at a stop or at none
  * (lib/old-thread.js).
  *
- * Brief 4.5 (C15, ruling 4): the director answers each question in its own box at the
+ * Brief 4.5 (ruling 4): the director answers each question in its own box at the
  * story meeting, and the answer (`answer`, WEAVE_ANSWER_KEY) travels with its question
  * to every later writer as the director's words. Code keeps each answered question
  * apart from any model's output, its words and the answer as the director left them (it
@@ -47,14 +47,14 @@ function subjectKey(q) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// THE WEAVE'S QUESTIONS (phase 4, brief 4.4; C15)
+// THE WEAVE'S QUESTIONS (phase 4, brief 4.4)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** The weave's field for its questions (lib/weave.js). */
 const WEAVE_QUESTIONS_KEY = 'questions';
 
 /**
- * A weave question's kind: C15's three cases, as the story meeting asks them. `player`:
+ * A weave question's kind: three cases, as the story meeting asks them. `player`:
  * the record holds nothing about a player; `pronoun`: a roster pronoun is missing;
  * `figure`: a figure looks wrong, in the ledger or as said in the room.
  */
@@ -62,7 +62,7 @@ const WEAVE_QUESTION_KINDS = Object.freeze(['player', 'pronoun', 'figure']);
 
 /**
  * The key a weave question names the thread it sits beside under (phase 4b, piece 3, brief 3B;
- * C15, R10): the id of the thread its answer changes. Optional: a question with none sits by the
+ * R10): the id of the thread its answer changes. Optional: a question with none sits by the
  * pitch.
  */
 const WEAVE_QUESTION_THREAD_KEY = 'thread';
@@ -75,16 +75,16 @@ const WEAVE_QUESTION_THREAD_KEY = 'thread';
  */
 const WEAVE_QUESTIONS_PROPERTY = Object.freeze({
   type: 'array',
-  description: 'Questions for the director (C15), each saying what its answer changes',
+  description: 'Questions for the director, each saying what its answer changes',
   items: {
     type: 'object',
     properties: {
       id: { type: 'string', description: 'A short id, unique in the weave' },
-      kind: { type: 'string', enum: [...WEAVE_QUESTION_KINDS], description: 'The C15 case the question raises' },
-      about: { type: 'string', description: "The player's name; for a figure, the ledger entry's time and amount or the words said in the room" },
+      kind: { type: 'string', enum: [...WEAVE_QUESTION_KINDS], description: 'Which of the three cases the question raises' },
+      about: { type: 'string', description: "The player's name; for a figure, the ledger entry's time and amount or the words someone said" },
       question: { type: 'string', description: 'The question for the director' },
       changes: { type: 'string', description: 'What its answer changes in print' },
-      [WEAVE_QUESTION_THREAD_KEY]: { type: 'string', description: 'The id of the thread its answer changes; left out when its answer changes who appears in the story (C15)' }
+      [WEAVE_QUESTION_THREAD_KEY]: { type: 'string', description: 'The id of the thread its answer changes; left out when its answer changes who appears in the story' }
     },
     required: ['id', 'kind', 'about', 'question', 'changes']
   }
@@ -251,7 +251,7 @@ function pairWeaveQuestions(previous, returned) {
 }
 
 /**
- * A weave rework's questions (C15, ruling 4 of brief 4.5): every rework, an automatic
+ * A weave rework's questions (ruling 4 of brief 4.5): every rework, an automatic
  * pass or the director's round alike, keeps each question the director has not answered.
  * Each previous question pairs with at most one of the rework's, by the rule of sameness
  * pairWeaveQuestions states (brief 4.5b, fix rounds 1 to 3; one function since brief 4.5c).
