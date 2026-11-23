@@ -154,8 +154,8 @@ const TRUTH_MATERIAL = Object.freeze({
   roster: 'CANONICAL CHARACTER ROSTER:',    // each player with the roster's pronoun
   whiteboard: '### The Whiteboard',         // the whiteboard, as context (renderWhiteboardConnections)
   photos: '\nPHOTOS (',                     // the photos the judged writer was given, with the director's descriptions
-  modeBlock: '<mode-',                      // the session's reporting-mode block (system prompt)
-  truthRules: '<truth-rules>',              // the truth rules, T14's production words among them (system prompt)
+  modeBlock: '<this-session>',              // the part about this session, where Nova was (system prompt; phase 18, R2)
+  truthRules: '<limits>',                   // the limits, the words from outside the story among them (system prompt; phase 18, R2)
   printedCards: '"type": "evidence-card"',  // the article's cards, as CONTENT BUNDLE prints them
   printedCaptions: '"caption": '            // the article's captions, as CONTENT BUNDLE prints them
 });

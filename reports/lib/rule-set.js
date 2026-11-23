@@ -1,22 +1,22 @@
 /**
  * The rule set: one loader for the model-facing rules every writer and judge reads
- * (phase 3, task 3.1; spec docs/superpowers/specs/2026-09-30-rule-set.md), from the rules
- * folder of the theme the caller holds.
+ * (phase 3, task 3.1), from the rules folder of the theme the caller holds. Phase 18 set
+ * the files and the lists it reads today (R1, R2; the brief-and-the-limits spec, section 1:
+ * docs/superpowers/specs/2026-11-20-the-brief-and-the-limits-design.md).
  *
  * The journalist's rules live as Markdown files in its skill,
  * `.claude/skills/journalist-report/references/rules/`, and a theme's folder holds files of
- * the same names:
- * - `world.md`: the purpose of the article, the world (spec section 2) and how a
- *   memory moves through the game (3a);
- * - `truth-rules.md`: T1 to T15, with T8's mode-independent part;
- * - eight `craft-*.md` files, the craft items C1 to C19 grouped by the writer's job
- *   (spec section 5; task 3.8): story (C1, C3, C16), form (C2, C5, C6, C17, C18,
- *   C19, C14), material (C8, C7, C10, C11), judgement (C13), cards (C9), questions
- *   (C15), telling (C4) and voice (C12). Each call reads the files RULE_SET_CALLS gives
- *   it, as the phase 17 spec's sections 3 and 4 set them
- *   (docs/superpowers/specs/2026-10-18-the-writing-design.md);
- * - `mode-on-site.md` and `mode-remote.md`: T8's mode part, the reporting-mode block,
- *   which loadModeBlock hands back in its tag as loadRuleSet does each file.
+ * the same names, eight in all, each the text the director settled on 2026-11-20:
+ * - `world.md`: the world, what became of each memory, and what the writer is given and
+ *   what each thing is in the story;
+ * - `limits.md`: the fifteen limits on what the article may claim;
+ * - `brief.md`: how a reporter approaches this article, with reasons, which the three
+ *   writers read;
+ * - `job-weave.md`, `job-map.md` and `job-article.md`: each writer's own part, read right
+ *   after the brief by the writer whose work it is (the spec's section 3);
+ * - `mode-on-site.md` and `mode-remote.md`: where Nova was this session, the part about this
+ *   session, which loadModeBlock hands back in a `this-session` tag.
+ * Each call reads the files RULE_SET_CALLS gives it.
  *
  * Synchronous on purpose: it reads with readFileSync and caches, so every prompt
  * builder that calls it stays synchronous. The cache lives for the process: a
@@ -34,52 +34,34 @@ const path = require('path');
 /** The folder a theme's `rules` path is relative to: the reports folder. */
 const REPORTS_ROOT = path.resolve(__dirname, '..');
 
-/** Every writer and judge reads these first: the world, then the truth rules. */
-const CORE_FILES = ['world', 'truth-rules'];
+/** Every writer and judge reads these first: the world, then the limits. */
+const CORE_FILES = ['world', 'limits'];
 
 /**
- * Each call's craft files, every list in one order: story, form, material, judgement,
- * cards, questions, telling, voice. The telling and the voice say how the prose reads, so
- * they come last, right before the director's notes. The arc writer writes the weave and
- * reads the story, form, material, judgement, questions and voice files; the map writer
- * lays it across the sections and reads all but the questions; the article writer reads
- * all eight. A reworker passes its writer's call.
- *
- * Phase 17 (R2; the writing spec's sections 3 and 4,
- * docs/superpowers/specs/2026-10-18-the-writing-design.md): the arc writer and the map
- * writer read the voice, for the lines the article prints that they write (an angle's
- * headline, the map's deck and its headings), and every list takes the one order. The
- * phase 4 spec's section 11 set the lists before. The judges read
- * the world, the truth rules and the mode block alone: they write no notes on the writing,
- * so they read no craft file (the story meeting's fact check, brief 4.4; the article judge,
- * brief 4.7a). The map writer asks nothing, so it reads no craft-questions (brief 4.6).
+ * Each call's own files, after the core (phase 18, R2; the spec's sections 1 and 3): each
+ * writer reads the brief, then its own part. The weave writer's part is `job-weave`, the map
+ * writer's `job-map` and the article writer's `job-article`. A reworker passes its writer's
+ * call, so it reads what its writer reads. The judges read the world, the limits and the part
+ * about this session alone: they write no notes on the writing, so they read neither the
+ * brief nor a writer's part (the story meeting's fact check, brief 4.4; the article judge,
+ * brief 4.7a).
  *
  * The calls are one list (brief 4.13b): lib/theme-config.js derives its identity calls from
  * RULE_SET_CALLS, each call and each writer's rework (a judge's call opens `judge-`), so a
  * call added here needs its identity line in each theme's config.
  */
-const ARC_CRAFT = [
-  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-  'craft-questions', 'craft-voice'
-];
-const OUTLINE_CRAFT = [
-  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-  'craft-cards', 'craft-telling', 'craft-voice'
-];
-const ARTICLE_CRAFT = [
-  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-  'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
-];
-
 const RULE_SET_CALLS = Object.freeze({
-  arc: ARC_CRAFT,
-  outline: OUTLINE_CRAFT,
-  article: ARTICLE_CRAFT,
+  arc: ['brief', 'job-weave'],
+  outline: ['brief', 'job-map'],
+  article: ['brief', 'job-article'],
   'judge-arc': [],
   'judge-article': []
 });
 
+/** The two parts about where Nova was, by reporting mode. */
 const MODE_FILES = Object.freeze({ 'on-site': 'mode-on-site', remote: 'mode-remote' });
+/** The tag the part about this session reaches every prompt in, whichever file it came from. */
+const MODE_TAG = 'this-session';
 
 /** The folder a test has every call read in place of its theme's (setDefaultRulesRoot), or null. */
 let standInRoot = null;
@@ -188,7 +170,7 @@ function readRuleFiles(names, root, what) {
   return texts;
 }
 
-/** One file, wrapped in one tag named after it. */
+/** One file's text, wrapped in one tag: the file's name, or the name a block goes by. */
 function tagged(name, text) {
   return `<${name}>\n${text}\n</${name}>`;
 }
@@ -200,36 +182,37 @@ function tagged(name, text) {
  * @param {Object} options
  * @param {string} [options.theme] - the caller's theme, whose rules folder is read
  * @param {string} [options.root] - a folder to read instead (tests); the theme is not read then
- * @returns {{core: string, craft: string}} `core`: <world> then <truth-rules>; `craft`:
- *   the call's craft files in RULE_SET_CALLS order. Each file is in its own tag; the
- *   caller inserts both strings unchanged.
+ * @returns {{core: string, craft: string}} `core`: <world> then <limits>; `craft`: the
+ *   call's own files in RULE_SET_CALLS order, for a writer <brief> then its <job-...>, and
+ *   for a judge nothing. Each file is in its own tag named after it; the caller inserts both
+ *   strings unchanged. (The key `craft` keeps the name its callers read.)
  * @throws {Error} on an unknown call; without a theme or a root; for a theme with no rules
  *   folder, naming the theme or the folder; or naming every missing or empty file
  */
 function loadRuleSet(call, { theme, root } = {}) {
-  const craftFiles = RULE_SET_CALLS[call];
-  if (!craftFiles) {
+  const callFiles = RULE_SET_CALLS[call];
+  if (!callFiles) {
     throw new Error(
       `[rule-set] Unknown call "${call}". Calls: ${Object.keys(RULE_SET_CALLS).join(', ')}.`
     );
   }
   const folder = folderFor(theme, root);
-  const texts = readRuleFiles([...CORE_FILES, ...craftFiles], folder, `call "${call}"`);
+  const texts = readRuleFiles([...CORE_FILES, ...callFiles], folder, `call "${call}"`);
   return {
     core: CORE_FILES.map((name) => tagged(name, texts[name])).join('\n\n'),
-    craft: craftFiles.map((name) => tagged(name, texts[name])).join('\n\n')
+    craft: callFiles.map((name) => tagged(name, texts[name])).join('\n\n')
   };
 }
 
 /**
- * The reporting-mode block for one mode: T8's mode part. It goes in a system prompt
- * right after the identity line (buildReportingModeBlock in lib/prompt-builder.js),
- * with the prompt's own text after it.
+ * The part about this session for one mode: where Nova was, from one of the two mode files.
+ * It goes in a system prompt right after the identity line (buildReportingModeBlock in
+ * lib/prompt-builder.js), with the prompt's own text after it.
  *
- * Wrapped in one tag named after its file (`<mode-remote>`), as loadRuleSet wraps each
- * file, and the caller inserts it unchanged. The file opens with its "## T8" heading
- * (the lint counts the id there); the closing tag ends the block, so the text that
- * follows it in the prompt is not read as part of T8.
+ * Wrapped in one tag, `<this-session>`, whichever file it came from (phase 18, R2): the
+ * world and the limits point at "the part about this session", so the name is one the
+ * reader can find. The caller inserts it unchanged, and the closing tag ends the block, so
+ * the text that follows it in the prompt is not read as part of it.
  *
  * @param {'on-site'|'remote'} mode
  * @param {Object} options
@@ -245,7 +228,7 @@ function loadModeBlock(mode, { theme, root } = {}) {
     throw new Error(`[rule-set] Unknown reporting mode "${mode}". Modes: ${Object.keys(MODE_FILES).join(', ')}.`);
   }
   const folder = folderFor(theme, root);
-  return tagged(name, readRuleFiles([name], folder, `the ${mode} mode block`)[name]);
+  return tagged(MODE_TAG, readRuleFiles([name], folder, `the ${mode} mode block`)[name]);
 }
 
 module.exports = {

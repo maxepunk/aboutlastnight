@@ -85,9 +85,10 @@ describe('4.7b: the article writer reads the settled weave, then the map', () =>
       '<SESSION_FACTS>',
       '<GENERATION_INSTRUCTION>',
       '<SCHEMA>',
-      // Each section by the line that opens it: the task names <craft-story> in prose.
-      '\n<craft-story>\n',
-      '\n<craft-questions>\n',
+      // Each section by the line that opens it (phase 18, R3): the brief, then the article
+      // writer's own part, where the craft files sat.
+      '\n<brief>\n',
+      '\n<job-article>\n',
       '\n<DIRECTOR_GUIDANCE>\n'
     ].map((marker) => [marker, user.indexOf(marker)]);
     order.forEach(([marker, at]) => expect(`${marker}: ${at >= 0}`).toBe(`${marker}: true`));
@@ -437,8 +438,11 @@ describe("4.7f: the director's desk edits, stated once", () => {
   const CUT_RULE = 'What a block they cut said is not said again anywhere in the article.';
   /** The rule's exception, which <HAND_EDITS> states on a send-back. */
   const EXCEPTION = 'unless the structural change their note asks for means it no longer fits';
-  /** Each rule-set file's block in the prompts (the world, the truth rules, the mode block, the craft), the director's wording. */
-  const RULE_SET_BLOCK = /^<(world|truth-rules|mode-[a-z-]+|craft-[a-z]+)>$[\s\S]*?^<\/\1>$/gm;
+  /**
+   * Each rule-set file's block in the prompts (the world, the limits, the part about this
+   * session, the brief and the writer's own part; phase 18, R2), the director's wording.
+   */
+  const RULE_SET_BLOCK = /^<(world|limits|this-session|brief|job-[a-z]+)>$[\s\S]*?^<\/\1>$/gm;
 
   /**
    * The rework's prompts after the director cut the p-dna card at the desk in round 1.
@@ -563,17 +567,14 @@ describe('1E: the article writer tells each beat from the evidence it carries', 
     expect(beatsLines).toHaveLength(1);
     expect(beatsLines[0].startsWith(`- the beats: ${FIRST};`)).toBe(true);
     expect(beatsLines[0].endsWith(` ${BEATS_EVIDENCE}`)).toBe(true);
-    // Each rule is stated once (spec section 8): C16, in the craft files the prompt holds, tells
-    // the article writer to draw on each beat's evidence and cite what it uses, and the line says
-    // it no second time. Task 4A's rule text has C16 tell each beat as the beat's sentence says;
-    // phase 17's (rule-text read, change 4) has it draw on the evidence for what the beat needs.
-    expect(user).toMatch(/^<craft-story>$[\s\S]*It tells each beat as the beat's sentence says, drawing on the evidence the beat carries for what the beat needs, and cites what it uses:[\s\S]*^<\/craft-story>$/m);
+    // Each rule is stated once (spec section 8): the line does not say a second time that the
+    // writer draws on each beat's evidence. Phase 18 (R4): the rule files' sentences this test
+    // pinned (C16's, T1's and C9's headings) went with the old files; each new file is pinned
+    // whole by hash in rule-set.test.js.
     expect(beatsLines[0]).not.toMatch(/from the evidence it carries|evidence cited/);
-    // The items it points at: T1 in the truth rules, which print in the system prompt alone, and
-    // C9 in the craft files.
-    expect(system).toMatch(/^<truth-rules>$[\s\S]*^## T1\. [\s\S]*^<\/truth-rules>$/m);
-    expect(user).not.toContain('<truth-rules>');
-    expect(user).toMatch(/^<craft-cards>\n## C9\./m);
+    // The limits print in the system prompt alone.
+    expect(system).toMatch(/^<limits>$[\s\S]*^<\/limits>$/m);
+    expect(user).not.toContain('<limits>');
     // The writer still reads the record for each scene's detail.
     expect(taskLines(user).filter((line) => line.includes("each scene's detail from the record"))).toHaveLength(1);
   });

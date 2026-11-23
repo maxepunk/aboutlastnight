@@ -388,10 +388,10 @@ function buildDirectorGuidanceSection(gateNotes = [], ...retired) {
  * (2.3) every rework system prompt opens with its writer's, so each rework carries the block
  * its writer does, once, in the writer's position.
  *
- * The theme's mode file (loadModeBlock), wrapped in one tag named after the file
- * (`<mode-remote>`), so the system prompt's text after the block is not read as part of
- * its "## T8" section. The theme is required: a missing one would silently give one
- * theme another's block.
+ * The theme's mode file (loadModeBlock), wrapped in one `<this-session>` tag whichever file
+ * it came from (phase 18, R2), so the system prompt's text after the block is not read as
+ * part of it. The theme is required: a missing one would silently give one theme another's
+ * block.
  *
  * @param {Object} [sessionConfig] - the session's config, with reportingMode
  * @param {string} theme - the theme the caller holds

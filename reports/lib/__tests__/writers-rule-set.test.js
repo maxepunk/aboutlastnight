@@ -6,10 +6,9 @@
  * reviseOutline, generateContentBundle, reviseContentBundle), with the real
  * PromptBuilder over the real rule files and a recording stand-in for the model,
  * in both reporting modes, and check what every render carries:
- * - the world and the truth rules once, in the system prompt; the call's craft files
- *   once, in the user prompt, after the data and before <DIRECTOR_GUIDANCE> (the
- *   integrator's placement ruling); the outline writer reads every craft file but
- *   the questions, the voice among them since phase 17 (R2);
+ * - the world and the limits once, in the system prompt; the call's own files once, in
+ *   the user prompt, after the data and before <DIRECTOR_GUIDANCE> (the integrator's
+ *   placement ruling): since phase 18 (R2, R3) the brief, then the writer's own part;
  * - none of the removed phrases in the pipeline's own instruction text, a gendered
  *   Nova included (the lint the brief asks for), and no em-dash (R171);
  * - no retired craft file loaded on any journalist path.
@@ -147,18 +146,18 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
     renders = await renderJournalistCalls(mode);
   });
 
-  it.each(Object.keys(CALL_OF))('%s: the world and the truth rules once, in the system prompt', (name) => {
+  it.each(Object.keys(CALL_OF))('%s: the world and the limits once, in the system prompt', (name) => {
     const { core } = loadRuleSet(CALL_OF[name]);
     expect(count(renders[name].systemPrompt, core)).toBe(1);
-    expect(renders[name].prompt).not.toContain('<truth-rules>');
+    expect(renders[name].prompt).not.toContain('<limits>');
     expect(renders[name].prompt).not.toContain('<world>');
   });
 
-  it.each(Object.keys(CALL_OF))('%s: its craft files once, in the user prompt, after the data and before <DIRECTOR_GUIDANCE>', (name) => {
+  it.each(Object.keys(CALL_OF))('%s: its own files once, in the user prompt, after the data and before <DIRECTOR_GUIDANCE>', (name) => {
     const { craft } = loadRuleSet(CALL_OF[name]);
     const user = renders[name].prompt;
     expect(count(user, craft)).toBe(1);
-    expect(renders[name].systemPrompt).not.toContain('<craft-');
+    expect(renders[name].systemPrompt).not.toMatch(/^<(brief|job-[a-z]+)>$/m);
     expect(user.indexOf(craft)).toBeGreaterThan(user.indexOf('</RECORD>'));
     expect(user.indexOf(craft)).toBeGreaterThan(user.indexOf('</SESSION_FACTS>'));
     // The section is the one that opens on its own line: the map's task names the tag in
@@ -168,11 +167,13 @@ describe.each(['remote', 'on-site'])('the journalist outline and article calls, 
     expect(count(user, '\n<RECORD>\n')).toBe(1);
   });
 
-  // Phase 17 (R2): the map writer reads the voice, for the deck and the headings it writes. Its
-  // task names the tag in prose, so the file is counted by the line that opens it.
-  it('the outline and article calls read the voice, once, as the line that opens its file', () => {
+  // Phase 18 (R2): each call reads the brief and its writer's own part, each counted by the
+  // line that opens its file.
+  it('the outline and article calls read the brief and their own part, once each, as the line that opens its file', () => {
     Object.keys(CALL_OF).forEach((name) => {
-      expect(`${name}: ${(renders[name].prompt.match(/^<craft-voice>$/gm) || []).length}`).toBe(`${name}: 1`);
+      ['brief', CALL_OF[name] === 'outline' ? 'job-map' : 'job-article'].forEach((tag) => {
+        expect(`${name}: ${tag}: ${(renders[name].prompt.match(new RegExp(`^<${tag}>$`, 'gm')) || []).length}`).toBe(`${name}: ${tag}: 1`);
+      });
     });
   });
 

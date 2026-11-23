@@ -436,14 +436,14 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
   afterAll(() => jest.restoreAllMocks());
 
   describe('the rule sections, placed by the placement ruling', () => {
-    it('the arc writer: identity, mode block, the world and the truth rules in the system prompt; its craft files in the user prompt', () => {
+    it('the arc writer: identity, mode block, the world and the limits in the system prompt; the brief and its own part in the user prompt', () => {
       const state = journalistState();
       const { core, craft } = loadRuleSet('arc');
       const system = weaveSystemPrompt(state.sessionConfig, 'journalist');
       expect(count(system, core)).toBe(1);
       expect(system.indexOf(loadModeBlock('remote'))).toBeLessThan(system.indexOf('<world>'));
-      expect(system.indexOf('<world>')).toBeLessThan(system.indexOf('<truth-rules>'));
-      expect(system).not.toContain('<craft-');
+      expect(system.indexOf('<world>')).toBeLessThan(system.indexOf('<limits>'));
+      expect(system).not.toMatch(/<(brief|job-[a-z]+)>/);
 
       const user = buildWeavePrompt({
         ...state,
@@ -451,7 +451,7 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       });
       expect(count(user, craft)).toBe(1);
       expect(user).not.toContain('<world>');
-      // The craft files come after the data and before <DIRECTOR_GUIDANCE>, which stays last.
+      // The brief and its part come after the data and before <DIRECTOR_GUIDANCE>, which stays last.
       expect(user.indexOf(craft)).toBeGreaterThan(user.indexOf('</RECORD>'));
       expect(user.indexOf(craft)).toBeLessThan(user.indexOf('<DIRECTOR_GUIDANCE>'));
       expect(user.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
@@ -489,10 +489,11 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
     // Phase 4 (brief 4.4; phase 4b, brief 1B): the lens work C16 sets out reaches the weave as
     // each thread's role and as evidence marked supporting the thread or cutting against it,
     // through no field of its own, and the task points at C16 for the threads.
-    it('the arc writer reads C16 in <craft-story> and restates none of it; the weave has no lens fields', () => {
+    // Phase 18 (R4): the rule files hold no numbered item, and each is pinned whole by hash
+    // in rule-set.test.js; the arc writer reads its files once.
+    it('the arc writer reads its rule files once and restates none of C16\'s terms; the weave has no lens fields', () => {
       const prompt = buildWeaveSections(journalistState());
       const { craft } = loadRuleSet('arc');
-      expect(craft).toMatch(/<craft-story>\n[\s\S]*## C16\.[\s\S]*<\/craft-story>/);
       expect(count(prompt, craft)).toBe(1);
       expect(restated(prompt, craft)).toEqual([]);
       const section = prompt.slice(prompt.indexOf('## SECTION 3: THE WEAVE'), prompt.indexOf('## SECTION 4'));
@@ -595,12 +596,8 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       // T12 and the world say the director's words stay exact: the label states none
       // of it again.
       expect(label).not.toMatch(/what happened and was said|never changed|as written|unproven claim|open question|suspicion|allegation|careful reporter|worded fresh/);
-      const system = weaveSystemPrompt(state.sessionConfig, 'journalist');
-      // Phase 4 (4.1): T1's second point names the director's answers at the story
-      // meeting beside the notes; T1 alone states it, once. Task A of phases 14 and 15:
-      // the point now names every source of the director's own words, the notes at the
-      // stops among them.
-      expect(count(`${system}\n${prompt}`, "as the director's own words record it (their notes and corrections, the accusation, their answers at the story meeting, and every note they send at a stop)")).toBe(1);
+      // Phase 18 (R4): the sentence of the old T1 this pinned, on the director's own words,
+      // went with the truth rules; the limits are pinned whole by hash in rule-set.test.js.
     });
 
     // Post-merge fix: the arc judge prints the arc writer's own label, so the label has

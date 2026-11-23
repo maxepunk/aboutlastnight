@@ -16,7 +16,7 @@ Read these first. They are what you check the draft against; this file adds only
 
 ```
 .claude/skills/journalist-report/references/rules/world.md
-.claude/skills/journalist-report/references/rules/truth-rules.md
+.claude/skills/journalist-report/references/rules/limits.md
 .claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, as the record's reportingMode says)
 ```
 

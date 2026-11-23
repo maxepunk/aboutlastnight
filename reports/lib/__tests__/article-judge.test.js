@@ -205,12 +205,13 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
       .forEach((gone) => expect(`${gone}: ${system.includes(gone)}`).toBe(`${gone}: false`));
   });
 
-  // Spec section 11: the article judge reads the world, the truth rules and the mode block.
-  it('reads no craft file: RULE_SET_CALLS[\'judge-article\'] is the core alone (spec section 11)', () => {
+  // Spec section 11: the article judge reads the world, the limits and the part about this
+  // session (phase 18, R2), and neither the brief nor a writer's part.
+  it('reads neither the brief nor a writer\'s part: RULE_SET_CALLS[\'judge-article\'] is the core alone (spec section 11)', () => {
     expect(RULE_SET_CALLS['judge-article']).toEqual([]);
     expect(loadRuleSet('judge-article').craft).toBe('');
     const state = articleState();
-    expect(`${systemFor(state)}\n${userFor(state)}`).not.toMatch(/^<craft-[a-z]+>$/m);
+    expect(`${systemFor(state)}\n${userFor(state)}`).not.toMatch(/^<(brief|job-[a-z]+)>$/m);
   });
 
   it('createEvaluator sends it the truth-only schema, and holds its verdict to the truth-only contract', async () => {

@@ -255,7 +255,7 @@ describe('requirePhasePrompts — the REAL PromptBuilder over the REAL ThemeLoad
     setDefaultRulesRoot(empty);
     try {
       await expect(builder.requirePhasePrompts('outlineGeneration'))
-        .rejects.toThrow(/Missing or empty rule files for call "outline": world\.md, truth-rules\.md/);
+        .rejects.toThrow(/Missing or empty rule files for call "outline": world\.md, limits\.md, brief\.md, job-map\.md/);
       await expect(builder.requirePhasePrompts('articleGeneration'))
         .rejects.toThrow(/Missing or empty rule files for call "article"/);
     } finally {

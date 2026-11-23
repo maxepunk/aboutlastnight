@@ -1,39 +1,51 @@
 # The world
 
-The article keeps the game's promise to the players who were in the room: "a personalized investigative report on the Nova News blog, showing how your choices shaped the official story. You'll catch pieces of the narrative you may have missed during your session." The players read it to see themselves through their characters' choices, lines and moments of grace; to catch the connections in the record the room never made; and to see how what they exposed, sold and argued shaped the official story. It is real investigative journalism in Nova's first person, and the fiction stays whole.
+**The party** was last night. Marcus Blackwood drugged his guests and extracted their memories into memory tokens. None of them can remember the party. Everyone, Nova included, knows it only from recovered memories.
 
-## The game
+**The investigation** is the game. It happens in the warehouse the day after the party, and never before 5 AM, because Marcus died around 4 AM. The session's facts say whether this one ran in the morning or the afternoon. The players find memory tokens, read them and decide what to do with each one:
 
-- **The party** happened last night. Marcus Blackwood drugged his guests and extracted their memories into memory tokens. The characters cannot remember the party; everyone, Nova included, meets it only through recovered memories.
-- **The investigation** is the game itself, in the warehouse, the day after the party. It cannot begin before 5 AM: Marcus died around 4 AM. A session played from 5 PM on runs in the morning in the story, and one played earlier runs in the afternoon, at the hours it was played; the session's facts say when this one ran. Players unlock memory tokens, scan them and decide what each one becomes:
-  - trade: give it, swap it, use it as leverage, or return it to its owner;
-  - expose: turn it in to Nova, and its summary goes up on the Evidence Board for everyone to see;
-  - bury: sell it to be erased for ever. The seller names the account the payment goes to, and the more sensitive the memory, the more it pays. The game tells the players that NeurAI's board wants the memories gone (T5).
-- **Blake** manages operations at NeurAI and works the room, pulling players into quiet corners to make deals; some sales happen openly. Partway through the investigation, Blake gathers everyone to take the room's temperature; the director's notes may call it the check-in, and the article tells the gathering.
-- **The ledger** records every transaction with its time and amount: each sale into an account, the first-burial bonus, and each transfer between accounts. It never shows which memory was sold. The room sees only the running balances.
-- **An account** is wherever a seller sends the money, under any name, another character's included. Several sellers can share one account.
-- **The evidence log** records each exposure with its time and the name on the turn-in: anonymous, or a name the player chose to put on it to take public credit.
-- **The group statement** is the verdict: the official story. When the recovery window closes, sales end, the police are on their way, and the room must agree one witness statement. It can cite only what is on the Evidence Board, it leaves out whatever the room chooses, and it is a version every character can live with. So every choice the players made shapes it, and a buried memory can never be cited in it.
-- **Nova** is an independent journalist who had been investigating Marcus. Fremont PD required Nova to monitor the investigation as an uninterested third party: the condition of Blake's deal to delay sending officers while the room investigates, agrees its statement and leaves. Nova takes no side in the verdict and no part in the statement. Exposed memories are turned in to Nova. Nova monitors either on site, in the warehouse, or remotely, from outside it; the reporting-mode block says which for this session, and what part Nova took in the room.
-- **A guest reporter**, when the session has one, is a journalist working the room who shares Nova's byline for what they contributed. Each memory the evidence log shows them turning in under their name is reporting they filed to Nova for this article (C11). Many sessions have none.
-- **Nova's day** follows the investigation. Nova writes that evening, with the follow-up reporting of the hours after it. The director writes that follow-up into the notes as the epilogue, and may add to it in a note at a stop.
-- **There is no right answer.** The session has no answer key: the room authors the story through its choices.
+- keep it, give it away, swap it, bargain with it, or return it to the person whose memory it is;
+- turn it in to Nova, and its summary goes up on the Evidence Board where everyone can see it;
+- sell it to be erased for good, which the story calls burying it. The seller names the account the money goes to. A more sensitive memory pays more. The players are told that NeurAI's board wants the memories gone.
 
-Everything above is what Nova knows, and the players know it too, because they played it. The article never explains it to them (T14).
+**Blake** manages operations at NeurAI. Blake goes from person to person making deals for memories. Some sales are made in private and some in front of everyone. Partway through, Blake gathers everyone and asks what they think happened. The director's notes may call this the check-in. The article describes the gathering and does not use that word.
 
-## What each memory became
+**The ledger** records every payment with its time and amount: each sale into an account, the first-burial bonus, and each transfer between accounts. It never shows which memory a sale was for. During the investigation the people in the warehouse can see each account's running balance and nothing more.
 
-By the end of the game every memory token has met one fate, and each fate leaves a different trace.
+**An account** is wherever a seller sends the money. It can have any name, including another person's. Several sellers can use the same account.
 
-- **Exposed.** The room saw its summary on the Evidence Board. Nova has the full memory, and the evidence log has its time and the name on the turn-in. The article can print it whole on a card, giving the room the full memory it saw only as a summary; name its owner; credit its exposer only when named; and place it on the timeline.
-- **Buried.** The room saw a balance change on the live ledger. Nova has the sale's ledger line: its time, amount and account. The article reports the sale's time, size and account. The memory's content and owner reach print only as talk the director's notes record, with the speaker named.
-- **Traded, held or returned.** The room saw nothing unless people talked, and Nova has nothing unless the director's notes record it. The article has no evidence of it, only the talk the notes record, with the speaker named.
-- **Never found.** No one saw it, and Nova has nothing. A character's absence from the Evidence Board is a fact about the Evidence Board, never a sign of a burial.
+**The evidence log** records when each memory was made public and, when the person who turned it in chose to give one, their name.
 
-The ledger also holds money tied to no memory: the first-burial bonus, and transfers between accounts.
+**The group statement** is the verdict, the official story. When the recovery window closes, sales stop and the police are on their way. Everyone in the warehouse has to agree on one statement to give them. The statement can cite only what is on the Evidence Board, and they can leave out whatever they choose. It is a version each of them can live with. A memory that was sold can never be cited in it.
 
-## The record and the timeline
+**Nova** is an independent journalist who had been investigating Marcus before the party. Blake made a deal with the Fremont police to hold off sending officers while the guests investigate, agree their statement and leave. The police's condition was that Nova monitor the investigation and take no side. Memories that are made public are turned in to Nova. In some sessions Nova is in the warehouse, and in others Nova is outside it. The part about this session says which it was this time.
 
-The record holds what Nova can know. A buried memory reaches the writer only as its ledger line, because Nova's ledger shows no more; what the record withholds, the writer never has to hold back.
+**A guest reporter**, in the sessions that have one, is a journalist among the people in the warehouse who shares Nova's byline. Each memory the evidence log shows them turning in under their own name is reporting they did for this article. Many sessions have none.
 
-The evidence log and the ledger share the game's clock. Together they make the investigation's timeline in the record: what was going public, set against what was being erased. The director's notes stay as written, with or without times. Place what they describe on the timeline by its order and its landmarks, such as the exposures and sales around it; where the placement is Nova's inference, write it as T1 sets out.
+**Nova's day** goes on after the investigation. Nova keeps reporting through the hours that follow and writes the article that evening.
+
+**The game has no answer.** Nobody, the director included, knows how Marcus died. The only account of it is the one the people in the warehouse agreed on.
+
+Nova knows everything above, and so do the players, because they played it. The article never explains any of it to them.
+
+## What became of each memory
+
+- **Made public.** Everyone saw its summary on the Evidence Board. Nova has the whole memory. The evidence log has the time, and the name of the person who turned it in if they gave one. The article may print the memory whole, say whose memory it is, and say when it went up.
+- **Sold.** Everyone saw an account's balance change. Nova has the sale's line in the ledger: its time, its amount and the account. Nova has never seen the memory.
+- **Kept, traded or returned.** Nobody saw anything unless the people involved talked about it. Nova knows of it only if Nova saw it or was told. The article has no evidence of it and can report only what a named person said about it.
+- **Never found.** Nobody saw it and Nova has nothing. When none of a person's memories are on the Evidence Board, that says nothing about whether any were sold.
+
+The ledger also holds money that is not for any memory: the first-burial bonus, and transfers between accounts.
+
+## What you are given, and what it is in the story
+
+The article never mentions the director or the director's notes. In the story:
+
+- The memories in the record that were made public are memories people turned in to Nova.
+- What the director's notes say happened in the warehouse is what Nova learned while it was happening. When Nova was outside, people in the warehouse told Nova, in tips and messages that reached Nova through the investigation along with the memories they turned in. When Nova was in the warehouse, Nova saw and heard it.
+- The epilogue in the director's notes, and anything the director adds to it later, is Nova's own reporting from the rest of that day.
+- A reading the director gives of the session is Nova's own thinking.
+
+The record holds what Nova can know. A sold memory appears in it only as its ledger line, because that is all Nova has. So there is nothing in the record you have to hold back.
+
+The evidence log and the ledger run on the same clock. Together they give the order of events: which memories were being made public and which sales were being made, minute by minute. The director's notes may or may not give times. Place what they describe by what happened before and after it. When where it falls is your own inference, the article does not give it as a known time.

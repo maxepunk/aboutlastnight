@@ -1,26 +1,24 @@
 /**
- * The rule set (phase 3, task 3.1; spec docs/superpowers/specs/2026-09-30-rule-set.md).
+ * The rule set (phase 3, task 3.1; phase 18, the brief and the limits:
+ * docs/superpowers/specs/2026-11-20-the-brief-and-the-limits-design.md, sections 1 and 9).
  *
- * The rule files under .claude/skills/journalist-report/references/rules/ state the
- * world (spec sections 1, 2 and 3a), the truth rules T1 to T15 and the craft items C1
- * to C19, each once. lib/rule-set.js hands each call the files the phase 17 spec's sections 3
- * and 4 give it (docs/superpowers/specs/2026-10-18-the-writing-design.md; R2), and the
- * reporting-mode block for the session's mode.
+ * The rule files under .claude/skills/journalist-report/references/rules/ are the eight the
+ * director settled on 2026-11-20: the world and the limits, which every writer and judge
+ * reads; the brief and each writer's own part (job-weave, job-map, job-article), which only
+ * the writers read; and the two parts about where Nova was this session, one of which reaches
+ * each prompt in a `this-session` tag. lib/rule-set.js hands each call the files R2 gives it.
  *
- * Task 3.8 (spec round 7): the craft items are regrouped by the writer's job into
- * eight files (story, form, material, judgement, cards, questions, telling, voice),
- * C17 to C19 are new, and a body may point at another item ("(T1)", "as T5 sets
- * out"), so the lint counts an item by its heading.
- *
- * Three parts:
- * - the loader: the map per call, the files, the throws, the stub root;
- * - a lint over the real rule files;
- * - the removed-phrase fixture's helpers, which the lint and the gate use.
+ * Four parts:
+ * - the loader: the list per call, the files, the throws, the stub root;
+ * - the rule files: each pinned whole by hash (R4), and the lint over them (R5);
+ * - the removed-phrase fixture's helpers, which the lint and the gate use;
+ * - instructionText, which reads only the pipeline's own instructions.
  */
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const {
   loadRuleSet, loadModeBlock, setDefaultRulesRoot, rulesFolderOf, RULE_SET_CALLS
 } = require('../rule-set');
@@ -31,94 +29,29 @@ const STUB_ROOT = path.join(__dirname, 'fixtures', 'rules');
 /** Brief 4.13 (R14): a call names the theme whose rules folder it reads; these read the journalist's. */
 const JOURNALIST = { theme: 'journalist' };
 
-const CORE_FILES = ['world', 'truth-rules'];
+/** R2: every writer and judge reads the world, then the limits. */
+const CORE_FILES = ['world', 'limits'];
 /**
- * The eight craft files, in the order a call reads the ones it is given: story, form,
- * material, judgement, cards, questions, telling, voice (phase 17, R2; the writing spec's
- * sections 3 and 4).
+ * R2: each call's own files, after the core. Each writer reads the brief, then its own part;
+ * the judges read neither (the spec's section 1).
  */
-const CRAFT_FILES = [
-  'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-  'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
-];
+const CALL_FILES = {
+  arc: ['brief', 'job-weave'],
+  outline: ['brief', 'job-map'],
+  article: ['brief', 'job-article'],
+  'judge-arc': [],
+  'judge-article': []
+};
 const MODE_FILES = ['mode-on-site', 'mode-remote'];
-const ALL_FILES = [...CORE_FILES, ...CRAFT_FILES, ...MODE_FILES];
-
-const ALL_TRUTH = Array.from({ length: 15 }, (_, i) => `T${i + 1}`);
-const ALL_CRAFT = Array.from({ length: 19 }, (_, i) => `C${i + 1}`);
-
-/**
- * Spec section 5: the craft items each file holds, grouped by the writer's job, in the
- * order the director's read gives them (rule-text-read-2.md, section A).
- */
-const CRAFT_ITEMS = {
-  'craft-story': ['C1', 'C3', 'C16'],
-  'craft-form': ['C2', 'C5', 'C6', 'C17', 'C18', 'C19', 'C14'],
-  'craft-material': ['C8', 'C7', 'C10', 'C11'],
-  'craft-voice': ['C12'],
-  'craft-judgement': ['C13'],
-  'craft-telling': ['C4'],
-  'craft-cards': ['C9'],
-  'craft-questions': ['C15']
-};
-
-/**
- * Who reads what, item by item (phase 17, the writing spec's sections 3 and 4,
- * docs/superpowers/specs/2026-10-18-the-writing-design.md; the phase 4 spec's section 11
- * before it): the arc writer reads neither the telling (C4) nor the cards (C9); the map
- * writer reads no questions (C15), since it asks nothing (brief 4.6). Both read the voice
- * (C12) since phase 17, for the lines the article prints that they write: an angle's
- * headline, the map's deck and its headings. Neither judge reads a craft file: the story
- * meeting's fact check (brief 4.4) and the article judge (brief 4.7a).
- */
-const SPEC_SECTION_11 = {
-  arc: ALL_CRAFT.filter((id) => !['C4', 'C9'].includes(id)),
-  outline: ALL_CRAFT.filter((id) => !['C15'].includes(id)),
-  article: ALL_CRAFT
-};
-SPEC_SECTION_11['judge-arc'] = [];
-SPEC_SECTION_11['judge-article'] = [];
-
-/**
- * The brief's map (phase 17, R2; the writing spec's section 4): each call's craft files, every
- * list in one order, story, form, material, judgement, cards, questions, telling, voice, so
- * the two that say how the prose reads come last, before the director's notes.
- */
-const BRIEF_MAP = {
-  arc: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions', 'craft-voice'],
-  outline: [
-    'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-    'craft-cards', 'craft-telling', 'craft-voice'
-  ],
-  article: [
-    'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-    'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
-  ]
-};
-BRIEF_MAP['judge-arc'] = [];
-BRIEF_MAP['judge-article'] = [];
+const ALL_FILES = [...CORE_FILES, ...MODE_FILES, 'brief', 'job-weave', 'job-map', 'job-article'];
+const WRITERS = ['arc', 'outline', 'article'];
 
 /** The line buildRevisionContext (node-helpers.js) prints after the director's send-back note. */
 const SEND_BACK_NOTE_LINE = 'NOTE: The human reviewer has explicitly requested these changes.';
 
-/** Every rule id ("T8", "C16") in a text, in order. */
-const ruleIds = (text) => (String(text).match(/\b[TC]\d{1,2}\b/g) || []);
-/** The items a text states, in order: the rule id that opens a heading ("## C16. ...", "## T8, remote: ..."). */
-const itemIds = (text) => [...String(text).matchAll(/^#{1,6} ([TC]\d{1,2})\b/gm)].map((m) => m[1]);
-/** The rule ids a text's bodies point at ("(T1)", "as T5 sets out"): every id outside a heading. */
-const pointerIds = (text) => ruleIds(String(text).split('\n').filter((line) => !/^#{1,6} /.test(line)).join('\n'));
 /** The tag names a loaded string carries, in order. */
 const tagsOf = (text) => (String(text).match(/^<([a-z-]+)>$/gm) || []).map((t) => t.slice(1, -1));
 const count = (haystack, needle) => haystack.split(needle).length - 1;
-/** One item's text in a real rule file: its heading line, through the line before the next heading. */
-const itemText = (name, id) => {
-  const file = path.join(RULES_ROOT, `${name}.md`);
-  const lines = (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '').split('\n');
-  const start = lines.findIndex((line) => new RegExp(`^#{1,6} ${id}\\b`).test(line));
-  if (start < 0) return '';
-  const end = lines.findIndex((line, i) => i > start && /^#{1,6} /.test(line));
-  return lines.slice(start, end < 0 ? lines.length : end).join('\n');
-};
 
 /** A temporary copy of the stub root, to break one file in. */
 function tempStubRoot() {
@@ -133,101 +66,98 @@ describe('the loader', () => {
     expect(rulesFolderOf('journalist')).toBe(path.resolve(RULES_ROOT));
   });
 
-  // Phase 4 (brief 4.6): the outline judge's call went with it.
-  it('serves exactly the five calls of the plan', () => {
-    expect(Object.keys(RULE_SET_CALLS).sort()).toEqual(Object.keys(BRIEF_MAP).sort());
-  });
-
-  it.each(Object.keys(BRIEF_MAP))('%s: the core is the world then the truth rules, each in its own tag', (call) => {
-    const { core } = loadRuleSet(call, { root: STUB_ROOT });
-    expect(core).toBe('<world>\nSTUB world\n</world>\n\n<truth-rules>\nSTUB truth-rules\n</truth-rules>');
-  });
-
-  it.each(Object.keys(BRIEF_MAP))('%s: the craft files are the map\'s, in its order', (call) => {
-    const { craft } = loadRuleSet(call, { root: STUB_ROOT });
-    expect(tagsOf(craft)).toEqual(BRIEF_MAP[call]);
-    expect(craft).toBe(BRIEF_MAP[call].map((name) => `<${name}>\nSTUB ${name}\n</${name}>`).join('\n\n'));
-  });
-
-  it.each(Object.keys(SPEC_SECTION_11))('%s: the real files give exactly the craft items the spec lists for the call, each once', (call) => {
-    const { core, craft } = loadRuleSet(call, JOURNALIST);
-    // An item is counted by its heading; a body may point at an item another file states.
-    const crafted = itemIds(craft).filter((id) => id.startsWith('C'));
-    expect(crafted.sort()).toEqual([...SPEC_SECTION_11[call]].sort());
-    // The core states no craft item: every call reads all of the world and the truth rules.
-    expect(itemIds(core).filter((id) => id.startsWith('C'))).toEqual([]);
-  });
-
-  it.each(Object.keys(BRIEF_MAP))('%s: the real files are read once each, each in its own tag', (call) => {
-    const { core, craft } = loadRuleSet(call, JOURNALIST);
-    expect(tagsOf(core)).toEqual(CORE_FILES);
-    expect(tagsOf(craft)).toEqual(BRIEF_MAP[call]);
-    for (const name of [...CORE_FILES, ...BRIEF_MAP[call]]) {
-      expect(`${call}: ${name}: ${count(`${core}\n${craft}`, `</${name}>`)}`).toBe(`${call}: ${name}: 1`);
+  it('serves exactly the five calls, each with R2\'s list', () => {
+    expect(Object.keys(RULE_SET_CALLS).sort()).toEqual(Object.keys(CALL_FILES).sort());
+    for (const [call, files] of Object.entries(CALL_FILES)) {
+      expect(`${call}: ${RULE_SET_CALLS[call].join(',')}`).toBe(`${call}: ${files.join(',')}`);
     }
   });
 
-  it.each(ALL_FILES)('the real %s.md exists and is not empty', (name) => {
-    const file = path.join(RULES_ROOT, `${name}.md`);
-    expect(`${name}.md: ${fs.existsSync(file)}`).toBe(`${name}.md: true`);
-    expect(fs.readFileSync(file, 'utf8').trim().length).toBeGreaterThan(0);
+  it('the stubs are the eight files, one line each', () => {
+    expect(fs.readdirSync(STUB_ROOT).sort()).toEqual(ALL_FILES.map((name) => `${name}.md`).sort());
+    for (const name of ALL_FILES) {
+      expect(fs.readFileSync(path.join(STUB_ROOT, `${name}.md`), 'utf8').trim()).toBe(`STUB ${name}`);
+    }
   });
 
-  it('the rules folder holds the twelve rule files and nothing else', () => {
-    // A retired file left on disk invites a loader or a person to read it again (the
-    // integrator's ruling: deleted, not archived).
-    expect(fs.readdirSync(RULES_ROOT).sort()).toEqual(ALL_FILES.map((name) => `${name}.md`).sort());
+  it.each(Object.keys(CALL_FILES))('%s: the core is the world then the limits, each in its own tag', (call) => {
+    const { core } = loadRuleSet(call, { root: STUB_ROOT });
+    expect(core).toBe('<world>\nSTUB world\n</world>\n\n<limits>\nSTUB limits\n</limits>');
+  });
+
+  it.each(Object.keys(CALL_FILES))('%s: the call\'s own files are R2\'s, in its order, each in a tag named after it', (call) => {
+    const { craft } = loadRuleSet(call, { root: STUB_ROOT });
+    expect(tagsOf(craft)).toEqual(CALL_FILES[call]);
+    expect(craft).toBe(CALL_FILES[call].map((name) => `<${name}>\nSTUB ${name}\n</${name}>`).join('\n\n'));
+  });
+
+  it.each(Object.keys(CALL_FILES))('%s: the real files are read once each, each in its own tag, holding its file\'s text', (call) => {
+    const { core, craft } = loadRuleSet(call, JOURNALIST);
+    expect(tagsOf(core)).toEqual(CORE_FILES);
+    expect(tagsOf(craft)).toEqual(CALL_FILES[call]);
+    for (const name of [...CORE_FILES, ...CALL_FILES[call]]) {
+      expect(`${call}: ${name}: ${count(`${core}\n${craft}`, `</${name}>`)}`).toBe(`${call}: ${name}: 1`);
+      const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8').trim();
+      expect(`${core}\n${craft}`).toContain(`<${name}>\n${text}\n</${name}>`);
+    }
+  });
+
+  it.each(Object.keys(CALL_FILES))('%s: no other rule file reaches the call', (call) => {
+    const { core, craft } = loadRuleSet(call, JOURNALIST);
+    const others = ALL_FILES.filter((name) => ![...CORE_FILES, ...CALL_FILES[call]].includes(name));
+    for (const name of others) {
+      expect(`${call}: ${name}: ${count(`${core}\n${craft}`, `<${name}>`)}`).toBe(`${call}: ${name}: 0`);
+    }
   });
 
   it('throws on a call it does not know, naming the calls it does', () => {
     expect(() => loadRuleSet('revision', { root: STUB_ROOT })).toThrow(/revision.*arc.*outline/s);
   });
 
-  it('throws naming every missing or empty file a call needs', () => {
+  it('throws naming every missing or empty file a call needs, and the call', () => {
     const root = tempStubRoot();
-    fs.unlinkSync(path.join(root, 'craft-story.md'));
-    fs.writeFileSync(path.join(root, 'truth-rules.md'), '  \n');
-    expect(() => loadRuleSet('arc', { root })).toThrow(/truth-rules\.md.*craft-story\.md/s);
+    fs.unlinkSync(path.join(root, 'job-weave.md'));
+    fs.writeFileSync(path.join(root, 'limits.md'), '  \n');
+    expect(() => loadRuleSet('arc', { root })).toThrow(/call "arc".*limits\.md.*job-weave\.md/s);
   });
 
-  // Phase 17 (R2): the map writer reads the voice, so a missing craft-voice.md fails it as it
-  // fails the article writer; the questions, which it never reads, still cannot.
   it('does not throw for a broken file the call does not read', () => {
     const root = tempStubRoot();
-    fs.unlinkSync(path.join(root, 'craft-questions.md'));
-    expect(() => loadRuleSet('outline', { root })).not.toThrow();
-    expect(() => loadRuleSet('article', { root })).toThrow(/craft-questions\.md/);
+    fs.unlinkSync(path.join(root, 'job-map.md'));
+    expect(() => loadRuleSet('outline', { root })).toThrow(/job-map\.md/);
+    for (const call of ['arc', 'article', 'judge-arc', 'judge-article']) {
+      expect(() => loadRuleSet(call, { root })).not.toThrow();
+    }
   });
 
-  it('throws for a missing craft-voice.md in every writer that reads it', () => {
+  it('throws for a missing brief.md in every writer, and in neither judge', () => {
     const root = tempStubRoot();
-    fs.unlinkSync(path.join(root, 'craft-voice.md'));
-    ['arc', 'outline', 'article'].forEach((call) => {
-      expect(() => loadRuleSet(call, { root })).toThrow(/craft-voice\.md/);
+    fs.unlinkSync(path.join(root, 'brief.md'));
+    WRITERS.forEach((call) => {
+      expect(() => loadRuleSet(call, { root })).toThrow(/brief\.md/);
     });
+    expect(() => loadRuleSet('judge-arc', { root })).not.toThrow();
     expect(() => loadRuleSet('judge-article', { root })).not.toThrow();
   });
 });
 
 describe('the mode block', () => {
-  // Wrapped as loadRuleSet wraps each file (review of 3.1, finding 4): the block sits in
-  // the middle of a system prompt, and its closing tag ends it, so the text after it is
-  // not read as part of T8.
-  it.each(['on-site', 'remote'])('%s: returns the mode file\'s text in one tag named after the file', (mode) => {
-    expect(loadModeBlock(mode, { root: STUB_ROOT })).toBe(`<mode-${mode}>\nSTUB mode-${mode}\n</mode-${mode}>`);
+  // Wrapped in one tag (review of 3.1, finding 4): the block sits in the middle of a system
+  // prompt, and its closing tag ends it. Phase 18 (R2): the tag is `this-session` whichever
+  // file it came from, the name the world and the limits call it by.
+  it.each(['on-site', 'remote'])('%s: returns the mode file\'s text in one <this-session> tag', (mode) => {
+    expect(loadModeBlock(mode, { root: STUB_ROOT })).toBe(`<this-session>\nSTUB mode-${mode}\n</this-session>`);
   });
 
-  it('the two real blocks differ, and each carries T8', () => {
-    const onSite = loadModeBlock('on-site', JOURNALIST);
-    const remote = loadModeBlock('remote', JOURNALIST);
-    expect(onSite).not.toBe(remote);
-    // Task A of phases 14 and 15: the on-site block's body points at T12 and T8 (Nova's
-    // lines in prose, no side in the verdict), so each block states T8 as its one item and
-    // its body points only at items the set states (the lint below).
-    expect(itemIds(onSite)).toEqual(['T8']);
-    expect(itemIds(remote)).toEqual(['T8']);
-    expect(ruleIds(onSite)).toEqual(['T8', 'T12', 'T8']);
-    expect(ruleIds(remote)).toEqual(['T8']);
+  it.each(['on-site', 'remote'])('%s: the real block holds its own file\'s text, once', (mode) => {
+    const text = fs.readFileSync(path.join(RULES_ROOT, `mode-${mode}.md`), 'utf8').trim();
+    const block = loadModeBlock(mode, JOURNALIST);
+    expect(block).toBe(`<this-session>\n${text}\n</this-session>`);
+    expect(tagsOf(block)).toEqual(['this-session']);
+  });
+
+  it('the two real blocks differ', () => {
+    expect(loadModeBlock('on-site', JOURNALIST)).not.toBe(loadModeBlock('remote', JOURNALIST));
   });
 
   it('throws on a mode it does not know', () => {
@@ -238,6 +168,7 @@ describe('the mode block', () => {
     const root = tempStubRoot();
     fs.unlinkSync(path.join(root, 'mode-remote.md'));
     expect(() => loadModeBlock('remote', { root })).toThrow(/mode-remote\.md/);
+    expect(() => loadModeBlock('on-site', { root })).not.toThrow();
   });
 });
 
@@ -248,7 +179,7 @@ describe('the default root, which a test can point at the stubs', () => {
   it('serves the stubs to every call that passes no root, and returns the previous root', () => {
     expect(setDefaultRulesRoot(STUB_ROOT)).toBeNull();
     expect(loadRuleSet('arc', JOURNALIST).core).toContain('STUB world');
-    expect(loadModeBlock('remote', JOURNALIST)).toBe('<mode-remote>\nSTUB mode-remote\n</mode-remote>');
+    expect(loadModeBlock('remote', JOURNALIST)).toBe('<this-session>\nSTUB mode-remote\n</this-session>');
     expect(setDefaultRulesRoot(STUB_ROOT)).toBe(path.resolve(STUB_ROOT));
   });
 
@@ -266,54 +197,57 @@ describe('the default root, which a test can point at the stubs', () => {
 });
 
 /**
- * The lint over the real rule files (the brief's tests). Model-facing text: each rule
- * once, no em-dash, Nova never gendered, nothing on the removed list, and the examples
- * carry placeholders, never the old examples' accounts or sums.
+ * R4: each rule file is pinned whole by hash. A deliberate change to a rule file updates its
+ * row here, in the same commit, with the reason; a change that was not meant fails here.
+ * The hash is sha256 of the file's bytes, and the length is in characters.
  */
+const RULE_FILE_PINS = {
+  world: ['9299a7a71fb44b4590213ff1cd1fdd327b73887c4e01ccf053710292ea5f113d', 5750,
+    'phase 18: the text the director settled on 2026-11-20'],
+  limits: ['a09a78ab277c2695dd6ad9e889c0b0422f698d23487b1f58160b6eb2e1d15d55', 9581,
+    'phase 18: the text the director settled on 2026-11-20'],
+  'mode-on-site': ['8fbacd078d0c52df7185128d1408c090cc6f769fca1d44997545eed7bbc559bd', 1012,
+    'phase 18: the text the director settled on 2026-11-20'],
+  'mode-remote': ['e0c7db4180d5595bc8f7048347c443e311c264b690347e933638642af72e2e5a', 749,
+    'phase 18: the text the director settled on 2026-11-20'],
+  brief: ['958c5057e9e21d8608cdff1dea3772052946d43e1392c0b27546b48a08eba43b', 9730,
+    'phase 18: the text the director settled on 2026-11-20'],
+  'job-weave': ['1560ccbdacc48d7a63fde9eba916f80d0ceb6f5ff3ba67f71b111ed2038f0de7', 5209,
+    'phase 18: the text the director settled on 2026-11-20'],
+  'job-map': ['ce98c6fcd3cd1e9ed2d1b487cd6d2f0d2100d737bacf9e9592131aa3dde6f498', 5065,
+    'phase 18: the text the director settled on 2026-11-20'],
+  'job-article': ['ff2d6d0fa5a762e1d091d61c1ac428646cfea549da14318fad97ddef49095e53', 2942,
+    'phase 18: the text the director settled on 2026-11-20']
+};
+
 describe('the rule files', () => {
   // Read here, not in a test: a missing file fails the tests that need it, one by one.
   const read = (name) => {
     const file = path.join(RULES_ROOT, `${name}.md`);
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    return fs.existsSync(file) ? fs.readFileSync(file) : Buffer.alloc(0);
   };
-  const files = Object.fromEntries(ALL_FILES.map((name) => [name, read(name)]));
-  const T8_HOMES = ['truth-rules', 'mode-on-site', 'mode-remote'];
+  const bytes = Object.fromEntries(ALL_FILES.map((name) => [name, read(name)]));
+  const files = Object.fromEntries(ALL_FILES.map((name) => [name, bytes[name].toString('utf8')]));
 
-  it('state each of T1 to T15 and C1 to C19 as an item exactly once, T8 once in the truth rules and once in each mode file', () => {
-    const counts = {};
-    for (const [name, text] of Object.entries(files)) {
-      for (const id of itemIds(text)) {
-        const key = id === 'T8' ? `T8@${name}` : id;
-        counts[key] = (counts[key] || 0) + 1;
-      }
-    }
-    const want = Object.fromEntries([...ALL_TRUTH, ...ALL_CRAFT].filter((id) => id !== 'T8').map((id) => [id, 1]));
-    for (const home of T8_HOMES) want[`T8@${home}`] = 1;
-    expect(counts).toEqual(want);
+  it('the folder holds the eight rule files and nothing else', () => {
+    // A retired file left on disk invites a loader or a person to read it again (the
+    // integrator's ruling: deleted, not archived).
+    expect(fs.readdirSync(RULES_ROOT).sort()).toEqual(ALL_FILES.map((name) => `${name}.md`).sort());
   });
 
-  it('name a rule in a body only to point at an item the set states', () => {
-    // Round 7's text points across files ("(T1)", "as T5 sets out", "(C16)"): each
-    // pointer names one of T1 to T15 or C1 to C19, never a retired or unknown id.
-    const items = new Set([...ALL_TRUTH, ...ALL_CRAFT]);
-    for (const [name, text] of Object.entries(files)) {
-      const unknown = pointerIds(text).filter((id) => !items.has(id));
-      expect(`${name}: ${unknown.join(',')}`).toBe(`${name}: `);
+  it('every file is pinned, with a reason', () => {
+    expect(Object.keys(RULE_FILE_PINS).sort()).toEqual([...ALL_FILES].sort());
+    for (const [name, [, , reason]] of Object.entries(RULE_FILE_PINS)) {
+      expect(`${name}: ${typeof reason === 'string' && reason.trim().length > 0}`).toBe(`${name}: true`);
     }
   });
 
-  it('put each item in its file, in the order the read gives', () => {
-    const where = {
-      world: [],
-      'truth-rules': ALL_TRUTH,
-      ...CRAFT_ITEMS,
-      'mode-on-site': ['T8'],
-      'mode-remote': ['T8']
-    };
-    expect(Object.keys(where).sort()).toEqual([...ALL_FILES].sort());
-    for (const [name, ids] of Object.entries(where)) {
-      expect(`${name}: ${itemIds(files[name]).join(',')}`).toBe(`${name}: ${ids.join(',')}`);
-    }
+  it.each(ALL_FILES)('%s.md matches its pin (R4)', (name) => {
+    const [hash, length] = RULE_FILE_PINS[name];
+    // Length first: when it differs, the size of the change says where to look.
+    expect(`${name}.md length ${files[name].length}`).toBe(`${name}.md length ${length}`);
+    const actual = crypto.createHash('sha256').update(bytes[name]).digest('hex');
+    expect(`${name}.md sha256 ${actual}`).toBe(`${name}.md sha256 ${hash}`);
   });
 
   it.each(ALL_FILES)('%s.md has no em-dash', (name) => {
@@ -335,265 +269,36 @@ describe('the rule files', () => {
     expect(files[name]).not.toMatch(/\bDec(ember)? 21\b/);
   });
 
-  it('state when an exposure is anonymous only with both of T6\'s conditions, wherever they state it', () => {
-    // T6 lifts anonymity on either of two records: a name in the evidence log, or the
-    // director's own words recording who turned the memory in (their notes, corrections,
-    // accusation or meeting answers; the director's ruling, 2026-10-04). The mode files restate the
-    // rule beside T6 (plan review I6), so a copy that carries only the first condition
-    // would tell a judge that a credit taken from the notes breaks anonymity.
-    const statements = [];
-    for (const [name, text] of Object.entries(files)) {
-      const body = text.split('\n').filter((line) => !/^#{1,6} /.test(line)).join('\n');
-      for (const sentence of body.split(/(?<=[.!?])\s+/)) {
-        if (/anonymous unless/i.test(sentence)) statements.push({ name, sentence });
-      }
-    }
-    expect(statements.map(({ name }) => name).sort()).toEqual(['mode-on-site', 'mode-remote', 'truth-rules']);
-    for (const { name, sentence } of statements) {
-      expect(`${name}: ${/\bevidence log\b/.test(sentence)}`).toBe(`${name}: true`);
-      expect(`${name}: ${/the director's own words record who turned the memory in/.test(sentence)}`).toBe(`${name}: true`);
-    }
+  // The director (2026-11-19): the writer lifts any finished sentence, so the rule files hold
+  // no "such as" aside and no example.
+  it.each(ALL_FILES)('%s.md says neither "such as" nor "for example"', (name) => {
+    expect(files[name]).not.toMatch(/\bsuch as\b/i);
+    expect(files[name]).not.toMatch(/\bfor example\b/i);
   });
 
-  it('open the world with the purpose of the article, without its length', () => {
-    expect(files.world).toMatch(/how your choices shaped the official story/);
-    expect(files.world).not.toMatch(/1,500/);
+  // The director (2026-11-19): "The 'room' didn't do anything." People did each thing.
+  it.each(ALL_FILES)('%s.md never says "the room"', (name) => {
+    expect(files[name]).not.toMatch(/\bthe room\b/i);
   });
 
-  it('come to less than half the eight craft files they replace', () => {
+  // The spec's section 7: a part is named by its name, never by a number.
+  it.each(ALL_FILES)('%s.md cites no rule by number', (name) => {
+    expect(files[name].match(/\b[TC]\d{1,2}\b/g) || []).toEqual([]);
+  });
+
+  // The director's ruling of 2026-10-10: a player's character sheet is never an in-world
+  // document, so no rule file tells a writer or a judge how to use one.
+  it.each(ALL_FILES)('%s.md never speaks of a character sheet', (name) => {
+    expect(files[name]).not.toMatch(/character sheet/i);
+  });
+
+  it('come together to less than half the eight craft files of bad9781', () => {
     // The eight journalist craft files at bad9781 (writing-principles, anti-patterns,
     // character-voice, evidence-boundaries, narrative-structure, section-rules,
-    // editorial-design, formatting): 100,005 characters. 3.2 deletes them, so the
-    // figure is fixed here.
-    const EIGHT_FILES_CHARACTERS = 100005;
+    // editorial-design, formatting): 100,005 characters, so the cap is 50,002.
+    const CAP = 50002;
     const size = Object.values(files).reduce((sum, text) => sum + text.length, 0);
-    expect(size).toBeLessThan(EIGHT_FILES_CHARACTERS / 2);
-  });
-});
-
-/**
- * Phase 4, task 4.1: the rule text the director approved on 2026-10-03
- * (rule-text-read-3.md in the phase 4 workspace, sections A and B). Phase 4 moves the
- * stages' jobs: the story meeting settles the story, the map lays it across the
- * sections, and the article writer writes all the prose. Each changed item carries one
- * of the read's sentences inside its own item, and C8 and C15 carry the read's titles.
- * The lint above holds the rest: each item once, every pointer, no em-dash, no gendered
- * Nova and nothing on the removed list.
- */
-describe('the items phase 4 rewrites (task 4.1)', () => {
-  it.each([
-    // Task 3A (phase 4b piece 3's read, 2026-10-06) rewrote C1's and C16's sentences these
-    // rows pinned, on the angles and the threads' roles; its block below pins the new ones.
-    ['C2', 'craft-form', 'The map decides, from the settled story, which sections exist, their order and their headings.'],
-    ['C4', 'craft-telling', "The article writer gives each beat the sentences its job needs, a supporting player's beat a line or two and a decisive scene more, and aims at the map's expected length: a session that gives less makes a shorter article, never a padded one."],
-    // Task 1A (phase 4b's read, 2026-10-05) rewrote the sentence this row pinned, on where
-    // the map places each line, and pins it in its own block below; this row pins the
-    // phase 4 read's sentence that stands, as phase 17's fix wave 2 words it (the director's
-    // call after the final review, 2026-10-20): the article quotes the lines it needs (C16).
-    ['C8', 'craft-material', 'Each line the article quotes is word for word and in the right mouth (T12).'],
-    ['C7', 'craft-material', 'The map places every player in a beat, through something the record shows they did or said, in the section where it matters, never as a roll call.'],
-    ['C15', 'craft-questions', "The director answers each in its own box at the story meeting, and the answer travels with its question to every later writer as the director's words."],
-    // Task A of phases 14 and 15 (2026-10-09) rewrote the T1 sentence this row pinned, so the
-    // director's words take in every note they send at a stop; its block below pins it.
-    // T2 gained the desk clause on the director's ruling (2026-10-04): the desk edits come first.
-    ['T2', 'truth-rules', "The map places each alternative theory the room debated, a line each, and the article reports every one the map carries, as the director's desk edits leave it; a theory the director strikes from the map or cuts at the desk stays out."],
-    ['T5', 'truth-rules', 'An entry that looks like a mistake is raised as a question at the story meeting (C15); with no answer, a later writer leaves that entry out of print.'],
-    ['T9', 'truth-rules', "A pronoun the director's own words give that player counts as the answer; with none, a later writer uses the player's name in place of a pronoun."]
-  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
-    expect(itemText(name, id)).toContain(sentence);
-  });
-
-  it.each([
-    ['C8', 'craft-material', "## C8. The director's lines: weighed by the arc writer, chosen by the map"],
-    ['C15', 'craft-questions', '## C15. Questions to the director, at the story meeting']
-  ])('%s, in %s.md, carries the approved title', (id, name, heading) => {
-    expect(itemText(name, id).split('\n')[0]).toBe(heading);
-  });
-
-  // The director's change of 2026-10-03, on thin notes: the article is capped at about
-  // 1,500 words, and the C4 clause pinned above aims it at the map's expected length.
-  it('C4 caps the article at about 1,500 words', () => {
-    expect(itemText('craft-telling', 'C4')).toContain('The article runs to about 1,500 words at most.');
-  });
-});
-
-/**
- * Phase 4b, piece 1, task 1A: the rule text the director approved on 2026-10-05
- * (rule-text-read.md in the phase 4b workspace; the piece 1 spec's section 8). The weave
- * and the map stay at the level of the story, with the evidence under each line: C16 sets
- * that out for the threads, the connections and the convergence, C2 for the beats, C8 for
- * the director's lines and C9 for the cards. Each changed item carries one of the read's
- * new sentences inside its own item. The lint above holds the rest: each item once, every
- * pointer, no em-dash, no gendered Nova and nothing on the removed list.
- */
-describe('the items phase 4b rewrites (task 1A)', () => {
-  it.each([
-    // Task 3A rewrote the C16 sentence this row pinned, for the angles, and task 4A the C2
-    // sentence, for the summary and the order; their blocks below pin them.
-    ['C8', 'craft-material', 'The map chooses, from the notes and the record, the lines the settled story needs, and places each as evidence under the beat where it makes sense, a line from the room under the moment it was said.'],
-    ['C9', 'craft-cards', "The map chooses the cards with the story: it marks each beat whose evidence prints as a card, and names the card's document under that beat."]
-  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
-    expect(itemText(name, id)).toContain(sentence);
-  });
-});
-
-/**
- * Phase 4b, piece 3, task 3A: the rule text the director approved on 2026-10-06
- * (rule-text-read.md in the piece 3 workspace; the piece 3 spec's section 11). The arc
- * writer pitches two or three angles over one shared set of threads, and the director
- * settles the story by picking one: C1 says how the thesis is pitched, C16 how the threads
- * make each angle with no main thread and no roles, and C15 how the questions are asked,
- * once per subject. Each changed item carries one of the read's new sentences inside its
- * own item. The lint above holds the rest: each item once, every pointer, no em-dash, no
- * gendered Nova and nothing on the removed list.
- */
-describe('the items phase 4b piece 3 rewrites (task 3A)', () => {
-  it.each([
-    ['C1', 'craft-story', 'The arc writer pitches the thesis at the story meeting as two or three angles, each a different story the article could tell.'],
-    ['C1', 'craft-story', 'The director settles the thesis by picking an angle and adjusting it, and every later writer works from the settled story.'],
-    ['C16', 'craft-story', "The arc writer weighs each thread by how it bears on the room's verdict, and that weight decides which angles use it and where in each it falls."],
-    ['C16', 'craft-story', "Each angle's story, question and ending, each thread, each connection and every beat on the map are said in plain words, with people's names, and with no quotation from the record, no figure, no clock time and no document id."],
-    ['C15', 'craft-questions', 'It asks once about each subject, each player, each pronoun and each figure, however many threads the answer touches.']
-  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
-    expect(itemText(name, id)).toContain(sentence);
-  });
-
-  // The read retires the main thread, the roles and the left-out thread's reason from C1 and C16.
-  it.each([
-    'main thread', 'grounds it', 'complicates it', 'mirrors it', 'carries it forward', 'left out, with one line on why'
-  ])('C1 and C16 no longer say "%s"', (phrase) => {
-    const text = `${itemText('craft-story', 'C1')}
-${itemText('craft-story', 'C16')}`.toLowerCase();
-    expect(text).not.toContain(phrase);
-  });
-});
-
-/**
- * Phase 4b, piece 4, task 4A: the rule text the director approved on 2026-10-07
- * (rule-text-read.md in the piece 4 workspace; the piece 4 spec's section 12). Each beat on
- * the map is also summed up in one sentence saying what the article tells there, and the
- * order of a section's beats is the map's: C2 says what a beat is, and C16 how the article
- * writer tells the beats, in the map's order, each as its sentence says. Each changed item
- * carries one of the read's new sentences inside its own item. The lint above holds the
- * rest: each item once, every pointer, no em-dash, no gendered Nova and nothing on the
- * removed list.
- */
-describe('the items phase 4b piece 4 rewrites (task 4A)', () => {
-  it.each([
-    ['C2', 'craft-form', "A section's beats are the moves of its story, in the order the article tells them."],
-    // Phase 17 (rule-text read, 2026-10-20, changes 5 and 4): the article writer draws on a
-    // beat's evidence for what the beat needs, and cites what it uses.
-    ['C2', 'craft-form', 'The article writer tells each beat as its sentence says, drawing on its evidence, in its own words.'],
-    ['C16', 'craft-story', "It tells each beat as the beat's sentence says, drawing on the evidence the beat carries for what the beat needs, and cites what it uses: every quotation, figure or document it prints does something in its paragraph, proving the point, complicating it or showing the person, and what the paragraph does not need stays in the record."]
-  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
-    expect(itemText(name, id)).toContain(sentence);
-  });
-
-  // The read takes the order of the beats out of the article writer's list: the order is the map's.
-  it('C16 no longer gives the article writer the order of the beats within each section', () => {
-    expect(itemText('craft-story', 'C16')).not.toContain('the order of the beats within each section');
-  });
-});
-
-/**
- * Phases 14 and 15, task A: the rule text the director approved on 2026-10-09
- * (rule-text-read.md in the phases' workspace; the spec's section 13). The article sits in
- * its world: its authors in the story (Nova on site a character in the room, remote no part
- * in it, in both no side in the verdict; the guest reporter when there is one), only what
- * exists in the world, the game's rules off the
- * page, the account-name rule the director set, opinion and a theory past the room, the
- * closing with no forced form, the time of day the session's facts give, and every note the
- * director sends at a stop among their words. Each changed item carries one of the read's
- * new sentences inside its own item, and world.md its new paragraphs. The lint above holds
- * the rest: each item once, every pointer, no em-dash, no gendered Nova and nothing on the
- * removed list.
- */
-describe('the items phases 14 and 15 rewrite (task A)', () => {
-  const world = fs.readFileSync(path.join(RULES_ROOT, 'world.md'), 'utf8');
-
-  it.each([
-    "**The investigation** is the game itself, in the warehouse, the day after the party. It cannot begin before 5 AM: Marcus died around 4 AM. A session played from 5 PM on runs in the morning in the story, and one played earlier runs in the afternoon, at the hours it was played; the session's facts say when this one ran.",
-    "Partway through the investigation, Blake gathers everyone to take the room's temperature;",
-    'Nova takes no side in the verdict and no part in the statement.',
-    'the reporting-mode block says which for this session, and what part Nova took in the room.',
-    // Phase 17 (rule-text read, change 9): a guest reporter is a journalist working the room.
-    "- **A guest reporter**, when the session has one, is a journalist working the room who shares Nova's byline for what they contributed. Each memory the evidence log shows them turning in under their name is reporting they filed to Nova for this article (C11). Many sessions have none.",
-    'Nova writes that evening, with the follow-up reporting of the hours after it.',
-    'Everything above is what Nova knows, and the players know it too, because they played it. The article never explains it to them (T14).',
-    "Together they make the investigation's timeline in the record: what was going public, set against what was being erased."
-  ])('world.md carries the approved text: %s', (text) => {
-    expect(world).toContain(text);
-  });
-
-  it.each([
-    ['T1', 'truth-rules', "What happened or was said in the room, as the director's own words record it (their notes and corrections, the accusation, their answers at the story meeting, and every note they send at a stop), Nova reports as the reporting mode sets out (T8), with each quoted line in its speaker's mouth (T12)."],
-    ['T1', 'truth-rules', "A note that gives the article a direction, such as a theory to pursue, is the director's direction, not a fact: Nova writes it as Nova's own reading."],
-    // Phase 17 (rule-text read, change 6): an opinion is said plainly as Nova's own, not marked.
-    ['T1', 'truth-rules', "or an opinion Nova commits to, said plainly as Nova's own, the way a person says what they think, and grounded in what the record does show."],
-    ['T1', 'truth-rules', "A theory may reach past the room, toward where the epilogue takes the world, and stays Nova's."],
-    ['T4', 'truth-rules', "Otherwise Nova may wonder about the character an account is named after, or read the name as someone's attempt to frame them, as Nova's opinion or a question"],
-    ['T4', 'truth-rules', "Totals show where the investigation's money went."],
-    ['T5', 'truth-rules', "The ledger holds the investigation's payments for erasure. Money from before the party, such as an investment, a fortune or an inheritance, is the characters' backstory, from the documents."],
-    ['T6', 'truth-rules', 'their answers at the story meeting, or a note they sent at a stop.'],
-    ['T7', 'truth-rules', "The investigation is told at the time of day the session's facts give, morning or afternoon, and never called by the other."],
-    ['T8', 'truth-rules', 'Nova takes no side in the verdict: Nova never votes, joins the room\'s accusation or exposes a memory. "Uninterested" is about what the room decides, not the story, which Nova works.'],
-    ['T8', 'truth-rules', 'It also says where Nova stood and what part Nova took in the room.'],
-    ['T14', 'truth-rules', 'Nor does the article explain how the game works: the players played it.'],
-    // Phase 17 (rule-text read, changes 1 and 3): where the record stops moves from C4 into
-    // C12's description of the voice, said once, and C12 commits to a reading in its new words.
-    ['C12', 'craft-voice', "Where the record stops, Nova reasons inside the world (T14) and says what Nova suspects in so many words, with a careful reporter's doubt: the way a person talks who could be wrong and wants the reader to know how much they know."],
-    ['C12', 'craft-voice', 'Nova commits to a reading where the session gives reason, a theory that may reach past the room toward where the epilogue takes the world (T1).'],
-    ['C12', 'craft-voice', "tells each player's choices in their character's terms, and takes a player's suspicion as a lead to follow, not as their belief alone."],
-    // Phase 17, fix wave 2 (the director's call after the final review, 2026-10-20): C12's last
-    // test reads the players as in the room, since the investigation runs the day after the party.
-    ['C12', 'craft-voice', 'Every line makes sense to a player who was in the room but saw only their part of it: they know the game and the characters,'],
-    // Phase 17 (rule-text read, change 8): a guest reporter's turn-ins are reporting filed to Nova.
-    ['C11', 'craft-material', "A guest reporter's turn-ins are the reporting they filed to Nova from the room, and the article tells them as that: what they found and brought in, credited as one reporter credits a colleague's work."],
-    ['C13', 'craft-judgement', "it aims where this session's evidence and its epilogue lead, such as NeurAI, its board, its technology and the business of buying memories, written as Nova's suspicion or opinion (T1, T5)."],
-    ['C2', 'craft-form', 'A section whose job is done elsewhere is dropped, with one line on why. The story is told through every section'],
-    ['C14', 'craft-form', "It may look ahead to what is still at stake, who stands to profit or what Nova is chasing next, or close on the theory the article has built, whichever this session's story and its epilogue make strongest."],
-    ['C9', 'craft-cards', "Memories come first; a document card quotes only the passage that matters. Every card is clear about what it cites."]
-  ])('%s, in %s.md, carries the approved sentence', (id, name, sentence) => {
-    expect(itemText(name, id)).toContain(sentence);
-  });
-
-  it('C14 carries the approved title', () => {
-    expect(itemText('craft-form', 'C14').split('\n')[0]).toBe('## C14. The closing lands where the story leads');
-  });
-
-  // The read retires these wordings from the rule files (the spec's section 15; R12).
-  it.each([
-    ['truth-rules', 'is never one of the room'],
-    ['truth-rules', 'from outside its choices'],
-    ['truth-rules', 'is never a reason to suspect its namesake'],
-    ['truth-rules', 'on the morning clock'],
-    ['truth-rules', "the morning's"],
-    ['truth-rules', 'motive background'],
-    ['mode-on-site', 'for being there and for nothing more'],
-    ['craft-telling', 'Nova says so in one plain line'],
-    ['craft-voice', "One honest line about Nova's own motive"],
-    ['craft-voice', "the morning's"],
-    ['craft-form', 'what is still open often belongs in the closing'],
-    ['craft-form', 'The closing looks ahead from the thesis'],
-    ['world', 'this morning, in the warehouse'],
-    ['world', 'through the morning']
-  ])('%s.md no longer says "%s"', (name, phrase) => {
-    const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8');
-    expect(text).not.toContain(phrase);
-  });
-});
-
-/**
- * The director's ruling of 2026-10-10: a player's character sheet is never an in-world document,
- * so it is never in the record, never cited and never printed. The paper fetch leaves every sheet
- * out, and no rule file tells a writer or a judge how to use one (the three passages the
- * 2026-10-09 read gave T1, world.md and C9 went, with T1's reason for them).
- */
-describe('no rule file speaks of a character sheet (2026-10-10)', () => {
-  it.each(['world', 'truth-rules', 'mode-on-site', 'mode-remote', 'craft-story', 'craft-form', 'craft-material',
-    'craft-voice', 'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions'])('%s.md', (name) => {
-    const text = fs.readFileSync(path.join(RULES_ROOT, `${name}.md`), 'utf8');
-    expect(text).not.toMatch(/character sheet/i);
+    expect(size).toBeLessThan(CAP);
   });
 });
 

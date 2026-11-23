@@ -5,9 +5,10 @@
  * one mode block in the article SYSTEM prompt, right after the identity line. Since
  * phase 3 (task 3.1) the journalist's block is the mode file of the rule set
  * (`references/rules/mode-on-site.md` / `mode-remote.md`, through `loadModeBlock`):
- * T8's mode part, Nova's position as the uninterested third party and what Nova
- * could witness. Since phase 4 (brief 4.13; R14) every theme's block is its own mode
- * file, and the parked detective, which names no rules folder, has none (R1).
+ * where Nova was this session and what Nova could see. Since phase 4 (brief 4.13; R14)
+ * every theme's block is its own mode file, and the parked detective, which names no
+ * rules folder, has none (R1). Since phase 18 (R2) either file reaches the prompt in one
+ * `<this-session>` tag, the part about this session the world and the limits point at.
  *
  * The craft prompts then said the opposite, several thousand tokens later and
  * LAST (the <RULES> block is placed last on purpose, for recency):
@@ -135,10 +136,10 @@ describe('article prompt, remote session', () => {
   beforeAll(async () => { rendered = await renderArticlePrompt('remote'); });
 
   // Phase 3 (3.2): character-voice.md, whose POV section named the mode in the user
-  // prompt, is retired. The truth rules (T8, in the system prompt) defer to the block.
-  it('states the mode in the system prompt, where the truth rules defer to it', () => {
-    expect(rendered.systemPrompt).toContain('The reporting-mode block states what Nova could witness in this session.');
-    expect(rendered.userPrompt).not.toContain('<truth-rules>');
+  // prompt, is retired. The limits (phase 18), in the system prompt alone, defer to the block.
+  it('carries the limits in the system prompt, and none in the user prompt', () => {
+    expect(rendered.systemPrompt).toContain('<limits>');
+    expect(rendered.userPrompt).not.toContain('<limits>');
   });
 
   it('carries the remote mode block in the SYSTEM prompt', () => {
@@ -146,10 +147,11 @@ describe('article prompt, remote session', () => {
   });
 
   it('closes the block in its tag, then a blank line, before the rest of the system prompt', () => {
-    // Review of 3.1, finding 4: the block opens with "## T8, remote", and the article
-    // system prompt's next part (the roster) has no heading of its own.
-    expect(rendered.systemPrompt).toContain('<mode-remote>\n## T8, remote');
-    expect(rendered.systemPrompt).toContain('\n</mode-remote>\n\n');
+    // Review of 3.1, finding 4: the article system prompt's next part has no heading of its
+    // own, so the closing tag ends the block.
+    expect(rendered.systemPrompt).toContain(`${loadModeBlock('remote')}\n\n`);
+    expect(loadModeBlock('remote').startsWith('<this-session>\n')).toBe(true);
+    expect(rendered.systemPrompt.split('\n</this-session>\n\n')).toHaveLength(2);
   });
 
   it.each(ON_SITE_PERSONA)('does not assert: %s', (phrase) => {
@@ -170,8 +172,9 @@ describe('article prompt, on-site session', () => {
   let rendered;
   beforeAll(async () => { rendered = await renderArticlePrompt('on-site'); });
 
-  it('states the mode in the system prompt, where the truth rules defer to it', () => {
-    expect(rendered.systemPrompt).toContain('The reporting-mode block states what Nova could witness in this session.');
+  it('carries the limits in the system prompt, and none in the user prompt', () => {
+    expect(rendered.systemPrompt).toContain('<limits>');
+    expect(rendered.userPrompt).not.toContain('<limits>');
   });
 
   it('carries the on-site mode block in the SYSTEM prompt, which is where presence is asserted', () => {
@@ -308,16 +311,18 @@ describe('the mode block reaches the arc and outline writers', () => {
         });
       });
 
-      it('wraps the block in its tag, so the prompt\'s next part is not read as part of T8', () => {
-        // Review of 3.1, finding 4: the block opens with a "## T8" heading, and the text
-        // after it in the arc calls ("GAME CONTEXT:") has none of its own. The closing
-        // tag ends the block; the outline writer's next part is its own tagged section.
+      it('wraps the block in its tag, so the prompt\'s next part is not read as part of it', () => {
+        // Review of 3.1, finding 4: the text after the block in the arc calls ("GAME
+        // CONTEXT:") has no heading of its own. The closing tag ends the block; the next
+        // line is blank or a tag. Phase 18 (R2): the tag is `this-session` in both modes.
+        const fileFirstLine = REPORTING_MODE_BLOCKS[mode].split('\n')[1];
         Object.entries(prompts).forEach(([name, prompt]) => {
           const lines = prompt.split('\n');
-          const open = lines.indexOf(`<mode-${mode}>`);
-          const close = lines.indexOf(`</mode-${mode}>`);
-          expect(`${name}:${open}:${lines[open + 1]?.startsWith('## T8, ')}`).toBe(`${name}:2:true`);
+          const open = lines.indexOf('<this-session>');
+          const close = lines.indexOf('</this-session>');
+          expect(`${name}:${open}:${lines[open + 1] === fileFirstLine}`).toBe(`${name}:2:true`);
           expect(`${name}:${close > open}:${/^(|<[a-z-]+>)$/.test(lines[close + 1])}`).toBe(`${name}:true:true`);
+          expect(`${name}:${lines.filter((line) => line === '<this-session>').length}`).toBe(`${name}:1`);
         });
       });
 
@@ -350,77 +355,17 @@ describe('the mode block reaches the arc and outline writers', () => {
 });
 
 /**
- * The journalist's mode blocks are T8's mode part (phase 3, task 3.1; spec T8 and
- * section 2). Each states Nova's position as the uninterested third party Fremont PD
- * required and what Nova could witness in that mode. In both, exposed memories are
- * turned in to Nova directly, anonymous unless the evidence log carries a name or the
- * director's own words record who turned the memory in (T6's two conditions, word for
- * word, so the block and T6 never disagree): the old remote block sent every exposure
- * through a tipster ("Every exposure ... reached you as tips"), which pushed the
- * article to name or invent exposers (plan review I6).
- *
- * Phase 2 (2.6) still holds for the remote block: the absence is said once, and
- * attribution where it matters. 092026's remote article said "I was not there.", "I
- * was not in that room." and "This is the story they told me." and the article
- * evaluation scored it as good voice. Task 3.8 (spec round 7, R13): Nova says it once,
- * early, as the start of Nova's questions, and the room's events are then told as
- * scenes; a source tag on every room event turned the story into a disclaimer.
- *
- * What moved out of the block in 3.1: "you did not vote" is T8's mode-independent
- * part and "you were not at the party" is T7, both in the truth rules, which every
- * writer and judge reads from wave 2 on.
+ * The journalist's mode blocks, the part about this session (phase 3, task 3.1; phase 18,
+ * R2). Their wording is the director's of 2026-11-20, pinned whole by hash in
+ * rule-set.test.js (R4). Here each block, as a writer reads it, carries nothing on the
+ * removed list. "Tips" is the director's word since phase 18 (R6): what Nova knows from
+ * outside reached Nova as "tips and messages" along with the memories turned in.
  */
-describe("the journalist mode blocks state T8's mode part", () => {
+describe('the journalist mode blocks', () => {
   const blocks = { 'on-site': loadModeBlock('on-site'), remote: loadModeBlock('remote') };
 
-  it.each(['on-site', 'remote'])("%s: sits in its tag, opens with its T8 heading and states Nova's position", (mode) => {
-    expect(blocks[mode]).toMatch(new RegExp(`^<mode-${mode}>\\n## T8, ${mode === 'remote' ? 'remote' : 'on site'}:`));
-    expect(blocks[mode].endsWith(`\n</mode-${mode}>`)).toBe(true);
-    expect(blocks[mode]).toMatch(/uninterested third party Fremont PD required/);
-  });
-
-  it.each(['on-site', 'remote'])("%s: exposed memories reach Nova directly, anonymous unless T6's records name who turned one in", (mode) => {
-    expect(blocks[mode]).toMatch(/Exposed memories were turned in to Nova directly/);
-    expect(blocks[mode]).toMatch(
-      /anonymous unless the evidence log carries a name or the director's own words record who turned the memory in/
-    );
-  });
-
-  it.each(['on-site', 'remote'])('%s: carries nothing on the removed list, tips and a gendered Nova included', (mode) => {
+  it.each(['on-site', 'remote'])('%s: carries nothing on the removed list, a gendered Nova included', (mode) => {
     expect(findRemovedPhrases(blocks[mode])).toEqual([]);
-    expect(blocks[mode]).not.toMatch(/\btips?\b/i);
-  });
-
-  // Task A of phases 14 and 15: on site Nova is a character in the room, working it for the
-  // story, and the "we" takes in the room for what Nova shared with it, never the verdict.
-  it('on site: Nova saw and heard the investigation, and "we" takes in the room for what Nova shared with it', () => {
-    expect(blocks['on-site']).toMatch(/saw and heard the investigation/);
-    expect(blocks['on-site']).toMatch(/"we" may also take in the room, for what Nova shared with it, never the vote or the accusation/);
-    expect(blocks['on-site']).not.toMatch(/for being there and for nothing more/);
-  });
-
-  it("on site: Nova was in the room as a character, tells Nova's own part in the first person and may be in the photos", () => {
-    expect(blocks['on-site']).toMatch(/Nova was in the room as a character, working it for the story\./);
-    expect(blocks['on-site']).toMatch(/The article tells Nova's own part in the first person where it carries the story, and what Nova said in the room in prose, never as a quote \(T12\)\./);
-    expect(blocks['on-site']).toMatch(/Nova may be in the photos, and a caption names Nova by the name Nova signs the article with\./);
-    expect(blocks['on-site']).toMatch(/Nova still takes no side in the verdict \(T8\)\./);
-  });
-
-  it('remote: Nova took no part in the room and is in no photo', () => {
-    expect(blocks.remote).toMatch(/Fremont PD required, and took no part in the room: the players had no dealings with Nova beyond the memories they turned in, and Nova is in no photo\./);
-  });
-
-  it('remote: Nova says once, early, that Nova monitored from outside, and then tells the room in scenes (R13)', () => {
-    expect(blocks.remote).toMatch(/Nova monitored the investigation remotely, from outside the warehouse/);
-    // Phase 17 (rule-text read, change 10): in Nova's own words, with the police deal in the background.
-    expect(blocks.remote).toMatch(/Nova says so once, early, in Nova's own words and as the start of Nova's questions; the terms of the police deal that put Nova there stay in the background unless the story turns on them\./);
-    expect(blocks.remote).toMatch(/After that the room's events are told as scenes/);
-  });
-
-  it('remote: attribution goes where it matters, and Nova never claims to have seen or heard the room (R13)', () => {
-    expect(blocks.remote).toMatch(/Attribution goes where it matters: a line someone was overheard saying, and a claim about a person/);
-    expect(blocks.remote).toMatch(/Nova never claims to have seen or heard the room/);
-    expect(blocks.remote).toMatch(/A person is named as Nova's source only where the record names them/);
   });
 });
 
@@ -489,11 +434,12 @@ describe('presence lines outside the article prompt', () => {
       'CONTEXT', 'PREVIOUS', builder
     );
     const all = system + '\n' + user;
-    // Phase 3 (3.2): the rule set in place of the retired craft files.
+    // Phase 3 (3.2): the rule set in place of the retired craft files; phase 18 (R2), the
+    // limits, the brief and the article writer's own part, each counted by its line.
     expect(all).toContain('<world>');
-    expect(all).toContain('<truth-rules>');
-    // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
-    expect(all.match(/^<craft-voice>$/gm)).toHaveLength(1);
+    expect(all).toContain('<limits>');
+    expect(all.match(/^<brief>$/gm)).toHaveLength(1);
+    expect(all.match(/^<job-article>$/gm)).toHaveLength(1);
     expect(all).toContain('<INVESTIGATION_OBSERVATIONS>');
     [...ON_SITE_PERSONA, ...RESTATEMENTS].forEach((phrase) => {
       expect(`${mode}: ${phrase}: ${all.includes(phrase)}`).toBe(`${mode}: ${phrase}: false`);

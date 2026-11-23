@@ -3,9 +3,9 @@
  * constraint "Themes").
  *
  * A future theme is new files rather than new code. Everything a theme decides for the new
- * stages lives in its own files: its rules folder (the world, the truth rules, the craft
- * files and the two mode files), which its config names, and its identity lines, which its
- * config holds (lib/theme-config.js). Code reads both through the theme it holds.
+ * stages lives in its own files: its rules folder (the world, the limits, the brief, each
+ * writer's own part and the two mode files; phase 18, R1), which its config names, and its
+ * identity lines, which its config holds (lib/theme-config.js). Code reads both through the theme it holds.
  *
  * Three parts, the brief's three tests:
  * - a planted second theme, with its own rules folder, mode files and identity lines: each
@@ -44,11 +44,12 @@ const { reworkFixtureState, WEAVE, MAP } = require('./fixtures/rework-state');
 const REPO = path.join(__dirname, '..', '..');
 const count = (haystack, needle) => haystack.split(needle).length - 1;
 
-/** Every file a rules folder holds: the core, the eight craft files and the two mode files. */
+/**
+ * Every file a rules folder holds (phase 18, R1): the core, the brief, each writer's own part
+ * and the two mode files.
+ */
 const RULE_FILES = [
-  'world', 'truth-rules',
-  'craft-story', 'craft-form', 'craft-material', 'craft-voice',
-  'craft-judgement', 'craft-telling', 'craft-cards', 'craft-questions',
+  'world', 'limits', 'brief', 'job-weave', 'job-map', 'job-article',
   'mode-on-site', 'mode-remote'
 ];
 
@@ -91,8 +92,10 @@ function plantedConfig(rules) {
 
 /** The planted folder's text, as the loader wraps each file. */
 const tagged = (name) => `<${name}>\nPLANTED ${name}\n</${name}>`;
-const PLANTED_CORE = `${tagged('world')}\n\n${tagged('truth-rules')}`;
-const PLANTED_MODE = tagged('mode-remote');
+const PLANTED_CORE = `${tagged('world')}\n\n${tagged('limits')}`;
+/** A mode file's text, in the one tag either reaches a prompt in (phase 18, R2). */
+const thisSession = (name) => `<this-session>\nPLANTED ${name}\n</this-session>`;
+const PLANTED_MODE = thisSession('mode-remote');
 const plantedCraft = (call) => RULE_SET_CALLS[call].map(tagged).join('\n\n');
 
 /** A theme loader that no writer of the new stages may ask for a file. */
@@ -127,19 +130,19 @@ describe('4.13: a planted second theme reads its own rules and identity lines', 
 
   /**
    * A system prompt of the planted theme: its identity line for the call, its remote mode
-   * block right after it, then its world and truth rules, each once, and nothing of another
+   * block right after it, then its world and limits, each once, and nothing of another
    * theme's core.
    */
   function expectPlantedSystem(system, identity) {
     expect(system.startsWith(`${identity}\n\n${PLANTED_MODE}\n\n${PLANTED_CORE}`)).toBe(true);
     expect(count(system, '<world>')).toBe(1);
-    expect(count(system, '<truth-rules>')).toBe(1);
-    expect(count(system, '<mode-on-site>') + count(system, '<mode-remote>')).toBe(1);
+    expect(count(system, '<limits>')).toBe(1);
+    expect(count(system, '<this-session>')).toBe(1);
   }
 
   /**
-   * A user prompt of the planted theme: the call's craft files from its folder, once each.
-   * A file's tag opens a line of its own; a task names the tag in prose ("C1 (<craft-story>)").
+   * A user prompt of the planted theme: the call's own files from its folder, the brief then
+   * its writer's part, once each. A file's tag opens a line of its own.
    */
   function expectPlantedCraft(user, call) {
     expect(count(user, plantedCraft(call))).toBe(1);
@@ -193,10 +196,10 @@ describe('4.13: a planted second theme reads its own rules and identity lines', 
   });
 
   describe('the judges', () => {
-    it.each([['arcs', 'judge-arc'], ['article', 'judge-article']])('the %s judge opens with the theme\'s identity and reads its core and mode block, no craft', (phase, call) => {
+    it.each([['arcs', 'judge-arc'], ['article', 'judge-article']])('the %s judge opens with the theme\'s identity and reads its core and mode block, no brief and no writer\'s part', (phase, call) => {
       const system = buildEvaluationSystemPrompt(phase, getPhaseCriteria(phase, PLANTED), PLANTED, { sessionConfig: state.sessionConfig });
       expectPlantedSystem(system, PLANTED_IDENTITIES[call]);
-      expect(system).not.toMatch(/<craft-[a-z]+>/);
+      expect(system).not.toMatch(/<(brief|job-[a-z]+)>/);
     });
   });
 
@@ -204,7 +207,7 @@ describe('4.13: a planted second theme reads its own rules and identity lines', 
     for (const call of Object.keys(RULE_SET_CALLS)) {
       expect(loadRuleSet(call, { theme: PLANTED })).toEqual({ core: PLANTED_CORE, craft: plantedCraft(call) });
     }
-    expect(loadModeBlock('on-site', { theme: PLANTED })).toBe(tagged('mode-on-site'));
+    expect(loadModeBlock('on-site', { theme: PLANTED })).toBe(thisSession('mode-on-site'));
     expect(loadModeBlock('remote', { theme: PLANTED })).toBe(PLANTED_MODE);
   });
 });
@@ -221,7 +224,7 @@ describe('4.13: a theme with no rules folder throws, naming it', () => {
     THEME_CONFIGS[ROOMLESS] = plantedConfig(missingRoot);
     // A folder that exists, with one file a call reads gone.
     holedRoot = plantRulesFolder('holed-rules-');
-    fs.unlinkSync(path.join(holedRoot, 'craft-story.md'));
+    fs.unlinkSync(path.join(holedRoot, 'brief.md'));
     THEME_CONFIGS[HOLED] = plantedConfig(holedRoot);
   });
 
@@ -251,7 +254,7 @@ describe('4.13: a theme with no rules folder throws, naming it', () => {
   });
 
   it('a missing file in the theme\'s folder throws naming the file, for the calls that read it', () => {
-    expect(() => loadRuleSet('arc', { theme: HOLED })).toThrow(/craft-story\.md/);
+    expect(() => loadRuleSet('arc', { theme: HOLED })).toThrow(/brief\.md/);
     expect(() => loadRuleSet('judge-arc', { theme: HOLED })).not.toThrow();
   });
 });

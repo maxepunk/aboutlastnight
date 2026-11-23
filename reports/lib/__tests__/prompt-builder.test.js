@@ -86,11 +86,11 @@ describe('PromptBuilder', () => {
       expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
     });
 
-    it('should carry the world and the truth rules in the system prompt', async () => {
+    it('should carry the world and the limits in the system prompt', async () => {
       const { systemPrompt } = await builder.buildOutlinePrompt(SETTLED_WEAVE);
 
       expect(systemPrompt).toContain('<world>');
-      expect(systemPrompt).toContain('<truth-rules>');
+      expect(systemPrompt).toContain('<limits>');
       expect(systemPrompt).not.toContain('Lede must hook');
     });
 
@@ -142,8 +142,8 @@ describe('PromptBuilder', () => {
       const schemaBlock = userPrompt.slice(userPrompt.indexOf('\n<SCHEMA>\n'), userPrompt.indexOf('\n</SCHEMA>\n'));
       expect(schemaBlock).toContain(printed);
       expect(userPrompt.indexOf('\n<SCHEMA>\n')).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
-      // The craft files open on their own lines; the map's task names their tags in prose.
-      expect(userPrompt.indexOf('\n</SCHEMA>\n')).toBeLessThan(userPrompt.indexOf('\n<craft-'));
+      // The brief and the map writer's part open on their own lines, after the schema.
+      expect(userPrompt.indexOf('\n</SCHEMA>\n')).toBeLessThan(userPrompt.indexOf('\n<brief>\n'));
       const outsideSchema = userPrompt.replace(/<SCHEMA>[\s\S]*?<\/SCHEMA>/g, '');
       expect(outsideSchema).not.toContain('Return JSON with the following structure');
       expect(outsideSchema).not.toContain('"followTheMoney": {');
@@ -191,27 +191,26 @@ describe('PromptBuilder', () => {
       expect(mockThemeLoader.loadPhasePrompts).not.toHaveBeenCalled();
     });
 
-    // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
-    it('should carry the voice craft file in the user prompt', async () => {
+    // Phase 18 (R2): the brief, counted by the line that opens it.
+    it('should carry the brief in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         SETTLED_WEAVE, mockMap
       );
 
-      expect(userPrompt.match(/^<craft-voice>$/gm)).toHaveLength(1);
+      expect(userPrompt.match(/^<brief>$/gm)).toHaveLength(1);
       expect(userPrompt).not.toContain('Be NovaGlade');
     });
 
-    it('should carry every article craft file in the user prompt', async () => {
+    it('should carry every file the article call reads in the user prompt', async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         SETTLED_WEAVE, mockMap
       );
 
-      // Task 3.8: the eight craft files, grouped by the writer's job (spec section 8). Phase 17
-      // (R3): the task names story, form, cards, telling and voice in prose, so each file is
-      // counted by the line that opens it.
-      ['story', 'form', 'material', 'judgement', 'cards', 'questions', 'telling', 'voice']
+      // Phase 18 (R2): the brief and the article writer's own part, each counted by the line
+      // that opens it.
+      ['brief', 'job-article']
         .forEach((name) => {
-          const lines = (userPrompt.match(new RegExp(`^<craft-${name}>$`, 'gm')) || []).length;
+          const lines = (userPrompt.match(new RegExp(`^<${name}>$`, 'gm')) || []).length;
           expect(`${name}: ${lines}`).toBe(`${name}: 1`);
         });
       expect(userPrompt).not.toContain('Show dont tell');
@@ -245,14 +244,14 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('anthropics/claude-agent-sdk-typescript#277');
     });
 
-    // Phase 3 (3.2): the em-dash house style is C4's, in craft-telling. Phase 17 (R3): the
-    // task names <craft-telling> in prose, so the file is counted by its line.
-    it('should carry the telling craft file, where the em-dash house style lives', async () => {
+    // Phase 3 (3.2): the house style on dashes is a rule file's. Phase 18 (R2): the article
+    // writer's own part holds it, counted by the line that opens it.
+    it("should carry the article writer's own part, where the house style on dashes lives", async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         SETTLED_WEAVE, mockMap
       );
 
-      expect(userPrompt.match(/^<craft-telling>$/gm)).toHaveLength(1);
+      expect(userPrompt.match(/^<job-article>$/gm)).toHaveLength(1);
     });
 
     // Brief 4.7b: the sections are the map's, each named by its slot; no code names the
@@ -286,14 +285,15 @@ describe('PromptBuilder', () => {
       expect(userPrompt).not.toContain('ARC_FLOW');
     });
 
-    // Phase 3 (3.2): the length is C4's (about 1,500 words), in craft-telling.
-    it('journalist article prompt leaves the word target to C4', async () => {
+    // Phase 3 (3.2): the length (about 1,500 words) is a rule file's; phase 18 (R2), the
+    // article writer's own part.
+    it("journalist article prompt leaves the word target to the article writer's own part", async () => {
       const { userPrompt } = await builder.buildArticlePrompt(
         SETTLED_WEAVE, STORY_MAP
       );
       const generationInstruction = userPrompt.split('<GENERATION_INSTRUCTION>')[1] || '';
       expect(generationInstruction).not.toContain('1000-1500 words');
-      expect(userPrompt.match(/^<craft-telling>$/gm)).toHaveLength(1);
+      expect(userPrompt.match(/^<job-article>$/gm)).toHaveLength(1);
     });
   });
 
@@ -382,20 +382,20 @@ describe('PromptBuilder', () => {
     };
 
     // Task A of phases 14 and 15: the world no longer fixes the morning. The investigation is
-    // the day after the party, at the time of day the session's facts give.
-    it.each(['outline', 'article'])('the %s system prompt says the party was last night and the investigation the day after', async (which) => {
+    // the day after the party, at the time of day the session's facts give. Phase 18 (R4): the
+    // world's sentences this pinned are pinned whole by hash in rule-set.test.js.
+    it.each(['outline', 'article'])('the %s system prompt fixes no morning and carries no temporal block', async (which) => {
       const { systemPrompt, userPrompt } = await stagesFor('on-site', which);
-      expect(systemPrompt).toContain('**The party** happened last night');
-      expect(systemPrompt).toContain('**The investigation** is the game itself, in the warehouse, the day after the party.');
+      expect(systemPrompt).toContain('<world>');
       expect(systemPrompt).not.toContain('this morning, in the warehouse');
       expect(userPrompt).not.toContain('<TEMPORAL_DISCIPLINE>');
       expect(systemPrompt).not.toContain('the game session');
     });
 
-    it('the world and the truth rules are the same in both modes; only the mode block differs', async () => {
+    it('the world and the limits are the same in both modes; only the mode block differs', async () => {
       const remote = (await stagesFor('remote', 'article')).systemPrompt;
       const onSite = (await stagesFor('on-site', 'article')).systemPrompt;
-      const core = (text) => text.slice(text.indexOf('<world>'), text.indexOf('</truth-rules>'));
+      const core = (text) => text.slice(text.indexOf('<world>'), text.indexOf('</limits>'));
       expect(core(remote)).toBe(core(onSite));
       expect(core(remote)).not.toContain('physically present');
     });
@@ -648,7 +648,7 @@ describe('PromptBuilder', () => {
       );
       expect(section).toContain('Blake solicited Vic three times');
       expect(section).not.toContain('suspects');
-      const outsideCraft = userPrompt.replace(/^<(craft-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
+      const outsideCraft = userPrompt.replace(/^<(brief|job-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
       expect(outsideCraft).toContain('<SETTLED_WEAVE>');
       expect(outsideCraft).not.toContain('suspects');
     });
@@ -978,9 +978,9 @@ describe('buildOutlinePrompt — the director\'s raw notes', () => {
 
   it('carries the whiteboard nowhere near it — that is Layer 3, and it has its own path', async () => {
     const { userPrompt } = await render({ directorNotes: DIRECTOR_NOTES });
-    // Phase 17: the map writer reads C12, which says "what Nova suspects" (rule-text read,
-    // change 1), so the scan reads the prompt outside the craft files.
-    const outsideCraft = userPrompt.replace(/^<(craft-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
+    // Phase 17: the scan reads the prompt outside the rule files the user prompt carries (since
+    // phase 18, the brief and the map writer's part), whose wording is the director's.
+    const outsideCraft = userPrompt.replace(/^<(brief|job-[a-z]+)>$[\s\S]*?^<\/\1>$/gm, '');
     expect(outsideCraft).toContain('<SETTLED_WEAVE>');
     expect(outsideCraft).not.toContain('suspects');
   });
@@ -1387,36 +1387,37 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
   const between = (text, open, close) => text.slice(text.indexOf(open), text.indexOf(close) + close.length);
 
   describe('the rule sections', () => {
-    // Phase 17 (R2): the map writer reads the voice, for the deck and the headings. Its task
-    // names the tag in prose, so the file is counted by the line that opens it.
-    it('the outline writer: the world and the truth rules in its system prompt, its craft, the voice last, in its user prompt', async () => {
+    // Phase 18 (R2, R3): the map writer reads the brief, then its own part, last, each counted by
+    // the line that opens it.
+    it('the outline writer: the world and the limits in its system prompt, the brief then its own part in its user prompt', async () => {
       const { core, craft } = loadRuleSet('outline');
       const { systemPrompt, userPrompt } = await outlineOf(journalist());
       expect(systemPrompt.split(core).length - 1).toBe(1);
       expect(userPrompt.split(craft).length - 1).toBe(1);
-      expect(userPrompt.match(/^<craft-voice>$/gm)).toHaveLength(1);
-      expect(craft.trimEnd().endsWith('</craft-voice>')).toBe(true);
+      expect(userPrompt.match(/^<job-map>$/gm)).toHaveLength(1);
+      expect(craft.startsWith('<brief>\n')).toBe(true);
+      expect(craft.trimEnd().endsWith('</job-map>')).toBe(true);
       expect(userPrompt.indexOf(craft)).toBeGreaterThan(userPrompt.indexOf('</SESSION_FACTS>'));
       // Phase 4 (brief 4.6): the map's task names <DIRECTOR_GUIDANCE> in prose, so the
       // section is the last one.
       expect(userPrompt.indexOf(craft)).toBeLessThan(userPrompt.lastIndexOf('<DIRECTOR_GUIDANCE>'));
     });
 
-    it('the article writer: the world and the truth rules in its system prompt, every craft file in its user prompt', async () => {
+    it('the article writer: the world and the limits in its system prompt, the brief then its own part in its user prompt', async () => {
       const { core, craft } = loadRuleSet('article');
       const { systemPrompt, userPrompt } = await articleOf(journalist());
       expect(systemPrompt.split(core).length - 1).toBe(1);
       expect(userPrompt.split(craft).length - 1).toBe(1);
-      // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
-      expect(userPrompt.match(/^<craft-voice>$/gm)).toHaveLength(1);
+      // Phase 18 (R2): the article writer's own part, counted by its line.
+      expect(userPrompt.match(/^<job-article>$/gm)).toHaveLength(1);
       expect(userPrompt.indexOf(craft)).toBeGreaterThan(userPrompt.indexOf('</GENERATION_INSTRUCTION>'));
       expect(userPrompt.indexOf(craft)).toBeLessThan(userPrompt.indexOf('<DIRECTOR_GUIDANCE>'));
     });
 
     it('the mode block keeps its place, right after the identity line, before the world', async () => {
       for (const { systemPrompt } of [await outlineOf(journalist()), await articleOf(journalist())]) {
-        expect(systemPrompt.split('\n')[2]).toBe('<mode-remote>');
-        expect(systemPrompt.indexOf('</mode-remote>')).toBeLessThan(systemPrompt.indexOf('<world>'));
+        expect(systemPrompt.split('\n')[2]).toBe('<this-session>');
+        expect(systemPrompt.indexOf('</this-session>')).toBeLessThan(systemPrompt.indexOf('<world>'));
       }
     });
 

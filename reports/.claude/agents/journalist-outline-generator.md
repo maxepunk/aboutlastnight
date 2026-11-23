@@ -16,14 +16,9 @@ Read these first. They are the rules for everything you plan and write; this fil
 
 ```
 .claude/skills/journalist-report/references/rules/world.md
-.claude/skills/journalist-report/references/rules/truth-rules.md
-.claude/skills/journalist-report/references/rules/craft-story.md
-.claude/skills/journalist-report/references/rules/craft-form.md
-.claude/skills/journalist-report/references/rules/craft-material.md
-.claude/skills/journalist-report/references/rules/craft-judgement.md
-.claude/skills/journalist-report/references/rules/craft-cards.md
-.claude/skills/journalist-report/references/rules/craft-telling.md
-.claude/skills/journalist-report/references/rules/craft-voice.md
+.claude/skills/journalist-report/references/rules/limits.md
+.claude/skills/journalist-report/references/rules/brief.md
+.claude/skills/journalist-report/references/rules/job-map.md
 .claude/skills/journalist-report/references/rules/mode-on-site.md   (or mode-remote.md, as the record's reportingMode says)
 ```
 

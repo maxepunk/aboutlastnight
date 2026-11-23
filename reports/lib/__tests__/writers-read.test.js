@@ -2,12 +2,12 @@
  * What the writers are told and read (phase 17, brief B; spec
  * docs/superpowers/specs/2026-10-18-the-writing-design.md, sections 3 and 4; rulings R2 and R3).
  *
- * - Every writer reads its craft files in one order, story, form, material, judgement, cards,
- *   questions, telling, voice (R2), so the two that say how the prose reads sit last, right
- *   before the director's notes. Each rework reads its writer's files in its writer's order,
- *   every way it runs: the arc rework as an automatic pass, a reweave and a send-back, the map
- *   rework as an automatic pass and a send-back, and the article rework. The renders run the
- *   real nodes over the real rule files, with a recording stand-in for the model.
+ * - Every writer reads the brief, then its own part (phase 18, R2 and R3; the brief-and-the-
+ *   limits spec, section 1), where its craft files sat, right before the director's notes. Each
+ *   rework reads its writer's files in its writer's order, every way it runs: the arc rework as
+ *   an automatic pass, a reweave and a send-back, the map rework as an automatic pass and a
+ *   send-back, and the article rework. The renders run the real nodes over the real rule
+ *   files, with a recording stand-in for the model.
  * - The code-built lines say what the director's rule-text read says (R3): the article writer's
  *   identity line, and the map schema's descriptions the map writer reads.
  */
@@ -27,22 +27,18 @@ const cfg = (sdk) => ({ configurable: { sdkClient: sdk, theme: 'journalist' } })
 const recordingSdk = (value) => jest.fn(async () => clone(value));
 const sent = (sdk) => sdk.mock.calls[0][0];
 
-/** R2: each writer's craft files, in the one order. */
+/** Phase 18, R2: each writer's own files, the brief then its own part. */
 const R2 = {
-  arc: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions', 'craft-voice'],
-  outline: ['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-cards', 'craft-telling', 'craft-voice'],
-  article: [
-    'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
-    'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
-  ]
+  arc: ['brief', 'job-weave'],
+  outline: ['brief', 'job-map'],
+  article: ['brief', 'job-article']
 };
 
 /**
- * Every craft file a prompt carries, by the line that opens it, in order. The tasks name
- * <craft-story>, <craft-form>, <craft-voice> and the others in prose, so a tag is counted only
- * where it stands alone on its line.
+ * Every writer's file a prompt carries, the brief and the writers' parts, by the line that
+ * opens it, in order. A tag is counted only where it stands alone on its line.
  */
-const craftTagsOf = (text) => [...text.matchAll(/^<(craft-[a-z]+)>$/gm)].map((match) => match[1]);
+const callTagsOf = (text) => [...text.matchAll(/^<(brief|job-[a-z]+)>$/gm)].map((match) => match[1]);
 
 /** Each writer and each way its rework runs, with the call it reads. */
 async function renderAll() {
@@ -118,7 +114,7 @@ beforeAll(() => {
 });
 afterAll(() => jest.restoreAllMocks());
 
-describe("R2: every writer and every rework reads its craft files in the one order, telling and voice last", () => {
+describe("R2: every writer and every rework reads the brief, then its own part, last before the director's notes", () => {
   let renders;
   beforeAll(async () => { renders = await renderAll(); });
 
@@ -142,32 +138,31 @@ describe("R2: every writer and every rework reads its craft files in the one ord
     'arc writer', 'arc rework, send-back', 'arc rework, reweave', 'arc rework, automatic',
     'map writer', 'map rework, send-back', 'map rework, automatic',
     'article writer', 'article rework'
-  ])("%s: its craft files in R2's order, in the user prompt alone, <craft-voice> once", (name) => {
+  ])("%s: its files in R2's order, in the user prompt alone, each once", (name) => {
     const [call, { prompt, systemPrompt }] = renders[name];
-    expect(craftTagsOf(prompt)).toEqual(R2[call]);
-    expect(craftTagsOf(systemPrompt)).toEqual([]);
-    expect(`${name}: ${(prompt.match(/^<craft-voice>$/gm) || []).length}`).toBe(`${name}: 1`);
+    expect(callTagsOf(prompt)).toEqual(R2[call]);
+    expect(callTagsOf(systemPrompt)).toEqual([]);
+    R2[call].forEach((tag) => {
+      expect(`${name}: ${tag}: ${(prompt.match(new RegExp(`^</${tag}>$`, 'gm')) || []).length}`).toBe(`${name}: ${tag}: 1`);
+    });
   });
 
   it.each([
     'arc writer', 'arc rework, send-back', 'arc rework, reweave', 'arc rework, automatic',
     'map writer', 'map rework, send-back', 'map rework, automatic',
     'article writer', 'article rework'
-  ])('%s: the craft ends on the voice, after the telling where the call reads it, before <DIRECTOR_GUIDANCE>', (name) => {
+  ])("%s: <brief> then the call's <job-...>, then <DIRECTOR_GUIDANCE>", (name) => {
     const [call, { prompt }] = renders[name];
+    const [brief, job] = R2[call];
     const opening = (tag) => prompt.search(new RegExp(`^<${tag}>$`, 'm'));
-    const voiceEnd = prompt.search(/^<\/craft-voice>$/m);
+    const jobEnd = prompt.search(new RegExp(`^</${job}>$`, 'm'));
     const guidance = prompt.search(/^<DIRECTOR_GUIDANCE>$/m);
-    expect(guidance).toBeGreaterThan(voiceEnd);
-    expect(voiceEnd).toBeGreaterThan(opening('craft-voice'));
-    R2[call].filter((tag) => tag !== 'craft-voice').forEach((tag) => {
-      expect(`${name}: ${tag} before the voice: ${opening(tag) < opening('craft-voice')}`).toBe(`${name}: ${tag} before the voice: true`);
-    });
-    if (R2[call].includes('craft-telling')) {
-      // Telling and voice are the last two, with nothing between them but the blank line.
-      const tellingEnd = prompt.search(/^<\/craft-telling>$/m);
-      expect(prompt.slice(tellingEnd, opening('craft-voice'))).toBe('</craft-telling>\n\n');
-    }
+    expect(opening(brief)).toBeGreaterThan(-1);
+    expect(guidance).toBeGreaterThan(jobEnd);
+    expect(jobEnd).toBeGreaterThan(opening(job));
+    // The brief and the writer's part sit together, with nothing between them but the blank line.
+    const briefEnd = prompt.search(new RegExp(`^</${brief}>$`, 'm'));
+    expect(prompt.slice(briefEnd, opening(job))).toBe(`</${brief}>\n\n`);
     // A writer's prompt ends on its standing notes; a rework's carries its revision block between.
     expect(prompt.trimEnd().endsWith('</DIRECTOR_GUIDANCE>')).toBe(true);
   });

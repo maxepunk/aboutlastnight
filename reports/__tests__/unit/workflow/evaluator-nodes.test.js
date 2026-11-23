@@ -1605,12 +1605,12 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
   const ARC_TRUTH = Object.keys(TRUTH_GROUPS).filter((k) => k !== 'photosTruth' && k !== 'fictionTruth');
   const TRUTH_BY_PHASE = { arcs: ARC_TRUTH, article: Object.keys(TRUTH_GROUPS) };
 
-  describe('wiring: the world, the truth rules and the mode block in the system prompt', () => {
-    it.each(JUDGE_CALLS)('the journalist %s judge reads the world and the truth rules once', (phase, call) => {
+  describe('wiring: the world, the limits and the mode block in the system prompt', () => {
+    it.each(JUDGE_CALLS)('the journalist %s judge reads the world and the limits once', (phase, call) => {
       const prompt = systemFor(phase, stateFor());
       const { core } = loadRuleSet(call);
       expect(count(prompt, core)).toBe(1);
-      expect(count(prompt, '<truth-rules>')).toBe(1);
+      expect(count(prompt, '<limits>')).toBe(1);
     });
 
     it.each(JUDGE_CALLS)('the journalist %s judge reads the session\'s mode block once, right after the identity line', (phase) => {
@@ -1631,12 +1631,12 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
     // Phase 4 (spec section 11): neither judge reads a craft file, the story meeting's fact
     // check (brief 4.4) nor the article judge (brief 4.7a), so neither writes a craft
     // finding. The article judge's craft files, its craft-findings section and their tests
-    // went with its notes on the writing.
-    it('neither judge reads a craft file, nor asks for a craft finding', () => {
-      const craftTags = (phase) => [...userFor(phase, stateFor()).matchAll(/^<(craft-[a-z]+)>$/gm)].map((m) => m[1]);
+    // went with its notes on the writing. Phase 18 (R2): nor the brief or a writer's part.
+    it('neither judge reads the brief or a writer\'s part, nor asks for a craft finding', () => {
+      const callTags = (phase) => [...userFor(phase, stateFor()).matchAll(/^<(brief|job-[a-z]+)>$/gm)].map((m) => m[1]);
       for (const [phase] of JUDGE_CALLS) {
-        expect([phase, craftTags(phase)]).toEqual([phase, []]);
-        expect(`${systemFor(phase, stateFor())}\n${userFor(phase, stateFor())}`).not.toMatch(/<craft-[a-z]+>/);
+        expect([phase, callTags(phase)]).toEqual([phase, []]);
+        expect(`${systemFor(phase, stateFor())}\n${userFor(phase, stateFor())}`).not.toMatch(/<(brief|job-[a-z]+)>/);
         expect(systemFor(phase, stateFor())).not.toContain('CRAFT FINDINGS');
       }
     });

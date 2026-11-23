@@ -12,7 +12,7 @@
  * model (generateOutline, generateContentBundle, generateWeave), for the fixture
  * state in fixtures/rework-state.js with every tail input set (arc-stop guidance,
  * standing notes, the previous stage's advisories; the arc writer's revision hook).
- * The craft files are stubs (fixtures/render-writers.js), so the pin covers the
+ * The rule files are stubs (fixtures/render-writers.js), so the pin covers the
  * builders' assembly, not the files' contents.
  *
  * The hashes were taken from df51bc0, the tree before the split, and the split
@@ -475,11 +475,19 @@ const REPO = path.join(__dirname, '..', '..');
  *   investigation runs the day after the party (-5): article-journalist 36324 -> 36319. The
  *   byline's guestReporter description in its <SCHEMA> names the " || " join of two or more
  *   credits, as the byline instruction gives them (+58): article-journalist 36319 -> 36377.
+ * - Phase 18, slice A (R1, R2; the brief-and-the-limits spec, section 1), the rule files and the
+ *   loader. The stubs are the eight new files (fixtures/rules/), and each writer reads them in the
+ *   old files' places. The mode block's tag is <this-session> in place of <mode-remote> (+2); the
+ *   core's second file is <limits> in place of <truth-rules> (-15); and each writer's craft files
+ *   give way to the brief and its own part: the weave writer's six to <brief> and <job-weave>
+ *   (-242), the map writer's seven to <brief> and <job-map> (-289), the article writer's eight to
+ *   <brief> and <job-article> (-336). arcs-journalist 12319 -> 12064 (-255), outline-journalist
+ *   25519 -> 25217 (-302), article-journalist 36377 -> 36028 (-349). Nothing else in a render moves.
  */
 const PINNED = {
-  'outline-journalist': ['b3e3e235b31d78e8a484dcdc62531159cbe8a1ed4cd0ef57388115cd1fb75f1d', 25519],
-  'article-journalist': ['2ee55f5ebea7c0e2200e61477457a5ab6edb84b2b651e5213aef8a086fcacd36', 36377],
-  'arcs-journalist': ['d7586be4b567321e07151d17b9727fc418666ae0cae7780b4e7f90afa9ba0f1a', 12319]
+  'outline-journalist': ['4c0ed98db0e86521a72301be750d2dfb4b68d43a3b4e8be5363af35b41b00192', 25217],
+  'article-journalist': ['b02351b6293ac65d33b6c3e028cda3470d6c99b22a888d210d4360db2565b1d1', 36028],
+  'arcs-journalist': ['087cc063121c6f55e865a92fb603ed645739f2eaabe0be2e2c859377e11fba50', 12064]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

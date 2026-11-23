@@ -150,9 +150,9 @@ describe('journalist map stop', () => {
   it("the reworker's system prompt is its writer's, then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
     expect(rework.system).toBe(`${writer.system}\n\n${OUTLINE_REVISION_RULES}`);
-    // Phase 3 (3.2): the journalist's system prompt carries the world and the truth rules.
+    // Phase 3 (3.2): the journalist's system prompt carries the world and the limits (phase 18).
     expect(writer.system).toContain('<world>');
-    expect(writer.system).toContain('<truth-rules>');
+    expect(writer.system).toContain('<limits>');
   });
 
   it("the guidance keeps phase 1's note filtering: every note but the one being acted on", async () => {
@@ -209,10 +209,11 @@ describe('journalist article stop', () => {
     expectOneRecordAndGuidanceLast(rework.user);
 
     // The writer's rules and schema replace the reworker's own smaller copies.
-    // Phase 3 (3.2): the journalist's rules are its craft files, once.
+    // Phase 3 (3.2): the journalist's rules are its writer's files, once: since phase 18
+    // (R2) the brief and the article writer's own part, each counted by its line.
     expect(count(rework.user, '<RULES>')).toBe(0);
-    // Phase 17 (R3): the task names <craft-voice> in prose, so the file is counted by its line.
-    expect(rework.user.match(/^<craft-voice>$/gm)).toHaveLength(1);
+    expect(rework.user.match(/^<brief>$/gm)).toHaveLength(1);
+    expect(rework.user.match(/^<job-article>$/gm)).toHaveLength(1);
     expect(count(rework.user, '<SCHEMA>')).toBe(1);
     expect(rework.user).not.toContain('## OUTPUT SCHEMA');
     // Brief 4.7b: the settled weave first, then the map as the director left it.
@@ -240,12 +241,12 @@ describe('journalist article stop', () => {
     cardIds.forEach((id) => expect(writerPart).toContain(DOCUMENT_TEXT[id]));
   });
 
-  it("the reworker's system prompt is its writer's (the roster with pronouns, the world and the truth rules), then the rework rules", async () => {
+  it("the reworker's system prompt is its writer's (the roster with pronouns, the world and the limits), then the rework rules", async () => {
     const { writer, rework } = await writerAndRework(SEND_BACK);
     expect(rework.system).toBe(`${writer.system}\n\n${ARTICLE_REVISION_RULES}`);
     expect(writer.system).toContain('CANONICAL CHARACTER ROSTER');
     expect(writer.system).toContain('Morgan → Morgan Reed');
-    expect(writer.system).toContain('<truth-rules>');
+    expect(writer.system).toContain('<limits>');
   });
 
   it("the guidance keeps phase 1's note filtering", async () => {
@@ -292,11 +293,11 @@ describe('journalist arc stop', () => {
 
     // What the reworker used to lack (rework-inputs.md Step 2): the whiteboard, the
     // investigation focus, the character context, the rules and the record. Phase 3
-    // (3.3): the rule set's craft files come last. Phase 4 (brief 4.4): the weave's
-    // sections.
+    // (3.3): the rule set's files come last, since phase 18 (R2) the brief and the weave
+    // writer's own part. Phase 4 (brief 4.4): the weave's sections.
     [
       '### The Whiteboard', '### Primary Investigation Focus', '### Character Context',
-      '## SECTION 2: THE RECORD', '## SECTION 3: THE WEAVE', '## SECTION 4: CRAFT GUIDANCE', '<craft-story>'
+      '## SECTION 2: THE RECORD', '## SECTION 3: THE WEAVE', '## SECTION 4: CRAFT GUIDANCE', '\n<brief>\n', '\n<job-weave>\n'
     ].forEach((heading) => expect(rework.user).toContain(heading));
     Object.values(DOCUMENT_TEXT).forEach((text) => expect(rework.user).toContain(text));
 

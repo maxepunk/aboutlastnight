@@ -99,7 +99,7 @@ describe('the arc writer writes one weave in one call', () => {
       .rejects.toThrow(/no threads/);
   });
 
-  it('the system prompt: the identity line, the mode block, the world and the truth rules, then the role, and no every-player line', () => {
+  it('the system prompt: the identity line, the mode block, the world and the limits, then the role, and no every-player line', () => {
     const state = weaveState();
     const system = weaveSystemPrompt(state.sessionConfig, 'journalist');
     // Brief 4.13: the identity line is the theme's, and the prompt's own text follows the rules.
@@ -109,7 +109,7 @@ describe('the arc writer writes one weave in one call', () => {
     expect(system.endsWith(`\n\n${WEAVE_SYSTEM_PROMPT}`)).toBe(true);
     expect(system.indexOf(loadModeBlock('remote'))).toBeLessThan(system.indexOf('<world>'));
     expect(count(system, loadRuleSet('arc').core)).toBe(1);
-    expect(system).not.toContain('<craft-');
+    expect(system).not.toMatch(/<(brief|job-[a-z]+)>/);
     // The prompt's own text: the rule files state their own rules.
     expect(WEAVE_SYSTEM_PROMPT).not.toMatch(/roster member|placement|every player|each player|narrative arcs/i);
   });
@@ -160,8 +160,8 @@ describe('the arc writer writes one weave in one call', () => {
   });
 
   it('carries its rule files as RULE_SET_CALLS[\'arc\'] gives them, after the record and before <DIRECTOR_GUIDANCE>, which stays last', () => {
-    // Phase 17 (R2): the arc writer reads the voice, last, for each angle's headline.
-    expect(RULE_SET_CALLS.arc).toEqual(['craft-story', 'craft-form', 'craft-material', 'craft-judgement', 'craft-questions', 'craft-voice']);
+    // Phase 18 (R2): the arc writer reads the brief, then its own part.
+    expect(RULE_SET_CALLS.arc).toEqual(['brief', 'job-weave']);
     const notes = [{ gate: 'arc-selection', kind: 'rejection', round: 1, text: 'Lead with the vote.', at: 't' }];
     const prompt = buildWeavePrompt(weaveState({ directorGateNotes: notes }));
     const { craft } = loadRuleSet('arc');
@@ -503,11 +503,11 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
     expect(system).toMatch(/where a piece of evidence is at fault, the piece by its sources/);
   });
 
-  it('reads no craft file: RULE_SET_CALLS[\'judge-arc\'] is the core alone', () => {
+  it('reads neither the brief nor a writer\'s part: RULE_SET_CALLS[\'judge-arc\'] is the core alone', () => {
     expect(RULE_SET_CALLS['judge-arc']).toEqual([]);
     expect(loadRuleSet('judge-arc').craft).toBe('');
     const prompt = buildEvaluationUserPrompt('arcs', weaveState());
-    expect(prompt).not.toContain('<craft-');
+    expect(prompt).not.toMatch(/<(brief|job-[a-z]+)>/);
   });
 
   it('its user prompt prints the weave without the mark, then the verdict, the roster, the notes and the record', () => {

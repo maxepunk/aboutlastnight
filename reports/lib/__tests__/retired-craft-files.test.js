@@ -8,6 +8,9 @@
  * eight nor the five rule files task 3.8 retired. Task 4c-fix: each agent definition
  * lists exactly the rule files its pipeline counterpart reads.
  *
+ * Phase 18 (R1; the brief-and-the-limits spec, section 1): the truth rules and the eight
+ * craft files of task 3.8 give way to the limits, the brief and each writer's own part.
+ *
  * Real files on disk: nothing here is mocked.
  */
 
@@ -44,6 +47,29 @@ describe('the five craft files the rule set retires (task 3.8)', () => {
   it('no call, writer or judge, reads one', () => {
     for (const [call, files] of Object.entries(RULE_SET_CALLS)) {
       const retired = files.filter((name) => RETIRED_RULE_FILES.includes(name));
+      expect(`${call}: ${retired.join(',')}`).toBe(`${call}: `);
+    }
+  });
+});
+
+/**
+ * Phase 18 (R1): the nine rule files the limits, the brief and each writer's own part
+ * replace. Deleted, not archived; git keeps them.
+ */
+const PHASE_18_RETIRED = [
+  'truth-rules', 'craft-story', 'craft-form', 'craft-material', 'craft-judgement',
+  'craft-cards', 'craft-questions', 'craft-telling', 'craft-voice'
+];
+
+describe('the nine rule files phase 18 retires (R1)', () => {
+  it.each(PHASE_18_RETIRED)('%s.md is gone from the rules folder and from the stubs', (name) => {
+    expect(fs.existsSync(path.join(rulesFolderOf('journalist'), `${name}.md`))).toBe(false);
+    expect(fs.existsSync(path.join(STUB_RULES, `${name}.md`))).toBe(false);
+  });
+
+  it('no call, writer or judge, reads one', () => {
+    for (const [call, files] of Object.entries(RULE_SET_CALLS)) {
+      const retired = files.filter((name) => PHASE_18_RETIRED.includes(name));
       expect(`${call}: ${retired.join(',')}`).toBe(`${call}: `);
     }
   });
@@ -90,18 +116,19 @@ describe('the retired journalist craft files', () => {
   /**
    * Task 4c-fix (3.12 review minor 5): each standalone agent lists exactly the rule files
    * its pipeline counterpart reads, so an agent's list cannot fall behind a change to
-   * RULE_SET_CALLS. Every call reads the world and the truth rules, then its craft files
-   * in RULE_SET_CALLS order, then the reporting-mode block (phase 17's spec, sections 3 and
-   * 4, docs/superpowers/specs/2026-10-18-the-writing-design.md, sets the lists and their one
-   * order; the phase 4 spec's section 11 set them before). The evidence curator and the image analyzer
+   * RULE_SET_CALLS. Every call reads the world and the limits, then its own files in
+   * RULE_SET_CALLS order, then the part about this session, one of the two mode files (phase
+   * 18, R2 and R15; docs/superpowers/specs/2026-11-20-the-brief-and-the-limits-design.md,
+   * section 1, sets the lists; phase 17's spec and the phase 4 spec's section 11 set them
+   * before). The evidence curator and the image analyzer
    * write no story text, so they read the world file alone, for the game's facts and what
    * each memory became. The three specialists left the skill path when the standalone path
    * was rewritten to defer to the rule set: nothing started them.
    *
    * Phase 4 (brief 4.12b; R13): the arc analyzer writes the weave and the outline generator
    * the map, the pipeline's `arc` and `outline` calls. The article validator is the article
-   * judge's counterpart, `judge-article`: it checks the draft against the truth rules and
-   * writes no notes on the writing, so it reads no craft file (spec 6.2 and section 11).
+   * judge's counterpart, `judge-article`: it checks the draft against the limits and
+   * writes no notes on the writing, so it reads neither the brief nor a writer's own part.
    */
   const AGENT_CALLS = {
     'journalist-arc-analyzer.md': 'arc',
@@ -125,7 +152,7 @@ describe('the retired journalist craft files', () => {
   it.each(Object.entries(AGENT_CALLS))('%s lists exactly the rule files the %s call reads', (agent, call) => {
     const text = fs.readFileSync(path.join(REPO, '.claude', 'agents', agent), 'utf8');
     const listed = [...text.matchAll(/references\/rules\/([a-z-]+)\.md/g)].map((match) => match[1]);
-    expect(listed).toEqual(call ? ['world', 'truth-rules', ...RULE_SET_CALLS[call], 'mode-on-site'] : ['world']);
+    expect(listed).toEqual(call ? ['world', 'limits', ...RULE_SET_CALLS[call], 'mode-on-site'] : ['world']);
     if (call) expect(text).toContain('mode-remote.md');
   });
 });
@@ -160,7 +187,7 @@ describe('requirePhasePrompts: the reworkers\' guard', () => {
     await expect(builder.requirePhasePrompts(phase)).resolves.toBeUndefined();
     setDefaultRulesRoot(emptyRoot);
     try {
-      await expect(builder.requirePhasePrompts(phase)).rejects.toThrow(/truth-rules\.md/);
+      await expect(builder.requirePhasePrompts(phase)).rejects.toThrow(/limits\.md/);
     } finally {
       setDefaultRulesRoot(null);
     }

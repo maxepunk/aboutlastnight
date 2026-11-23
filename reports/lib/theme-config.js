@@ -115,9 +115,12 @@ const THEME_CONFIGS = {
     // config had zero runtime consumers. Since phase 3 the writers read the rule set
     // (lib/rule-set.js), and the evaluator holds the checks.
 
-    // The rules folder (phase 4, R14): the world, the truth rules, the eight craft files and
-    // the two mode files, which every writer, rework and judge of this theme reads through
-    // lib/rule-set.js.
+    // The rules folder (phase 4, R14), read through lib/rule-set.js: since phase 18 (R1, R2;
+    // docs/superpowers/specs/2026-11-20-the-brief-and-the-limits-design.md, section 1) the
+    // world and the limits, which every writer, rework and judge of this theme reads; the
+    // brief and each writer's own part (job-weave, job-map, job-article), which its writers
+    // and their reworks read; and the two mode files, one of which reaches each prompt as
+    // the part about this session.
     rules: '.claude/skills/journalist-report/references/rules',
 
     // The identity lines (phase 4, brief 4.13): who is writing, reworking or judging, the
