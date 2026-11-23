@@ -116,7 +116,7 @@ describe('no code-built label fixes the morning (R8)', () => {
   // document the record prints is complete again, and the introduction says so.
   it("says in the record view's introduction that each document is complete, and names no morning and no sheet", () => {
     const intro = renderRecordView(bundle, { sessionConfig: eveningState().sessionConfig }).split('\n')[1];
-    expect(intro).toContain('Each exposed document below is complete');
+    expect(intro).toContain('Each document below is complete');
     expect(intro).toContain('<investigation-timeline>');
     expect(intro).not.toMatch(/morning|character sheet/i);
   });

@@ -1077,9 +1077,9 @@ describe('the record view in the outline and article prompts (brief 2.1)', () =>
     expect(count(userPrompt, '</RECORD>')).toBe(1);
     // Every usable document in full, each exactly once: the view, never a second copy.
     for (const text of ALL_TEXTS) expect(count(userPrompt, text)).toBe(1);
-    expect(userPrompt).toContain('<document id="m1" kind="memory" name="M1 - name" owner="Alex Reeves" layer="exposed">');
-    expect(userPrompt).toContain('<document id="mar004" kind="memory" name="MAR004 - name" owner="Marcus Blackwood" layer="exposed">');
-    expect(userPrompt).toContain('<document id="p1" kind="Document" name="Board minutes" layer="exposed">');
+    expect(userPrompt).toContain('<document id="m1" kind="memory" name="M1 - name" owner="Alex Reeves">');
+    expect(userPrompt).toContain('<document id="mar004" kind="memory" name="MAR004 - name" owner="Marcus Blackwood">');
+    expect(userPrompt).toContain('<document id="p1" kind="Document" name="Board minutes">');
     expect(userPrompt).not.toContain('Derived Guess');
     // Buried memories: sales only, once, on the morning timeline (phase 3, 3.5: it
     // replaced <buried-transactions>; 07:50 PM is the first sale, so the evening clock
@@ -1242,7 +1242,7 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
     it("the outline carries the charge, no accused for a no-culprit verdict, and the director's words", async () => {
       const { userPrompt } = await outline(OVERDOSE_FACTS);
       const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
-      expect(facts).toContain("ACCUSATION: none (the room's verdict names no culprit: an overdose)");
+      expect(facts).toContain("ACCUSATION: none (the verdict names no culprit: an overdose)");
       expect(facts).toContain('CHARGE: Accidental overdose');
       expect(facts).toContain('<DIRECTOR_ACCUSATION>');
       expect(facts).toContain(RAW_ACCUSATION);
@@ -1252,7 +1252,7 @@ describe("buildOutlinePrompt / buildArticlePrompt — the director's words as re
     it('the article carries the same, from the same renderer', async () => {
       const { userPrompt } = await article(OVERDOSE_FACTS);
       const facts = between(userPrompt, '<SESSION_FACTS>', '</SESSION_FACTS>');
-      expect(facts).toContain("ACCUSATION: none (the room's verdict names no culprit: an overdose)");
+      expect(facts).toContain("ACCUSATION: none (the verdict names no culprit: an overdose)");
       expect(facts).toContain('CHARGE: Accidental overdose');
       expect(facts).toContain(RAW_ACCUSATION);
     });
@@ -1461,12 +1461,13 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       }
     });
 
-    it('with an epilogue, the header points at <EPILOGUE> and at T7, and prescribes no phrasing', async () => {
+    it('with an epilogue, the header points at <EPILOGUE> and says it is Nova reporting the rest of the day, and prescribes no phrasing', async () => {
       const { userPrompt } = await articleOf(journalist(), NOTES_EPILOGUE);
       const block = between(userPrompt, '<INVESTIGATION_OBSERVATIONS>', '</INVESTIGATION_OBSERVATIONS>');
       const header = block.slice(0, block.indexOf('<DIRECTOR_NOTES>'));
       expect(header).toContain('<EPILOGUE>');
-      expect(header).toContain('T7');
+      expect(header).toContain("In the story it is Nova's own reporting from the rest of that day.");
+      expect(header).not.toMatch(/T7/);
       expect(block).toContain('- After the investigation, Riley left town.');
       expect(header).not.toMatch(/announced|Currently/);
     });
@@ -1485,7 +1486,7 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
     });
 
     it('gives Marcus he/him and the canon line, and invents nothing for Blake', () => {
-      expect(lines.filter((l) => l.startsWith('- Marcus'))).toEqual(['- Marcus Blackwood (he/him) - the man whose death the room investigates']);
+      expect(lines.filter((l) => l.startsWith('- Marcus'))).toEqual(['- Marcus Blackwood (he/him) - the man whose death is being investigated']);
       expect(lines.filter((l) => l.startsWith('- Blake'))).toEqual(['- Blake - manages operations at NeurAI; Marcus called Blake his Valet']);
     });
 
@@ -1524,7 +1525,7 @@ describe('phase 3 (3.2): the journalist writers read the rule set', () => {
       'When the article counts the people at the investigation, it counts these 2 players.';
     const ON_SITE_AGENCY = 'Only the 2 players above were at the investigation. Every other character except Blake and Nova appears only through the memories and documents. ' +
       'Blake was in the room too, making deals, and acts and speaks there as the record shows. ' +
-      'Nova was in the room too, working it for the story, as the reporting-mode block sets out (T8). Nova is not one of the players. ' +
+      'Nova was in the warehouse too, working on the story, as the part about this session sets out. Nova is not one of the players. ' +
       'When the article counts the people at the investigation, it counts these 2 players.';
 
     it.each(['outline', 'article'])('the %s SESSION_FACTS, remote, keeps the sentence as it was', async (which) => {

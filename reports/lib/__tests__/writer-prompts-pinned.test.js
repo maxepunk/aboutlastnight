@@ -508,11 +508,21 @@ const REPO = path.join(__dirname, '..', '..');
  *   leave out (-258), and the schema printed in <SCHEMA> loses those fields
  *   (printedBundleSchemaOf; -5603): article-journalist 36028 -> 29793 (-6235). The outline and
  *   arc pins do not move.
+ * - Phase 18, slice E (the read's parts 3 and 5), the record and the shared labels. The record's
+ *   opening line says each document is a memory made public or a paper document the players
+ *   unlocked and gives no layer, the "layer" label is gone from every document, and sales are of
+ *   "sold" memories; the timeline's opening line gives "a memory turned in" and drops its "(T7)";
+ *   the timeline's turn-in line reads "memory turned in | document: <id> | name given: <name>" or
+ *   "no name given"; the verdict's accused line and the sentence after it, the whiteboard's
+ *   label, Marcus's role and the gloss on "evidence-log" use the limits' words, and the story-terms
+ *   fix and the card field's description drop their rule numbers. The fixture's record, whiteboard
+ *   and accusation print these: outline-journalist 25217 -> 25277 (+60), article-journalist
+ *   36028 -> 36105 (+77), arcs-journalist 12064 -> 12130 (+66).
  */
 const PINNED = {
-  'outline-journalist': ['6448c1d8684ff7906a4283ef580de155837a7e489f255721472c426d79df493d', 24885],
-  'article-journalist': ['bf5f9f6250473dc81adf991f74bdad290d9a0d5d1432a30e3a00ba6cddee3023', 29793],
-  'arcs-journalist': ['a79ae324351e3b0c356a129f867c1352e2390e0187cf82ab9d26507dd3862912', 12135]
+  'outline-journalist': ['ce13061c77ace390949d44fa7a3605d9effe61bd52ac2388841f78fee7f45b95', 24945],
+  'article-journalist': ['9d8b249b785b8a12ae3e9086f33f79b5be5cb83c4214ae1ced4cb2385281cbae', 29870],
+  'arcs-journalist': ['c3ba415e6320b02c474f1110364dfb676f6e5b8a2087225a945c39a469f0d6c6', 12201]
 };
 
 describe('the writers send exactly what they sent before the reworkers were built from them', () => {

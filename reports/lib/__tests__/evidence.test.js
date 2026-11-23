@@ -298,8 +298,7 @@ describe('the story-terms check (storyTermsProblems)', () => {
     // Fix round, fix 1: the same hits said to the director, a document's id said and never shown.
     expect(storyTermsSaid(terms('At 9:58 Rich took $450,000 in jes002 and sam001.'))).toBe("gives the time 9:58, the figure $450,000 and documents' ids");
     expect(storyTermsSaid(terms('"Not here," said Quinn in jes002.'))).toBe('gives the quotation "Not here," and a document\'s id');
-    expect(STORY_TERMS_FIX).toMatch(/story terms/);
-    expect(STORY_TERMS_FIX).toMatch(/C16 \(<craft-story>\)/);
+    expect(STORY_TERMS_FIX).toBe('Say it in plain words: the evidence under the lines carries the record\'s quotations, figures, times and document ids.');
     expect(STORY_TERMS_FIX).not.toMatch(/[–—]/);
   });
 
@@ -347,11 +346,11 @@ describe("fix round 4: the ledger's and the evidence log's texts are the record 
     return s;
   };
 
-  it('passes a piece that quotes the words the writer read on the timeline: "anonymous", "first-burial bonus", "paid to: Rich"', () => {
+  it('passes a piece that quotes the words the writer read on the timeline: "no name given", "first-burial bonus", "paid to: Rich"', () => {
     const ctx = evidenceContextOf(withBonus());
     expect(evidenceProblems([
-      piece(['evidence-log'], 'The warning was turned in "anonymous"'),
-      piece(['evidence-log'], 'The log reads "exposure | document: jes002 | anonymous"'),
+      piece(['evidence-log'], 'The warning was turned in with "no name given"'),
+      piece(['evidence-log'], 'The log reads "memory turned in | document: jes002 | no name given"'),
       piece(['ledger'], 'The ledger lists a "first-burial bonus"'),
       piece(['ledger'], 'The bonus was "paid to: Rich"')
     ], ctx)).toEqual([]);
@@ -363,7 +362,7 @@ describe("fix round 4: the ledger's and the evidence log's texts are the record 
     const timeline = renderMorningTimeline(s.evidenceBundle, s.sessionConfig);
     [...ctx.texts.ledger, ...ctx.texts['evidence-log']].forEach((text) => expect(timeline).toContain(`- ${text}`));
     // The session clock prints an evening's times as the morning's, as the writer reads them.
-    expect(ctx.texts['evidence-log']).toEqual(['09:56 AM | exposure | document: jes002 | anonymous']);
+    expect(ctx.texts['evidence-log']).toEqual(['09:56 AM | memory turned in | document: jes002 | no name given']);
   });
 });
 

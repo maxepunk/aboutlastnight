@@ -121,11 +121,11 @@ describe('renderMorningTimeline', () => {
     expect(lines[0]).toBe('<investigation-timeline>');
     expect(lines[lines.length - 1]).toBe('</investigation-timeline>');
     expect(lines.slice(2, -1)).toEqual([
-      '- 07:37 AM | exposure | document: ale003 | anonymous',
+      '- 07:37 AM | memory turned in | document: ale003 | no name given',
       '- 07:50 AM, same minute:',
       '  - sale | account: Ember | amount: $500,000',
       '  - first-burial bonus | paid to: Ember | amount: $50,000',
-      '- 09:40 AM | exposure | document: ash003 | named: Ashe',
+      '- 09:40 AM | memory turned in | document: ash003 | name given: Ashe',
       '- 10:30 AM | transfer | from: Vic | to: L | amount: $375,000'
     ]);
   });
@@ -147,7 +147,7 @@ describe('renderMorningTimeline', () => {
       '  - first-burial bonus | paid to: Ember | amount: $50,000',
       '- 07:51 AM, same minute:',
       '  - transfer | from: Vic | to: L | amount: $20,000',
-      '  - exposure | document: ale003 | named: Ashe'
+      '  - memory turned in | document: ale003 | name given: Ashe'
     ]);
   });
 

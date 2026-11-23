@@ -164,10 +164,20 @@ describe('Review Focus 4: the verdicts reach SESSION_FACTS and the arc writer\'s
 
   it('a verdict with no culprit names no one', () => {
     const r = bothRenders({ verdictKind: 'overdose', accused: ['Marcus'], charge: 'Accidental overdose' });
-    expect(r.sessionFacts).toContain('ACCUSATION: none (the room\'s verdict names no culprit: an overdose)');
-    expect(r.arc).toContain('**Accused:** none (the room\'s verdict names no culprit: an overdose)');
+    expect(r.sessionFacts).toContain('ACCUSATION: none (the verdict names no culprit: an overdose)');
+    expect(r.arc).toContain('**Accused:** none (the verdict names no culprit: an overdose)');
     expect(r.sessionFacts).not.toContain('FINAL VOTE');
     expect(r.arc).not.toContain('Final Vote');
+  });
+
+  // Phase 18, slice E (review focus 4): a verdict that blames nobody. The line after the accused
+  // line says the players agreed nobody was to blame, and the verdict's thread still holds no one.
+  it("a verdict that blames nobody: the two lines, and the verdict's thread holds no one as the accused", () => {
+    const r = bothRenders({ verdictKind: 'overdose', accused: ['Marcus'], charge: 'Accidental overdose' });
+    expect(r.arc).toContain('The players agreed that nobody was to blame: their verdict is an overdose (Accidental overdose). ' +
+      'The thread that tells the verdict holds no one as the accused, and never the victim.');
+    expect(r.arc).not.toMatch(/the room|room named/i);
+    expect(r.sessionFacts).not.toMatch(/the room's verdict/);
   });
 
   it('a parse from before phase 3 (no verdict kind, no votes) still renders', () => {

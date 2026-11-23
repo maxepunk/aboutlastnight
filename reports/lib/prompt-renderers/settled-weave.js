@@ -239,7 +239,7 @@ function renderSettledWeave(weave, edits) {
   lines.push('', 'THREADS IN THE STORY:');
   settled.threads.forEach((thread) => {
     const id = textOf(thread.id);
-    const verdict = thread.verdict === true ? " It carries the room's verdict." : '';
+    const verdict = thread.verdict === true ? " It carries the verdict." : '';
     lines.push(`- ${id} ${textOf(thread.name)}: ${textOf(thread.line)}${verdict}${marked(`thread:${id}`)}`);
     lines.push(...evidenceLines(thread));
   });
@@ -290,7 +290,7 @@ function renderDirectorAnswers(questions) {
   if (answered.length === 0) return '';
   return [
     `<${DIRECTOR_ANSWERS_TAG}>`,
-    "The director's answers at the story meeting, each under its question: the director's own words, record as the notes are (T1).",
+    "The director's answers at the story meeting, each under its question: the director's own words, as the notes are.",
     ...answered.flatMap((question) => questionLines(question, { unansweredLine: false })),
     `</${DIRECTOR_ANSWERS_TAG}>`
   ].join('\n');

@@ -139,10 +139,10 @@ describe('synthesizePlayerFocus reads regions, not a "suspect" label', () => {
 describe('renderWhiteboardConnections: a machine\'s reading, given as context', () => {
   const context = synthesizePlayerFocus({ accusation: {} }, { whiteboard: PARSE }).whiteboardContext;
 
-  it('labels the whole as a model\'s reading of the photo, context for how the room reasoned', () => {
+  it('labels the whole as a model\'s reading of the photo, context for how they reached the verdict', () => {
     const out = renderWhiteboardConnections(context);
     expect(out.startsWith('### The Whiteboard (a model\'s reading of the photo)\n')).toBe(true);
-    expect(out).toMatch(/context for how the room reasoned/);
+    expect(out).toMatch(/context for how they reached the verdict/);
     expect(out).not.toMatch(/Players drew these/);
   });
 

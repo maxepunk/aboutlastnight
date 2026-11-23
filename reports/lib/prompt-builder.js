@@ -668,7 +668,7 @@ class PromptBuilder {
    * Phase 3 (3.2): the header no longer dates every line to "this morning" (the
    * notes hold the director's read of the session and the epilogue as well), and
    * no longer prescribes wire phrasing ("It has just been announced…") for the
-   * follow-up: T7 says the follow-up is Nova's own reporting, from the epilogue
+   * follow-up: the header says the follow-up is Nova's own reporting, from the epilogue
    * alone. The header points at <EPILOGUE> only when the notes carry one, so a
    * session with no epilogue gets no post-investigation section at all.
    */
@@ -683,7 +683,7 @@ class PromptBuilder {
       sessionConfig: withSessionClock(this.sessionConfig, evidenceBundle)
     });
     const epilogueLine = notes.includes('\n<EPILOGUE>\n')
-      ? "\nThe follow-up from Nova's day is the <EPILOGUE> below; T7 says how Nova reports it."
+      ? "\nThe follow-up from Nova's day is the <EPILOGUE> below. In the story it is Nova's own reporting from the rest of that day."
       : '';
     return `<INVESTIGATION_OBSERVATIONS>
 The director's notes on the session, as written. Each block below says what it is.${epilogueLine}

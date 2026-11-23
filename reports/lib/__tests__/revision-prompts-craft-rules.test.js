@@ -200,11 +200,11 @@ describe('arc revision prompt gives the model the record (PROMPT-REVIEW; brief 2
     // documents themselves, as the writer does, and the ids follow the writer's rule.
     // Phase 4 (brief 4.4): the ids are the receipts a thread may give. Phase 4b (brief 1B): the
     // sources a piece of evidence may name, beside the ledger, the evidence log and the notes.
-    expect(prompt).toContain('<document id="vic001" kind="memory" name="VIC001 - The ledger" owner="Vic Kingsley" layer="exposed">');
+    expect(prompt).toContain('<document id="vic001" kind="memory" name="VIC001 - The ledger" owner="Vic Kingsley">');
     expect(prompt).toContain(MEMORY_TEXT);
-    expect(prompt).toContain('<document id="paper-1" kind="Document" name="Cease and desist" layer="exposed">');
+    expect(prompt).toContain('<document id="paper-1" kind="Document" name="Cease and desist">');
     expect(prompt).toContain(PAPER_TEXT);
-    expect(prompt).toContain("### Sources\nA piece of evidence names each of its sources by one of these document ids, or as \"ledger\" for a sale, the bonus or a transfer on the investigation's timeline, \"evidence-log\" for an exposure on it, or \"notes\" for the director's own words: the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops.\n[\"vic001\",\"paper-1\"]");
+    expect(prompt).toContain("### Sources\nA piece of evidence names each of its sources by one of these document ids, or as \"ledger\" for a sale, the bonus or a transfer on the investigation's timeline, \"evidence-log\" for a memory turned in on it, or \"notes\" for the director's own words: the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops.\n[\"vic001\",\"paper-1\"]");
     expect(prompt).not.toContain('A summary of the name only');
   });
 

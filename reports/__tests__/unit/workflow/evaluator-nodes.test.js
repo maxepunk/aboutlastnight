@@ -1344,7 +1344,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       expect(count(prompt, '<DIRECTOR_ACCUSATION>')).toBe(1);
       expect(count(prompt, ACCUSATION_RAW)).toBe(1);
       // The parse above it says the room named no culprit, never the victim.
-      expect(prompt).toContain('none (the room\'s verdict names no culprit: an overdose)');
+      expect(prompt).toContain('none (the verdict names no culprit: an overdose)');
     });
 
     it.each(PROMPTS)('the %s judge on a detective session reads the detective roster section, without pronouns', (_, build) => {
@@ -1417,7 +1417,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null });
 
       expect(prompt).toContain(renderSessionFactsVerdict(buildSessionFacts(state)));
-      expect(prompt).toContain('ACCUSATION: none (the room\'s verdict names no culprit: an overdose)');
+      expect(prompt).toContain('ACCUSATION: none (the verdict names no culprit: an overdose)');
       expect(prompt).toContain('CHARGE: accidental overdose');
       expect(prompt).toContain('<DIRECTOR_ACCUSATION>');
       expect(prompt).toContain(ACCUSATION_RAW);

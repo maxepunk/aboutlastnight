@@ -71,7 +71,7 @@ const NAMED_SOURCES = (() => {
  */
 const SOURCE_MEANINGS = Object.freeze({
   [EVIDENCE_SOURCES.LEDGER]: "a sale, the bonus or a transfer on the investigation's timeline",
-  [EVIDENCE_SOURCES.EVIDENCE_LOG]: 'an exposure on it',
+  [EVIDENCE_SOURCES.EVIDENCE_LOG]: 'a memory turned in on it',
   [EVIDENCE_SOURCES.NOTES]: (() => {
     const labels = DIRECTOR_WORDS_SOURCES.map((source) => source.label);
     return `the director's own words: ${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
@@ -105,7 +105,7 @@ const EVIDENCE_PIECE_SCHEMA = {
     },
     shows: { type: 'string', description: 'What the piece shows, in a short line with the words or figures that matter; a quotation is word for word from its source' },
     stance: { type: 'string', enum: [...EVIDENCE_STANCES], description: 'Whether the piece supports its line or cuts against it' },
-    card: { type: 'boolean', description: "On a beat of the map: true on the one piece whose document the article prints as the beat's card (C9)" }
+    card: { type: 'boolean', description: "On a beat of the map: true on the one piece whose document the article prints as the beat's card" }
   },
   required: ['sources', 'shows', 'stance']
 };
@@ -639,8 +639,8 @@ function storyTermsSaid(problems) {
   return `gives ${listOf(items)}`;
 }
 
-/** The fix of a line that fails the story-terms check: the rule it keeps, and where what it holds belongs. */
-const STORY_TERMS_FIX = 'Say it in story terms, as C16 (<craft-story>) sets out: the evidence under the lines carries the record\'s quotations, figures, times and document ids.';
+/** The fix of a line that fails the story-terms check: say it in plain words, and where what it holds belongs. */
+const STORY_TERMS_FIX = 'Say it in plain words: the evidence under the lines carries the record\'s quotations, figures, times and document ids.';
 
 module.exports = {
   EVIDENCE_SOURCES,

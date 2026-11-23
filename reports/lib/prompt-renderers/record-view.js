@@ -7,7 +7,7 @@
  *
  * Each exposed document sits in its own tag, labelled the same way everywhere:
  *
- *   <document id="…" kind="…" name="…" owner="…" layer="exposed">
+ *   <document id="…" kind="…" name="…" owner="…">
  *   the document's full text
  *   </document>
  *
@@ -35,7 +35,7 @@ const { guestTurnInName } = require('./session-authors');
 /** The one wording an instruction uses to point a writer at a document's text (R1). */
 const DOCUMENT_POINTER = 'the document with that id in <RECORD>';
 
-const NO_DOCUMENTS = '(The record holds no exposed documents.)';
+const NO_DOCUMENTS = '(The record holds no documents.)';
 const NO_TEXT = '(The record holds no text for this document.)';
 const NOT_RECORDED = '(not recorded)';
 
@@ -123,8 +123,7 @@ function renderDocument(item, kind) {
     ['id', recordIdOf(item)],
     ['kind', kind],
     ['name', firstText(recordOf(item).name, item.name)],
-    ['owner', ownerOf(item)],
-    ['layer', 'exposed']
+    ['owner', ownerOf(item)]
   ]
     .filter(([, value]) => typeof value === 'string' && value.trim())
     .map(([key, value]) => `${key}="${escapeAttr(value)}"`)
@@ -331,7 +330,7 @@ function timelineEventText(event) {
     case 'sale':
       return `sale | ${accountAmountFields(event.account, event.amount)}`;
     case 'exposure':
-      return `exposure | document: ${event.documentId} | ${event.exposer ? `named: ${event.exposer}` : 'anonymous'}`;
+      return `memory turned in | document: ${event.documentId} | ${event.exposer ? `name given: ${event.exposer}` : 'no name given'}`;
     case 'bonus':
       return `first-burial bonus | paid to: ${fieldText(event.toAccount)} | amount: ${fieldText(event.amount, formatAmount)}`;
     case 'transfer':
@@ -353,9 +352,9 @@ function timelineEventLine(event) {
 
 // Phases 14 and 15 (brief E, R8): the investigation ran in the morning or the afternoon, and
 // the time-of-day line says which (session-clock.js timeOfDayLine), so no label here names it.
-const TIMELINE_INTRO = 'The investigation in time order: the ledger and the evidence log merged, each logged time at the hour the investigation ran (T7). ' +
-  'A sale is a buried memory\'s ledger line: the account paid, the amount and the time. ' +
-  'An exposure names the memory\'s document id and the name on the turn-in. ' +
+const TIMELINE_INTRO = 'The investigation in time order: the ledger and the evidence log merged, each logged time at the hour the investigation ran. ' +
+  'A sale is a sold memory\'s ledger line: the account paid, the amount and the time. ' +
+  'A memory turned in gives the memory\'s document id, and the name the person who turned it in gave, if they gave one. ' +
   'Events logged in the same minute sit under that minute, in no known order.';
 
 /**
@@ -400,10 +399,11 @@ function renderMorningTimeline(evidenceBundle, sessionConfig) {
  * @returns {string}
  */
 function renderRecordView(evidenceBundle, { buried = true, sessionConfig = null } = {}) {
-  const intro = 'The session\'s record. Each exposed document below is complete: its id, its kind ' +
-    '(memory, or the paper document\'s type), its name, its owner when the record names one, ' +
-    'and its layer, then its full text.' +
-    (buried ? ' Buried memories appear only as sales on the <investigation-timeline> that follows the documents.' : '');
+  const intro = 'The session\'s record. Each document below is complete: a memory that was made public, ' +
+    'or a paper document the players unlocked. Each gives its id, its kind ' +
+    '(memory, or the paper document\'s type), its name, and its owner when the record names one, ' +
+    'then its full text.' +
+    (buried ? ' Sold memories appear only as sales on the <investigation-timeline> that follows the documents.' : '');
   const parts = [intro, renderRecordDocuments(evidenceBundle)];
   if (buried) parts.push(renderMorningTimeline(evidenceBundle, sessionConfig));
   return `<RECORD>\n${parts.join('\n\n')}\n</RECORD>`;

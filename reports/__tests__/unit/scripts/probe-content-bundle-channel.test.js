@@ -123,11 +123,11 @@ describe('buildProbePrompt', () => {
     expect(evidenceBundle.exposed.paperEvidence).toHaveLength(2);
     // Brief 2.1: each document once, in full, in <RECORD>.
     expect(userPrompt).toContain(
-      `<document id="${PAPER[0].notionId}" kind="Document" name="Test letter (unlocked)" layer="exposed">\n${PAPER[0].description}\n</document>`);
+      `<document id="${PAPER[0].notionId}" kind="Document" name="Test letter (unlocked)">\n${PAPER[0].description}\n</document>`);
     expect(userPrompt).toContain(
-      `<document id="${PAPER[1].notionId}" kind="Document" name="Test email (locked)" owner="Test Owner C" layer="exposed">\n${PAPER[1].description}\n</document>`);
+      `<document id="${PAPER[1].notionId}" kind="Document" name="Test email (locked)" owner="Test Owner C">\n${PAPER[1].description}\n</document>`);
     expect(userPrompt).toContain(
-      `<document id="tst001" kind="memory" name="TST001" owner="Test Owner A" layer="exposed">\n${TOKENS[0].fullDescription}\n</document>`);
+      `<document id="tst001" kind="memory" name="TST001" owner="Test Owner A">\n${TOKENS[0].fullDescription}\n</document>`);
     expect(userPrompt.split(PAPER[0].description).length - 1).toBe(1);
     expect(userPrompt).not.toContain('ARC EVIDENCE PACKAGES');
     // The blank page is cited by no arc, so it is not in the probe's record.

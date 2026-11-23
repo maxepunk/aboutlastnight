@@ -89,7 +89,7 @@ describe('extractCharacterData', () => {
         memoryTokens: [],
         sessionConfig: { roster: ['Mel', 'Nat'] }
       });
-      expect(prompt).toContain('<document id="p-sel" kind="Document" name="Mel - Nat texts" owner="Mel Nilsson" layer="exposed">');
+      expect(prompt).toContain('<document id="p-sel" kind="Document" name="Mel - Nat texts" owner="Mel Nilsson">');
       expect(prompt).toContain('Stanford Four era vs today.');
       expect(prompt).not.toContain('half-brother');
       expect(prompt).not.toContain('Locked safe letter');
@@ -116,7 +116,7 @@ describe('extractCharacterData', () => {
         sessionConfig: { roster: ['Nat'] }
       });
       for (let i = 0; i < 35; i++) expect(prompt).toContain(memoryText(i));
-      expect(prompt).toContain('<document id="mem034" kind="memory" name="MEM34" owner="Nat Francisco" layer="exposed">');
+      expect(prompt).toContain('<document id="mem034" kind="memory" name="MEM34" owner="Nat Francisco">');
       expect(prompt).not.toContain('Buried secret text.');
       expect(prompt).not.toContain('bur001');
     });
@@ -217,7 +217,7 @@ describe('extractCharacterData', () => {
       const canon = getThemeNPCEntries('journalist').filter((e) => !e.aliasOf);
       expect(canon.length).toBe(3);
       canon.forEach((e) => expect(prompt).toContain(`- ${e.fullName}: ${e.role}\n`));
-      expect(prompt).toContain('- Marcus Blackwood: the man whose death the room investigates\n');
+      expect(prompt).toContain('- Marcus Blackwood: the man whose death is being investigated\n');
     });
 
     test('carries no em-dash', async () => {

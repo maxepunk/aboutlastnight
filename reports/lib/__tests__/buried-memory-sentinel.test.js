@@ -141,7 +141,7 @@ describe('the arc stage: no prompt carries the buried memory, so none reaches th
     // real exposure on it, and the buried memory's evidence-log entry left out.
     expect(prompts[0]).toContain('<investigation-timeline>');
     expect(prompts[0]).toContain('| sale | account: Gorlan | amount: $125,000');
-    expect(prompts[0]).toContain('| exposure | document: ale003 | anonymous');
+    expect(prompts[0]).toContain('| memory turned in | document: ale003 | no name given');
     expect(leaksIn(prompts[0])).toEqual([]);
   });
 

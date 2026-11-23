@@ -83,7 +83,7 @@ describe('record view: document tags', () => {
   it('renders an exposed memory as one labelled tag with its full text as the body', () => {
     const out = renderRecordDocuments(bundle({ paper: [] }));
     expect(out).toBe(
-      '<document id="ale003" kind="memory" name="ALE003 - Alex’s fight with Marcus" owner="Alex Reeves" layer="exposed">\n' +
+      '<document id="ale003" kind="memory" name="ALE003 - Alex’s fight with Marcus" owner="Alex Reeves">\n' +
       ALEX_TEXT + '\n' +
       '</document>'
     );
@@ -100,7 +100,7 @@ describe('record view: document tags', () => {
       tokens: [],
       paper: [bundlePaper({ owners: ['Sarah Blackwood', 'Alex Reeves'] })]
     }));
-    expect(out).toContain('<document id="p-test-1" kind="Document" name="Paternity test" owner="Sarah Blackwood, Alex Reeves" layer="exposed">');
+    expect(out).toContain('<document id="p-test-1" kind="Document" name="Paternity test" owner="Sarah Blackwood, Alex Reeves">');
   });
 
   it('leaves out an attribute the record has no value for, never guessing one', () => {
@@ -108,7 +108,7 @@ describe('record view: document tags', () => {
       tokens: [],
       paper: [bundlePaper({ owners: [], basicType: undefined })]
     }));
-    expect(out).toContain('<document id="p-test-1" name="Paternity test" layer="exposed">');
+    expect(out).toContain('<document id="p-test-1" name="Paternity test">');
     expect(out).not.toMatch(/owner=/);
     expect(out).not.toMatch(/kind=/);
   });
@@ -155,7 +155,7 @@ describe('record view: document tags', () => {
   it('renders a rescued paper item with its Notion id and its description as text', () => {
     const out = renderRecordDocuments(bundle({ tokens: [], paper: [rescuedPaper()] }));
     expect(out).toBe(
-      '<document id="p-rescued-9" kind="Prop" name="Rescued letter" layer="exposed">\n' +
+      '<document id="p-rescued-9" kind="Prop" name="Rescued letter">\n' +
       'Dear Marcus, I know what you did.\n' +
       '</document>'
     );
@@ -263,7 +263,7 @@ describe('record view: the whole view', () => {
     for (const empty of [{}, null, undefined, { exposed: {}, buried: {} }]) {
       const out = renderRecordView(empty);
       expect(out).toContain('<RECORD>');
-      expect(out).toContain('(The record holds no exposed documents.)');
+      expect(out).toContain('(The record holds no documents.)');
       expect(out).toMatch(/<investigation-timeline>\n[^\n]+\n\(none\)\n<\/investigation-timeline>/);
       expect(out).not.toContain('<document');
     }
@@ -314,5 +314,57 @@ describe('record view: a character sheet is never in the record', () => {
   it('gives character extraction, which takes the documents alone, no sheet either', () => {
     const out = renderRecordView({ exposed: { tokens: [], paperEvidence: [characterSheet()] } }, { buried: false });
     sheetLines.forEach((line) => expect(out).not.toContain(line));
+  });
+});
+
+// Phase 18, slice E: the record takes the limits' words. Each line below is the read's wording
+// (part 3), word for word.
+describe('record view: the limits\' words (phase 18)', () => {
+  const memory = (id) => bundleToken({ id, rawData: { ...bundleToken().rawData, tokenId: id } });
+  const timelineBundle = () => bundle({
+    tokens: [memory('ale003'), memory('ash003'), memory('tay001')],
+    paper: [],
+    transactions: [{ shellAccount: 'Melanie', amount: 75000, time: '07:50 PM' }]
+  });
+  const config = {
+    guestReporters: [{ name: 'Taylor Chase', role: 'Contributing Reporter' }],
+    exposures: [
+      { tokenId: 'ale003', exposer: 'Ashe', time: '07:30 PM' },
+      { tokenId: 'ash003', exposer: 'Anonymous', time: '07:35 PM' },
+      { tokenId: 'tay001', exposer: 'Taylor', time: '07:40 PM' }
+    ]
+  };
+
+  it('opens the record with the read\'s line, and its last sentence prints only with the timeline', () => {
+    const first = 'The session\'s record. Each document below is complete: a memory that was made public, ' +
+      'or a paper document the players unlocked. Each gives its id, its kind ' +
+      '(memory, or the paper document\'s type), its name, and its owner when the record names one, then its full text.';
+    const last = ' Sold memories appear only as sales on the <investigation-timeline> that follows the documents.';
+    expect(renderRecordView(timelineBundle(), { sessionConfig: config }).split('\n')[1]).toBe(first + last);
+    expect(renderRecordView(timelineBundle(), { buried: false }).split('\n')[1]).toBe(first);
+  });
+
+  it('opens the timeline with the read\'s line', () => {
+    const out = renderMorningTimeline(timelineBundle(), config);
+    expect(out.split('\n')[1]).toBe(
+      'The investigation in time order: the ledger and the evidence log merged, each logged time at the hour the investigation ran. ' +
+      'A sale is a sold memory\'s ledger line: the account paid, the amount and the time. ' +
+      'A memory turned in gives the memory\'s document id, and the name the person who turned it in gave, if they gave one. ' +
+      'Events logged in the same minute sit under that minute, in no known order.'
+    );
+  });
+
+  // Review focus 5: a guest reporter's memory on the timeline.
+  it('prints a memory turned in with the name given, the guest reporter\'s mark after it, and with no name given', () => {
+    const lines = renderMorningTimeline(timelineBundle(), config).split('\n').filter((l) => l.startsWith('- '));
+    expect(lines).toContain('- 07:30 AM | memory turned in | document: ale003 | name given: Ashe');
+    expect(lines).toContain('- 07:35 AM | memory turned in | document: ash003 | no name given');
+    expect(lines).toContain('- 07:40 AM | memory turned in | document: tay001 | name given: Taylor (the guest reporter, Taylor Chase)');
+  });
+
+  it('keeps sale, first-burial bonus and transfer as they were, and prints none of the old words', () => {
+    const out = renderRecordView(timelineBundle(), { sessionConfig: config });
+    expect(out).toContain('| sale | account: Melanie | amount: $75,000');
+    expect(out).not.toMatch(/exposure|exposed|anonymous|buried|named:|layer=/i);
   });
 });

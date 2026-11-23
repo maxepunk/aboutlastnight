@@ -406,11 +406,11 @@ describe('the weave checks (checkWeave)', () => {
       ['an angle\'s card line', () => withAngle('a2', (a) => ({ ...a, gist: 'A plan in vic002 went on.' })), 'angles[#a2]', /its gist holds the document id "vic002"\./],
       ['why an angle lands', () => withAngle('a2', (a) => ({ ...a, lands: 'The players argued until 9 PM.' })), 'angles[#a2]', /its lands holds the clock time "9 PM"\./],
       ['where an angle ends up', () => withAngle('a1', (a) => ({ ...a, ends: `${a.ends} It lands at 9 PM.` })), 'angles[#a1]', /its ends holds the clock time "9 PM"\./]
-    ])('fires on %s that holds an id, a quotation, a time or a figure, with its place and C16\'s fix', (_name, change, place, message) => {
+    ])('fires on %s that holds an id, a quotation, a time or a figure, with its place and its fix', (_name, change, place, message) => {
       const failures = check(change());
       expect(failures.map((f) => [f.type, f.place])).toEqual([['story-terms', place]]);
       expect(failures[0].message).toMatch(message);
-      expect(failures[0].message).toMatch(/Say it in story terms, as C16 \(<craft-story>\) sets out/);
+      expect(failures[0].message).toMatch(/Say it in plain words: the evidence under the lines carries/);
     });
 
     it('reads an angle\'s headline, "from your notes" and the questions as exempt (R2)', () => {

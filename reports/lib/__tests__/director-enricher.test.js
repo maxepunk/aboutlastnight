@@ -600,7 +600,7 @@ describe('the accusation block (phase 2, brief 2.2)', () => {
       accusation: { verdictKind: 'overdose', accused: [], charge: 'Accidental overdose', notes: 'deadlocked 4 to 4' }
     });
     const block = userPrompt.slice(userPrompt.indexOf('<ACCUSATION>'), userPrompt.indexOf('</ACCUSATION>'));
-    expect(block).toContain("Accused: none (the room's verdict names no culprit: an overdose)");
+    expect(block).toContain("Accused: none (the verdict names no culprit: an overdose)");
     expect(block).toContain('Charge: Accidental overdose');
     expect(block).toContain('Notes: deadlocked 4 to 4');
     expect(block).not.toMatch(/unspecified|Marcus/);

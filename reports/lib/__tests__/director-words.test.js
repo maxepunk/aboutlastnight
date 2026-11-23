@@ -79,11 +79,11 @@ describe("R1: the director's words are one list", () => {
 });
 
 describe('R2: the notes at the stops in their own block', () => {
-  it('opens with one line pointing at T1, then each note under its stop and its action, word for word', () => {
+  it('opens with one line naming what the notes are, then each note under its stop and its action, word for word', () => {
     const block = renderDirectorStopNotes(withNotes());
     const lines = block.split('\n');
     expect(lines[0]).toBe('<DIRECTOR_STOP_NOTES>');
-    expect(lines[1]).toBe("The notes the director sent with their actions at the stops, in order: the director's own words, each read as T1 sets out.");
+    expect(lines[1]).toBe("The notes the director sent with their actions at the stops, in order: the director's own words.");
     expect(lines.slice(2, -1)).toEqual([
       `- At the map, sent back: "${MAP_NOTE}"`,
       `- At the story meeting, approved: "${MEETING_NOTE}"`,

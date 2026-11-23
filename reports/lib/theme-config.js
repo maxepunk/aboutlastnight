@@ -90,9 +90,9 @@ const THEME_CONFIGS = {
     // - inAPhotoByName: the same for a name that already holds Nova's own name ("Nova", or the
     //   first name with it), so the mark does not repeat it (the final fix wave, K4).
     // - inTheRoom: on site only, SESSION_FACTS' line beside Blake's (the final fix wave, K1),
-    //   which points at the mode block rather than restating it.
+    //   which points at the part about this session rather than restating it.
     npcs: [
-      { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the man whose death the room investigates' },
+      { name: 'Marcus', fullName: 'Marcus Blackwood', pronouns: 'he/him', role: 'the man whose death is being investigated' },
       {
         name: 'Nova',
         fullName: 'Nova',
@@ -104,7 +104,7 @@ const THEME_CONFIGS = {
             'A name a roster player has names that player; any other "Nova" or "{first}" names Nova: keep it as written.',
           inAPhoto: '{name} (Nova, who writes this article)',
           inAPhotoByName: '{name} (who writes this article)',
-          inTheRoom: 'Nova was in the room too, working it for the story, as the reporting-mode block sets out (T8).'
+          inTheRoom: 'Nova was in the warehouse too, working on the story, as the part about this session sets out.'
         }
       },
       { name: 'Blake', fullName: 'Blake', role: 'manages operations at NeurAI; Marcus called Blake his Valet' },

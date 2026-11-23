@@ -61,7 +61,7 @@ const BLAMES_NO_CHARACTER = 'no character (the group statement blames an institu
  */
 function formatAccused(accusation, { json = false, joiner = ', ', empty = 'unspecified' } = {}) {
   if (isNoCulpritVerdict(accusation)) {
-    return `none (the room's verdict names no culprit: ${VERDICT_KIND_PHRASES[accusation.verdictKind]})`;
+    return `none (the verdict names no culprit: ${VERDICT_KIND_PHRASES[accusation.verdictKind]})`;
   }
   if (blamesNoCharacter(accusation)) return BLAMES_NO_CHARACTER;
   const names = accusedNames(accusation);
@@ -117,7 +117,7 @@ function noCulpritInstruction(accusation) {
       'The thread that tells the verdict holds no character as the accused.';
   }
   if (!isNoCulpritVerdict(accusation)) return '';
-  return `The room named no culprit: its verdict is ${VERDICT_KIND_PHRASES[accusation.verdictKind]}${charge ? ` (${charge})` : ''}. ` +
+  return `The players agreed that nobody was to blame: their verdict is ${VERDICT_KIND_PHRASES[accusation.verdictKind]}${charge ? ` (${charge})` : ''}. ` +
     'The thread that tells the verdict holds no one as the accused, and never the victim.';
 }
 
@@ -265,7 +265,7 @@ const STOP_NOTE_ACTIONS = Object.freeze({ approval: 'approved', rejection: 'sent
 
 /**
  * The notes the director sent at the stops, for both judges (phases 14 and 15, brief B; ruling
- * R2): one line pointing at T1, then each note in the order filed, under its stop and the action
+ * R2): one line naming what the notes are, then each note in the order filed, under its stop and the action
  * it went with, its text word for word in quotation marks (trimmed at the ends), as the answers
  * block quotes an answer, so a note that holds lines of its own reads as one note. Every note in
  * directorGateNotes prints, the one a rework acted on included (lib/director-words.js
@@ -283,7 +283,7 @@ function renderDirectorStopNotes(state) {
   });
   return [
     `<${DIRECTOR_STOP_NOTES_TAG}>`,
-    "The notes the director sent with their actions at the stops, in order: the director's own words, each read as T1 sets out.",
+    "The notes the director sent with their actions at the stops, in order: the director's own words.",
     ...lines,
     `</${DIRECTOR_STOP_NOTES_TAG}>`
   ].join('\n');
@@ -339,7 +339,7 @@ function renderWhiteboardConnections(whiteboard, { omitWhenEmpty = false } = {})
   const lists = [wb.connections, wb.notes, wb.namesFound, wb.ambiguities].map(asList);
   if (omitWhenEmpty && regions.length === 0 && lists.every(l => l.length === 0)) return '';
   return `### The Whiteboard (a model's reading of the photo)
-A model's reading of the photo of the whiteboard where the room kept its working notes during the investigation: context for how the room reasoned toward its verdict, not a source.
+A model's reading of the photo of the whiteboard where the people in the warehouse worked out their thinking during the investigation: context for how they reached the verdict, not a source.
 **Regions, each under the heading the players wrote:**${regions.length > 0 ? `\n${regions.map(whiteboardRegionLine).join('\n')}` : ' none'}
 **Lines drawn:** ${JSON.stringify(lists[0])}
 **Other writing:** ${JSON.stringify(lists[1])}

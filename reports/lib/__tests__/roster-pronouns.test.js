@@ -34,9 +34,9 @@ describe('generateRosterSection (journalist)', () => {
   const section = generateRosterSection('journalist', CANONICAL, null, PRONOUNS, ROSTER);
 
   it('lists Marcus once, in the NPC block, with his canon pronoun', () => {
-    // Phase 3 (3.2; T15, M26): the canon line names the man whose death the room investigates.
+    // Phase 3 (3.2; T15, M26): the canon line names the man whose death is being investigated.
     const marcus = linesOf(section).filter((l) => l.startsWith('- Marcus'));
-    expect(marcus).toEqual(['- Marcus Blackwood (he/him) - the man whose death the room investigates']);
+    expect(marcus).toEqual(['- Marcus Blackwood (he/him) - the man whose death is being investigated']);
     expect(section).not.toContain('Marcus → Marcus Blackwood');
   });
 

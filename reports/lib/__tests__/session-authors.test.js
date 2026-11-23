@@ -368,7 +368,7 @@ describe('each guest reporter, when the session has any (R5)', () => {
     it('marks a guest who plays a roster character: the normal case', () => {
       const config = { roster: ['Vic', 'Dana'], guestReporters: [GUEST], exposures: [{ tokenId: 'ale003', exposer: 'Dana', time: '07:37 PM' }] };
       expect(guestTurnInName('Dana', config)).toBe('Dana (the guest reporter, Dana Okafor)');
-      expect(renderMorningTimeline(BUNDLE, config)).toContain('document: ale003 | named: Dana (the guest reporter, Dana Okafor)');
+      expect(renderMorningTimeline(BUNDLE, config)).toContain('document: ale003 | name given: Dana (the guest reporter, Dana Okafor)');
     });
 
     it('leaves a first name two reporters share unmarked, while each full name marks', () => {
@@ -381,12 +381,12 @@ describe('each guest reporter, when the session has any (R5)', () => {
 
     it("marks each reporter's turn-ins on the timeline", () => {
       const timeline = renderMorningTimeline(BUNDLE, withGuests([GUEST, SECOND]).sessionConfig);
-      expect(timeline).toContain('document: ale003 | named: Dana (the guest reporter, Dana Okafor)');
-      expect(timeline).toContain('document: mor001 | named: dana okafor (the guest reporter)');
-      expect(timeline).toContain('document: sar002 | named: Remi (the guest reporter, Remi Vale)');
+      expect(timeline).toContain('document: ale003 | name given: Dana (the guest reporter, Dana Okafor)');
+      expect(timeline).toContain('document: mor001 | name given: dana okafor (the guest reporter)');
+      expect(timeline).toContain('document: sar002 | name given: Remi (the guest reporter, Remi Vale)');
       for (const none of [withGuests([]), withOlderGuest(null)]) {
         const plain = renderMorningTimeline(BUNDLE, none.sessionConfig);
-        expect(plain).toContain('document: ale003 | named: Dana\n');
+        expect(plain).toContain('document: ale003 | name given: Dana\n');
         expect(plain).not.toContain('guest reporter');
       }
     });

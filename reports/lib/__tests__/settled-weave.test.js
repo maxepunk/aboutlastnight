@@ -105,7 +105,7 @@ describe('renderSettledWeave: the angle the director settled (briefs 4.5 and 3B)
   it("prints the angle's threads in its order by id, name and line, the director's after the angle's own, then the left-out threads by name", () => {
     const lines = settled().split('\n').filter((line) => /^- t\d/.test(line));
     expect(lines.map((line) => line.slice(0, line.indexOf(' ', 2)))).toEqual(['- t1', '- t2', '- t3', '- t7']);
-    expect(lines[0]).toBe(`- t1 The case against Rowan: ${WRITERS.threads[0].line} It carries the room's verdict.`);
+    expect(lines[0]).toBe(`- t1 The case against Rowan: ${WRITERS.threads[0].line} It carries the verdict.`);
     expect(settled()).toContain('THREADS LEFT OUT: The coat check');
     expect(settled()).not.toMatch(/\((main thread|grounds it|left out)\)|Why it is left out/);
   });
@@ -315,7 +315,7 @@ describe("4.6b: the settled weave's own labels hold to the removed-phrase list",
     const lines = text.split('\n');
     const labels = [
       '<SETTLED_WEAVE>', 'The story the director settled at the story meeting', 'HEADLINE: ', 'STORY: ', 'QUESTION: ', 'WHY IT LANDS: ', 'WHERE IT ENDS UP: ',
-      "FROM THE DIRECTOR'S NOTES: \"", 'THREADS IN THE STORY:', " It carries the room's verdict.", 'THREADS LEFT OUT: ',
+      "FROM THE DIRECTOR'S NOTES: \"", 'THREADS IN THE STORY:', " It carries the verdict.", 'THREADS LEFT OUT: ',
       '  - supports, from ', '  - cuts against, from ', '  - No evidence yet.',
       'CONNECTIONS:', ', joining ', "QUESTIONS TO THE DIRECTOR, WITH THE DIRECTOR'S ANSWERS:", '; beside the thread "', ' Its answer changes: ',
       "  The director's answer, word for word: \"", '  Unanswered.', '</SETTLED_WEAVE>'

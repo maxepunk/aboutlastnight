@@ -169,8 +169,8 @@ describe('arc prompts carry the record view (brief 2.1)', () => {
     expect(section3).toContain('<RECORD>');
     expect(count(prompt, MEMORY_TEXT)).toBe(1);
     expect(count(prompt, LONG_PAPER.trim())).toBe(1);   // past the old 200-character cut
-    expect(section3).toContain('<document id="ale003" kind="memory" name="ALE003 - Alex fight" owner="Alex Reeves" layer="exposed">');
-    expect(section3).toContain('<document id="p-rescued" kind="Prop" name="Rescued letter" layer="exposed">');
+    expect(section3).toContain('<document id="ale003" kind="memory" name="ALE003 - Alex fight" owner="Alex Reeves">');
+    expect(section3).toContain('<document id="p-rescued" kind="Prop" name="Rescued letter">');
     // The summaries of names no longer stand in for a document.
     expect(prompt).not.toContain('Haiku summary of the name');
     expect(prompt).not.toContain('Derived Guess');
@@ -292,7 +292,7 @@ describe("arc prompts: the director's words as record", () => {
     it("carries the director's account word for word and names no culprit for an overdose", () => {
       for (const prompt of [buildWeavePrompt(base), buildArcRevisionPrompt(base, '', '')]) {
         expect(prompt).toContain(RAW_ACCUSATION);
-        expect(prompt).toContain("**Accused:** none (the room's verdict names no culprit: an overdose)");
+        expect(prompt).toContain("**Accused:** none (the verdict names no culprit: an overdose)");
         expect(prompt).toContain('**Charge:** Accidental overdose');
         // Brief 4.5 (ruling 11): worded for the weave.
         expect(prompt).toContain('The thread that tells the verdict holds no one as the accused, and never the victim.');
@@ -317,7 +317,7 @@ describe("arc prompts: the director's words as record", () => {
     it('is rendered by the shared function, labelled as a model\'s reading of the photo (phase 3, 3.5)', () => {
       const prompt = buildWeavePrompt(base);
       expect(prompt).toContain(renderWhiteboardConnections(base.playerFocus.whiteboardContext));
-      expect(prompt).toContain("### The Whiteboard (a model's reading of the photo)\nA model's reading of the photo of the whiteboard where the room kept its working notes during the investigation: context for how the room reasoned toward its verdict, not a source.\n**Regions, each under the heading the players wrote:** none");
+      expect(prompt).toContain("### The Whiteboard (a model's reading of the photo)\nA model's reading of the photo of the whiteboard where the people in the warehouse worked out their thinking during the investigation: context for how they reached the verdict, not a source.\n**Regions, each under the heading the players wrote:** none");
       expect(prompt).not.toContain('Players drew these');
     });
   });
@@ -627,7 +627,7 @@ describe('phase 3 (3.3): the arc calls read the rule set', () => {
       const prompt = buildWeaveSections(journalistState());
       expect(prompt.match(/^<RECORD>$/gm)).toHaveLength(1);
       expect(prompt.match(/^<investigation-timeline>$/gm)).toHaveLength(1);
-      expect(prompt).toContain('- 07:37 AM | exposure | document: ale003 | anonymous\n- 07:50 AM | sale | account: Melanie | amount: $75,000');
+      expect(prompt).toContain('- 07:37 AM | memory turned in | document: ale003 | no name given\n- 07:50 AM | sale | account: Melanie | amount: $75,000');
       expect(prompt).not.toContain('### Buried Transactions');
       expect(prompt).not.toContain('"shellAccount"');
       expect(count(prompt, 'Melanie')).toBe(1);

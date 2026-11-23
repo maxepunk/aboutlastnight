@@ -15,7 +15,7 @@ const {
   MAP_WORD_BOUND, MAP_WORD_AIM, mapLengthOf
 } = require('../map');
 const { wordCount } = require('../word-count');
-const { EVIDENCE_PIECE_SCHEMA, evidenceContextOf } = require('../evidence');
+const { EVIDENCE_PIECE_SCHEMA, evidenceContextOf, STORY_TERMS_FIX } = require('../evidence');
 const { mapEditsBetween, standingOnMap, carriedEdits, settleEdits, _testing: diffTesting } = require('../hand-edit-diff');
 const { beatCardOf, mapTally, strikeBeat, bringBackBeat, addBeat } = require('../../console/outline-edit-logic');
 const { _testing: mapNodes } = require('../workflow/nodes/map-nodes');
@@ -423,7 +423,7 @@ describe("1D: each of the writer's beats passes the evidence check, and each of 
     const failure = mapFindings(map, { ...inputsOf(state, map) }).failures.find((f) => f.type === 'story-terms');
     expect(failure).toMatchObject({ place });
     expect(failure.message).toMatch(inMessage);
-    expect(failure.message).toMatch(/C16 \(<craft-story>\)/);
+    expect(failure.message).toContain(STORY_TERMS_FIX);
     expect(failure.line).toMatch(/The map tells the story in plain words/);
     expect(failure.line).not.toMatch(/\b[btc]\d+\b|sam001/);
   });
