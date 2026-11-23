@@ -36,11 +36,15 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 const count = (text, part) => text.split(part).length - 1;
 
 /**
- * The article's verdictTruth question (T2 as rewritten; brief 4.7f): the map's theories, read as
- * the director's edits leave the map. Phases 14 and 15, brief F: it names where the director's
- * words on the verdict come from, the notes at the stops among them.
+ * The article's verdictTruth question (phase 18, the rule-text read's part 4): the verdict told as
+ * the account the players agreed, which Nova does not call right or wrong, and a verdict that
+ * blames nobody told without blaming anyone. It names where the director's words on the verdict
+ * come from, the notes at the stops among them, and says nothing of theories (R11).
  */
-const VERDICT_QUESTION = "Is the verdict in the article told as the room's official story, as the director's words record it (the accusation, the notes, the answers at the story meeting and the notes at the stops), left ungraded against any hidden answer, with every alternative theory the room debated that a beat in the map's sections carries reported, and every theory in the map's leftOut, where a beat the director struck sits, kept out of print (T2)? The director's edits come first, where THE DIRECTOR'S EDITS lists them, so the map is read as they leave it: a theory the director cut, or took out in a rewrite, is out of its sections, and a theory the director's own text reports is in them, from its leftOut too.";
+const VERDICT_QUESTION = "Is the verdict in the article told as the account the players agreed to give the police, as the director's words record it (the accusation, the notes, the answers at the story meeting and the notes at the stops); does Nova report it, doubt it or give an opinion of it without saying it was right or wrong; and where the players agreed that nobody was to blame, is it told without blaming anyone (T2)?";
+
+/** The director's words as an article question names them (ARTICLE_DIRECTOR_WORDS). */
+const WORDS = '(the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops)';
 
 beforeAll(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -132,33 +136,37 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
   // What the record cannot back is never stated as fact, and an opinion is Nova's by how its line
   // says it, not by a tag, so a plainly said opinion passes and no question asks for a mark; a
   // rule of the game explained or stated to the players is caught.
-  it('each truth question is worded as the rules give it', () => {
+  // Phase 18 (the rule-text read's part 4): each question is reworded from the limit it checks,
+  // word for word, with today's variable parts kept (ARTICLE_DIRECTOR_WORDS); the verdict's asks
+  // for the account the players agreed, ungraded, and nothing of theories.
+  it('each truth question is worded as the limits give it', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
-      evidenceTruth: "Is every claim in the article written as its evidence allows (T1): what the record backs stated; the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) included as record, and a direction a note at a stop gives written as Nova's own reading; and what the record cannot back never stated as fact, but written as Nova's own suspicion, an allegation, a question, or an opinion plainly Nova's own, which a line shows by how it says it, not by a tag? And is it written with no buried memory's content or owner stated as fact (T3); with a person tied to an account as fact only where the director saw the sale or it was made openly in front of the room, and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4); and with no exposer named that neither the evidence log nor the director's words name (T6)?",
-      moneyTruth: "Does the money in the article run from the buyer to the seller's chosen account, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as the investigation's payments for erasure (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the investigation as FINANCIAL_SUMMARY gives it; a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the room as that moment's figure, and a ledger line they explain as they give it (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).",
+      evidenceTruth: `Is every claim in the article written as its evidence allows (T1): what the record shows stated as fact; what people did and said in the warehouse, as the director's words record it ${WORDS}, reported as fact; a reading the director gives of the session written as Nova's own thinking; and what neither shows never stated as fact, appearing only as what Nova suspects, asks or believes, which a line shows by how it says it and needs no label? And is it written with nothing stated as fact about what a sold memory held or whose it was (T3); with a person tied to an account as fact only where the sale was made in front of everyone or the director's notes record that the director saw it, and the person an account is named after otherwise only wondered about, in Nova's question or opinion (T4); and with nobody named as having turned a memory in unless the evidence log gives the name or the director's words say who it was (T6)?`,
+      moneyTruth: `Does the money in the article go from the buyer to the account the seller named, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as what was paid during the investigation for memories to be erased (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; each total at the close of the investigation as FINANCIAL_SUMMARY gives it; a balance the director's words ${WORDS} record as said or shown in the warehouse as that moment's figure, and a ledger line they explain as they give it (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of the article when the question has no answer (T5).`,
       verdictTruth: VERDICT_QUESTION,
-      stagesTruth: "In the article, is the party met only through memories; the investigation told as the reporting mode allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; Nova's day taken only from the epilogue and from any note at a stop that adds to it; and every logged time as the record's timeline prints it, or as a note at a stop rules it (T7)? What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue.",
-      novaPositionTruth: "In the article, does Nova take no side in the verdict, never voting, joining the room's accusation or exposing a memory, and are where Nova stood, what part Nova took in the room and what Nova could witness as this session's mode block states them (T8)?",
-      playersTruth: "Does every player in the article take the pronoun the roster gives, or, where the roster gives none, the pronoun the director's own words give (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops), or else the player's name in place of a pronoun (T9), and does the judgement in the article land on the characters' choices, with no player's looks described (T11)?",
-      wordsTruth: "Is every quoted line in the article word for word from the record or the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) and in its real speaker's mouth, and does every card copy the record with no id or timestamp in its text (T12)?",
-      photosTruth: "Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the subject and action of the director's description wherever PHOTOS gives one (T13)?",
-      fictionTruth: "Does every line of the article that reaches print speak the fiction's own words, with no production word in it and no rule of the game explained or stated to the players, Nova reasoning from what a rule makes true wherever it matters to a line (T14)?"
+      stagesTruth: "In the article, is nothing from the party told as something a person saw or remembers, but as what a recovered memory shows; is the investigation told as the part about this session allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; is the rest of Nova's day taken only from the epilogue and from any note at a stop that adds to it; and is every time the article gives the time the record gives, or the time a note at a stop rules (T7)? What Nova says NovaNews will keep looking into is Nova's own intention and needs no source.",
+      novaPositionTruth: 'In the article, does Nova take no side: not voting, not joining in accusing anyone, taking no part in the statement and making no memory public; and is what Nova saw, heard and did as the part about this session says (T8)?',
+      playersTruth: `Does every character a player played take the pronoun the roster gives in the article, or, where the roster gives none, the pronoun the director's own words give ${WORDS}, or else the person's name in place of a pronoun (T9); and is everything the article says about a person said about the character, with no comment on the player and no player's looks described (T11)?`,
+      wordsTruth: `Is every line in quotation marks in the article word for word from the record or the director's words ${WORDS} and given to the person who said it, and does every card copy the record with no id or time in its text (T12)?`,
+      photosTruth: "Does the article print every photo in PHOTOS and no other, the hero image as its hero, cite nothing from the whiteboard, and give each printed photo a caption that keeps the people and the action of the director's description wherever PHOTOS gives one (T13)?",
+      fictionTruth: "Does every line of the article that reaches print use the story's own words, with no word from running the game in it and no rule of the game explained or stated to the players, Nova reasoning from what a rule makes true wherever it matters to a point (T14)?"
     });
   });
 
-  // Brief 4.7c: a question that names the director's words reads all four sources. Brief 4.7f:
-  // verdictTruth reads the director's edits too, under the heading its question names. Phases 14
+  // Brief 4.7c: a question that names the director's words reads all four sources. Phases 14
   // and 15, brief B (R1, R2): the notes at the stops are the fifth source, so every question that
   // reads the director's words reads them, verdictTruth among them. Brief F: stagesTruth reads
   // them too, since a note at a stop may rule on a logged time (spec 4: a note at any stop
   // corrects a shift for the writers and the judges) or add to Nova's day (T1).
+  // Phase 18 (R11): verdictTruth reads the verdict, the notes, the answers and the notes at the
+  // stops; no longer the map or the director's edits, since it asks nothing of theories.
   it('the answers from the story meeting join the reads of evidenceTruth, moneyTruth, playersTruth and verdictTruth (T1)', () => {
     const reads = Object.fromEntries(Object.entries(getPhaseCriteria('article', 'journalist')).map(([key, c]) => [key, c.reads]));
     expect(reads).toEqual({
       evidenceTruth: ['record', 'timeline', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes'],
       moneyTruth: ['timeline', 'financialSummary', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes', 'weave'],
-      verdictTruth: ['verdict', 'notes', 'answers', 'stopNotes', 'map', 'directorEdits'],
+      verdictTruth: ['verdict', 'notes', 'answers', 'stopNotes'],
       stagesTruth: ['record', 'modeBlock', 'epilogue', 'timeline', 'stopNotes'],
       novaPositionTruth: ['modeBlock'],
       playersTruth: ['roster', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes'],
@@ -194,7 +202,7 @@ describe('4.7a: the article judge scores the truth criteria alone', () => {
     expect(system.split('\n')[0]).toBe('You are the ARTICLE judge for an investigative article about one session of the game: you check the article the article writer wrote, before the director reads it.');
     expect(system.startsWith(`${system.split('\n')[0]}\n\n${loadModeBlock('remote')}\n\n`)).toBe(true);
     expect(count(system, loadRuleSet('judge-article').core)).toBe(1);
-    expect(system).toContain('Your task is to find each breach of the truth rules in the article.');
+    expect(system).toContain('Your task is to find each place where the article breaks a limit. The world and the limits above are the ones the article writer followed: judge the article by them, against the record and the director\'s words in the evaluation prompt.');
     for (const [key, rules] of Object.entries(ARTICLE_TRUTH)) expect(system).toContain(`- ${key} (${rules.join(', ')}; must pass): `);
     expect(system).toContain(TRUTH_ONLY_EVALUATION_RULES);
     expect(system).toContain('"notes": "the breach: the sentence at fault, its section, and the record it contradicts"');
@@ -315,8 +323,8 @@ describe('4.7a: what the article judge reads', () => {
     expect(mapIn(prompt)).toEqual(state.outline);
     expect(prompt).toContain('\nThe map below is the one the article writer wrote from, as the director left it: the beats in its sections are what the article tells, and leftOut holds what it leaves out, each beat the director struck among them.\nMAP:\n{');
     expect(prompt.startsWith('Check this article against the record and the director\'s words:')).toBe(true);
-    expect(prompt.trim().endsWith('Is the article free of truth-rule breaches?')).toBe(true);
-    expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: remote (the mode block in your instructions says what Nova could witness; stagesTruth and novaPositionTruth score the article against it)');
+    expect(prompt.trim().endsWith('Does the article keep within the limits?')).toBe(true);
+    expect(prompt).toContain('WHERE NOVA WAS THIS SESSION: outside the warehouse (the part about this session in your instructions says what Nova saw, heard and did; stagesTruth and novaPositionTruth score the article against it)');
     expect(prompt).not.toContain('\nOUTLINE:');
     expect(prompt).not.toContain('THE CRAFT GUIDANCE');
   });
@@ -364,7 +372,7 @@ describe('4.7a: what the article judge reads', () => {
     expect(answers).not.toContain(unanswered.question);
     expect(settled).toContain(`- q3 (a figure; about: the 07:50 PM sale): ${unanswered.question} Its answer changes: ${unanswered.changes}\n  Unanswered.`);
     const { description } = getPhaseCriteria('article', 'journalist').moneyTruth;
-    expect(description).toContain("a figure raised as a question at the story meeting as the director's answer gives it, and out of print when the question has no answer (T5).");
+    expect(description).toContain("a figure raised as a question at the story meeting as the director's answer gives it, and out of the article when the question has no answer (T5).");
   });
 
   it('a breach on an unanswered figure the article printed holds the article for its rework', async () => {
@@ -381,10 +389,11 @@ describe('4.7a: what the article judge reads', () => {
 });
 
 // Review focus 7: a debated theory the director strikes from the map stays out of the
-// article, and neither the writer nor the judge brings it back. T2 as rewritten: the
-// article reports every theory the map carries; a theory the director strikes stays out.
+// article, and neither the writer nor the judge brings it back. Phase 18 (the brief-and-the-limits
+// spec, section 8; R11): the verdict's question asks nothing of theories. A move the director
+// struck stays out by the article writer's own part, and the judge still reads the map whole.
 describe('4.7a: a theory struck from the map stays out, through the judge', () => {
-  it('the judge reads the struck theory in the map\'s leftOut, and its question keeps leftOut out of print', async () => {
+  it('the judge reads the struck theory in the map\'s leftOut, and its verdict question asks nothing of theories', async () => {
     const sdk = judging(CLEAN);
     await evaluateArticle(atCap(struckTheoryState()), cfg(sdk));
     const { systemPrompt, prompt } = sdk.mock.calls[0][0];
@@ -392,7 +401,8 @@ describe('4.7a: a theory struck from the map stays out, through the judge', () =
     expect(map.sections.flatMap((s) => s.beats).map((b) => b.id)).not.toContain('b7');
     expect(map.leftOut.find((b) => b.id === 'b7')).toEqual(THEORY_BEAT);
     expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
-    // The question that asked for every theory the room debated, whatever the map said, is gone.
+    // The questions that asked for the theories the room debated, or for the map's leftOut, are gone.
+    expect(VERDICT_QUESTION).not.toMatch(/theor|leftOut|the map/i);
     expect(systemPrompt).not.toContain('with the alternative theories the room debated reported');
   });
 
@@ -430,8 +440,8 @@ describe("4.7d: an exposer named in any of the director's words is record (T1, T
     const { evidenceTruth } = getPhaseCriteria('article', 'journalist');
     // The T6 clause reads an exposer from the director's words, which the question names by
     // their sources.
-    expect(evidenceTruth.description.endsWith("and with no exposer named that neither the evidence log nor the director's words name (T6)?")).toBe(true);
-    expect(evidenceTruth.description).toContain(`the director's words ${ARTICLE_DIRECTOR_WORDS} included as record,`);
+    expect(evidenceTruth.description.endsWith("and with nobody named as having turned a memory in unless the evidence log gives the name or the director's words say who it was (T6)?")).toBe(true);
+    expect(evidenceTruth.description).toContain(`as the director's words record it ${ARTICLE_DIRECTOR_WORDS}, reported as fact;`);
     expect(evidenceTruth.reads).toContain('answers');
     // The answer prints under its material, and it is the only text of the director's that
     // names an exposer; the fact check reads it with the rest.
@@ -445,7 +455,7 @@ describe("4.7d: an exposer named in any of the director's words is record (T1, T
   // notes and the answers.
   it("the weave's T6 clause reads an exposer from the notes, the answers and the notes at the stops", () => {
     expect(getPhaseCriteria('arcs', 'journalist').evidenceTruth.description)
-      .toContain("and with no exposer named that neither the evidence log nor the director's notes, their answers at the story meeting or the notes at the stops name (T6)?");
+      .toContain("and with nobody named as having turned a memory in unless the evidence log gives the name or the director's notes, their answers at the story meeting or the notes at the stops say who it was (T6)?");
   });
 });
 
@@ -508,7 +518,11 @@ describe("4.7d: the director's words are one list", () => {
 // card the director cut as unreported: a finding that quoted neither the cut text nor the edit's
 // id stayed structural, and an automatic rework was sent to bring the cut back. A theory the
 // director printed from leftOut in their own words read as a breach the same way.
-describe("4.7f: the judge reads the map as the director's edits leave it", () => {
+//
+// Phase 18 (R11): the verdict's question asks nothing of theories, so it reads neither the map nor
+// the director's edits. The judge still reads both: the map under its own line, and the edits
+// right after the article, where the verdict guard and every finding find them.
+describe("4.7f: the judge reads the map and the director's edits", () => {
   const { judgedEdits } = evalTesting;
   /** A theory the room debated, carried in THE STORY by beat b3, the mor001 card. Invented text. */
   const CARD_THEORY = 'The room weighed whether Morgan paid Riley to keep the books quiet';
@@ -526,17 +540,17 @@ describe("4.7f: the judge reads the map as the director's edits leave it", () =>
     return articleState('journalist', { outline: map, contentBundle: directors, _articleHandEdits: standingAfterSendBack(null, writers, directors, 'bundle') });
   }
 
-  it("the question reads the director's edits first, under the heading the judge's prompt prints them", () => {
+  it("the verdict's question reads neither the map nor the director's edits, which the prompt still prints under their heading (R11)", () => {
     const { verdictTruth } = getPhaseCriteria('article', 'journalist');
     expect(verdictTruth.description).toBe(VERDICT_QUESTION);
-    expect(verdictTruth.reads).toContain('directorEdits');
-    expect(VERDICT_QUESTION).toContain(`where ${TRUTH_MATERIAL.directorEdits.replace(/ \($/, '')} lists them`);
+    expect(verdictTruth.reads).not.toContain('directorEdits');
+    expect(verdictTruth.reads).not.toContain('map');
     const state = cutTheoryCardState();
     const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: judgedEdits('article', state) });
     expect(prompt).toContain(`\n${TRUTH_MATERIAL.directorEdits}record: the director's own text`);
   });
 
-  it("a theory whose card the director cut: the map still carries its beat, the judge reads the cut among the director's edits, and the question takes the theory out of the map's sections", async () => {
+  it("a theory whose card the director cut: the map still carries its beat, the judge reads the cut among the director's edits, and the verdict's question is the limit's", async () => {
     const sdk = judging(CLEAN);
     await evaluateArticle(atCap(cutTheoryCardState()), cfg(sdk));
     const { systemPrompt, prompt } = sdk.mock.calls[0][0];
@@ -548,7 +562,7 @@ describe("4.7f: the judge reads the map as the director's edits leave it", () =>
     expect(systemPrompt).toContain(`- verdictTruth (T2; must pass): ${VERDICT_QUESTION}`);
   });
 
-  it("a theory the director printed from leftOut in their own words: the judge reads their paragraph among the director's edits, and the question puts the theory in the map's sections", async () => {
+  it("a theory the director printed from leftOut in their own words: the judge reads their paragraph among the director's edits, and the verdict's question is the limit's", async () => {
     const state = struckTheoryState();
     const writers = clone(state.contentBundle);
     const DIRECTORS = `${THEORY}, and the director printed it at the desk.`;

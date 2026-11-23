@@ -1101,7 +1101,8 @@ describe('reporterMode: a remote article states its absence at most once (phase 
     const loadModeBlock = (mode) => require('../../../lib/rule-set').loadModeBlock(mode, { theme: 'journalist' });
     const state = { contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' } };
     const prompt = buildEvaluationUserPrompt('article', state);
-    expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: remote (the mode block in your instructions says what Nova could witness; stagesTruth and novaPositionTruth score the article against it)');
+    // Phase 18 (the rule-text read's part 5c): the line names where Nova was in the warehouse's words.
+    expect(prompt).toContain('WHERE NOVA WAS THIS SESSION: outside the warehouse (the part about this session in your instructions says what Nova saw, heard and did; stagesTruth and novaPositionTruth score the article against it)');
     expect(prompt).not.toContain('reached them as tips');
     const system = buildEvaluationSystemPrompt('article', getArticleCriteria('journalist'), 'journalist', { sessionConfig: state.sessionConfig });
     expect(system).toContain(loadModeBlock('remote'));
@@ -1113,7 +1114,7 @@ describe('reporterMode: a remote article states its absence at most once (phase 
       contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'on-site' }
     });
     expect(prompt).not.toContain('at most once');
-    expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: on-site');
+    expect(prompt).toContain('WHERE NOVA WAS THIS SESSION: in the warehouse (');
     const system = buildEvaluationSystemPrompt('article', getArticleCriteria('journalist'), 'journalist', { sessionConfig: { reportingMode: 'on-site' } });
     expect(system).toContain(loadModeBlock('on-site'));
     expect(loadModeBlock('on-site')).not.toContain('at most once');
@@ -1459,7 +1460,7 @@ describe('what each judge sees (phase 2, brief 2.4)', () => {
       expect(prompt).not.toContain('cardFidelity');
       // Beside the bundle it describes, right before the question.
       expect(prompt.indexOf('THE FACT CHECK ON THIS BUNDLE')).toBeGreaterThan(prompt.indexOf('CONTENT BUNDLE:'));
-      expect(prompt.trim().endsWith('Is the article free of truth-rule breaches?')).toBe(true);
+      expect(prompt.trim().endsWith('Does the article keep within the limits?')).toBe(true);
     });
 
     it('says so when the check found nothing, and when it did not run', () => {
@@ -1666,8 +1667,8 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       for (const key of TRUTH_BY_PHASE[phase]) {
         expect(prompt).toContain(`- ${key} (${TRUTH_GROUPS[key].join(', ')}; must pass):`);
       }
-      expect(prompt).toContain('TRUTH RULES (MUST PASS');
-      expect(prompt).toMatch(/opens with the rule ids/);
+      expect(prompt).toContain('THE LIMITS (MUST PASS');
+      expect(prompt).toMatch(/opens with the limits' codes and a colon/);
       expect(prompt).toMatch(/the record it contradicts/);
     });
 
@@ -1934,9 +1935,9 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(userFor('arcs', stateFor())).toContain(`${ARC_NOTES_LABEL}\n<DIRECTOR_NOTES>`);
     });
 
-    it('the article judge\'s mode line points at the mode block and sends no exposure through a tipster', () => {
+    it('the article judge\'s line on where Nova was points at the part about this session and sends no exposure through a tipster', () => {
       const prompt = userFor('article', stateFor());
-      expect(prompt).toContain('REPORTING MODE FOR THIS SESSION: remote');
+      expect(prompt).toContain('WHERE NOVA WAS THIS SESSION: outside the warehouse (the part about this session in your instructions');
       expect(prompt).not.toMatch(/\btips\b/);
     });
   });
@@ -2086,13 +2087,14 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       for (const phase of ['article']) expect(userFor(phase, state)).not.toContain('FINANCIAL_SUMMARY');
     });
 
-    it('moneyTruth asks whether the money runs from the buyer, with NeurAI and its board Nova\'s suspicion', () => {
+    // Phase 18 (the rule-text read's part 4): the money question in the limit's words.
+    it('moneyTruth asks whether the money goes from the buyer, with NeurAI and its board Nova\'s suspicion', () => {
       for (const phase of ['arcs', 'article']) {
         const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
-        expect(description).toContain("run from the buyer to the seller's chosen account");
+        expect(description).toContain('go from the buyer to the account the seller named');
         expect(description).toContain("NeurAI and its board written as Nova's suspicion");
         // Brief F (T5): the investigation's payments, at whatever time of day it ran.
-        expect(description).toContain("the investigation's payments for erasure");
+        expect(description).toContain('what was paid during the investigation for memories to be erased');
         expect(description).toMatch(/\bT5\b/);
         expect(description).not.toContain("run from NeurAI's board");
         expect(description).not.toContain('other wealth');
@@ -2124,9 +2126,10 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     // balance is the one the director's words record, each of its sources named. Brief F (T1):
     // a ledger line the director's words explain, such as a note at a stop ruling on its time, is
     // as they give it, at either judge (spec 3 and 4).
-    it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the room', () => {
+    // Phase 18: a balance said or shown in the warehouse, the limits' word for the place.
+    it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the warehouse', () => {
       const LEDGER = 'Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;';
-      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the room as that moment's figure, and a ledger line they explain as they give it (T1);";
+      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the warehouse as that moment's figure, and a ledger line they explain as they give it (T1);";
       for (const phase of ['article']) {
         const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
         expect(description).toContain(LEDGER);
@@ -2137,7 +2140,7 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       // Brief 4.5 (T1): at the weave, a ledger line the director's answer explains, too; brief
       // F: or a note at a stop.
       const arcs = getPhaseCriteria('arcs', 'journalist').moneyTruth.description;
-      expect(arcs).toContain(`${LEDGER} a balance the director's notes or the notes at the stops record as said or shown in the room as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1).`);
+      expect(arcs).toContain(`${LEDGER} a balance the director's notes or the notes at the stops record as said or shown in the warehouse as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1).`);
     });
   });
 
@@ -2146,11 +2149,12 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
 
     // Phases 14 and 15, brief F (T4 as the director ruled): Nova may wonder about the character
     // an account is named after, or read the name as a frame, as opinion or a question.
+    // Phase 18 (the rule-text read's part 4): in the limit's words.
     it("evidenceTruth (T4): a person is tied to an account as fact only on the director's sight of the sale or an open sale; otherwise the namesake is Nova's opinion or question", () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'evidenceTruth');
-        expect(description).toContain('only where the director saw the sale or it was made openly in front of the room');
-        expect(description).toContain("and the character an account is named after otherwise only wondered about, or read as the target of a frame, in Nova's opinion or question (T4)");
+        expect(description).toContain("only where the sale was made in front of everyone or the director's notes record that the director saw it");
+        expect(description).toContain("and the person an account is named after otherwise only wondered about, in Nova's question or opinion (T4)");
         expect(description).not.toContain('never a reason to suspect its namesake');
         expect(description).not.toContain('read as proof of who holds it');
       }
@@ -2158,15 +2162,16 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
 
     // Brief F (T1): opinion joins Nova's forms. The clause on character sheets went on 2026-10-10:
     // a sheet is never in the record (the director's ruling), so no judge is asked about one.
-    it("evidenceTruth (T1): what the record cannot back is Nova's suspicion, allegation, question or opinion, and no character sheet is asked about", () => {
+    // Phase 18 (the rule-text read's part 4): the limit's three kinds of thing.
+    it("evidenceTruth (T1): what neither the record nor the director's words show is what Nova suspects, asks or believes, and no character sheet is asked about", () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'evidenceTruth');
         expect(description).not.toMatch(/character sheet/i);
-        expect(description).toContain("what the record backs stated; ");
+        expect(description).toContain('what the record shows stated as fact; ');
         // Phase 17 (R4): an opinion is Nova's by how its line says it, not by a tag.
-        expect(description).toContain("what the record cannot back never stated as fact, but written as Nova's own suspicion, an allegation, a question, or an opinion plainly Nova's own, which a line shows by how it says it, not by a tag?");
+        expect(description).toContain("what neither shows never stated as fact, appearing only as what Nova suspects, asks or believes, which a line shows by how it says it and needs no label?");
         expect(description).not.toContain("question or opinion, marked as Nova's");
-        expect(description).toContain("a direction a note at a stop gives written as Nova's own reading");
+        expect(description).toContain("a reading the director gives of the session written as Nova's own thinking");
       }
     });
 
@@ -2176,24 +2181,25 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'stagesTruth');
         expect(description).toContain("at the time of day the session's facts give for it, morning or afternoon, and never called the other");
-        expect(description).toContain("every logged time as the record's timeline prints it, or as a note at a stop rules it (T7)");
+        expect(description).toContain(`is every time ${phase === 'arcs' ? 'the weave' : 'the article'} gives the time the record gives, or the time a note at a stop rules (T7)`);
         expect(description).not.toMatch(/morning clock/);
       }
     });
 
-    it('stagesTruth (T7): what NovaNews is still chasing is Nova\'s intent and needs no epilogue', () => {
+    it('stagesTruth (T7): what NovaNews will keep looking into is Nova\'s intention and needs no source', () => {
       for (const phase of ['arcs', 'article']) {
-        expect(truthOf(phase, 'stagesTruth')).toContain("What Nova says NovaNews is still chasing is Nova's own intent and needs no epilogue");
+        expect(truthOf(phase, 'stagesTruth')).toContain("What Nova says NovaNews will keep looking into is Nova's own intention and needs no source.");
       }
     });
 
-    // Phases 14 and 15, brief F (T8 as rewritten): Nova takes no side in the verdict in either
-    // mode, and the mode block says where Nova stood and what part Nova took in the room.
-    it('novaPositionTruth (T8): Nova takes no side in the verdict, and the mode block says where Nova stood and what part Nova took', () => {
+    // Phases 14 and 15, brief F (T8 as rewritten): Nova takes no side in either mode. Phase 18
+    // (the rule-text read's part 4): in the limit's words, and the part about this session says
+    // what Nova saw, heard and did.
+    it('novaPositionTruth (T8): Nova takes no side, and the part about this session says what Nova saw, heard and did', () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'novaPositionTruth');
-        expect(description).toContain("does Nova take no side in the verdict, never voting, joining the room's accusation or exposing a memory");
-        expect(description).toContain("where Nova stood, what part Nova took in the room and what Nova could witness as this session's mode block states them (T8)");
+        expect(description).toContain('does Nova take no side: not voting, not joining in accusing anyone, taking no part in the statement and making no memory public');
+        expect(description).toContain('is what Nova saw, heard and did as the part about this session says (T8)');
         expect(description).not.toContain('from outside its choices');
         expect(description).not.toContain('accusations and exposures');
       }

@@ -153,17 +153,17 @@ describe('the evaluator scores reporter mode (BASELINE §4 class 6)', () => {
     }
   });
 
-  it('the evaluation user prompt states the session mode', () => {
+  // Phase 18 (the rule-text read's part 5c): the line says where Nova was, in the warehouse's words.
+  it('the evaluation user prompt states where Nova was this session', () => {
     const remote = buildEvaluationUserPrompt('article', {
       contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'remote' }
     });
-    expect(remote).toMatch(/REPORTING MODE/i);
-    expect(remote).toContain('remote');
+    expect(remote).toContain('WHERE NOVA WAS THIS SESSION: outside the warehouse (');
 
     const onsite = buildEvaluationUserPrompt('article', {
       contentBundle: {}, outline: {}, sessionConfig: { reportingMode: 'on-site' }
     });
-    expect(onsite).toContain('on-site');
+    expect(onsite).toContain('WHERE NOVA WAS THIS SESSION: in the warehouse (');
   });
 });
 
