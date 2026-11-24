@@ -362,6 +362,25 @@ describe('record view: the limits\' words (phase 18)', () => {
     expect(lines).toContain('- 07:40 AM | memory turned in | document: tay001 | name given: Taylor (the guest reporter, Taylor Chase)');
   });
 
+  // Phase 18, run 2b (brief I; the ledger's ruling after run 2): two of three recent sessions log
+  // most turn-ins as "Nova (anon tip)". Nova made no memory public and a name is one the person
+  // gave, so a logged name that says "anon", in any case, is no name given. No game character's
+  // name holds those letters.
+  it('prints a logged name that says "anon", in any case, as no name given', () => {
+    const anonConfig = {
+      exposures: [
+        { tokenId: 'ale003', exposer: 'Nova (anon tip)', time: '07:30 PM' },
+        { tokenId: 'ash003', exposer: 'ANON', time: '07:35 PM' },
+        { tokenId: 'tay001', exposer: 'Anon.', time: '07:40 PM' }
+      ]
+    };
+    const lines = renderMorningTimeline(timelineBundle(), anonConfig).split('\n').filter((l) => l.startsWith('- '));
+    expect(lines).toContain('- 07:30 AM | memory turned in | document: ale003 | no name given');
+    expect(lines).toContain('- 07:35 AM | memory turned in | document: ash003 | no name given');
+    expect(lines).toContain('- 07:40 AM | memory turned in | document: tay001 | no name given');
+    expect(lines.join('\n')).not.toMatch(/name given:|anon/i);
+  });
+
   it('keeps sale, first-burial bonus and transfer as they were, and prints none of the old words', () => {
     const out = renderRecordView(timelineBundle(), { sessionConfig: config });
     expect(out).toContain('| sale | account: Melanie | amount: $75,000');

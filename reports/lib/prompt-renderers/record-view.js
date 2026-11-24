@@ -221,8 +221,13 @@ const TABLE_ORDER = { sale: 0, bonus: 1, transfer: 1, exposure: 2 };
 
 /**
  * The name on an exposure's turn-in: null when the evidence log records it as
- * anonymous (empty, "NovaNews (Anonymous)", or Nova's outlet alone), else the name as
- * written, which is an honest attribution (spec T6).
+ * anonymous (empty, Nova's outlet alone, or any name that says "anon" in any case, as
+ * "NovaNews (Anonymous)" and "Nova (anon tip)" do), else the name as written, which is an
+ * honest attribution (spec T6).
+ *
+ * Phase 18, run 2b (the ledger's ruling after run 2): two of three recent sessions log most
+ * turn-ins as "Nova (anon tip)". Nova made no memory public and a name is one the person gave,
+ * so such a name is no name given. No game character's name holds the letters "anon".
  *
  * Phases 14 and 15 (R5): a name that is the guest reporter's, by their full name or their
  * first name in any case, is marked as theirs (session-authors.js guestTurnInName):
@@ -234,7 +239,7 @@ const TABLE_ORDER = { sale: 0, bonus: 1, transfer: 1, exposure: 2 };
  */
 function turnInName(exposer, sessionConfig = null) {
   const text = typeof exposer === 'string' ? exposer.trim() : '';
-  if (!text || /anonymous/i.test(text) || /^novanews$/i.test(text)) return null;
+  if (!text || /anon/i.test(text) || /^novanews$/i.test(text)) return null;
   return guestTurnInName(text, sessionConfig);
 }
 
