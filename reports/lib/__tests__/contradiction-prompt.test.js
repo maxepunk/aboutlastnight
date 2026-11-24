@@ -75,6 +75,22 @@ describe('contradiction data in arc prompt', () => {
     expect(prompt).not.toContain(DERIVED_LABELS.narrativeTensions);
   });
 
+  // Directors' notes wrap lines, and a wrapped line stays one stored sentence
+  // (contradiction-surfacing.test.js). The notes still hold it word for word, and it prints
+  // on one list line. Moved here from the article writer's test in run 2c, when the weave
+  // writer became the one reader of directorTensionSentences.
+  test('a stored sentence wrapped across lines still matches the notes and prints on one line', () => {
+    const prompt = buildWeavePrompt(baseState({
+      directorNotes: { rawProse: 'Blake pulled Vic aside at the bar. The Valet read the balances.', transactionReferences: [] },
+      narrativeTensions: {
+        tensions: [{ type: 'blake-proximity', observations: ['Blake pulled Vic aside\n  at the bar.', 'The Valet read the balances.'] }]
+      }
+    }));
+    const section = prompt.slice(prompt.indexOf("### Blake and the Valet in the director's notes"), prompt.indexOf('### Session Roster'));
+    const listed = section.split('\n').filter(line => line.startsWith('- '));
+    expect(listed).toEqual(['- Blake pulled Vic aside at the bar.', '- The Valet read the balances.']);
+  });
+
   test('buildWeavePrompt omits tensions section when no tensions', () => {
     const prompt = buildWeavePrompt(baseState({ narrativeTensions: null }));
     expect(prompt).not.toContain('NARRATIVE TENSIONS');
