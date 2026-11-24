@@ -1251,3 +1251,91 @@ describe('4.14f: the desk says once what came of a deleted Key Evidence entry or
     expect(ViewLogic.steeringView(report, []).kept).toBe('');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18, brief S: what a send-back acts on, and a suggestion added to the note
+// ═══════════════════════════════════════════════════════════════════════════
+
+// A director's send-back at the desk shows the rework the note and the must-fix findings, never a
+// "Fact check, advisory" mark. The desk says so under the note box, and an advisory mark carries a
+// button that adds its words, and the piece it sits beside, to the note as one line of its own.
+describe('brief S: the desk says what a send-back acts on', () => {
+  const { deskNoteLine, noteHoldsLine, noteWithLine, deskNoteButton, sendBackScopeLine, DESK_NOTE_BUTTON_LABELS, DESK_HAND_EDITS_LINE } = ViewLogic;
+  const SCOPE = 'Send back acts on this note, and on the marks labelled "Fact check" or "The judge could not fix this". It leaves a "Fact check, advisory" mark alone: fix that one yourself here, or press its "Add to note" button to ask the writer for it.';
+  const data = payloadFor(article());
+  const marks = deskMarks(data, data.contentBundle);
+  const dash = deskMarksAt(marks, block(1, 1))[0];
+  const onCard = { key: 'mark-9', tone: 'advisory', label: 'Fact check, advisory', text: 'This card reads long for the sidebar.', where: 'Sidebar card 1', anchor: { kind: 'sidebar', index: 0 } };
+  const apart = { key: 'mark-8', tone: 'advisory', label: 'Fact check, advisory', text: 'The article says twice that no one saw the ledger.', where: '', anchor: null };
+
+  test('the lines the director reads, word for word', () => {
+    expect(DESK_NOTE_BUTTON_LABELS).toEqual({ add: 'Add to note', added: 'In the note' });
+    expect(DESK_HAND_EDITS_LINE).toBe('Your hand edits are sent with this note. The writer is told to keep them, so a mark on a piece you have edited is not acted on either. Fix it yourself.');
+  });
+
+  test("a mark beside a paragraph: its words as the desk shows them, then the piece as the desk names it", () => {
+    expect(dash.tone).toBe('advisory');
+    expect(deskNoteLine(dash)).toBe(`${dash.text} (The Story: Eight Minutes, block 2)`);
+  });
+
+  test('a mark beside a card names the card, and one beside no piece adds its words alone', () => {
+    expect(deskNoteLine(onCard)).toBe('This card reads long for the sidebar. (Sidebar card 1)');
+    expect(deskNoteLine(apart)).toBe('The article says twice that no one saw the ledger.');
+  });
+
+  test('the line is one line: the words as the page shows them, a run of spaces or a line break read as one space', () => {
+    expect(deskNoteLine({ ...apart, text: '  Two\nlines,   spaced.  ' })).toBe('Two lines, spaced.');
+  });
+
+  test('the line goes at the end of the note, on a line of its own, and never drops what the director typed', () => {
+    const line = deskNoteLine(dash);
+    expect(noteWithLine('', line)).toBe(line);
+    expect(noteWithLine('Tighten the lede.', line)).toBe(`Tighten the lede.\n${line}`);
+    expect(noteWithLine('Tighten the lede.\n', line)).toBe(`Tighten the lede.\n${line}`);
+    const two = noteWithLine(noteWithLine('Tighten the lede.', line), deskNoteLine(onCard));
+    expect(two).toBe(`Tighten the lede.\n${line}\nThis card reads long for the sidebar. (Sidebar card 1)`);
+  });
+
+  test('added once and not twice: while the note holds the line, a second add changes nothing', () => {
+    const line = deskNoteLine(dash);
+    const once = noteWithLine('Tighten the lede.', line);
+    expect(noteHoldsLine(once, line)).toBe(true);
+    expect(noteWithLine(once, line)).toBe(once);
+    expect(noteHoldsLine(`Tighten the lede.\r\n  ${line}  \r\nKeep the close.`, line)).toBe(true);
+  });
+
+  test('a line the director edited is no longer held, so the button offers it again', () => {
+    const line = deskNoteLine(dash);
+    const edited = noteWithLine('', line).replace('em-dash', 'dash');
+    expect(noteHoldsLine(edited, line)).toBe(false);
+    expect(noteHoldsLine('', line)).toBe(false);
+    expect(noteHoldsLine(`Before ${line}`, line)).toBe(false);
+  });
+
+  test('the button sits on an advisory mark alone, and reads "In the note" while the note holds its line', () => {
+    expect(deskNoteButton(dash, '')).toEqual({ label: 'Add to note', inNote: false, line: deskNoteLine(dash) });
+    expect(deskNoteButton(dash, noteWithLine('', deskNoteLine(dash)))).toEqual({ label: 'In the note', inNote: true, line: deskNoteLine(dash) });
+    ['judge', 'structural', 'concern', 'changed'].forEach((tone) => {
+      expect([tone, deskNoteButton({ ...onCard, tone }, '')]).toEqual([tone, null]);
+    });
+    expect(deskNoteButton(null, '')).toBeNull();
+  });
+
+  test('the line under the note box shows while the desk holds a "Fact check", "The judge could not fix this" or "Fact check, advisory" mark', () => {
+    expect(sendBackScopeLine(marks)).toBe(SCOPE);
+    const only = (tone, where) => ({ at: {}, apart: [], resolved: [], [where]: where === 'at' ? { 'block:0:0': [{ ...onCard, tone }] } : [{ ...onCard, tone }] });
+    ['judge', 'structural', 'advisory'].forEach((tone) => ['at', 'apart', 'resolved'].forEach((where) => {
+      expect([tone, where, sendBackScopeLine(only(tone, where))]).toEqual([tone, where, SCOPE]);
+    }));
+  });
+
+  test('a desk with none of those marks shows no line: no marks, or only the director\'s own', () => {
+    const clean = article();
+    clean.sections[1].content = [paragraph(STORY_1), paragraph(STORY_3)];
+    clean.sections[2].content = [paragraph(MONEY_1)];
+    const d = payloadFor(clean, { factCheck: { findings: [] } });
+    expect(sendBackScopeLine(deskMarks(d, d.contentBundle))).toBe('');
+    expect(sendBackScopeLine({ at: { 'block:0:0': [{ ...onCard, tone: 'concern' }] }, apart: [{ ...apart, tone: 'changed' }], resolved: [] })).toBe('');
+    expect(sendBackScopeLine(null)).toBe('');
+  });
+});

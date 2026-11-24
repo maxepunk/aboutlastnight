@@ -3938,6 +3938,31 @@ textarea.input {
   color: var(--text-secondary);
 }
 
+/* Phase 18, brief S: an advisory mark's "Add to note", which a send-back leaves alone unless
+   the note asks for it; small, in the rail buttons' manner, and faded once its line is in the note. */
+.desk-mark__add {
+  margin-left: var(--space-sm);
+  padding: 0 6px;
+  height: 20px;
+  background: rgba(212, 168, 83, 0.1);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--accent-amber);
+  font-size: 0.72rem;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.desk-mark__add:hover:not(:disabled),
+.desk-mark__add:focus-visible {
+  background: rgba(212, 168, 83, 0.3);
+}
+
+.desk-mark__add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* The settled story above the headline: read-only, with no pencil. */
 .desk-echo {
   border-left: 2px solid rgba(212, 168, 83, 0.6);

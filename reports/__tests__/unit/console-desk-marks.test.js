@@ -134,3 +134,51 @@ describe("4.10c: the folded record says the edits stand, in steeringView's words
     expect(src).not.toMatch(/kept all|keptCount/);
   });
 });
+
+// Phase 18, brief S: the desk says what a send-back acts on, and an advisory mark's "Add to note"
+// button adds its line to the note box. The lines and the rules are checkpoint-view-logic.js's,
+// pinned in console/__tests__/checkpoint-view-logic-desk.test.js; here, that Article.js renders them
+// and that a press changes the note as typing does. The click-through is the integrator's.
+describe("brief S: Article.js wires the note's button and the send-back's lines", () => {
+  const src = read('components/checkpoints/Article.js');
+  const body = (name) => {
+    const from = src.slice(src.indexOf(`function ${name}(`));
+    return from.slice(0, from.indexOf('\n  }\n'));
+  };
+  const noteBox = src.slice(src.indexOf("htmlFor: 'article-note'"), src.indexOf("id: 'article-note'"));
+
+  it("every list of marks is drawn inside the desk, where the note is, once: beside a piece, apart and in the resolved fold", () => {
+    expect(count(src, 'function deskMarksList(')).toBe(1);
+    expect(src.indexOf('function deskMarksList(')).toBeGreaterThan(src.indexOf('function Article('));
+    expect(body('deskMarksList')).toContain('ViewLogic.deskNoteButton(mark, feedbackText)');
+    expect(src).toContain('deskMarksList(desk.apart.items)');
+    expect(src).toContain('deskMarksList(desk.folds.resolved.items, true)');
+  });
+
+  it('the button reads as the view says, waits while the note holds its line, and a press adds the line as typing would, disarming the send-back', () => {
+    const list = body('deskMarksList');
+    expect(list).toContain('disabled: button.inNote');
+    expect(list).toContain('button.label');
+    expect(list).toContain('e.stopPropagation(); addToNote(button);');
+    const add = body('addToNote');
+    expect(add).toContain('if (button.inNote) return;');
+    expect(add).toContain('setFeedbackText(ViewLogic.noteWithLine(feedbackText, button.line));');
+    expect(add).toContain('setSendBackArmed(false);');
+  });
+
+  it('under the note box\'s line, the line on what a send-back acts on, then the changed line on the hand edits', () => {
+    const existing = noteBox.indexOf('With Approve it stands for every later writer.');
+    expect(count(src, 'const scopeLine = ViewLogic.sendBackScopeLine(desk.marks);')).toBe(1);
+    const scope = noteBox.indexOf("scopeLine && React.createElement('p', { className: 'text-xs text-muted' }, scopeLine)");
+    const edits = noteBox.indexOf('hasEdits && React.createElement(');
+    expect([existing > -1, scope > existing, edits > scope]).toEqual([true, true, true]);
+    expect(noteBox).toContain('ViewLogic.DESK_HAND_EDITS_LINE');
+    expect(src).not.toContain("'Your hand edits are sent with this note. The writer is told to keep them.'");
+  });
+
+  it('the button has its style in the marks\' section', () => {
+    const css = read('console.css');
+    const marks = css.slice(css.indexOf("/* ── 4.10: the desk's marks ──"));
+    expect(marks).toContain('.desk-mark__add');
+  });
+});

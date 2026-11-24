@@ -105,25 +105,6 @@ function echoLine(label, value) {
 }
 
 /**
- * A list of marks (task 4.10): each mark's label, then its text, in the tone deskMarks gives
- * it, and, with `showWhere`, the piece it was about in brackets. Under a piece in its row, the
- * marks beside it; beside the approve button, the marks with no piece; in the fold below the
- * article, the marks possibly resolved. Nothing for no marks.
- */
-function deskMarksList(marks, showWhere) {
-  if (!marks || marks.length === 0) return null;
-  return React.createElement('ul', { className: 'desk-marks' },
-    marks.map(function (mark) {
-      return React.createElement('li', { key: mark.key, className: 'desk-mark desk-mark--' + mark.tone },
-        React.createElement('strong', { className: 'desk-mark__label' }, mark.label + ': '),
-        mark.text,
-        showWhere && mark.where && React.createElement('span', { className: 'desk-mark__where' }, ' (' + mark.where + ')')
-      );
-    })
-  );
-}
-
-/**
  * The line beside what waits for unsaved input (tasks 4.14d and 4.14g): the rule's line, or nothing
  * for none. A hold, not an error, so it is styled .held-line, calmer than a refusal's red.
  */
@@ -997,6 +978,46 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   }
 
   /**
+   * A list of marks (task 4.10): each mark's label, then its text, in the tone deskMarks gives
+   * it, and, with `showWhere`, the piece it was about in brackets. Under a piece in its row, the
+   * marks beside it; beside the approve button, the marks with no piece; in the fold below the
+   * article, the marks possibly resolved. Nothing for no marks.
+   *
+   * A "Fact check, advisory" mark, which a send-back leaves alone, carries the button that adds
+   * its line to the note (phase 18, brief S; ViewLogic.deskNoteButton), wherever it is drawn. It
+   * reads "In the note" and waits while the note holds the line.
+   */
+  function deskMarksList(marks, showWhere) {
+    if (!marks || marks.length === 0) return null;
+    return React.createElement('ul', { className: 'desk-marks' },
+      marks.map(function (mark) {
+        var button = ViewLogic.deskNoteButton(mark, feedbackText);
+        return React.createElement('li', { key: mark.key, className: 'desk-mark desk-mark--' + mark.tone },
+          React.createElement('strong', { className: 'desk-mark__label' }, mark.label + ': '),
+          mark.text,
+          showWhere && mark.where && React.createElement('span', { className: 'desk-mark__where' }, ' (' + mark.where + ')'),
+          button && React.createElement('button', {
+            type: 'button',
+            className: 'desk-mark__add',
+            disabled: button.inNote,
+            onClick: function (e) { e.stopPropagation(); addToNote(button); }
+          }, button.label)
+        );
+      })
+    );
+  }
+
+  /**
+   * An advisory mark's line added to the end of the note box, as typing it would: the note
+   * changes and an armed send-back disarms. Nothing while the note holds the line.
+   */
+  function addToNote(button) {
+    if (button.inNote) return;
+    setFeedbackText(ViewLogic.noteWithLine(feedbackText, button.line));
+    setSendBackArmed(false);
+  }
+
+  /**
    * A piece's open editor with the piece's marks under it, so the director fixes what they flag with
    * them in view, and, between them, the line saying the desk's other controls wait for it (task 4.14g).
    */
@@ -1366,6 +1387,8 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
   const sendBack = ViewLogic.sendBackButton(sendBackArmed, feedbackText, 'article');
   // Task 4.14e: a send-back whose rework did not run, read by what the note box holds.
   const didNotRun = ViewLogic.reworkDidNotRunLine(data && data.roundDidNotRun, feedbackText, 'article');
+  // Phase 18, brief S: the line under the note box saying what a send-back acts on, or ''.
+  const scopeLine = ViewLogic.sendBackScopeLine(desk.marks);
 
   var currentSections = deskBundleNow.sections || [];
   var currentEvidenceCards = deskBundleNow.evidenceCards || [];
@@ -1492,8 +1515,10 @@ function Article({ data, sessionId: propSessionId, theme, onApprove, onReject, d
         'Note to the writer, sent with whichever button you press'),
       React.createElement('p', { className: 'text-xs text-muted' },
         'With Approve it stands for every later writer. With Send back it drives the rework, and then stands. Send back needs one.'),
+      // Phase 18, brief S: what a send-back acts on, while the desk holds a mark it is about.
+      scopeLine && React.createElement('p', { className: 'text-xs text-muted' }, scopeLine),
       hasEdits && React.createElement('p', { className: 'text-xs text-muted', role: 'status' },
-        'Your hand edits are sent with this note. The writer is told to keep them.'),
+        ViewLogic.DESK_HAND_EDITS_LINE),
       React.createElement('textarea', {
         id: 'article-note',
         className: 'input feedback-area',

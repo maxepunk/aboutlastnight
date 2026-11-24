@@ -5297,6 +5297,99 @@
     };
   }
 
+  // ── What a send-back at the desk acts on (phase 18, brief S) ─────────────────
+  //
+  // A send-back at the desk always carries a note, so its rework is shown the note and then the
+  // must-fix findings: every mark labelled "Fact check" or "The judge could not fix this", less a
+  // finding that quotes a piece the director has edited, which the director's edits withhold. A
+  // "Fact check, advisory" mark is not among them. The desk says so under the note box, and an
+  // advisory mark carries a button that adds its line to the note, so the director need not copy it.
+
+  /** The button on an advisory mark, before and while the note holds its line. */
+  var DESK_NOTE_BUTTON_LABELS = { add: 'Add to note', added: 'In the note' };
+
+  /** The tones whose marks the scope line is about: "Fact check", "The judge could not fix this" and "Fact check, advisory". */
+  var SEND_BACK_SCOPE_TONES = ['judge', 'structural', 'advisory'];
+
+  /** The line under the note box while the desk holds a mark of SEND_BACK_SCOPE_TONES. */
+  var SEND_BACK_SCOPE_LINE = 'Send back acts on this note, and on the marks labelled "' + DESK_MARK_LABELS.structural +
+    '" or "' + DESK_MARK_LABELS.judge + '". It leaves a "' + DESK_MARK_LABELS.advisory +
+    '" mark alone: fix that one yourself here, or press its "' + DESK_NOTE_BUTTON_LABELS.add + '" button to ask the writer for it.';
+
+  /** The line under the note box while the desk holds one of the director's edits. */
+  var DESK_HAND_EDITS_LINE = 'Your hand edits are sent with this note. The writer is told to keep them, so a mark on a piece you have edited is not acted on either. Fix it yourself.';
+
+  /**
+   * The line an advisory mark adds to the note: the mark's words as the desk shows them (a run of
+   * spaces or a line break reads as one space, as the page renders it), then the piece it sits
+   * beside in brackets, named as the desk names it (`where`, pieceWords), as the resolved fold
+   * shows a mark. A mark beside no piece gives its words alone.
+   *
+   * @param {Object} mark - one of deskMarks' marks
+   * @returns {string}
+   */
+  function deskNoteLine(mark) {
+    var m = isPlainObject(mark) ? mark : {};
+    var words = asString(m.text).replace(/\s+/g, ' ').trim();
+    var where = asString(m.where).trim();
+    return where ? words + ' (' + where + ')' : words;
+  }
+
+  /** Whether one line of the note, read past the spaces around it, is the line. */
+  function noteHoldsLine(note, line) {
+    var wanted = asString(line).trim();
+    if (!wanted) return false;
+    return asString(note).split(/\r?\n/).some(function (held) { return held.trim() === wanted; });
+  }
+
+  /**
+   * The note with the line added at its end, on a line of its own; the note as it is while it
+   * holds the line. Nothing the director typed is dropped.
+   *
+   * @param {string} note - the note box
+   * @param {string} line - deskNoteLine(mark)
+   * @returns {string}
+   */
+  function noteWithLine(note, line) {
+    var text = asString(note);
+    var add = asString(line).trim();
+    if (!add || noteHoldsLine(text, add)) return text;
+    if (!text) return add;
+    return text + (/\n$/.test(text) ? '' : '\n') + add;
+  }
+
+  /**
+   * The "Add to note" button of a mark: on a "Fact check, advisory" mark only, null on any other.
+   * While the note holds the mark's line it reads "In the note" and does nothing (`inNote`).
+   *
+   * @param {Object} mark - one of deskMarks' marks
+   * @param {string} note - the note box
+   * @returns {{label: string, inNote: boolean, line: string}|null}
+   */
+  function deskNoteButton(mark, note) {
+    if (!isPlainObject(mark) || mark.tone !== 'advisory') return null;
+    var line = deskNoteLine(mark);
+    var inNote = noteHoldsLine(note, line);
+    return { label: inNote ? DESK_NOTE_BUTTON_LABELS.added : DESK_NOTE_BUTTON_LABELS.add, inNote: inNote, line: line };
+  }
+
+  /**
+   * The line under the note box that says what a send-back acts on, while the desk holds a mark
+   * labelled "Fact check", "The judge could not fix this" or "Fact check, advisory", beside a
+   * piece, apart or in the resolved fold; '' otherwise.
+   *
+   * @param {Object} marks - deskMarks(...)
+   * @returns {string}
+   */
+  function sendBackScopeLine(marks) {
+    var m = isPlainObject(marks) ? marks : {};
+    var at = isPlainObject(m.at) ? m.at : {};
+    var all = Object.keys(at).reduce(function (list, key) { return list.concat(asArray(at[key])); }, [])
+      .concat(asArray(m.apart), asArray(m.resolved));
+    var shows = all.some(function (mark) { return isPlainObject(mark) && SEND_BACK_SCOPE_TONES.indexOf(mark.tone) !== -1; });
+    return shows ? SEND_BACK_SCOPE_LINE : '';
+  }
+
   // ── A send-back that did not run, at the map and the desk (task 4.14e) ───────
 
   /** The stops that send back what the line names: the map and the article. */
@@ -5531,6 +5624,14 @@
     deskMarksAt: deskMarksAt,
     deskEcho: deskEcho,
     deskView: deskView,
+    // Phase 18, brief S: what a send-back at the desk acts on, and an advisory mark added to the note
+    DESK_NOTE_BUTTON_LABELS: DESK_NOTE_BUTTON_LABELS,
+    DESK_HAND_EDITS_LINE: DESK_HAND_EDITS_LINE,
+    deskNoteLine: deskNoteLine,
+    noteHoldsLine: noteHoldsLine,
+    noteWithLine: noteWithLine,
+    deskNoteButton: deskNoteButton,
+    sendBackScopeLine: sendBackScopeLine,
     // The console's copies of the server's rules for where a finding sits, each held equal by a
     // test: lib/grounding.js's reading of a quote, the passages lib/hand-edit-diff.js
     // locateQuotedText locates by, and lib/content-bundle-fact-check.js sectionIdOf
