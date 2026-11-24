@@ -540,3 +540,102 @@ The work is three waves on the phase branch, between run 2 and run 3:
 | L | Opus 5.5, medium | Opus 5.5, medium | lists and blocks moved between two prompts |
 
 The verifier is Sonnet 5.5 at medium, a fixer runs one step above the attempt that failed, and a re-review is Opus 5.5 at medium, as in run 2.
+
+---
+
+## Run 2c: the approved lines (added 2026-11-24)
+
+Run 2b is merged. The director read the new lines on 2026-11-24, corrected the integrator twice, and approved the corrected page. The wording is in `docs/superpowers/specs/2026-11-24-phase-18-run-2c-wording.md`, each line as it is and as approved, and the four changed rule files are in the approved-text folder. This run puts them in.
+
+Two of the director's corrections bind every seat:
+
+- **Judge a change by the whole pipeline.** A line is read by more than the writer it sits in front of: a later writer, a check, a judge, and the director at a stop. Before a line changes, know who else reads it.
+- **The spec's non-goals hold.** What a piece of evidence holds is not changed in this phase.
+
+### Rulings for run 2c
+
+- **R29. The wording doc is the read for this run.** Every "Approved" line goes in word for word. Nothing else a model reads changes. A line that cannot be built as written comes back as NEEDS_CONTEXT.
+- **R30. R28's shorter lists are withdrawn.** Each judge lists the fifteen limits, as the spec's section 7 says. Run 2b's other changes to the judges stay: the notes' label, the roster block and the money totals.
+- **R31. One rule for a beat's kind, in two forms.** The strip of `kind` is its own exported step. The map as the article writer is shown it builds on that step and then cuts each left-out beat to its id and title. The map's rework calls the first form, since it hands back a whole map. Slice J's local helper goes.
+- **R32. The line above the headline is untouched** until the director gives its words.
+- **R33. The stock headings stay in the theme's config** for whatever else reads them. Only the map writer's prompt stops printing them. Each slot's description lives with the slot in the config, once, and the prompt prints it from there.
+- **R34. The two blocks no longer offered** leave the generation instruction and the schema the writer is shown and given. The validator, the template and a stored article keep both. A rework of a stored article that holds one cannot hand it back; no session of the last three holds one, so that is a known rare case.
+- **R35. A question's `reads` follows its words.** Where a question now says "the director's words", it reads every block of the director's words that judge's prompt holds.
+- **R36. The note's block ends without its NOTE lines.** Whatever found the end of the director's words by them finds it another way, held by a test.
+- **R37. The probe.** The integrator runs the one live call the director allowed against the merged run 2b. Its result is in the ledger. No seat makes a live call.
+
+### Review focus for run 2c
+
+- Every approved line compared with the wording doc word for word, in the rendered prompt and not only in the diff.
+- Each prompt a seat changes rendered for 111326 and 101826 and read top to bottom, as its model meets it.
+- For each changed line: who else reads it. The roster block, the derived labels and the settled angle's intro are printed to several writers and to the judges.
+- A theme that prints no pronouns still gets a roster block that reads whole.
+- A judge's findings still parse: codes, criteria, the director's-edits guard.
+
+### Brief N: the rule files, and the weave and map writers' lines
+
+**Intent.** The four changed rule files are the approved ones, and the two planning writers' own lines read as approved.
+
+**Layers.**
+- The rules folder: `world.md`, `limits.md`, `brief.md` and `job-map.md` copied from the approved-text folder, and their hashes re-pinned in `lib/__tests__/rule-set.test.js`. The stubs the pinned renders use are untouched unless a test forces it.
+- `lib/prompt-builder.js`, `<SLOTS>` in the map writer's sections, and `lib/theme-config.js`: the wording doc's part 2 and R33.
+- `lib/schemas/outline.schema.json`: a beat's players, part 2, in a section's beats and in the left-out beats.
+- `lib/workflow/nodes/arc-specialist-nodes.js`: the task's opening and the connection's evidence, part 4. The label over the sentences about Blake is slice O's constant.
+
+**Tests.** The rules folder byte-equal to the approved folder, by a test or by `diff -r` in the verification; the slot list as approved; the players' description; the weave task's two lines; every test that held the old words moved to the new.
+
+**Invariants.** The bound on the weave's page and its check are unchanged. The map checks are unchanged: the players' line is a description, and the check still reads who is placed from it. The console's map page is unchanged.
+
+**Verification.** Render the weave writer's and the map writer's prompts for 111326 and 101826 and read each top to bottom.
+
+**Done.** The approved lines stand in the renders word for word, the suite is green, the moved pins carry their reasons.
+
+### Brief O: the article writer, and the blocks every prompt shares
+
+**Intent.** The article writer knows what the settled angle's lines are, is not handed the sentences about Blake again, and is offered only the blocks an article uses. The blocks every prompt shares speak in the limits' manner.
+
+**Layers.**
+- `lib/prompt-renderers/settled-weave.js`: the wording doc's part 3. The two shared sentences print for every reader of the settled angle; the four for the article print with the form that has no evidence under the threads.
+- `lib/prompt-builder.js`: the list of names (part 5), in the one function every writer and judge prints it from; the block of sentences about Blake gone from the article writer and its rework (part 6); the two block types gone from the generation instruction and from the writer's schema (part 6, R34); R31's two forms.
+- `lib/workflow/nodes/ai-nodes.js`: the map's rework calls R31's first form.
+- `lib/prompt-renderers/derived-labels.js` and `director-notes-renderer.js`: the three labels, the label over the sentences about Blake, and the line over the quoted lines (parts 4 and 5).
+
+**Tests.** Each approved line; the article writer's prompt without the Blake block and the weave writer's with it under the new label; the writer's schema without the two block shapes and the full schema with them; a stored article that holds one still validates; R31's two forms from one rule; a theme with no pronouns.
+
+**Invariants.** The printed schema equals the schema the SDK is given, on all three kinds of call. The carry is unchanged. The judges read the settled angle with its evidence.
+
+**Verification.** Render all eleven prompts for both sessions. Read the article writer's top to bottom. For the shared blocks, read each in every prompt that prints it.
+
+**Done.** The approved lines stand in the renders word for word, the suite is green, the moved pins carry their reasons.
+
+### Brief Q: the judges, the note in a rework, and the whiteboard lines
+
+**Intent.** A judge knows what the director's words are, what a breach is, what its fix may hold, and what it is reading. A rework reads the director's note under its own name.
+
+**Layers.**
+- `lib/workflow/nodes/evaluator-nodes.js`: the wording doc's part 7, and R30 and R35. `scripts/lib/render-calls.js` follows in the same commit.
+- `lib/workflow/nodes/node-helpers.js`: the note's block, part 8 and R36.
+- `lib/content-bundle-fact-check.js`: the two whiteboard lines, part 8.
+- Left from run 2b: the tests that build their expected text with the function under test take a literal.
+
+**Tests.** Each approved line; each judge's list holds fifteen; the first question names the fixed facts' code among its codes; a finding that opens with that code is read as that question's; the note's block at each stop; the scan that reads the end of the director's words.
+
+**Invariants.** The pass mark, the output's shape and the parsing of findings are untouched. The scope sentences of a rework are byte for byte.
+
+**Verification.** Render both judges and every rework for both sessions and read each top to bottom.
+
+**Done.** The approved lines stand in the renders word for word and the suite is green.
+
+### Seats for run 2c
+
+| Slice | Builder | Reviewer | Why |
+|---|---|---|---|
+| N | Opus 5.5, medium | Opus 5.5, medium | copied files and four lines, each checked by a render |
+| O | Opus 5.5, high | Fable 5.2, high | the writer's schema again, and blocks that five prompts share |
+| Q | Opus 5.5, high | Fable 5.2, high | the judges decide what is reworked; a wrong word changes what passes |
+
+The verifier is Sonnet 5.5 at medium, a fixer is Opus 5.5 at high, and a re-review is Opus 5.5 at medium.
+
+### After run 2c
+
+A second prompt read, by fresh readers on Fable 5.2 at high, of the prompts as built. This time the integrator walks each finding through the whole pipeline before it becomes a proposal. Then run 3 and the gates.
