@@ -324,8 +324,8 @@ describe('photo references (class 7)', () => {
     });
   });
 
-  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays
-  // out of the article): the whiteboard photo is never a usable reference. A printed one
+  // Task 4c-fix (T13: the whiteboard is the working notes kept during the investigation, and its
+  // photo stays out of the article; run 2c's wording): the whiteboard photo is never a usable reference. A printed one
   // is an invalid reference whose message says what it is, and no fix line offers it.
   // The evaluator passes its filename from where the writers get it (buildFactCheckArgs,
   // whiteboardFilenameOf). It used to be offered as a photo to use.
@@ -336,9 +336,9 @@ describe('photo references (class 7)', () => {
       evidenceCards: [],
       heroImage: { filename: 'aln0711-1.jpg' }
     });
-    const WORKING_NOTES = "this is the whiteboard, the room's working notes, and its photo stays out of the article.";
+    const WORKING_NOTES = "this is the whiteboard, the working notes kept during the investigation, and its photo stays out of the article.";
 
-    it("is an invalid reference when printed, with a message that says it is the room's working notes", () => {
+    it("is an invalid reference when printed, with a message that says it is the working notes kept during the investigation", () => {
       const result = factCheckContentBundle(baseArgs({
         sessionPhotos: PHOTOS, whiteboardPhoto: 'whiteboard.jpg', contentBundle: placing('aln0711-2.jpg', 'whiteboard.jpg')
       }));
@@ -2267,7 +2267,7 @@ describe("4.10b: each finding carries the director's line for its place", () => 
     expect(linesOf(result, 'photoReferences')).toEqual([
       [{ filename: 'nope.jpg', section: 'the-story' }, "This photo, nope.jpg, is not one of the session's photos."],
       [{ filename: 'gone.jpg', section: 'the-story' }, 'The article still prints this photo, gone.jpg, which you left out.'],
-      [{ filename: 'wb.jpg', section: 'the-story' }, "This photo, wb.jpg, is the whiteboard: the room's working notes, which stay out of the article."]
+      [{ filename: 'wb.jpg', section: 'the-story' }, "This photo, wb.jpg, is the whiteboard: the working notes kept during the investigation, which stay out of the article."]
     ]);
     const unchecked = factCheckContentBundle(baseArgs({ contentBundle: storyWith(photo('kept.jpg')) }));
     expect(linesOf(unchecked, 'photoReferences')).toEqual([

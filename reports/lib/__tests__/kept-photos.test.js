@@ -256,8 +256,8 @@ describe('the fact check reads an excluded photo as not a usable reference', () 
     expect(issue).not.toMatch(/p3\.jpg|p5\.jpg|whiteboard\.jpg/);
   });
 
-  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays
-  // out of the article). The writers never list the whiteboard (whiteboardFilenameOf),
+  // Task 4c-fix (T13: the whiteboard is the working notes kept during the investigation, and its
+  // photo stays out of the article; run 2c's wording). The writers never list the whiteboard (whiteboardFilenameOf),
   // but the fact check offered it in its fix lines and accepted it in print.
   it("reads the whiteboard's filename where the writers get it, and a printed whiteboard is an invalid reference", () => {
     const state = { ...photoState(), contentBundle: bundleWith('p2.jpg', 'whiteboard.jpg') };
@@ -267,7 +267,7 @@ describe('the fact check reads an excluded photo as not a usable reference', () 
     const result = factCheckContentBundle(args);
     expect(result.photoReferences.invalid).toEqual(['whiteboard.jpg']);
     expect(result.structuralIssues.filter((text) => text.startsWith('Invalid photo reference'))).toEqual([
-      "Invalid photo reference \"whiteboard.jpg\": this is the whiteboard, the room's working notes, and its photo stays out of the article. Use one of [hero.jpg, p2.jpg, p4.jpg] or remove the reference."
+      "Invalid photo reference \"whiteboard.jpg\": this is the whiteboard, the working notes kept during the investigation, and its photo stays out of the article. Use one of [hero.jpg, p2.jpg, p4.jpg] or remove the reference."
     ]);
   });
 });

@@ -1107,9 +1107,9 @@ function describeLocations(locations) {
  *                                               (T13; the evaluator's isPhotoExcluded): no
  *                                               usable reference, and never offered in a fix
  * @param {?string}  [args.whiteboardPhoto]    - the whiteboard photo's filename or path (T13;
- *                                               the writers' whiteboardFilenameOf): the room's
- *                                               working notes, so no usable reference, and
- *                                               never offered in a fix
+ *                                               the writers' whiteboardFilenameOf): the working
+ *                                               notes kept during the investigation, so no
+ *                                               usable reference, and never offered in a fix
  * @param {string}   args.reportingMode        - 'on-site' | 'remote' (default 'on-site')
  * @param {Array}    [args.npcs]               - the theme's NPC entries (theme-config
  *                                               getThemeNPCEntries): {name, pronouns?, aliasOf?}
@@ -1376,10 +1376,11 @@ function factCheckContentBundle({
   // to offer every session photo, so a rework could be told to place one the director
   // pulled. The message keeps its prefix: the console groups by it.
   //
-  // Task 4c-fix (T13: the whiteboard is the room's working notes, and its photo stays out
-  // of the article): the whiteboard photo is no usable reference either, and no fix line
-  // offers it; a printed one says what it is. Its filename is known whatever the
-  // session's photo list holds, so it is checked even when that list is empty.
+  // Task 4c-fix (T13: the whiteboard is the working notes kept during the investigation, and its
+  // photo stays out of the article): the whiteboard photo is no usable reference either, and no
+  // fix line offers it; a printed one says what it is, in run 2c's words (the wording doc's part
+  // 8). Its filename is known whatever the session's photo list holds, so it is checked even when
+  // that list is empty.
   const isWhiteboard = (name) => isWhiteboardPhoto(name, whiteboardPhoto);
   const available = new Set(sessionPhotoNames(sessionPhotos));
   const excluded = new Set(asArray(excludedPhotos).map(basename).filter(Boolean));
@@ -1455,7 +1456,7 @@ function factCheckContentBundle({
   };
   const photoMessage = (filename) => {
     const reason = {
-      whiteboard: "this is the whiteboard, the room's working notes, and its photo stays out of the article.",
+      whiteboard: 'this is the whiteboard, the working notes kept during the investigation, and its photo stays out of the article.',
       excluded: 'the director excluded this photo.',
       notTheSessions: "not one of this session's photos."
     }[photoReasonOf(filename)];
@@ -1463,7 +1464,7 @@ function factCheckContentBundle({
   };
   // Brief 4.10c: a photo the director left out says what the article does with it: it prints it.
   const photoLine = (filename) => ({
-    whiteboard: `This photo, ${filename}, is the whiteboard: the room's working notes, which stay out of the article.`,
+    whiteboard: `This photo, ${filename}, is the whiteboard: the working notes kept during the investigation, which stay out of the article.`,
     excluded: `The article still prints this photo, ${filename}, which you left out.`,
     notTheSessions: `This photo, ${filename}, is not one of the session's photos.`
   })[photoReasonOf(filename)];
