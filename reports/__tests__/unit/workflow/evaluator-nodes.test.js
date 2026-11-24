@@ -1589,9 +1589,9 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
   );
   const userFor = (phase, state) => buildEvaluationUserPrompt(phase, state, { factCheck: null });
 
-  /** The truth groups of brief 3.4, by criterion, with the rules each names. */
+  /** The truth groups of brief 3.4, by criterion, with the rules each names (run 2c: the first names the fixed facts). */
   const TRUTH_GROUPS = {
-    evidenceTruth: ['T1', 'T3', 'T4', 'T6'],
+    evidenceTruth: ['T1', 'T3', 'T4', 'T6', 'T15'],
     moneyTruth: ['T5'],
     verdictTruth: ['T2'],
     stagesTruth: ['T7'],
@@ -1790,7 +1790,7 @@ describe('the judges read the rule set (phase 3, 3.4)', () => {
       expect(result.validationResults.passed).toBe(false);
       // Labelled with its rules, so the evaluation bar and the rework both see which rule.
       expect(result.evaluationHistory.structuralIssues).toEqual([
-        'T1, T3, T4, T6: The lede names Morgan as the exposer of mor001. Keep the exposure anonymous.'
+        'T1, T3, T4, T6, T15: The lede names Morgan as the exposer of mor001. Keep the exposure anonymous.'
       ]);
       expect(result.validationResults.structuralIssues).toContain(result.evaluationHistory.structuralIssues[0]);
     });
@@ -2108,7 +2108,8 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     it('moneyTruth reads the timeline and the notes at every judge, and FINANCIAL_SUMMARY where its writer had it', () => {
       // Brief 4.5 (T1): the weave's fact check reads the director's answers too.
       // Brief B (R1, R2): both judges read the notes the director sent at the stops.
-      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes', 'answers', 'stopNotes']);
+      // Run 2c (R35): the question says "the director's words", so it reads every block of them.
+      expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.reads).toEqual(['timeline', 'notes', 'corrections', 'verdict', 'answers', 'stopNotes']);
       expect(getPhaseCriteria('arcs', 'journalist').moneyTruth.description).not.toContain('FINANCIAL_SUMMARY');
       // Brief 4.7a (T1, T5): the article judge reads the answers, and the settled weave,
       // which lists the questions left unanswered. Brief 4.7c: the director's words whole,
@@ -2131,9 +2132,10 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     // a ledger line the director's words explain, such as a note at a stop ruling on its time, is
     // as they give it, at either judge (spec 3 and 4).
     // Phase 18: a balance said or shown in the warehouse, the limits' word for the place.
+    // Run 2c (the wording doc's part 7): "the director's words" without a list, at both judges.
     it('moneyTruth names each source by what it gives: the ledger, the closing totals, and a balance said in the warehouse', () => {
       const LEDGER = 'Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;';
-      const IN_THE_ROOM = "a balance the director's words (the notes, the input-review corrections, the accusation, the answers at the story meeting and the notes at the stops) record as said or shown in the warehouse as that moment's figure, and a ledger line they explain as they give it (T1);";
+      const IN_THE_ROOM = "a balance the director's words record as said or shown in the warehouse as that moment's figure, and a ledger line they explain as they give it (T1);";
       for (const phase of ['article']) {
         const { description } = getPhaseCriteria(phase, 'journalist').moneyTruth;
         expect(description).toContain(LEDGER);
@@ -2144,7 +2146,7 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
       // Brief 4.5 (T1): at the weave, a ledger line the director's answer explains, too; brief
       // F: or a note at a stop.
       const arcs = getPhaseCriteria('arcs', 'journalist').moneyTruth.description;
-      expect(arcs).toContain(`${LEDGER} a balance the director's notes or the notes at the stops record as said or shown in the warehouse as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1).`);
+      expect(arcs).toContain(`${LEDGER} a balance the director's words record as said or shown in the warehouse as that moment's figure; and a ledger line they explain as they give it (T1).`);
     });
   });
 
@@ -2180,12 +2182,12 @@ describe('the judges and the money line (phase 3, 3.9)', () => {
     });
 
     // Brief F (T7): the time of day the session's facts give, and a note at a stop that rules on
-    // a time or adds to Nova's day.
+    // a time or adds to Nova's day. Run 2c: each logged time as the record or the director's words give it.
     it("stagesTruth (T7): the investigation at the time of day the session's facts give, and the timeline or a note at a stop for each logged time", () => {
       for (const phase of ['arcs', 'article']) {
         const description = truthOf(phase, 'stagesTruth');
         expect(description).toContain("at the time of day the session's facts give for it, morning or afternoon, and never called the other");
-        expect(description).toContain(`is every time ${phase === 'arcs' ? 'the weave' : 'the article'} gives the time the record gives, or the time a note at a stop rules (T7)`);
+        expect(description).toContain(`is every time ${phase === 'arcs' ? 'the weave' : 'the article'} gives the time the record or the director's words give (T7)`);
         expect(description).not.toMatch(/morning clock/);
       }
     });

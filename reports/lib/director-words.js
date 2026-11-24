@@ -6,18 +6,21 @@
  * notes, their corrections at the input review, their accusation, their answers at the story
  * meeting, and every note they send at a stop with an approve, a reweave or a send-back. Each
  * source is `{key, label, material, texts}`:
- * - `label`: how an article truth question names it (evaluator-nodes.js ARTICLE_DIRECTOR_WORDS);
+ * - `label`: how the evidence's gloss names it (lib/evidence.js SOURCE_MEANINGS; until phase 18,
+ *   run 2c, the article judge's questions named it so too);
  * - `material`: the judge's material it prints under (evaluator-nodes.js TRUTH_MATERIAL);
  * - `texts(state)`: its texts in state, each word for word.
  *
- * Every reader of the director's words reads this list: the article judge's questions and
- * materials, the fact check's directorText and the verdict guard's record (evaluator-nodes.js
- * directorWords), and the evidence check's "notes" (lib/evidence.js notesTextsOf). "From your
+ * Every reader of the director's words reads this list: the judges' materials, which every
+ * question that says "the director's words" reads, the fact check's directorText and the verdict
+ * guard's record (evaluator-nodes.js directorWords), and the evidence check's "notes"
+ * (lib/evidence.js notesTextsOf). The judges' line that says what the director's words are
+ * (evaluator-nodes.js DIRECTOR_WORDS_LINE) names them in this order, which a test holds. "From your
  * notes" at the story meeting is not one of them: it quotes the session notes and the
  * corrections alone (arc-specialist-nodes.js directorWordsOf).
  *
  * The notes at the stops are read from directorGateNotes whole, never through filterGateNotes:
- * a judge reads the note a rework acted on too, which that rework read as its HUMAN FEEDBACK.
+ * a judge reads the note a rework acted on too, which that rework read under THE DIRECTOR'S NOTE.
  */
 
 const { directorAccusationText } = require('./accusation-verdict');

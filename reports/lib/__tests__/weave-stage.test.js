@@ -15,7 +15,7 @@ const { buildEvaluationSystemPrompt, buildEvaluationUserPrompt, getPhaseCriteria
 const { DIRECTOR_EDIT_PREFIX } = require('../hand-edit-diff');
 const { _testing: graphTesting } = require('../workflow/graph');
 const { routeArcValidation, routeArcEvaluation, incrementArcRevision } = graphTesting;
-const { buildRevisionContext, STRUCTURAL_PASS_SCORE, withLimitNames } = require('../workflow/nodes/node-helpers');
+const { buildRevisionContext, STRUCTURAL_PASS_SCORE } = require('../workflow/nodes/node-helpers');
 const { WEAVE_SCHEMA, WEAVE_SYSTEM_PROMPT } = require('../sdk-client/subagents');
 const subagents = require('../sdk-client/subagents');
 const ruleSet = require('../rule-set');
@@ -492,18 +492,38 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
   // record cannot back is never stated as fact, and an opinion is Nova's by how its line says it,
   // not by a tag, so the meeting's fact check asks the weave's lines for no mark.
   // Phase 18 (the rule-text read's part 4): each question is the article's, reworded from the limit
-  // it checks, with the weave's own director's words kept; the verdict's says nothing of theories.
+  // it checks; the verdict's says nothing of theories. Run 2c (the wording doc's part 7): each says
+  // "the director's words" without listing them, as the article's do, since the judge's instructions
+  // name them once, and the first gains the fixed facts.
   it('each truth question is worded for the weave, pinned', () => {
     const descriptions = Object.fromEntries(Object.entries(getPhaseCriteria('arcs', 'journalist')).map(([key, c]) => [key, c.description]));
     expect(descriptions).toEqual({
-      evidenceTruth: "Is every claim in the weave written as its evidence allows (T1): what the record shows stated as fact; what people did and said in the warehouse, as the director's words record it (the director's notes, their answers at the story meeting and the notes at the stops), reported as fact; a reading the director gives of the session written as Nova's own thinking; and what neither shows never stated as fact, appearing only as what Nova suspects, asks or believes, which a line shows by how it says it and needs no label? And is it written with nothing stated as fact about what a sold memory held or whose it was (T3); with a person tied to an account as fact only where the sale was made in front of everyone or the director's notes record that the director saw it, and the person an account is named after otherwise only wondered about, in Nova's question or opinion (T4); and with nobody named as having turned a memory in unless the evidence log gives the name or the director's notes, their answers at the story meeting or the notes at the stops say who it was (T6)?",
-      moneyTruth: "Does the money in the weave go from the buyer to the account the seller named, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as what was paid during the investigation for memories to be erased (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; a balance the director's notes or the notes at the stops record as said or shown in the warehouse as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1).",
-      verdictTruth: "Is the verdict in the weave told as the account the players agreed to give the police, as the director's words record it (the accusation, the notes and the notes at the stops); does Nova report it, doubt it or give an opinion of it without saying it was right or wrong; and where the players agreed that nobody was to blame, is it told without blaming anyone (T2)?",
-      stagesTruth: "In the weave, is nothing from the party told as something a person saw or remembers, but as what a recovered memory shows; is the investigation told as the part about this session allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; is the rest of Nova's day taken only from the epilogue and from any note at a stop that adds to it; and is every time the weave gives the time the record gives, or the time a note at a stop rules (T7)? What Nova says NovaNews will keep looking into is Nova's own intention and needs no source.",
+      evidenceTruth: "Is every claim in the weave written as its evidence allows (T1): what the record shows stated as fact; what people did and said in the warehouse, as the director's words record it, reported as fact; a reading the director gives of the session written as Nova's own thinking; and what neither shows never stated as fact, appearing only as what Nova suspects, asks or believes, which a line shows by how it says it and needs no label? And is it written with nothing stated as fact about what a sold memory held or whose it was (T3); with a person tied to an account as fact only where the sale was made in front of everyone or the director's notes record that the director saw it, and the person an account is named after otherwise only wondered about, in Nova's question or opinion (T4); and with nobody named as having turned a memory in unless the evidence log gives the name or the director's words say who it was (T6); and does nothing in it go against the fixed facts (T15)?",
+      moneyTruth: "Does the money in the weave go from the buyer to the account the seller named, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as what was paid during the investigation for memories to be erased (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it; a balance the director's words record as said or shown in the warehouse as that moment's figure; and a ledger line they explain as they give it (T1).",
+      verdictTruth: "Is the verdict in the weave told as the account the players agreed to give the police, as the director's words record it; does Nova report it, doubt it or give an opinion of it without saying it was right or wrong; and where the players agreed that nobody was to blame, is it told without blaming anyone (T2)?",
+      stagesTruth: "In the weave, is nothing from the party told as something a person saw or remembers, but as what a recovered memory shows; is the investigation told as the part about this session allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; is the rest of Nova's day taken only from the epilogue and from any note at a stop that adds to it; and is every time the weave gives the time the record or the director's words give (T7)? What Nova says NovaNews will keep looking into is Nova's own intention and needs no source.",
       novaPositionTruth: 'In the weave, does Nova take no side: not voting, not joining in accusing anyone, taking no part in the statement and making no memory public; and is what Nova saw, heard and did as the part about this session says (T8)?',
-      playersTruth: "Does every character a player played take the pronoun the roster gives in the weave, or, where the roster gives none, the pronoun the director's answer at the story meeting or a note at a stop gives (T9); and is everything the weave says about a person said about the character, with no comment on the player and no player's looks described (T11)?",
-      wordsTruth: "Is every line in quotation marks in the weave word for word from the record, the director's notes or the notes at the stops, and given to the person who said it (T12)?"
+      playersTruth: "Does every character a player played take the pronoun the roster gives in the weave, or, where the roster gives none, the pronoun the director's words give (T9); and is everything the weave says about a person said about the character, with no comment on the player and no player's looks described (T11)?",
+      wordsTruth: "Is every line in quotation marks in the weave word for word from the record or the director's words, and given to the person who said it (T12)?"
     });
+  });
+
+  // Run 2c (R35): a question that says "the director's words" reads every block of them its judge's
+  // prompt holds, and each material a question reads is printed in the judge's prompts.
+  it('every material a weave truth criterion reads is printed in the judge\'s prompts', () => {
+    const state = weaveState();
+    state.weave.questions[0].answer = 'Sarah ran the bar all morning.';
+    state.directorGateNotes = [{ gate: 'arc-selection', kind: 'rejection', round: 1, stopRound: 1, text: 'Keep the bartender in the story.' }];
+    const { TRUTH_MATERIAL } = evalTesting;
+    const criteria = getPhaseCriteria('arcs', 'journalist');
+    const prompts = `${buildEvaluationSystemPrompt('arcs', criteria, 'journalist', { sessionConfig: state.sessionConfig })}\n${buildEvaluationUserPrompt('arcs', state)}`;
+    const missing = Object.entries(criteria)
+      .flatMap(([key, c]) => c.reads.filter((m) => !prompts.includes(TRUTH_MATERIAL[m])).map((m) => `${key} reads ${m}`));
+    expect(missing).toEqual([]);
+    const WORDS = ['notes', 'corrections', 'verdict', 'answers', 'stopNotes'];
+    const saying = Object.entries(criteria).filter(([, c]) => c.description.includes("the director's words")).map(([key]) => key);
+    expect(saying).toEqual(['evidenceTruth', 'moneyTruth', 'verdictTruth', 'stagesTruth', 'playersTruth', 'wordsTruth']);
+    saying.forEach((key) => expect([key, WORDS.filter((m) => !criteria[key].reads.includes(m))]).toEqual([key, []]));
   });
 
   it('its system prompt: the identity, the mode block, the world and the truth rules, the truth criteria and the truth-only scoring rules; no weighted criteria, no craft findings', () => {
@@ -549,8 +569,9 @@ describe('the fact check scores the truth criteria only, for the weave', () => {
   // piece against the record; the weave it prints carries the evidence under each line.
   it('its user prompt opens by naming the evidence under each line, and prints it with the weave', () => {
     const prompt = buildEvaluationUserPrompt('arcs', weaveState());
-    // Piece 3 (brief 3B; spec 9.2): it names the angles and checks every one.
-    expect(prompt.split('\n')[0]).toBe("Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.");
+    // Piece 3 (brief 3B; spec 9.2): it names the angles and checks every one. Run 2c (the wording
+    // doc's part 7): after its first sentence, what a weave is to its judge.
+    expect(prompt.split('\n')[0]).toBe("Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. Judge what each line claims, not how it is worded: a line breaks a limit when the article it leads to would state something the record and the director's words do not support. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.");
     const weave = prompt.slice(prompt.indexOf('WEAVE:'), prompt.indexOf('THE ACCUSATION'));
     expect(weave).toContain('"evidence": [');
     expect(weave).toContain('"shows": "Marcus on the sale: \\"Worth it. Finally worth it.\\""');
@@ -706,7 +727,7 @@ describe('the fact check writes to the truth-only contract (fix round 1)', () =>
     const sdk = recordingSdk(reworkFixtureState('journalist').weave);
     await reviseArcs({ ...state, weave: update.weave, validationResults: update.validationResults, arcRevisionCount: 1 }, { configurable: { sdkClient: sdk } });
     const { prompt } = sdk.calls[0];
-    expect(prompt).toContain(`  - ${withLimitNames('T12: Thread t1 quotes words the notes do not hold. Quote the notes word for word.')}`);
+    expect(prompt).toContain('  - Quotes are exact: Thread t1 quotes words the notes do not hold. Quote the notes word for word.');
     expect(prompt).not.toMatch(/wordsTruth|0\.50 \[structural\]/);
     expect(prompt).toContain('This rework fixes the must-fix items: the ISSUES TO ADDRESS. Everything else in the previous weave stays word for word.');
     expect(prompt).not.toContain('SHOULD CONSIDER');
@@ -775,7 +796,7 @@ describe('the automatic passes run through reviseArcs with the weave\'s schema',
     expect(update.weave._factCheck).toEqual({ at: 't', ready: false, fixes: 1 });
     expect(sdk.calls[0].prompt).not.toContain('_factCheck');
     // Phase 18, run 2b (brief K): the breach reads the limit's name in place of its code.
-    expect(sdk.calls[0].prompt).toContain(`ISSUES TO ADDRESS:\n  - ${withLimitNames(BREACH.structuralIssues[0])}`);
+    expect(sdk.calls[0].prompt).toContain('ISSUES TO ADDRESS:\n  - Sold memories: "Morgan sold the BizAI memory" in thread t2 states what a buried memory held; the record holds only its sale. Report the sale.');
     expect(sdk.calls[0].prompt).not.toMatch(/ISSUES TO ADDRESS:\n {2}- T3:/);
   });
 

@@ -341,8 +341,10 @@ describe("the fact check after a director's round (brief 4.5; T1)", () => {
     const criteria = getPhaseCriteria('arcs', 'journalist');
     expect(TRUTH_MATERIAL.answers).toBe('<DIRECTOR_ANSWERS>');
     ['evidenceTruth', 'moneyTruth', 'playersTruth'].forEach((key) => expect([key, criteria[key].reads.includes('answers')]).toEqual([key, true]));
-    expect(criteria.moneyTruth.description).toMatch(/the director's answer at the story meeting/);
-    expect(criteria.playersTruth.description).toMatch(/the director's answer at the story meeting/);
+    // Run 2c (the wording doc's part 7): the questions say "the director's words", which the judge's
+    // instructions say once include the answers at the story meeting.
+    expect(criteria.moneyTruth.description).toMatch(/the director's words record/);
+    expect(criteria.playersTruth.description).toMatch(/the pronoun the director's words give/);
   });
 
   it("a finding located in the director's text is a concern on the mark, never the fix's work", async () => {

@@ -69,6 +69,10 @@ function loadCallModules(req) {
  * Run 2b (R28): the arcs judge reads the article judge's roster block and money totals, and
  * both read the notes under one label, all built from the state inside the builders, so
  * createEvaluator's argument lists, and these, are unchanged.
+ *
+ * Run 2c: each judge lists the fifteen limits again and its questions and instructions take the
+ * approved lines, all built inside the builders from the criteria and the state, so the argument
+ * lists, and these, are unchanged again.
  * @param {string} phase - one of JUDGE_PHASES
  * @returns {Promise<{systemPrompt: string, userPrompt: string}>}
  */

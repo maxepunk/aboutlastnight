@@ -174,12 +174,12 @@ const TRUTH_MATERIAL = Object.freeze({
 //
 // Brief 4.7c (T1, T9): an article question that names where the director's words come from
 // names the sources the fact check reads as the director's words (buildFactCheckArgs'
-// directorWords): ARTICLE_DIRECTOR_WORDS, printed under DIRECTOR_WORDS_MATERIAL, which such a
-// question reads.
+// directorWords): until run 2c by a list of them in the question, printed under
+// DIRECTOR_WORDS_MATERIAL, which such a question reads.
 //
-// Brief 4.7d: the sources are one list, DIRECTOR_WORDS_SOURCES, which builds all three: the
-// questions' name for them, the materials the judge reads them under, and the texts the fact
-// check and the verdict guard read (directorWords), so all three hold one order.
+// Brief 4.7d: the sources are one list, DIRECTOR_WORDS_SOURCES, which builds the materials the
+// judge reads them under and the texts the fact check and the verdict guard read (directorWords),
+// so both hold one order.
 //
 // Phases 14 and 15, brief B (R1, R2): the list is lib/director-words.js's, and the notes the
 // director sent at the stops are its fifth source. Both judges print them in their own block
@@ -189,9 +189,13 @@ const TRUTH_MATERIAL = Object.freeze({
 // Phases 14 and 15, brief F (R9; spec 11): the questions follow the approved rules. Each weave
 // question that says where the director's words come from names the notes at the stops beside
 // the notes and the answers, as the article's name every source.
-
-/** The director's words as an article truth question names them: each source's label, in order. */
-const ARTICLE_DIRECTOR_WORDS = `(${DIRECTOR_WORDS_SOURCES.slice(0, -1).map((source) => source.label).join(', ')} and ${DIRECTOR_WORDS_SOURCES[DIRECTOR_WORDS_SOURCES.length - 1].label})`;
+//
+// Phase 18, run 2c (the wording doc's part 7; R35): no question lists the director's words any
+// longer. Both judges' instructions say once what they are (DIRECTOR_WORDS_LINE), in the order
+// DIRECTOR_WORDS_SOURCES holds them, and each question says "the director's words". A question
+// that says so reads every block of them its judge's prompt holds (DIRECTOR_WORDS_MATERIAL): both
+// judges print each of the five when the session holds it, the weave's judge its accusation, its
+// notes with the corrections, the answers and the notes at the stops as the article's does.
 
 /** The materials the sources print under, in the order directorWords holds them. */
 const DIRECTOR_WORDS_MATERIAL = Object.freeze(DIRECTOR_WORDS_SOURCES.map((source) => source.material));
@@ -202,8 +206,8 @@ const TRUTH_GROUPS = [
   {
     key: 'evidenceTruth',
     about: 'how the claims are written against their evidence',
-    rules: ['T1', 'T3', 'T4', 'T6'],
-    reads: (phase) => (phase === 'arcs' ? ['record', 'timeline', 'notes', 'answers', 'stopNotes'] : ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL]),
+    rules: ['T1', 'T3', 'T4', 'T6', 'T15'],
+    reads: () => ['record', 'timeline', ...DIRECTOR_WORDS_MATERIAL, 'truthRules'],
     // Phase 3 (3.9): T4 as round 7 words it (R21). Brief 4.7d (T1, T6): at the article, a
     // correction or an answer that names who turned a memory in is the director's words as
     // the notes are, so the T6 clause reads an exposer from every source its T1 clause names.
@@ -218,19 +222,15 @@ const TRUTH_GROUPS = [
     // it, not by a tag, so neither judge looks for a mark or asks for one, and a plainly said
     // opinion passes.
     //
-    // Phase 18 (the rule-text read's part 4): reworded from the limits it checks. The weave's
-    // judge names its own director's words, the notes, the answers and the notes at the stops,
-    // in both places the article's names its sources.
-    describe: (s, phase) => {
-      const arcs = phase === 'arcs';
-      const words = arcs
-        ? "(the director's notes, their answers at the story meeting and the notes at the stops)"
-        : ARTICLE_DIRECTOR_WORDS;
-      const namers = arcs
-        ? "the director's notes, their answers at the story meeting or the notes at the stops"
-        : "the director's words";
-      return `Is every claim in ${s} written as its evidence allows (T1): what the record shows stated as fact; what people did and said in the warehouse, as the director's words record it ${words}, reported as fact; a reading the director gives of the session written as Nova's own thinking; and what neither shows never stated as fact, appearing only as what Nova suspects, asks or believes, which a line shows by how it says it and needs no label? And is it written with nothing stated as fact about what a sold memory held or whose it was (T3); with a person tied to an account as fact only where the sale was made in front of everyone or the director's notes record that the director saw it, and the person an account is named after otherwise only wondered about, in Nova's question or opinion (T4); and with nobody named as having turned a memory in unless the evidence log gives the name or ${namers} say who it was (T6)?`;
-    }
+    // Phase 18 (the rule-text read's part 4): reworded from the limits it checks.
+    //
+    // Run 2c (the wording doc's part 7): both judges say "the director's words" without listing
+    // them, so the two judges ask the same question, and the question ends on the fixed facts,
+    // which no other question and no code check covers. T15 is its code, so everything that reads
+    // a criterion's codes (the line that lists them, leadingRuleIds against `rules`, the verdict
+    // guard, criteriaRules) reads a T15 finding as this question's. Its reads follow its words
+    // (R35): every block of the director's words, and the limits, where the fixed facts stand.
+    describe: (s) => `Is every claim in ${s} written as its evidence allows (T1): what the record shows stated as fact; what people did and said in the warehouse, as the director's words record it, reported as fact; a reading the director gives of the session written as Nova's own thinking; and what neither shows never stated as fact, appearing only as what Nova suspects, asks or believes, which a line shows by how it says it and needs no label? And is it written with nothing stated as fact about what a sold memory held or whose it was (T3); with a person tied to an account as fact only where the sale was made in front of everyone or the director's notes record that the director saw it, and the person an account is named after otherwise only wondered about, in Nova's question or opinion (T4); and with nobody named as having turned a memory in unless the evidence log gives the name or the director's words say who it was (T6); and does nothing in it go against the fixed facts (T15)?`
   },
   {
     key: 'moneyTruth',
@@ -256,10 +256,13 @@ const TRUTH_GROUPS = [
     // payments, at whatever time of day it ran, and a ledger line a note at a stop explains
     // (such as a ruling on its logged time) is as the note gives it, at either judge.
     //
-    // Phase 18 (the rule-text read's part 4): in the limit's words. The weave's question keeps
-    // its own sources and, as before, names neither the totals nor the question at the meeting.
-    reads: (phase) => (phase === 'arcs' ? ['timeline', 'notes', 'answers', 'stopNotes'] : ['timeline', 'financialSummary', ...DIRECTOR_WORDS_MATERIAL, 'weave']),
-    describe: (s, phase) => `Does the money in ${s} go from the buyer to the account the seller named, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as what was paid during the investigation for memories to be erased (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the investigation as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's notes or the notes at the stops record as said or shown in the warehouse as that moment's figure; and a ledger line the director's answer at the story meeting or a note at a stop explains as that answer or note gives it (T1)." : `a balance the director's words ${ARTICLE_DIRECTOR_WORDS} record as said or shown in the warehouse as that moment's figure, and a ledger line they explain as they give it (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of the article when the question has no answer (T5).`}`
+    // Phase 18 (the rule-text read's part 4): in the limit's words. The weave's question names
+    // neither the totals nor the question at the meeting, as before.
+    //
+    // Run 2c (the wording doc's part 7; R35): each judge says "the director's words" without
+    // listing them, and reads every block of them.
+    reads: (phase) => (phase === 'arcs' ? ['timeline', ...DIRECTOR_WORDS_MATERIAL] : ['timeline', 'financialSummary', ...DIRECTOR_WORDS_MATERIAL, 'weave']),
+    describe: (s, phase) => `Does the money in ${s} go from the buyer to the account the seller named, with NeurAI and its board written as Nova's suspicion of who the buyer is and never as fact, and the ledger's money taken as what was paid during the investigation for memories to be erased (T5)? Each figure is as its source gives it: each sale, the first-burial bonus and each transfer as the ledger gives it;${phase === 'arcs' ? '' : ' each total at the close of the investigation as FINANCIAL_SUMMARY gives it;'} ${phase === 'arcs' ? "a balance the director's words record as said or shown in the warehouse as that moment's figure; and a ledger line they explain as they give it (T1)." : "a balance the director's words record as said or shown in the warehouse as that moment's figure, and a ledger line they explain as they give it (T1); and a figure raised as a question at the story meeting as the director's answer gives it, and out of the article when the question has no answer (T5)."}`
   },
   {
     key: 'verdictTruth',
@@ -268,13 +271,13 @@ const TRUTH_GROUPS = [
     // Phase 18 (the brief-and-the-limits spec, section 8; R11): the question asks what the limit
     // asks. The verdict is the account the players agreed, which Nova does not call right or
     // wrong, and a verdict that blames nobody is told without blaming anyone. It asks nothing of
-    // the theories debated, so the article's reads the verdict, the notes, the answers and the
-    // notes at the stops, and no longer the map or the director's edits: a move the director
-    // struck stays out by the article writer's own part, and their desk edits are held by code.
-    // Each question names where the director's words on the verdict come from, as its reads list
-    // them.
-    reads: (phase) => (phase === 'arcs' ? ['verdict', 'notes', 'stopNotes'] : ['verdict', 'notes', 'answers', 'stopNotes']),
-    describe: (s, phase) => `Is the verdict in ${s} told as the account the players agreed to give the police, as the director's words record it ${phase === 'arcs' ? '(the accusation, the notes and the notes at the stops)' : '(the accusation, the notes, the answers at the story meeting and the notes at the stops)'}; does Nova report it, doubt it or give an opinion of it without saying it was right or wrong; and where the players agreed that nobody was to blame, is it told without blaming anyone (T2)?`
+    // the theories debated, so the article's reads the director's words alone, and no longer the
+    // map or the director's edits: a move the director struck stays out by the article writer's
+    // own part, and their desk edits are held by code.
+    // Run 2c (the wording doc's part 7; R35): the question says "the director's words" without
+    // listing them, and reads every block of them, at both judges.
+    reads: () => [...DIRECTOR_WORDS_MATERIAL],
+    describe: (s) => `Is the verdict in ${s} told as the account the players agreed to give the police, as the director's words record it; does Nova report it, doubt it or give an opinion of it without saying it was right or wrong; and where the players agreed that nobody was to blame, is it told without blaming anyone (T2)?`
   },
   {
     key: 'stagesTruth',
@@ -291,8 +294,12 @@ const TRUTH_GROUPS = [
     //
     // Phase 18 (the rule-text read's part 4): in the limit's words; the investigation is told as
     // the part about this session allows.
-    reads: () => ['record', 'modeBlock', 'epilogue', 'timeline', 'stopNotes'],
-    describe: (s) => `In ${s}, is nothing from the party told as something a person saw or remembers, but as what a recovered memory shows; is the investigation told as the part about this session allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; is the rest of Nova's day taken only from the epilogue and from any note at a stop that adds to it; and is every time ${s} gives the time the record gives, or the time a note at a stop rules (T7)? What Nova says NovaNews will keep looking into is Nova's own intention and needs no source.`
+    //
+    // Run 2c (the wording doc's part 7; R35): each time as the record or the director's words give
+    // it, so the question reads every block of the director's words, the notes at the stops among
+    // them.
+    reads: () => ['record', 'modeBlock', 'epilogue', 'timeline', ...DIRECTOR_WORDS_MATERIAL],
+    describe: (s) => `In ${s}, is nothing from the party told as something a person saw or remembers, but as what a recovered memory shows; is the investigation told as the part about this session allows, at the time of day the session's facts give for it, morning or afternoon, and never called the other; is the rest of Nova's day taken only from the epilogue and from any note at a stop that adds to it; and is every time ${s} gives the time the record or the director's words give (T7)? What Nova says NovaNews will keep looking into is Nova's own intention and needs no source.`
   },
   {
     key: 'novaPositionTruth',
@@ -314,8 +321,11 @@ const TRUTH_GROUPS = [
     // director's words are the sources the fact check's pronoun check reads (directorWords).
     // Phase 18 (the rule-text read's part 4): in the limits' words; everything said about a
     // person is said about the character.
-    reads: (phase) => (phase === 'arcs' ? ['roster', 'answers', 'stopNotes'] : ['roster', ...DIRECTOR_WORDS_MATERIAL]),
-    describe: (s, phase) => `Does every character a player played take the pronoun the roster gives in ${s}, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's answer at the story meeting or a note at a stop gives" : `the pronoun the director's own words give ${ARTICLE_DIRECTOR_WORDS}, or else the person's name in place of a pronoun`} (T9); and is everything ${s} says about a person said about the character, with no comment on the player and no player's looks described (T11)?`
+    //
+    // Run 2c (the wording doc's part 7; R35): both judges read a pronoun from the director's words,
+    // every block of them, so the two rule alike on one pronoun.
+    reads: () => ['roster', ...DIRECTOR_WORDS_MATERIAL],
+    describe: (s, phase) => `Does every character a player played take the pronoun the roster gives in ${s}, or, where the roster gives none, ${phase === 'arcs' ? "the pronoun the director's words give" : "the pronoun the director's words give, or else the person's name in place of a pronoun"} (T9); and is everything ${s} says about a person said about the character, with no comment on the player and no player's looks described (T11)?`
   },
   {
     key: 'wordsTruth',
@@ -326,10 +336,13 @@ const TRUTH_GROUPS = [
     // at the article, a line the director's words hold is quoted from them, any of their
     // sources. Brief F: at the weave, from the notes or the notes at the stops.
     // Phase 18 (the rule-text read's part 4): in the limit's words.
-    reads: (phase) => (phase === 'article' ? ['record', ...DIRECTOR_WORDS_MATERIAL, 'printedCards'] : ['record', 'notes', 'stopNotes']),
+    //
+    // Run 2c (the wording doc's part 7; R35): from the record or the director's words, every block
+    // of them, at both judges.
+    reads: (phase) => (phase === 'article' ? ['record', ...DIRECTOR_WORDS_MATERIAL, 'printedCards'] : ['record', ...DIRECTOR_WORDS_MATERIAL]),
     describe: (s, phase) => (phase === 'article'
-      ? `Is every line in quotation marks in the article word for word from the record or the director's words ${ARTICLE_DIRECTOR_WORDS} and given to the person who said it, and does every card copy the record with no id or time in its text (T12)?`
-      : `Is every line in quotation marks in ${s} word for word from the record, the director's notes or the notes at the stops, and given to the person who said it (T12)?`)
+      ? "Is every line in quotation marks in the article word for word from the record or the director's words and given to the person who said it, and does every card copy the record with no id or time in its text (T12)?"
+      : `Is every line in quotation marks in ${s} word for word from the record or the director's words, and given to the person who said it (T12)?`)
   },
   {
     key: 'photosTruth',
@@ -363,10 +376,11 @@ const TRUTH_GROUPS = [
  * with (phase 18, R8; the brief-and-the-limits spec, section 7). The limits file carries no codes;
  * code reads the code to tell which criterion a finding belongs to (leadingRuleIds,
  * criteriaRules), and stored sessions hold findings in that form, so the judges keep them and
- * their own instructions list each limit they score by code and name (truthCriteriaSection,
- * through judgeLimits; run 2b, R28), in the rule-text read's words. The constant keeps all
- * fifteen. lib/__tests__/judge-limits.test.js holds each name equal to its limit's bold lead-in;
- * T8's adds the part about this session, which holds the rest of that limit.
+ * their own instructions list all fifteen by code and name (truthCriteriaSection, through
+ * limitsLine), in the rule-text read's words. Run 2c (R30) took back run 2b's shorter lists
+ * (R28): a judge is for catching every breach, whichever question it files it under.
+ * lib/__tests__/judge-limits.test.js holds each name equal to its limit's bold lead-in; T8's adds
+ * the part about this session, which holds the rest of that limit.
  */
 const LIMIT_CODES = Object.freeze([
   'What can be stated as fact',
@@ -386,25 +400,9 @@ const LIMIT_CODES = Object.freeze([
   'Fixed facts'
 ].map((name, i) => Object.freeze({ code: `T${i + 1}`, name })));
 
-/**
- * The limits a judge scores, in the limits' order: each limit whose code one of its truth
- * criteria names in its `rules` (run 2b, R28). The other limits stay in the limits' own text in
- * the system prompt, so a judge is listed no limit it has no question for. Derived from the
- * criteria the judge is given, so its list and its criteria cannot drift.
- *
- * @param {Object} criteria - the judge's criteria (getPhaseCriteria)
- * @returns {Array<{code: string, name: string}>}
- */
-function judgeLimits(criteria) {
-  const scored = new Set(Object.values(criteria || {})
-    .filter((criterion) => criterion && criterion.truth)
-    .flatMap((criterion) => criterion.rules || []));
-  return LIMIT_CODES.filter(({ code }) => scored.has(code));
-}
-
-/** A judge's list of the limits it scores as one line: "T1 What can be stated as fact. T2 The verdict. …" */
-function limitsLine(criteria) {
-  return judgeLimits(criteria).map(({ code, name }) => `${code} ${name}.`).join(' ');
+/** The judges' list of the limits as one line, all fifteen: "T1 What can be stated as fact. T2 The verdict. …" */
+function limitsLine() {
+  return LIMIT_CODES.map(({ code, name }) => `${code} ${name}.`).join(' ');
 }
 
 /**
@@ -1121,11 +1119,37 @@ const TRUTH_ONLY_EVALUATION_RULES = `EVALUATION RULES:
 3. overallScore is the lowest truth-criterion score.`;
 
 /**
+ * What a breach is, and what a judge does with doubt (run 2c; the wording doc's part 7): a breach
+ * is something the judge can show against the record or the director's words, and a line it only
+ * doubts is not one. The prompt read found every "must pass" mark pushing a judge to fail a line
+ * of Nova's opinion it was unsure of, and the rework then hedging it.
+ */
+const BREACH_LINE = "A breach is something you can show: the sentence, and what in the record or the director's words it goes against. A line you only doubt is not a breach. A plain statement of what Nova thinks is Nova's opinion, and it needs no label to pass.";
+
+/**
+ * The director's words, said once for both judges (run 2c; the wording doc's part 7), in the order
+ * lib/director-words.js lists their sources (DIRECTOR_WORDS_SOURCES; judge-limits.test.js holds the
+ * two to one order). Every question that says "the director's words" points at this line, and reads
+ * every block of them its judge's prompt holds (R35).
+ */
+const DIRECTOR_WORDS_LINE = "The director's words are the director's notes, the corrections at the input review, the accusation as the director wrote it, the answers at the story meeting and the notes at the stops.";
+
+/**
+ * What a judge's fix holds (run 2c; the wording doc's part 7): what is wrong and what the record or
+ * the director's words show, never the new sentence. The prompt read found a judge writing the
+ * replacement sentence, which the rework printed as it stood: the judge became a second, unbriefed
+ * writer of the article.
+ */
+const FIX_HOLDS = "and says what the record or the director's words show instead. Say what is wrong and what is true. Do not write the new sentence. The writer words it, and a sentence you write is printed as it stands.";
+
+/**
  * The truth criteria and how to write a breach, or '' when the criteria carry none. Phase 18
  * (R8; the rule-text read's parts 4 and 5e): under its heading, the list of the limits by code
  * and name, once, then each criterion with the codes it scores, and a finding opens with those
- * codes, as code reads them (leadingRuleIds). Run 2b (R28): the list holds only the limits these
- * criteria score (limitsLine).
+ * codes, as code reads them (leadingRuleIds). Run 2c (R30): the list holds all fifteen
+ * (limitsLine); after the pass mark, what a breach is (BREACH_LINE) and what the director's words
+ * are (DIRECTOR_WORDS_LINE), then the questions; a finding says what is true and leaves the new
+ * sentence to the writer (FIX_HOLDS), and the sample entry follows as it stood.
  *
  * @param {'arcs'|'article'} phase
  * @param {Object} criteria
@@ -1137,11 +1161,13 @@ function truthCriteriaSection(phase, criteria) {
     .map(([key, { rules, description }]) => `- ${key} (${rules.join(', ')}; must pass): ${description}`);
   if (lines.length === 0) return '';
   return `${boxedHeading('THE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)')}
-${limitsLine(criteria)}
+${limitsLine()}
 Each criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below ${STRUCTURAL_PASS_SCORE}.
+${BREACH_LINE}
+${DIRECTOR_WORDS_LINE}
 ${lines.join('\n')}
 
-Write each breach as its own structuralIssues entry, so the rework can fix it. The entry opens with the limits' codes and a colon, ${TRUTH_FINDING_QUOTE[phase]}, names the record it contradicts, and gives the fix:
+Write each breach as its own structuralIssues entry, so the rework can fix it. The entry opens with the limits' codes and a colon, ${TRUTH_FINDING_QUOTE[phase]}, ${FIX_HOLDS}
 T3: "<the text at fault>" states what a sold memory held; the record holds only its sale (<time>, <amount>, <account>). Report the sale instead.
 
 `;
@@ -1396,7 +1422,7 @@ ${formatEditLines(list)}`;
   const output = 'the content bundle above';
   const example = `${DIRECTOR_EDIT_PREFIX}E1: T1: <the concern>`;
   return `THE DIRECTOR'S EDITS (record: the director's own text, each final as the director left it):
-Each edit below is text the director wrote into ${output}, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE} An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, or would bring back a cut or a removed sentence, write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${example}.
+Each edit below is text the director wrote into ${output}, text they cut from it (marked cut), or a block they moved (marked moved). ${EDIT_LINES_GUIDE} An edit is the final word on its text, so score each criterion, and write each structural issue, on the writer's text alone. Where you disagree with an edit, or would bring back a cut or a removed sentence, write the concern in advisoryWarnings, opening with the edit's id and then the limit it concerns, as in: ${example}.
 
 ${formatEditLines(list)}`;
 }
@@ -1562,7 +1588,7 @@ function buildEvaluationUserPrompt(phase, state, options = {}) {
       // figure can be checked against.
       const answers = renderDirectorAnswers(state.weave && state.weave.questions);
       const weaveMoney = renderJudgeFinancialSummary(state);
-      return `Check this weave against the record and the director's words. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
+      return `Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. Judge what each line claims, not how it is worded: a line breaks a limit when the article it leads to would state something the record and the director's words do not support. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.
 
 WEAVE:
 ${JSON.stringify(weaveForJudge(state.weave) || null, null, 2)}
@@ -1612,7 +1638,7 @@ ${renderRecordView(state.evidenceBundle, { sessionConfig: state.sessionConfig })
 
 ${renderArticleJudgePhotos(state)}
 
-${settledWeave ? `${settledWeave}\n\n` : ''}The map below is the one the article writer wrote from, as the director left it: the beats in its sections are what the article tells, and leftOut holds what it leaves out, each beat the director struck among them.
+${settledWeave ? `${settledWeave}\n\n` : ''}The map below is the one the article writer wrote from, as the director left it. The headline, the line under it and each section's heading were settled on it before the article was written, and the writer prints them as given. A concern about one of them is for the director, reported the way a concern about one of the director's edits is. Whether the article follows the map is not yours to judge.
 ${JUDGE_MAP_LABEL}
 ${JSON.stringify(state.outline || {}, null, 2)}
 
@@ -2259,7 +2285,6 @@ module.exports = {
     TRUTH_MATERIAL,
     // Brief 4.7d: the director's words, one list, and what it builds.
     DIRECTOR_WORDS_SOURCES,
-    ARTICLE_DIRECTOR_WORDS,
     DIRECTOR_WORDS_MATERIAL,
     directorWords,
     printedBundle,

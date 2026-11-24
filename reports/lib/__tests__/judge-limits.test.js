@@ -10,9 +10,11 @@
  * The judges' own instructions take the rule-text read's part 5e, word for word, and the article
  * judge's line on where Nova was its part 5c, from the session config the mode block is chosen by.
  *
- * Run 2b (R28): each judge is listed only the limits its criteria score, both judges read the
- * director's notes under one label with its line on backstory, and the weave's judge reads the
- * roster block and the money totals the article's judge reads.
+ * Run 2b (R28): both judges read the director's notes under one label with its line on backstory,
+ * and the weave's judge reads the roster block and the money totals the article's judge reads.
+ * Run 2c (R30) takes back R28's shorter lists: each judge lists all fifteen limits again. Run 2c
+ * also adds what a breach is and what the director's words are, the fixed facts to the first
+ * question, what a fix holds, what a weave is to its judge and what the map is to the article's.
  *
  * Review focus 1: a thread from before the merge holds findings in today's form ("T5: …", and a
  * concern "Director's edit E1: T1: …"). They still match their criteria and still read past their
@@ -54,14 +56,14 @@ function boldLeadIns(text) {
 
 /**
  * Each judge's own list of the limits, each entry word for word from the rule-text read's part 4.
- * Run 2b (R28): a judge is listed only the limits its criteria score. The weave's judge scores no
- * photos and no words from outside the story, and neither judge scores how many people or the
- * fixed facts, which stay in the limits' own text.
+ * Run 2c (R30): each judge lists all fifteen, as the spec's section 7 says; run 2b's shorter lists
+ * (R28) are taken back.
  */
-const LIMITS_LINES = {
-  arcs: 'T1 What can be stated as fact. T2 The verdict. T3 Sold memories. T4 Whose account it is. T5 The money. T6 Who made a memory public. T7 Three stretches of time. T8 Nova takes no side, with the part about this session. T9 Pronouns. T11 Characters, never the players. T12 Quotes are exact.',
-  article: 'T1 What can be stated as fact. T2 The verdict. T3 Sold memories. T4 Whose account it is. T5 The money. T6 Who made a memory public. T7 Three stretches of time. T8 Nova takes no side, with the part about this session. T9 Pronouns. T11 Characters, never the players. T12 Quotes are exact. T13 Photos. T14 Nothing from outside the story.'
-};
+const LIMITS_LINE = 'T1 What can be stated as fact. T2 The verdict. T3 Sold memories. T4 Whose account it is. T5 The money. T6 Who made a memory public. T7 Three stretches of time. T8 Nova takes no side, with the part about this session. T9 Pronouns. T10 How many people. T11 Characters, never the players. T12 Quotes are exact. T13 Photos. T14 Nothing from outside the story. T15 Fixed facts.';
+
+/** The two paragraphs run 2c adds after "One breach fails it", word for word (the wording doc's part 7). */
+const BREACH_LINE = "A breach is something you can show: the sentence, and what in the record or the director's words it goes against. A line you only doubt is not a breach. A plain statement of what Nova thinks is Nova's opinion, and it needs no label to pass.";
+const WORDS_LINE = "The director's words are the director's notes, the corrections at the input review, the accusation as the director wrote it, the answers at the story meeting and the notes at the stops.";
 
 const RULE = '═══════════════════════════════════════════════════════════════════════════';
 
@@ -87,34 +89,30 @@ describe('R8: the judges\' list of the limits', () => {
     expect(LIMIT_CODES.map((limit) => (limit.code === 'T8' ? limit.name.slice(0, -SUFFIX.length) : limit.name))).toEqual(leadIns);
   });
 
-  it('every code a criterion scores is a limit\'s code, and T10 and T15 are in no criterion', () => {
+  // Run 2c (the wording doc's part 7): the first question of each judge names the fixed facts among
+  // its codes, so T15 is scored; T10, the head count, is the code fact check's and stays in no criterion.
+  it('every code a criterion scores is a limit\'s code; T10 is in no criterion, and T15 is the first question\'s', () => {
     const codes = LIMIT_CODES.map((limit) => limit.code);
     const scored = ['arcs', 'article'].flatMap((phase) => Object.values(getPhaseCriteria(phase, 'journalist')).flatMap((c) => c.rules));
     expect(scored.filter((code) => !codes.includes(code))).toEqual([]);
     expect(scored).not.toContain('T10');
-    expect(scored).not.toContain('T15');
+    ['arcs', 'article'].forEach((phase) => {
+      const owners = Object.entries(getPhaseCriteria(phase, 'journalist')).filter(([, c]) => c.rules.includes('T15')).map(([key]) => key);
+      expect([phase, owners]).toEqual([phase, ['evidenceTruth']]);
+    });
   });
 
   it.each(['arcs', 'article'])('the %s judge prints its list once, as one line, right under its heading', (phase) => {
     const system = systemFor(phase, stateFor());
-    expect(count(system, LIMITS_LINES[phase])).toBe(1);
-    expect(system).toContain(`${RULE}\nTHE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)\n${RULE}\n${LIMITS_LINES[phase]}\nEach criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below 0.8.\n`);
+    expect(count(system, LIMITS_LINE)).toBe(1);
+    expect(system).toContain(`${RULE}\nTHE LIMITS (MUST PASS: a breach is a definite error, so the output goes back for a rework)\n${RULE}\n${LIMITS_LINE}\nEach criterion below scores the limits it names by their codes, against the record and the director's words in the evaluation prompt. One breach fails it: score it below 0.8.\n`);
     expect(system).not.toContain('TRUTH RULES');
   });
 });
 
-// Run 2b (R28; the prompt read's judges' findings 2 and 3): a judge is listed only the limits it
-// scores. The list is derived from the codes its own criteria name, so the two cannot drift; this
-// test reads both, the criteria's `rules` and the codes their questions cite, and holds the printed
-// list to them.
-describe("R28: each judge is listed only the limits its criteria score", () => {
-  /** The codes a judge's criteria name: their `rules`, and every code their questions cite. */
-  const criteriaCodes = (phase) => {
-    const criteria = Object.values(getPhaseCriteria(phase, 'journalist')).filter((c) => c.truth);
-    const ruled = new Set(criteria.flatMap((c) => c.rules));
-    const cited = new Set(criteria.flatMap((c) => c.description.match(/\bT\d{1,2}\b/g) || []));
-    return { ruled, cited };
-  };
+// Run 2c (R30): R28's shorter lists are withdrawn. A judge is for catching every breach, and the
+// spec's section 7 has each judge list the fifteen limits by code and name, in the limits' order.
+describe('R30: each judge lists the fifteen limits', () => {
   /** The codes on the line right under the heading THE LIMITS and its closing rule. */
   const printedCodes = (phase) => {
     const lines = systemFor(phase, stateFor()).split('\n');
@@ -123,27 +121,65 @@ describe("R28: each judge is listed only the limits its criteria score", () => {
     return lines[heading + 2].match(/\bT\d{1,2}\b/g) || [];
   };
 
-  it.each(['arcs', 'article'])('the %s judge lists exactly the codes its criteria name, in the limits\' order', (phase) => {
-    const { ruled, cited } = criteriaCodes(phase);
-    expect([...cited].filter((code) => !ruled.has(code))).toEqual([]);
-    const inOrder = LIMIT_CODES.map((limit) => limit.code).filter((code) => ruled.has(code));
-    expect(printedCodes(phase)).toEqual(inOrder);
-    expect(LIMITS_LINES[phase]).toBe(LIMIT_CODES.filter((limit) => ruled.has(limit.code)).map(({ code, name }) => `${code} ${name}.`).join(' '));
+  it.each(['arcs', 'article'])('the %s judge lists T1 to T15, in order, whatever its criteria score', (phase) => {
+    expect(printedCodes(phase)).toEqual(['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12', 'T13', 'T14', 'T15']);
   });
+});
 
-  it.each([
-    ['arcs', ['T10', 'T13', 'T14', 'T15']],
-    ['article', ['T10', 'T15']]
-  ])('the %s judge is listed no limit it has no question for: %j', (phase, unscored) => {
+// Run 2c (the wording doc's part 7, "After 'One breach fails it'"): two paragraphs, in this order,
+// after the pass mark and before the questions, for both judges: what a breach is and what a judge
+// does with doubt, then the one statement of the director's words the questions point at.
+describe('run 2c: what a breach is, and what the director\'s words are', () => {
+  it.each(['arcs', 'article'])('the %s judge reads both paragraphs once, between the pass mark and the first question', (phase) => {
     const system = systemFor(phase, stateFor());
-    unscored.forEach((code) => {
-      const { name } = LIMIT_CODES.find((limit) => limit.code === code);
-      expect(`${code}: ${system.includes(`${code} ${name}.`)}`).toBe(`${code}: false`);
-    });
+    expect(system).toContain(`One breach fails it: score it below 0.8.\n${BREACH_LINE}\n${WORDS_LINE}\n- evidenceTruth (`);
+    expect(count(system, BREACH_LINE)).toBe(1);
+    expect(count(system, WORDS_LINE)).toBe(1);
   });
 
-  it('LIMIT_CODES keeps all fifteen, whatever a judge is listed', () => {
-    expect(LIMIT_CODES).toHaveLength(15);
+  it('the statement names the five sources of the director\'s words, in the order lib/director-words.js lists them', () => {
+    const { DIRECTOR_WORDS_SOURCES } = require('../director-words');
+    const PHRASE = {
+      notes: "the director's notes", corrections: 'the corrections at the input review', accusation: 'the accusation as the director wrote it',
+      answers: 'the answers at the story meeting', stopNotes: 'the notes at the stops'
+    };
+    const at = DIRECTOR_WORDS_SOURCES.map((source) => WORDS_LINE.indexOf(PHRASE[source.key]));
+    expect(at.every((i) => i > -1)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+});
+
+// Run 2c (the wording doc's part 7, "The fixed facts"): each judge's first question gains the clause
+// and names T15 among its codes. Everything that reads a criterion's codes follows from its `rules`:
+// the line that says which limits it scores, the reading of a finding's opening code, the verdict
+// guard on the director's edits, and the rework's criteriaRules.
+describe('run 2c: the fixed facts are the first question\'s', () => {
+  const CLAUSE = 'say who it was (T6); and does nothing in it go against the fixed facts (T15)?';
+  const FIXED_FACTS_ISSUE = 'T15: "Blake owns NeurAI" goes against the fixed facts: Blake manages operations there.';
+
+  it.each(['arcs', 'article'])('the %s judge: the question ends on the clause, and its line names T15 among its codes', (phase) => {
+    const { evidenceTruth } = getPhaseCriteria(phase, 'journalist');
+    expect(evidenceTruth.rules).toEqual(['T1', 'T3', 'T4', 'T6', 'T15']);
+    expect(evidenceTruth.description.endsWith(CLAUSE)).toBe(true);
+    expect(systemFor(phase, stateFor())).toContain(`\n- evidenceTruth (T1, T3, T4, T6, T15; must pass): ${evidenceTruth.description}\n`);
+  });
+
+  it('a finding that opens with T15 is read as the first question\'s: no second line for it, and it holds the output', () => {
+    const { guardDirectorEdits } = evalTesting;
+    const guard = guardDirectorEdits({
+      evaluation: {
+        structuralPassed: false,
+        criteriaScores: { evidenceTruth: { score: 0.3, notes: 'Blake is called the owner.' }, moneyTruth: { score: 1 } },
+        structuralIssues: [FIXED_FACTS_ISSUE]
+      },
+      criteria: getPhaseCriteria('article', 'journalist'),
+      edits: [],
+      output: null
+    });
+    expect(leadingRuleIds(FIXED_FACTS_ISSUE)).toEqual(['T15']);
+    expect(guard.kept).toEqual([FIXED_FACTS_ISSUE]);
+    expect(guard.holding).toEqual(['evidenceTruth']);
+    expect(guard.ready).toBe(false);
   });
 });
 
@@ -213,13 +249,21 @@ describe('R28: the two judges read the same notes, roster and totals', () => {
 // "article writer" and "the article" are the article judge's; the weave's judge keeps its own.
 describe("5e: the judges' own instructions", () => {
   const JUDGED = { arcs: ['arc writer', 'the weave'], article: ['article writer', 'the article'] };
+  /** How each judge's finding quotes the text at fault, as it stood before run 2c. */
+  const FINDING_QUOTE = {
+    arcs: 'quotes the text at fault, names the angle, thread or connection it is in by its id (for an angle, with its line: the headline, its card line, the story, the question, why it lands or where it ends up) and, where a piece of evidence is at fault, the piece by its sources',
+    article: 'quotes the sentence and names its section'
+  };
 
   it.each(['arcs', 'article'])('the %s judge: its task, its frame, how a finding is written, the sample and the first evaluation rule', (phase) => {
     const [writer, judged] = JUDGED[phase];
     const system = systemFor(phase, stateFor());
     expect(system).toContain(`\n\nYour task is to find each place where ${judged} breaks a limit. The world and the limits above are the ones the ${writer} followed: judge ${judged} by them, against the record and the director's words in the evaluation prompt.\n\n`);
     expect(system).toContain('The entry opens with the limits\' codes and a colon, ');
-    expect(system).toContain('\nT3: "<the text at fault>" states what a sold memory held; the record holds only its sale (<time>, <amount>, <account>). Report the sale instead.\n');
+    // Run 2c (the wording doc's part 7, "What a fix holds"): what the record or the director's words
+    // show instead, and no new sentence; the sample entry follows, as it stood.
+    expect(system).toContain(`, ${FINDING_QUOTE[phase]}, and says what the record or the director's words show instead. Say what is wrong and what is true. Do not write the new sentence. The writer words it, and a sentence you write is printed as it stands.\nT3: "<the text at fault>" states what a sold memory held; the record holds only its sale (<time>, <amount>, <account>). Report the sale instead.\n`);
+    expect(system).not.toContain('names the record it contradicts, and gives the fix');
     expect(system).toContain('EVALUATION RULES:\n1. The truth criteria above are the whole evaluation: each finding is a place where a limit is broken.\n');
     ['breach of the truth rules', 'truth rule', 'opens with the rule ids', 'buried memory said', 'The rules above'].forEach((gone) => {
       expect(`${gone}: ${system.includes(gone)}`).toBe(`${gone}: false`);
@@ -239,6 +283,36 @@ describe("5e: the judges' own instructions", () => {
     const prompt = buildEvaluationUserPrompt('arcs', edited, { directorEdits: judgedEdits('arcs', edited) });
     expect(prompt).toContain(`Where a change of the director's breaks a limit, write the concern in advisoryWarnings, opening with the change's id and then the code of the limit it concerns, as in: ${DIRECTOR_EDIT_PREFIX}E1: T1: <the concern>.`);
     expect(prompt).not.toContain('breaks a truth rule');
+  });
+});
+
+// Run 2c (the wording doc's part 7): what each judge is told its material is. The weave is the
+// writer's notes to the director, of which only an angle's headline is printed; the map's settled
+// lines are printed as given, and a concern about one is the director's; a concern about one of the
+// director's edits names the limit it concerns.
+describe('run 2c: what each judge reads its material as', () => {
+  const WEAVE_OPENING = "Check this weave against the record and the director's words. The weave is the writer's notes to the director. Only an angle's headline is printed. Judge what each line claims, not how it is worded: a line breaks a limit when the article it leads to would state something the record and the director's words do not support. It pitches two or three angles, each a story told through the threads it names, and the director may pick any of them, so check every angle: each line of its pitch against the evidence of its threads. Each thread and each connection carries its evidence: the pieces of the record it rests on, each with its sources, what it shows, and whether it supports the line or cuts against it. Read each line against its evidence, and each piece against the record.";
+  const MAP_LINE = "The map below is the one the article writer wrote from, as the director left it. The headline, the line under it and each section's heading were settled on it before the article was written, and the writer prints them as given. A concern about one of them is for the director, reported the way a concern about one of the director's edits is. Whether the article follows the map is not yours to judge.";
+
+  it("the weave's judge opens on what a weave is, after its first sentence", () => {
+    expect(buildEvaluationUserPrompt('arcs', stateFor()).split('\n')[0]).toBe(WEAVE_OPENING);
+  });
+
+  it("the article's judge reads the map under the line on its settled lines, once", () => {
+    const prompt = buildEvaluationUserPrompt('article', stateFor(), { factCheck: null });
+    expect(prompt).toContain(`\n${MAP_LINE}\nMAP:\n{`);
+    expect(count(prompt, MAP_LINE)).toBe(1);
+    expect(prompt).not.toContain('the beats in its sections are what the article tells');
+  });
+
+  it("the article's judge files a concern about one of the director's edits under the limit it concerns", () => {
+    const writers = clone(PREVIOUS_BUNDLE);
+    const directors = clone(PREVIOUS_BUNDLE);
+    directors.sections[0].content.push({ type: 'paragraph', text: 'The director added this paragraph at the desk.' });
+    const state = stateFor('remote', { contentBundle: directors, _articleHandEdits: standingAfterSendBack(null, writers, directors, 'bundle') });
+    const prompt = buildEvaluationUserPrompt('article', state, { factCheck: null, directorEdits: judgedEdits('article', state) });
+    expect(prompt).toContain(`write the concern in advisoryWarnings, opening with the edit's id and then the limit it concerns, as in: ${DIRECTOR_EDIT_PREFIX}E1: T1: <the concern>.`);
+    expect(prompt).not.toContain('the rule or criterion it concerns');
   });
 });
 
@@ -304,7 +378,8 @@ describe("review focus 1: a stored finding in today's form", () => {
     expect(held.evaluationHistory.ready).toBe(false);
     expect(held.evaluationHistory.structuralIssues).toEqual([STORED_ISSUE]);
     expect(held.evaluationHistory.advisoryWarnings).toContain(STORED_CONCERN);
-    expect(held.validationResults.criteriaRules).toMatchObject({ moneyTruth: ['T5'], evidenceTruth: ['T1', 'T3', 'T4', 'T6'] });
+    // Run 2c: the first question names the fixed facts among its codes.
+    expect(held.validationResults.criteriaRules).toMatchObject({ moneyTruth: ['T5'], evidenceTruth: ['T1', 'T3', 'T4', 'T6', 'T15'] });
     // The concern covers evidenceTruth, so its notes stay away from the rework.
     expect(held.validationResults.criteriaScores.evidenceTruth).toEqual({ score: 0.3, type: 'structural' });
 
@@ -313,9 +388,22 @@ describe("review focus 1: a stored finding in today's form", () => {
     expect(clear.evaluationHistory.advisoryWarnings).toContain(STORED_CONCERN);
   });
 
+  // Run 2c: a concern about one of the director's edits filed under the fixed facts' code covers the
+  // first question, as a T1 concern does, so the guard on the director's edits reads T15 as that
+  // question's: its notes stay away from the rework, and it holds nothing.
+  it('a T15 concern about the director\'s edit covers evidenceTruth and holds nothing', async () => {
+    const T15_CONCERN = `${DIRECTOR_EDIT_PREFIX}E1: T15: "${DIRECTORS}" calls Blake the owner of NeurAI.`;
+    const fixedFacts = { ...verdict([]), advisoryWarnings: [T15_CONCERN] };
+    const update = await evaluateArticle(editedState(), cfg(fixedFacts));
+    expect(update.evaluationHistory.ready).toBe(true);
+    expect(update.evaluationHistory.structuralIssues).toEqual([]);
+    expect(update.evaluationHistory.advisoryWarnings).toContain(T15_CONCERN);
+    expect(update.validationResults.criteriaScores.evidenceTruth).toEqual({ score: 0.3, type: 'structural' });
+  });
+
   it('at the desk each reads past its codes: a must-fix line in the trace, a concern beside its line', () => {
-    const [pass] = ViewLogic.traceView([{ pass: 1, round: 1, trigger: 'evaluation', findings: { structuralIssues: [STORED_ISSUE], advisoryWarnings: [] } }], 'journalist').passes;
-    expect(pass.mustFix.items).toEqual(['"a $75,000 sale at 07:50 PM" prints a figure the story meeting left unanswered. Cut the figure.']);
+    const [pass] = ViewLogic.traceView([{ pass: 1, round: 1, trigger: 'evaluation', findings: { structuralIssues: [STORED_ISSUE, 'T15: "Blake owns NeurAI" goes against the fixed facts.'], advisoryWarnings: [] } }], 'journalist').passes;
+    expect(pass.mustFix.items).toEqual(['"a $75,000 sale at 07:50 PM" prints a figure the story meeting left unanswered. Cut the figure.', '"Blake owns NeurAI" goes against the fixed facts.']);
     const placed = ViewLogic.concernsBesideLines([{ text: STORED_CONCERN, places: [] }], new Set(), () => null);
     expect(placed.other).toEqual([`Concern: "${DIRECTORS}" says more than the notes.`]);
   });

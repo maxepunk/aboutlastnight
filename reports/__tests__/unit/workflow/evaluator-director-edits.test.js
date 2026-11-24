@@ -20,7 +20,7 @@
 const { evaluateArticle, evaluateArcs, _testing: { buildEvaluationUserPrompt, buildFactCheckArgs } } =
   require('../../../lib/workflow/nodes/evaluator-nodes');
 const { standingAfterSendBack, DIRECTOR_EDIT_PREFIX } = require('../../../lib/hand-edit-diff');
-const { buildRevisionContext, withLimitNames } = require('../../../lib/workflow/nodes/node-helpers');
+const { buildRevisionContext } = require('../../../lib/workflow/nodes/node-helpers');
 const { reworkFixtureState, PREVIOUS_BUNDLE } = require('../../../lib/__tests__/fixtures/rework-state');
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -91,7 +91,7 @@ describe('the judges read the director\'s edits (F1)', () => {
     expect(prompt).toContain(`E1 (section "the-story", paragraph, cut): "${THEORY}"`);
     expect(prompt).toContain(`E2 (section "closing", paragraph): "${CLOSING}"\n  removed: "Whether the verdict costs Alex anything is still open."`);
     expect(prompt).toContain('A removed: line under an edit is a sentence the director took out of that text when rewriting it.');
-    expect(prompt).toContain(`write the concern in advisoryWarnings, opening with the edit's id and then the rule or criterion it concerns, as in: ${DIRECTOR_EDIT_PREFIX}E1: `);
+    expect(prompt).toContain(`write the concern in advisoryWarnings, opening with the edit's id and then the limit it concerns, as in: ${DIRECTOR_EDIT_PREFIX}E1: `);
     expect(prompt).toContain('score each criterion, and write each structural issue, on the writer\'s text alone');
   });
 
@@ -349,7 +349,7 @@ describe('what the rework reads of a verdict about the director\'s edits (F1, fi
     const part = evaluationPart(result.validationResults, state);
     // Brief K: the must-fix line reads the limit's name for its code, and the writer's fix is
     // read once, in it; wordsTruth's fix, its second copy, does not print.
-    expect(part).toContain(`  - ${withLimitNames(WRITER_ISSUE)}`);
+    expect(part).toContain(`  - Quotes are exact: "${WRITER_LINE}" is not in the record. Cut the line.`);
     expect(part.split('Cut the line.').length - 1).toBe(1);
     expect(part).not.toContain(CLOSING);
     expect(part).not.toContain('the closing');
