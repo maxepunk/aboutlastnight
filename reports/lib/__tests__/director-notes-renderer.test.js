@@ -30,7 +30,10 @@ describe('renderDirectorEnrichmentBlock', () => {
     expect(out).toContain('- Alex: "we had to act"');
   });
 
-  it("prints the addressee, and the director's words around the quote on their own line (phase 3, 3.6)", () => {
+  // Phase 18, run 2b (brief I; R26): a quoted line stands once in the bank, with its speaker and
+  // addressee; the notes' sentence it came from stays in the notes above and is not printed under
+  // it again, though it still decides the speaker (groundQuote).
+  it("prints the addressee, and the line once, without the notes' sentence under it (run 2b)", () => {
     const prose = 'After unlocking a box, Remi said "do you want to trade a little" to Mel.';
     const out = renderDirectorEnrichmentBlock({
       rawProse: prose,
@@ -39,8 +42,9 @@ describe('renderDirectorEnrichmentBlock', () => {
       postInvestigationDevelopments: []
     });
     expect(out).toContain(`- Remi (to Mel): "do you want to trade a little"
-  In the notes: ${prose}
 </QUOTE_BANK>`);
+    expect(out).not.toContain('In the notes:');
+    expect(out.split('do you want to trade a little')).toHaveLength(3);
     // The model's own rating is not printed: the director's words say how the speaker is known.
     expect(out).not.toContain('[high]');
   });
@@ -89,7 +93,7 @@ describe('renderDirectorEnrichmentBlock', () => {
     const out = renderDirectorEnrichmentBlock({
       rawProse: 'Kai paid Blake',
       quotes: [{ speaker: 'Alex', text: 'we had to act', confidence: 'high' }],
-      transactionReferences: [{ excerpt: 'Kai paid Blake', linkedTransactions: [], confidence: 'low' }]
+      transactionReferences: [{ excerpt: 'Kai paid Blake', linkedTransactions: [{ timestamp: '09:40 PM', amount: '$450,000', sellingTeam: 'Cass' }], confidence: 'low' }]
     });
     expect(out).toContain(`<QUOTE_BANK>
 ${DERIVED_LABELS.directorNotesIndex}
@@ -104,15 +108,22 @@ ${DERIVED_LABELS.transactionLinks}
     expect(out.slice(0, out.indexOf('<QUOTE_BANK>'))).not.toContain(DERIVED_LABELS.directorNotesIndex);
   });
 
-  it('emits "no link" marker when linkedTransactions is empty', () => {
-    const out = renderDirectorEnrichmentBlock({
-      rawProse: 'An ambiguous observation.',
-      quotes: [],
-      transactionReferences: [{ excerpt: 'ambiguous observation', linkedTransactions: [], confidence: 'low' }],
-      postInvestigationDevelopments: []
-    });
-    expect(out).toContain('[no link]');
-    expect(out).toContain('(low)');
+  // Phase 18, run 2b (brief I; R26): a link that pairs no sale says nothing, so it prints nothing,
+  // and a block left with no line is left out whole.
+  it('prints nothing of a link that pairs no sale, and no block when no link pairs one', () => {
+    const prose = 'An ambiguous observation. Kai paid Blake.';
+    const empty = { excerpt: 'ambiguous observation', linkedTransactions: [], confidence: 'low' };
+    const none = renderDirectorEnrichmentBlock({ rawProse: prose, transactionReferences: [empty, { excerpt: 'Kai paid Blake', confidence: 'low' }] });
+    expect(none).not.toContain('TRANSACTION_LINKS');
+    expect(none).not.toContain('no link');
+
+    const kai = { excerpt: 'Kai paid Blake', linkedTransactions: [{ timestamp: '09:40 PM', amount: '$450,000', sellingTeam: 'Cass' }], confidence: 'high' };
+    const one = renderDirectorEnrichmentBlock({ rawProse: prose, transactionReferences: [empty, kai] });
+    expect(one).toContain('<TRANSACTION_LINKS>');
+    expect(one.match(/^- "/gm)).toHaveLength(1);
+    expect(one).toContain('- "Kai paid Blake" → [account: Cass | amount: $450,000 | time: 09:40 PM] (high)');
+    expect(one).not.toContain('ambiguous observation" →');
+    expect(one).not.toContain('no link');
   });
 
   it("emits <EPILOGUE> with the director's sentence (phase 3, 3.6)", () => {
@@ -190,9 +201,11 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
   ];
   const block = (out, tag) => out.slice(out.indexOf(`<${tag}>`), out.indexOf(`</${tag}>`) + tag.length + 3);
 
-  it("prints a quote whose speaker the notes do not record as \"speaker not recorded\", with the director's words around it", () => {
+  // Run 2b (R26): the line once, without the notes' sentence under it.
+  it('prints a quote whose speaker the notes do not record as "speaker not recorded", the line alone', () => {
     const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, quotes: QUOTES, corrections: [CORRECTION] });
-    expect(out).toContain('- (speaker not recorded): "Oh, Sam exposed everything."\n  In the notes: Overheard near the end: "Oh, Sam exposed everything."\n');
+    expect(out).toContain('- (speaker not recorded): "Oh, Sam exposed everything."\n- Blake');
+    expect(out).not.toContain('In the notes:');
   });
 
   it('prints a stored "unknown" speaker the same way (a thread enriched before 3.6)', () => {
@@ -208,7 +221,6 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
     const out = renderDirectorEnrichmentBlock({ rawProse: PROSE, quotes: QUOTES, corrections: [CORRECTION] });
     expect(block(out, 'QUOTE_BANK')).toContain([
       '- Blake: "my company would be very interested"',
-      '  In the notes: Vic to Ashe: "My company is very interesting."',
       `  The director's correction: ${CORRECTION}`
     ].join('\n'));
   });
@@ -216,7 +228,7 @@ describe("renderDirectorEnrichmentBlock: the director's notes, unguessed (phase 
   // Task 3.11 (final review, session-data finding 2): 092026's stored quote keeps Blake
   // only because the stored correction names Blake. Its stored context was the enricher's
   // own prose, which the notes do not hold, so it neither prints nor names anyone.
-  it("prints a context only when the notes hold it word for word, and keeps 092026's Blake only because the stored correction names Blake", () => {
+  it("prints no context, and keeps 092026's Blake only because the stored correction names Blake", () => {
     const stored = {
       speaker: 'Blake', text: 'My company is very interesting.',
       context: "Prose attributes this to 'Vic to Ashe' but DIRECTOR_CORRECTIONS states this was Blake -> Ashe.",
@@ -330,7 +342,7 @@ describe("renderDirectorEnrichmentBlock: a stored speaker prints only when the d
 
   it('prints "speaker not recorded" when the verified context names someone else, and keeps the addressee it names', () => {
     const bank = bankOf([{ speaker: 'Blake', addressee: 'Ashe', text: 'My company is very interesting.', context: 'Vic to Ashe: "My company is very interesting."', confidence: 'high' }]);
-    expect(bank).toContain('- (speaker not recorded) (to Ashe): "My company is very interesting."\n  In the notes: Vic to Ashe: "My company is very interesting."');
+    expect(bank).toContain('- (speaker not recorded) (to Ashe): "My company is very interesting."\n');
   });
 
   it('never counts the quoted words as naming the speaker or the addressee (092626\'s "How would you know that, Jess?")', () => {
@@ -349,7 +361,7 @@ describe("renderDirectorEnrichmentBlock: a stored speaker prints only when the d
       speaker: 'Jess', addressee: 'Sarah', text: 'So I assume that is not where he spent time with you, Sarah.',
       context: 'Jess told the room she had found a bedroom in the warehouse.', confidence: 'high'
     }]);
-    expect(bank).toContain('- Jess: "So I assume that is not where he spent time with you, Sarah."\n  In the notes: Jess told the room she had found a bedroom in the warehouse.');
+    expect(bank).toContain('- Jess: "So I assume that is not where he spent time with you, Sarah."\n');
   });
 
   it('reads the rule from the grounding module, which the enricher shares', () => {
@@ -383,7 +395,6 @@ describe("renderDirectorEnrichmentBlock: a corrected line prints in no corrected
     const bank = bankOf([{ ...VIC, correction: CORRECTION }], [CORRECTION]);
     expect(bank).toContain([
       '- (speaker not recorded): "My company is very interesting."',
-      '  In the notes: Vic to Ashe: "My company is very interesting."',
       `  The director's correction: ${CORRECTION}`
     ].join('\n'));
     expect(bank).not.toMatch(/- Vic|\(to Ashe\)/);
@@ -395,7 +406,7 @@ describe("renderDirectorEnrichmentBlock: a corrected line prints in no corrected
     ['other case', 'The quote attributed to Vic, speaking to Ashe ("MY COMPANY IS VERY INTERESTING"), was actually said by Blake to Ashe.']
   ])('prints "speaker not recorded" for a stored Vic when a correction quoting the line in %s was never attached', (_case, correction) => {
     const bank = bankOf([VIC], [correction]);
-    expect(bank).toContain('- (speaker not recorded): "My company is very interesting."\n  In the notes: Vic to Ashe: "My company is very interesting."');
+    expect(bank).toContain('- (speaker not recorded): "My company is very interesting."\n');
     expect(bank).not.toMatch(/- Vic|\(to Ashe\)/);
   });
 
@@ -448,8 +459,8 @@ describe('renderDirectorEnrichmentBlock: a stored transaction link prints only w
   it('reads the notes as the enricher does: an observation retyped with a different dash or line break is the same words', () => {
     const out = renderDirectorEnrichmentBlock({
       rawProse: PROSE,
-      transactionReferences: [{ excerpt: 'Remi kept to the bar \u2014 all night.', linkedTransactions: [], confidence: 'low' }]
+      transactionReferences: [{ excerpt: 'Remi kept to the bar \u2014 all night.', linkedTransactions: [{ timestamp: '10:13 PM', amount: '$400,000', sellingTeam: 'RW' }], confidence: 'low' }]
     });
-    expect(out).toContain('- "Remi kept to the bar \u2014 all night." → [no link] (low)');
+    expect(out).toContain('- "Remi kept to the bar \u2014 all night." → [account: RW | amount: $400,000 | time: 10:13 PM] (low)');
   });
 });

@@ -18,11 +18,14 @@ const { isVerbatimIn, groundQuote } = require('../grounding');
 const SPEAKER_NOT_RECORDED = '(speaker not recorded)';
 
 /**
- * One quote of <QUOTE_BANK> (phase 3, 3.6): its speaker, or "speaker not recorded",
- * then the director's words around it and the correction that applied, each on its
- * own line. A line is printed only when the notes, or the corrections, hold it word
- * for word: a thread enriched before 3.6 stored the enricher's own prose as context
- * (092026), and the line's label says it is the director's words.
+ * One quote of <QUOTE_BANK> (phase 3, 3.6): its speaker, or "speaker not recorded", and its
+ * addressee, then the correction that applied on its own line. A correction is printed only
+ * when the corrections hold it word for word.
+ *
+ * Phase 18, run 2b (R26): the quoted line stands once in the bank. The notes' sentence it came
+ * from is in <DIRECTOR_NOTES> above and no longer prints under it, so the line is not met three
+ * times. That sentence still decides the speaker and the addressee (groundQuote reads it, and
+ * only a context the notes hold word for word counts).
  *
  * A stored speaker or addressee prints by the enricher's own rule (lib/grounding.js
  * groundQuote; task 3.11, final review data-harness-docs[1]): a name the verified
@@ -38,9 +41,8 @@ const SPEAKER_NOT_RECORDED = '(speaker not recorded)';
  * @returns {string}
  */
 function quoteEntry(quote, rawProse, corrections) {
-  const { context, correction, speaker, addressee } = groundQuote(quote, rawProse, corrections);
+  const { correction, speaker, addressee } = groundQuote(quote, rawProse, corrections);
   const lines = [`- ${speaker || SPEAKER_NOT_RECORDED}${addressee ? ` (to ${addressee})` : ''}: "${quote.text}"`];
-  if (context) lines.push(`  In the notes: ${context}`);
   if (correction) lines.push(`  The director's correction: ${correction}`);
   return lines.join('\n');
 }
@@ -70,13 +72,17 @@ function epilogueSentences(items, rawProse) {
  * context and an epilogue detail. A link is the pairing of its observation with
  * sales, so one whose observation the notes do not hold prints nothing at all.
  *
+ * Phase 18, run 2b (R26): a link that pairs no sale prints nothing either. Its observation is
+ * already in the notes, and a line saying no sale was found beside it says nothing.
+ *
  * @param {Array} references - stored transactionReferences
  * @param {string} rawProse - the director's notes
  * @returns {Array} the links to print, in stored order
  */
 function linksInTheNotes(references, rawProse) {
   return (Array.isArray(references) ? references : [])
-    .filter(ref => ref && typeof ref === 'object' && typeof ref.excerpt === 'string' && isVerbatimIn(ref.excerpt, rawProse));
+    .filter(ref => ref && typeof ref === 'object' && typeof ref.excerpt === 'string' && isVerbatimIn(ref.excerpt, rawProse))
+    .filter(ref => Array.isArray(ref.linkedTransactions) && ref.linkedTransactions.some(tx => tx && typeof tx === 'object'));
 }
 
 /**
@@ -109,11 +115,12 @@ function linkedTransactionLine(tx, sessionConfig = null) {
  *
  * @param {Object} ctx - Director-notes context
  * @param {string} [ctx.rawProse] - Verbatim director prose
- * @param {Array} [ctx.quotes] - Extracted quotes, each printed with the director's
- *   words around it (see quoteEntry)
+ * @param {Array} [ctx.quotes] - Extracted quotes, each printed once with its speaker and
+ *   any correction (see quoteEntry)
  * @param {Array} [ctx.transactionReferences] - Observation → transaction links
  *   (each transaction printed as account, amount and time only; a link prints only
- *   when the notes hold its observation word for word, see linksInTheNotes)
+ *   when the notes hold its observation word for word and it pairs a sale, see
+ *   linksInTheNotes)
  * @param {Array} [ctx.postInvestigationDevelopments] - The epilogue items, printed as
  *   the director's sentences under <EPILOGUE> (see epilogueSentences)
  * @param {string[]|string|null} [ctx.corrections] - the director's input-review
@@ -154,12 +161,13 @@ ${lines}
 </QUOTE_BANK>`);
   }
 
-  // 3.6b fix batch, finding 7: only the links whose observation the notes hold.
+  // 3.6b fix batch, finding 7: only the links whose observation the notes hold. Run 2b (R26):
+  // and that pair a sale; with none, the block is left out whole.
   const links = linksInTheNotes(transactionReferences, rawProse);
   if (links.length > 0) {
     const lines = links.map(t => {
-      const txs = (t.linkedTransactions || []).map((tx) => linkedTransactionLine(tx, sessionConfig)).join('; ');
-      return `- "${t.excerpt}" → [${txs || 'no link'}] (${t.confidence})`;
+      const txs = t.linkedTransactions.map((tx) => linkedTransactionLine(tx, sessionConfig)).join('; ');
+      return `- "${t.excerpt}" → [${txs}] (${t.confidence})`;
     }).join('\n');
     blocks.push(`<TRANSACTION_LINKS>
 ${DERIVED_LABELS.transactionLinks}
